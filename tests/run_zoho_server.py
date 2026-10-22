@@ -1,6 +1,6 @@
 """python3 run_zoho_server.py - the zoho-books function (server/zoho-books/index.ts, under Deno) against a stand-in Zoho
 (fake_zoho.py, the test organisation of tests/fixtures/zoho) and a throwaway PostgreSQL built with staging's migrations and
-migration 75 (zoho_stand.py). TEST DATA ONLY. Nothing real is reached: Zoho, Supabase and the database are stand-ins.
+migration 75 and 98 (zoho_stand.py). TEST DATA ONLY. Nothing real is reached: Zoho, Supabase and the database are stand-ins.
 
   1. set-up: the client id and secret only as "configured" (never their values); a staff member cannot connect, the owner can;
      Zoho's approval page asked with the minimal ZohoBooks.* scopes on the India data centre; the redirect taken once only;
@@ -15,7 +15,7 @@ migration 75 (zoho_stand.py). TEST DATA ONLY. Nothing real is reached: Zoho, Sup
   5. deletions: a bill deleted in Zoho is marked deleted in FinCom at the daily id comparison (never removed); a list
      that suddenly lacks every invoice is not applied (held, said)
   6. limits: Zoho's 429 (a minute) is waited out and the run completes; the daily limit ends the run and moves the next one
-     past midnight IST; the database's own count stops at 90 calls a minute
+     past midnight IST; the database's own count stops at 90 calls in any 60 seconds (98)
   7. tokens: an access token Zoho no longer takes (401) is renewed with the refresh token and the call goes on; a refresh
      Zoho refuses marks the organisation "sign in again"
   8. posting: a FinCom bill posted as a Zoho bill (reference FC:<id>, notes TDSDesk:<id>, TDS and GST as Zoho's own taxes);

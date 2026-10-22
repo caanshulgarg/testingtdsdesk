@@ -1,13 +1,14 @@
 """The database for the Zoho Books tests: a throwaway PostgreSQL (pg_stand) built with staging's migrations in staging's
 order (as run_e2e_tdsgst.py builds it: 32 .. 60, 68, 70, 61, 62 .. 67, 72, 73, 74), the Supabase pieces migration 75 leans
 on made plain (Vault: vault.secrets, vault.decrypted_secrets, vault.create_secret / update_secret; extensions.gen_random_bytes),
-then migration 75 (zoho-books). Nothing of a real database is touched.
+then migration 75 (zoho-books) and 99 (its call count over any 60 seconds). Nothing of a real database is touched.
     db = zoho_stand.build(port, run75=True)"""
 import os, subprocess
 import pg_stand
 HERE = os.path.dirname(os.path.abspath(__file__))
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 M75 = os.environ.get("M75_FILE") or os.path.join(HERE, "..", "server", "zoho-books", "migration-75-zoho-books.sql")
+M99 = os.path.join(HERE, "..", "server", "zoho-books", "migration-99-zoho-rolling-minute.sql")   # zoho_api_take: any 60 seconds
 STAGING = ["migration-32-sync-safety.sql", "migration-33-ledger-lists.sql", "migration-35-bridge-control.sql", "@34", "migration-36b-post-acceptance.sql", "migration-37-follow-ups.sql",
            "migration-36-ledger-rename.sql", "migration-38-post-followups.sql", "migration-39-rename-map-empty-day.sql", "migration-40-states-carried.sql", "migration-41-day-counts.sql",
            "migration-42-empty-day-second-read.sql", "migration-43-posting-reply.sql", "migration-44-recorder.sql", "migration-45-bulk-posting.sql", "migration-46-trial-tools.sql",
@@ -38,7 +39,7 @@ def psql_file(db, path):
     r = subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"],
                        input=open(path).read(), capture_output=True, text=True)
     return r.returncode, (r.stderr or r.stdout)[-1500:]
-def build(port, run75=True):
+def build(port, run75=True, run99=None):
     db = pg_stand.start(port)
     db.sql(part(os.path.join(HERE, "run_migration33.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration35.py"), "SCHEMA")); db.sql(part(os.path.join(HERE, "run_migration37.py"), "SCHEMA_X"))
     db.sql(part(os.path.join(HERE, "run_migration47.py"), "SCHEMA47"))
@@ -51,4 +52,7 @@ def build(port, run75=True):
     if run75:
         rc, err = psql_file(db, M75)
         if rc: raise SystemExit("migration 75 does not run: " + err)
+    if run75 if run99 is None else run99:
+        rc, err = psql_file(db, M99)
+        if rc: raise SystemExit("migration 99 does not run: " + err)
     return db
