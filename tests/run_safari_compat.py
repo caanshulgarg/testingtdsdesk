@@ -18,6 +18,8 @@ def ok(c, w):
 
 files = [f for f in glob.glob(os.path.join(SITE, "**", "*.js"), recursive=True) if "/bridge-go/" not in f]
 ok(len(files) > 3, "built scripts found (%d)" % len(files))
+_fx = open(os.path.join(HERE, "..", "app", "src", "calls", "effects.js"), encoding="utf8").read()
+ok("if (!simdOk()) throw" in _fx and _fx.index("if (!simdOk()) throw") < _fx.index("fetchChecked(n, s)"), "MediaPipe is loaded only after the SIMD check (no Safari before 16.4 ever reads its files)")
 for f in files:
     s = open(f, encoding="utf8", errors="replace").read()
     rel = os.path.relpath(f, SITE)
@@ -26,6 +28,9 @@ for f in files:
     lb = [m.start() for m in re.finditer(r"\(\?<[=!]", s) if not re.search(r"new RegExp\(\s*[\"']$", s[max(0, m.start() - 20):m.start()])]
     ok(not lb, "%s: no regex look-behind" % rel)
     if rel in ("guard.js", "oldcheck.js"): continue
+    # calls (23-Oct-2026): MediaPipe's own files (assets/mediapipe/, pinned) are loaded only after app/src/calls/effects.js's
+    # WebAssembly SIMD check, which no Safari before 16.4 passes, and 16.4 reads ??= and ||=; checked below that the gate is there
+    if rel.startswith("assets/mediapipe/") or rel.startswith("assets" + os.sep + "mediapipe" + os.sep): continue
     for pat, what in ((r"\?\?=", "??="), (r"\|\|=", "||="), (r"&&=", "&&="), (r"\bstatic\s*\{", "class static block")):
         ok(not re.search(pat, s), "%s: no %s (Safari 14 cannot read it)" % (rel, what))
 g = open(os.path.join(SITE, "guard.js"), encoding="utf8").read()

@@ -335,3 +335,24 @@ def press(pg, sel, ms=60000):
     """a click without waiting for the page to settle (a busy CPU, a canvas being recorded): the element must be there"""
     pg.wait_for_selector(sel, state="attached", timeout=ms)
     pg.eval_on_selector(sel, "el => el.click()")
+
+def call_of_three(br, port, hub, fn, rest, checks, member_tok="tok-look"):
+    """the host (staff) starts a client call; a member joins; a guest comes in by link, checked and admitted"""
+    actx, A = member_page(br, port, "tok-staff", hub, fn, rest, checks)
+    A.click("[data-call-menu] summary"); A.click("[data-call-client]")
+    wait_for(A, "!!document.querySelector('[data-call-join]')"); press(A, "[data-call-join]")
+    wait_for(A, "!!document.querySelector('#fincom-call [data-call=in]')")
+    rid = list(fn.rooms)[0]
+    bctx, B = member_page(br, port, member_tok, hub, fn, rest, checks)
+    B.evaluate("(r) => FinComCall.join(r)", rid); wait_for(B, "!!document.querySelector('[data-call-join]')"); press(B, "[data-call-join]")
+    wait_for(B, "!!document.querySelector('#fincom-call [data-call=in]')")
+    tok = "G" * 43; fn.invites[tok] = rid
+    gctx, G, gseen = guest_page(br, port, "http://localhost:%d/#join=%s" % (port, tok), hub, fn, rest, checks)
+    wait_for(G, "!!document.querySelector('[data-guest-name]')")
+    G.fill("[data-guest-name]", "Ram Kumar"); G.fill("[data-guest-email]", "ram@client.test"); press(G, "[data-guest-continue]")
+    wait_for(G, "!!document.querySelector('[data-guest-code]')"); G.fill("[data-guest-code]", "424242"); press(G, "[data-guest-verify]")
+    wait_for(G, "!!document.querySelector('[data-guest-waiting]')")
+    press(A, "[data-call-people-btn]"); wait_for(A, "!!document.querySelector('[data-waiting] [data-admit]')", 15000); press(A, "[data-waiting] [data-admit]")
+    wait_for(G, "!!document.querySelector('[data-call-join]')", 15000); press(G, "[data-call-join]")
+    wait_for(A, "document.querySelectorAll('#fincom-call [data-tile]').length === 3", 30000)
+    return (actx, A), (bctx, B), (gctx, G, gseen), rid
