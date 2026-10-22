@@ -196,7 +196,7 @@ function Describe({ cid, names }) {
     <label htmlFor="mmDesc"><Wand2 size={15} aria-hidden="true" /> Describe your MIS</label>
     <div className="mm-desc-row"><textarea id="mmDesc" rows={2} value={desc.text || ""} placeholder="e.g. Monthly P&L against last year, top 10 customers in lakhs, and cash and bank at each month's end"
       onChange={(ev) => set({ desc: Object.assign({}, desc, { text: ev.target.value }) })} />
-      <span className="mm-desc-acts"><VoiceInput a={a} onText={(t) => set({ desc: Object.assign({}, st().desc || {}, { text: t }) })} />
+      <span className="mm-desc-acts"><VoiceInput a={a} client={cid} onText={(t) => set({ desc: Object.assign({}, st().desc || {}, { text: t }) })} />
         <Button className="btn small primary" data-mm-describe-go="" disabled={desc.busy || !String(desc.text || "").trim()} onClick={go}>{desc.busy ? "Laying it out…" : "Lay it out"}</Button></span></div>
     {desc.err && <p className="bad" role="alert">{desc.err}</p>}
     <p className="note">Ask FinCom writes only the layout; FinCom works out every figure from the books.</p>
