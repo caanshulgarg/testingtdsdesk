@@ -158,6 +158,24 @@ try:
             J("() => { window.__lkOn = false; TDSReg.locked = window.__lk; }")
             pg.keyboard.press("Escape"); W(500); J("() => { const p = TDSPanFix.list('26Q', '2025-26', 'Q1')[0]; tdsDeducteeSet(p.party, {pan: 'AAAPN1234C', name: p.party}); }"); W(300)
 
+            print("2b. a deductee with no name and no PAN (the owner's MONIKA NAUTIYAL line, 22-Oct 18:40): its key is blank")
+            J("""() => { const r = TDSAdd.save({party: 'ZZ Blank Name', section: '194J', credit: '2025-05-10', date: '2025-05-10', paid: '35.50', rate: 2, tds: 0.71, cert: '', basis: '', challan: '', rateWhy: '', fromVoucher: ''});
+              window.__blank = Object.keys(S.books.tdsAdded).find(k => S.books.tdsAdded[k].party === 'ZZ Blank Name'); S.books.tdsAdded[window.__blank].party = ''; TDSReg.forget(); render(); }""")
+            go("deductees"); W(300)
+            B = '#app tr.dee-row[data-dee=""]'
+            ok(pg.locator(B).count() == 1, "%d the blank-named deductee has its row" % vw)
+            ok(not shown(D), "%d with nothing opened, no panel is open (a blank key is not \"open\")" % vw)
+            bways = [("✕", lambda: pg.locator(D + " button[aria-label=Close]").click()), ("Esc", lambda: pg.keyboard.press("Escape")), ("Back", lambda: pg.go_back())]
+            if not phone: bways.insert(0, ("a click on the page", lambda: pg.mouse.click(*outside_point(D))))
+            for wname, how in bways:
+                go("deductees"); pg.locator(B).click(); W(800)
+                ok(shown(D) and "1 deduction" in pg.locator(D).inner_text(), "%d its row opens its panel" % vw)
+                how(); W(800)
+                ok(not shown(D) and J("S.view") == "company", "%d the blank-named deductee's panel: %s closes it" % (vw, wname))
+                go("deductees"); W(300)
+                ok(not shown(D), "%d ... and it stays closed" % vw)
+            J("() => { TDSAdd.remove(window.__blank, 'test'); render(); }")
+
             print("3. Add deduction: typed, closed, kept; Save closes it; a refused Save stays")
             A = '[data-drawer="add-deduction"]'
             ok(open_(A, "deductions", "() => { S.tdsAdd = {}; render(); }"), "%d Add a deduction opens" % vw)
