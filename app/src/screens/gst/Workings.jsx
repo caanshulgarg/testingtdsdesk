@@ -157,8 +157,8 @@ function LeftOut({ a }) {
 }
 
 export function Advances() {
-  // off unless turned on for the client (the owner, 22-Oct-2026): one quiet line, nothing worked out
-  if (!advOn(CO())) return <AdvOffLine />;
+  // off unless turned on for the client (the owner, 22-Oct-2026): the switch and one quiet line, nothing worked out
+  if (!advOn(CO())) return <><AdvOptIn /><AdvOffLine /></>;
   if (!GSTAdv.ready()) return <><AdvOptIn /><section className="dash-card"><h3>Advances need the day book read again</h3><p className="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section></>;
   const ym = S.gstYm || "", a = GSTAdv.month(ym, S.gstReg || "");
   const box = (s) => [money(s.received) + " received, " + money(s.igst + s.cgst + s.sgst + s.cess) + " tax"];

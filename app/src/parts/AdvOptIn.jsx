@@ -4,7 +4,8 @@
 // prev} (choiceConfirm, src/js/60-choices.js), so it goes with the client to the cloud and to every computer, with who
 // changed it and when. GSTAdv.ready() (src/js/14) reads it: off, there is nothing in 11A/11B of GSTR-1, 3B 3.1(a), the
 // JSON and Excel, and no check about advances. Only the owner and staff change it; a "look only" user sees it disabled.
-// Shown on the GST page's Advances (gst/Workings.jsx) and in Client setup → GST (gst/GstSettings.jsx).
+// Shown on the GST page's Advances (gst/Workings.jsx), in Client setup → GST (gst/GstSettings.jsx), and as one line on the
+// month's GSTR-1 and GSTR-3B summary (AdvLine; the owner, 22-Oct-2026, could not find the switch).
 
 export const advOn = (co) => choiceValue(co, "advGst") === "on";
 // the owner and staff (a computer not signed in to the firm's account: its own user)
@@ -44,5 +45,17 @@ export function AdvOffLine({ co }) {
   const may = advMay();
   return <p className="note" data-adv-off="" style={{ margin: "8px 0" }}>Advances are not shown in GST returns for this client{" · "}
     <button type="button" className="linkbtn" data-adv-turn-on="" disabled={!may} title={may ? undefined : NO_RIGHT} onClick={() => advSet(co, true)}>Turn on</button>
+    {!may && <span data-adv-readonly="">{" (" + NO_RIGHT.toLowerCase() + ")"}</span>}</p>;
+}
+
+// one line on the month's GSTR-1 and GSTR-3B: "Advances (11A/11B): Off for this client · Turn on" (or On · Turn off), and
+// the Advances working one click away whether on or off; a look-only member sees the button greyed out
+export function AdvLine({ co }) {
+  co = co || CO();
+  if (!co) return null;
+  const on = advOn(co), may = advMay();
+  return <p className="note" data-adv-line={on ? "on" : "off"} style={{ margin: "8px 2px 0" }}>Advances (11A/11B): <b>{on ? "On" : "Off for this client"}</b>{" · "}
+    <button type="button" className="linkbtn" data-adv-toggle="" disabled={!may} aria-disabled={!may} title={may ? undefined : NO_RIGHT} style={may ? undefined : { opacity: 0.5, cursor: "not-allowed" }} onClick={() => advSet(co, !on)}>{on ? "Turn off" : "Turn on"}</button>
+    {" · "}<button type="button" className="linkbtn" data-adv-open="" onClick={() => gstPartGo("adv")}>Advances working</button>
     {!may && <span data-adv-readonly="">{" (" + NO_RIGHT.toLowerCase() + ")"}</span>}</p>;
 }

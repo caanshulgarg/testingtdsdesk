@@ -1,6 +1,6 @@
 """python3 run_adv_optin_ui.py - "Show advances in GST returns (Tables 11A/11B)", per client, off unless turned on (the owner,
 22-Oct-2026: "don't treat advance unless we say.. there should be an option whether to show advance in gst return"):
-  1. a client never set: off. The GST page's Advances shows one quiet line ("Advances are not shown in GST returns for this
+  1. a client never set: off. The GST page's Advances shows the switch and one quiet line ("Advances are not shown in GST returns for this
      client · Turn on") and nothing else; 11A/11B, 3B 3.1(a) and the checks have no advances; B2B is the same
   2. Turn on: kept in co.choices.advGst (confirmed, who and when), the Advances page shows 11A, GSTR-1 and 3B count it
   3. the tick on the page turns it off again (who and when, the value before kept), and on again
@@ -64,8 +64,8 @@ with sync_playwright() as p:
     print("1. never set: off")
     s = E(STATE)
     ok(s["choice"] is None and s["at"] == 0 and s["txpd"] == 0, "no choice kept; 11A in July and 11B in August empty (%d, %d)" % (s["at"], s["txpd"]))
-    ok(s["off"] and s["offText"].replace(" ", " ").strip() == "Advances are not shown in GST returns for this client · Turn on" and not s["tiles"] and not s["box"],
-       "the Advances page: one quiet line, no tiles, no tables (%r)" % s["offText"])
+    ok(s["off"] and s["offText"].replace(" ", " ").strip() == "Advances are not shown in GST returns for this client · Turn on" and not s["tiles"] and s["box"] and s["optin"] == "off",
+       "the Advances page: the switch (unticked) and one quiet line, no tiles, no tables (%r)" % s["offText"])
     ok(s["b3jul"] == 0 and s["checks"] == 0, "3B 3.1(a) for July has no advance tax, and no check about advances (%s, %d)" % (s["b3jul"], s["checks"]))
     b2b_off = s["b2bAug"]
 
