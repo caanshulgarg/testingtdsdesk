@@ -10,7 +10,7 @@
 // The figures and the decisions are TDSMatch's (src/js/86) and the register's (TDSReg, src/js/79); nothing here works
 // out a match.
 import { useState, useRef } from "react";
-import { Dialog, DialogContent } from "@/registry/components/dialog/dialog";
+import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 import { AddChallan, SrcBadge, say } from "./Register.jsx";
 import More from "../../parts/More.jsx";
 import { SideDrawer } from "./Shell.jsx";
@@ -329,7 +329,7 @@ function RowDetails({ form }) {
 
 function MoveDialog() {
   const mv = S.tdsMove, [sec, setSec] = useState(""), [mon, setMon] = useState("");
-  if (!mv) return <Dialog open={false} onOpenChange={() => {}} />;
+  if (!mv) return <PanelDialog open={false} onClose={() => {}} />;
   const cx = TDSReg.ctx(), rows = mv.ids.map((id) => cx.byRow[id] && cx.byRow[id].r).filter(Boolean), need = r2(rows.filter((r) => !r.challan || true).reduce((a, r) => a + r.tds, 0));
   const list = TDS.challans().filter((c) => (!sec || chSec(c) === sec || !chSec(c)) && (!mon || TDS.ymd(c.date).slice(0, 6) === mon)).map((c) => {
     const add = r2(rows.filter((r) => r.challan !== c.id).reduce((a, r) => a + r.tds, 0)), left = TDSReg.balance(c, cx).tax;
@@ -340,8 +340,7 @@ function MoveDialog() {
   }).sort((a, b) => (a.early ? 1 : 0) - (b.early ? 1 : 0) || (a.note ? 1 : 0) - (b.note ? 1 : 0) || (b.after >= -0.005) - (a.after >= -0.005) || TDS.ymd(a.c.date).localeCompare(TDS.ymd(b.c.date)));
   const secs = Array.from(new Set(TDS.challans().map(chSec).filter(Boolean))).sort(), months = Array.from(new Set(TDS.challans().map((c) => TDS.ymd(c.date).slice(0, 6)))).sort();
   const close = () => { S.tdsMove = null; render(); };
-  return <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-    <DialogContent title={"Move " + rows.length + " deduction" + (rows.length === 1 ? "" : "s") + " to a challan"} description={money(need) + " · " + Array.from(new Set(rows.map(secOf))).join(", ")} data-cm-move-dialog="">
+  return <PanelDialog open onClose={close} title={"Move " + rows.length + " deduction" + (rows.length === 1 ? "" : "s") + " to a challan"} description={money(need) + " · " + Array.from(new Set(rows.map(secOf))).join(", ")} attrs={{ "data-cm-move-dialog": "" }}>
       <div className="row cm-filters">
         <select aria-label="Challan section" value={sec} onChange={(ev) => setSec(ev.target.value)}><option value="">Every section</option>{secs.map((x) => <option key={x} value={x}>{x}</option>)}</select>
         <select aria-label="Challan month" value={mon} onChange={(ev) => setMon(ev.target.value)}><option value="">Every month</option>{months.map((x) => <option key={x} value={x}>{monthOf(x)}</option>)}</select></div>
@@ -352,15 +351,15 @@ function MoveDialog() {
         <button className="btn small" disabled={after < -0.005 || early > 0} data-cm-pick-go={c.id} onClick={() => tdsMoveTo(mv.ids, c.id)}>Move here</button></li>)}
         {!list.length && <li className="note">No challan of that section or month.</li>}</ul>
       {rows.some((r) => r.challan) && <div className="row"><button className="btn small" data-cm-takeoff-dlg="" onClick={() => { tdsTakeOff(rows.filter((r) => r.challan).map((r) => r.id)); close(); }}>Take off challan</button></div>}
-    </DialogContent></Dialog>;
+    </PanelDialog>;
 }
 
 function SplitDialog({ form, fy, q }) {
   const sp = S.tdsSplit, s = sp && sp.key ? TDSMatch.find(sp.key, form, fy, q) : null, [parts, setParts] = useState(null);
-  if (!sp) return <Dialog open={false} onOpenChange={() => {}} />;
+  if (!sp) return <PanelDialog open={false} onClose={() => {}} />;
   const close = () => { S.tdsSplit = null; setParts(null); render(); };
   const cx = TDSReg.ctx(), rowId = s ? s.ids[0] : sp.rowId, r = rowId && cx.byRow[rowId] ? cx.byRow[rowId].r : null;
-  if (!r || (sp.key && !s)) return <Dialog open onOpenChange={(o) => { if (!o) close(); }}><DialogContent title="Split the row"><p className="note">That suggestion is no longer there.</p></DialogContent></Dialog>;
+  if (!r || (sp.key && !s)) return <PanelDialog open onClose={close} title="Split the row"><p className="note">That suggestion is no longer there.</p></PanelDialog>;
   // a split asked from a challan (Split… on a deduction more than its balance): that challan's balance first, the rest on
   // the challan of the same section with the most left (changeable)
   const start = () => {
@@ -372,8 +371,7 @@ function SplitDialog({ form, fy, q }) {
   const ps = parts || start();
   const tot = r2(ps.reduce((a, p) => a + num(p.tds), 0)), okSum = Math.round(tot * 100) === Math.round(r.tds * 100) && ps.every((p) => p.chId);
   const opts = TDS.challans().filter((c) => TDSReg.balance(c, cx).tax > 0.005 || ps.some((p) => p.chId === c.id));
-  return <Dialog open onOpenChange={(o) => { if (!o) close(); }}>
-    <DialogContent title="Split the row across challans" description={(r.party || r.employee || "") + " · " + day(r.date) + " · " + secOf(r) + " · " + money(r.tds)} data-cm-split-dialog="">
+  return <PanelDialog open onClose={close} title="Split the row across challans" description={(r.party || r.employee || "") + " · " + day(r.date) + " · " + secOf(r) + " · " + money(r.tds)} attrs={{ "data-cm-split-dialog": "" }}>
       <p className="note">No one challan has enough left for this deduction. It becomes {ps.length} rows in the file, the same payment and deduction dates, each paid by its own challan; the amount paid is divided in the same proportion.</p>
       <table className="bk-table cm-split"><thead><tr><th>Part</th><th>Challan</th><th className="n">Left on it</th><th className="n">Tax in this part</th></tr></thead>
         <tbody>{ps.map((p, i) => { const c = TDS.challans().find((x) => x.id === p.chId);
@@ -385,5 +383,5 @@ function SplitDialog({ form, fy, q }) {
       <div className="row" style={{ gap: 8, marginTop: 10 }}>
         <button className="btn small primary" data-cm-split-go="" disabled={!okSum} onClick={() => { const x = tdsSplitDo(rowId, ps.map((p) => ({ chId: p.chId, tds: num(p.tds) }))); if (x.ok) setParts(null); }}>Split the row</button>
         <button className="btn small" onClick={close}>Cancel</button></div>
-    </DialogContent></Dialog>;
+    </PanelDialog>;
 }

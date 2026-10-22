@@ -219,12 +219,14 @@ export function Drawer() {
   first.current = false;
   const e = drawerEntry();
   // the action bar under it works on the open bill (Approve, "Cannot approve: invoice date" leads into the drawer): inside
-  useDismiss(!!e, box, () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); },
+  // next-fix-drawers (the owner, 22-Oct-2026: "If I click on the main screen also.. it should close right away"): closing
+  // never asks; what is unsaved on the page stays as it is (Drafts keeps it), only the drawer goes
+  useDismiss(!!e, box, () => doAct("drawerClose"),
     { also: () => Array.from(document.querySelectorAll("#app .actionbar")) });
   if (!e) return null;
   const rows = draftRows(), i = rows.findIndex((r) => r.e.id === e.id);
-  // a click outside, Esc and (a phone) Back close it; asked first when a section of the page has unsaved changes (Drafts)
-  const close = () => { const d = typeof Drafts === "object" ? Drafts.dirtyOn(Route.of()) : []; if (d.length) Drafts.guard(d.map((s) => s.id), () => doAct("drawerClose")); else doAct("drawerClose"); };
+  // a click outside, Esc and (a phone) Back close it, at once
+  const close = () => doAct("drawerClose");
   return <>
     <button className={"drawer-scrim" + enter} aria-label="Close" onClick={close}></button>
     <aside ref={box} className={"drawer" + enter} role="dialog" aria-modal="true" aria-label="Bill">

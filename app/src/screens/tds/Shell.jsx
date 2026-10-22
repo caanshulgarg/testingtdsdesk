@@ -9,8 +9,7 @@
 //   is in the "N to fix" count)
 // The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings), shown once, in the header.
 // The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
-import { useRef } from "react";
-import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
+import { Panel } from "../../parts/DetailDrawer.jsx";
 import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
@@ -87,18 +86,11 @@ export function nextStep(cur, form, filed) {
   return ids[i + 1] === "after" && !filed ? "" : ids[i + 1] || "";
 }
 
-// a right-hand drawer kept in the page (#app), for a row's or a check's details
-export function SideDrawer({ open, onClose, title, description, kind, wide, children }) {
-  const last = useRef(null);
-  if (open) last.current = { title, description, children };
-  const shown = last.current;
-  return <Drawer open={!!open} onOpenChange={(o) => { if (!o) onClose(); }}>
-    <DrawerContent className={"ddraw rt-drawer" + (wide ? " ddraw-wide" : "")} data-drawer={kind || ""} title={(shown && shown.title) || ""}
-      description={(shown && shown.description) || undefined} closeLabel="Close" aria-describedby={undefined}
-      portal={document.getElementById("app")} onEscapeKeyDown={(ev) => { ev.preventDefault(); onClose(); }}>
-      {shown ? shown.children : null}
-    </DrawerContent>
-  </Drawer>;
+// a right-hand drawer kept in the page (#app), for a row's or a check's details: the app's one side panel (parts/DetailDrawer's
+// Panel: ✕, Cancel, Esc, a click outside and Back close it at once; draft: a useDraft() for what was typed and not saved)
+export function SideDrawer({ open, onClose, title, description, kind, wide, draft, children }) {
+  return <Panel open={!!open} onClose={() => onClose()} title={title} description={description} wide={wide} draft={draft}
+    cls="rt-drawer" attrs={{ "data-drawer": kind || "" }}>{children}</Panel>;
 }
 
 // the frame (round 94, 19-Oct-2026; the owner: "Deductor, Deductee, Challan, Deduction can come horizontally; remove
