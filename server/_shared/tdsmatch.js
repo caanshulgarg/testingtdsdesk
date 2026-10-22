@@ -136,9 +136,9 @@ function tmRules(rows, chs, opt){
   const sum = list => list.reduce((a, r) => a + tmP(r.tds), 0);
   const last = list => list.map(r => tmYmd(r.date)).sort().pop();
   // H6 (the TDS check of 22-Oct-2026; Leads' 194-I: September's rent went up, its challan was short, and September took
-  // October's challan, October left unpaid): a challan deposited for another month of the section whose deductions still
-  // wait for it is not that month's to give
-  const theirs = (c, sec, ym) => { const om = tmOwnYm(c); return om !== ym && freeRows().some(r => tmSecOk(sec, r.sec) && tmYmd(r.date).slice(0, 6) === om); };
+  // October's challan, October left unpaid): a challan deposited for a later month of the section whose deductions still
+  // wait for it is not an earlier month's to take (a later month on an earlier challan, an advance challan, rule f, stays)
+  const theirs = (c, sec, ym) => { const om = tmOwnYm(c); return om > ym && freeRows().some(r => tmSecOk(sec, r.sec) && tmYmd(r.date).slice(0, 6) === om); };
   // M2: challans are whole rupees: "exact" is within a rupee, never above the challan
   const near = (c, need) => left[c.id] >= need && left[c.id] - need <= 100;
   const n = (k, w) => k + " " + w + (k === 1 ? "" : "s");
