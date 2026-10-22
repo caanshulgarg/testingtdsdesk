@@ -11,8 +11,15 @@ const GSTAmend = {
   numKey(n){ return String(n == null ? "" : n).toUpperCase().replace(/\s+/g, ""); },
   // the last month a year's invoices can still be amended in: November after the year ends (section 37(3))
   lastYm(ym){ const y = num(ym.slice(0, 4)), m = num(ym.slice(4, 6)); return String((m >= 4 ? y + 1 : y)) + "11"; },
-  filed(reg){
-    return Object.values((S.books && S.books.filed) || {}).filter(f => (!reg || String(f.gstin).slice(0, 2) === reg)).sort((a, c) => a.ym.localeCompare(c.ym));
+  // the copies that stand as filed: one brought in from the portal; one downloaded here only once its month is marked filed
+  // (the date typed, the portal's return status or its PDF's ARN), and then the last download made by the filing date.
+  // Until then a download is a draft (owner, 22-Oct-2026). all: every copy kept, for the list
+  filed(reg, all){
+    return Object.values((S.books && S.books.filed) || {}).filter(f => (!reg || String(f.gstin).slice(0, 2) === reg)).map(f => all || f.source === "portal" ? f : this.asFiled(f)).filter(f => f).sort((a, c) => a.ym.localeCompare(c.ym));
+  },
+  asFiled(f){
+    const p = this.proof(f.ym, String(f.gstin).slice(0, 2)), on = p && p.on ? p.on + "T18:30" : "~", c = p && ([f].concat(f.prev || []).find(x => x.at <= on) || f);
+    return c && c !== f ? Object.assign({}, f, c) : c;
   },
   // keep a GSTR-1 JSON as filed: one per registration and month
   keep(json, source, extra){
@@ -24,7 +31,8 @@ const GSTAmend = {
     // (a filing date, or its ARN): it is what later amendments are measured against, and a download from the books
     // as they are now would hide every change made in Tally since
     if (old && source === "downloaded" && (old.source === "portal" || (!old.notFiled && this.proof(old.ym, gstin.slice(0, 2))))) return old;
-    b.filed[k] = Object.assign({gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false}, extra || {});
+    // a draft replaced by a newer download is kept behind it: the one filed is the last made by the filing date
+    b.filed[k] = Object.assign({gstin, fp, ym: this.ymOf(fp), source, at: new Date().toISOString(), json, notFiled: false, prev: old && source === "downloaded" ? [{at: old.at, json: old.json}].concat(old.prev || []).slice(0, 3) : void 0}, extra || {});
     return b.filed[k];
   },
   // one flat list of documents from a GSTR-1 JSON, amendments folded onto the original number
@@ -192,7 +200,7 @@ const GSTAmend = {
     if (!(b.vouchers || []).length || !m.from || !m.to) return out;
     // only months the books hold whole: a month outside them is not "changed", just not brought in
     const inBooks = ym => String(m.from) <= ym + "01" && String(m.to).slice(0, 6) >= ym;
-    const regs = new Set(Object.values(b.filed || {}).filter(f => !f.notFiled).map(f => String(f.gstin).slice(0, 2)));
+    const regs = new Set(this.filed().filter(f => !f.notFiled).map(f => String(f.gstin).slice(0, 2)));
     regs.forEach(reg => {
       const mine = this.filed(reg).filter(f => !f.notFiled), last = mine.map(f => f.ym).sort().pop();
       const N = this.nextOpen(last, reg);

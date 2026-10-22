@@ -60,6 +60,7 @@ const M = v => Math.round(v || 0).toLocaleString("en-IN");
   // amendments: keep July 2025 as filed, then renumber one invoice, correct another's GSTIN, and remove a third's GSTIN
   const reg = "07", jul = x.GSTR.toJson("202507", reg, {plain: true});
   x.GSTAmend.keep(JSON.parse(JSON.stringify(jul)), "downloaded");
+  b.gstFiled = Object.assign(b.gstFiled || {}, {"07": Object.assign((b.gstFiled || {})["07"] || {}, {"202507": {r1: "2025-08-11"}})});   // marked filed: a download counts only then (22-Oct-2026)
   const inv = x.GSTR.one("202507", reg).b2b;
   const vA = b.vouchers.find(v => v.id === inv[0].id), vB = b.vouchers.find(v => v.id === inv.find(r => r.gstin !== inv[0].gstin && r.no !== inv[0].no).id);
   const vC = b.vouchers.find(v => v.id === inv.find(r => r.id !== vA.id && r.id !== vB.id && r.igst > 0 && r.parts.length === 1 && r.total <= 100000).id);

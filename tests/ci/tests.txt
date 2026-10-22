@@ -432,3 +432,6 @@ run_tally_ini_ui.py                  180  TDSDESK_SITE=../app/dist-test
 # GSTR-1 (22-Oct-2026): the party line found by group or bill allocation; advances shown only when turned on per client
 run_gstr1_party.js                    120
 run_adv_optin_ui.py                   180  TDSDESK_SITE=../app/dist-test
+# GSTR-1 (22-Oct-2026, Leads Insurance): a JSON downloaded here counts as filed only once the month is marked filed
+run_gst_draftcopy.js                  120
+run_gst_draftcopy_ui.py               180  TDSDESK_SITE=../app/dist-test
