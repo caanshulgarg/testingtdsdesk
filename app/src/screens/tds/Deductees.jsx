@@ -32,6 +32,11 @@ export function PanState({ st }) {
 const stateW = (st) => (st === "unknown" ? "Not checked" : st === "valid" ? "Operative" : st === "inoperative" ? "Inoperative" : "Invalid");
 const RowChip = ({ p }) => (<span className={"tag " + (p.status.state === "valid" ? "ok" : p.status.state === "unknown" ? "" : "warn")} data-pan-state={p.status.state} title={p.status.words}>{stateW(p.status.state)}</span>);
 
+// which deductee's panel is open: S.tdsDee = "k:" + its key. A deductee with no name has the key "" (normName of ""), so the
+// bare key cannot mark it: "" (closed) would match it and its panel could never close (the owner, 22-Oct-2026: a blank
+// line of MONIKA NAUTIYAL, 194J, no PAN). tdsDeducteeOpen(key) with a non-blank bare key still opens it.
+export const openDee = (key) => { S.tdsDee = "k:" + key; render(); };
+const isOpen = (x) => { const w = S.tdsDee; return typeof w === "string" && w !== "" && (w === "k:" + x.key || (x.key !== "" && w === x.key)); };
 export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
   const list = TDSPanFix.list(form, fy, q), locked = TDSReg.locked(fy, q, form);
   const rateN = (p) => p.rows.filter((r) => issueOf[r.id]).length;
@@ -56,8 +61,8 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
     </div>
     <div className="bk-tablewrap"><table className="bk-table rt-rows" id="tdsDeTable" data-statement="">
       <thead><tr><Th cf={cf} k="name">{form === "24Q" ? "Employee" : form === "27EQ" ? "Buyer" : "Deductee"}</Th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="n" cls="n">Deductions</Th><Th cf={cf} k="paid" cls="n">Paid or credited</Th><Th cf={cf} k="tds" cls="n">{form === "27EQ" ? "TCS" : "TDS"}</Th></tr></thead>
-      <tbody>{shown.map((p) => <tr key={p.key} className={"dee-row" + (p.bad ? " bad" : "")} data-dee={p.key} data-dee-bad={p.bad ? "1" : undefined} tabIndex={0} onClick={() => tdsDeducteeOpen(p.key)} onKeyDown={(ev) => { if (ev.key === "Enter") tdsDeducteeOpen(p.key); }}>
-        <td className="pty"><button className="linkbtn" data-dee-open={p.key} onClick={(ev) => { ev.stopPropagation(); tdsDeducteeOpen(p.key); }}>{p.name}</button>
+      <tbody>{shown.map((p) => <tr key={p.key} className={"dee-row" + (p.bad ? " bad" : "")} data-dee={p.key} data-dee-bad={p.bad ? "1" : undefined} tabIndex={0} onClick={() => openDee(p.key)} onKeyDown={(ev) => { if (ev.key === "Enter") openDee(p.key); }}>
+        <td className="pty"><button className="linkbtn" data-dee-open={p.key} onClick={(ev) => { ev.stopPropagation(); openDee(p.key); }}>{p.name}</button>
           {p.fixed ? <small className="tg-sub-i" data-dee-fixed="" title="Corrected in FinCom"> ✎</small> : null}{rateN(p) ? <span className="rt-dot" title={rateN(p) + " rate question" + (rateN(p) === 1 ? "" : "s")} aria-label="rate question" data-dee-rate={rateN(p)}>•</span> : null}</td>
         <td className="dee-pan pan">{p.pan && Certs.validPan(p.pan) ? <>{p.pan}{p.source === "fincom" ? <small className="tg-sub-i" title="Saved in FinCom’s PAN book" data-pan-from="fincom"> ·F</small> : null} <RowChip p={p} /></> : <PanBox party={p.party} compact />}
           {p.conflict ? <PanConflict party={p.party} c={p.conflict} /> : null}</td>
@@ -72,7 +77,7 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
 
 export function DeducteeDetails({ list, form, fy, q, locked, issueOf = {} }) {
   // what is typed and not saved stays as this deductee's draft when the panel closes (next-fix-drawers); Save clears it
-  const p = list.find((x) => x.key === S.tdsDee) || null, dr = useDraft("deductee", p ? form + "|" + p.key : null);
+  const p = list.find(isOpen) || null, dr = useDraft("deductee", p ? form + "|" + p.key : null);
   const pan = dr.value ? dr.value.pan : null, name = dr.value ? dr.value.name : null;
   const setPan = (x) => dr.set({ pan: x, name }), setName = (x) => dr.set({ pan, name: x });
   const [err, setErr] = useState(""), close = () => { S.tdsDee = ""; setErr(""); render(); };
