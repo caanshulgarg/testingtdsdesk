@@ -172,6 +172,9 @@ try:
     # summary strip is gone by the owner's word ("TDS … · On challans … · Left ₹0.00 — we don't need that"): the certificates
     # page, drawn under the last return opened (24Q Q4), showed that return's strip (₹0.00 left in 2025-26, TDS ₹8,000.00 in
     # 2026-27): taken out of tds/2025-26/certs and tds/2026-27/certs
+    # the TDS check of 22-Oct-2026, N10: remark C (higher rate, no PAN) is written only where the higher rate was deducted
+    # (20%, or 5% under 194Q/194-O); the FVU refuses C with a lower rate. The 26Q files of 2025-26 Q1 to Q3 deduct from
+    # no-PAN 194C parties at 1% and 2%: their DD rows lose the "C" (677 -> 675, 504 -> 503, 504 -> 503 bytes), re-baselined
     before = json.load(open(os.path.join(HERE, "fixtures", "tdsgst-before.json")))
     after = snapshot(SITE, PORT + 1)
     d = compare(before, after)

@@ -39,11 +39,11 @@ const TDSRegActs = {
     // the TDS check of 22-Oct-2026, H8 (Leads: ₹16,200 of the 30-Apr-2026 194J challan, which pays March 2026, given to Q1
     // 2026-27 as its fee, March left short): the tax of a challan is first for the deductions of the month it was deposited
     // for (its section's, not yet on a challan); only what is beyond them may pay another return's interest or fee
-    const om = tmOwnYm(c), sec = TDSCH.secNorm(c.section), own = TDS.rows().concat(TDS.salaryRows()).filter(z => !z.challan && TDS.ymd(z.date).slice(0, 6) === om && (!sec || TDSCH.secNorm(z.section) === sec));
+    const cd = TDS.ymd(c.date), cm = num(cd.slice(4, 6)), om = num(cd.slice(6, 8)) <= (cm === 4 ? 30 : 7) ? (cm === 1 ? (num(cd.slice(0, 4)) - 1) + "12" : cd.slice(0, 4) + String(cm - 1).padStart(2, "0")) : cd.slice(0, 6), sec = TDSCH.secNorm(c.section), own = TDS.rows().concat(TDS.salaryRows()).filter(z => !z.challan && TDS.ymd(z.date).slice(0, 6) === om && (!sec || TDSCH.secNorm(z.section) === sec));
     const keep = r2(own.reduce((a, z) => a + num(z.tds), 0));
     if (keep > 0.005 && this.key(form, TDS.fyOf(om + "01"), TDS.qOf(om + "01")) !== k){
       const need = r2(M(interest - hi) + M(fee - (others == null ? hf + ho : hf)) + (others == null ? 0 : M(others - ho)));
-      if (TDSCH.p(need) > TDSCH.p(M(r - keep))) return {ok: false, why: money(keep) + " of this challan's tax is for its own deductions (" + tmMonth(om) + (sec ? ", " + sec : "") + "), not yet on it: " + money(M(r - keep)) + " can go to another return's interest or fee."};
+      if (TDSCH.p(need) > TDSCH.p(M(r - keep))) return {ok: false, why: money(keep) + " of this challan's tax is for its own deductions (" + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][num(om.slice(4, 6)) - 1] + " " + om.slice(0, 4) + (sec ? ", " + sec : "") + "), not yet on it: " + money(M(r - keep)) + " can go to another return's interest or fee."};
     }
     for (const [v, h, w] of [[interest, hi, "interest"], [fee, hf, "the fee"], [others, ho, "others"]]){
       const x = r2(M(h) + r);
