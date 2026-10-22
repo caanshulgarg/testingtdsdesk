@@ -44,33 +44,35 @@ export function micWords(e) {
 // start recording. o: {silenceMs, onSilence(), onError(words), onReady() once the recorder runs}. Returns {stop(): Promise<clips>, abort()} at once; the
 // microphone is asked for in the background (a prompt left unanswered just records nothing, and the browser's words stand).
 export function startRecording(o = {}) {
-  const st = { on: true, stream: null, rec: null, chunks: [], clips: [], at: 0, ctx: null, timer: null, split: null, heard: false, loud: 0, done: null, pending: 0, settle: null };
+  const st = { on: true, stream: null, rec: null, prev: null, seq: 0, chunks: [], clips: [], at: 0, ctx: null, timer: null, split: null, heard: false, loud: 0, done: null, pending: 0, settle: null };
   const type = pickType();
   const closeAll = () => {
     clearInterval(st.timer); clearTimeout(st.split);
     try { if (st.ctx && st.ctx.close) st.ctx.close(); } catch (e) { /* closed */ }
     try { (st.stream && st.stream.getTracks ? st.stream.getTracks() : []).forEach((t) => t.stop()); } catch (e) { /* stopped */ }
   };
-  const settled = () => { if (!st.pending && st.settle) { const f = st.settle; st.settle = null; f(st.clips.slice()); } };
+  // the pieces in the order they began (with the overlap, two may end in either order)
+  const settled = () => { if (!st.pending && st.settle) { const f = st.settle; st.settle = null; f(st.clips.slice().sort((a, b) => a.seq - b.seq).map(({ seq, ...c }) => c)); } };
   // one recorder = one piece (a whole file)
   const piece = () => {
     let r;
     try { r = new window.MediaRecorder(st.stream, Object.assign(type ? { mimeType: type } : {}, { audioBitsPerSecond: BITRATE })); }
     catch (e) { try { r = type ? new window.MediaRecorder(st.stream, { mimeType: type }) : new window.MediaRecorder(st.stream); } catch (e2) { if (o.onError) o.onError(micWords(e2)); return; } }
-    const chunks = [], t0 = Date.now();
+    const chunks = [], t0 = Date.now(), seq = st.seq++;
     st.rec = r; st.pending++;
     r.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
     r.onstop = () => {
       const secs = (Date.now() - t0) / 1000, mime = String(r.mimeType || type || chunks[0]?.type || "audio/webm");
-      if (chunks.length) st.clips.push({ blob: new Blob(chunks, { type: mime }), type: mime, secs: Math.min(secs, 60) });
+      if (chunks.length) st.clips.push({ seq, blob: new Blob(chunks, { type: mime }), type: mime, secs: Math.min(secs, 60) });
       st.pending--; settled();
     };
     try { r.start(1000); } catch (e) { st.pending--; if (o.onError) o.onError(micWords(e)); return; }
     // the next piece starts a little before this one ends (a word at the seam is in one of them whole)
     st.split = setTimeout(() => {
       if (!st.on || st.rec !== r) return;
+      st.prev = r;
       piece();
-      setTimeout(() => { try { if (r.state !== "inactive") r.stop(); } catch (e) { /* stopped */ } }, Math.min(PRE_ROLL_MS, splitMs() / 4));
+      setTimeout(() => { if (st.prev === r) st.prev = null; try { if (r.state !== "inactive") r.stop(); } catch (e) { /* stopped */ } }, Math.min(PRE_ROLL_MS, splitMs() / 4));
     }, splitMs());
   };
   // the level meter: speech, then about 3 s quiet, ends the listening
@@ -112,14 +114,19 @@ export function startRecording(o = {}) {
       // the microphone is let go once the last piece is whole
       st.done = new Promise((res) => { st.settle = (clips) => { closeAll(); res(clips); }; });
       clearInterval(st.timer); clearTimeout(st.split);
-      const r = st.rec; st.rec = null;
-      try { if (r && r.state !== "inactive") r.stop(); } catch (e) { /* stopped */ }
+      const r = st.rec, p = st.prev; st.rec = null; st.prev = null;
+      for (const x of [p, r]) { try { if (x && x.state !== "inactive") x.stop(); } catch (e) { /* stopped */ } }
       settled();
       // a recorder that never says it stopped: what there is, after 2 s
       setTimeout(() => { if (st.settle) { st.pending = 0; settled(); } }, 2000);
       return st.done;
     },
-    abort() { st.on = false; st.settle = null; clearTimeout(st.split); const r = st.rec; st.rec = null; try { if (r && r.state !== "inactive") r.stop(); } catch (e) { /* stopped */ } closeAll(); st.clips = []; },
+    abort() {
+      st.on = false; st.settle = null; clearTimeout(st.split);
+      const r = st.rec, p = st.prev; st.rec = null; st.prev = null;
+      for (const x of [p, r]) { try { if (x && x.state !== "inactive") x.stop(); } catch (e) { /* stopped */ } }
+      closeAll(); st.clips = [];
+    },
   };
 }
 

@@ -69,7 +69,7 @@ try:
             if b and b["x"] > 40: return (max(10, b["x"] / 2), 450)
             return (30, 880) if b else None
 
-        for vw in (1400, 390):
+        for vw in (() if os.environ.get("PANELS_ONLY") == "settings" else (1400, 390)):   # PANELS_ONLY=settings: part 4 only
             pg.set_viewport_size({"width": vw, "height": 900 if vw > 600 else 844}); W(400)
             phone = vw < 600
             print("\n== %d px" % vw)
@@ -194,6 +194,79 @@ try:
                "%d after a Save, a new one starts empty (the draft is gone)" % vw)
             pg.keyboard.press("Escape"); W(500)
             J("() => { Object.entries(TDSAdd.all()).filter(([k, x]) => !x.deleted && x.party === 'ZZ New Party').forEach(([k]) => TDSAdd.remove(k, 'test')); render(); }")
+        print("\n4. the settings panels (the owner, 22-Oct-2026: \"Yes, same as others\"): Bank settings, Sales settings, the firm's details")
+        pg.set_viewport_size({"width": 1400, "height": 900}); W(400)
+        asked4 = lambda: pg.locator("#confirmBox [data-leave-ask]").count() > 0 and pg.locator("#confirmBox [data-leave-ask]").first.is_visible() or asked()
+        J("""(leds) => { const c = newCompany({name: "ZZ Zeta Exports", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
+          return openCompany(c.id).then(() => loadBank(c.id)).then(() => { S.bank.ledgers = {list: leds.map(n => ({name: n, group: /Sales/.test(n) ? "Sales Accounts" : /Output|Round/.test(n) ? "Duties & Taxes" : /Bank/.test(n) ? "Bank Accounts" : "Sundry Debtors"})), importedAt: new Date().toISOString(), live: true}; S.tab = "sales"; S.step = null; return loadSales(c.id); }); }""",
+          ["Alpha Retail LLP", "Sales @ 18% Local", "Output CGST", "Output SGST", "Output IGST", "Round Off", "HDFC Bank"]); W(900)
+        P = "#app .bk-panel"
+        def ways4(close_x):
+            return [("✕", lambda: pg.locator(P + ' button[aria-label="Close"]').first.click()), ("Esc", lambda: pg.keyboard.press("Escape")),
+                    ("a click outside", lambda: pg.mouse.click(5, 450)), ("Back", lambda: pg.go_back())]
+        # Sales settings
+        J("() => { window.__saves = 0; const f = window.saveSales; window.saveSales = function () { window.__saves++; return f.apply(this, arguments); }; }")
+        ser0 = J("SL().cfg.series || ''")
+        sopen = lambda: (J("() => { salesAct('salesSettings'); }"), W(600))
+        for wname, how in ways4(True):
+            sopen()
+            if not pg.locator(P).count(): ok(False, "Sales settings opens"); break
+            ser = pg.locator(P + ' label:has-text("Series") input'); ser.fill("ZZ/{FY}/"); ser.press("Tab"); W(300)
+            J("window.__saves = 0"); how(); W(700)
+            ok(pg.locator(P).count() == 0 and not asked4(), "Sales settings: %s closes it at once, no ask" % wname)
+            ok(J("window.__saves") == 0 and J("Drafts.dirty('sales:settings')"), "Sales settings: closing does not save (%d saves); the change is kept as a draft" % J("window.__saves"))
+            sopen()
+            ok(pg.locator(P + " [data-draft-kept]").count() == 1 and "Unsaved changes kept" in pg.locator(P + " [data-draft-kept]").inner_text()
+               and pg.input_value(P + ' label:has-text("Series") input') == "ZZ/{FY}/", "Sales settings after %s, opened again: the series typed, with \"Unsaved changes kept · Discard\"" % wname)
+            pg.locator(P + " [data-draft-discard]").click(); W(400)
+            ok(J("SL().cfg.series || ''") == ser0 and not J("Drafts.dirty('sales:settings')") and pg.locator(P + " [data-draft-kept]").count() == 0, "Sales settings: Discard puts the saved series back")
+            pg.keyboard.press("Escape"); W(500)
+        sopen(); ser = pg.locator(P + ' label:has-text("Series") input'); ser.fill("ZY/{FY}/"); ser.press("Tab"); W(300)
+        pg.click('#app [data-confirm-foot="sales:settings"] [data-cfm="save"]'); W(400)
+        ok(J("SL().cfg.series") == "ZY/{FY}/" and not J("Drafts.dirty('sales:settings')"), "Sales settings: Save saves")
+        pg.keyboard.press("Escape"); W(500); sopen()
+        ok(pg.locator(P + " [data-draft-kept]").count() == 0, "Sales settings: after Save, no draft line")
+        pg.keyboard.press("Escape"); W(500)
+        # Bank settings
+        J("() => { S.tab = 'bank'; render(); }"); W(700)
+        bopen = lambda: (J("() => { B().showSettings = true; render(); }"), W(600))
+        AUTO = P + ' label:has-text("Mark sure matches as Ready") input'
+        auto0 = J("CO().bankAuto !== false")
+        for wname, how in ways4(True):
+            bopen()
+            if not pg.locator(P).count(): ok(False, "Bank settings opens"); break
+            pg.locator(AUTO).click(); W(300)
+            how(); W(700)
+            ok(pg.locator(P).count() == 0 and not asked4(), "Bank settings: %s closes it at once, no ask" % wname)
+            ok(J("Drafts.dirty('bank:settings')") and (J("CO().bankAuto !== false") != auto0), "Bank settings: the change is kept as a draft")
+            bopen()
+            ok(pg.locator(P + " [data-draft-kept]").count() == 1 and pg.locator(AUTO).is_checked() != auto0, "Bank settings after %s, opened again: the change, with the kept line" % wname)
+            pg.locator(P + " [data-draft-discard]").click(); W(400)
+            ok(J("CO().bankAuto !== false") == auto0 and not J("Drafts.dirty('bank:settings')"), "Bank settings: Discard puts it back")
+            pg.keyboard.press("Escape"); W(500)
+        # the firm's details, asked at an owner's first sign-in
+        J("() => { window.__fsDue = true; window.__fsReal = [window.firmSetupDue, window.firmSetupLater]; window.firmSetupDue = () => window.__fsDue; window.firmSetupLater = () => { window.__fsDue = false; render(); }; render(); }"); W(600)
+        FSX = '[data-overlay="firmsetup"]'
+        fsways = [("✕", lambda: pg.locator(FSX + ' button[aria-label^="Close"]').first.click()), ("Esc", lambda: pg.keyboard.press("Escape")),
+                  ("a click outside", lambda: pg.mouse.click(15, 15)), ("Back", lambda: pg.go_back()), ("Later", lambda: pg.locator(FSX + ' button:text-is("Later")').click())]
+        for wname, how in fsways:
+            J("() => { window.__fsDue = true; render(); }"); W(600)
+            if not pg.locator(FSX).count(): ok(False, "the firm's details open"); break
+            pg.fill(FSX + ' input[aria-label="Firm name"]', "Garg & Co " + wname); W(200)
+            how(); W(600)
+            ok(pg.locator(FSX).count() == 0 and not asked4(), "the firm's details: %s closes it at once, no ask" % wname)
+            J("() => { window.__fsDue = true; render(); }"); W(600)
+            ok(pg.input_value(FSX + ' input[aria-label="Firm name"]') == "Garg & Co " + wname and pg.locator(FSX + " [data-draft-kept]").count() == 1,
+               "the firm's details after %s, opened again: what was typed is kept, with the kept line" % wname)
+            pg.locator(FSX + " [data-draft-discard]").click(); W(300)
+            ok(pg.input_value(FSX + ' input[aria-label="Firm name"]') != "Garg & Co " + wname and pg.locator(FSX + " [data-draft-kept]").count() == 0, "the firm's details: Discard empties it again")
+            J("() => { window.__fsDue = false; render(); }"); W(400)
+        J("() => { window.__fsDue = true; render(); }"); W(600)
+        pg.fill(FSX + ' input[aria-label="Firm name"]', "Garg Shekhar & Company"); pg.click(FSX + ' button:text-is("Save")'); W(600)
+        ok(J("S.firm.firmName") == "Garg Shekhar & Company", "the firm's details: Save saves")
+        J("() => { S.firm.firmName = ''; window.__fsDue = true; render(); }"); W(600)
+        ok(pg.locator(FSX + " [data-draft-kept]").count() == 0, "the firm's details: after Save, no draft")
+        J("() => { [window.firmSetupDue, window.firmSetupLater] = window.__fsReal; render(); }"); W(300)
         ok(not [e for e in errors if "supabase" not in e.lower()], "no page errors (%s)" % errors[:3])
         br.close()
 except Exception as e:

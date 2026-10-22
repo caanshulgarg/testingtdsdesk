@@ -15,7 +15,7 @@ import Loading from "../parts/Loading.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import LedgerBox from "../parts/LedgerBox.jsx";
 import LedgerSelect from "../parts/LedgerSelect.jsx";
-import Confirm from "../parts/Confirm.jsx";
+import Confirm, { KeptLine } from "../parts/Confirm.jsx";
 import { BusyCard } from "../parts/Reading.jsx";
 import { ChipBar, NoMatch } from "../parts/ChipBar.jsx";
 import NoticeLine from "../parts/NoticeLine.jsx";
@@ -66,11 +66,10 @@ function salesCols(s, list, nSel) {
 }
 
 // a panel over the page (the invoice, or the settings); a click on the dark area around it or Esc closes it
-// (parts/dismiss.js: a click outside, Esc and, on a phone, Back all go through close, which asks first when something is
-// not saved)
+// (parts/dismiss.js: a click outside, Esc and Back all go through close, at once)
 function Panel({ title, wide, close, children }) {
   const ref = useRef(null);
-  useDismiss(true, ref, close);
+  useDismiss(true, ref, close, { back: "always" });
   return (
     <div className="bk-overlay">
       <div ref={ref} className={"bk-panel" + (wide ? " wide" : "")} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Invoice"}>
@@ -192,9 +191,11 @@ function SettingsPanel() {
   const s = SL(), c = s.cfg, co = CO(s.cid), home = stateOfGstin(co.gstin);
   const rates = Array.from(new Set(s.list.flatMap((v) => salesTotals(v.x).map((g) => g.rate)).concat([5, 18]))).sort((a, b) => a - b);
   return (
-    <Panel title={"Sales settings — " + co.name} close={() => Drafts.guard("sales:settings", () => salesAct("salesSettingsClose"))}>
+    // closing never asks and never saves (the owner, 22-Oct-2026): what is not saved stays as a draft until Save
+    <Panel title={"Sales settings — " + co.name} close={() => { s.showSettings = false; render(); }}>
       {/* review 18: one section, saved with Save at its foot; the default ledgers are confirmed for every computer */}
       <Confirm id="sales:settings" label="Sales settings" stores={["salescfg"]} cid={s.cid}>
+      <KeptLine id="sales:settings" />
       <section><h3>Invoice numbers</h3>
         <div className="bk-form"><CfgField c={c} label="Series ({FY} = financial year)" k="series" ph="INV/{FY}/" /><CfgField c={c} label="Next number" k="next" /><CfgField c={c} label="Digits" k="pad" /></div>
         <p className="note">Next invoice: <b>{nextInvoiceNumber(new Date().toISOString().slice(0, 10)).number}</b></p></section>

@@ -113,7 +113,7 @@ export function handler(deps: Deps) {
   const secret = async (name: string) => { try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq." + name, SERVICE)) as any[]; return String((k && k[0] && k[0].value) || ""); } catch { return ""; } };
   const groqKey = () => secret("groq_api_key");
   // one Groq call; -> the Response, or null when Groq could not be reached
-  const groq = async (key: string, model: string, audio: Uint8Array, ext: string, type: string, lang: string, prompt: string) => {
+  const groq = async (key: string, model: string, audio: BlobPart, ext: string, type: string, lang: string, prompt: string) => {
     const form = new FormData();
     form.append("file", new File([audio], "clip." + ext, { type: type === "video/webm" ? "audio/webm" : type }));
     form.append("model", model);

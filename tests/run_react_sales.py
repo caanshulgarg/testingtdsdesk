@@ -83,10 +83,12 @@ with sync_playwright() as p:
     ser = pg.locator('#app .bk-panel label:has-text("Series") input'); ser.fill("ZZ/{FY}/"); ser.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("SL().cfg.series") == "ZZ/{FY}/" and "ZZ/" in pg.inner_text("#app .bk-panel"), "Sales settings: the invoice series, and the next number shown")
     pg.screenshot(path=OUT + "/react-sales.png")
-    # review 18 (02-Oct-2026): closing with unsaved changes asks; saved with Save at the panel's foot, it closes at once
+    # the owner, 22-Oct-2026 ("Yes, same as others"): closing never asks and never saves; the series stays as a draft, said
+    # when the panel is opened again; saved with Save at the panel's foot
     pg.click('#app .bk-panel button[aria-label="Close"]'); pg.wait_for_timeout(300)
-    ok(pg.locator("#confirmBox [data-leave-ask]").is_visible(), "review 18: closing with the series not saved asks first")
-    pg.click('#confirmBox [data-leave="stay"]'); pg.wait_for_timeout(300)
+    ok(pg.locator("#app .bk-panel").count() == 0 and not pg.locator("#confirmBox [data-leave-ask]").is_visible(), "closing with the series not saved: closed at once, no ask")
+    pg.click('#app .bk-actions button:has-text("Settings")'); pg.wait_for_timeout(400)
+    ok(pg.locator('#app .bk-panel [data-draft-kept]').count() == 1 and pg.evaluate("SL().cfg.series") == "ZZ/{FY}/", "opened again: the series kept, \"Unsaved changes kept · Discard\"")
     pg.click('#app [data-confirm-foot="sales:settings"] [data-cfm="save"]'); pg.wait_for_timeout(300)
     pg.click('#app .bk-panel button[aria-label="Close"]'); pg.wait_for_timeout(300)
     ok(pg.locator("#app .bk-panel").count() == 0, "closed")
