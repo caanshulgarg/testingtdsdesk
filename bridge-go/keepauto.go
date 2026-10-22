@@ -78,7 +78,11 @@ func keepAutoBlocked(company, guid string) string {
 	if cur == nil {
 		return "" // the callers ask nothing without the counters
 	}
-	if v, max := toI64(cur["altvchid"]), keepAutoMax(); v > max {
+	v, max := toI64(cur["altvchid"]), keepAutoMax()
+	if v <= 0 {
+		return "Tally gave no voucher counter for the company, so its size is not known"
+	}
+	if v > max {
 		return fmt.Sprintf("the company has up to %d vouchers (Tally's voucher counter), more than %d: Tally would take longer than 2 s to list its changed entries", v, max)
 	}
 	return ""
