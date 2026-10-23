@@ -29,13 +29,14 @@ const GST2B = {
     b.vouchers.forEach(v => {
       if (Books.isSale(v) || v.opt) return;                                   // an Optional entry is no document
       const tax = {IGST: 0, CGST: 0, SGST: 0, CESS: 0};
-      let signed = 0, reg = "", inel = 0, any = false, setOff = false;
+      let signed = 0, reg = "", inel = 0, any = false, setOff = false, hold = 0, claim = 0, bare = true;
       v.ent.forEach(e => {
         const m = Books.ledgerOf(e.l);
         if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) setOff = true;
+        if (m.kind === "tax_other" && m.what === "gst_setoff") setOff = true;
         if (m.kind === "gst" && m.rcm && m.side === "output") return;
-        if (!((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") && m.kind !== "ineligible") return;
-        any = true;
+        if (!((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") && m.kind !== "ineligible"){ if (m.kind !== "roundoff") bare = false; return; }
+        any = true; if (GSTR.held(e.l)) hold++; else claim++;
         const amt = Math.abs(e.a), t = m.tax || "IGST";
         tax[t] = r2(tax[t] + amt); signed += e.a;
         if (m.kind === "ineligible") inel = r2(inel + amt);
@@ -44,6 +45,10 @@ const GST2B = {
       if (!any) return;
       // the month's set-off of output tax against credit is not a purchase
       if (setOff){ this.skipped.setOff++; return; }
+      // 3B input check (23-Oct-2026): credit moved from the held ledger ("NOT SHOWN IN 2B", GSTR.held) to the input ledger,
+      // or input lines only (a rounding): no document
+      // (and the held ledger credited alone: its credit written off, not a supplier's note)
+      if (bare || (hold && claim) || (hold && signed > 0)){ this.skipped.taxOnly++; return; }
       // the supplier: the voucher's party, else the one ledger in it that carries a GSTIN
       let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase();
       if (!gstin){ const e = v.ent.find(x => gst[x.l]); if (e){ party = e.l; gstin = String(gst[e.l]).toUpperCase(); } }
@@ -58,7 +63,7 @@ const GST2B = {
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
         taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
-        dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, narr: v.narr || ""});
+        dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, held: hold > 0, narr: v.narr || ""});
     });
     return out;
   },

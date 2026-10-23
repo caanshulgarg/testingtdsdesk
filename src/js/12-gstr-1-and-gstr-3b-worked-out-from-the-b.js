@@ -128,6 +128,23 @@ const GSTR = {
   // the purchase side, for the credit in 3B: every bill, and every journal or payment that takes input tax
   // (an expense booked in a journal, bank charges, reverse charge on rent); not the month's set-off,
   // and not tax only moved between ledgers (to a control account, or a rounding)
+  // 3B input check (23-Oct-2026): an input ledger the books keep credit in until 2B shows the bill ("IGST INPUT NOT SHOWN
+  // IN 2B", or under a group so named): no credit is taken on it; it is taken when the books move it to the input ledger.
+  // A ledger set by hand (held true / false) is as set
+  HELD: /NOT\s*(SHOWN|REFLECT\w*|APPEAR\w*)?\s*IN\s*(GSTR\s*-?\s*)?2\s*[AB]\b|ITC\s*(ON\s*HOLD|PENDING)|PENDING\s*ITC/i,
+  held(l){ const m = Books.ledgerOf(l); if (m.held != null) return !!m.held; return m.kind === "gst" && m.side === "input" && (this.HELD.test(l) || ledGroupPath(S.books || {}, l).some(g => this.HELD.test(g))); },
+  // the credit an entry other than a bill takes, head by head, from the debits and credits of the input ledgers (debit
+  // more); the held ledger's lines apart (hold). Lines are netted, never added up: tax moved from the held ledger to
+  // Input IGST is that month's credit once (Leads: 3 x 2,02,500 taken as 12,15,000 in Apr-2026)
+  netIn(v){
+    const n = {IGST: 0, CGST: 0, SGST: 0, CESS: 0, hold: 0, inel: 0, other: false, round: true, ro: false};
+    v.ent.forEach(e => { const m = Books.ledgerOf(e.l), inp = ((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") || m.kind === "ineligible";
+      if (!inp){ if (m.kind === "roundoff") n.ro = true; else n.round = false; if (m.kind === "tax_other" || m.what === "gst_setoff" || ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm)) n.other = true; return; }
+      if (this.held(e.l)){ n.hold = r2(n.hold - e.a); return; }
+      if (m.kind === "ineligible"){ n.inel = r2(n.inel - e.a); return; }
+      (m.tax === "CGST+SGST" ? [["CGST", e.a / 2], ["SGST", e.a / 2]] : [[m.tax || "IGST", e.a]]).forEach(([h, a]) => { n[h] = r2(n[h] - a); }); });
+    return n;
+  },
   inward(ym, reg){
     const b = S.books, out = [], gst = b.gstins || {};
     this.vIn(ym).forEach(v => {
@@ -140,7 +157,16 @@ const GSTR = {
         else if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) outTax = true; });
       if (!purch && (!inTax || outTax)) return;
       if (reg && this.regOf(v) !== reg) return;
-      const L = Books.lines(v);
+      // not a bill: the credit is the input ledgers' net (above). None left (a move between input ledgers, a bill or a
+      // write-off on the held ledger): no credit. A set-off (with output tax or the GST payable or cash ledger) or a
+      // rounding of the input ledgers is no purchase, so never negative credit
+      // (a bill on the held ledger: the same, its credit waits)
+      let ni = this.netIn(v); const none = ["IGST", "CGST", "SGST", "CESS", "inel"].every(h => Math.abs(ni[h]) < 0.005);
+      if (purch && !ni.hold) ni = null;
+      else if (purch ? none : (ni.other || (ni.round && ni.ro) || none)) return;
+      if (ni){ const s = r2(ni.IGST + ni.CGST + ni.SGST + ni.CESS); signed = s > 0 ? -1 : 1; }
+      const L0 = Books.lines(v), d = signed < 0 ? 1 : -1;
+      const L = ni ? Object.assign({}, L0, {tax: {IGST: r2(ni.IGST * d), CGST: r2(ni.CGST * d), SGST: r2(ni.SGST * d), CESS: r2(ni.CESS * d)}}) : L0;
       const tax = r2(L.tax.CGST + L.tax.SGST + L.tax.IGST + L.tax.CESS);
       const rcm = Books.isRcm(v);
       let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase(), taxable = L.taxable, parts = L.parts || [], guessed = false, taxOnly = false;
@@ -156,13 +182,13 @@ const GSTR = {
         if (!taxable && rcm){ const rt = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]) || 18; taxable = r2((tax - L.tax.CESS) * 100 / rt); guessed = true; }
         const rt = taxable ? Books.snapRate(Math.round(r2(tax - L.tax.CESS) / taxable * 10000) / 100) : 0;
         parts = [{rate: rt, hsn: parts[0] ? parts[0].hsn : "", supply: v.supply || "", taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS, guessed}];
-      }
+      } else if (ni) parts = [Object.assign({}, parts[0] || {}, {taxable, igst: L.tax.IGST, cgst: L.tax.CGST, sgst: L.tax.SGST, cess: L.tax.CESS})];
       if (!taxable && !tax) return;
       out.push({id: v.id, date: v.date, no: Books.supInv(v), voucher: v.no || "", type: v.type, party, gstin, refDate: v.refDate || "",
         taxable, cgst: L.tax.CGST, sgst: L.tax.SGST, igst: L.tax.IGST, cess: L.tax.CESS, parts, valueGuessed: guessed, bill: purch,
         cls: Books.supplyClass(v), rcm, import: Books.isImport(v), supply: v.supply || (parts[0] && parts[0].supply) || "",
         blocked: !!v.ineligibleFlag, hsn: (parts[0] && parts[0].hsn) || (v.hsn || [])[0] || "",
-        ineligible: L.ineligible || 0, common: L.common || null, dir: this.itcDir(v), note: this.itcDir(v) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, src: v.src === "bridge" ? "bridge" : "daybook"});
+        ineligible: L.ineligible || 0, common: L.common || null, dir: ni ? d : this.itcDir(v), note: (ni ? d : this.itcDir(v)) < 0 ? "debit" : "", narr: v.narr || "", taxOnly, fromHold: ni && ni.hold < 0 ? -ni.hold : 0, src: v.src === "bridge" ? "bridge" : "daybook"});
     });
     return out;
   },
@@ -281,7 +307,8 @@ const GSTR = {
     if (basis.on){
       const add = (o, d) => { o.igst = r2(o.igst + d.igst); o.cgst = r2(o.cgst + d.cgst); o.sgst = r2(o.sgst + d.sgst); o.cess = r2(o.cess + d.cess); o.n++; o.list.push(d); };
       const vById = new Map((S.books.vouchers || []).map(v => [v.id, v]));
-      const claimable = d => d.dir > 0 && !d.rcm && !d.ineligible && !(vById.get(d.id) && Books.isImport(vById.get(d.id)));
+      // a bill the books hold ("NOT SHOWN IN 2B") took no credit: nothing to hold back or release (the books' move takes it)
+      const claimable = d => d.dir > 0 && !d.rcm && !d.ineligible && !d.held && !(vById.get(d.id) && Books.isImport(vById.get(d.id)));
       basis.res.onlyBooks.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
       basis.res.pairs.forEach(x => { if (x.p.ym > ym) x.books.filter(d => d.ym === ym && claimable(d)).forEach(d => add(held, d));
         if (x.p.ym === ym) x.books.filter(d => d.ym < ym && basis.loaded.has(d.ym) && this.itcBasis(d.ym, reg, true) && claimable(d)).forEach(d => add(released, d)); });
@@ -296,7 +323,7 @@ const GSTR = {
       // a credit note booked in Tally (as our debit note) does not reduce credit while it stays rejected
       (basis.res.rejected || []).forEach(x => { const dk = typeof ITCT === "object" ? ITCT.dec(reg, "R|" + x.p.key).act : "";
         if (dk === "accept") return;
-        x.books.filter(d => !d.rcm && !d.ineligible).forEach(d => {
+        x.books.filter(d => !d.rcm && !d.ineligible && !d.held).forEach(d => {
           // in the month the bill was booked, if that month is on the 2B basis; else in the month of the 2B that shows the rejection
           const here = d.ym === ym || (x.p.ym === ym && d.ym < ym && !this.itcBasis(d.ym, reg, true));
           if (!here || (d.ym !== ym && d.ym > x.p.ym)) return;
@@ -410,7 +437,7 @@ const GSTR = {
     add("Invoice numbers longer than 16 characters", dn.long, "The portal takes at most 16 characters. Shorten the number in Tally (and on the invoice), e.g. drop the year's prefix.");
     add("Invoice numbers with characters the portal does not take", dn.chars, "Only letters, digits, / and - are allowed, and a number cannot be only zeros. Change the number in Tally.");
     add("Invoice numbers used twice in the financial year", dn.dup, "Each invoice (and each credit or debit note) needs its own number in the year. Renumber one of them in Tally.");
-    add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
+    add("Purchases with no supplier GSTIN", inn.filter(r => !r.gstin && !r.fromHold && (r.cgst || r.sgst || r.igst)), "Needed to match against 2B.");
     add("Supplier GSTINs that are not valid", inn.filter(r => r.gstin && !gstinValid(r.gstin)).map(r => ({no: r.gstin, party: r.party})), "The check digit or the form of the GSTIN is wrong: the bill can never match 2B. Correct the GSTIN on the supplier's ledger in Tally.");
     add("Purchases marked ITC not to be taken", inn.filter(r => r.blocked), "These are kept out of the credit claimed.");
     add("Inward supplies under reverse charge", inn.filter(r => r.rcm), "Tax on these is payable by you and shown in 3.1(d).");
