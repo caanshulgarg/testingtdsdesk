@@ -9,32 +9,92 @@ import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import More from "../parts/More.jsx";
 import { goTallyCard } from "../parts/TallyChip.jsx";
+import { seenWords } from "../parts/TallyLink.jsx";
 import Filters, { Search } from "../parts/Filters.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
 
+// Add client. 23-Oct-2026 (next-fix-tally-link; the owner added Salesify twice and it "is not updating"):
+//   Pick from Tally first: the companies FinCom has seen in Tally and not linked to a client (open now or not), each with
+//   its computer and when it was last seen, the best match for what is typed on top. "Add as client" adds the client
+//   already linked (saveNewCompany → tallyLinkClient, the person's own choice); a client of the same name already there is
+//   offered instead ("Salesify Marketing LLP already exists — link this company to it?").
+//   Or type a new client: a client of the same or a similar name, or the same GSTIN, is said under the name with Open it;
+//   adding one of the same name again is asked first. The old "Company in Tally" list and free "Company name in Tally" box
+//   are gone: a company picked and then cleared stayed in that box as the client's Tally name, and tally-ingest linked
+//   that company (VMS EVENTS) to the new client by itself.
+const SHOW_PICK = 6;
+function PickFromTally({ v, onAdd, busy }) {
+  const [all, setAll] = useState(false);
+  const seen = tallyCompaniesSeen().filter((c) => !c.client);
+  // the best match for what is typed (name or GSTIN) on top; then open now, then the latest seen
+  const probe = { id: "", name: v.name, gstin: v.gstin };
+  const row = (c) => ((TCloud.pane || {}).companies || []).find((x) => x.company === c.name) || {};
+  const at = (c) => row(c).last_seen || "";
+  // the computer that reported it (tally_companies.device_id), for "seen on NWS144"
+  const pc = (c) => { const d = ((TCloud.pane || {}).devices || []).find((x) => x.id === row(c).device_id); return d && typeof tallyPcLabel === "function" ? tallyPcLabel(d) : ""; };
+  const ranked = (typeof suggestFor === "function" && (v.name || v.gstin)
+    ? suggestFor(probe, seen.map((c) => Object.assign({ company: c.name, at: at(c) }, c)))
+    : seen.map((c) => Object.assign({ company: c.name, at: at(c), score: 0, why: "" }, c)).sort((a, b) => (b.open - a.open) || String(b.at).localeCompare(String(a.at)) || a.company.localeCompare(b.company)));
+  const shown = all ? ranked : ranked.slice(0, SHOW_PICK);
+  return <section className="addc-pick" data-add-pick={ranked.length}>
+    <h3>Pick from Tally</h3>
+    <p className="note" style={{ margin: "0 0 4px" }}>{ranked.length ? "The companies FinCom has seen in Tally and not linked to a client yet. Adding one links it at once."
+      : "No Tally company is waiting to be linked. Open the client’s company in TallyPrime on a connected computer and it shows here within a minute, or type the client below."}</p>
+    {shown.length > 0 && <ul className="tlink-list">{shown.map((c, i) => <li key={c.company} data-add-pick-row={c.company} data-why={c.why || ""}>
+      <span className="tlink-co"><b>{c.company}</b>
+        {c.why && <span className={"tag " + (c.why === "like" ? "warn" : "ok")}>{c.why === "gstin" ? "same GSTIN" : c.why === "name" ? "same name" : "similar name"}</span>}
+        <span className="note">{c.open ? c.where || "open in Tally" : (pc(c) ? "seen on " + pc(c) : c.where || "seen in Tally") + (c.at ? " · last seen " + seenWords(c.at) : "")}</span></span>
+      <button className="btn small" data-add-pick-company={c.company} disabled={!!busy} onClick={() => onAdd(c)}>{busy === c.company ? "Adding…" : "Add as client"}</button>
+    </li>)}</ul>}
+    {ranked.length > shown.length && <button className="linkbtn" data-add-pick-all="" onClick={() => setAll(true)}>{"Show all " + ranked.length}</button>}
+  </section>;
+}
+
 function AddClient() {
   const others = sortedCompanies();
-  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false, tallyCompany: "", postOnly: true });
+  const [v, setV] = useState({ name: "", gstin: "", copyFrom: "", turnover10cr: false });
+  const [busy, setBusy] = useState("");
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
   // the Tally companies the bridge here sees open, and the ones the firm's Tally computers reported (02-Oct-2026)
   if (typeof TCloud === "object" && TCloud.on() && TCloud.pane.devices === null && !TCloud.pane.busy) setTimeout(() => TCloud.refreshPane(), 0);
-  const seen = tallyCompaniesSeen(), pick = (name) => { const x = seen.find((c) => c.name === name);
-    setV({ ...v, tallyCompany: name, tallyName: name || v.tallyName, name: v.name || name, gstin: v.gstin || (x && x.gstin) || "" }); };
-  const save = () => saveNewCompany(v);
+  const live = Object.values(S.companies || {}).filter((c) => !c.deleted);
+  const dups = typeof similarClients === "function" && (v.name.trim() || v.gstin.trim()) ? similarClients(v.name, v.gstin, live) : [];
+  const pickable = (typeof TCloud === "object" && TCloud.on()) || (typeof Bridge === "object" && Bridge.up());
+  const openIt = (c) => { S.addingCo = false; openCompany(c.id); S.tab = "cotally"; render(); };
+  const save = async () => {
+    const same = dups.find((d) => d.why === "same");
+    if (same && !(await askConfirm({ title: same.client.name + " already exists", ok: "Add another",
+      body: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
+    saveNewCompany({ ...v, dupOk: !!same });
+  };
+  // Pick from Tally: a client of the same name already there is linked instead of adding a second one
+  const addFromTally = async (c) => {
+    const name = v.name.trim() && sameTallyName(v.name, c.company) ? v.name.trim() : clientNameFromTally(c.company);
+    const twin = similarClients(name, c.gstin || "", live).find((d) => d.why === "same" || d.why === "gstin");
+    if (twin) {
+      const ok = await askConfirm({ title: twin.client.name + " already exists", ok: "Link it to " + twin.client.name,
+        body: "<p><b>" + esc(twin.client.name) + "</b> is already in FinCom" + (twin.why === "gstin" ? " with this GSTIN" : "") + ". Link the Tally company <b>" + esc(c.company) + "</b> to it instead of adding another client?</p>" });
+      if (!ok) return;
+      setBusy(c.company); const done = await tallyLinkClient(c.company, twin.client.id); setBusy("");
+      if (done) openIt(twin.client);
+      return;
+    }
+    setBusy(c.company);
+    saveNewCompany({ ...v, name, gstin: v.gstin || c.gstin || "", tallyCompany: c.company, postOnly: false });
+    setBusy("");
+  };
   return <>
     <h2>Add client</h2>
+    {pickable && <PickFromTally v={v} onAdd={addFromTally} busy={busy} />}
+    {pickable && <h3 style={{ margin: "6px 0 0", fontSize: 15 }}>Or type a new client</h3>}
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
-      <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
-      <label className="f"><span>GSTIN</span><input type="text" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
-      <label className="f wide"><span>Company in Tally</span>
-        <select aria-label="Company in Tally" data-add-tally="" value={v.tallyCompany} onChange={(e) => pick(e.target.value)}>
-          <option value="">{seen.length ? "Choose the company in Tally (optional)" : "No Tally company seen yet: open it in Tally on a connected computer"}</option>
-          {seen.map((c) => <option key={c.name} value={c.name} disabled={!!c.client}>{c.name + (c.client ? " — linked to " + ((CO(c.client) || {}).name || "another client") : " — " + (c.where || (c.open ? "open in Tally" : "seen")))}</option>)}
-        </select></label>
-      {v.tallyCompany && <label className="chk wide" data-add-postonly=""><input type="checkbox" checked={v.postOnly} onChange={set("postOnly")} /> Post this client’s entries only into <b>{v.tallyCompany}</b></label>}
-      <label className="f"><span>Company name in Tally</span><input type="text" placeholder="Same as client name" value={v.tallyName} onChange={set("tallyName")} /></label>
+      <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus autoComplete="off" placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
+      <label className="f"><span>GSTIN</span><input type="text" autoComplete="off" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
+      {dups.length > 0 && <div className="addc-dup wide" data-add-dup={dups[0].why} role="status">
+        <span>{dups[0].why === "gstin" ? dups[0].client.name + " already has this GSTIN." : dups[0].why === "same" ? dups[0].client.name + " already exists." : "A client with a similar name exists: " + dups[0].client.name + "."}</span>
+        <button className="linkbtn" data-add-dup-open={dups[0].client.id} onClick={() => openIt(dups[0].client)}>Open it</button></div>}
       {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
         <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </label>}

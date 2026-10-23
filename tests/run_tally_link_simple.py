@@ -255,7 +255,10 @@ def main():
         n0 = len(calls("tally_company_link"))
         pg.select_option("#app [data-guide-client]", cid); pg.wait_for_timeout(300); pg.select_option("#app [data-guide-company]", "ABC LTD"); pg.wait_for_timeout(300)
         pg.click("#app [data-guide-link]"); pg.wait_for_timeout(900)
-        ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}]], "9. the guide's Link -> tally_company_link once (%s)" % calls("tally_company_link")[n0:])
+        # 23-Oct-2026 (next-fix-tally-link): a change of company moves the client: the new company linked, then the one it
+        # had (GARG SHEKHAR) unlinked in the cloud too (it used to stay linked there while this page showed it moved)
+        ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}], ["tally_company_link", {"p_company": "GARG SHEKHAR", "p_client": None}]],
+           "9. the guide's Link -> ABC LTD linked, GARG SHEKHAR unlinked (%s)" % calls("tally_company_link")[n0:])
         # every client linked: the guide folds
         E("() => { const ids = Object.values(S.companies).filter(x => !x.deleted).map(x => x.id); window.__companies = ids.map((id, i) => ({company: 'CO ' + i, client_id: id, device_id: '%s', gstin: ''})); TLight.st.cos = window.__companies; TCloud.pane.companies = window.__companies; render(); }" % D1)
         pg.wait_for_timeout(600)

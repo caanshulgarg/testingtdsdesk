@@ -1994,15 +1994,20 @@ function doAct(act, t){
     case "csv": exportCsv(); break;
   }
 }
-// v: {name, gstin, tallyName, copyFrom, turnover10cr} from the add-client form; false when something is missing
+// v: {name, gstin, copyFrom, turnover10cr, tallyCompany, postOnly, dupOk} from the add-client form; false when something is
+// missing. 23-Oct-2026 (next-fix-tally-link): the client's Tally name is the Tally company chosen, else its own name (the
+// form's free "Company name in Tally" box is gone: a company picked and then cleared stayed in it, and tally-ingest linked
+// that company to the new client by itself); a client of the same name is not added again unless the person said so (dupOk)
 function saveNewCompany(v){
   const name = String(v.name || "").trim(), gstin = String(v.gstin || "").trim().toUpperCase();
   if (!name){ toast("Enter the client name."); return false; }
   if (gstin && !gstinValid(gstin)){ toast("That GSTIN fails its check digit. Check each character or leave it blank."); return false; }
-  if (gstin && Object.values(S.companies).some(c => c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return false; }
+  if (gstin && Object.values(S.companies).some(c => !c.deleted && c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return false; }
+  const twin = similarClients(name, "", Object.values(S.companies)).find(x => x.why === "same");
+  if (twin && !v.dupOk){ toast(twin.client.name + " already exists. Open it from Clients, or add again to keep both."); return false; }
   const src = v.copyFrom ? S.companies[v.copyFrom] : null;
   const co = newCompany(Object.assign(src ? {voucherType:src.voucherType, createOptional:src.createOptional, billwise:src.billwise, gst:src.gst, roundOff:src.roundOff, tdsLedgers:src.tdsLedgers, expenseLedgers:src.expenseLedgers} : {},
-    {name, gstin, tallyName:String(v.tallyName || "").trim() || name, turnover10cr:!!v.turnover10cr}));
+    {name, gstin, tallyName:String(v.tallyCompany || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
   // 02-Oct-2026: the Tally company chosen here, and (ticked) the one company its entries may be posted to
@@ -2012,11 +2017,11 @@ function saveNewCompany(v){
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
-  // round 39: the new client opens on its Tally card (Client setup → Tally). 15-Oct-2026 (one place to connect): a Tally
-  // company chosen here is linked in the Tally page's Connect Tally guide, step 4, with the client and that company
-  // already chosen; a person presses Link there (nothing links by itself here)
+  // round 39: the new client opens on its Tally card (Client setup → Tally). 23-Oct-2026: a Tally company the person
+  // picked here (Pick from Tally) is linked at once: it is the person's own choice (tally_company_link, linked_by them);
+  // the card then says what is next (open it in Tally, the ledgers, the entries)
   openCompany(co.id); S.tab = "cotally"; render();
-  if (tco) openConnectTally(4, co.id, tco);
+  if (tco && typeof tallyLinkClient === "function") tallyLinkClient(tco, co.id).then(ok => { if (!ok) toast(name + " was added; link it to " + tco + " on its Tally card."); });
   return true;
 }
 let pickMode = "company";

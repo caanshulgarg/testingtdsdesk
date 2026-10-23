@@ -547,7 +547,7 @@ const TCloud = {
         p.noTarget = false;
       } catch (e){ p.prefs = []; p.links = []; p.noTarget = true; }
       await this.loadBridgeAlerts();
-      p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at&order=company.asc");
+      p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at,linked_by&order=company.asc");
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
       // or withdrawn (members may read both); without the migration, none (the lines still show what each heartbeat says)
@@ -912,10 +912,15 @@ const TCloud = {
       if (await this.autoOwn()) return;
       const co = CO(), o = co && Bridge.openFor(co);
       if (o){
-        const row = ((await Cloud.api("tally_companies?select=client_id&company=eq." + encodeURIComponent(o.name))) || [])[0];
+        const row = ((await Cloud.api("tally_companies?select=client_id,linked_at&company=eq." + encodeURIComponent(o.name))) || [])[0];
         if (!row) return;                               // the computer has not reported it yet: next minute
-        // linked to another client already: left as it is (changed only by hand, in Settings)
-        if (!row.client_id) await this.rpc("tally_company_link", {p_company: o.name, p_client: co.id});
+        // linked to another client already: left as it is (changed only by hand). 23-Oct-2026 (next-fix-tally-link): and
+        // only when it is certain (tallyAutoClient: the same GSTIN, or the client's NAME equal once the period and Pvt Ltd /
+        // LLP / & are taken off; the client not linked to another company), never a company a person unlinked. It was any
+        // company Bridge.openFor matched, by the client's typed Tally name too: a name left over from Add client linked the
+        // wrong company. The rest is offered on the client's Tally card
+        const m = !row.client_id && !row.linked_at ? tallyAutoClient({name: o.name, gstin: o.gstin || ""}) : null;
+        if (m && m.client.id === co.id) await this.rpc("tally_company_link", {p_company: o.name, p_client: co.id});
       }
       this.autoAt = Date.now() + 10 * 60000;
     } catch (e){ this.autoErr = (e && e.message) || String(e); }
@@ -1503,7 +1508,7 @@ const TLight = {
     this.st.busy = true;
     // round 4, item 25: the stops from FinCom still standing, with who and when (null when they cannot be read: before
     // migration-35; then the computer's info.readStop alone says it)
-    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,linked_at&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
+    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at,linked_by&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
         Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by&action=eq.stop&cleared_at=is.null&order=id.desc").then(r => [].concat(r || []), () => null)])
       .then(([cos, devs, stops]) => {
         this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || []; this.st.stops = stops; this.st.loaded = true;
@@ -1589,13 +1594,19 @@ function tallyLine(co){
   const st = (typeof TLight === "object" && TLight.st) || {}, now = Date.now();
   const link = (st.cos || []).find(c => c.client_id === co.id && c.device_id);
   const dev = link && (st.devs || []).find(d => d.id === link.device_id && !d.revoked);
-  let comp = "", beat = null, bridge = "online", tally = "closed", since = "", paused = false, read = "";
+  let comp = "", beat = null, bridge = "online", tally = "closed", since = "", paused = false, read = "", notOpen = false;
   if (dev){
     const info = dev.info || {}, ds = devState(dev, now);
     beat = info.beat || {}; comp = info.computer || dev.name || "the Tally computer";
     bridge = ds.bridge; tally = ds.tally; since = beat.notAnsweringSince || ""; paused = !!beat.paused;
     const cb = (beat.companies || []).find(k => k.name === link.company) || {};
     read = cb.lastRead || beat.lastRead || cb.at || "";
+    // 23-Oct-2026 (next-fix-tally-link): Tally open on the computer, but with other companies open and not this one (the
+    // heartbeat lists the open ones): said so, not "Connected" (Salesify's card said Linked · reading while only VMS
+    // EVENTS was open on NWS144). Bridges that send no list: as before
+    const lists = [beat.open].concat(Object.values(info.bridges || {}).map(b => b && b.open)).filter(Array.isArray);
+    const k = n => ledNm(String(n || "")).toLowerCase();
+    notOpen = lists.length > 0 && !lists.some(l => l.some(n => k(n) === k(link.company)));
   } else if (typeof Bridge === "object" && Bridge.on() && Bridge.up() && Bridge.openFor(co) && Bridge.openFor(co).name){
     // no word from the cloud for it: the bridge on this computer
     const b = Bridge.st || {}, man = (typeof LK === "object" && LK.fr ? (LK.fr() || {}).man : null) || {};
@@ -1616,6 +1627,7 @@ function tallyLine(co){
   if (tally === "closed") return o("closed", "warn", "Tally not open on " + comp);
   if (since) return o("notanswering", "bad", "Tally is not answering on " + comp + " since " + tallyHm(since));
   if (paused) return o("paused", "warn", "Reading paused on " + comp);
+  if (notOpen) return Object.assign(o("notopen", "warn", link.company + " is not open in Tally on " + comp), {company: link.company});
   return o("open", "ok", "Connected \u00b7 Tally open on " + comp + (read ? " \u00b7 last read " + tallyHm(read) : ""));
 }
 // the stop from FinCom standing on a computer, as the per-client line needs it: the one for all computers, else the
@@ -1885,12 +1897,19 @@ function gstinMatch(company){
   return hits.length === 1 ? hits[0] : null;
 }
 const linkTried = new Set();
+// 23-Oct-2026: the one rule (server/_shared/tallyname.js autoLinkFor) with the clients linked to another company already
+// left out: a company is never moved to them, or a second one added to them, by itself
+function tallyAutoClient(company){
+  const rows = [].concat((typeof TLight === "object" && TLight.st.cos) || [], (typeof TCloud === "object" && TCloud.pane.companies) || []);
+  const taken = new Set(rows.filter(r => r && r.client_id && r.company !== company.name).map(r => String(r.client_id)));
+  return autoLinkFor(company, Object.values(S.companies || {}), taken);
+}
 function linkByGstin(cos){
   if (!TCloud.on()) return;
   (cos || []).forEach(c => {
     if (c.client_id || c.linked_at || linkTried.has(c.company)) return;
-    const k = gstinMatch(c);
-    if (!k) return;
+    const k = gstinMatch(c), m = k && tallyAutoClient({name: c.company, gstin: c.gstin});
+    if (!k || !m || m.client.id !== k.id) return;
     linkTried.add(c.company);
     TCloud.rpc("tally_company_link", {p_company: c.company, p_client: k.id})
       .then(() => { c.client_id = k.id; if (!k.tallyName){ k.tallyName = c.company; Store.saveCompany(k); } TLight.st.at = 0; toast(c.company + " linked to " + k.name + " (same GSTIN " + k.gstin + ")."); render(); },
@@ -2237,8 +2256,13 @@ async function tallyLinkClient(company, cid){
   if (typeof TCloud !== "object" || !TCloud.on() || !company) return false;
   const co = cid ? CO(cid) : null;
   if (co){ try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){} }
+  // 23-Oct-2026: a change of company moves the client: the companies it was linked to before are unlinked in the cloud
+  // too, once the new link is taken (it used to look moved here only, the old link staying in the cloud)
+  const before = cid ? Array.from(new Set([].concat((typeof TLight === "object" && TLight.st.cos) || [], TCloud.pane.companies || [])
+    .filter(r => r && r.company && r.company !== company && String(r.client_id || "") === String(cid)).map(r => r.company))) : [];
   const ok = await TCloud.link(company, cid || null);
   if (!ok) return false;
+  for (const old of before){ try { await TCloud.rpc("tally_company_link", {p_company: old, p_client: null}); } catch (e){ toast("Could not unlink " + old + ": " + ((e && e.message) || e)); } }
   // what this browser shows follows at once; the next read of the cloud confirms it
   const mark = rows => (rows || []).forEach(r => { if (r.company === company) r.client_id = cid || null; else if (cid && r.client_id === cid) r.client_id = null; });
   if (typeof TLight === "object"){ mark(TLight.st.cos); TLight.st.at = 0; }
@@ -2273,7 +2297,11 @@ function tallyLinkOf(co){
   const bk = cloud && TCloud.book ? TCloud.book(co.id) : null;
   const company = (row && row.company) || (bk && bk.company) || (local && local.name) || "";
   const dev = row && row.device_id && [].concat(st.devs || [], pane.devices || []).find(d => d.id === row.device_id);
-  const out = (state, needs) => ({state, word: TALLY_LINK_WORDS[state], level: TALLY_LINK_LEVEL[state], company, computer: (l && l.computer) || (dev ? tallyPcLabel(dev) : ""), line: l, needs: needs || []});
+  // 23-Oct-2026: when the company was last seen by a computer (any row of it: TLight's or the Tally page's), and whether
+  // FinCom linked it by itself (linked_by empty), for the card's words and its "Not this company"
+  const seenAt = company ? [].concat(st.cos || [], pane.companies || []).filter(c => c && c.company === company).map(c => c.last_seen || "").sort().pop() || "" : "";
+  const auto = !!(row && row.linked_at && "linked_by" in row && !row.linked_by);
+  const out = (state, needs) => ({state, word: TALLY_LINK_WORDS[state], level: TALLY_LINK_LEVEL[state], company, computer: (l && l.computer) || (dev ? tallyPcLabel(dev) : ""), line: l, needs: needs || [], seenAt, auto});
   if (!company) return out("unlinked");
   const needs = [];
   if (l && l.state === "stopped") needs.push({kind: "stopped"});

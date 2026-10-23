@@ -508,7 +508,7 @@ def main():
             E("(c) => { S.tallyGuide = {}; openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", T); pg.wait_for_timeout(1200)
             sign = E("() => (document.querySelector('[data-tally-link-sign]') || {getAttribute: () => ''}).getAttribute('data-tally-link-sign')")
             E("() => navHome('clients')"); pg.wait_for_timeout(1000)
-            chip = E("(c) => { const r = [...document.querySelectorAll('#app table[data-list=\"clients\"] tr')].find(t => t.innerText.includes('GB TEXCOAT')); const ch = r && r.querySelector('[data-tally-chip]'); return ch ? ch.getAttribute('data-tally-chip') : ''; }", T)
+            chip = E("(c) => { const r = [...document.querySelectorAll('#app table[data-list=\"clients\"] tr')].find(t => t.innerText.startsWith('GB TEXCOAT')); const ch = r && r.querySelector('[data-tally-chip]'); return ch ? ch.getAttribute('data-tally-chip') : ''; }", T)
             E("(c) => openConnectTally(4, c)", T); pg.wait_for_timeout(1200)
             st = txt("#app [data-guide-client-state]")
             t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-step=\"tally\"]').forEach(e => e.remove()); return a.innerText; }""")
@@ -608,15 +608,16 @@ def main():
         ok(n(sn) == 1 and n(sn + " select") == 0 and n(sn + " [data-open-connect]") == 1, "a computer's 'Seen, not linked': a pointer, no Link… box")
         if n(sn + " [data-open-connect]"): pg.click(sn + " [data-open-connect]"); pg.wait_for_timeout(900); landed("a computer's Seen, not linked", 4)
         fold(False)
-        # Add client with its Tally company chosen: the guide's step 4 with both chosen, nothing linked yet
-        E("""() => { S.tallyGuide = {}; const f = {name: 'NEW CLIENT', gstin: '', tallyCompany: 'VMS EVENTS', postOnly: false};
+        ok(not [c for c in E("window.__calls") if c[0] in ("tally_company_link",)], "none of the entry points linked anything on its own (%s)" % E("window.__calls"))
+        # Add client with its Tally company picked (23-Oct-2026, next-fix-tally-link: Pick from Tally): the person's own
+        # choice, so it is linked at once, and the new client's Tally card opens (it was: the guide's step 4, Link there)
+        E("""() => { S.tallyGuide = {}; window.__calls = []; const f = {name: 'NEW CLIENT', gstin: '', tallyCompany: 'VMS EVENTS', postOnly: false};
             return saveNewCompany(f); }""")
         pg.wait_for_timeout(1500)
         if E("Object.values(S.companies).some(c => c.name === 'NEW CLIENT')"):
             nc = E("Object.values(S.companies).find(c => c.name === 'NEW CLIENT').id")
-            landed("Add client with a Tally company", 4, nc)
-            ok(E("() => document.querySelector('#app [data-guide-company]').value") == "VMS EVENTS", "Add client: its Tally company chosen in step 4")
-        ok(not [c for c in E("window.__calls") if c[0] in ("tally_company_link",)], "none of the entry points linked anything on its own (%s)" % E("window.__calls"))
+            ok(E("[S.view, S.tab, S.coId]") == ["company", "cotally", nc] and [c for c in E("window.__calls") if c[0] == "tally_company_link"] == [["tally_company_link", {"p_company": "VMS EVENTS", "p_client": nc}]],
+               "Add client with a Tally company picked: linked to it at once, its Tally card opens (%s %s)" % (E("[S.view, S.tab]"), E("window.__calls")))
         # ---- 3. staff: no owner button, fold open or not
         scene([PAUSED, OLD], companies(), DAYBOOK, role="staff")
         found = [h for h in OWNER_HOOKS if n("#app [%s]" % h)]

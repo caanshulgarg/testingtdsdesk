@@ -678,6 +678,19 @@ ol.setup li div{color:var(--ink);font-weight:400;margin-top:2px}
 .tlink-name{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:10px 0 0}
 .tlink-name .f{flex:1 1 240px;min-width:0;margin:0}
 .tlink .bk-menu-list{min-width:260px;max-width:calc(100vw - 32px)}
+/* 23-Oct-2026 (next-fix-tally-link): the companies to choose on the card, "Not this company?", what came in */
+.tlink-choose{margin:10px 0 0;padding:8px 0 0;border-top:1px solid var(--rule-soft)}
+.tlink-choose-h{margin:0;overflow-wrap:anywhere}
+.tlink-choose-more{display:flex;flex-wrap:wrap;gap:4px 16px;margin:6px 0 0}
+.tlink-wrong{margin:6px 0 0;overflow-wrap:anywhere}
+.tlink-steps{list-style:none;margin:10px 0 0;padding:8px 0 0;border-top:1px solid var(--rule-soft)}
+.tlink-steps li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding:3px 0}
+.tlink-steps li>span:first-child{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.tlink-steps li[data-done]{color:var(--ok)}
+/* Add client: Pick from Tally first, the duplicate warning */
+.addc-pick{margin:10px 0 14px;padding:10px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--sheet)}
+.addc-pick h3{margin:0 0 2px;font-size:15px}
+.addc-dup{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:6px 0 0;padding:6px 10px;border-radius:6px;background:var(--warn-soft);overflow-wrap:anywhere}
 /* the Tally page's computer card: a company seen, not linked, with its Link… */
 .tseen{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 8px;max-width:100%}
 .tseen select{width:auto;max-width:100%;min-width:0}

@@ -208,7 +208,9 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
-import { cloudReporter } from "../_shared/sentry.ts";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
+import { cloudReporter } from "../_shared/sentry.ts";
+// 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
+import { autoLinkFor } from "../_shared/tallyname.js";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -3740,14 +3742,20 @@ Deno.serve(sentry.wrap(async (req) => {
         const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so
-        const { data: clients } = await db.from("clients").select("id, tally_name, gstin, deleted").eq("firm_id", firm);
+        const { data: clients } = await db.from("clients").select("id, name, gstin, deleted").eq("firm_id", firm);
+        // the clients linked to a company already (a company of the same name or GSTIN is not moved to them by itself)
+        const taken = new Set((have || []).filter((r: any) => r.client_id).map((r: any) => String(r.client_id)));
         const links: Record<string, boolean> = {};
         for (const c of list) {
           let client = known.get(c.name) || null, auto = false;
           if (!client && !unlinked.has(c.name)) {
-            // linked by itself only when exactly one client has this Tally name and the GSTINs do not clash
-            const m = (clients || []).filter((k: any) => !k.deleted && String(k.tally_name || "").trim().toLowerCase() === c.name.toLowerCase());
-            if (m.length === 1 && !(m[0].gstin && c.gstin && pan(m[0].gstin) !== pan(c.gstin))) { client = m[0].id; auto = true; }
+            // 23-Oct-2026: linked by itself only when it is certain (autoLinkFor): the same GSTIN, or the client's NAME equal
+            // once the period and Pvt Ltd / LLP / & / case are taken off, one client only, not linked to another company, no
+            // other PAN. It was "exactly one client has this Tally name": a Tally name left over from the Add client form
+            // linked VMS EVENTS PRIVATE LIMITED (2024-25) to Salesify Marketing LLP on staging (linked_by empty). Anything
+            // else is offered to a person (the client's Tally card, Add client's Pick from Tally)
+            const m = autoLinkFor({ name: c.name, gstin: c.gstin }, clients || [], taken);
+            if (m) { client = m.client.id; auto = true; taken.add(String(client)); }
           }
           // a GSTIN is recorded when the computer knows it (the company open in Tally); never wiped by a report without one
           await db.from("tally_companies").upsert({ firm_id: firm, company: c.name, ...(c.gstin ? { gstin: c.gstin } : {}), device_id: dev.id, last_seen: new Date().toISOString(),

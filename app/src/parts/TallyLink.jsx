@@ -12,6 +12,18 @@
 //   asked first). Nothing is posted without it; a company FinCom found by itself stays off until ticked.
 //   More: Change company (the guide's step 4), Unlink, Name differs in Tally, Tally page.
 // companiesSeen (below) is the list the guide's step 4 offers, the company with this client's GSTIN on top.
+// 23-Oct-2026 (next-fix-tally-link; the owner: "Tally linking is still a very big problem", Salesify "even after adding
+// Tally it is not updating"): the card says plainly what is missing and the one thing to do:
+//   not linked   "Choose its Tally company": the companies FinCom has seen and not linked to another client, best match
+//                on top (suggestFor, server/_shared/tallyname.js: same GSTIN, same name once "(2024-25)", "- (from
+//                1-Apr-25)", Pvt Ltd / LLP / & are taken off), each with its computer and when it was last seen, and Link.
+//                The guide's step 4 lists only companies open now; a company not open (Salesify's) is linked from here.
+//   waiting      "Linked to X. Open X in TallyPrime on <PC> — FinCom reads it within a minute. Last seen 20-Oct."
+//   linked       "Not this company" (one click): the same list, without the company linked now; choosing one moves the
+//                client (tallyLinkClient unlinks the old one); "Unlink only" when none is right. A link FinCom made by
+//                itself (linked_by empty) says so.
+//   reading      what came in, in order: the ledgers, then this year's entries, each with its next step (Connect Tally's
+//                steps 5 and 6).
 import { useState } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
 import Button from "./Button.jsx";
@@ -21,6 +33,14 @@ const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const sameName = (a, b) => !!a && !!b && ledNm(a).toLowerCase() === ledNm(b).toLowerCase();
+// "today 15:21", "yesterday", "20-Oct" (IST)
+const IST = 5.5 * 3600e3, MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function seenWords(iso) {
+  const t = Date.parse(iso || ""); if (!t) return "";
+  const d = new Date(t + IST), now = new Date(Date.now() + IST), day = (x) => Math.floor(x.getTime() / 864e5);
+  const gap = day(now) - day(d), hm = String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
+  return gap <= 0 ? "today " + hm : gap === 1 ? "yesterday " + hm : String(d.getUTCDate()).padStart(2, "0") + "-" + MON[d.getUTCMonth()] + (d.getUTCFullYear() !== now.getUTCFullYear() ? "-" + d.getUTCFullYear() : "");
+}
 
 // the Tally companies FinCom's cloud has seen (tally_companies, as TLight and the Tally page read them), not linked to
 // another client: {company, gstin, computer, at, open, same (this client's GSTIN), mine (linked to this client)}
@@ -54,8 +74,9 @@ function StatusLine({ co, k, where, b, plain = false }) {
   const l = k.line, x = k.company, pc = k.computer || "the office computer", owner = isOwner();
   const openTally = () => openTallyFor(co.id);
   let text = "", act = null;
-  if (k.state === "unlinked") { text = "Not linked to its Tally company yet."; act = <OpenConnect co={co} step={4} primary={!plain} />; }
-  else if (k.state === "waiting") { text = "Linked to " + x + ". Open " + x + " in TallyPrime on " + pc + " to read new entries.";
+  if (k.state === "unlinked") { text = "Not linked to its Tally company yet." + (plain ? "" : " Choose its Tally company below."); act = <OpenConnect co={co} step={4} primary={false} />; }
+  else if (k.state === "waiting") { text = "Linked to " + x + ". Open " + x + " in TallyPrime on " + pc + " — FinCom reads it within a minute."
+      + (k.seenAt ? " Last seen " + seenWords(k.seenAt) + "." : " Not seen in Tally yet.");
     act = <OpenConnect co={co} step={0} primary={!plain} />; }
   else if (k.state === "reading") { const last = lastEntry(co, k);
     text = "Linked to " + x + " on " + pc + " · last entry " + (last ? tallyHm(last) : "not received yet");
@@ -143,6 +164,72 @@ function NameBox({ co, onClose }) {
   </div>;
 }
 
+// 23-Oct-2026: the companies to choose from, on the card itself: seen by the firm's computers (open now or not), not
+// linked to another client, best match first; Link is the person's own choice (tallyLinkClient: tally_company_link,
+// linked_by them; a change moves the client). Four shown, the rest behind "Show all"
+const WHY = { gstin: "same GSTIN", name: "same name", like: "similar name" };
+function Chooser({ co, k, onDone }) {
+  const [all, setAll] = useState(false), [busy, setBusy] = useState("");
+  const may = canWrite(), linkedTo = k.state !== "unlinked" ? k.company : "";
+  const raw = companiesSeen(co).filter((c) => !linkedTo || !sameName(c.company, linkedTo));
+  const list = typeof suggestFor === "function" ? suggestFor(co, raw) : raw;
+  const shown = all ? list : list.slice(0, 4);
+  const pick = async (company) => {
+    if (linkedTo) {
+      const ok = await askConfirm({ title: "Link " + co.name + " to " + company + "?", ok: "Link this company",
+        body: "<p>" + esc(co.name) + " is linked to <b>" + esc(linkedTo) + "</b> now. It will be linked to <b>" + esc(company) + "</b> instead, and " + esc(linkedTo) + " unlinked. Nothing in Tally changes.</p>" });
+      if (!ok) return;
+    }
+    setBusy(company); const done = await tallyLinkClient(company, co.id); setBusy("");
+    if (done && onDone) onDone();
+  };
+  const unlinkOnly = () => askConfirm({ title: "Unlink " + linkedTo + " from " + co.name + "?", ok: "Unlink", danger: true,
+    body: "<p>Its books stop coming to " + esc(co.name) + ". FinCom will not link it again by itself. Nothing in Tally changes.</p>" })
+    .then(async (ok) => { if (ok && await tallyLinkClient(linkedTo, null) && onDone) onDone(); });
+  const pcs = Array.from(new Set(list.map((c) => c.computer).filter(Boolean)));
+  return <div className="tlink-choose" data-tally-link-choose={linkedTo ? "change" : "link"}>
+    <p className="tlink-choose-h"><b>{linkedTo ? "Choose the right Tally company" : "Choose its Tally company"}</b>
+      <span className="note">{list.length ? " The companies FinCom has seen in Tally and not linked to another client" + (list[0].score > 0 ? ", the likeliest first." : ".")
+        : " FinCom has not seen another company in Tally. Open " + co.name + "’s company in TallyPrime" + (pcs[0] ? " on " + pcs[0] : " on the Tally computer") + "; it shows here within a minute."}</span></p>
+    {shown.length > 0 && <ul className="tlink-list" data-tally-link-suggest={list.length}>
+      {shown.map((c, i) => <li key={c.company} data-tally-link-pick-row={c.company} data-why={c.why || ""}>
+        <span className="tlink-co"><b>{c.company}</b>
+          {c.why && <span className={"tag " + (c.why === "like" ? "warn" : "ok")} data-tally-link-why={c.why}>{WHY[c.why]}</span>}
+          <span className="note">{(c.open ? "open in Tally" : "seen") + (c.computer ? " on " + c.computer : "") + (c.at && !c.open ? " · last seen " + seenWords(c.at) : "")}</span></span>
+        {may ? <Button className={"btn small" + (i === 0 && c.score > 0 && !linkedTo ? " primary" : "")} data-tally-link-pick={c.company} disabled={!!busy} onClick={() => pick(c.company)}>{busy === c.company ? "Linking…" : "Link"}</Button>
+          : i === 0 ? <span className="note">A member of the firm who may make changes links it.</span> : null}
+      </li>)}
+    </ul>}
+    <div className="tlink-choose-more">
+      {list.length > shown.length && <button className="linkbtn" data-tally-link-all="" onClick={() => setAll(true)}>{"Show all " + list.length}</button>}
+      {linkedTo && may && <button className="linkbtn" data-tally-link-unlink-only="" onClick={unlinkOnly}>None of these: unlink only</button>}
+      {linkedTo && <button className="linkbtn" data-tally-link-choose-close="" onClick={onDone}>Keep {linkedTo}</button>}
+    </div>
+  </div>;
+}
+
+// 23-Oct-2026: once linked, what came in, in order (the Connect Tally guide's steps 5 and 6, from the same counts: the
+// ledgers FinCom holds for the client, the days of this financial year in the cloud), each with its one next step
+function fyStart() { const t = new Date(Date.now() + IST), y = t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); return y + "0401"; }
+function Progress({ co, k }) {
+  const cloud = typeof TCloud === "object" && TCloud.on(), bk = cloud && TCloud.book ? TCloud.book(co.id) : null;
+  if (typeof TCloud === "object" && cloud && TCloud.status && !(TCloud.st[co.id] && TCloud.st[co.id].at)) setTimeout(() => { try { TCloud.status(co.id); } catch (e) { /* the next read */ } }, 0);
+  const nLed = Math.max(typeof Ledgers === "object" && Ledgers.status ? Ledgers.status(co.id).n || 0 : 0, ((typeof TCloud === "object" && TCloud.st[co.id]) || {}).ledN ? TCloud.st[co.id].ledN.n || 0 : 0);
+  const ledOk = nLed > 0 || !!(bk && bk.ledgersAt);
+  const to = String((bk && bk.to) || "").replace(/-/g, "").slice(0, 8), days = Number((bk && bk.days) || 0), dayOk = days > 0 && to >= fyStart();
+  const toWords = to ? to.slice(6, 8) + "-" + MON[Number(to.slice(4, 6)) - 1] + "-" + to.slice(0, 4) : "";
+  return <ol className="tlink-steps" data-tally-link-progress={!ledOk ? "ledgers" : !dayOk ? "entries" : "done"}>
+    <li data-tally-step="ledgers" data-done={ledOk ? "" : undefined}>
+      {ledOk ? <span>{"✓ Ledgers: " + (nLed ? nLed.toLocaleString("en-IN") + " in FinCom" : "in FinCom")}</span>
+        : <><span>{"Ledgers: not in FinCom yet. With " + k.company + " open in Tally they come in a minute or two."}</span>
+          <Button className="btn small" data-tally-step-go="5" onClick={() => openConnectTally(5, co.id)}>Import ledgers</Button></>}</li>
+    <li data-tally-step="entries" data-done={dayOk ? "" : undefined}>
+      {dayOk ? <span>{"✓ This year’s entries: up to " + toWords}</span>
+        : <><span>{ledOk ? "This year’s entries: not in FinCom yet. Bring in the Day Book once; new entries then come by themselves." : "Then this year’s entries."}</span>
+          {ledOk && <Button className="btn small" data-tally-step-go="6" onClick={() => openConnectTally(6, co.id)}>Bring in entries</Button>}</>}</li>
+  </ol>;
+}
+
 // the client's link state; on From Tally the days that need a Day Book are listed with their own Upload, so they are not
 // said again here (a warning is shown once)
 function linkHere(co, where) {
@@ -167,15 +254,22 @@ export function TallyLinkLine({ co, where = "overview", b = null, only = null })
 }
 
 export default function TallyLink({ co, where = "setup", b = null }) {
-  const [name, setName] = useState(false);
+  const [name, setName] = useState(false), [wrong, setWrong] = useState("");
   const k = co ? linkHere(co, where) : null, unlinked = !!k && k.state === "unlinked";
   if (!co || !k) return null;
+  const cloud = typeof TCloud === "object" && TCloud.on(), may = canWrite();
+  const choosing = cloud && (unlinked || (wrong && wrong === k.company));
   return <section className="tlink" data-tally-link={k.state} data-tally-line-state={k.line ? k.line.state : ""} aria-label={"Tally: " + k.word}>
     <div className="tlink-head">
       <h3 className="tlink-title">Tally</h3>
       <More co={co} k={k} onName={() => setName(true)} />
     </div>
     <StatusLine co={co} k={k} where={where} b={b} />
+    {!unlinked && cloud && may && !choosing && <p className="tlink-wrong" data-tally-link-auto={k.auto ? "" : undefined}>
+      {k.auto && <span className="note">{"FinCom linked " + k.company + " by itself (same name or GSTIN). "}</span>}
+      <button className="linkbtn" data-tally-link-wrong="" onClick={() => setWrong(k.company)}>Not this company?</button></p>}
+    {choosing && <Chooser co={co} k={k} onDone={() => setWrong("")} />}
+    {!unlinked && cloud && !choosing && (k.state === "reading" || k.state === "needs" || k.seenAt) && <Progress co={co} k={k} />}
     {k.needs.length > 1 && <ul className="tlink-needs" data-tally-link-needs="">{k.needs.slice(1).map((n) => { const x = needLine(co, n, k, where, b, isOwner(), () => openTallyFor(co.id));
       return <li key={n.kind} data-tally-need={n.kind}><span>{x.text}</span>{x.act}</li>; })}</ul>}
     {!unlinked && <PostTick co={co} company={k.company} />}

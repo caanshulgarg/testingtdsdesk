@@ -1,7 +1,7 @@
-"""python3 run_add_client_tally.py - "Add client" (02-Oct-2026): the Tally companies the bridge here sees open and the ones
-the firm's Tally computers reported are offered; choosing one fills the Tally name, ticks "Post this client's entries only
-into <company>", and on Add the client is sent to the server and linked to that company in one step. A company linked
-to another client cannot be chosen.
+"""python3 run_add_client_tally.py - "Add client" (02-Oct-2026; 23-Oct-2026, next-fix-tally-link: Pick from Tally): the
+Tally companies the bridge here sees open and the ones the firm's Tally computers reported, not linked to a client, are
+offered first; "Add as client" adds the client with that company as its Tally name and links it in one step (sent to the
+server, then tally_company_link). A company linked to another client is not offered.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_add_client_tally.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -24,19 +24,17 @@ with sync_playwright() as p:
       TCloud.on = () => true; TCloud.refreshPane = async () => {};
       TCloud.pane.devices = [{id: 'd1', name: 'Office computer', revoked: false, info: {computer: 'NWS144', beat: {open: ['ZZ TEST']}}}];
       TCloud.pane.companies = [{company: 'ZZ TEST', client_id: null, gstin: ''}, {company: 'GARG SHEKHAR & COMPANY', client_id: g.id, gstin: '09AANFG3202D1ZR'}];
-      TCloud.link = async (c, id) => { window.__calls.push(['link', c, id]); };
+      TCloud.link = async (c, id) => { window.__calls.push(['link', c, id]); return true; };
       window.cloudPushNow = async () => { window.__calls.push(['push']); };
       doAct('addCo'); }""")
     pg.wait_for_timeout(600)
-    opts = pg.evaluate("[...document.querySelectorAll('#app select[data-add-tally] option')].map(o => [o.value, o.textContent, o.disabled])")
-    zz = [o for o in opts if o[0] == "ZZ TEST"]; gs = [o for o in opts if o[0] == "GARG SHEKHAR & COMPANY"]
-    ok(zz and "open in Tally on this computer" in zz[0][1] and not zz[0][2], "ZZ TEST is offered, open in Tally (%s)" % (zz and zz[0][1]))
-    ok(gs and gs[0][2] and "linked to Testing AAD" in gs[0][1], "GARG SHEKHAR & COMPANY, linked to Testing AAD, cannot be chosen")
-    pg.select_option("#app select[data-add-tally]", "ZZ TEST"); pg.wait_for_timeout(300)
-    ok(pg.input_value("#ncName") == "ZZ TEST" and pg.is_checked("#app [data-add-postonly] input"), "choosing it fills the name and ticks 'Post this client's entries only into ZZ TEST'")
-    pg.click('#app button:has-text("Add and open")'); pg.wait_for_timeout(1000)
-    r = pg.evaluate("(() => { const c = Object.values(S.companies).find(x => x.name === 'ZZ TEST'); return {postTo: c.postTo, tally: c.tallyName, id: c.id, calls: window.__calls, open: S.coId === c.id}; })()")
-    ok(r["postTo"] == "ZZ TEST" and r["tally"] == "ZZ TEST" and r["open"], "added and opened: Tally name ZZ TEST, posting allowed only into ZZ TEST")
+    rows = pg.evaluate("[...document.querySelectorAll('#app [data-add-pick-row]')].map(r => [r.getAttribute('data-add-pick-row'), r.innerText])")
+    zz = [r for r in rows if r[0] == "ZZ TEST"]
+    ok(zz and "open in Tally on this computer" in zz[0][1], "ZZ TEST is offered, open in Tally (%s)" % (zz and zz[0][1]))
+    ok(not [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"], "GARG SHEKHAR & COMPANY, linked to Testing AAD, is not offered")
+    pg.click('#app [data-add-pick-company="ZZ TEST"]'); pg.wait_for_timeout(1000)
+    r = pg.evaluate("(() => { const c = Object.values(S.companies).find(x => x.name === 'ZZ TEST'); return {postTo: c.postTo || '', tally: c.tallyName, id: c.id, calls: window.__calls, open: S.coId === c.id}; })()")
+    ok(r["tally"] == "ZZ TEST" and r["open"] and not r["postTo"], "added and opened: Tally name ZZ TEST; posting waits for the tick on its card")
     ok(r["calls"] == [["push"], ["link", "ZZ TEST", r["id"]]], "sent to the server, then linked to ZZ TEST in the cloud (%s)" % r["calls"])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
