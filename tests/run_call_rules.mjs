@@ -78,5 +78,33 @@ console.log("== remote help (RustDesk)");
 ok(R.mayRemote("owner") && R.mayRemote("staff") && !R.mayRemote("readonly"), "owner or staff only");
 ok(R.rustdeskUri("123 456 789") === "rustdesk://connection/new/123456789" && R.rustdeskUri("bad id!") === "", "RustDesk's own link, spaces dropped; a wrong ID gives none");
 ok(!R.rustdeskUri("123456789").includes("password"), "never a password in the link");
+
+console.log("== meeting codes and links");
+const codes = new Set(); for (let i = 0; i < 2000; i++) codes.add(R.meetCode());
+ok([...codes].every((c) => R.codeOk(c) && !/[ilo]/.test(c) && c.replace(/-/g, "").length === 10), "abc-defg-hij: ten lowercase letters, never i, l or o");
+ok(codes.size === 2000, "2000 codes, no repeat");
+ok(R.codeFrom(" ABC DEFG HJK ") === "abc-defg-hjk" && R.codeFrom("abcdefghjk") === "abc-defg-hjk" && R.codeFrom("https://staging.fincom.live/review/#/join/abc-defg-hjk") === "abc-defg-hjk", "typed with spaces, capitals, no dashes, or the whole link");
+ok(R.codeFrom("abc-defg-hij") === "" && R.codeFrom("abc-def-hjk") === "" && R.codeFrom("") === "", "a code with a confusable letter or too short is no code");
+ok(R.joinLink("https://staging.fincom.live/review/?v=1#/meetings", "abc-defg-hjk") === "https://staging.fincom.live/review/#/join/abc-defg-hjk", "one stable link from the page FinCom is on");
+const inv = R.inviteText({ title: "Year-end review", host: "Anshul", firm: "Garg & Co", url: "https://x/#/join/abc-defg-hjk", code: "abc-defg-hjk", at: "2026-10-25T05:30:00Z", minutes: 45 });
+ok(inv.includes("25-Oct-2026 11:00 IST") && inv.includes("Meeting code: abc-defg-hjk") && inv.includes("Join: https://x/#/join/abc-defg-hjk"), "the invitation: time in IST, link and code");
+const mt = R.mailtoUrl(["a@x.test", "b@x.test"], "Invitation: X", "Join: https://x/#/join/a & b");
+ok(mt.startsWith("mailto:a%40x.test,b%40x.test?subject=Invitation%3A%20X&body=") && mt.includes("%26"), "the mail app's link, everything encoded");
+const g = R.googleCalUrl({ title: "Review", at: "2026-10-25T05:30:00Z", minutes: 45, url: "https://x/#/join/abc-defg-hjk" });
+ok(g.startsWith("https://calendar.google.com/calendar/render?action=TEMPLATE&text=Review&dates=20261025T053000Z/20261025T061500Z"), "Add to Google Calendar: the template link with start and end");
+
+console.log("== subtitles");
+ok(R.SUB_LANGS.length === 13 && R.subLangOk("ta") && R.subLangOk("hinglish") && !R.subLangOk("xx"), "13 languages");
+ok(R.defaultSubLang(["ta-IN", "en"]) === "ta" && R.defaultSubLang(["fr-FR"]) === "en" && R.defaultSubLang([]) === "en", "the browser's language first, else English");
+ok(R.whisperLang("tamil") === "ta" && R.whisperLang("Hindi") === "hi" && R.whisperLang("en") === "en", "Whisper's language read");
+ok(same(R.subTargets([{ subs: true, lang: "hi" }, { subs: true, lang: "en" }, { subs: false, lang: "te" }, { subs: true, lang: "ta" }, { subs: true, lang: "hi" }], "ta"), ["hi", "en"]), "only languages switched on, once each, never the speaker's own");
+ok(!R.subsNeeded([{ subs: false }], false) && R.subsNeeded([{ subs: true }], false) && R.subsNeeded([], true), "pieces only when someone reads subtitles or the transcript is kept");
+const line = { text: "வணக்கம்", lang: "ta", tr: { hi: "नमस्ते", en: null } };
+ok(R.subLine(line, "hi").text === "नमस्ते" && R.subLine(line, "ta").text === "வணக்கம்" && R.subLine(line, "en").paused && R.subLine(line, "en").text === "வணக்கம்", "each reads their own language; paused: the words as said");
+ok(R.termsKept("Send Sharma Traders ₹1,25,000 for GSTR-3B under 194J", "Sharma Traders को ₹125000 GSTR-3B 194J के लिए भेजें", ["Sharma Traders"]), "a translation that kept names, amount and tax terms is taken");
+ok(!R.termsKept("Pay 1,25,000 today", "आज भुगतान करें", []) && !R.termsKept("File GSTR-3B", "जीएसटीआर फाइल करें", []) && !R.termsKept("ask sharma traders", "व्यापारी से पूछें", ["Sharma Traders"]), "one that lost the amount, the return's name or a client's name is not");
+ok(R.termsKept("Please send the bills", "कृपया बिल भेजें", []), "an ordinary capital at the start is no term");
+ok(R.subPrompt("hi", ["Sharma Traders"]).includes("Sharma Traders") && R.subPrompt("hi").includes("194J") && R.subPrompt("hinglish").includes("Latin"), "the translation keeps names, amounts and tax terms");
+
 console.log("\n" + (fails ? fails + " FAILED" : "all passed"));
 process.exit(fails ? 1 : 0);

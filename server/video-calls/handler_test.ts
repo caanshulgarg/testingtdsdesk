@@ -22,18 +22,22 @@ let uuidN = 0;
 const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0");
 type Row = Record<string, any>;
 
-function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean } = {}) {
+function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
+  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
     clients: [{ id: "c1", firm_id: FIRM, name: "Client One", deleted: false }, { id: "c2", firm_id: FIRM2, name: "Client Two", deleted: false }],
-    platform_secrets: [{ name: "claude_api_key", value: o.ai === false ? "" : "sk-test" }, ...(o.mail ? [{ name: "resend_api_key", value: "re-test" }] : []),
+    platform_secrets: [{ name: "claude_api_key", value: o.ai === false ? "" : "sk-test" }, ...(o.groq === false ? [] : [{ name: "groq_api_key", value: "gsk-test" }]), ...(o.mail ? [{ name: "resend_api_key", value: "re-test" }] : []),
       ...(o.cf ? [{ name: "cf_realtime_app_id", value: "app1" }, { name: "cf_realtime_token", value: "cftok" }] : [])],
     assistant_settings: o.aiOff ? [{ firm_id: FIRM, enabled: false }] : [],
     app_settings: [{ name: "rustdesk", value: { id_server: "", relay: "", key: "" } }],
     call_batches: [], call_batch_members: [], call_rooms: [], call_participants: [], call_invites: [], call_messages: [], call_recordings: [], call_pieces: [],
     call_transcripts: [], call_consents: [], call_client_settings: [], call_remote_sessions: [], client_due_tasks: [],
+    call_captions: [], assistant_log: [], tally_books: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, client_id: "c1" }],
+    tally_ledgers: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, name: "Sharma Traders", primary_group: "Sundry Creditors", open: 500000 }],
   };
+  const tries: Record<string, number> = {};
   const DEF: Record<string, () => Row> = {
     call_rooms: () => ({ id: uuid(), status: "open", chan_key: R.randomToken(32), chan_epoch: 1, cowork_on: false, cowork_epoch: 1, created_at: new Date().toISOString(), invitees: [], client_id: null, batch_id: null }),
     call_participants: () => ({ id: uuid(), joined_at: new Date().toISOString(), verified: false, otp_tries: 0, state: "waiting", cf_session: null }),
@@ -42,12 +46,13 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     call_pieces: () => ({ id: T.call_pieces.length + 1, status: "new", tries: 0, text: "" }), call_batches: () => ({ id: uuid(), retention_days: 365, archived: false, created_at: new Date().toISOString() }),
     call_remote_sessions: () => ({ id: uuid(), ended_at: null }), call_transcripts: () => ({ tasks_added: [], summary: null }),
   };
-  const log = { mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[] };
+  const log = { mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[], stt: [] as any[], chat: [] as any[] };
   const match = (row: Row, k: string, v: string) => {
     const [op, ...rest] = v.split("."); const val = rest.join(".");
     const x = row[k];
     if (op === "eq") return String(x) === val;
     if (op === "neq") return String(x) !== val;
+    if (op === "not" && val === "is.null") return x != null;
     if (op === "is") return val === "null" ? x == null : val === "true" ? x === true : x === false || x == null;
     if (op === "in") return val.replace(/^\(|\)$/g, "").split(",").includes(String(x));
     if (op === "gte") return String(x) >= val;
@@ -74,6 +79,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         if (fn === "asst_cap_take") return J({ ok: true });
         if (fn === "asst_cost_add") return J({ inr: 1.5 });
         if (fn === "asst_log_add") return J(null);
+        if (fn === "call_code_hit") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); const add = body.p_add === 0 ? 0 : 1; tries[body.p_key] = (tries[body.p_key] || 0) + add; return J(tries[body.p_key] <= body.p_max - (add ? 0 : 1)); }
         if (fn === "call_client_setting_set") {
           const u = USERS[tok]; if (!u || u.role !== "owner") return J({ message: "Only the firm's owner can change a client's recording setting", code: "42501" }, 403);
           T.call_client_settings = T.call_client_settings.filter((x) => x.client_id !== body.p_client);
@@ -99,6 +105,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
           const oc = sp.get("on_conflict"), pref = h.get("Prefer") || "", made: Row[] = [];
           for (const r0 of rows) {
             const r = { ...(DEF[table] ? DEF[table]() : {}), ...r0 };
+            if (table === "call_rooms" && r.code && T.call_rooms.some((x) => x.code === r.code)) return J({ message: "duplicate key value violates unique constraint", code: "23505" }, 409);
             const clash = oc ? T[table].find((x) => oc.split(",").every((k) => String(x[k]) === String(r[k]))) : null;
             if (clash) { if (/merge-duplicates/.test(pref)) Object.assign(clash, r0); made.push(clash); continue; }
             T[table].push(r); made.push(r);
@@ -116,6 +123,17 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
       }
     }
     if (String(input).startsWith("https://api.resend.com/")) { log.mails.push(body); return J({ id: "m1" }); }
+    if (String(input) === "https://api.groq.com/openai/v1/audio/transcriptions") {
+      const form = init.body as FormData; log.stt.push({ auth: tok, model: form.get("model"), format: form.get("response_format"), prompt: form.get("prompt") });
+      return o.stt ? o.stt(form, log.stt.length) : J({ text: "Sharma Traders க்கு ₹1,25,000 GSTR-3B க்கு அனுப்புங்கள்", language: "tamil" });
+    }
+    if (String(input) === "https://api.groq.com/openai/v1/chat/completions") {
+      log.chat.push({ auth: tok, body });
+      if (o.chat) return o.chat(body, log.chat.length);
+      const sys = String(body.messages[0].content);
+      const out = sys.includes("into Hindi") ? "Sharma Traders को ₹1,25,000 GSTR-3B के लिए भेजें" : "Send ₹1,25,000 to Sharma Traders for GSTR-3B";
+      return J({ choices: [{ message: { content: out } }] });
+    }
     if (String(input).startsWith("https://api.anthropic.com/")) {
       log.ai.push(body);
       return J({ content: [{ type: "text", text: o.aiAnswer ?? JSON.stringify({ summary: "They agreed the GST return.", decisions: ["File GSTR-3B by 20th"], actions: [{ title: "Send purchase bills", who: "Client", due: "2026-10-30" }] }) }], usage: { input_tokens: 100, output_tokens: 50 } });
@@ -129,11 +147,11 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
   }) as typeof fetch;
   let clock = Date.parse("2026-10-23T05:00:00Z");
   const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, now: () => clock });
-  const call = async (body: unknown, tok?: string) => {
-    const res = await h(new Request("https://fn.test/fincom-call", { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://staging.fincom.live", ...(tok ? { Authorization: "Bearer " + tok } : {}) }, body: JSON.stringify(body) }));
+  const call = async (body: unknown, tok?: string, ip = "203.0.113.7") => {
+    const res = await h(new Request("https://fn.test/fincom-call", { method: "POST", headers: { "Content-Type": "application/json", Origin: "https://staging.fincom.live", "x-forwarded-for": ip + ", 10.0.0.1", ...(tok ? { Authorization: "Bearer " + tok } : {}) }, body: JSON.stringify(body) }));
     return { status: res.status, j: await res.json() as any };
   };
-  return { T, log, call, tick: (ms: number) => { clock += ms; } };
+  return { T, log, call, tries, tick: (ms: number) => { clock += ms; } };
 }
 
 Deno.test("who may call: no token 401; a guest action without a link; a look-only member cannot host", async () => {
@@ -187,7 +205,8 @@ Deno.test("guests: link, name and email, a code by email, the waiting room, admi
   const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
   const rid = a.j.room.id;
   const inv = await s.call({ action: "invite", room_id: rid, base: "https://evil.example/x" }, "tok-staff");
-  assert(inv.j.url.startsWith("https://staging.fincom.live/#join="), "a link only on FinCom's own site: " + inv.j.url);
+  assert(inv.j.url.startsWith("https://staging.fincom.live/#/join/") && R.codeOk(inv.j.code) && inv.j.url.endsWith(inv.j.code), "the room's code link, only on FinCom's own site: " + inv.j.url);
+  assert(inv.j.link.startsWith("https://staging.fincom.live/#join="), "and the older guest link: " + inv.j.link);
   eq(s.T.call_invites[0].token_hash, await R.sha256Hex(inv.j.token), "only the token's hash kept");
   eq((await s.call({ action: "guest_hello", token: inv.j.token })).j.title, "Call with Client One", "the guest sees the call's name");
   eq((await s.call({ action: "guest_start", token: inv.j.token, name: "X", email: "ram@client.test" })).status, 400, "a name of 2 letters at least");
@@ -376,7 +395,8 @@ Deno.test("schedule a meeting: the .ics, the invite by email when mail is set up
   const r = await s.call({ action: "schedule", title: "Year-end review", at: "2026-10-25T05:30:00Z", minutes: 45, emails: ["a@x.test", "B@x.test"], client_id: "c1", base: "https://staging.fincom.live/review/" }, "tok-staff");
   eq([r.status, r.j.emailed], [200, 2], "emailed to both");
   assert(r.j.ics.includes("DTSTART:20261025T053000Z") && r.j.ics.includes("DTEND:20261025T061500Z") && r.j.ics.includes("SUMMARY:Year-end review"), "the calendar invite");
-  assert(r.j.url.startsWith("https://staging.fincom.live/review/#join="), "the link on the page it was made from");
+  assert(r.j.url === "https://staging.fincom.live/review/#/join/" + r.j.code && R.codeOk(r.j.code), "the code link on the page it was made from: " + r.j.url);
+  assert(s.log.mails[0].text.includes("Meeting code: " + r.j.code) && s.log.mails[0].subject.startsWith("Invitation: Year-end review · 25-Oct-2026 11:00 IST"), "the email: link, code and time in IST");
   eq(s.log.mails[0].attachments[0].filename, "invite.ics", "the .ics attached");
   eq((await s.call({ action: "schedule", title: "x", at: "2026-10-25T05:30:00Z", emails: ["nope"] }, "tok-staff")).status, 400, "a wrong address refused");
   const m = stand({ mail: false });
@@ -384,4 +404,175 @@ Deno.test("schedule a meeting: the .ics, the invite by email when mail is set up
   eq([r2.j.emailed, r2.j.mail, r2.j.text.includes("Join:")], [0, false, true], "no mail: the invite text to copy");
   const j = await m.call({ action: "join", room_id: r2.j.room_id }, "tok-staff");
   eq(j.j.room.status, "open", "joining a scheduled meeting opens it");
+});
+
+// ---------------------------------------------------------------- next-calls-meet (23-Oct-2026): codes, Meetings, subtitles
+Deno.test("meeting codes: every room has one; an instant meeting, a meeting for later; a member joins by code, another firm's member as a guest", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting", title: "Quick sync" }, "tok-staff");
+  eq([a.status, a.j.room.kind, a.j.room.title, a.j.me.role], [200, "meeting", "Quick sync", "host"], "an instant meeting, the starter hosts");
+  assert(R.codeOk(a.j.room.code), "its code: " + a.j.room.code);
+  const a2 = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  assert(a2.j.room.id !== a.j.room.id && a2.j.room.code !== a.j.room.code, "a new room and code every time");
+  eq((await s.call({ action: "start", kind: "meeting", client_id: "c2" }, "tok-staff")).status, 403, "another firm's client refused");
+  const c = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  assert(R.codeOk(c.j.room.code), "a client call has a code too");
+  const later = await s.call({ action: "create", title: "GST review", base: "https://staging.fincom.live/review/?v=3#/meetings" }, "tok-owner");
+  eq([later.status, s.T.call_rooms.find((r) => r.id === later.j.room_id)!.status], [200, "scheduled"], "a meeting for later: made, nobody in it yet");
+  eq(later.j.url, "https://staging.fincom.live/review/#/join/" + later.j.code, "its one link");
+  assert(later.j.text.includes("Meeting code: " + later.j.code), "the words to share carry the code");
+  eq((await s.call({ action: "create", title: "x" }, "tok-look")).status, 403, "look-only cannot create one");
+  // an old room (made before codes) gets one when joined
+  s.T.call_rooms.push({ id: "eeeeeeee-0000-4000-8000-0000000000ff", firm_id: FIRM, kind: "help", title: "Old", status: "open", chan_key: "k".repeat(40), chan_epoch: 1, cowork_epoch: 1, created_at: new Date().toISOString() });
+  const old = await s.call({ action: "join", room_id: "eeeeeeee-0000-4000-8000-0000000000ff" }, "tok-staff");
+  assert(R.codeOk(old.j.room.code) && s.T.call_rooms.find((r) => r.id === "eeeeeeee-0000-4000-8000-0000000000ff")!.code === old.j.room.code, "an older room is given its code");
+  const byCode = await s.call({ action: "join_code", code: later.j.code.toUpperCase().replace(/-/g, " ") }, "tok-staff");
+  eq([byCode.status, byCode.j.room.id, byCode.j.room.status, byCode.j.me.role], [200, later.j.room_id, "open", "member"], "a member joins by the code, typed any way: straight in");
+  eq((await s.call({ action: "join_code", code: "https://staging.fincom.live/review/#/join/" + a.j.room.code }, "tok-look")).j.me.role, "member", "or with the whole link");
+  const other = await s.call({ action: "join_code", code: a.j.room.code }, "tok-other");
+  eq([other.status, other.j.kind], [404, "otherfirm"], "another firm's member is told to join as a guest");
+  eq((await s.call({ action: "join_code", code: "abc-defg-hjk" }, "tok-staff")).j.kind, "nocode", "a code of no room");
+});
+
+Deno.test("codes cannot be guessed: wrong codes counted per address, asks to join per room; a guest by code waits for the host", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const wrong = [];
+  for (let i = 0; i < R.CODE_TRIES.ipMax + 2; i++) wrong.push((await s.call({ action: "guest_hello", code: "bcd-efgh-jkm" }, undefined, "198.51.100.9")).j.kind);
+  eq(wrong.slice(0, R.CODE_TRIES.ipMax), Array(R.CODE_TRIES.ipMax).fill("nocode"), "ten wrong codes: no meeting has this code");
+  eq(wrong.slice(R.CODE_TRIES.ipMax), ["tries", "tries"], "then: too many wrong codes from here");
+  assert(Object.keys(s.tries).every((k) => /^ip:[0-9a-f]{32}$/.test(k) && !k.includes("198.51")), "the address kept only as a hash: " + Object.keys(s.tries));
+  eq((await s.call({ action: "guest_hello", code: a.j.room.code }, undefined, "198.51.100.9")).j.kind, "tries", "even a right code from that address waits out the window");
+  const hello = await s.call({ action: "guest_hello", code: a.j.room.code }, undefined, "192.0.2.1");
+  eq([hello.status, hello.j.title, hello.j.firm, hello.j.code], [200, "Meeting", "Garg & Co", a.j.room.code], "another address: the meeting's name and the firm");
+  eq((await s.call({ action: "guest_hello", code: "not a code" }, undefined, "192.0.2.1")).j.kind, "nocode", "not a code at all");
+  const g = await s.call({ action: "guest_start", code: a.j.room.code, name: "Ram Kumar", email: "ram@client.test" }, undefined, "192.0.2.1");
+  eq([g.status, g.j.code_sent], [200, false], "asked to join (no email set up: the host decides)");
+  const ro = await s.call({ action: "roster", room_id: a.j.room.id }, "tok-staff");
+  const row = ro.j.people.find((p: any) => p.role === "guest");
+  eq([row.name, row.state, s.T.call_participants.find((p) => p.id === row.id)!.invite_id], ["Ram Kumar", "waiting", null], "in the waiting room, by code (no link token)");
+  await s.call({ action: "admit", room_id: a.j.room.id, participant_id: row.id }, "tok-staff");
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt })).j.state, "admitted", "admitted");
+  for (let i = 0; i < R.CODE_TRIES.roomMax - 1; i++) await s.call({ action: "guest_start", code: a.j.room.code, name: "Person " + i, email: "p" + i + "@x.test" }, undefined, "192.0.2." + (i + 2));
+  const flood = await s.call({ action: "guest_start", code: a.j.room.code, name: "One more", email: "m@x.test" }, undefined, "192.0.2.200");
+  eq([flood.status, flood.j.kind], [429, "tries"], "30 asks to join a room in an hour, then refused");
+  s.tick(R.CODE_TRIES.roomSecs * 1000);
+  // (the stub's counter has no windows; the database's call_code_hit has: run_migration103.py)
+});
+
+Deno.test("guests by code with email set up: the code by email checks the address; the meeting ended: refused", async () => {
+  const s = stand({ mail: true });
+  const a = await s.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const g = await s.call({ action: "guest_start", code: a.j.room.code, name: "Sita Devi", email: "sita@x.test" });
+  eq(g.j.code_sent, true, "a code sent");
+  const otp = /code: (\d{6})/.exec(s.log.mails[0].subject)![1];
+  eq((await s.call({ action: "guest_verify", gt: g.j.gt, code: otp })).j.verified, true, "checked");
+  await s.call({ action: "end", room_id: a.j.room.id }, "tok-staff");
+  eq((await s.call({ action: "guest_hello", code: a.j.room.code })).j.kind, "ended", "the host ended it: the code says so");
+});
+
+Deno.test("a meeting's code works again after everyone left; the host's End ends it for good", async () => {
+  const s = stand();
+  const later = await s.call({ action: "create", title: "Weekly" }, "tok-staff");
+  const j1 = await s.call({ action: "join_code", code: later.j.code }, "tok-staff");
+  const topic1 = j1.j.topic;
+  await s.call({ action: "leave", room_id: later.j.room_id }, "tok-staff");
+  eq(s.T.call_rooms.find((r) => r.id === later.j.room_id)!.status, "scheduled", "the last one out: the meeting waits for its code again");
+  const j2 = await s.call({ action: "join_code", code: later.j.code }, "tok-owner");
+  eq([j2.status, j2.j.room.status], [200, "open"], "joined again the next day by the same code");
+  assert(j2.j.topic !== topic1, "a new channel name");
+  const help = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  await s.call({ action: "leave", room_id: help.j.room.id }, "tok-staff");
+  eq(s.T.call_rooms.find((r) => r.id === help.j.room.id)!.status, "ended", "a help call ends when the last one leaves, as before");
+  await s.call({ action: "end", room_id: later.j.room_id }, "tok-owner");
+  eq((await s.call({ action: "join_code", code: later.j.code }, "tok-staff")).j.kind, "ended", "ended by the host: for good");
+});
+
+Deno.test("Meetings: Upcoming (mine: host or invited by email) and Recent with recording and transcript; Add people by email or the mail app", async () => {
+  const s = stand({ mail: false });
+  const sch = await s.call({ action: "schedule", title: "Year-end", at: "2026-10-25T05:30:00Z", minutes: 45, emails: ["s2@a.test", "client@x.test"], base: "https://staging.fincom.live/review/" }, "tok-staff");
+  eq([sch.j.emailed, sch.j.mail], [0, false], "no email set up: nothing sent, the app opens the person's mail app");
+  assert(sch.j.subject === "Invitation: Year-end · 25-Oct-2026 11:00 IST" && sch.j.text.includes(sch.j.url) && sch.j.ics.includes("BEGIN:VEVENT"), "the subject, the words and the .ics for it");
+  await s.call({ action: "create", title: "Later one" }, "tok-owner");
+  const past = await s.call({ action: "start", kind: "meeting", title: "Done one" }, "tok-staff");
+  await s.call({ action: "rec_start", room_id: past.j.room.id }, "tok-staff");
+  s.T.call_transcripts.push({ room_id: past.j.room.id, firm_id: FIRM, lines: [] });
+  await s.call({ action: "end", room_id: past.j.room.id }, "tok-staff");
+  const m2 = await s.call({ action: "meetings" }, "tok-staff2");
+  const titles = m2.j.upcoming.map((r: any) => r.title + (r.mine ? "*" : ""));
+  eq(titles.sort(), ["Later one", "Year-end*"], "upcoming: the invited member's own marked (" + titles + ")");
+  eq(m2.j.recent.map((r: any) => [r.title, r.recording, r.transcript]), [["Done one", true, true]], "recent: with its recording and transcript");
+  eq((await s.call({ action: "meetings" }, "tok-other")).j.upcoming.length, 0, "another firm sees none");
+  const inv = await s.call({ action: "invite", room_id: sch.j.room_id, emails: ["new@x.test"], base: "https://staging.fincom.live/review/" }, "tok-staff");
+  eq([inv.j.emailed, inv.j.url, !!inv.j.ics], [false, sch.j.url, true], "Add people: the same link, the .ics (the mail app sends it)");
+  assert(s.T.call_rooms.find((r) => r.id === sch.j.room_id)!.invitees.includes("new@x.test"), "kept with the meeting's invitees");
+  const sm = stand({ mail: true });
+  const a = await sm.call({ action: "start", kind: "meeting" }, "tok-staff");
+  const inv2 = await sm.call({ action: "invite", room_id: a.j.room.id, emails: ["x@y.test", "z@y.test"] }, "tok-staff");
+  eq([inv2.j.emailed, sm.log.mails[0].to], [true, ["x@y.test", "z@y.test"]], "with Resend: emailed");
+  eq((await sm.call({ action: "invite", room_id: a.j.room.id, emails: ["bad"] }, "tok-staff")).status, 400, "a wrong address refused");
+});
+
+const AUDIO = btoa(String.fromCharCode(...new Array(3000).fill(0).map((_, i) => i % 251)));
+Deno.test("subtitles: the words and their language from Whisper, one translation per language switched on, never into the speaker's own", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  const r = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, mime: "audio/webm", secs: 5, start_ms: 4000, targets: ["hi", "en", "ta", "xx"] }, "tok-staff");
+  eq([r.status, r.j.lang, r.j.paused], [200, "ta", false], "Tamil found by Whisper");
+  eq(r.j.tr, { hi: "Sharma Traders को ₹1,25,000 GSTR-3B के लिए भेजें", en: "Send ₹1,25,000 to Sharma Traders for GSTR-3B" }, "into Hindi and English; not into Tamil (the speaker's own); an unknown language dropped");
+  eq([s.log.stt[0].format, s.log.stt[0].auth, s.log.stt[0].model], ["verbose_json", "gsk-test", "whisper-large-v3-turbo"], "Whisper with the language found (verbose_json), the platform's Groq key");
+  assert(String(s.log.stt[0].prompt).includes("Sharma Traders"), "the client's ledger names in Whisper's words prompt");
+  eq(s.log.chat.length, 2, "one translation call per language");
+  const sys = s.log.chat[0].body.messages[0].content;
+  assert(s.log.chat[0].body.model === "llama-3.1-8b-instant" && sys.includes("Sharma Traders") && sys.includes("194J") && sys.includes("amount"), "Groq's Llama, told to keep names, amounts and tax terms");
+  const used = s.T.assistant_log.at(-1)!;
+  eq([used.feature, used.question, used.tools[0], used.calls], ["call_subs", "", "ok", 3], "one usage row: counts only");
+  assert(!JSON.stringify(s.T.assistant_log).includes("Sharma") && !JSON.stringify(s.T.assistant_log).includes(AUDIO.slice(0, 20)), "never the words or the audio in the log");
+  eq(s.T.call_captions.length, 0, "not recorded: nothing kept, the subtitles only shown");
+  const none = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, secs: 5, targets: ["ta"] }, "tok-staff");
+  eq([none.j.tr, s.log.chat.length], [{}, 2], "only the speaker's own language on: no translation call");
+  const g = stand();
+  const b = await g.call({ action: "start", kind: "help" }, "tok-staff");
+  eq((await g.call({ action: "caption", room_id: b.j.room.id, audio: "%%%", targets: ["hi"] }, "tok-staff")).j.kind, "size", "not audio: refused");
+  eq((await g.call({ action: "caption", room_id: b.j.room.id, audio: AUDIO, targets: ["hi"] }, "tok-owner")).j.kind, "notin", "only someone in the call");
+});
+
+Deno.test("subtitles: Groq's 429 shows the words as said with translation paused; a translation that lost an amount or name is not used; recorded calls keep them", async () => {
+  const s = stand({ chat: (body, n) => n === 1 ? new Response("{}", { status: 429 }) : new Response(JSON.stringify({ choices: [{ message: { content: "x" } }] })) });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  const r = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, secs: 5, targets: ["hi", "en"] }, "tok-staff");
+  eq([r.status, r.j.paused, r.j.tr, r.j.text.length > 0], [200, true, { hi: null, en: null }, true], "429: the words as said, translation paused, the call goes on");
+  eq(s.log.chat.length, 1, "no more calls once paused for this piece");
+  assert(s.T.assistant_log.at(-1)!.tools.includes("paused"), "logged as paused");
+  const lost = stand({ chat: () => new Response(JSON.stringify({ choices: [{ message: { content: "शर्मा ट्रेडर्स को एक लाख भेजें" } }] })) });
+  const b = await lost.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  eq((await lost.call({ action: "caption", room_id: b.j.room.id, audio: AUDIO, secs: 5, targets: ["hi"] }, "tok-staff")).j.tr, { hi: null }, "names and the amount changed: not used (the words as said are shown)");
+  const sttLimit = stand({ stt: () => new Response("{}", { status: 429 }) });
+  const c = await sttLimit.call({ action: "start", kind: "help" }, "tok-staff");
+  const lim = await sttLimit.call({ action: "caption", room_id: c.j.room.id, audio: AUDIO, secs: 5, targets: ["hi"] }, "tok-staff");
+  eq([lim.status, lim.j.kind, sttLimit.log.stt.map((x: any) => x.model)], [429, "limit", ["whisper-large-v3-turbo", "whisper-large-v3"]], "Whisper's limit: the other model tried, then paused");
+  const nokey = stand({ groq: false });
+  const d = await nokey.call({ action: "start", kind: "help" }, "tok-staff");
+  eq((await nokey.call({ action: "caption", room_id: d.j.room.id, audio: AUDIO, targets: ["hi"] }, "tok-staff")).j.kind, "nokey", "no Groq key: said so");
+  // recorded: kept with the call, for those who stayed after the notice
+  const k = stand();
+  const e = await k.call({ action: "start", kind: "help" }, "tok-staff");
+  await k.call({ action: "join", room_id: e.j.room.id }, "tok-staff2");
+  const rec = await k.call({ action: "rec_start", room_id: e.j.room.id }, "tok-staff");
+  await k.call({ action: "caption", room_id: e.j.room.id, audio: AUDIO, secs: 5, start_ms: 1000, targets: ["hi"] }, "tok-staff2");
+  eq(k.T.call_captions.length, 0, "a person who has not accepted the notice: not kept");
+  await k.call({ action: "consent", room_id: e.j.room.id, recording_id: rec.j.recording_id, event: "accepted" }, "tok-staff2");
+  await k.call({ action: "caption", room_id: e.j.room.id, audio: AUDIO, secs: 5, start_ms: 7000, targets: ["hi"] }, "tok-staff2");
+  eq(k.T.call_captions.map((x) => [x.who, x.lang, x.start_ms, !!x.tr.hi]), [["S2", "ta", 7000, true]], "accepted: kept with the language found and the translation made");
+});
+
+Deno.test("the summary in the language asked for (default English)", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-staff");
+  s.T.call_transcripts.push({ room_id: a.j.room.id, firm_id: FIRM, lines: [{ who: "Riya", start_ms: 0, text: "File GSTR-3B by 20th" }], tasks_added: [] });
+  await s.call({ action: "summarise", room_id: a.j.room.id }, "tok-staff");
+  assert(!s.log.ai[0].system.includes("Write the summary"), "English: as before");
+  const h = await s.call({ action: "summarise", room_id: a.j.room.id, lang: "hi" }, "tok-staff");
+  assert(s.log.ai[1].system.includes("in Hindi (its own script)") && s.log.ai[1].system.includes("GSTR-3B"), "Hindi asked: said to the model, terms kept");
+  eq(h.j.summary.lang, "hi", "the summary says its language");
 });

@@ -147,7 +147,7 @@ export function mergeTranscript(pieces) {
   for (const p of list) {
     const last = out[out.length - 1];
     if (last && last.who === p.who) last.text += " " + String(p.text).trim();
-    else out.push({ who: p.who, start_ms: p.start_ms, text: String(p.text).trim() });
+    else out.push({ who: p.who, start_ms: p.start_ms, text: String(p.text).trim(), ...(p.lang ? { lang: p.lang } : {}) });
   }
   return out;
 }
@@ -234,3 +234,113 @@ export const rustdeskId = (id) => String(id || "").replace(/\s+/g, "").trim();
 // RustDesk's own link (its documented URL scheme): rustdesk://connection/new/<id>; never with a password
 export const rustdeskUri = (id) => (rustdeskIdOk(id) ? "rustdesk://connection/new/" + encodeURIComponent(rustdeskId(id)) : "");
 export const REMOTE_REASON_MAX = 300;
+
+// ---------------------------------------------------------------- meeting codes and links (next-calls-meet, 23-Oct-2026)
+// Every room has a short code like Google Meet's: abc-defg-hij, ten lowercase letters with none that is easily read as
+// another (no i, l, o: 1, 1, 0). 23 letters to the tenth power is about 4 x 10^13 codes; the function also limits wrong
+// guesses (per address and per room), so a code cannot be found by trying.
+export const CODE_LETTERS = "abcdefghjkmnpqrstuvwxyz";
+export const CODE_RE = /^[a-hjkmnp-z]{3}-[a-hjkmnp-z]{4}-[a-hjkmnp-z]{3}$/;
+export function meetCode() {
+  const a = new Uint8Array(10); crypto.getRandomValues(a);
+  let s = ""; for (let i = 0; i < 10; i++) s += CODE_LETTERS[a[i] % CODE_LETTERS.length];
+  return s.slice(0, 3) + "-" + s.slice(3, 7) + "-" + s.slice(7);
+}
+export const codeOk = (c) => CODE_RE.test(String(c || ""));
+// what a person typed or pasted (a code with or without dashes, spaces, capitals, or a whole link) -> the code, or ""
+export function codeFrom(text) {
+  const s = String(text || "").trim();
+  const m = /#\/join\/([A-Za-z-]{10,14})/.exec(s);
+  const raw = (m ? m[1] : s).toLowerCase().replace(/[\s-]+/g, "");
+  if (!/^[a-z]{10}$/.test(raw)) return "";
+  const c = raw.slice(0, 3) + "-" + raw.slice(3, 7) + "-" + raw.slice(7);
+  return codeOk(c) ? c : "";
+}
+// the one join link of a room: the page FinCom is on (staging.fincom.live/review/ or the live site), #/join/<code>
+export const joinLink = (base, code) => String(base || "").split("#")[0].split("?")[0] + "#/join/" + code;
+// wrong codes allowed: per address 10 in 15 minutes; asking to join one room 30 an hour (the host's waiting room)
+export const CODE_TRIES = { ipMax: 10, ipSecs: 900, roomMax: 30, roomSecs: 3600 };
+
+// the invitation in words: the email's subject and body, the WhatsApp text, the mail app's (mailto) and Google Calendar's
+const istWhen = (t) => { const d = new Date(new Date(t).getTime() + 330 * 60000); const M = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return String(d.getUTCDate()).padStart(2, "0") + "-" + M[d.getUTCMonth()] + "-" + d.getUTCFullYear() + " " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + " IST"; };
+export function inviteText({ title, host, firm, url, code, at, minutes }) {
+  const who = host ? host + (firm ? " (" + firm + ")" : "") + " invites you to " : "You are invited to ";
+  return who + "\"" + (title || "Meeting") + "\"" + (at ? " on " + istWhen(at) + (minutes ? " (" + minutes + " minutes)" : "") : "") + ".\n\n" +
+    "Join: " + url + "\nMeeting code: " + code + "\n\nOpen the link (or go to the FinCom join page and type the code), write your name and ask to join; the host lets you in.";
+}
+export const inviteSubject = (title, at) => "Invitation: " + (title || "Meeting") + (at ? " · " + istWhen(at) : "");
+export function mailtoUrl(to, subject, body) {
+  return "mailto:" + (Array.isArray(to) ? to : [to]).filter(Boolean).map(encodeURIComponent).join(",") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+}
+const gTime = (t) => new Date(t).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+export function googleCalUrl({ title, at, minutes, details, url }) {
+  const start = at ? new Date(at).getTime() : Date.now(), end = start + (Number(minutes) || 30) * 60000;
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(title || "Meeting") + "&dates=" + gTime(start) + "/" + gTime(end) +
+    "&details=" + encodeURIComponent(details || ("Join: " + url)) + "&location=" + encodeURIComponent(url || "");
+}
+
+// ---------------------------------------------------------------- live translated subtitles (23-Oct-2026)
+// Each person picks "My language" and switches subtitles on for themselves (off by default); a speaker's short pieces
+// (4 to 6 s, cut on a pause) are heard by Whisper on Groq (the language found by itself) and put into each language
+// someone in the call has switched on, by one Groq chat call per piece per language (never into the speaker's own).
+export const SUB_LANGS = [
+  { id: "en", name: "English" }, { id: "hi", name: "Hindi", native: "हिन्दी" }, { id: "hinglish", name: "Hinglish (English letters)" },
+  { id: "ta", name: "Tamil", native: "தமிழ்" }, { id: "te", name: "Telugu", native: "తెలుగు" }, { id: "kn", name: "Kannada", native: "ಕನ್ನಡ" },
+  { id: "ml", name: "Malayalam", native: "മലയാളം" }, { id: "mr", name: "Marathi", native: "मराठी" }, { id: "gu", name: "Gujarati", native: "ગુજરાતી" },
+  { id: "bn", name: "Bengali", native: "বাংলা" }, { id: "pa", name: "Punjabi", native: "ਪੰਜਾਬੀ" }, { id: "or", name: "Odia", native: "ଓଡ଼ିଆ" },
+  { id: "ur", name: "Urdu", native: "اردو" },
+];
+export const subLangOk = (id) => SUB_LANGS.some((l) => l.id === id);
+export const subLangName = (id) => ((SUB_LANGS.find((l) => l.id === id) || {}).name || "English");
+// the person's language at first: the app's or browser's (hi-IN -> hi, ta -> ta), else English
+export function defaultSubLang(navLangs) {
+  for (const raw of (navLangs || [])) { const id = String(raw || "").toLowerCase().split("-")[0]; if (subLangOk(id)) return id; }
+  return "en";
+}
+// Whisper's answer names a language in words ("tamil") or by code ("ta"): -> one of ours, or the code as it came
+const WHISPER_NAMES = { english: "en", hindi: "hi", tamil: "ta", telugu: "te", kannada: "kn", malayalam: "ml", marathi: "mr", gujarati: "gu", bengali: "bn", punjabi: "pa", panjabi: "pa", odia: "or", oriya: "or", urdu: "ur" };
+export function whisperLang(x) { const s = String(x || "").toLowerCase().trim(); return WHISPER_NAMES[s] || (s.length <= 3 ? s : ""); }
+// the languages to put a piece into: those of the people who switched subtitles on, never the piece's own language
+// (Hinglish is its own target: Hindi said is still written out in English letters for a Hinglish reader)
+export function subTargets(people, source) {
+  const out = [];
+  for (const p of (people || [])) {
+    if (!p || !p.subs || !subLangOk(p.lang)) continue;
+    if (p.lang === source || out.includes(p.lang)) continue;
+    out.push(p.lang);
+  }
+  return out.slice(0, 6);
+}
+// the speaker sends pieces only when someone has subtitles on, or the transcript is being kept (recording, after the notice)
+export const subsNeeded = (people, keeping) => !!keeping || (people || []).some((p) => p && p.subs);
+// what a viewer reads: their own language when made, else the words as said (and "translation paused" when it was asked
+// for and not made)
+export function subLine(line, lang) {
+  if (!line) return null;
+  if (line.lang === lang || !lang) return { text: line.text, original: false, paused: false };
+  const t = line.tr && line.tr[lang];
+  return t ? { text: t, original: true, paused: false } : { text: line.text, original: false, paused: !!(line.paused || (line.tr && lang in line.tr)) };
+}
+// the translation's instructions: names, numbers, amounts and tax terms unchanged
+export function subPrompt(target, names) {
+  const lang = target === "hinglish" ? "Hinglish: Hindi written in English (Latin) letters, as Indians type it on WhatsApp" : subLangName(target) + (target === "en" ? "" : ", in its own script");
+  return "You translate one line said in a business call at an Indian chartered accountant's firm into " + lang + ". " +
+    "Keep every name of a person, company, client or ledger exactly as written; keep every number, date and amount exactly (₹, lakh, crore stay as they are); " +
+    "keep the terms GST, TDS, TCS, GSTR-1, GSTR-3B, ITR, PAN, TAN, Tally, invoice and section numbers (194J, 194C, 80C) unchanged. " +
+    "Reply with the translation only, nothing else, no quotes, no notes." + (names && names.length ? "\nNames that may be said: " + names.slice(0, 40).join(", ") : "");
+}
+export const SUB_PIECE = { minMs: 3500, maxMs: 6000, pauseMs: 600, minSpeechMs: 400 };
+// a translation is taken only when it kept what must not change: every number and amount (1,25,000 = 125000), every word
+// in capitals or with a figure (GST, TDS, GSTR-3B, 194J) and every name of the firm's list that was said; else the line
+// is shown as said
+export function termsKept(src, out, names) {
+  const s = String(src || ""), o = String(out || ""), flat = (x) => x.replace(/[,\s]/g, "");
+  const oFlat = flat(o).toLowerCase();
+  const nums = s.match(/\d[\d,]*(\.\d+)?/g) || [];
+  if (nums.some((n) => !oFlat.includes(flat(n).toLowerCase()))) return false;
+  const terms = s.match(/\b(?=[A-Za-z0-9-]*[A-Z0-9])(?=[A-Za-z0-9-]*[A-Z]{2}|[A-Za-z0-9-]*\d[A-Za-z])[A-Za-z0-9-]{2,}\b/g) || [];
+  if (terms.some((t) => !o.includes(t))) return false;
+  for (const n of (names || [])) { const nm = String(n || "").trim(); if (nm.length >= 3 && /[A-Za-z]/.test(nm) && s.toLowerCase().includes(nm.toLowerCase()) && !o.toLowerCase().includes(nm.toLowerCase())) return false; }
+  return true;
+}

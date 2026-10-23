@@ -97,8 +97,8 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
 }
 
 const AUDIO = new Uint8Array(48_000).map((_, i) => (i * 31 + 7) & 255);     // a made-up clip; its bytes are looked for later
-function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean } = {}) {
-  const qs = new URLSearchParams({ lang: o.lang ?? "hi", secs: String(o.secs ?? 12), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}) });
+function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean, verbose?: boolean } = {}) {
+  const qs = new URLSearchParams({ lang: o.lang ?? "hi", secs: String(o.secs ?? 12), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}) });
   const headers: Record<string, string> = { "Content-Type": o.type ?? "audio/webm;codecs=opus", Origin: "https://staging.fincom.live" };
   if (o.tok !== null) headers.Authorization = "Bearer " + (o.tok ?? "tok-me");
   if (o.len) headers["Content-Length"] = o.len;
@@ -290,4 +290,15 @@ Deno.test("the AI step: only for names near but unsure, under the cap; a changed
   const f = stand({ key: "gsk_test", claudeKey: "sk-test", groq, claude: () => new Response("oops", { status: 500 }) });
   const rf = await send(f.h, { lang: "auto", latin: true });
   eq([rf.status, (await rf.json()).text], [200, said], "the AI step failed: Whisper's words stand");
+});
+
+Deno.test("verbose=1 (live subtitles in calls): Whisper's verbose answer and the language it found; without it, as before", async () => {
+  const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: " வணக்கம் Sharma Traders ", language: "tamil", segments: [] })) });
+  const r = await send(s.h, { lang: "auto", verbose: true, latin: true });
+  const j = await r.json();
+  eq([r.status, j.text, j.language], [200, "வணக்கம் Sharma Traders", "ta"], "the words in their own script and the language");
+  eq(s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format, "verbose_json", "asked for the verbose answer");
+  const plain = stand({ key: "gsk_test" });
+  const j2 = await (await send(plain.h, { lang: "hi" })).json();
+  eq([j2.language, plain.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format], [undefined, "json"], "without verbose: unchanged (no language, json)");
 });

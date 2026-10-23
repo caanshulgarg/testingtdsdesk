@@ -3,9 +3,18 @@
 //   members (the signed-in user's token, their two-step sign-in, an active member of a firm):
 //     start, join, schedule, invite, roster, admit, deny, remove, end, leave, topic, chat, upload, download, rec_start,
 //     rec_part, rec_stop, consent, piece, transcribe, summarise, tasks, cf, cowork, cowork_join, remote, settings,
-//     batch_list, batch_save, history
+//     batch_list, batch_save, history; and (next-calls-meet, 23-Oct-2026) create (a meeting for later), join_code,
+//     meetings (Upcoming and Recent), and start with kind "meeting" (an instant meeting)
 //   guests (no FinCom sign-in): guest_hello and guest_start with the link's token; then a signed guest token (gt) for
-//     guest_verify, guest_poll, topic, chat, upload, download, consent, piece, cf, leave
+//     guest_verify, guest_poll, topic, chat, upload, download, consent, piece, cf, leave, caption
+//   meeting codes (23-Oct-2026): every room has a code like Meet's (abc-defg-hij, rules.meetCode) and one link,
+//     <FinCom's page>#/join/<code>; guest_hello and guest_start take {code} as they take {token}. Wrong codes are counted
+//     per address (a hash of it) and requests to join per room (call_code_hit, migration 103), so codes cannot be guessed.
+//   live subtitles (23-Oct-2026): `caption` takes a short piece of the speaker's microphone (4 to 6 s), Whisper on Groq
+//     finds the words and the language (fincom-transcribe's model and words prompt), and one Groq chat call per language
+//     someone switched on (never the speaker's own) translates it, names, amounts and tax terms kept (rules.termsKept).
+//     Groq's 429: the words as said, "translation paused". Kept (call_captions) only while the call is recorded and the
+//     speaker stayed after the notice; one usage row per piece (feature "call_subs", counts only, never words).
 // Media: Cloudflare Realtime (SFU) when platform_secrets cf_realtime_app_id and cf_realtime_token are set (read here only,
 // never sent to a browser; the browser's session calls come through `cf`); otherwise peer to peer with Cloudflare's free
 // STUN and at most 4 people. TURN (cf_turn_key_id, cf_turn_key_token) is added to the ICE servers when set.
@@ -17,6 +26,7 @@
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
+import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
 
 export type Env = (k: string) => string | undefined;
 export type Deps = { env: Env, fetch: typeof fetch, now?: () => number };
@@ -24,6 +34,11 @@ export type Deps = { env: Env, fetch: typeof fetch, now?: () => number };
 export const CF_API = "https://rtc.live.cloudflare.com/v1";
 export const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 export const RESEND_URL = "https://api.resend.com/emails";
+export const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
+// the translation model: Groq's free Llama (the one constant to change)
+export const SUB_MODEL = "llama-3.1-8b-instant";
+export { GROQ_URL };
+const CAPTION_B64_MAX = 600_000;      // about 450 KB of audio: 6 s of speech is some 30 KB
 const TRANSCRIBE_BATCH = 4;
 
 export const SUMMARY_SYSTEM = "You summarise a call held by an Indian chartered accountant's firm (with a client, staff or a class). " +
@@ -142,7 +157,8 @@ export function handler(deps: Deps) {
     const mode = r.media_mode;
     const rec = await activeRec(r.id);
     return {
-      ok: true, room: { id: r.id, kind: r.kind, title: r.title, client_id: r.client_id, batch_id: r.batch_id, status: r.status, host_user: r.host_user, cowork_on: r.cowork_on, started_at: r.started_at },
+      ok: true, room: { id: r.id, kind: r.kind, title: r.title, client_id: r.client_id, batch_id: r.batch_id, status: r.status, host_user: r.host_user, cowork_on: r.cowork_on, started_at: r.started_at,
+        code: r.code || null, scheduled_at: r.scheduled_at || null, minutes: r.minutes || null },
       me: { id: p.id, role: p.role, name: p.name, state: p.state }, topic: await R.topicFor(r.chan_key, r.chan_epoch), ice: await iceServers(), mode, max: R.maxPeople(mode),
       recording: rec ? { id: rec.id, started_at: rec.started_at, notice: R.CONSENT_TEXT } : null, ...extra,
     };
@@ -152,24 +168,83 @@ export function handler(deps: Deps) {
     await insert("call_invites", { room_id: r.id, firm_id: r.firm_id, token_hash: await R.sha256Hex(token), email, max_uses: max, expires_at: new Date(now() + days * 86400000).toISOString(), created_by: by });
     return token;
   };
-  const linkUrl = (base: unknown, token: string) => {
+  // the page a link opens: the one it was made from when that is FinCom's own site, else staging's
+  const siteBase = (base: unknown) => {
     const b = String(base || "");
     let origin = "";
     try { origin = new URL(b).origin; } catch { /* below */ }
-    const okBase = origin && allowedOrigins().includes(origin) ? b.split("#")[0] : "https://staging.fincom.live/";
-    return okBase + "#join=" + token;
+    return origin && allowedOrigins().includes(origin) ? b.split("#")[0] : "https://staging.fincom.live/";
+  };
+  const linkUrl = (base: unknown, token: string) => siteBase(base) + "#join=" + token;
+  const codeUrl = (base: unknown, code: string) => R.joinLink(siteBase(base), code);
+  // a new room with its own code (a clash, very unlikely, tries another)
+  const newRoom = async (row: Record<string, unknown>) => {
+    for (let i = 0; ; i++) {
+      try { return await insert("call_rooms", { ...row, code: R.meetCode() }); }
+      catch (e) { if (i >= 4 || !/duplicate|23505|unique/i.test(String((e as any).code || "") + " " + String((e as Error).message))) throw e; }
+    }
+  };
+  // a room made before codes (or by an older function): given its code when first asked for
+  const ensureCode = async (r: any) => {
+    if (r.code) return r.code;
+    for (let i = 0; i < 5; i++) {
+      try { const [x] = await patch("call_rooms", "id=eq." + r.id + "&code=is.null", { code: R.meetCode() }); if (x) { r.code = x.code; return r.code; } const y = await one("/rest/v1/call_rooms?select=code&id=eq." + r.id); r.code = y && y.code; return r.code; }
+      catch (e) { if (!/duplicate|23505|unique/i.test(String((e as any).code || "") + " " + String((e as Error).message))) throw e; }
+    }
+    return r.code;
+  };
+  // tries counted (migration 103): true while within the limit; when the counter cannot be reached the try is allowed
+  const hit = async (key: string, secs: number, max: number, add = 1) => { try { return (await rpc("call_code_hit", { p_key: key, p_secs: secs, p_max: max, p_add: add })) !== false; } catch { return true; } };
+  const ipKey = async (ip: string) => "ip:" + (await R.sha256Hex("fincom-call:" + (ip || "?"))).slice(0, 32);
+  // a room by its code; a wrong code counted against the address it came from
+  const byCode = async (codeIn: unknown, ip: string) => {
+    const code = R.codeFrom(String(codeIn || ""));
+    const k = await ipKey(ip);
+    // an address over its wrong codes is refused before any look, right code or not (else a guess could still land)
+    if (!(await hit(k, R.CODE_TRIES.ipSecs, R.CODE_TRIES.ipMax, 0))) fail(429, "Too many wrong codes from here. Wait 15 minutes and try again.", "tries");
+    if (!code) { if (!(await hit(k, R.CODE_TRIES.ipSecs, R.CODE_TRIES.ipMax))) fail(429, "Too many wrong codes from here. Wait 15 minutes and try again.", "tries"); fail(400, "A meeting code has ten letters, like abc-defg-hjk.", "nocode"); }
+    const r = await one("/rest/v1/call_rooms?select=*&code=eq." + q(code));
+    if (!r) {
+      if (!(await hit(k, R.CODE_TRIES.ipSecs, R.CODE_TRIES.ipMax))) fail(429, "Too many wrong codes from here. Wait 15 minutes and try again.", "tries");
+      fail(404, "No meeting has this code. Check it with the person who sent it.", "nocode");
+    }
+    return r;
+  };
+  const roomInvite = (r: any, m: { name: string }, firm: string, url: string) => R.inviteText({ title: r.title, host: m.name, firm, url, code: r.code, at: r.scheduled_at || null, minutes: r.minutes || null });
+  // the names that may be said in a call: the client's own and its biggest Tally ledgers (the firm's own only), kept a
+  // few minutes per room
+  const vocabCache = new Map<string, { at: number, names: any[] }>();
+  const vocabulary = async (r: any): Promise<any[]> => {
+    const c = vocabCache.get(r.id);
+    if (c && now() - c.at < 600000) return c.names;
+    const names: any[] = [];
+    if (r.client_id) {
+      try {
+        const cl = await one("/rest/v1/clients?select=name&id=eq." + q(r.client_id) + "&firm_id=eq." + r.firm_id);
+        if (cl && cl.name) names.push(String(cl.name));
+        const books = ((await svc("/rest/v1/tally_books?select=book_id&firm_id=eq." + r.firm_id + "&client_id=eq." + q(r.client_id))) as any[] || []).map((x) => String(x.book_id)).filter((x) => R.isUuid(x));
+        if (books.length) {
+          const ls = (await svc("/rest/v1/tally_ledgers?select=name,primary_group,open&firm_id=eq." + r.firm_id + "&book_id=in.(" + books.join(",") + ")&limit=2000")) as any[] || [];
+          ls.sort((a, b) => Math.abs(Number(b.open) || 0) - Math.abs(Number(a.open) || 0));
+          for (const l of ls.slice(0, 60)) names.push({ name: String(l.name || ""), group: String(l.primary_group || "") });
+        }
+      } catch { /* the firm's words alone */ }
+    }
+    vocabCache.set(r.id, { at: now(), names });
+    return names;
   };
   const firmName = async (firm: string) => String(((await one("/rest/v1/firms?select=name&id=eq." + firm)) || {}).name || "the firm");
 
   // ---------------------------------------------------------------- the actions
-  const member: Record<string, (m: Member, b: any) => Promise<unknown>> = {
+  type Ctx = { ip: string };
+  const member: Record<string, (m: Member, b: any, ctx: Ctx) => Promise<unknown>> = {
     // a room for the work at hand: a client's open call is joined, not made twice
     async start(m, b) {
       const kind = String(b.kind || "");
       if (!R.canHost(kind, m.role)) fail(403, m.role === "readonly" ? "A look-only member can join a call but not start one." : "This kind of call cannot be started here.", "role");
-      if (kind === "meeting") fail(400, "A meeting is scheduled (Schedule meeting).");
-      const client = kind === "client" ? String(b.client_id || "").slice(0, 120) : null;
-      if (kind === "client" && !(await clientReadable(m.jwt, client))) fail(403, "This client is not one of your firm's.", "client");
+      // an instant meeting (Meetings > New meeting > Start an instant meeting): a new room every time, a client if chosen
+      const client = kind === "client" || (kind === "meeting" && b.client_id) ? String(b.client_id || "").slice(0, 120) : null;
+      if (client && !(await clientReadable(m.jwt, client))) fail(403, "This client is not one of your firm's.", "client");
       let batch: any = null;
       if (kind === "class") {
         batch = R.isUuid(b.batch_id) ? await one("/rest/v1/call_batches?select=*&id=eq." + q(b.batch_id) + "&firm_id=eq." + m.firm) : null;
@@ -179,18 +254,55 @@ export function handler(deps: Deps) {
         : kind === "class" ? await one("/rest/v1/call_rooms?select=*&status=eq.open&kind=eq.class&batch_id=eq." + q(batch.id) + "&order=created_at.desc&limit=1") : null;
       if (!r) {
         const cname = client ? String(((await one("/rest/v1/clients?select=name&id=eq." + q(client))) || {}).name || "") : "";
-        const title = String(b.title || (kind === "client" ? "Call with " + cname : kind === "class" ? batch.name + " · class" : "Help call")).slice(0, 200);
-        r = await insert("call_rooms", { firm_id: m.firm, kind, client_id: client, batch_id: batch ? batch.id : null, title, status: "open", media_mode: R.mediaMode(!!(await cfKeys())),
+        const title = String(b.title || (kind === "client" ? "Call with " + cname : kind === "class" ? batch.name + " · class" : kind === "meeting" ? (cname ? "Meeting with " + cname : "Meeting") : "Help call")).slice(0, 200);
+        r = await newRoom({ firm_id: m.firm, kind, client_id: client, batch_id: batch ? batch.id : null, title, status: "open", media_mode: R.mediaMode(!!(await cfKeys())),
           host_user: m.user, created_by: m.user, started_at: new Date(now()).toISOString() });
       }
+      await ensureCode(r);
       const p = await joinAs(r, m, r.host_user === m.user ? "host" : "member");
       return session(r, p);
+    },
+    // a member with a code (typed on Meetings, or the link opened while signed in): the same as join; a code of another
+    // firm's room says so, and the app goes on as a guest
+    async join_code(m, b, ctx) {
+      const r = await byCode(b.code, ctx.ip);
+      if (r.firm_id !== m.firm) fail(404, "This meeting is another firm's: you join it as a guest.", "otherfirm");
+      return member.join(m, { room_id: r.id }, ctx);
+    },
+    // a meeting for later: its code and link now, joined whenever (status scheduled until someone comes)
+    async create(m, b) {
+      if (!R.canHost("meeting", m.role)) fail(403, "Only the owner or staff can create a meeting.", "role");
+      const client = b.client_id ? String(b.client_id).slice(0, 120) : null;
+      if (client && !(await clientReadable(m.jwt, client))) fail(403, "This client is not one of your firm's.", "client");
+      const title = String(b.title || "Meeting").trim().slice(0, 200) || "Meeting";
+      const r = await newRoom({ firm_id: m.firm, kind: "meeting", client_id: client, title, status: "scheduled", media_mode: R.mediaMode(!!(await cfKeys())), host_user: m.user, created_by: m.user });
+      const url = codeUrl(b.base, r.code);
+      return { ok: true, room_id: r.id, code: r.code, url, title, text: roomInvite(r, m, await firmName(m.firm), url), mail: !!(await mailKey()) };
+    },
+    // Meetings' lists: Upcoming (scheduled or open, read as the person: row-level security) with "mine" (the host, or
+    // invited by their sign-in email: these also show on Today and in the bell), and Recent (held, newest first) with
+    // whether a recording or a transcript is kept
+    async meetings(m) {
+      const cols = "id,kind,title,status,client_id,batch_id,scheduled_at,minutes,invitees,host_user,code,created_at,started_at,ended_at";
+      const up = (await rest("/rest/v1/call_rooms?select=" + cols + "&status=in.(scheduled,open)&order=created_at.desc&limit=60", m.jwt)) as any[] || [];
+      const cut = now() - 3 * 3600000;
+      const upcoming = up.filter((r) => r.status === "open" || !r.scheduled_at || Date.parse(r.scheduled_at) + (Number(r.minutes) || 30) * 60000 >= cut)
+        .filter((r) => r.status === "open" || r.kind === "meeting")
+        .map((r) => ({ ...r, mine: r.host_user === m.user || (Array.isArray(r.invitees) && r.invitees.includes(m.email)) }))
+        .sort((a, b) => String(a.scheduled_at || a.started_at || a.created_at).localeCompare(String(b.scheduled_at || b.started_at || b.created_at)));
+      const past = (await rest("/rest/v1/call_rooms?select=" + cols + "&started_at=not.is.null&order=started_at.desc&limit=25", m.jwt)) as any[] || [];
+      const recent = past.filter((r) => r.status !== "open");
+      const ids = recent.map((r) => r.id).join(",");
+      const recs = ids ? (await rest("/rest/v1/call_recordings?select=room_id&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
+      const trs = ids ? (await rest("/rest/v1/call_transcripts?select=room_id&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
+      return { ok: true, upcoming, recent: recent.map((r) => ({ ...r, recording: (recs || []).some((x) => x.room_id === r.id), transcript: (trs || []).some((x) => x.room_id === r.id) })), me: m.user, email: m.email };
     },
     async join(m, b) {
       const r = await room(b.room_id, m.firm);
       if (r.status === "ended") fail(410, "This call has ended.", "ended");
       if (r.kind === "client" && !(await clientReadable(m.jwt, r.client_id))) fail(403, "This client is not one of your firm's.", "client");
-      if (r.status === "scheduled") { await patch("call_rooms", "id=eq." + r.id, { status: "open", started_at: new Date(now()).toISOString(), host_user: r.host_user || m.user }); r.status = "open"; }
+      if (r.status === "scheduled") { await patch("call_rooms", "id=eq." + r.id, { status: "open", started_at: new Date(now()).toISOString(), ended_at: null, host_user: r.host_user || m.user }); r.status = "open"; }
+      await ensureCode(r);
       const p = await joinAs(r, m, r.host_user === m.user ? "host" : "member");
       return session(r, p);
     },
@@ -204,27 +316,33 @@ export function handler(deps: Deps) {
       const client = b.client_id ? String(b.client_id).slice(0, 120) : null;
       if (client && !(await clientReadable(m.jwt, client))) fail(403, "This client is not one of your firm's.", "client");
       const title = String(b.title || "Meeting").trim().slice(0, 200) || "Meeting";
-      const r = await insert("call_rooms", { firm_id: m.firm, kind: "meeting", client_id: client, title, status: "scheduled", scheduled_at: new Date(at).toISOString(), minutes,
+      const r = await newRoom({ firm_id: m.firm, kind: "meeting", client_id: client, title, status: "scheduled", scheduled_at: new Date(at).toISOString(), minutes,
         invitees: emails, media_mode: R.mediaMode(!!(await cfKeys())), host_user: m.user, created_by: m.user });
-      const token = await newLink(r, m.user, "", Math.max(R.GUEST_LINK_DAYS, Math.ceil((at - now()) / 86400000) + 2), 50);
-      const url = linkUrl(b.base, token);
-      const ics = R.icsFor({ uid: r.id, title, start: at, minutes, url, organizer: { email: m.email, name: m.name }, description: "A FinCom call. Open the link at the time; you will be asked your name." });
-      const when = new Date(at + 330 * 60000).toISOString().replace("T", " ").slice(0, 16) + " IST";
-      const text = m.name + " invites you to \"" + title + "\" on " + when + " (" + minutes + " minutes).\n\nJoin: " + url + "\n\nYou will be asked your name and a code sent to your email. The calendar invite is attached.";
-      const sent = emails.length ? await sendMail(emails, "Invitation: " + title + " · " + when, text, [{ filename: "invite.ics", content: btoa(ics) }]) : false;
-      return { ok: true, room_id: r.id, token, url, ics, text, emailed: sent ? emails.length : 0, mail: !!(await mailKey()) };
+      const url = codeUrl(b.base, r.code);
+      const ics = R.icsFor({ uid: r.id, title, start: at, minutes, url, organizer: { email: m.email, name: m.name }, description: "A FinCom meeting. Meeting code: " + r.code + ". Open the link at the time, write your name and ask to join." });
+      const text = roomInvite(r, m, await firmName(m.firm), url), subject = R.inviteSubject(title, at);
+      const sent = emails.length ? await sendMail(emails, subject, text, [{ filename: "invite.ics", content: btoa(unescape(encodeURIComponent(ics))) }]) : false;
+      return { ok: true, room_id: r.id, code: r.code, url, ics, text, subject, title, at: new Date(at).toISOString(), minutes, emails, emailed: sent ? emails.length : 0, mail: !!(await mailKey()) };
     },
+    // Add people: the room's code link (and, for an older link, a guest token link too), emailed when FinCom's email is
+    // set up (with the .ics when the meeting has a time); otherwise the words for the person's own mail app
     async invite(m, b) {
       const r = await room(b.room_id, m.firm);
       if (!R.canHost(r.kind, m.role)) fail(403, "Only the owner or staff can invite a guest.", "role");
       if (r.status === "ended") fail(410, "This call has ended.", "ended");
-      const email = String(b.email || "").trim().toLowerCase();
-      if (email && !R.emailOk(email)) fail(400, "That email address is not one.");
-      const token = await newLink(r, m.user, email);
-      const url = linkUrl(b.base, token);
-      const text = m.name + " (" + await firmName(m.firm) + ") invites you to a FinCom call: " + r.title + "\nJoin: " + url;
-      const sent = email ? await sendMail([email], "Join the call: " + r.title, text) : false;
-      return { ok: true, token, url, text, emailed: sent, mail: !!(await mailKey()) };
+      const list = [...new Set([...(Array.isArray(b.emails) ? b.emails : []), b.email].map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
+      if (list.length > 20 || list.some((e) => !R.emailOk(e))) fail(400, "That email address is not one.");
+      await ensureCode(r);
+      const url = codeUrl(b.base, r.code);
+      const token = await newLink(r, m.user, list[0] || "");
+      const text = roomInvite(r, m, await firmName(m.firm), url), subject = R.inviteSubject(r.title, r.scheduled_at || null);
+      const ics = r.scheduled_at ? R.icsFor({ uid: r.id, title: r.title, start: Date.parse(r.scheduled_at), minutes: r.minutes || 30, url, organizer: { email: m.email, name: m.name }, description: "Meeting code: " + r.code }) : "";
+      const sent = list.length ? await sendMail(list, subject, text, ics ? [{ filename: "invite.ics", content: btoa(unescape(encodeURIComponent(ics))) }] : undefined) : false;
+      if (list.length && r.kind === "meeting") {
+        const inv = [...new Set([...(Array.isArray(r.invitees) ? r.invitees : []), ...list])].slice(0, 50);
+        await patch("call_rooms", "id=eq." + r.id, { invitees: inv }).catch(() => null);
+      }
+      return { ok: true, code: r.code, url, token, link: linkUrl(b.base, token), text, subject, ics, emailed: sent, mail: !!(await mailKey()) };
     },
     async roster(m, b) {
       const r = await room(b.room_id, m.firm);
@@ -294,12 +412,12 @@ export function handler(deps: Deps) {
         const file = await doFetch(URL_ + "/storage/v1/object/call-recordings/" + p.path.split("/").map(q).join("/"), { headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE } });
         if (!file.ok) { await file.body?.cancel(); await patch("call_pieces", "id=eq." + p.id, { status: "failed", tries: p.tries + 1 }); continue; }
         const audio = new Uint8Array(await file.arrayBuffer());
-        const u = URL_ + "/functions/v1/fincom-transcribe?lang=auto&latin=1&secs=" + Math.ceil(p.dur_ms / 1000) + (r.client_id ? "&client=" + q(r.client_id) : "");
+        const u = URL_ + "/functions/v1/fincom-transcribe?lang=auto&latin=1&verbose=1&secs=" + Math.ceil(p.dur_ms / 1000) + (r.client_id ? "&client=" + q(r.client_id) : "");
         let res: Response | null = null;
         try { res = await doFetch(u, { method: "POST", headers: { Authorization: "Bearer " + m.jwt, apikey: ANON, "Content-Type": p.mime || "audio/webm" }, body: audio }); } catch { res = null; }
         const j: any = res ? await res.json().catch(() => null) : null;
         if (res && res.status === 429) { wait = 60; break; }
-        if (res && res.ok && j && j.ok && typeof j.text === "string") await patch("call_pieces", "id=eq." + p.id, { status: "done", text: j.text.slice(0, 20000), tries: p.tries + 1 });
+        if (res && res.ok && j && j.ok && typeof j.text === "string") await patch("call_pieces", "id=eq." + p.id, { status: "done", text: j.text.slice(0, 20000), tries: p.tries + 1, ...(j.language ? { lang: String(j.language).slice(0, 12) } : {}) });
         else if (j && (j.kind === "nokey" || j.kind === "off" || j.kind === "mfa")) fail(503, String(j.error || "Clearer listening is not set up."), j.kind);
         else await patch("call_pieces", "id=eq." + p.id, { status: p.tries + 1 >= 3 ? "failed" : "new", tries: p.tries + 1 });
       }
@@ -319,12 +437,16 @@ export function handler(deps: Deps) {
       const cap = await rpc("asst_cap_take", { p_firm: m.firm, p_n: 1 }).catch(() => null);
       if (!cap?.ok) fail(429, "The firm's AI limit for this month is reached.", "cap");
       const pl = plan("book", "low", true);
+      // in the language the person asked for (default English); names, amounts and tax terms as said
+      const lang = R.subLangOk(b.lang) ? String(b.lang) : "en";
+      const sumLang = lang === "en" ? "" : " Write the summary, the decisions and the action items' titles in " + (lang === "hinglish" ? "Hinglish (Hindi in English letters)" : R.subLangName(lang) + " (its own script)") +
+        "; keep names, numbers, amounts and tax terms (GST, TDS, GSTR-3B, 194J) exactly as said; the JSON keys stay in English.";
       const text = R.transcriptText(lines).slice(-60000);
       const t0 = now();
       let msg: any = null, okCall = false;
       try {
         const res = await doFetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({ model: pl.model, max_tokens: 2000, system: SUMMARY_SYSTEM, messages: [{ role: "user", content: "Call: " + r.title + "\n\nTranscript:\n" + text }] }) });
+          body: JSON.stringify({ model: pl.model, max_tokens: 2000, system: SUMMARY_SYSTEM + sumLang, messages: [{ role: "user", content: "Call: " + r.title + "\n\nTranscript:\n" + text }] }) });
         msg = await res.json().catch(() => null); okCall = res.ok && !!msg;
       } catch { okCall = false; }
       const u = (msg && msg.usage) || {};
@@ -336,7 +458,7 @@ export function handler(deps: Deps) {
       const out = String((msg.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("")).trim().replace(/^```(json)?\s*|\s*```$/g, "");
       let j: any = null; try { j = JSON.parse(out); } catch { j = null; }
       if (!R.summaryOk(j)) fail(502, "The summary did not come back in the expected shape; try again.", "ai");
-      const summary = { summary: j.summary, decisions: j.decisions, actions: j.actions.map((a: any) => ({ title: a.title, who: a.who || "", due: a.due || "" })), model: pl.model, at: new Date(now()).toISOString() };
+      const summary = { summary: j.summary, decisions: j.decisions, actions: j.actions.map((a: any) => ({ title: a.title, who: a.who || "", due: a.due || "" })), model: pl.model, lang, at: new Date(now()).toISOString() };
       await patch("call_transcripts", "room_id=eq." + r.id, { summary, updated_at: new Date(now()).toISOString() });
       return { ok: true, summary };
     },
@@ -430,6 +552,14 @@ export function handler(deps: Deps) {
     }
     return { ok: true };
   }
+  // a meeting nobody is in: back to waiting for its code (a new channel name; whatever ran is stopped)
+  async function idleRoom(r: any) {
+    const at = new Date(now()).toISOString();
+    await patch("call_rooms", "id=eq." + r.id, { status: "scheduled", ended_at: at, chan_epoch: Number(r.chan_epoch) + 1, cowork_on: false, cowork_epoch: Number(r.cowork_epoch || 1) + 1 });
+    await patch("call_participants", "room_id=eq." + r.id + "&state=eq.waiting", { state: "left", left_at: at });
+    await patch("call_recordings", "room_id=eq." + r.id + "&ended_at=is.null", { ended_at: at });
+    await patch("call_remote_sessions", "room_id=eq." + r.id + "&ended_at=is.null", { ended_at: at });
+  }
   async function endRoom(r: any) {
     const at = new Date(now()).toISOString();
     await patch("call_rooms", "id=eq." + r.id, { status: "ended", ended_at: at, chan_epoch: Number(r.chan_epoch) + 1, cowork_on: false, cowork_epoch: Number(r.cowork_epoch || 1) + 1 });
@@ -438,17 +568,17 @@ export function handler(deps: Deps) {
     await patch("call_remote_sessions", "room_id=eq." + r.id + "&ended_at=is.null", { ended_at: at });
   }
   async function buildTranscript(r: any) {
-    const ps = (await svc("/rest/v1/call_pieces?select=participant_id,start_ms,status,text&room_id=eq." + q(r.id) + "&order=start_ms")) as any[];
+    const ps = (await svc("/rest/v1/call_pieces?select=participant_id,start_ms,status,text,lang&room_id=eq." + q(r.id) + "&order=start_ms")) as any[];
     const people = (await svc("/rest/v1/call_participants?select=id,name&room_id=eq." + q(r.id))) as any[];
     const nameOf = (id: string) => String((people.find((p) => p.id === id) || {}).name || "Someone");
-    const lines = R.mergeTranscript(ps.filter((p) => p.status === "done").map((p) => ({ who: nameOf(p.participant_id), start_ms: Number(p.start_ms), text: p.text })));
+    const lines = R.mergeTranscript(ps.filter((p) => p.status === "done").map((p) => ({ who: nameOf(p.participant_id), start_ms: Number(p.start_ms), text: p.text, ...(p.lang ? { lang: p.lang } : {}) })));
     const row = { room_id: r.id, firm_id: r.firm_id, batch_id: r.batch_id, lines, pieces_done: ps.filter((p) => p.status !== "new").length, pieces_all: ps.length, updated_at: new Date(now()).toISOString() };
     await svc("/rest/v1/call_transcripts?on_conflict=room_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(row) });
     return { lines, done: row.pieces_done, all: row.pieces_all, left: ps.filter((p) => p.status === "new").length };
   }
 
   // actions open to anyone in the call, member or guest
-  const shared: Record<string, (w: Member | Guest, b: any) => Promise<unknown>> = {
+  const shared: Record<string, (w: Member | Guest, b: any, ctx: Ctx) => Promise<unknown>> = {
     async topic(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
       await admittedIn(r, w);
@@ -458,8 +588,14 @@ export function handler(deps: Deps) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
       const p = await meIn(r, w);
       if (p && (p.state === "admitted" || p.state === "waiting")) await patch("call_participants", "id=eq." + p.id, { state: "left", left_at: new Date(now()).toISOString() });
-      // the last one out closes the room
-      if (r.status === "open" && (await inCall(r.id)) === 0) await endRoom(r);
+      // the last one out closes the room; a meeting (its code may be used again, as Meet's) waits for the next one, for
+      // 30 days from when it was made or until a day after its time, whichever is later; the host's "End for everyone"
+      // ends it for good
+      if (r.status === "open" && (await inCall(r.id)) === 0) {
+        const until = Math.max(Date.parse(r.created_at || "") + 30 * 86400000 || 0, r.scheduled_at ? Date.parse(r.scheduled_at) + 86400000 : 0);
+        if (r.kind === "meeting" && until > now()) await idleRoom(r);
+        else await endRoom(r);
+      }
       return { ok: true };
     },
     async chat(w, b) {
@@ -539,6 +675,69 @@ export function handler(deps: Deps) {
         body: JSON.stringify({ room_id: r.id, firm_id: r.firm_id, participant_id: p.id, seq, start_ms: start, dur_ms: dur, path, mime: String(b.mime || "audio/webm").slice(0, 60) }) });
       return { ok: true };
     },
+    // live subtitles: one short piece of the speaker's own microphone -> the words, their language, and the languages asked
+    // for (those someone in the call switched on). The audio and the words are never logged; they are kept (call_captions)
+    // only while the call is recorded and this speaker stayed after the notice, as the transcript is
+    async caption(w, b) {
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const p = await admittedIn(r, w);
+      const t0 = now();
+      const b64 = String(b.audio || "");
+      if (!b64 || b64.length > CAPTION_B64_MAX || !/^[A-Za-z0-9+/=]+$/.test(b64)) fail(413, "A subtitle piece must be a short clip.", "size");
+      const secs = Math.max(0, Math.min(15, Number(b.secs) || 0));
+      const targets = [...new Set(((Array.isArray(b.targets) ? b.targets : []) as unknown[]).map(String).filter((x) => R.subLangOk(x)))].slice(0, 6);
+      const key = await secret("groq_api_key");
+      const usage = (tools: string[], models: string[], calls: number) => insert("assistant_log", { firm_id: r.firm_id, user_id: w.kind === "member" ? w.user : null, client_id: r.client_id, question: "",
+        tools, calls, ms: Math.round(secs * 1000), feature: "call_subs", route: targets.join(",").slice(0, 20), models }).catch(() => null);
+      if (!key) { await usage(["nokey"], [STT_MODEL], 0); fail(503, "Subtitles are not set up yet (the listening key).", "nokey"); }
+      const names = await vocabulary(r);
+      // the words and their language (Whisper on Groq, the language found by itself)
+      const audio = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const mime = /mp4|m4a|aac/.test(String(b.mime || "")) ? "audio/mp4" : "audio/webm";
+      const stt = async (model: string) => {
+        const form = new FormData();
+        form.append("file", new File([audio], "piece." + (mime === "audio/mp4" ? "m4a" : "webm"), { type: mime }));
+        form.append("model", model); form.append("temperature", "0"); form.append("response_format", "verbose_json");
+        form.append("prompt", buildPrompt(names, "list"));
+        try { return await doFetch(GROQ_URL, { method: "POST", headers: { Authorization: "Bearer " + key }, body: form }); } catch { return null; }
+      };
+      let model = STT_MODEL, res = await stt(model);
+      if (res && res.status === 429) { await res.body?.cancel(); model = STT_MODEL_FULL; res = await stt(model); }
+      if (!res) { await usage(["error"], [model], 1); fail(502, "Subtitles could not be reached.", "error"); }
+      if (res!.status === 429) { await res!.body?.cancel(); await usage(["limit"], [model], 1); fail(429, "Subtitles are paused: the free listening limit is reached for now.", "limit"); }
+      const j: any = await res!.json().catch(() => null);
+      if (!res!.ok || !j || typeof j.text !== "string") { await usage(["error"], [model], 1); fail(502, "Subtitles did not answer.", "error"); }
+      const text = String(j.text).replace(/\s+/g, " ").trim().slice(0, 2000);
+      const lang = R.whisperLang(j.language) || "";
+      if (!text) { await usage(["empty"], [model], 1); return { ok: true, text: "", lang, tr: {}, paused: false }; }
+      // one translation per language asked for, never into the piece's own
+      const tr: Record<string, string | null> = {};
+      let paused = false, calls = 1;
+      const models = [model];
+      for (const target of targets) {
+        if (target === lang) continue;
+        if (paused) { tr[target] = null; continue; }
+        calls++; if (!models.includes(SUB_MODEL)) models.push(SUB_MODEL);
+        let out: Response | null = null;
+        try {
+          out = await doFetch(GROQ_CHAT_URL, { method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+            body: JSON.stringify({ model: SUB_MODEL, temperature: 0, max_tokens: 400, messages: [{ role: "system", content: R.subPrompt(target, names.map((n: any) => typeof n === "string" ? n : n.name)) }, { role: "user", content: text }] }) });
+        } catch { out = null; }
+        if (out && out.status === 429) { await out.body?.cancel(); paused = true; tr[target] = null; continue; }
+        const c: any = out ? await out.json().catch(() => null) : null;
+        const said = String((c && c.choices && c.choices[0] && c.choices[0].message && c.choices[0].message.content) || "").replace(/^["'“”\s]+|["'“”\s]+$/g, "").replace(/\s+/g, " ").trim();
+        tr[target] = said && said.length <= text.length * 4 + 40 && R.termsKept(text, said, names.map((n: any) => typeof n === "string" ? n : n.name)) ? said : null;
+      }
+      // kept with the call only while it is recorded and this speaker accepted the notice
+      const rec = await activeRec(r.id);
+      if (rec) {
+        const yes = await one("/rest/v1/call_consents?select=id&recording_id=eq." + rec.id + "&participant_id=eq." + p.id + "&event=eq.accepted&limit=1");
+        if (yes || (w.kind === "member" && isHost(r, w))) await insert("call_captions", { room_id: r.id, firm_id: r.firm_id, batch_id: r.batch_id, participant_id: p.id, who: p.name,
+          start_ms: Math.max(0, Math.floor(Number(b.start_ms) || 0)), text, lang, tr }).catch(() => null);
+      }
+      await usage(["ok", "tr:" + Object.values(tr).filter(Boolean).length, ...(paused ? ["paused"] : [])], models, calls);
+      return { ok: true, text, lang, tr, paused, ms: now() - t0 };
+    },
     // Cloudflare Realtime, the person's own session only; the app's keys never leave here
     async cf(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
@@ -582,6 +781,13 @@ export function handler(deps: Deps) {
   };
 
   // guests: the link, their name and email, the code, the waiting room
+  // a guest's way in: the link's token (#join=…), or the meeting's code (#/join/<code>, or typed)
+  const entryOf = async (b: any, ip: string): Promise<{ inv: any, r: any }> => {
+    if (b.code == null) return linkOf(String(b.token || ""));
+    const r = await byCode(b.code, ip);
+    if (r.status === "ended") fail(410, "This meeting has ended.", "ended");
+    return { inv: null, r };
+  };
   const linkOf = async (token: string) => {
     if (!R.linkTokenOk(token)) fail(404, "This link is not a FinCom call link.", "link");
     const inv = await one("/rest/v1/call_invites?select=*&token_hash=eq." + (await R.sha256Hex(token)));
@@ -590,21 +796,23 @@ export function handler(deps: Deps) {
     if (!r || r.status === "ended") fail(410, "This call has ended.", "ended");
     return { inv, r };
   };
-  const guest: Record<string, (b: any) => Promise<unknown>> = {
-    async guest_hello(b) {
-      const { r } = await linkOf(String(b.token || ""));
-      return { ok: true, title: r.title, firm: await firmName(r.firm_id), kind: r.kind, scheduled_at: r.scheduled_at, status: r.status, mail: !!(await mailKey()) };
+  const guest: Record<string, (b: any, ctx: Ctx) => Promise<unknown>> = {
+    async guest_hello(b, ctx) {
+      const { r } = await entryOf(b, ctx.ip);
+      return { ok: true, title: r.title, firm: await firmName(r.firm_id), kind: r.kind, scheduled_at: r.scheduled_at, minutes: r.minutes, status: r.status, code: r.code || null, mail: !!(await mailKey()) };
     },
-    async guest_start(b) {
-      const { inv, r } = await linkOf(String(b.token || ""));
+    async guest_start(b, ctx) {
+      const { inv, r } = await entryOf(b, ctx.ip);
       const name = String(b.name || "").trim(), email = String(b.email || "").trim().toLowerCase();
       if (!R.nameOk(name)) fail(400, "Write your name (2 to 60 letters).");
       if (!R.emailOk(email)) fail(400, "Write your email address; a code is sent to it.");
-      if (inv.uses >= inv.max_uses) fail(429, "This link has been used too many times. Ask for a new one.", "link");
-      await patch("call_invites", "id=eq." + inv.id, { uses: inv.uses + 1 });
-      const code = R.otpCode(), mail = !!(await mailKey());
-      const p = await insert("call_participants", { room_id: r.id, firm_id: r.firm_id, name, email, role: "guest", state: "waiting", invite_id: inv.id,
-        otp_hash: mail ? await R.sha256Hex(code + ":" + inv.id) : null, otp_until: mail ? new Date(now() + R.OTP_MINUTES * 60000).toISOString() : null });
+      if (inv) {
+        if (inv.uses >= inv.max_uses) fail(429, "This link has been used too many times. Ask for a new one.", "link");
+        await patch("call_invites", "id=eq." + inv.id, { uses: inv.uses + 1 });
+      } else if (!(await hit("room:" + r.id, R.CODE_TRIES.roomSecs, R.CODE_TRIES.roomMax))) fail(429, "Too many people asked to join this meeting in the last hour. Ask the host to let you in another way.", "tries");
+      const code = R.otpCode(), mail = !!(await mailKey()), salt = inv ? inv.id : r.id;
+      const p = await insert("call_participants", { room_id: r.id, firm_id: r.firm_id, name, email, role: "guest", state: "waiting", invite_id: inv ? inv.id : null,
+        otp_hash: mail ? await R.sha256Hex(code + ":" + salt) : null, otp_until: mail ? new Date(now() + R.OTP_MINUTES * 60000).toISOString() : null });
       const sent = mail ? await sendMail([email], "Your FinCom call code: " + code, "Your code to join \"" + r.title + "\" is " + code + ". It works for " + R.OTP_MINUTES + " minutes.\nIf you did not ask for it, ignore this email.") : false;
       const gt = await R.signGuest(await guestSecret(), r.id, p.id, Math.floor(now() / 1000));
       return { ok: true, gt, code_sent: sent, mail };
@@ -615,7 +823,7 @@ export function handler(deps: Deps) {
       if (p.verified) return { ok: true, verified: true };
       if (!p.otp_hash) fail(409, "No code was sent; the host will let you in.", "nocode");
       if (p.otp_tries >= R.OTP_TRIES || Date.parse(p.otp_until) < now()) fail(429, "The code has run out. Open the link again for a new one.", "otp");
-      const good = (await R.sha256Hex(String(b.code || "").trim() + ":" + p.invite_id)) === p.otp_hash;
+      const good = (await R.sha256Hex(String(b.code || "").trim() + ":" + (p.invite_id || p.room_id))) === p.otp_hash;
       await patch("call_participants", "id=eq." + p.id, { otp_tries: p.otp_tries + 1, ...(good ? { verified: true, otp_hash: null } : {}) });
       if (!good) fail(400, "That code is not right.", "otp");
       // a class's own student (their verified email is on the batch) comes straight in
@@ -645,15 +853,17 @@ export function handler(deps: Deps) {
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
     const action = String((body && body.action) || "");
     try {
-      if (guest[action]) return reply(200, await guest[action](body));
+      // the address a request came from (the first of x-forwarded-for, as the platform sets it): wrong codes are counted by it
+      const ctx: Ctx = { ip: (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip") || "" };
+      if (guest[action]) return reply(200, await guest[action](body, ctx));
       if (body.gt) {
         if (!shared[action]) return reply(403, { ok: false, kind: "guest", error: "A guest cannot do that." });
-        return reply(200, await shared[action](await asGuest(String(body.gt)), body));
+        return reply(200, await shared[action](await asGuest(String(body.gt)), body, ctx));
       }
       const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       const m = await asMember(jwt);
-      if (member[action]) return reply(200, await member[action](m, body));
-      if (shared[action]) return reply(200, await shared[action](m, body));
+      if (member[action]) return reply(200, await member[action](m, body, ctx));
+      if (shared[action]) return reply(200, await shared[action](m, body, ctx));
       return reply(400, { ok: false, error: "Unknown request" });
     } catch (e) {
       if (e instanceof Fail) return reply(e.code, { ok: false, kind: e.kind, error: e.message });
