@@ -466,3 +466,5 @@ run_tds_audit_checks.js               120
 # suggested, Undo, a filed return untouched, 10,000 deductions timed) and the remarks B, T, Y (FVU lines, Excel, Validate)
 run_tds_autoplace.js                  180
 run_tds_autoplace_ui.py               300  TDSDESK_SITE=../app/dist-test
+# GST (23-Oct-2026, Leads Insurance): a remark in 2B reconciliation and the decision in ITC follow-up are one, kept with the books
+run_2b_follow_ui.py                   240  TDSDESK_SITE=../app/dist-test

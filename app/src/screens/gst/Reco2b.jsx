@@ -12,7 +12,7 @@ const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => (/^\d{8}$/.test(String(d || "")) ? fmtDate(tallyDate(d)) : String(d || ""));
 const tax = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 const CHIPS = [["", "All"], ["mismatch", "Mismatch"], ["probable", "Probable match"], ["books", "In books only"], ["2b", "In 2B only"], ["matched", "Matched"]];
-const TAGS_2B = [["", "Action…"], ["To book in Tally", "To book in Tally"], ["Booked in a later month", "Claim next month (booked later)"], ["Not our purchase", "Ignore: not our purchase"], ["Blocked, section 17(5)", "Blocked, 17(5)"], ["Ask supplier to correct", "Ask supplier to correct"]];
+const TAGS_2B = [["", "Action…"], ["To book in Tally", "To book in Tally"], ["Booked in a later month", "Claim next month (booked later)"], ["Not our purchase", "Ignore: not our purchase"], ["Blocked, section 17(5)", "Blocked, 17(5)"], ["Ask supplier to correct", "Ask supplier to correct"], ["Follow up with supplier", "Follow up with supplier"]];
 const TAGS_BOOKS = [["", "Action…"], ["Follow up with supplier", "Follow up with supplier"], ["Expect in next 2B", "Claim next month (expect in next 2B)"], ["Reverse in 3B", "Reverse in 3B"], ["Reverse charge or import", "Ignore: reverse charge or import"], ["No credit claimed", "Ignore: no credit claimed"]];
 const TAGS_PAIR = [["", "Action…"], ["Ask supplier to correct", "Ask supplier to correct"], ["Follow up with supplier", "Follow up with supplier"]];
 

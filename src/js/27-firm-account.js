@@ -1071,7 +1071,7 @@ function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; save
 function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
 function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
-function r2Tag(key, tag){ const st = GST2B.state(); if (tag) st.tag[key] = {tag, at: new Date().toISOString()}; else delete st.tag[key]; saveBooks(); render(); }
+// a remark on a document (r2Tag): app/src/lib/itcSync.js, where it is also ITC follow-up's decision on that bill
 // a note to a supplier listing the invoices not in their return, to the clipboard (or on screen to copy)
 function r2Copy(k){
   const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);

@@ -11,7 +11,7 @@ const ITCT = {
     diff:      {label: "In both, amounts differ", law: "Credit is taken on the lower of the bill and 2B; the rest waits until the supplier amends, or Tally is corrected.", warn: true,
                 acts: [["supplier", "Ask the supplier to amend"], ["books", "Correct Tally"], ["accept", "Accept: the lower is final"]]},
     tobook:    {label: "In 2B, not in Tally", law: "Credit needs the bill in the books and the goods or services received (section 16(2)); book it, or keep it pending or reject it in IMS.", warn: true,
-                acts: [["book", "Book it in Tally"], ["pending", "Keep pending in IMS, book later"], ["reject", "Not ours: reject in IMS"]]},
+                acts: [["book", "Book it in Tally"], ["pending", "Keep pending in IMS, book later"], ["reject", "Not ours: reject in IMS"], ["supplier", "Ask the supplier to correct"]]},
     nocredit:  {label: "In 2B, booked without credit", law: "The bill is in Tally with the tax charged to cost, and 2B shows the credit as available.", warn: true,
                 acts: [["take", "Take the credit: put the tax to input in Tally"], ["leave", "Leave it: the tax stays in cost"]]},
     suppcn:    {label: "Supplier\u2019s credit note in 2B", law: "A credit note in 2B reduces credit in that month unless it is rejected in IMS; book it in Tally as a debit note.", warn: true,
@@ -87,22 +87,23 @@ const ITCT = {
   tax(o){ return r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)); },
   // months of the books with no 2B here: nothing can be followed up for them
   missingMonths(loaded){ const have = new Set(loaded); return GSTR.months().filter(m => !have.has(m)); },
-  // what to write to one supplier: its bills not in 2B, and the ones that differ
+  // what to write to one supplier: its bills not in 2B, the ones that differ, and its documents in 2B to correct
   letter(reg, gstin, party, items){
-    const co = CO(), m = v => INR.format(r2(v || 0));
-    const w = items.filter(x => x.cat === "waiting" && x.act === "follow"), d = items.filter(x => x.cat === "diff" && x.act === "supplier"), n = items.filter(x => x.cat === "ournote" && x.act === "follow"),
+    const co = CO(), m = v => INR.format(r2(v || 0)), f = (c, a) => items.filter(x => x.cat === c && x.act === a);
+    const w = f("waiting", "follow"), d = f("diff", "supplier"), n = f("ournote", "follow"), tb = f("tobook", "supplier"),
       rj = items.filter(x => (x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep");
     let t = "Dear " + (party || "Sir/Madam") + ",\n\nWe are " + co.name + (co.gstin || gstin ? " (GSTIN " + ((GSTR.gstins(S.books) || []).find(g => g.slice(0, 2) === reg) || co.gstin || "") + ")" : "") + ". Our GST credit depends on your returns, so please look at the following:\n";
     if (w.length) t += "\n1. Invoices in our books that do not appear in our GSTR-2B. Please report them in your GSTR-1 / IFF:\n" + w.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ", taxable " + m(x.taxable) + ", tax " + m(x.tax)).join("\n") + "\n";
     if (d.length) t += "\n" + (w.length ? "2" : "1") + ". Invoices reported with different figures. Please amend them in your GSTR-1:\n" + d.map((x, i) => "   " + (i + 1) + ". Invoice " + x.no + " dated " + GSTAmend.dmy(x.date) + ": tax " + m(x.tax) + " in our books, " + m(x.tax2b) + " in your return" + (x.issues && x.issues.length ? " (" + x.issues.filter(z => !/^booked in|^value differs/.test(z)).join("; ") + ")" : "")).join("\n") + "\n";
     if (n.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0)) + ". Credit notes you issued to us that are not in your return:\n" + n.map((x, i) => "   " + (i + 1) + ". Note " + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax)).join("\n") + "\n";
     if (rj.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0) + (n.length ? 1 : 0)) + ". Documents we have rejected in the Invoice Management System. Please amend or cancel them in your GSTR-1A / GSTR-1:\n" + rj.map((x, i) => "   " + (i + 1) + ". " + (x.cat === "rejcn" ? "Credit note " : "Invoice ") + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax2b) + (x.remarks ? " (" + x.remarks + ")" : "")).join("\n") + "\n";
+    if (tb.length) t += "\n" + (1 + (w.length ? 1 : 0) + (d.length ? 1 : 0) + (n.length ? 1 : 0) + (rj.length ? 1 : 0)) + ". Documents in our GSTR-2B that are not in our books. Please check them and correct or cancel them in your GSTR-1A / GSTR-1:\n" + tb.map((x, i) => "   " + (i + 1) + ". " + x.no + " dated " + GSTAmend.dmy(x.date) + ", tax " + m(x.tax2b)).join("\n") + "\n";
     t += "\nThe last date for us to take this credit is 30 November after the end of the year of each invoice. Please confirm once reported.\n\nRegards,\n" + co.name;
-    return {text: t, n: w.length + d.length + n.length + rj.length};
+    return {text: t, n: w.length + d.length + n.length + rj.length + tb.length};
   },
   suppliers(reg, items){
     const m = {};
-    items.filter(x => x.open && ((x.cat === "waiting" && x.act === "follow") || (x.cat === "diff" && x.act === "supplier") || (x.cat === "ournote" && x.act === "follow") || ((x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep"))).forEach(x => {
+    items.filter(x => x.open && ((x.cat === "waiting" && x.act === "follow") || ((x.cat === "diff" || x.cat === "tobook") && x.act === "supplier") || (x.cat === "ournote" && x.act === "follow") || ((x.cat === "rejinv" || x.cat === "rejcn") && x.act === "keep"))).forEach(x => {
       const k = x.gstin || x.supplier, s = m[k] = m[k] || {key: k, gstin: x.gstin, party: x.supplier, items: [], tax: 0, oldest: x.date, deadline: x.deadline};
       s.items.push(x); s.tax = r2(s.tax + (x.cat === "diff" ? Math.abs(x.gap) : x.cat === "rejcn" || x.cat === "rejinv" ? x.tax2b : x.tax)); if (String(x.date) < String(s.oldest)) s.oldest = x.date; if (x.deadline && (!s.deadline || x.deadline < s.deadline)) s.deadline = x.deadline;
     });
@@ -114,10 +115,12 @@ const ITCT = {
   tallyPhone(party){ const i = ((S.books.ledInfo || {})[party]) || {}; return i.phone || ""; }
 };
 
-// the ITC follow-up page: React (app/src/screens/gst/ItcFollow.jsx)
+// the ITC follow-up page: React (app/src/screens/gst/ItcFollow.jsx). A remark set in 2B reconciliation ("Follow up with
+// supplier", "Ask supplier to correct", ...) and the decision here are one: app/src/lib/itcSync.js puts the later of the
+// two on each line ITCT.items gives, and writes each change to both stores (reco2b.tag and itcTrack, both kept with the books)
 function itctSupplier(key){ const reg = S.gstReg || "", R = ITCT.items(reg), s = ITCT.suppliers(reg, R.items).find(z => z.key === key); return s ? {reg, s, L: ITCT.letter(reg, s.gstin, s.party, s.items)} : null; }
-// what the user decides on a line, and a note to it (kept, carried to later months)
-function itctSetAct(key, act){ const st = ITCT.store(S.gstReg || ""); st.dec[key] = Object.assign({}, st.dec[key], {act, at: ITCT.today()}); saveBooks(); render(); }
+// what the user decides on a line (itctSetAct: app/src/lib/itcSync.js, with the 2B reconciliation's remark to match), and
+// a note to it (kept, carried to later months)
 function itctSetNote(key, note){ const st = ITCT.store(S.gstReg || ""); st.dec[key] = Object.assign({}, st.dec[key], {note}); saveBooks(); }
 // one letter to a supplier with every bill waiting on them: copied, or opened in the mail app or WhatsApp; logged as written
 function itctWrite(how, key){

@@ -1,6 +1,7 @@
 // ITC follow-up: every bill 2B and Tally do not agree on, carried from month to month until it is settled, what to
 // do about each, and the suppliers to write to. Was viewItcFollow (src/js/32). The lines are ITCT.items(); the
-// decisions are saved by itctSetAct and itctSetNote, the letters by itctWrite (src/js/32).
+// decisions are saved by itctSetAct (app/src/lib/itcSync.js: one with the 2B reconciliation's remark on the bill) and
+// itctSetNote, the letters by itctWrite (src/js/32).
 //
 // State: S.itctShow ("open" or "all"), S.itctCat (a kind of line, from the chips).
 import CommitBox from "../../parts/CommitBox.jsx";

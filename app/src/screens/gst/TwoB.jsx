@@ -19,7 +19,7 @@ const tx = (o) => r2(num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess));
 const sumTx = (list) => r2(list.reduce((a, o) => a + tx(o) * (o.dir || 1), 0));
 const LIMIT = 400;
 const FLAGS = [["", "Everything"], ["month", "Matched in another month"], ["notavl", "ITC not available in 2B"], ["ims", "Rejected or pending in IMS"], ["rcm", "Reverse charge"], ["nogstin", "No GSTIN in Tally"], ["notes", "Credit and debit notes"], ["big", "Tax over ₹ 10,000"]];
-const TAGS_2B = [["", "—"], ["To book in Tally", "to book in Tally"], ["Booked in a later month", "booked in a later month"], ["Not our purchase", "not our purchase"], ["Blocked, section 17(5)", "blocked, 17(5)"], ["Ask supplier to correct", "ask supplier to correct"]];
+const TAGS_2B = [["", "—"], ["To book in Tally", "to book in Tally"], ["Booked in a later month", "booked in a later month"], ["Not our purchase", "not our purchase"], ["Blocked, section 17(5)", "blocked, 17(5)"], ["Ask supplier to correct", "ask supplier to correct"], ["Follow up with supplier", "follow up with supplier"]];
 const TAGS_BOOKS = [["", "—"], ["Follow up with supplier", "follow up with supplier"], ["Expect in next 2B", "expect in next 2B"], ["Reverse in 3B", "reverse in 3B"], ["Reverse charge or import", "reverse charge or import"], ["No credit claimed", "no credit claimed"]];
 const RESULT = { matched: "matched", diff: "difference", probable: "to confirm" };
 

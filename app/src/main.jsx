@@ -20,6 +20,8 @@ import "./nav.js";
 import { guestLink, startGuest, joinHash, memberHere, takeJoin } from "./calls/launch.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
+// a remark in 2B reconciliation and the decision in ITC follow-up kept as one (r2Tag, itctSetAct, ITCT.items)
+import "./lib/itcSync.js";
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
