@@ -124,8 +124,8 @@ try:
         # a nil row for this deductee: its remark B (the declaration first), its UIN 24 characters: Validate says it
         J("(k) => TDSAdd.save({party: k, section: '194C', date: '20260615', credit: '20260615', paid: 25000, rate: 0, tds: 0})", party)
         J(GO, "file"); pg.wait_for_timeout(700)
-        it = pg.locator('[data-val-item="rm-b-decl"]')
-        ok(it.count() == 1 and "UIN" in it.inner_text(), "C. Validate & file: remark B needs the Form 121 UIN: %s" % (it.inner_text() if it.count() else "none"))
+        it = pg.locator('[data-val-item="rm-b-uin"]')
+        ok(it.count() == 1 and "UIN" in it.inner_text() and it.get_attribute("data-val-level") == "warn" and pg.locator('[data-val-item="rm-b-decl"]').count() == 0, "C. Validate & file: the Form 121 UIN missing is a warning, not an error: %s" % (it.inner_text() if it.count() else "none"))
         J("(k) => TDSDecl.set(k, '2026-27', {form: ''})", party); J("() => render()"); pg.wait_for_timeout(400)
         it = pg.locator('[data-val-item="rm-t-pan"]')
         ok(it.count() == 1 and party in it.inner_text(), "C. Validate & file: remark T needs the PAN: %s" % (it.inner_text() if it.count() else "none"))

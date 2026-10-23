@@ -443,7 +443,7 @@ const TDSF25 = {
     at[28] = rate; at[32] = remark; at[33] = cert;
     if (form === "26Q"){
       // next-tds-autoplace: remark B's declaration (Form 121) UIN in field 31; T only with the deductee's PAN
-      if (remark === "B"){ const u = (((typeof TDSDecl === "object" ? TDSDecl.of(r.party, fy).b : null) || {}).uin || ""); if (!/^[A-Z0-9]{26}$/.test(u)) P(who + ": remark B needs the UIN of the deductee's Form 121 (26 characters, DD field 31)."); at[31] = u.slice(0, 26); }
+      if (remark === "B"){ const u = (((typeof TDSDecl === "object" ? TDSDecl.of(r.party, fy).b : null) || {}).uin || ""); at[31] = /^[A-Z0-9]{26}$/.test(u) ? u : ""; }   // (optional, the owner 23-Oct-2026: Validate warns when it is not given)
       if (remark === "T" && !valid) P(who + ": remark T (a transporter) needs the deductee's PAN.");
       // fields 22, 23: the cash withdrawn above Rs 1 crore / 3 crore, only with section codes 1065 / 1064
       if (code === "1065" || code === "1064") P(who + ": section code " + code + " needs the amount of cash withdrawn above the limit (DD field " + (code === "1065" ? 22 : 23) + "), which FinCom does not hold.");

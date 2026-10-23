@@ -194,7 +194,11 @@ for (const fy of ["2025-26", FY]){
   ok(!ck.some(c => /Saver|Road Kings|Small Consult/.test(c.words)), fy + " K. Validate: nothing said of the rows whose remark is right");
   x.TDSDecl.set("Saver", fy, {form: "15G", date: "", uin: ""});
   const ck2 = x.TDSDecl.checks(fy, Q, "26Q");
-  ok(ck2.some(c => c.k === "b-decl" && /Saver/.test(c.words) && (fy === FY ? /UIN/.test(c.words) : /date/.test(c.words))), fy + " K. Validate: remark B needs the declaration's date" + (fy === FY ? " and its Form 121 UIN" : "") + " (" + ck2.filter(c => c.k === "b-decl").map(c => c.words).join(" | ") + ")");
+  ok(ck2.some(c => c.k === "b-decl" && c.level === "error" && /Saver/.test(c.words) && /date/.test(c.words) && !/UIN/.test(c.words)), fy + " K. Validate: remark B without the date received: an error that stops the file (" + ck2.filter(c => /^b-/.test(c.k)).map(c => c.k + ": " + c.words).join(" | ") + ")");
+  ok(fy === FY ? ck2.some(c => c.k === "b-uin" && c.level === "warn" && /Saver/.test(c.words) && /UIN/.test(c.words)) : !ck2.some(c => c.k === "b-uin"), fy + " K. Validate: the Form 121 UIN missing is a warning only (the owner, 23-Oct-2026: optional)" + (fy === FY ? "" : "; none before 2026-27"));
+  x.TDSDecl.set("Saver", fy, {form: "15G", date: fy === FY ? "2026-04-10" : "2025-04-10", uin: ""});
+  const ck3 = x.TDSDecl.checks(fy, Q, "26Q");
+  ok(!ck3.some(c => c.k === "b-decl" || c.level === "error" && /Saver/.test(c.words)), fy + " K. Validate: form and date given, no UIN: nothing stops the file (" + J(ck3.map(c => c.k)) + ")");
   x.TDSDecl.set("Saver", fy, {form: "15G", date: fy === FY ? "2026-04-10" : "2025-04-10", uin: "ABCDE12345F123456789012345"});
   // the FVU text lines
   b.tdsAdded = Object.fromEntries(Object.entries(b.tdsAdded).filter(([, v]) => !/Big Consult|No Pan Roads/.test(v.party)));

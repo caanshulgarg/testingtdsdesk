@@ -49,7 +49,7 @@ export function checkReturn(fy, q, form) {
   // next-tds-autoplace: the remarks of the rows with no tax (src/js/94): B needs its declaration, T a PAN, Y a payment below the
   // limit; each said only when it is wrong (not counted among the checks passed)
   let rk = []; try { rk = TDSDecl.checks(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
-  rk.forEach((x) => out.errors.push({ k: "rm-" + x.k, n: x.n, words: x.words, step: "deductees" }));
+  rk.forEach((x) => (x.level === "warn" ? out.warnings : out.errors).push({ k: "rm-" + x.k, n: x.n, words: x.words, step: "deductees" }));
   // the salary return without the salary sheet or Tally's payroll: no file can be made
   const sheet = form === "24Q" && (((S.books || {}).salary || []).length > 0), tally = form === "24Q" && !sheet && Payroll.has(fy);
   if (form === "24Q") put(out.errors, { k: "nosheet", n: !sheet && !tally ? 1 : 0, words: "24Q needs the salary sheet: the books cannot say whose TDS it is", act: ["Bring in the salary sheet", () => doAct("salaryPick")] });

@@ -71,28 +71,29 @@ const TDSDecl = {
     if (this.below(r) === true) return {remark: TDS_REMARK.Y, certNo: ""};
     return null;
   },
-  // Validate & file: what stops the file for the remarks: [{k, n, ids, words}] (one line per kind, the deductees named)
+  // Validate & file: the remarks' checks: [{k, level (error: stops the file; warn), n, ids, words}] (one line per kind, the deductees named)
   checks(fy, q, form){
     if (form !== "26Q" || typeof TDS_FORMS !== "object") return [];
     const rows = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q && !(num(r.tds) > 0.005)), isNew = TDS.isNew(fy);
-    const bad = {"b-decl": [], "t-pan": [], "t-sec": [], "y-over": []};
+    const bad = {"b-decl": [], "b-uin": [], "t-pan": [], "t-sec": [], "y-over": []};
     rows.forEach(r => {
       const m = TDS26Q.remark(r, form) || {};
       if (m.remark === "B"){
         const d = this.of(r.party, fy).b || {}, miss = [];
         if (!d.form) miss.push("the form (15G or 15H)");
         if (!d.date) miss.push("the date it was received");
-        if (isNew && !/^[A-Z0-9]{26}$/.test(d.uin || "")) miss.push("its Form 121 UIN (26 characters, DD field 31)");
         if (miss.length) bad["b-decl"].push({r, w: r.party + ": " + miss.join(", ")});
+        // (the owner, 23-Oct-2026: the UIN is optional, as the format has DD field 31: a warning, the file is still made)
+        if (isNew && !/^[A-Z0-9]{26}$/.test(d.uin || "")) bad["b-uin"].push({r, w: r.party});
       }
       if (m.remark === "T" && !(Certs.validPan(r.pan) && !Certs.inoperative(r.pan))) bad["t-pan"].push({r, w: r.party});
       if (m.remark === "T" && !/^194C/.test(TDS.sec(r.section))) bad["t-sec"].push({r, w: r.party + " (" + TDS.sec(r.section) + ")"});
       if (m.remark === "Y" && this.below(r) === false){ const w = this.limitOf(r) || {}; bad["y-over"].push({r, w: r.party + " (" + TDS.sec(r.section) + " ₹" + INR.format(r2(num(w.credited))) + " in " + fy + ", limit " + (w.limitWords || "") + ")"}); }
     });
     const uniq = (l) => Array.from(new Set(l.map(x => x.w)));
-    const W = {"b-decl": "Remark B (Form 15G/15H) needs the declaration: ", "t-pan": "Remark T (transporter) needs the deductee's PAN: ",
+    const W = {"b-decl": "Remark B (Form 15G/15H) needs the declaration: ", "b-uin": "Remark B: the Form 121 UIN (26 characters, DD field 31) is not given (optional; give it if the deductee has it): ", "t-pan": "Remark T (transporter) needs the deductee's PAN: ",
       "t-sec": "Remark T is only for 194C (a transporter's contract): ", "y-over": "Remark Y (below the threshold), but the payments are above it: "};
-    return Object.keys(bad).filter(k => bad[k].length).map(k => ({k, n: bad[k].length, ids: bad[k].map(x => x.r.id), words: W[k] + uniq(bad[k]).join("; ")}));
+    return Object.keys(bad).filter(k => bad[k].length).map(k => ({k, level: k === "b-uin" ? "warn" : "error", n: bad[k].length, ids: bad[k].map(x => x.r.id), words: W[k] + uniq(bad[k]).join("; ")}));
   }
 };
 // TDS26Q.remark (src/js/16) with these first: the file builders, the Excel working and the screens read the one function
