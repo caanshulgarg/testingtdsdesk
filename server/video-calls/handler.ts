@@ -27,6 +27,7 @@ import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
 import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
+import { arabicShare, devanagariShare, toLatin } from "../fincom-transcribe/names.ts";
 
 export type Env = (k: string) => string | undefined;
 export type Deps = { env: Env, fetch: typeof fetch, now?: () => number };
@@ -694,10 +695,11 @@ export function handler(deps: Deps) {
       // the words and their language (Whisper on Groq, the language found by itself)
       const audio = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
       const mime = /mp4|m4a|aac/.test(String(b.mime || "")) ? "audio/mp4" : "audio/webm";
-      const stt = async (model: string) => {
+      const stt = async (model: string, language = "") => {
         const form = new FormData();
         form.append("file", new File([audio], "piece." + (mime === "audio/mp4" ? "m4a" : "webm"), { type: mime }));
         form.append("model", model); form.append("temperature", "0"); form.append("response_format", "verbose_json");
+        if (language) form.append("language", language);
         form.append("prompt", buildPrompt(names, "list"));
         try { return await doFetch(GROQ_URL, { method: "POST", headers: { Authorization: "Bearer " + key }, body: form }); } catch { return null; }
       };
@@ -714,8 +716,23 @@ export function handler(deps: Deps) {
       const tr: Record<string, string | null> = {};
       let paused = false, calls = 1;
       const models = [model];
+      const notes: string[] = [];
+      // Hinglish (as fincom-transcribe's latin=1, next-fix-urdu): Hindi taken for Urdu (Whisper's guess; they sound alike)
+      // is heard once more as Hindi, then written in English letters; Hindi in Devanagari is written in English letters
+      // without a translation call. A genuine Urdu speaker read in Urdu keeps Urdu (same language: no change).
+      if (targets.includes("hinglish") && lang !== "hinglish") {
+        let deva = devanagariShare(text) > 0.5 ? text : "";
+        if (!deva && arabicShare(text) > 0.5) {
+          calls++;
+          const r2 = await stt(model, "hi");
+          const j2: any = r2 && r2.ok ? await r2.json().catch(() => null) : (await r2?.body?.cancel(), null);
+          const t2 = j2 && typeof j2.text === "string" ? j2.text.replace(/\s+/g, " ").trim() : "";
+          if (t2 && devanagariShare(t2) > 0.5) { deva = t2; notes.push("urdu:hi"); } else notes.push("urdu:kept");
+        }
+        if (deva) tr.hinglish = toLatin(deva);
+      }
       for (const target of targets) {
-        if (target === lang) continue;
+        if (target === lang || target in tr) continue;
         if (paused) { tr[target] = null; continue; }
         calls++; if (!models.includes(SUB_MODEL)) models.push(SUB_MODEL);
         let out: Response | null = null;
@@ -735,7 +752,7 @@ export function handler(deps: Deps) {
         if (yes || (w.kind === "member" && isHost(r, w))) await insert("call_captions", { room_id: r.id, firm_id: r.firm_id, batch_id: r.batch_id, participant_id: p.id, who: p.name,
           start_ms: Math.max(0, Math.floor(Number(b.start_ms) || 0)), text, lang, tr }).catch(() => null);
       }
-      await usage(["ok", "tr:" + Object.values(tr).filter(Boolean).length, ...(paused ? ["paused"] : [])], models, calls);
+      await usage(["ok", "tr:" + Object.values(tr).filter(Boolean).length, ...notes, ...(paused ? ["paused"] : [])], models, calls);
       return { ok: true, text, lang, tr, paused, ms: now() - t0 };
     },
     // Cloudflare Realtime, the person's own session only; the app's keys never leave here

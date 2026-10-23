@@ -124,7 +124,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     }
     if (String(input).startsWith("https://api.resend.com/")) { log.mails.push(body); return J({ id: "m1" }); }
     if (String(input) === "https://api.groq.com/openai/v1/audio/transcriptions") {
-      const form = init.body as FormData; log.stt.push({ auth: tok, model: form.get("model"), format: form.get("response_format"), prompt: form.get("prompt") });
+      const form = init.body as FormData; log.stt.push({ auth: tok, model: form.get("model"), format: form.get("response_format"), prompt: form.get("prompt"), language: form.get("language") });
       return o.stt ? o.stt(form, log.stt.length) : J({ text: "Sharma Traders க்கு ₹1,25,000 GSTR-3B க்கு அனுப்புங்கள்", language: "tamil" });
     }
     if (String(input) === "https://api.groq.com/openai/v1/chat/completions") {
@@ -575,4 +575,26 @@ Deno.test("the summary in the language asked for (default English)", async () =>
   const h = await s.call({ action: "summarise", room_id: a.j.room.id, lang: "hi" }, "tok-staff");
   assert(s.log.ai[1].system.includes("in Hindi (its own script)") && s.log.ai[1].system.includes("GSTR-3B"), "Hindi asked: said to the model, terms kept");
   eq(h.j.summary.lang, "hi", "the summary says its language");
+});
+
+Deno.test("subtitles in Hinglish: Hindi taken for Urdu is heard again as Hindi, then in English letters; a real Urdu speaker read in Urdu keeps Urdu", async () => {
+  const URDU = "شرما ٹریڈرز کو ایک لاکھ روپے بھیجو", HINDI = "शर्मा ट्रेडर्स को एक लाख रुपये भेजो";
+  const stt = (form: FormData) => new Response(JSON.stringify(form.get("language") === "hi" ? { text: HINDI, language: "hindi" } : { text: URDU, language: "urdu" }));
+  const s = stand({ stt });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  const r = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, secs: 5, targets: ["hinglish", "ur"] }, "tok-staff");
+  eq([r.j.lang, r.j.text], ["ur", URDU], "Whisper's first answer kept as said (Urdu found)");
+  eq(s.log.stt.map((x: any) => x.language), [null, "hi"], "heard again as Hindi for the Hinglish reader");
+  assert(typeof r.j.tr.hinglish === "string" && /^[\x00-\x7F]+$/.test(r.j.tr.hinglish) && /lakh|lakha|laakh/i.test(r.j.tr.hinglish), "Hinglish in English letters: " + r.j.tr.hinglish);
+  assert(!("ur" in r.j.tr), "the Urdu reader: the words as said, no translation");
+  eq(s.log.chat.length, 0, "no translation call for either");
+  assert(s.T.assistant_log.at(-1)!.tools.includes("urdu:hi"), "logged urdu:hi");
+  const u = stand({ stt });
+  const b = await u.call({ action: "start", kind: "help" }, "tok-staff");
+  const r2 = await u.call({ action: "caption", room_id: b.j.room.id, audio: AUDIO, secs: 5, targets: ["ur"] }, "tok-staff");
+  eq([r2.j.lang, r2.j.tr, u.log.stt.length], ["ur", {}, 1], "a genuine Urdu speaker, Urdu reader: Urdu kept, not heard again");
+  const h = stand({ stt: () => new Response(JSON.stringify({ text: HINDI, language: "hindi" })) });
+  const c = await h.call({ action: "start", kind: "help" }, "tok-staff");
+  const r3 = await h.call({ action: "caption", room_id: c.j.room.id, audio: AUDIO, secs: 5, targets: ["hinglish"] }, "tok-staff");
+  assert(/^[\x00-\x7F]+$/.test(r3.j.tr.hinglish) && h.log.chat.length === 0, "Hindi in Devanagari to Hinglish: English letters, no call: " + r3.j.tr.hinglish);
 });
