@@ -751,7 +751,7 @@ function Vid({ stream, muted, name, screen, me }) {
 function Tile({ name, stream, camOn, micOn, hand, react, me, state, speaking }) {
   return <div className={"call-tile" + (speaking && micOn ? " speaking" : "")} data-tile={name} data-speaking={speaking && micOn ? "" : undefined}>
     {stream ? <Vid stream={stream} muted={me} name={name} me={me} /> : null}
-    {!camOn && <div className="call-camoff"><span className="call-avatar">{String(name || "?").slice(0, 1).toUpperCase()}</span></div>}
+    {(!camOn || !stream) && <div className="call-camoff"><span className="call-avatar">{String(name || "?").slice(0, 1).toUpperCase()}</span></div>}
     <span className="call-name">{hand ? "✋ " : ""}{name}{micOn ? "" : " · muted"}{state === "disconnected" ? " · reconnecting" : ""}</span>
     {!micOn && <span className="call-muted" aria-hidden="true">🔇</span>}
     {react && <span className="call-float" data-reaction={react.e}>{react.e}</span>}
