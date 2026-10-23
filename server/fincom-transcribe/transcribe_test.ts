@@ -246,6 +246,29 @@ Deno.test("Hinglish: a sample sentence in English letters from the client's name
   eq(buildPrompt(["रिचा", "Richa"], "hinglish").includes("रिचा"), false, "Hinglish: a Devanagari name is left out");
 });
 
+Deno.test("Hinglish heard as Urdu: the clip is heard again as Hindi, then written in English letters", async () => {
+  // Whisper's own language guess takes spoken Hindi for Urdu now and then (23-Oct: "mujhe last month ki GST payable..." came
+  // back in Urdu letters); with no language given, ask once more with language hi
+  const s = stand({ key: "gsk_test", groq: (f) => new Response(JSON.stringify({ text: f.language === "hi" ? "मुझे लास्ट मंथ की जीएसटी पेएबल कितना है" : "مجھے لاسٹ منت کی جی ایس ٹی پی ویل کتنا ہے" })) });
+  const j = await (await send(s.h, { lang: "auto", latin: true })).json();
+  const g = s.calls.filter((x) => x.url.startsWith("https://api.groq.com/"));
+  eq(g.length, 2, "two calls: the first guess, then as Hindi");
+  eq(g[0].form!.language, undefined, "the first: the language left to Whisper");
+  eq(g[1].form!.language, "hi", "the second: as Hindi");
+  assert(!/[؀-ۿ]/.test(j.text) && !/[ऀ-ॿ]/.test(j.text), "English letters only: " + j.text);
+  assert(j.text.startsWith("mujhe"), "the Hindi words in English letters: " + j.text);
+  eq(s.logRows[0].tools.slice(0, 3), ["ok", "urdu:hi", "latin"], "logged: heard again as Hindi, then written in English letters");
+  // Hindi asked for, or an English answer: one call only
+  const one = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "Richa ko ek lakh" })) });
+  await send(one.h, { lang: "auto", latin: true });
+  eq(one.calls.filter((x) => x.url.startsWith("https://api.groq.com/")).length, 1, "a Latin answer: no second call");
+  // the second call failing: the first answer stays (never an error for this)
+  const bad = stand({ key: "gsk_test", groq: (f) => f.language === "hi" ? new Response("{}", { status: 429 }) : new Response(JSON.stringify({ text: "مجھے بتا دو" })) });
+  const rb = await send(bad.h, { lang: "auto", latin: true });
+  eq(rb.status, 200, "still answered");
+  eq((await rb.json()).text, "مجھے بتا دو", "the first words kept");
+});
+
 Deno.test("names corrected on the server: the client's ledgers and the firm's clients; the changes go back", async () => {
   const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "leeds insurance ke liye hdfc bank se richa khandelwaal ko 1,25,000 ka payment, teddy mein entry." })) });
   const j = await (await send(s.h, { lang: "auto", latin: true })).json();
