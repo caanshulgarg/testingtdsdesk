@@ -1,3 +1,4 @@
+import { clientTallyState } from "../lib/tallyState.js";
 // One way to link Tally (ui-tidy, 13-Oct-2026; the owner: "still it is very confusing where is the client and how to link
 // tally"): every place that mentions a client's Tally link goes to that client's one Link to Tally card (parts/TallyLink.jsx,
 // in Client setup → Tally): the client strip's chip, the Clients list's chip, Today's "not linked" line, Getting ready, the
@@ -7,9 +8,9 @@
 // links Tally, the Tally page's Connect Tally guide (openConnectTally, src/js/52). A chip of a client not linked, or
 // linked but waiting for Tally, points there (step 4 with that client); a client linked and reading, or needing a Day
 // Book, opens its own Tally card (Client setup → Tally: what it needs, and the posting company), which links nothing
+// next-tally-suvit (Suvit's flow): every chip opens the client's own Tally card, which says the company's state in the one
+// pill (lib/tallyState.js) with Sync now, and, while not linked, lists the companies in Tally it may be, each with Link
 export function goTallyCard(cid) {
-  const k = cid && typeof tallyLinkOf === "function" && S.companies && S.companies[cid] ? tallyLinkOf(S.companies[cid]) : null;
-  if (k && (k.state === "unlinked" || k.state === "waiting")) { openConnectTally(k.state === "unlinked" ? 4 : 0, cid); return Promise.resolve(); }
   return goTallySetup(cid);
 }
 // the client's own Tally card (Client setup → Tally)
@@ -22,9 +23,11 @@ export function goTallySetup(cid) {
 const MARK = { ok: "● ", warn: "◐ ", bad: "○ " };
 export default function TallyChip({ co, where = "", title }) {
   if (!co || typeof tallyLinkOf !== "function") return null;
-  const k = tallyLinkOf(co);
-  return <button type="button" className={"tag tchip " + k.level} data-tally-chip={k.state} data-tally-chip-at={where} data-tally-link-chip={k.state}
-    title={title || ("Link to Tally: " + k.word + (k.company ? " (" + k.company + ")" : ""))} aria-label={co.name + ", Tally: " + k.word}
+  const lk = tallyLinkOf(co), p = clientTallyState(co);
+  // the pill's word (Connected / Disconnected / Not linked), "Needs you" when a person must act
+  const k = Object.assign({}, lk, lk.state === "needs" ? {} : { level: p.level, word: p.word });
+  return <button type="button" className={"tag tchip " + k.level} data-tally-chip={k.state} data-tally-chip-at={where} data-tally-link-chip={k.state} data-tally-pill={p.state}
+    title={title || ("Tally: " + p.text + (k.company ? " (" + k.company + ")" : ""))} aria-label={co.name + ", Tally: " + k.word}
     // upload-pages (14-Oct-2026): beside an upload page's name, "Tally needs you" ("○ Needs you" beside Purchase read as
     // the bills to review); the other words already say Tally
     onClick={(ev) => { ev.stopPropagation(); goTallyCard(co.id); }}>{MARK[k.level] + (where === "title" && k.state === "needs" && typeof uploadPage === "function" && uploadPage() ? "Tally " + k.word.toLowerCase() : k.word)}</button>;

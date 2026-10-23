@@ -1,7 +1,9 @@
 """python3 run_add_client_tally.py - "Add client" (02-Oct-2026; 23-Oct-2026, next-fix-tally-link: Pick from Tally): the
 Tally companies the bridge here sees open and the ones the firm's Tally computers reported, not linked to a client, are
 offered first; "Add as client" adds the client with that company as its Tally name and links it in one step (sent to the
-server, then tally_company_link). A company linked to another client is not offered.
+server, then tally_company_link). A company linked to another client is not offered. 23-Oct-2026 (next-tally-suvit): the
+rows are the Tally page's own Companies in Tally rows (data-tco-row), with the same pill ("Connected": open in Tally on
+this computer).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_add_client_tally.py"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -28,14 +30,14 @@ with sync_playwright() as p:
       window.cloudPushNow = async () => { window.__calls.push(['push']); };
       doAct('addCo'); }""")
     pg.wait_for_timeout(600)
-    rows = pg.evaluate("[...document.querySelectorAll('#app [data-add-pick-row]')].map(r => [r.getAttribute('data-add-pick-row'), r.innerText])")
+    rows = pg.evaluate("[...document.querySelectorAll('#app [data-tco-list=add] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tco-state')])")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
-    ok(zz and "open in Tally on this computer" in zz[0][1], "ZZ TEST is offered, open in Tally (%s)" % (zz and zz[0][1]))
+    ok(zz and zz[0][2] == "connected" and "this computer" in zz[0][1] and "Connected" in zz[0][1], "ZZ TEST is offered, Connected: open in Tally on this computer (%s)" % (zz and zz[0][1]))
     ok(not [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"], "GARG SHEKHAR & COMPANY, linked to Testing AAD, is not offered")
-    pg.click('#app [data-add-pick-company="ZZ TEST"]'); pg.wait_for_timeout(1000)
+    pg.click('#app [data-tco-list=add] [data-tco-row="ZZ TEST"] [data-tco-act=add]'); pg.wait_for_timeout(1500)
     r = pg.evaluate("(() => { const c = Object.values(S.companies).find(x => x.name === 'ZZ TEST'); return {postTo: c.postTo || '', tally: c.tallyName, id: c.id, calls: window.__calls, open: S.coId === c.id}; })()")
     ok(r["tally"] == "ZZ TEST" and r["open"] and not r["postTo"], "added and opened: Tally name ZZ TEST; posting waits for the tick on its card")
-    ok(r["calls"] == [["push"], ["link", "ZZ TEST", r["id"]]], "sent to the server, then linked to ZZ TEST in the cloud (%s)" % r["calls"])
+    ok(r["calls"][:2] == [["push"], ["link", "ZZ TEST", r["id"]]], "sent to the server, then linked to ZZ TEST in the cloud (%s)" % r["calls"])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))

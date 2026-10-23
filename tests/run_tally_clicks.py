@@ -10,7 +10,8 @@ sent with their "<- Tally"), clicked one at a time from a fresh scene, as an own
   - something happens: the page, tab, step or fold changes, a question is asked (answered Yes, with its boxes filled), a
     call goes out (RPC spy, the bridge's wake, a read of the computers, doAct, Update now, a toast), or the page's words
     change; a download is the setup's link (not followed);
-  - the expected effect where there is one: Link -> tally_company_link, Check again -> the wake and a read, Resume ->
+  - the expected effect where there is one (next-tally-suvit: Add as client / Link on a company's row -> tally_company_link,
+    Sync now -> Update now, Today's not-linked line -> the client's Tally card): Link -> tally_company_link, Check again -> the wake and a read, Resume ->
     tally_read_resume, Unlink -> its question then tally_company_link with no client, Hold / Roll back / Stop reading ->
     their question then their RPC, Update now -> tallyUpdateNow;
   - staff see no owner-only control and no owner-only RPC goes out.
@@ -81,7 +82,12 @@ def expect(name, d, calls, fx):
     if "[data-release-rollback]" in name: return "tally_release_rollback" in rpc and d["asked"], "Roll back -> asked, then tally_release_rollback"
     if "[data-read-stop-all]" in name or "[data-read-stop=" in name: return "tally_read_stop" in rpc and d["asked"], "Stop reading -> asked, then tally_read_stop"
     if "[data-update-now]" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn, "Update now -> tallyUpdateNow"
-    if "[data-open-connect" in name or "[data-client-link=" in name or "[data-not-linked-open=" in name: return '"step"' in d["guide"] and d["home"] == "tally", "-> Connect Tally"
+    # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update now
+    if "[data-tco-act=" in name or "[data-tco-relink]" in name: return "tally_company_link" in rpc, "Add as client / Link -> tally_company_link"
+    if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update now"
+    # Today's not-linked line: the client's own Tally card (its companies in Tally, each with Link)
+    if "[data-not-linked-open=" in name: return d["view"] == "company" and d["tab"] == "cotally", "-> the client's Tally card"
+    if "[data-open-connect" in name or "[data-client-link=" in name: return '"step"' in d["guide"] and d["home"] == "tally", "-> Connect Tally"
     return None, ""
 
 def main():

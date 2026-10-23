@@ -15,6 +15,10 @@ not tell whether a client is linked, when it will link, or whether he needs a po
   6. Add client lands on the new client's card; Getting ready's Link to Tally opens Connect Tally's step 4, ticked only on
      a real link.
   7. The Clients list chip and the top bar's sign say the same four words.
+23-Oct-2026 (next-tally-suvit, Suvit's flow): the card's word is the one pill every place says (Not linked / Connected /
+Disconnected, and Needs you when a person must act; lib/tallyState.js), with Sync now; not linked, the card itself lists
+the companies in Tally it may be, each with Link (the same rows as the Tally page's Companies in Tally); Change company
+opens the card's own choice; Getting ready's Link to Tally and Change company lead to those rows.
 Options: --shots DIR  saves the card in its four states (desktop 1440 / phone 390, light and dark) and the Tally page.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_link_simple.py"""
 import json, os, re, sys, threading, functools, http.server
@@ -26,7 +30,7 @@ SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
 PORT = 8629
 GSTIN = "09AANFG3202D1ZR"
 # ui-tidy (13-Oct-2026): the same short words on every chip and card ("Not linked → Link" says what to do)
-WORDS = ["Not linked → Link", "Waiting for Tally", "Linked · reading", "Needs you"]
+WORDS = ["Not linked", "Disconnected", "Connected", "Needs you"]   # next-tally-suvit: the pill's words (lib/tallyState.js)
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []
@@ -114,9 +118,9 @@ def main():
         def status():
             return E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tally-link-status]')].map(e => [e.getAttribute('data-tally-link-status'), e.querySelector('[data-tally-link-state]').innerText.trim(), e.innerText.replace(/\\s+/g, ' ').trim()])")
         def one_line(want, label):
-            st, body = status(), txt(card)
-            words = [w for w in WORDS if w in body]
-            ok(len(st) == 1 and st[0][1] == want and words == [want], "%s: exactly one status line, %r (%s; words in the card %s)" % (label, want, st, words))
+            st = status()
+            tags = E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tally-link-state]')].map(e => e.innerText.trim())")
+            ok(len(st) == 1 and st[0][1] == want and tags == [want], "%s: exactly one status line, %r (%s; the card's words %s)" % (label, want, st, tags))
             return st[0][2] if st else ""
         def confirm(yes=True):
             # the question is asked first (askConfirm): wait for it, answer, and wait for it to close
@@ -132,53 +136,50 @@ def main():
         def shot(page, name):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); page.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)
 
-        # ---- 1. Not linked: the card points to the one place to link (15-Oct-2026: the Tally page's Connect Tally, step 4),
-        # where the companies seen are listed, the same GSTIN on top, with Link
-        scene(SEEN)
-        line = one_line("Not linked → Link", "1. not linked")
-        ok("Not linked to its Tally company yet" in line and pg.locator(card + ' [data-open-connect="4"]').count() == 1 and pg.locator(card + " [data-tally-link-to], " + card + " select").count() == 0,
-           "1. not linked: said, with Open Connect Tally; nothing to link with on the card (%s)" % line)
+        # ---- 1. Not linked: the card lists the companies seen (the rows of Companies in Tally), the same GSTIN on top, with Link
+        scene(SEEN); pg.wait_for_timeout(600)
+        line = one_line("Not linked", "1. not linked")
+        ok("Not linked to its company in Tally yet" in line and pg.locator(card + " [data-tally-link-to], " + card + " select").count() == 0,
+           "1. not linked: said; no box to type or pick in, only the companies' rows (%s)" % line)
         ok(pg.locator(card + " [data-tally-link-post]").count() == 0, "1. no posting tick before the client is linked")
         no_port("1. the card, not linked")
         shot(pg, "card-1-not-linked-desktop-light")
-        pg.click(card + ' [data-open-connect="4"]'); pg.wait_for_timeout(1200)
-        ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, cid] and E("() => document.querySelector('#app [data-guide-client]').value") == cid,
-           "1. Open Connect Tally: the guide's step 4, this client chosen (%s)" % E("S.tallyGuide"))
-        gopts = lambda: E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => [o.value, o.innerText])")
+        gopts = lambda: E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' ')])")
         opts = gopts()
         ok([o[0] for o in opts] == ["ABC LTD", "GARG SHEKHAR"] and "same GSTIN" in opts[0][1], "1. the companies seen, the same GSTIN on top (%s)" % opts)
         ok("LAPTOP" in opts[0][1] and "NWS144" in opts[1][1], "1. each with its computer (%s)" % [o[1] for o in opts])
         # Link: tally_company_link once, the Tally name set
         n0 = len(calls("tally_company_link"))
-        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
+        pg.click(card + ' [data-tco-row="ABC LTD"] [data-tco-act=link]'); pg.wait_for_timeout(1200)
         lk = calls("tally_company_link")[n0:]
         ok(lk == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}]], "2. Link -> tally_company_link once, for this client (%s)" % lk)
         ok(E("(c) => S.companies[c].tallyName", cid) == "ABC LTD", "2. Link sets the client's Tally name (%s)" % E("(c) => S.companies[c].tallyName", cid))
         ok(E("(c) => tallyLinkOf(S.companies[c]).state", cid) != "unlinked", "2. the client is linked at once (%s)" % E("(c) => tallyLinkOf(S.companies[c]).state", cid))
         ok(E("(c) => choiceState(S.companies[c], 'postTo')", cid) != "confirmed" and not E("(c) => S.companies[c].postTo || ''", cid), "2. linking does not allow posting")
 
-        # ---- 2b. not linked, nothing seen yet: the guide reads the cloud again by itself
+        # ---- 2b. not linked, nothing seen yet: Companies in Tally reads the cloud again by itself
         E("(c) => { S.companies[c].tallyName = 'NEW CO'; }", cid)
-        # no company open in Tally on any computer (15-Oct-2026: step 4 offers only what is open now)
         scene([], devs=[dev(1, "NWS144", "anshul", opened=()), dev(2, "LAPTOP", "ravi", opened=())])
         E("(c) => openConnectTally(4, c)", cid); pg.wait_for_timeout(1500)
-        ok("open NEW CO in TallyPrime" in txt("#app [data-guide-none]"), "2b. nothing seen: open NEW CO in TallyPrime (%s)" % txt("#app [data-connect-step=\"link\"]"))
-        # 15-Oct-2026: step 4 offers only the companies open in Tally now, so NEW CO is opened in Tally on NWS144 too
+        ok("No company seen in Tally yet" in txt("#app [data-tco-list=firm]"), "2b. nothing seen: open your company in TallyPrime (%s)" % txt("#app [data-tco-list=firm]"))
         E("""() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()});
             const d = window.__devs.find(x => x.id === '%s'); d.info.beat.open.push('NEW CO'); Object.values(d.info.bridges).forEach(b => b.open.push('NEW CO')); }""" % (D1, D1))
         pg.wait_for_timeout(22500)
-        ok([o for o in gopts() if o[0] == "NEW CO"], "2b. a company opened in Tally shows by itself (no click) (%s)" % gopts())
+        ok(pg.locator('#app [data-tco-list=firm] [data-tco-row="NEW CO"]').count() == 1, "2b. a company opened in Tally shows by itself (no click)")
 
         # ---- 3. Waiting for Tally: linked, the computer has Tally closed
-        scene(LINKED(D3))
-        line = one_line("Waiting for Tally", "3. waiting")
-        ok("Linked to GARG SHEKHAR. Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line, "3. waiting: open it in TallyPrime on the computer (%s)" % line)
+        # (FRONTDESK keeps it, Tally closed there; no other computer has it open)
+        scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
+        line = one_line("Disconnected", "3. waiting")
+        ok("— not open in Tally on FRONTDESK (last seen" in line and "Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and pg.locator(card + " [data-tally-sync-now]").count() == 1,
+           "3. Disconnected: not open in Tally on FRONTDESK, open it there; Sync now (%s)" % line)
         shot(pg, "card-2-waiting-desktop-light")
 
         # ---- 4. Linked and reading
         scene(LINKED(D1))
-        line = one_line("Linked · reading", "4. reading")
-        ok(re.search(r"Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d", line) is not None and pg.locator(card + " [data-update-now]").count() == 1, "4. reading: computer and last entry, Update now (%s)" % line)
+        line = one_line("Connected", "4. reading")
+        ok(re.search(r"Connected \u00b7 GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d", line) is not None and pg.locator(card + " [data-update-now]").count() == 1 and "Sync now" in line,
+           "4. Connected: computer and last entry, Sync now (the Update now) (%s)" % line)
         no_port("4. Client setup → Tally")
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no separate name box, no 'Posting allowed to' card")
         shot(pg, "card-3-reading-desktop-light")
@@ -204,9 +205,9 @@ def main():
         pg.click(card + " [data-tally-link-more] summary"); pg.wait_for_timeout(300)
         items = E("() => [...document.querySelectorAll('#app [data-tally-link-more] .bk-menu-list button')].map(b => b.firstChild.textContent.trim())")
         ok(items == ["Change company", "Unlink", "Name differs in Tally", "Tally page"], "6. More: %s" % items)
-        pg.click(card + " [data-tally-link-change]"); pg.wait_for_timeout(1200)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid] and [o for o in E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)") if o == "ABC LTD"],
-           "6. Change company: Connect Tally's step 4 with this client, listing the other companies seen")
+        pg.click(card + " [data-tally-link-change]"); pg.wait_for_timeout(800)
+        ok(E("[S.coId, S.tab]") == [cid, "cotally"] and [o for o in E("() => [...document.querySelectorAll('#app [data-tally-link-pick-row]')].map(o => o.getAttribute('data-tally-link-pick-row'))") if o == "ABC LTD"],
+           "6. Change company: the card's own choice, listing the other companies seen")
         E("(c) => { S.tallyGuide = {}; openCompany(c); S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(900)
         n0 = len(calls("tally_company_link"))
         pg.click(card + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(card + " [data-tally-link-unlink]"); confirm(True); pg.wait_for_timeout(600)
@@ -219,50 +220,57 @@ def main():
         scene(LINKED(D1), lines=HELD)
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(2000); E("() => render()"); pg.wait_for_timeout(500)
         line = one_line("Needs you", "7. needs you")
-        ok("held" in line and pg.locator(card + " [data-tally-link-status] [data-tally-need-held]").count() == 1, "7. needs you: the held entry, with See them (%s)" % line)
+        ok("Connected" in line and "held" in txt(card + " [data-tally-link-needs]") and pg.locator(card + " [data-tally-link-needs] [data-tally-need-held]").count() == 1,
+           "7. needs you: the pill's words, and the held entry under it, with See them (%s / %s)" % (line, txt(card + " [data-tally-link-needs]")))
         shot(pg, "card-4-needs-you-desktop-light")
         stop = [{"id": 8, "device_id": D1, "action": "stop", "reason": "Tally slow", "stopped_at": "ago:5", "cleared_at": None, "stopped_by": None}]
         scene(LINKED(D1), stops=stop); E("() => render()"); pg.wait_for_timeout(500)
         line = one_line("Needs you", "7. stopped")
-        ok("Tally slow" in line and pg.locator(card + " [data-read-resume-line]").count() == 1, "7. stopped: said, with Resume (%s)" % line)
+        ok("Tally slow" in txt(card + " [data-tally-link-needs]") and pg.locator(card + " [data-read-resume-line]").count() == 1, "7. stopped: said, with Resume (%s)" % txt(card + " [data-tally-link-needs]"))
 
         # ---- 8. the chip and the top bar say the same words
-        scene(LINKED(D3))
+        scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(1500); E("() => render()"); pg.wait_for_timeout(400)
         sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? [b.getAttribute('data-tally-link-sign'), b.title] : null; }")
-        ok(sign and sign[0] == "waiting" and "link: Waiting for Tally" in sign[1], "8. the top bar's sign: 'link: Waiting for Tally' (%s %s)" % (sign, E("JSON.stringify(tallyLinkOf(CO()).needs)")))
+        card_words = re.sub(r"\s+", " ", txt(card + " [data-tally-link-status]"))
+        ok(sign and sign[0] == "waiting" and "Disconnected — not open in Tally on FRONTDESK" in sign[1] and "Disconnected — not open in Tally on FRONTDESK" in card_words,
+           "8. the top bar's sign says the card's words: 'Disconnected — not open in Tally on FRONTDESK' (%s %s)" % (sign, E("JSON.stringify(tallyLinkOf(CO()).needs)")))
         E("() => navHome('clients')"); pg.wait_for_timeout(900)
         chip = E("(c) => { const r = [...document.querySelectorAll('#app [data-tally-link-chip]')].map(e => e.innerText.trim()); return r; }", cid)
-        ok(any(c.endswith("Waiting for Tally") for c in chip) and all(any(c.endswith(w) for w in WORDS) for c in chip), "8. the Clients chip: the four words (%s)" % chip)
+        ok(any(c.endswith("Disconnected") for c in chip) and all(any(c.endswith(w) for w in WORDS) for c in chip), "8. the Clients chip: the same words (%s)" % chip)
 
-        # ---- 9. the Tally page: the guide's step 4 while a client is not linked; a computer's card only points to it; no port
-        # outside Details
-        E("() => { const o = newCompany({name: 'ZZ Other', gstin: ''}); S.companies[o.id] = o; S.data[o.id] = {parties: {}, entries: {}, loaded: true}; o.stats = {}; }")
+        # ---- 9. the Tally page (next-tally-suvit): Companies in Tally, each company with its client or Add as client; a
+        # client not linked: a pointer lists the companies with "Link to <client>"; a computer's card only points there; no
+        # port outside Details
+        E("() => { const o = newCompany({name: 'ZZ Other', gstin: ''}); S.companies[o.id] = o; S.data[o.id] = {parties: {}, entries: {}, loaded: true}; o.stats = {}; window.__zz = o.id; }")
         scene(LINKED(D1)); E("() => { S.tallyFocus = ''; S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1800)
-        # round 64: the client worked on (Link Co, open last) is linked: step 4 is done for it; ZZ Other is named in its note
-        g = txt('#app [data-connect-step="link"]')
-        ok(pg.locator('#app [data-connect-step="link"][data-done]').count() == 1 and "Not linked yet: ZZ Other." in g, "9. round 64: the client worked on linked: step 4 done, ZZ Other named (%s)" % g[-160:])
-        E("() => { S.coId = null; render(); }"); pg.wait_for_timeout(900)
-        g = txt('#app [data-connect-step="link"]')
-        ok("ZZ Other" in g and "not linked" in g and pg.locator("#app [data-guide-link]").count() == 1, "9. the guide's step 4 while a client is not linked, with Link (%s)" % g[-160:])
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+        rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.innerText.replace(/\\s+/g, ' ')]]))")
+        ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Sync now" in rows["GARG SHEKHAR"][2],
+           "9. Companies in Tally: GARG SHEKHAR, Connected, its client Link Co, Sync now (%s)" % rows.get("GARG SHEKHAR"))
+        ok("Add as client" in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): Add as client (%s)" % rows.get("ABC LTD"))
+        zz = E("window.__zz")
+        E("(z) => openConnectTally(4, z)", zz); pg.wait_for_timeout(900)
+        ok(pg.locator('#app [data-tco-for="%s"]' % zz).count() == 1 and txt('#app [data-tco-list=firm] [data-tco-row="ABC LTD"] [data-tco-act]') == "Link to ZZ Other",
+           "9. a client not linked (ZZ Other): the list for it, 'Link to ZZ Other' (%s)" % txt("#app [data-tco-list=firm]")[:200])
+        E("() => { S.tallyGuide = {}; S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
         seen = '#app [data-computer="%s"] [data-card-seen]' % D2
-        ok("ABC LTD" in txt(seen) and pg.locator(seen + " select").count() == 0 and pg.locator(seen + " [data-open-connect]").count() == 1, "9. LAPTOP's card: ABC LTD seen, not linked, pointing to Connect Tally (%s)" % txt(seen))
+        ok("ABC LTD" in txt(seen) and pg.locator(seen + " select").count() == 0 and pg.locator(seen + " [data-open-connect]").count() == 1, "9. LAPTOP's card: ABC LTD seen, not linked, pointing to Companies in Tally (%s)" % txt(seen))
         no_port("9. the Tally page")
         E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(400)
         shot(pg, "tally-page-desktop-light")
-        # Link in the guide
+        # a change of company, from the client's card ("Not this company?")
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(900)
         n0 = len(calls("tally_company_link"))
-        pg.select_option("#app [data-guide-client]", cid); pg.wait_for_timeout(300); pg.select_option("#app [data-guide-company]", "ABC LTD"); pg.wait_for_timeout(300)
-        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(900)
+        pg.click(card + " [data-tally-link-wrong]"); pg.wait_for_timeout(400)
+        pg.click(card + ' [data-tally-link-pick="ABC LTD"]'); confirm(True); pg.wait_for_timeout(900)
         # 23-Oct-2026 (next-fix-tally-link): a change of company moves the client: the new company linked, then the one it
         # had (GARG SHEKHAR) unlinked in the cloud too (it used to stay linked there while this page showed it moved)
         ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}], ["tally_company_link", {"p_company": "GARG SHEKHAR", "p_client": None}]],
-           "9. the guide's Link -> ABC LTD linked, GARG SHEKHAR unlinked (%s)" % calls("tally_company_link")[n0:])
+           "9. Not this company → ABC LTD linked, GARG SHEKHAR unlinked (%s)" % calls("tally_company_link")[n0:])
+        E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(900)
         # every client linked: the guide folds
         E("() => { const ids = Object.values(S.companies).filter(x => !x.deleted).map(x => x.id); window.__companies = ids.map((id, i) => ({company: 'CO ' + i, client_id: id, device_id: '%s', gstin: ''})); TLight.st.cos = window.__companies; TCloud.pane.companies = window.__companies; render(); }" % D1)
         pg.wait_for_timeout(600)
-        # round 63: and each client's ledgers and this year's Day Book are in FinCom (tally_status: a book with ledgers and days)
         E("""() => { const rpc = TCloud.rpc, today = new Date().toISOString().slice(0, 10);
             TCloud.rpc = async (fn, a) => fn === "tally_status" ? (await new Promise(r => setTimeout(r, 5)), [{book: "bk-" + a.p_client, company: "X", from: "2026-04-01", openAsOn: "2026-03-31", ledgersAt: new Date().toISOString(), days: 150, to: today, state: {}}]) : rpc(fn, a);
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
@@ -288,7 +296,8 @@ def main():
         st = E("ONB.steps(CO()).map(s => [s.id, s.done])")
         ok([s[0] for s in st if s[0] in ("tally", "bridge", "link")] == ["link"] and dict(st)["link"] is False, "11. one step, Link to Tally; a Tally name alone does not tick it (%s)" % st)
         pg.click('#app [data-onb-step="link"] button'); pg.wait_for_timeout(800)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid] and pg.locator("#app [data-guide-link]").count() == 1, "11. Link to Tally opens Connect Tally, step 4, this client (%s)" % E("S.tallyGuide"))
+        ok(E("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid] and pg.locator('#app [data-tco-for="%s"]' % cid).count() == 1 and pg.locator("#app [data-tco-list=firm] [data-tco-act=link]").count() >= 1,
+           "11. Link to Tally opens Companies in Tally for this client, each company with Link (%s)" % E("S.tallyGuide"))
         scene(LINKED(D3))
         ok(E("ONB.steps(CO()).find(s => s.id === 'link').done") is True, "11. linked in the cloud (its computer off): ticked")
 

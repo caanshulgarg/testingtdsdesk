@@ -28,6 +28,7 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
+import { clientTallyState } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 
@@ -416,7 +417,7 @@ function clientGroups() {
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the round-off ledger.", "Tally: " + tallyLinkOf(co).word + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
+      it("cotally", "Which Tally company entries go into, how they are numbered, and the round-off ledger.", "Tally: " + (tallyLinkOf(co).state === "needs" ? tallyLinkOf(co).word : clientTallyState(co).word) + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),

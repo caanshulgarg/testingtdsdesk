@@ -2,60 +2,31 @@
 // Clean-up batch 2 (11-Oct-2026, "one main button, one place for each thing"): the page has one job, the list, and one
 // main button, Add client. Uploading bills for any client, the reading check and the Day Books for several clients are
 // under the page's More, each opening its panel above the list; the records used are under Settings → Plan and credit.
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import DropZone from "../parts/DropZone.jsx";
 import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import More from "../parts/More.jsx";
 import { goTallyCard } from "../parts/TallyChip.jsx";
-import { seenWords } from "../parts/TallyLink.jsx";
+import { clientTallyState } from "../lib/tallyState.js";
+// next-tally-suvit: Pick from Tally is the Tally page's own rows (Companies in Tally, its own file)
+const AddPick = lazy(() => import("../parts/TallyCompanies.jsx").then((m) => ({ default: m.AddPick })));
 import Filters, { Search } from "../parts/Filters.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
 
 // Add client. 23-Oct-2026 (next-fix-tally-link; the owner added Salesify twice and it "is not updating"):
-//   Pick from Tally first: the companies FinCom has seen in Tally and not linked to a client (open now or not), each with
-//   its computer and when it was last seen, the best match for what is typed on top. "Add as client" adds the client
-//   already linked (saveNewCompany → tallyLinkClient, the person's own choice); a client of the same name already there is
-//   offered instead ("Salesify Marketing LLP already exists — link this company to it?").
-//   Or type a new client: a client of the same or a similar name, or the same GSTIN, is said under the name with Open it;
-//   adding one of the same name again is asked first. The old "Company in Tally" list and free "Company name in Tally" box
-//   are gone: a company picked and then cleared stayed in that box as the client's Tally name, and tally-ingest linked
-//   that company (VMS EVENTS) to the new client by itself.
-const SHOW_PICK = 6;
-function PickFromTally({ v, onAdd, busy }) {
-  const [all, setAll] = useState(false);
-  const seen = tallyCompaniesSeen().filter((c) => !c.client);
-  // the best match for what is typed (name or GSTIN) on top; then open now, then the latest seen
-  const probe = { id: "", name: v.name, gstin: v.gstin };
-  const row = (c) => ((TCloud.pane || {}).companies || []).find((x) => x.company === c.name) || {};
-  const at = (c) => row(c).last_seen || "";
-  // the computer that reported it (tally_companies.device_id), for "seen on NWS144"
-  const pc = (c) => { const d = ((TCloud.pane || {}).devices || []).find((x) => x.id === row(c).device_id); return d && typeof tallyPcLabel === "function" ? tallyPcLabel(d) : ""; };
-  const ranked = (typeof suggestFor === "function" && (v.name || v.gstin)
-    ? suggestFor(probe, seen.map((c) => Object.assign({ company: c.name, at: at(c) }, c)))
-    : seen.map((c) => Object.assign({ company: c.name, at: at(c), score: 0, why: "" }, c)).sort((a, b) => (b.open - a.open) || String(b.at).localeCompare(String(a.at)) || a.company.localeCompare(b.company)));
-  const shown = all ? ranked : ranked.slice(0, SHOW_PICK);
-  return <section className="addc-pick" data-add-pick={ranked.length}>
-    <h3>Pick from Tally</h3>
-    <p className="note" style={{ margin: "0 0 4px" }}>{ranked.length ? "The companies FinCom has seen in Tally and not linked to a client yet. Adding one links it at once."
-      : "No Tally company is waiting to be linked. Open the client’s company in TallyPrime on a connected computer and it shows here within a minute, or type the client below."}</p>
-    {shown.length > 0 && <ul className="tlink-list">{shown.map((c, i) => <li key={c.company} data-add-pick-row={c.company} data-why={c.why || ""}>
-      <span className="tlink-co"><b>{c.company}</b>
-        {c.why && <span className={"tag " + (c.why === "like" ? "warn" : "ok")}>{c.why === "gstin" ? "same GSTIN" : c.why === "name" ? "same name" : "similar name"}</span>}
-        <span className="note">{c.open ? c.where || "open in Tally" : (pc(c) ? "seen on " + pc(c) : c.where || "seen in Tally") + (c.at ? " · last seen " + seenWords(c.at) : "")}</span></span>
-      <button className="btn small" data-add-pick-company={c.company} disabled={!!busy} onClick={() => onAdd(c)}>{busy === c.company ? "Adding…" : "Add as client"}</button>
-    </li>)}</ul>}
-    {ranked.length > shown.length && <button className="linkbtn" data-add-pick-all="" onClick={() => setAll(true)}>{"Show all " + ranked.length}</button>}
-  </section>;
-}
-
+//   Pick from Tally first: the companies FinCom has seen in Tally and not linked to a client. 23-Oct-2026 (next-tally-suvit,
+//   Suvit's flow): these are the Tally page's own rows (parts/TallyCompanies.jsx), the best match for what is typed on
+//   top: "Add as client" adds the client already linked and starts its first sync; a client of the same name or GSTIN
+//   already there is "Link to <client>" instead, never a second one. The client's Tally card then opens.
+//   Or type a new client (one without Tally): a client of the same or a similar name, or the same GSTIN, is said under
+//   the name with Open it; adding one of the same name again is asked first.
 function AddClient() {
   const others = sortedCompanies();
   const [v, setV] = useState({ name: "", gstin: "", copyFrom: "", turnover10cr: false });
-  const [busy, setBusy] = useState("");
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
   // the Tally companies the bridge here sees open, and the ones the firm's Tally computers reported (02-Oct-2026)
   if (typeof TCloud === "object" && TCloud.on() && TCloud.pane.devices === null && !TCloud.pane.busy) setTimeout(() => TCloud.refreshPane(), 0);
@@ -69,25 +40,9 @@ function AddClient() {
       body: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
     saveNewCompany({ ...v, dupOk: !!same });
   };
-  // Pick from Tally: a client of the same name already there is linked instead of adding a second one
-  const addFromTally = async (c) => {
-    const name = v.name.trim() && sameTallyName(v.name, c.company) ? v.name.trim() : clientNameFromTally(c.company);
-    const twin = similarClients(name, c.gstin || "", live).find((d) => d.why === "same" || d.why === "gstin");
-    if (twin) {
-      const ok = await askConfirm({ title: twin.client.name + " already exists", ok: "Link it to " + twin.client.name,
-        body: "<p><b>" + esc(twin.client.name) + "</b> is already in FinCom" + (twin.why === "gstin" ? " with this GSTIN" : "") + ". Link the Tally company <b>" + esc(c.company) + "</b> to it instead of adding another client?</p>" });
-      if (!ok) return;
-      setBusy(c.company); const done = await tallyLinkClient(c.company, twin.client.id); setBusy("");
-      if (done) openIt(twin.client);
-      return;
-    }
-    setBusy(c.company);
-    saveNewCompany({ ...v, name, gstin: v.gstin || c.gstin || "", tallyCompany: c.company, postOnly: false });
-    setBusy("");
-  };
   return <>
     <h2>Add client</h2>
-    {pickable && <PickFromTally v={v} onAdd={addFromTally} busy={busy} />}
+    {pickable && <Suspense fallback={null}><AddPick v={v} onDone={(cid) => { const c = S.companies[cid]; if (c) openIt(c); }} /></Suspense>}
     {pickable && <h3 style={{ margin: "6px 0 0", fontSize: 15 }}>Or type a new client</h3>}
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
       <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus autoComplete="off" placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
@@ -123,10 +78,13 @@ function TallyLight({ cid }) {
   // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
   // round 39: the chip says the client's link in the same four words as its Link to Tally card and the top bar's sign
   const l = typeof tallyLine === "function" ? tallyLine(co) : null, k = tallyLinkOf(co);
-  // ui-tidy (13-Oct-2026); 15-Oct-2026: a client not linked points to Connect Tally, step 4 (goTallyCard, parts/TallyChip.jsx)
-  return <button type="button" className={"tag tchip " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
-    data-tally={t.state} data-tally-link-chip={k.state} data-tally-chip={k.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
-    onClick={(ev) => { ev.stopPropagation(); goTallyCard(cid); }}>{MARK[k.level] + k.word}</button>;
+  // ui-tidy (13-Oct-2026); 15-Oct-2026: a client not linked points to Connect Tally, step 4 (goTallyCard, parts/TallyChip.jsx).
+  // next-tally-suvit: the chip says the pill's word (lib/tallyState.js: Connected / Disconnected / Not linked), "Needs you"
+  // when a person must act; the pill's whole words lead its tip
+  const p = clientTallyState(co), w = k.state === "needs" ? { level: k.level, word: k.word } : p;
+  return <button type="button" className={"tag tchip " + w.level} title={p.text + (k.company ? " (" + k.company + ")" : "") + ". " + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
+    data-tally={t.state} data-tally-link-chip={k.state} data-tally-chip={k.state} data-tally-pill={p.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
+    onClick={(ev) => { ev.stopPropagation(); goTallyCard(cid); }}>{MARK[w.level] + w.word}</button>;
 }
 
 // the panels under More, one at a time (S.clientsPanel); the Day Books panel stays while its files are being matched

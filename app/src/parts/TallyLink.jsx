@@ -24,8 +24,19 @@
 //                itself (linked_by empty) says so.
 //   reading      what came in, in order: the ledgers, then this year's entries, each with its next step (Connect Tally's
 //                steps 5 and 6).
-import { useState } from "react";
+// 23-Oct-2026 (next-tally-suvit; the owner: "make sure it should connect like Suvit.. every step"): the card says the
+// company's state in the one pill every place uses (lib/tallyState.js: Connected / Disconnected — not open in Tally on
+// NWS144 (last seen 20-Oct) / Disconnected — computer offline since 14:02) with Sync now (Update now); not linked, the
+// card lists the matching rows of the Tally page's Companies in Tally, each with Link (parts/TallyCompanies.jsx, its
+// own file); linked, the first sync's progress and confirmation, or what FinCom holds ("Ledgers 1,240 · Entries
+// Apr–Oct 2026"), and Upload older entries (Day Book) while days are missing.
+import { useState, lazy, Suspense } from "react";
 import { needDays } from "../screens/books/FromTally.jsx";
+import { seenWords, clientTallyState } from "../lib/tallyState.js";
+const TCO = () => import("./TallyCompanies.jsx");
+const ClientPick = lazy(() => TCO().then((m) => ({ default: m.ClientPick })));
+const SyncLine = lazy(() => TCO().then((m) => ({ default: m.SyncLine })));
+const DaybookLink = lazy(() => TCO().then((m) => ({ default: ({ cid }) => (m.oldDaysMissing(cid) ? <button className="btn small" data-tally-daybook={cid} onClick={() => m.openFromTally(cid)}>Upload older entries (Day Book)</button> : null) })));
 import Button from "./Button.jsx";
 import CommitBox from "./CommitBox.jsx";
 
@@ -33,14 +44,7 @@ const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const sameName = (a, b) => !!a && !!b && ledNm(a).toLowerCase() === ledNm(b).toLowerCase();
-// "today 15:21", "yesterday", "20-Oct" (IST)
-const IST = 5.5 * 3600e3, MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-export function seenWords(iso) {
-  const t = Date.parse(iso || ""); if (!t) return "";
-  const d = new Date(t + IST), now = new Date(Date.now() + IST), day = (x) => Math.floor(x.getTime() / 864e5);
-  const gap = day(now) - day(d), hm = String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
-  return gap <= 0 ? "today " + hm : gap === 1 ? "yesterday " + hm : String(d.getUTCDate()).padStart(2, "0") + "-" + MON[d.getUTCMonth()] + (d.getUTCFullYear() !== now.getUTCFullYear() ? "-" + d.getUTCFullYear() : "");
-}
+export { seenWords };
 
 // the Tally companies FinCom's cloud has seen (tally_companies, as TLight and the Tally page read them), not linked to
 // another client: {company, gstin, computer, at, open, same (this client's GSTIN), mine (linked to this client)}
@@ -69,21 +73,27 @@ export function OpenConnect({ co, step, primary = true }) {
   return <Button className={"btn small" + (primary ? " primary" : "")} data-open-connect={String(step || 0)} onClick={() => openConnectTally(step || 0, co ? co.id : "")}>Open Connect Tally</Button>;
 }
 
-// the one status line: the state's word, what it means, and at most one button
+// the one status line: the pill (the words every place uses), what it means, and at most one button (Sync now)
 function StatusLine({ co, k, where, b, plain = false }) {
-  const l = k.line, x = k.company, pc = k.computer || "the office computer", owner = isOwner();
+  const x = k.company, owner = isOwner(), pill = clientTallyState(co);
   const openTally = () => openTallyFor(co.id);
-  let text = "", act = null;
-  if (k.state === "unlinked") { text = "Not linked to its Tally company yet." + (plain ? "" : " Choose its Tally company below."); act = <OpenConnect co={co} step={4} primary={false} />; }
-  else if (k.state === "waiting") { text = "Linked to " + x + ". Open " + x + " in TallyPrime on " + pc + " — FinCom reads it within a minute."
-      + (k.seenAt ? " Last seen " + seenWords(k.seenAt) + "." : " Not seen in Tally yet.");
-    act = <OpenConnect co={co} step={0} primary={!plain} />; }
-  else if (k.state === "reading") { const last = lastEntry(co, k);
-    text = "Linked to " + x + " on " + pc + " · last entry " + (last ? tallyHm(last) : "not received yet");
-    act = <Button className="btn small" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>{l && l.reading ? "Reading now…" : "Update now"}</Button>; }
-  else { const n = needLine(co, k.needs[0], k, where, b, owner, openTally, plain); text = n.text; act = n.act; }
-  return <div className="tlink-line" data-tally-link-status={k.state}>
-    <span className={"tag " + k.level} data-tally-link-state="">{k.word}</span>
+  let text = "", act = null, tag = pill;
+  if (k.state === "unlinked") { text = "Not linked to its company in Tally yet." + (plain ? "" : " Choose it below: Link.");
+    act = plain ? <Button className="btn small" data-tally-link-choose-go="" onClick={goTallyLinkHome}>Choose its company</Button> : null; }
+  else if (plain && k.state === "needs") { const n = needLine(co, k.needs[0], k, where, b, owner, openTally, plain); text = n.text; act = n.act; tag = { level: k.level, word: k.word, state: "needs" }; }
+  else {
+    const last = lastEntry(co, k), pc = pill.computer || k.computer || "its computer";
+    text = pill.state === "connected" ? "Connected · " + x + " on " + pc + " · last entry " + (last ? tallyHm(last) : "not received yet")
+      : pill.text.replace(/^Disconnected/, "") + ". " + (pill.state === "offline" ? "Turn " + pc + " on and sign in to Windows: FinCom Bridge starts by itself."
+        : pill.state === "unseen" ? "Open " + x + " in TallyPrime on the computer with FinCom Bridge — FinCom reads it within a minute."
+        : "Open " + x + " in TallyPrime on " + pc + " — FinCom reads it within a minute.");
+    // a person must act (reading stopped, a Day Book, held entries): the word is "Needs you", as the chips say; what, below
+    if (k.state === "needs") tag = { level: k.level, word: k.word, state: "needs" };
+    const reading = !!(k.line && k.line.reading);
+    act = canWrite() ? <Button className="btn small" data-update-now="" data-tally-sync-now={co.id} disabled={reading} onClick={() => tallyUpdateNow(co.id)}>{reading ? "Syncing…" : "Sync now"}</Button> : null;
+  }
+  return <div className="tlink-line" data-tally-link-status={k.state} data-tally-pill={tag.state}>
+    <span className={"tag " + tag.level} data-tally-link-state="">{tag.word}</span>
     <span className="tlink-say" data-tally-link-text="">{text}</span>
     {act && <span className="tlink-act">{act}</span>}
   </div>;
@@ -134,7 +144,7 @@ function PostTick({ co, company }) {
 }
 
 // More: Change company, Unlink, Name differs in Tally, Tally page (the menu Client setup's More uses)
-function More({ co, k, onName }) {
+function More({ co, k, onName, onChange }) {
   const linked = k.state !== "unlinked", cloud = typeof TCloud === "object" && TCloud.on(), may = canWrite();
   const unlink = () => askConfirm({ title: "Unlink " + k.company + " from " + co.name + "?", ok: "Unlink", danger: true,
     body: "<p>Its books stop coming to " + esc(co.name) + " until the client is linked again. Nothing in Tally changes.</p>" }).then((ok) => { if (ok) tallyLinkClient(k.company, null); });
@@ -143,7 +153,7 @@ function More({ co, k, onName }) {
   return <details className="bk-menu" data-tally-link-more="">
     <summary className="btn small" aria-label={"More about the Tally link of " + co.name}>More</summary>
     <div className="bk-menu-list">
-      {linked && cloud && may && <button data-tally-link-change="" onClick={go(() => openConnectTally(4, co.id))}>Change company<small>In Connect Tally: link another company in Tally to this client instead.</small></button>}
+      {linked && cloud && may && <button data-tally-link-change="" onClick={go(onChange)}>Change company<small>Link another company in Tally to this client instead.</small></button>}
       {linked && cloud && may && <button className="danger" data-tally-link-unlink="" onClick={go(unlink)}>Unlink<small>{k.company + "’s books stop coming to this client."}</small></button>}
       <button data-tally-link-name="" onClick={go(onName)}>Name differs in Tally<small>The company’s name exactly as Tally shows it.</small></button>
       <button data-tally-link-page="" onClick={go(() => openTallyFor(co.id))}>Tally page<small>The computers, and the details for support.</small></button>
@@ -208,26 +218,12 @@ function Chooser({ co, k, onDone }) {
   </div>;
 }
 
-// 23-Oct-2026: once linked, what came in, in order (the Connect Tally guide's steps 5 and 6, from the same counts: the
-// ledgers FinCom holds for the client, the days of this financial year in the cloud), each with its one next step
-function fyStart() { const t = new Date(Date.now() + IST), y = t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); return y + "0401"; }
-function Progress({ co, k }) {
-  const cloud = typeof TCloud === "object" && TCloud.on(), bk = cloud && TCloud.book ? TCloud.book(co.id) : null;
-  if (typeof TCloud === "object" && cloud && TCloud.status && !(TCloud.st[co.id] && TCloud.st[co.id].at)) setTimeout(() => { try { TCloud.status(co.id); } catch (e) { /* the next read */ } }, 0);
-  const nLed = Math.max(typeof Ledgers === "object" && Ledgers.status ? Ledgers.status(co.id).n || 0 : 0, ((typeof TCloud === "object" && TCloud.st[co.id]) || {}).ledN ? TCloud.st[co.id].ledN.n || 0 : 0);
-  const ledOk = nLed > 0 || !!(bk && bk.ledgersAt);
-  const to = String((bk && bk.to) || "").replace(/-/g, "").slice(0, 8), days = Number((bk && bk.days) || 0), dayOk = days > 0 && to >= fyStart();
-  const toWords = to ? to.slice(6, 8) + "-" + MON[Number(to.slice(4, 6)) - 1] + "-" + to.slice(0, 4) : "";
-  return <ol className="tlink-steps" data-tally-link-progress={!ledOk ? "ledgers" : !dayOk ? "entries" : "done"}>
-    <li data-tally-step="ledgers" data-done={ledOk ? "" : undefined}>
-      {ledOk ? <span>{"✓ Ledgers: " + (nLed ? nLed.toLocaleString("en-IN") + " in FinCom" : "in FinCom")}</span>
-        : <><span>{"Ledgers: not in FinCom yet. With " + k.company + " open in Tally they come in a minute or two."}</span>
-          <Button className="btn small" data-tally-step-go="5" onClick={() => openConnectTally(5, co.id)}>Import ledgers</Button></>}</li>
-    <li data-tally-step="entries" data-done={dayOk ? "" : undefined}>
-      {dayOk ? <span>{"✓ This year’s entries: up to " + toWords}</span>
-        : <><span>{ledOk ? "This year’s entries: not in FinCom yet. Bring in the Day Book once; new entries then come by themselves." : "Then this year’s entries."}</span>
-          {ledOk && <Button className="btn small" data-tally-step-go="6" onClick={() => openConnectTally(6, co.id)}>Bring in entries</Button>}</>}</li>
-  </ol>;
+// once linked: the first sync's progress and its confirmation, else what FinCom holds (TallyCompanies.jsx's SyncLine,
+// the same line as the client's row on the Tally page), and Upload older entries (Day Book) while days are missing
+function Progress({ co }) {
+  const cloud = typeof TCloud === "object" && TCloud.on();
+  if (cloud && TCloud.status && !(TCloud.st[co.id] && TCloud.st[co.id].at)) setTimeout(() => { try { TCloud.status(co.id); } catch (e) { /* the next read */ } }, 0);
+  return <div className="tlink-steps" data-tally-link-progress=""><Suspense fallback={null}><SyncLine cid={co.id} /><DaybookLink cid={co.id} /></Suspense></div>;
 }
 
 // the client's link state; on From Tally the days that need a Day Book are listed with their own Upload, so they are not
@@ -262,15 +258,16 @@ export default function TallyLink({ co, where = "setup", b = null }) {
   return <section className="tlink" data-tally-link={k.state} data-tally-line-state={k.line ? k.line.state : ""} aria-label={"Tally: " + k.word}>
     <div className="tlink-head">
       <h3 className="tlink-title">Tally</h3>
-      <More co={co} k={k} onName={() => setName(true)} />
+      <More co={co} k={k} onName={() => setName(true)} onChange={() => setWrong(k.company)} />
     </div>
     <StatusLine co={co} k={k} where={where} b={b} />
     {!unlinked && cloud && may && !choosing && <p className="tlink-wrong" data-tally-link-auto={k.auto ? "" : undefined}>
       {k.auto && <span className="note">{"FinCom linked " + k.company + " by itself (same name or GSTIN). "}</span>}
       <button className="linkbtn" data-tally-link-wrong="" onClick={() => setWrong(k.company)}>Not this company?</button></p>}
-    {choosing && <Chooser co={co} k={k} onDone={() => setWrong("")} />}
-    {!unlinked && cloud && !choosing && (k.state === "reading" || k.state === "needs" || k.seenAt) && <Progress co={co} k={k} />}
-    {k.needs.length > 1 && <ul className="tlink-needs" data-tally-link-needs="">{k.needs.slice(1).map((n) => { const x = needLine(co, n, k, where, b, isOwner(), () => openTallyFor(co.id));
+    {cloud && unlinked && <Suspense fallback={null}><ClientPick co={co} /></Suspense>}
+    {choosing && !unlinked && <Chooser co={co} k={k} onDone={() => setWrong("")} />}
+    {!unlinked && cloud && !choosing && <Progress co={co} />}
+    {k.needs.length > 0 && <ul className="tlink-needs" data-tally-link-needs="">{k.needs.map((n) => { const x = needLine(co, n, k, where, b, isOwner(), () => openTallyFor(co.id));
       return <li key={n.kind} data-tally-need={n.kind}><span>{x.text}</span>{x.act}</li>; })}</ul>}
     {!unlinked && <PostTick co={co} company={k.company} />}
     {name && <NameBox co={co} onClose={() => setName(false)} />}
