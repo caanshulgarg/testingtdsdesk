@@ -101,6 +101,12 @@ run_migration101.py                   180
 run_autopost_rules.js                 120
 run_autopost_replay.js                120
 run_autopost_ui.py                    300  TDSDESK_SITE=../app/dist-test
+run_migration102.py                   180
+run_call_rules.mjs                    120
+run_video_calls_server.py             120
+run_video_calls_ui.py                 600  TDSDESK_SITE=../app/dist-test
+run_work_together_ui.py               480  TDSDESK_SITE=../app/dist-test
+run_remote_help_ui.py                 480  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
 run_mis_sales.py                      120

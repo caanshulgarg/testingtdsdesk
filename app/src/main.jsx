@@ -16,6 +16,8 @@ import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens } from "./screens/lazy.js";
 import "./nav.js";
+// calls (stage 1, 23-Oct-2026): the way in only; the call screen is its own file, fetched when a call is opened
+import { guestLink, startGuest } from "./calls/launch.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
@@ -119,7 +121,9 @@ function start() {
 // that index.html's build check is swapping for a newer build; and on the service worker's kept copy of the page
 // (data-boot-kept, sw/sw.js: the line was too slow to bring the page), not before that check has answered (6 s at most),
 // so an older build is never drawn and then replaced
-if (!window.__fincomOld && !window.__fincomSwapping) {
+// a guest's call link (#join=…): the guest's page alone, FinCom itself is not started (no sign-in)
+if (!window.__fincomOld && !window.__fincomSwapping && guestLink()) startGuest().catch((e) => { try { document.body.textContent = "The call could not be opened: " + e.message; } catch (x) { /* */ } });
+else if (!window.__fincomOld && !window.__fincomSwapping) {
   const check = document.documentElement.hasAttribute("data-boot-kept") && window.__fincomBootCheck;
   if (!check) start();
   else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) start(); }, start);
