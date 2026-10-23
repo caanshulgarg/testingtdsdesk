@@ -18,7 +18,25 @@ H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ
 srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 json.dump({"TallyTimeoutSec": 20}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
-br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
+# its own process group, so the bridge's workers (posting jobs, the keep copier) end with it (CI 37881218752 attempt 1: a
+# test after this one met a bridge answering 502, as if Tally were held by a process left from here)
+br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN, start_new_session=True)
+def stop_bridge():
+    """the bridge, its process group, and every worker it wrote down in its folder (keep.pid, a job's progress.json)"""
+    import glob, signal
+    try: os.killpg(br_p.pid, signal.SIGKILL)
+    except Exception: pass
+    br_p.kill()
+    pids = []
+    for f in glob.glob(_os.path.join(BRUN, "**", "keep.pid"), recursive=True):
+        try: pids.append(int(open(f).read().strip() or 0))
+        except Exception: pass
+    for f in glob.glob(_os.path.join(BRUN, "**", "progress.json"), recursive=True):
+        try: pids.append(int(json.load(open(f, encoding="utf-8-sig")).get("pid") or 0))
+        except Exception: pass
+    for pid in set(x for x in pids if x > 0 and x != os.getpid()):
+        try: os.kill(pid, 9)
+        except Exception: pass
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -26,7 +44,7 @@ def ok(c, w):
 # the bank and a supplier in the stand-in Tally's books: the real client's, or the fixture's (tests/fixtures/books)
 BANK, PARTY = ("Kaveri Bank - CA 0815", "Juniper Legal Associates") if fake_tally._bd.FIXTURE else ("HDFC BANK ACCOUNT", "2K Mart")
 CO_NAME, CO_GSTIN = fake_tally.COMPANY, fake_tally._bd.GSTIN
-SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
+SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k}); /* FinCom 2.3.0 sends nothing to a bridge that has not proved itself; the PowerShell bridge 1.15.0 run here cannot, so this end-to-end test of posting takes it as proved */ Bridge.ensureProven = async () => true; 
   const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}]; choiceConfirm(c, "bank:a1", bank); choiceConfirm(c, "postTo", c.name);   // posting uses a confirmed bank ledger and Tally company only (src/js/60)
   S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
   const rows = [["2025-06-02", 1000], ["2025-06-03", 2500], ["2025-06-04", 330], ["2025-06-05", 47000]].map(([d, amt], i) => ({id: "r" + i, fp: "fp-e2e-" + i, date: d, debit: amt, credit: 0,
@@ -212,6 +230,6 @@ try:
         ok(len(fake_tally.POSTED) == n_before and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
         br.close()
 finally:
-    br_p.kill()
+    stop_bridge()
 ok(not errors, "no page errors" + ("" if not errors else ": " + " | ".join(errors[:3])))
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))

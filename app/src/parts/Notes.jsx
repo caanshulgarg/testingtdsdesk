@@ -28,7 +28,7 @@ export function GstDriftNote({ b }) {
 
 // whether the TDS and GST work is kept for the firm, or only in this browser
 export function SyncNote({ cid, tab }) {
-  const info = !tab || tab === "import", note = (t, cls) => <p className={"note" + (cls ? " " + cls : "")} style={{ margin: "6px 0" }}>{t}</p>;
+  const info = !tab, note = (t, cls) => <p className={"note" + (cls ? " " + cls : "")} style={{ margin: "6px 0" }}>{t}</p>;
   if (!(typeof Cloud === "object" && Cloud.on())) return info ? note("TDS and GST work is kept in this browser only. Sign in to the firm account to share it with your colleagues.") : null;
   if (BookSync.off) return info ? note("The firm’s database is not set up for shared TDS and GST work yet: it is kept in this browser only.") : null;
   const s = BookSync.st[cid] || {};
@@ -73,7 +73,9 @@ export function MultiUpload() {
 
 // fast-sync: what FinCom's server is doing for this client (a day book being read in, the kept day books read again),
 // live; it carries on when this page is closed (TCloud.jobs, migration-13)
-export function JobsNote({ cid }) {
+// compact (From Tally, 2.4.0): "Sending DayBook.xml to FinCom’s cloud: 42%", the sizes and what happens if the page is
+// closed on hover
+export function JobsNote({ cid, compact }) {
   if (typeof TCloud !== "object" || !TCloud.on()) return null;
   if (TCloud.jobs[cid] === undefined && TCloud.jobsOk !== false) { TCloud.jobs[cid] = []; setTimeout(() => TCloud.jobsLoad(cid), 0); }
   const day = Date.now() - 86400000;
@@ -81,7 +83,8 @@ export function JobsNote({ cid }) {
   // round 20 (d.2): a Day Book on its way to Storage from this page: its progress bar
   const up = typeof TCloudUp === "object" && TCloudUp.prog ? TCloudUp.prog[cid] : null;
   const pct = up && up.size ? Math.floor((up.sent * 100) / up.size) : 0;
-  const bar = up ? <div data-upload-progress="" style={{ margin: "4px 0" }}><span className="note">{"Sending " + up.name + " to FinCom’s cloud: " + pct + "% (" + (up.sent / 1048576).toFixed(1) + " of " + (up.size / 1048576).toFixed(1) + " MB). If the page is closed, it goes on from here the next time this client is opened."}</span>
+  const more = "(" + (up ? (up.sent / 1048576).toFixed(1) + " of " + (up.size / 1048576).toFixed(1) : "") + " MB). If the page is closed, it goes on from here the next time this client is opened.";
+  const bar = up ? <div data-upload-progress="" style={{ margin: "4px 0" }} title={compact ? more : undefined}><span className="note">{"Sending " + up.name + " to FinCom’s cloud: " + pct + "%" + (compact ? "" : " " + more)}</span>
     <progress data-upload-bar="" max={100} value={pct} style={{ display: "block", width: "100%", maxWidth: 420 }} /></div> : null;
   if (!list.length) return bar;
   return <div data-jobs>{bar}{list.map((j) => <p key={j.id} className={"note" + (j.status === "failed" ? " bad" : "")} style={{ margin: "4px 0" }} data-job={j.status}>{TCloud.jobLine(j)}</p>)}</div>;

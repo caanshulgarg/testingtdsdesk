@@ -21,13 +21,18 @@ with sync_playwright() as p:
     # Tally ledgers
     pend = lambda: pg.evaluate("LedMaster.pending(S.books).length")
     n0 = pend()
-    ok(n0 > 0 and pg.locator("#lmTable tbody tr").count() == n0, "Tally ledgers: the %d to confirm are listed" % n0)
-    row = pg.locator("#lmTable tbody tr").first; name = row.get_attribute("data-key")
-    row.locator("td.ac button").click(); pg.wait_for_timeout(400)
+    # FinCom 2.4.0, the simpler page: each ledger to confirm on one row (GST ledgers, TDS ledgers, or Needs you)
+    keys = lambda: pg.evaluate("() => [...document.querySelectorAll('#app [data-led-table] tr[data-key]')].map(r => r.dataset.key)")
+    pn = pg.evaluate("LedMaster.pending(S.books).map(([n]) => n)")
+    ok(n0 > 0 and all(k in keys() for k in pn), "Tally ledgers: the %d to confirm are listed" % n0)
+    row = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; name = row.get_attribute("data-key")
+    row.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(pend() == n0 - 1 and pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "Confirm: %s confirmed, one fewer to confirm" % name)
-    pg.click('nav[aria-label="Ledgers"] button:has-text("Confirmed")'); pg.wait_for_timeout(400)
-    pg.locator('#lmTable tr[data-key=%s] button:text-is("✓ confirmed")' % json.dumps(name)).click(); pg.wait_for_timeout(400)
-    ok(pend() == n0 and not pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "✓ confirmed, clicked: undone")
+    pg.click("#app [data-led-show-done]"); pg.wait_for_timeout(400)
+    pg.locator('#app tr[data-key=%s] [data-led-undo]' % json.dumps(name)).click(); pg.wait_for_timeout(400)
+    ok(pend() == n0 and not pg.evaluate("S.books.map[%s].ok" % json.dumps(name)), "✓ Confirmed, clicked: undone")
+    pg.click("#app [data-led-show-done]"); pg.wait_for_timeout(300)
+    pg.click("#app [data-more-toggle=ledpage]"); pg.wait_for_timeout(300)
     pg.click('nav[aria-label="Ledgers"] button:has-text("Other ledgers")'); pg.wait_for_timeout(400)
     other = pg.locator("#lmTable tbody tr").first.get_attribute("data-key")
     box = pg.locator('input[aria-label="Find a ledger"]'); box.click(); pg.keyboard.type(other[:8], delay=15); pg.wait_for_timeout(600)
@@ -35,15 +40,24 @@ with sync_playwright() as p:
     pg.select_option('select[aria-label="What %s is"]' % other, "tds_payable"); pg.wait_for_timeout(500)
     m = pg.evaluate("S.books.map[%s]" % json.dumps(other))
     ok(m["what"] == "tds_payable" and m["ok"], "an other ledger made a TDS ledger: kept, and confirmed as the user's own choice")
-    box.fill(""); pg.click('nav[aria-label="Ledgers"] button:has-text("TDS and TCS")'); pg.wait_for_timeout(400)
+    # now a confirmed TDS ledger: shown with the confirmed, changed there
+    pg.evaluate("lmViewGo('done')"); pg.wait_for_timeout(400)
+    pg.click('#app [data-led-table=tds] tr[data-key=%s] [data-led-change]' % json.dumps(other)); pg.wait_for_timeout(300)
     sec = pg.locator('input[aria-label="Section of %s"]' % other); sec.fill("194j"); sec.press("Tab"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].section" % json.dumps(other)) == "194J", "its section typed, kept in capitals")
     # review 18 (02-Oct-2026): what is chosen or typed on the page is saved with Save at its foot; Confirm buttons save at once
     ok("Not saved yet" in pg.inner_text('#app [data-confirm-foot="books:ledgers"]'), "review 18: the ledger's kind and section are not saved until Save")
     pg.click('#app [data-confirm-foot="books:ledgers"] [data-cfm="save"]'); pg.wait_for_timeout(400)
-    pg.click('nav[aria-label="Ledgers"] button:has-text("To confirm")'); pg.wait_for_timeout(400)
-    pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(600)
-    ok(pend() == 0 and "Every GST and TDS ledger is confirmed." in pg.inner_text("#app"), "Confirm the shown: nothing left to confirm")
+    box.fill(""); pg.evaluate("S.ledEdit = ''; lmViewGo('pending')"); pg.wait_for_timeout(400)
+    for sec_ in ("gst", "tds"):
+        if pg.locator("#app [data-led-confirm-all=%s]" % sec_).count(): pg.click("#app [data-led-confirm-all=%s]" % sec_); pg.wait_for_timeout(500)
+    while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
+        pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
+    # a ledger FinCom could not tell is chosen by hand (Needs you), then confirmed
+    for k in pg.evaluate("LedMaster.pending(S.books).map(([n]) => n)"):
+        pg.evaluate("(n) => lmSet(n, 'what', 'none')", k); pg.wait_for_timeout(100)
+    ok(pend() == 0 and "No GST ledger to confirm." in pg.inner_text("#app"), "Confirm all: nothing left to confirm")
+    pg.click("#app [data-more-toggle=ledpage]") if pg.locator('nav[aria-label="Ledgers"]').count() == 0 else None; pg.wait_for_timeout(300)
     pg.click('nav[aria-label="Ledgers"] button:has-text("What FinCom posts to")'); pg.wait_for_timeout(400)
     ok("What FinCom posts bills to" in pg.inner_text("#app"), "What FinCom posts to: the posting ledgers")
     # Audit: run, open a finding, its status and note, an area, related parties, the 3CD draft

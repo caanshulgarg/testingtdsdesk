@@ -60,10 +60,12 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8294/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     hmIn = lambda text, m: any(hm(x) in text for x in (m, m + 1))
-    E(SETUP, ["owner", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800)
+    E(SETUP, ["owner", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800); more()
     comp = lambda d: '#app [data-computer="%s"]' % d
     # ---- F36: per company on each computer
     zz = txt(comp(D1) + ' [data-recorder-co="ZZ TEST"]'); abc = txt(comp(D1) + ' [data-recorder-co="ABC LTD"]')
@@ -84,21 +86,21 @@ with sync_playwright() as p:
     ok(["tally_recorder_silent", {"p_firm": "f-1"}] in E("window.__calls"), "J64: tally_recorder_silent(p_firm) asked (%s)" % E("window.__calls"))
     sl = [x for x in items if "No change recorded today" in x["text"]]
     ok(len(sl) == 1 and sl[0]["sev"] == "info" and "TALLYSRV" in sl[0]["details"], "J64: silent today, as information, TALLYSRV behind details (%s)" % sl)
-    E(SETUP, ["staff", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800)
+    E(SETUP, ["staff", DEVS, SILENT, "", ""]); pg.wait_for_timeout(1800); more()
     items = E(BELL)
     ok([x for x in items if "No change recorded today" in x["text"]] and [x for x in items if x["text"].startswith("ABC Client:")], "J64, F36: staff see them too")
-    E(SETUP, ["owner", DEVS, SILENT, "Could not find the function public.tally_recorder_silent(p_firm) in the schema cache (PGRST202)", ""]); pg.wait_for_timeout(1800)
+    E(SETUP, ["owner", DEVS, SILENT, "Could not find the function public.tally_recorder_silent(p_firm) in the schema cache (PGRST202)", ""]); pg.wait_for_timeout(1800); more()
     ok(not [x for x in E(BELL) if "No change recorded today" in x["text"]] and pg.locator("#app [data-computer]").count() == 3 and "PGRST202" not in txt("#app"), "J64: the function missing: nothing said, the page as before")
     # ---- a client's pages: no banner (the bell has it)
-    E(SETUP, ["owner", DEVS, SILENT, "", "abc"]); pg.wait_for_timeout(1500)
+    E(SETUP, ["owner", DEVS, SILENT, "", "abc"]); pg.wait_for_timeout(1500); more()
     ok(pg.locator("#app [data-recorder-banner]").count() == 0 and "not being recorded" not in txt("#app") and "not recording" not in txt("#app"), "ABC Client's pages: no banner")
     E("() => { S.tab = 'books'; S.booksTab = 'tds'; render(); }"); pg.wait_for_timeout(800)
     ok(pg.locator("#app [data-alert-line]").count() == 1 and "not recording" in txt("#app [data-alert-line]"), "ABC Client's books: the one slim line (%s)" % txt("#app [data-alert-line]"))
     # no bridge reports a recorder at all (every bridge before 2.1.9): no alert, no word on the Tally page
     OLD = [dev(D1, "NWS144", ["ZZ TEST", "ABC LTD"]), dev(D2, "TALLYSRV", ["OTHER CO"])]
-    E(SETUP, ["owner", OLD, {"ok": True, "silent": []}, "", "abc"]); pg.wait_for_timeout(1500)
+    E(SETUP, ["owner", OLD, {"ok": True, "silent": []}, "", "abc"]); pg.wait_for_timeout(1500); more()
     ok(not [x for x in E(BELL) if "not recording" in x["text"]], "bridges before 2.1.9: no alert")
-    E("() => navHome('tally')"); pg.wait_for_timeout(1500)
+    E("() => navHome('tally')"); pg.wait_for_timeout(1500); more()
     ok(pg.locator("#app [data-recorder-co], #app [data-recorder-off], #app [data-recorder-silent]").count() == 0, "bridges before 2.1.9: nothing on the Tally page")
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()

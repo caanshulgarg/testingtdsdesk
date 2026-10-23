@@ -55,14 +55,15 @@ func TestR222eDecisionLog(t *testing.T) {
 	if n := logLines("): not asked: a posting is going on; asked after it"); n != 1 {
 		t.Fatalf("the posting reason said %d times", n)
 	}
-	// the body fetch off
-	liveTurnOff("bodies", nwsCo+"|"+nwsGUID, nwsCo, 3.4)
+	// 2.3.1: waiting for the retry schedule (never a switch-off): said in the decision log too; 2.3.3: the line goes up held
+	// at once with the words
+	retryNote(f.port, vchObjectID, errRecorderStop)
 	uploadAll(t)
-	if !strings.Contains(r222eLog(), "): not asked: the body fetch is off for this company (Tally took 3.4 s") {
-		t.Fatalf("the switch-off not in the log:\n%s", r222eLog())
+	if !strings.Contains(r222eLog(), "): held at once: waiting: Tally busy; FinCom asks again at ") {
+		t.Fatalf("the wait not in the log:\n%s", r222eLog())
 	}
 	// the resolver's turn: one line
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it back on
+	retryDue()
 	applyHeldLines(M{"heldLines": []any{r222cRow("st-1", "altered", "26312", "Receipt", "192", "20261005")}})
 	liveUploadOnce()
 	if logLines("Recorder: held lines: ") < 1 || !strings.Contains(r222eLog(), " from FinCom, ") || !strings.Contains(r222eLog(), " asked, ") || !strings.Contains(r222eLog(), " resolved, ") ||
@@ -74,8 +75,9 @@ func TestR222eDecisionLog(t *testing.T) {
 // no starting point: said, never silent
 func TestR222eNoStartPointSaid(t *testing.T) {
 	rec, f, _ := liveBridge(t, "")
-	v := f.add(today(), "Party", "N-1", "x", "-1.00")
-	liveAppend(t, liveFilePath(rec, ""), liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "N-1", today(), "", "", "x"))
+	td := today() // read once: the voucher and its live line on the same day
+	v := f.add(td, "Party", "N-1", "x", "-1.00")
+	liveAppend(t, liveFilePath(rec, ""), liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "N-1", td, "", "", "x"))
 	readAndUploadAll(t)
 	if !strings.Contains(r222eLog(), "): not asked: no starting point recorded for this company") {
 		t.Fatalf("not said:\n%s", r222eLog())

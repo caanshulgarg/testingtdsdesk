@@ -61,12 +61,14 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8293/"); pg.wait_for_timeout(2500)
     pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
+    # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
+    more = lambda: (pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500))
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     TT = lambda d: '#app [data-computer="%s"] [data-trial-tools]' % d
     SW = lambda d: TT(d) + " [data-trial-tools-switch]"
     side = pg.locator('#side button[aria-label="Tally"]')
     def page(role):
-        E(SETUP, [DEVS, [], [], role]); pg.wait_for_timeout(500); side.first.click(); pg.wait_for_timeout(1500)
+        E(SETUP, [DEVS, [], [], role]); pg.wait_for_timeout(500); side.first.click(); pg.wait_for_timeout(1500); more()
     page("owner")
     ok(pg.locator("#app [data-computer]").count() == 2, "two computers on the Tally page")
     t1, t2 = txt(TT(D1)), txt(TT(D2))
@@ -92,7 +94,7 @@ with sync_playwright() as p:
     # the column missing (migration 46 not run): words, no switch; the rest of the page as before
     page("owner")
     E("""() => { window.__api0 = Cloud.api; Cloud.api = async (path) => { if (/^tally_devices/.test(path) && /trial_tools/.test(path)) throw new Error("column tally_devices.trial_tools does not exist (42703)"); return window.__api0(path); }; TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.busy = ''; }""")
-    side.first.click(); pg.wait_for_timeout(300); E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
+    side.first.click(); pg.wait_for_timeout(300); E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200); more()
     ok(pg.locator("#app [data-computer]").count() == 2 and "not available until migration 46 runs" in txt(TT(D1)) and pg.locator(SW(D1)).count() == 0,
        "without the column: two computers still, 'not available until migration 46 runs', no switch (%s)" % txt(TT(D1)))
     # guard (a): the read test (Tally page -> Details -> Check my Tally -> Test reading entries) is the owner's only
@@ -101,7 +103,8 @@ with sync_playwright() as p:
         page(role)
         E("""() => { Bridge.up = () => true; Bridge.on = () => true; Bridge.blocked = () => false; const c0 = Bridge.cfg(); Bridge.cfg = () => Object.assign({}, c0, {key: 'k'}); Bridge.st = Object.assign(Bridge.st || {}, {state: 'ok', tallyUp: true, open: [{name: 'GARG SHEKHAR & COMPANY'}], sessions: []});
           window.__bc = []; Bridge.call = async (u) => { window.__bc.push(u); return {tests: []}; }; render(); }"""); pg.wait_for_timeout(300)
-        if pg.locator("#app [data-bridge-details]").count(): pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
+        # 2.3.5: Details is the page's More (it may be open already: it stays open while FinCom is)
+        if pg.locator("#app [data-bridge-details]").count() and not pg.locator("#app [data-bridge-more]").count(): pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
     details("owner")
     ok(pg.locator(RT).count() >= 1 and "Test reading entries" in txt(RT), "owner: 'Test reading entries' under Details (%d)" % pg.locator(RT).count())
     details("staff")

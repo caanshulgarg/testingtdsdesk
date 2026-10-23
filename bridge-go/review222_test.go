@@ -65,7 +65,7 @@ func TestR222DuplicatedVoucherPair(t *testing.T) {
 	if strings.Contains(jsonText(s), "51986") {
 		t.Fatalf("the source's AlterID went: %s", jsonText(s))
 	}
-	if f.n(vchByMasterID) != 1 || !strings.Contains(f.bodiesOf(vchByMasterID)[0], "$MasterID = 25683") || f.n(vchByNumberID) != 0 {
+	if f.n(vchObjectID) != 1 || !strings.Contains(f.bodiesOf(vchObjectID)[0], "ID:25683</ID>") || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }
@@ -73,7 +73,13 @@ func TestR222DuplicatedVoucherPair(t *testing.T) {
 // --- 2. a line whose GUID is not its MasterID in hex (a delete, nothing to fetch): its GUID only as lineGuid, flagged;
 // a line whose GUID and MasterID agree goes as before
 func TestR222MismatchFlag(t *testing.T) {
-	p, _, c := nwsBridge(t, "")
+	p, f, c := nwsBridge(t, "")
+	// review H1 of 2.3.0: 191 deleted in this Tally (a delete goes on only when this Tally shows it gone)
+	for _, v := range append([]*tVch{}, f.vch...) {
+		if v.master == "26311" {
+			f.remove(v)
+		}
+	}
 	liveAppend(t, p,
 		r222Line("after_delete", "08:10", r222GUID(25414), "25683", "51986", "Journal", "J-55", "5-Oct-2026", "x"),
 		r222Line("after_delete", "08:11", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "y"))
@@ -137,65 +143,58 @@ func TestR222UnnumberedJournalByMaster(t *testing.T) {
 	}
 }
 
-// --- 5. the MasterID gives another voucher: the fallback by type, number and date finds the line's own
+// --- 5. the MasterID gives another voucher (a Payment, not this Journal): 2.3.4 (the independent review, L5) held for
+// good, never asked by its type, number and date (a scan of the company); Tally's own voucher J-77 is not taken. 2.4.1
+// (review M1 of next-241): kept so, another type, date or number is never asked by its number
 func TestR222FallbackByNumber(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20)) // the background read waits its turn behind the company lookup (about 4 s here)
 	r222Vch(f, 25683, "Payment", "P-4", "20261005", 54502)
-	nv := r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
+	r222Vch(f, 25800, "Journal", "J-77", "20261005", 54520)
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "08:40", nwsGUID+"-00000000", "0", "0", "Journal", "J-77", "5-Oct-2026", "j77"),
 		r222Line("voucher_accept_post", "08:40", nwsGUID+"-00000000", "25683", "0", "Journal", "J-77", "5-Oct-2026", "j77"))
 	readAndUploadAll(t)
 	sent := c.recSent()
-	if len(sent) != 1 || str(sent[0]["object_guid"]) != nv.guid || str(sent[0]["master_id"]) != "25800" || toI64(sent[0]["alter_id"]) != 54520 ||
-		!strings.Contains(str(sent[0]["xml"]), "<VOUCHERNUMBER>J-77</VOUCHERNUMBER>") {
-		t.Fatalf("by number: %v", sent)
+	if len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.Contains(str(sent[0]["heldWhy"]), "is a Payment of 05-Oct-2026, not this Journal") {
+		t.Fatalf("held: %v", sent)
 	}
-	if f.n(vchByMasterID) != 1 || f.n(vchByNumberID) != 1 {
+	if f.n(vchObjectID) != 1 || f.n(vchByNumberID) != 0 {
 		t.Fatalf("requests: %v", f.ids())
 	}
 }
 
-// --- 6. a held entry is asked again 20 times at most, then left held with plain words (once in the log)
+// --- 6. (2.3.3, the owner's rule of 07-Oct-2026, replacing 2.2.2's 20 tries) a held entry is asked again ONCE: Tally
+// still not giving it, it ends with the Day Book words (sent as its ":resolved" line), never asked again
 func TestR222HeldTwentyTries(t *testing.T) {
 	p, f, c := nwsBridge(t, `,"RecorderResolveSec":0`)
 	liveAppend(t, p, r222Line("voucher_accept_pre", "08:50", nwsGUID+"-00000000", "0", "0", "Receipt", "900", "5-Oct-2026", "never"))
 	liveFlushAll()
 	readAndUploadAll(t)
-	if len(c.recSent()) != 1 {
-		t.Fatalf("held: %v", c.recSent())
-	}
 	for i := 0; i < 30; i++ {
 		liveUploadOnce()
 	}
-	// 3 asks before it went held (2.2.1), then 20 by the held list
-	if got := f.n(vchByNumberID) - 3; got != 20 {
-		t.Fatalf("the held entry was asked %d times again, want 20", got)
+	// its first ask, then the one ask again
+	if got := f.n(vchByNumberID); got != 2 {
+		t.Fatalf("the held entry was asked %d times in all, want 2", got)
 	}
-	const why = "Tally did not give this entry after 20 tries; upload that day's Day Book to settle it"
-	if logLines(why) != 1 {
-		t.Fatalf("the words in the log %d times", logLines(why))
+	s := c.recSent()
+	if len(s) != 2 || str(s[1]["line_id"]) != str(s[0]["line_id"])+":resolved" || str(s[1]["heldWhy"]) != liveHeldOnceGiveUp {
+		t.Fatalf("held, then ended: %v", s)
 	}
-	_, items := liveHeldLoad()
-	if len(items) != 1 {
+	if _, items := liveHeldLoad(); len(items) != 0 {
 		t.Fatalf("held list: %v", items)
-	}
-	for _, h := range items {
-		if h.Why != why || h.Tries != 20 {
-			t.Fatalf("the held entry: %+v", h)
-		}
 	}
 }
 
 // --- 7. a HARD 2 s stop for the recorder's background reads (the entry fetch here): the bridge stops waiting at 2 s and
-// the switch-off applies; a posting (Import) is never cut by it
+// (2.3.1) tries again by itself on the shared schedule; a posting (Import) is never cut by it
 func TestR222HardTwoSecondStop(t *testing.T) {
 	p, f, c := nwsBridge(t, "")
 	setCfg("RecorderBodySec", float64(20))
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 5 * time.Second
 		}
 		return 0
@@ -211,13 +210,23 @@ func TestR222HardTwoSecondStop(t *testing.T) {
 	if el := time.Since(t0); el > 7500*time.Millisecond {
 		t.Fatalf("the recorder read took %s (a hard stop at 2 s)", el)
 	}
-	if logLines("The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s)") != 1 {
-		t.Fatalf("the switch-off: %s", readText(logFile()))
+	// 2.3.1 (the owner's last change): never switched off; the line waits for the shared retry schedule (retry.go)
+	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
+		t.Fatalf("switched off, or the retry not said: %s", readText(logFile()))
 	}
-	if !liveIsOff("bodies", nwsCo+"|"+nwsGUID) {
-		t.Fatal("the body fetch was not switched off")
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): up held at once, asked once more 5 minutes later
+	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" || !strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally took longer than 2 s; FinCom asks once more at ") {
+		t.Fatalf("not held at once: %v", sent)
 	}
-	if sent := c.recSent(); len(sent) != 1 || str(sent[0]["xml"]) != "" {
+	// not asked again before those 5 minutes
+	for i := 0; i < 3; i++ {
+		retryDue()
+		uploadAll(t)
+	}
+	if n := f.n(vchObjectID); n != 1 {
+		t.Fatalf("asked %d times (its fetch only)", n)
+	}
+	if sent := c.recSent(); len(sent) != 1 {
 		t.Fatalf("sent: %v", sent)
 	}
 }
@@ -258,15 +267,16 @@ func TestR222RecorderSeenDailyFiles(t *testing.T) {
 	if c := cur(); c["recorderSeen"] != false {
 		t.Fatalf("no file: %v", c)
 	}
-	_ = os.WriteFile(filepath.Join(rec, "co-guid-1-"+time.Now().Format("20060102")+".txt"), utf16leBOM(r18Line1+"\r\n"), 0o644)
+	day := time.Now().Format("20060102") // read once: a midnight between writing and removing the file must not leave it behind
+	_ = os.WriteFile(filepath.Join(rec, "co-guid-1-"+day+".txt"), utf16leBOM(r18Line1+"\r\n"), 0o644)
 	if c := cur(); c["recorderSeen"] != true || str(c["recorderLastAt"]) == "" {
 		t.Fatalf("a daily file: %v", c)
 	}
 	// another company's daily file is not this one's
 	f2 := filepath.Join(rec, "co-guid-1-20261005.txt")
-	_ = os.Remove(filepath.Join(rec, "co-guid-1-"+time.Now().Format("20060102")+".txt"))
+	_ = os.Remove(filepath.Join(rec, "co-guid-1-"+day+".txt"))
 	_ = os.Remove(f2)
-	_ = os.WriteFile(filepath.Join(rec, "co-guid-9-"+time.Now().Format("20060102")+".txt"), []byte("x"), 0o644)
+	_ = os.WriteFile(filepath.Join(rec, "co-guid-9-"+day+".txt"), []byte("x"), 0o644)
 	if c := cur(); c["recorderSeen"] != false {
 		t.Fatalf("another company's file: %v", c)
 	}

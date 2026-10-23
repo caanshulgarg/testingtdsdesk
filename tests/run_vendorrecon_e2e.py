@@ -63,7 +63,7 @@ try:
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:8135/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
-        pg.evaluate("""(k) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
+        pg.evaluate("""(k) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k}); /* FinCom 2.3.0 sends nothing to a bridge that has not proved itself; the PowerShell bridge 1.15.0 run here cannot, so this end-to-end test of posting takes it as proved */ Bridge.ensureProven = async () => true; 
           const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "invoices"; render(); }""".replace("@CO@", fake_tally.COMPANY).replace("@GSTIN@", fake_tally._bd.GSTIN), key)
         pg.evaluate("Bridge.refresh()"); pg.wait_for_timeout(1500)
         pg.evaluate("syncLedgersFromTally(true)"); pg.evaluate("render()"); pg.wait_for_timeout(300)

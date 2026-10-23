@@ -114,6 +114,20 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 				mid-40, mid, mid, mid)
 		}
 		sr.ledgers = sr.rows
+	case strings.Contains(body, "<TYPE>TDSRate</TYPE>"):
+		// 2.4.3: a big company's natures of payment (Tally's own list and a few of its own: 120), MasterIDs 1 to 120; a
+		// request reads the TDSRate masters alone, those of its MasterID span come back
+		var after, upto int64 = 0, 1 << 62
+		if m := reMidRange.FindStringSubmatch(body); m != nil {
+			after = toI64(m[1])
+			if m[2] != "" {
+				upto = toI64(m[2])
+			}
+		}
+		for mid := after + 1; mid <= upto && mid <= 120; mid++ {
+			sr.rows++
+			fmt.Fprintf(&out, `<TDSRATE NAME="Big Nature %03d"><GUID>big-nat-%d</GUID><MASTERID> %d</MASTERID><CATEGORYDETAILS.LIST><APPLICABLEFROM>20260401</APPLICABLEFROM><TDSRATESECTION>194C</TDSRATESECTION><EXEMPTIONLIMIT>30000.00</EXEMPTIONLIMIT></CATEGORYDETAILS.LIST></TDSRATE>`, mid, mid, mid)
+		}
 	case strings.Contains(body, "<TYPE>Group</TYPE>"):
 		sr.rows = 40
 		for i := 1; i <= 40; i++ {

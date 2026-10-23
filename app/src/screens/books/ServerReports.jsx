@@ -65,6 +65,23 @@ export function ServerTds({ b }) {
     <Src x={x} /></section>;
 }
 
+// review M1 of 2.4.0 part 2 (08-Oct-2026): the TDS details of Tally's entries, each rate in words (TDS.tallyRateWords): a
+// rate FinCom worked out where Tally stored 0 says so, a line Tally marked exempt says so, Tally's own rate stands alone
+export function TallyTdsLines({ b }) {
+  if (typeof TCloud !== "object" || !TCloud.on() || !TCloud.book(b.cid)) return null;
+  const x = TCloud.tdsLines(b.cid), rows = x.rows;
+  if (!rows) return x.missing || !x.err ? null : <section className="dash-card"><h3>TDS on Tally’s entries</h3><Wait x={x} what="the TDS details of Tally’s entries" /></section>;
+  if (!rows.length) return null;
+  const worked = rows.filter((r) => r.rate_worked_out).length, ex = rows.filter((r) => r.exempt).length;
+  const said = [worked ? worked + (worked === 1 ? " rate" : " rates") + " worked out by FinCom where Tally stored 0" : "", ex ? ex + " marked exempt in Tally (no rate worked out)" : ""].filter(Boolean);
+  return <section className="dash-card" data-tds-lines><h3>TDS on Tally’s entries</h3>
+    {said.length > 0 && <p className="note" data-tds-lines-note>{said.join("; ")}.</p>}
+    <div className="bk-tablewrap"><table className="bk-table" data-statement="" id="tallyTdsLines"><thead><tr><th className="dt">Date</th><th>Deductee</th><th>Nature of payment</th><th>Section</th><th className="n">Assessable</th><th>Rate</th><th className="n">TDS</th></tr></thead><tbody>
+      {rows.map((r) => <tr key={r.guid + ":" + r.line_no} data-rate-worked-out={r.rate_worked_out ? "" : undefined} data-tds-exempt={r.exempt ? "" : undefined}>
+        <td className="dt">{fmtDate(tallyDate(d8(r.day)))}</td><td>{r.party}</td><td>{r.nature}</td><td>{r.section}</td><td className="n">{m(r.assessable)}</td>
+        <td className={r.rate_worked_out || r.exempt ? "warn" : ""}>{TDS.tallyRateWords(r)}</td><td className="n">{m(r.amount)}</td></tr>)}</tbody></table></div></section>;
+}
+
 export function ServerGst({ b }) {
   const cid = b.cid, p = TCloud.fyOf(cid), x = TCloud.report("gst", cid, p.from, p.to), r = x.res;
   if (!r) return <section className="dash-card"><h3>GST, from the server</h3><Wait x={x} what="the GST summary" /></section>;

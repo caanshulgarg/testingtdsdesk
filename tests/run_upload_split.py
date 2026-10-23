@@ -18,7 +18,8 @@ time per piece is measured (the split's own work: decoding, cutting, building an
 of 1,000,003 bytes (an odd size: cuts inside UTF-8 characters, between UTF-16 code units and inside surrogate pairs): UTF-8
 without the BOM, UTF-16LE without the BOM, UTF-8 with the BOM - each equal to the browser split's; a file out of date order
 (entries of earlier days further on): the days met again are read again whole (a second pass over their byte ranges) and
-the LAST file queued for every day equals the browser's; (C) the same file uploaded twice through the real day path
+the LAST file queued for every day equals the browser's; (E, 2.4.4) a salary payment's bank details never queued, the
+uploaded file removed once its last piece is queued; (C) the same file uploaded twice through the real day path
 (tally_ingest_day on a throwaway PostgreSQL, pg_stand port 30484, staging's order to 46) doubles nothing: the entries, lines,
 versions and the ledger-day cache are the same after the second upload.
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
@@ -324,6 +325,7 @@ try:
     work_until_done(jm4, 60); FS.IGNORE_RANGE[0] = False
     ok(jrow(jm4).get("status") == "failed" and "byte range" in (jrow(jm4).get("message") or "") and all(n < len(big) // 2 for k_, n in FS.SENT[n_s:]),
        "M4. its pieces: never the whole object, the job stopped at once with words (%s: %s; %s)" % (jrow(jm4).get("status"), jrow(jm4).get("message"), [n for _, n in FS.SENT[n_s:]][:6]))
+    ok("tally-uploads/" + str(path) not in FS.FILES, "2.4.4 (review 244 R2-M2): the file of an upload stopped for good is not kept")
     # M5: one entry longer than the carried tail's cap: the job stops with words, no memory growth
     ok(start_fn(PIECE_B, TALLY_UPLOAD_MAX_TAIL="200000") is not None, "the cloud function again, the carried tail capped at 200,000 characters")
     tb = make_book(2 * 1024 * 1024, seed=25, tag="g"); k_ = tb.index("<NARRATION>", len(tb) // 2) + len("<NARRATION>")
@@ -341,6 +343,7 @@ try:
     rpc("tally_work_send", {"p_msg": {"job": jl2, "firm": FIRM, "book": BOOK, "upload": {"path": FIRM + "/other.xml", "size": len(small), "from": 0, "range": {"from": "20260401", "to": "20270331"}}}})
     work_until_done(jl2, 30)
     ok(jrow(jl2).get("status") == "failed" and not [x for x in FS.RANGES[n_r:] if x[0].endswith("/other.xml")], "L2. a piece whose path is not '<firm>/<job>.xml': not read, the job stopped with words (%s)" % jrow(jl2).get("message"))
+    ok("tally-uploads/%s/other.xml" % FIRM in FS.FILES, "L2. the other file is not removed either (only the job's own path ever is)")
     # L3: the job's book, not the client's company linked now
     c, r = call({"kind": "upload_new", "client": CID, "name": "l3.xml", "size": len(small), "from": "20260401", "to": "20270331"})
     jl3 = r.get("job"); FS.FILES["tally-uploads/" + str(r.get("path"))] = small
@@ -391,6 +394,36 @@ try:
     ok(job2 != job1 and work_until_done(job2) and jrow(job2).get("status") == "done", "C the same file again (a new job): done")
     s2 = snap()
     ok(s2 == s1, "C the same file twice doubles nothing: entries, lines, versions, days and the ledger-day cache identical (%s)" % s2)
+    # ---------------------------------------------------------------- (E) 2.4.4: a salary payment's bank details
+    print("== E. 2.4.4 (review 244 R2-M2): a Day Book with a salary payment's bank details (Tally's real 7.1 export)")
+    sal = gzip.open(os.path.join(HERE, "..", "bridge-go", "testdata", "payroll244", "7.1", "full-SAL-PAY-NOV.xml.gz")).read().decode("utf8")
+    vD = re.search(r"<VOUCHER\s[\s\S]*?</VOUCHER>", sal).group(0)
+    dataD = ("<ENVELOPE><BODY><DATA><TALLYMESSAGE>" + vD + "</TALLYMESSAGE></DATA></BODY></ENVELOPE>").encode("utf8")
+    bankW = ("<ACCOUNTNUMBER", "<IFSCODE", "<PAYMENTFAVOURING", "50100123456781", "HDFC0001001", "HDFC Bank Ltd")
+    ok(all(w in vD for w in bankW), "E the export carries every employee's account, IFSC, name in favour and bank")
+    c, r, c2, r2, jobD, pathD = upload("e.xml", dataD, ("20261201", "20261231"))
+    ok(work_until_done(jobD) and jrow(jobD).get("status") == "done", "E the upload: done (%s)" % jrow(jobD).get("status"))
+    qd = [gzip.decompress(base64.b64decode(d["gz"])).decode("utf8") for x in FS.QUEUE if (x["message"] or {}).get("job") == jobD and isinstance((x["message"] or {}).get("days"), list) for d in x["message"]["days"]]
+    qall = json.dumps([x["message"] for x in FS.QUEUE if (x["message"] or {}).get("job") == jobD])
+    ok(any("<BANKEMPLOYEENAME" in t for t in qd) and not any(w in t for t in qd for w in bankW) and not any(w in qall for w in bankW[3:]),
+       "E the day queued keeps the employee and amount, never the account, IFSC, name in favour or the employee's bank (nor any piece's message)")
+    ok("tally-uploads/" + str(pathD) not in FS.FILES and "tally-uploads/" + str(pathD) in FS.REMOVED, "E the uploaded file is removed once its last piece is queued")
+    # review 244 R3-L1: the salary payment cut by a piece's end (its first part carried in the next piece's message, which
+    # the queue's archive keeps): no bank details in any message
+    pad = " " * (PIECE_B - 20000)
+    dataE2 = ("<ENVELOPE><BODY><DATA>" + pad + "<TALLYMESSAGE>" + vD + "</TALLYMESSAGE></DATA></BODY></ENVELOPE>").encode("utf8")
+    c, r, c2, r2, jobE2, pathE2 = upload("e2.xml", dataE2, ("20261201", "20261231"))
+    ok(work_until_done(jobE2) and jrow(jobE2).get("status") == "done", "E2 a salary payment across a piece's end: done (%s)" % jrow(jobE2).get("status"))
+    msgs = [x["message"] for x in FS.QUEUE if (x["message"] or {}).get("job") == jobE2]
+    carried = [m for m in msgs if isinstance(m.get("upload"), dict) and "<VOUCHER" in str(m["upload"].get("tail", ""))]
+    qe2 = [gzip.decompress(base64.b64decode(d["gz"])).decode("utf8") for m in msgs if isinstance(m.get("days"), list) for d in m["days"]]
+    ok(carried and not any(w in json.dumps(msgs) for w in bankW[3:]) and any("<BANKEMPLOYEENAME" in t for t in qe2) and not any(w in t for t in qe2 for w in bankW),
+       "E2 the cut voucher carried into the next piece and the day queued: no account, IFSC or bank in any message (%d carried)" % len(carried))
+    # review 244 R3-M1: a stored file of another size is not read and not kept
+    c, r = call({"kind": "upload_new", "client": CID, "name": "e3.xml", "size": len(dataD) + 5, "from": "20261201", "to": "20261231"})
+    FS.FILES["tally-uploads/" + str(r.get("path"))] = dataD
+    c3, r3 = call({"kind": "upload_done", "client": CID, "job": r.get("job"), "path": r.get("path")})
+    ok(c3 == 409 and "tally-uploads/" + str(r.get("path")) not in FS.FILES, "E3 a stored file of another size: refused (409) and not kept (%s)" % c3)
     print("\n  piece times (the split's own work per piece, ms):")
     for tag, pt in pieces_ms:
         if pt: print("    %-45s %3d pieces  max %6.0f ms  mean %6.0f ms  largest piece %.2f MB" % (tag, len(pt), max(ms for _, ms in pt), sum(ms for _, ms in pt) / len(pt), max(b for b, _ in pt) / 1048576))

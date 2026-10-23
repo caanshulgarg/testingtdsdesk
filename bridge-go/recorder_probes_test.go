@@ -231,28 +231,23 @@ func TestSourceCOffAfterSlowAnswer(t *testing.T) {
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
 	_, _ = liveSourceC(zz, f.port)
-	// 2.2.2: the hard stop at 2 s (the bridge stops waiting then, not at 2.5 s); the switch-off applies as before
-	if logLines("Source C off: Tally took 2.0 s for the month slice (limit 2 s)") != 1 {
+	// 2.2.2: the hard stop at 2 s (the bridge stops waiting then, not at 2.5 s); 2.3.1: never switched off, asked again by
+	// itself on the shared retry schedule (retry.go)
+	if logLines("off: Tally took") != 0 || logLines("(FinComSlice, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceC"])[zz]); st["off"] != true || num(st["seconds"]) < 1.9 {
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceC"]); len(st) != 0 {
 		t.Fatalf("the beat: %v", st)
 	}
 	liveResetState() // a restart (the setting stays)
 	laterBy(t, 10*time.Minute)
 	f.mu.Lock()
 	f.add(today(), fgParty, "SC-6", "this month", "-1.00")
-	f.mu.Unlock()
-	_, _ = companyCheck(fin, zz, f.port)
-	if n, _ := liveSourceC(zz, f.port); n != 0 || f.n(sliceID) != 1 {
-		t.Fatal("source C asked again after it turned off")
-	}
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner's switch
-	f.mu.Lock()
 	f.slow = nil
 	f.mu.Unlock()
+	_, _ = companyCheck(fin, zz, f.port)
 	if n, err := liveSourceC(zz, f.port); err != nil || n == 0 || f.n(sliceID) != 2 {
-		t.Fatalf("after the owner's switch: %d %v", n, err)
+		t.Fatalf("source C not asked again by itself: %d %v", n, err)
 	}
 }
 
@@ -332,7 +327,7 @@ func TestSourceCDatedGuardException(t *testing.T) {
 		}
 	}
 	for id, x := range allowListSamples() {
-		if id == sliceID || id == vchByMasterID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
+		if id == sliceID || id == vchObjectID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
 			continue
 		}
 		if datedRefused(fin, x) == nil {
@@ -341,16 +336,16 @@ func TestSourceCDatedGuardException(t *testing.T) {
 	}
 }
 
-// --- the 2 s switch-off on the body fetch too
+// --- the 2 s stop on the body fetch too (2.3.1: never a switch-off)
 func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
-	rec, f, c := liveBridge(t, `,"RecorderBodySec":5`)
+	rec, f, c := liveBridge(t, `,"RecorderBodySec":5,"RecorderFreshRetryMs":0`) // 2.3.3: the held line's one ask at the next try
 	td := today()
 	f.alter = 10
 	noteStartPoint(zz, b220CoGUID, 5, 1) // 2.2.2: nothing is taken without a starting point
 	v := f.add(td, "Party S", "PS-1", "slow", "-1.00")
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 2500 * time.Millisecond
 		}
 		return 0
@@ -360,18 +355,29 @@ func TestBodyFetchOffAfterSlowAnswer(t *testing.T) {
 	liveAppend(t, p, liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "1", "Journal", "PS-1", td, "", "", "slow"))
 	liveReadOnce()
 	uploadAll(t)
-	// 2.2.2: the hard stop at 2 s
-	if logLines("The body fetch off: Tally took 2.0 s for the entry bodies (limit 2 s)") != 1 {
+	// 2.2.2: the hard stop at 2 s; 2.3.1: never switched off, the line waits for the retry schedule (retry.go)
+	if logLines("off: Tally took") != 0 || logLines("(FinComVoucherObject, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"])[zz]); st["off"] != true {
-		t.Fatalf("the beat: %v", st)
+	// 2.3.4 (the owner's answer B, 08-Oct-2026): the line goes up held at once, asked once more 5 minutes later
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderBodyFetch"]); len(st) != 0 || len(c.recSent()) != 1 || !strings.HasPrefix(str(c.recSent()[0]["heldWhy"]), "waiting: Tally took longer than 2 s; FinCom asks once more at ") {
+		t.Fatalf("the beat: %v; sent %v", st, c.recSent())
 	}
+	// Tally answers in time at the next try: both lines go with their body
+	f.mu.Lock()
+	f.slow = nil
+	f.mu.Unlock()
 	liveAppend(t, p, liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "2", "Journal", "PS-1", td, "", "", "slow 2"))
 	liveReadOnce()
+	retryDue()
 	uploadAll(t)
-	if f.n(vchByMasterID) != 1 || len(c.recSent()) != 2 || str(c.recSent()[1]["xml"]) != "" {
-		t.Fatalf("the body asked again after it turned off: %d", f.n(vchByMasterID))
+	// the second line with its body; the first waits for its one more ask (2.3.4, answer B: 5 minutes on)
+	s := c.recSent()
+	if len(s) != 2 || str(s[1]["xml"]) == "" || strings.HasSuffix(str(s[1]["line_id"]), ":resolved") {
+		for _, x := range s {
+			t.Logf("%s xml=%d why=%s", str(x["line_id"]), len(str(x["xml"])), str(x["heldWhy"]))
+		}
+		t.Fatalf("not sent with their bodies at the retry: %d", len(s))
 	}
 }
 

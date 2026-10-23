@@ -1,13 +1,12 @@
-// The self-watch (plan item 10) and the read stop (items 10 and 11). Every request to Tally is timed here (from
-// invokeTally): the heartbeat carries today's count, the last and the longest request and how many took over 20 s. A
-// request over SelfStopSec (20 s), or Tally not answering for over SelfStopSilenceSec (2 minutes), stops all reading on
-// this computer: the background reads, Update now, the ledger lists, the catch-up and FinCom's reads are refused before
-// anything is sent. Postings go on (the company list and check, the duplicate and FinCom id checks, the import, the
-// small check after a timeout). The stop is kept in the settings (ReadStop), so a restart keeps it.
+// The self-watch (plan item 10) and the read stop (item 11). Every request to Tally is timed here (from invokeTally): the
+// heartbeat carries today's count, the last and the longest request and how many took over 20 s.
 //
-// Who stops and who resumes: a stop by the bridge itself ("self") is cleared only by the tray's "Resume reading" or by
-// FinCom's resume (the heartbeat's answer readResume: true). A stop from FinCom ("fincom", the heartbeat's answer
-// readStop) lifts when FinCom's answer no longer carries one (readStop: null), or from the tray.
+// 2.3.1 (the owner's last change, 06-Oct-2026): "A slow or unanswered request never switches reading off." The bridge no
+// longer stops reading by itself (2.3.0 stopped all reading after a request over 20 s, or Tally silent for 2 minutes, kept
+// until resumed): a request over 20 s is counted for the beat, and the background requests try again by themselves on the
+// shared schedule (retry.go). A stop by itself saved by a 2.3.0 bridge is ignored and cleared at start (clearOldSwitchOffs).
+// The owner's stop from FinCom is as before: the heartbeat's answer readStop stops reading on this computer (postings go
+// on), and it lifts when FinCom's answer no longer carries one (readStop: null) or FinCom resumes (readResume: true).
 package main
 
 import (
@@ -19,8 +18,7 @@ import (
 	"time"
 )
 
-func selfStopSec() int        { return keepNum("SelfStopSec", 20) }
-func selfStopSilenceSec() int { return keepNum("SelfStopSilenceSec", 120) }
+func selfStopSec() int { return keepNum("SelfStopSec", 20) }
 
 // requests of the measuring tool over the limit (they do not stop reading; the report says so)
 var measureOver atomic.Int32
@@ -74,62 +72,13 @@ func noteRequest(x string, d time.Duration, fail string) {
 	}
 	swMu.Unlock()
 	if over && measuring.Load() > 0 {
-		// the measuring tool hits the limit on purpose (a ledger that hangs Tally): said in its report, reading goes on
+		// the measuring tool hits the limit on purpose (a ledger that hangs Tally): said in its report
 		measureOver.Add(1)
-		writeLog(fmt.Sprintf("Measure Tally: a request (%s) took %.1f s, more than %d s; reading was not stopped (the measuring tool is running)", kind, d.Seconds(), selfStopSec()))
+		writeLog(fmt.Sprintf("Measure Tally: a request (%s) took %.1f s, more than %d s (the measuring tool is running)", kind, d.Seconds(), selfStopSec()))
 	} else if over {
-		setReadStop("self", fmt.Sprintf("a request to Tally (%s) took %.1f s, more than %d s", kind, d.Seconds(), selfStopSec()))
+		// 2.3.1: counted for the beat (over20) and said; reading is never stopped for it
+		writeLog(fmt.Sprintf("Tally: a request (%s) took %.1f s, more than %d s; reading goes on (the background requests try again by themselves when one is not answered in time)", kind, d.Seconds(), selfStopSec()))
 	}
-}
-
-// --- silence: Tally took requests and answered none of them (the small check included) for over two minutes while they
-// were being sent. Kept in memory from this bridge's own requests (an old "not answering" file left from before is not
-// silence), and measured between the first request not answered and the latest one: one failure followed by idle time
-// is not silence
-var (
-	silMu    sync.Mutex
-	silFirst time.Time // the first request not answered since Tally last answered
-	silLast  time.Time // the latest request not answered
-)
-
-func resetSilence() {
-	silMu.Lock()
-	silFirst, silLast = time.Time{}, time.Time{}
-	silMu.Unlock()
-}
-
-// a request sent to Tally: answered (err nil), or not (a timeout, an answer cut off); other errors say nothing
-func noteSilence(err error) {
-	if err != nil && !tallyNoAnswer(err) {
-		return
-	}
-	silMu.Lock()
-	if err == nil {
-		silFirst, silLast = time.Time{}, time.Time{}
-	} else {
-		if silFirst.IsZero() {
-			silFirst = nowFn()
-		}
-		silLast = nowFn()
-	}
-	silMu.Unlock()
-	if err != nil {
-		selfWatchTick()
-	}
-}
-
-// Tally silent for over SelfStopSilenceSec while being asked: reading stops (also called from the heartbeat loop)
-func selfWatchTick() {
-	silMu.Lock()
-	first, last := silFirst, silLast
-	silMu.Unlock()
-	if first.IsZero() || last.Sub(first) <= time.Duration(selfStopSilenceSec())*time.Second {
-		return
-	}
-	if measuring.Load() > 0 {
-		return // the measuring tool waits for Tally on purpose (measure.go); its report says what happened
-	}
-	setReadStop("self", fmt.Sprintf("Tally has not answered since %s (over %d minutes of requests not answered)", first.Format("15:04"), selfStopSilenceSec()/60))
 }
 
 // the heartbeat's reqs: {day, last: {kind, ms, at}, longest: {kind, ms, at}, over20, n}
@@ -152,13 +101,41 @@ func noteM(n *reqNote) any {
 // --- the read stop, kept in the settings
 var rsMu sync.Mutex
 
-// {by: "self"|"fincom", reason, at}, or nil when reading goes on
+// {by: "fincom", reason, at}, or nil when reading goes on. 2.3.1: a stop by the bridge itself ("self", saved by 2.3.0) is
+// no stop: it is ignored here and cleared at start (clearOldSwitchOffs)
 func readStop() M {
 	o := obj(cfg("ReadStop"))
-	if o == nil || str(o["by"]) == "" {
+	if o == nil || str(o["by"]) == "" || str(o["by"]) == "self" {
 		return nil
 	}
 	return o
+}
+
+// 2.3.1, at start: a stop of reading by the bridge itself and the 2-second rule's switch-offs that a 2.3.0 bridge saved
+// (the settings' ReadStop, the recorder's offsets file) are cleared, each said once in the log. The owner's stop from
+// FinCom is kept
+func clearOldSwitchOffs() {
+	rsMu.Lock()
+	o := obj(cfg("ReadStop"))
+	if o != nil && str(o["by"]) == "self" {
+		setCfg("ReadStop", nil)
+		saveConfig()
+		rsMu.Unlock()
+		writeLog("Reading from Tally: a stop saved by an earlier bridge (by itself, " + strings.Replace(str(o["at"]), "T", " ", 1) + ": " + str(o["reason"]) +
+			") is cleared; this bridge never stops reading by itself (a request not answered in time is tried again by itself)")
+	} else {
+		rsMu.Unlock()
+	}
+	live.mu.Lock()
+	liveFresh()
+	n := len(live.offWas)
+	drop := live.offDrop
+	live.offDrop = false
+	live.mu.Unlock()
+	if drop {
+		writeLog(fmt.Sprintf("Recorder: %d switch-off(s) saved by an earlier bridge (the 2-second rule: the entry fetch, a source or the ledger changes off for a company) cleared; nothing is switched off now (a request not answered in time is tried again by itself)", n))
+		liveSaveOffsets()
+	}
 }
 func readStopped() bool { return readStop() != nil }
 
@@ -170,7 +147,7 @@ func readStopAny() any {
 	return nil
 }
 
-// stop reading. A stop by the bridge itself is not replaced by FinCom's (it needs the tray or FinCom's resume)
+// stop reading (FinCom's stop: by "fincom")
 func setReadStop(by, reason string) { setReadStopAt(by, reason, "") }
 
 func setReadStopAt(by, reason, at string) {
@@ -179,51 +156,38 @@ func setReadStopAt(by, reason, at string) {
 	}
 	rsMu.Lock()
 	cur := readStop()
-	if cur != nil && (str(cur["by"]) == "self" || (str(cur["by"]) == by && str(cur["reason"]) == reason)) {
+	if cur != nil && str(cur["by"]) == by && str(cur["reason"]) == reason {
 		rsMu.Unlock()
 		return
 	}
 	setCfg("ReadStop", M{"by": by, "reason": reason, "at": at})
 	saveConfig()
 	rsMu.Unlock()
-	who := map[string]string{"self": "by the bridge itself", "fincom": "from FinCom"}[by]
-	again := "from the tray icon (Resume reading) or from FinCom"
-	if by == "fincom" {
-		again = "from FinCom"
-	}
-	writeLog("Reading from Tally stopped on this computer " + who + ": " + reason + ". Postings still go; reading starts again only " + again)
+	writeLog("Reading from Tally stopped on this computer from FinCom: " + reason + ". Postings still go; reading starts again only from FinCom")
 }
 
-// clear the stop: how = "tray" (the bridge's own stop only: a stop made from FinCom is lifted in FinCom),
-// "fincom-resume" (any stop), "fincom-lifted" (FinCom's own stop only)
+// clear FinCom's stop: how = "fincom-resume" or "fincom-lifted" (FinCom's resume, or its answer without a stop)
 func clearReadStop(how string) bool {
 	rsMu.Lock()
 	cur := readStop()
-	if cur == nil || (how == "fincom-lifted" && str(cur["by"]) != "fincom") || (how == "tray" && str(cur["by"]) != "self") {
+	if cur == nil {
 		rsMu.Unlock()
 		return false
 	}
 	setCfg("ReadStop", nil)
 	saveConfig()
 	rsMu.Unlock()
-	switch how {
-	case "tray":
-		writeLog("Reading from Tally resumed from the tray icon (it was stopped: " + str(cur["reason"]) + ")")
-	default:
-		writeLog("Reading from Tally resumed from FinCom (it was stopped: " + str(cur["reason"]) + ")")
-	}
+	writeLog("Reading from Tally resumed from FinCom (it was stopped: " + str(cur["reason"]) + ")")
 	return true
 }
 
-// the tray's "Resume reading": a stop by the bridge itself only; a stop made from FinCom stays until FinCom lifts it
+// the tray's "Resume reading": 2.3.1 has no stop of its own to resume (never a manual resume); a stop made from FinCom
+// stays until FinCom lifts it
 func trayResumeReading() (M, error) {
-	if !clearReadStop("tray") {
-		if st := readStop(); st != nil && str(st["by"]) == "fincom" {
-			return M{"ok": true, "resumed": false, "byFinCom": true}, nil
-		}
-		return M{"ok": true, "resumed": false}, nil
+	if st := readStop(); st != nil && str(st["by"]) == "fincom" {
+		return M{"ok": true, "resumed": false, "byFinCom": true}, nil
 	}
-	return M{"ok": true, "resumed": true}, nil
+	return M{"ok": true, "resumed": false}, nil
 }
 
 // the requests that go on while reading is stopped: what a posting needs
@@ -243,12 +207,8 @@ func readStopRefuses(x string) error {
 	if st == nil || readStopExempt(tallyRequestID(x)) {
 		return nil
 	}
-	who, again := "by the bridge itself", "the tray icon (Resume reading) or FinCom"
-	if str(st["by"]) == "fincom" {
-		who, again = "from FinCom", "FinCom (Resume reading for this computer)"
-	}
-	return fmt.Errorf("%w on this computer %s (%s, %s); nothing was sent to Tally. Postings still go. Resume from %s",
-		errReadStopped, who, str(st["reason"]), strings.Replace(str(st["at"]), "T", " ", 1), again)
+	return fmt.Errorf("%w on this computer from FinCom (%s, %s); nothing was sent to Tally. Postings still go. Resume from FinCom (Resume reading for this computer)",
+		errReadStopped, str(st["reason"]), strings.Replace(str(st["at"]), "T", " ", 1))
 }
 
 // a read asked of this bridge (FinCom's, or the measuring tool's): refused at once while reading is stopped, before even
@@ -260,9 +220,8 @@ func readsAllowed() error {
 	return readStopRefuses("<ENVELOPE><HEADER><ID>read</ID></HEADER></ENVELOPE>")
 }
 
-// the heartbeat's answer (plan item 11): readResume: true clears any stop (the only way FinCom clears the bridge's own);
-// readStop: {by, reason, at} stops reading from FinCom; readStop: null lifts FinCom's own stop only. An answer without
-// these fields (an older cloud) changes nothing
+// the heartbeat's answer (plan item 11): readResume: true clears FinCom's stop; readStop: {by, reason, at} stops reading
+// from FinCom; readStop: null lifts it. An answer without these fields (an older cloud) changes nothing
 func applyReadControl(j M) {
 	if j == nil {
 		return

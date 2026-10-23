@@ -28,7 +28,27 @@ type tVch struct {
 	guid, master, date, typ, no, narr, party string
 	alter                                    int64
 	lines                                    [][2]string
+	cancelled                                bool   // review H1 (2.3.0): this Tally answers ISCANCELLED Yes for it
+	extra                                    string // 2.3.4 review: more of the voucher as Tally holds it (fields outside the approved list, other lists)
+	bank                                     string // next-bankdate: the bank date set in Bank Reconciliation (BANKALLOCATIONS.BANKERSDATE on its "Bank" line)
 }
+
+// next-bankdate: the bank allocation Tally keeps on the "Bank" line once a bank date is set (yyyymmdd)
+func (v *tVch) bankAlloc(name string) string {
+	if v.bank == "" || name != "Bank" {
+		return ""
+	}
+	return "<BANKALLOCATIONS.LIST>" + standField("DATE", "Date", v.date) + standField("TRANSACTIONTYPE", "String", "Cheque") + standField("BANKERSDATE", "Date", v.bank) + "</BANKALLOCATIONS.LIST>"
+}
+
+// review H1 (2.3.0): ISCANCELLED as this stand Tally gives it
+func (v *tVch) isCancelled() string {
+	if v.cancelled {
+		return "Yes"
+	}
+	return "No"
+}
+
 type standTally struct {
 	srv       *httptest.Server
 	port      int
@@ -62,14 +82,37 @@ type standTally struct {
 	// 2.2.0: the Voucher collections of the date-form probe and source C: svIgnored, SVFROMDATE/SVTODATE are ignored
 	// (Tally's current period: every entry); filterDates, a TDL filter on $Date with $$Date literals is applied
 	svIgnored, filterDates bool
-	cnMode                 string // how the change numbers are given (the company check above)
+	cnMode                 string  // how the change numbers are given (the company check above)
+	nat                    []*tNat // 2.4.3: the natures of payment (FinComTdsNatures)
+	emp                    []*tEmp // 2.4.4: the cost centres (FinComEmployees), payroll's and others
+}
+
+// 2.4.4: a ledger's pay-head fields as the stand-in Tally writes them (nil: none)
+var payFieldsOf func(name string) string
+
+// a cost centre of the stand-in Tally (2.4.4: FinComEmployees); its fields as TallyPrime 7.1 writes them (run 38253610530)
+type tEmp struct {
+	guid, name, parent, category, pan, joined, left, desig string
+	payroll, group                                         bool
+	extra                                                  string // fields a request did not ask for (a real Tally writes LANGUAGENAME.LIST)
+	mid, alter                                             int64
 }
 
 // a ledger master of the stand-in Tally (its stored fields only)
 type tLed struct {
 	guid, name, parent, open, gstin, pan string
 	state                                string // LEDSTATENAME (round 11)
+	dtype                                string // TDSDEDUCTEETYPE (2.3.1): the party's deductee type, a ledger master field
 	mid, alter                           int64
+	// 2.4.3: the TDS settings, written when the request asks for them as a real Tally writes them
+	nature, special string // TDSRATENAME; the special rate ("" : TDSDEDUCTEEISSPECIALRATE No)
+	ldcXML          string // the LOWERDEDUCTION.LIST elements as Tally writes them
+}
+
+// a nature of payment of the stand-in Tally (2.4.3: FinComTdsNatures)
+type tNat struct {
+	guid, name, cats string // cats: the CATEGORYDETAILS.LIST elements as Tally writes them
+	mid, alter       int64
 }
 
 var reMidRange = regexp.MustCompile(`\$MasterID &gt; (\d+)(?: AND \$MasterID &lt;= (\d+))?`)
@@ -162,8 +205,13 @@ func standCollectionHead(ledgers, vouchers int) string {
 	}
 	var b strings.Builder
 	b.WriteString("<ENVELOPE>\r\n <HEADER>\r\n  <VERSION>1</VERSION>\r\n  <STATUS>1</STATUS>\r\n </HEADER>\r\n <BODY>\r\n  <DESC>\r\n   <CMPINFO>\r\n")
-	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 4},
-		{"TAXUNIT", 6}, {"VOUCHERNUMBERSERIES", 6}, {"VOUCHER", vouchers}} {
+	// 2.3.1 (2.2.4 review L7): every counter a real TallyPrime 7.1 writes, in its order (testdata/real-tally-7.1/vouchers-d.xml)
+	for _, c := range [][2]any{{"COMPANY", 0}, {"GROUP", 0}, {"LEDGER", ledgers}, {"COSTCATEGORY", 0}, {"COSTCENTRE", 0}, {"GODOWN", 0}, {"STOCKGROUP", 0},
+		{"STOCKCATEGORY", 0}, {"STOCKITEM", 0}, {"VOUCHERTYPE", 2}, {"CURRENCY", 8}, {"UNIT", 0}, {"BUDGET", 0}, {"CLIENTRULE", 0}, {"SERVERRULE", 0},
+		{"STATE", 0}, {"TDSRATE", 0}, {"TAXCLASSIFICATION", 0}, {"STCATEGORY", 0}, {"DEDUCTEETYPE", 0}, {"ATTENDANCETYPE", 0}, {"FBTCATEGORY", 0},
+		{"FBTASSESSEETYPE", 0}, {"TARIFFCLASSIFICATION", 0}, {"EXCISEDUTYCLASSIFICATION", 0}, {"SERIALNUMBER", 0}, {"ADJUSTMENTCLASSIFICATION", 0},
+		{"INCOMETAXSLAB", 0}, {"INCOMETAXCLASSIFICATION", 0}, {"LBTCLASSIFICATION", 0}, {"TAXUNIT", 12}, {"RETURNMASTER", 0}, {"GSTCLASSIFICATION", 0},
+		{"VOUCHERNUMBERSERIES", 14}, {"VOUCHER", vouchers}} {
 		fmt.Fprintf(&b, "    <%s>%v</%s>\r\n", c[0], c[1], c[0])
 	}
 	b.WriteString("   </CMPINFO>\r\n  </DESC>\r\n  <DATA>\r\n   <COLLECTION ISCMPDEPTYPE=\"Yes\" CMPLOCUS=\"4\" CMPDEPTYPE=\"64\">")
@@ -176,12 +224,12 @@ func (v *tVch) xml() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHTYPE="%s"><DATE>%s</DATE><GUID>%s</GUID><MASTERID>%s</MASTERID><ALTERID> %d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>`+
-		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>No</ISCANCELLED>`,
-		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr))
+		`<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>%s</NARRATION><ISOPTIONAL>No</ISOPTIONAL><ISCANCELLED>%s</ISCANCELLED>`,
+		v.guid, v.typ, v.date, v.guid, v.master, v.alter, v.typ, v.no, esc(v.party), esc(v.narr), v.isCancelled())
 	for _, l := range v.lines {
-		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT></ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1])
+		fmt.Fprintf(&b, `<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><AMOUNT>%s</AMOUNT>%s</ALLLEDGERENTRIES.LIST>`, esc(l[0]), l[1], v.bankAlloc(l[0]))
 	}
-	b.WriteString("</VOUCHER>")
+	b.WriteString(v.extra + "</VOUCHER>")
 	return b.String()
 }
 
@@ -192,15 +240,15 @@ func (v *tVch) xmlTyped() string {
 	fmt.Fprintf(&b, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4d8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View">`, v.guid, v.guid, v.typ)
 	for _, f := range []string{standField("DATE", "Date", v.date), "<GUID>" + v.guid + "</GUID>", standField("NARRATION", "String", esc(v.narr)), "<REQUESTORRULE/>",
 		"<VOUCHERTYPENAME>" + v.typ + "</VOUCHERTYPENAME>", standField("PARTYLEDGERNAME", "String", esc(v.party)), "<VOUCHERNUMBER>" + v.no + "</VOUCHERNUMBER>",
-		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", "No"),
+		standField("ISOPTIONAL", "Logical", "No"), standField("EFFECTIVEDATE", "Date", v.date), standField("ISCANCELLED", "Logical", v.isCancelled()),
 		standField("ALTERID", "Number", fmt.Sprint(v.alter)), standField("MASTERID", "Number", v.master), standField("VOUCHERKEY", "Number", "198839805935624")} {
 		b.WriteString(nl + f)
 	}
 	for _, l := range v.lines {
 		b.WriteString(nl + "<ALLLEDGERENTRIES.LIST>" + nl + " " + standField("LEDGERNAME", "String", esc(l[0])) + nl + " " + standField("ISDEEMEDPOSITIVE", "Logical", "No") +
-			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + nl + "</ALLLEDGERENTRIES.LIST>")
+			nl + " " + standField("AMOUNT", "Amount", l[1]) + nl + " <BILLALLOCATIONS.LIST>      </BILLALLOCATIONS.LIST>" + v.bankAlloc(l[0]) + nl + "</ALLLEDGERENTRIES.LIST>")
 	}
-	b.WriteString("\r\n    </VOUCHER>\r\n    ")
+	b.WriteString(v.extra + "\r\n    </VOUCHER>\r\n    ")
 	return b.String()
 }
 
@@ -231,6 +279,9 @@ func newStandTally(t *testing.T) *standTally {
 		}
 		if strings.Contains(body, "Import Data") {
 			id = "Import"
+		}
+		if oid, ok := objectRequestID(body); ok {
+			id = oid // next-fastfetch: the object export of one voucher
 		}
 		f.mu.Lock()
 		f.reqs = append(f.reqs, id)
@@ -299,7 +350,62 @@ func newStandTally(t *testing.T) *standTally {
 			}
 			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
 				standField("STARTINGFROM", "Date", "20260401"), standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
-		case "FinComLedgers":
+		case "FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName":
+			// 2.3.1 (masters): the ledgers with an AlterID in (after, upto], or the one ledger of that name, the same fields
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil && id == "FinComLedgers" {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			var aAfter, aUpto int64 = -1, -1
+			if m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)`).FindStringSubmatch(body); m != nil && id == "FinComLedgerChanges" {
+				aAfter, aUpto = toI64(m[1]), toI64(m[2])
+			}
+			byName := ""
+			if id == "FinComLedgerByName" {
+				byName = pinQuoted(body, "$Name")
+			}
+			for _, l := range f.led {
+				if id == "FinComLedgerChanges" && (aAfter < 0 || l.alter <= aAfter || l.alter > aUpto) {
+					continue
+				}
+				if id == "FinComLedgerByName" && !strings.EqualFold(l.name, byName) {
+					continue
+				}
+				if l.mid > after && (upto < 0 || l.mid <= upto) {
+					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
+						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
+						standField("OPENINGBALANCE", "Amount", l.open), standField("PARTYGSTIN", "String", l.gstin), standField("INCOMETAXNUMBER", "String", l.pan), standField("LEDSTATENAME", "String", esc(l.state)))
+					if strings.Contains(body, "TDSDEDUCTEETYPE") && l.dtype != "" { // asked for: a real Tally writes it when set
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + standField("TDSDEDUCTEETYPE", "String", esc(l.dtype)) + "</LEDGER>")
+					}
+					if strings.Contains(body, "TDSRATENAME") { // 2.4.3: asked for: as TallyPrime 7.1 writes them (run 38155837948)
+						x := ""
+						if l.nature != "" {
+							x += standField("TDSRATENAME", "String", esc(l.nature))
+						}
+						if l.special != "" {
+							x += standField("TDSDEDUCTEEISSPECIALRATE", "Logical", "Yes") + standField("TDSDEDUCTEESPECIALRATE", "Number", " "+l.special)
+						} else {
+							x += standField("TDSDEDUCTEEISSPECIALRATE", "Logical", "No")
+						}
+						x += l.ldcXML
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + x + "</LEDGER>")
+					}
+					if strings.Contains(body, "PAYTYPE") && payFieldsOf != nil { // 2.4.4: the pay-head fields, as 7.1 writes them
+						s := o.String()
+						o.Reset()
+						o.WriteString(strings.TrimSuffix(s, "</LEDGER>") + payFieldsOf(l.name) + "</LEDGER>")
+					}
+				}
+			}
+		case "FinComEmployees": // 2.4.4: the cost centres with a MasterID in (after, upto], the fields as 7.1 writes them
 			var after, upto int64 = 0, -1
 			if m := reMidRange.FindStringSubmatch(body); m != nil {
 				after = toI64(m[1])
@@ -307,11 +413,28 @@ func newStandTally(t *testing.T) *standTally {
 					upto = toI64(m[2])
 				}
 			}
-			for _, l := range f.led {
-				if l.mid > after && (upto < 0 || l.mid <= upto) {
-					fmt.Fprintf(&o, `<LEDGER NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s</LEDGER>`, esc(l.name), standField("GUID", "String", l.guid),
-						standField("MASTERID", "Number", fmt.Sprintf(" %d", l.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", l.alter)), standField("PARENT", "String", esc(l.parent)),
-						standField("OPENINGBALANCE", "Amount", l.open), standField("PARTYGSTIN", "String", l.gstin), standField("INCOMETAXNUMBER", "String", l.pan), standField("LEDSTATENAME", "String", esc(l.state)))
+			yn := map[bool]string{true: "Yes", false: "No"}
+			for _, e := range f.emp {
+				if e.mid > after && (upto < 0 || e.mid <= upto) {
+					fmt.Fprintf(&o, `<COSTCENTRE NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s%s%s%s%s%s%s<LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>%s</NAME></NAME.LIST></LANGUAGENAME.LIST></COSTCENTRE>`,
+						esc(e.name), standField("DATEOFJOIN", "Date", e.joined), standField("DEACTIVATIONDATE", "Date", e.left), standField("GUID", "String", e.guid),
+						standField("PARENT", "String", esc(e.parent)), standField("CATEGORY", "String", esc(e.category)), standField("DESIGNATION", "String", esc(e.desig)),
+						standField("PANNUMBER", "String", e.pan), standField("FORPAYROLL", "Logical", yn[e.payroll]), standField("ISEMPLOYEEGROUP", "Logical", yn[e.group]),
+						standField("ALTERID", "Number", fmt.Sprintf(" %d", e.alter)), standField("MASTERID", "Number", fmt.Sprintf(" %d", e.mid)), e.extra, esc(e.name))
+				}
+			}
+		case "FinComTdsNatures": // 2.4.3: the natures with a MasterID in (after, upto]
+			var after, upto int64 = 0, -1
+			if m := reMidRange.FindStringSubmatch(body); m != nil {
+				after = toI64(m[1])
+				if m[2] != "" {
+					upto = toI64(m[2])
+				}
+			}
+			for _, n := range f.nat {
+				if n.mid > after && (upto < 0 || n.mid <= upto) {
+					fmt.Fprintf(&o, `<TDSRATE NAME="%s" RESERVEDNAME="">%s%s%s%s</TDSRATE>`, esc(n.name), standField("GUID", "String", n.guid),
+						standField("MASTERID", "Number", fmt.Sprintf(" %d", n.mid)), standField("ALTERID", "Number", fmt.Sprintf(" %d", n.alter)), n.cats)
 				}
 			}
 		case "FinComGroups":
@@ -344,15 +467,20 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
-		case vchByMasterID: // 2.2.0: the recorder's body fetch, every MasterID named (one day)
-			want := map[string]bool{}
-			for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(body, -1) {
-				want[m[1]] = true
-			}
+		case vchObjectID: // next-fastfetch: the object export "ID:<MasterID>": that one voucher, whatever its date
+			want := group(`<ID TYPE="Name">ID:(\d+)</ID>`, body, 1)
+			found := false
 			for _, v := range f.vch {
-				if inDates(v) && want[v.master] {
+				if v.master == want {
 					o.WriteString(v.xml())
+					found = true
 				}
+			}
+			if !found {
+				// as a real Tally answers a MasterID it does not have (3.0 .. 7.1, testdata/fast234/notfound): bare, no envelope
+				f.mu.Unlock()
+				_, _ = w.Write([]byte("<ERRORMSG>Could not find Voucher:ID:" + want + "!</ERRORMSG>\r\n"))
+				return
 			}
 		case vchByNumberID: // 2.2.1: a new entry by its type and number (one day)
 			no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, body, 1))
@@ -480,13 +608,36 @@ type standCloud struct {
 	beatReply M        // added to the heartbeat's answer (readStop, readResume, release)
 	takeJobs  []M      // round 7: jobs posts_take hands out, one per call
 	posts     []M      // round 7: every posts_update body
-	dayPosts  []M      // round 10: every "days" body (per day: day, n, empty / readFailed)
+	// next-outbox: how posts_update is answered (nil: 200 {ok})
+	postsReply func(b M) (int, M)
+	dayPosts   []M // round 10: every "days" body (per day: day, n, empty / readFailed)
 	// 2.2.0: recorder_lines: the bodies answered 200 with results (recBodies) and every body as sent (recRaw); recReply
 	// answers instead (nil: results, every line applied); recDelay: how long each answer takes
 	recBodies []M
 	recRaw    []string
 	recReply  func(b M) (int, M)
 	recDelay  time.Duration
+	// decisions B and D (05-Oct-2026, migration 55): the checks posts_take carries (checks), every post_check body
+	// (checkReports) and how it is answered (checkReply; nil: {ok, state}); the lease kept as migration 55 keeps it
+	// (lease; nil: the plain held / free above)
+	checks       []M
+	checkReports []M
+	checkReply   func(b M) M
+	lease        *leaseModel
+	devKeys      []string // final review M3: the computer key each call came with (x-fincom-device), in order
+	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
+	ledChanges []M
+	ledChReply func(b M) (int, M)
+	// 2.4.4: every "employees" body, and how it is answered (nil: 200 {ok})
+	empPosts []M
+	empReply func(b M) (int, M)
+	// the nightly self-check (selfcheck.go): every selfcheck body, and how it is answered (nil: compare finds nothing
+	// missing, record answers ok)
+	selfchecks []M
+	scReply    func(b M) (int, M)
+	// next-renumber: every renumber_list body, and how it is answered (nil: 200 {ok, entries: []})
+	renumAsks  []M
+	renumReply func(b M) (int, M)
 }
 
 func newStandCloud(t *testing.T) *standCloud {
@@ -499,11 +650,24 @@ func newStandCloud(t *testing.T) *standCloud {
 		k := str(o["kind"])
 		c.kinds = append(c.kinds, k)
 		c.raw = append(c.raw, string(b))
+		c.devKeys = append(c.devKeys, r.Header.Get("x-fincom-device"))
 		out := M{"ok": true}
 		switch k {
 		case "companies":
 			out["links"] = M{zz: true}
-		case "lease_take":
+		case "lease_take", "lease_release":
+			if c.lease != nil {
+				who := str(obj(o["bridge"])["id"])
+				if k == "lease_take" {
+					out = c.lease.take(who, str(o["purpose"]))
+				} else {
+					out = c.lease.release(who)
+				}
+				break
+			}
+			if k == "lease_release" {
+				break
+			}
 			if c.held {
 				out = M{"ok": true, "held": true, "holder": M{"computer": "PC-2", "bridge": "go-other", "until": "15:00"}}
 			} else {
@@ -522,11 +686,80 @@ func newStandCloud(t *testing.T) *standCloud {
 				out["job"] = c.takeJobs[0]
 				c.takeJobs = c.takeJobs[1:]
 			}
+			if len(c.checks) > 0 {
+				out["checks"] = toAnyM(c.checks)
+			}
+		case "own_key":
+			out["moved"] = true
+		case "post_check":
+			c.checkReports = append(c.checkReports, o)
+			if c.checkReply != nil {
+				out = c.checkReply(o)
+			} else {
+				out["state"] = str(o["result"])
+			}
 		case "posts_update":
 			c.posts = append(c.posts, o)
+			if c.postsReply != nil {
+				code, ans := c.postsReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
+		case "ledger_changes":
+			// 2.3.1 (masters): the ledgers created or altered since the master counter last moved, or asked for an entry
+			c.ledChanges = append(c.ledChanges, o)
+			if c.ledChReply != nil {
+				code, ans := c.ledChReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["added"], out["updated"] = len(arr(o["ledgers"])), 0
+		case "employees":
+			c.empPosts = append(c.empPosts, o)
+			if c.empReply != nil {
+				code, ans := c.empReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["employees"] = len(arr(o["employees"]))
+		case "selfcheck":
+			c.selfchecks = append(c.selfchecks, o)
+			if c.scReply != nil {
+				code, ans := c.scReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			if str(o["step"]) == "compare" {
+				out["missing"], out["received"] = []any{}, toI64(o["altvchid"])
+			} else {
+				out["result"], out["words"] = "ok", "checked (stand)"
+			}
+		case "renumber_list":
+			c.renumAsks = append(c.renumAsks, o)
+			if c.renumReply != nil {
+				code, ans := c.renumReply(o)
+				if code != 200 {
+					w.WriteHeader(code)
+				}
+				_, _ = w.Write([]byte(jsonText(ans)))
+				return
+			}
+			out["entries"] = []any{}
 		case "recorder_lines":
 			c.recRaw = append(c.recRaw, string(b))
 			if c.recDelay > 0 {
@@ -589,6 +822,8 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	bgMu.Lock()
 	stopHold = map[int]time.Time{}
 	bgMu.Unlock()
+	retryReset()   // 2.3.1: the shared retry schedule (retry.go), per test
+	resetEarlier() // and the requests given up while Tally is still on them (inflight.go)
 	decideMu.Lock()
 	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test
 	decideMu.Unlock()
@@ -596,7 +831,7 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	numberAsks = map[string]time.Time{}
 	numberAskMu.Unlock()
 	leaseMu.Lock()
-	leases = map[string]time.Time{}
+	leases, leasePurp, leaseAsked = map[string]time.Time{}, map[string]string{}, map[string]time.Time{}
 	leaseMu.Unlock()
 	whereMu.Lock()
 	whereMap = map[string]map[string]string{}
@@ -640,7 +875,7 @@ func TestUpdateNowReadsMonthSlicesOnly(t *testing.T) {
 				t.Errorf("a slice crosses a month: %s-%s", a, z)
 			}
 			slices = append(slices, a+"-"+z)
-		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID: // 2.1.4: the plain ledger and group lists too
+		case "FinComCompany", "TDSDeskCompanies", "TDSDeskCompanyInfo", ledListID, grpListID, natListID: // 2.1.4: the plain ledger and group lists too; 2.4.3: the natures
 		default:
 			t.Errorf("Update now sent %q", id)
 		}

@@ -1,9 +1,11 @@
 {
   "allowlist": {
-    "hash": "8d23831f9445777a1f82de0745add209aa647b547a22fb8f67f7643ff9235db6",
+    "hash": "dadd3e8e75abe1d671b5bd9cedcc1bb73c6ff98a88e4720d03b4b93b9492ad88",
     "measured": false
   },
   "autoUpdate": true,
+  "bankAlerts": [],
+  "bridgePort": 9100,
   "busySince": "",
   "changeNumbers": {
     "GARG SHEKHAR & COMPANY": {
@@ -29,13 +31,14 @@
     }
   ],
   "computer": "TEST-PC",
-  "dailyAt": "02:00",
+  "dailyAt": "19:00",
+  "dataFolder": "",
   "events": true,
   "every": 30,
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",
-  "nightlyAt": "02:00",
+  "nightlyAt": "19:00",
   "notAnsweringSince": "",
   "open": [
     "GARG SHEKHAR & COMPANY"
@@ -62,6 +65,10 @@
   "recorderSourceB": {},
   "recorderSourceC": {},
   "recorderState": {},
+  "recorderWaitSince": "",
+  "recorderWaitStarts": [],
+  "recorderWaitWords": "",
+  "renumberAlerts": [],
   "reqs": {
     "day": "2026-10-04",
     "last": {
@@ -88,8 +95,11 @@
     }
   },
   "tally": true,
+  "tallyPort": 9000,
+  "tallyRetry": null,
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.2.4"
+  "version": "2.4.4",
+  "windowsUser": ""
 }

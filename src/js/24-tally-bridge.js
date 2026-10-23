@@ -10,7 +10,82 @@ const Bridge = {
   on(){ return !this.blocked() && !!this.cfg().key; },
   up(){ return this.st.state === "ok"; },
   pinQ(){ const pp = this.cfg().port; return pp ? "&port=" + pp : ""; },
-  async call(path, body, ms){
+  // FinCom Bridge 2.3.0: on a shared Windows server each Windows user's bridge takes its own port of 9100..9199 and
+  // answers only programs of its own Windows user. Another user's program may listen on one of those ports and claim
+  // anything, so a bridge is never taken on its word (the owner's condition of 05-Oct-2026): before the bridge key, a
+  // pairing code or a computer key goes to a listener, it proves itself. FinCom sends a fresh random nonce to /ping?n=;
+  // the bridge answers HMAC-SHA256(bridge key, nonce || bridge id || port), which FinCom checks with the key it holds;
+  // not paired yet: HMAC-SHA256(pairing code, nonce || bridge id || port), given only while the bridge's pairing window is open. Review M2
+  // of 2.3.0: a proof is never kept: the bridge proves itself again immediately before EVERY request that carries a secret
+  // (each call carries the key; posting, /cloudlink; /pair goes only after its own pairProof), so a program that takes the
+  // port after the bridge restarts gets nothing; an old proof (another nonce) never passes. A bridge that cannot prove itself (older than 2.3.0, or not a FinCom Bridge) is never sent a secret.
+  PORTS: Array.from({length: 100}, (_, i) => 9100 + i),   // 9100..9199 (the owner's rule of 05-Oct-2026: no limit by number of bridges; was 9100..9119)
+  proven: {},              // address -> when it proved itself with the key held
+  localUrl(u){ const m = String(u || "").match(/^http:\/\/(127\.0\.0\.1|localhost):(\d+)\/*$/); return !!m && this.PORTS.includes(+m[2]); },
+  urlPort(u){ const m = String(u || "").match(/^https?:\/\/[^/:]+:(\d+)/); return m ? +m[1] : 0; },
+  nonce(){ const a = new Uint8Array(24); crypto.getRandomValues(a); return Array.from(a, x => x.toString(16).padStart(2, "0")).join(""); },
+  async hmac(secret, msg){
+    const enc = new TextEncoder(), k = await crypto.subtle.importKey("raw", enc.encode(String(secret)), {name: "HMAC", hash: "SHA-256"}, false, ["sign"]);
+    return Array.from(new Uint8Array(await crypto.subtle.sign("HMAC", k, enc.encode(msg))), x => x.toString(16).padStart(2, "0")).join("");
+  },
+  // /ping?n= at an address (nothing secret is sent), with whether it proved itself: key -> proven (the key's proof, bound
+  // to its id and this port); code -> pairProven (the pairing code's proof, bound to its id and this port as well)
+  async probeUrl(base, ms, key, code){
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 1500), n = this.nonce(), port = this.urlPort(base);
+    try {
+      const r = await fetch(base.replace(/\/+$/, "") + "/ping?n=" + n, {cache: "no-store", signal: ctl.signal});
+      const j = await r.json().catch(() => null);
+      if (!j || j.ok === false) return null;
+      const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
+      if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
+      // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
+      if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(String(code).trim(), n + j.bridgeId + port);
+      return o;
+    } catch (e){ return null; } finally { clearTimeout(t); }
+  },
+  async probe(port, ms, key, code){ return this.probeUrl("http://127.0.0.1:" + port, ms, key, code); },
+  // this user's bridge among 9100..9199: only one that proves itself (with the key held, or with the pairing code given);
+  // among those the one paired with (its id), else the bridge linked to the signed-in member, else the first
+  async find(code){
+    const c = this.cfg();
+    if (!this.localUrl(c.url)) return null;
+    const found = (await Promise.all(this.PORTS.map(p => this.probe(p, 1500, c.key, code)))).filter(Boolean);
+    const ok = found.filter(b => code ? b.pairProven : b.proven);
+    const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
+    const pick = (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
+    this.foundAt = Date.now();
+    this.lastFound = found;
+    if (pick && !code) this.proven[pick.url] = Date.now();
+    return pick ? {url: pick.url, bridgeId: pick.bridgeId || "", port: pick.port} : null;
+  },
+  // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s)
+  async refind(){
+    if (this.foundAt && Date.now() - this.foundAt < 15000) return false;
+    const f = await this.find();
+    if (!f || f.url === this.cfg().url.replace(/\/+$/, "")) return false;
+    this.setCfg({url: f.url, bridgeId: f.bridgeId || this.cfg().bridgeId || ""});
+    return true;
+  },
+  // before anything secret goes to the bridge's address: proved there now, with a fresh nonce (review M2 of 2.3.0: no
+  // proof is kept for later; this.proven only says when it last proved itself)
+  async ensureProven(){
+    const c = this.cfg(), u = c.url.replace(/\/+$/, "");
+    const o = c.key ? await this.probeUrl(u, 4000, c.key) : null;
+    if (o && o.proven){ this.proven[u] = Date.now(); if (o.bridgeId && o.bridgeId !== c.bridgeId) this.setCfg({bridgeId: o.bridgeId}); return true; }
+    delete this.proven[u];
+    this.lastProbe = o;
+    return false;
+  },
+  async call(path, body, ms, again){
+    // the owner's condition: no key, no posting, no computer key before the bridge at this address proved itself
+    if (!(await this.ensureProven())){
+      const other = this.lastProbe && this.lastProbe.yours === false;
+      if (!again && await this.refind()) return this.call(path, body, ms, true);
+      if (other) throw {code: "bridge_other_user", message: "The FinCom Bridge at " + this.cfg().url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+      throw {code: this.lastProbe ? "bridge_unproven" : "bridge_down", message: this.lastProbe
+        ? "The program answering at " + this.cfg().url + " did not prove it is your FinCom Bridge, so nothing was sent to it. Install FinCom Bridge 2.3.0 or later for your Windows user, then connect again (right-click the FinCom Bridge icon \u2192 Connect FinCom on this computer\u2026)."
+        : "FinCom Bridge is not running on this computer (" + this.cfg().url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
+    }
     const c = this.cfg();
     if (c.port){ if (body && typeof body === "object" && !Array.isArray(body)) body = Object.assign({port: c.port}, body); }
     // writes to Tally go into the firm's audit trail (who, which company, how many)
@@ -24,10 +99,17 @@ const Bridge = {
     try {
       r = await fetch(c.url.replace(/\/+$/, "") + path, {method: body ? "POST" : "GET", headers: Object.assign({"X-Bridge-Key": c.key}, body ? {"Content-Type": "application/json"} : {}), body: body ? JSON.stringify(body) : undefined, signal: ctl.signal, cache: "no-store"});
     } catch (e){
+      delete this.proven[c.url.replace(/\/+$/, "")];
+      if (!again && e && e.name !== "AbortError" && await this.refind()) return this.call(path, body, ms, true);
       throw {code: "bridge_down", message: e && e.name === "AbortError" ? "FinCom Bridge did not answer in time. Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)." : "FinCom Bridge is not running on this computer (" + c.url + "). Check the FinCom Bridge icon near the clock (right-click \u2192 Test connection)."};
     } finally { clearTimeout(timer); }
     let j = null;
     try { j = await r.json(); } catch (e){ j = null; }
+    if (r.status === 403 && j && j.notYours){
+      delete this.proven[c.url.replace(/\/+$/, "")];
+      if (!again && await this.refind()) return this.call(path, body, ms, true);
+      throw {code: "bridge_other_user", message: "The FinCom Bridge at " + c.url + " is another Windows user's on this computer, and FinCom did not find yours on ports 9100\u20139199. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d)."};
+    }
     if (!r.ok || !j || j.ok === false) throw {code: r.status === 401 ? "bridge_key" : "bridge", message: (j && (j.error || j.message)) || ("The bridge answered with error " + r.status + ".")};
     return j;
   },
@@ -201,14 +283,29 @@ const Bridge = {
   },
   // ask the bridge on this computer for its key, with the 6-digit code FinCom Bridge shows (tray icon → Connect FinCom on this computer…)
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
+  // pairing: only with a bridge that proves it shows this code now (its pairing window open), on this address or found
+  // on 9100..9199; the code goes to it only then, and the key it hands over must prove itself before it is kept
   async pair(code){
+    code = String(code || "").trim();
     const c = this.cfg();
-    const base = c.url.replace(/\/+$/, "");
-    const r = await fetch(base + "/pair?code=" + encodeURIComponent(String(code || "").trim()), {cache: "no-store"}).catch(() => null);
-    if (!r) throw {code: "bridge_down", message: "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
+    let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code);
+    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); hit = f ? {url: f.url, bridgeId: f.bridgeId, pairProven: true} : null; }
+    if (!hit || !hit.pairProven){
+      const any = (this.lastFound || []).length || hit;
+      throw {code: any ? "pair" : "bridge_down", message: any
+        ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
+        : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
+    }
+    base = hit.url;
+    const r = await fetch(base + "/pair?code=" + encodeURIComponent(code), {cache: "no-store"}).catch(() => null);
+    if (!r) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
     const j = await r.json().catch(() => null);
+    if (r.status === 403 && j && j.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
     if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
-    this.setCfg({key: j.key, url: base});
+    const chk = await this.probeUrl(base, 2500, j.key);
+    if (!chk || !chk.proven) throw {code: "pair", message: "The bridge's key did not prove itself, so it was not kept. Connect again."};
+    this.proven[base] = Date.now();
+    this.setCfg({key: j.key, url: base, bridgeId: chk.bridgeId || j.bridgeId || ""});
     return j;
   },
   tallyName(co){ const o = this.openFor(co); return o ? o.name : (co.tallyName || co.name); },
@@ -1379,6 +1476,7 @@ const BridgeSeed = {
   add(d, n){ return this.ymd(new Date(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8) + n)); },
   company(){ const co = CO(); return (Bridge.openFor(co) || {}).name || co.tallyName || co.name; },
   async post(path, body, type){
+    if (!(await Bridge.ensureProven())) throw new Error("FinCom Bridge on this computer did not prove itself, so nothing was sent to it. Connect it again from the Tally page.");
     const c = Bridge.cfg();
     const r = await fetch(c.url.replace(/\/+$/, "") + path + Bridge.pinQ(), {method: "POST", headers: {"X-Bridge-Key": c.key, "Content-Type": type}, body, cache: "no-store"});
     const j = await r.json().catch(() => ({}));

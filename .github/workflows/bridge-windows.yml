@@ -53,7 +53,7 @@ jobs:
       - name: NSIS (makensis)
         run: sudo apt-get update -q && sudo apt-get install -y -q nsis
       - name: Tests
-        run: go test -count=1 ./...
+        run: go test -count=1 -timeout 25m ./...
       - name: Program and setup
         # FORCE_REBUILD: a version already published is built again here only to be tested, never published
         run: FORCE_REBUILD=1 ./build.sh

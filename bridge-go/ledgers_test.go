@@ -430,10 +430,16 @@ func TestLedgerRenameAndDeleteSent(t *testing.T) {
 	f.noBalance(t)
 }
 
-// --- the ledger list goes through the one gate: a posting stops a chunk at Tally at once and goes first; the chunk is
-// read again afterwards. Another bridge holding the lease, or another company GUID: nothing read
+// --- the ledger list goes through the one gate: a posting stops the bridge waiting for a chunk and goes first; the
+// chunk is read again afterwards. One request at Tally at a time (the owner's rule, inflight.go): the chunk given up is
+// still at Tally, so the posting waits for Tally to finish it ("waiting for Tally to finish an earlier request").
+// Another bridge holding the lease, or another company GUID: nothing read.
+// Run with the shipped TallyAbandonMaxSec (600): with 0 (the stands' old mode: the connection closed on giving up), the
+// bridge sends the posting at once while the closed chunk may still be at Tally, and the stand's count of requests in
+// flight then depends on when it notices the closed connection (it failed twice under load: "2 requests at Tally at
+// once"; the 2.3.4 coordinator, 08-Oct-2026)
 func TestLedgerListGivesWayToPosting(t *testing.T) {
-	f := ledgerTally(t, 5000, `,"PostWaitMs":200`)
+	f := ledgerTally(t, 5000, `,"PostWaitMs":200,"TallyAbandonMaxSec":600`)
 	var once sync.Once
 	started := make(chan struct{})
 	f.mu.Lock()
@@ -454,8 +460,8 @@ func TestLedgerListGivesWayToPosting(t *testing.T) {
 	if r := postOne(t, "p1", finVoucher("p1", fgParty, "P-1", today(), "5.00")); r["ok"] != true {
 		t.Fatalf("posting: %v", r)
 	}
-	if time.Since(t0) > 3*time.Second {
-		t.Fatal("the posting waited for the ledger chunk")
+	if el := time.Since(t0); el > 8*time.Second {
+		t.Fatalf("the posting took %s (Tally finishes the chunk 3.8 s after it)", el)
 	}
 	waitIdle(t)
 	ids := f.ids()

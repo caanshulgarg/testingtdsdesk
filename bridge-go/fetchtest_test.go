@@ -29,6 +29,12 @@ func ps1Forms(t *testing.T, company string) map[string]string {
 		x := strings.ReplaceAll(m[2], "GARG SHEKHAR &amp; COMPANY", esc(company))
 		x = strings.ReplaceAll(x, "FinComVoucherByNumber", "FinComFetchTest"+m[1])
 		x = strings.ReplaceAll(x, "FinComVoucherByMaster", "FinComFetchTest"+m[1])
+		// 2.3.1 (the owner's decision of 06-Oct-2026; review M2): the ps1 stays the record of what 2.2.2 sent; A and C carry
+		// the entry request's fetch as built now (the 2.2.2 fields plus the ledger lines under an invoice's items), so they
+		// stay byte for byte the bridge's two requests; B, D, E and F stay byte for byte the ps1's (2.2.2 .. 2.3.0)
+		if m[1] == "A" || m[1] == "C" {
+			x = strings.Replace(x, "<FETCH>"+items231OldFetch+"</FETCH>", "<FETCH>"+liveFetchField+"</FETCH>", 1)
+		}
 		out[m[1]] = x
 	}
 	if len(out) != 6 {
@@ -40,10 +46,10 @@ func ps1Forms(t *testing.T, company string) map[string]string {
 // the stand answers the fetch test's forms: hit(letter) says which give the one voucher (MasterID 26312)
 func fetchTestStand(hit func(letter string) bool, then func(letter string)) func(w http.ResponseWriter, r *http.Request, id, body string) bool {
 	return func(w http.ResponseWriter, r *http.Request, id, body string) bool {
-		if !strings.HasPrefix(id, "FinComFetchTest") {
+		l, ok := ftLetter(id)
+		if !ok {
 			return false
 		}
-		l := strings.TrimPrefix(id, "FinComFetchTest")
 		if then != nil {
 			defer then(l)
 		}
@@ -86,12 +92,23 @@ func fetchTestBodies(f *standTally) ([]string, []string) {
 	defer f.mu.Unlock()
 	var ids, bodies []string
 	for i, id := range f.reqs {
-		if strings.HasPrefix(id, "FinComFetchTest") {
-			ids = append(ids, strings.TrimPrefix(id, "FinComFetchTest"))
+		if l, ok := ftLetter(id); ok {
+			ids = append(ids, l)
 			bodies = append(bodies, f.bodies[i])
 		}
 	}
 	return ids, bodies
+}
+
+// next-fastfetch: form C is the bridge's own entry request (the object export, id FinComVoucherObject)
+func ftLetter(id string) (string, bool) {
+	if id == vchObjectID {
+		return "C", true
+	}
+	if strings.HasPrefix(id, "FinComFetchTest") {
+		return strings.TrimPrefix(id, "FinComFetchTest"), true
+	}
+	return "", false
 }
 
 // --- 1. the route: the tray only (no Origin, no Sec-Fetch header), the owner's trial tools on; nothing sent otherwise
@@ -131,7 +148,16 @@ func TestFetchTestRoutePersonOnly(t *testing.T) {
 		t.Fatalf("the preview sent %v", ids)
 	}
 	// the variants are measure-only: never sent outside the test
-	for _, l := range []string{"A", "B", "C", "D", "E", "F"} {
+	// 2.3.4 (the owner, 08-Oct-2026): forms A and C removed, with their allow-list rows
+	for _, l := range []string{"A", "C"} {
+		if fetchTestRequest(l, zz, "20261005", "Receipt", "212", "26312") != "" {
+			t.Fatalf("form %s still built", l)
+		}
+		if _, ok := tallyAllowList["FinComFetchTest"+l]; ok {
+			t.Fatalf("FinComFetchTest%s still on the allow-list", l)
+		}
+	}
+	for _, l := range []string{"B", "D", "E", "F"} {
 		x := fetchTestRequest(l, zz, "20261005", "Receipt", "212", "26312")
 		if x == "" {
 			t.Fatalf("form %s not built", l)
@@ -151,8 +177,8 @@ func TestFetchTestRoutePersonOnly(t *testing.T) {
 	}
 }
 
-// --- 2. the six forms, in order, byte for byte as the ps1 holds them; C on the MasterID B found; the log and the summary
-func TestFetchTestSixFormsInOrder(t *testing.T) {
+// --- 2. the four forms (2.3.4: A and C removed), in order, byte for byte as the ps1 holds them; D and E on the MasterID B found; the log and the summary
+func TestFetchTestFourFormsInOrder(t *testing.T) {
 	f := newStandTally(t)
 	f.mu.Lock()
 	f.behave = fetchTestStand(func(l string) bool { return l == "B" || l == "D" || l == "F" }, nil)
@@ -167,7 +193,7 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 	}
 	res = fetchTestWait(t, "done")
 	ids, bodies := fetchTestBodies(f)
-	if strings.Join(ids, "") != "ABCDEF" {
+	if strings.Join(ids, "") != "BDEF" {
 		t.Fatalf("the forms sent: %v", ids)
 	}
 	want := ps1Forms(t, gsc)
@@ -176,15 +202,8 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 			t.Errorf("form %s:\n got %s\nwant %s", l, bodies[i], want[l])
 		}
 	}
-	// A and C are the bridge's own requests, byte for byte, under their own ids
-	if strings.ReplaceAll(bodies[0], "FinComFetchTestA", vchByNumberID) != voucherByNumberRequest(gsc, "20261005", "Receipt", "212") {
-		t.Error("A is not voucherByNumberRequest as sent")
-	}
-	if strings.ReplaceAll(bodies[2], "FinComFetchTestC", vchByMasterID) != voucherByMasterRequest(gsc, "20261005", []string{"26312"}) {
-		t.Error("C is not voucherByMasterRequest as sent")
-	}
 	sum := str(res["summary"])
-	if !regexp.MustCompile(`^A 0 vouchers \d+ ms · B 1 voucher \d+ ms · C 0 vouchers \d+ ms · D 1 voucher \d+ ms · E 0 vouchers \d+ ms · F 1 voucher \d+ ms$`).MatchString(sum) {
+	if !regexp.MustCompile(`^B 1 voucher \d+ ms · D 1 voucher \d+ ms · E 0 vouchers \d+ ms · F 1 voucher \d+ ms$`).MatchString(sum) {
 		t.Fatalf("the summary: %q", sum)
 	}
 	if str(res["masterId"]) != "26312" {
@@ -194,16 +213,14 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 	ll := r13LogLines("Test fetching an entry: " + gsc + ", Receipt 212, 5-Oct-2026: ")
 	all := strings.Join(ll, "\n")
 	for _, w := range []string{
-		"A. FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd): ",
 		"B. by number with plain quote marks, dates yyyymmdd: ",
-		"C. FinComVoucherByMaster as sent, MasterID 26312 (dates yyyymmdd): ",
 		"D. by MasterID 26312 with no dates: ",
 		"E. by MasterID 26312 with the dates as d-MMM-yyyy TYPE=Date: ",
 		"F. by number with plain quote marks and no dates: ",
 		"B vouchers: MASTERID=26312 VOUCHERNUMBER=212 DATE=20261005 VOUCHERTYPENAME=Receipt",
-		"A answer starts: <ENVELOPE><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><VOUCHER>14</VOUCHER></CMPINFO></DESC>",
+		"E answer starts: <ENVELOPE><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><VOUCHER>14</VOUCHER></CMPINFO></DESC>",
 		// the period sent, in full, per form
-		"A. FinComVoucherByNumber as sent (&#34; quotes, dates yyyymmdd): sent <SVFROMDATE>20261005</SVFROMDATE><SVTODATE>20261005</SVTODATE>: ",
+		"B. by number with plain quote marks, dates yyyymmdd: sent <SVFROMDATE>20261005</SVFROMDATE><SVTODATE>20261005</SVTODATE>: ",
 		"E. by MasterID 26312 with the dates as d-MMM-yyyy TYPE=Date: sent <SVFROMDATE TYPE=\"Date\">5-Oct-2026</SVFROMDATE><SVTODATE TYPE=\"Date\">5-Oct-2026</SVTODATE>: ",
 		"D. by MasterID 26312 with no dates: sent no SVFROMDATE/SVTODATE: ",
 		"B answer starts: <ENVELOPE> <BODY> <DATA><COLLECTION><VOUCHER REMOTEID=\"g-1\"",
@@ -212,7 +229,7 @@ func TestFetchTestSixFormsInOrder(t *testing.T) {
 			t.Errorf("the log does not say %q:\n%s", w, all)
 		}
 	}
-	if !regexp.MustCompile(`A\. [^\n]*: \d+ ms, 0 vouchers`).MatchString(all) || !regexp.MustCompile(`B\. [^\n]*: \d+ ms, 1 voucher\b`).MatchString(all) {
+	if !regexp.MustCompile(`E\. [^\n]*: \d+ ms, 0 vouchers`).MatchString(all) || !regexp.MustCompile(`B\. [^\n]*: \d+ ms, 1 voucher\b`).MatchString(all) {
 		t.Errorf("the times and counts:\n%s", all)
 	}
 	for _, l := range ll {
@@ -252,7 +269,7 @@ func TestFetchTestMasterFromFOrAsked(t *testing.T) {
 		t.Fatalf("POST: %d %v", code, res)
 	}
 	fetchTestWait(t, "done")
-	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "ABFCDE" {
+	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "BFDE" {
 		t.Fatalf("with F's MasterID: %v", ids)
 	}
 	// none found: asked
@@ -272,7 +289,7 @@ func TestFetchTestMasterFromFOrAsked(t *testing.T) {
 	callLocal(t, "POST", "/tray/fetchtest", "", `{"masterId":"777"}`)
 	res = fetchTestWait(t, "done")
 	ids, bodies := fetchTestBodies(f)
-	if strings.Join(ids, "") != "ABFCDE" || !strings.Contains(bodies[3], "$MasterID = 777</SYSTEM>") {
+	if strings.Join(ids, "") != "BFDE" || !strings.Contains(bodies[2], "$MasterID = 777</SYSTEM>") {
 		t.Fatalf("with the MasterID typed: %v", ids)
 	}
 	// skipped
@@ -284,10 +301,10 @@ func TestFetchTestMasterFromFOrAsked(t *testing.T) {
 	fetchTestWait(t, "needMaster")
 	callLocal(t, "POST", "/tray/fetchtest", "", `{"skip":true}`)
 	res = fetchTestWait(t, "done")
-	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "ABF" {
+	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "BF" {
 		t.Fatalf("skipped: %v", ids)
 	}
-	if !strings.Contains(str(res["summary"]), "C, D, E skipped") || len(r13LogLines("C, D and E not sent: no MasterID")) == 0 {
+	if !strings.Contains(str(res["summary"]), "D, E skipped") || len(r13LogLines("D and E not sent: no MasterID")) == 0 {
 		t.Fatalf("the skip is not said: %v", res["summary"])
 	}
 }
@@ -314,7 +331,7 @@ func TestFetchTestMeasuringNotHeldWhileAsking(t *testing.T) {
 	if measuring.Load() != 0 {
 		t.Fatalf("measuring after the test: %d", measuring.Load())
 	}
-	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "ABFCDE" || str(r["masterId"]) != "777" {
+	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "BFDE" || str(r["masterId"]) != "777" {
 		t.Fatalf("the forms: %v %v", ids, r["masterId"])
 	}
 }
@@ -342,20 +359,20 @@ func TestFetchTestRefusedDuringPosting(t *testing.T) {
 		t.Fatalf("run directly during a posting: %v", err)
 	}
 	postTaking.Store(false)
-	// a posting starts while A is answered: B is not sent
+	// a posting starts while B is answered: F is not sent
 	f.mu.Lock()
 	f.behave = fetchTestStand(func(string) bool { return false }, func(l string) {
-		if l == "A" {
+		if l == "B" {
 			postTaking.Store(true)
 		}
 	})
 	f.mu.Unlock()
 	callLocal(t, "POST", "/tray/fetchtest", "", `{"company":"ZZ TEST","type":"Receipt","number":"212","date":"05-Oct-2026"}`)
 	res = fetchTestWait(t, "done")
-	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "A" {
-		t.Fatalf("a posting started after A: %v", ids)
+	if ids, _ := fetchTestBodies(f); strings.Join(ids, "") != "B" {
+		t.Fatalf("a posting started after B: %v", ids)
 	}
-	if !strings.Contains(str(res["summary"]), "B not sent (a posting started)") || len(r13LogLines("B not sent: a posting started")) == 0 {
+	if !strings.Contains(str(res["summary"]), "F not sent (a posting started)") || len(r13LogLines("F not sent: a posting started")) == 0 {
 		t.Fatalf("the stop is not said: %v", res)
 	}
 }
@@ -363,11 +380,11 @@ func TestFetchTestRefusedDuringPosting(t *testing.T) {
 // --- 5. the inputs: a type or number that cannot go in a TDL string, a date that is not one, a MasterID not a number
 func TestFetchTestInputsChecked(t *testing.T) {
 	for _, c := range [][4]string{{"Rec\"eipt", "212", "20261005", ""}, {"Receipt", "", "20261005", ""}, {"Receipt", "212", "2026-13-45", ""}} {
-		if x := fetchTestRequest("A", zz, normDate(c[2]), c[0], c[1], ""); x != "" {
+		if x := fetchTestRequest("B", zz, normDate(c[2]), c[0], c[1], ""); x != "" {
 			t.Errorf("%v built: %s", c, x)
 		}
 	}
-	if fetchTestRequest("C", zz, "20261005", "", "", "12a") != "" || fetchTestRequest("D", zz, "", "", "", "") != "" {
+	if fetchTestRequest("E", zz, "20261005", "", "", "12a") != "" || fetchTestRequest("D", zz, "", "", "", "") != "" {
 		t.Error("a MasterID that is not a number built")
 	}
 	if fetchTestRequest("F", zz, "", "Receipt", "212", "") == "" || fetchTestRequest("D", zz, "", "", "", "5") == "" {

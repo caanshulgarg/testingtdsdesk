@@ -16,6 +16,11 @@
 #   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
+#   green 5  BridgeVersion 2.4.0 with the real decision line of docs/tally-allowlist.md (the owner's decision of 2026-10-07;
+#            "re-measured on 2026-10-08"; the 2.3.5, 2.3.4, 2.3.3, 2.3.2, 2.3.1 and 2.3.0 lines kept as history) -> passes
+#   red 14   the same line, but the last release row dated 2026-10-09 (after its "re-measured on") -> fails "before the last release"
+#   pin      every 'go test' line in release-check.sh carries -timeout 20m (Go's default 10 minutes cut a full run at 588 s
+#            on 05-Oct-2026)
 # Nothing outside the temp folder is touched. Run: bash bridge-go/release_check_test.sh
 # (RELEASE_CHECK_SCRIPT=<file> tests another copy of the script, e.g. one that always passes, to see this test fail.)
 set -u
@@ -124,8 +129,39 @@ expect "red 10: 2.1.7 with a line without the owner's decision words" 1 "owner's
 setup; withver 2.1.6; unmeasured "First table: not yet measured; allowed for 2.1.6 only; allowed for 2.1.5 only; re-measured on 2026-10-02 (no times)"
 expect "red 11: an exception naming two versions" 1 "names more than one version"
 
+# the owner's standing decision of 06-Oct-2026: "allowed for <version> by the owner's standing decision of <date>" counts too
+setup; withver 2.3.0; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed.
+re-measured on 2026-10-02 (no times)"
+expect "green 4: the standing-decision line for this version passes check 4" 0 "allowed for 2.3.0"
+
+setup; withver 2.3.1; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06: no request on the list and no request shape changed.
+re-measured on 2026-10-02 (no times)"
+expect "red 12: a standing-decision line naming another version" 1 "not 2.3.1"
+
+setup; withver 2.3.0; unmeasured "First table: not yet measured; allowed for 2.3.0 by the owner's standing decision of 2026-10-06; allowed for 2.2.4 only by the owner's decision of 2026-10-05.
+re-measured on 2026-10-02 (no times)"
+expect "red 13: a standing line and an older decision line together name two versions" 1 "names more than one version"
+
+# bridge 2.3.1 (the owner's decision of 06-Oct-2026), then 2.3.2 (the owner's standing decision, 2.3.1's line kept as
+# history: "as for 2.3.1: ..."): the real decision line, as docs/tally-allowlist.md carries it
+L231="$(grep -m1 '^First table:' "$HERE/../docs/tally-allowlist.md")"
+setup; withver 2.4.4; unmeasured "$L231
+(re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
+expect "green 5: 2.4.4 with the real decision line (2.4.3's, 2.4.2's, 2.4.1's, 2.4.0's, 2.3.5's, 2.3.4's, 2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.4.4 by the owner's decision of 2026-10-12"
+
+setup; withver 2.4.4; unmeasured "$L231
+(re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
+sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-09 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
+expect "red 14: the line re-measured before the last release row's date" 1 "before the last release"
+
 setup; printf '# Tally allow-list\n\nre-measured on 2026-10-02\n| id | purpose | worst case (s) | measured on |\n|---|---|---|---|\nledgers | ledger list | 4 | 2026-09-30\n' >"$R/docs/tally-allowlist.md"; g add -A; g commit -qm "no rows"
 expect "red 9: no row of the allow-list table can be parsed" 1 "no rows parsed"
+
+# pin: every go test command in the script carries the explicit 20-minute limit (GO_TEST_TIMEOUT=20m, used on each line)
+S="${RELEASE_CHECK_SCRIPT:-$HERE/release-check.sh}"
+nt="$(grep -cE '^[[:space:]]*go test ' "$S")"; nl="$(grep -E '^[[:space:]]*go test ' "$S" | grep -cF -- '-timeout "$GO_TEST_TIMEOUT"')"
+if [ "$nt" -ge 2 ] && [ "$nt" = "$nl" ] && grep -qx 'GO_TEST_TIMEOUT=20m' "$S"; then echo "PASS  pin: all $nt go test lines run with -timeout 20m"
+else echo "FAIL  pin: $nl of $nt go test lines carry -timeout \$GO_TEST_TIMEOUT, or GO_TEST_TIMEOUT=20m is missing"; FAILS=$((FAILS+1)); fi
 
 echo
 if [ "$FAILS" = 0 ]; then echo "release_check_test: all cases as expected"; else echo "release_check_test: $FAILS case(s) wrong"; exit 1; fi

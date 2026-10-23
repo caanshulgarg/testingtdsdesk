@@ -4,9 +4,11 @@ migration-35: the real cloud function (server/tally-cloud/index.ts) under Deno a
 Checks: the beat keeps the bridge's request timings (reqs) and its own stop (readStopped), cleaned, in info.beat and in
 the bridge's entry (info.bridges), and passes them on the firm's broadcast when they change; the answer carries readStop
 (Stop reading from FinCom, for this computer or for all of the firm's, never another firm's) and the device's info keeps
-it for the app; Resume: readStop gone and readResume once per bridge (also for a bridge that stopped itself); release:
-none without a row, the pilot computer allowed, the others not until the version is approved, an older approved version
-for the others meanwhile; the pilot computer's beats on the version are recorded as evidence (and a self-stop on it);
+it for the app; Resume: readStop gone and readResume once per bridge (also for a bridge that stopped itself); release
+(the owner's rule of 05-Oct-2026, migration 54): the newest version goes to every computer by itself, owner's or staff's,
+with no pilot and no approval ({newest, allowed, held}); a version the owner HELD or withdrew is named in held and not
+taken; the owner's "Roll back to <version>" ({version, allowed, rollback}) until cleared; the beats of a computer on a
+version named in a pilot row are still recorded (and a self-stop on it);
 a cloud without migration-35 answers as before; bridge 1.15.0 and a bridge in test mode keep working."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, shutil, threading
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -90,7 +92,8 @@ try:
     b1 = dev1["info"].get("beat", {})
     ok(c == 200 and b1.get("reqs") == REQS and b1.get("readStopped") is None, "the beat's request timings kept in info.beat (%s)" % b1.get("reqs"))
     ok(dev1["info"]["bridges"][GO1["id"]].get("reqs") == REQS and dev1["info"]["bridges"][GO1["id"]].get("readStopped") is None, "and in the bridge's own entry (info.bridges)")
-    ok("readStop" in r and r["readStop"] is None and "release" not in r and not r.get("readResume"), "no stop from FinCom: readStop null; no release row: no release (%s)" % {k: r.get(k) for k in ("readStop", "release", "readResume")})
+    ok("readStop" in r and r["readStop"] is None and r.get("release") == {"newest": True, "allowed": True, "held": []} and not r.get("readResume"),
+       "no stop from FinCom: readStop null; no release row: the newest allowed (the owner's rule of 05-Oct-2026) (%s)" % {k: r.get(k) for k in ("readStop", "release", "readResume")})
     ok(dev1["info"].get("readStop", "missing") is None, "the device's info says it is not stopped from FinCom (for the app)")
     got = [m["payload"]["beat"] for s in SENT for m in s.get("messages", []) if m.get("event") == "beat" and m["payload"].get("device") == D1]
     ok(got and got[-1].get("reqs") == REQS and "readStopped" in got[-1] and "readStop" in got[-1], "the timings go out on the firm's broadcast (%s)" % (got[-1] if got else SENT))
@@ -161,21 +164,32 @@ try:
     c, r = beat(K1, GO1)
     ok(not r.get("readResume"), "a resume older than a week is not passed on")
 
-    # 5. the staged release
+    # 5. the release: no conditions (the owner's rule of 05-Oct-2026)
+    NEWEST = {"newest": True, "allowed": True, "held": []}
     c, r = beat(K1, GO1)
-    ok("release" not in r, "no release row: no release (the bridge never updates)")
+    ok(r.get("release") == NEWEST, "no release row: the newest version (FinCom's signed list) is allowed, with nothing held (%s)" % r.get("release"))
     F.T["tally_bridge_releases"].append({"firm_id": FIRM, "version": "2.1.6", "pilot_device": D1, "pilot_started_at": None, "pilot_by": None, "pilot_seen_at": None, "pilot_last_seen_at": None,
                                          "pilot_beats": 0, "pilot_self_stop": None, "approved_at": None, "approved_by": None, "note": ""})
     rel = F.T["tally_bridge_releases"][-1]
     c, r = beat(K1, GO1)
-    ok(r.get("release") == {"version": "2.1.6", "allowed": False}, "a pilot computer named but its pilot not started: not allowed (%s)" % r.get("release"))
+    ok(r.get("release") == dict(NEWEST, version="2.1.6"), "a row for 2.1.6, its pilot never started: allowed all the same, no approval (%s)" % r.get("release"))
     rel["pilot_started_at"], rel["pilot_by"] = iso(-3600), "u-1"
-    c, r = beat(K1, GO1)
-    ok(r.get("release") == {"version": "2.1.6", "allowed": True}, "the pilot computer is allowed 2.1.6 (%s)" % r.get("release"))
     c, r = beat(K2, GO2)
-    ok(r.get("release") == {"version": "2.1.6", "allowed": False}, "OFFICE-2 is not, until approved (%s)" % r.get("release"))
+    ok(r.get("release") == dict(NEWEST, version="2.1.6"), "OFFICE-2 (a staff member's bridge) gets 2.1.6 with no approval (%s)" % r.get("release"))
     c, r = beat(K3, dict(GO2, id="go-cccccccccccc"))
-    ok("release" not in r, "another firm's computer: nothing (its firm has no release row)")
+    ok(r.get("release") == NEWEST, "another firm's computer: its own firm's (no row there: the newest, nothing held) (%s)" % r.get("release"))
+    rel["held_at"], rel["held_by"], rel["held_why"] = iso(), "u-1", "a report from NWS144"
+    c, r = beat(K2, GO2)
+    ok(r.get("release") == {"newest": True, "allowed": True, "held": ["2.1.6"]}, "the owner HOLDS 2.1.6: named in held, not offered (%s)" % r.get("release"))
+    rel["held_at"] = None
+    F.T.setdefault("tally_bridge_rollbacks", []).append({"id": 1, "firm_id": FIRM, "version": "2.1.4", "why": "posting broke", "set_by": "u-1", "set_at": iso(), "cleared_at": None})
+    c, r = beat(K2, GO2)
+    ok(r.get("release") == {"version": "2.1.4", "allowed": True, "rollback": True}, "the owner's Roll back to 2.1.4: offered as a rollback (%s)" % r.get("release"))
+    c, r = beat(K3, dict(GO2, id="go-cccccccccccc"))
+    ok(r.get("release") == NEWEST, "never another firm's rollback (%s)" % r.get("release"))
+    F.T["tally_bridge_rollbacks"][-1]["cleared_at"] = iso()
+    c, r = beat(K2, GO2)
+    ok(r.get("release") == dict(NEWEST, version="2.1.6"), "the rollback cleared: the newest again (%s)" % r.get("release"))
     ok(rel["pilot_seen_at"] is None and rel["pilot_beats"] == 0, "the pilot's beats on 2.1.5 are not evidence for 2.1.6 (%s)" % rel["pilot_beats"])
     GO16 = dict(GO1, version="2.1.6")
     c, r = beat(K1, GO16)
@@ -193,13 +207,10 @@ try:
     ok(rel["pilot_beats"] == 2, "another computer on 2.1.6 is no evidence for the pilot")
     F.T["tally_bridge_releases"].append({"firm_id": FIRM, "version": "2.1.5", "pilot_device": D1, "pilot_started_at": iso(-90000), "pilot_by": "u-1", "pilot_seen_at": iso(-89000),
                                          "pilot_last_seen_at": iso(-100), "pilot_beats": 300, "pilot_self_stop": None, "approved_at": iso(-50), "approved_by": "u-1", "note": ""})
+    F.T["tally_bridge_releases"][-1]["withdrawn_at"] = iso()
     c, r = beat(K2, GO2)
-    ok(r.get("release") == {"version": "2.1.5", "allowed": True}, "2.1.5 approved, 2.1.6 in pilot: OFFICE-2 may take 2.1.5 (%s)" % r.get("release"))
-    c, r = beat(K1, GO16)
-    ok(r.get("release") == {"version": "2.1.6", "allowed": True}, "the pilot keeps 2.1.6 (%s)" % r.get("release"))
+    ok(r.get("release") == {"newest": True, "allowed": True, "held": ["2.1.5"], "version": "2.1.6"}, "a withdrawn version (2.1.5) is held too; 2.1.6 named (%s)" % r.get("release"))
     rel["approved_at"], rel["approved_by"] = iso(), "u-1"
-    c, r = beat(K2, GO2)
-    ok(r.get("release") == {"version": "2.1.6", "allowed": True}, "2.1.6 approved: every computer allowed (%s)" % r.get("release"))
     n = rel["pilot_beats"]; rel["pilot_last_seen_at"] = iso(-3600)
     beat(K1, GO16)
     ok(rel["pilot_beats"] == n, "after approval the pilot's beats are no longer written")

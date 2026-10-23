@@ -130,29 +130,26 @@ func TestR222bStopHoldsBackgroundOnly(t *testing.T) {
 		}
 	}
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return 4 * time.Second
 		}
 		return 0
 	}
 	f.mu.Unlock()
-	resetSilence()
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "10:40", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "a"),
 		r222Line("voucher_accept_post", "10:40", r222GUID(26311), "26311", "54395", "Receipt", "191", "5-Oct-2026", "a"))
 	readAndUploadAll(t)
-	n := f.n(vchByMasterID)
+	n := f.n(vchObjectID)
 	if n != 1 {
 		t.Fatalf("asked %d", n)
 	}
-	silMu.Lock()
-	sil := silFirst
-	silMu.Unlock()
-	if !sil.IsZero() {
-		t.Fatal("the deliberate stop counted as Tally's silence")
+	// 2.3.1: never a stop of reading (the self-watch's silence is gone); the background waits for the retry schedule
+	if readStop() != nil || !retryHeld() {
+		t.Fatalf("after the stop: reading %v, retry pending %v", readStop(), retryHeld())
 	}
-	if _, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 5); err == nil || f.n(vchByMasterID) != n {
-		t.Fatalf("a background read sent into Tally right after the stop: %v (%d requests)", err, f.n(vchByMasterID))
+	if _, err := fetchVouchersByMasterIn(recorderTC(nil), nwsCo, f.port, "20261005", []string{"26312"}, 5); err == nil || f.n(vchObjectID) != n {
+		t.Fatalf("a background read sent into Tally right after the stop: %v (%d requests)", err, f.n(vchObjectID))
 	}
 	f.mu.Lock()
 	f.slow = nil
@@ -221,7 +218,7 @@ func TestR222bLimitAfterGentleWait(t *testing.T) {
 		}
 	}
 	f.slow = func(id, body string) time.Duration {
-		if id == vchByMasterID {
+		if id == vchObjectID {
 			return time.Second
 		}
 		return 0
@@ -231,7 +228,7 @@ func TestR222bLimitAfterGentleWait(t *testing.T) {
 		r222Line("voucher_accept_pre", "11:00", r222GUID(26311), "26311", "54391", "Receipt", "191", "5-Oct-2026", "g"),
 		r222Line("voucher_accept_post", "11:00", r222GUID(26311), "26311", "54395", "Receipt", "191", "5-Oct-2026", "g"))
 	readAndUploadAll(t)
-	if s := c.recSent(); len(s) != 1 || str(s[0]["xml"]) == "" || liveIsOff("bodies", nwsCo+"|"+nwsGUID) {
+	if s := c.recSent(); len(s) != 1 || str(s[0]["xml"]) == "" || retryHeld() {
 		t.Fatalf("a 1 s answer after a 1.5 s gentle wait was stopped: %v", s)
 	}
 }
@@ -256,7 +253,7 @@ func TestR222bNoDateNoMaster(t *testing.T) {
 
 // --- code L4: a pair whose pre carries another entry's GUID is flagged; a resolved line keeps the flag
 func TestR222bPreMismatchFlagged(t *testing.T) {
-	p, f, c := r222bBridge(t, `,"RecorderResolveSec":0`)
+	p, f, c := r222bBridge(t, "") // 2.3.3: its one ask again on the held list's spacing (10 minutes), by when Tally has it
 	src := r222Vch(f, 25414, "Journal", "J-10", "20261005", 51986)
 	liveAppend(t, p,
 		r222Line("voucher_accept_pre", "11:20", src.guid, "25414", "51986", "Journal", "J-95", "5-Oct-2026", "x"),
@@ -267,6 +264,8 @@ func TestR222bPreMismatchFlagged(t *testing.T) {
 		t.Fatalf("the pre's GUID not flagged: %s", jsonText(sent))
 	}
 	r222Vch(f, 25960, "Journal", "J-95", "20261005", 54560)
+	at := nowFn().Add(11 * time.Minute)
+	nowFn = func() time.Time { return at }
 	readAndUploadAll(t)
 	readAndUploadAll(t)
 	sent = c.recSent()
@@ -312,7 +311,7 @@ func TestR222bBelowStartGeneric(t *testing.T) {
 	if w != "Tally's voucher with that MasterID is not a change after the starting point" || strings.Contains(jsonText(s[0]), "P-SECRET") || strings.Contains(jsonText(s[0]), "Payment") {
 		t.Fatalf("the words: %q", w)
 	}
-	if err := datedRefused(&TC{copier: true}, voucherByMasterRequest("NO START CO", "20261005", []string{"1"})); err == nil {
+	if err := datedRefused(&TC{copier: true}, voucherObjectRequest("NO START CO", "1")); err == nil {
 		t.Fatal("a request by MasterID for a company with no starting point passes the guard")
 	}
 }

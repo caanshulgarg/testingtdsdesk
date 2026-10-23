@@ -265,6 +265,11 @@ func collectionRequest(id, typ, fetch, company, extra string) string {
 // read), which always gives way: 2.1.3 stops a background read at once (its request to Tally is closed) when FinCom's
 // request comes, and the read goes on from where it was afterwards
 type TC struct {
+	// next-inflight: where invokeTallyNow puts the request it gave up on while Tally is still on it (only invokeTally's own
+	// copy of a TC carries it: a shared TC never does)
+	slotOut **abandonSlot
+	// 2.3.3 (re-review L1): set true when this request was sent to Tally (it reached Tally, whatever came of it)
+	sentOut *bool
 	copier  bool
 	readSec int    // the copier: no read of the day book may hold Tally longer than this
 	enc     string // round 18: "utf-16" or "utf-8" for this request whatever TallyRequestUTF16 says ("": as the setting says)
@@ -281,23 +286,30 @@ type TC struct {
 	// the failure), the wait for Tally's lock not counted
 	timed func(seconds float64)
 	// 2.2.2 (the owner's condition b): a HARD stop for the recorder's background reads (the entry fetch by MasterID and by
-	// number, source B, source C, the held resolver): the bridge stops waiting after this many milliseconds (a context
-	// deadline from the send). Never for a posting (Import), a person's read or the light company check (they never set it)
+	// number, source B, source C, the held resolver; 2.3.1: the company list asked in the background, bgCompaniesTC): the
+	// bridge stops waiting after this many milliseconds (a context deadline from the send). Never for a posting (Import), a
+	// person's read or the light company check FinComCompany (they never set it)
 	limitMs int
 	// 2.2.2 second review (L-B): the light company check and the open-company list (tiny): not held by the cool-down after
 	// a recorder read's stop (the probe and busy rules still apply)
 	light bool
+	// 2.3.1 (the owner's last change, retry.go): a background request (the entry fetch, the company list asked in the
+	// background, the ledger changes, the light check, the held-line resolve): it waits for the shared retry schedule after
+	// a stop or no answer, and its answer in time ends it. Never a posting or a person's request
+	bg bool
+	// the shared retry schedule's try itself (set by invokeTally on its own copy of the TC)
+	isTry bool
 }
 
 // round 19 (review finding 1, the owner's rule "reading is prospective only", by any route): a request carrying a period
 // (SVFROMDATE / SVTODATE, any date form) goes to Tally only when ReadDays is on or a person started it
 //
-// 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch (FinComVoucherByMaster):
-// it asks only the entries just changed, by MasterID, with the line's own date as the period; it passes only when it is
-// exactly what voucherByMasterRequest builds for one day and 1 to 50 MasterIDs (recorder_live.go). Never a day's list
+// 2.2.0 (the owner's rule, prospective only): one narrow exception, the recorder's body fetch: it asks only the entry just
+// changed, by MasterID; it passes only when it is exactly what its builder makes for exactly one MasterID (next-fastfetch:
+// voucherObjectRequest, the object export "ID:<MasterID>", no period; fastvch.go). Never a day's list
 //
 // Round 3 R3-1: the two exceptions are checked by their id, always (whatever ReadDays says, whatever date form they use):
-// a FinComVoucherByMaster or FinComSlice that is not exactly as built, with its values in bounds, never goes.
+// an entry request or FinComSlice that is not exactly as built, with its values in bounds, never goes.
 // Round 4 R4-1: with ReadDays off the guard decides by the request's id, not by how its dates are spelt: an id that
 // reads by date is refused; TDSDeskKeepList goes only exactly as keepListAboveRequest builds it (its undated form); an
 // undated id goes unless it carries dates in any spelling (a normalised copy, lower-cased with character references
@@ -306,22 +318,26 @@ var requestClass = map[string]string{
 	"Day Book": "dated", "TDSDeskVchHeads": "dated", dupCheckID: "dated", tagCheckID: "dated", masterCheckID: "dated",
 	"FinComMeasureB": "dated", "FinComMeasureC": "dated", "FinComMeasureYear": "dated", "FinComMeasureD": "dated",
 	"FinComMeasureE": "dated", "FinComSnapshot": "dated", datesProbeID: "dated",
-	vchByMasterID: "exception", sliceID: "exception", vchByNumberID: "exception",
+	vchObjectID: "exception", sliceID: "exception", vchByNumberID: "exception",
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
 	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
-	// 2.2.2: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
-	fetchTestA: "dated", fetchTestB: "dated", fetchTestC: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
+	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
+	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
+	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
+	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
+	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
 
 func datedRefused(tc *TC, x string) error {
 	id := tallyRequestID(x)
 	switch id {
-	case vchByMasterID:
-		if voucherByMasterExact(x) {
+	case vchObjectID:
+		// next-fastfetch: the entry request (no period), exactly as built, for a company whose starting point is recorded
+		if voucherObjectExact(x) {
 			return nil
 		}
 		return readsOffErr()
@@ -484,45 +500,108 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	}
 	// a deliberate stop (the caller's deadline): not Tally's silence, never noted as such
 	stoppedHere := func() bool { return parent.Err() == nil && errors.Is(ctx.Err(), context.DeadlineExceeded) }
-	cl := &http.Client{Timeout: time.Duration(timeoutSec) * time.Second, Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
+	// 2.3.1 (one request in flight per Tally, inflight.go): the exchange itself runs on its own, bounded only by
+	// TallyAbandonMaxSec; the caller waits for it until its timeout, its stop or its cancel. Given up, the connection is
+	// not closed: Tally is still on it, so its answer is read and discarded, and the caller's lock is held until then
+	// next-inflight: TallyAbandonMaxSec counts from the moment the bridge stopped waiting (an import's own long timeout
+	// is never cut by it)
+	xctx, xdone := context.WithCancel(context.Background())
+	var bounded atomic.Bool
+	cl := &http.Client{Transport: &http.Transport{DisableKeepAlives: true, Proxy: nil}}
 	body, ctype := tallyBody(x, wantUTF16(ctx))
-	req, _ := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(xctx, "POST", fmt.Sprintf("http://%s:%d", host, port), bytes.NewReader(body))
 	req.Header.Set("Content-Type", ctype)
 	tallySent.Add(1)
 	tallySentAt.Store(time.Now().Unix())
 	if at, _ := ctx.Value(sentKey{}).(*time.Time); at != nil {
 		*at = time.Now()
 	}
-	resp, err := cl.Do(req)
-	if err != nil {
-		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
-		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		e := plainNetErr(err)
-		noteSilence(e)
-		return "", e
+	type answer struct {
+		b   []byte
+		err error
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
+	got := make(chan answer, 1)
+	go func() {
+		defer xdone()
+		resp, err := cl.Do(req)
+		if err != nil {
+			if bounded.Load() {
+				err = errTimeout
+			}
+			got <- answer{nil, err}
+			return
+		}
+		b, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil && bounded.Load() {
+			err = errTimeout
+		}
+		got <- answer{b, err}
+	}()
+	wait := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+	defer wait.Stop()
+	var why error
+	select {
+	case a := <-got:
+		if a.err != nil {
+			return "", plainNetErr(a.err)
+		}
+		return textFromBytes(a.b), nil
+	case <-ctx.Done():
 		if stoppedHere() {
-			return "", fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+			why = fmt.Errorf("%w (%g s)", errRecorderStop, ctx.Value(stopKey{}).(time.Duration).Seconds())
+		} else {
+			why = errPreempted
 		}
-		if errors.Is(ctx.Err(), context.Canceled) {
-			return "", errPreempted
-		}
-		e := plainNetErr(err)
-		noteSilence(e)
-		return "", e
+	case <-wait.C:
+		why = errTimeout
 	}
-	noteSilence(nil)
-	return textFromBytes(b), nil
+	// TallyAbandonMaxSec 0: the request is closed now (as before); invokeTallyNow owes the small check after a minute
+	if abandonMax() <= 0 {
+		xdone()
+		<-got
+		return "", why
+	}
+	// given up: Tally is still on it. The answer is read in the background and discarded; the lock goes when it ends
+	id, t0, gaveUp := tallyRequestID(x), time.Now(), nowFn()
+	done := make(chan struct{})
+	slot, _ := parent.Value(abandonKey{}).(*abandonSlot)
+	if slot == nil {
+		slot = &abandonSlot{}
+	}
+	slot.done, slot.id, slot.at = done, id, t0
+	bound := time.AfterFunc(abandonMax(), func() { bounded.Store(true); xdone() })
+	go func() {
+		defer close(done)
+		a := <-got
+		bound.Stop()
+		if errors.Is(a.err, errTimeout) && bounded.Load() {
+			// next-inflight: the long bound. The bridge closes the connection; whether Tally is free is not known, so the
+			// small check goes first, at once (setProbeNow: no minute's wait, nothing was sent since), and the request
+			// after it when Tally answers it
+			slot.bound = true
+			writeLog(fmt.Sprintf("Tally %d did not answer an earlier request (%s, sent at %s) in %s: taken as not answering; the next request may go (the small check first)",
+				port, id, t0.Format("15:04:05"), abandonMax().Round(time.Second)))
+			setProbeFrom(port, gaveUp)
+			setTallyStuck(port)
+			return
+		}
+		// next-inflight: Tally finished it (answered, or closed it): Tally is free, no small check is owed. Within the 20 s wait
+		// after the stop the next request goes at once (invokeTally lifts the retry schedule's wait); later, the schedule stands
+		slot.took = time.Since(t0)
+		clearProbe(port)
+		clearTallyStuck(port)
+		if slot.took <= abandonWait() {
+			writeLog(fmt.Sprintf("Tally %d finished the request the bridge stopped waiting for (%s) %s after the stop; its answer is discarded and the next request goes now",
+				port, id, slot.took.Round(100*time.Millisecond)))
+		} else {
+			writeLog(fmt.Sprintf("Tally %d answered the earlier request (%s) %s after the bridge stopped waiting (over the %s wait); its answer is discarded and the next request goes at the retry schedule's time",
+				port, id, slot.took.Round(100*time.Millisecond), abandonWait().Round(time.Second)))
+		}
+	}()
+	return "", why
 }
 
-// the words Windows uses, which the rest of the bridge (and FinCom) read
 func plainNetErr(err error) error {
 	var ne net.Error
 	s := err.Error()
@@ -615,6 +694,10 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			case <-stopCh:
 				return nil, errPreempted
 			case <-time.After(200 * time.Millisecond):
+				// 2.3.1: Tally still on an earlier request given up: not waited for here (the retry schedule)
+				if err := earlierRefusal(port); err != nil && !tc.person {
+					return nil, err
+				}
 				continue
 			}
 			if userWaiting(port) { // FinCom came meanwhile: it goes first
@@ -639,8 +722,21 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 			}
 			g.mu.Unlock()
 		}()
-		t0, told := time.Now(), false
+		t0, told, toldEarlier := time.Now(), false, false
 		for got := false; !got; {
+			// 2.3.1 (inflight.go): Tally still on an earlier request the bridge stopped waiting for: this one waits, said once
+			if e := earlierRefusal(port); e != nil {
+				s := e.(*earlierErr).s
+				if !toldEarlier {
+					toldEarlier = true
+					writeLog(fmt.Sprintf("Tally %d: %s (%s, sent at %s); this one goes when Tally has answered it", port, earlierWords, s.id, s.at.Format("15:04:05")))
+				}
+				// next-inflight: a person's read waits up to TallyAbandonWaitSec (20 s), then backs off in plain words, nothing
+				// sent; a posting waits on (it says so, and is never lost)
+				if !post && time.Since(t0) >= abandonWait() {
+					return nil, fmt.Errorf("Tally (port %d) is still working on an earlier request (%s, sent at %s); nothing was sent (%s), try again in a moment", port, s.id, s.at.Format("15:04:05"), earlierWords)
+				}
+			}
 			// postings jump the queue: another FinCom request waits while a posting waits
 			g.mu.Lock()
 			held := !post && g.posts > 0
@@ -800,39 +896,110 @@ func isBusyErr(err error) bool {
 }
 
 func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
+	if !tc.bg || tc.person || isImportRequest(x) || checkAllowed(x) != nil || readStopRefuses(x) != nil {
+		return invokeTallyNow(tc, port, x, timeoutSec)
+	}
+	// 2.3.1: a background request waits for the shared retry schedule (retry.go); nothing is sent before its time
+	try, err := retryTake(tallyRequestID(x))
+	if err != nil {
+		return "", err
+	}
+	t2 := *tc
+	t2.isTry = try
+	// 2.3.2 (slowco.go): the time Tally had it, told only when the request reached Tally
+	sent, took := false, time.Duration(0)
+	t2.timed = func(sec float64) {
+		sent, took = true, time.Duration(sec*float64(time.Second))
+		if tc.timed != nil {
+			tc.timed(sec)
+		}
+	}
+	var given *abandonSlot
+	t2.slotOut = &given
+	r, err := invokeTallyNow(&t2, port, x, timeoutSec)
+	retryNote(port, tallyRequestID(x), err)
+	slowNote(port, x, sent, took, err, tc.limitMs)
+	// next-inflight (the owner, 07-Oct-2026): after a stop the bridge waits up to TallyAbandonWaitSec (20 s) for Tally to
+	// finish that request, sending nothing; finished in time, the retry schedule's wait is lifted and the next request
+	// goes at once; not finished, the schedule's back-off stands
+	if s := given; s != nil && s.done != nil && err != nil {
+		go func() {
+			select {
+			case <-s.done:
+				if !s.bound && s.took <= abandonWait() {
+					retryLift()
+				}
+			case <-time.After(abandonWait() + time.Second):
+			}
+		}()
+	}
+	return r, err
+}
+
+func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	// plan item 7: a request not on the allow-list is refused before anything is sent (allowlist.go)
 	if err := checkAllowed(x); err != nil {
 		writeLog(fmt.Sprintf("Tally %d: refused: %s", port, err.Error()))
 		return "", err
 	}
 	if err := datedRefused(tc, x); err != nil {
-		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: it carries a period and reading old entries is off (ReadDays)", port, tallyRequestID(x)))
+		// 2.4.1 (item 6): FinComVoucherByNumber is refused by its own rule (one day, from the starting day to today, within
+		// the last 3 days or a line just asked), whatever ReadDays says: the log names that rule
+		why := "it carries a period and reading old entries is off (ReadDays)"
+		if tallyRequestID(x) == vchByNumberID {
+			why = or(voucherByNumberWhy(x), "it is not exactly as the bridge builds it")
+		}
+		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: %s", port, tallyRequestID(x), why))
 		return "", err
 	}
 	// plan items 10-11: while reading is stopped on this computer only what a posting needs goes (selfwatch.go)
 	if err := readStopRefuses(x); err != nil {
 		return "", err
 	}
-	if tc.copier && !bgBackoffUntil(port).IsZero() {
+	// (a background request of 2.3.1 follows the shared retry schedule instead: invokeTally)
+	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		return "", errBackoff
 	}
-	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
+	if tc.copier && !tc.bg && !tc.person && !tc.light && stopHeld(port) {
 		return "", errBackoff // 2.2.2: a recorder read was stopped at its limit: Tally is still on it
 	}
 	// after a request that did not answer, nothing goes before the "is it free?" check may be sent (once a minute)
 	if err := probeHold(port); err != nil {
 		return "", err
 	}
+	// decision D (05-Oct-2026): a background read of a company whose lease this bridge holds for reading gives way, here
+	// at the request boundary (before the next request, never cutting one), when another bridge wants to post to it
+	if tc.copier && !tc.light && !isImportRequest(x) {
+		if co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1)); co != "" && leaseYieldNow(co) {
+			return "", errPreempted
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	if tc.enc != "" {
 		ctx = context.WithValue(ctx, encKey{}, tc.enc)
 	}
-	unlock, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
+	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
+	if tc.copier && !tc.person {
+		if err := earlierRefusal(port); err != nil {
+			return "", err
+		}
+	}
+	unlock0, err := enterTallyLock(tc, port, cancel, isPostingRequest(x))
 	if err != nil {
 		return "", err
 	}
-	if tc.copier && !bgBackoffUntil(port).IsZero() {
+	// 2.3.1: a request given up while Tally is still on it keeps the lock until Tally answered or closed it
+	slot := &abandonSlot{}
+	ctx = context.WithValue(ctx, abandonKey{}, slot)
+	unlock := func() {
+		if slot.done != nil {
+			holdUntilAnswered(port, slot, unlock0)
+			return
+		}
+		unlock0()
+	}
+	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		unlock()
 		return "", errBackoff
 	}
@@ -840,9 +1007,17 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 		unlock()
 		return "", errBackoff
 	}
+	// 2.3.1 (as 2.2.2's L-A): a background request that waited for the lock while another was stopped or not answered is
+	// not sent: it waits for the retry schedule's try
+	if tc.bg && !tc.isTry {
+		if err := retryWaiting(); err != nil {
+			unlock()
+			return "", err
+		}
+	}
 	// 2.2.2 second review (L-A): a background read that waited for the lock while a recorder read was stopped is not
 	// sent into the Tally still working on it
-	if tc.copier && !tc.person && !tc.light && stopHeld(port) {
+	if tc.copier && !tc.bg && !tc.person && !tc.light && stopHeld(port) {
 		unlock()
 		return "", errBackoff
 	}
@@ -873,10 +1048,19 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	t0 := time.Now()
 	setInflight(port, true)
 	r, err := tallyRaw(ctx, port, x, timeoutSec)
+	// next-inflight: a request given up is held as in flight (the lock kept) until Tally finishes it; its end decides the
+	// small check (none when Tally finished it; first, after the long bound) and, within the 20 s wait, lifts the retry wait
+	held := slot.done != nil
+	if tc.slotOut != nil {
+		*tc.slotOut = slot
+	}
 	setInflight(port, false)
 	took := time.Since(t0)
 	if !sentAt.IsZero() {
 		took = time.Since(*sentAt) // the time Tally had the request (a gentle wait is not Tally's)
+		if tc.sentOut != nil {
+			*tc.sentOut = true
+		}
 	}
 	stopped := errors.Is(err, errRecorderStop)
 	if stopped {
@@ -920,7 +1104,11 @@ func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
 	} else {
 		fail = err.Error()
 		if re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
-			setProbeAfterTimeout(port)
+			// next-inflight: a request held as in flight (Tally still on it) owes no small check here: its end decides
+			// (finished: none; the long bound: the check first). One Tally closed is checked as before
+			if !held {
+				setProbeAfterTimeout(port)
+			}
 			setTallyStuck(port)
 			// said once a busy spell; the next tries are quiet
 			busyMu.Lock()

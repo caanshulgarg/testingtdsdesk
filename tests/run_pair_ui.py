@@ -1,6 +1,8 @@
 """python3 run_pair_ui.py - FinCom opened by the FinCom Connector with a connect code in its address connects to the
 bridge by itself, and the code is taken off the address at once."""
 import json, os, sys, threading, functools, http.server
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from bridge_proof import ping_body, is_ping
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -12,7 +14,9 @@ def ok(c, w):
     if not c: fails.append(w)
 def bridge(r):
     u = r.request.url; asked.append(u)
-    if "/pair?code=482913" in u: return r.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": True, "key": "k" * 24, "computer": "OFFICE-PC", "version": "1.13.0"}))
+    # FinCom Bridge 2.3.0 proves itself on /ping?n= (its key; the code while its pairing window is open)
+    if is_ping(u): return r.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps(ping_body(u, "k" * 24, code="482913")))
+    if "/pair?code=482913" in u: return r.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": True, "key": "k" * 24, "computer": "OFFICE-PC", "version": "2.3.0"}))
     if "/pair" in u: return r.fulfill(status=403, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": False, "error": "That is not the code shown in the bridge window."}))
     return r.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body=json.dumps({"ok": True, "version": "1.13.0", "sessions": [], "jobs": []}))
 with sync_playwright() as p:
@@ -26,7 +30,7 @@ with sync_playwright() as p:
     ok("Connected to FinCom Bridge on OFFICE-PC" in pg.inner_text("body"), "and says so")
     pg2 = br.new_page(); pg2.on("pageerror", lambda e: errors.append(str(e))); pg2.route("http://127.0.0.1:9100/**", bridge)
     pg2.goto("http://localhost:8147/#pair=111111"); pg2.wait_for_timeout(3000)
-    ok("Could not connect to the bridge" in pg2.inner_text("body") and not pg2.evaluate("Bridge.cfg().key"), "a wrong or old code does not connect, and says what to do")
+    ok("Could not connect to the bridge" in pg2.inner_text("body") and not pg2.evaluate("Bridge.cfg().key") and not any("/pair?code=111111" in u for u in asked), "a wrong or old code does not connect (not even sent: the bridge did not prove it shows it), and says what to do")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0][:200]))
     br.close()
 print("all passed" if not fails else str(len(fails)) + " FAILED")

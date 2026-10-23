@@ -47,6 +47,7 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8379/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     txt = lambda s: (E("(s) => { const e = document.querySelector(s); return e ? e.innerText.replace(/\\s+/g, ' ').trim() : ''; }", s))
+    tc = lambda sel: (pg.text_content(sel) or "").replace("\n", " ").strip() if pg.locator(sel).count() else ""   # 2.3.5: the lines under "Which entries" are folded
     cid = E(SETUP, [{"devs": [dev(recording=True)], "alerts": [], "gap": None, "lines": LINES}, "owner"])
     E("() => { AlertHub.refresh(true); }"); pg.wait_for_timeout(1200)
     # ---- 1. Sync activity on the Tally page
@@ -54,8 +55,9 @@ with sync_playwright() as p:
     held, applied = txt('#app [data-sync-line="601"] [data-sync-state]'), txt('#app [data-sync-line="602"] [data-sync-state]')
     ok(HELDW.fullmatch(held or "") is not None, "Sync activity: the held line says 'received, not yet entered in the books: <held_why>' (%s)" % held)
     ok(applied == "Entered in the books", "Sync activity: the applied line as before (%s)" % applied)
-    wl = txt('#app [data-sync-waiting-line="601"]')
-    ok(wl.endswith(", not yet entered in the books: " + WHY) and ", received " in wl, "Sync activity's waiting strip: received at, not yet entered in the books, the reason (%s)" % wl)
+    # 2.3.5: a line held for a reason only a person settles is under "Needs you" (its group's sentence, the line below it)
+    wl = tc('#app [data-sync-needs-line="601"]'); gt = txt('#app [data-sync-needs] [data-needs-text]')
+    ok(wl.endswith(": " + WHY) and ", received " in wl and "not yet entered in the books (" + WHY + ")" in gt, "Sync activity's Needs you: received at, not yet entered in the books, the reason (%s | %s)" % (wl, gt))
     ok(not SYNC.search(pg.inner_text("#app")), "Sync activity: no 'in sync' on the page")
     # ---- 2. the Tally status: never "in sync" with a held line
     st = E(STATUS, cid)

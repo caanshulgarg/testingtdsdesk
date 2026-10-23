@@ -36,21 +36,36 @@ var tallyAllowList = map[string]allowedReq{
 	"Day Book":           {purpose: "the day book of one company for one month at most (Update now, the nightly run, a FinCom read)"},
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
-	ledListID:            {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only"},
-	grpListID:            {purpose: "the group list, stored master fields only"},
-	"TDSDeskLedgers":     {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
-	"TDSDeskGroups":      {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
-	"TDSDeskNames":       {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
-	"TDSDeskGroupNames":  {purpose: "group names and parents"},
-	dupCheckID:           {purpose: "the duplicate check before a posting: one date's entries (for one party)", aux: nil},
-	tagCheckID:           {purpose: "the FinCom id check: one date's entries, heads and narration only"},
-	masterCheckID:        {purpose: "the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only"},
-	"Import":             {purpose: "a posting or a deletion (Import Data)"},
-	sliceID:              {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
-	datesProbeID:         {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
-	editLogProbeID:       {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
-	vchByMasterID:        {purpose: "the recorder's body fetch (2.2.0): the entries just changed, by MasterID (50 at most), the line's own date as the period, the fields FinCom's day parse reads"},
-	vchByNumberID:        {purpose: "the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields"},
+	ledListID: {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates; 2.4.4: a pay head's PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL)", maxSec: 0.28,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: a chunk of 2,000 MasterIDs 278 ms worst (3.0), the same chunk with 2.4.3's fields 218 ms; 2.4.3's tdsm runs 38164963591 and 38187902681: 316 ms worst with 2.4.3's fields)"},
+	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
+	// one ledger an entry names that FinCom does not have (ledchanges.go)
+	ledChangesID: {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only", maxSec: 0.24,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: every window of 200 AlterIDs, 237 ms worst (3.0))"},
+	ledByNameID: {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only", maxSec: 0.038,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: 38 ms worst (3.0))"},
+	grpListID: {purpose: "the group list, stored master fields only"},
+	// 2.4.3 (the owner's approval of 11-Oct-2026, (b)): the natures of payment (tdsnatures.go)
+	natListID: {purpose: "the TDS natures of payment (2.4.3): Tally's TDSRate masters, each one's section, rates and thresholds by the date they apply from, 5,000 MasterIDs a request at most, stored master fields only", maxSec: 0.006,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode tdsm, runs 38164963591 and 38187902681: 5.6 ms worst (4.1))"},
+	// 2.4.4 (the owner's decision of 12-Oct-2026, item 1): the payroll's employees (payroll.go)
+	empListID: {purpose: "the payroll's employees (2.4.4): Tally's Cost Centre masters, 2,000 MasterIDs a request at most, exactly GUID, MASTERID, ALTERID, NAME, PARENT, CATEGORY, FORPAYROLL, ISEMPLOYEEGROUP, PANNUMBER, DATEOFJOIN, DEACTIVATIONDATE, DESIGNATION (stored master fields only, no period); only payroll rows kept, every other cost centre dropped before anything is logged, stored or sent; read again when Tally's master counter moves", maxSec: 0.17,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: every chunk of 2,000 MasterIDs and the open end, 163 ms worst (3.0), the chunk with all 2,000 employees 1.55 MB)"},
+	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
+	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
+	"TDSDeskNames":      {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
+	"TDSDeskGroupNames": {purpose: "group names and parents"},
+	dupCheckID:          {purpose: "the duplicate check before a posting: one date's entries (for one party)", aux: nil},
+	tagCheckID:          {purpose: "the FinCom id check: one date's entries, heads and narration only"},
+	masterCheckID:       {purpose: "the posting read-back by Tally's voucher id (LASTVCHID): one month's entries filtered to that one MasterID, heads and narration only"},
+	"Import":            {purpose: "a posting or a deletion (Import Data)"},
+	sliceID:             {purpose: "the recorder's source C (2.2.0, off by default): one month's entries above an AlterID as GUID, MasterID, AlterID and date, in the date form the read test kept"},
+	datesProbeID:        {purpose: "measure (the read test): one past-year month's entries as GUID, MasterID, AlterID and date, in each date form", measureOnly: true},
+	editLogProbeID:      {purpose: "measure (the read test): one entry by MasterID with its edit-log sub-collection (candidate names)", measureOnly: true},
+	// next-fastfetch (the owner's approval of 07-Oct-2026 and decision of 08-Oct-2026): replaces FinComVoucherByMaster
+	vchObjectID: {purpose: "the entry request (next-fastfetch, replacing FinComVoucherByMaster): ONE voucher by its MasterID, Tally's object export ID:<MasterID> (keyed: it does not read every voucher of the company), its FETCHLIST the approved fields of FinComVoucherByMaster; Tally sends the whole voucher and the bridge keeps exactly those fields (ledger lines as ALLLEDGERENTRIES), dropping the rest before anything is logged, stored or sent; read only, no period; stopped at 2 s, a payroll voucher's at 3 s (2.4.4, the owner's decision of 12-Oct-2026)", maxSec: 2.2,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475: a payroll entry of 500 employees, 2,189 ms worst (6.2), under its 3 s; push-design runs 37718386662 and 37747408916 (2026-10-08): 9-23 ms median, 61 ms worst for an ordinary entry at 4,000-100,000 vouchers, 1.7 s worst for a 500-item invoice)"},
+	vchByNumberID:        {purpose: "the recorder's new entry (2.2.1): one entry by its voucher type and number, the line's own date as the period, the body fetch's fields (2.3.1: the whole entry, as the body fetch)"},
 	"FinComMeasureB":     {purpose: "measure: entries above an AlterID over the year", measureOnly: true},
 	"FinComMeasureC":     {purpose: "measure: entries above an AlterID, one month", measureOnly: true},
 	"FinComMeasureYear":  {purpose: "measure: the year's entries, dates only", measureOnly: true},
@@ -60,13 +75,12 @@ var tallyAllowList = map[string]allowedReq{
 	"FinComMeasureLedF":  {purpose: "measure: one ledger's master fields", measureOnly: true},
 	"FinComMeasureLedO":  {purpose: "measure: one ledger's stored opening (the field, no period)", measureOnly: true},
 	"FinComSnapshot":     {purpose: "measure: one month's entries as GUID, AlterID, date, type and number", measureOnly: true},
-	// 2.2.2 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
+	// 2.2.3 (the owner's request, 05-Oct-2026): "Test fetching an entry" (fetchtest.go), the forms of
 	// docs/diagnostics/2.2.2-fetch-check.ps1 for one voucher, a person's tray item only
-	fetchTestA: {purpose: "measure (Test fetching an entry): form A, FinComVoucherByNumber as built (one voucher by type and number, one day, yyyymmdd), under its own id", measureOnly: true},
-	fetchTestB: {purpose: "measure (Test fetching an entry): form B, form A with plain quote marks in the filter", measureOnly: true},
-	fetchTestC: {purpose: "measure (Test fetching an entry): form C, FinComVoucherByMaster as built (one MasterID, one day, yyyymmdd), under its own id", measureOnly: true},
-	fetchTestD: {purpose: "measure (Test fetching an entry): form D, form C with no dates", measureOnly: true},
-	fetchTestE: {purpose: "measure (Test fetching an entry): form E, form C with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
+	// 2.3.4 (the owner, 08-Oct-2026): forms A and C removed; B, D, E and F as before (their purposes name the 2.2.2 requests they vary)
+	fetchTestB: {purpose: "measure (Test fetching an entry): form B, the 2.2.2 by-number entry request with plain quote marks in the filter", measureOnly: true},
+	fetchTestD: {purpose: "measure (Test fetching an entry): form D, the 2.2.2 by-MasterID entry request with no dates", measureOnly: true},
+	fetchTestE: {purpose: "measure (Test fetching an entry): form E, the 2.2.2 by-MasterID entry request with the dates as d-MMM-yyyy TYPE=Date", measureOnly: true},
 	fetchTestF: {purpose: "measure (Test fetching an entry): form F, form B with no dates", measureOnly: true},
 }
 
@@ -80,10 +94,14 @@ var measuring atomic.Int32
 // an Import Data request as importEnvelope makes it: its fixed header at the start (anchored)
 func isImportRequest(x string) bool { return strings.HasPrefix(x, importHead) }
 
-// a request's id: "Import" for every Import Data request; else the collection's ID; else the report's name
+// a request's id: "Import" for every Import Data request; the object export of a voucher vchObjectID (next-fastfetch); else
+// the collection's ID; else the report's name
 func tallyRequestID(x string) string {
 	if isImportRequest(x) {
 		return "Import"
+	}
+	if id, ok := objectRequestID(x); ok {
+		return id
 	}
 	if id := strings.TrimSpace(group(`<ID>([^<]+)</ID>`, x, 1)); id != "" {
 		return id
@@ -165,7 +183,11 @@ func allowListSamples() map[string]string {
 		"TDSDeskVchHeads":    vchHeadsRequest(c, a, z),
 		"TDSDeskKeepList":    keepListRequest(c, a, z, 0),
 		ledListID:            ledgerChunkRequest(c, 0, 2000),
+		ledChangesID:         ledgerChangesRequest(c, 0, 200),
+		ledByNameID:          ledgerByNameRequest(c, "SAMPLE LEDGER"),
 		grpListID:            groupListRequest(c),
+		natListID:            natureChunkRequest(c, 0, 5000),
+		empListID:            employeeChunkRequest(c, 0, 2000),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),
@@ -173,7 +195,7 @@ func allowListSamples() map[string]string {
 		dupCheckID:           dupCheckRequest(c, a, "SAMPLE PARTY"),
 		tagCheckID:           tagCheckRequest(c, a),
 		masterCheckID:        masterCheckRequest(c, a, z, "1"),
-		vchByMasterID:        voucherByMasterRequest(c, a, []string{"1", "2"}),
+		vchObjectID:          voucherObjectRequest(c, "1"),
 		vchByNumberID:        voucherByNumberRequest(c, a, "Receipt", "1"),
 		sliceID:              sliceRequest(c, formPlain, "202604", 1),
 		datesProbeID:         datesProbeRequest(c, collFilterGE, a, z),
@@ -188,9 +210,7 @@ func allowListSamples() map[string]string {
 		"FinComMeasureLedF":  measureReqLedF(c, "SAMPLE LEDGER"),
 		"FinComMeasureLedO":  measureReqLedO(c, "SAMPLE LEDGER"),
 		"FinComSnapshot":     snapshotRequest(c, a, z),
-		fetchTestA:           fetchTestRequest("A", c, a, "Receipt", "1", ""),
 		fetchTestB:           fetchTestRequest("B", c, a, "Receipt", "1", ""),
-		fetchTestC:           fetchTestRequest("C", c, a, "", "", "1"),
 		fetchTestD:           fetchTestRequest("D", c, "", "", "", "1"),
 		fetchTestE:           fetchTestRequest("E", c, a, "", "", "1"),
 		fetchTestF:           fetchTestRequest("F", c, "", "Receipt", "1", ""),

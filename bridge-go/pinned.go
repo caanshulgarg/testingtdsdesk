@@ -4,7 +4,7 @@
 // can no longer widen an id: another TYPE, field, filter, report or one character more is refused before anything is
 // sent. Import (a posting, free content) is held to its fixed envelope: the Import Data header, one of the bridge's two
 // reports, the company, and one TALLYMESSAGE holding VOUCHER and LEDGER objects only. The id-based ReadDays-off guard
-// and the value checks (tally.go datedRefused, sliceExact, voucherByMasterExact, keepAboveExact) stay on top.
+// and the value checks (tally.go datedRefused, sliceExact, voucherObjectExact, keepAboveExact) stay on top.
 package main
 
 import (
@@ -75,8 +75,25 @@ var requestRebuild = map[string]func(x string) []string{
 		n := pinNum(x, `\$AlterID &gt; (\d+)`)
 		return []string{keepListRequest(pinCo(x), a, z, n), keepListAboveRequest(pinCo(x), n)}
 	},
-	ledListID:           pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgerChunkRequest(pinCo(x), a, u) }),
-	grpListID:           pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
+	ledListID: pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgerChunkRequest(pinCo(x), a, u) }),
+	// 2.3.1 (masters): an AlterID span with both ends, and one ledger by its name
+	ledChangesID: func(x string) []string {
+		m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)</SYSTEM>`).FindStringSubmatch(x)
+		if m == nil {
+			return nil
+		}
+		return []string{ledgerChangesRequest(pinCo(x), toI64(m[1]), toI64(m[2]))}
+	},
+	ledByNameID: pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
+	grpListID:   pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
+	natListID:   pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),
+	empListID: pinOne(func(x string) string {
+		a, u := pinMasterRange(x)
+		if u > 0 && u-a > 2000 {
+			return "" // 2.4.4: 2,000 MasterIDs a request at most (the owner's decision of 12-Oct-2026)
+		}
+		return employeeChunkRequest(pinCo(x), a, u)
+	}),
 	"TDSDeskLedgers":    pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgersFullRequest(pinCo(x), a, u) }),
 	"TDSDeskGroups":     pinOne(func(x string) string { return groupsFullRequest(pinCo(x)) }),
 	"TDSDeskNames":      pinOne(func(x string) string { a, u := pinMasterRange(x); return namesRequest(pinCo(x), a, u) }),
@@ -90,14 +107,7 @@ var requestRebuild = map[string]func(x string) []string{
 		a, z := pinDates(x)
 		return masterCheckRequest(pinCo(x), a, z, group(`\$MasterID = (\d+)`, x, 1))
 	}),
-	vchByMasterID: pinOne(func(x string) string {
-		a, _ := pinDates(x)
-		var ids []string
-		for _, m := range regexp.MustCompile(`\$MasterID = (\d+)`).FindAllStringSubmatch(x, -1) {
-			ids = append(ids, m[1])
-		}
-		return voucherByMasterRequest(pinCo(x), a, ids)
-	}),
+	vchObjectID: pinOne(voucherObjectRebuild), // next-fastfetch: the object export of one voucher (fastvch.go)
 	vchByNumberID: pinOne(func(x string) string {
 		a, _ := pinDates(x)
 		no := html.UnescapeString(group(`\$VoucherNumber = &#34;(.*?)&#34; AND`, x, 1))
@@ -142,8 +152,8 @@ var requestRebuild = map[string]func(x string) []string{
 	"FinComMeasureLedF":  pinOne(func(x string) string { return measureReqLedF(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComMeasureLedO":  pinOne(func(x string) string { return measureReqLedO(pinCo(x), pinQuoted(x, "$Name")) }),
 	"FinComSnapshot":     pinOne(func(x string) string { a, z := pinDates(x); return snapshotRequest(pinCo(x), a, z) }),
-	// 2.2.2: "Test fetching an entry" (fetchtest.go)
-	fetchTestA: fetchTestRebuild("A"), fetchTestB: fetchTestRebuild("B"), fetchTestC: fetchTestRebuild("C"),
+	// 2.2.3: "Test fetching an entry" (fetchtest.go)
+	fetchTestB: fetchTestRebuild("B"),
 	fetchTestD: fetchTestRebuild("D"), fetchTestE: fetchTestRebuild("E"), fetchTestF: fetchTestRebuild("F"),
 }
 

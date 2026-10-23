@@ -344,7 +344,7 @@ func pushCloudCompany(company, dir string, budget time.Duration) error {
 		size := 0
 		for i < len(q) && len(batch) < 31 {
 			d := q[i]
-			t := readText(filepath.Join(dir, "days", d+".xml"))
+			t := dropBankDetails(readText(filepath.Join(dir, "days", d+".xml"))) // 2.4.4: a day file an older bridge wrote
 			var one M
 			var n int
 			// packed here (gzip); a day the cloud could not open that way is sent again as plain text
@@ -510,6 +510,9 @@ func pushCloudState(company, dir string) {
 
 // every turn: all companies kept here, whether open in Tally or not (sending needs no Tally); returns the days waiting
 func invokeCloudPush() int {
+	for _, d := range keptDirs() {
+		bankCleanOnce(d) // 2.4.4 (review 244 R2-L1): once per company folder
+	}
 	if !cloudOn() {
 		return 0
 	}
@@ -586,6 +589,7 @@ func setCloudLink(o M) (M, error) {
 		return nil, errors.New("That is not a FinCom computer key.")
 	}
 	oldU, oldK, oldG := cfg("CloudUrl"), cfg("CloudKey"), cfg("CloudKeyGo")
+	oldPlain := cloudKey()
 	pk, err := protectKey(key)
 	if err != nil {
 		return nil, err
@@ -593,6 +597,18 @@ func setCloudLink(o M) (M, error) {
 	setCfg("CloudUrl", u)
 	setCfg("CloudKey", "")
 	setCfg("CloudKeyGo", pk)
+	// final review M3: a NEW key for this bridge (its member's FinCom page made it, e.g. to give the bridge a key of its own
+	// on a computer key shared with another Windows user): the bridge, holding both keys, asks FinCom first, with the new
+	// key and the old one in the body, to move its identity to the new key (FinCom's cloud only: the old key goes nowhere
+	// else; never written to the log). Refused (an older cloud, or nothing to move): the hello below decides as before
+	if oldPlain != "" && oldPlain != key && str(oldU) == u {
+		m := invokeCloud(M{"kind": "own_key", "oldKey": oldPlain}, 60)
+		said := "moved"
+		if !truthy(obj(m.json)["moved"]) {
+			said = "not moved (" + or(m.err, fmt.Sprint("nothing to move, HTTP ", m.code)) + ")"
+		}
+		writeLog("Cloud: this bridge asked to move to its new computer key: " + said)
+	}
 	r := invokeCloud(M{"kind": "hello", "info": M{"computer": computerName(), "user": ownerName()}}, 60)
 	if r.code != 200 {
 		setCfg("CloudUrl", oldU)
@@ -661,9 +677,9 @@ func beatLoop() {
 			defer func() {
 				if r := recover(); r != nil {
 					writeLog(fmt.Sprint("Heartbeat: ", r))
+					crashReport("heartbeat", r)
 				}
 			}()
-			selfWatchTick()
 			if cloudOn() {
 				beatOnce()
 				claimMainOnce()
@@ -688,6 +704,12 @@ func beatOnce() {
 	// on first sight in this run and at most every 10 minutes while it stays open (startpoint.go); nothing else is read
 	startLightCheck(sessions)
 	r := invokeCloud(beatBody(tally, tstate, tsince, open, ports, cos), 10)
+	// the owner's condition (Fix 2c): FinCom refused this computer key the bridge's id: its words in the tray and the log
+	if r.code == 409 && r.json != nil && truthy(r.json["idRefused"]) {
+		setIdRefused(str(r.json["error"]))
+	} else if r.code == 200 {
+		setIdRefused("")
+	}
 	if r.code != 200 || r.json == nil {
 		// round 22 (the 2.1.10 reviews' Medium 1 / S1): no current "on" from FinCom: the trial tools are off at once
 		trialToolsOff("FinCom's answer to the heartbeat did not come: " + or(r.err, fmt.Sprint("HTTP ", r.code)))
@@ -712,6 +734,8 @@ func beatOnce() {
 		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again
 		applyRecorderSource(r.json) // 2.2.0: where the recorder's changes come from (the owner's choice; absent: the setting)
 		applyHeldLines(r.json)      // 2.2.2: the lines FinCom holds without their entry, asked of Tally again
+		applyRefetch(r.json)        // after 2.3.0: this bridge's own held lines FinCom asks for again (body missing, placeholder GUID)
+		applyLedgersWanted(r.json)  // 2.3.1: the ledgers FinCom holds an entry for, asked of the own Tally by name (ledchanges.go)
 		// made the main bridge on FinCom's Tally page: this test bridge switches itself to main, once
 		if testMode() && truthy(r.json["makeMain"]) && makeMainSeen.CompareAndSwap(false, true) {
 			writeLog("FinCom made this the main bridge")
@@ -721,6 +745,16 @@ func beatOnce() {
 		}
 		// another bridge is the main one on this computer: this one reads only (said once in the log)
 		if !testMode() {
+			// L2: FinCom's "Changes only" for this bridge, kept in the settings until FinCom answers without it
+			if on := truthy(r.json["changesOnly"]); on != cfgB("ChangesOnly") {
+				setCfg("ChangesOnly", on)
+				saveConfig()
+				if on {
+					writeLog("FinCom: " + changesOnlyText + " Kept in the settings.")
+				} else {
+					writeLog("FinCom: changes only is off; this bridge may post again")
+				}
+			}
 			if truthy(r.json["notMain"]) {
 				noteNotMain(str(r.json["error"]), true)
 			} else {
@@ -783,6 +817,7 @@ func startLightCheck(sessions []M) {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprint("Light check: ", r))
+				crashReport("light_check", r)
 			}
 			lightBusy.Store(false)
 			lightWG.Done()
@@ -875,13 +910,146 @@ func beatCompanies(sessions []M, open []any) []any {
 	return cos
 }
 
+// 2.3.3: the beat's recorderWaitWords: why this computer's changes wait for a look at its own Tally, and the lines
+// waiting to go to FinCom (one line for the Tally page; FinCom keeps 300 characters)
+func liveWaitWordsAll() string {
+	var ws []string
+	for _, w := range []string{earlierPageWords(), liveOwnWaitWords(), liveQueueWaitWords()} {
+		if w != "" {
+			ws = append(ws, w)
+		}
+	}
+	return cutRunes(strings.Join(ws, "; "), 300)
+}
+
+// release-240 re-review M2-r: each reason the changes wait has its own start, the same for every browser (the "changes
+// wait on one computer" notice joins them into its fingerprint, as a book alert joins its lines): an earlier request Tally
+// is still finishing ("earlier": when it was sent), no complete look at the own Tally ("blind": when that began, kept on
+// disk), a company's lines waiting ("queue": when its oldest line first passed RecorderWaitWordsSec, 30 s; kept on disk,
+// reset only when that company's queue drops below the threshold, so a draining backlog keeps its start and a line
+// FinCom keeps answering 'failed' does not hide a different wait). Read at each beat.
+var waitQ struct {
+	mu  sync.Mutex
+	dir string
+	m   map[string]time.Time // company -> its queue's start
+}
+
+func waitStartsFile() string { return sp("recorder-wait-starts.json") }
+
+// a restart: the starts read again from disk (the tests)
+func waitForget() {
+	waitQ.mu.Lock()
+	waitQ.m = nil
+	waitQ.mu.Unlock()
+}
+
+func liveWaitStarts() []any {
+	out := []any{}
+	add := func(reason, company string, at time.Time) {
+		if at.IsZero() || len(out) >= 50 {
+			return
+		}
+		e := M{"reason": reason, "since": at.UTC().Format(time.RFC3339)}
+		if company != "" {
+			e["company"] = cutRunes(company, 200)
+		}
+		out = append(out, e)
+	}
+	if earlierPageWords() != "" {
+		add("earlier", "", earlierOldestAt())
+	}
+	if liveOwnWaitWords() != "" {
+		live.mu.Lock()
+		at := live.ownBlindAt
+		if at.IsZero() {
+			at = live.ownWaitAt
+		}
+		live.mu.Unlock()
+		add("blind", "", at)
+	}
+	// each company's lines: over the threshold now (its oldest line older than it), or not
+	live.mu.Lock()
+	liveFresh()
+	after := time.Duration(keepNumZero("RecorderWaitWordsSec", 30)) * time.Second
+	oldest := map[string]time.Time{}
+	for _, c := range live.queue {
+		if o, had := oldest[c.company]; !had || c.readAt.Before(o) {
+			oldest[c.company] = c.readAt
+		}
+	}
+	live.mu.Unlock()
+	now := nowFn()
+	waitQ.mu.Lock()
+	if d := syncDir(); waitQ.m == nil || waitQ.dir != d {
+		waitQ.dir, waitQ.m = d, map[string]time.Time{}
+		for k, v := range obj(readObjFile(waitStartsFile())["queue"]) {
+			if t, err := time.Parse(time.RFC3339, str(v)); err == nil {
+				waitQ.m[k] = t
+			}
+		}
+	}
+	changed := false
+	var cos []string
+	for co, o := range oldest {
+		if now.Sub(o) < after {
+			continue
+		}
+		cos = append(cos, co)
+		if _, had := waitQ.m[co]; !had {
+			waitQ.m[co] = o.Add(after) // when its oldest line passed the threshold
+			changed = true
+		}
+	}
+	for co := range waitQ.m {
+		if o, had := oldest[co]; !had || now.Sub(o) < after {
+			delete(waitQ.m, co) // below the threshold (or empty): its next wait is a new one
+			changed = true
+		}
+	}
+	sort.Strings(cos)
+	starts := map[string]time.Time{}
+	for _, co := range cos {
+		starts[co] = waitQ.m[co]
+	}
+	if changed {
+		o := M{}
+		for k, v := range waitQ.m {
+			o[k] = v.UTC().Format(time.RFC3339)
+		}
+		if err := saveFile(waitStartsFile(), jsonText(M{"queue": o})); err != nil {
+			writeLog("Recorder: " + waitStartsFile() + " could not be written: " + err.Error())
+		}
+	}
+	waitQ.mu.Unlock()
+	for _, co := range cos {
+		add("queue", co, starts[co])
+	}
+	return out
+}
+
+// release-240 re-review M2: the earliest of those starts (RFC3339; "" when nothing waits), kept for the beat's readers
+func liveWaitSinceAll() string { return waitSinceOf(liveWaitStarts()) }
+
+func waitSinceOf(starts []any) string {
+	first := ""
+	for _, x := range starts {
+		if s := str(obj(x)["since"]); first == "" || s < first {
+			first = s
+		}
+	}
+	return first
+}
+
 func beatMissedSince() time.Time { _, f := beatTimes(); return f }
 
 // the heartbeat (2.1.3): also whether background reading is paused, since when Tally has not answered, the hour of the
 // nightly catch-up, the last read of each company, and that this bridge reads Tally only after an event
 func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	au, rb := autoUpdateBeat()
-	return M{"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
+	tport, tdata := myTallyFor(ports)
+	waitStarts := liveWaitStarts()                                                                                  // release-240 re-review M2-r: each reason's start, and the earliest
+	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
+		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
 		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
@@ -894,10 +1062,20 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"trialTools": trialTools(),
 		// 2.2.0: the live recorder per company (lines read, sent, waiting, the oldest waiting, the source) and its source
 		"recorderState": liveBeat(), "recorderSource": recorderSource(),
-		// the owner's rule: source B off by itself after a list that took more than 2 s, per company
-		"recorderSourceB": liveBeatOff("B"), "recorderSourceC": liveBeatOff("C"), "recorderBodyFetch": liveBeatOff("bodies"),
+		// 2.3.1 (the owner's last change): nothing is switched off by the 2-second rule any more: always {} (an older cloud
+		// and page read these per company), and tallyRetry says when a request was not answered in time and when the
+		// bridge tries again by itself (retry.go; null when the background requests go as normal). 2.3.2 (issue 232):
+		// recorderBodyFetch carries the companies marked "entry fetch stopped: over 2 s" (slowco.go), per company
+		// {off, seconds, at, why} (FinCom keeps it as recorderOff.bodies) and {company, since, timesOver, lastMs}; {} when none
+		"recorderSourceB": M{}, "recorderSourceC": M{}, "recorderBodyFetch": slowBeat(), "tallyRetry": retryBeat(),
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
-		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb}
+		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
+		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
+		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": waitSinceOf(waitStarts), "recorderWaitStarts": waitStarts,
+		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)
+		"renumberAlerts": renumBeat(),
+		// next-bankdate: bank dates set in Tally that may not have reached FinCom, in plain words (bankdate.go)
+		"bankAlerts": bankBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time
@@ -936,6 +1114,15 @@ func cloudPostTake() {
 	if readOnlyWhy() != "" { // only the one bridge that posts takes postings
 		return
 	}
+	// decision B (migration 55): the checks "Not in Tally - post again" asks of this bridge come with posts_take; each is
+	// looked in Tally (postcheck.go) after the postings are taken; one found not there is handed back: taken again here
+	if checks := cloudPostTakeJobs(); len(checks) > 0 && runPostChecks(checks) {
+		cloudPostTakeJobs()
+	}
+}
+
+// the postings waiting for this bridge, taken (five at most a turn); the checks the first answer carried
+func cloudPostTakeJobs() (checks []any) {
 	cpMu.Lock()
 	defer cpMu.Unlock()
 	cp := getCloudPosts()
@@ -945,6 +1132,9 @@ func cloudPostTake() {
 			noteNotMain(r.err, false)
 			return
 		}
+		if i == 0 && r.code == 200 && r.json != nil {
+			checks = arr(r.json["checks"])
+		}
 		if r.code != 200 || r.json == nil || obj(r.json["job"]) == nil {
 			return
 		}
@@ -952,7 +1142,9 @@ func cloudPostTake() {
 		pl := obj(j["payload"])
 		id := str(j["id"])
 		// round 7 (F2): the owner's releases ("Not in Tally — release") for the job's ids come with it
-		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"])})
+		// review M1 / L2: a posting handed back after the bridge's "not found" names the entries to send again (resendOnly):
+		// only those go, never the whole posting
+		v, err := newPostJob(M{"jobId": id, "company": str(j["company"]), "masters": arr(pl["masters"]), "vouchers": arr(pl["vouchers"]), "released": arr(j["released"]), "resendOnly": arr(j["resendOnly"])})
 		if err != nil {
 			invokeCloud(M{"kind": "posts_update", "id": id, "status": "failed", "done": 0, "message": "The Tally computer could not start this posting: " + err.Error(), "results": []any{}}, 30)
 			continue
@@ -961,6 +1153,7 @@ func cloudPostTake() {
 		saveCloudPosts()
 		writeLog(fmt.Sprintf("Posting from FinCom's queue: %v item(s) for %s (job %s)", v["total"], str(j["company"]), id))
 	}
+	return
 }
 
 // the job's status as FinCom's queue knows it (taken, running, done, failed): a posting waiting for Tally is "taken",
@@ -1269,4 +1462,23 @@ func wakeEvent(ev string, inner M) {
 		}
 		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	}
+}
+
+var (
+	idRefusedMu  sync.Mutex
+	idRefusedWhy string
+)
+
+func setIdRefused(why string) {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	if why != idRefusedWhy && why != "" {
+		writeLog("FinCom: " + why)
+	}
+	idRefusedWhy = why
+}
+func idRefused() string {
+	idRefusedMu.Lock()
+	defer idRefusedMu.Unlock()
+	return idRefusedWhy
 }

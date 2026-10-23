@@ -138,6 +138,8 @@ with sync_playwright() as p:
     pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
         body=json.dumps({"setup": {"version": "2.1.0", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.1.0.exe", "sha256": "ab" * 32}})))
     E("() => { navHome('tally'); }"); pg.wait_for_timeout(1500)
+    # 2.3.5: with the firm account on, the install card is under the page's More
+    if not pg.locator("#app [data-bridge-card]").count() and pg.locator("#app [data-bridge-details]").count(): pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(600)
     t = pg.inner_text("#app")
     ok("without an administrator" in t and pg.locator("#app [data-bridge-link]").count() == 1 and "Invoke-WebRequest" in pg.inner_text("#app [data-bridge-ps]") and "Tls12" in pg.inner_text("#app [data-bridge-ps]"),
        "18, 19. the Tally page: installs without an administrator, the direct link and the PowerShell command")

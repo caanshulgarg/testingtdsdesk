@@ -45,11 +45,13 @@ func nwsBridge(t *testing.T, extra string) (string, *standTally, *standCloud) {
 	t.Cleanup(func() { nowFn = time.Now })
 	f.mu.Lock()
 	f.guid, f.coName = nwsGUID, nwsCo
+	liveSeedOwnOpen(nwsGUID, nwsCo) // fix 3: the company open in this bridge's own Tally all along
 	add := func(no, mid string, alter int64, narr, amt string) {
 		f.vch = append(f.vch, &tVch{guid: fmt.Sprintf("%s-%08x", nwsGUID, toI64(mid)), master: mid, date: "20261005", typ: "Receipt", no: no, narr: narr,
 			party: "Customer A", alter: alter, lines: [][2]string{{"Customer A", amt}, {"Bank", strings.TrimPrefix("-"+amt, "--")}}})
 	}
 	add("190", "26309", 54390, "Receipt 190", "100.00")
+	f.vch[len(f.vch)-1].cancelled = true // review H1 of 2.3.0: cancelled in this Tally (its cancel line is proven here)
 	add("191", "26311", 54391, "Received from customer", "500.00")
 	add("192", "26312", 54392, "Received again", "700.00")
 	f.mu.Unlock()
@@ -109,8 +111,11 @@ func TestNWS144RealLines(t *testing.T) {
 			t.Errorf("Receipt %s: save_ms %v sent from times to the minute", str(want["vch_no"]), g["save_ms"])
 		}
 	}
-	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID
-	if f.n(vchByNumberID) != 1 || f.n(vchByMasterID) != 1 {
+	// 191 (MasterID 0) by its type and number, once, for its own day; 192 by its MasterID; review H1 of 2.3.0: the cancel
+	// of 190 and the delete of 189 are asked of this Tally by their MasterIDs too (proof they happened here); 2.3.4
+	// (re-review 2 L-d): the delete Tally did not find asked once more, the company checked around it
+	asked := strings.Join(f.bodiesOf(vchObjectID), " ")
+	if f.n(vchByNumberID) != 1 || f.n(vchObjectID) < 2 || f.n(vchObjectID) > 4 || !strings.Contains(asked, "ID:26309</ID>") || !strings.Contains(asked, "ID:26305</ID>") {
 		t.Fatalf("requests: %v", f.ids())
 	}
 	b := f.bodiesOf(vchByNumberID)[0]
@@ -121,8 +126,8 @@ func TestNWS144RealLines(t *testing.T) {
 	if b != voucherByNumberRequest(nwsCo, "20261005", "Receipt", "191") {
 		t.Fatal("the request by number is not as built")
 	}
-	if !strings.Contains(f.bodiesOf(vchByMasterID)[0], "$MasterID = 26312") {
-		t.Fatalf("the body by MasterID: %s", f.bodiesOf(vchByMasterID)[0])
+	if !strings.Contains(asked, "ID:26312</ID>") {
+		t.Fatalf("the body by MasterID: %s", asked)
 	}
 }
 
@@ -190,14 +195,18 @@ func TestNWS144ByNumberNoneOrTwo(t *testing.T) {
 	liveAppend(t, p, l("300"))
 	liveFlushAll()
 	readAndUploadAll(t)
+	// 2.3.3: held at once after its first ask ("waiting: ..."), asked again once (the owner's rule), then ended with the Day
+	// Book words (2.3.2: 3 asks before it went up at all)
 	sent := c.recSent()
-	if len(sent) != 1 || str(sent[0]["event"]) != "created" || str(sent[0]["object_guid"]) != "" || str(sent[0]["xml"]) != "" || sent[0]["alter_id"] != nil {
+	if len(sent) != 2 || str(sent[0]["event"]) != "created" || str(sent[0]["object_guid"]) != "" || str(sent[0]["xml"]) != "" || sent[0]["alter_id"] != nil ||
+		!strings.HasPrefix(str(sent[0]["heldWhy"]), "waiting: Tally has not shown this new entry yet") ||
+		str(sent[1]["line_id"]) != str(sent[0]["line_id"])+":resolved" || str(sent[1]["heldWhy"]) != liveHeldOnceGiveUp {
 		t.Fatalf("none found: %v", sent)
 	}
-	if f.n(vchByNumberID) != 3 {
-		t.Fatalf("asked %d times, want 3", f.n(vchByNumberID))
+	if f.n(vchByNumberID) != 2 {
+		t.Fatalf("asked %d times, want 2", f.n(vchByNumberID))
 	}
-	if logLines("Receipt 300") < 1 || logLines("not found by its type and number") < 1 {
+	if logLines("Receipt 300") < 1 || logLines("Tally has not shown this new entry yet") < 1 {
 		t.Fatal("the log does not say why")
 	}
 	// two entries with that type and number on that day: not asked again, sent without
@@ -210,8 +219,9 @@ func TestNWS144ByNumberNoneOrTwo(t *testing.T) {
 	liveAppend(t, p, l("301"))
 	liveFlushAll()
 	readAndUploadAll(t)
+	// two found is an answer, not a wait: held at once, its one ask again on the held list's 10-minute spacing
 	sent = c.recSent()
-	if len(sent) != 2 || str(sent[1]["object_guid"]) != "" || str(sent[1]["xml"]) != "" || f.n(vchByNumberID) != n0+1 {
+	if len(sent) != 3 || str(sent[2]["object_guid"]) != "" || str(sent[2]["xml"]) != "" || f.n(vchByNumberID) != n0+1 {
 		t.Fatalf("two found: %v (%d asks)", sent, f.n(vchByNumberID)-n0)
 	}
 	if logLines("2 entries") < 1 {
@@ -308,7 +318,8 @@ func TestNWS144ResolveOnce(t *testing.T) {
 
 // --- 6. a line 2.2.1 itself sent held (none found) is resolved later, once, when Tally has the entry
 func TestNWS144HeldResolvedLater(t *testing.T) {
-	p, f, c := nwsBridge(t, `,"RecorderResolveSec":0`)
+	// 2.3.3: its one ask again comes RecorderFreshRetryMs (1 min here) after its first, by when Tally has the entry
+	p, f, c := nwsBridge(t, `,"RecorderResolveSec":0,"RecorderFreshRetryMs":60000`)
 	liveAppend(t, p, "FCR1|ev=voucher_accept_pre|t0=5-Oct-2026 07:40|tw=5-Oct-2026 07:40|cguid="+nwsGUID+"|cname="+nwsCo+"|user=owner|obj=Voucher|guid="+
 		nwsGUID+"-00000000|mid=0|aid=0|vtype=Receipt|vno=400|vdate=5-Oct-2026|name=|parent=|narr=late|t1=5-Oct-2026 07:40|src=live")
 	liveFlushAll()
@@ -321,6 +332,8 @@ func TestNWS144HeldResolvedLater(t *testing.T) {
 	f.vch = append(f.vch, &tVch{guid: nwsGUID + "-00006a00", master: "27136", date: "20261005", typ: "Receipt", no: "400", narr: "late", party: "Customer A",
 		alter: 54410, lines: [][2]string{{"Customer A", "1.00"}, {"Bank", "-1.00"}}})
 	f.mu.Unlock()
+	at := nowFn().Add(2 * time.Minute)
+	nowFn = func() time.Time { return at }
 	readAndUploadAll(t)
 	readAndUploadAll(t)
 	sent = c.recSent()

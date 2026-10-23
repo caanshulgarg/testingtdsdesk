@@ -40,7 +40,7 @@ func TestSourceCBounded(t *testing.T) {
 	laterBy(t, 2*time.Minute)
 	_, _ = liveSourceC(zz, f.port)
 	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s
-	if logLines("Source C off: Tally took 2.0 s") != 1 {
+	if logLines("FinComSlice 20261001-20261031 took 2.0s and failed") != 1 || logLines("(FinComSlice, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the request's limit: %s", readText(logFile()))
 	}
 }
@@ -90,7 +90,7 @@ func TestFailedTxtForgedDropped(t *testing.T) {
 	liveAppend(t, filepath.Join(rec, "failed.txt"), forged, wf(real))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != "g-1" || q[0].event != "cancelled" || !strings.Contains(q[0].narr, "first line\nFCR1|ev=after_delete") {
+	if len(q) != 1 || q[0].masterId != "1" || q[0].event != "cancelled" || !strings.Contains(q[0].narr, "first line\nFCR1|ev=after_delete") {
 		t.Fatalf("queued: %+v", q)
 	}
 	// a write_failed line whose inner GUID is not the held GUID of its company: dropped

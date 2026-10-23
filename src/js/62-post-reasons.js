@@ -83,12 +83,12 @@ const POST_REASONS = [
     re: /no answer came|not known whether|Checking whether it reached Tally|did not answer|no answer|timed out|could not confirm/i,
     seen: "Sent to Tally, but no answer came · not known whether Tally got it · Checking whether it reached Tally · Tally did not answer",
     reason: "No answer from Tally: it may or may not be in Tally",
-    fix: "Look in Tally's Day Book for the bill's date before anything else. If it is there: mark posted with its Tally id. If not: release it and post again."},
+    fix: "Look in Tally's Day Book for the bill's date before anything else. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},
   {id: "incomplete", kind: "review", again: false,
     re: /replied 'created'|cannot be found in|not found yet in|reply needs a look|^Tally's reply: |<RESPONSE>|Tally did not confirm|Tally took it; not read back|not yet read back|accepted it.*being checked/i,
     seen: "Tally replied 'created', but the entry cannot be found … · Tally's reply: … · Tally did not confirm it · not yet read back",
     reason: "Tally's reply was incomplete: it said it took the entry, but FinCom could not find it in Tally",
-    fix: "Look in Tally's Day Book for the bill's date. If it is there: mark posted with its Tally id. If not: release it and post again."},
+    fix: "Look in Tally's Day Book for the bill's date. If it is there: mark posted with its Tally id. If not: press Not in Tally – post again (the FinCom Bridge looks in Tally first)."},
   {id: "exception", kind: "refused", again: true,
     re: /Tally reported an exception|already exists!?$|Voucher Number .* already exists/i,
     seen: "Tally reported an exception. Check the ledger names and the voucher type. · Voucher Number 'X' already exists!",
@@ -278,10 +278,16 @@ function postStatus(entry, job, ids, marks, ctx){
     if (releasedByOwner){
       if (bill && e.status === "approved" && !e.exportedAt) return null;              // back in Ready to post
       const why = (ids && ids.released_why) || (r && r.reason) || "";
-      return mk(8, "An owner said it is not in Tally" + (why ? " (" + postReasonText(why).replace(/^Not in Tally: released by the owner on [^(]*\(|\)$/g, "") + ")" : "") + ". It can be posted again.", deleted || !bill ? null : again, {reason: {id: "released", reason: "Released by an owner: not in Tally", fix: "It can be posted again."}, released: true});
+      // decision B (migration 55): who said so and when (tally_post_marks 'released'; any member who may post), and that
+      // the FinCom Bridge looked in Tally first
+      const rm = [].concat(marks || []).filter(x => x && x.action === "released").slice(-1)[0];
+      const rwho = rm && rm.by_user ? (ctx.me && rm.by_user === ctx.me ? "You" : postWhoSay(rm.by_user)) : (r && r.by) || (it && it.by) || "";
+      const rwhen = (rm && rm.at) || (r && r.byOwnerAt) || (it && it.byOwnerAt) || "";
+      const wt = postReasonText(why), wm = /^Not in Tally: released by [^(]* on [^(]*\(([\s\S]*)\)$/.exec(wt);
+      return mk(8, (rwho ? rwho + " said it is not in Tally" + (rwhen ? " on " + postWhenSay(rwhen) : "") : "Marked not in Tally") + (why ? " (" + (wm ? wm[1] : wt) + ")" : "") + ". It can be posted again.", deleted || !bill ? null : again, {reason: {id: "released", reason: "Not in Tally: released", fix: "It can be posted again."}, released: true, markedBy: rm && rm.by_user, markedAt: rwhen});
     }
     if (okR){
-      if (gone) return mk(6, "FinCom's copy of Tally did not show it on " + (typeof fmtDate === "function" ? fmtDate(String(e.goneFromTally).slice(0, 10)) : String(e.goneFromTally).slice(0, 10)) + ". Look in Tally's Day Book for " + (bill ? (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "the bill's date") + ": if it is there, mark it posted; if not, release it and post again.",
+      if (gone) return mk(6, "FinCom's copy of Tally did not show it on " + (typeof fmtDate === "function" ? fmtDate(String(e.goneFromTally).slice(0, 10)) : String(e.goneFromTally).slice(0, 10)) + ". Look in Tally's Day Book for " + (bill ? (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "the bill's date") + ": if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).",
         {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason: {id: "notseen", reason: "FinCom's copy of Tally did not show it", fix: "Look in Tally's Day Book."}, id: tid, posted: at});
       if (deleted) return mk(10, (idSay ? idSay + ". " : "") + (ctx.missing ? "The bill is no longer in FinCom, so there is nothing to restore. The entry stays in Tally." : "Restore the bill in FinCom to keep its record with the entry in Tally."),
         ctx.missing ? null : {kind: "restore", label: "Restore the bill"}, {id: tid, posted: at});
@@ -307,7 +313,21 @@ function postStatus(entry, job, ids, marks, ctx){
       const two = tid.ids.length > 1;
       const reason = two ? {id: "twice", reason: "Tally may have this entry twice (Tally ids " + tid.ids.join(" and ") + ")", fix: "Look in Tally's Day Book" + (bill ? " for " + (typeof fmtDate === "function" ? fmtDate(e.x.invoiceDate) : e.x.invoiceDate) : "") + ": keep one entry and delete the other in Tally, then mark this one posted with the Tally id you kept."} : why;
       const acc = (r && r.accepted === true) || (ids && ids.accepted_at);
-      return mk(6, (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, release it and post again.") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
+      // decision B (migration 55): "Not in Tally - post again" asked: the FinCom Bridge looks in Tally first; until it has,
+      // the row says so in plain words (who asked, when, why, what the bridge said last); nothing is sent meanwhile
+      const ck = ctx.check && ctx.check.state === "waiting" ? ctx.check : null;
+      // final review: a check given up (10 tries or 24 hours) or withdrawn says so; the person looks in Tally and settles it
+      const ckDone = ctx.check && ctx.check.state === "given_up" ? (postReasonText(ctx.check.words) || "FinCom stopped looking in Tally for this entry by itself. Look in Tally: use Mark posted if it is there, or press Not in Tally \u2013 post again only after checking.") + " "
+        : ctx.check && ctx.check.state === "withdrawn" ? "The check was withdrawn by " + (ctx.me && ctx.check.withdrawn_by === ctx.me ? "you" : postWhoSay(ctx.check.withdrawn_by) || "a member") + (ctx.check.withdrawn_at ? " on " + postWhenSay(ctx.check.withdrawn_at) : "") + (ctx.check.withdrawn_why ? " (" + ctx.check.withdrawn_why + ")" : "") + "; nothing was released or sent. " : "";
+      // the owner's rule: the bridge did not see it on that day ("notseen"): nothing is sent; a person looks in Tally and
+      // confirms "not there" (the only way it is sent again), or marks it posted
+      const ns = ctx.check && ctx.check.state === "notseen" ? ctx.check : null;
+      if (ns) return mk(6, (postReasonText(ns.words) || "Tally has no such voucher on that day. FinCom cannot see other dates, so a person must confirm: look in Tally (Day Book, or search the narration TDSDesk:" + String(e.id) + "); if it is not there, press \u2018I looked in Tally: not there \u2013 post again\u2019 (reason required).")
+          + (ns.checked_at ? " (The FinCom Bridge looked on " + postWhenSay(ns.checked_at) + ".)" : ""),
+        {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, notSeen: ns});
+      if (ck) return mk(6, "Checking Tally before it is sent again: " + (postReasonText(ck.last_words) || "waiting for the FinCom Bridge to look in Tally") + ". Asked by " + (ctx.me && ck.asked_by === ctx.me ? "you" : postWhoSay(ck.asked_by) || "a member") + (ck.asked_at ? " on " + postWhenSay(ck.asked_at) : "") + (ck.why ? " (" + ck.why + ")" : "") + ". It is looked in again by itself; nothing is sent until the bridge finds it is not there.",
+        {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live, check: ck});
+      return mk(6, ckDone + (ctx.differs ? ctx.differs + " " : "") + reason.reason + (tid.ids.length === 1 ? " (Tally id " + tid.ids[0] + ")" : "") + ". " + (reason.fix || "Look in Tally's Day Book: if it is there, mark it posted; if not, press Not in Tally – post again (the FinCom Bridge looks in Tally first).") + (deleted ? " The bill is " + (ctx.missing ? "no longer in FinCom." : "deleted in FinCom.") : ""),
         live && !acc ? null : {kind: "settle", label: "It is in Tally: mark posted (Tally id)"}, {reason, id: tid, posted: at, accepted: !!acc, checking: live});
     }
     if (live){
@@ -375,6 +395,30 @@ const PostMarks = {
     finally { delete this.busy[cid]; }
   },
   of(cid, jobId, id){ const s = this.by[cid]; return (s && s.m && s.m.get(jobId + "|" + id)) || []; }
+};
+// decision B (05-Oct-2026, migration 55): the checks "Not in Tally - post again" asked of the FinCom Bridge
+// (tally_post_checks), the newest per posting and entry: waiting (the bridge has not looked yet, or Tally could not be
+// asked: last_words), found, notfound; superseded (a Mark posted closed it), withdrawn (by the asker or an owner) and
+// given_up (10 tries or 24 hours, in words): the final review of 2.3.0. A cloud without 55: none
+const PostChecks = {
+  by: {}, readable: null, busy: {},
+  async load(cid, force){
+    if (!cid || typeof TCloud !== "object" || !TCloud.on() || this.readable === false || this.busy[cid]) return;
+    const key = typeof PostIds === "object" ? PostIds.jobsKey(cid) : "", s = this.by[cid];
+    if (!key || (!force && s && s.key === key && Date.now() - s.at < 20000)) return;
+    this.busy[cid] = true;
+    try {
+      const rows = await TCloud.restAll("tally_post_checks?select=*&job_id=in.(" + key + ")&order=id.asc");
+      const m = new Map();
+      [].concat(rows || []).forEach(x => { if (x && x.job_id) m.set(x.job_id + "|" + x.entry_id, x); });
+      const sig = JSON.stringify([...m.entries()]);
+      const changed = !s || s.sig !== sig;
+      this.by[cid] = {at: Date.now(), key, m, sig}; this.readable = true;
+      if (changed && typeof render === "function") render();
+    } catch (e){ this.readable = false; this.by[cid] = {at: Date.now(), key, m: new Map(), sig: ""}; }
+    finally { delete this.busy[cid]; }
+  },
+  of(cid, jobId, id){ const s = this.by[cid]; return (s && s.m && s.m.get(jobId + "|" + id)) || null; }
 };
 // the voucher a posting sent, for an entry FinCom has no record of (its bill deleted for good, or never kept): read from
 // the posting's payload once, on demand
@@ -452,7 +496,7 @@ function postEntryRows(cid){
     const ent = e || bl || {id};
     const held = typeof postIdReleased === "function" ? (postIdReleased(id, cid) === false ? true : postIdReleased(id, cid) === true ? false : null) : null;
     const missing = kind === "other" && !String(id).includes("-") && !(S.sales && (S.sales.list || []).some(v => String(v.id) === id));
-    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0};
+    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0, check: typeof PostChecks === "object" ? PostChecks.of(cid, j.id, id) : null};
     let st = postStatus(kind === "bank" ? Object.assign({}, bl, {x: undefined}) : ent, j, ids, marks, c0);
     // C6 "what differs": an entry that needs review is set beside what the posting sent (its payload, read on demand)
     if (st && st.code === 6 && kind === "bill"){

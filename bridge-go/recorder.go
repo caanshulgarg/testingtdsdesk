@@ -201,6 +201,7 @@ func recorderWatchLoop() {
 			defer func() {
 				if r := recover(); r != nil {
 					writeLog(fmt.Sprint("Recorder: ", r))
+					crashReport("recorder", r)
 				}
 			}()
 			liveReadOnce()

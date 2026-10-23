@@ -184,6 +184,13 @@ func runUser(args []string) int {
 			}
 			stamp = exeStamp(exe)
 		}
+		if !restartAfter(code) {
+			// 2.3.0: no port of 9100..9199 free (the bridge said so once, in the log and the tray): not started again
+			// until the next sign-in; the icon stays and shows why
+			writeLog("The bridge is not started again: it found no free port (see the message above)")
+			<-stop
+			return 0
+		}
 		if time.Since(started) > 10*time.Minute {
 			fails = 0
 		}
@@ -399,6 +406,11 @@ func installUserCmd(args []string) int {
 	if err != nil {
 		return installFailed(2, "This Windows user's folders could not be found ("+err.Error()+").", "Sign in to Windows as the person who uses Tally and run the setup again.")
 	}
+	// review M3 of 2.3.0: the Windows service already works for this same Windows user (its record in HKLM names the same
+	// OwnerSid): refused (no administrator's rights here to stop the service; nothing that runs is changed)
+	if why := perUserBlockedByService(serviceOwnerSid(), o.sid); why != "" {
+		return installFailed(8, why, "Keep using the FinCom Bridge service (its icon near the clock), or ask the administrator to uninstall it first; then run this setup again.")
+	}
 	installLog(fmt.Sprintf("Install (just for this user, no service): FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
 	stopUser()
@@ -439,11 +451,7 @@ func installUserCmd(args []string) int {
 		return installFailed(5, "FinCom Bridge did not start ("+err.Error()+"); an antivirus may have blocked "+exe+".", "Allow FinCom Bridge in the antivirus, or sign out and in again; if it stays, send the install log to FinCom.")
 	}
 	_ = c.Process.Release()
-	port := 9100
-	if mode == "test" {
-		port = 9101
-	}
-	return waitAnswer(port, "it starts when you sign in")
+	return waitAnswer(cfgPath, true, "it starts when you sign in")
 }
 
 // uninstall --per-user: the start at sign-in and the record go, the bridge stops, and its own files (uninstall.go); bridge

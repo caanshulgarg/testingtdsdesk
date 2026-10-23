@@ -56,16 +56,57 @@ func keepOn() bool {
 // what FinCom reads as the schedule: the nightly catch-up (the "continuous" copy of older bridges is gone)
 func keepSchedule() string { return "daily" }
 
-// the hour of the nightly catch-up (KeepDailyAt in the settings, shown in the tray): 02:00 unless set
+// the hour the night's work starts (KeepDailyAt in the settings, shown in the tray): 19:00, the end of office hours,
+// unless set by hand (release-240, the owner's decision of 2026-10-09: Tally is usually closed at night; was 02:00)
 func keepDailyAt() string {
 	v := cfgS("KeepDailyAt")
 	if re(`^([01]?\d|2[0-3]):[0-5]\d$`).MatchString(v) {
 		return v
 	}
-	return "02:00"
+	return "19:00"
 }
-func keepLastRun() string { return strings.TrimSpace(readText(sp("keep-lastrun.txt"))) }
-func lightFile() string   { return sp("keep-light.txt") }
+
+// office hours in the PC's time or in IST (officeHoursAt: KeepOfficeFrom..KeepOfficeTo, 09:00 to 19:00, Monday to Saturday)
+func nightOffice(t time.Time) bool { return officeHoursAt(t) || officeHoursAt(t.In(istZone)) }
+
+// the night's window (release-240, the owner's decision of 2026-10-09), shared by the nightly catch-up, the bank route's
+// nightly list and the nightly self-check: from KeepDailyAt (19:00) at the first moment outside office hours, up to the
+// next office start, Sundays included (no office hours on a Sunday); NightlyWindowMin caps it only when set by hand. The
+// night's key: the date of the evening it began (KeepDailyAt's day), given even when outside the window. A night whose
+// work did not run (Tally closed all evening) is not made up by day: the next evening's window runs it
+func nightWindow(now time.Time) (bool, string) {
+	var h, mi int
+	fmt.Sscanf(keepDailyAt(), "%d:%d", &h, &mi)
+	at := time.Date(now.Year(), now.Month(), now.Day(), h, mi, 0, 0, now.Location())
+	if now.Before(at) {
+		at = at.AddDate(0, 0, -1)
+	}
+	key := tallyDate(at)
+	if cfg("NightlyWindowMin") != nil && now.Sub(at) >= time.Duration(keepNum("NightlyWindowMin", 0))*time.Minute {
+		return false, key
+	}
+	if nightOffice(now) {
+		return false, key
+	}
+	// no office hours between the window's start (the first moment outside them from KeepDailyAt) and now; office hours
+	// start and end on a half hour in the PC's time and in IST
+	step := func(t time.Time) time.Time { return t.Truncate(30 * time.Minute).Add(30 * time.Minute) }
+	t := at
+	for t.Before(now) && nightOffice(t) {
+		t = step(t)
+	}
+	for ; t.Before(now); t = step(t) {
+		if nightOffice(t) {
+			return false, key
+		}
+	}
+	return true, key
+}
+
+// the night whose catch-up last finished (its key); the catch-up runs once a night
+func keepLastNight() string { return strings.TrimSpace(readText(sp("keep-lastnight.txt"))) }
+func keepLastRun() string   { return strings.TrimSpace(readText(sp("keep-lastrun.txt"))) }
+func lightFile() string     { return sp("keep-light.txt") }
 
 // Update now (pressed in FinCom, here or on another computer): kept in a file, so a restart does not lose it
 func requestKeepNow() {
@@ -229,7 +270,7 @@ func saveKeepDaysChanged(dir, from, to, x string, full bool) (int, int) {
 		if by[d] == nil {
 			by[d] = &strings.Builder{}
 		}
-		by[d].WriteString("<TALLYMESSAGE>" + m + "</TALLYMESSAGE>")
+		by[d].WriteString("<TALLYMESSAGE>" + dropBankDetails(m) + "</TALLYMESSAGE>") // 2.4.4: never the bank details
 	}
 	days := filepath.Join(dir, "days")
 	_ = os.MkdirAll(days, 0o755)
@@ -518,8 +559,8 @@ func keepHeld(dir, ym string) map[string]held {
 	return h
 }
 
-// a month's day book file, put together from its days, for FinCom to read
-func writeKeepMonth(dir, ym string, st M) {
+// the month's file put together from its days (its entries counted)
+func writeKeepMonthFile(dir, ym string) int {
 	var b strings.Builder
 	b.WriteString("<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>")
 	n := 0
@@ -530,6 +571,12 @@ func writeKeepMonth(dir, ym string, st M) {
 	}
 	b.WriteString("</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>")
 	_ = saveFile(filepath.Join(dir, "daybook-"+ym+".xml"), b.String())
+	return n
+}
+
+// a month's day book file, put together from its days, for FinCom to read
+func writeKeepMonth(dir, ym string, st M) {
+	n := writeKeepMonthFile(dir, ym)
 	months := obj(st["months"])
 	if months == nil {
 		months = M{}
@@ -632,15 +679,19 @@ func renameKeepLedger(dir string, st M, old, nw string) int {
 	olds := uniqSorted([]string{esc(old), ampx(old), strings.ReplaceAll(ampx(old), "'", "&apos;")})
 	nn := ampx(nw)
 	touched := map[string]bool{}
+	// the field as Tally writes it, with or without its TYPE attribute (real TallyPrime 7.1); 2.3.1 (2.2.4 review L6):
+	// compiled here, once a call, not kept in the shared regex cache (which grew with every ledger name)
+	var rs []*regexp.Regexp
+	for _, o := range olds {
+		for _, tag := range []string{"LEDGERNAME", "PARTYLEDGERNAME"} {
+			rs = append(rs, regexp.MustCompile(`(`+tagOpenRe(tag)+`)`+regexp.QuoteMeta(o)+`(</`+tag+`\s*>)`))
+		}
+	}
 	for _, f := range dayFiles(dir, "") {
 		t := readText(f)
 		t2 := t
-		for _, o := range olds {
-			for _, tag := range []string{"LEDGERNAME", "PARTYLEDGERNAME"} {
-				// the field as Tally writes it, with or without its TYPE attribute (real TallyPrime 7.1)
-				r := re(`(` + tagOpenRe(tag) + `)` + regexp.QuoteMeta(o) + `(</` + tag + `\s*>)`)
-				t2 = r.ReplaceAllStringFunc(t2, func(m string) string { sm := r.FindStringSubmatch(m); return sm[1] + nn + sm[2] })
-			}
+		for _, r := range rs {
+			t2 = r.ReplaceAllStringFunc(t2, func(m string) string { sm := r.FindStringSubmatch(m); return sm[1] + nn + sm[2] })
 		}
 		if t2 != t {
 			base := strings.TrimSuffix(filepath.Base(f), ".xml")
@@ -710,13 +761,15 @@ func useKeepPosted(dir string, st M) int {
 			v += "<VOUCHERNUMBER>" + esc(str(e["number"])) + "</VOUCHERNUMBER>"
 		}
 		v += rest
-		tag := "<GUID>" + esc(str(e["guid"])) + "</GUID>"
+		// 2.3.1 (2.2.4 review L4): the old copy's GUID with or without attributes (<GUID TYPE="String">, a real TallyPrime
+		// 7.1), compiled for this entry only (not kept in the shared regex cache)
+		tag := regexp.MustCompile(tagOpenRe("GUID") + `\s*` + regexp.QuoteMeta(esc(str(e["guid"]))) + `\s*</GUID\s*>`)
 		for _, day := range uniqSorted([]string{str(e["date"]), whereGet(where, str(e["guid"]))}) {
 			df := filepath.Join(days, day+".xml")
 			t := readText(df)
 			var keep strings.Builder
 			for _, pc := range re(`<TALLYMESSAGE>[\s\S]*?</TALLYMESSAGE>`).FindAllString(t, -1) {
-				if !strings.Contains(pc, tag) {
+				if !tag.MatchString(pc) {
 					keep.WriteString(pc)
 				}
 			}
@@ -816,7 +869,17 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		st["phase"] = "live"
 	}
 	// only one bridge reads or posts a company at a time (a lease held in FinCom's cloud)
-	if ok, who := leaseTake(company); !ok {
+	if ok, h := leaseTakeFor(company, "read"); !ok {
+		who := h.who
+		if h.purpose == "post" {
+			// decision D: another bridge posts to this company (or the lease is kept for its posting): this read waits and
+			// resumes after it, from where it was
+			if !k.told["leasepost:"+company] {
+				k.told["leasepost:"+company] = true
+				writeLog("Keeping " + company + ": another FinCom Bridge (" + who + ") is posting to this company; this one gives way to a posting and resumes after")
+			}
+			return errPreempted
+		}
 		if !k.told["lease:"+company] {
 			k.told["lease:"+company] = true
 			writeLog("Keeping " + company + ": another FinCom Bridge (" + who + ") is reading or posting this company now; this one gives way")
@@ -1027,9 +1090,10 @@ func writeKeepLoad() {
 // --- a run of the copier, asked for by an event (events.go): light (a client opened in FinCom, or the entries just
 // posted), now (Update now), nightly (the nightly catch-up)
 type runReq struct {
-	kind string   // light | now | nightly | ledgers
-	only []string // these companies only; none: every company open in Tally
-	why  string   // for the log
+	night string   // a nightly run: the night's key (nightWindow)
+	kind  string   // light | now | nightly | ledgers
+	only  []string // these companies only; none: every company open in Tally
+	why   string   // for the log
 }
 
 func runRank(kind string) int {
@@ -1134,6 +1198,7 @@ func keepWorker(r runReq) {
 	defer func() {
 		if x := recover(); x != nil {
 			writeLog(fmt.Sprint("Keeping copies in step stopped: ", x))
+			crashReport("keep_in_step", x)
 		}
 		if strings.TrimSpace(readText(pidf)) == fmt.Sprint(os.Getpid()) {
 			_ = os.WriteFile(pidf, nil, 0o644)
@@ -1321,9 +1386,7 @@ func keepWorker(r runReq) {
 		}
 		sleepOrStop(time.Duration(minI(5, keepNum("KeepCycleSec", 5))) * time.Second)
 	}
-	for _, c := range leasesHeld() {
-		leaseRelease(c)
-	}
+	keepReleaseLeases()
 	// what came in goes on to the cloud before this stops (a few minutes at most; Tally is not asked)
 	until := time.Now().Add(10 * time.Minute)
 	for time.Now().Before(until) && !stopping() {
@@ -1356,6 +1419,9 @@ func keepWorker(r runReq) {
 		writeLog(what + ": not finished (" + why + ")" + reqs())
 	default:
 		_ = saveFile(sp("keep-lastrun.txt"), today())
+		if r.kind == "nightly" && r.night != "" {
+			_ = saveFile(sp("keep-lastnight.txt"), r.night)
+		}
 		_ = saveFile(lightFile(), nowS())
 		_ = os.Remove(sp("keep-now.txt"))
 		writeLog(what + ": done" + reqs() + "; the bridge is idle again (next: the nightly catch-up at " + keepDailyAt() + ", or Update now)")

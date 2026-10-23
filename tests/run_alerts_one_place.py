@@ -104,7 +104,8 @@ with sync_playwright() as p:
     b = E(BELL); garg = [x for x in b["items"] if "GARG" in x["text"]]
     g = garg[0] if garg else {"text": "", "fix": "", "act": "", "sev": ""}
     ok(len(garg) == 1 and "fetching the entry" in g["fix"] and "nothing to do" in g["fix"].lower() and "Day Book" not in g["fix"] + g["act"], "a line held by FinCom's own fault (the placeholder GUID, no body): FinCom is fetching it, nothing to do, never upload a Day Book (%s | %s)" % (g["fix"], g["act"]))
-    ok(g["sev"] == "warn", "and amber, not red (%s)" % g["sev"])
+    # 2.3.5 (the owner: "a yellow field coming all the time"): nothing to do is information, said quietly; yellow is for "Needs you"
+    ok(g["sev"] == "info", "and quiet (information), not amber or red (%s)" % g["sev"])
     E(CLOSE)
     E("() => { window.__w.lines = window.__w.lines.map(l => Object.assign(l, {state: 'applied', held_why: null})); window.__w.cursor = []; AlertHub.refresh(true); Rec.gaps.at = 0; }"); pg.wait_for_timeout(1500)
     b = E(BELL)
@@ -123,6 +124,21 @@ with sync_playwright() as p:
     b = E(BELL)
     st = [x for x in b["items"] if "browser" in x["text"].lower()]
     ok(len(st) == 1 and st[0]["sev"] == "info", "it is information in the bell (%s)" % st[:1])
+    E(CLOSE)
+    # review H1 (bridge 2.3.1): the bridge's own Tally lists its companies too slowly (stopped at 2 s): the lines of this
+    # computer wait, said in plain words in the bell (the beat's recorderWaitWords), never lost; gone when it answers again
+    WW = "Tally took longer than 2 s to list its open companies (limit 2 s); this computer's changes are waiting until it answers in time (Update now asks it without the limit)"
+    cid = scene({"devs": [dev(recording=True)], "alerts": [], "gap": None})
+    E("""(w) => { window.__w.devs = window.__w.devs.map(d => { d.info.beat = Object.assign({}, d.info.beat || {}, {recorderWaitWords: w}); return d; }); TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""", WW)
+    pg.wait_for_timeout(400)
+    b = E(BELL)
+    ww = [x for x in (b or {}).get("items", []) if "list its open companies" in x["text"]]
+    ok(len(ww) == 1 and ww[0]["sev"] == "warn" and WW in ww[0]["text"] and "nothing is lost" in ww[0]["fix"].lower(), "a slow company list: one amber alert in plain words, nothing lost (%s)" % ww[:1])
+    E(CLOSE)
+    E("""() => { window.__w.devs = window.__w.devs.map(d => { delete d.info.beat.recorderWaitWords; return d; }); TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""")
+    pg.wait_for_timeout(400)
+    b = E(BELL)
+    ok(not [x for x in (b or {}).get("items", []) if "list its open companies" in x["text"]], "it answers in time again: the alert is gone by itself")
     E(CLOSE)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

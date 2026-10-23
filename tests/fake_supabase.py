@@ -10,6 +10,7 @@ T = {"members": [], "clients": [], "tally_companies": [], "tally_jobs": [], "tal
 USERS = {}            # bearer token -> {id, email}
 FILES = {}            # bucket/path -> bytes
 RANGES = []           # (bucket/path, from, to) of each ranged GET (Range: bytes=from-to)
+REMOVED = []          # bucket/path of each object removed (Storage remove(), DELETE)
 QUEUE = []            # {msg_id, vt, read_ct, message, archived}
 DAYS = []             # (book, day, n) of each tally_ingest_day
 FAIL = {}             # day -> times tally_ingest_day fails for it before it works
@@ -28,9 +29,18 @@ STORAGE_FAIL = {}         # {status, body, n}: the next n Storage GETs answer th
 FAIL_INSERT = {}          # table -> {message, code}: a POST answers this PostgREST error
 FAIL_DONE = {"upload": 0} # the next n tally_work_done of an upload piece fail
 FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of that day fail (tally_work_send / tally_upload_advance)
+NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
+FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
+MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
+NO_COL = {}               # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
+                          # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
+HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
+LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)
 PK = {"gst_sessions": ["firm_id", "gstin"], "gst_returns": ["firm_id", "gstin", "form", "period"], "gst_einv_accounts": ["firm_id", "gstin"], "gst_einvoices": ["firm_id", "gstin", "doc_key"]}
 ids = itertools.count(1)
 def now(): return time.time()
+def like_re(pat):   # a LIKE pattern (\\ escapes, % or PostgREST's * any, _ one) as a regular expression
+    return re.sub(r"\\(.)|[%*]|_|[^%*_\\]+", lambda m: re.escape(m.group(1)) if m.group(1) is not None else ".*" if m.group(0) in "%*" else "." if m.group(0) == "_" else re.escape(m.group(0)), pat)
 def match(row, q):
     for k, vs in q.items():
         if k in ("select", "order", "limit", "offset", "on_conflict", "columns"): continue
@@ -44,6 +54,7 @@ def match(row, q):
         if op == "gt" and not cs > val: return False
         if op == "is" and val == "null" and cell is not None: return False
         if op == "in" and cs not in val.strip("()").split(","): return False
+        if op == "ilike" and not re.fullmatch(like_re(val), cs, re.I | re.S): return False   # bridge 2.3.1: a name in other capitals
     return True
 def rpc(fn, a):
     ARGS.setdefault(fn, []).append(a)
@@ -96,6 +107,51 @@ def rpc(fn, a):
         SECRETS[a["p_name"]] = a["p_value"]; return "sec-" + a["p_name"]
     if fn == "gsp_secret_get": return SECRETS.get(a["p_name"]) if a["p_name"].startswith("gsp:") else None
     if fn == "gst_cron_ok": return a.get("k") == CRON_KEY
+    if fn == "tally_bridge_bind":       # migration 54 (review M3, M-A): a bridge id belongs to the first of the firm's computers that reports it
+        bound = T.setdefault("tally_bridge_ids", [])
+        if not re.match(r"^go-[0-9a-f]{6,32}$", a.get("p_bridge") or ""): return {"own": True}
+        firm = next((x.get("firm_id") for x in T["tally_devices"] if x["id"] == a["p_device"]), None)
+        hit = next((x for x in bound if x["bridge_id"] == a["p_bridge"] and x.get("firm_id") == firm), None)
+        if not hit: hit = {"bridge_id": a["p_bridge"], "device_id": a["p_device"], "firm_id": firm}; bound.append(hit)
+        if hit["device_id"] == a["p_device"]: return {"own": True}
+        d = next((x for x in T["tally_devices"] if x["id"] == hit["device_id"]), {}); e = ((d.get("info") or {}).get("bridges") or {}).get(a["p_bridge"]) or {}
+        return {"own": False, "words": "This computer key cannot use bridge %s: it belongs to %s. Ask the firm's owner." % (a["p_bridge"], " · ".join(x for x in (e.get("computer"), e.get("user")) if x) or d.get("name", ""))}
+    if fn == "tally_post_take_for":     # migration 54: the oldest waiting posting of the computer for this bridge (or none named, when main)
+        if any(p.get("device_id") == a["p_device"] and p.get("bridge_id") == a["p_bridge"] and p.get("changes_only") for p in T.get("tally_bridge_prefs", [])): return []
+        if not any(a["p_bridge"] in ((d.get("info") or {}).get("bridges") or {}) for d in T["tally_devices"] if d["id"] == a["p_device"]): return []
+        for j in sorted(T["tally_post_jobs"], key=lambda j: j.get("created_at") or ""):
+            if j["device_id"] == a["p_device"] and j["status"] == "waiting" and (j.get("target_bridge") == a["p_bridge"] or (j.get("target_bridge") is None and a.get("p_main"))):
+                j["status"] = "taken"; return [j]
+        return []
+    if fn == "tally_post_rescue":       # migration 54 (review M-B): a computer's waiting postings for a bridge that may no longer post: moved to its main bridge
+        # (the owner's rule of 05-Oct-2026: only the main bridge of the SAME Windows user stops a bridge, and a posting moves only to it)
+        d = next((x for x in T["tally_devices"] if x["id"] == a["p_device"]), {}); main = d.get("main_bridge"); bs = (d.get("info") or {}).get("bridges") or {}
+        u = lambda b: str((bs.get(b) or {}).get("user") or "").strip().lower()
+        same = lambda t: bool(main) and main in bs and u(main) == u(t)
+        co = {p.get("bridge_id") for p in T.get("tally_bridge_prefs", []) if p.get("device_id") == a["p_device"] and p.get("changes_only")}
+        moved = failed = 0
+        for j in T["tally_post_jobs"]:
+            t = j.get("target_bridge")
+            if j["device_id"] != a["p_device"] or j["status"] != "waiting" or not t or ((not same(t) or main == t) and t not in co): continue
+            if same(t) and main not in co: j["target_bridge"] = main; moved += 1
+            else: j["status"] = "failed"; failed += 1
+        return {"ok": True, "moved": moved, "failed": failed}
+    if fn == "tally_post_checks_for":   # migration 55 (decision B): the waiting checks of this bridge's postings
+        out = []
+        for c in T.get("tally_post_checks", []):
+            j = next((x for x in T["tally_post_jobs"] if x["id"] == c["job_id"]), None)
+            if c.get("state") != "waiting" or not j or j["device_id"] != a["p_device"]: continue
+            if not (j.get("target_bridge") == a["p_bridge"] or (j.get("target_bridge") is None and a.get("p_main"))): continue
+            xml = next((v.get("xml") for v in (j.get("payload") or {}).get("vouchers", []) if v.get("id") == c["entry_id"]), None)
+            out.append({"check": c["id"], "job": j["id"], "entry": c["entry_id"], "company": j["company"], "why": c.get("why"), "xml": xml})
+        return out
+    if fn == "tally_post_check_report":  # migration 55: the bridge's answer (the SQL is tested on pg_stand: run_migration55.py)
+        return {"ok": True, "state": "waiting" if a.get("p_result") == "unable" else a.get("p_result"), "check": a.get("p_check")}
+    if fn == "tally_lease_take":        # 32/37 (6 arguments) and 55 (7, p_purpose): free unless the test says otherwise
+        if "p_purpose" in a and LEASE7_MISSING[0]: raise LookupError("PGRST202")
+        return {"ok": True, "held": False, "purpose": a.get("p_purpose") or "", "lease": {"until": "2026-10-05T12:00:00Z", "ttl": a.get("p_ttl")}}
+    if fn == "tally_lease_release": return {"ok": True, "released": True}
+    if fn == "tally_bridge_own_key_move": return {"ok": True, "moved": True, "bridge": a.get("p_bridge"), "from": a.get("p_from"), "to": a.get("p_to")}   # migration 54 (final review M3; the SQL: run_migration54.py)
     if fn == "tally_post_take":
         for j in T["tally_post_jobs"]:
             if j["device_id"] == a["p_device"] and j["status"] == "waiting": j["status"] = "taken"; return [j]
@@ -119,17 +175,35 @@ class H(http.server.BaseHTTPRequestHandler):
         t = (self.headers.get("Authorization") or "").replace("Bearer ", "")
         return "service" if t == SERVICE else USERS.get(t)
     def handle_any(self, method):
-        u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH") else b""
+        u = urlparse(self.path); path = u.path; q = parse_qs(u.query, keep_blank_values=True); raw = self.body() if method in ("POST", "PATCH", "DELETE") else b""
         CALLS.append((method, path))
+        if MAX_URL[0] and len(self.path) > MAX_URL[0]: return self.send(414, {"message": "URI Too Long"})
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})
         if path.startswith("/rest/v1/rpc/"):
+            if path.rsplit("/", 1)[1] in NO_FN:
+                return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))
+            except LookupError:   # an overload this database does not have (PostgREST answers 404 PGRST202)
+                return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s with those arguments in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             except Exception as e: return self.send(400, {"message": str(e), "code": "P0001"})
         if path.startswith("/rest/v1/"):
             t = path.rsplit("/", 1)[1]; rows = T.setdefault(t, []); single = "vnd.pgrst.object" in (self.headers.get("Accept") or "")
+            if method in ("GET", "HEAD") and t in FAIL_SELECT:
+                return self.send(400, dict(FAIL_SELECT[t], details=None, hint=None))
+            if method in ("GET", "HEAD") and NO_COL.get(t):
+                bad = [c.strip() for c in (q.get("select") or ["*"])[0].split(",") if c.strip() in NO_COL[t]]
+                if bad: return self.send(400, {"code": "42703", "message": "column %s.%s does not exist" % (t, bad[0]), "details": None, "hint": None})
+            if method == "POST" and NO_COL.get(t):
+                d0 = json.loads(raw or b"[]"); d0 = d0 if isinstance(d0, list) else [d0]
+                bad = sorted(set(k for d in d0 for k in d if k in NO_COL[t]))
+                if bad: return self.send(400, {"code": "PGRST204", "message": "Could not find the '%s' column of '%s' in the schema cache" % (bad[0], t), "details": None, "hint": None})
             if method in ("GET", "HEAD"):
                 hit = [r for r in rows if match(r, q)]
+                if HONOR_LIMIT[0]:
+                    for o in reversed(((q.get("order") or [""])[0]).split(",")):
+                        if o: col, _, d = o.partition("."); hit.sort(key=lambda r: (r.get(col) is None, r.get(col) if r.get(col) is not None else 0), reverse=d.startswith("desc"))
+                    if q.get("limit"): hit = hit[:int(q["limit"][0])]
                 sel = (q.get("select") or ["*"])[0]
                 if t.startswith("gst_") and sel != "*" and "(" not in sel:      # the columns asked for (gst-taxpro's tests)
                     cols = [c.strip() for c in sel.split(",")]; hit = [{c: r.get(c) for c in cols} for r in hit]
@@ -170,6 +244,13 @@ class H(http.server.BaseHTTPRequestHandler):
             return self.send(200, [{"name": n, "id": None if "." not in n else n} for n in names])
         if path.startswith("/storage/v1/object/"):
             key = unquote(path[len("/storage/v1/object/"):]).replace("authenticated/", "", 1)
+            if method == "DELETE":                                    # remove([paths]): DELETE /storage/v1/object/<bucket> {prefixes}
+                gone = []
+                for pf in (json.loads(raw or b"{}").get("prefixes") or []):
+                    k = key.rstrip("/") + "/" + pf
+                    if k in FILES: del FILES[k]; gone.append({"name": pf})
+                REMOVED.extend(key.rstrip("/") + "/" + g["name"] for g in gone)
+                return self.send(200, gone)
             if method == "POST" or method == "PUT": FILES[key] = raw; return self.send(200, {"Key": key})
             if method == "GET":
                 if key not in FILES: return self.send(404, {"message": "not found"})
@@ -197,5 +278,6 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_POST(self): self.handle_any("POST")
     def do_PATCH(self): self.handle_any("PATCH")
     def do_PUT(self): self.handle_any("PUT")
+    def do_DELETE(self): self.handle_any("DELETE")
 def start():
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H); threading.Thread(target=srv.serve_forever, daemon=True).start(); return srv

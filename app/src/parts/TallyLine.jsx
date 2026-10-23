@@ -1,7 +1,9 @@
 // FinCom Bridge 2.1.3 reads Tally only after an event, and Tally cannot send its changes by itself, so a client's Tally
 // is said in one line with one button (tallyLine, booksAsOf and tallyUpdateNow in src/js/49-tally-cloud.js):
-//   TallyLine: "Tally open on NWS144 · last read 15:34" / "Tally is closed on NWS144" / "NWS144 is offline" /
-//              "Tally is not answering on NWS144 since 12:28" / "Background reading paused on NWS144" · Update now
+//   TallyLine: "Connected · Tally open on NWS144 · last read 15:34" / "Tally not open on NWS144" / "NWS144 is offline" /
+//              "Tally is not answering on NWS144 since 12:28" / "Reading paused on NWS144" · Update now
+//   (FinCom 2.3.5: one vocabulary with the Tally page's cards: Connected / Offline / Tally not open / Reading stopped /
+//   Needs you)
 //   BooksAsOf: "Books as of 15:34 · Update now", wherever the client's books figures are shown
 
 export default function TallyLine({ co, update = true }) {

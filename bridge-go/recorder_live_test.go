@@ -81,7 +81,23 @@ func liveBridge(t *testing.T, extra string) (rec string, f *standTally, c *stand
 	standBridge(t, f, c.cfg()+extra)
 	liveResetState()
 	t.Cleanup(liveResetState)
+	liveSeedOwnOpen(b220CoGUID, zz)
 	return rec, f, c
+}
+
+// fix 3: these tests' bridge reads lines its own Tally wrote: the company was open in its own Tally all along (a stretch
+// over every line's time, kept on disk like the bridge's own looks, so a restart keeps it)
+func liveSeedOwnOpen(guid, name string) {
+	from, to := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	live.mu.Lock()
+	liveFresh()
+	for _, k := range []string{liveOwnKey(guid, name), liveOwnKey("", name)} {
+		live.own[k] = &liveOwnSt{name: name, ivs: []liveOwnIv{{from: from, to: to}}}
+	}
+	live.ownAt = to
+	path, text := liveOwnTallyFile(), liveOwnText()
+	live.mu.Unlock()
+	_ = saveFile(path, text)
 }
 
 // the lines the stand cloud took (200 answers only), in order
@@ -160,6 +176,10 @@ func TestLiveAddonFile(t *testing.T) {
 	trial := readText(filepath.Join("addon", anyAddonName))
 	body := func(s string) string {
 		s = s[strings.Index(s, "    01 : SET"):]
+		// next-userfile: the Windows user's own file (06a-06c: the shared name when Tally gives no user) and w= after tw
+		s = regexp.MustCompile(`(?m)^    06[abc]:.*\n`).ReplaceAllString(s, "")
+		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + "-" + @@FCRWinUser + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
+		s = strings.ReplaceAll(s, `"|tw=" + ##vTW + "|w=" + @@FCRWinUser`, `"|tw=" + ##vTW`)
 		s = strings.ReplaceAll(s, `@@FCRFolder + ##vGuid + "-" + @@FCRDay + ".txt"`, `@@FCRFolder + ##vGuid + ".txt"`)
 		s = strings.ReplaceAll(s, `"|t1=" + ##vT1 + "|src=live"`, `"|t1=" + ##vT1`)
 		s = strings.ReplaceAll(s, `SET : vGuid : "noguid"`, `SET : vGuid : "name-" + ##SVCurrentCompany`) // review Low 17
@@ -357,7 +377,8 @@ func TestLiveOnlyNewest7Days(t *testing.T) {
 	liveAppend(t, filepath.Join(rec, b220CoGUID+".txt"), vchLine("after_delete", "g-trial", "3", "3", ""))
 	liveReadOnce()
 	q := liveQueue()
-	if len(q) != 1 || q[0].guid != b220CoGUID+"-00000002" {
+	// review H1 of 2.3.0: a delete's own GUID is kept aside (guidKeep) until this Tally shows the voucher gone
+	if len(q) != 1 || q[0].guidKeep != b220CoGUID+"-00000002" || q[0].masterId != "2" {
 		t.Fatalf("read: %+v", q)
 	}
 }
@@ -483,6 +504,8 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	}
 	applyRecorderSource(M{"recorderSource": "addon"})
 	setCfg("RecorderSource", "addon")
+	// 2.3.3: the lines here wait several seconds for the test's own steps; the 4 s safety net is not what this test is about
+	setCfg("RecorderHoldAfterMs", float64(60000))
 	// lines read from the add-on, then the source switched: the queued lines still go, by the same uploader
 	liveAppend(t, liveFilePath(rec, ""), vchLine("after_delete", b220CoGUID+"-00000009", "9", "1", "from the add-on"))
 	liveReadOnce()
@@ -526,14 +549,15 @@ func TestLiveSourceSwitchKeepsUploader(t *testing.T) {
 	}
 }
 
-// --- 3a. the one dated exception: FinComVoucherByMaster, one day, MasterIDs only, exactly as built; nothing else dated
+// --- 3a. the entry request's exception: next-fastfetch, the object export of ONE voucher (no period), exactly as built,
+// for a company whose starting point is recorded, whatever ReadDays says; nothing else dated passes
 func TestLiveDatedGuardException(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	if readDaysOn() {
 		t.Fatal("ReadDays is on by default")
 	}
-	ok := voucherByMasterRequest(zz, "20261004", []string{"5", "9"})
+	ok := voucherObjectRequest(zz, "5")
 	// 2.2.2 security review: only for a company whose starting point is recorded
 	if datedRefused(fin, ok) == nil {
 		t.Fatal("the body fetch passes for a company with no starting point")
@@ -545,34 +569,29 @@ func TestLiveDatedGuardException(t *testing.T) {
 	if _, err := invokeTally(&TC{copier: true}, f.port, ok, 5); err != nil {
 		t.Fatalf("the body fetch: %v", err)
 	}
-	var ids []string
-	for i := 0; i < 51; i++ {
-		ids = append(ids, fmt.Sprint(i+1))
-	}
 	bad := map[string]string{
-		"two days":       strings.Replace(ok, "<SVTODATE>20261004</SVTODATE>", "<SVTODATE>20261005</SVTODATE>", 1),
-		"51 ids":         voucherByMasterRequest(zz, "20261004", ids),
-		"another filter": strings.Replace(ok, "$MasterID = 5 OR $MasterID = 9", "$AlterID &gt; 0", 1),
-		"no filter":      strings.Replace(ok, "$MasterID = 5 OR $MasterID = 9", "", 1),
-		"more fields":    strings.Replace(ok, "<FETCH>", "<FETCH>LEDGERENTRIES.*, ", 1),
-		"another id":     strings.ReplaceAll(ok, vchByMasterID, tagCheckID),
+		"a period":    strings.Replace(ok, "</SVCURRENTCOMPANY>", "</SVCURRENTCOMPANY><SVFROMDATE>20261004</SVFROMDATE><SVTODATE>20261004</SVTODATE>", 1),
+		"two ids":     strings.Replace(ok, "ID:5<", "ID:5,9<", 1),
+		"no id":       strings.Replace(ok, "ID:5<", "<", 1),
+		"no fetch":    regexp.MustCompile(`<FETCHLIST>.*</FETCHLIST>`).ReplaceAllString(ok, ""),
+		"more fields": strings.Replace(ok, "<FETCHLIST>", "<FETCHLIST><FETCH>LEDGERENTRIES.*</FETCH>", 1),
 	}
 	for name, x := range bad {
-		if datedRefused(fin, x) == nil {
-			t.Errorf("%s: passes the dated guard", name)
+		if datedRefused(fin, x) == nil && checkAllowed(x) == nil {
+			t.Errorf("%s: passes", name)
 		}
 	}
-	// every other dated request the bridge can build stays refused with ReadDays off
+	// every dated request the bridge can build stays refused with ReadDays off
 	for id, x := range allowListSamples() {
-		if id == vchByMasterID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
+		if id == vchObjectID || (!strings.Contains(x, "<SVFROMDATE") && !strings.Contains(x, "<SVTODATE")) {
 			continue
 		}
 		if datedRefused(fin, x) == nil {
 			t.Errorf("%s passes the dated guard with ReadDays off", id)
 		}
 	}
-	if !strings.Contains(allowListSamples()[vchByMasterID], "<SVFROMDATE") {
-		t.Fatal("the body fetch's sample carries no period")
+	if strings.Contains(allowListSamples()[vchObjectID], "<SVFROMDATE") {
+		t.Fatal("the entry request's sample carries a period")
 	}
 }
 
@@ -600,11 +619,11 @@ func TestLiveBodyFetch(t *testing.T) {
 		t.Fatalf("during a posting: %v, %d sent", f.ids()[n0:], len(c.recSent()))
 	}
 	uploadAll(t)
-	if f.n(vchByMasterID) != 1 {
+	if f.n(vchObjectID) != 1 {
 		t.Fatalf("body fetches: %v", f.ids()[n0:])
 	}
-	body := f.bodiesOf(vchByMasterID)[0]
-	if !strings.Contains(body, "$MasterID = "+v.master) || !strings.Contains(body, "<SVFROMDATE>"+td+"</SVFROMDATE>") || strings.Contains(body, "$MasterID = 77") {
+	body := f.bodiesOf(vchObjectID)[0]
+	if body != voucherObjectRequest(zz, v.master) {
 		t.Fatalf("the request: %s", body)
 	}
 	sent := c.recSent()
@@ -623,7 +642,7 @@ func TestLiveBodyFetch(t *testing.T) {
 	}
 	// Tally not answering: the line goes without its body within the cap
 	f.mu.Lock()
-	f.behave = silentFor(isID(vchByMasterID), nil)
+	f.behave = silentFor(isID(vchObjectID), nil)
 	f.mu.Unlock()
 	liveAppend(t, p, liveLine("voucher_accept_pre", "Voucher", v.guid, v.master, "99", "Journal", "PA-1", td, "", "", "rent 2"),
 		liveLine("voucher_accept_post", "Voucher", v.guid, v.master, "100", "Journal", "PA-1", td, "", "", "rent 2"))
@@ -633,12 +652,24 @@ func TestLiveBodyFetch(t *testing.T) {
 	if el := time.Since(t0); el > 6*time.Second {
 		t.Fatalf("the body fetch held the line %s", el)
 	}
+	// 2.3.3 (the owner's rule): stopped at 2 s, it goes up held at once with the words; asked again once at the retry's
+	// try, stopped again, it ends with the Day Book words (2.3.1: asked 3 times before it went up at all)
 	sent = c.recSent()
-	if len(sent) != 3 || str(sent[2]["xml"]) != "" || str(sent[2]["event"]) != "altered" {
+	if len(sent) != 3 || str(sent[2]["xml"]) != "" || str(sent[2]["event"]) != "altered" || !strings.HasPrefix(str(sent[2]["heldWhy"]), "waiting: ") {
 		t.Fatalf("without a body: %v", sent[len(sent)-1])
 	}
-	if logLines("Recorder: the body of 1 entr") < 1 {
-		t.Fatal("the failed body fetch is not in the log")
+	// Tally did not answer at all: nothing more is sent to it until it answers the small check (once a minute); the held
+	// line's one ask again waits for that, not spent meanwhile
+	n := f.n(vchObjectID)
+	for i := 0; i < 2; i++ {
+		retryDue()
+		uploadAll(t)
+	}
+	if sent = c.recSent(); len(sent) != 3 || f.n(vchObjectID) != n {
+		t.Fatalf("while Tally owes the small check: %v (asked %d more)", sent[2:], f.n(vchObjectID)-n)
+	}
+	if logLines("held at once: waiting: ") < 1 {
+		t.Fatal("the held line is not in the log")
 	}
 }
 
@@ -1154,8 +1185,14 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 	// 5 MB in a day: a second copy of the same date
 	big := strings.Repeat("y", 5*1024*1024+10)
 	_ = os.WriteFile(lf, []byte(big), 0o644)
+	// the copy is named by the log's own date (its time), read once here: a midnight between writing it and the
+	// check must not make the test look for the next day's name (CI 06-Oct-2026 ran across midnight)
+	bigDay := ""
+	if fi, err := os.Stat(lf); err == nil {
+		bigDay = fi.ModTime().Format("2006-01-02")
+	}
 	writeLog("after five megabytes")
-	if m, _ := filepath.Glob(filepath.Join(dir, base+"."+time.Now().Format("2006-01-02")+"*")); len(m) != 1 {
+	if m, _ := filepath.Glob(filepath.Join(dir, base+"."+bigDay+"*")); len(m) != 1 {
 		t.Fatalf("the size rotation: %v", m)
 	}
 	if !strings.Contains(readText(lf), "after five megabytes") || len(readText(lf)) > 1000 {
@@ -1165,7 +1202,7 @@ func TestRecorderLogsKept30Days(t *testing.T) {
 
 // --- 8. the version, the sheets and the allow-list decision line
 func TestRecorderVersion220Sheets(t *testing.T) {
-	if BridgeVersion != "2.2.4" { // 2.2.4 (Tally's typed fields read); the 2.2.0 sheet stays as it was
+	if BridgeVersion != "2.4.4" { // 2.3.1 (the ledger lines under an invoice's items); the 2.2.0 sheet stays as it was
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	sheet := strings.Join(strings.Fields(readText("../docs/bridge-2.2.0-test-sheet.txt")), " ")
@@ -1191,9 +1228,9 @@ func TestRecorderVersion220Sheets(t *testing.T) {
 		t.Error("the 2.2.0 test sheet has neither the fingerprint placeholder nor the setup's SHA-256")
 	}
 	al := readText("../docs/tally-allowlist.md")
-	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.2\.4 only by the owner's decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchByMasterID) ||
+	if !regexp.MustCompile(`not yet measured[^;]*; allowed for 2\.4\.4 (only )?by the owner's (standing )?decision of \d{4}-\d{2}-\d{2}`).MatchString(al) || !strings.Contains(al, vchObjectID) ||
 		!strings.Contains(al, vchByNumberID) {
-		t.Fatal("docs/tally-allowlist.md: no decision line for 2.2.4, or no FinComVoucherByMaster / FinComVoucherByNumber row")
+		t.Fatal("docs/tally-allowlist.md: no decision line for 2.4.4, or no FinComVoucherObject / FinComVoucherByNumber row")
 	}
 }
 
@@ -1251,8 +1288,15 @@ func TestSourceBNotDefault(t *testing.T) {
 	spChecked = map[string]time.Time{}
 	spMu.Unlock()
 	lightCheckOpen(sessions)
-	if f.n("TDSDeskKeepList") != 0 {
-		t.Fatal("source B ran without the owner's switch")
+	// next-bankdate (2.4.0, the owner's agreed fallback): a move of ALTVCHID with no add-on line to explain it (ND-2 here) is
+	// listed once by the bank route (bankdate.go), never by source B: no change of source "alterid" is made
+	for _, c := range liveQueue() {
+		if c.source == "alterid" {
+			t.Fatalf("source B ran without the owner's switch: %+v", c)
+		}
+	}
+	if n := f.n("TDSDeskKeepList"); n > 1 || (n == 1 && !strings.Contains(readText(logFile()), "Bank dates:")) {
+		t.Fatalf("the list asked %d times (the bank route's once at most)", n)
 	}
 	if b := beatBody(true, "open", "", nil, nil, nil); str(b["recorderSource"]) != "addon" {
 		t.Fatalf("beat: %v", b["recorderSource"])
@@ -1284,6 +1328,8 @@ func TestSourceBSpacingAndPosting(t *testing.T) {
 	}
 }
 
+// 2.3.1 (the owner's last change): a list stopped at 2 s never turns source B off; it is asked again by itself on the
+// shared retry schedule (retry.go), and the beat carries no switch-off
 func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	f, _, sessions := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
@@ -1291,15 +1337,15 @@ func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	if f.n("TDSDeskKeepList") != 1 {
 		t.Fatal("not asked")
 	}
-	// 2.2.2 (the owner's condition b): a hard stop at 2 s: the bridge stops waiting then (not at 2.5 s), and the switch-off
-	// applies as before
-	if logLines("Source B off: Tally took 2.0 s for the changed-entries list (limit 2 s)") != 1 {
+	// 2.2.2 (the owner's condition b): a hard stop at 2 s: the bridge stops waiting then (not at 2.5 s)
+	if logLines("off: Tally took") != 0 || logLines("(TDSDeskKeepList, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the log: %s", readText(logFile()))
 	}
-	st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz])
-	if st["off"] != true || num(st["seconds"]) < 1.9 || num(st["seconds"]) > 2.2 || str(st["at"]) == "" || !strings.Contains(str(st["why"]), "2.0 s") {
-		t.Fatalf("the beat: %v", st)
+	b := beatBody(true, "open", "", nil, nil, nil)
+	if len(obj(b["recorderSourceB"])) != 0 || !strings.HasPrefix(str(obj(b["tallyRetry"])["words"]), "Tally did not answer in time at ") {
+		t.Fatalf("the beat: %v %v", b["recorderSourceB"], b["tallyRetry"])
 	}
+	slowKeepList(f, 0)
 	f.mu.Lock()
 	f.add(today(), fgParty, "SB-4", "four", "-1.00")
 	f.mu.Unlock()
@@ -1307,13 +1353,17 @@ func TestSourceBOffAfterSlowAnswer(t *testing.T) {
 	spMu.Lock()
 	spChecked = map[string]time.Time{}
 	spMu.Unlock()
-	lightCheckOpen(sessions)
-	_, _ = liveSourceB(zz, f.port)
-	if f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("source B asked again after it turned off")
+	lightCheckOpen(sessions) // the light check sees the counter moved and asks source B (by itself: no owner's switch)
+	// the stopped request took nothing: SB-2 comes now with SB-4
+	if f.n("TDSDeskKeepList") != 2 || logLines("Recorder (Tally's change list) for "+zz+": 2 change(s) found") != 1 {
+		t.Fatalf("source B not asked again by itself: %v\n%s", f.ids(), readText(logFile()))
+	}
+	if b := beatBody(true, "open", "", nil, nil, nil); b["tallyRetry"] != nil {
+		t.Fatalf("the beat after an answer in time: %v", b["tallyRetry"])
 	}
 }
 
+// nothing is kept switched off across a restart (2.3.1)
 func TestSourceBStaysOffAfterRestart(t *testing.T) {
 	f, _, _ := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
@@ -1326,37 +1376,34 @@ func TestSourceBStaysOffAfterRestart(t *testing.T) {
 	f.add(today(), fgParty, "SB-5", "five", "-1.00")
 	f.mu.Unlock()
 	_, _ = companyCheck(fin, zz, f.port)
-	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("source B came back on after a restart")
+	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
+		t.Fatalf("source B not asked after a restart: %d %v", n, err)
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz]); st["off"] != true {
+	if st := obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"]); len(st) != 0 {
 		t.Fatalf("the beat after the restart: %v", st)
 	}
 }
 
+// no owner's switch is needed: it goes again by itself (2.3.1); the owner's switch changes nothing of it
 func TestSourceBBackOnOwnerSwitch(t *testing.T) {
 	f, _, _ := sourceBReady(t)
 	slowKeepList(f, 2500*time.Millisecond)
 	_, _ = liveSourceB(zz, f.port)
 	slowKeepList(f, 0)
-	laterBy(t, 10*time.Minute)
-	applyRecorderSource(M{"recorderSource": "alterid"}) // unchanged: still off
+	laterBy(t, 10*time.Second)
 	if n, _ := liveSourceB(zz, f.port); n != 0 || f.n("TDSDeskKeepList") != 1 {
-		t.Fatal("on again without the owner's switch")
+		t.Fatal("asked before the retry's time")
 	}
 	f.mu.Lock()
 	f.add(today(), fgParty, "SB-6", "six", "-1.00")
 	f.mu.Unlock()
+	laterBy(t, 10*time.Minute)
 	_, _ = companyCheck(fin, zz, f.port)
-	applyRecorderSource(M{"recorderSource": "both"}) // the owner switches it
 	// 2.2.2: the slow request was stopped at 2 s (nothing taken from it): SB-2 comes now with SB-6
 	if n, err := liveSourceB(zz, f.port); err != nil || n != 2 || f.n("TDSDeskKeepList") != 2 {
-		t.Fatalf("after the owner's switch: %d %v", n, err)
+		t.Fatalf("by itself: %d %v", n, err)
 	}
-	if st := obj(obj(beatBody(true, "open", "", nil, nil, nil)["recorderSourceB"])[zz]); st["off"] == true {
-		t.Fatalf("the beat after the switch: %v", st)
-	}
-	if logLines("Source B on again for "+zz) != 1 {
-		t.Fatal("the switch back is not in the log")
+	if logLines("Source B on again for "+zz) != 0 {
+		t.Fatal("an owner's switch was needed")
 	}
 }

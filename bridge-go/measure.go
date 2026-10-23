@@ -39,6 +39,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -81,6 +82,25 @@ var measureFields = []struct{ name, tags string }{
 	{"TDS section / nature", "TDSEXPENSEALLOCATIONS.LIST|TAXOBJECTALLOCATIONS.LIST|TDSNATUREOFPAYMENT"},
 	{"inventory lines", "ALLINVENTORYENTRIES.LIST|INVENTORYENTRIES.LIST"}, {"bank allocations", "BANKALLOCATIONS.LIST"},
 	{"instrument number", "INSTRUMENTNUMBER"}, {"bank reconciliation date", "BANKERSDATE"},
+}
+
+// what item e. found of one field in the entry v (tags: its tags, one of them enough): "present" (a value),
+// "present, empty" (only empty or self-closed), "absent". 2.3.1 (2.2.4 review L5): a field read as the rest of the bridge
+// reads Tally's fields, with or without attributes (<NARRATION TYPE="String"/>, a real TallyPrime 7.1) and its closing
+// tag as "</TAG>" or "</TAG >"
+func measureFieldState(v, tags string) string {
+	st := "absent"
+	for _, tg := range strings.Split(tags, "|") {
+		if m := re(tagOpenRe(tg) + `([\s\S]*?)</` + regexp.QuoteMeta(tg) + `\s*>`).FindStringSubmatch(v); m != nil {
+			if strings.TrimSpace(m[1]) != "" {
+				return "present"
+			}
+			st = "present, empty"
+		} else if re(`<` + regexp.QuoteMeta(tg) + `(?:\s[^>]*)?/>`).MatchString(v) {
+			st = "present, empty"
+		}
+	}
+	return st
 }
 
 var (
@@ -372,19 +392,7 @@ func runMeasure(o measureOpts) (M, error) {
 		v := vs[0]
 		it.note = fmt.Sprintf("%d bytes for the entry", len(v))
 		for _, f := range measureFields {
-			st := "absent"
-			for _, tg := range strings.Split(f.tags, "|") {
-				if m := re(`<` + re(`\.`).ReplaceAllString(tg, `\.`) + `(\s[^>]*)?>([\s\S]*?)</` + re(`\.`).ReplaceAllString(tg, `\.`) + `>`).FindStringSubmatch(v); m != nil {
-					if strings.TrimSpace(m[2]) == "" {
-						st = "present, empty"
-					} else {
-						st = "present"
-						break
-					}
-				} else if re(`<`+re(`\.`).ReplaceAllString(tg, `\.`)+`\s*/>`).MatchString(v) && st == "absent" {
-					st = "present, empty"
-				}
-			}
+			st := measureFieldState(v, f.tags)
 			it.extraLines = append(it.extraLines, fmt.Sprintf("      %-26s %s", f.name, st))
 		}
 	} else if it.err == "" {

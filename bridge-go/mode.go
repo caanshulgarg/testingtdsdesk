@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+const changesOnlyText = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts."
+
 func testMode() bool { return strings.EqualFold(cfgS("Mode"), "test") }
 
 // How this program was started, for the tray and the log: "service" (a Windows service for all users, started by
@@ -75,6 +77,10 @@ var (
 func readOnlyWhy() string {
 	if testMode() {
 		return "This FinCom Bridge is the test install beside bridge 1.15.0: it reads Tally but never posts. Postings go through bridge 1.15.0."
+	}
+	// L2: set to changes only in FinCom (kept in the settings: a restart or FinCom out of reach never posts again)
+	if cfgB("ChangesOnly") {
+		return changesOnlyText
 	}
 	if why := notMainNow(); why != "" {
 		return why
@@ -177,7 +183,7 @@ func trayStatus() M {
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
 		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow(), "readStopped": readStopAny(),
-		"trialTools": trialTools()} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
+		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn())} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
 }
 
 // the way it runs, in words for the log and the tray
@@ -303,30 +309,53 @@ func showDiagnosis() {
 // runBridge runs until it is asked to stop; returns the exit code (non-zero: start me again)
 func runBridge(console bool) int {
 	loadConfig()
+	// 2.4.0: crash reports to Sentry, only when the settings say "CrashReports": true and the bridge is connected to the
+	// staging cloud (crash.go, docs/sentry.md). A panic of the bridge itself is reported, then goes on as before
+	if crashStart(bridgeDSN) {
+		writeLog("Crash reports to FinCom's error tracker are on (CrashReports in the settings; staging only)")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			crashReport("bridge", r)
+			crashStop()
+			panic(r)
+		}
+		crashStop()
+	}()
 	_ = os.MkdirAll(syncDir(), 0o755)
 	pausedB = cfgB("Paused")
 	if testMode() {
 		seedFromOldCopy()
 	}
-	var err error
-	for i := 0; ; i++ {
-		if _, err = serve(); err == nil {
-			break
+	// review M3 of 2.3.0: one bridge per settings (the service and a "Just for me" bridge of the same Windows user share
+	// them): a second one refuses to start, says so in its log and the tray's message, and is not started again
+	release, err := takeInstanceLock()
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
 		}
-		if console || i >= 60 {
-			fmt.Printf("Could not start on port %d: %s\n", toInt(cfg("Port")), err)
-			fmt.Println("Another program already uses this port. Usually a bridge is already running. Stop it, or change \"Port\" in the settings.")
-			writeLog(fmt.Sprintf("Could not start on port %d: %s", toInt(cfg("Port")), err))
-			return 1
-		}
-		if i == 0 {
-			writeLog(fmt.Sprintf("Port %d is taken; trying again every 5 seconds (another bridge may be stopping)", toInt(cfg("Port"))))
-		}
-		sleepOrStop(5 * time.Second)
-		if stopping() {
-			return stopCode
-		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitTwice
 	}
+	defer release()
+	// 2.3.1 (the owner's last change): a 2.3.0 bridge's stop of reading by itself and its 2-second switch-offs, saved on
+	// disk, are cleared (the owner's stop from FinCom is kept)
+	clearOldSwitchOffs()
+	// 2.3.0: the first free port of 9100..9199 (the remembered one first); none: said once, and the bridge stops
+	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
+		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitNoPort
+	}
+	_ = os.Remove(startFailedFile())
+	serve(ln)
 	openPairWindow(toInt(cfg("PairWindowMin")))
 	mode := "the only bridge on this computer"
 	if testMode() {
@@ -357,6 +386,7 @@ func runBridge(console bool) int {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprintf("%s: %v", name, r))
+				crashReport("main_loop", r)
 			}
 		}()
 		f()
@@ -370,6 +400,7 @@ func runBridge(console bool) int {
 		sleepOrStop(100 * time.Millisecond)
 		bridgeTurn(safe)
 	}
+	liveMidSave() // 2.3.1 (2.3.0 review L2/L3): the record of Tally's GUIDs learnt since its last write
 	time.Sleep(300 * time.Millisecond)
 	return stopCode
 }

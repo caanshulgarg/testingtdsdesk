@@ -188,12 +188,13 @@ func TestReadTestDayChoice(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	dir := syncFolder(zz)
+	before := today() // the bridge reads today itself: the date before or after the call is right (midnight between)
 	r, err := runReadTest(zz)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if str(r["day"]) != today() {
-		t.Fatalf("no day file: the day is %q, want today %s", str(r["day"]), today())
+	if after := today(); str(r["day"]) != before && str(r["day"]) != after {
+		t.Fatalf("no day file: the day is %q, want today %s", str(r["day"]), after)
 	}
 	writeDayFile(dir, "20260615", r12Voucher("20260615"), false)
 	writeDayFile(dir, "20260701", "", false)

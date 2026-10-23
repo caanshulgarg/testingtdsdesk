@@ -179,7 +179,7 @@ const Rec = {
     const a = this.act, cid = S.syncClient || "";
     a.busy = true; a.cid = cid;
     try {
-      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short" +
+      const rows = await Cloud.api("tally_recorder_lines?select=id,client_id,book_id,device_id,pc,company,line_id,event,object_guid,alter_id,vch_type,vch_no,vch_date,saved_at,received_at,applied_at,state,held_why,ledgers,fid:payload->>fid,short:payload->>short,checks:payload->checkNotes" +
         "&firm_id=eq." + encodeURIComponent(this.firm()) + (cid ? "&client_id=eq." + encodeURIComponent(cid) : "") + "&order=received_at.desc&limit=200");
       a.rows = [].concat(rows || []); a.no44 = false; a.err = "";
     } catch (e){ if (this.missing(e)){ a.no44 = true; a.rows = []; } else a.err = this.say(e); }
@@ -211,11 +211,18 @@ const Rec = {
     const head = [r.vch_type, r.vch_no].filter(Boolean).join(" ");
     return (head || "an entry") + (r.vch_date ? " · " + fmtDate(String(r.vch_date).slice(0, 10)) : "");
   },
+  // bridge 2.3.1 (the owner's rule after review, 06-Oct-2026): an entry is held only when its lines do not total zero; any
+  // other mismatch is entered with plain words for a person (tally-ingest's payload checkNotes, read as checks; a live row
+  // carries its payload): "; to check: ..." after "Entered in the books"
+  notesWords(r){
+    const n = [].concat((r && (r.checks || (r.payload && r.payload.checkNotes))) || []).map(x => String(x || "").trim()).filter(Boolean);
+    return n.length ? "; to check: " + n.join("; ") : "";
+  },
   // a line's state in the owner's words (05-Oct-2026): "Entered in the books" for an applied line alone
   stateWords(r){
     const why = r.held_why ? ": " + r.held_why : "";
     switch (r.state){
-      case "applied": return "Entered in the books";
+      case "applied": return "Entered in the books" + this.notesWords(r);
       case "held": return "Received, not yet entered in the books" + why;
       case "received": return "Received, not yet entered in the books";
       case "replaced": return "Replaced by a later line";
@@ -235,11 +242,151 @@ const Rec = {
     return this.sorted().filter(r => (r.state === "received" || r.state === "held") && r.received_at && now - Date.parse(r.received_at) > 120000).map(r => {
       const d = this.devOf(r.device_id), pc = r.pc || (d && ((d.info || {}).computer || d.name)) || "the Tally computer";
       let why = r.held_why || "";
-      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally is closed on " + pc : ""; }
-      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally is closed on " + pc; }
+      if (!why && d){ const ds = devState(d, now); why = ds.bridge === "offline" || ds.bridge === "none" ? pc + " is offline" : ds.tally === "closed" ? "Tally not open on " + pc : ""; }
+      else if (d && r.state === "received"){ const ds = devState(d, now); if (ds.bridge === "offline" || ds.bridge === "none") why = pc + " is offline"; else if (ds.tally === "closed") why = "Tally not open on " + pc; }
       return {r, why: why || "not yet entered in the books"};
     });
   },
+  // FinCom 2.3.5 (the owner: "in tally sync there is a yellow field coming all the time.. there should be clear flow"):
+  // the lines waiting over 2 minutes (waiting(), above) by what will actually happen to them - THE one classifier, used by
+  // Sync activity, the books' held banner and the bell (AlertHub.oursHeld), so they never disagree (review of f0f1531f).
+  //   "" = being fetched: FinCom Bridge or the cloud settles it by itself (said quietly);
+  //   any other kind = Needs you: nothing happens until a person acts, with ONE action:
+  //     daybook  - upload that day's Day Book (the bridge gave up; no entry GUID; a Day Book of the day incomplete...)
+  //     dupid    - FinCom's id is on a second Tally entry: check Tally for a double posting, then upload that day's Day Book
+  //     readstop - reading is stopped from FinCom on that computer: an owner resumes it (Resume reading)
+  //     baseline - the company's starting point is not recorded: the Tally page (the computer's More, Baselines)
+  //     masters  - a ledger line with no GUID: read the ledgers from Tally (Books -> From Tally)
+  //     locked   - the month is locked in FinCom: unlock it in Tie-out (then it applies)
+  //     other    - any other held reason: Apply now (tally_recorder_release_held), once it is settled
+  // Every reason the bridge (bridge-go) and the cloud (server/tally-cloud, migration 60) write is in
+  // tests/run_tally_page_simple.py (KINDS), each with its kind. The cloud's words are not changed.
+  FETCHED: [/waiting for the entry's details/i, /^waiting: /i, /FinCom asks again at/i, /matches no posting of this firm/i,
+    /held until FinCom Bridge( [\d.]+)? sends/i, /next (ledger list|day read|full line)/i, /^unknown (entry|ledger)\b/i, /^applied when |^replaced by /i,
+    /could not be asked whether it was (deleted|cancelled) here/i, /^the entry was not read from Tally/i, /queue/i, /not read from Tally in time/i],
+  needKind(r){
+    if (!r) return "";
+    const why = String(r.held_why || "").trim(), st = String(r.state || "");
+    if (st === "received" || st === "queued") return "";
+    if (st === "failed") return /queue|timeout|server/i.test(why) ? "" : "other";
+    if (st !== "held") return "";
+    if (/reading from Tally is stopped|stopped from FinCom/i.test(why)) return "readstop";
+    if (/starting point/i.test(why)) return "baseline";
+    if (/^FinCom id .* is matched to another Tally entry/i.test(why)) return "dupid";
+    if (/no MasterID or no date/i.test(why)) return "daybook";
+    if (this.FETCHED.some(x => x.test(why))) return "";
+    if (/Day Book|could not tell which entry|cannot tell which entry|cannot be asked for its entry/i.test(why)) return "daybook";
+    if (/^no GUID on the line/i.test(why)) return "masters";
+    if (/^month locked/i.test(why)) return "locked";
+    if (!why && /-0{8}$/.test(String(r.object_guid || ""))) return "";     // the add-on's placeholder, no words yet: the bridge asks for it
+    return "other";
+  },
+  // {needs: [{key, kind, cid, company, day (yyyy-mm-dd), lines, text}], fetching: [{r, why}]}
+  flow(){
+    const needs = new Map(), fetching = [];
+    this.waiting().forEach(w => {
+      const r = w.r, kind = this.needKind(r);
+      if (!kind){ fetching.push(w); return; }
+      const company = r.company || (((S.companies || {})[r.client_id] || {}).name) || "a company";
+      const day = /^\d{4}-\d{2}-\d{2}/.test(String(r.vch_date || "")) ? String(r.vch_date).slice(0, 10) : istDay(r.received_at) || "";
+      const dev = this.devOf(r.device_id), pc = r.pc || (dev && ((dev.info || {}).computer || dev.name)) || "the Tally computer";
+      const key = kind + "|" + company + "|" + (kind === "readstop" ? pc : kind === "masters" || kind === "baseline" ? "" : day) + (kind === "other" ? "|" + String(r.held_why || "") : "");
+      if (!needs.has(key)) needs.set(key, {key, kind, cid: r.client_id || "", company, day: kind === "readstop" || kind === "masters" || kind === "baseline" ? "" : day, pc, deviceId: r.device_id || "", lines: []});
+      needs.get(key).lines.push(r);
+    });
+    const n = (k) => k + (k === 1 ? " entry" : " entries"), out = [...needs.values()].sort((a, b) => a.company.localeCompare(b.company) || b.day.localeCompare(a.day));
+    out.forEach(g => {
+      const k = g.lines.length, d = g.day ? fmtDate(g.day) : "", head = g.company + (d ? " · " + d : "") + ": ";
+      const w = String(g.lines[0].held_why || ""), m = /^FinCom id (\S+)/.exec(w);
+      g.text = head + (g.kind === "daybook" ? n(k) + " could not be read from Tally \u2014 upload the Day Book for " + (d || "that day")
+        : g.kind === "dupid" ? n(k) + " carry FinCom id " + (m ? m[1] : "") + ", which is on another Tally entry already \u2014 check Tally for a double posting, then upload the Day Book for " + (d || "that day")
+        : g.kind === "readstop" ? n(k) + " waiting: reading from Tally is stopped on " + g.pc + " \u2014 " + (this.role() === "owner" ? "Resume reading" : "an owner of the firm resumes it on the Tally page")
+        : g.kind === "baseline" ? n(k) + " waiting: the company's starting point is not recorded \u2014 see the Tally page (the computer's More)"
+        : g.kind === "masters" ? n(k) + " of a ledger with no GUID \u2014 read the ledgers again: Books \u2192 From Tally"
+        : g.kind === "locked" ? n(k) + (k === 1 ? " falls" : " fall") + " in a month locked in FinCom (" + w + ") \u2014 unlock the month in Tie-out; " + (k === 1 ? "it applies" : "they apply") + " then"
+        : n(k) + " not yet entered in the books (" + (w || "held") + ") \u2014 Apply now once it is settled");
+    });
+    // bridge 2.4.0 (next-outbox; the coordinator, 08-Oct-2026: "nothing lost", shown): saves FinCom answered 'failed' again
+    // and again; the bridge keeps them and sends them every 30 minutes, its beat says how many, since when and the oldest's
+    // day. Through the one classifier (a held row in the bridge's words: daybook), one group per computer and company
+    this.stuck().forEach(x => {
+      const kind = this.needKind(this.stuckRow(x));
+      if (!kind) return;
+      const d = x.day ? fmtDate(x.day) : "", hm = /T(\d{2}:\d{2})/.exec(String(x.since || "")), k = num(x.n);
+      out.push({key: kind + "|" + x.company + "|" + (x.day || "") + "|stuck|" + x.deviceId, kind, cid: this.clientOf(x.company), company: x.company, day: x.day || "", pc: x.pc, deviceId: x.deviceId, lines: [], stuck: true,
+        text: x.company + (d ? " \u00b7 " + d : "") + ": " + k + (k === 1 ? " save" : " saves") + " from " + x.pc + " could not be stored in FinCom" + (hm ? " since " + hm[1] : "") +
+          "; FinCom keeps trying \u2014 if it continues, upload the Day Book for " + (d || "that day")});
+    });
+    // 2.4.0 review MEDIUM (next-renumber): the bridges' renumbering alerts are "Needs you" too (kind renumber), first
+    const rn = this.renumberNeeds().filter(g => !S.syncClient || g.cid === S.syncClient);
+    return {needs: rn.concat(out), fetching};
+  },
+  // 2.4.0 review MEDIUM (next-renumber): an entry inserted or deleted in Tally makes Tally renumber the later entries of
+  // that voucher type with no line for them; FinCom Bridge reads them again, and says the ones it could not
+  // (renumber.go: below the starting point, Tally too slow twice, an answer it cannot read, more than 500, or not
+  // listable by MasterID) on its beat (info.beat.renumberAlerts, kept by tally-ingest; the last 7 days). One item a
+  // company, the earliest date of every computer's alerts: [{key, kind: "renumber", cid, company, day, n, more, text}];
+  // its one action: Upload the Day Book from that day (Rec.uploadFrom)
+  renumberNeeds(){
+    const tl = (typeof TLight === "object" && TLight.st) || {}, by = new Map();
+    (tl.devs || []).filter(d => d && !d.revoked).forEach(d => {
+      [].concat((((d.info || {}).beat) || {}).renumberAlerts || []).forEach(a => {
+        const f = String((a && a.from) || "");
+        if (!a || !a.company || !/^\d{8}$/.test(f)) return;
+        const day = f.slice(0, 4) + "-" + f.slice(4, 6) + "-" + f.slice(6, 8), k = norm(a.company);
+        const co = (tl.cos || []).find(c => c.client_id && norm(c.company) === k)
+          || Object.values(S.companies || {}).map(c => ({client_id: c.id, company: c.tallyName || c.name})).find(c => !(S.companies[c.client_id] || {}).deleted && norm(c.company) === k);
+        if (!by.has(k)) by.set(k, {key: "renumber|" + a.company, kind: "renumber", cid: co ? co.client_id : "", company: a.company, day, n: 0, more: false, pc: this.pcOf(d), deviceId: d.id, lines: []});
+        const g = by.get(k);
+        if (day < g.day) g.day = day;
+        g.n += Math.max(0, Number(a.n) || 0); g.more = g.more || a.more === true;
+      });
+    });
+    return [...by.values()].sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
+      text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
+        " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
+  },
+  // the Day Book upload from a day to today: Books -> From Tally
+  async uploadFrom(cid, day){
+    if (!cid || !day) return;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = this.ymdLocal(Date.now());
+    goClient("books:import");
+  },
+  // the lines a computer's bridge keeps because FinCom could not store them (its beat's recorderStuck), each
+  // {company, n, since, day, pc, deviceId}
+  stuck(){
+    const seen = new Set(), out = [];
+    [].concat((typeof TCloud === "object" && TCloud.pane.devices) || [], (typeof TLight === "object" && TLight.st.devs) || []).forEach(d => {
+      if (!d || d.revoked || seen.has(d.id)) return;
+      seen.add(d.id);
+      const info = d.info || {}, b = info.beat || {};
+      [].concat(b.recorderStuck || []).forEach(x => { if (x && x.company && num(x.n) > 0) out.push({company: String(x.company), n: num(x.n), since: x.since || "", day: x.day || "", pc: info.computer || d.name || "the Tally computer", deviceId: d.id}); });
+    });
+    return out;
+  },
+  // a stuck group as a held row in the bridge's words, so the one classifier (needKind) decides it
+  stuckRow(x){ return {state: "held", object_guid: "", stuck: x, held_why: "could not be stored in FinCom; FinCom Bridge keeps it and sends it again every 30 minutes; if it continues, upload that day's Day Book"}; },
+  // the FinCom client a Tally company is linked to (its Tally name, else its name), "" when none here
+  clientOf(company){
+    const k = String(company || "").trim().toLowerCase(), c = Object.values(S.companies || {}).find(x => x && String(x.tallyName || "").trim().toLowerCase() === k)
+      || Object.values(S.companies || {}).find(x => x && String(x.name || "").trim().toLowerCase() === k);
+    return c ? c.id : "";
+  },
+  // the Day Book upload for one day: Books -> From Tally with that day (Rec.uploadDays does it from a day to today)
+  async uploadDay(cid, day){
+    if (!cid || !day) return;
+    S.dbFrom = day; S.dbTo = day;
+    if (S.view !== "company" || S.coId !== cid) await openCompany(cid);
+    S.dbFrom = day; S.dbTo = day;
+    goClient("books:import");
+  },
+  // a client's Tie-out (unlocking a month), its From Tally (the ledgers), the Tally page, Resume reading on one computer
+  async openClientTab(cid, tab){ if (!cid) return; if (S.view !== "company" || S.coId !== cid) await openCompany(cid); goClient(tab); },
+  openTallyPage(){ S.tallyTab = "computers"; navHome("tally"); },
+  resumeOn(g){ if (typeof TCloud === "object" && g && g.deviceId) TCloud.readResume({device: {id: g.deviceId}, computer: g.pc}); },
+  // Apply now on every line of a group, one after another (the list's own Apply now, line by line)
+  async releaseAll(lines){ for (const r of [].concat(lines || [])) if (r.state === "held") await this.release(r); },
   async release(r){
     const a = this.act;
     a.msg = {busy: true, id: r.id}; render();
@@ -253,6 +400,52 @@ const Rec = {
   // a client's own lines: the Tally page's Sync activity, for that client
   // filter: the list shown first ("held": the lines held, from the books' "not yet in these books" line)
   openActivity(cid, filter){ S.syncClient = cid || ""; S.syncFilter = filter || "all"; S.tallyTab = "activity"; this.act.at = 0; navHome("tally"); },
+
+  // ---------------------------------------------------------------- unknown ledgers (the owner, 06-Oct-2026; migration 56)
+  // "An entry using an unknown ledger is applied anyway, with nothing flagged. Until 2.3.1 is out, flag these on the page in
+  // plain words so they are visible." The firm's live entries whose lines name a ledger FinCom's copy does not have
+  // (tally_unknown_ledger_entries(p_book null): every book of the firm; members read). Read once a minute at most; nothing
+  // shown (and no error) while migration 56 has not run
+  unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, at, busy, none, err}
+  unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
+  unkOf(books){
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || Date.now() - u.at > 60000)){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
+    return u;
+  },
+  async unkLoad(books){
+    const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, at: 0, busy: false, none: false, err: ""});
+    u.busy = true;
+    try {
+      const out = [];
+      for (const b of (books && books.length ? books : [null])) out.push(...[].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: b}) || []));
+      u.rows = out; u.none = false; u.err = "";
+    } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
+    u.busy = false; u.at = Date.now(); render();
+  },
+  // a client's books in FinCom's cloud (TCloud.st[cid].books[].book): its Books page asks for these books only (the
+  // firm-wide list stops at 500 entries)
+  unkBooks(cid){
+    const st = cid && typeof TCloud === "object" && TCloud.st && TCloud.st[cid];
+    return [...new Set([].concat((st && st.books) || []).map(b => b && b.book).filter(Boolean).map(String))].sort();
+  },
+  // one sentence an entry and ledger: "<type> <number> of <date> uses the ledger '<name>', which FinCom does not have yet. It
+  // is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1."
+  unkWords(r, name){
+    const head = [r.vtype, r.vno].map(x => String(x || "").trim()).filter(Boolean).join(" ") || "An entry";
+    return head + (r.day ? " of " + fmtDate(String(r.day).slice(0, 10)) : "") + " uses the ledger '" + name + "', which FinCom does not have yet. It is in the books; the ledger's group is unknown until the next ledger list or bridge 2.3.1.";
+  },
+  // the sentences for one client ("" or none: every client), newest entry first: [{key, cid, text}]; books: read those
+  // books only (a client's Books page), else the firm's list
+  unkLines(cid, books){
+    const rows = this.unkOf(books).rows || [];
+    const out = [];
+    rows.filter(r => !cid || String(r.client_id || "") === String(cid)).forEach(r => {
+      const names = Array.isArray(r.ledgers) ? r.ledgers : String(r.ledgers || "").replace(/^\{|\}$/g, "").split(",").map(x => x.replace(/^"|"$/g, "")).filter(Boolean);
+      names.forEach(n => out.push({key: (r.book_id || "") + ":" + r.guid + ":" + n, cid: r.client_id || "", text: this.unkWords(r, n)}));
+    });
+    return out;
+  },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?
   // the recorder words a computer's bridges send (info.bridges[id].recorder: {company: {seen, lastAt}}; the beat's
@@ -287,37 +480,9 @@ const Rec = {
     if (!rc) return [];
     return this.openOf(dev).filter(co => rc[co] && rc[co].seen === false);
   },
-  // the owner's condition 4 (05-Oct-2026): what FinCom Bridge's 2-second rule switched off on a computer, per company
-  // (info.bridges[id].recorderOff {bodies, B, C}, kept by tally-ingest from the 2.2.0 beat): from the main bridge, else
-  // the one heard last; [] when none is off or the bridge does not say (before 2.2.0).
-  // [{kind: bodies|B|C, what: "Entry fetch" | "Tally's change list" | "Month slices", company, seconds, at, why}]
-  OFF_WHAT: {bodies: "Entry fetch", B: "Tally's change list", C: "Month slices"},
-  OFF_BELL: {bodies: "FinCom's entry fetch", B: "FinCom's reading of Tally's change list", C: "FinCom's reading by month slices"},
-  OFF_LIMIT: 2,
-  offOf(dev){
-    const br = ((dev && dev.info) || {}).bridges || {};
-    const ids = Object.keys(br).filter(id => br[id] && typeof br[id] === "object");
-    const id = dev && dev.main_bridge && br[dev.main_bridge] ? dev.main_bridge : ids.sort((x, y) => String(br[y].at || "").localeCompare(String(br[x].at || "")))[0];
-    const ro = id && br[id].recorderOff;
-    if (!ro || typeof ro !== "object") return [];
-    const out = [];
-    Object.keys(this.OFF_WHAT).forEach(kind => Object.entries(ro[kind] || {}).forEach(([company, x]) => {
-      if (x && x.off === true) out.push({kind, what: this.OFF_WHAT[kind], company, seconds: Number(x.seconds) || 0, at: x.at || "", why: x.why || ""});
-    }));
-    return out;
-  },
-  // "Entry fetch switched off for <company>: Tally took 3.4 s at 14:05 IST (limit 2 s)." The bridge's time has no zone
-  // and is India's (istParts reads it so); another day: with its date
-  offWords(x){
-    const when = x.at ? (istDay(x.at) === istDay(Date.now()) ? fmtTime(x.at) : fmtDateTime(x.at)) : "";
-    return x.what + " switched off for " + x.company + ": Tally took " + (Math.round(x.seconds * 10) / 10) + " s" + (when ? " at " + when : "") + " (limit " + this.OFF_LIMIT + " s).";
-  },
-  // the bridge switches it on again when "Changes come from" for the computer changes from the value in force when it
-  // switched off (bridge-go/recorder_probes.go liveOnAgain); a change and back within one heartbeat may not be seen
-  offAgain(owner){
-    return owner ? 'To switch it back on: change "Changes come from" for this computer to another choice, wait one minute, then set it back.'
-      : 'To switch it back on: the owner changes "Changes come from" for this computer to another choice, waits one minute, then sets it back.';
-  },
+  // (bridge 2.3.1, the owner's last change: nothing is switched off by the 2-second rule any more; the per-company
+  // "switched off" lines and their "Changes come from" advice are gone. A request not answered in time is said on the
+  // computer's line, TCloud.readState)
   // the computers keeping a client's company open without recording it: [{pc, company}]
   clientNotRecording(cid){
     const st = (typeof TLight === "object" && TLight.st) || {}, out = [];

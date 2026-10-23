@@ -31,7 +31,9 @@ with sync_playwright() as p:
     ok(pg.evaluate("Object.keys(S.books.ledInfo || {}).length") == 55 if FIXTURE else pg.evaluate("Object.keys(S.books.ledInfo || {}).length") > 2000, "masters read: what Tally says about each ledger is kept")
     pg.evaluate("S.booksTab = 'ledgers'; S.lmView = ''; render();"); pg.wait_for_timeout(600)
     t = pg.inner_text("#app"); pend = pg.evaluate("LedMaster.pending(S.books).length")
-    ok(pend > (10 if FIXTURE else 40) and "confirm once for this client" in t, "Tally ledgers tab opens on the %d to confirm" % pend)
+    # FinCom 2.4.0, the simpler page: every ledger to confirm on one row (GST ledgers, TDS ledgers or Needs you)
+    rows = pg.evaluate("() => new Set([...document.querySelectorAll('#app [data-led-table] tr[data-key]')].map(r => r.dataset.key)).size")
+    ok(pend > (10 if FIXTURE else 40) and "Ledgers from Tally" in t and rows >= pend, "Tally ledgers tab opens on the %d to confirm (%d rows)" % (pend, rows))
     pg.screenshot(path=OUT + "/led-pending.png", full_page=False)
     # GST screen shows the banner and will not make the JSON
     pg.evaluate("S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '" + GM + "'; S.gstReg = '07'; render();"); pg.wait_for_timeout(600)
@@ -41,26 +43,32 @@ with sync_playwright() as p:
     ok(pg.evaluate("window.__saved.length") == 0 and pg.evaluate("S.booksTab") == "ledgers", "GSTR-1 JSON waits and takes you to the ledgers")
     # change CONTROL A/C to GST: counts as confirmed at once
     pg.fill('input[aria-label="Find a ledger"]', CTRL[:-6]); pg.wait_for_timeout(700)
+    pg.click('#app [data-led-change=%s]' % json.dumps(CTRL)); pg.wait_for_timeout(300)   # 2.4.0: Change opens the choices
     pg.select_option('select[aria-label="What %s is"]' % CTRL, "gst"); pg.wait_for_timeout(500)
     m = pg.evaluate("JSON.stringify(S.books.map[%s])" % json.dumps(CTRL))
     ok('"what":"gst"' in m and '"ok":true' in m and '"tax":"IGST"' in m, "a choice made by hand is confirmed: " + m[:120])
     pg.fill('input[aria-label="Find a ledger"]', ""); pg.wait_for_timeout(700)
     # a section for TDS PAYABLE CURRENT
     pg.fill('input[aria-label="Find a ledger"]', CLEAR); pg.wait_for_timeout(700)
+    pg.evaluate("S.ledEdit = ''; render();"); pg.click('#app [data-led-change=%s]' % json.dumps(CLEAR)); pg.wait_for_timeout(300)
     ok(pg.evaluate("document.querySelector('select[aria-label=%s]').value" % json.dumps("What %s is" % CLEAR)) == "tds_clearing", CLEAR + " offered as a TDS clearing account")
-    pg.fill('input[aria-label="Find a ledger"]', ""); pg.wait_for_timeout(700)
-    # confirm one guess with the button, then the rest shown
-    first = pg.locator("#lmTable tbody tr:has(td.ac button)").first; nm = first.get_attribute("data-key"); first.locator("td.ac button").click(); pg.wait_for_timeout(400)
+    pg.evaluate("S.ledEdit = ''; render();"); pg.fill('input[aria-label="Find a ledger"]', ""); pg.wait_for_timeout(700)
+    # confirm one guess with the button, then the rest shown (2.4.0: Confirm all, a section at a time)
+    first = pg.locator("#app [data-led-table] tbody tr:has([data-led-confirm])").first; nm = first.get_attribute("data-key"); first.locator("[data-led-confirm]").click(); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].ok" % json.dumps(nm)) is True, "Confirm button: " + nm)
-    pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(600)
+    for sec in ("gst", "tds"):
+        if pg.locator("#app [data-led-confirm-all=%s]" % sec).count(): pg.click("#app [data-led-confirm-all=%s]" % sec); pg.wait_for_timeout(500)
+    while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
+        pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
     ok(pg.evaluate("LedMaster.pending(S.books).length") == 0, "confirm the rest shown: none left")
     # other ledgers: add one as GST
+    pg.click("#app [data-more-toggle=ledpage]"); pg.wait_for_timeout(300)   # 2.4.0: other ledgers are under More
     pg.click('nav[aria-label="Ledgers"] button:has-text("Other ledgers")'); pg.wait_for_timeout(500)
     pg.fill('input[aria-label="Find a ledger"]', PLAIN); pg.wait_for_timeout(700)
     pg.select_option('select[aria-label="What %s is"]' % PLAIN, "gst_setoff"); pg.wait_for_timeout(400)
     ok(pg.evaluate("S.books.map[%s].what" % json.dumps(PLAIN)) == "gst_setoff", "an ordinary ledger added to the GST master")
     pg.fill('input[aria-label="Find a ledger"]', ""); pg.wait_for_timeout(500)
-    pg.click('nav[aria-label="Ledgers"] button:has-text("GST")'); pg.wait_for_timeout(500)
+    pg.evaluate("lmViewGo('')"); pg.wait_for_timeout(500)
     pg.screenshot(path=OUT + "/led-gst.png", full_page=False)
     pg.click('#app [data-confirm-foot="books:ledgers"] [data-cfm="save"]'); pg.wait_for_timeout(300)   # changes are kept with Save (review 18)
     # now the JSON is made

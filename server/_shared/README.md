@@ -19,7 +19,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 | gateway | server/security/functions/gateway | index.ts, cors.ts, classify.ts, ../_shared/cors.ts | the list |
 | admin | server/security/functions/admin | index.ts, cors.ts, ../_shared/cors.ts | the list |
 | signin | server/security/functions/signin | index.ts, cors.ts, ../_shared/cors.ts | the list |
-| tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js | `*` |
+| tally-ingest | server/tally-cloud | index.ts, parse.js, ../_shared/cors.ts, ../_shared/names.js, ../_shared/sentry.ts, ../_shared/sentry-scrub.js | `*` |
 | gst-api | server/gst-api | index.ts, gstcrypto.ts, ../_shared/cors.ts | `*` |
 | gst-taxpro | server/gst-taxpro | index.ts, ../_shared/cors.ts | `*` |
 | support-mail | server/support-mail | index.ts, ../_shared/cors.ts | `*` |
@@ -58,3 +58,11 @@ lower case). It is plain JavaScript with no imports. The cloud reader imports it
 tally-ingest must be deployed with `../_shared/names.js`); `build.py` puts it, without its export line, at the head of
 the app, where `ledClean` / `ledKey` / `ledNm` / `ledEnt` (src/js/00-core.js) and `Books.unesc` (src/js/04) call it.
 `node tests/run_names_shared.js` checks both give the same names and keys.
+
+## sentry-scrub.js and sentry.ts: error reports to Sentry, staging only (2.4.0)
+
+`sentry-scrub.js` is the one scrubber for every report to Sentry: the app's `beforeSend` / `beforeBreadcrumb`
+(app/src/sentry.js) and tally-ingest's reports (`sentry.ts`, which builds and posts the envelope itself, without an SDK,
+only when `SUPABASE_URL` is the staging project and the secret `FINCOM_SENTRY` is not `off`). Plain JavaScript with no
+imports. What may be sent, and how to turn it off: docs/sentry.md. Tests: `node tests/run_sentry_scrub.mjs`,
+`node tests/run_sentry_cloud.mjs`.

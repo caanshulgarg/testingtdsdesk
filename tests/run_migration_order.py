@@ -1,6 +1,7 @@
 """python3 run_migration_order.py - the order the cloud migrations run in on a fresh database (03-Oct-2026, round 4 items
 1-3; docs/MIGRATION-ORDER.md): BOTH valid orders, each applied TWICE on its own database: staging's (32 -> 33 -> 35 -> 34 as FIRST run there, commit 2105b2d
--> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53); the function texts
+-> 36b -> 37 -> 36 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70, then
+2.4.0's NEXT240: 62 -> 63 -> 64 -> 65 -> 66 -> 67) and a fresh database's (32 -> 33 -> 35 -> 34 reviewed -> 36 -> 36b -> 37 -> 38 -> 39 -> 40 -> 41 -> 42 -> 43 -> 44 -> 45 -> 46 -> 47 -> 48 -> 49 -> 50 -> 51 -> 52 -> 53 -> 54 -> 55 -> 56 -> 57 -> 58 -> 59 -> 60 -> 68 -> 70, then 62 -> 67 -> 63 -> 64 -> 65 -> 66); the function texts
 the two orders end with are compared and must be identical (round 9), on a throwaway PostgreSQL (pg_stand)
 with the tables as on staging (run_migration33's schema, tally_devices, tally_bills) and made-up rows; never on staging.
 Checks: every file runs, twice, and deletes nothing; after the run the release functions are migration-34's
@@ -14,8 +15,20 @@ import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
 BASE = [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql")]
 # the two valid orders (docs/MIGRATION-ORDER.md): staging's (the FIRST 34, commit 2105b2d, then 36b and 37 run on 03-Oct, then 36 and 38) and a fresh database's
-ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", "..", "tests", "fixtures", "migration-34-as-run-on-staging.sql")), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (36, "migration-36-ledger-rename.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql")],
-          "fresh": BASE + [(34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql")]}
+ORDERS = {"staging": BASE + [("34 (first, as on staging)", os.path.join("..", "..", "tests", "fixtures", "migration-34-as-run-on-staging.sql")), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (36, "migration-36-ledger-rename.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql"), (54, "migration-54-post-target-bridge.sql"), (55, "migration-55-settle-and-lease.sql"), (56, "migration-56-keep-fields.sql"), (57, "migration-57-entry-details.sql"), (58, "migration-58-lows.sql"), (59, "migration-59-ledger-aliases.sql"), (60, "migration-60-recorder-lows.sql"), (68, "migration-68-alert-dismissals.sql"), (70, "migration-70-alert-dismissals-tighten.sql")],
+          "fresh": BASE + [(34, "migration-34-ledger-safety.sql"), (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql"), (38, "migration-38-post-followups.sql"), (39, "migration-39-rename-map-empty-day.sql"), (40, "migration-40-states-carried.sql"), (41, "migration-41-day-counts.sql"), (42, "migration-42-empty-day-second-read.sql"), (43, "migration-43-posting-reply.sql"), (44, "migration-44-recorder.sql"), (45, "migration-45-bulk-posting.sql"), (46, "migration-46-trial-tools.sql"), (47, "migration-47-recorder-queue-alerts.sql"), (48, "migration-48-day-cache-once.sql"), (49, "migration-49-post-row-flags.sql"), (50, "migration-50-recorder-held.sql"), (51, "migration-51-recorder-ids-mismatch.sql"), (52, "migration-52-recorder-duplicate-needs-same-entry.sql"), (53, "migration-53-recorder-placeholder-settled.sql"), (54, "migration-54-post-target-bridge.sql"), (55, "migration-55-settle-and-lease.sql"), (56, "migration-56-keep-fields.sql"), (57, "migration-57-entry-details.sql"), (58, "migration-58-lows.sql"), (59, "migration-59-ledger-aliases.sql"), (60, "migration-60-recorder-lows.sql"), (68, "migration-68-alert-dismissals.sql"), (70, "migration-70-alert-dismissals-tighten.sql")]}
+# release-240 (FinCom Bridge 2.4.0): the next release's migrations run after 2.3.5's (... -> 60 -> 68 -> 70; independent of them) in
+# both orders. 61 (privileges, run on staging 06-Oct-2026; branch perms-61) before 62 when that file is in the tree; 62 the TDS
+# rate worked out; 63 (outbox) and 67 (renumbering) both replace tally_recorder_line with ONE combined text: staging's order
+# runs them 63 -> 67, a fresh database's 67 -> 63, and the two must end with identical function texts (the check below)
+NEXT240 = {"staging": [(62, "migration-62-tds-rate-worked-out.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql"), (67, "migration-67-recorder-renumbered.sql")],
+           "fresh": [(62, "migration-62-tds-rate-worked-out.sql"), (67, "migration-67-recorder-renumbered.sql"), (63, "migration-63-recorder-repeat.sql"), (64, "migration-64-pages-live.sql"), (65, "migration-65-selfchecks.sql"), (66, "migration-66-recorder-masters.sql")]}
+for _k, _o in ORDERS.items():
+    if os.path.exists(os.path.join(SQLDIR, "migration-61-privileges.sql")) and (61, "migration-61-privileges.sql") not in _o: _o.append((61, "migration-61-privileges.sql"))
+    _o.extend(NEXT240[_k])
+    _o.append((72, "migration-72-gst-type.sql"))   # bridge 2.4.2 (round 44 part B): each entry's GST type, after 62
+    _o.append((73, "migration-73-tds-fields.sql"))   # bridge 2.4.3: TDS challans and TDS master settings, after 72
+    _o.append((74, "migration-74-payroll.sql"))   # bridge 2.4.4: payroll (employees, pay-head fields, salary paid), after 73
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
@@ -26,7 +39,26 @@ READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_
            # 05-Oct-2026 (migration 50: the held words, replaced, the day release)
            "tally_recorder_release_day", "tally_days_recorder_release",
            # 05-Oct-2026 (migration 53: a placeholder line whose entry the copy holds; the AlterID received only from lines whose ids belong together)
-           "tally_recorder_ids_together"]
+           "tally_recorder_ids_together",
+           # 05-Oct-2026 (migration 54: a posting names the bridge that posts it; changes only; the member's bridge)
+           "tally_post_enqueue_to", "tally_post_take_for", "tally_bridge_changes_only", "tally_member_bridge_link", "tally_post_enqueue_core", "tally_bridge_bind", "tally_post_device_for", "tally_bridge_reset", "tally_post_nobody_words",
+           # 05-Oct-2026 (migration 54, the owner's rule: no conditions on any bridge)
+           "tally_bridge_may_post", "tally_bridge_user", "tally_bridge_takes_unnamed", "tally_bridge_poster", "tally_post_reroute", "tally_bridge_is_own", "tally_post_own_bridge", "tally_post_own_words",
+           "tally_bridge_has_open", "tally_bridge_own_key", "tally_device_create", "tally_want_update", "tally_read_resume",
+           # 05-Oct-2026 (migration 55: any member settles an uncertain posting after the bridge's check; the lease's purpose and "want to post")
+           "tally_post_job_mark_posted", "tally_post_id_release_owner", "tally_post_settle_ask", "tally_post_checks_for", "tally_post_check_report", "tally_post_mark_core", "tally_post_release_core", "tally_member_name",
+           # 06-Oct-2026 (migration 56: a recorder line keeps the fields its request does not fetch; the repair, not run)
+           "tally_ingest_entries/5", "tally_recorder_keep_vouchers", "tally_recorder_keep_lines", "tally_recorder_blanked", "tally_recorder_restore_fields", "tally_recorder_restore_fields/2", "tally_unknown_ledger_entries", "tally_recorder_pair_lines",
+           # 06-Oct-2026 (migration 57, bridge 2.3.1 part A: the entry's details, written by the entry path for both paths)
+           "tally_ingest_details", "tally_tds_details",
+           # 07-Oct-2026 (migration 65: the nightly self-check)
+           "tally_selfcheck_compare", "tally_selfcheck_copy", "tally_selfcheck_words", "tally_selfcheck_record",
+           # 07-Oct-2026 (migration 66, next-masterhook: the add-on's master lines kept, heads only; review L4 of 2.4.0 part 2;
+           # 66 runs in NEXT240 above)
+           "tally_recorder_masters_save",
+           # 08-Oct-2026 (migration 62, review M1 of 2.4.0 part 2: the TDS details with the rate-worked-out and exempt marks)
+           "tally_tds_details_marked"]
+
 texts = {}
 fails = []
 def ok(c, w):
@@ -72,7 +104,7 @@ def run_order(label, ORDER):
                 if r.returncode: raise SystemExit("cannot go on: migration-%s failed" % n)
             k = counts()
             ok(all(k.get(t) == v for t, v in before.items()), "pass %d: nothing deleted (%s rows kept)" % (round_, sum(before.values())))
-        ARGS = {"tally_ingest_day": "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean", "tally_ingest_entries": "uuid, jsonb, jsonb, boolean", "tally_ingest_entries/3": "uuid, jsonb, jsonb"}
+        ARGS = {"tally_ingest_day": "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean", "tally_ingest_entries": "uuid, jsonb, jsonb, boolean", "tally_ingest_entries/3": "uuid, jsonb, jsonb", "tally_ingest_entries/5": "uuid, jsonb, jsonb, boolean, boolean", "tally_recorder_restore_fields": "uuid", "tally_recorder_restore_fields/2": "uuid, boolean"}
         for fn in READERS: texts.setdefault(fn, {})[label] = re.sub(r"\s+", " ", fdef(fn.split("/")[0], ARGS.get(fn)))
         ok("tally_post_job_accepted" in fdef("tally_post_ids_sync") and "tally_post_result_taken" in fdef("tally_post_ids_sync") and "tally_post_result_confirmed" not in fdef("tally_post_ids_sync") and "tally_post_result_taken" in fdef("tally_post_job_accepted"), "migration-40's sync and tally_post_job_accepted (39/36b's rules, calling tally_post_result_taken) are in force")
         ok(db.one("select count(*) from information_schema.columns where (table_name, column_name) in (('client_book_items', 'carried'), ('tally_ledgers', 'state'))") == "2" and "'states'" in fdef("tally_ledger_carry_choices") and "carriedTo" not in fdef("tally_ledger_carry_choices"), "40: client_book_items.carried, tally_ledgers.state; the carry marks `carried`, not data")
@@ -116,7 +148,7 @@ def run_order(label, ORDER):
            and "ledger_altered' and og is not null" in fdef("tally_recorder_line") and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_drain(integer)', 'execute')") == "f",
            "47: the queue tally_recorder, tally_alerts / tally_recorder_failures (RLS), recorder_source (every computer addon), tally_jobs.upload and kind upload, the private 2 GB bucket and its two policies, the cron jobs (round 21: the drain a procedure call, 48's archive retention), the rename by GUID in tally_recorder_line (in force in this order)")
         ok("tally_ingest_entries(p_book, p_vouchers, p_lines, true)" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb") and "coalesce(p_rebuild, true)" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean")
-           and "fincom.day_rebuild_once" in fdef("tally_recorder_apply") and "not once" in fdef("tally_recorder_line") and db.one("select count(*) from pg_proc where proname = 'tally_ingest_entries'") == "2"
+           and "fincom.day_rebuild_once" in fdef("tally_recorder_apply") and "not once" in fdef("tally_recorder_line") and db.one("select count(*) from pg_proc where proname = 'tally_ingest_entries'") == "3"     # 56 adds the 5-argument form
            and db.one("select has_function_privilege('authenticated', 'public.tally_ingest_entries(uuid, jsonb, jsonb, boolean)', 'execute')") == "f",
            "48: tally_ingest_entries with and without the rebuild (the 3-argument one calls it with true), the apply rebuilding once per call (in force in this order)")
         ok("'replaced'::text" in db.one("select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.tally_recorder_lines'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%state%'")
@@ -134,6 +166,54 @@ def run_order(label, ORDER):
            and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_ids_together(bigint)', 'execute')") == "f"
            and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_release_held(bigint)', 'execute')") == "t",
            "53: a held placeholder line whose entry the copy holds above the starting point is 'duplicate'; the AlterID received only from lines whose ids belong together (52's rules kept) (in force in this order)")
+        ok(db.one("select count(*) from information_schema.columns where table_name = 'tally_post_jobs' and column_name = 'target_bridge'") == "1"
+           and "target_bridge = p_bridge" in fdef("tally_post_take_for") and "tally_post_enqueue_core(p_id, p_client, p_payload, tdev, t)" in fdef("tally_post_enqueue_to") and "tally_post_enqueue_to(p_id, p_client, p_payload, null, null)" in fdef("tally_post_enqueue", "uuid, text, jsonb")
+           and db.one("select has_function_privilege('authenticated', 'public.tally_post_take_for(uuid, text, boolean)', 'execute')") == "f",
+           "54: tally_post_jobs.target_bridge; tally_post_enqueue_to and the 3-argument tally_post_enqueue go through tally_post_enqueue_core; tally_post_take_for for the service role only (in force in this order)")
+        ok("can_write()" in fdef("tally_post_job_mark_posted") and "tally_post_checks" in fdef("tally_post_id_release_owner") and "tally_post_release_core(" not in fdef("tally_post_check_report") and "tally_post_release_core(" in fdef("tally_post_check_confirm")
+           and "want_post_by" in fdef("tally_lease_take", "uuid, uuid, text, uuid, integer, jsonb, text") and "null::text" in fdef("tally_lease_take", "uuid, uuid, text, uuid, integer, jsonb")
+           and db.one("select count(*) from information_schema.columns where table_name = 'tally_company_lease' and column_name in ('purpose', 'want_post_by')") == "2"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_post_check_report(bigint, uuid, text, boolean, text, text, text, text, text)', 'execute')") == "f",
+           "55: any member who may write settles (mark posted; the bridge's report never releases: only a member's confirm after the bridge's 'not seen'); the lease's purpose and want to post (in force in this order)")
+        ok("not once, true)" in fdef("tally_recorder_line") and "tally_ingest_entries(p_book, vs, ls, p_rebuild)" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean, boolean")
+           and "tally_ingest_entries(p_book, p_vouchers, p_lines, true)" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb") and "keep" not in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean")
+           and db.one("select count(*) from pg_proc where proname = 'tally_ingest_entries'") == "3" and db.one("select relrowsecurity from pg_class where relname = 'tally_recorder_restore_log'") == "t"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_restore_fields(uuid)', 'execute')") == "f"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_recorder_restore_fields(uuid, boolean)', 'execute')") == "f"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_unknown_ledger_entries(uuid)', 'execute')") == "t"
+           and db.one("select has_function_privilege('service_role', 'public.tally_ingest_entries(uuid, jsonb, jsonb, boolean, boolean)', 'execute')") == "f",
+           "56: the recorder's line keeps (the 5-argument entry path); 48's 3- and 4-argument forms unchanged (the Day Book's); the repair (dry run) and its log, the service role's; the unknown-ledger list for members (in force in this order)")
+        ok("perform tally_ingest_details(p_book, vs, coalesce(p_keep, false));" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean, boolean")
+           and "p_lines, true, false);" in fdef("tally_ingest_day", "uuid, date, jsonb, jsonb, integer, bigint, integer, boolean") and "nothing to remove: the entry is not in FinCom" in fdef("tally_ingest_delete")
+           and db.one("select count(*) from pg_class where relname in ('tally_item_lines', 'tally_cost_allocs', 'tally_bank_allocs', 'tally_tds_lines') and relrowsecurity") == "4"
+           and db.one("select count(*) from information_schema.columns where table_name = 'tally_vouchers' and column_name in ('irn', 'irn_ack_no', 'irn_ack_date', 'eway_no', 'check_notes')") == "5"
+           and db.one("select has_function_privilege('service_role', 'public.tally_ingest_details(uuid, jsonb, boolean)', 'execute')") == "f"
+           and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'tds_deductee_type'") == "1"
+           and db.one("select has_function_privilege('authenticated', 'public.tally_tds_details(uuid)', 'execute')") == "t"
+           and db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_nothing_removed'::regclass") == "true"
+           and "tally_nothing_removed" in fdef("tally_ingest_delete") and "x.valt > x.vcc" in fdef("tally_ingest_entries", "uuid, jsonb, jsonb, boolean, boolean"),
+           "57: the entry's details (items, cost centres, bank, TDS, e-invoice, e-way bill, the checks' words) written by the 5-argument entry path, the Day Book through it; a delete of an entry never in the copy settles (in force in this order)")
+        ok("not once, true)" in fdef("tally_recorder_line") and "only the add-on''s placeholder" in fdef("tally_recorder_line") and "then_cancel" in fdef("tally_recorder_line")
+           and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",
+           "60: the recorder's line is 56's (it keeps) with R3-L1..L3 (the owner's 'nothing to remove' stays 57's); granted to nobody (in force in this order)")
+        ok(db.one("select count(*) from information_schema.columns where table_name = 'tally_ledger_aliases' and column_name in ('book_id', 'firm_id', 'tally_name', 'fincom_name', 'tally_guid', 'seen_at', 'confirmed_at', 'ended_at')") == "8"
+           and db.one("select relrowsecurity::text from pg_class where oid = 'public.tally_ledger_aliases'::regclass") == "true"
+           and db.one("select has_table_privilege('anon', 'public.tally_ledger_aliases', 'select')::text") == "false",
+           "59: tally_ledger_aliases (a ledger renamed in Tally: Tally's name -> FinCom's ledger), row security on, nothing for anon (in force in this order)")
+        ok(db.one("select count(*) from information_schema.columns where table_name = 'app_alert_dismissals' and column_name in ('firm_id', 'user_id', 'alert_key', 'fingerprint', 'words', 'batch', 'cleared_at', 'undone_at')") == "8"
+           and db.one("select relrowsecurity::text from pg_class where oid = 'public.app_alert_dismissals'::regclass") == "true"
+           and db.one("select has_table_privilege('authenticated', 'public.app_alert_dismissals', 'delete')::text") == "false"
+           and db.one("select has_table_privilege('authenticated', 'public.app_alert_dismissals', 'insert')::text") == "false"
+           and db.one("select count(*) from pg_constraint where conrelid = 'public.app_alert_dismissals'::regclass and contype = 'c' and convalidated") == "3"
+           and "limit 20000" in fdef("alert_dismissals_list")
+           and db.one("select has_function_privilege('authenticated', 'public.alert_dismiss(jsonb)', 'execute')::text") == "true"
+           and db.one("select has_function_privilege('anon', 'public.alert_dismiss_undo(uuid)', 'execute')::text") == "false"
+           and "undone_at = now()" in fdef("alert_dismiss_undo"),
+           "68 + 70: app_alert_dismissals (a person's cleared notifications), row security on, no insert or delete from the browser (70), its length checks (70); alert_dismiss / _undo (stamps undone_at) / alert_dismissals_list up to 20000 (70) (in force in this order)")
+        ok("already have this line" in fdef("tally_recorder_line") and "renumbered in Tally" in fdef("tally_recorder_line")
+           and db.one("select count(*) from pg_indexes where indexname = 'tally_recorder_lines_line'") == "1"
+           and db.one("select has_function_privilege('service_role', 'public.tally_recorder_line(uuid, uuid, jsonb, bigint)', 'execute')") == "f",
+           "63 + 67 (release-240, one combined tally_recorder_line, whichever ran last): a repeat of a line FinCom has answered 'duplicate' (63) and a renumbered entry applied (67); 63's index; granted to nobody (in force in this order)")
         ok("tally_ledger_carry_choices" in fdef("tally_ledger_rename") and db.one("select count(*) from information_schema.columns where table_name = 'tally_ledgers' and column_name = 'needs_confirm'") == "1", "39: the rename carries the choices; tally_ledgers.needs_confirm")
         ok(db.one("select string_agg(confdeltype::text, '') from pg_constraint where conrelid = 'public.tally_post_marks'::regclass and contype = 'f'") == "rr", "38: tally_post_marks' foreign keys restrict (no cascade)")
         for fn in ("tally_tb", "tally_period", "tally_balances_on"): ok("d.merged_into is null" in fdef(fn), "%s hides the twins" % fn)
@@ -158,7 +238,9 @@ def run_order(label, ORDER):
                 for row in db.rows("select prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)):
                     if row["prosecdef"] != "t": continue       # plain trigger functions touch no table
                     n += 1
-                    if row["conf"].replace(" ", "") != "search_path=public,pg_temp": ok(False, "%s (%s): search_path = %r" % (fn, f, row["conf"]))
+                    # migration 54's tally_device_create (migration.sql's, without the limit of 50 keys) needs pgcrypto, in extensions on Supabase
+                    want = "search_path=public,extensions,pg_temp" if fn == "tally_device_create" else "search_path=public,pg_temp"
+                    if row["conf"].replace(" ", "") != want: ok(False, "%s (%s): search_path = %r" % (fn, f, row["conf"]))
         ok(n >= 20, "%d security definer functions all search public, pg_temp" % n)
         # round 5 (S1): after 36 -> 36b -> 37, an id Tally accepted stays live when the posting is failed or cancelled; a plain one is freed
         J1 = "00000001-0000-0000-0000-000000000000"

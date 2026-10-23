@@ -27,7 +27,12 @@ with sync_playwright() as p:
     pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'post'; render();"); pg.wait_for_timeout(500)
     ok("none confirmed" in pg.inner_text("#app"), "before confirming: nothing from the master")
     pg.evaluate("S.lmView = 'pending'; render();"); pg.wait_for_timeout(300)
-    pg.click('button:has-text("Confirm the"):has-text("shown")'); pg.wait_for_timeout(800)
+    # FinCom 2.4.0: Confirm all, a section at a time (was "Confirm the N shown")
+    for sec in ("gst", "tds"):
+        if pg.locator("#app [data-led-confirm-all=%s]" % sec).count(): pg.click("#app [data-led-confirm-all=%s]" % sec); pg.wait_for_timeout(500)
+    while pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").count():
+        pg.locator("#app [data-led-table] tbody tr [data-led-confirm]").first.click(); pg.wait_for_timeout(300)
+    pg.wait_for_timeout(500)
     co = pg.evaluate("JSON.stringify({gst: CO().gst, tds: CO().tdsLedgers, ro: CO().roundOff})")
     print("   posting after confirming: " + co[:300])
     ok('"cgst":"07 CGST INPUT"' in co and '"igst":"07 IGST INPUT"' in co, "empty posting ledgers filled from the confirmed master (Delhi input ledgers)")
@@ -43,7 +48,8 @@ with sync_playwright() as p:
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n) => window.__saved.push(n); S.booksTab = 'gst'; S.gstPart = 'r1'; S.gstYm = '" + GM + "'; S.gstReg = '07'; render(); }")
     pg.click('button:has-text("Download GSTR-1 JSON")'); pg.wait_for_timeout(800)
     ok(pg.evaluate("(S.books.ledSnaps || []).length") == 1, "a copy of the master kept with the GSTR-1 JSON")
-    pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = %s; render();" % json.dumps(CTRL[:-6])); pg.wait_for_timeout(500)
+    pg.evaluate("S.booksTab = 'ledgers'; S.lmView = 'gst'; S.ledQ = %s; S.ledShowDone = true; render();" % json.dumps(CTRL[:-6])); pg.wait_for_timeout(500)
+    pg.click('#app [data-led-change=%s]' % json.dumps(CTRL)); pg.wait_for_timeout(300)   # 2.4.0: Change opens the choices
     pg.select_option('select[aria-label="What %s is"]' % CTRL, "gst"); pg.wait_for_timeout(500)
     t = pg.inner_text("#app")
     ok("changed after returns were made from them" in t and ("GSTR-1 " + pg.evaluate("GSTR.label(%s)" % json.dumps(GM)) + " 07") in t, "changing a ledger after filing names the return made before")

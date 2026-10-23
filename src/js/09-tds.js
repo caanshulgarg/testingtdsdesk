@@ -68,6 +68,15 @@ const TDS = {
   ymd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 6 ? t : ""; },
   qOf(d){ const m = num(this.ymd(d).slice(4, 6)); return m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4"; },
   fyOf(d){ const t = this.ymd(d), y = num(t.slice(0, 4)), m = num(t.slice(4, 6)); return (m >= 4 ? y : y - 1) + "-" + String((m >= 4 ? y + 1 : y)).slice(2); },
+  // review M1 of 2.4.0 part 2 (08-Oct-2026): a TDS line of Tally's entry (tally_tds_details_marked, migration 62) in words:
+  // the rate and, where it is not Tally's own, why: worked out by FinCom where Tally stored 0 (the owner's decision of
+  // 07-Oct-2026, option A), or none worked out where Tally marked the line exempt (review L2). Tally's own rate: the rate alone
+  tallyRateWords(l){
+    const has = l && l.rate != null && l.rate !== "", pct = (has ? r2(num(l.rate)) : 0) + "%";
+    if (l && l.exempt) return pct + " \u00b7 exempt in Tally: no rate worked out";
+    if (l && l.rate_worked_out) return pct + " \u00b7 rate worked out: Tally stored 0 (TDS \u00f7 assessable amount)";
+    return has ? pct : "";
+  },
   // 26Q: every deduction from a resident other than salary
   rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section))); },
   // 27Q: deductions from non-residents

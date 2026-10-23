@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -333,7 +332,8 @@ func recorderHolding(company, guid string) (bool, string) {
 	// least one valid recorder line of that GUID (review L6, security L7). The folder is listed at most once in 10 s
 	if plainFileName(guid) {
 		for _, f := range liveDailyFiles(dir) {
-			if g := reLiveFileAnyCase.FindStringSubmatch(filepath.Base(f.name)); g != nil && strings.EqualFold(g[1], guid) && f.mod.After(newest) && dailyHasLine(dir, f, guid) {
+			// next-userfile: <GUID>-<day>-<Windows user>.txt too, this bridge's own user's (userfile.go)
+			if g := reLiveFileUser.FindStringSubmatch(filepath.Base(f.name)); g != nil && strings.EqualFold(g[1], guid) && liveFileMine(filepath.Base(f.name)) && f.mod.After(newest) && dailyHasLine(dir, f, guid) {
 				newest = f.mod
 			}
 		}
@@ -350,13 +350,12 @@ func recorderHolding(company, guid string) (bool, string) {
 }
 
 var (
-	reLiveFileAnyCase = regexp.MustCompile(`(?i)^(.+)-(\d{8}|\d{4}-\d{2}-\d{2}|\d{1,2}-[a-z]{3}-\d{2})\.txt$`) // 2.2.2: d-Mon-yy too
-	dailyMu           sync.Mutex
-	dailyAt           time.Time
-	dailyDirMod       time.Time
-	dailyDir          string
-	dailyList         []dailyFile
-	dailyValid        = map[string]bool{} // name|size|time|guid -> it holds a valid line of that GUID
+	dailyMu     sync.Mutex
+	dailyAt     time.Time
+	dailyDirMod time.Time
+	dailyDir    string
+	dailyList   []dailyFile
+	dailyValid  = map[string]bool{} // name|size|time|guid -> it holds a valid line of that GUID
 )
 
 type dailyFile struct {
@@ -510,7 +509,10 @@ func lightCompanyList(sessions []M) []M {
 	if !open {
 		return sessions
 	}
-	fresh, ok := openCompaniesAsk(&TC{copier: true, light: true, yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}, true)
+	if retryHeld() {
+		return sessions // 2.3.1: backed off after the list took over 2 s (retry.go): the list held stands
+	}
+	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
 	switch {
 	case ok:
 		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock
@@ -576,7 +578,7 @@ func lightCheckOpen(sessions []M) {
 			}
 			_, had := startPointOf(name)
 			seq := spSeqOf(name)
-			if _, err := companyCheck(&TC{copier: true, light: true, yield: lightCheckYield(name)}, name, port); err != nil {
+			if _, err := companyCheck(&TC{copier: true, light: true, bg: true, yield: lightCheckYield(name)}, name, port); err != nil {
 				// not marked: it goes again at the next turn
 				spMu.Lock()
 				if spChecked[name].Equal(now) {
@@ -597,6 +599,14 @@ func lightCheckOpen(sessions []M) {
 			lightLogResult(name, had)
 			// 2.2.0: the recorder's source B (Tally's change list), when it is the source or one of them
 			liveAfterLightCheck(name, port)
+			// next-bankdate: Tally's voucher counter moved with no add-on line to explain it (a bank date set, bankdate.go)
+			bankAfterLightCheck(name, port)
+			// 2.3.1 (masters): the master counter moved: the ledgers created or altered since the last number (ledchanges.go)
+			ledChangesAfterLightCheck(name, port)
+			// 2.4.4 (payroll): the master counter moved: the payroll's employees read again, in chunks (payroll.go)
+			employeesAfterLightCheck(name, port)
+			// next release (item e): the nightly self-check, once a night after hours while Tally is idle (selfcheck.go)
+			selfCheckAfterLightCheck(name, port)
 		}
 	}
 }
@@ -635,6 +645,10 @@ func lightLogResult(name string, had bool) {
 	v, m := toI64(cur["altvchid"]), toI64(cur["altmstid"])
 	sp, ok := startPointOf(name)
 	switch {
+	case !ok && v <= 0:
+		// fix 3 (the owner's spike run): ALTVCHID 0 is never a starting point (noteStartPoint); nothing failed, so the line
+		// says why plainly (the rule itself is unchanged)
+		writeLog(fmt.Sprintf("Light check of %s: no starting point yet for %s: it has no entry in Tally yet; the first entry made will set it (now ALTVCHID=%d, ALTMSTID=%d)", name, name, v, m))
 	case !ok:
 		writeLog(fmt.Sprintf("Light check of %s: no starting point recorded (start-point.json could not be written; see above); now ALTVCHID=%d, ALTMSTID=%d", name, v, m))
 	case !had:
