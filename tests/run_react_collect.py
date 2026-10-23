@@ -18,7 +18,7 @@ with sync_playwright() as p:
       c.stats = {}; window.__calls = []; return c.id; }""")
     pg.evaluate("(cid) => openCompany(cid).then(() => goStep('collect', 'bills'))", cid); pg.wait_for_timeout(1200)
     app = lambda: pg.inner_text("#app")
-    ok("Upload for ZZ Epsilon Mills" in app() and "Nothing waiting in the inbox for ZZ Epsilon Mills" in app(), "Collect: the upload box, and nothing in the inbox")
+    ok("Drop ZZ Epsilon Mills’s bills here" in app() and "Nothing waiting in the inbox for ZZ Epsilon Mills" in app(), "Collect: the upload box, and nothing in the inbox")
     ok(pg.locator("#app .rcheck .tag").count() >= 3 and "PDF text" in pg.inner_text("#app .rcheck"), "the reading check's tags")
     # the PDF option is remembered
     pg.click('#app label:has-text("A PDF holds many bills") input'); pg.wait_for_timeout(200)
@@ -64,6 +64,9 @@ with sync_playwright() as p:
     pg.select_option('#app tr:has-text("stray.pdf") select', cid); pg.wait_for_timeout(200)
     ok(pg.evaluate("__calls") == [["assign", "u1", cid]], "an unsorted upload is moved to the chosen client")
     pg.click('#app tr:has-text("stray.pdf") button:has-text("Delete")'); pg.wait_for_timeout(400)
+    # spec K9 (round 2): deleting it cannot be undone, so it is asked first, naming the file
+    ok("stray.pdf" in pg.inner_text("#confirmBox") and "cannot be undone" in pg.inner_text("#confirmBox"), "deleting asks first, naming the file and that it cannot be undone")
+    pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
     ok(not pg.evaluate("S.inbox.u1") and "stray.pdf" not in app(), "or deleted")
     pg.screenshot(path=OUT + "/react-inbox.png")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

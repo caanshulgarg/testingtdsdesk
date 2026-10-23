@@ -132,8 +132,8 @@ function gregAdd(g){
   GSTRegs.add(g); S.gsetReg = g.slice(0, 2); S.gstReg = g.slice(0, 2); saveBooks(); render(); toast(g + " added (" + GSTRegs.state(g) + ")."); return true;
 }
 function gregRemove(g){
-  askConfirm({title: "Remove " + g + "?", ok: "Remove", body: '<p class="note">It goes from this client\u2019s GSTINs. Its settings, 2B and returns filed stay with the books and come back if it is added again.</p>'})
-    .then(r => { if (!r) return; GSTRegs.remove(g); saveBooks(); render(); });
+  // no question first (spec K9, round 2): nothing is lost, adding it again brings everything back
+  GSTRegs.remove(g); saveBooks(); toast(g + " removed. Its settings, 2B and returns filed stay with the books and come back if it is added again."); render();
 }
 // a party's email or phone for GST letters
 function gcontSet(gstin, key, val){ const b = S.books; b.gstContacts = Object.assign({}, b.gstContacts); b.gstContacts[gstin] = Object.assign({}, b.gstContacts[gstin], {[key]: String(val).trim()}); saveBooks(); }

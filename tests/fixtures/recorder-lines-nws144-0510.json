@@ -1,0 +1,17 @@
+{
+  "note": "The add-on writes the time to the minute (TDL $$MachineTime). Bridge 2.2.0 on NWS144, 05-Oct-2026: the four recorder lines staging received (tally_recorder_lines payload as the bridge sent it). Lines 1 and 4 are the owner's NEW entries, sent as altered with a placeholder GUID (company GUID + -00000000) and no body. Bridge 2.2.1 sends them as created: line 4 with its GUID rebuilt from its MasterID (company GUID + -%08x) and its body by MasterID; line 1 (MasterID 0) found by its type and number on its date (FinComVoucherByNumber). recorder-lines-nws144-0510.txt holds FCR1 lines reconstructed from these payloads.",
+  "companyGuid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189",
+  "startPoint": {"altvchid": 54389, "altmstid": 14507, "at": "2026-10-05T07:09:00"},
+  "received_2_2_0": [
+    {"event": "altered", "vch_type": "Receipt", "vch_no": "191", "vch_date": "2026-10-05", "master_id": "0", "alter_id": 0, "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-00000000", "save_ms": 0},
+    {"event": "deleted", "vch_type": "Receipt", "vch_no": "189", "vch_date": "2026-10-01", "master_id": "26305", "alter_id": 54386, "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c1"},
+    {"event": "cancelled", "vch_type": "Receipt", "vch_no": "190", "vch_date": "2026-10-05", "master_id": "26309", "alter_id": 54390, "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c5"},
+    {"event": "altered", "vch_type": "Receipt", "vch_no": "192", "vch_date": "2026-10-05", "master_id": "26312", "alter_id": 0, "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-00000000", "save_ms": 0}
+  ],
+  "expected_2_2_1": [
+    {"event": "created", "vch_no": "191", "master_id": "26311", "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c7", "body": "by type and number"},
+    {"event": "deleted", "vch_no": "189", "master_id": "26305", "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c1"},
+    {"event": "cancelled", "vch_no": "190", "master_id": "26309", "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c5"},
+    {"event": "created", "vch_no": "192", "master_id": "26312", "object_guid": "7c5fd9b3-7235-4cbb-b4cd-1124be599189-000066c8", "body": "by MasterID"}
+  ]
+}

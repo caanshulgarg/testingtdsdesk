@@ -1,5 +1,5 @@
 // node run_gstset.js - GST settings: filing type (monthly, QRMP, composition) and what follows from it, contacts, e-invoicing
-const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE} = require("./harness");
+const fs = require("fs"), {load, openBlob, HTML, DATA, CACHE, FIXTURE} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "normName", "ITCT", "GSTSet", "CustIMS", "GSTF", "CO"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 (async () => {
@@ -29,7 +29,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   ok(G.qLabel("202601") === "Q4 2025-26" && G.qLabel("202607") === "Q2 2026-27", "quarters named by the financial year");
   // contacts: typed here first, then kept from earlier letters, then Tally
   const p = G.parties();
-  ok(p.length > 100 && p[0].gstin && p.some(z => /supplier/.test(z.sides)) && p.some(z => /customer/.test(z.sides)), "parties with a GSTIN, suppliers and customers (" + p.length + ")");
+  ok(p.length >= (FIXTURE ? 10 : 100) && p[0].gstin && p.some(z => /supplier/.test(z.sides)) && p.some(z => /customer/.test(z.sides)), "parties with a GSTIN, suppliers and customers (" + p.length + ")");
   const one = p[0];
   b.gstContacts = {[one.gstin]: {email: "typed@x.example"}};
   ok(G.contact(one.gstin, one.party, {email: "old@x.example"}).email === "typed@x.example" && G.contact("XX", one.party, {email: "old@x.example"}).email === "old@x.example", "a contact typed in settings comes first, then one kept from earlier letters");
@@ -42,7 +42,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   G.store("07").einv = "outside";
   ok(!F.einv("202603", "07").uses && F.einv("202603", "07").mode === "outside", "made outside Tally: no check from Tally's IRNs");
   delete sales[0].irn; delete sales[0].irnDate; G.store("07").einv = "auto";
-  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\(opts\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
+  const src = fs.readFileSync(HTML, "utf8"), sv = /async function saveBooks\([^)]*\)\{[\s\S]*?BOOKS_KEYS\.forEach\(k => \{ keep\[k\] = b\[k\]; \}\)/.test(src) ? JSON.parse((src.match(/const BOOKS_KEYS = (\[[^\]]*\]);/) || [, "[]"])[1]).map(k => k + ": b." + k).join(", ") : "";  // what saveBooks keeps: every name in BOOKS_KEYS
   ok(["gstSet", "gstContacts", "itcBasis", "gstOpen", "rule37On", "gstAato", "gstCashLedger"].every(k => new RegExp("\\b" + k + ": b\\." + k + "\\b").test(sv)), "every GST setting is saved with the books");
   ok(/\["gstset", "GST"\]/.test(src), "Client setup has a GST tab");
   console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

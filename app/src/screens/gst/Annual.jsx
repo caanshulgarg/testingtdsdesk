@@ -33,18 +33,18 @@ export function Gst9({ b }) {
     </section>
     <Card title="Figures not in the books">
       <p className="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.{b12 && (b12.igst + b12.cgst + b12.sgst) ? " Table 12 is taken from the books unless typed." : ""}</p>
-      <div className="bk-tablewrap"><table className="bk-table gf-off">
+      <div className="bk-tablewrap"><table className="bk-table gf-off" data-statement="">
         <thead><tr><th>Table</th><th className="n">Value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th></tr></thead>
         <tbody>{GST9.TYPED.map(([k, l]) => <tr key={k}><td>{/^\d+[A-Z]? /.test(l) ? l : k + " " + l}</td>{["taxable", "igst", "cgst", "sgst", "cess"].map((f) => <td key={f} className="n"><Typed ty={ty} k={k} f={f} /></td>)}</tr>)}
           <tr><td>14 Differential tax on 10 and 11: payable / paid</td><td className="n"><Typed ty={ty} k="14" f="payable" /></td><td className="n"><Typed ty={ty} k="14" f="paid" /></td><td colSpan={3}></td></tr></tbody>
       </table></div>
     </Card>
     <Card title="17. HSN summary of outward supplies">
-      <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>HSN</th><th className="n">Rate</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>HSN</th><th className="n">Rate</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
         <tbody>{d.hsnOut.slice(0, 100).map((x, i) => <tr key={i}><td>{x.hsn || "—"}</td><td className="n">{x.rate}%</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}</tbody></table></div>
     </Card>
     <Card title="18. HSN summary of inward supplies">
-      <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th>HSN</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>HSN</th><th className="n">Taxable value</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th></tr></thead>
         <tbody>{d.hsnIn.slice(0, 100).map((x, i) => <tr key={i}><td>{x.hsn || "no HSN in Tally"}</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.igst)}</td><td className="n">{m(x.cgst)}</td><td className="n">{m(x.sgst)}</td></tr>)}</tbody></table></div>
     </Card>
   </>;
@@ -55,7 +55,7 @@ const Amount = ({ k, v, ph }) => <CommitBox type="number" step="0.01" aria-label
 const Row = ({ no, l, v, bold, bad }) => <tr><td>{no}</td><td>{bold ? <b>{l}</b> : l}</td><td className={"n" + (bad && Math.abs(v) >= 1 ? " bad" : "")}>{bold ? <b>{m(v)}</b> : m(v)}</td></tr>;
 const Reasons = ({ no, label, st }) => <label className="note" style={{ display: "block" }}>{label}<CommitBox as="textarea" aria-label={label} rows={2} style={{ width: "100%" }} value={st.reasons[no] || ""} onCommit={(x) => gst9cSet("reasons." + no, x)} /></label>;
 const H = ({ children }) => <h3 style={{ marginTop: 12 }}>{children}</h3>;
-const Table = ({ children }) => <div className="bk-tablewrap"><table className="bk-table"><tbody>{children}</tbody></table></div>;
+const Table = ({ children }) => <div className="bk-tablewrap"><table className="bk-table" data-statement=""><tbody>{children}</tbody></table></div>;
 
 export function Gst9c() {
   const b = S.books, reg = regOf(b);
@@ -81,7 +81,7 @@ export function Gst9c() {
       </Table>
       <Reasons no="8" label="8. Reasons" st={st} />
       <H>9. Reconciliation of tax paid, rate by rate</H>
-      <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th className="n">Rate</th><th className="n">Taxable value</th><th className="n">Tax payable</th></tr></thead>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="n">Rate</th><th className="n">Taxable value</th><th className="n">Tax payable</th></tr></thead>
         <tbody>{c.rates.map((x) => <tr key={x.rate}><td className="n">{x.rate}%</td><td className="n">{m(x.taxable)}</td><td className="n">{m(x.tax)}</td></tr>)}</tbody></table></div>
       <Reasons no="10" label="10. Reasons" st={st} />
       <H>12. Reconciliation of input tax credit</H>

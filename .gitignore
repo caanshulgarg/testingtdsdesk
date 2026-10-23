@@ -9,3 +9,16 @@ connector/FinComConnector.exe
 
 # the React build published on main for checking (staging.fincom.live/react/, app/publish-preview.sh)
 /react/
+
+# red/green test outputs kept by the agents while working (may carry client figures): never committed
+scratchpad/
+
+# the bridge's log, if a test ever writes it into the package folder (round 3 R3-2): never committed
+bridge-go/tds-bridge.log
+
+# a go build in the package folder (never committed)
+bridge-go/bridge
+bridge-go/bridge.exe
+
+# the Go tests' whole output, kept by CI for upload (.github/workflows/ci.yml): never committed
+bridge-go/go-test.log

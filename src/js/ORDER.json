@@ -52,5 +52,14 @@
  "50-ai-help.js",
  "52-routes.js",
  "53-phone.js",
- "54-live-sync.js"
+ "54-live-sync.js",
+ "55-einvoice.js",
+ "56-gst-recon.js",
+ "57-ledger-check.js",
+ "59-post-preview.js",
+ "62-post-reasons.js",
+ "58-ledgers.js",
+ "60-choices.js",
+ "61-recorder.js",
+ "63-alerts.js"
 ]

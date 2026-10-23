@@ -1,0 +1,884 @@
+// Measuring Tally for FinCom support (02-Oct-2026: nobody can measure Tally from FinCom's side). Run from the tray
+// ("Measure Tally (for FinCom support)") or as
+//
+//	FinComBridge.exe measure --company "<name>" [--out file] [--ledgers 696 | --ledgers 696-699]
+//	FinComBridge.exe measure --company "<name>" --snapshot <label> [--month yyyymm]
+//	FinComBridge.exe measure --compare <label1> <label2>
+//	... --old-days   (round 19) the dated items b-e and the snapshot with ReadDays off: typed at the console, with the
+//	                 bridge stopped (the running bridge's /measure never takes it, nor the tray)
+//
+// Round 19 (2.1.9, the code review's finding 7; the owner's rule of 04-Oct-2026 names only the read test as the
+// exception): with ReadDays off the tool runs its undated items only (a, a2, the ledger items f); b, c, c0, d, e and the
+// snapshot carry a period and go only with ReadDays on or --old-days.
+//
+// One request at a time, each with its own cap (TallyMaxSec, 20 s), through the bridge's own queue (a posting still goes first).
+// Round 4 (03-Oct-2026): the run STOPS at the first request that does not answer in that time: nothing more is sent but
+// the small company check, which is waited for (up to 10 minutes), and the run ends with that in the report. The tool
+// is started by a person only: the tray item, or "FinComBridge.exe measure" typed in a console (both reach the running
+// bridge's web server, whatever its run mode); never by the bridge itself, and never from a web page (the measure
+// routes refuse an Origin or Sec-Fetch header). The console never measures in parallel with a running bridge.
+// Nothing is written to Tally. The report is plain text in the bridge's folder: times in ms, bytes, counts, errors.
+//
+//	a. the company-level check: its GUID and highest AlterIDs (the voucher count is not asked: Tally gives none cheaply)
+//	b. entries with an AlterID above (highest - 500) over the whole financial year: about 500 entries
+//	c. the same, limited to one month (the current month, and the busiest month)
+//	d. the list of GUIDs only, for one month
+//	e. one entry with every field FinCom needs; its size, and which fields came back
+//	f. the hanging-ledger check: the opening each ledger master stores (the master's field, no period, never a balance
+//	   worked out) of the ledgers numbered 696-699 in name order, one at a time, the company check between them; their
+//	   other master fields first, on their own, so a hang shows which part hangs. Only with --ledgers (after working
+//	   hours, one ledger a run: --ledgers 696, then 697...); the default run measures f0 only
+//	g. snapshots (each entry's GUID, MasterID and AlterID for a month, the company's GUID and highest AlterID) and their
+//	   comparison, for the owner's manual tests (docs/tally-measure-sheet.txt)
+package main
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+type measureOpts struct {
+	company  string
+	out      string
+	ledgers  string // "696-699"
+	snapshot string
+	month    string // yyyymm, for d and the snapshot (default: this month)
+	// round 19 (review finding 7): --old-days typed by a person at the console: the dated items (b, c, c0, d, e, the
+	// snapshot) run with ReadDays off. Set only by measureArgs (the console), never from /measure or the tray
+	oldDays bool
+}
+
+type mItem struct {
+	key, what   string
+	ms          int64
+	bytes, n    int
+	err, note   string
+	timedOut    bool
+	extraLines  []string
+	requestSent bool
+}
+
+// all of a voucher FinCom needs (heads, lines, bill-wise, cost centres, GST, TDS, items, bank details)
+const measureVchFetch = "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, REFERENCE, REFERENCEDATE, NARRATION, PARTYLEDGERNAME, PARTYNAME, " +
+	"PARTYGSTIN, PLACEOFSUPPLY, GSTREGISTRATIONTYPE, CMPGSTIN, ISOPTIONAL, ISCANCELLED, ISINVOICE, " +
+	"ALLLEDGERENTRIES.LIST, LEDGERENTRIES.LIST, ALLINVENTORYENTRIES.LIST, INVENTORYENTRIES.LIST"
+
+// the fields e. looks for, and the tags that show them
+var measureFields = []struct{ name, tags string }{
+	{"GUID", "GUID"}, {"MasterID", "MASTERID"}, {"AlterID", "ALTERID"}, {"date", "DATE"}, {"voucher type", "VOUCHERTYPENAME"},
+	{"voucher number", "VOUCHERNUMBER"}, {"narration", "NARRATION"}, {"ledger entries", "ALLLEDGERENTRIES.LIST|LEDGERENTRIES.LIST"},
+	{"ledger name and amount", "LEDGERNAME"}, {"bill-wise allocations", "BILLALLOCATIONS.LIST"},
+	{"cost centres", "CATEGORYALLOCATIONS.LIST|COSTCENTREALLOCATIONS.LIST"}, {"party GSTIN", "PARTYGSTIN"}, {"place of supply", "PLACEOFSUPPLY"},
+	{"GST rate details", "RATEDETAILS.LIST|GSTRATEDUTYHEAD"}, {"HSN/SAC", "GSTHSNNAME|HSNCODE"},
+	{"TDS section / nature", "TDSEXPENSEALLOCATIONS.LIST|TAXOBJECTALLOCATIONS.LIST|TDSNATUREOFPAYMENT"},
+	{"inventory lines", "ALLINVENTORYENTRIES.LIST|INVENTORYENTRIES.LIST"}, {"bank allocations", "BANKALLOCATIONS.LIST"},
+	{"instrument number", "INSTRUMENTNUMBER"}, {"bank reconciliation date", "BANKERSDATE"},
+}
+
+// what item e. found of one field in the entry v (tags: its tags, one of them enough): "present" (a value),
+// "present, empty" (only empty or self-closed), "absent". 2.3.1 (2.2.4 review L5): a field read as the rest of the bridge
+// reads Tally's fields, with or without attributes (<NARRATION TYPE="String"/>, a real TallyPrime 7.1) and its closing
+// tag as "</TAG>" or "</TAG >"
+func measureFieldState(v, tags string) string {
+	st := "absent"
+	for _, tg := range strings.Split(tags, "|") {
+		if m := re(tagOpenRe(tg) + `([\s\S]*?)</` + regexp.QuoteMeta(tg) + `\s*>`).FindStringSubmatch(v); m != nil {
+			if strings.TrimSpace(m[1]) != "" {
+				return "present"
+			}
+			st = "present, empty"
+		} else if re(`<` + regexp.QuoteMeta(tg) + `(?:\s[^>]*)?/>`).MatchString(v) {
+			st = "present, empty"
+		}
+	}
+	return st
+}
+
+var (
+	measureMu   sync.Mutex
+	measureLast M
+)
+
+// the bridge's own ledger list in name order (the order 2.1.3 numbered them in its batches: "ledgers 691-695").
+// Round 2 (02-Oct-2026): the per-ledger items run only when asked (--ledgers 696, or a range 696-699); with no
+// --ledgers none runs (0, 0), as the ledgers 696-699 are measured after working hours only, one at a time
+func measureLedgerRange(spec string) (int, int) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return 0, 0
+	}
+	a, b := 0, 0
+	if m := re(`^(\d+)\s*-\s*(\d+)$`).FindStringSubmatch(spec); m != nil {
+		a, b = toInt(m[1]), toInt(m[2])
+	} else if m := re(`^(\d+)$`).FindStringSubmatch(spec); m != nil {
+		a, b = toInt(m[1]), toInt(m[1])
+	} else {
+		return 0, 0
+	}
+	if a < 1 {
+		a = 1
+	}
+	if b < a {
+		b = a
+	}
+	if b-a > 20 {
+		b = a + 20
+	}
+	return a, b
+}
+
+// one request, its time, size and how many of a kind came back
+func measureOne(port int, key, what, x, count string) (*mItem, string) {
+	return measureOneTC(fin, port, key, what, x, count)
+}
+func measureOneTC(tc *TC, port int, key, what, x, count string) (*mItem, string) {
+	it := &mItem{key: key, what: what, requestSent: true}
+	t0 := time.Now()
+	raw, err := invokeTally(tc, port, x, tallyMaxSec())
+	it.ms = time.Since(t0).Milliseconds()
+	it.bytes = len(raw)
+	if err != nil {
+		it.err = err.Error()
+		it.timedOut = isBusyErr(err) && strings.Contains(err.Error(), "timed out")
+		if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "refused") && re(`is busy`).MatchString(err.Error()) {
+			it.requestSent = false // held back: Tally had not answered the small check yet
+		}
+		return it, ""
+	}
+	if count != "" {
+		it.n = len(xmlDoc(raw).All(count))
+	}
+	if re(`(?i)<LINEERROR[\s>]`).MatchString(raw) {
+		it.err = "Tally: " + cut(flat(group(`(?i)<LINEERROR(?:\s[^>]*)?>([\s\S]*?)</LINEERROR>`, raw, 1)), 200)
+	}
+	return it, raw
+}
+
+// waits for Tally to answer the company check after a request that did not answer (at most maxWait)
+func measureWaitFree(port int, company string, maxWait time.Duration) (bool, int) {
+	end := time.Now().Add(maxWait)
+	tries := 0
+	for time.Now().Before(end) && !stopping() {
+		if err := probeHold(port); err == nil {
+			tries++
+			if _, err := companyCheck(fin, company, port); err == nil {
+				return true, tries
+			}
+		}
+		sleepOrStop(2 * time.Second)
+	}
+	return false, tries
+}
+
+// the measuring tool is started by a person: the tray item or the measure command typed in a console reach the running
+// bridge's web server (server.go refuses a web page); the bridge itself, the service included, never starts one
+func measureAllowed() error { return readsAllowed() }
+
+// round 19 (review finding 7, the owner's rule of 04-Oct-2026: only the read test is named as the exception): the
+// measuring tool's dated items go only with ReadDays on, or with --old-days typed by a person at the console (o.oldDays,
+// never set from /measure or the tray); nil when they may not
+func measureDatedTC(o measureOpts) *TC {
+	if o.oldDays {
+		return &TC{person: true}
+	}
+	if readDaysOn() {
+		return fin
+	}
+	return nil
+}
+
+const measureNoOldDays = "the dated items (b, c, d, e and the snapshot) are not run: reading old entries is off on this computer (ReadDays). " +
+	"A person may run them at the console with the bridge stopped: FinComBridge.exe measure --company \"<name>\" --old-days"
+
+func fyBounds(t time.Time) (string, string) {
+	a := fyStart(t)
+	return tallyDate(a), tallyDate(a.AddDate(1, 0, -1))
+}
+
+// the measurements a-f, one at a time; the report written to a file
+func runMeasure(o measureOpts) (M, error) {
+	if o.company == "" {
+		return nil, errors.New("Say which company: --company \"<name as in Tally>\".")
+	}
+	if o.snapshot != "" {
+		return measureSnapshot(o)
+	}
+	if err := measureAllowed(); err != nil {
+		return nil, err
+	}
+	measuring.Add(1)
+	defer measuring.Add(-1)
+	measureOver.Store(0)
+	port, err := findCompanyPort(o.company, 0)
+	if err != nil {
+		return nil, err
+	}
+	company := o.company
+	var items []*mItem
+	add := func(it *mItem) { items = append(items, it) }
+	started := time.Now()
+	fyA, fyZ := fyBounds(time.Now())
+	td := today()
+	month := o.month
+	if !re(`^\d{6}$`).MatchString(month) {
+		month = td[:6]
+	}
+	mA, mZ := month+"01", monthEnd(month)
+	writeLog(fmt.Sprintf("Measure Tally: %s (for FinCom support): one request at a time, %d s each at most", company, tallyMaxSec()))
+
+	// round 4: the run stops at the FIRST request that does not answer in tallyMaxSec (or that left Tally unanswered):
+	// nothing more is sent but the small company check, waited for up to 10 minutes; then the report
+	stopped := func(it *mItem) bool {
+		if !it.timedOut && !needProbe(port) {
+			return false
+		}
+		if !it.timedOut {
+			it.timedOut = true
+		}
+		it.note = strings.TrimSpace(fmt.Sprintf("HANGS (no answer in %d s) %s", tallyMaxSec(), it.note))
+		ok, tries := measureWaitFree(port, company, 10*time.Minute)
+		add(&mItem{key: "-", what: "waiting for Tally to answer the company check after a request that did not answer", note: fmt.Sprintf("answered: %v after %d check(s)", ok, tries)})
+		add(&mItem{key: "-", what: fmt.Sprintf("the run stopped at the first request that did not answer in %d s (%s): nothing more was measured in this run", tallyMaxSec(), it.key),
+			note: "run the tool again when Tally answers; a single ledger only with --ledgers N, after working hours"})
+		writeLog(fmt.Sprintf("Measure Tally: %s: the run stopped at the first request that did not answer in %d s (%s); the company check answered: %v", company, tallyMaxSec(), it.key, ok))
+		return true
+	}
+
+	// a. the company-level check
+	// round 5 R5-1: the two forms of the change numbers (form a: NATIVEMETHOD; form b, the report, when a gives none)
+	read := func(raw string) (string, int64, int64) {
+		for _, c := range xmlDoc(raw).All("COMPANY") {
+			if n := nameOf(c); n == "" || sameCompany(n, company) {
+				return nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTVCHID"), "")), toI64(re(`\D`).ReplaceAllString(cnTag(c, "ALTMSTID"), ""))
+			}
+		}
+		return "", 0, 0
+	}
+	it, raw := measureOne(port, "a", "the company check: its GUID and highest AlterIDs (one tiny request; form a)", companyCheckRequest(company), "COMPANY")
+	guid, altV, altM := read(raw)
+	it.note = fmt.Sprintf("company GUID %s; highest AlterID: entries %d, masters %d; the voucher count is not asked (Tally does not give it cheaply)", or(guid, "(not given)"), altV, altM)
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
+	if altV <= 0 && altM <= 0 {
+		itb, rawb := measureOne(port, "a-b", "the change numbers, form b (a report over the company)", companyNumbersRequest(company), "COMPANY")
+		_, altV, altM = read(rawb)
+		itb.note = fmt.Sprintf("highest AlterID: entries %d, masters %d", altV, altM)
+		add(itb)
+		if stopped(itb) {
+			return measureReport(o, company, port, items, started)
+		}
+	}
+
+	// a2. round 18 (the owner's rule of 04-Oct-2026, measurement only): the entries above the company's starting point,
+	// the AlterID filter alone with NO dates (TDSDeskKeepList); the time says whether Tally answers it without looking
+	// at every entry of its books (only NWS144 can say; a stand-in cannot)
+	// round 5 R5-1: only from a recorded starting point (never above a lower number: that would be a full read)
+	if spAfter, had := startPointOf(company); had {
+		it, _ = measureOne(port, "a2", fmt.Sprintf("entries with AlterID above the starting point %d, no dates (TDSDeskKeepList)", spAfter),
+			keepListAboveRequest(company, spAfter), "VOUCHER")
+		add(it)
+		if stopped(it) {
+			return measureReport(o, company, port, items, started)
+		}
+	} else {
+		add(&mItem{key: "a2", what: "entries above the starting point (TDSDeskKeepList)", note: "not asked: no starting point is recorded"})
+		writeLog("Measure Tally: " + company + ": the entries above the starting point are not asked: no starting point is recorded (Tally gave no change numbers yet)")
+	}
+
+	dtc := measureDatedTC(o)
+	if dtc == nil {
+		add(&mItem{key: "b..e", what: "not run", note: measureNoOldDays})
+		writeLog("Measure Tally: " + company + ": " + measureNoOldDays)
+		return measureLedgerItems(o, company, port, &items, add, started, stopped)
+	}
+	mOne := func(key, what, x, count string) (*mItem, string) { return measureOneTC(dtc, port, key, what, x, count) }
+
+	// b. AlterID above (highest - 500), the whole year
+	after := altV - 500
+	if after < 0 {
+		after = 0
+	}
+	it, raw = mOne("b", fmt.Sprintf("entries with AlterID above %d over the year %s-%s (every field FinCom needs)", after, fyA, fyZ),
+		measureReqB(company, fyA, fyZ, after), "VOUCHER")
+	if it.n > 0 {
+		it.note = fmt.Sprintf("%d bytes an entry on average", it.bytes/it.n)
+	}
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
+
+	// c. the same, one month: this month, and the busiest month of the year
+	cReq := func(key, a, z string) *mItem {
+		it, _ := mOne(key, fmt.Sprintf("entries with AlterID above %d, %s-%s only", after, a, z),
+			measureReqC(company, a, z, after), "VOUCHER")
+		add(it)
+		return it
+	}
+	if stopped(cReq("c1", td[:6]+"01", td)) {
+		return measureReport(o, company, port, items, started)
+	}
+	busy, how := "", ""
+	var man M
+	if dir, err := companyDir(company); err == nil {
+		man = readObjFile(filepath.Join(dir, "manifest.json"))
+	}
+	if man != nil {
+		best := -1
+		for _, x := range arr(man["months"]) {
+			m := obj(x)
+			if toInt(m["n"]) > best && str(m["ym"]) >= fyA[:6] && str(m["ym"]) <= fyZ[:6] {
+				best, busy = toInt(m["n"]), str(m["ym"])
+			}
+		}
+		how = "from the bridge's copy"
+	}
+	if busy == "" {
+		it, raw := mOne("c0", "the year's entries, dates only (to find the busiest month)",
+			measureReqYear(company, fyA, fyZ), "VOUCHER")
+		by := map[string]int{}
+		for _, v := range xmlDoc(raw).All("VOUCHER") {
+			if d := nt(v, "DATE"); isTallyDate(d) {
+				by[d[:6]]++
+			}
+		}
+		best := -1
+		for ym, n := range by {
+			if n > best {
+				best, busy = n, ym
+			}
+		}
+		add(it)
+		how = "from the year's dates"
+		if stopped(it) {
+			return measureReport(o, company, port, items, started)
+		}
+	}
+	if busy != "" {
+		e := monthEnd(busy)
+		if e > td {
+			e = td
+		}
+		it := cReq("c2", busy+"01", e)
+		it.note = "the busiest month, " + how
+		if stopped(it) {
+			return measureReport(o, company, port, items, started)
+		}
+	}
+
+	// d. the GUID list only, one month
+	it, _ = mOne("d", "the list of GUIDs only, "+mA+"-"+mZ,
+		measureReqD(company, mA, mZ), "VOUCHER")
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
+
+	// e. one entry with every field
+	it, raw = mOne("e", fmt.Sprintf("one entry (AlterID %d) with every field FinCom needs", altV),
+		measureReqE(company, fyA, addDays(td, 366), altV), "VOUCHER")
+	if vs := reVchBlock.FindAllString(raw, -1); len(vs) > 0 {
+		v := vs[0]
+		it.note = fmt.Sprintf("%d bytes for the entry", len(v))
+		for _, f := range measureFields {
+			st := measureFieldState(v, f.tags)
+			it.extraLines = append(it.extraLines, fmt.Sprintf("      %-26s %s", f.name, st))
+		}
+	} else if it.err == "" {
+		it.note = "no entry with that AlterID came back (the highest AlterID may be a master's)"
+	}
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, items, started)
+	}
+
+	return measureLedgerItems(o, company, port, &items, add, started, stopped)
+}
+
+// f. the ledger items (no period): run whatever ReadDays says
+func measureLedgerItems(o measureOpts, company string, port int, itemsP *[]*mItem, add func(*mItem), started time.Time, stopped func(*mItem) bool) (M, error) {
+	var it *mItem
+	var raw string
+	// f. the hanging-ledger check (round 4: the run ends at the first hang, the check waited for; one ledger a run)
+	a, b := measureLedgerRange(o.ledgers)
+	it, raw = measureOne(port, "f0", "every ledger's name (to number them in name order)", measureReqNames(company), "LEDGER")
+	var names []string
+	for _, l := range xmlDoc(raw).All("LEDGER") {
+		if n := nameOf(l); n != "" {
+			names = append(names, n)
+		}
+	}
+	names = uniqSorted(names)
+	it.note = fmt.Sprintf("%d ledgers", len(names))
+	add(it)
+	if stopped(it) {
+		return measureReport(o, company, port, *itemsP, started)
+	}
+	if a == 0 {
+		add(&mItem{key: "f696..", what: "the per-ledger items (ledgers 696-699: fields, then the stored opening) are not run by default",
+			note: `after working hours only, one ledger at a time: FinComBridge.exe measure --company "<name>" --ledgers 696, then --ledgers 697, 698, 699, each on its own`})
+	}
+	for i := a; a > 0 && i <= b && i <= len(names); i++ {
+		n := names[i-1]
+		// the company check between them
+		pi, _ := measureOne(port, fmt.Sprintf("f%d-check", i), "the company check", companyCheckRequest(company), "COMPANY")
+		add(pi)
+		if stopped(pi) {
+			return measureReport(o, company, port, *itemsP, started)
+		}
+		fi, fraw := measureOne(port, fmt.Sprintf("f%d-fields", i), fmt.Sprintf("ledger %d %q: its master's fields (no opening)", i, n),
+			measureReqLedF(company, n), "LEDGER")
+		for _, l := range xmlDoc(fraw).All("LEDGER") {
+			fi.note = fmt.Sprintf("parent %q, is revenue %s, affects stock %s, bill-wise %s, cost centres %s, deemed positive %s, reserved name %q, GUID %s",
+				nt(l, "PARENT"), or(nt(l, "ISREVENUE"), "-"), or(nt(l, "AFFECTSSTOCK"), "-"), or(nt(l, "ISBILLWISEON"), "-"), or(nt(l, "ISCOSTCENTRESON"), "-"),
+				or(nt(l, "ISDEEMEDPOSITIVE"), "-"), nt(l, "RESERVEDNAME"), nt(l, "GUID"))
+		}
+		add(fi)
+		if stopped(fi) {
+			return measureReport(o, company, port, *itemsP, started)
+		}
+		oi, oraw := measureOne(port, fmt.Sprintf("f%d-opening", i), fmt.Sprintf("ledger %d %q: the opening its master stores (the field only, no period)", i, n),
+			measureReqLedO(company, n), "LEDGER")
+		for _, l := range xmlDoc(oraw).All("LEDGER") {
+			oi.note = "stored opening " + or(nt(l, "OPENINGBALANCE"), "(empty)")
+		}
+		add(oi)
+		if stopped(oi) {
+			return measureReport(o, company, port, *itemsP, started)
+		}
+	}
+	return measureReport(o, company, port, *itemsP, started)
+}
+
+func or(a, b string) string {
+	if strings.TrimSpace(a) == "" {
+		return b
+	}
+	return a
+}
+
+func measureReport(o measureOpts, company string, port int, items []*mItem, started time.Time) (M, error) {
+	var b strings.Builder
+	fmt.Fprintf(&b, "FinCom Bridge %s - Tally measured for FinCom support\nCompany: %s   Tally port: %d   Computer: %s\nStarted %s, took %s\n",
+		BridgeVersion, company, port, computerName(), started.Format("2006-01-02 15:04:05"), time.Since(started).Round(time.Second))
+	fmt.Fprintf(&b, "Each request on its own, %d s at most; the run stops at the first request that does not answer: nothing more is sent until the company check answers, and the run ends there.\n", tallyMaxSec())
+	if n := measureOver.Load(); n > 0 {
+		fmt.Fprintf(&b, "%d request(s) took more than %d s (the limit that stops reading on this computer); reading was not stopped, as the measuring tool was running.\n", n, selfStopSec())
+	}
+	b.WriteString("\n")
+	fmt.Fprintf(&b, "%-10s %8s %10s %7s  %s\n", "item", "ms", "bytes", "count", "what / result")
+	rows := []any{}
+	for _, it := range items {
+		res := it.what
+		if it.err != "" {
+			res += "  ERROR: " + it.err
+		}
+		if it.note != "" {
+			res += "  -- " + it.note
+		}
+		if !it.requestSent && it.err != "" {
+			res += " (nothing was sent)"
+		}
+		fmt.Fprintf(&b, "%-10s %8d %10d %7d  %s\n", it.key, it.ms, it.bytes, it.n, res)
+		for _, l := range it.extraLines {
+			b.WriteString(l + "\n")
+		}
+		rows = append(rows, M{"item": it.key, "what": it.what, "ms": it.ms, "bytes": it.bytes, "count": it.n, "error": it.err, "note": it.note, "timedOut": it.timedOut})
+	}
+	out := o.out
+	if out == "" {
+		n, err := safeName(strings.ReplaceAll(company, " ", "_"))
+		if err != nil {
+			n = "company"
+		}
+		out = filepath.Join(Home, "measure-"+n+"-"+time.Now().Format("20060102-150405")+".txt")
+	}
+	if err := saveFile(out, b.String()); err != nil {
+		return nil, err
+	}
+	writeLog("Measure Tally: report written to " + out)
+	return M{"ok": true, "file": out, "report": b.String(), "items": rows}, nil
+}
+
+// --- g. snapshots and their comparison
+func snapFile(label string) string {
+	return filepath.Join(Home, "measure-snap-"+re(`[^A-Za-z0-9_.-]`).ReplaceAllString(label, "_")+".json")
+}
+
+func measureSnapshot(o measureOpts) (M, error) {
+	if err := measureAllowed(); err != nil {
+		return nil, err
+	}
+	dtc := measureDatedTC(o)
+	if dtc == nil {
+		return nil, errors.New("Snapshot not taken: " + measureNoOldDays)
+	}
+	measuring.Add(1)
+	defer measuring.Add(-1)
+	port, err := findCompanyPort(o.company, 0)
+	if err != nil {
+		return nil, err
+	}
+	month := o.month
+	if !re(`^\d{6}$`).MatchString(month) {
+		month = today()[:6]
+	}
+	a, z := month+"01", monthEnd(month)
+	t0 := time.Now()
+	raw, err := invokeTally(fin, port, companyCheckRequest(o.company), tallyMaxSec())
+	if err != nil {
+		return nil, err
+	}
+	guid, alt := "", int64(0)
+	for _, c := range xmlDoc(raw).All("COMPANY") {
+		if n := nameOf(c); n == "" || sameCompany(n, o.company) {
+			guid, alt = nt(c, "GUID"), toI64(re(`\D`).ReplaceAllString(nt(c, "ALTVCHID"), ""))
+		}
+	}
+	raw, err = invokeTally(dtc, port, snapshotRequest(o.company, a, z), tallyMaxSec())
+	if err != nil {
+		return nil, err
+	}
+	vs := []any{}
+	for _, v := range xmlDoc(raw).All("VOUCHER") {
+		d := nt(v, "DATE")
+		if d != "" && (d < a || d > z) {
+			continue
+		}
+		vs = append(vs, M{"guid": nt(v, "GUID"), "masterId": nt(v, "MASTERID"), "alter": toI64(re(`\D`).ReplaceAllString(nt(v, "ALTERID"), "")), "date": d,
+			"type": voucherType(v), "number": nt(v, "VOUCHERNUMBER")})
+	}
+	snap := M{"label": o.snapshot, "company": o.company, "companyGuid": guid, "highestAlterId": alt, "month": month, "at": nowS(), "ms": time.Since(t0).Milliseconds(), "vouchers": vs}
+	f := snapFile(o.snapshot)
+	if err := saveFile(f, jsonText(snap)); err != nil {
+		return nil, err
+	}
+	rep := fmt.Sprintf("Snapshot %q of %s, %s: company GUID %s, highest AlterID %d, %d entries; kept in %s\n", o.snapshot, o.company, month, or(guid, "(not given)"), alt, len(vs), f)
+	writeLog("Measure Tally: " + strings.TrimSpace(rep))
+	return M{"ok": true, "file": f, "report": rep}, nil
+}
+
+// what changed between two snapshots: the company's GUID and highest AlterID, and each entry added, gone, or with its
+// AlterID, MasterID, date or number changed (an entry deleted and entered again shows as one gone and one added)
+func measureCompare(l1, l2 string) (string, error) {
+	a, b := readObjFile(snapFile(l1)), readObjFile(snapFile(l2))
+	if a == nil || b == nil {
+		return "", fmt.Errorf("No snapshot named %q or %q in %s (measure --snapshot <label> makes one)", l1, l2, Home)
+	}
+	var o strings.Builder
+	fmt.Fprintf(&o, "Snapshots %q (%s) and %q (%s) of %s, month %s\n", l1, str(a["at"]), l2, str(b["at"]), str(a["company"]), str(a["month"]))
+	same := "the same"
+	if str(a["companyGuid"]) != str(b["companyGuid"]) {
+		same = "DIFFERENT: " + str(a["companyGuid"]) + " -> " + str(b["companyGuid"])
+	}
+	fmt.Fprintf(&o, "Company GUID: %s\nHighest AlterID: %d -> %d (%+d)\n", same, toI64(a["highestAlterId"]), toI64(b["highestAlterId"]), toI64(b["highestAlterId"])-toI64(a["highestAlterId"]))
+	idx := func(s M) map[string]M {
+		m := map[string]M{}
+		for _, x := range arr(s["vouchers"]) {
+			v := obj(x)
+			m[str(v["guid"])] = v
+		}
+		return m
+	}
+	A, B := idx(a), idx(b)
+	var added, gone, changed []string
+	for g, v := range B {
+		w, ok := A[g]
+		if !ok {
+			added = append(added, fmt.Sprintf("  added    %s %s no. %s, %s, MasterID %s, AlterID %d", g, str(v["type"]), str(v["number"]), str(v["date"]), str(v["masterId"]), toI64(v["alter"])))
+			continue
+		}
+		var d []string
+		if toI64(w["alter"]) != toI64(v["alter"]) {
+			d = append(d, fmt.Sprintf("AlterID %d -> %d", toI64(w["alter"]), toI64(v["alter"])))
+		}
+		if str(w["masterId"]) != str(v["masterId"]) {
+			d = append(d, "MasterID "+str(w["masterId"])+" -> "+str(v["masterId"]))
+		}
+		if str(w["date"]) != str(v["date"]) {
+			d = append(d, "date "+str(w["date"])+" -> "+str(v["date"]))
+		}
+		if str(w["number"]) != str(v["number"]) {
+			d = append(d, "number "+str(w["number"])+" -> "+str(v["number"]))
+		}
+		if len(d) > 0 {
+			changed = append(changed, fmt.Sprintf("  changed  %s %s no. %s: %s", g, str(v["type"]), str(v["number"]), strings.Join(d, ", ")))
+		}
+	}
+	for g, w := range A {
+		if _, ok := B[g]; !ok {
+			gone = append(gone, fmt.Sprintf("  gone     %s %s no. %s, %s, MasterID %s, AlterID %d", g, str(w["type"]), str(w["number"]), str(w["date"]), str(w["masterId"]), toI64(w["alter"])))
+		}
+	}
+	for _, l := range [][]string{changed, added, gone} {
+		sort.Strings(l)
+	}
+	fmt.Fprintf(&o, "Entries: %d -> %d; %d changed, %d added, %d gone\n", len(A), len(B), len(changed), len(added), len(gone))
+	for _, l := range [][]string{changed, added, gone} {
+		for _, x := range l {
+			o.WriteString(x + "\n")
+		}
+	}
+	return o.String(), nil
+}
+
+// --- the tray and the command line reach the running bridge (its queue): POST starts, GET says how far it is
+func startMeasure(o measureOpts) M {
+	measureMu.Lock()
+	defer measureMu.Unlock()
+	if measureLast != nil && str(measureLast["state"]) == "running" {
+		return measureLast
+	}
+	measureLast = M{"ok": true, "state": "running", "company": o.company, "at": nowS()}
+	go func() {
+		r, err := runMeasure(o)
+		measureMu.Lock()
+		defer measureMu.Unlock()
+		if err != nil {
+			measureLast = M{"ok": false, "state": "failed", "error": err.Error(), "company": o.company, "at": nowS()}
+			return
+		}
+		r["state"] = "done"
+		measureLast = r
+	}()
+	return measureLast
+}
+func measureStatus() M {
+	measureMu.Lock()
+	defer measureMu.Unlock()
+	if measureLast == nil {
+		return M{"ok": true, "state": "none"}
+	}
+	return measureLast
+}
+
+// the company to measure from the tray: the one company open in Tally (the first, if several)
+func trayMeasureCompany() string {
+	for _, s := range openCompaniesCached() {
+		if s["skipped"] != true && s["ok"] == true {
+			for _, c := range sessCompanies(s) {
+				return str(c["name"])
+			}
+		}
+	}
+	return ""
+}
+
+// the console's words: the options and --compare's two labels
+func measureArgsCmp(args []string) (measureOpts, []string) {
+	var o measureOpts
+	var cmp []string
+	for i := 0; i < len(args); i++ {
+		next := func() string {
+			if i+1 < len(args) {
+				i++
+				return args[i]
+			}
+			return ""
+		}
+		switch strings.TrimLeft(strings.ToLower(args[i]), "-") {
+		case "company":
+			o.company = next()
+		case "out":
+			o.out = next()
+		case "ledgers":
+			o.ledgers = next()
+		case "snapshot":
+			o.snapshot = next()
+		case "month":
+			o.month = next()
+		case "compare":
+			cmp = append(cmp, next(), next())
+		case "old-days":
+			o.oldDays = true
+		}
+	}
+	return o, cmp
+}
+func measureArgs(args []string) measureOpts { o, _ := measureArgsCmp(args); return o }
+
+// FinComBridge.exe measure ...: through the running bridge when it answers, else here
+func measureCmd(args []string) int {
+	o, cmp := measureArgsCmp(args)
+	loadConfigRO()
+	logEcho = false
+	if len(cmp) == 2 {
+		r, err := measureCompare(cmp[0], cmp[1])
+		if err != nil {
+			fmt.Println(err.Error())
+			return 1
+		}
+		fmt.Print(r)
+		return 0
+	}
+	if o.company == "" {
+		fmt.Println(`Say which company: FinComBridge.exe measure --company "<name as in Tally>"`)
+		return 2
+	}
+	port := toInt(cfg("Port"))
+	body := M{"company": o.company, "out": o.out, "ledgers": o.ledgers, "snapshot": o.snapshot, "month": o.month}
+	code, said := consoleMeasure(o, bridgeState(port),
+		func() M { return localCall("POST", "/measure", body) },
+		func() M { return localCall("GET", "/measure", nil) },
+		func() (M, error) { loadConfig(); return runMeasure(o) })
+	fmt.Print(said)
+	return code
+}
+
+// the console command's decision (C5, round 5): through the running bridge when one answers; one that refuses or is
+// busy ends the command with its reason (never measured here in parallel with that bridge's reads and postings, which
+// go through its one-at-a-time gate); only when no bridge answers at all is Tally measured from this process
+// the bridge on this computer: "up" (its /ping answers as this program), "none" (nothing listens on its port), "busy" (a
+// listener that does not answer in time), "other" (a listener that is not this program: bridge 1.15.0)
+func bridgeState(port int) string {
+	c := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/ping", port))
+	if err != nil {
+		var oe *net.OpError
+		if errors.As(err, &oe) && strings.Contains(strings.ToLower(oe.Error()), "refused") {
+			return "none"
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "connection refused") || strings.Contains(strings.ToLower(err.Error()), "actively refused") {
+			return "none"
+		}
+		return "busy" // a listener that did not answer in time (or answered oddly): a bridge may be at work
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if o := parseObj(string(b)); o != nil && str(o["impl"]) == "go" {
+		return "up"
+	}
+	return "other" // something answers on the port that is not this program (bridge 1.15.0, or another program)
+}
+
+var (
+	measureFollowEvery = 2 * time.Second
+	measureFollowMax   = 25 * time.Minute
+)
+
+func consoleMeasure(o measureOpts, bridge string, post func() M, status func() M, local func() (M, error)) (int, string) {
+	var out strings.Builder
+	if bridge == "other" {
+		fmt.Fprintln(&out, "Not measured: another bridge program is on this port (bridge 1.15.0, or another program answering there), not FinCom Bridge "+BridgeVersion+". Make FinCom Bridge the main bridge (tray icon), or stop that program, then try again.")
+		return 1, out.String()
+	}
+	if bridge == "busy" {
+		fmt.Fprintln(&out, "Not measured: the bridge on this computer is busy (it listens on its port but did not answer in 3 s). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute.")
+		return 1, out.String()
+	}
+	if bridge == "up" && o.oldDays {
+		// round 19 (review finding 7): --old-days never goes through the bridge's web server (/measure never takes it)
+		fmt.Fprintln(&out, "Not measured: --old-days is measured only from this console with the bridge stopped (the running bridge never takes it). Quit the bridge (tray icon: Quit, or stop the FinCom Bridge service), then run the command again; or run it without --old-days.")
+		return 1, out.String()
+	}
+	if bridge == "up" {
+		r := post()
+		if r == nil {
+			fmt.Fprintln(&out, "Not measured: the bridge running on this computer did not take the request (busy, or not answering). Nothing is measured from this console while a bridge runs: its reads and postings go one at a time through that bridge. Try again in a minute, or stop the bridge first.")
+			return 1, out.String()
+		}
+		if r["ok"] == false {
+			fmt.Fprintln(&out, "Not measured: the bridge running on this computer did not take it ("+or(str(r["error"]), "no reason given")+"). Nothing is measured from this console while a bridge runs.")
+			return 1, out.String()
+		}
+		{
+			fmt.Fprintln(&out, "Measuring "+o.company+" through the running bridge (one request at a time)...")
+			for t0 := time.Now(); time.Since(t0) < measureFollowMax; {
+				time.Sleep(measureFollowEvery)
+				s := status()
+				if s == nil {
+					continue
+				}
+				switch str(s["state"]) {
+				case "done":
+					out.WriteString(str(s["report"]))
+					fmt.Fprintln(&out, "\nReport: "+str(s["file"]))
+					return 0, out.String()
+				case "failed":
+					fmt.Fprintln(&out, "Not measured: "+str(s["error"]))
+					return 1, out.String()
+				}
+			}
+			fmt.Fprintln(&out, "Still measuring after "+measureFollowMax.Round(time.Minute).String()+": still running in the bridge; see the tray (the report opens there, and lands in "+Home+")")
+			return 1, out.String()
+		}
+	}
+	// no bridge answers at all: measured here
+	r, err := local()
+	if err != nil {
+		fmt.Fprintln(&out, "Not measured: "+err.Error())
+		return 1, out.String()
+	}
+	out.WriteString(str(r["report"]))
+	fmt.Fprintln(&out, "\nReport: "+str(r["file"]))
+	return 0, out.String()
+}
+
+// a call to the bridge running on this computer, with its key
+func localCall(method, path string, body any) M {
+	return bridgeCall(method, path, body, 20*time.Second)
+}
+
+func bridgeCall(method, path string, body any, timeout time.Duration) M {
+	var rd io.Reader
+	if body != nil {
+		rd = strings.NewReader(jsonText(body))
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
+	req.Header.Set("X-Bridge-Key", cfgS("Key"))
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	return parseObj(string(b))
+}
+
+// the measuring tool's requests (measure-only on the allow-list)
+func measurePeriod(a, z string) string {
+	return periodVars(a, z)
+}
+func measureReqB(company, a, z string, after int64) string {
+	return fcCollection("FinComMeasureB", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after))
+}
+func measureReqC(company, a, z string, after int64) string {
+	return fcCollection("FinComMeasureC", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID > %d", after))
+}
+func measureReqYear(company, a, z string) string {
+	return fcCollection("FinComMeasureYear", company, measurePeriod(a, z), "Voucher", "DATE", "")
+}
+func measureReqD(company, a, z string) string {
+	return fcCollection("FinComMeasureD", company, measurePeriod(a, z), "Voucher", "GUID", "")
+}
+func measureReqE(company, a, z string, alt int64) string {
+	return fcCollection("FinComMeasureE", company, measurePeriod(a, z), "Voucher", measureVchFetch, fmt.Sprintf("$AlterID = %d", alt))
+}
+func measureReqNames(company string) string {
+	return collectionRequest("FinComMeasureNames", "Ledger", "NAME", company, "")
+}
+func measureLedFilter(name string) string {
+	return `$Name = "` + strings.ReplaceAll(name, `"`, "") + `"`
+}
+func measureReqLedF(company, name string) string {
+	return fcCollection("FinComMeasureLedF", company, "", "Ledger", "NAME, PARENT, GUID, MASTERID, ALTERID, ISREVENUE, AFFECTSSTOCK, ISBILLWISEON, ISCOSTCENTRESON, ISDEEMEDPOSITIVE, RESERVEDNAME", measureLedFilter(name))
+}
+func measureReqLedO(company, name string) string {
+	return fcCollection("FinComMeasureLedO", company, "", "Ledger", "NAME, OPENINGBALANCE", measureLedFilter(name))
+}
+func snapshotRequest(company, a, z string) string {
+	return fcCollection("FinComSnapshot", company, measurePeriod(a, z), "Voucher", "GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER", "")
+}

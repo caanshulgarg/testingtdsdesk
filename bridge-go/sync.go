@@ -16,67 +16,36 @@ import (
 	"time"
 )
 
+// FinCom's "Fetch from Tally" (/syncnow): 2.1.5 reads only what changed (Update now for the company) and answers with
+// the copy's list of months; the year is never read again, and no balance is asked of Tally
 func companySync(company string, port int) (M, error) {
-	dir := syncFolder(company)
-	_ = os.MkdirAll(dir, 0o755)
-	td := time.Now()
-	from := fyStart(td)
-	// after the year ends, keep the last year too until its audit is done (to 30 November)
-	if td.Month() >= 4 && td.Month() <= 11 {
-		from = from.AddDate(-1, 0, 0)
+	if company == "" {
+		return nil, errors.New("Say which company.")
 	}
-	months := []any{}
-	for m := from; !m.After(td); m = m.AddDate(0, 1, 0) {
-		end := m.AddDate(0, 1, -1)
-		if end.After(td) {
-			end = td
+	wakeUpdate(company)
+	until := time.Now().Add(10 * time.Minute)
+	for time.Now().Before(until) && !stopping() {
+		sleepOrStop(500 * time.Millisecond)
+		if !keepRunning() {
+			break
 		}
-		f, t := tallyDate(m), tallyDate(end)
-		x, err := getDayBookXML(fin, company, f, t, port)
-		if err != nil {
-			return nil, err
-		}
-		file := filepath.Join(dir, "daybook-"+m.Format("200601")+".xml")
-		_ = saveFile(file, x)
-		months = append(months, M{"ym": m.Format("200601"), "from": f, "to": t, "bytes": len(x)})
 	}
-	bal, err := getBalances(company, tallyDate(from), tallyDate(td), port, false)
+	dir, err := companyDir(company)
 	if err != nil {
 		return nil, err
 	}
-	_ = saveFile(filepath.Join(dir, "balances.json"), jsonText(bal))
-	led, err := getLedgers(company, port)
-	if err != nil {
-		return nil, err
+	if m := readObjFile(filepath.Join(dir, "manifest.json")); m != nil {
+		return m, nil
 	}
-	_ = saveFile(filepath.Join(dir, "ledgers.json"), jsonText(led))
-	man := M{"ok": true, "company": company, "at": nowS(), "from": tallyDate(from), "to": tallyDate(td), "months": months, "bridge": BridgeVersion}
-	_ = saveFile(filepath.Join(dir, "manifest.json"), jsonText(man))
-	return man, nil
+	return nil, errors.New("The bridge has no copy of " + company + " yet; it is read at Update now or the nightly run.")
 }
 
+// the "sync" command of the old scheduled task (bridge 1.10): 2.1.5 reads nothing (it read the whole year and every
+// ledger's balance each night); the running bridge's nightly run reads only what changed. The task is taken off
 func nightlySync() M {
-	done, failed := []any{}, []any{}
-	want := strs(cfg("SyncCompanies"))
-	for _, s := range openCompanies(true) {
-		if s["skipped"] == true {
-			continue
-		}
-		for _, c := range sessCompanies(s) {
-			n := str(c["name"])
-			if len(want) > 0 && !contains(want, n) {
-				continue
-			}
-			if _, err := companySync(n, toInt(s["port"])); err != nil {
-				failed = append(failed, n+": "+err.Error())
-				writeLog("Nightly copy of " + n + " FAILED: " + err.Error())
-			} else {
-				done = append(done, n)
-				writeLog("Nightly copy of " + n + ": done")
-			}
-		}
-	}
-	sum := M{"at": nowS(), "done": done, "failed": failed}
+	_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
+	writeLog("The old nightly copy task is not used any more: the bridge's own nightly run reads only what changed in Tally")
+	sum := M{"at": nowS(), "done": []any{}, "failed": []any{}, "retired": true}
 	_ = saveFile(sp("last-run.json"), jsonText(sum))
 	return sum
 }
@@ -103,18 +72,13 @@ func setSchedule(on bool, t string) (M, error) {
 	if runtime.GOOS != "windows" {
 		return getSchedule(), nil
 	}
-	if !on {
-		_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
-		return getSchedule(), nil
+	// 2.1.5: the old nightly copy task (the whole year and every balance) is never made again; the bridge's own nightly
+	// run reads only what changed
+	_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
+	if on {
+		writeLog("The old nightly copy task was asked for: not made (the bridge's own nightly run at " + keepDailyAt() + " reads only what changed)")
 	}
-	if !re(`^\d{2}:\d{2}$`).MatchString(t) {
-		t = "02:00"
-	}
-	exe, _ := os.Executable()
-	cmd := `"` + exe + `" sync --config "` + ConfigPath + `"`
-	if err := exec.Command("schtasks.exe", "/Create", "/F", "/SC", "DAILY", "/ST", t, "/TN", taskName, "/TR", cmd).Run(); err != nil {
-		return nil, errors.New("Windows did not accept the nightly task.")
-	}
+	_ = t
 	return getSchedule(), nil
 }
 

@@ -28,10 +28,11 @@ with sync_playwright() as p:
     pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(800)
     fresh = pg.inner_text("#app")
     want = "%s-%s-%s" % (last[6:], ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][int(last[4:6]) - 1], last[:4])
-    ok(("Books up to " + want + " (the last entry)") in fresh and "checked with Tally to 30-Sep-2026" in fresh,
-       "3a. the books' last entry date, not how far the copy was checked: " + (re.search(r"Books up to[^\n]*", fresh) or [""])[0])
+    # review of 01-Oct-2026: one sentence on every page (booksFresh): "Books: last entry <date>, checked with Tally to <date>"
+    ok(("Books: last entry " + want) in fresh and "checked with Tally to 30-Sep-2026" in fresh,
+       "3a. the books' last entry date, not how far the copy was checked: " + (re.search(r"Books: [^\n]*", fresh) or [""])[0])
     # FY 2025-26 run
-    pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(4000)
+    pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(4000)
     r = pg.evaluate("""(() => { const r = S.books.mis && S.books.mis.last; if (!r) return null; const f = A => ({owe: A.sum.owe, adv: A.sum.advance, nb: A.sum.nb, und: A.sum.und,
         parties: A.rows.map(p => ({net: p.net, nb: p.nb, und: p.und, adv: p.advance}))}); return {from: r.from, to: r.to, pay: f(r.pay), recv: f(r.recv), dpo: r.dpo, dso: r.dso, sales: r.sales.total, pbt: r.pl.pbt.t}; })()""")
     ok(r and r["from"] == "20250401" and r["to"] == "20260331", "MIS run for FY 2025-26 (%s to %s)" % ((r or {}).get("from"), (r or {}).get("to")))
@@ -57,7 +58,7 @@ with sync_playwright() as p:
         ok(r["pbt"] < r["sales"], "3b. with the ledger groups, expenses come off: profit before tax %.2f below sales %.2f" % (r["pbt"], r["sales"]))
     # Sep-2026, as the review saw it: ageing still adds up and over 90 is within the total
     pg.evaluate("() => { S.misRange = {from: '2026-09-01', to: '2026-09-30'}; render(); }"); pg.wait_for_timeout(300)
-    pg.click('section:has(> h3:text-is("MIS")) button:text-is("Run now")'); pg.wait_for_timeout(3000)
+    pg.click('section[data-mis-head] button:text-is("Run now")'); pg.wait_for_timeout(3000)
     s2 = pg.evaluate("(() => { const A = S.books.mis.last.pay, B = S.books.mis.last.recv; return [A.sum.owe, A.sum.nb[3] + A.sum.nb[4], B.sum.owe, B.sum.nb[3] + B.sum.nb[4]]; })()")
     ok(s2[1] <= s2[0] + 0.01 and s2[3] <= s2[2] + 0.01, "3d. Sep-2026: over 90 days is within the total (payables %.2f of %.2f, receivables %.2f of %.2f)" % (s2[1], s2[0], s2[3], s2[2]))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))

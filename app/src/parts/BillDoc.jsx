@@ -2,6 +2,7 @@
 // firm account (FileStore.get: this computer first, then the firm's documents), so it opens on any computer.
 // Zoom for both; page flip for a PDF (the browser's PDF viewer, opened at the page asked for).
 import { useEffect, useState } from "react";
+import Loading from "./Loading.jsx";
 
 export default function BillDoc({ e }) {
   const cid = S.coId, prev = S.previews[e.id];
@@ -25,7 +26,7 @@ export default function BillDoc({ e }) {
   }, [e.id, e.docPath]);
   const url = doc ? doc.url : prev, pdf = !!(doc && doc.pdf);
   if (!url) {
-    if (state === "loading") return <div className="prevbox"><p className="note">Opening the bill…</p></div>;
+    if (state === "loading") return <div className="prevbox"><Loading what="the bill" lines={4} /></div>;
     if (e.fileName === "Manual entry") return null;
     return <div className="prevbox"><p className="note" style={{ margin: 0 }}>{e.docPath
       ? "The bill's document could not be opened from the firm account. Check you are signed in, then open the bill again."

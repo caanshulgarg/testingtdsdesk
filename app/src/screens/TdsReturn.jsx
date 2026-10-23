@@ -7,6 +7,7 @@
 // Filters are kept per tab in S.tdsFl, sorting in S.tdsSort; the row opened under a table in S.chOpen, S.tdsOpen,
 // S.q24Open. Changes go through tdsFilter, tdsSortBy, tdsToggle, tdsAlloc, challanAdd, … (src/js/27).
 import { useState } from "react";
+import ListTable from "../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -41,12 +42,8 @@ function Tabs({ tabs }) {
   );
 }
 
-// a column heading that sorts the table; a second click turns the order round
-function SortHead({ tab, k, label, cls }) {
-  const s = (S.tdsSort || {})[tab] || {}, on = s.k === k;
-  return <th className={cls}><button className="linkbtn" style={{ font: "inherit", color: "inherit", textTransform: "inherit", letterSpacing: "inherit" }} onClick={() => tdsSortBy(tab, k)}>
-    {label}{on ? (s.d < 0 ? " ↓" : " ↑") : ""}</button></th>;
-}
+// the shared list table (spec K6, round 2) with the return's own order (S.tdsSort, tdsSortBy): same headers and arrows
+const via = (tab) => { const s = (S.tdsSort || {})[tab] || {}; return { state: s.k ? { k: s.k, dir: s.d < 0 ? "desc" : "asc" } : null, by: (k) => tdsSortBy(tab, k) }; };
 const Tile = ({ label, value, sub, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{value}</b><small>{sub}</small></div>;
 const Toggle = ({ which, k, children }) => <button className="linkbtn" onClick={() => tdsToggle(which, k)}>{S[which] === k ? "▾ " : "▸ "}{children}</button>;
 
@@ -67,16 +64,20 @@ function PayRow({ p }) {
 function NewChallan() {
   const blank = { bsr: "", serial: "", date: "", tax: "", interest: "" }, [c, setC] = useState(blank);
   const box = (k, props) => <input value={c[k]} onChange={(ev) => setC({ ...c, [k]: ev.target.value })} {...props} />;
-  return <tr>
-    <td></td><td>{box("bsr", { type: "text", placeholder: "0240020", "aria-label": "New challan: BSR code", style: { width: 100 } })}</td>
+  return <tr className="lt-new">
+    <td></td><td>{box("date", { type: "date", "aria-label": "New challan: date" })}</td>
+    <td>{box("bsr", { type: "text", placeholder: "0240020", "aria-label": "New challan: BSR code", style: { width: 100 } })}</td>
     <td>{box("serial", { type: "text", placeholder: "00979", "aria-label": "New challan: serial", style: { width: 90 } })}</td>
-    <td>{box("date", { type: "date", "aria-label": "New challan: date" })}</td><td></td>
     <td className="n">{box("tax", { type: "text", inputMode: "decimal", placeholder: "tax", "aria-label": "New challan: tax", style: { width: 110, textAlign: "right" } })}</td>
+    <td colSpan={2}></td>
     <td className="n">{box("interest", { type: "text", inputMode: "decimal", placeholder: "interest", "aria-label": "New challan: interest", style: { width: 100, textAlign: "right" } })}</td>
     <td colSpan={3}></td>
     <td className="ac"><button className="btn small" onClick={() => { if (challanAdd(c)) setC(blank); }}>Add</button></td>
   </tr>;
 }
+
+// a challan's use, in words (the status of the challans list)
+const chState = (c, use) => { const u = use[c.id] || 0, l = r2(num(c.tax) - u); return l < -0.5 ? "Used more than paid" : u <= 0 ? "Not used" : Math.abs(l) <= 0.5 ? "Fully used" : "Part used"; };
 
 function Challans({ fy, q, ch, allRows, allCh, use, title }) {
   const f = (S.tdsFl || {}).challans || {}, qq = String(f.q || "").toLowerCase(), left = (c) => r2(num(c.tax) - (use[c.id] || 0));
@@ -88,46 +89,42 @@ function Challans({ fy, q, ch, allRows, allCh, use, title }) {
     if (f.state === "over" && left(c) >= -0.5) return false;
     if (f.month && TDS.ymd(c.date).slice(0, 6) !== f.month) return false;
     return true;
-  }), (c, k) => k === "date" ? TDS.ymd(c.date) : k === "tax" ? num(c.tax) : k === "left" ? num(c.tax) - (use[c.id] || 0) : k === "used" ? (use[c.id] || 0) : String(c[k] || ""));
+  }), (c, k) => k === "state" ? chState(c, use) : k === "int" ? num(c.interest) : k === "date" ? TDS.ymd(c.date) : k === "tax" ? num(c.tax) : k === "left" ? num(c.tax) - (use[c.id] || 0) : k === "used" ? (use[c.id] || 0) : String(c[k] || ""));
   const pays = TDS.paymentsFromBooks().filter((p) => TDS.fyOf(p.date) === fy && TDS.qOf(p.date) === q)
     .filter((p) => !allCh.some((c) => TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - p.tax) < 1));
-  const tot = (fn) => money(shown.reduce((a, c) => a + fn(c), 0));
   return <>
     {pays.length > 0 && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Paid to the government, from the books</h3>
       <p className="note">TDS payment vouchers in Tally for this quarter. Add the BSR code and challan serial number and each becomes a challan.</p>
-      <div className="bk-tablewrap"><table className="bk-table">
+      <div className="bk-tablewrap"><table className="bk-table" data-statement="">
         <thead><tr><th>Date</th><th className="n">Tax</th><th>Sections</th><th>Voucher</th><th>BSR code</th><th>Serial</th><th className="ac"></th></tr></thead>
         <tbody>{pays.map((p) => <PayRow key={p.vid} p={p} />)}</tbody>
       </table></div></section>}
     <FilterBar tab="challans" placeholder="Find a BSR code or serial" table="tdsChTable" title={title + " challans"} excel="tdsExcel" count={shown.length + " of " + ch.length + " challans"}
       selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) },
         { key: "state", label: "Use", options: [["", "Used: any"], ["unused", "Not used"], ["part", "Part used"], ["full", "Fully used"], ["over", "Used more than paid"]] }]} />
-    <div className="bk-tablewrap"><table className="bk-table" id="tdsChTable">
-      <thead><tr><th className="n">Sl.</th><SortHead tab="challans" k="bsr" label="BSR code" /><SortHead tab="challans" k="serial" label="Serial" /><SortHead tab="challans" k="date" label="Deposited" cls="dt" />
-        <th>Sections</th><SortHead tab="challans" k="tax" label="Tax" cls="n" /><th className="n">Interest</th><SortHead tab="challans" k="used" label="Used" cls="n" /><SortHead tab="challans" k="left" label="Left" cls="n" />
-        <th className="n">Deductions</th><th className="ac"></th></tr></thead>
-      <tbody>
-        {shown.map((c, i) => {
-          const mine = allRows.filter((r) => r.challan === c.id), l = left(c), open = S.chOpen === c.id;
-          const secs = Array.from(new Set(mine.map((r) => r.section))).join(", ") || c.section || "—";
-          return [<tr key={c.id}>
-            <td className="n">{i + 1}</td><td><Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle></td><td>{c.serial}</td><td>{day(c.date)}</td><td>{secs}</td>
-            <td className="n">{money(c.tax)}</td><td className="n">{money(c.interest)}</td><td className="n">{money(use[c.id] || 0)}</td>
-            <td className={"n" + (l < -0.5 ? " bad" : "")}>{money(l)}</td>
-            <td className="n"><button className="linkbtn" onClick={() => tdsToggle("chOpen", c.id)}>{mine.length}</button></td>
-            <td className="ac"><button className="icon danger" title="Remove this challan" aria-label="Remove this challan" onClick={() => challanDelete(c.id)}>✕</button></td>
-          </tr>, open && <tr key={c.id + ":open"}><td colSpan={11} style={{ background: "var(--paper)", padding: 0 }}>
-            {mine.length ? <table className="bk-table" style={{ margin: 0 }}>
-              <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
-              <tbody>{mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td>{r.section}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
-            </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>}
-          </td></tr>];
-        })}
-        <tr><td></td><td colSpan={4}><b>Total</b></td><td className="n"><b>{tot((c) => num(c.tax))}</b></td><td className="n">{tot((c) => num(c.interest))}</td>
-          <td className="n">{tot((c) => use[c.id] || 0)}</td><td className="n">{tot((c) => num(c.tax) - (use[c.id] || 0))}</td><td></td><td></td></tr>
-        <NewChallan />
-      </tbody>
-    </table>{!shown.length && ch.length > 0 && <Empty>No challan matches these filters.</Empty>}</div>
+    {/* the one list table (spec K6): deposited (date), BSR code and serial (number), tax (amount), use (status), then the rest */}
+    <ListTable name="tdsChallans" id="tdsChTable" rows={shown} rowKey={(c) => c.id} unit={["challan", "challans"]} of={ch.length} sortVia={via("challans")}
+      empty={ch.length ? "No challan matches these filters. Use Clear filters above to see all." : null}
+      tail={<NewChallan />} prep={(c) => ({ mine: allRows.filter((r) => r.challan === c.id), l: left(c) })}
+      after={(c, p) => S.chOpen === c.id && (p.mine.length ? <table className="bk-table" style={{ margin: 0 }} data-statement="">
+          <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid or credited</th><th className="n">TDS</th></tr></thead>
+          <tbody>{p.mine.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td>{r.section}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
+        </table> : <p className="note" style={{ margin: 8 }}>No deduction is against this challan yet.</p>)}
+      cols={[
+        { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (c, p, i) => i + 1 },
+        { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
+        { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => <Toggle which="chOpen" k={c.id}>{c.bsr}</Toggle> },
+        { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
+        { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
+        { k: "state", role: "status", label: "Use", v: (c, p) => chState(c, use), cell: (c) => { const w = chState(c, use); return <span className={"tag " + (/more than/.test(w) ? "bad" : /Not used|Part/.test(w) ? "warn" : "ok")}>{w}</span>; } },
+        { k: "secs", label: "Sections", cell: (c, p) => Array.from(new Set(p.mine.map((r) => r.section))).join(", ") || c.section || "—" },
+        { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
+        { k: "used", label: "Used", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
+        { k: "left", label: "Left", cls: "n", v: (c) => left(c), sum: true, fmt: money, td: (c, p) => ({ className: p.l < -0.5 ? "bad" : undefined }), cell: (c, p) => money(p.l) },
+        { k: "n", label: "Deductions", cls: "n", cell: (c, p) => <button className="linkbtn" onClick={() => tdsToggle("chOpen", c.id)}>{p.mine.length}</button> },
+        { k: "ac", role: "act", cls: "ac", cell: (c) => <button className="icon danger" title="Remove this challan" aria-label="Remove this challan" onClick={() => challanDelete(c.id)}>✕</button> },
+      ]} />
+    {!shown.length && !ch.length && <table className="bk-table" id="tdsChTable" data-statement=""><tbody><NewChallan /></tbody></table>}
   </>;
 }
 
@@ -150,61 +147,73 @@ function Deductees({ rows, deductees, issueOf, pass, common, chOpts, title }) {
     p.rows.push(r);
   });
   const list = tdsSorted("deductees", Object.values(by).sort((a, c) => c.tds - a.tds), (p, k) => k === "secs" ? Array.from(p.secs).join(",") : p[k]);
-  const sum = (k) => list.reduce((a, p) => a + p[k], 0);
   return <>
     <FilterBar tab="deductees" placeholder="Find a deductee, PAN or voucher" table="tdsDeTable" title={title + " deductees"} excel="tdsExcel" count={list.length + " of " + deductees + " deductees"}
       selects={common.concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
-    <div className="bk-tablewrap"><table className="bk-table" id="tdsDeTable">
-      <thead><tr><SortHead tab="deductees" k="party" label="Deductee" /><SortHead tab="deductees" k="pan" label="PAN" /><th>Code</th><SortHead tab="deductees" k="secs" label="Sections" />
-        <SortHead tab="deductees" k="n" label="Deductions" cls="n" /><SortHead tab="deductees" k="paid" label="Paid or credited" cls="n" /><SortHead tab="deductees" k="tds" label="TDS" cls="n" /><SortHead tab="deductees" k="unallocated" label="Not against a challan" cls="n" /></tr></thead>
-      <tbody>
-        {list.map((p) => [<tr key={p.key}>
-          <td><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</td>
-          <td><Pan pan={p.pan} /></td><td>{Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—"}</td><td>{Array.from(p.secs).join(", ")}</td>
-          <td className="n"><button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button></td><td className="n">{money(p.paid)}</td><td className="n"><b>{money(p.tds)}</b></td>
-          <td className={"n" + (p.unallocated ? " bad" : "")}>{p.unallocated ? money(p.unallocated) : "—"}</td>
-        </tr>, S.tdsOpen === p.key && <tr key={p.key + ":open"}><td colSpan={8} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
+    {/* the one list table (spec K6): deductee (party), paid and TDS (amounts), then the rest */}
+    <ListTable name="tdsDeductees" id="tdsDeTable" rows={list} rowKey={(p) => p.key} unit={["deductee", "deductees"]} of={deductees} sortVia={via("deductees")}
+      empty="No deductee matches these filters. Use Clear filters above to see all."
+      after={(p) => S.tdsOpen === p.key && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Date</th><th>Voucher</th><th>Section</th><th className="n">Paid or credited</th><th className="n">Rate</th><th className="n">TDS</th><th>Challan</th></tr></thead>
           <tbody>{p.rows.map((r) => <tr key={r.id}><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td>{r.section}</td><td className="n">{money(r.paid)}</td>
             <td className="n"><Rate r={r} issue={issueOf[r.id]} /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td></tr>)}</tbody>
-        </table></td></tr>])}
-        <tr><td colSpan={4}><b>Total</b></td><td className="n">{sum("n")}</td><td className="n">{money(sum("paid"))}</td><td className="n"><b>{money(sum("tds"))}</b></td><td className="n">{money(sum("unallocated"))}</td></tr>
-      </tbody>
-    </table>{!list.length && <Empty>No deductee matches these filters.</Empty>}</div>
+        </table>}
+      cols={[
+        { k: "party", role: "party", label: "Deductee", v: (p) => p.party, cell: (p) => <><Toggle which="tdsOpen" k={p.key}>{p.party}</Toggle>{p.issues > 0 && <> <span className="tag warn">{p.issues} rate</span></>}</> },
+        { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (p) => p.paid, fmt: money, cell: (p) => money(p.paid) },
+        { k: "tds", role: "amount", label: "TDS", cls: "n", v: (p) => p.tds, fmt: money, cell: (p) => <b>{money(p.tds)}</b> },
+        { k: "pan", label: "PAN", v: (p) => p.pan || "", cell: (p) => <Pan pan={p.pan} /> },
+        { k: "code", label: "Code", cell: (p) => (Certs.validPan(p.pan) ? (/^[A-Z]{3}C/.test(p.pan) ? "01 company" : "02 other") : "—") },
+        { k: "secs", label: "Sections", v: (p) => Array.from(p.secs).join(","), cell: (p) => Array.from(p.secs).join(", ") },
+        { k: "n", label: "Deductions", cls: "n", v: (p) => p.n, sum: true, fmt: String, cell: (p) => <button className="linkbtn" onClick={() => tdsToggle("tdsOpen", p.key)}>{p.n}</button> },
+        { k: "unallocated", label: "Not against a challan", cls: "n", v: (p) => p.unallocated, sum: true, fmt: money, td: (p) => ({ className: p.unallocated ? "bad" : undefined }), cell: (p) => (p.unallocated ? money(p.unallocated) : "—") },
+      ]} />
   </>;
 }
 
 function Deductions({ fy, q, rows, issueOf, pass, common, chOpts, title }) {
   const f = (S.tdsFl || {}).deductions || {};
   const shown = tdsSorted("deductions", rows.filter((r) => pass(r, f)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
-  const LIMIT = 500, page = shown.slice(0, LIMIT), sum = (k) => money(shown.reduce((a, r) => a + r[k], 0));
+  const LIMIT = 500, sum = (k) => money(shown.reduce((a, r) => a + r[k], 0));
   return <>
     <FilterBar tab="deductions" placeholder="Find a deductee, PAN, voucher or ledger" table="tdsDnTable" title={title + " deductions"} excel="tdsExcel"
       count={shown.length + " of " + rows.length + " deductions · TDS " + sum("tds")}
       selects={[{ key: "month", label: "Month", options: [["", "Every month"]].concat(tdsMonths(fy, q).map((m) => [m, monthName(m)])) }].concat(common)
         .concat([{ key: "rate", label: "Rate", options: [["", "Rate: any"], ["q", "Rate questions"], ["ok", "Rate as expected"]] }])} />
-    <div className="bk-tablewrap"><table className="bk-table" id="tdsDnTable">
-      <thead><tr><th className="n">Sl.</th><SortHead tab="deductions" k="date" label="Date" cls="dt" /><SortHead tab="deductions" k="voucher" label="Voucher" /><SortHead tab="deductions" k="party" label="Deductee" />
-        <SortHead tab="deductions" k="pan" label="PAN" /><SortHead tab="deductions" k="section" label="Section" /><SortHead tab="deductions" k="paid" label="Paid or credited" cls="n" />
-        <SortHead tab="deductions" k="rate" label="Rate" cls="n" /><SortHead tab="deductions" k="tds" label="TDS" cls="n" /><SortHead tab="deductions" k="challan" label="Challan" /></tr></thead>
-      <tbody>
-        {page.map((r, i) => <tr key={r.id}><td className="n">{i + 1}</td><td>{day(r.date)}</td><td>{r.voucher || ""}</td><td>{r.party}</td><td><Pan pan={r.pan} /></td><td>{r.section}</td>
-          <td className="n">{money(r.paid)}</td><td className="n"><Rate r={r} issue={issueOf[r.id]} why /></td><td className="n">{money(r.tds)}</td><td><ChallanPick r={r} chOpts={chOpts} /></td></tr>)}
-        <tr><td></td><td colSpan={5}><b>Total</b></td><td className="n">{sum("paid")}</td><td></td><td className="n"><b>{sum("tds")}</b></td><td></td></tr>
-      </tbody>
-    </table>
-    {shown.length > LIMIT && <p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
-    {!shown.length && <Empty>No deduction matches these filters.</Empty>}</div>
+    {/* the one list table (spec K6): date, voucher (number), deductee (party), paid and TDS (amounts), challan (status), then the rest */}
+    <ListTable name="tdsDeductions" id="tdsDnTable" rows={shown} rowKey={(r) => r.id} unit={["deduction", "deductions"]} of={rows.length} sortVia={via("deductions")} limit={LIMIT}
+      more={<p className="note">The first {LIMIT} are shown. Narrow them with the filters, or download the Excel for all {shown.length}.</p>}
+      empty="No deduction matches these filters. Use Clear filters above to see all."
+      cols={[
+        { k: "sl", role: "row", label: "Sl.", cls: "n", cell: (r, p, i) => i + 1 },
+        { k: "date", role: "date", label: "Date", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => day(r.date) },
+        { k: "voucher", role: "number", label: "Voucher", v: (r) => r.voucher || "", cell: (r) => r.voucher || "" },
+        { k: "party", role: "party", label: "Deductee", v: (r) => r.party, cell: (r) => r.party },
+        { k: "paid", role: "amount", label: "Paid or credited", cls: "n", v: (r) => r.paid, fmt: money, cell: (r) => money(r.paid) },
+        { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => r.tds, fmt: money, cell: (r) => money(r.tds) },
+        { k: "challan", role: "status", label: "Challan", v: (r) => (r.challan ? 1 : 0), cell: (r) => <ChallanPick r={r} chOpts={chOpts} /> },
+        { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => <Pan pan={r.pan} /> },
+        { k: "section", label: "Section", v: (r) => r.section || "", cell: (r) => r.section },
+        { k: "rate", label: "Rate", cls: "n", v: (r) => (r.rate == null ? "" : r.rate), cell: (r) => <Rate r={r} issue={issueOf[r.id]} why /> },
+      ]} />
   </>;
 }
 
 // the rate questions table, shared by the return's checks and the certificates page
 function RateQuestions({ list }) {
-  return <div className="bk-tablewrap"><table className="bk-table">
-    <thead><tr><th className="dt">Date</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Paid</th><th className="n">Rate used</th><th className="n">Rate that applies</th><th>Why</th><th className="n">Short or excess</th></tr></thead>
-    <tbody>{list.map((x, i) => <tr key={i}><td>{day(x.row.date)}</td><td>{x.row.party}</td><td><Pan pan={x.row.pan} /></td><td>{x.row.section}</td><td className="n">{money(x.row.paid)}</td>
-      <td className="n">{x.row.rate == null ? "" : x.row.rate + "%"}</td><td className="n">{x.expected}%</td><td>{x.why}</td><td className={"n" + (x.short > 0 ? " bad" : "")}>{money(x.short)}</td></tr>)}</tbody>
-  </table></div>;
+  // the one list table (spec K6): date, deductee (party), paid (amount), then the rest
+  return <ListTable name="tdsRateQ" rows={list} rowKey={(x, i) => x.row.id || i} unit={["deduction", "deductions"]} empty={null}
+    cols={[
+      { k: "date", role: "date", label: "Date", cls: "dt", v: (x) => TDS.ymd(x.row.date), cell: (x) => day(x.row.date) },
+      { k: "party", role: "party", label: "Deductee", v: (x) => x.row.party, cell: (x) => x.row.party },
+      { k: "paid", role: "amount", label: "Paid", cls: "n", v: (x) => num(x.row.paid), fmt: money, cell: (x) => money(x.row.paid) },
+      { k: "pan", label: "PAN", v: (x) => x.row.pan || "", cell: (x) => <Pan pan={x.row.pan} /> },
+      { k: "sec", label: "Section", v: (x) => x.row.section || "", cell: (x) => x.row.section },
+      { k: "used", label: "Rate used", cls: "n", v: (x) => (x.row.rate == null ? "" : x.row.rate), cell: (x) => (x.row.rate == null ? "" : x.row.rate + "%") },
+      { k: "exp", label: "Rate that applies", cls: "n", v: (x) => x.expected, cell: (x) => x.expected + "%" },
+      { k: "why", label: "Why", cell: (x) => x.why },
+      { k: "short", label: "Short or excess", cls: "n", v: (x) => num(x.short), sum: true, fmt: money, td: (x) => ({ className: x.short > 0 ? "bad" : undefined }), cell: (x) => money(x.short) },
+    ]} />;
 }
 
 function Checks26({ fy, q, int1A, fee, issues }) {
@@ -219,30 +228,77 @@ function Checks26({ fy, q, int1A, fee, issues }) {
       <div className="dash-row"><span>Interest under 201(1A), paid after the due date</span><b>{money(total)}</b></div>
       <div className="dash-row"><span>Late filing fee under 234E, if filed today</span><b>{money(fee && fee.days > 0 ? fee.fee : 0)}</b></div>
       {fee && fee.days > 0 && <p className="note">{fee.days} day{fee.days === 1 ? "" : "s"} past {day(fee.due)} at 200 a day, capped at the TDS of the quarter ({money(fee.cap)}).</p>}
-      {int1A.length ? <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th className="dt">Deducted</th><th>Deductee</th><th className="n">TDS</th><th>Due</th><th>Paid</th><th className="n">Months</th><th className="n">Interest</th></tr></thead>
-        <tbody>{int1A.slice(0, 100).map((x, i) => <tr key={i}><td>{day(x.row.date)}</td><td>{x.row.party}</td><td className="n">{money(x.row.tds)}</td><td>{day(x.due)}</td><td>{day(x.challan.date)}</td>
-          <td className="n">{x.months}</td><td className="n bad">{money(x.amount)}</td></tr>)}</tbody>
-      </table></div> : <p className="note">No deduction was paid late.</p>}
+      {int1A.length ? <ListTable name="tdsLate" rows={int1A} rowKey={(x, i) => (x.row.id || "") + ":" + i} unit={["late deduction", "late deductions"]} limit={100}
+        cols={[
+          { k: "date", role: "date", label: "Deducted", cls: "dt", v: (x) => TDS.ymd(x.row.date), cell: (x) => day(x.row.date) },
+          { k: "party", role: "party", label: "Deductee", v: (x) => x.row.party, cell: (x) => x.row.party },
+          { k: "int", role: "amount", label: "Interest", cls: "n", v: (x) => num(x.amount), fmt: money, td: () => ({ className: "bad" }), cell: (x) => money(x.amount) },
+          { k: "tds", label: "TDS", cls: "n", v: (x) => num(x.row.tds), sum: true, fmt: money, cell: (x) => money(x.row.tds) },
+          { k: "due", label: "Due", v: (x) => TDS.ymd(x.due), cell: (x) => day(x.due) },
+          { k: "paid", label: "Paid", v: (x) => TDS.ymd(x.challan.date), cell: (x) => day(x.challan.date) },
+          { k: "m", label: "Months", cls: "n", v: (x) => x.months, cell: (x) => x.months },
+        ]} /> : <p className="note">No deduction was paid late.</p>}
     </section>
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Rate questions</h3>{issues.length ? <RateQuestions list={issues} /> : <p className="note">Every deduction matches the rate that applies.</p>}</section>
-    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table">
+    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
       <thead><tr><th>Section</th><th className="n">Deductions</th><th className="n">Paid or credited</th><th className="n">TDS</th><th className="n">Not against a challan</th></tr></thead>
       <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
     </table></div></section>
   </>;
 }
 
-export function Return26({ b, allRows }) {
+// 27Q and 27EQ: what is missing before the file can be made, the non-resident's details, and the FVU's answer
+function NrInfo({ party }) {
+  const i = TDS26Q.nrInfo(party);
+  const f = (k, label, w = 140) => <label className="nr" style={{ display: "inline-flex", flexDirection: "column", marginRight: 8 }}>{label}
+    <input type="text" defaultValue={i[k] || ""} aria-label={label + ": " + party} style={{ width: w }} onBlur={(ev) => tdsNrSet(party, k, ev.target.value)} /></label>;
+  return <tr data-nr={party}><td>{party}</td><td colSpan={2}>
+    {f("country", "Country code", 60)}{f("nature", "Nature code", 60)}{f("ack15ca", "15CA acknowledgement")}{f("tin", "Tax ID in the country")}
+    {f("email", "Email", 180)}{f("phone", "Phone")}{f("address", "Address", 260)}
+    <label className="nr"><input type="checkbox" defaultChecked={!!i.dtaa} onChange={(ev) => tdsNrSet(party, "dtaa", ev.target.checked)} /> Treaty (DTAA) rate</label>{" "}
+    <label className="nr"><input type="checkbox" defaultChecked={!!i.trc} onChange={(ev) => tdsNrSet(party, "trc", ev.target.checked)} /> Tax residency certificate and Form 10F on file</label>
+  </td></tr>;
+}
+function ChecksOther({ fy, q, form, other, rows }) {
+  const fr = S.fvuResult, sum = TDS.summary(fy, q, form);
+  const parties = Array.from(new Set(rows.map((r) => r.party)));
+  return <>
+    {fr && fr.form === form && <section className={"bk-alert " + (fr.ok ? "" : "bad")}><b>{fr.ok ? "The FVU accepted the " + form + " file." : "The FVU found problems in the " + form + " file."}</b>
+      {fr.errors && <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 220, overflow: "auto", margin: "8px 0 0" }}>{String(fr.errors).slice(0, 4000)}</pre>}
+      <div className="row" style={{ marginTop: 8 }}><button className="linkbtn" onClick={() => doAct("fvuClose")}>Hide this</button></div></section>}
+    <section className="dash-card" style={{ marginBottom: 12 }} data-checks={form}><h3>Before the file is made</h3>
+      {other.length ? <ul>{other.map((x, i) => <li key={i}>{x.party ? <><b>{x.party}</b>: missing {x.missing.join(", ")}</> : x.why}</li>)}</ul>
+        : <p className="note">Nothing is missing.</p>}
+    </section>
+    {form === "27Q" && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Non-resident deductees</h3>
+      <p className="note">The 27Q file needs these for each deductee. The country and nature codes are the ones in the return's own lists.</p>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>Deductee</th><th colSpan={2}>Details</th></tr></thead>
+        <tbody>{parties.map((p) => <NrInfo key={p} party={p} />)}</tbody></table></div></section>}
+    {form === "27EQ" && <section className="dash-card" style={{ marginBottom: 12 }}><h3>Collection codes</h3>
+      <p className="note">Each TCS ledger needs the 27EQ collection code of what was sold.</p>
+      <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>TCS ledger</th><th>Collection code</th></tr></thead>
+        <tbody>{Array.from(new Set(rows.map((r) => r.ledger))).map((l) => <tr key={l}><td>{l}</td><td>
+          <select aria-label={"Collection code: " + l} value={TCS27EQ.codeOf(l)} onChange={(ev) => tdsTcsCode(l, ev.target.value)}>
+            <option value="">Choose…</option>{TCS27EQ.CODES.map(([c, t]) => <option key={c} value={c}>{c} · {t}</option>)}</select></td></tr>)}</tbody></table></div></section>}
+    <section className="dash-card"><h3>By section</h3><div className="bk-tablewrap"><table className="bk-table" data-statement="">
+      <thead><tr><th>Section</th><th className="n">{form === "27EQ" ? "Collections" : "Deductions"}</th><th className="n">Paid or received</th><th className="n">{form === "27EQ" ? "TCS" : "TDS"}</th><th className="n">Not against a challan</th></tr></thead>
+      <tbody>{sum.map((s) => <tr key={s.section}><td>{s.section}</td><td className="n">{s.count}</td><td className="n">{money(s.paid)}</td><td className="n">{money(s.tds)}</td><td className="n">{money(s.unallocated)}</td></tr>)}</tbody>
+    </table></div></section>
+  </>;
+}
+
+export function Return26({ b, allRows, form = "26Q" }) {
   const fy = S.tdsFy, q = S.tdsQ, rows = allRows.filter((r) => r.fy === fy && r.q === q);
   const ch = tdsQuarterChallans(fy, q, rows), use = TDS.challanUse(), allCh = TDS.challans();
-  const issues = Certs.issues(fy, q), issueOf = {};
+  const issues = form === "26Q" ? Certs.issues(fy, q) : [], issueOf = {};
   issues.forEach((x) => { issueOf[x.row.id] = x; });
   const deductees = new Set(rows.map((r) => (r.pan && Certs.validPan(r.pan) ? r.pan : normName(r.party)))).size;
   if (!["challans", "deductees", "deductions", "checks"].includes(S.tdsTab)) S.tdsTab = "challans";
   const tds = r2(rows.reduce((a, r) => a + r.tds, 0)), un = rows.filter((r) => !r.challan), chTax = r2(ch.reduce((a, c) => a + num(c.tax), 0));
-  const int1A = TDS.interest(fy, q), fee = TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]), noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
-  const title = CO().name + " 26Q " + q + " " + fy;
+  const int1A = form === "26Q" ? TDS.interest(fy, q) : [], fee = form === "26Q" ? TDS.lateFee(fy, q, (b.filedOn || {})[fy + q]) : null, noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
+  const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
+  const title = CO().name + " " + fname + " " + q + " " + fy;
+  const other = form === "27Q" ? TDS26Q.nrChecks(fy, q) : form === "27EQ" ? TCS27EQ.checks(fy, q) : [];
   const chOpts = ch.concat(allCh.filter((c) => !ch.includes(c) && TDS.fyOf(c.date) === fy));
   const secs = Array.from(new Set(rows.map((r) => r.section))).sort();
   const common = [{ key: "section", label: "Section", options: [["", "Every section"]].concat(secs.map((x) => [x, x])) },
@@ -261,26 +317,27 @@ export function Return26({ b, allRows }) {
     if (f.rate === "ok" && issueOf[r.id]) return false;
     return true;
   };
-  const checksN = int1A.length || (fee && fee.days > 0) || issues.length ? int1A.length + issues.length + (fee && fee.days > 0 ? 1 : 0) : null;
+  const checksN = int1A.length || (fee && fee.days > 0) || issues.length || other.length ? int1A.length + issues.length + other.length + (fee && fee.days > 0 ? 1 : 0) : null;
   const common_ = { rows, issueOf, pass, common, chOpts, title };
   return <>
     <div className="revfilter">
       <button className="btn small" onClick={() => doAct("tdsAuto")}>Put them against challans</button>
-      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the 26Q working</button>
-      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the 26Q text file</button>
-      <button className="btn small primary" disabled={!Bridge.on()} title={Bridge.on() ? undefined : "Needs the Tally Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
+      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download the {fname} working</button>
+      <button className="btn small" onClick={() => doAct("tdsTxt")}>Download the {fname} text file{draft ? " (draft)" : ""}</button>
+      <button className="btn small primary" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check it with the FVU</button>
     </div>
+    {draft && <section className="bk-alert" data-draft={TDS.formNo(form, fy)}><b>{fname} (was {form}): draft – not yet validated.</b> From 1 April 2026 the return is {fname} under the Income-tax Act, 2025, with new payment codes and file layout. FinCom’s file is not yet matched to Protean’s file format or run through their FVU: do not file it.</section>}
     <div className="dash-tiles">
-      <Tile label="TDS deducted" value={money(tds)} sub={rows.length + " deductions, " + deductees + " deductees"} />
+      <Tile label={form === "27EQ" ? "TCS collected" : "TDS deducted"} value={money(tds)} sub={rows.length + (form === "27EQ" ? " collections, " + deductees + " buyers" : " deductions, " + deductees + " deductees")} />
       <Tile label="Challans" value={money(chTax)} sub={ch.length + " challan" + (ch.length === 1 ? "" : "s")} />
       <Tile label="Not against a challan" value={money(un.reduce((a, r) => a + r.tds, 0))} sub={un.length + " deductions"} warn={un.length > 0} />
-      <Tile label="To look at" value={issues.length + noPan} sub={noPan + " without PAN, " + issues.length + " rate questions"} warn={issues.length > 0 || noPan > 0} />
+      <Tile label="To look at" value={issues.length + noPan + other.length} sub={noPan + " without PAN, " + (form === "26Q" ? issues.length + " rate questions" : other.length + " details missing")} warn={issues.length > 0 || noPan > 0 || other.length > 0} />
     </div>
     <Tabs tabs={[["challans", "Challans", ch.length], ["deductees", "Deductees", deductees], ["deductions", "Deductions", rows.length], ["checks", "Interest, late fee and checks", checksN]]} />
     {S.tdsTab === "challans" ? <Challans fy={fy} q={q} ch={ch} allRows={allRows} allCh={allCh} use={use} title={title} />
       : S.tdsTab === "deductees" ? <Deductees deductees={deductees} {...common_} />
       : S.tdsTab === "deductions" ? <Deductions fy={fy} q={q} {...common_} />
-      : <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} />}
+      : form === "26Q" ? <Checks26 fy={fy} q={q} int1A={int1A} fee={fee} issues={issues} /> : <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />}
   </>;
 }
 
@@ -290,23 +347,23 @@ function Employees({ fy, q, a1 }) {
   const f = (S.tdsFl || {}).employees || {}, qq = String(f.q || "").toLowerCase();
   const shown = tdsSorted("employees", a1.filter((e) => (!qq || (e.name + " " + e.pan).toLowerCase().includes(qq)) &&
     (f.pan !== "no" || !Certs.validPan(e.pan)) && (f.pan !== "yes" || Certs.validPan(e.pan)) && (f.tds !== "yes" || e.tds > 0) && (f.tds !== "no" || !e.tds)), (e, k) => e[k]);
-  const sum = (k) => shown.reduce((a, e) => a + e[k], 0);
   return <>
     <FilterBar tab="employees" placeholder="Find an employee or PAN" table="q24Table" title={CO().name + " 24Q " + q + " " + fy} excel="q24Excel" count={shown.length + " of " + a1.length + " employees"}
       selects={[{ key: "pan", label: "PAN", options: [["", "PAN: any"], ["no", "No valid PAN"], ["yes", "Has a PAN"]] }, { key: "tds", label: "TDS", options: [["", "TDS: any"], ["yes", "TDS deducted"], ["no", "No TDS"]] }]} />
-    <div className="bk-tablewrap"><table className="bk-table" id="q24Table">
-      <thead><tr><SortHead tab="employees" k="name" label="Employee" /><SortHead tab="employees" k="pan" label="PAN" /><SortHead tab="employees" k="months" label="Months" cls="n" />
-        <SortHead tab="employees" k="paid" label="Paid" cls="n" /><SortHead tab="employees" k="tds" label="TDS" cls="n" /></tr></thead>
-      <tbody>
-        {shown.map((e) => { const key = e.pan || e.name; return [<tr key={key}>
-          <td><Toggle which="q24Open" k={key}>{e.name}</Toggle></td><td><Pan pan={e.pan} /></td><td className="n">{e.months}</td><td className="n">{money(e.paid)}</td><td className="n"><b>{money(e.tds)}</b></td>
-        </tr>, S.q24Open === key && <tr key={key + ":open"}><td colSpan={5} style={{ background: "var(--paper)", padding: 0 }}><table className="bk-table" style={{ margin: 0 }}>
+    {/* the one list table (spec K6): employee (party), paid and TDS (amounts), then the rest */}
+    <ListTable name="q24Employees" id="q24Table" rows={shown} rowKey={(e) => e.pan || e.name} unit={["employee", "employees"]} of={a1.length} sortVia={via("employees")}
+      empty="No employee matches these filters. Use Clear filters above to see all."
+      after={(e) => S.q24Open === (e.pan || e.name) && <table className="bk-table" style={{ margin: 0 }} data-statement="">
           <thead><tr><th className="dt">Month</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Chapter VI-A</th><th className="n">TDS</th></tr></thead>
           <tbody>{e.rows.map((r, i) => <tr key={i}><td>{fmtDate(r.date)}</td><td className="n">{money(r.gross)}</td><td className="n">{money(r.exempt)}</td><td className="n">{money(r.chapter6)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody>
-        </table></td></tr>]; })}
-        <tr><td><b>Total</b></td><td></td><td className="n">{sum("months")}</td><td className="n">{money(sum("paid"))}</td><td className="n"><b>{money(sum("tds"))}</b></td></tr>
-      </tbody>
-    </table>{!shown.length && <Empty>No employee matches these filters.</Empty>}</div>
+        </table>}
+      cols={[
+        { k: "name", role: "party", label: "Employee", v: (e) => e.name, cell: (e) => <Toggle which="q24Open" k={e.pan || e.name}>{e.name}</Toggle> },
+        { k: "paid", role: "amount", label: "Paid", cls: "n", v: (e) => e.paid, fmt: money, cell: (e) => money(e.paid) },
+        { k: "tds", role: "amount", label: "TDS", cls: "n", v: (e) => e.tds, fmt: money, cell: (e) => <b>{money(e.tds)}</b> },
+        { k: "pan", label: "PAN", v: (e) => e.pan || "", cell: (e) => <Pan pan={e.pan} /> },
+        { k: "months", label: "Months", cls: "n", v: (e) => e.months, sum: true, fmt: String, cell: (e) => e.months },
+      ]} />
   </>;
 }
 
@@ -322,8 +379,14 @@ export function Return24({ b }) {
     const inB = TDS.salaryRows().filter((r) => r.fy === fy && r.q === q);
     return <>{top}
       {inB.length > 0 && <section className="dash-card" style={{ maxWidth: 760, marginBottom: 12 }}><h3>Salary TDS in the books</h3>
-        <div className="bk-tablewrap"><table className="bk-table"><thead><tr><th className="dt">Date</th><th>Employee</th><th>PAN</th><th className="n">Paid</th><th className="n">TDS</th></tr></thead>
-          <tbody>{inB.map((r, i) => <tr key={i}><td>{day(r.date)}</td><td>{r.party}</td><td>{r.pan || "—"}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td></tr>)}</tbody></table></div>
+        <ListTable name="q24InBooks" rows={inB} rowKey={(r, i) => i} unit={["deduction", "deductions"]}
+          cols={[
+            { k: "date", role: "date", label: "Date", cls: "dt", v: (r) => TDS.ymd(r.date), cell: (r) => day(r.date) },
+            { k: "party", role: "party", label: "Employee", v: (r) => r.party, cell: (r) => r.party },
+            { k: "paid", role: "amount", label: "Paid", cls: "n", v: (r) => num(r.paid), fmt: money, cell: (r) => money(r.paid) },
+            { k: "tds", role: "amount", label: "TDS", cls: "n", v: (r) => num(r.tds), fmt: money, cell: (r) => money(r.tds) },
+            { k: "pan", label: "PAN", v: (r) => r.pan || "", cell: (r) => r.pan || "—" },
+          ]} />
         <p className="note">These are kept out of 26Q. For Annexure I and II, bring in the salary sheet.</p></section>}
       <section className="dash-card" style={{ maxWidth: 760 }}><h3>24Q needs the salary sheet</h3>
         <p className="note">Tally credits each employee their net pay and the TDS as one figure, so the books cannot say how much was deducted from whom. Bring in the payroll sheet you already prepare — Excel or CSV — and the columns are found by their names: employee, PAN, month, gross salary, exempt allowances, standard deduction, professional tax, Chapter VI-A, taxable income and TDS.</p></section>
@@ -344,11 +407,18 @@ export function Return24({ b }) {
     {S.tdsTab === "employees" ? <Employees fy={fy} q={q} a1={a1} />
       : S.tdsTab === "challans" ? <>
         <p className="note">Challans deposited in {q}. Salary TDS is paid under section 192; add a challan under 26Q’s Challans tab if it is not here.</p>
-        <div className="bk-tablewrap"><table className="bk-table" id="q24ChTable">
-          <thead><tr><th>BSR code</th><th>Serial</th><th className="dt">Deposited</th><th>Section</th><th className="n">Tax</th><th className="n">Interest</th><th className="n">Used in 26Q</th></tr></thead>
-          <tbody>{ch.map((c) => <tr key={c.id}><td>{c.bsr}</td><td>{c.serial}</td><td>{day(c.date)}</td><td>{c.section || "—"}</td><td className="n">{money(c.tax)}</td><td className="n">{money(c.interest)}</td><td className="n">{money(use[c.id] || 0)}</td></tr>)}</tbody>
-        </table>{!ch.length && <Empty>No challan deposited in this quarter.</Empty>}</div></>
-      : S.tdsTab === "annex2" ? <div className="bk-tablewrap"><table className="bk-table">
+        <ListTable name="q24Challans" id="q24ChTable" rows={ch} rowKey={(c) => c.id} unit={["challan", "challans"]}
+          empty="No challan deposited in this quarter. Add one under 26Q’s Challans tab."
+          cols={[
+            { k: "date", role: "date", label: "Deposited", cls: "dt", v: (c) => TDS.ymd(c.date), cell: (c) => day(c.date) },
+            { k: "bsr", role: "number", label: "BSR code", v: (c) => String(c.bsr || ""), cell: (c) => c.bsr },
+            { k: "serial", role: "number", label: "Serial", v: (c) => String(c.serial || ""), cell: (c) => c.serial },
+            { k: "tax", role: "amount", label: "Tax", cls: "n", v: (c) => num(c.tax), fmt: money, cell: (c) => money(c.tax) },
+            { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => c.section || "—" },
+            { k: "int", label: "Interest", cls: "n", v: (c) => num(c.interest), sum: true, fmt: money, cell: (c) => money(c.interest) },
+            { k: "used", label: "Used in 26Q", cls: "n", v: (c) => use[c.id] || 0, sum: true, fmt: money, cell: (c) => money(use[c.id] || 0) },
+          ]} /></>
+      : S.tdsTab === "annex2" ? <div className="bk-tablewrap"><table className="bk-table" data-statement="">
           <thead><tr><th>Employee</th><th>PAN</th><th>Regime</th><th className="n">Gross</th><th className="n">Exempt</th><th className="n">Standard</th><th className="n">Chapter VI-A</th><th className="n">Taxable</th><th className="n">TDS</th></tr></thead>
           <tbody>{TDS24Q.annexII(fy).map((e) => <tr key={e.pan || e.name}><td>{e.name}</td><td>{e.pan || "—"}</td><td>{e.regime === "N" ? "New" : e.regime === "O" ? "Old" : "—"}</td>
             <td className="n">{money(e.gross)}</td><td className="n">{money(e.exempt)}</td><td className="n">{money(e.standard)}</td><td className="n">{money(e.chapter6)}</td><td className="n">{money(e.taxable)}</td><td className="n">{money(e.tds)}</td></tr>)}</tbody>
@@ -364,13 +434,14 @@ export function Return24({ b }) {
 function NewCert() {
   const blank = { party: "", pan: "", section: "", certNo: "", rate: "", from: "", to: "" }, [c, setC] = useState(blank);
   const box = (k, props) => <input value={c[k]} onChange={(ev) => setC({ ...c, [k]: ev.target.value })} {...props} />;
-  return <tr>
+  return <tr className="lt-new">
+    <td>{box("from", { type: "date", "aria-label": "New certificate: from" })}</td>
+    <td>{box("certNo", { type: "text", placeholder: "certificate no.", "aria-label": "New certificate: number", style: { width: 140 } })}</td>
     <td>{box("party", { type: "text", placeholder: "deductee as named in Tally", "aria-label": "New certificate: deductee", style: { width: 190 } })}</td>
     <td>{box("pan", { type: "text", placeholder: "PAN", "aria-label": "New certificate: PAN", style: { width: 110 } })}</td>
     <td>{box("section", { type: "text", placeholder: "194C", "aria-label": "New certificate: section", style: { width: 80 } })}</td>
-    <td>{box("certNo", { type: "text", placeholder: "certificate no.", "aria-label": "New certificate: number", style: { width: 140 } })}</td>
     <td className="n">{box("rate", { type: "text", inputMode: "decimal", placeholder: "0.5", "aria-label": "New certificate: rate", style: { width: 70, textAlign: "right" } })}</td>
-    <td>{box("from", { type: "date", "aria-label": "New certificate: from" })}</td><td>{box("to", { type: "date", "aria-label": "New certificate: to" })}</td>
+    <td>{box("to", { type: "date", "aria-label": "New certificate: to" })}</td>
     <td className="ac"><button className="btn small" onClick={() => { if (certAdd(c)) setC(blank); }}>Add</button></td>
   </tr>;
 }
@@ -380,15 +451,19 @@ export function CertsPage() {
   return <>
     <section className="dash-card" style={{ marginBottom: 12 }}><h3>Certificates under section 197</h3>
       <p className="note">A deductee with a certificate for a lower rate, or nil. Where a payment is covered by one, that rate is what the system expects instead of the usual rate.</p>
-      <div className="bk-tablewrap"><table className="bk-table">
-        <thead><tr><th>Deductee</th><th>PAN</th><th>Section</th><th>Certificate no.</th><th className="n">Rate</th><th>From</th><th>To</th><th className="ac"></th></tr></thead>
-        <tbody>
-          {list.map((c) => <tr key={c.id}><td>{c.party}</td><td>{c.pan || ""}</td><td>{c.section || "any"}</td><td>{c.certNo || ""}</td><td className="n">{num(c.rate)}%</td>
-            <td>{c.from ? fmtDate(c.from) : ""}</td><td>{c.to ? fmtDate(c.to) : ""}</td>
-            <td className="ac"><button className="icon danger" aria-label="Remove this certificate" onClick={() => certDelete(c.id)}>✕</button></td></tr>)}
-          <NewCert />
-        </tbody>
-      </table></div></section>
+      {list.length ? <ListTable name="tdsCerts" rows={list} rowKey={(c) => c.id} unit={["certificate", "certificates"]} tail={<NewCert />}
+        cols={[
+          { k: "from", role: "date", label: "From", v: (c) => c.from || "", cell: (c) => (c.from ? fmtDate(c.from) : "") },
+          { k: "no", role: "number", label: "Certificate no.", v: (c) => c.certNo || "", cell: (c) => c.certNo || "" },
+          { k: "party", role: "party", label: "Deductee", v: (c) => c.party, cell: (c) => c.party },
+          { k: "pan", label: "PAN", v: (c) => c.pan || "", cell: (c) => c.pan || "" },
+          { k: "sec", label: "Section", v: (c) => c.section || "", cell: (c) => c.section || "any" },
+          { k: "rate", label: "Rate", cls: "n", v: (c) => num(c.rate), cell: (c) => num(c.rate) + "%" },
+          { k: "to", label: "To", v: (c) => c.to || "", cell: (c) => (c.to ? fmtDate(c.to) : "") },
+          { k: "ac", role: "act", cls: "ac", cell: (c) => <button className="icon danger" aria-label="Remove this certificate" onClick={() => certDelete(c.id)}>✕</button> },
+        ]} /> : <><p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>No certificate yet. Type one in below and use Add.</p>
+        <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th>From</th><th>Certificate no.</th><th>Deductee</th><th>PAN</th><th>Section</th><th className="n">Rate</th><th>To</th><th className="ac"></th></tr></thead><tbody><NewCert /></tbody></table></div></>}
+    </section>
     <section className="dash-card"><h3>Rate questions</h3>
       <p className="note">Where the books deducted at a rate different from the one that applies: a certificate, 20% under section 206AA when there is no valid PAN, or the usual rate for the section.</p>
       <RateQuestions list={iss.slice(0, 200)} />{!iss.length && <Empty>Every deduction matches the rate that applies.</Empty>}

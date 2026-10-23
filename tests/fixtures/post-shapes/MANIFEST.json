@@ -1,0 +1,36 @@
+{
+  "builders": [
+    "xesc",
+    "r2",
+    "num",
+    "amt",
+    "toTallyDate",
+    "fmtDate",
+    "toDateObj",
+    "MONTHS",
+    "MONTHS3",
+    "voucherXml",
+    "vchNoFor",
+    "remoteIdFor",
+    "remoteIdTrial",
+    "bankVoucherXml",
+    "ledgerMasterXml",
+    "salesVoucherXml",
+    "customerMasterXml",
+    "GST_STATES",
+    "stateOfGstin",
+    "fpHash",
+    "setAutoNumbering"
+  ],
+  "sha256": "70792b675b0338e0e83a926f498208bd885f1b34c931c22da5311e8e5a551eba",
+  "files": [
+    "purchase-bill.xml",
+    "journal.xml",
+    "debit-note.xml",
+    "sales-invoice.xml",
+    "bank-batch.xml",
+    "new-ledger.xml",
+    "new-customer.xml",
+    "voucher-type-numbering.xml"
+  ]
+}

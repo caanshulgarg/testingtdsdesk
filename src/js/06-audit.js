@@ -13,12 +13,8 @@ const Audit = {
   today(){ const d = new Date(); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0"); },
   fyStart(d){ d = this.ymd(d); const y = num(d.slice(0, 4)), m = num(d.slice(4, 6)); return String(m >= 4 ? y : y - 1) + "0401"; },
   // the group a ledger sits under, up to the top
-  path(l){
-    const b = S.books, under = b.under || {}, groups = b.groups || {}, out = [];
-    let p = under[l];
-    for (let i = 0; p && i < 15; i++){ out.push(p); p = groups[p]; }
-    return out;
-  },
+  // (ledGroupPath, src/js/00: a name with line breaks or entities still finds its group)
+  path(l){ return ledGroupPath(S.books, l); },
   under(l, re){ return this.path(l).some(g => re.test(g)); },
   isCash(l){ const m = Books.ledgerOf(l); return this.under(l, /^cash-in-hand$/i) || (!this.path(l).length && m.kind === "bank" && /\bCASH\b/i.test(l)); },
   isBankL(l){ return this.under(l, /^bank (accounts|od a\/c|occ a\/c)$/i) || (Books.ledgerOf(l).kind === "bank" && !this.isCash(l)); },
@@ -50,10 +46,11 @@ const Audit = {
     };
     if (tb && tb.from <= from && tb.to >= to){
       const open = {}; Object.entries(tb.led || {}).forEach(([n, x]) => { open[n] = num(x.open); });
-      return {ok: true, src: "Tally's balances read on " + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};
+      // the openings from FinCom's copy (FinCom Bridge 2.1.4 asks Tally for no balance), or a trial balance file
+      return {ok: true, src: (tb.src === "copy" ? "the opening balances in FinCom's copy, read on " : "Tally's balances read on ") + fmtDate(String(tb.at).slice(0, 10)), at: d => move(open, tb.from, d)};
     }
     const info = b.ledInfo || {}, starts = Object.values(info).map(x => x.from).filter(Boolean).sort();
-    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger balances are not read yet; read the day book and balances from Tally through the bridge, or bring in the ledger masters"};
+    if (!Object.values(info).some(x => x.ob != null)) return {ok: false, why: "the ledger balances are not read yet; they come with FinCom's copy of the books, or bring in the ledger masters"};
     const begin = starts[0] || "", first = String((b.meta || {}).from || "");
     if (begin && first && first > begin) return {ok: false, why: "the books begin on " + fmtDate(tallyDate(begin)) + " but the day book starts on " + fmtDate(tallyDate(first)) + "; read the day book and balances from Tally through the bridge, or a day book from " + fmtDate(tallyDate(begin))};
     const ob = {}; Object.entries(info).forEach(([n, x]) => { if (x.ob) ob[n] = num(x.ob); });
@@ -170,7 +167,7 @@ const Audit = {
       Object.values(agg).forEach(x => {
         const r = RULE_DEFAULTS.find(z => z.id === x.rule);
         if (!r) return;
-        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
+        const over = r.basis === "single_or_annual" ? (x.max > r.single || x.amt > r.limit) : r.basis === "single" ? x.max >= r.single : r.basis === "always" ? x.amt > 0 : r.basis === "never" ? false : r.basis === "monthly" ? Object.values(x.months).some(m => m > r.limit) : x.amt > r.limit;
         if (!over) return;
         const pan = (S.books.pans || {})[x.party] || "", rate = /^[A-Z]{3}[PH]/.test(pan) ? r.rateInd : r.rateOth;
         const tds = r2(x.amt * rate / 100);
@@ -413,14 +410,16 @@ const Audit = {
     },
     balances(A, V, ctx){
       if (!ctx.bal.ok) return null;
-      const bal = ctx.bal.at(ctx.to), out = [];
-      const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -10000), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 10000);
+      const bal = ctx.bal.at(ctx.to), out = [], P = Parties.position(ctx.to);
+      // every supplier in debit and customer in credit, as Parties.position counts them (review of 02-Oct-2026: only those
+      // above Rs 10,000 were counted, so the audit's totals differed from MIS and Reports)
+      const cr = Object.entries(bal).filter(([l, v]) => A.isCreditor(l) && v < -0.5), dr = Object.entries(bal).filter(([l, v]) => A.isDebtor(l) && v > 0.5);
       if (cr.length) out.push({key: "crDr", area: "bal", sev: "low", clause: "Schedule III", title: "Suppliers with a debit balance", problem: cr.length + " suppliers owe you money.",
-        impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: cr.reduce((s, [, v]) => s - v, 0),
+        impact: "In the balance sheet these are advances to suppliers, not a reduction of trade payables.", amount: P.ok ? P.supAdv : cr.reduce((s, [, v]) => s - v, 0),
         suggestion: "Confirm the balances; show them under short-term loans and advances.", je: [{date: ctx.to, narr: "Suppliers with debit balances shown as advances", lines: [{l: "ADVANCE TO SUPPLIERS", dr: r2(cr.reduce((s, [, v]) => s - v, 0))}].concat(cr.map(([l, v]) => ({l, cr: r2(-v)})))}],
         rows: cr.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: -v, note: "debit balance"}))});
       if (dr.length) out.push({key: "drCr", area: "bal", sev: "low", clause: "Schedule III", title: "Customers with a credit balance", problem: dr.length + " customers have paid more than billed.",
-        impact: "These are advances from customers \u2014 a liability, and possibly tax on advances for services.", amount: dr.reduce((s, [, v]) => s + v, 0),
+        impact: "These are advances from customers \u2014 a liability, and possibly tax on advances for services.", amount: P.ok ? P.custAdv : dr.reduce((s, [, v]) => s + v, 0),
         suggestion: "Confirm the balances; show them as advances from customers, and see GST \u2192 Advances.", je: [{date: ctx.to, narr: "Customers with credit balances shown as advances", lines: dr.map(([l, v]) => ({l, dr: r2(v)})).concat([{l: "ADVANCE FROM CUSTOMERS", cr: r2(dr.reduce((s, [, v]) => s + v, 0))}])}],
         rows: dr.map(([l, v]) => ({vid: "", date: ctx.to, no: "", type: "", party: l, amount: v, note: "credit balance"}))});
       const sus = Object.entries(bal).filter(([l, v]) => (A.under(l, /^suspense a\/c$/i) || /SUSPENSE/i.test(l)) && Math.abs(v) >= 1);
@@ -481,7 +480,7 @@ const Audit = {
     });
     const solvedBy = {};
     Object.values(au.items).filter(it => it.solved).forEach(it => { (solvedBy[it.f] = solvedBy[it.f] || []).push(it); });
-    const run = {at, from, to, how: how || "run now", findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
+    const run = {at, from, to, how: how || "run now", basis: MIS.basis(), findings, errors, vouchers: V.length, balances: ctx.bal.ok ? ctx.bal.src : "",
       notes: [ctx.bal.ok ? "" : "Balance checks were not run: " + ctx.bal.why + ".", this.mastersIn() ? "" : "The ledger masters are not read, so ledgers are recognised by name only."].filter(Boolean),
       solved: Object.entries(solvedBy).map(([fid, list]) => ({id: fid, title: list[0].title || fid, area: list[0].area, sev: list[0].sev, n: list.length, amount: r2(list.reduce((s2, it) => s2 + num(it.row && it.row.amount), 0)),
         items: list.sort((a, c) => String(a.solved).localeCompare(String(c.solved)) || String((a.row || {}).date).localeCompare(String((c.row || {}).date))).slice(-300)}))};
@@ -512,11 +511,26 @@ const Audit = {
     if (c.freq === "monthly") return last.slice(0, 6) < t.slice(0, 6);
     return false;
   },
+  // the year chosen, else the last full year of the books (as Accounts): never a year the books hardly reach (review of
+  // 02-Oct-2026: the books end on 01-Jul-2026, and the audit ran on Apr-Sep 2026, which holds one entry)
   defaultRange(b){
-    const to = String((b.meta || {}).to || this.today()), t = this.today();
-    const end = to < t ? to : t;
-    return {from: this.fyStart(end), to: end};
+    const fy = typeof fsLastFull === "function" ? (S.auditFy || fsLastFull()) : "";
+    const end = String((b.meta || {}).to || this.today()), t = this.today(), last = end < t ? end : t;
+    if (!fy) return {from: this.fyStart(last), to: last};
+    const fyEnd = (num(fy) + 1) + "0331";
+    return {from: fy + "0401", to: fyEnd < last ? fyEnd : last};
   },
+  // a run kept from before that no longer matches the books for its period (another computer's books, or books read again)
+  // a kept run that no longer fits: the books hold a different number of entries for its period, or the books or
+  // FinCom's working changed since (MIS.basis); its findings and figures are then not shown, only "Run again"
+  stale(run){
+    if (!run || !run.from) return null;
+    const n = this.vouchers(run.from, run.to).length;
+    if (n !== run.vouchers) return {was: run.vouchers, now: n};
+    if (!run.basis || run.basis !== MIS.basis()) return {was: run.vouchers, now: n, changed: true};
+    return null;
+  },
+  howLabel(run){ return !run || !run.how || run.how === "run now" ? "run by hand" : run.how; },
   maybeRun(){
     const b = S.books;
     if (!b || !b.vouchers || !this.due(b)) return;

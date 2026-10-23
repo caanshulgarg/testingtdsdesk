@@ -13,11 +13,11 @@ function Tile({ label, n, sub, go }) {
 
 export default function Dash() {
   const co = CO(), v = Object.values(D().entries), [q, setQ] = useState("");
-  const drafts = v.filter((e) => e.status === "draft"), approved = v.filter((e) => e.status === "approved" && !e.exportedAt);
+  const drafts = v.filter((e) => e.status === "draft"), approved = postBillsOpen(co.id) || [];   // ready to post: the one count for Tally (postCounts, src/js/59)
   const bank = S.bank && S.bank.cid === co.id ? S.bank : null, bc = bank ? tabCounts(bank.rows) : null, stmt = bank ? curStmt() : null;
   const sales = S.sales && S.sales.cid === co.id ? S.sales.list : null;
   const tds = v.filter((e) => e.status !== "rejected" && e.snapshot).reduce((a, e) => a + num(e.snapshot.tds), 0);
-  const recent = v.filter((e) => e.exportedAt).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
+  const recent = v.filter(billInTally).sort((a, b) => String(b.exportedAt).localeCompare(String(a.exportedAt))).slice(0, 5);
   const off = bank ? bank.rows.filter((r) => r.balOk === false).length : 0;
   return (
     <section className="dash">
@@ -31,7 +31,7 @@ export default function Dash() {
       <div className="dash-tiles">
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" />
         <Tile label="Bills to review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />
-        <Tile label="Ready to post" n={approved.length} sub={approved.length ? sumTotal(approved) : "nothing approved"} go="post" />
+        <Tile label="Post to Tally" n={postCountFor(co.id)} sub={(approved.length ? sumTotal(approved) : "nothing ready") + (postAttentionFor(co.id) ? " · " + postAttentionFor(co.id) + " need attention" : "")} go="post" />
         <Tile label="Bank lines to review" n={bc ? bc.review : "…"} sub={bc ? bc.ready + " ready to post" : "opening the bank"} go="bank" />
       </div>
       {CloudDocs.on() && <p className="note" style={{ margin: "-6px 0 14px" }}>Documents are kept in the firm account, so anyone in the firm can open a bill from Transactions on any computer.
