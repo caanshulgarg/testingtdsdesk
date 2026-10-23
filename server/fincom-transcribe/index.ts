@@ -29,7 +29,7 @@
 // why not, with "names:<count of names corrected>" and "ai:<count>" or "ai:refused" (counts only, never the words), the
 // models used, question empty).
 import { corsFor } from "../_shared/cors.ts";
-import { checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
+import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
 import { ID_PATTERNS } from "../assistant/mask.ts";
 import { whisperLang } from "../../app/src/calls/rules.js";
@@ -219,8 +219,16 @@ export function handler(deps: Deps) {
     const j: any = await r.json().catch(() => null);
     if (!r.ok || !j || typeof j.text !== "string") { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening did not answer (" + r.status + ")." }); }
     let text = j.text.replace(/\s+/g, " ").trim();
-    // Hinglish: an answer mostly in Devanagari, in English letters
     const tools = ["ok"];
+    // Hinglish taken for Urdu (Whisper's own guess; the two sound alike): heard once more as Hindi; the first words stay
+    // when that call fails
+    if (latin && arabicShare(text) > 0.5) {
+      const r2 = await groq(key, model, audio, ext, type, "hi", prompt);
+      const j2: any = r2 && r2.ok ? await r2.json().catch(() => null) : (await r2?.body?.cancel(), null);
+      if (j2 && typeof j2.text === "string" && j2.text.trim()) { text = j2.text.replace(/\s+/g, " ").trim(); tools.push("urdu:hi"); }
+      else tools.push("urdu:kept");
+    }
+    // Hinglish: an answer mostly in Devanagari, in English letters
     if (latin && devanagariShare(text) > 0.5) { text = toLatin(text); tools.push("latin"); }
     // the names said, made right (deterministic)
     const all: Name[] = [...names, ...firmClients];
