@@ -55,6 +55,9 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
   function attach(p) {
     if (local) {
       for (const t of local.getAudioTracks()) if (!p.senders.audio) p.senders.audio = p.pc.addTrack(t, local);
+      // no microphone here (Remote Desktop, refused): a silent voice is sent, so the call is set up as any other and the
+      // others' voices are received
+      if (!local.getAudioTracks().length && !p.senders.audio) { const t = dummyAudio(); if (t) p.senders.audio = p.pc.addTrack(t, local); }
       if (!p.senders.video) p.senders.video = p.pc.addTrack(videoTrack || local.getVideoTracks()[0] || dummyVideo(), local);
     }
     if (screen && !p.senders.screen) p.senders.screen = p.pc.addTrack(screen.getVideoTracks()[0], screen);
@@ -123,6 +126,13 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
   };
 }
 // a sender needs a track to start with (the camera off from the start): a tiny black picture
+let silent = null;
+function dummyAudio() {
+  try {
+    if (!silent) { const AC = window.AudioContext || window.webkitAudioContext, ac = new AC(), d = ac.createMediaStreamDestination(); silent = d.stream.getAudioTracks()[0]; }
+    return silent;
+  } catch (e) { return null; }
+}
 function dummyVideo() {
   const c = document.createElement("canvas"); c.width = 16; c.height = 9;
   const t = c.captureStream ? c.captureStream(1).getVideoTracks()[0] : null;

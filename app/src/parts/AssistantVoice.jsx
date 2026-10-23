@@ -21,6 +21,8 @@
 // under the box, underlined, with what was heard on hover or a tap, and one tap on its undo puts the heard words back.
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square, Undo2, Volume2, VolumeX } from "lucide-react";
+import NoDeviceNote from "./NoDeviceNote.jsx";
+import { NO_SOUND_TEXT } from "./noDevice.js";
 
 // code: what the browser listens for and what goes to fincom-assistant as the hint (server/assistant/agent.ts, LANGS)
 export const VOICE_LANGS = [
@@ -94,6 +96,8 @@ const ERR = {
 // the mic and the language, in the question box's bar; `a` is ASST's state (a.q the box, a.lang the hint)
 export function VoiceInput({ a, onText, client = null }) {
   const [on, setOn] = useState(false), [msg, setMsg] = useState(""), [lang, setLang] = useState(voiceLang);
+  // no microphone reached this browser (Remote Desktop, a cloud PC): "nodevice"; one that sent no sound: "silent"
+  const [noDev, setNoDev] = useState("");
   const [none, setNone] = useState(() => !voiceSupported() && !seen(NONE_KEY));
   // the names corrected in the words last put in the box: [{from, to, open}], and where those words start
   const [fixes, setFixes] = useState({ list: [], at: 0 });
@@ -158,9 +162,10 @@ export function VoiceInput({ a, onText, client = null }) {
       sess.rec = r; r.startedAt = Date.now();
       try { r.start(); } catch (e) { sess.rec = null; setMsg("Voice typing could not start here."); sess.finish("abort"); }
     };
-    stopVoice(); live = sess; mine.current = sess;
+    stopVoice(); live = sess; mine.current = sess; setNoDev("");
     if (VR && VR.canRecord()) {
       sess.mic = VR.startRecording({ silenceMs: silenceMs(), onSilence: () => sess.finish("stop"), onError: (w) => { if (mine.current === sess) setMsg(w); },
+        onNoDevice: () => { if (mine.current === sess) { setNoDev("nodevice"); setMsg((m) => (m === OPENING ? "" : m)); } },
         onReady: () => { if (mine.current === sess) setMsg((m) => (m === OPENING ? "" : m)); } });
     }
     if (!seen(NOTE_KEY)) { see(NOTE_KEY); setMsg(NOTE); } else setMsg(sess.mic ? OPENING : "");
@@ -173,6 +178,8 @@ export function VoiceInput({ a, onText, client = null }) {
     const sep = base ? " " : "";
     sess.mic.stop().then((clips) => {
       if (!clips.length || mine.current !== sess) return null;
+      // the microphone sent no sound (a silent Remote Desktop microphone): nothing sent to be heard, the browser's words stay
+      if (clips.quiet) { setNoDev("silent"); return null; }
       setMsg(BUSY);
       return VR.transcribe(clips, { lang: VR.whisperLang(sess.lang), client, latin: VR.whisperLatin ? VR.whisperLatin(sess.lang) : false }).then((r) => {
         const done = (m) => setMsg((x) => (x === BUSY ? m : x));
@@ -205,7 +212,9 @@ export function VoiceInput({ a, onText, client = null }) {
       <select id="asstVoiceLang" className="asst-lang" data-asst-lang="" value={lang} onChange={(e) => pick(e.target.value)} title="Language you speak (the reply comes in the question's language)">
         {VOICE_LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
       </select>
+      {noDev === "nodevice" && <NoDeviceNote className="asst-nodev" />}
     </span>
+    {noDev === "silent" && <span className="asst-voice-msg" role="status" data-asst-voice-silent="">{NO_SOUND_TEXT}<NoDeviceNote /></span>}
     {(on || msg) && <span className="asst-voice-msg" role="status" data-asst-voice-msg="">{msg || "Listening… speak; it keeps listening until you pause or tap the mic again."}</span>}
     {shownFixes.length > 0 && <span className="asst-voice-msg asst-voice-fixes" data-asst-voice-fixes="">
       <span>Names matched to the books:</span>

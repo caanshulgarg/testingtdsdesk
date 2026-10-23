@@ -25,6 +25,8 @@ import { compositeRecorder, micPieces, uploadQueue } from "./recorder.js";
 import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText, SUB_LANGS, SUB_PIECE, defaultSubLang, subLangOk, subLangName, subTargets, subsNeeded, subLine, emailOk, nameOk } from "./rules.js";
 import { startCowork } from "./cowork.js";
 import { MeetCard } from "./MeetCard.jsx";
+import NoDeviceNote from "../parts/NoDeviceNote.jsx";
+import { noDeviceError, devicesMissing } from "../parts/noDevice.js";
 import "./calls.css";
 
 const REACTIONS = ["👍", "👏", "😂", "🎉", "❤️", "🙏"];
@@ -114,6 +116,8 @@ function Call({ opts, onClose }) {
   const [clock, setClock] = useState(nowIst());
   const [devices, setDevices] = useState({ mics: [], cams: [], outs: [] }), [dev, setDev] = useState({ mic: "", cam: "", out: "" });
   const [hello, setHello] = useState(gmode && gmode.hello ? gmode.hello : null);
+  // no microphone or camera reached this browser (Remote Desktop, a cloud PC, refused): {mic, cam}; joining still works
+  const [noDev, setNoDev] = useState({ mic: false, cam: false });
   useEffect(() => { const f = () => setNeedTap(true); window.addEventListener("fincom-call-tap", f); return () => window.removeEventListener("fincom-call-tap", f); }, []);
   useEffect(() => { const t = setInterval(() => setClock(nowIst()), 20000); return () => clearInterval(t); }, []);
   const force = useForce();
@@ -132,14 +136,21 @@ function Call({ opts, onClose }) {
     const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, ...(want && want.mic ? { deviceId: { exact: want.mic } } : {}) };
     const video = { width: { ideal: 1280 }, height: { ideal: 720 }, ...(want && want.cam ? { deviceId: { exact: want.cam } } : { facingMode: "user" }) };
     let s;
-    try { s = await navigator.mediaDevices.getUserMedia({ audio, video }); setErr(""); }
+    try { s = await navigator.mediaDevices.getUserMedia({ audio, video }); setErr(""); setNoDev({ mic: false, cam: false }); }
     catch (e) {
-      try { s = await navigator.mediaDevices.getUserMedia({ audio }); setCam(false); setErr("The camera could not be opened; you can still talk."); }
-      catch (e2) { s = new MediaStream(); setMic(false); setCam(false); setErr(e2 && e2.name === "NotAllowedError" ? "The browser did not allow the camera and microphone. Allow them in the address bar, then open the call again." : "No camera or microphone was found."); }
+      try { s = await navigator.mediaDevices.getUserMedia({ audio }); setCam(false); setNoDev({ mic: false, cam: noDeviceError(e) }); setErr(noDeviceError(e) ? "" : "The camera could not be opened; you can still talk."); }
+      catch (e2) {
+        s = new MediaStream(); setMic(false); setCam(false);
+        // nothing reached the browser: one plain message (with Remote Desktop's steps) and joining to listen and chat
+        if (noDeviceError(e2)) { setNoDev({ mic: true, cam: true }); setErr(""); }
+        else setErr("The camera and microphone could not be opened; you can still join to listen and chat.");
+      }
     }
     return s;
   }
   async function listDevices() {
+    const miss = await devicesMissing();
+    if (miss && (miss.mic || miss.cam)) { setNoDev((d) => ({ mic: d.mic || miss.mic, cam: d.cam || miss.cam })); if (miss.mic) setMic(false); if (miss.cam) setCam(false); }
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
       setDevices({ mics: all.filter((d) => d.kind === "audioinput"), cams: all.filter((d) => d.kind === "videoinput"), outs: all.filter((d) => d.kind === "audiooutput") });
@@ -552,8 +563,8 @@ function Call({ opts, onClose }) {
           <div className="call-preview"><video ref={preview} autoPlay playsInline muted data-preview="" />{!cam && <div className="call-camoff">Camera is off</div>}
             <span className="lobby-me">{myName}</span>
             <div className="lobby-toggles">
-              <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={mic ? "Turn off the microphone" : "Turn on the microphone"} title={mic ? "Turn off the microphone" : "Turn on the microphone"} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
-              <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={cam ? "Turn off the camera" : "Turn on the camera"} title={cam ? "Turn off the camera" : "Turn on the camera"} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
+              <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} title={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} disabled={noDev.mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
+              <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} title={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} disabled={noDev.cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
               <button type="button" className={"round" + (panel === "effects" ? " on" : "")} aria-label="Background and look" title="Background and look" onClick={() => setPanel(panel === "effects" ? "" : "effects")} data-call-effects=""><Sparkles width={20} height={20} /></button>
             </div>
           </div>
@@ -562,6 +573,7 @@ function Call({ opts, onClose }) {
             <label><span>Camera</span><select value={dev.cam} onChange={(e) => pickDevice("cam", e.target.value)} data-dev-cam="">{devices.cams.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || "Camera " + (i + 1)}</option>)}{!devices.cams.length && <option value="">The browser's choice</option>}</select></label>
             {devices.outs.length > 0 && <label><span>Speaker</span><select value={dev.out} onChange={(e) => pickDevice("out", e.target.value)} data-dev-out="">{devices.outs.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || "Speaker " + (i + 1)}</option>)}</select></label>}
           </div>
+          {(noDev.mic || noDev.cam) && <NoDeviceNote className="lobby-nodev" />}
           {panel === "effects" && <Effects fx={fx} change={changeFx} note={fxNote} />}
         </div>
         <div className="lobby-right">
@@ -630,6 +642,7 @@ function Call({ opts, onClose }) {
         : <p>Waiting for them to share their RustDesk ID (their screen shows the steps).</p>}
       <button type="button" className="call-btn small" onClick={() => markRemote("ended")}>Cancel</button>
     </div>}
+    {noDev.mic && !min && <div className="call-banner call-listen" data-call-listen-only="" role="status"><NoDeviceNote text={"Listening only: no microphone" + (noDev.cam ? " or camera" : "") + " reached this browser, so the others cannot hear you (chat works)."} /></div>}
     {held && <div className="call-modal" role="dialog" aria-modal="true" data-consent="">
       <div><h3>{CONSENT_TEXT}</h3><p>The host is recording this call (picture, voices and the words said, for a transcript). Your microphone and camera stay off until you choose.</p>
         <button type="button" className="call-primary" onClick={accept} data-consent-stay="">Stay in the call</button> <button type="button" className="call-btn" onClick={declineRec} data-consent-leave="">Leave</button></div></div>}
@@ -694,8 +707,8 @@ function Call({ opts, onClose }) {
     <footer className="call-bar" role="toolbar" aria-label="Call controls">
       <span className="call-bar-left" aria-hidden="true">{sess.room.title}</span>
       <div className="call-bar-mid">
-        <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={mic ? "Mute" : "Unmute"} title={mic ? "Turn off the microphone" : "Turn on the microphone"} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
-        <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={cam ? "Camera off" : "Camera on"} title={cam ? "Turn off the camera" : "Turn on the camera"} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
+        <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={mic ? "Mute" : "Unmute"} title={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} disabled={noDev.mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
+        <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={cam ? "Camera off" : "Camera on"} title={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} disabled={noDev.cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
         {navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && <button type="button" className={"round" + (screenOn ? " on" : "")} aria-pressed={screenOn} aria-label={screenOn ? "Stop presenting" : "Present now"} title={screenOn ? "Stop presenting" : "Present your screen"} onClick={toggleScreen} data-call-share=""><MonitorUp width={20} height={20} /></button>}
         <button type="button" className={"round" + (hand ? " on" : "")} aria-pressed={hand} aria-label={hand ? "Lower hand" : "Raise hand"} title={hand ? "Lower hand" : "Raise hand"} onClick={() => setHand(!hand)} data-call-hand=""><Hand width={20} height={20} /></button>
         <span className="call-pop-wrap">

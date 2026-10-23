@@ -273,3 +273,8 @@
   .meet-new, .meet-new-btn { width: 100%; justify-content: center; }
 }
 @media (max-width: 640px) { .call-in .call-caps { left: 8px; right: 8px; transform: none; max-width: none; } }
+/* no microphone or camera reached this browser (Remote Desktop, a cloud PC) */
+.lobby-nodev { margin-top: 12px; text-align: left; }
+.call-listen { background: #3C4043; color: #E8EAED; }
+.call-listen .linkbtn { color: #8AB4F8; }
+.round[disabled] { opacity: .55; cursor: not-allowed; }
