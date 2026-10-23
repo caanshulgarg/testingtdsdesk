@@ -44,5 +44,15 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git push origin *:refs/heads/staging-next)",
+      "Bash(git push -u origin next-*)",
+      "Bash(git push origin next-*)",
+      "Bash(*publish-preview.sh review *)",
+      "Bash(gh api -X POST repos/caanshulgarg/testingtdsdesk/actions/workflows/*/dispatches *)",
+      "mcp__Supabase__deploy_edge_function"
+    ]
   }
 }
