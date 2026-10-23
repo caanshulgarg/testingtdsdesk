@@ -601,7 +601,7 @@ function guideState(rows, latest) {
   const openNow = [];
   tally.forEach(([rr, ss]) => ss.open.forEach((name) => { if (!openNow.some((o) => lc(o.company) === lc(name))) openNow.push({ company: name, computer: pcName(rr) }); }));
   const pcs = Array.from(new Set(openNow.map((o) => o.computer)));
-  const linkedN = new Set([].concat(p.companies || [], (typeof TLight === "object" && TLight.st.cos) || []).filter((c) => c && c.client_id && S.companies && S.companies[c.client_id] && !S.companies[c.client_id].deleted).map((c) => lc(c.company))).size;
+  const linkedN = new Set([].concat(p.companies || [], (typeof TLight === "object" && TLight.st.cos) || []).filter((c) => c && c.client_id && !(S.companies && S.companies[c.client_id] && S.companies[c.client_id].deleted)).map((c) => lc(c.company))).size;
   const done = { install: live.length > 0, open: reading.length > 0, add: linkedN > 0 };
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
   return { done, r, s, live, on, tally, openNow, pcs, linkedN, fine: (st.find(([, x]) => x.fine) || open[0] || null) };
@@ -650,7 +650,8 @@ function ConnectGuide({ x, m, connectStep }) {
       {all && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
     <ol className="tc3-steps">
       <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
-        {d.install ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + "."}</span>
+        {d.install ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + ". "}
+            {g.step === 1 && g.at ? <><span>On another computer: </span><DownloadBtn m={m} primary /></> : null}</span>
           : <><span className="note">On the computer where TallyPrime runs. If Windows says “Windows protected your PC”, press More info, then Run anyway.</span>{" "}<DownloadBtn m={m} primary />
             {connectStep && <div data-guide-connect-slot="">{connectStep}</div>}</>}
       </Step>

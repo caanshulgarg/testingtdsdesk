@@ -255,21 +255,20 @@ def main():
         scene(DEVS, LINKED); E("() => goClient('books:import')"); pg.wait_for_timeout(1200)
         # round 39: the Link to Tally card (run_tally_link_simple.py has the rest): one status line, Update now, Change company in More
         lt = txt(link + " [data-tally-link-text]")
-        ok(re.match(r"^Linked to GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d IST$", lt) is not None and txt(link + " [data-tally-link-state]") == "Linked · reading", "5. linked: one line (%r)" % lt)   # ui-tidy: the same words on every chip and card
+        # next-tally-suvit: the one pill's words (lib/tallyState.js), as every chip and card says them
+        ok(re.match(r"^Connected \u00b7 GARG SHEKHAR on NWS144 \u00b7 last entry \d\d:\d\d IST$", lt) is not None and txt(link + " [data-tally-link-state]") == "Connected", "5. linked: one line (%r)" % lt)   # ui-tidy: the same words on every chip and card
         ok(pg.locator(link + " [data-update-now]").count() == 1 and pg.locator(link + " [data-tally-link-change]").count() == 0, "5. linked: Update now (Change company is on the card in Client setup)")
         ok(pg.locator("#app [data-upload-page] [data-update-now]").count() == 1, "5. From Tally: Update now once (on the link line)")
         E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)   # clean-up batch 2: Change company is on the card, in Client setup -> Tally
-        # 15-Oct-2026: Change company leads to the one place to link, Connect Tally's step 4 with this client
+        # next-tally-suvit: Change company opens the card's own choice: the other companies seen, GARG SHEKHAR (linked now) not
+        # offered again, "Keep GARG SHEKHAR"
         pg.click(link + " [data-tally-link-more] summary"); pg.wait_for_timeout(200); pg.click(link + " [data-tally-link-change]"); pg.wait_for_timeout(900)
-        opts = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
-        # 15-Oct-2026: only the companies open in Tally now (ABC LTD's LAPTOP was last heard 3 hours ago): its own GARG SHEKHAR
-        # (already linked, so Change cannot pick it again) and XYZ, open on TALLYSRV
-        ok(opts == ["GARG SHEKHAR", "XYZ"] and E("() => document.querySelector('#app [data-guide-client]').value") == cid
-           and E("() => document.querySelector('#app [data-guide-company]').value") == "XYZ", "5. Change company: Connect Tally, this client, the companies open in Tally now (%s)" % opts)
-        # round 63: the client's state in one line ("<client> is linked to GARG SHEKHAR · open in Tally now ✓")
-        ok("is linked to GARG SHEKHAR" in txt("#app [data-guide-client-state]") and "open in Tally now" in txt("#app [data-guide-client-state]"), "5. Change company: it says what it is linked to now (%s)" % txt("#app [data-guide-client-state]"))
-        pg.click("#app [data-guide-link]"); pg.wait_for_timeout(800)
-        ok(["tally_company_link", {"p_company": "XYZ", "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
+        opts = E("() => [...document.querySelectorAll('#app [data-tally-link-pick-row]')].map(o => o.getAttribute('data-tally-link-pick-row'))")
+        ok(opts and "GARG SHEKHAR" not in opts, "5. Change company: the other companies seen, this client's own not again (%s)" % opts)
+        other = opts[0] if opts else "XYZ"
+        ok("Keep GARG SHEKHAR" in txt("#app [data-tally-link-choose]"), "5. Change company: it says what it is linked to now (%s)" % txt("#app [data-tally-link-choose]")[-120:])
+        pg.click('#app [data-tally-link-pick="%s"]' % other); pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
+        ok(["tally_company_link", {"p_company": other, "p_client": cid}] in calls("tally_company_link"), "5. Change company -> tally_company_link (the same as Settings)")
         shot("client-linked")
         E("(c) => { S.tallyGuide = {}; openCompany(c); goClient('books:import'); }", cid); pg.wait_for_timeout(1000)
         # held entries: that day's Day Book (and one other held line)
@@ -283,7 +282,8 @@ def main():
         # Client setup -> Tally says the Day Book line too (From Tally lists the days in its own section instead)
         E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)
         nd2 = E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tally-link-status], #app [data-tally-link-needs] li')].map(li => [li.getAttribute('data-tally-link-status') || li.getAttribute('data-tally-need'), li.innerText.replace(/\\s+/g, ' ').trim()])")
-        ok(nd2 and nd2[0][0] == "needs" and "Day Book" in nd2[0][1] and nd2[0][1].endswith("Upload") and any(n[0] == "held" for n in nd2), "5. Client setup -> Tally: the Day Book line with Upload, then the held line (%s)" % nd2)
+        ok(nd2 and nd2[0][0] == "needs" and nd2[0][1].startswith("Needs you") and any(n[0] == "daybook" and "Day Book" in n[1] and n[1].endswith("Upload") for n in nd2) and any(n[0] == "held" for n in nd2),
+           "5. Client setup -> Tally: Needs you, then the Day Book line with Upload and the held line (%s)" % nd2)
         shot("client-setup-held")
         E("() => goClient('books:import')"); pg.wait_for_timeout(1000)
         # stopped: the line says it, Resume for an owner
@@ -298,16 +298,17 @@ def main():
         scene(DEVS, [{"company": "ABC LTD", "client_id": None, "device_id": D2, "gstin": "", "last_seen": "ago:1"}])
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(1500); E("() => render()"); pg.wait_for_timeout(600)
         ok(E("document.querySelector('#app [data-tally-link]') && document.querySelector('#app [data-tally-link]').getAttribute('data-tally-link')") == "unlinked", "5. not linked: From Tally's line says so")
-        # 15-Oct-2026: the companies to link are in the one place to link, Connect Tally's step 4
-        pg.click("#app [data-tally-link-line] [data-open-connect]"); pg.wait_for_timeout(900)
-        o5 = E("() => [...document.querySelectorAll('#app [data-guide-company] option')].map(o => o.value)")
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and "GARG SHEKHAR" in o5 and "ABC LTD" not in o5,
-           "5. not linked: Open Connect Tally, its step 4 lists the companies open in Tally now (not ABC LTD, its computer offline) (%s)" % o5)
+        # next-tally-suvit: the line's "Choose its company" opens the client's card: the companies in Tally, each with Link and
+        # its pill (ABC LTD: its computer offline)
+        pg.click("#app [data-tally-link-line] [data-tally-link-choose-go]"); pg.wait_for_timeout(1500)
+        o5 = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tally-link] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-tco-state')]))")
+        ok(E("S.tab") == "cotally" and o5.get("GARG SHEKHAR") == "connected" and o5.get("ABC LTD") == "offline",
+           "5. not linked: Choose its company: the card lists the companies with their state (ABC LTD: computer offline) (%s)" % o5)
         E("(c) => { S.tallyGuide = {}; S.view = 'company'; S.coId = c; goClient('books:import'); }", cid); pg.wait_for_timeout(900)
         shot("client-unlinked")
         # Client setup -> Tally: the same line at the top
         scene(DEVS, LINKED); E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(1500); E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)
-        ok(pg.locator("#app [data-tally-link]").count() == 1 and "Linked to GARG SHEKHAR on NWS144" in txt(link), "5. Client setup -> Tally: the link line (%s)" % txt(link)[:80])
+        ok(pg.locator("#app [data-tally-link]").count() == 1 and "Connected · GARG SHEKHAR on NWS144" in txt(link), "5. Client setup -> Tally: the link line (%s)" % txt(link)[:80])
         shot("client-setup-tally")
 
         # ---- 6. phone width

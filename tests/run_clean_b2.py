@@ -162,13 +162,14 @@ try:
         ok(pg.locator("#app .tlink .tlink-title").count() == 1, "Client setup → Tally: the client's Tally card")
         go(CL("goClient('books:import');"))
         ok(pg.locator("#app .tlink-title").count() == 0 and pg.locator("#app [data-tally-link-line]").count() == 1, "From Tally: the link's one status line, not the card")
-        # 15-Oct-2026: a client not linked: the line points to the one place to link, Connect Tally (step 4)
-        pg.click("#app [data-tally-link-line] [data-open-connect]"); W(1000)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and pg.locator("#app [data-connect-guide]").count() == 1, "  … its Open Connect Tally opens the guide's step 4")
+        # 15-Oct-2026; 23-Oct-2026 (next-tally-suvit): a client not linked: the line's "Choose its company" opens its Tally card,
+        # which lists the companies in Tally with Link
+        pg.click("#app [data-tally-link-line] [data-tally-link-choose-go]"); W(1000)
+        ok(E("S.tab") == "cotally" and pg.locator("#app .tlink-title").count() == 1, "  … its Choose its company opens the client's Tally card")
         E("() => { const co = CO(); co.onbHide = true; }"); go(CL("goClient('dash');"))
         ok(pg.locator("#app .tlink-title").count() == 0 and pg.locator("#app [data-tally-link-line]").count() == 1, "Overview (checklist folded): the link's one status line")
-        pg.click("#app [data-tally-link-line] [data-open-connect]"); W(1000)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4], "  … its Open Connect Tally opens the guide's step 4")
+        pg.click("#app [data-tally-link-line] [data-tally-link-choose-go]"); W(1000)
+        ok(E("S.tab") == "cotally", "  … its Choose its company opens the client's Tally card")
         E("() => { const co = CO(); co.onbHide = false; }"); go(CL("goClient('dash');"))
         ok(pg.locator("#app [data-tally-link-line]").count() == 0 and pg.locator("#app [data-onb-step=link]").count() == 1, "Overview (checklist open): its Link to Tally step says it, once")
         # the bridge card and the post log: nowhere else among the pages

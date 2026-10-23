@@ -198,8 +198,11 @@ with sync_playwright() as p:
     # client, not linked yet, is linked here
     pg.evaluate("() => { const c = newCompany({name: 'New Client Pvt Ltd', gstin: ''}); c.id = 'c_new'; S.companies[c.id] = c; Store.saveCompany(c); }")
     calls["link"].clear(); pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(1200)
-    pg.select_option("#app [data-guide-client]", "c_new"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
-    pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
+    # 23-Oct-2026 (next-tally-suvit): the pointer lands on Companies in Tally; for the client chosen (c_new), CO's row says
+    # "Link to New Client Pvt Ltd"
+    ok(pg.evaluate("S.homeTab") == "tally" and pg.locator('#app [data-tco-list=firm] [data-tco-row="%s"]' % CO).count() == 1, "the pointer lands on Companies in Tally, %s listed" % CO)
+    pg.evaluate("() => openConnectTally(4, 'c_new')"); pg.wait_for_timeout(900)
+    pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=link]' % CO); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_new"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
     calls["link"].clear()

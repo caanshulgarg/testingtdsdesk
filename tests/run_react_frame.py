@@ -64,7 +64,8 @@ with sync_playwright() as p:
     # Tally page's Connect Tally (step 4, this client); once linked it opens the Tally panel, as before
     cid0 = pg.evaluate("S.coId")
     pg.click("#cobar .tallychip"); pg.wait_for_timeout(600)
-    ok(pg.evaluate("[S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["tally", 4, cid0] and pg.locator("#app [data-connect-guide]").count() == 1, "the Tally sign of a client not linked opens Connect Tally, step 4")
+    # 23-Oct-2026 (next-tally-suvit): it opens the client's own Tally card, which lists the companies in Tally with Link
+    ok(pg.evaluate("[S.view, S.coId, S.tab]") == ["company", cid0, "cotally"] and pg.locator("#app [data-tally-link]").count() == 1, "the Tally sign of a client not linked opens its Tally card")
     pg.evaluate("(c) => { S.view = 'company'; S.coId = c; S.tab = 'cotally'; render(); }", cid0); pg.wait_for_timeout(600)
     pg.evaluate("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)
     ok(pg.locator(".tallypanel").count() == 1 and "Tally connection" in pg.inner_text(".tallypanel"), "the Tally panel opens")
