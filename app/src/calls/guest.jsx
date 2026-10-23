@@ -1,75 +1,63 @@
-// A guest's page (…#join=<link token>): no FinCom sign-in. The call's name and the firm's; the guest's name and email; a
-// six-figure code sent to that email (when FinCom's email is set up); then the waiting room until the host lets them in.
-// The guest's pass is signed by the server and good for six hours; it gives only this call: never FinCom's data, never
-// "Work together" (they see the host's screen only when it is shared).
+// A guest's way into a FinCom meeting, without a FinCom sign-in (next-calls-meet, 23-Oct-2026): the meeting's link
+// (…#/join/<code>), an older guest link (…#join=<token>), or the join page (…#/join) where the code is typed. The
+// meeting's name and the firm's are read, then the lobby (the call screen's own: the camera's preview, name and email,
+// "Ask to join", "Asking to join…" until the host lets them in). The guest's pass is signed by the server and good for six
+// hours; it gives only this call: never FinCom's data, never "Work together" (they see the host's screen only when shared).
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { makeApi } from "./api.js";
 import { openCall } from "./CallScreen.jsx";
+import { codeFrom } from "./rules.js";
+import { joinHash } from "./launch.js";
 import "./calls.css";
 
 export function mountGuest() {
   document.documentElement.setAttribute("data-guest", "");
   const el = document.createElement("div"); el.id = "fincom-guest"; document.body.appendChild(el);
-  createRoot(el).render(<Guest token={String(location.hash).slice(6)} />);
+  const h = String(location.hash || "");
+  const token = /^#join=/.test(h) ? h.slice(6) : "";
+  const j = joinHash();
+  createRoot(el).render(<Guest token={token} code={j ? j.code : ""} />);
 }
 
-function Guest({ token }) {
-  const [hello, setHello] = useState(null), [err, setErr] = useState(""), [step, setStep] = useState("form"), [name, setName] = useState(""), [email, setEmail] = useState(""), [code, setCode] = useState(""), [busy, setBusy] = useState(false);
-  const [pass, setPass] = useState(null);
+function Guest({ token, code }) {
+  const [err, setErr] = useState(""), [busy, setBusy] = useState(false), [typed, setTyped] = useState(code || ""), [left, setLeft] = useState(false), [inCall, setInCall] = useState(false);
   const open = makeApi({});
-  useEffect(() => { open.call("guest_hello", { token }).then(setHello, (e) => setErr(e.message)); }, []);
-  // the waiting room: asked every 2.5 s
+  async function go(entry) {
+    setBusy(true); setErr("");
+    try {
+      const hello = await open.call("guest_hello", entry);
+      setInCall(true); setLeft(false);
+      openCall({ guest: Object.assign({}, entry, { hello }) });
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
   useEffect(() => {
-    if (step !== "waiting" || !pass) return;
-    const api = makeApi({ gt: pass.gt });
-    let stop = false;
-    const tick = async () => {
-      if (stop) return;
-      try {
-        const j = await api.call("guest_poll", {});
-        if (j.state === "admitted") { setStep("in"); openCall({ guest: { gt: pass.gt, session: j, name } }); return; }
-        if (j.state === "denied") { setStep("denied"); return; }
-        if (j.state === "removed") { setStep("removed"); return; }
-        if (j.state === "ended") { setStep("ended"); return; }
-      } catch (e) { if (e.status === 401) { setErr(e.message); setStep("form"); return; } }
-      setTimeout(tick, 2500);
-    };
-    tick();
-    return () => { stop = true; };
-  }, [step, pass]);
-  async function start(e) {
-    e.preventDefault(); setBusy(true); setErr("");
-    try { const j = await open.call("guest_start", { token, name, email }); setPass(j); setStep(j.code_sent ? "code" : "waiting"); }
-    catch (x) { setErr(x.message); }
-    setBusy(false);
+    if (token) go({ token });
+    else if (code) { const c = codeFrom(code); if (c) go({ code: c }); else setErr("That is not a meeting code. A code has ten letters, like abc-defg-hjk."); }
+    const back = () => { setInCall(false); setLeft(true); };
+    window.addEventListener("fincom-meetings-changed", back);
+    return () => window.removeEventListener("fincom-meetings-changed", back);
+  }, []);
+  function submit(e) {
+    e.preventDefault();
+    const c = codeFrom(typed);
+    if (!c) { setErr(typed.trim() ? "That is not a meeting code. A code has ten letters, like abc-defg-hjk, or paste the whole link." : "Type the meeting code you were sent."); return; }
+    try { history.replaceState(null, "", location.pathname + location.search + "#/join/" + c); } catch (x) { /* */ }
+    go({ code: c });
   }
-  async function verify(e) {
-    e.preventDefault(); setBusy(true); setErr("");
-    try { await makeApi({ gt: pass.gt }).call("guest_verify", { code }); setStep("waiting"); } catch (x) { setErr(x.message); }
-    setBusy(false);
-  }
-  if (step === "in") return null;
-  return <div className="call-guest" data-guest-page="">
-    <div className="call-lobby">
-      <p className="call-note">FinCom call</p>
-      {hello ? <h2>{hello.title}</h2> : !err && <h2>Opening the call…</h2>}
-      {hello && <p>with {hello.firm}{hello.scheduled_at ? " · " + new Date(hello.scheduled_at).toLocaleString("en-IN") : ""}</p>}
+  if (inCall) return null;
+  return <div className="call-guest" data-guest-join="">
+    <div className="guest-card">
+      <div className="lobby-brand"><span className="lobby-mark" aria-hidden="true">F</span> FinCom <span className="lobby-brand-sub">Meetings</span></div>
+      <h1>{left ? "You left the meeting" : "Join a meeting"}</h1>
+      <p className="guest-note">{left ? "Thank you. To join again, use the same link or code." : "Type the meeting code you were sent (like abc-defg-hjk), or open the link from the invitation. No FinCom account is needed."}</p>
+      <form onSubmit={submit} className="guest-form">
+        <input value={typed} onChange={(e) => { setTyped(e.target.value); setErr(""); }} placeholder="Enter the meeting code" aria-label="Meeting code" autoComplete="off" spellCheck={false} data-join-code="" />
+        <button type="submit" className="btn primary" disabled={busy} title={busy ? "Opening…" : undefined} data-join-go="">{busy ? "Opening…" : "Join"}</button>
+      </form>
       {err && <p className="call-err" role="alert" data-guest-error="">{err}</p>}
-      {hello && step === "form" && <form onSubmit={start}>
-        <label className="f"><span>Your name</span><input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={60} autoComplete="name" data-guest-name="" /></label>
-        <label className="f"><span>Your email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" data-guest-email="" /></label>
-        <p className="call-note">{hello.mail ? "A code is sent to this email to check it is yours." : "The host checks who you are before letting you in."} Your camera and microphone are used only in this call.</p>
-        <button type="submit" className="call-primary" disabled={busy} data-guest-continue="">Continue</button>
-      </form>}
-      {step === "code" && <form onSubmit={verify}>
-        <label className="f"><span>The 6-figure code sent to {email}</span><input inputMode="numeric" pattern="[0-9]{6}" value={code} onChange={(e) => setCode(e.target.value)} required autoComplete="one-time-code" data-guest-code="" /></label>
-        <button type="submit" className="call-primary" disabled={busy} data-guest-verify="">Check the code</button>
-      </form>}
-      {step === "waiting" && <p data-guest-waiting="" role="status">Waiting for the host to let you in…</p>}
-      {step === "denied" && <p data-guest-denied="">The host did not let you in.</p>}
-      {step === "removed" && <p>The host removed you from this call.</p>}
-      {step === "ended" && <p>This call has ended.</p>}
+      <p className="guest-foot">Part of the firm? <a href="./" data-guest-signin="">Open FinCom and sign in</a>, then open the link again.</p>
     </div>
   </div>;
 }

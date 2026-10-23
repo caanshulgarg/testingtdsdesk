@@ -1,27 +1,59 @@
 // The call screen (stage 1, the owner's approval of 23-Oct-2026), in its own file, loaded only when a call is opened
 // (app/src/calls/launch.js). It is drawn over FinCom in its own root, and can be made small (a dock in the corner) so
 // FinCom stays usable beside it, which "Work together" needs.
-// Before joining: the camera and microphone, the effects. In the call: mute, camera, screen share, people, raise hand,
-// reactions, chat with links and files, live captions (this browser's own speech recogniser), the host's admit / remove /
-// mute all, recording with the notice everyone must see, "Work together", remote help (RustDesk), a weak line made
-// smaller then audio only, and reconnecting by itself. After the call: the transcript, the summary and the action items.
+// next-calls-meet (23-Oct-2026; the owner "didn't know where anyone will go or connect"): laid out like Google Meet.
+//   Before joining, the lobby: the camera's preview with the microphone and camera switches, the devices, the background,
+//     your name (a guest: name and email), My language and Subtitles on or off, then "Join now" (a member) or "Ask to
+//     join" (a guest: "Asking to join…" until the host lets them in, then straight into the call).
+//   The host who starts a meeting sees "Your meeting's ready" (the link and the code to share); "Meeting details" (i) shows
+//     the same at any time. Someone asking to join: "<name> wants to join · Admit · View", with a sound, over the call.
+//   In the call: a dark stage, the tiles in a grid with names and who is speaking; the bar at the foot (microphone,
+//     camera, present, raise hand, reactions, subtitles, more ⋮, the red leave), on the right Meeting details, People
+//     (the number waiting) and Chat; the time and the code at the top left.
+//   Everything of before stays: recording with the notice everyone must see, the transcript, "Work together", remote
+//   help, mute all, remove, the effects, a weak line made smaller then audio only, reconnecting by itself.
+//   Live translated subtitles (23-Oct-2026): each person's own switch (off at first) and language; the speaker's short
+//   pieces go to the function (Groq) only while someone in the call has subtitles on.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Mic, MicOff, Video, VideoOff, MonitorUp, Hand, Smile, Captions, EllipsisVertical, PhoneOff, Info, Users, MessageSquare, Sparkles, X } from "lucide-react";
 import { makeApi, base, publicKey } from "./api.js";
 import { channel } from "./realtime.js";
 import { createMedia } from "./media.js";
 import { makeEffects, loadChoice, saveChoice, effectsOn, BACKGROUNDS, lightDevice, shrinkImage } from "./effects.js";
 import { compositeRecorder, micPieces, uploadQueue } from "./recorder.js";
-import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText } from "./rules.js";
+import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText, SUB_LANGS, SUB_PIECE, defaultSubLang, subLangOk, subLangName, subTargets, subsNeeded, subLine, emailOk, nameOk } from "./rules.js";
 import { startCowork } from "./cowork.js";
+import { MeetCard } from "./MeetCard.jsx";
+import NoDeviceNote from "../parts/NoDeviceNote.jsx";
+import { noDeviceError, devicesMissing } from "../parts/noDevice.js";
 import "./calls.css";
 
 const REACTIONS = ["👍", "👏", "😂", "🎉", "❤️", "🙏"];
 const say = (s) => { try { toast(s); } catch (e) { /* the screen shows it too */ } };
 const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
+const nowIst = () => { try { return fmtTime(new Date()); } catch (e) { return ""; } };
+const b64 = (blob) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1] || ""); r.onerror = no; r.readAsDataURL(blob); });
+// a soft two-note chime (no sound file): someone asks to join
+function chime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext, ac = new AC();
+    [[660, 0], [880, 0.18]].forEach(([f, t]) => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = f; g.gain.setValueAtTime(0.0001, ac.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + t + 0.35); o.connect(g).connect(ac.destination); o.start(ac.currentTime + t); o.stop(ac.currentTime + t + 0.4); });
+    setTimeout(() => { try { ac.close(); } catch (e) { /* */ } }, 1200);
+  } catch (e) { /* no sound here: the toast is seen */ }
+}
+// subtitles: each person's own choice, remembered on this device (off at first)
+const SUBS_KEY = (who) => "fincom.call-subs:" + who;
+function loadSubs(who) {
+  let x = null; try { x = JSON.parse(localStorage.getItem(SUBS_KEY(who)) || "null"); } catch (e) { x = null; }
+  return { on: !!(x && x.on), lang: x && subLangOk(x.lang) ? x.lang : defaultSubLang([(document.documentElement.lang || ""), ...(navigator.languages || [navigator.language])]) };
+}
+const saveSubs = (who, s) => { try { localStorage.setItem(SUBS_KEY(who), JSON.stringify(s)); } catch (e) { /* this call only */ } };
 
 let root = null, host = null;
-// opts: {start: {kind, client_id, batch_id, title}} | {join: room_id} | {guest: {gt, session, name}}
+// opts: {start: {kind, client_id, batch_id, title}} | {join: room_id} | {code} (a member with a code) |
+//       {guest: {code | token, hello}} (the guest's page)
 export function openCall(opts) {
   if (host) { host.setAttribute("data-call-min", "false"); return; }
   host = document.createElement("div"); host.id = "fincom-call"; host.setAttribute("data-call-min", "false");
@@ -29,24 +61,33 @@ export function openCall(opts) {
   root = createRoot(host);
   root.render(<Call opts={opts} onClose={closeCall} />);
 }
-export function closeCall() { try { root && root.unmount(); } catch (e) { /* */ } if (host) host.remove(); root = null; host = null; }
+export function closeCall() { try { root && root.unmount(); } catch (e) { /* */ } if (host) host.remove(); root = null; host = null; try { window.dispatchEvent(new Event("fincom-meetings-changed")); } catch (e) { /* */ } }
 export const callOpen = () => !!host;
 
 function useForce() { const [, set] = useState(0); return () => set((x) => x + 1); }
 
 function Call({ opts, onClose }) {
-  const guest = opts.guest || null;
-  const api = useMemo(() => makeApi(guest), []);
-  const who = guest ? "guest" : String((typeof Cloud === "object" && Cloud.sess && (Cloud.sess() || {}).user_id) || "me");
-  const myName = guest ? guest.name : String(((typeof Cloud === "object" && Cloud.st && (Cloud.st.members || []).find((m) => m.user_id === who)) || {}).name || (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "Me");
+  // a guest: from the guest's page, or a member of another firm who typed this firm's code
+  const [gmode, setGmode] = useState(opts.guest || null);
+  const guest = gmode;
+  const apiBox = useRef(makeApi(gmode ? {} : null));
+  const api = useMemo(() => ({ call: (...a) => apiBox.current.call(...a), upload: (...a) => apiBox.current.upload(...a), put: (...a) => apiBox.current.put(...a) }), []);
+  const member = typeof Cloud === "object" && Cloud.sess && Cloud.sess();
+  const who = guest ? "guest" : String((member || {}).user_id || "me");
+  const accountName = String(((typeof Cloud === "object" && Cloud.st && (Cloud.st.members || []).find((m) => m.user_id === who)) || {}).name || (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || "Me");
+  const [gname, setGname] = useState(() => { try { return localStorage.getItem("fincom.guest-name") || ""; } catch (e) { return ""; } });
+  const [gemail, setGemail] = useState(() => { try { return localStorage.getItem("fincom.guest-email") || ""; } catch (e) { return ""; } });
+  const [otp, setOtp] = useState("");
+  const myName = guest ? (gname.trim() || "Guest") : accountName;
   const role = guest ? "guest" : String((typeof Cloud === "object" && Cloud.st && Cloud.st.role) || "");
-  const [phase, setPhase] = useState("lobby");            // lobby, joining, in, ended
+  const [phase, setPhase] = useState("lobby");            // lobby, joining, code, asking, denied, in, ended
   const [err, setErr] = useState("");
-  const [sess, setSess] = useState(guest ? guest.session : null);
+  const [sess, setSess] = useState(null);
   const [mic, setMic] = useState(true), [cam, setCam] = useState(true);
   const [fx, setFx] = useState(() => loadChoice(who));
   const [fxNote, setFxNote] = useState("");
-  const [panel, setPanel] = useState("");                  // "", people, chat, effects, more
+  const [panel, setPanel] = useState("");                  // "", people, chat, effects, details
+  const [menu, setMenu] = useState("");                    // "", more, reacts, subs
   const [min, setMin] = useState(false);
   const [status, setStatus] = useState("");               // reconnecting, …
   const [level, setLevel] = useState("high");
@@ -57,17 +98,32 @@ function Call({ opts, onClose }) {
   const [chat, setChat] = useState([]);
   const [unread, setUnread] = useState(0);
   const [roster, setRoster] = useState([]);               // the host's list (with the waiting room)
+  const [knocks, setKnocks] = useState([]);               // people asking to join, not yet answered (the host)
   const [presence, setPresence] = useState([]);
   const [reacts, setReacts] = useState({});               // pid -> {e, at}
-  const [caps, setCaps] = useState(false), [capLines, setCapLines] = useState([]);
+  const [caps, setCaps] = useState(false), [capLines, setCapLines] = useState([]);   // the browser's own captions (no Groq key)
+  const [subs, setSubs] = useState(() => loadSubs(who));  // {on, lang}: my subtitles
+  const [subLines, setSubLines] = useState([]);           // [{pid, name, text, lang, tr, paused, at}]
+  const [subNote, setSubNote] = useState("");
+  const [showOrig, setShowOrig] = useState({});
   const [screenOn, setScreenOn] = useState(false);
   const [cowork, setCowork] = useState(null);             // {follow, people, isHost} while working together
   const [remote, setRemote] = useState(null);             // remote help: {phase, id, peerId, rid, reason}
   const [after, setAfter] = useState(null);               // after the call
   const [needTap, setNeedTap] = useState(false);          // the browser held the others' sound until a tap
+  const [ready, setReady] = useState(false);              // "Your meeting's ready"
+  const [speaking, setSpeaking] = useState({});           // pid -> true
+  const [clock, setClock] = useState(nowIst());
+  const [devices, setDevices] = useState({ mics: [], cams: [], outs: [] }), [dev, setDev] = useState({ mic: "", cam: "", out: "" });
+  const [hello, setHello] = useState(gmode && gmode.hello ? gmode.hello : null);
+  // no microphone or camera reached this browser (Remote Desktop, a cloud PC, refused): {mic, cam}; joining still works
+  const [noDev, setNoDev] = useState({ mic: false, cam: false });
   useEffect(() => { const f = () => setNeedTap(true); window.addEventListener("fincom-call-tap", f); return () => window.removeEventListener("fincom-call-tap", f); }, []);
+  useEffect(() => { const t = setInterval(() => setClock(nowIst()), 20000); return () => clearInterval(t); }, []);
   const force = useForce();
-  const R = useRef({ remotes: new Map(), sigHandlers: {}, ch: null, media: null, raw: null, fxp: null, screen: null, recorder: null, mic: null, queue: null, t0: Date.now(), cw: null, recog: null }).current;
+  const subsRef = useRef(subs); subsRef.current = subs;
+  const micRef = useRef(mic); micRef.current = mic;
+  const R = useRef({ remotes: new Map(), sigHandlers: {}, ch: null, media: null, raw: null, fxp: null, screen: null, recorder: null, mic: null, queue: null, t0: Date.now(), cw: null, recog: null, seen: new Set(), subMic: null, subBusy: 0, subPauseUntil: 0 }).current;
   // the room's host records, ends it for everyone, mutes all, starts working together and remote help; the firm's owner
   // may also admit and remove people (the server's rule)
   const amHost = !!(sess && !guest && sess.me.role === "host");
@@ -76,21 +132,56 @@ function Call({ opts, onClose }) {
 
   // ---------------------------------------------------------------- the camera and microphone (lobby preview too)
   const preview = useRef(null);
+  async function openDevices(want) {
+    const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, ...(want && want.mic ? { deviceId: { exact: want.mic } } : {}) };
+    const video = { width: { ideal: 1280 }, height: { ideal: 720 }, ...(want && want.cam ? { deviceId: { exact: want.cam } } : { facingMode: "user" }) };
+    let s;
+    try { s = await navigator.mediaDevices.getUserMedia({ audio, video }); setErr(""); setNoDev({ mic: false, cam: false }); }
+    catch (e) {
+      try { s = await navigator.mediaDevices.getUserMedia({ audio }); setCam(false); setNoDev({ mic: false, cam: noDeviceError(e) }); setErr(noDeviceError(e) ? "" : "The camera could not be opened; you can still talk."); }
+      catch (e2) {
+        s = new MediaStream(); setMic(false); setCam(false);
+        // nothing reached the browser: one plain message (with Remote Desktop's steps) and joining to listen and chat
+        if (noDeviceError(e2)) { setNoDev({ mic: true, cam: true }); setErr(""); }
+        else setErr("The camera and microphone could not be opened; you can still join to listen and chat.");
+      }
+    }
+    return s;
+  }
+  async function listDevices() {
+    const miss = await devicesMissing();
+    if (miss && (miss.mic || miss.cam)) { setNoDev((d) => ({ mic: d.mic || miss.mic, cam: d.cam || miss.cam })); if (miss.mic) setMic(false); if (miss.cam) setCam(false); }
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      setDevices({ mics: all.filter((d) => d.kind === "audioinput"), cams: all.filter((d) => d.kind === "videoinput"), outs: all.filter((d) => d.kind === "audiooutput") });
+      const a = R.raw && R.raw.getAudioTracks()[0], v = R.raw && R.raw.getVideoTracks()[0];
+      setDev((d) => ({ mic: (a && a.getSettings && a.getSettings().deviceId) || d.mic, cam: (v && v.getSettings && v.getSettings().deviceId) || d.cam, out: d.out }));
+    } catch (e) { /* no list: the browser's own choice */ }
+  }
   useEffect(() => {
     let live = true;
     (async () => {
-      try {
-        R.raw = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" } });
-      } catch (e) {
-        try { R.raw = await navigator.mediaDevices.getUserMedia({ audio: true }); setCam(false); setErr("The camera could not be opened; you can still talk."); }
-        catch (e2) { R.raw = new MediaStream(); setMic(false); setCam(false); setErr(e2 && e2.name === "NotAllowedError" ? "The browser did not allow the camera and microphone. Allow them in the address bar, then open the call again." : "No camera or microphone was found."); }
-      }
-      if (!live) return;
+      R.raw = await openDevices(null);
+      if (!live) { R.raw.getTracks().forEach((t) => t.stop()); return; }
       await applyFx(fx);
+      listDevices();
       force();
     })();
     return () => { live = false; };
   }, []);
+  // another microphone or camera picked in the lobby
+  async function pickDevice(kind, id) {
+    const want = Object.assign({}, dev, { [kind]: id });
+    setDev(want);
+    if (kind === "out") { document.querySelectorAll("#fincom-call video[data-cam]").forEach((v) => { try { v.setSinkId && v.setSinkId(id); } catch (e) { /* */ } }); return; }
+    const old = R.raw;
+    if (R.fxp) { R.fxp.stop(); R.fxp = null; }
+    if (old) old.getTracks().forEach((t) => t.stop());
+    R.raw = await openDevices(want);
+    await applyFx(fx);
+    if (R.media) R.media.setVideoTrack(cam ? outVideo() : null);
+    force();
+  }
   const outVideo = () => (R.fxp ? R.fxp.track : (R.raw && R.raw.getVideoTracks()[0]) || null);
   async function applyFx(next) {
     const on = effectsOn(next);
@@ -119,26 +210,77 @@ function Call({ opts, onClose }) {
   }), []);
   function openChannel(topic) {
     if (R.ch) R.ch.close();
-    const ch = channel({ url: base(), key: publicKey(), topic, presenceKey: sess ? sess.me.id : "x", onStatus: (s) => setStatus(s === "joined" ? "" : s) });
-    for (const ev of ["rtc", "sfu", "sfu-ask", "chat", "hand", "react", "rec", "kick", "rekey", "end", "mute-all", "cowork", "cap", "remote", "rdid"]) ch.on(ev, (p) => (R.sigHandlers[ev] || []).forEach((f) => f(p)));
+    const ch = channel({ url: base(), key: publicKey(), topic, presenceKey: R.sess ? R.sess.me.id : "x", onStatus: (s) => setStatus(s === "joined" ? "" : s) });
+    for (const ev of ["rtc", "sfu", "sfu-ask", "chat", "hand", "react", "rec", "kick", "rekey", "end", "mute-all", "cowork", "cap", "remote", "rdid", "sub"]) ch.on(ev, (p) => (R.sigHandlers[ev] || []).forEach((f) => f(p)));
     ch.onPresence((list) => { setPresence(list); if (R.media) list.forEach((p) => p.pid && R.media.meet(p.pid)); });
     R.ch = ch; trackMe();
   }
-  function trackMe() { if (R.ch && sess) R.ch.track({ pid: sess.me.id, name: sess.me.name || myName, role: sess.me.role, mic: mic && mayPublish(!!rec, acked || !!R.recording), cam, hand, guest: !!guest, notice: true }); }
-  useEffect(() => { trackMe(); }, [hand, sess]);
+  function trackMe() { const s = R.sess; if (R.ch && s) R.ch.track({ pid: s.me.id, name: s.me.name || myName, role: s.me.role, mic: mic && mayPublish(!!rec, acked || !!R.recording), cam, hand, guest: !!guest, notice: true, subs: !!subs.on, lang: subs.lang }); }
+  useEffect(() => { trackMe(); }, [hand, sess, subs]);
+  const setMySubs = (p) => { const n = Object.assign({}, subs, p); setSubs(n); saveSubs(who, n); if (p.on === false) setSubLines([]); };
 
   // ---------------------------------------------------------------- joining
+  function enter(s) {
+    R.sess = s; setSess(s);
+    R.t0 = s.room.started_at ? Date.parse(s.room.started_at) : Date.now();
+    if (s.recording) setRec({ id: s.recording.id });
+    // the host who has just opened a meeting: the link and the code to share
+    if (!guest && s.me.role === "host" && (opts.start || opts.code)) setReady(true);
+    setPhase("in");
+  }
   async function join() {
     setPhase("joining"); setErr("");
     try {
-      let s = sess;
-      if (!s) s = opts.start ? await api.call("start", opts.start) : await api.call("join", { room_id: opts.join });
-      setSess(s);
-      R.t0 = s.room.started_at ? Date.parse(s.room.started_at) : Date.now();
-      if (s.recording) setRec({ id: s.recording.id });
-      setPhase("in");
+      const s = opts.start ? await api.call("start", opts.start) : opts.code ? await api.call("join_code", { code: opts.code }) : await api.call("join", { room_id: opts.join });
+      enter(s);
+    } catch (e) {
+      // another firm's meeting: this person joins it as a guest (their name and email, then the host lets them in)
+      if (e.kind === "otherfirm") {
+        apiBox.current = makeApi({});
+        setGname(accountName === "Me" ? "" : accountName); setGemail(String((Cloud.st && Cloud.st.email) || ""));
+        setGmode({ code: opts.code }); setPhase("lobby");
+        apiBox.current.call("guest_hello", { code: opts.code }).then(setHello, (x) => setErr(x.message));
+        setErr("This meeting is another firm's: write your name and email and ask to join.");
+        return;
+      }
+      setErr(e.message); setPhase("lobby");
+    }
+  }
+  // a guest: name and email, then (with FinCom's email set up) the code sent to it, then waiting for the host
+  async function askToJoin() {
+    setErr("");
+    if (!nameOk(gname)) { setErr("Write your name (2 to 60 letters)."); return; }
+    if (!emailOk(gemail.trim())) { setErr("Write your email address."); return; }
+    try { localStorage.setItem("fincom.guest-name", gname.trim()); localStorage.setItem("fincom.guest-email", gemail.trim()); } catch (e) { /* */ }
+    setPhase("joining");
+    try {
+      const j = await apiBox.current.call("guest_start", Object.assign(guest.code ? { code: guest.code } : { token: guest.token }, { name: gname.trim(), email: gemail.trim() }));
+      apiBox.current = makeApi({ gt: j.gt });
+      setPhase(j.code_sent ? "code" : "asking");
     } catch (e) { setErr(e.message); setPhase("lobby"); }
   }
+  async function verify() {
+    setErr("");
+    try { await api.call("guest_verify", { code: otp.trim() }); setPhase("asking"); } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => {
+    if (phase !== "asking") return;
+    let stop = false;
+    const tick = async () => {
+      if (stop) return;
+      try {
+        const j = await api.call("guest_poll", {});
+        if (j.state === "admitted") { enter(j); return; }
+        if (j.state === "denied") { setPhase("denied"); return; }
+        if (j.state === "removed") { setPhase("denied"); setErr("The host removed you from this call."); return; }
+        if (j.state === "ended") { setAfter({ why: "This meeting has ended.", room: null }); setPhase("ended"); return; }
+      } catch (e) { if (e.status === 401) { setErr(e.message); setPhase("lobby"); return; } }
+      setTimeout(tick, 2500);
+    };
+    tick();
+    return () => { stop = true; };
+  }, [phase]);
+
   useEffect(() => {
     if (phase !== "in" || !sess) return;
     openChannel(sess.topic);
@@ -158,20 +300,94 @@ function Call({ opts, onClose }) {
       sig.on("mute-all", (m) => { if (m.from !== sess.me.id) { setMic(false); say("The host muted everyone. Unmute when you speak."); } }),
       sig.on("cowork", (m) => { if (m.on) joinCowork(); else stopCowork(); }),
       sig.on("cap", (m) => { setCapLines((l) => l.filter((x) => x.pid !== m.pid).concat([{ pid: m.pid, name: m.name, text: m.text, at: Date.now() }]).slice(-4)); }),
+      sig.on("sub", (m) => addSub(m)),
       sig.on("remote", (m) => onRemote(m)),
       sig.on("rdid", (m) => setRemote((r) => r && r.id ? Object.assign({}, r, { rid: m.id, peerName: m.name }) : r)),
     ];
-    // the host: the waiting room and the people list every 3 s
+    // members: the people list every 3 s (the host also the waiting room, with a sound for each new person asking)
     let poll = null;
     if (!guest) {
-      const load = () => api.call("roster", { room_id: sess.room.id }).then((j) => { setRoster(j.people || []); if (j.status === "ended") leave(false, "The call has ended."); }).catch(() => {});
+      const load = () => api.call("roster", { room_id: sess.room.id }).then((j) => {
+        const ps = j.people || [];
+        setRoster(ps);
+        const waiting = ps.filter((p) => p.state === "waiting");
+        const fresh = waiting.filter((p) => !R.seen.has(p.id));
+        fresh.forEach((p) => R.seen.add(p.id));
+        if (fresh.length && j.host) { chime(); }
+        setKnocks((k) => waiting.filter((p) => k.some((x) => x.id === p.id) || fresh.some((x) => x.id === p.id)));
+        if (j.status === "ended") leave(false, "The call has ended.");
+      }).catch(() => {});
       load(); poll = setInterval(load, 3000);
     }
     if (sess.room.cowork_on && !guest) joinCowork();
-    const bye = () => { try { navigator.sendBeacon && 0; } catch (e) { /* */ } };
-    window.addEventListener("pagehide", bye);
-    return () => { offs.forEach((f) => f()); clearInterval(poll); window.removeEventListener("pagehide", bye); };
+    return () => { offs.forEach((f) => f()); clearInterval(poll); };
   }, [phase, sess && sess.room.id]);
+
+  // ---------------------------------------------------------------- who is speaking (each voice's level, a few times a second)
+  useEffect(() => {
+    if (phase !== "in" || !sess) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    let ac; try { ac = new AC(); } catch (e) { return; }
+    const meters = new Map();      // pid -> {track, an, buf}
+    const meter = (pid, track) => {
+      const m = meters.get(pid);
+      if (m && m.track === track) return m;
+      try { const src = ac.createMediaStreamSource(new MediaStream([track])), an = ac.createAnalyser(); an.fftSize = 512; src.connect(an); const x = { track, an, buf: new Float32Array(an.fftSize) }; meters.set(pid, x); return x; } catch (e) { return null; }
+    };
+    const t = setInterval(() => {
+      const on = {};
+      const tracks = [[sess.me.id, mic && R.raw && R.raw.getAudioTracks()[0]], ...[...R.remotes.entries()].map(([pid, s]) => [pid, s.cam && s.cam.getAudioTracks()[0]])];
+      for (const [pid, tr] of tracks) {
+        if (!tr) continue;
+        const m = meter(pid, tr); if (!m) continue;
+        m.an.getFloatTimeDomainData(m.buf);
+        let s = 0; for (let i = 0; i < m.buf.length; i++) s += m.buf[i] * m.buf[i];
+        if (Math.sqrt(s / m.buf.length) > 0.02) on[pid] = true;
+      }
+      setSpeaking((old) => { const a = Object.keys(old).sort().join(","), b = Object.keys(on).sort().join(","); return a === b ? old : on; });
+    }, 250);
+    return () => { clearInterval(t); try { ac.close(); } catch (e) { /* */ } };
+  }, [phase, sess && sess.room.id, mic]);
+
+  // ---------------------------------------------------------------- live subtitles
+  function addSub(m) {
+    if (!m || !m.text) return;
+    setSubLines((l) => l.filter((x) => x.pid !== m.pid && Date.now() - x.at < 8000).concat([Object.assign({}, m, { at: Date.now() })]).slice(-3));
+  }
+  useEffect(() => { if (!subLines.length) return; const t = setTimeout(() => setSubLines((l) => l.filter((x) => Date.now() - x.at < 7000)), 7200); return () => clearTimeout(t); }, [subLines]);
+  // my microphone in short pieces, only while someone in the call (me too) reads subtitles; never while held by the notice
+  const anyoneSubs = phase === "in" && subsNeeded(presence.length ? presence : [{ subs: subs.on }], false);
+  const held0 = rec && !acked && !R.recording;
+  useEffect(() => {
+    const want = anyoneSubs && mic && !held0 && R.raw && R.raw.getAudioTracks().length && window.MediaRecorder && sess;
+    if (!want) { if (R.subMic) { R.subMic.stop(); R.subMic = null; } return; }
+    if (R.subMic) return;
+    try {
+      R.subMic = micPieces({ track: R.raw.getAudioTracks()[0], t0: R.t0, isMuted: () => !micRef.current, sizes: SUB_PIECE, onPiece: (blob, seq, start, dur) => sendPiece(blob, start, dur) });
+    } catch (e) { R.subMic = null; }
+    return undefined;
+  }, [anyoneSubs, mic, held0, sess && sess.room.id]);
+  useEffect(() => () => { if (R.subMic) { R.subMic.stop(); R.subMic = null; } }, []);
+  async function sendPiece(blob, start, dur) {
+    if (!R.sess || R.subBusy >= 2 || Date.now() < R.subPauseUntil) return;      // a backlog is dropped: subtitles must be quick
+    const people = presenceRef.current.length ? presenceRef.current : [{ subs: subsRef.current.on, lang: subsRef.current.lang }];
+    const targets = subTargets(people, "");
+    if (!subsNeeded(people, false)) return;
+    R.subBusy++;
+    try {
+      const j = await api.call("caption", { room_id: R.sess.room.id, audio: await b64(blob), mime: blob.type, secs: Math.round(dur / 100) / 10, start_ms: start, targets });
+      if (j.text) {
+        const line = { pid: R.sess.me.id, name: R.sess.me.name || myName, text: j.text, lang: j.lang, tr: j.tr || {}, paused: !!j.paused };
+        sig.send("sub", line); addSub(line);
+      }
+      setSubNote(j.paused ? "Translation paused for a moment (the free limit): the words are shown as said." : "");
+    } catch (e) {
+      if (e.kind === "limit") { R.subPauseUntil = Date.now() + 30000; setSubNote("Subtitles paused for a moment (the free limit)."); }
+      else if (e.kind === "nokey") { R.subPauseUntil = Date.now() + 3600000; setSubNote("Translated subtitles are not set up yet; the browser's own captions are used."); if (!caps) toggleCaps(); }
+    }
+    R.subBusy--;
+  }
 
   // the recording notice: someone in the call while it records sees it and decides
   useEffect(() => {
@@ -244,7 +460,7 @@ function Call({ opts, onClose }) {
   }
   async function openFile(file) { try { const j = await api.call("download", { room_id: sess.room.id, path: file.path }); window.open(j.url, "_blank", "noopener"); } catch (e) { say(e.message); } }
 
-  // ---------------------------------------------------------------- captions (this browser's own recogniser)
+  // ---------------------------------------------------------------- the browser's own captions (when Groq is not set up)
   function toggleCaps() {
     if (caps) { try { R.recog && R.recog.stop(); } catch (e) { /* */ } R.recog = null; setCaps(false); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -297,12 +513,22 @@ function Call({ opts, onClose }) {
     if (state === "ended") { const id = remote && remote.id; setRemote(null); sig.send("remote", { state: "ended", close: true, to: remote && remote.to }); if (id) api.call("remote", { room_id: sess.room.id, op: "end", id }).catch(() => {}); }
   }
 
+  // ---------------------------------------------------------------- the waiting room (the host)
+  async function answer(p, yes) {
+    try {
+      await api.call(yes ? "admit" : "deny", { room_id: sess.room.id, participant_id: p.id });
+      setRoster((r) => r.map((x) => x.id === p.id ? Object.assign({}, x, { state: yes ? "admitted" : "denied" }) : x));
+      setKnocks((k) => k.filter((x) => x.id !== p.id));
+    } catch (e) { say(e.message); }
+  }
+
   // ---------------------------------------------------------------- leaving
   async function leave(endAll, why) {
     if (phase === "ended") return;
     stopCowork();
     if (R.recorder) { await toggleRec().catch(() => {}); }
     stopMic();
+    if (R.subMic) { R.subMic.stop(); R.subMic = null; }
     if (R.queue) await Promise.race([R.queue.drain(), new Promise((ok) => setTimeout(ok, 15000))]);
     try { R.recog && R.recog.stop(); } catch (e) { /* */ }
     if (endAll && sess) { sig.send("end", {}); await api.call("end", { room_id: sess.room.id }).catch(() => {}); }
@@ -314,38 +540,89 @@ function Call({ opts, onClose }) {
     setAfter({ why: why || (endAll ? "You ended the call for everyone." : "You left the call."), room: sess && sess.room });
     setPhase("ended"); setMin(false);
   }
+  function cancelLobby() { [R.raw].forEach((s) => s && s.getTracks().forEach((t) => t.stop())); if (R.fxp) R.fxp.stop(); if (phase === "asking" || phase === "code") api.call("leave", {}).catch(() => {}); onClose(); }
   useEffect(() => { if (host) host.setAttribute("data-call-min", min ? "true" : "false"); }, [min]);
+  // a menu of the bar closes on a click elsewhere or Esc
+  useEffect(() => {
+    if (!menu) return;
+    const out = (e) => { if (!e.target.closest || !e.target.closest("[data-bar-menu], [data-bar-opener]")) setMenu(""); };
+    const esc = (e) => { if (e.key === "Escape") setMenu(""); };
+    document.addEventListener("pointerdown", out); document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("pointerdown", out); document.removeEventListener("keydown", esc); };
+  }, [menu]);
 
-  // ---------------------------------------------------------------- drawing
-  if (phase === "lobby" || phase === "joining") return <div className="call-shell" data-call="lobby" data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"}>
-    <div className="call-lobby">
-      <h2>{opts.start ? (opts.start.title || "Start the call") : guest ? (guest.session.room.title || "Join the call") : "Join the call"}</h2>
-      <div className="call-preview"><video ref={preview} autoPlay playsInline muted data-preview="" />{!cam && <div className="call-camoff">Camera off</div>}</div>
-      <div className="call-row">
-        <button type="button" className={"call-btn" + (mic ? "" : " off")} aria-pressed={!mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? "Mic on" : "Mic off"}</button>
-        <button type="button" className={"call-btn" + (cam ? "" : " off")} aria-pressed={!cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? "Camera on" : "Camera off"}</button>
-        <button type="button" className="call-btn" onClick={() => setPanel(panel === "effects" ? "" : "effects")} data-call-effects="">Background and look</button>
+  // ---------------------------------------------------------------- drawing: the lobby
+  const lobbyLike = ["lobby", "joining", "code", "asking", "denied"].includes(phase);
+  if (lobbyLike) {
+    const title = guest ? (hello ? hello.title : "Join the meeting") : opts.start ? (opts.start.title || "Start the call") : "Ready to join?";
+    const sub = guest && hello ? (hello.firm ? "with " + hello.firm : "") + (hello.scheduled_at ? (hello.firm ? " · " : "") + (typeof fmtDateTime === "function" ? fmtDateTime(hello.scheduled_at) : "") : "") : opts.code ? "Meeting code " + opts.code : "";
+    return <div className="call-shell call-lobby-shell" data-call="lobby" data-guest-page={guest ? "" : undefined} data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"}>
+      <div className="lobby-brand"><span className="lobby-mark" aria-hidden="true">F</span> FinCom <span className="lobby-brand-sub">Meetings</span></div>
+      <div className="lobby">
+        <div className="lobby-left">
+          <div className="call-preview"><video ref={preview} autoPlay playsInline muted data-preview="" />{!cam && <div className="call-camoff">Camera is off</div>}
+            <span className="lobby-me">{myName}</span>
+            <div className="lobby-toggles">
+              <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} title={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} disabled={noDev.mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
+              <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} title={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} disabled={noDev.cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
+              <button type="button" className={"round" + (panel === "effects" ? " on" : "")} aria-label="Background and look" title="Background and look" onClick={() => setPanel(panel === "effects" ? "" : "effects")} data-call-effects=""><Sparkles width={20} height={20} /></button>
+            </div>
+          </div>
+          <div className="lobby-devices">
+            <label><span>Microphone</span><select value={dev.mic} onChange={(e) => pickDevice("mic", e.target.value)} data-dev-mic="">{devices.mics.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || "Microphone " + (i + 1)}</option>)}{!devices.mics.length && <option value="">The browser's choice</option>}</select></label>
+            <label><span>Camera</span><select value={dev.cam} onChange={(e) => pickDevice("cam", e.target.value)} data-dev-cam="">{devices.cams.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || "Camera " + (i + 1)}</option>)}{!devices.cams.length && <option value="">The browser's choice</option>}</select></label>
+            {devices.outs.length > 0 && <label><span>Speaker</span><select value={dev.out} onChange={(e) => pickDevice("out", e.target.value)} data-dev-out="">{devices.outs.map((d, i) => <option key={d.deviceId || i} value={d.deviceId}>{d.label || "Speaker " + (i + 1)}</option>)}</select></label>}
+          </div>
+          {(noDev.mic || noDev.cam) && <NoDeviceNote className="lobby-nodev" />}
+          {panel === "effects" && <Effects fx={fx} change={changeFx} note={fxNote} />}
+        </div>
+        <div className="lobby-right">
+          <h2 data-lobby-title="">{phase === "asking" ? "Asking to join…" : phase === "denied" ? "You can't join this call" : title}</h2>
+          {sub && phase !== "asking" && <p className="lobby-sub">{sub}</p>}
+          {!guest && phase !== "denied" && <p className="lobby-sub">Joining as <b>{accountName}</b></p>}
+          {guest && (phase === "lobby" || phase === "joining") && <form className="lobby-form" onSubmit={(e) => { e.preventDefault(); askToJoin(); }}>
+            <label className="f"><span>Your name</span><input value={gname} onChange={(e) => setGname(e.target.value)} required minLength={2} maxLength={60} autoComplete="name" data-guest-name="" /></label>
+            <label className="f"><span>Your email</span><input type="email" value={gemail} onChange={(e) => setGemail(e.target.value)} required autoComplete="email" data-guest-email="" /></label>
+            <p className="lobby-note">{hello && hello.mail ? "A code is sent to this email to check it is yours. " : ""}The host sees your name and lets you in. Your camera and microphone are used only in this call.</p>
+          </form>}
+          {phase === "code" && <form className="lobby-form" onSubmit={(e) => { e.preventDefault(); verify(); }}>
+            <label className="f"><span>The 6-figure code sent to {gemail}</span><input inputMode="numeric" pattern="[0-9]{6}" value={otp} onChange={(e) => setOtp(e.target.value)} required autoComplete="one-time-code" data-guest-code="" /></label>
+            <button type="submit" className="btn primary" data-guest-verify="">Check the code</button>
+          </form>}
+          {phase === "asking" && <p className="lobby-wait" role="status" data-guest-waiting=""><span className="lobby-spin" aria-hidden="true" />You'll join the call when someone lets you in.</p>}
+          {phase === "denied" && <p data-guest-denied="">{err || "Someone in the call denied your request to join."}</p>}
+          {(phase === "lobby" || phase === "joining") && <div className="lobby-subs">
+            <label><span>My language</span><select value={subs.lang} onChange={(e) => setMySubs({ lang: e.target.value })} data-subs-lang="">{SUB_LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}{l.native ? " · " + l.native : ""}</option>)}</select></label>
+            <label className="lobby-switch"><input type="checkbox" checked={subs.on} onChange={(e) => setMySubs({ on: e.target.checked })} data-subs-lobby="" /> Subtitles: {subs.on ? "On" : "Off"}</label>
+          </div>}
+          {err && phase !== "denied" && <p className="call-err" role="alert" data-guest-error="">{err}</p>}
+          <div className="lobby-acts">
+            {(phase === "lobby" || phase === "joining") && (guest
+              ? <button type="button" className="btn primary lobby-go" disabled={phase === "joining"} title={phase === "joining" ? "Asking…" : undefined} onClick={askToJoin} data-guest-continue="" data-call-ask="">{phase === "joining" ? "Asking…" : "Ask to join"}</button>
+              : <button type="button" className="btn primary lobby-go" disabled={phase === "joining"} title={phase === "joining" ? "Joining…" : undefined} onClick={join} data-call-join="">{phase === "joining" ? "Joining…" : "Join now"}</button>)}
+            <button type="button" className="btn" onClick={cancelLobby} data-call-cancel="">{phase === "asking" ? "Cancel the request" : "Cancel"}</button>
+          </div>
+        </div>
       </div>
-      {panel === "effects" && <Effects fx={fx} change={changeFx} note={fxNote} />}
-      {err && <p className="call-err" role="alert">{err}</p>}
-      <div className="call-row">
-        <button type="button" className="call-primary" disabled={phase === "joining"} onClick={join} data-call-join="">{phase === "joining" ? "Joining…" : "Join now"}</button>
-        <button type="button" className="call-btn" onClick={() => { [R.raw].forEach((s) => s && s.getTracks().forEach((t) => t.stop())); if (R.fxp) R.fxp.stop(); onClose(); }}>Cancel</button>
-      </div>
-    </div>
-  </div>;
+    </div>;
+  }
 
-  if (phase === "ended") return <div className="call-shell" data-call="ended"><AfterCall api={api} after={after} canStaff={canStaff} onClose={onClose} guest={!!guest} /></div>;
+  if (phase === "ended") return <div className="call-shell" data-call="ended"><AfterCall api={api} after={after} canStaff={canStaff} onClose={onClose} guest={!!guest} lang={subs.lang} /></div>;
 
+  // ---------------------------------------------------------------- drawing: in the call
   const pres = presence.filter((p) => p.pid && p.pid !== sess.me.id);
   const nameOf = (pid) => ((presence.find((p) => p.pid === pid) || roster.find((p) => p.id === pid) || {}).name) || "Someone";
   const screens = [...R.remotes.entries()].filter(([, s]) => s.screen).map(([pid, s]) => ({ pid, stream: s.screen }));
   if (R.screen) screens.unshift({ pid: sess.me.id, stream: R.screen, mine: true });
   const waiting = roster.filter((p) => p.state === "waiting");
   const held = rec && !acked && !R.recording;
-  return <div className={"call-shell" + (min ? " min" : "")} data-call="in" data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"} data-mode={sess.mode}>
+  const info = { room_id: sess.room.id, code: sess.room.code, title: sess.room.title, at: sess.room.scheduled_at, minutes: sess.room.minutes };
+  const shownSubs = subs.on ? subLines.map((l) => ({ l, v: subLine(l, subs.lang) })) : [];
+  const toggle = (p) => setPanel(panel === p ? "" : p);
+  return <div className={"call-shell call-in" + (min ? " min" : "") + (panel ? " has-side" : "")} data-call="in" data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"} data-mode={sess.mode}>
     <header className="call-top">
-      <b>{sess.room.title}</b>
+      <span className="call-when" data-call-clock="">{clock}{sess.room.code ? <> <span aria-hidden="true">|</span> <span data-call-code="">{sess.room.code}</span></> : null}</span>
+      <b className="call-title">{sess.room.title}</b>
       {rec && <span className="call-rec" data-call-recording="" role="status">● {CONSENT_TEXT}</span>}
       {status === "reconnecting" && <span className="call-warn" data-call-reconnecting="">Reconnecting…</span>}
       {level !== "high" && <span className="call-warn" data-call-level={level}>{level === "audio" || audioOnly ? "Weak line: audio only" : "Weak line: picture made smaller"}</span>}
@@ -365,58 +642,110 @@ function Call({ opts, onClose }) {
         : <p>Waiting for them to share their RustDesk ID (their screen shows the steps).</p>}
       <button type="button" className="call-btn small" onClick={() => markRemote("ended")}>Cancel</button>
     </div>}
+    {noDev.mic && !min && <div className="call-banner call-listen" data-call-listen-only="" role="status"><NoDeviceNote text={"Listening only: no microphone" + (noDev.cam ? " or camera" : "") + " reached this browser, so the others cannot hear you (chat works)."} /></div>}
     {held && <div className="call-modal" role="dialog" aria-modal="true" data-consent="">
       <div><h3>{CONSENT_TEXT}</h3><p>The host is recording this call (picture, voices and the words said, for a transcript). Your microphone and camera stay off until you choose.</p>
         <button type="button" className="call-primary" onClick={accept} data-consent-stay="">Stay in the call</button> <button type="button" className="call-btn" onClick={declineRec} data-consent-leave="">Leave</button></div></div>}
+    {/* someone asks to join: seen over the call whatever is open, with a sound */}
+    {isHost && knocks.length > 0 && <div className="call-knock" role="alert" data-knock="">
+      {knocks.length === 1 ? <><span><b>{knocks[0].name}</b> wants to join this call{knocks[0].email ? <small> · {knocks[0].email}{knocks[0].verified ? " · email checked" : ""}</small> : null}</span>
+        <button type="button" className="call-primary" onClick={() => answer(knocks[0], true)} data-knock-admit="">Admit</button>
+        <button type="button" className="call-btn" onClick={() => answer(knocks[0], false)} data-knock-deny="">Deny</button>
+        <button type="button" className="call-btn" onClick={() => setPanel("people")} data-knock-view="">View</button></>
+        : <><span><b>{knocks.length} people</b> want to join this call</span>
+          <button type="button" className="call-primary" onClick={() => knocks.forEach((p) => answer(p, true))} data-knock-admit-all="">Admit all</button>
+          <button type="button" className="call-btn" onClick={() => setPanel("people")} data-knock-view="">View all</button></>}
+    </div>}
+    {ready && !min && <div className="call-ready" data-call-ready="">
+      <button type="button" className="call-ready-x" aria-label="Close" onClick={() => setReady(false)} data-call-ready-close=""><X width={18} height={18} /></button>
+      <MeetCard info={info} api={api} />
+    </div>}
     <div className="call-main">
       {screens.length > 0 && <div className="call-stage">{screens.slice(0, 1).map((s) => <Vid key={s.pid} stream={s.stream} screen name={(s.mine ? "Your" : nameOf(s.pid) + "’s") + " screen"} />)}</div>}
       <div className="call-grid" data-count={pres.length + 1}>
-        <Tile me name={myName + " (you)"} stream={selfStream} camOn={cam} micOn={mic && !held} hand={hand} react={reacts[sess.me.id]} />
-        {pres.map((p) => { const s = R.remotes.get(p.pid) || {}; return <Tile key={p.pid} name={p.name + (p.guest ? " (guest)" : "")} stream={s.cam} camOn={p.cam !== false && !!s.cam} micOn={p.mic !== false} hand={p.hand} react={reacts[p.pid]} state={s.state} />; })}
+        <Tile me name={myName + " (you)"} stream={selfStream} camOn={cam} micOn={mic && !held} hand={hand} react={reacts[sess.me.id]} speaking={!!speaking[sess.me.id]} />
+        {pres.map((p) => { const s = R.remotes.get(p.pid) || {}; return <Tile key={p.pid} name={p.name + (p.guest ? " (guest)" : "")} stream={s.cam} camOn={p.cam !== false && !!s.cam} micOn={p.mic !== false} hand={p.hand} react={reacts[p.pid]} state={s.state} speaking={!!speaking[p.pid]} />; })}
       </div>
-      {capLines.length > 0 && caps && <div className="call-caps" data-captions="">{capLines.map((l) => <div key={l.pid}><b>{l.name}:</b> {l.text}</div>)}</div>}
+      {(shownSubs.length > 0 || (caps && capLines.length > 0)) && <div className="call-caps" data-captions="" aria-live="polite">
+        {shownSubs.map(({ l, v }) => <div key={l.pid} className="call-sub" data-sub-line={l.name} data-sub-lang={v.original ? subs.lang : l.lang} title={v.original ? "As said: " + l.text : undefined}
+          onClick={() => v.original && setShowOrig((o) => Object.assign({}, o, { [l.pid]: !o[l.pid] }))}>
+          <b>{l.name}:</b> <span data-sub-text="">{showOrig[l.pid] && v.original ? l.text : v.text}</span>{v.paused && <small className="call-sub-paused" data-sub-paused=""> · translation paused</small>}</div>)}
+        {caps && capLines.map((l) => <div key={"c" + l.pid}><b>{l.name}:</b> {l.text}</div>)}
+      </div>}
+      {subNote && subs.on && <p className="call-subnote" data-sub-note="">{subNote}</p>}
       {panel === "people" && <aside className="call-side" data-call-people="">
-        <h3>People ({pres.length + 1})</h3>
-        {isHost && waiting.length > 0 && <><h4>Waiting to join</h4>{waiting.map((p) => <div key={p.id} className="call-person" data-waiting={p.name}><span>{p.name} <small>{p.email}{p.verified ? " · email checked" : " · email not checked"}</small></span>
-          <button type="button" className="call-btn small" onClick={() => api.call("admit", { room_id: sess.room.id, participant_id: p.id }).then(() => setRoster((r) => r.map((x) => x.id === p.id ? Object.assign({}, x, { state: "admitted" }) : x))).catch((e) => say(e.message))} data-admit="">Admit</button>
-          <button type="button" className="call-btn small" onClick={() => api.call("deny", { room_id: sess.room.id, participant_id: p.id }).catch((e) => say(e.message))}>Deny</button></div>)}</>}
+        <div className="call-side-head"><h3>People</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div>
+        {isHost && <button type="button" className="call-btn wide" onClick={() => setPanel("details")} data-people-add="">Add people (link, code, email)</button>}
+        {isHost && waiting.length > 0 && <><h4>Waiting to join ({waiting.length})</h4>{waiting.map((p) => <div key={p.id} className="call-person" data-waiting={p.name}><span>{p.name} <small>{p.email}{p.verified ? " · email checked" : " · email not checked"}</small></span>
+          <button type="button" className="call-btn small" onClick={() => answer(p, true)} data-admit="">Admit</button>
+          <button type="button" className="call-btn small" onClick={() => answer(p, false)} data-deny="">Deny</button></div>)}</>}
+        <h4>In the call ({pres.length + 1})</h4>
         <div className="call-person"><span>{myName} (you){isHost ? " · host" : ""}</span></div>
         {pres.map((p) => <div key={p.pid} className="call-person" data-person={p.name}><span>{p.name}{p.guest ? " (guest)" : ""}{p.role === "host" ? " · host" : ""}{p.hand ? " ✋" : ""}{p.mic === false ? " · muted" : ""}</span>
           {isHost && <button type="button" className="call-btn small danger" onClick={async () => { if (!confirm("Remove " + p.name + " from the call?")) return; try { await api.call("remove", { room_id: sess.room.id, participant_id: p.pid }); sig.send("kick", { pid: p.pid }); R.media && R.media.forget(p.pid); sig.send("rekey", {}); const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t.topic); } catch (e) { say(e.message); } }} data-remove="">Remove</button>}
           {amHost && canStaff && !remote && <button type="button" className="call-btn small" onClick={() => { const reason = prompt("Remote help for " + p.name + ": why do you need to control their computer? (kept in the log)"); if (reason) startRemote(reason, p); }} data-remote-start="">Remote help</button>}</div>)}
         {amHost && <button type="button" className="call-btn small" onClick={() => { sig.send("mute-all", { from: sess.me.id }); say("Everyone else is muted."); }} data-mute-all="">Mute all</button>}
-        {isHost && !guest && <InviteBox api={api} room={sess.room} />}
+      </aside>}
+      {panel === "details" && <aside className="call-side" data-call-details="">
+        <div className="call-side-head"><h3>Meeting details</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div>
+        <MeetCard title=" " info={info} api={isHost ? api : null} guest={!isHost} />
       </aside>}
       {panel === "chat" && <aside className="call-side" data-call-chat="">
-        <h3>Chat</h3>
-        <div className="call-chat" ref={chatBox}>{chat.map((m) => <div key={m.id} className="call-msg"><b>{m.author}</b> <small>{new Date(m.at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</small>
+        <div className="call-side-head"><h3>In-call messages</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div>
+        <div className="call-chat" ref={chatBox}>{chat.map((m) => <div key={m.id} className="call-msg"><b>{m.author}</b> <small>{typeof fmtTime === "function" ? fmtTime(m.at) : ""}</small>
           <div>{m.file ? <button type="button" className="linkbtn" onClick={() => openFile(m.file)} data-chat-file={m.file.name}>📎 {m.file.name} ({fmtSize(m.file.size)})</button>
             : chatParts(m.body).map((p, i) => p.link ? <a key={i} href={p.link} target="_blank" rel="noopener noreferrer nofollow">{p.link}</a> : <span key={i}>{p.text}</span>)}</div></div>)}</div>
         <form onSubmit={(e) => { e.preventDefault(); const t = e.target.elements.msg; sendChat(t.value); t.value = ""; }} className="call-chatform">
-          <input name="msg" aria-label="Message" placeholder="Write a message" maxLength={4000} data-chat-input="" />
+          <input name="msg" aria-label="Message" placeholder="Send a message" maxLength={4000} data-chat-input="" />
           <button type="submit" className="call-btn small">Send</button>
           <button type="button" className="call-btn small" onClick={() => fileIn.current && fileIn.current.click()} data-chat-attach="">File</button>
           <input ref={fileIn} type="file" hidden onChange={(e) => { sendFile(e.target.files[0]); e.target.value = ""; }} data-chat-fileinput="" />
         </form>
       </aside>}
-      {panel === "effects" && <aside className="call-side"><Effects fx={fx} change={changeFx} note={fxNote} /></aside>}
+      {panel === "effects" && <aside className="call-side"><div className="call-side-head"><h3>Background and look</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div><Effects fx={fx} change={changeFx} note={fxNote} /></aside>}
     </div>
     <footer className="call-bar" role="toolbar" aria-label="Call controls">
-      <button type="button" className={"call-btn" + (mic ? "" : " off")} aria-pressed={!mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? "Mute" : "Unmute"}</button>
-      <button type="button" className={"call-btn" + (cam ? "" : " off")} aria-pressed={!cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? "Camera off" : "Camera on"}</button>
-      {navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && <button type="button" className={"call-btn" + (screenOn ? " on" : "")} aria-pressed={screenOn} onClick={toggleScreen} data-call-share="">{screenOn ? "Stop sharing" : "Share screen"}</button>}
-      <button type="button" className={"call-btn" + (hand ? " on" : "")} aria-pressed={hand} onClick={() => { setHand(!hand); }} data-call-hand="">{hand ? "Lower hand" : "Raise hand"}</button>
-      <span className="call-reacts">{REACTIONS.map((e) => <button key={e} type="button" className="call-react" aria-label={"React " + e} onClick={() => { sig.send("react", { pid: sess.me.id, e }); setReacts((r) => Object.assign({}, r, { [sess.me.id]: { e, at: Date.now() } })); }} data-call-react={e}>{e}</button>)}</span>
-      <button type="button" className={"call-btn" + (panel === "people" ? " on" : "")} onClick={() => setPanel(panel === "people" ? "" : "people")} data-call-people-btn="">People{isHost && waiting.length ? " (" + waiting.length + " waiting)" : ""}</button>
-      <button type="button" className={"call-btn" + (panel === "chat" ? " on" : "")} onClick={() => { setPanel(panel === "chat" ? "" : "chat"); setUnread(0); }} data-call-chat-btn="">Chat{unread && panel !== "chat" ? " (" + unread + ")" : ""}</button>
-      <button type="button" className={"call-btn" + (panel === "effects" ? " on" : "")} onClick={() => setPanel(panel === "effects" ? "" : "effects")} data-call-effects="">Background</button>
-      <button type="button" className={"call-btn" + (caps ? " on" : "")} aria-pressed={caps} onClick={toggleCaps} data-call-caps="">Captions</button>
-      <button type="button" className={"call-btn" + (audioOnly ? " on" : "")} aria-pressed={audioOnly} onClick={() => { const a = !audioOnly; setAudioOnly(a); R.media && R.media.setAudioOnly(a); }} data-call-audioonly="">Audio only</button>
-      {amHost && <button type="button" className={"call-btn" + (rec ? " on rec" : "")} onClick={toggleRec} data-call-record="">{rec ? "Stop recording" : "Record"}</button>}
-      {amHost && sess.room.kind !== "class" && <button type="button" className={"call-btn" + (cowork ? " on" : "")} onClick={toggleCowork} data-call-cowork="">{cowork ? "Stop working together" : "Work together"}</button>}
-      {cowork && !amHost && <button type="button" className="call-btn" onClick={() => R.cw && R.cw.setFollow(!cowork.follow)} data-call-follow="">{cowork.follow ? "Stop following" : "Follow the host"}</button>}
-      {amHost && <button type="button" className="call-btn danger" onClick={() => leave(true)} data-call-end="">End for everyone</button>}
-      <button type="button" className="call-btn danger" onClick={() => leave(false)} data-call-leave="">Leave</button>
+      <span className="call-bar-left" aria-hidden="true">{sess.room.title}</span>
+      <div className="call-bar-mid">
+        <button type="button" className={"round" + (mic ? "" : " off")} aria-pressed={!mic} aria-label={mic ? "Mute" : "Unmute"} title={noDev.mic ? "No microphone reached this browser" : mic ? "Turn off the microphone" : "Turn on the microphone"} disabled={noDev.mic} onClick={() => setMic(!mic)} data-call-mic="">{mic ? <Mic width={20} height={20} /> : <MicOff width={20} height={20} />}</button>
+        <button type="button" className={"round" + (cam ? "" : " off")} aria-pressed={!cam} aria-label={cam ? "Camera off" : "Camera on"} title={noDev.cam ? "No camera reached this browser" : cam ? "Turn off the camera" : "Turn on the camera"} disabled={noDev.cam} onClick={() => setCam(!cam)} data-call-cam="">{cam ? <Video width={20} height={20} /> : <VideoOff width={20} height={20} />}</button>
+        {navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && <button type="button" className={"round" + (screenOn ? " on" : "")} aria-pressed={screenOn} aria-label={screenOn ? "Stop presenting" : "Present now"} title={screenOn ? "Stop presenting" : "Present your screen"} onClick={toggleScreen} data-call-share=""><MonitorUp width={20} height={20} /></button>}
+        <button type="button" className={"round" + (hand ? " on" : "")} aria-pressed={hand} aria-label={hand ? "Lower hand" : "Raise hand"} title={hand ? "Lower hand" : "Raise hand"} onClick={() => setHand(!hand)} data-call-hand=""><Hand width={20} height={20} /></button>
+        <span className="call-pop-wrap">
+          <button type="button" className={"round" + (menu === "reacts" ? " on" : "")} aria-label="Send a reaction" title="Send a reaction" aria-expanded={menu === "reacts"} onClick={() => setMenu(menu === "reacts" ? "" : "reacts")} data-bar-opener="" data-call-reacts=""><Smile width={20} height={20} /></button>
+          <span className="call-pop call-reacts" hidden={menu !== "reacts"} data-bar-menu="">{REACTIONS.map((e) => <button key={e} type="button" className="call-react" aria-label={"React " + e} onClick={() => { sig.send("react", { pid: sess.me.id, e }); setReacts((r) => Object.assign({}, r, { [sess.me.id]: { e, at: Date.now() } })); setMenu(""); }} data-call-react={e}>{e}</button>)}</span>
+        </span>
+        <span className="call-pop-wrap">
+          <button type="button" className={"round" + (subs.on ? " on" : "")} aria-pressed={subs.on} aria-label={subs.on ? "Turn off subtitles" : "Turn on subtitles"} title={(subs.on ? "Subtitles on" : "Subtitles off") + " · " + subLangName(subs.lang)} onClick={() => setMySubs({ on: !subs.on })} data-call-caps="" data-call-subs=""><Captions width={20} height={20} /></button>
+          <button type="button" className="round tiny" aria-label="Subtitle language" title="Subtitle language" onClick={() => setMenu(menu === "subs" ? "" : "subs")} data-bar-opener="" data-call-subs-menu="">▾</button>
+          <span className="call-pop call-subs-pop" hidden={menu !== "subs"} data-bar-menu="">
+            <label className="lobby-switch"><input type="checkbox" checked={subs.on} onChange={(e) => setMySubs({ on: e.target.checked })} data-subs-toggle="" /> Subtitles {subs.on ? "on" : "off"}</label>
+            <label><span>My language</span><select value={subs.lang} onChange={(e) => setMySubs({ lang: e.target.value })} data-subs-lang="">{SUB_LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}{l.native ? " · " + l.native : ""}</option>)}</select></label>
+            <small>Only you see your subtitles. Off: nothing is translated for you.</small>
+          </span>
+        </span>
+        <span className="call-pop-wrap">
+          <button type="button" className={"round" + (menu === "more" ? " on" : "")} aria-label="More options" title="More options" aria-expanded={menu === "more"} onClick={() => setMenu(menu === "more" ? "" : "more")} data-bar-opener="" data-call-more=""><EllipsisVertical width={20} height={20} /></button>
+          <span className="call-pop call-more" hidden={menu !== "more"} data-bar-menu="" role="menu">
+            <button type="button" role="menuitem" onClick={() => { setMenu(""); toggle("effects"); }} data-call-effects="">Background and effects</button>
+            <button type="button" role="menuitem" aria-pressed={audioOnly} onClick={() => { const a = !audioOnly; setAudioOnly(a); R.media && R.media.setAudioOnly(a); setMenu(""); }} data-call-audioonly="">{audioOnly ? "Picture back on (audio only now)" : "Audio only (a weak line)"}</button>
+            <button type="button" role="menuitem" aria-pressed={caps} onClick={() => { toggleCaps(); setMenu(""); }} data-call-browser-caps="">{caps ? "Stop the browser's captions" : "The browser's own captions (English)"}</button>
+            {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleRec(); }} data-call-record="">{rec ? "Stop recording" : "Record the call"}</button>}
+            {amHost && sess.room.kind !== "class" && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleCowork(); }} data-call-cowork="">{cowork ? "Stop working together" : "Work together (FinCom side by side)"}</button>}
+            {cowork && !amHost && <button type="button" role="menuitem" onClick={() => { R.cw && R.cw.setFollow(!cowork.follow); setMenu(""); }} data-call-follow="">{cowork.follow ? "Stop following" : "Follow the host"}</button>}
+            {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); sig.send("mute-all", { from: sess.me.id }); say("Everyone else is muted."); }} data-call-muteall="">Mute everyone else</button>}
+            <button type="button" role="menuitem" onClick={() => { setMenu(""); setMin(!min); }}>{min ? "Open the call" : "Make the call small (use FinCom beside it)"}</button>
+            {amHost && <button type="button" role="menuitem" className="danger" onClick={() => { setMenu(""); leave(true); }} data-call-end="">End the call for everyone</button>}
+          </span>
+        </span>
+        <button type="button" className="round leave" aria-label="Leave call" title="Leave call" onClick={() => leave(false)} data-call-leave=""><PhoneOff width={22} height={22} /></button>
+      </div>
+      <div className="call-bar-right">
+        <button type="button" className={"flat" + (panel === "details" ? " on" : "")} aria-label="Meeting details" title="Meeting details" onClick={() => toggle("details")} data-call-details-btn=""><Info width={20} height={20} /></button>
+        <button type="button" className={"flat" + (panel === "people" ? " on" : "")} aria-label={"People" + (isHost && waiting.length ? ", " + waiting.length + " waiting" : "")} title="People" onClick={() => toggle("people")} data-call-people-btn=""><Users width={20} height={20} />
+          <span className="flat-n">{pres.length + 1}</span>{isHost && waiting.length > 0 && <span className="badge" data-waiting-count="">{waiting.length}</span>}</button>
+        <button type="button" className={"flat" + (panel === "chat" ? " on" : "")} aria-label={"Chat" + (unread && panel !== "chat" ? ", " + unread + " new" : "")} title="Chat with everyone" onClick={() => { toggle("chat"); setUnread(0); }} data-call-chat-btn=""><MessageSquare width={20} height={20} />{unread > 0 && panel !== "chat" && <span className="badge" data-chat-unread="">{unread}</span>}</button>
+      </div>
     </footer>
   </div>;
 }
@@ -432,11 +761,12 @@ function Vid({ stream, muted, name, screen, me }) {
   }, [stream]);
   return <video ref={v} autoPlay playsInline muted={!!muted} data-cam={screen ? undefined : ""} data-screen={screen ? "" : undefined} data-name={name} className={me ? "mirror" : ""} />;
 }
-function Tile({ name, stream, camOn, micOn, hand, react, me, state }) {
-  return <div className="call-tile" data-tile={name}>
+function Tile({ name, stream, camOn, micOn, hand, react, me, state, speaking }) {
+  return <div className={"call-tile" + (speaking && micOn ? " speaking" : "")} data-tile={name} data-speaking={speaking && micOn ? "" : undefined}>
     {stream ? <Vid stream={stream} muted={me} name={name} me={me} /> : null}
-    {!camOn && <div className="call-camoff">{String(name || "?").slice(0, 1).toUpperCase()}</div>}
+    {(!camOn || !stream) && <div className="call-camoff"><span className="call-avatar">{String(name || "?").slice(0, 1).toUpperCase()}</span></div>}
     <span className="call-name">{hand ? "✋ " : ""}{name}{micOn ? "" : " · muted"}{state === "disconnected" ? " · reconnecting" : ""}</span>
+    {!micOn && <span className="call-muted" aria-hidden="true">🔇</span>}
     {react && <span className="call-float" data-reaction={react.e}>{react.e}</span>}
   </div>;
 }
@@ -461,21 +791,6 @@ function Effects({ fx, change, note }) {
   </div>;
 }
 
-function InviteBox({ api, room }) {
-  const [link, setLink] = useState(null), [email, setEmail] = useState("");
-  const make = async () => { try { setLink(await api.call("invite", { room_id: room.id, email, base: location.href })); } catch (e) { alert(e.message); } };
-  return <div className="call-invite" data-invite="">
-    <h4>Invite someone without a FinCom sign-in</h4>
-    <input type="email" placeholder="Their email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Guest's email" />
-    <button type="button" className="call-btn small" onClick={make} data-invite-make="">Make a guest link</button>
-    {link && <div><input readOnly value={link.url} aria-label="Guest link" data-invite-link="" onFocus={(e) => e.target.select()} />
-      <button type="button" className="call-btn small" onClick={() => { try { navigator.clipboard.writeText(link.url); } catch (e) { /* */ } }}>Copy link</button>
-      <a className="call-btn small" href={"https://wa.me/?text=" + encodeURIComponent(link.text)} target="_blank" rel="noopener noreferrer">WhatsApp</a>
-      <a className="call-btn small" href={"mailto:" + encodeURIComponent(email) + "?subject=" + encodeURIComponent("Join the call: " + room.title) + "&body=" + encodeURIComponent(link.text)}>Email</a>
-      {link.emailed && <small> · emailed</small>}</div>}
-  </div>;
-}
-
 // the card the other person sees for remote help: RustDesk's own download, their ID, plain steps; RustDesk's own accept
 // window on their side is the consent; FinCom never asks for a password and never sets up unattended access
 function RemoteCard({ remote, share }) {
@@ -497,8 +812,10 @@ function RemoteCard({ remote, share }) {
 }
 
 // after the call: the transcript (each person's own microphone through Whisper), the summary, the action items
-function AfterCall({ api, after, canStaff, onClose, guest }) {
+function AfterCall({ api, after, canStaff, onClose, guest, lang }) {
   const [t, setT] = useState(null), [busy, setBusy] = useState(""), [sum, setSum] = useState(null), [pick, setPick] = useState({}), [msg, setMsg] = useState("");
+  // the summary in the person's own language (default English; the subtitle language they chose is offered)
+  const [sumLang, setSumLang] = useState(lang && lang !== "hinglish" ? lang : "en");
   const room = after && after.room;
   async function transcribe() {
     setBusy("transcript"); setMsg("");
@@ -512,7 +829,7 @@ function AfterCall({ api, after, canStaff, onClose, guest }) {
     } catch (e) { setMsg(e.message); }
     setBusy("");
   }
-  async function summarise() { setBusy("summary"); setMsg(""); try { const j = await api.call("summarise", { room_id: room.id }); setSum(j.summary); setPick(Object.fromEntries(j.summary.actions.map((a, i) => [i, true]))); } catch (e) { setMsg(e.message); } setBusy(""); }
+  async function summarise() { setBusy("summary"); setMsg(""); try { const j = await api.call("summarise", { room_id: room.id, lang: sumLang }); setSum(j.summary); setPick(Object.fromEntries(j.summary.actions.map((a, i) => [i, true]))); } catch (e) { setMsg(e.message); } setBusy(""); }
   async function addTasks() {
     const items = sum.actions.filter((a, i) => pick[i]);
     try { const j = await api.call("tasks", { room_id: room.id, items }); setMsg(j.added + " added to the client's due list."); } catch (e) { setMsg(e.message); }
@@ -523,7 +840,8 @@ function AfterCall({ api, after, canStaff, onClose, guest }) {
       <p className="call-note">The recording, transcript, summary and chat stay with {room.client_id ? "the client" : room.kind === "class" ? "the batch" : "this meeting"}.</p>
       <div className="call-row">
         <button type="button" className="call-btn" disabled={!!busy} onClick={transcribe} data-make-transcript="">{busy === "transcript" ? "Making the transcript…" : "Make the transcript"}</button>
-        <button type="button" className="call-btn" disabled={!!busy || !(t && t.lines && t.lines.length)} onClick={summarise} data-make-summary="">{busy === "summary" ? "Summarising…" : "Summary and action items"}</button>
+        <button type="button" className="call-btn" disabled={!!busy || !(t && t.lines && t.lines.length)} title={!(t && t.lines && t.lines.length) ? "Make the transcript first" : undefined} onClick={summarise} data-make-summary="">{busy === "summary" ? "Summarising…" : "Summary and action items"}</button>
+        <label className="call-check">in <select value={sumLang} onChange={(e) => setSumLang(e.target.value)} data-summary-lang="">{SUB_LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
       </div>
       {t && <p className="call-note" data-transcript-progress="">{t.done} of {t.all} pieces read{t.left ? ", " + t.left + " to go" : ""}.</p>}
       {t && t.lines && t.lines.length > 0 && <pre className="call-transcript" data-transcript="">{transcriptText(t.lines)}</pre>}

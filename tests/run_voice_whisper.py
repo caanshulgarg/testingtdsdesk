@@ -29,55 +29,13 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 
-FAKES = """(() => {
-  window.__recs = [];
-  class FakeRec {
-    constructor(){ this.lang = ''; this.state = 'new'; window.__recs.push(this); }
-    start(){ this.state = 'listening'; }
-    stop(){ if (this.state !== 'listening') return; this.state = 'stopped'; if (this.onend) this.onend(); }
-    abort(){ if (this.state !== 'listening') return; this.state = 'aborted'; if (this.onerror) this.onerror({error: 'aborted'}); if (this.onend) this.onend(); }
-  }
-  window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
-  window.__rec = () => window.__recs[window.__recs.length - 1];
-  window.__say = (parts) => { const r = window.__rec(); r.onresult({resultIndex: 0, results: parts.map(([t, fin]) => Object.assign([{transcript: t, confidence: .9}], {isFinal: !!fin}))}); };
-  // MediaRecorder: each recorder's file is "clip<n>" (n: the n-th recorder made), handed over when it stops
-  window.__mr = []; window.__tracksStopped = 0;
-  class FakeMR {
-    constructor(stream, o){ this.mimeType = (o && o.mimeType) || 'audio/webm'; this.opts = o || {}; this.state = 'inactive'; this.n = window.__mr.length; window.__mr.push(this); }
-    static isTypeSupported(t){ return true; }
-    start(){ this.state = 'recording'; }
-    stop(){ if (this.state === 'inactive') return; this.state = 'inactive'; setTimeout(() => { if (this.ondataavailable) this.ondataavailable({data: new Blob(['clip' + this.n], {type: this.mimeType})}); if (this.onstop) this.onstop(); }, 20); }
-  }
-  window.MediaRecorder = FakeMR;
-  window.__gumError = '';
-  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = async (c) => { window.__gumArgs = c; if (window.__gumError) throw Object.assign(new Error('mic'), {name: window.__gumError}); return {getTracks: () => [{stop(){ window.__tracksStopped++; }}]}; };
-  // the level meter's input: window.__level (0 quiet, 0.1 speech)
-  window.__level = 0;
-  class FakeAC { createMediaStreamSource(){ return {connect(){}}; } createAnalyser(){ return {fftSize: 1024, getFloatTimeDomainData(a){ a.fill(window.__level); }}; } close(){} }
-  window.AudioContext = FakeAC; window.webkitAudioContext = FakeAC;
-})()"""
-SETUP = """() => {
-  Cloud.cfg = () => ({url: "https://stand.supabase.co", key: "anon-key", email: "me@firm.test"});
-  Cloud.sess = () => ({access_token: "tok-x", refresh_token: "", user_id: "u1", email: "me@firm.test", at: Date.now(), expires_in: 3600});
-  Cloud.fresh = async () => {}; Cloud.refreshToken = async () => {};
-  Cloud.st.firm = "f1"; Cloud.st.role = "owner"; Cloud.st.state = "ok";
-  S.account = Object.assign(S.account || {}, {me: {role: "owner", email: "me@firm.test"}, firm: {name: "Test firm"}}); S.firm.firmName = "Test firm";
-  Cloud.rpc = async (fn) => fn === "asst_settings" ? {enabled: true, owner: true, default_on: true, consent: true} : {};
-  Cloud.api = async () => []; try { Live.stop(); } catch (e) {}
-  try { lsSet("tdsdesk:asst-notice", "1"); localStorage.setItem("tdsdesk:asst-voice-note", "1"); } catch (e) {}
-  const c = newCompany({name: "Leads Insurance Private Limited", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
-  S.coId = c.id; S.view = "company"; S.tab = "books"; render();
-  const real = window.fetch;
-  window.fetch = (u, o) => { if (String(u) !== ASST.url()) return real(u, o); return new Promise(() => {}); };
-  return ASST.loadSettings(true).then(() => c.id);
-}"""
+from voice_fakes import FAKES, SETUP, CORS
 box = lambda pg: pg.evaluate("document.getElementById('asstQ').value")
 mic_on = lambda pg: pg.locator("[data-asst-mic][aria-pressed=true]").count() == 1
 line = lambda pg: pg.inner_text("[data-asst-voice-msg]") if pg.locator("[data-asst-voice-msg]").count() else ""
 
 # the function, answered here: MODE[0] "ok" (the words "Whisper heard <the clip's content>"), "limit", "nokey"
 MODE, SEEN = ["ok"], []
-CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS"}
 def fn(route, request):
     if request.method == "OPTIONS": return route.fulfill(status=204, headers=CORS)
     u = urllib.parse.urlparse(request.url); qs = dict(urllib.parse.parse_qsl(u.query))
@@ -162,7 +120,7 @@ with sync_playwright() as p:
     pg.fill("#asstQ", ""); n = len(SEEN)
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(1600)
     ok(mic_on(pg), "quiet before any speech: still listening")
-    pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(500); pg.evaluate("window.__level = 0"); pg.wait_for_timeout(500)
+    pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(500); pg.evaluate("window.__level = 0.006"); pg.wait_for_timeout(500)
     ok(mic_on(pg), "less than the pause after speech: still listening")
     pg.wait_for_timeout(1100)
     ok(not mic_on(pg), "the pause after speech (heard by the level meter, no words from the browser) stopped it")
@@ -172,10 +130,13 @@ with sync_playwright() as p:
 
     print("5. a blocked microphone in plain words")
     pg.evaluate("window.__gumError = 'NotAllowedError'"); pg.fill("#asstQ", ""); pg.click("[data-asst-mic]"); pg.wait_for_timeout(300)
-    ok("microphone is blocked" in line(pg) and "site settings" in line(pg), "NotAllowedError: allow it in the site settings (%r)" % line(pg))
+    nd = lambda: pg.evaluate("(document.querySelector('[data-asst-voice] [data-no-device]') || {}).textContent || ''")
+    ok("No microphone/camera reached this browser" in nd(), "NotAllowedError: the one plain message (no microphone reached the browser) (%r)" % nd())
+    pg.click("[data-asst-voice] [data-no-device-how]")
+    ok("lock or camera sign beside the address" in nd() and "Remote Desktop" in nd(), "How: allow it beside the address, or Remote Desktop's steps")
     pg.click("[data-asst-mic]") if mic_on(pg) else None; pg.wait_for_timeout(200)
     pg.evaluate("window.__gumError = 'NotReadableError'"); pg.click("[data-asst-mic]"); pg.wait_for_timeout(300)
-    ok("another app" in line(pg), "NotReadableError: used by another app (%r)" % line(pg))
+    ok("No microphone/camera reached this browser" in nd(), "NotReadableError (held by another app or Remote Desktop): the same message (%r)" % nd())
     pg.click("[data-asst-mic]") if mic_on(pg) else None
     ok(not errors, "no page error (%s)" % errors[:2])
     ctx.close()
@@ -218,7 +179,7 @@ with sync_playwright() as p:
     # the pause after speech: 4 s unless the person set another
     pg.evaluate("localStorage.removeItem('tdsdesk:asst-voice-silence')"); pg.fill("#asstQ", "")
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(300)
-    pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(400); pg.evaluate("window.__level = 0"); pg.wait_for_timeout(3300)
+    pg.evaluate("window.__level = 0.1"); pg.wait_for_timeout(400); pg.evaluate("window.__level = 0.006"); pg.wait_for_timeout(3300)
     ok(mic_on(pg), "3.3 s quiet after speech: still listening (the default pause is 4 s)")
     pg.wait_for_timeout(1200)
     ok(not mic_on(pg), "about 4 s quiet after speech: stopped")

@@ -5,6 +5,7 @@ import ListTable from "../parts/ListTable.jsx";
 import { DueLine } from "../parts/DueList.jsx";
 import { goTallyCard } from "../parts/TallyChip.jsx";
 import { AutoToday } from "../parts/AutoPost.jsx";
+import { MeetToday } from "../calls/MeetLine.jsx";
 
 // ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked to Tally, in one line; each name points to
 // the Tally page's Connect Tally, step 4 with that client (15-Oct-2026: the one place to link), the rest are on that page
@@ -51,6 +52,7 @@ export default function Today() {
         <Metric label="Needs you" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
       </div>
       <AutoToday />
+      <MeetToday />
       {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}

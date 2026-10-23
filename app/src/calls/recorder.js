@@ -81,7 +81,11 @@ export function compositeRecorder({ tiles, screen, audio, onPart, fps = 12 }) {
 }
 
 // ---------------------------------------------------------------- my own microphone, in pieces
-export function micPieces({ track, t0, onPiece, isMuted }) {
+// sizes: the transcript's pieces by default (8 to 55 s, a 1.2 s pause); live subtitles pass shorter ones (rules.SUB_PIECE)
+export function micPieces({ track, t0, onPiece, isMuted, sizes }) {
+  const Z = sizes || null;
+  const ends = (ms, silent) => (Z ? ms >= Z.maxMs || (ms >= Z.minMs && silent >= Z.pauseMs) : pieceEnds(ms, silent));
+  const minSpeech = Z ? Z.minSpeechMs : 500;
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC(), src = ac.createMediaStreamSource(new MediaStream([track])), an = ac.createAnalyser();
   an.fftSize = 1024; src.connect(an);
@@ -96,7 +100,7 @@ export function micPieces({ track, t0, onPiece, isMuted }) {
     rec.onstop = () => {
       const dur = Math.min(PIECE_MAX_MS + 2000, Date.now() - myStart), had = speechMsOf.get(myRec) || 0;
       // a piece with less than half a second of speech is not sent (it costs the free allowance and says nothing)
-      if (had >= 500 && chunks.length) onPiece(new Blob(chunks, { type: myRec.mimeType || mime || "audio/webm" }), seq++, Math.max(0, myStart - t0), Math.min(60000, dur));
+      if (had >= minSpeech && chunks.length) onPiece(new Blob(chunks, { type: myRec.mimeType || mime || "audio/webm" }), seq++, Math.max(0, myStart - t0), Math.min(60000, dur));
     };
     rec.start(1000);
   }
@@ -108,7 +112,7 @@ export function micPieces({ track, t0, onPiece, isMuted }) {
     const rms = Math.sqrt(s / buf.length), now = Date.now(), dt = now - lastTick; lastTick = now;
     const speaking = rms > 0.015 && !(isMuted && isMuted());
     if (speaking) { silentSince = now; speechMs += dt; speechMsOf.set(rec, speechMs); }
-    if (pieceEnds(now - started, now - silentSince)) { const r = rec; begin(); try { r.stop(); } catch (e) { /* */ } }
+    if (ends(now - started, now - silentSince)) { const r = rec; begin(); try { r.stop(); } catch (e) { /* */ } }
   }
   begin();
   timer = setInterval(tick, 100);

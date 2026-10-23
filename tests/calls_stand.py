@@ -93,14 +93,22 @@ class Hub:
         return [t for t in self.frames if pred(t)]
 
 # ---------------------------------------------------------------- the fincom-call function, faked
+LETTERS = "abcdefghjkmnpqrstuvwxyz"
+def code_of(n):
+    x = [LETTERS[(n * 7 + i * 5 + 3) % 23] for i in range(10)]
+    return "".join(x[:3]) + "-" + "".join(x[3:7]) + "-" + "".join(x[7:])
+
 class Fn:
-    def __init__(self, allow_recording=True):
+    def __init__(self, allow_recording=True, mail=True, subs=None):
         self.allow = allow_recording
+        self.mail = mail
+        self.subs = subs or {}       # speaker's name -> {"text", "lang", "tr": {lang: text}}: what Whisper and the translation give back
+        self.captions = []
         self.rooms, self.people, self.invites, self.msgs, self.recs, self.pieces, self.uploads, self.tasks, self.remote, self.calls = {}, {}, {}, [], {}, [], [], [], [], []
         self.codes = {}
     def session(self, r, p):
         rec = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
-        return {"ok": True, "room": {k: r[k] for k in ("id", "kind", "title", "client_id", "batch_id", "status", "host_user", "cowork_on", "started_at")},
+        return {"ok": True, "room": dict({k: r[k] for k in ("id", "kind", "title", "client_id", "batch_id", "status", "host_user", "cowork_on", "started_at")}, code=r.get("code"), scheduled_at=r.get("scheduled_at"), minutes=r.get("minutes")),
                 "me": {"id": p["id"], "role": p["role"], "name": p["name"], "state": p["state"]}, "topic": "call:%s-e%d" % (r["id"][:8], r["epoch"]),
                 "ice": [], "mode": "p2p", "max": 4, "recording": {"id": rec["id"], "notice": "This call is being recorded"} if rec else None}
     def handle(self, body, tok):
@@ -110,21 +118,30 @@ class Fn:
         def err(code, msg, kind="other"): return code, {"ok": False, "error": msg, "kind": kind}
         def room_of(): return self.rooms.get(gp["room"]) if gp else self.rooms.get(body.get("room_id"))
         def me_in(r): return gp if gp else next((p for p in self.people.values() if p["room"] == r["id"] and p.get("user") == (u or {}).get("id")), None)
+        def entry():
+            if body.get("code") is not None:
+                r = next((x for x in self.rooms.values() if x.get("code") == body.get("code")), None)
+                if not r: return None, err(404, "No meeting has this code. Check it with the person who sent it.", "nocode")
+                if r["status"] == "ended": return None, err(410, "This meeting has ended.", "ended")
+                return r["id"], None
+            inv = self.invites.get(body.get("token"))
+            if not inv: return None, err(404, "This link is not a FinCom call link.", "link")
+            return inv, None
         if a == "guest_hello":
-            inv = self.invites.get(body.get("token"))
-            if not inv: return err(404, "This link is not a FinCom call link.", "link")
-            r = self.rooms[inv]
-            return 200, {"ok": True, "title": r["title"], "firm": "Garg & Co", "kind": r["kind"], "status": r["status"], "mail": True}
+            rid, e = entry()
+            if e: return e
+            r = self.rooms[rid]
+            return 200, {"ok": True, "title": r["title"], "firm": "Garg & Co", "kind": r["kind"], "status": r["status"], "code": r.get("code"), "scheduled_at": r.get("scheduled_at"), "mail": self.mail}
         if a == "guest_start":
-            inv = self.invites.get(body.get("token"))
-            if not inv: return err(404, "bad link", "link")
+            rid, e = entry()
+            if e: return e
             pid = "99999999-0000-4000-8000-%012d" % (len(self.people) + 1)
-            self.people[pid] = {"id": pid, "room": inv, "role": "guest", "name": body["name"], "email": body["email"], "state": "waiting", "verified": False}
+            self.people[pid] = {"id": pid, "room": rid, "role": "guest", "name": body["name"], "email": body["email"], "state": "waiting", "verified": False}
             self.codes[pid] = "424242"
-            return 200, {"ok": True, "gt": "gt-" + pid, "code_sent": True, "mail": True}
+            return 200, {"ok": True, "gt": "gt-" + pid, "code_sent": self.mail, "mail": self.mail}
         if body.get("gt"):
             if not gp: return err(401, "pass", "guest")
-            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave"): return err(403, "A guest cannot do that.", "guest")
+            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave", "caption"): return err(403, "A guest cannot do that.", "guest")
             if a == "guest_verify":
                 if body.get("code") != self.codes.get(gp["id"]): return err(400, "That code is not right.", "otp")
                 gp["verified"] = True; return 200, {"ok": True, "verified": True}
@@ -138,13 +155,31 @@ class Fn:
             if u["role"] not in ("owner", "staff"): return err(403, "A look-only member can join a call but not start one.", "role")
             r = next((x for x in self.rooms.values() if x["status"] == "open" and x["client_id"] == body.get("client_id") and body.get("kind") == "client"), None)
             if not r:
-                rid = "cccccccc-0000-4000-8000-%012d" % (len(self.rooms) + 1)
-                r = self.rooms[rid] = {"id": rid, "kind": body.get("kind"), "title": "Call with Client One" if body.get("kind") == "client" else body.get("title") or "Help call", "client_id": body.get("client_id"),
-                                       "batch_id": body.get("batch_id"), "status": "open", "host_user": u["id"], "cowork_on": False, "started_at": "2026-10-23T05:00:00Z", "epoch": 1}
+                r = self._room(u, kind=body.get("kind"), title="Call with Client One" if body.get("kind") == "client" else body.get("title") or ("Meeting" if body.get("kind") == "meeting" else "Help call"),
+                               client_id=body.get("client_id"), batch_id=body.get("batch_id"), status="open")
             return 200, self.session(r, self._join(r, u))
+        if a in ("create", "schedule"):
+            if u["role"] not in ("owner", "staff"): return err(403, "Only the owner or staff can create a meeting.", "role")
+            r = self._room(u, kind="meeting", title=body.get("title") or "Meeting", client_id=body.get("client_id"), status="scheduled", scheduled_at=body.get("at"), minutes=body.get("minutes"), invitees=body.get("emails") or [])
+            url = (body.get("base") or "").split("#")[0].split("?")[0] + "#/join/" + r["code"]
+            text = "%s invites you to \"%s\".\n\nJoin: %s\nMeeting code: %s" % (u["name"], r["title"], url, r["code"])
+            return 200, {"ok": True, "room_id": r["id"], "code": r["code"], "url": url, "title": r["title"], "at": body.get("at"), "minutes": body.get("minutes"), "emails": body.get("emails") or [],
+                         "text": text, "subject": "Invitation: " + r["title"], "ics": "BEGIN:VCALENDAR", "emailed": len(body.get("emails") or []) if self.mail else 0, "mail": self.mail}
+        if a == "join_code":
+            r = next((x for x in self.rooms.values() if x.get("code") == body.get("code")), None)
+            if not r: return err(404, "No meeting has this code. Check it with the person who sent it.", "nocode")
+            if r["status"] == "ended": return err(410, "This meeting has ended.", "ended")
+            if r["status"] == "scheduled": r["status"] = "open"
+            return 200, self.session(r, self._join(r, u))
+        if a == "meetings":
+            mine = lambda r: r["host_user"] == u["id"] or u["email"] in (r.get("invitees") or [])
+            row = lambda r: dict({k: r.get(k) for k in ("id", "kind", "title", "status", "client_id", "scheduled_at", "minutes", "code", "started_at", "host_user")}, mine=mine(r))
+            return 200, {"ok": True, "upcoming": [row(r) for r in self.rooms.values() if r["status"] in ("scheduled", "open") and (r["kind"] == "meeting" or r["status"] == "open")],
+                         "recent": [dict(row(r), recording=any(x["room"] == r["id"] for x in self.recs.values()), transcript=False) for r in self.rooms.values() if r["status"] == "ended"]}
         if a == "join":
             r = self.rooms.get(body.get("room_id"))
             if not r or r["status"] == "ended": return err(410, "This call has ended.", "ended")
+            if r["status"] == "scheduled": r["status"] = "open"
             return 200, self.session(r, self._join(r, u))
         if a in ("rec_part", "rec_stop"):
             rec = self.recs.get(body.get("recording_id"))
@@ -162,8 +197,10 @@ class Fn:
                          for x in self.people.values() if x["room"] == r["id"] and x["state"] in ("waiting", "admitted") and (host or x["state"] == "admitted")], "host": host, "status": r["status"], "cowork_on": r["cowork_on"]}
         if a == "invite":
             t = secrets.token_urlsafe(32)[:43].ljust(43, "x"); self.invites[t] = r["id"]
-            url = body.get("base", "").split("#")[0] + "#join=" + t
-            return 200, {"ok": True, "token": t, "url": url, "text": "Join: " + url, "emailed": False, "mail": True}
+            url = body.get("base", "").split("#")[0].split("?")[0] + "#/join/" + r["code"]
+            emails = [e for e in (body.get("emails") or []) if e]
+            self.invited = getattr(self, "invited", []) + emails
+            return 200, {"ok": True, "token": t, "code": r["code"], "url": url, "link": body.get("base", "").split("#")[0] + "#join=" + t, "text": "Join: " + url, "emailed": bool(self.mail and emails), "mail": self.mail}
         if a in ("admit", "deny", "remove"):
             if not host: return err(403, "Only the host can do that.", "host")
             x = self.people.get(body.get("participant_id"))
@@ -192,6 +229,11 @@ class Fn:
             return 200, {"ok": True, "recording_id": rid, "notice": "This call is being recorded"}
         if a == "consent": self.calls[-1]["who"] = p["name"]; return 200, {"ok": True}
         if a == "piece": self.pieces.append(dict(body, who=p["name"])); return 200, {"ok": True}
+        if a == "caption":
+            said = self.subs.get(p["name"]) or {"text": "", "lang": "en", "tr": {}}
+            targets = [t for t in (body.get("targets") or []) if t != said["lang"]]
+            self.captions.append({"who": p["name"], "targets": targets, "bytes": len(body.get("audio") or "")})
+            return 200, {"ok": True, "text": said["text"], "lang": said["lang"], "tr": {t: said["tr"].get(t) for t in targets}, "paused": False}
         if a == "transcribe":
             if u["role"] not in ("owner", "staff"): return err(403, "Only the owner or staff can make the transcript.", "role")
             lines = [{"who": x["who"], "start_ms": x["start_ms"], "text": "words heard from " + x["who"]} for x in sorted(self.pieces, key=lambda x: x["start_ms"]) if x["room_id"] == r["id"] or True]
@@ -216,6 +258,7 @@ class Fn:
             return 200, {"ok": True, "ended": bool(row)}
         if a == "leave":
             if p: p["state"] = "left"
+            if r["kind"] == "meeting" and not any(x["room"] == r["id"] and x["state"] == "admitted" for x in self.people.values()): r["status"] = "scheduled"
             return 200, {"ok": True}
         if a == "end":
             if not host: return err(403, "Only the host can end the call for everyone.", "host")
@@ -224,6 +267,12 @@ class Fn:
                 if x["end"] is None: x["end"] = time.time()
             return 200, {"ok": True}
         return err(400, "Unknown request " + str(a))
+    def _room(self, u, **kw):
+        rid = "cccccccc-0000-4000-8000-%012d" % (len(self.rooms) + 1)
+        r = dict({"id": rid, "kind": "meeting", "title": "Meeting", "client_id": None, "batch_id": None, "status": "open", "host_user": u["id"], "cowork_on": False,
+                  "started_at": "2026-10-23T05:00:00Z", "epoch": 1, "code": code_of(len(self.rooms) + 1), "scheduled_at": None, "minutes": None, "invitees": []}, **{k: v for k, v in kw.items() if v is not None or k in ("client_id", "batch_id")})
+        self.rooms[rid] = r
+        return r
     def _join(self, r, u):
         p = next((x for x in self.people.values() if x["room"] == r["id"] and x.get("user") == u["id"]), None)
         if not p:
@@ -353,6 +402,6 @@ def call_of_three(br, port, hub, fn, rest, checks, member_tok="tok-look"):
     wait_for(G, "!!document.querySelector('[data-guest-code]')"); G.fill("[data-guest-code]", "424242"); press(G, "[data-guest-verify]")
     wait_for(G, "!!document.querySelector('[data-guest-waiting]')")
     press(A, "[data-call-people-btn]"); wait_for(A, "!!document.querySelector('[data-waiting] [data-admit]')", 15000); press(A, "[data-waiting] [data-admit]")
-    wait_for(G, "!!document.querySelector('[data-call-join]')", 15000); press(G, "[data-call-join]")
+    wait_for(G, "!!document.querySelector('#fincom-call [data-call=in]')", 15000)
     wait_for(A, "document.querySelectorAll('#fincom-call [data-tile]').length === 3", 30000)
     return (actx, A), (bctx, B), (gctx, G, gseen), rid

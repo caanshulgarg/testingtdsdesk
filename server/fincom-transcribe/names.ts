@@ -63,6 +63,12 @@ export function devanagariShare(text: string): number {
   if (!letters.length) return 0;
   return letters.filter((c) => DEVA.test(c)).length / letters.length;
 }
+// the share of letters in the Arabic script, as Urdu is written (0-1)
+export function arabicShare(text: string): number {
+  const letters = [...String(text || "")].filter((c) => /[\p{L}\p{M}]/u.test(c));
+  if (!letters.length) return 0;
+  return letters.filter((c) => /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/.test(c)).length / letters.length;
+}
 export function toLatin(text: string): string {
   return String(text || "").split(/(\s+)/).map((w) => (DEVA.test(w) ? wordToLatin(w) : w)).join("");
 }

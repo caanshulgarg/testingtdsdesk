@@ -10,6 +10,7 @@
 // last one ends (a word at the seam is never cut), and the person is told to speak only once the recorder runs (onReady).
 // The function corrects the client's names; the changes ({from, to}) come back with the words, for the app to show.
 // Nothing is kept: the clip lives in this page's memory until it is sent, and the function keeps neither audio nor words.
+import { noDeviceError } from "./noDevice.js";
 
 // a piece's length before a new one starts (the function takes at most 60 s); a test may shorten it
 const splitMs = () => Number(globalThis.FINCOM_VOICE_SPLIT_MS) || 55000;
@@ -18,6 +19,9 @@ const SPEECH = 0.02;           // the level (RMS, 0-1) that counts as speech, ab
 export const SILENCE_MS = 4000; // the pause after speech that ends the listening (a person may set 1-15 s)
 export const PRE_ROLL_MS = 300; // a new piece starts this long before the last one ends
 export const BITRATE = 40000;   // opus, bits a second
+// below this level (RMS) for the whole listening, the microphone sent no sound (a silent Remote Desktop microphone): the
+// clip is not sent to be heard (23-Oct-2026)
+export const QUIET = 0.003;
 // what the microphone is asked for (each an ideal: a microphone that cannot is used as it is)
 export const MIC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 };
 
@@ -41,10 +45,12 @@ export function micWords(e) {
   return "The microphone could not start. Tap the mic to try again, or type.";
 }
 
-// start recording. o: {silenceMs, onSilence(), onError(words), onReady() once the recorder runs}. Returns {stop(): Promise<clips>, abort()} at once; the
+// start recording. o: {silenceMs, onSilence(), onError(words), onNoDevice(error) (no microphone reached the browser: missing,
+// refused or held, as in Remote Desktop), onReady() once the recorder runs}. The clips stop() gives carry quiet: true when
+// the level meter saw no sound at all. Returns {stop(): Promise<clips>, abort()} at once; the
 // microphone is asked for in the background (a prompt left unanswered just records nothing, and the browser's words stand).
 export function startRecording(o = {}) {
-  const st = { on: true, stream: null, rec: null, prev: null, seq: 0, chunks: [], clips: [], at: 0, ctx: null, timer: null, split: null, heard: false, loud: 0, done: null, pending: 0, settle: null };
+  const st = { on: true, stream: null, rec: null, prev: null, seq: 0, chunks: [], clips: [], at: 0, ctx: null, timer: null, split: null, heard: false, loud: 0, done: null, pending: 0, settle: null, peak: 0, ticks: 0 };
   const type = pickType();
   const closeAll = () => {
     clearInterval(st.timer); clearTimeout(st.split);
@@ -78,7 +84,7 @@ export function startRecording(o = {}) {
   // the level meter: speech, then about 3 s quiet, ends the listening
   const meter = () => {
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC || !o.onSilence) return;
+    if (!AC) return;
     try {
       const ctx = new AC(); st.ctx = ctx;
       const src = ctx.createMediaStreamSource(st.stream), an = ctx.createAnalyser();
@@ -89,8 +95,9 @@ export function startRecording(o = {}) {
         let s = 0;
         if (an.getFloatTimeDomainData) { an.getFloatTimeDomainData(buf); for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i]; }
         const rms = Math.sqrt(s / buf.length), now = Date.now();
+        st.ticks++; if (rms > st.peak) st.peak = rms;
         if (rms > SPEECH) { st.heard = true; st.loud = now; }
-        else if (st.heard && now - st.loud >= (o.silenceMs || SILENCE_MS)) { st.heard = false; o.onSilence(); }
+        else if (st.heard && o.onSilence && now - st.loud >= (o.silenceMs || SILENCE_MS)) { st.heard = false; o.onSilence(); }
       }, TICK);
     } catch (e) { /* no meter: the browser's own pause and the tap still stop it */ }
   };
@@ -103,7 +110,8 @@ export function startRecording(o = {}) {
     }, (e) => {
       // a blocked or busy microphone is said in plain words; otherwise (no microphone found, ...) the recording is just off
       // and the browser's recogniser, which says so itself, goes on
-      if (st.on && o.onError && /^(NotAllowedError|SecurityError|PermissionDeniedError|NotReadableError|TrackStartError)$/.test((e && e.name) || "")) o.onError(micWords(e));
+      if (st.on && o.onNoDevice && noDeviceError(e)) o.onNoDevice(e);
+      else if (st.on && o.onError && /^(NotAllowedError|SecurityError|PermissionDeniedError|NotReadableError|TrackStartError)$/.test((e && e.name) || "")) o.onError(micWords(e));
     });
   }
   return {
@@ -112,7 +120,9 @@ export function startRecording(o = {}) {
       if (st.done) return st.done;
       st.on = false;
       // the microphone is let go once the last piece is whole
-      st.done = new Promise((res) => { st.settle = (clips) => { closeAll(); res(clips); }; });
+      // quiet: the level meter ran (a few readings) and never saw sound
+      const quiet = st.ticks >= 3 && st.peak < QUIET;
+      st.done = new Promise((res) => { st.settle = (clips) => { closeAll(); clips.quiet = quiet; res(clips); }; });
       clearInterval(st.timer); clearTimeout(st.split);
       const r = st.rec, p = st.prev; st.rec = null; st.prev = null;
       for (const x of [p, r]) { try { if (x && x.state !== "inactive") x.stop(); } catch (e) { /* stopped */ } }

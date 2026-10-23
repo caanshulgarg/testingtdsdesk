@@ -4,8 +4,9 @@
 // Whisper's words replace the browser's. On any failure the app keeps the browser's words.
 //   POST the audio itself (Content-Type audio/webm, audio/ogg, audio/mp4 or audio/wav; at most 5 MB and 60 s), with
 //     ?lang=hi|en|auto (auto: Hinglish and the other languages), &latin=1 (Hinglish: the words in English letters),
-//     &secs=<the clip's length>, &client=<the open client>
-//     -> {ok: true, text, changes: [{from, to}], model, ms} | {ok: false, kind: "nokey" | "limit" | "error" | "size" | ...}
+//     &secs=<the clip's length>, &client=<the open client>, &verbose=1 (calls, 23-Oct-2026: Whisper's verbose answer, and
+//     the language it found as `language`, ta, hi, en…; the words in their own script: with verbose=1 latin is not applied)
+//     -> {ok: true, text, changes: [{from, to}], model, ms[, language]} | {ok: false, kind: "nokey" | "limit" | "error" | "size" | ...}
 //   POST {"action": "usage"} -> {ok, firm_secs, all_secs (the platform administrator only), key: is a key set}
 // Who: as fincom-assistant: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner
 // has not switched AI help off; a client must be one of that firm's (read with the user's own token: row-level security).
@@ -28,9 +29,10 @@
 // why not, with "names:<count of names corrected>" and "ai:<count>" or "ai:refused" (counts only, never the words), the
 // models used, question empty).
 import { corsFor } from "../_shared/cors.ts";
-import { checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
+import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
 import { ID_PATTERNS } from "../assistant/mask.ts";
+import { whisperLang } from "../../app/src/calls/rules.js";
 
 export type Env = (k: string) => string | undefined;
 export type Deps = { env: Env, fetch: typeof fetch };
@@ -113,12 +115,12 @@ export function handler(deps: Deps) {
   const secret = async (name: string) => { try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq." + name, SERVICE)) as any[]; return String((k && k[0] && k[0].value) || ""); } catch { return ""; } };
   const groqKey = () => secret("groq_api_key");
   // one Groq call; -> the Response, or null when Groq could not be reached
-  const groq = async (key: string, model: string, audio: BlobPart, ext: string, type: string, lang: string, prompt: string) => {
+  const groq = async (key: string, model: string, audio: BlobPart, ext: string, type: string, lang: string, prompt: string, verbose = false) => {
     const form = new FormData();
     form.append("file", new File([audio], "clip." + ext, { type: type === "video/webm" ? "audio/webm" : type }));
     form.append("model", model);
     form.append("temperature", "0");
-    form.append("response_format", "json");
+    form.append("response_format", verbose ? "verbose_json" : "json");
     if (lang !== "auto") form.append("language", lang);
     form.append("prompt", prompt);
     try { return await doFetch(GROQ_URL, { method: "POST", headers: { Authorization: "Bearer " + key }, body: form, signal: AbortSignal.timeout(45_000) }); }
@@ -171,7 +173,8 @@ export function handler(deps: Deps) {
     if (!ext) { await drop(); return reply(415, { ok: false, kind: "type", error: "Send the recording as webm, ogg, mp4 or wav." }); }
     const u = new URL(req.url);
     const lang = String(u.searchParams.get("lang") || "auto").toLowerCase();
-    const latin = u.searchParams.get("latin") === "1" && lang === "auto";       // Hinglish: the words in English letters
+    const verbose = u.searchParams.get("verbose") === "1";
+    const latin = u.searchParams.get("latin") === "1" && lang === "auto" && !verbose;       // Hinglish: the words in English letters
     if (!LANGS.has(lang)) { await drop(); return reply(400, { ok: false, kind: "lang", error: "The language must be hi, en or auto." }); }
     const secs = Math.max(0, Number(u.searchParams.get("secs")) || 0);
     if (secs > MAX_SECS) { await drop(); return reply(413, { ok: false, kind: "length", error: "A clip may be at most 60 seconds." }); }
@@ -209,15 +212,23 @@ export function handler(deps: Deps) {
     const prompt = buildPrompt(names, style);
     // the full model for a short clip; turbo for a long one, or when the full model is at its limit
     let model = secs > 0 && secs < FULL_SECS ? MODEL_FULL : MODEL;
-    let r = await groq(key, model, audio, ext, type, lang, prompt);
-    if (r && r.status === 429 && model === MODEL_FULL) { await r.body?.cancel(); model = MODEL; r = await groq(key, model, audio, ext, type, lang, prompt); }
+    let r = await groq(key, model, audio, ext, type, lang, prompt, verbose);
+    if (r && r.status === 429 && model === MODEL_FULL) { await r.body?.cancel(); model = MODEL; r = await groq(key, model, audio, ext, type, lang, prompt, verbose); }
     if (!r) { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening could not be reached." }); }
     if (r.status === 429) { await r.body?.cancel(); await log(["limit"], [model], 1); return reply(429, { ok: false, kind: "limit", error: "Today's limit for clearer listening is reached." }); }
     const j: any = await r.json().catch(() => null);
     if (!r.ok || !j || typeof j.text !== "string") { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening did not answer (" + r.status + ")." }); }
     let text = j.text.replace(/\s+/g, " ").trim();
-    // Hinglish: an answer mostly in Devanagari, in English letters
     const tools = ["ok"];
+    // Hinglish taken for Urdu (Whisper's own guess; the two sound alike): heard once more as Hindi; the first words stay
+    // when that call fails
+    if (latin && arabicShare(text) > 0.5) {
+      const r2 = await groq(key, model, audio, ext, type, "hi", prompt);
+      const j2: any = r2 && r2.ok ? await r2.json().catch(() => null) : (await r2?.body?.cancel(), null);
+      if (j2 && typeof j2.text === "string" && j2.text.trim()) { text = j2.text.replace(/\s+/g, " ").trim(); tools.push("urdu:hi"); }
+      else tools.push("urdu:kept");
+    }
+    // Hinglish: an answer mostly in Devanagari, in English letters
     if (latin && devanagariShare(text) > 0.5) { text = toLatin(text); tools.push("latin"); }
     // the names said, made right (deterministic)
     const all: Name[] = [...names, ...firmClients];
@@ -238,7 +249,7 @@ export function handler(deps: Deps) {
       } else if (ai.called) tools.push("ai:refused");
     }
     await log(tools, models, calls, costInr);
-    return reply(200, { ok: true, text, changes, model, ms: Date.now() - t0 });
+    return reply(200, { ok: true, text, changes, model, ms: Date.now() - t0, ...(verbose ? { language: whisperLang(j.language) } : {}) });
 
     // one cheap call: the words and the near names -> the corrected words, or null (refused, failed, over the cap)
     async function aiFix(words: string, near: string[]): Promise<{ text: string | null, called: boolean, inr: number }> {

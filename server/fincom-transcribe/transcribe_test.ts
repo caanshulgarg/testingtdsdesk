@@ -97,8 +97,8 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
 }
 
 const AUDIO = new Uint8Array(48_000).map((_, i) => (i * 31 + 7) & 255);     // a made-up clip; its bytes are looked for later
-function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean } = {}) {
-  const qs = new URLSearchParams({ lang: o.lang ?? "hi", secs: String(o.secs ?? 12), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}) });
+function send(h: (r: Request) => Promise<Response>, o: { tok?: string | null, bytes?: Uint8Array, type?: string, lang?: string, client?: string, secs?: number, len?: string, latin?: boolean, verbose?: boolean } = {}) {
+  const qs = new URLSearchParams({ lang: o.lang ?? "hi", secs: String(o.secs ?? 12), ...(o.client === undefined ? { client: "larkspur" } : o.client ? { client: o.client } : {}), ...(o.latin ? { latin: "1" } : {}), ...(o.verbose ? { verbose: "1" } : {}) });
   const headers: Record<string, string> = { "Content-Type": o.type ?? "audio/webm;codecs=opus", Origin: "https://staging.fincom.live" };
   if (o.tok !== null) headers.Authorization = "Bearer " + (o.tok ?? "tok-me");
   if (o.len) headers["Content-Length"] = o.len;
@@ -246,6 +246,29 @@ Deno.test("Hinglish: a sample sentence in English letters from the client's name
   eq(buildPrompt(["रिचा", "Richa"], "hinglish").includes("रिचा"), false, "Hinglish: a Devanagari name is left out");
 });
 
+Deno.test("Hinglish heard as Urdu: the clip is heard again as Hindi, then written in English letters", async () => {
+  // Whisper's own language guess takes spoken Hindi for Urdu now and then (23-Oct: "mujhe last month ki GST payable..." came
+  // back in Urdu letters); with no language given, ask once more with language hi
+  const s = stand({ key: "gsk_test", groq: (f) => new Response(JSON.stringify({ text: f.language === "hi" ? "मुझे लास्ट मंथ की जीएसटी पेएबल कितना है" : "مجھے لاسٹ منت کی جی ایس ٹی پی ویل کتنا ہے" })) });
+  const j = await (await send(s.h, { lang: "auto", latin: true })).json();
+  const g = s.calls.filter((x) => x.url.startsWith("https://api.groq.com/"));
+  eq(g.length, 2, "two calls: the first guess, then as Hindi");
+  eq(g[0].form!.language, undefined, "the first: the language left to Whisper");
+  eq(g[1].form!.language, "hi", "the second: as Hindi");
+  assert(!/[؀-ۿ]/.test(j.text) && !/[ऀ-ॿ]/.test(j.text), "English letters only: " + j.text);
+  assert(j.text.startsWith("mujhe"), "the Hindi words in English letters: " + j.text);
+  eq(s.logRows[0].tools.slice(0, 3), ["ok", "urdu:hi", "latin"], "logged: heard again as Hindi, then written in English letters");
+  // Hindi asked for, or an English answer: one call only
+  const one = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "Richa ko ek lakh" })) });
+  await send(one.h, { lang: "auto", latin: true });
+  eq(one.calls.filter((x) => x.url.startsWith("https://api.groq.com/")).length, 1, "a Latin answer: no second call");
+  // the second call failing: the first answer stays (never an error for this)
+  const bad = stand({ key: "gsk_test", groq: (f) => f.language === "hi" ? new Response("{}", { status: 429 }) : new Response(JSON.stringify({ text: "مجھے بتا دو" })) });
+  const rb = await send(bad.h, { lang: "auto", latin: true });
+  eq(rb.status, 200, "still answered");
+  eq((await rb.json()).text, "مجھے بتا دو", "the first words kept");
+});
+
 Deno.test("names corrected on the server: the client's ledgers and the firm's clients; the changes go back", async () => {
   const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: "leeds insurance ke liye hdfc bank se richa khandelwaal ko 1,25,000 ka payment, teddy mein entry." })) });
   const j = await (await send(s.h, { lang: "auto", latin: true })).json();
@@ -290,4 +313,15 @@ Deno.test("the AI step: only for names near but unsure, under the cap; a changed
   const f = stand({ key: "gsk_test", claudeKey: "sk-test", groq, claude: () => new Response("oops", { status: 500 }) });
   const rf = await send(f.h, { lang: "auto", latin: true });
   eq([rf.status, (await rf.json()).text], [200, said], "the AI step failed: Whisper's words stand");
+});
+
+Deno.test("verbose=1 (live subtitles in calls): Whisper's verbose answer and the language it found; without it, as before", async () => {
+  const s = stand({ key: "gsk_test", groq: () => new Response(JSON.stringify({ text: " வணக்கம் Sharma Traders ", language: "tamil", segments: [] })) });
+  const r = await send(s.h, { lang: "auto", verbose: true, latin: true });
+  const j = await r.json();
+  eq([r.status, j.text, j.language], [200, "வணக்கம் Sharma Traders", "ta"], "the words in their own script and the language");
+  eq(s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format, "verbose_json", "asked for the verbose answer");
+  const plain = stand({ key: "gsk_test" });
+  const j2 = await (await send(plain.h, { lang: "hi" })).json();
+  eq([j2.language, plain.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format], [undefined, "json"], "without verbose: unchanged (no language, json)");
 });
