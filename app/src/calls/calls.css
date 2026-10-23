@@ -272,3 +272,4 @@
   .meet-codebox { flex: 1 1 100%; }
   .meet-new, .meet-new-btn { width: 100%; justify-content: center; }
 }
+@media (max-width: 640px) { .call-in .call-caps { left: 8px; right: 8px; transform: none; max-width: none; } }

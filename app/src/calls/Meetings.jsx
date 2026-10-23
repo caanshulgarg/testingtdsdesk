@@ -16,7 +16,7 @@ const clientName = (id) => { try { return (S.companies[id] || {}).name || ""; } 
 export default function Meetings() {
   const signed = typeof Cloud === "object" && Cloud.on();
   const role = String((signed && Cloud.st && Cloud.st.role) || ""), staff = role === "owner" || role === "staff";
-  const [menu, setMenu] = useState(false), [code, setCode] = useState(""), [err, setErr] = useState(""), [lists, setLists] = useState(null), [loadErr, setLoadErr] = useState(""), [copied, setCopied] = useState("");
+  const [menu, setMenu] = useState(false), [code, setCode] = useState(""), [err, setErr] = useState(""), [lists, setLists] = useState(null), [loadErr, setLoadErr] = useState(""), [copied, setCopied] = useState(""), [checking, setChecking] = useState(false);
   const menuRef = useRef(null);
   const load = () => {
     if (!signed) return;
