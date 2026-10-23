@@ -11,6 +11,8 @@ import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "./Button.jsx";
 import { useDismiss } from "./dismiss.js";
+import { meetAlerts } from "../calls/MeetLine.jsx";
+import { refreshMeetings } from "../calls/upcoming.js";
 
 // the Clear of one notification ({key, fp, text}: an AlertHub alert, or AlertClear.item(...) for a page's own line)
 export function ClearBtn({ x, label = "Clear" }) {
@@ -58,12 +60,12 @@ export default function Bell() {
   // t70: what happened by itself in the last ten minutes ("Audit ran on its own…", toast(…, {background: true})) is read
   // here (it was the sidebar's foot line)
   const q = S.quiet && Date.now() - S.quiet.at < 600000 ? S.quiet : null;
-  const list = AlertHub.list(), n = list.length + (q ? 1 : 0), worst = list.length ? list[0].sev : q ? "info" : "";
+  const list = AlertHub.list().concat(meetAlerts()), n = list.length + (q ? 1 : 0), worst = list.length ? list[0].sev : q ? "info" : "";
   const close = () => { S.alertsOpen = false; render(); };
   return <span className="bell-wrap">
     <button ref={btn} className={"bell" + (worst ? " al-" + worst : "")} data-bell="" aria-haspopup="dialog" aria-expanded={!!S.alertsOpen}
       title={n ? n + (n === 1 ? " alert" : " alerts") : "No alerts"} aria-label={n ? n + (n === 1 ? " alert" : " alerts") : "No alerts"}
-      onClick={() => { S.alertsOpen = !S.alertsOpen; if (S.alertsOpen) AlertHub.refresh(); render(); }}>
+      onClick={() => { S.alertsOpen = !S.alertsOpen; if (S.alertsOpen) { AlertHub.refresh(); refreshMeetings(); } render(); }}>
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>
       {n > 0 && <span className="bell-n" data-bell-count="">{n}</span>}
     </button>
@@ -73,7 +75,7 @@ export default function Bell() {
         <div className="fm-head"><b>Alerts</b>
           <span className="row" style={{ gap: 6, alignItems: "center" }}>
             {n > 0 && typeof AlertClear === "object" && <Button className="btn small" data-alerts-clear-all="" title="Clear every notification here: they are not shown again to you"
-              onClick={() => AlertClear.clear(list)}>Clear all</Button>}
+              onClick={() => AlertClear.clear(list.filter((x) => x.fp))}>Clear all</Button>}
             <button className="icon" onClick={close} aria-label="Close">✕</button></span></div>
         {typeof Rec === "object" && Rec.alerts && Rec.alerts.msg && Rec.alerts.msg.err && <p className="note bad" data-alerts-msg="" style={{ padding: "8px 14px", margin: 0 }}>{Rec.alerts.msg.err}</p>}
         {n ? <ul className="al-list">{q && <li className="al-item al-info" data-quiet-note="" data-sev="info"><span className="al-dot" aria-label="Information" title="Information" />
