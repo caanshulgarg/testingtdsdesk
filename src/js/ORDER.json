@@ -91,6 +91,8 @@
  "89-tds-adjust.js",
   "91-tds-audit.js",
   "92-tds-file.js",
+  "93-tds-autoplace.js",
+  "94-tds-remarks.js",
  "88-fin-statements.js",
  "90-autopost.js"
 ]

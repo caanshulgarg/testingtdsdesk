@@ -195,9 +195,12 @@ try:
         pg.click("[data-dreg-confirm-all]"); pg.wait_for_timeout(700)
         after = state()
         ok(J("() => document.querySelectorAll('[data-dreg-confirm]').length") == 0 and after["mapped"] - before["mapped"] == nconf and before["pending"] - after["pending"] == nconf, "Confirm all %d: off Pending, on Mapped at once (%s → %s)" % (nconf, before, after))
+        # (next-tds-autoplace: ZZ Contractor 1, moved to 194J above with ₹10,200, is no longer filled onto chJ oldest-first: R5
+        # finds the one set of April's 194J that is chJ's ₹12,345, the eight consultants, so it may be in either tab)
+        J("() => { S.tdsDedReg = TDS.rows().some(r => r.party === 'ZZ Contractor 1' && r.challan) ? 'mapped' : 'pending'; render(); }"); pg.wait_for_timeout(300)
+        fx = J("() => { const t = [...document.querySelectorAll('[data-dreg-body] tr[data-dreg-row]')].find(tr => /ZZ Contractor 1\\b/.test(tr.innerText)); const f = t && t.querySelector('[data-dreg-flag=pan]'); return f ? [f.innerText.trim(), f.title] : null; }")
+        ok(fx == ["No PAN", "no PAN"], "the register: ZZ Contractor 1's chip “No PAN”, its words on a hover (%s)" % fx)
         J("() => { S.tdsDedReg = 'mapped'; render(); }"); pg.wait_for_timeout(300)
-        fx = J("() => { const t = [...document.querySelectorAll('[data-dreg-body=\"mapped\"] tr[data-dreg-row]')].find(tr => /ZZ Contractor 1\\b/.test(tr.innerText)); const f = t && t.querySelector('[data-dreg-flag=pan]'); return f ? [f.innerText.trim(), f.title] : null; }")
-        ok(fx == ["No PAN", "no PAN"], "Mapped: ZZ Contractor 1's chip “No PAN”, its words on a hover (%s)" % fx)
         # no challan at all: every deduction Pending, each “Needs a challan”
         J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(800)
         nd = J("() => [...document.querySelectorAll('[data-dreg-body=\"pending\"] tr[data-dreg-row] .dreg-next')].map(e => e.innerText.trim())")

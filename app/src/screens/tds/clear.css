@@ -325,6 +325,8 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .rt { --rt-bottom: var(--bottom-banner-h, 0px); }
 @media (max-width: 600px) { body:has(.side:not(.hidden)) .rt { --rt-bottom: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom, 0px)); } }
 .wd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 4px; }
+/* next-tds-autoplace: the one line a "Place automatically" leaves */
+.wd-ap { margin: 2px 0 6px; }
 .wd-sel { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--ink); }
 .wd-sel select { min-width: 260px; max-width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
 .wd-chw { font-size: 13px; color: var(--ink); }
@@ -439,3 +441,9 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 .dreg-to { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dreg-to select { max-width: 260px; }
 .dreg-table .dt-flag, .dreg-table .dreg-how, .dreg-table .dreg-vl, .dreg-table td[data-dreg-ch] { white-space: nowrap !important; margin-left: 0; }
+
+/* next-tds-autoplace: the deductee's declarations (Deductees › a deductee) */
+.dee-decl { border: 1px solid var(--border, var(--rule)); border-radius: 8px; padding: 8px 10px 10px; margin: 0 0 10px; min-width: 0; }
+.dee-decl legend { font-size: 12px; color: var(--text-secondary, var(--muted)); padding: 0 4px; }
+.dee-chk { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 6px; }
+.dee-chk small { display: block; }

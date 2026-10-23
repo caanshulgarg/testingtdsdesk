@@ -455,3 +455,7 @@ run_tds_party.js                      120
 run_tds_audit_rows.js                 120
 run_tds_audit_challans.js             120
 run_tds_audit_checks.js               120
+# next-tds-autoplace (23-Oct-2026, the owner's approval of the TDS check's C and D): Place automatically (R1-R5 placed, R6-R9
+# suggested, Undo, a filed return untouched, 10,000 deductions timed) and the remarks B, T, Y (FVU lines, Excel, Validate)
+run_tds_autoplace.js                  180
+run_tds_autoplace_ui.py               300  TDSDESK_SITE=../app/dist-test

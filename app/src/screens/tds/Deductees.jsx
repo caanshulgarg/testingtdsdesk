@@ -99,10 +99,34 @@ export function DeducteeDetails({ list, form, fy, q, locked, issueOf = {} }) {
         : <div className="row" style={{ gap: 8, margin: "4px 0 10px" }}>
           <button className="btn small primary" data-dee-save="" disabled={!ok} onClick={() => { const r = tdsDeducteeSet(p.party, { pan: v, name: nm }); if (r.ok) { dr.clear(); close(); } else setErr(r.why || "Not saved."); }}>Save for all {p.n} deduction{p.n === 1 ? "" : "s"}</button>
           <button className="btn small" onClick={close}>Cancel</button></div>}
+      {form === "26Q" && <Declarations key={p.key + "|" + fy} p={p} fy={fy} locked={locked} />}
       <div className="bk-tablewrap"><table className="bk-table" data-statement=""><thead><tr><th className="dt">Date</th><th>Section</th><th className="n">Paid</th><th className="n">TDS</th><th className="n">Rate</th><th>Challan</th></tr></thead>
         <tbody>{p.rows.map((r) => { const c = r.challan ? chOf(r.challan) : null; return <tr key={r.id}><td className="dt">{day(r.date)}</td><td title={secTitle(r.section, fy)}>{secShort(r.section, fy)}</td><td className="n">{money(r.paid)}</td><td className="n">{money(r.tds)}</td><td className="n">{r.rate != null ? r.rate + "%" : ""}</td>
           <td>{c ? TDSCH.label(c) : <span className="bad">Not matched</span>}</td></tr>; })}</tbody></table></div>
       {why.length > 0 && <div className="note" data-dee-rate-why=""><b>The rate:</b><ul>{why.map((x, i) => <li key={i}>{day(x.row.date)}: {x.row.rate}% used, {x.expected}% applies — {x.why}</li>)}</ul></div>}
       {Certs.validPan(p.pan) ? <p className="note">{form === "24Q" ? "Form 16" : TDS.isNew(fy) ? "Form 131 (earlier Form 16A)" : "Form 16A"}: {TRF.f16().some((r) => r.pan === p.pan && (!r.fy || r.fy === fy) && (!r.q || r.q === q)) ? <F16Link pan={p.pan} fy={fy} q={q} /> : "none brought in yet (After filing › Upload TRACES files)"}</p> : null}
     </div></SideDrawer>;
+}
+
+// next-tds-autoplace (the owner, 23-Oct-2026): the deductee's declarations for the return's year, kept with the books
+// (TDSDecl, src/js/94): a transporter's (194C; remark T on its rows with no TDS) and Form 15G / 15H (from 2026-27 Form 121;
+// remark B, its date and UIN in the file). Saved as ticked, or with Save declaration
+const iso = (d) => { const t = TDS.ymd(d || ""); return t.length === 8 ? t.slice(0, 4) + "-" + t.slice(4, 6) + "-" + t.slice(6, 8) : ""; };
+function Declarations({ p, fy, locked }) {
+  const d = TDSDecl.of(p.party, fy), b = d.b || {}, [v, setV] = useState(null);
+  const cur = v || { form: b.form || "", date: iso(b.date), uin: b.uin || "" }, set = (k, x) => setV(Object.assign({}, cur, { [k]: x }));
+  const c194 = p.secs.some((s) => /^194C/.test(TDS.sec(s))), isNew = TDS.isNew(fy);
+  return <fieldset className="dee-decl" data-dee-decl={fy} disabled={locked}>
+    <legend>Declarations · FY {fy}</legend>
+    {c194 && <label className="dee-chk"><input type="checkbox" data-dee-transporter="" checked={!!d.t} onChange={(ev) => tdsDeclSet(p.party, fy, { transporter: ev.target.checked })} />
+      <span>Transporter declaration received <small className="note">(10 goods carriages or fewer, PAN given): remark T where no TDS</small></span></label>}
+    <div className="ach-grid">
+      <label className="ach-f">{isNew ? "Form 121 (15G / 15H)" : "Form 15G / 15H"}<select aria-label="Declaration form" data-dee-bform="" value={cur.form} onChange={(ev) => set("form", ev.target.value)}>
+        <option value="">None</option><option value="15G">15G</option><option value="15H">15H</option></select></label>
+      {cur.form && <label className="ach-f">Received on<input type="date" aria-label="Declaration received on" data-dee-bdate="" value={cur.date} onChange={(ev) => set("date", ev.target.value)} /></label>}
+      {cur.form && <label className="ach-f">UIN{isNew ? "" : " (optional)"}<input type="text" aria-label="Declaration UIN" data-dee-buin="" maxLength={26} value={cur.uin} placeholder={isNew ? "26 letters and digits" : ""} style={{ textTransform: "uppercase" }} onChange={(ev) => set("uin", ev.target.value)} /></label>}
+    </div>
+    {v && <div className="row" style={{ gap: 8 }}><button className="btn small" data-dee-bsave="" onClick={() => { const r = tdsDeclSet(p.party, fy, cur); if (r.ok) setV(null); }}>Save declaration</button>
+      <button className="btn small" onClick={() => setV(null)}>Cancel</button></div>}
+  </fieldset>;
 }

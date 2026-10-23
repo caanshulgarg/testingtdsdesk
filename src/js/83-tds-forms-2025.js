@@ -69,8 +69,13 @@ const TDSF25 = {
   },
   // Annexure 6: the section codes each remark FinCom writes (A: certificate, C: higher rate, no PAN) is allowed with.
   // Form 138 and Form 143: A and C with every code of the form. Form 140: every code. Form 144: every code but 1059, 1061.
+  // next-tds-autoplace: B, T and Y (a deduction with no tax: src/js/94) with the codes Annexure 6 lists for them (docs/tds-
+  // forms-2025/140.md rows 495-625, 144.md rows 507-513)
   FLAG_CODES: {"27Q": {A: ["1004", "1039", "1040", "1041", "1042", "1043", "1044", "1045", "1046", "1047", "1048", "1049", "1050", "1051", "1052",
-    "1053", "1054", "1055", "1056", "1057", "1058", "1060", "1062", "1063", "1064", "1065", "1066", "1067"]}},
+    "1053", "1054", "1055", "1056", "1057", "1058", "1060", "1062", "1063", "1064", "1065", "1066", "1067"], Y: ["1004", "1058", "1059", "1062", "1063", "1066", "1067"]},
+    "26Q": {B: ["1004", "1005", "1008", "1009", "1013", "1019", "1020", "1021", "1022", "1029", "1030"], T: ["1023", "1024"],
+      Y: ["1004", "1005", "1006", "1012", "1013", "1019", "1020", "1021", "1022", "1023", "1024", "1026", "1027", "1029", "1030", "1031", "1033", "1034", "1035", "1037", "1038",
+        "1058", "1059", "1062", "1063", "1066", "1067"]}},
   // codes whose deductee record must have a real PAN (DD field 8, Forms 140 and 144) and carries tax and rate 0.00
   NO_DEFAULT_PAN: {"26Q": ["1059", "1034", "1038", "1061"], "27Q": ["1059", "1061"]},
   // Form 144 Annexure 9: the nature-of-remittance codes allowed for each section code that needs one (DD field 16); a
@@ -245,8 +250,10 @@ const TDSF25 = {
     const ch = live.map((c, ci) => {
       const mine = used[c.id];
       const B = r2(num(c.tax)), C = r2(num(c.interest)), D = r2(num(c.fee)), E = r2(num(c.others)), F = r2(B + C + D + E);
-      [[B, "tax"], [C, "interest"], [D, "fee"], [E, "penalty / others"]].forEach(([v, w]) => { if (Math.round(v * 100) % 100) P("Challan " + c.bsr + "/" + c.serial + ": its " + w + " " + this.money(v) + " has paise; the challan record takes whole rupees."); });
       const dep = r2(mine.reduce((a, r) => a + num(r.tds), 0));
+      // next-tds-autoplace: the nil challan of a quarter with only nil rows (rowsOf): no BSR, serial or amounts
+      if (c.nil) return {c, mine, B: 0, C: 0, D: 0, E: 0, F: 0, dep, no: ci + 1, book: false, aI: 0, aE: 0, nil: true};
+      [[B, "tax"], [C, "interest"], [D, "fee"], [E, "penalty / others"]].forEach(([v, w]) => { if (Math.round(v * 100) % 100) P("Challan " + c.bsr + "/" + c.serial + ": its " + w + " " + this.money(v) + " has paise; the challan record takes whole rupees."); });
       if (Math.round(dep * 100) > Math.round(B * 100)) P("Challan " + c.bsr + "/" + c.serial + ": the tax of its deductions (" + this.money(dep) + ") is more than the challan's tax (" + this.money(B) + ").");
       if (!/^\d{7}$/.test(String(c.bsr || ""))) P("Challan " + (c.bsr || "?") + "/" + (c.serial || "?") + ": the BSR code is not 7 digits.");
       if (!/^\d{1,5}$/.test(String(c.serial || ""))) P("Challan " + (c.bsr || "?") + "/" + (c.serial || "?") + ": the challan serial number is not up to 5 digits.");
@@ -287,9 +294,9 @@ const TDSF25 = {
     ch.forEach(x => {
       let dno = 0;
       const {c, mine} = x;
-      put(this.FIELDS.CD, {2: "CD", 3: "1", 4: String(x.no), 5: String(mine.length), 6: "N", 8: this.money(x.B), 9: this.money(x.C), 10: this.money(x.D),
-        11: this.money(x.E), 12: this.money(x.F), 13: x.book ? "B" : "C", 15: String(c.bsr || ""), 17: String(c.serial || ""), 19: this.dmy(c.date),
-        21: this.money(x.dep), 22: this.money(mine.reduce((a, r) => a + num(r.tds), 0)), 23: x.book ? String(c.minorHead || "") : String(c.minorHead || "200"),
+      put(this.FIELDS.CD, {2: "CD", 3: "1", 4: String(x.no), 5: String(mine.length), 6: x.nil ? "Y" : "N", 8: this.money(x.B), 9: this.money(x.C), 10: this.money(x.D),
+        11: this.money(x.E), 12: this.money(x.F), 13: x.nil ? "" : x.book ? "B" : "C", 15: String(c.bsr || ""), 17: String(c.serial || ""), 19: this.dmy(c.date),
+        21: this.money(x.dep), 22: this.money(mine.reduce((a, r) => a + num(r.tds), 0)), 23: x.nil ? "" : x.book ? String(c.minorHead || "") : String(c.minorHead || "200"),
         24: this.money(x.aI), 25: this.money(x.aE)});
       mine.forEach(r => {
         dno++;
@@ -362,7 +369,7 @@ const TDSF25 = {
   // next-challan-match: a deduction with tax on no challan stops the file with the list (TDS26Q.untaggedError), never left
   // out silently; Form 138's rows are TDS24Q_FILE.rowsOf's (Tally's payroll, else the salary sheet)
   rowsOf(fy, q, form){
-    let rows;
+    let rows, nil = [];
     if (form === "24Q"){
       const s = TDS24Q_FILE.rowsOf(fy, q);
       if (s.error) return s;
@@ -371,10 +378,17 @@ const TDSF25 = {
       const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = TDS26Q.untaggedError(all, form === "27EQ");
       if (un) return un;
       rows = all.filter(r => r.challan);
+      // next-tds-autoplace: a deduction with no tax and its reason (remark B, T or Y: src/js/94) goes in the file: under the
+      // quarter's first challan, else under a nil challan (CD field 6 "Y"), as Protean's general note 11 asks
+      if (form === "26Q") nil = all.filter(r => !r.challan && !(num(r.tds) > 0.005) && /^[BTY]$/.test((TDS26Q.remark(r, form) || {}).remark || ""));
     }
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
-    const live = TDS.challans().filter(c => (used[c.id] || []).length).sort((a, b) => String(TDS.ymd(a.date)).localeCompare(String(TDS.ymd(b.date))));
+    let live = TDS.challans().filter(c => (used[c.id] || []).length).sort((a, b) => String(TDS.ymd(a.date)).localeCompare(String(TDS.ymd(b.date))));
+    if (nil.length){
+      if (!live.length){ const end = {Q1: "0630", Q2: "0930", Q3: "1231", Q4: "0331"}[q]; live = [{id: "__nil", nil: true, date: (q === "Q4" ? num(fy.slice(0, 4)) + 1 : fy.slice(0, 4)) + end, tax: 0, interest: 0, fee: 0, others: 0, bsr: "", serial: ""}]; used.__nil = []; }
+      used[live[0].id] = used[live[0].id].concat(nil); rows = rows.concat(nil);
+    }
     if (!live.length) return {error: form === "24Q" ? "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."
       : "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in Form " + TDS.formNo(form, fy) + " against it yet."};
     const useAll = TDS.challanUse(), over = live.filter(c => Math.round((useAll[c.id] || 0) * 100) > Math.round(num(c.tax) * 100));
@@ -428,6 +442,9 @@ const TDSF25 = {
     if (rate === "") P(who + ": the rate of deduction is not known.");
     at[28] = rate; at[32] = remark; at[33] = cert;
     if (form === "26Q"){
+      // next-tds-autoplace: remark B's declaration (Form 121) UIN in field 31; T only with the deductee's PAN
+      if (remark === "B"){ const u = (((typeof TDSDecl === "object" ? TDSDecl.of(r.party, fy).b : null) || {}).uin || ""); if (!/^[A-Z0-9]{26}$/.test(u)) P(who + ": remark B needs the UIN of the deductee's Form 121 (26 characters, DD field 31)."); at[31] = u.slice(0, 26); }
+      if (remark === "T" && !valid) P(who + ": remark T (a transporter) needs the deductee's PAN.");
       // fields 22, 23: the cash withdrawn above Rs 1 crore / 3 crore, only with section codes 1065 / 1064
       if (code === "1065" || code === "1064") P(who + ": section code " + code + " needs the amount of cash withdrawn above the limit (DD field " + (code === "1065" ? 22 : 23) + "), which FinCom does not hold.");
       return at;

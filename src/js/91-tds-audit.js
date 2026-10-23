@@ -83,12 +83,12 @@ if (typeof TDS === "object") TDS.toExcel = async function(fy, q, form){
       r2(rows.filter(r => r.challan === c.id).reduce((a, r) => a + r.tds, 0)), part(c).interest, part(c).fee]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(cs), "Challans");
   const head = ["Sl. No.", "Deductee code", "PAN of the deductee", "Name of the deductee", "Section code", "Date of payment or credit", "Amount paid or credited",
-    "TDS", "Total tax deducted", "Date of deduction", "Rate at which deducted", "Reason for non-deduction or lower deduction", "Certificate number", "Voucher", "Challan BSR", "Challan serial", "Challan date"];
+    "TDS", "Total tax deducted", "Date of deduction", "Rate at which deducted", "Reason for non-deduction or lower deduction", "Certificate number", "Voucher", "Challan BSR", "Challan serial", "Challan date", "Declaration UIN (Form 121 / 15G / 15H)"];
   const body = rows.map((r, i) => {
     const c = ch.find(x => x.id === r.challan) || {}, pan = r.pan && Certs.validPan(r.pan) ? r.pan : "PANNOTAVBL", m = TDS26Q.remark(r, form);
     const dc = TDS26Q.oldDeducteeCode(r, form, pan).code;
     return [i + 1, form === "26Q" ? dc : String(dc).padStart(2, "0"), pan, TDS26Q.fileName(r), form === "27EQ" ? r.code : TDS26Q.codeFor ? TDS26Q.codeFor(r) || TDS26Q.code(r.section) : TDS26Q.code(r.section),
-      d(r.credit || r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, m.remark, m.certNo, r.voucher, c.bsr || "", c.serial || "", d(c.date || "")];
+      d(r.credit || r.date), r.paid, r.tds, r.tds, d(r.date), r.rate, m.remark, m.certNo, r.voucher, c.bsr || "", c.serial || "", d(c.date || ""), m.uin || ""];
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([head].concat(body)), "Deductees");
   const sum = [["Section", "Deductions", "Amount paid", "TDS", "Not against a challan", "Without PAN"]]

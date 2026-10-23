@@ -16,8 +16,9 @@ const TDS26QFile = {
     const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
     const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = this.untaggedError(all, form === "27EQ");
     if (un) return un;
-    // M4: a nil deduction with remark T or Y goes in the file under the quarter's first challan (not left out)
-    const nil = all.filter(r => !r.challan && !(num(r.tds) > 0.005) && /^[TY]$/.test(this.remark(r, form).remark)), rows = all.filter(r => r.challan), nilOut = this.nilOut(all) - nil.length;
+    // M4: a nil deduction with remark T or Y goes in the file under the quarter's first challan (not left out); next-tds-autoplace:
+    // B too (a 15G/15H declaration, src/js/94)
+    const nil = all.filter(r => !r.challan && !(num(r.tds) > 0.005) && /^[BTY]$/.test(this.remark(r, form).remark)), rows = all.filter(r => r.challan), nilOut = this.nilOut(all) - nil.length;
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     if (nil.length && rows.length) used[rows[0].challan] = used[rows[0].challan].concat(nil);

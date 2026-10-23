@@ -230,6 +230,8 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, too
   S.tdsWinRet = key;
   if (S.tdsWinCh && S.tdsWinCh !== "__none" && !list.some((c) => c.id === S.tdsWinCh)) { const x = TDS.challans().find((c) => c.id === S.tdsWinCh); if (x) list.push(x); }
   const un = unplaced(rows), cur = chosenOf(list, rows, cx), c = cur === "__none" ? null : list.find((x) => x.id === cur);
+  // the last "Place automatically" of this return, in this page (its one line and Undo)
+  const ap = S.tdsAp && S.tdsAp.key === key && !locked ? S.tdsAp : null;
   // the default kept as chosen, so the view stays on the challan once a deduction uses up its balance
   if (c && S.tdsWinCh !== cur) S.tdsWinCh = cur;
   const pick = (v) => { S.tdsWinCh = v; S.tdsWinAdd = ""; S.tdsWinRSel = {}; S.tdsWinSel = {}; render(); };
@@ -259,10 +261,15 @@ export function DedByChallan({ form, fy, q, rows, m, issueOf, probs, locked, too
           {!list.length && <option value="__none">No challan yet</option>}</select></label>
       {c && <span className="wd-chw" title={c.bsr + " · " + c.serial}>BSR {c.bsr} · serial {c.serial}{chSec(c) ? " · " + chSec(c) : ""}</span>}
       <span className="rt-sp" />
+      {/* next-tds-autoplace (the owner, 23-Oct-2026): the rules that are certain place by themselves (TDSAuto, src/js/93) */}
+      {!locked && un.length > 0 && <button type="button" className="btn small" data-ap-run="" title="Place the deductions on no challan by the rules that are certain (R1-R5); the rest is suggested in Deductions › Pending. One click undoes it." onClick={() => tdsAutoPlace()}>Place automatically</button>}
       {!locked && earlyN > 0 && <button type="button" className="btn small" data-wd-fix-early={earlyN} title="Each on a challan that cannot pay it (an earlier year's, a future one, not minor head 200) to the earliest challan of its section dated on or after it, with enough left" onClick={() => fixEarly(rows)}>Put {earlyN} on the right challans</button>}
       <DedRegButton rows={rows} />
       {tools}
     </div>
+    {ap && <p className="note wd-ap" data-ap-result={ap.placed} aria-live="polite"><span data-ap-words="">{TDSAuto.words(ap)}</span>
+      {ap.placed > 0 && TDSAuto.last(form, fy, q) ? <> · <button type="button" className="linkbtn" data-ap-undo="" onClick={() => tdsAutoUndo()}>Undo</button></> : null}
+      {ap.suggested > 0 && <> · <button type="button" className="linkbtn" data-ap-sugg="" onClick={() => openDedRegister("pending")}>See the suggested</button></>}</p>}
     <DedRegister form={form} fy={fy} q={q} rows={rows} m={m} issueOf={issueOf} probs={probs} locked={locked} />
     {/* next-tds-tidy2 (the owner: "this should not be here"): no banner of deductions on a challan dated before them; the
         row's chip and Validate & file's error say it */}
