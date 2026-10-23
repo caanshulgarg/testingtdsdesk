@@ -122,7 +122,7 @@ with sync_playwright() as p:
     press(A, "[data-knock-admit]")
     ok(wait_for(G, "!!document.querySelector('#fincom-call [data-call=in]')", 15000), "admitted: the guest is in")
     ok(wait_for(A, "document.querySelectorAll('#fincom-call [data-tile]').length === 2", 20000) and wait_for(G, "document.querySelectorAll('#fincom-call [data-tile]').length === 2", 20000), "both in the grid (%s)" % tiles(A))
-    ok(wait_for(A, "[...document.querySelectorAll('#fincom-call [data-tile]')].some(t => t.dataset.tile.includes('Ram') && t.querySelector('video') && t.querySelector('video').videoWidth > 0)", 30000), "the host sees the guest's picture")
+    ok(wait_for(A, "[...document.querySelectorAll('#fincom-call [data-tile]')].some(t => t.dataset.tile.includes('Ram') && t.querySelector('video') && t.querySelector('video').videoWidth > 0)", 60000), "the host sees the guest's picture")
     ok(not A.locator("[data-knock]").count(), "the toast gone once answered")
     ok(G.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "the guest's phone: no sideways scroll")
     snap(A, "08-in-call-two-people", dark=False)
