@@ -21,8 +21,14 @@ const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
 // not again over the line); the page and the two little scripts without a hash past it
 const HASHED = (f) => /^\.\/assets\//.test(f) || /^\.\/legacy\.js\?v=/.test(f);
 const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
+// 24-Oct-2026 (Safari, right after a publish): each file kept on its own, and only a real answer (keepable); one file
+// that does not come (a publish half way across GitHub's servers) no longer fails the whole install and leaves the older
+// worker in charge. A file not kept now is fetched and kept when it is first used
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map(ask))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => {
+    const q = ask(f);
+    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(q, r) : null).catch(() => null);
+  }))).then(() => self.skipWaiting()));
 });
 // the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
 let keeping = null;
@@ -44,28 +50,55 @@ self.addEventListener("message", (e) => {
 });
 
 // the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
-// A page asked for by its build (?v=…: index.html's check found a newer build than the page it was given) waits for the
-// network as long as it takes (17-Oct-2026: on a slow line the 4 s wait handed back the old page again)
+// 24-Oct-2026 (Sentry FINCOM-APP-STAGING-3 / -5, Mac Safari, right after a publish: "did not open in 20 s", the page the
+// worker's kept copy, "error loading script legacy.js"): a page asked for by its build (?v=…, index.html's check found a
+// newer build than the kept page) waited for the network with no end. When that one request hung, the kept page
+// stayed on screen with its program held back (it was being swapped; in Safari its scripts' loads were cancelled by the
+// swap), until Safari was quit. Now no wait is without an end, and a request that hangs is given up and asked again:
+//  - the plain page: the network for 4 s; then, before the kept copy is handed back, build.json (2.5 s) says which build
+//    is out: a kept copy of another build is never handed back while the line answers, the page is asked again instead;
+//  - the page by its build: 6 s, then asked once more past every cache (10 s); the kept copy only when that fails too.
+const wait = (ms) => new Promise((ok) => setTimeout(() => ok(null), ms));
+function net(req, ms, cacheMode) {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  const p = fetch(req, ctl ? { cache: cacheMode, signal: ctl.signal } : { cache: cacheMode });
+  return { p, stop: () => { try { if (ctl) ctl.abort(); } catch (e) { /* */ } }, within: () => Promise.race([p.catch(() => null), wait(ms)]) };
+}
+const keptBuild = (t) => { const m = /"fincom:opened"\)===\"([^"]+)\"/.exec(t || ""); return m ? m[1] : ""; };
+async function serverBuild() {
+  try {
+    const r = await Promise.race([fetch("./build.json?t=" + Date.now(), { cache: "no-store" }), wait(2500)]);
+    if (!r || !r.ok) return "";
+    const j = await r.json();
+    return (j && j.build) || "";
+  } catch (e) { return ""; }
+}
 async function page(req) {
   const cache = await caches.open(SHELL);
-  const net = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) cache.put("./", r.clone()); return r; });
-  const byBuild = new URL(req.url).searchParams.has("v");
-  try {
-    const r = byBuild ? await net : await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
-    if (r) return r;
-    const c = await cache.match("./");
-    return c ? kept(c) : await net;
-  } catch (e) {
-    const c = await cache.match("./");
-    if (c) return kept(c);
-    throw e;
-  }
+  const keep = (r) => { if (r && r.ok && !r.redirected) cache.put("./", r.clone()).catch(() => {}); return r; };
+  const want = new URL(req.url).searchParams.get("v");
+  const first = net(req, want ? 6000 : 4000, "no-cache");
+  let r = await first.within();
+  if (r) return keep(r);
+  const c = await cache.match("./").catch(() => null);
+  const ct = c ? await c.clone().text().catch(() => "") : "", cb = keptBuild(ct);
+  if (!want) {
+    const sb = await serverBuild();
+    if (c && (!sb || sb === cb)) { first.p.then(keep, () => {}); return kept(c, ct); }   // no line, or the kept one is current
+  } else if (c && cb === want) { first.p.then(keep, () => {}); return kept(c, ct); }
+  // the line answers but the page did not come: asked again past every cache
+  first.stop();
+  const again = net(req, 10000, "reload");
+  r = await again.within();
+  if (r) return keep(r);
+  if (c) return kept(c, ct);
+  return again.p;
 }
 // the kept copy is marked (data-boot-kept on <html>): its program waits for index.html's build check before it starts,
 // so an older build is swapped before it is drawn (src/main.jsx)
-async function kept(c) {
+async function kept(c, text) {
   try {
-    const t = await c.clone().text();
+    const t = text || await c.clone().text();
     return new Response(t.replace("<html ", '<html data-boot-kept="" '), { status: c.status, statusText: c.statusText, headers: c.headers });
   } catch (e) { return c; }
 }
@@ -76,6 +109,9 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(req.url);
   if (u.origin !== self.location.origin || !u.pathname.startsWith(SCOPE)) return;   // Supabase, the bridge, Sentry: never here
   if (req.mode === "navigate") { e.respondWith(page(req)); return; }
+  // 24-Oct-2026: a file the page asks for straight from the network (?fincom-net=…: legacy.js's second try, oldcheck.js)
+  // is not answered here at all
+  if (u.searchParams.has("fincom-net")) return;
   const rest = u.pathname.slice(SCOPE.length);
   // the two little scripts without a hash in their name: the network first, this computer's copy without a line
   if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
@@ -96,9 +132,11 @@ async function asset(req) {
   let hit = null;
   try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }
   if (hit && hit.ok && !hit.redirected && hit.type !== "opaque" && hit.type !== "opaqueredirect") return hit;
+  // 24-Oct-2026: a request that hangs (no answer in 15 s) is given up and asked once more, as a dropped line is
   let r;
-  try { r = await fetch(req); } catch (e) {
-    try { r = await fetch(new Request(req, { cache: "reload" })); } catch (e2) { return Response.error(); }
+  const once = (q, ms) => Promise.race([fetch(q), new Promise((ok, no) => setTimeout(() => no(new Error("timeout")), ms))]);
+  try { r = await once(req, 15000); } catch (e) {
+    try { r = await once(new Request(req.url, { cache: "reload", credentials: "same-origin" }), 30000); } catch (e2) { return Response.error(); }
   }
   if (keepable(r)) { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)).catch(() => {}); }
   return r;
