@@ -10,7 +10,8 @@ const Certs = {
       normName(c.party) === normName(r.party) &&
       (!c.from || TDS.ymd(r.date) >= TDS.ymd(c.from)) && (!c.to || TDS.ymd(r.date) <= TDS.ymd(c.to)));
   },
-  validPan(p){ return /^[A-Z]{5}\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
+  // (the TDS check of 22-Oct-2026, M5: the fourth letter is the holder's status, one of those Protean's FVU takes)
+  validPan(p){ return /^[A-Z]{3}[ABCFGHJLPT][A-Z]\d{4}[A-Z]$/.test(String(p || "").toUpperCase()); },
   // PANs marked inoperative (not linked with Aadhaar) for this client's books: S.books.panInoperative = {PAN: date checked}
   inoperative(p){
     const P = String(p || "").toUpperCase();
@@ -50,7 +51,7 @@ const Certs = {
   },
   // the rate without a certificate
   expectedNormal(r){
-    const std = (TDS.STD[TDS.sec(r.section)] || []);
+    const std = TDS.stdOn(r.section, r.date);
     const near = std.length ? std.slice().sort((a, b) => Math.abs(a - (r.rate || 0)) - Math.abs(b - (r.rate || 0)))[0] : null;
     // no PAN (or one marked inoperative under Deductees): the higher of the usual rate and 20%; 5% for 194Q and 194-O
     const noPan = !this.validPan(r.pan) ? "no valid PAN" : this.inoperative(r.pan) ? "PAN inoperative" : "";
@@ -71,6 +72,8 @@ const Certs = {
     TDS.rows().filter(r => (!fy || r.fy === fy) && (!q || r.q === q)).forEach(r => {
       // a TDS entry of its own short of its bill (TDSSep, src/js/66) is the audit's "short deducted" (TDSWatch), said once
       if (r.sepShort) return;
+      // N7 (Testing AAD, 01-Jul-2026: rent on "TDS 94H" at 10%): the section looks wrong, not the rate (TDSAudit says so)
+      if (typeof TDSRate === "object" && TDSRate.secOfPay(r.pay) && TDSRate.secOfPay(r.pay) !== TDS.sec(r.section).slice(0, 4)) return;
       const e = this.expected(r);
       if (e.rate == null || r.rate == null) return;
       const short = e.due != null ? r2(e.due - r.tds) : r2(r.paid * (e.rate - r.rate) / 100);
@@ -182,9 +185,13 @@ async function openBooksNow(cid){
     let taken; const first = new Promise(ok => { taken = ok; });
     const pull = BookSync.pull(cid, {taken, after: drawn}).catch(() => {});
     pull.then(taken);
-    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 1500 : 6000))]);
+    // books-speed (24-Oct-2026): books kept here are shown after 250 ms at most (1.5 s before: on the owner's office line
+    // each reopening waited for the round trip); the server's changes since this computer last looked come in behind
+    // them, item by item, as before (BookItems.take: a change made here and not sent yet is never overwritten)
+    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 250 : 6000))]);
     if (!S.books || S.books.cid !== cid) return;
-    if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid) render(); });
+    // (item by item, BookItems draws the page itself when something came in: not drawn again for nothing)
+    if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid && !(typeof BookItems === "object" && BookItems.on())) render(); });
     else if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
   S.books.loading = false; delete S.books.cached; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
@@ -201,9 +208,10 @@ async function openBooksNow(cid){
   try { requestAnimationFrame(() => setTimeout(() => painted(), 0)); } catch (e){ painted(); }
 }
 // everything kept with a client's books, in this browser and (the TDS and GST work) in the firm's database
-const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp", "chPortions", "tdsCorr", "allocLog", "tracesChStatus", "tcsCodesFixed", "fixedAssets", "tdsEdits", "matchNo", "tdsSplits", "panFix", "tdsAdded", "tdsPayKind", "payroll"];
+const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp", "chPortions", "tdsCorr", "allocLog", "tracesChStatus", "tcsCodesFixed", "fixedAssets", "tdsEdits", "matchNo", "tdsSplits", "panFix", "tdsAdded", "tdsPayKind", "payroll", "itcDec", "itcAdj", "r1Fix"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
+  if (typeof BOOKS_REV === "number") BOOKS_REV++;      // the figures held for the top bar's redraws are worked out again (memoKeep, src/js/01)
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
@@ -624,7 +632,7 @@ function gstParts(b){
   const ftype = typeof GSTSet === "object" && S.gstYm ? GSTSet.typeOf(S.gstYm, S.gstReg || "") : "monthly";
   const parts = ftype === "comp" ? [["cmp08", "CMP-08"], ["gstr4", "GSTR-4"], ["inreg", "Purchases"], ["r2b", "2B reconciliation"]]
     : (ftype === "qrmp" ? [["qtr", "This quarter"], ["r1", "GSTR-1 working"], ["r3b", "GSTR-3B working"]] : [["r1", "GSTR-1"], ["r3b", "GSTR-3B"]])
-      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["follow", "ITC follow-up"], ["health", "Supplier health"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
+      .concat([["inreg", "Input register"], ["r2b", "2B reconciliation"], ["itcfinal", "Final credit for 3B"], ["adv", "Advances"], ["rev", "Reversal"], ["amend", "Amendments"], ["g9", "GSTR-9"], ["g9c", "GSTR-9C"]]);
   // tax-accuracy: the filed GSTR-1 and 3B (fetched from the portal) against FinCom's working, month by month
   if (ftype !== "comp") parts.push(["filedcmp", "Filed vs FinCom"]);
   // request of 02-Oct-2026: the books invoice by invoice against the returns filed and 2B, for the year
@@ -717,7 +725,8 @@ function readingToggle(which, on){
 function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
-function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
+// books-speed: the top bar's news is drawn with the figures of the last drawing when the books did not change (memoKeep)
+function renderTop(){ if (window.FinComReact) FinComReact.redraw({keep: true}); }
 
 /* ---------- Home: client list ---------- */
 /* ---------- Home: unsorted uploads ---------- */

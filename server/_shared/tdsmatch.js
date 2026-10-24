@@ -37,18 +37,22 @@
 //
 // rows: [{id, sec, date (yyyymmdd), tds, party, pan, fy, q}]   the return's deductions on no challan
 // chs:  [{id, sec ("" when the challan names none), date, minor ("200"/"400"), bal (tax left), fy, label, narr}]
-// opt:  {fy, q, today (yyyymmdd), links: {chId: [row ids]}, no: {suggestion key: true} (a person's "Not this")}
+// opt:  {fy, q, today (yyyymmdd), links: {chId: [row ids]}, no: {suggestion key: true} (a person's "Not this"), waiting:
+//        [{sec, ym}] (other returns' deductions on no challan: a later month's own challan is theirs too)}
 
 const TM_VERSION = "tm-1";
 const TM_RULES = {a: "From Tally", b: "Same section, same month, exact amount", c: "Same section, whole quarter, exact amount", d: "Same section, same month",
-  e: "Several sections in one challan", f: "Advance challan (same year) or next year's challan", g: "AI", split: "Split across challans", int: "Interest allocated to this return"};
+  e: "Several sections in one challan", f: "Advance challan (same year) or next year's challan", g: "AI", split: "Split across challans", int: "Interest allocated to this return",
+  p: "One party's month total", x: "The only set that adds up"};
 const TM_AI_ROWS = 300;
 const TM_AI_CHS = 120;
 const TM_MON = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function tmNum(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function tmP(v){ return Math.round(tmNum(v) * 100); }
-function tmInr(paise){ return "₹" + new Intl.NumberFormat("en-IN", {minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2}).format(paise / 100); }
+// (the two formats made once: a new Intl.NumberFormat a call took seconds over 10,000 deductions; next-tds-autoplace)
+const TM_FMT = {};
+function tmInr(paise){ const k = paise % 100 ? 2 : 0; return "₹" + (TM_FMT[k] = TM_FMT[k] || new Intl.NumberFormat("en-IN", {minimumFractionDigits: k, maximumFractionDigits: 2})).format(paise / 100); }
 function tmYmd(d){ const t = String(d || "").replace(/[^0-9]/g, ""); return t.length >= 8 ? t.slice(0, 8) : t; }
 function tmMonth(ym){ const s = String(ym || ""); return s.length >= 6 ? TM_MON[+s.slice(4, 6) - 1] + " " + s.slice(0, 4) : ""; }
 function tmDmy(d){ const s = tmYmd(d); return s.length === 8 ? s.slice(6, 8) + "-" + s.slice(4, 6) + "-" + s.slice(0, 4) : ""; }
@@ -65,18 +69,29 @@ function tmSecOk(a, b){
 // a challan of the return's tax year: deposited in it, or (Q4: March's TDS is due by 30 April) up to 31 May after it
 function tmYearOk(c, fy, q){
   const d = tmYmd(c.date);
+  // the TDS check of 22-Oct-2026, H7: an April challan that pays last year's March (c.forFy, the app's TDSMatch.lastYear)
+  if (c.forFy) return c.forFy === fy;
   if (tmFyOf(d) === fy) return true;
   return q === "Q4" && tmFyOf(d) > fy && d <= String(+String(fy).slice(0, 4) + 1) + "0531";
 }
 const tmTdsHead = c => !c.minor || String(c.minor) === "200";
 // next-tds-early: the years from a deduction's (or a return's) financial year to a challan's: 0 the same, 1 the next, -1 the one before
 const tmFyGap = (d, c) => +tmFyOf(c.date).slice(0, 4) - +tmFyOf(d).slice(0, 4);
+// next-fvu87 (24-Oct-2026): a challan of a year before the deduction's, in words that say what each FVU does (run on both):
+// FVU 1.2 (tax year 2026-27 on) refuses any (T-FV-3076, "Date prior to Financial Year"); FVU 8.7 (up to FY 2025-26) takes one
+// of the year just before and refuses older ones (T-FV-3166, "Date prior to immediate previous Financial Year"). FinCom
+// takes neither for a deduction: a challan deposited in an earlier year than the deduction is not used for it
+function tmEarlyWords(d, g){
+  if (+tmFyOf(d).slice(0, 4) >= 2026) return "a challan dated before the deduction's financial year: Protean's FVU 1.2 refuses it (T-FV-3076)";
+  if (g < -1) return "a challan dated two or more years before the deduction's financial year: Protean's FVU 8.7 refuses it (T-FV-3166)";
+  return "a challan of the year before the deduction's: FinCom does not use it for the deduction (Protean's FVU 8.7 itself takes a challan of the year just before)";
+}
 // what Protean's FVU takes for a deduction: minor head 200, a challan of its year or the next, not dated after today.
 // "" when it does, else why not
 function tmCannot(c, r, today){
   if (!c || !tmTdsHead(c)) return "a challan not minor head 200 cannot pay a deduction";
   const g = tmFyGap(r.date, c);
-  if (g < 0) return "a challan dated before the deduction's financial year: Protean's FVU refuses it (T-FV-3076)";
+  if (g < 0) return tmEarlyWords(r.date, g);
   if (g > 1) return "a challan more than a year after the deduction's financial year";
   if (today && tmYmd(c.date) > tmYmd(today)) return "a challan dated after today: Protean's FVU refuses it (T-FV-3040)";
   return "";
@@ -87,7 +102,13 @@ const tmKey = (rule, chId, ids) => (rule === "split" ? "split:" : "") + chId + "
 const tmByDate = (a, c) => tmYmd(a.date).localeCompare(tmYmd(c.date)) || tmP(a.tds) - tmP(c.tds) || (String(a.id) < String(c.id) ? -1 : String(a.id) > String(c.id) ? 1 : 0);
 const tmChOrder = (a, c) => tmYmd(a.date).localeCompare(tmYmd(c.date)) || (String(a.id) < String(c.id) ? -1 : String(a.id) > String(c.id) ? 1 : 0);
 // the 7th of the next month (30 April for March): the due date of a month's TDS
-function tmDue(ym){ const m = +ym.slice(4, 6); return m === 3 ? ym.slice(0, 4) + "0430" : tmNextYm(ym) + "07"; }
+// (the TDS check of 22-Oct-2026, N5: TCS collected in March is due by 7 April, not 30 April: tcs true)
+function tmDue(ym, tcs){ const m = +ym.slice(4, 6); return m === 3 && !tcs ? ym.slice(0, 4) + "0430" : tmNextYm(ym) + "07"; }
+// the month a challan was deposited for, as its date says: by the 7th, the month before (by 30 April, March); else its own
+function tmOwnYm(c){
+  const d = tmYmd(c.date), ym = d.slice(0, 6), y = +ym.slice(0, 4), m = +ym.slice(4, 6), prev = m === 1 ? (y - 1) + "12" : y + String(m - 1).padStart(2, "0");
+  return +d.slice(6, 8) <= (m === 4 ? 30 : 7) ? prev : ym;
+}
 
 // the suggestions of rules a to f (and the splits offered). Each: {key, rule, words, reason, warn, info, chId, ids, total
 // (paise), parts (a split: [{chId, paise}])}
@@ -100,7 +121,9 @@ function tmRules(rows, chs, opt){
   const free = new Set((rows || []).filter(r => tmP(r.tds) > 0).map(r => r.id));
   const out = [];
   const allCh = (chs || []).slice().sort(tmChOrder);
-  const freeRows = () => (rows || []).filter(r => free.has(r.id)).sort(tmByDate);
+  // (memo: a rule's many reads between two changes of free; next-tds-autoplace, 10,000 deductions)
+  let freeMemo = null, freeN = -1;
+  const freeRows = () => { if (!freeMemo || freeN !== free.size){ freeMemo = (rows || []).filter(r => free.has(r.id)).sort(tmByDate); freeN = free.size; } return freeMemo.slice(); };
   const put = (rule, c, list, reason, warn, info) => {
     if (!list.length) return false;
     const ids = list.map(r => r.id), key = tmKey(rule, c.id, ids), total = list.reduce((a, r) => a + tmP(r.tds), 0);
@@ -127,6 +150,15 @@ function tmRules(rows, chs, opt){
   };
   const sum = list => list.reduce((a, r) => a + tmP(r.tds), 0);
   const last = list => list.map(r => tmYmd(r.date)).sort().pop();
+  // H6 (the TDS check of 22-Oct-2026; Leads' 194-I: September's rent went up, its challan was short, and September took
+  // October's challan, October left unpaid): a challan deposited for a later month of the section whose deductions still
+  // wait for it is not an earlier month's to take (a later month on an earlier challan, an advance challan, rule f, stays)
+  // (next-tds-autoplace, the Leads-shaped check: September's rent offered October's own challan when October's deduction is
+  // in the next quarter's return: opt.waiting [{sec, ym}], the deductions of other returns on no challan, count too)
+  const waiting = opt.waiting || [];
+  const theirs = (c, sec, ym) => { const om = tmOwnYm(c); return om > ym && (freeRows().some(r => tmSecOk(sec, r.sec) && tmYmd(r.date).slice(0, 6) === om) || waiting.some(w => w.ym === om && tmSecOk(sec, w.sec))); };
+  // M2: challans are whole rupees: "exact" is within a rupee, never above the challan
+  const near = (c, need) => left[c.id] >= need && left[c.id] - need <= 100;
   const n = (k, w) => k + " " + w + (k === 1 ? "" : "s");
 
   // a. Tally's own link
@@ -146,7 +178,7 @@ function tmRules(rows, chs, opt){
   // b. one section, one month, the exact amount
   groups().forEach(g => {
     const need = sum(g.rows), after = last(g.rows);
-    const c = allCh.find(c => base(c) && c.sec && tmSecOk(c.sec, g.sec) && tmYmd(c.date) >= after && left[c.id] === need && !no[tmKey("b", c.id, g.rows.map(r => r.id))]);
+    const c = allCh.find(c => base(c) && c.sec && tmSecOk(c.sec, g.sec) && tmYmd(c.date) >= after && near(c, need) && !theirs(c, g.sec, g.ym) && !no[tmKey("b", c.id, g.rows.map(r => r.id))]);
     if (c) put("b", c, g.rows, g.sec + " · " + tmMonth(g.ym) + " · total " + tmInr(need) + " = challan " + tmInr(left[c.id]));
   });
   // c. one section, the quarter, the exact amount
@@ -154,27 +186,30 @@ function tmRules(rows, chs, opt){
   freeRows().forEach(r => { (bySec[r.sec] = bySec[r.sec] || []).push(r); });
   Object.keys(bySec).sort().forEach(sec => {
     const list = bySec[sec], need = sum(list), after = last(list);
-    const c = allCh.find(c => base(c) && c.sec && tmSecOk(c.sec, sec) && tmYmd(c.date) >= after && left[c.id] === need && !no[tmKey("c", c.id, list.map(r => r.id))]);
+    // (next-tds-autoplace: H6 here too: never a later month's own challan for the quarter's last month)
+    const c = allCh.find(c => base(c) && c.sec && tmSecOk(c.sec, sec) && tmYmd(c.date) >= after && near(c, need) && !theirs(c, sec, after.slice(0, 6)) && !no[tmKey("c", c.id, list.map(r => r.id))]);
     if (c) put("c", c, list, sec + " · " + (q || "the quarter") + " · " + n(list.length, "deduction") + " total " + tmInr(need) + " = challan " + tmInr(left[c.id]));
   });
+  // (tmPlan's first pass: the sure rules a to c only)
+  if (opt.upto === "c") return out;
   // d. one section, one month, filled: the challan for that month first (deposited in it or the next), then a later one
   const dPass = own => groups().forEach(g => {
-    const cands = allCh.filter(c => base(c) && c.sec && tmSecOk(c.sec, g.sec) && (own ? [g.ym, tmNextYm(g.ym)].includes(tmYmd(c.date).slice(0, 6)) : true));
+    const cands = allCh.filter(c => base(c) && c.sec && tmSecOk(c.sec, g.sec) && (own ? [g.ym, tmNextYm(g.ym)].includes(tmYmd(c.date).slice(0, 6)) : true) && !theirs(c, g.sec, g.ym));
     cands.forEach(c => {
       const rest = g.rows.filter(r => free.has(r.id));
       if (!rest.length || !left[c.id]) return;
       const got = fill(c, rest);
       if (!got.length) return;
-      const late = tmYmd(c.date) > tmDue(g.ym);
+      const tcs = /^206C/.test(g.sec), late = tmYmd(c.date) > tmDue(g.ym, tcs);
       put("d", c, got, g.sec + " · " + tmMonth(g.ym) + " · " + n(got.length, "deduction") + " " + tmInr(sum(got)) + " from challan with " + tmInr(left[c.id]) + " left",
-        late ? "Paid " + tmDmy(c.date) + ", after the due date " + tmDmy(tmDue(g.ym)) + ": interest at 1.5% a month is due on these" : "");
+        late ? "Paid " + tmDmy(c.date) + ", after the due date " + tmDmy(tmDue(g.ym, tcs)) + ": interest at " + (tcs ? "1%" : "1.5%") + " a month is due on these" : "");
     });
   });
   dPass(true);
   // e. a challan naming no section, the month or the next
   const months = Array.from(new Set(freeRows().map(r => tmYmd(r.date).slice(0, 6)))).sort();
   months.forEach(ym => {
-    allCh.filter(c => base(c) && !c.sec && [ym, tmNextYm(ym)].includes(tmYmd(c.date).slice(0, 6))).forEach(c => {
+    allCh.filter(c => base(c) && !c.sec && [ym, tmNextYm(ym)].includes(tmYmd(c.date).slice(0, 6)) && !(tmOwnYm(c) !== ym && freeRows().some(r => tmYmd(r.date).slice(0, 6) === tmOwnYm(c)))).forEach(c => {
       const rest = freeRows().filter(r => tmYmd(r.date).slice(0, 6) === ym && tmYmd(r.date) <= tmYmd(c.date));
       // first a section's deductions of the month whose total is the challan's balance exactly, or all of the month's;
       // else filled, oldest first
@@ -193,7 +228,7 @@ function tmRules(rows, chs, opt){
   // first, one naming its section before one naming none), then on a challan of the following year (the oldest first)
   [1, 2].forEach(tier => groups().forEach(g => {
     const d0 = g.ym + "01";
-    const cands = allCh.filter(c => left[c.id] > 0 && tmTdsHead(c) && !(today && tmYmd(c.date) > today) && (c.sec ? tmSecOk(c.sec, g.sec) : true) && tmFyGap(d0, c) === tier - 1)
+    const cands = allCh.filter(c => left[c.id] > 0 && tmTdsHead(c) && !(today && tmYmd(c.date) > today) && (c.sec ? tmSecOk(c.sec, g.sec) : true) && tmFyGap(d0, c) === tier - 1 && (!c.forFy || c.forFy === fy) && !theirs(c, g.sec, g.ym))
       .sort((a, c) => ((c.sec ? 1 : 0) - (a.sec ? 1 : 0)) || (tier === 1 ? -tmChOrder(a, c) : tmChOrder(a, c)));
     cands.forEach(c => {
       const rest = g.rows.filter(r => free.has(r.id));
@@ -209,7 +244,7 @@ function tmRules(rows, chs, opt){
   // a deduction no single challan can hold, where two or more together can: a split, offered
   freeRows().forEach(r => {
     const p = tmP(r.tds);
-    const el = allCh.filter(c => base(c) && (!c.sec || tmSecOk(c.sec, r.sec)) && tmYmd(c.date) >= tmYmd(r.date));
+    const el = allCh.filter(c => base(c) && (!c.sec || tmSecOk(c.sec, r.sec)) && tmYmd(c.date) >= tmYmd(r.date) && !theirs(c, r.sec, tmYmd(r.date).slice(0, 6)));
     if (!el.length || el.some(c => left[c.id] >= p) || el.reduce((a, c) => a + left[c.id], 0) < p) return;
     const parts = []; let need = p;
     el.slice().sort((a, c) => ((c.sec ? 1 : 0) - (a.sec ? 1 : 0)) || tmChOrder(a, c)).forEach(c => { if (need <= 0) return; const take = Math.min(left[c.id], need); if (take > 0){ parts.push({chId: c.id, paise: take}); need -= take; } });
@@ -231,7 +266,7 @@ function tmRules(rows, chs, opt){
 function tmMonths(a, b){ const A = tmYmd(a), B = tmYmd(b); if (!A || !B || B <= A) return 0; return (+B.slice(0, 4) - +A.slice(0, 4)) * 12 + (+B.slice(4, 6) - +A.slice(4, 6)) + 1; }
 function tmLateInterest(r, today, pct){
   const ym = tmYmd(r.date).slice(0, 6);
-  if (!today || tmYmd(today) <= tmDue(ym)) return 0;
+  if (!today || tmYmd(today) <= tmDue(ym, pct === 1)) return 0;
   return Math.round(tmP(r.tds) * (pct || 1.5) / 100 * tmMonths(r.date, today) / 100) * 100;      // whole rupees, in paise
 }
 function tmReasons(rows, chs, sugg, opt){
@@ -241,6 +276,8 @@ function tmReasons(rows, chs, sugg, opt){
   (chs || []).forEach(c => { left[c.id] = Math.max(0, tmP(c.bal)); });
   (sugg || []).forEach(s => (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { left[p.chId] = (left[p.chId] || 0) - p.paise; }));
   const rest = (rows || []).filter(r => !covered.has(r.id)).sort(tmByDate), out = [];
+  // each section and month's total of what is left, once (next-tds-autoplace: 10,000 deductions)
+  const grpSum = {}; rest.forEach(x => { const k = x.sec + "|" + tmYmd(x.date).slice(0, 6); grpSum[k] = (grpSum[k] || 0) + tmP(x.tds); });
   const lab = c => c.label || ((c.bsr || c.id) + (c.serial ? " / " + c.serial : ""));
   // the deductions with no challan at all, by section and month: one "pay" line each (the amount for all of them)
   const groups = {};
@@ -258,13 +295,13 @@ function tmReasons(rows, chs, sugg, opt){
     const withLeft = ok.filter(c => left[c.id] > 0 && forMonth(c) && tmYmd(c.date) >= tmYmd(r.date)), sumLeft = withLeft.reduce((a, c) => a + left[c.id], 0), need = tmP(r.tds);
     // another section's challan with room: the one whose balance is these deductions' total (the section and month) first,
     // then one deposited in the month or the next
-    const ym = tmYmd(r.date).slice(0, 6), grp = rest.filter(x => x.sec === r.sec && tmYmd(x.date).slice(0, 6) === ym).reduce((a, x) => a + tmP(x.tds), 0);
+    const ym = tmYmd(r.date).slice(0, 6), grp = grpSum[r.sec + "|" + ym] || 0;
     const near = c => (left[c.id] === grp ? 0 : 2) + ([ym, tmNextYm(ym)].includes(tmYmd(c.date).slice(0, 6)) ? 0 : 1);
     const other = (chs || []).filter(c => tmTdsHead(c) && tmYearOk(c, fy, q) && c.sec && !tmSecOk(c.sec, r.sec) && left[c.id] >= need && tmYmd(c.date) >= tmYmd(r.date)).sort((a, c) => near(a) - near(c) || tmChOrder(a, c))[0];
     if (other){ out.push({rowId: r.id, step: "move", words: "Challan " + lab(other) + " (" + other.sec + ") has " + tmInr(left[other.id]) + " left, but this is " + r.sec + ": if it was paid for this, use Move to challan.", pay: 0, chId: other.id}); return; }
     if (withLeft.length && sumLeft < need){
       const c = withLeft.sort((a, c2) => left[c2.id] - left[a.id] || tmChOrder(a, c2))[0], gap = need - sumLeft, intr = tmLateInterest(r, today, pct);
-      out.push({rowId: r.id, step: "pay", words: "Challan " + lab(c) + " has " + tmInr(left[c.id]) + " left but this needs " + tmInr(need) + ": pay " + tmInr(gap + intr) + " (the TDS short " + tmInr(gap) + (intr ? " + interest " + tmInr(intr) + " to " + tmDmy(today) : "") + "), then split this deduction across the two challans.", pay: gap + intr}); return;
+      out.push({rowId: r.id, step: "pay", words: "Short-paid " + tmInr(gap) + ": challan " + lab(c) + " has " + tmInr(left[c.id]) + " left but this needs " + tmInr(need) + ". Pay " + tmInr(gap + intr) + " (the TDS short " + tmInr(gap) + (intr ? " + interest " + tmInr(intr) + " to " + tmDmy(today) : "") + "), then split this deduction across the two challans; a later month's challan is not used for it.", pay: gap + intr}); return;
     }
     if (withLeft.length){ const c = withLeft.sort(tmChOrder)[0]; out.push({rowId: r.id, step: "move", words: "Challan " + lab(c) + " has " + tmInr(left[c.id]) + " left: the suggestion for it was set aside. If it pays this, use Move to challan; if not, pay a challan for it.", pay: 0, chId: c.id}); return; }
     if (own.length && !ok.length){ const c = own[0]; out.push({rowId: r.id, step: "pay", words: "Challan " + lab(c) + " is minor head " + c.minor + " (not TDS payable by the deductor, 200): it cannot pay this. Pay " + tmInr(need + tmLateInterest(r, today, pct)) + " under minor head 200.", pay: need + tmLateInterest(r, today, pct)}); return; }
@@ -418,4 +455,138 @@ function tmAiCheck(ai, rows, chs, opt){
   return {sugg: out, dropped, why};
 }
 
-export { tmCannot, tmFyGap, tmReasons, tmReasonGroups, tmLateInterest, tmMonths, TM_VERSION, TM_RULES, TM_SCHEMA, TM_SYSTEM, TM_AI_ROWS, TM_AI_CHS, tmNum, tmP, tmInr, tmYmd, tmMonth, tmDmy, tmFyOf, tmSecOk, tmYearOk, tmDue, tmRules, tmMask, tmAiInput, tmAiPrompt, tmAiParse, tmAiCheck };
+// ---------------------------------------------------------------- Place automatically (next-tds-autoplace, 23-Oct-2026)
+// The owner approved sections C and D of the TDS check of 22-Oct-2026: "Place automatically" puts deductions on challans
+// by itself only where it is certain, strongest rule first; the rest is suggested (one click each) or said. tmPlan runs
+// the rules in this order, each on what the ones before it left, and gives every placing its rule (code R1-R9) and auto:
+//   R1  Tally's own link (rule a; for salary, the payroll period)                                       automatic
+//   R2  a section's month total = a challan (±₹1, never above it), paid by the due date (b; 24Q's s)  automatic (late: suggested)
+//   R3  the same for the whole quarter (c)                                                             automatic (late: suggested)
+//   R4  one party's month total = a challan (±₹1), and only one party fits (p)                        automatic
+//   R5  exactly one set of deductions adds up to a challan (±₹1) (x)                                  automatic if nothing of
+//       that section and month is left over, else suggested
+//   R6  a challan filled with its month's deductions, oldest first (d; e, a challan naming no section)  suggested
+//   R7  a later challan, with the interest due (d after the due date)                                  suggested
+//   R8  an advance or next year's challan (f)                                                          suggested
+//   R9  the AI (g)                                                                                     suggested only
+// (R0, one Tally payment split into a challan per section in whole rupees, is TDSTally's, before any of this.)
+// Never automatic: on a challan dated before a deduction; a later month's own challan for an earlier month (theirs); a split.
+const TM_CODES = {R1: "Tally's own link", R2: "Section's month total = challan", R3: "Section's quarter total = challan", R4: "One party's month total = challan",
+  R5: "The only set that adds up to the challan", R6: "Filled oldest first", R7: "Later challan, interest due", R8: "Advance or next year's challan", R9: "AI"};
+// R5 looks at no more than this many deductions for one challan (2^11 x 2^11 sets: quick; more is not "certain" anyway)
+const TM_SUBSET_MAX = 22;
+// what a pass of rules used: the rows it took out, the challans' balances less what it took (bal0 the balance before any)
+function tmLess(rows, chs, sugg){
+  const use = {}, taken = new Set();
+  (sugg || []).forEach(s => { s.ids.forEach(id => taken.add(id)); (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
+  return {rows: (rows || []).filter(r => !taken.has(r.id)), chs: (chs || []).map(c => Object.assign({}, c, {bal0: c.bal0 != null ? c.bal0 : c.bal, bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100})).filter(c => tmP(c.bal) > 0)};
+}
+// the common ground of R4 and R5: the challans that may take a deduction by themselves, and the rows each may take (of its
+// section, deducted on or before it, the challan paid by the month's due date, not a later month's own challan)
+function tmSure(rows, chs, opt){
+  opt = opt || {};
+  const fy = opt.fy, q = opt.q, today = tmYmd(opt.today), left = {}, free = new Set((rows || []).filter(r => tmP(r.tds) > 0).map(r => r.id));
+  (chs || []).forEach(c => { left[c.id] = Math.max(0, tmP(c.bal)); });
+  const allCh = (chs || []).slice().sort(tmChOrder), list = (rows || []).slice().sort(tmByDate), byYm = {};
+  list.forEach(r => { (byYm[tmYmd(r.date).slice(0, 6)] = byYm[tmYmd(r.date).slice(0, 6)] || []).push(r); });
+  const base = c => tmTdsHead(c) && tmYearOk(c, fy, q) && left[c.id] > 0 && !(today && tmYmd(c.date) > today);
+  // a later month's own challan: its month has free deductions of the section still waiting for it
+  const waiting = opt.waiting || [];
+  const theirs = (c, sec, ym) => { const om = tmOwnYm(c); return om > ym && ((byYm[om] || []).some(r => free.has(r.id) && tmSecOk(sec, r.sec)) || waiting.some(w => w.ym === om && tmSecOk(sec, w.sec))); };
+  const fits = c => { const d = tmYmd(c.date), om = {}; return list.filter(r => { if (!free.has(r.id) || tmYmd(r.date) > d || (c.sec && !tmSecOk(c.sec, r.sec))) return false;
+    const ym = tmYmd(r.date).slice(0, 6), k = r.sec + "|" + ym;
+    if (!(k in om)) om[k] = d <= tmDue(ym, /^206C/.test(r.sec)) && !theirs(c, r.sec, ym);
+    return om[k]; }); };
+  return {left, free, allCh, base, fits, no: opt.no || {}};
+}
+// R4: for each challan (oldest first), the deductions of one party, one section and one month whose total is the challan's
+// balance (±₹1, never above it); placed only when exactly one such party-month fits that challan
+function tmPartyRule(rows, chs, opt){
+  const z = tmSure(rows, chs, opt), out = [];
+  z.allCh.forEach(c => {
+    if (!z.base(c)) return;
+    const g = {};
+    z.fits(c).forEach(r => { const k = String(r.party || "").trim().toUpperCase() + "|" + r.sec + "|" + tmYmd(r.date).slice(0, 6); (g[k] = g[k] || []).push(r); });
+    const hit = Object.keys(g).filter(k => { const t = g[k].reduce((a, r) => a + tmP(r.tds), 0); return t <= z.left[c.id] && z.left[c.id] - t <= 100; });
+    if (hit.length !== 1) return;
+    const list = g[hit[0]], ids = list.map(r => r.id), key = tmKey("p", c.id, ids), total = list.reduce((a, r) => a + tmP(r.tds), 0);
+    if (z.no[key]) return;
+    z.left[c.id] -= total; ids.forEach(id => z.free.delete(id));
+    out.push({key, rule: "p", words: TM_RULES.p, reason: list[0].sec + " · " + tmMonth(tmYmd(list[0].date).slice(0, 6)) + " · " + (list[0].party || "") + " · " + list.length + (list.length === 1 ? " deduction " : " deductions ") + tmInr(total) + " = challan " + tmInr(z.left[c.id] + total) + " (the only party that fits)",
+      warn: "", info: "", chId: c.id, ids, total});
+  });
+  return out;
+}
+// R5: for each challan naming a section (oldest first), the sets of its possible deductions (TM_SUBSET_MAX at most) whose
+// total is its balance (±₹1, never above it); placed only when there is exactly one such set
+function tmSubsetRule(rows, chs, opt){
+  const z = tmSure(rows, chs, opt), out = [];
+  z.allCh.forEach(c => {
+    if (!z.base(c) || !c.sec) return;
+    const pool = z.fits(c), hi = z.left[c.id], lo = hi - 100;
+    if (!pool.length || pool.length > TM_SUBSET_MAX || pool.reduce((a, r) => a + tmP(r.tds), 0) < lo) return;
+    // meet in the middle: every sum of each half, then the pairs whose total falls in [lo, hi]; stop at a second set
+    const h = pool.length >> 1, A = pool.slice(0, h), B = pool.slice(h);
+    const sums = (L) => { const o = [{s: 0, m: 0}]; L.forEach((r, i) => { const p = tmP(r.tds), n = o.length; for (let k = 0; k < n; k++) o.push({s: o[k].s + p, m: o[k].m | (1 << i)}); }); return o; };
+    const SA = sums(A), SB = sums(B).sort((a, b) => a.s - b.s);
+    const first = (v) => { let l = 0, r = SB.length; while (l < r){ const m = (l + r) >> 1; if (SB[m].s < v) l = m + 1; else r = m; } return l; };
+    let found = null, n = 0;
+    for (const a of SA){
+      for (let i = first(lo - a.s); i < SB.length && SB[i].s <= hi - a.s; i++){
+        if (!(a.m || SB[i].m)) continue;
+        n++; found = {a: a.m, b: SB[i].m};
+        if (n > 1) break;
+      }
+      if (n > 1) break;
+    }
+    if (n !== 1) return;
+    const list = A.filter((r, i) => found.a & (1 << i)).concat(B.filter((r, i) => found.b & (1 << i))).sort(tmByDate);
+    const ids = list.map(r => r.id), key = tmKey("x", c.id, ids), total = list.reduce((a, r) => a + tmP(r.tds), 0);
+    if (z.no[key]) return;
+    z.left[c.id] -= total; ids.forEach(id => z.free.delete(id));
+    out.push({key, rule: "x", words: TM_RULES.x, reason: c.sec + " · " + list.length + (list.length === 1 ? " deduction " : " deductions ") + tmInr(total) + " = challan " + tmInr(z.left[c.id] + total) + " (the only set of the " + pool.length + " that adds up)",
+      warn: "", info: "", chId: c.id, ids, total});
+  });
+  return out;
+}
+// a placing's rule (R1-R9) and whether it is placed by itself: {code, auto, warn}. rowBy: id -> row; leftRows: the rows no
+// placing took (R5 is automatic only when none of its section and months is among them)
+function tmCodeOf(s, c, rowBy, leftRows){
+  const rs = (s.ids || []).map(id => rowBy[id]).filter(Boolean), d = tmYmd(c && c.date), yms = rs.map(r => tmYmd(r.date).slice(0, 6)), lastYm = yms.slice().sort().pop() || "";
+  const tcs = rs.some(r => /^206C/.test(r.sec)), due = lastYm ? tmDue(lastYm, tcs) : "", onTime = !!d && !!due && d <= due;
+  const late = () => "Paid " + tmDmy(d) + ", after the due date " + tmDmy(due) + ": interest at " + (tcs ? "1%" : "1.5%") + " a month is due on these";
+  const sure = !!c && tmTdsHead(c) && rs.length > 0 && rs.every(r => tmYmd(r.date) <= d) && !s.parts;
+  const R = (code, auto, warn) => ({code, auto: !!auto && sure, warn: warn != null ? warn : s.warn || ""});
+  switch (s.rule){
+    case "a": return R("R1", true);
+    case "s": return R("R2", true);
+    case "b": return onTime ? R("R2", true) : R("R2", false, s.warn || late());
+    case "c": return onTime ? R("R3", true) : R("R3", false, s.warn || late());
+    case "p": return R("R4", true);
+    case "x": return R("R5", !(leftRows || []).some(r => tmP(r.tds) > 0 && yms.includes(tmYmd(r.date).slice(0, 6)) && (c && c.sec ? tmSecOk(c.sec, r.sec) : rs.some(z => z.sec === r.sec))));
+    case "d": return R(s.warn ? "R7" : "R6", false);
+    case "e": return R("R6", false);
+    case "f": return R("R8", false);
+    case "g": return {code: "R9", auto: false, warn: s.warn || ""};
+    default: return {code: s.rule === "split" ? "" : "", auto: false, warn: s.warn || ""};
+  }
+}
+// the rules in order (opt as tmRules'; opt.mid(rows, chs): placings of the form's own, after a to c — 24Q's salary rule),
+// each placing with its code and auto
+function tmPlan(rows, chs, opt){
+  opt = opt || {};
+  rows = rows || []; chs = chs || [];
+  const all = []; let cur = {rows, chs};
+  const step = (list) => { list = list || []; all.push(...list); if (list.length) cur = tmLess(cur.rows, cur.chs, list); };
+  step(tmRules(cur.rows, cur.chs, Object.assign({}, opt, {upto: "c"})));
+  if (typeof opt.mid === "function" && cur.rows.length && cur.chs.length) step(opt.mid(cur.rows, cur.chs));
+  if (cur.rows.length && cur.chs.length) step(tmPartyRule(cur.rows, cur.chs, opt));
+  if (cur.rows.length && cur.chs.length) step(tmSubsetRule(cur.rows, cur.chs, opt));
+  if (cur.rows.length && cur.chs.length) step(tmRules(cur.rows, cur.chs, Object.assign({}, opt, {upto: ""})));
+  const chBy = {}, rowBy = {};
+  chs.forEach(c => { chBy[c.id] = c; }); rows.forEach(r => { rowBy[r.id] = r; });
+  all.forEach(s => Object.assign(s, tmCodeOf(s, chBy[s.chId], rowBy, cur.rows)));
+  return all;
+}
+
+export { TM_CODES, TM_SUBSET_MAX, tmLess, tmSure, tmPartyRule, tmSubsetRule, tmCodeOf, tmPlan, tmOwnYm, tmCannot, tmFyGap, tmReasons, tmReasonGroups, tmLateInterest, tmMonths, TM_VERSION, TM_RULES, TM_SCHEMA, TM_SYSTEM, TM_AI_ROWS, TM_AI_CHS, tmNum, tmP, tmInr, tmYmd, tmMonth, tmDmy, tmFyOf, tmSecOk, tmYearOk, tmDue, tmRules, tmMask, tmAiInput, tmAiPrompt, tmAiParse, tmAiCheck };

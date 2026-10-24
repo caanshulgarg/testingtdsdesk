@@ -16,10 +16,21 @@ import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens } from "./screens/lazy.js";
 import "./nav.js";
+// calls (stage 1, 23-Oct-2026): the way in only; the call screen is its own file, fetched when a call is opened
+import { guestLink, startGuest, joinHash, memberHere, takeJoin } from "./calls/launch.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
+// the decision on each line of 2B reconciliation, one store (ITCDec; the old remarks and follow-up decisions read into it)
+import "./lib/itcSync.js";
+// next-itc-simple: the credit of GSTR-3B table 4 from the decisions in 2B reconciliation and the adjustments (wraps GSTR.threeBm)
+import "./lib/itcFinal.js";
+// next-gstr1-excel: FinCom's GSTR-1 corrections (an Excel brought back) laid over GSTR.toJson and 3B's 3.1 (wraps them).
+// Its own file (the first file is at its size budget), fetched at once; the GST screen imports it too
+import("./lib/gstr1Fix.js").then(() => { try { if (typeof S === "object" && S.books && S.books.r1Fix) render(); } catch (e) { /* drawn later */ } }).catch((e) => staleReload(e, true));
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
+// Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
+import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
@@ -87,6 +98,7 @@ function start() {
     afterFirstPage(() => import("./sentry.js").then((m) => { window.removeEventListener("error", keep); window.removeEventListener("unhandledrejection", keep); m.start(); }).catch(() => {}), 3000);
   }
   adopt();
+  try { installAutopost(); } catch (e) { /* never in the way of the page */ }
   createRoot(document.getElementById("react-root")).render(<Root />);
   watchFresh();
   // the other screens' files (screens/lazy.js), fetched once the first page is up
@@ -116,8 +128,17 @@ function start() {
 // that index.html's build check is swapping for a newer build; and on the service worker's kept copy of the page
 // (data-boot-kept, sw/sw.js: the line was too slow to bring the page), not before that check has answered (6 s at most),
 // so an older build is never drawn and then replaced
-if (!window.__fincomOld && !window.__fincomSwapping) {
+// a guest's call link (#join=…): the guest's page alone, FinCom itself is not started (no sign-in)
+// next-calls-meet (23-Oct-2026): a meeting's link (#/join/<code>) or the join page (#/join): the guest's page for someone
+// not signed in here; a signed-in member gets FinCom with the meeting's lobby over Meetings
+const guestPage = !window.__fincomOld && !window.__fincomSwapping && (guestLink() || (joinHash() && !memberHere()));
+if (guestPage) startGuest().catch((e) => { try { document.body.textContent = "The call could not be opened: " + e.message; } catch (x) { /* */ } });
+else if (!window.__fincomOld && !window.__fincomSwapping) {
+  takeJoin();
   const check = document.documentElement.hasAttribute("data-boot-kept") && window.__fincomBootCheck;
-  if (!check) start();
-  else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) start(); }, start);
+  // 24-Oct-2026: legacy.js did not load (public/oldcheck.js): the app does not start (the page is being refreshed, or
+  // says so)
+  const go = () => (window.__fincomLegacy ? window.__fincomLegacy.then((ok) => { if (ok) start(); }) : start());
+  if (!check) go();
+  else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) go(); }, go);
 }

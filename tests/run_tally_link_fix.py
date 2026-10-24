@@ -1,0 +1,253 @@
+"""python3 run_tally_link_fix.py - linking a client to its Tally company (23-Oct-2026, next-fix-tally-link; the owner:
+"Tally linking is still a very big problem", Salesify "even after adding Tally it is not updating"). The firm's own case:
+VMS EVENTS PRIVATE LIMITED (2024-25) open in Tally on NWS144; Salesify's company SALESIFY MARKETING LLP - (from 1-Apr-25)
+seen on 20-Oct and not open since.
+  1. Add client: Pick from Tally first (the companies seen and not linked, with computer and last seen; what is typed puts
+     the best match on top); Add as client adds the client already linked (tally_company_link once, Tally name set).
+  2. Adding a client by name while another company is open in Tally links nothing and keeps the client's own name as its
+     Tally name; this browser's automatic link (TCloud.auto / linkByGstin, tallyAutoClient) does not link the open company.
+  3. A client of the same name: said under the name with Open it; Add asks first; Pick from Tally offers to link the
+     existing client instead of adding a second one.
+  4. The client's Tally card, not linked: "Choose its Tally company" with the companies seen, the same name on top, last
+     seen 20-Oct, Link.
+  5. Linked to the wrong company by FinCom: said, "Not this company?" lists the others; choosing one moves the client
+     (the new company linked, the old unlinked).
+  6. Linked, not open: "Open X in TallyPrime on NWS144 — FinCom reads it within a minute. Last seen 20-Oct."; what came in
+     (ledgers, then entries) with the next step.
+  7. Same GSTIN: linked by itself (linkByGstin), not when the client has a company already.
+  8. No sideways scroll at 1440 and 390; shots with --shots DIR.
+24-Oct-2026 (next-tally-one-page): the same intent on the ONE place, the Tally page's Companies in Tally: Add client
+picks no Tally company; a client not linked has one line, "Choose on Tally page" (the list for it, open first); the
+wrong company moves from its row (Link to another client / the right row's Link, asked once); the row says Disconnected
+with the fix and what came in. 23-Oct-2026 (next-tally-suvit, Suvit's flow): Pick from Tally and the card's choice are the Tally page's own rows
+(Companies in Tally: data-tco-row, the pill, one action); a client already there is "Link to <client>" on the row (no
+question); the card says the pill's words with Sync now, and what came in with Upload older entries (Day Book).
+Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_link_fix.py [--shots DIR]"""
+import json, os, re, sys, threading, functools, http.server
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
+from playwright.sync_api import sync_playwright
+HERE = os.path.dirname(os.path.abspath(__file__))
+SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
+SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
+PORT = 8641
+class Q(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a): pass
+fails, errors = [], []
+def ok(c, w):
+    print(("  ok   " if c else "  FAIL ") + w)
+    if not c: fails.append(w)
+VMS, SAL = "VMS EVENTS PRIVATE LIMITED (2024-25)", "SALESIFY MARKETING LLP - (from 1-Apr-25)"
+D1 = "58d73e82-0000-4000-8000-000000000001"
+def dev(opened=(VMS,)):
+    bt = {"at": "ago:0.5", "every": 30, "tally": True, "tallyState": "open", "open": list(opened), "paused": False}
+    b = {"at": "ago:0.5", "version": "2.4.5", "computer": "NWS144", "user": "anshul", "mode": "main", "runMode": "user", "tally": True, "tallyState": "open", "open": list(opened)}
+    return {"id": D1, "name": "NWS144", "revoked": False, "last_seen": "ago:0.5", "version": "2.4.5", "main_bridge": "go-1", "created_at": "2026-09-01T00:00:00Z",
+            "info": {"computer": "NWS144", "user": "anshul", "beat": bt, "bridges": {"go-1": b}}}
+# 20-Oct-2026 17:21 UTC: the last time the bridge saw Salesify's company
+SAL_SEEN = "2026-10-20T17:21:36Z"
+def cos(vms_client=None, sal_client=None, vms_by=None, extra=()):
+    return [{"company": VMS, "client_id": vms_client, "device_id": D1, "gstin": "", "last_seen": "ago:1", "linked_at": "ago:30" if vms_client else None, "linked_by": vms_by},
+            {"company": SAL, "client_id": sal_client, "device_id": D1, "gstin": "", "last_seen": SAL_SEEN, "linked_at": "ago:5" if sal_client else None, "linked_by": "u-1" if sal_client else None}] + list(extra)
+SETUP = """([devs, companies]) => {
+  const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
+  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v);
+  window.__devs = fix(devs); window.__calls = window.__calls || [];
+  const ids = window.__ids || {};
+  window.__companies = fix(companies).map(x => Object.assign(x, {client_id: x.client_id ? (ids[x.client_id] || x.client_id) : null}));
+  Cloud.on = () => true; Cloud.st.firm = "f-1"; Cloud.st.members = [];
+  TCloud.on = () => true;
+  const copy = (o) => JSON.parse(JSON.stringify(o));
+  Cloud.api = async (path) => {
+    if (/^tally_devices/.test(path)) return copy(window.__devs);
+    if (/^tally_companies/.test(path)) return copy(window.__companies);
+    return [];
+  };
+  TCloud.restAll = async (u) => Cloud.api(u);
+  TCloud.rpc = async (fn, a) => { window.__calls.push([fn, JSON.parse(JSON.stringify(a || {}))]);
+    if (fn === "tally_company_link") window.__companies.forEach(r => { if (r.company === a.p_company) { r.client_id = a.p_client || null; r.linked_at = new Date().toISOString(); r.linked_by = "u-1"; } });
+    return {ok: true}; };
+  Cloud.rpc = async (fn, a) => { window.__calls.push([fn, JSON.parse(JSON.stringify(a || {}))]); return {ok: true}; };
+  window.cloudPushNow = async () => {};
+  // next-tally-suvit: a link starts the first sync (the ledgers wake); each scene starts without one
+  TCloudUp.post = async (body) => { window.__calls.push(["post", JSON.parse(JSON.stringify(body))]); return {ok: true, woken: 1, asked: 1}; }; S.tcoSync = {};
+  S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role: "owner"})});
+  TCloud.pane.devices = window.__devs; TCloud.pane.companies = window.__companies; TCloud.pane.at = Date.now(); TCloud.pane.err = ""; TCloud.pane.stops = [];
+  TLight.st.at = Date.now(); TLight.st.devs = window.__devs; TLight.st.cos = window.__companies; TLight.st.stops = [];
+  document.body.classList.add("is-test"); S.firm.firmName = S.firm.firmName || "Test Firm";
+  return true;
+}"""
+
+def main():
+    srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    with sync_playwright() as p:
+        br = p.chromium.launch()
+        def open_page(w, h, scheme="light"):
+            pg = br.new_page(viewport={"width": w, "height": h}, color_scheme=scheme); pg.on("pageerror", lambda e: errors.append(str(e)))
+            pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps({"setup": {"version": "2.4.5", "url": "https://x/s.exe", "sha256": "ab" * 32}})))
+            pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
+            pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+            pg.evaluate("""() => { const g = newCompany({name: 'Garg Shekhar & Company', gstin: '09AANFG3202D1ZR'}); S.companies[g.id] = g; S.data[g.id] = {parties: {}, entries: {}, loaded: true}; g.stats = {};
+                Store.saveCompany(g); window.__ids = {GS: g.id}; }""")
+            return pg
+        pg = open_page(1440, 900)
+        E = lambda js, *a: pg.evaluate(js, *a)
+        txt = lambda sel: pg.inner_text(sel).strip() if pg.locator(sel).count() else ""
+        calls = lambda: [c for c in E("window.__calls || []") if c[0] == "tally_company_link"]
+        def scene(companies, devs=None):
+            E(SETUP, [[dev()] if devs is None else devs, companies]); pg.wait_for_timeout(300)
+        def confirm(yes=True):
+            sel = '#confirmBox [data-cbx="%s"]' % ("yes" if yes else "no")
+            pg.wait_for_selector(sel, state="visible", timeout=10000); pg.click(sel)
+            pg.wait_for_selector(sel, state="hidden", timeout=10000); pg.wait_for_timeout(500)
+        def shot(name, page=None):
+            if SHOTS: os.makedirs(SHOTS, exist_ok=True); (page or pg).screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)
+        def card(cid):
+            E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(900)
+        by_name = lambda n: E("(n) => Object.values(S.companies).filter(x => !x.deleted && x.name === n).map(x => x.id)", n)
+
+        def tally_list(cid=""):
+            E("(c) => { S.view = 'home'; if (c) openConnectTally(4, c); else { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); } }", cid); pg.wait_for_timeout(1300)
+            return E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-why'), r.innerText.replace(/\\s+/g, ' '), ((r.querySelector('[data-tco-act]') || {}).innerText || '').trim()])")
+        R = lambda co: '#app [data-tco-list=firm] [data-tco-row="%s"]' % co
+
+        # ---- 2. a client added by name while VMS EVENTS is open in Tally: nothing linked, its own name kept
+        # next-tally-one-page: Add client picks no Tally company (the Tally page's list is the one place)
+        scene(cos())
+        E("() => doAct('addCo')"); pg.wait_for_timeout(700)
+        ok(pg.locator("#app [data-tco-list=add]").count() == 0 and pg.locator("#app [data-add-tally-go]").count() == 1, "1. Add client: no Pick from Tally; one button to the Tally page's list")
+        ok(pg.locator("#app select[data-add-tally]").count() == 0 and pg.locator('#app input[placeholder="Same as client name"]').count() == 0, "2. no 'Company in Tally' list or free 'Company name in Tally' box on Add client")
+        shot("add-client-desktop")
+        pg.fill("#ncName", "Salesify Marketing LLP"); pg.wait_for_timeout(400)
+        n0 = len(calls())
+        pg.click('#app button:has-text("Add and open")'); pg.wait_for_timeout(1200)
+        s1 = by_name("Salesify Marketing LLP")
+        ok(len(s1) == 1 and len(calls()) == n0, "2. added by name while VMS EVENTS is open in Tally: nothing linked (%s)" % calls()[n0:])
+        ok(E("(c) => S.companies[c].tallyName", s1[0]) == "Salesify Marketing LLP", "2. its Tally name is its own name, not the company open in Tally (%s)" % E("(c) => S.companies[c].tallyName", s1[0]))
+        E("(c) => { window.__ids.S1 = c; }", s1[0])
+        # this browser's automatic link: the company open here (VMS) is never linked to Salesify
+        m = E("() => { const m = tallyAutoClient({name: '%s', gstin: ''}); return m ? m.client.name : null; }" % VMS)
+        ok(m is None, "2. tallyAutoClient: VMS EVENTS matches no client by itself (%s)" % m)
+        E("(c) => { S.companies[c].tallyName = '%s'; }" % VMS, s1[0])   # the 23-Oct state: a Tally name left over
+        m = E("() => { const m = tallyAutoClient({name: '%s', gstin: ''}); return m ? m.client.name : null; }" % VMS)
+        ok(m is None, "2. not even with VMS EVENTS left as Salesify's Tally name (%s)" % m)
+        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "unlinked", "2. and a Tally name left over does not make it linked (the cloud's link alone)")
+        m = E("() => { const m = tallyAutoClient({name: '%s', gstin: ''}); return m ? [m.client.name, m.why] : null; }" % SAL)
+        ok(m == ["Salesify Marketing LLP", "name"], "2. SALESIFY MARKETING LLP - (from 1-Apr-25) matches Salesify by its name (%s)" % m)
+        E("(c) => { S.companies[c].tallyName = 'Salesify Marketing LLP'; }", s1[0])
+
+        # ---- 3. a client of the same name
+        E("() => { S.view = 'home'; navHome('clients'); doAct('addCo'); }"); pg.wait_for_timeout(600)
+        pg.fill("#ncName", "salesify marketing llp."); pg.wait_for_timeout(400)
+        d = txt("#app [data-add-dup]")
+        ok(E("() => document.querySelector('#app [data-add-dup]') && document.querySelector('#app [data-add-dup]').getAttribute('data-add-dup')") == "same" and "Salesify Marketing LLP already exists" in d and pg.locator("#app [data-add-dup-open]").count() == 1,
+           "3. a client of the same name: 'Salesify Marketing LLP already exists', Open it (%s)" % d)
+        shot("add-client-duplicate-desktop")
+        pg.click('#app button:has-text("Add and open")'); confirm(False)
+        ok(len(by_name("Salesify Marketing LLP")) + len(by_name("salesify marketing llp.")) == 1, "3. Add asks first; No adds nothing")
+        # the Tally page's list with that client there: the row links it to the existing client, no second one
+        rows = tally_list()
+        ok([r[0] for r in rows] == [VMS, SAL], "1. Companies in Tally: the two companies, the one open now first (%s)" % [r[0] for r in rows])
+        ok(rows and "NWS144 · open now" in rows[0][2] and re.search(r"NWS144 · last seen 20-Oct", rows[1][2] or "") is not None, "1. each with its computer, and when it was last seen (%s)" % [r[2] for r in rows])
+        n0 = len(calls())
+        q = txt(R(SAL) + " [data-tco-act]")
+        ok(q == "Link to Salesify Marketing LLP", "3. the row says 'Link to Salesify Marketing LLP' (%s)" % q)
+        pg.click(R(SAL) + " [data-tco-act]"); pg.wait_for_timeout(1200)
+        ok(calls()[n0:] == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}]] and len(by_name("Salesify Marketing LLP")) == 1 and len(by_name("SALESIFY MARKETING LLP")) == 0,
+           "3. linked to the existing Salesify, no second client (%s)" % calls()[n0:])
+
+        # ---- 1b. Add as client adds the client already linked
+        scene(cos(sal_client="S1"))
+        tally_list()
+        n0 = len(calls())
+        pg.click(R(VMS) + " [data-tco-act=add]"); pg.wait_for_timeout(1500)
+        vm = by_name("VMS EVENTS PRIVATE LIMITED")
+        ok(len(vm) == 1 and calls()[n0:] == [["tally_company_link", {"p_company": VMS, "p_client": vm[0] if vm else ""}]],
+           "1. Add as client: VMS EVENTS PRIVATE LIMITED added (the period off its name) and linked at once (%s)" % calls()[n0:])
+        ok(vm and E("(c) => S.companies[c].tallyName", vm[0]) == VMS, "1. its Tally name hint is the company")
+        ok(vm and E("(c) => tallyLinkOf(S.companies[c]).state", vm[0]) != "unlinked", "1. it is linked")
+        E("(c) => { S.companies[c].deleted = true; }", vm[0])
+
+        # ---- 4. a client not linked: its one line points to the list for it, the same name on top of the not-open ones
+        scene(cos())
+        card(s1[0])
+        t4 = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
+        ok(t4 == "Tally: ◐ Not linked · Choose on Tally page" and pg.locator("#app [data-tally-link]").count() == 0, "4. not linked: one line, 'Choose on Tally page', no card (%r)" % t4)
+        rows = tally_list(s1[0])
+        ok(rows and rows[0][0] == VMS and rows[1][0] == SAL and rows[1][1] == "name" and "same name" in rows[1][2], "4. every company, open first, Salesify's marked 'same name' (%s)" % [(r[0], r[1]) for r in rows])
+        ok(rows and "last seen 20-Oct" in rows[1][2] and "NWS144" in rows[1][2] and rows[1][3] == "Link to Salesify Marketing LLP", "4. with its computer, 'last seen 20-Oct', Link to Salesify Marketing LLP (%s)" % (rows and rows[1]))
+        shot("card-not-linked-desktop")
+        n0 = len(calls())
+        pg.click(R(SAL) + " [data-tco-act=link]"); pg.wait_for_timeout(1200)
+        ok(calls()[n0:] == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}]], "4. Link -> tally_company_link once (%s)" % calls()[n0:])
+
+        # ---- 5. linked to the wrong company by FinCom: Link to another client / Link the right one (it moves)
+        scene(cos(vms_client="S1"))
+        tally_list()
+        pg.click(R(VMS) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
+        ok(pg.locator(R(VMS) + " [data-tco-not-this]").count() == 1 and pg.locator(R(VMS) + " [data-tco-unlink]").count() == 1, "5. ⋯ Link to another client, Unlink on the wrong company's row")
+        E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
+        q = txt(R(SAL) + " [data-tco-act]")
+        ok(q == "Link to Salesify Marketing LLP", "5. the right company says 'Link to Salesify Marketing LLP' (%s)" % q)
+        n0 = len(calls())
+        pg.click(R(SAL) + " [data-tco-act]"); confirm(True); pg.wait_for_timeout(1000)
+        got = calls()[n0:]
+        ok(got == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}], ["tally_company_link", {"p_company": VMS, "p_client": None}]],
+           "5. asked once, the client moves: SALESIFY linked, VMS EVENTS unlinked (%s)" % got)
+        ok(E("(c) => tallyLinkOf(S.companies[c]).company", s1[0]) == SAL, "5. the client now names SALESIFY")
+        ok(txt(R(VMS) + " [data-tco-pill]").startswith("Not a client"), "5. VMS EVENTS stays in the list, Not a client")
+        # Unlink only
+        scene(cos(vms_client="S1")); tally_list()
+        pg.click(R(VMS) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
+        n0 = len(calls()); pg.click(R(VMS) + " [data-tco-unlink]"); confirm(True); pg.wait_for_timeout(800)
+        ok(calls()[n0:] == [["tally_company_link", {"p_company": VMS, "p_client": None}]], "5. Unlink: VMS EVENTS unlinked only (%s)" % calls()[n0:])
+
+        # ---- 6. linked, not open in Tally: the one thing to do, and what came in (the row)
+        scene(cos(sal_client="S1")); tally_list()
+        fx = txt(R(SAL) + " [data-tco-fix]"); pill = txt(R(SAL) + " [data-tco-pill]")
+        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "waiting" and pill.startswith("Disconnected") and "not open in Tally on NWS144 (last seen 20-Oct)" in pill and fx == "Open " + SAL + " in TallyPrime on NWS144."
+           and pg.locator(R(SAL) + " [data-tco-sync-now]").count() == 1,
+           "6. 'Disconnected — not open in Tally on NWS144 (last seen 20-Oct)', 'Open SALESIFY… in TallyPrime on NWS144.', Sync now (%s | %s)" % (pill, fx))
+        E("(c) => { TCloud.st[c] = Object.assign(TCloud.st[c] || {}, {at: Date.now(), books: []}); render(); }", s1[0]); pg.wait_for_timeout(500)
+        pr = txt(R(SAL) + " [data-tco-sync]")
+        ok("Ledgers not in FinCom yet" in pr, "6. what came in: no ledgers yet (%s)" % pr)
+        shot("card-waiting-desktop")
+        E("(c) => { TCloud.st[c] = Object.assign(TCloud.st[c] || {}, {at: Date.now(), ledN: {n: 1240, at: Date.now(), book: 'b'}}); render(); }", s1[0]); pg.wait_for_timeout(400)
+        pr = txt(R(SAL) + " [data-tco-sync]")
+        ok("Ledgers 1,240" in pr and "this year’s entries not in FinCom yet" in pr, "6. ledgers in: then this year's entries (%s)" % pr)
+        pg.click(R(SAL) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
+        ok(pg.locator(R(SAL) + " [data-tco-daybook]").count() == 1, "6. ⋯ Upload older entries (Day Book) while days are missing")
+        pg.click(R(SAL) + " [data-tco-daybook]"); pg.wait_for_timeout(1000)
+        ok(E("[S.coId, S.tab, S.booksTab]") == [s1[0], "books", "import"], "6. Upload older entries opens Books › From Tally's Upload for this client (%s)" % E("[S.coId, S.tab, S.booksTab]"))
+
+        # ---- 7. the same GSTIN: linked by itself, not when the client has a company already
+        E("() => { window.__calls = []; }")
+        scene(cos(extra=[{"company": "GSC BOOKS 2026", "client_id": None, "device_id": D1, "gstin": "09AANFG3202D1ZR", "last_seen": "ago:2", "linked_at": None, "linked_by": None}]))
+        E("() => { linkByGstin(window.__companies); }"); pg.wait_for_timeout(600)
+        ok(calls() == [["tally_company_link", {"p_company": "GSC BOOKS 2026", "p_client": E("window.__ids.GS")}]], "7. the same GSTIN as Garg Shekhar & Company: linked by itself (%s)" % calls())
+        E("() => { window.__calls = []; }")
+        scene(cos(extra=[{"company": "GARG SHEKHAR & COMPANY", "client_id": "GS", "device_id": D1, "gstin": "09AANFG3202D1ZR", "last_seen": "ago:2", "linked_at": "ago:900", "linked_by": "u-1"},
+                         {"company": "GSC BOOKS 2027", "client_id": None, "device_id": D1, "gstin": "09AANFG3202D1ZR", "last_seen": "ago:2", "linked_at": None, "linked_by": None}]))
+        E("() => { linkByGstin(window.__companies); }"); pg.wait_for_timeout(600)
+        ok(calls() == [], "7. not when that client is linked to a company already (%s)" % calls())
+
+        # ---- 8. phone 390, light and dark: no sideways scroll; shots
+        for scheme in ("light", "dark"):
+            for w, h, tag in ((1440, 900, "desktop"), (390, 844, "phone")):
+                q = open_page(w, h, scheme)
+                q.evaluate("() => { const c = newCompany({name: 'Salesify Marketing LLP', gstin: '06AEVFS5010H1ZV'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
+                for nm, comp, act in (("list-for-client", cos(), "for"), ("list", cos(vms_client="S1"), "page"), ("list-waiting", cos(sal_client="S1"), "page")):
+                    q.evaluate(SETUP, [[dev()], comp]); q.wait_for_timeout(300)
+                    q.evaluate("(a) => { S.view = 'home'; if (a === 'for') openConnectTally(4, window.__ids.S1); else { S.tallyGuide = {}; navHome('tally'); } }", act); q.wait_for_timeout(1200)
+                    x = q.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
+                    ok(x <= 1, "8. %s %s %s: no sideways scroll (%d px)" % (tag, scheme, nm, x))
+                    if SHOTS: q.screenshot(path=os.path.join(SHOTS, "%s-%s-%s.png" % (nm, tag, scheme)), full_page=True)
+                q.close()
+        br.close()
+    srv.shutdown()
+    print("page errors:", errors[:3]) if errors else None
+    ok(not errors, "no page errors (%d)" % len(errors))
+    print("\n%d failed" % len(fails) if fails else "\nall passed")
+    sys.exit(1 if fails else 0)
+
+if __name__ == "__main__":
+    main()

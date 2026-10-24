@@ -92,6 +92,14 @@ const M2B = {
     Object.defineProperty(res, "_maps", {value: {g, b}, enumerable: false});
     return res._maps;
   },
+  // next-itc-simple: the AI's pairs for GST2B.run (a 2B document with its books entries), and what they were made from
+  aiLinks(reg){
+    const s = this.st[this.key(reg, this.fyNow())], res = s && s.run && s.run.result;
+    if (!res) return [];
+    return (res.rows || []).filter(r => (r.st === "matched-ai" || r.st === "probable") && r.g.length === 1 && r.b.length)
+      .map(r => ({g: r.g[0], b: r.b.slice(), st: r.st, why: (r.why || []).join("; "), id: r.id}));
+  },
+  aiSig(reg){ const s = this.st[this.key(reg, this.fyNow())]; return s && s.run ? String(s.run.id || "") + ":" + String(s.run.at || "") + ":" + ((s.run.result || {}).rows || []).length + ":" + JSON.stringify(s.run.decisions || {}).length : ""; },
   statusOf2b(key, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.g[key] || "" : ""; },
   statusOfBook(id, reg){ const m = this.statusMaps(reg === undefined ? r2Reg(S.books) : reg); return m ? m.b[id] || "" : ""; },
   // a person's accept or reject of a probable pair (one, or all of them): kept on the server, and an accepted pair of one

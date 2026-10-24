@@ -13,7 +13,7 @@
 //
 // The TDS & GST makeover (round 46, 11-Oct-2026; the owner: "page looks very heavy … one page = one job"): four tabs,
 // each its own address — Returns (the year's grid, and GSTR-1, 3B, the quarter, CMP-08, GSTR-4, GSTR-9, 9C, amendments,
-// advances, the returns filed, notices) · 2B & ITC (2B, the input register, ITC follow-up, reversal) · Supplier health ·
+// advances, the returns filed, notices) · 2B & ITC (the input register, 2B reconciliation, the final credit for 3B) ·
 // Checks (filed vs FinCom, filed vs books). A GSTR-1 or 3B open has a summary card on top (status, the one download, More).
 //
 // State: S.gstYm (the month, YYYYMM), S.gstReg (the GSTIN's state code), S.gstView (year | return), S.gstPart,
@@ -31,8 +31,7 @@ import InputRegister from "./gst/InputRegister.jsx";
 import TwoB from "./gst/TwoB.jsx";
 import { Amendments, Advances, Reversal } from "./gst/Workings.jsx";
 import { Gst9, Gst9c } from "./gst/Annual.jsx";
-import ItcFollow from "./gst/ItcFollow.jsx";
-import SupplierHealth from "./gst/SupplierHealth.jsx";
+import ItcFinal from "./gst/ItcFinal.jsx";
 import ReturnsFiled from "./gst/ReturnsFiled.jsx";
 import FiledCompare from "./gst/FiledCompare.jsx";
 import Recon from "./gst/Recon.jsx";
@@ -44,6 +43,8 @@ import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
 import { r1PortalExcel } from "./gst/R1Portal.jsx";
 import { Answer } from "../parts/Answer.jsx";
 import BrowserHelper from "./gst/BrowserHelper.jsx";
+// next-gstr1-excel: GSTR-1 as an Excel to download, change (add, delete, modify) and bring back
+import R1ExcelBar from "./gst/R1Excel.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => (s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "");
@@ -52,8 +53,11 @@ const RET = { r1: "GSTR-1", iff: "IFF", r3b: "GSTR-3B", r2b: "GSTR-2B", g9: "GST
 const SUBS = { r1: [["summary", "Summary"], ["details", "Details"], ["diff", "Differences"], ["file", "Files"]],
   r3b: [["summary", "Summary"], ["details", "Details"], ["diff", "2B match"], ["file", "Files"]] };
 // the GST tabs (round 46) and the parts of each; a part not listed is a return
-const SECS = [["returns", "Returns"], ["itc", "2B & ITC"], ["health", "Supplier health"], ["checks", "Checks"]];
-const SEC_PARTS = { itc: ["r2b", "inreg", "follow", "rev"], health: ["health"], checks: ["filedcmp", "recon"] };
+// next-itc-simple (24-Oct-2026; the owner: "2B & ITC page is not clear.. supplier health is not required"): 2B & ITC is three
+// tabs, Input register · 2B reconciliation (with the follow-up and the letters) · Final credit for 3B; Reversal is a working
+// under Returns
+const SECS = [["returns", "Returns"], ["itc", "2B & ITC"], ["checks", "Checks"]];
+const SEC_PARTS = { itc: ["inreg", "r2b", "itcfinal"], checks: ["filedcmp", "recon"] };
 export const gstSecOf = (part, view) => (view === "year" ? "returns" : Object.keys(SEC_PARTS).find((k) => SEC_PARTS[k].includes(part)) || "returns");
 
 // the label of a period in the bar: a month, or for a QRMP filer the quarter (its last month) or IFF (the first two)
@@ -161,6 +165,7 @@ function OptionalNote() {
   return <p className="note" style={{ margin: "0 0 10px" }} data-optional-note="">{n} Optional entr{n === 1 ? "y" : "ies"} with GST in {fy} {n === 1 ? "is" : "are"} in no return. <button className="linkbtn" onClick={() => { S.reconTab = "optional"; gstPartGo("recon"); }}>See the list</button></p>;
 }
 
+const r1xClick = (k) => { const b = document.querySelector('[data-r1x-bar] [data-r1x="' + k + '"]'); if (b) b.click(); };
 // a GSTR-1 or 3B open: its summary card (round 46) — the return and period, its status as the year's grid says it, the
 // one download, and More
 function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledger, retPick, oneGstin }) {
@@ -184,7 +189,10 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
       {ctx}
       <div className="ret-acts">
         {prefile && <span data-prefile-bar="">{prefile}</span>}
-        <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]]}>
+        {part === "r1" && !noReturn && <span className="r1x-bar" data-r1x-bar="">{<R1ExcelBar ym={ym} reg={reg} />}</span>}
+        <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]].concat(
+          // next-gstr1-excel: under 1400 px the card has no room beside its actions: the GSTR-1 Excel's two are here (the bar stays, hidden)
+          part === "r1" && !noReturn && typeof window !== "undefined" && window.innerWidth < 1400 ? [["Download Excel (to change)", () => r1xClick("down")], ["Upload Excel", () => r1xClick("up")]] : [])}>
           <p>Check the JSON in the portal’s offline tool before filing.</p></More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
       </div>
@@ -245,6 +253,8 @@ export default function Gst() {
   // the year's grid first; a part already chosen (a link to it, an alert's button) opens that part
   if (!S.gstView) S.gstView = S.gstPart ? "return" : "year";
   // the parts follow the filing type of this month and GSTIN, so both are settled first
+  // the old ITC follow-up and Supplier health addresses open 2B reconciliation (next-itc-simple)
+  if (S.gstPart === "follow" || S.gstPart === "health") S.gstPart = "r2b";
   const { parts, ftype, noBooks } = gstParts(b);
   const seen = (S.gstReg || "") + "|" + ftype;
   if (!S.gstPart || !parts.some((x) => x[0] === S.gstPart) || (S.gstSeen && S.gstSeen !== seen)) S.gstPart = parts[0][0];
@@ -255,7 +265,7 @@ export default function Gst() {
   const subs = S.gstView === "return" && !noBooks ? SUBS[part] : null;
   if (subs && !subs.some(([k]) => k === S.gstSub)) S.gstSub = "summary";
   const sub = subs ? S.gstSub : undefined;
-  const noDownload = ["r2b", "rev", "inreg", "follow", "health", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
+  const noDownload = ["r2b", "rev", "inreg", "itcfinal", "qtr", "vault", "filedcmp", "recon"].includes(part) || ftype === "comp";
   const forWhat = ftype === "qrmp" ? " for the quarter" : " for the portal";
   // ledger-confirm (14-Oct-2026): the GST ledgers are confirmed here, a section of their own (TaxLedgers.jsx)
   const sec = S.gstView === "ledgers" ? "ledgers" : gstSecOf(part, S.gstView);
@@ -310,7 +320,7 @@ export default function Gst() {
         label={part === "r3b" ? "GSTR-3B" + (ftype === "qrmp" ? " for the quarter" : "") : ftype === "qrmp" ? (GSTSet.isQEnd(S.gstYm || "") ? "GSTR-1 for the quarter" : "IFF") : "GSTR-1"} />}</section>}
     {/* the browser helper (next-gst-browser): fills the return on the portal and stops before File */}
     {sub === "file" && (!noReturn || iffNow) && S.gstYm && <BrowserHelper form={iffNow ? "IFF" : part === "r1" ? "R1" : "3B"} ym={S.gstYm} reg={S.gstReg || ""} />}
-    {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "follow" ? <ItcFollow /> : part === "health" ? <SupplierHealth /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
+    {part === "r1" ? <Gstr1 b={b} sub={sub} /> : part === "r3b" ? <Gstr3b b={b} sub={sub} /> : part === "inreg" ? <InputRegister b={b} /> : part === "r2b" ? <TwoB b={b} /> : part === "amend" ? <Amendments b={b} /> : part === "adv" ? <Advances /> : part === "rev" ? <Reversal b={b} /> : part === "g9" ? <Gst9 b={b} /> : part === "g9c" ? <Gst9c /> : part === "itcfinal" ? <ItcFinal b={b} /> : part === "vault" ? <ReturnsFiled b={b} /> : part === "filedcmp" ? <FiledCompare b={b} /> : part === "recon" ? <Recon b={b} /> : part === "qtr" ? <Qrmp /> : part === "cmp08" ? <Cmp08 /> : part === "gstr4" ? <Gstr4 /> : part === "notices" ? <Notices b={b} kind="gst" /> : null}
     </>}
     </>}
   </div>;

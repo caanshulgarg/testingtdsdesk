@@ -142,7 +142,7 @@ with sync_playwright() as p:
     pg.click(row + 'button:text-is("Remove")'); pg.wait_for_timeout(300)
     ok(pg.evaluate("S.books.assets.length") == 0, "Remove")
     # advances: the month with the most, a rate changed, one marked not an advance and back
-    pg.evaluate("() => { const ms = GSTR.months(), n = m => GSTAdv.month(m, S.gstReg || '').at.length; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); pg.wait_for_timeout(600)
+    pg.evaluate("() => { CO().choices = Object.assign(CO().choices || {}, {advGst: {value: 'on', state: 'confirmed', by: 'test', at: '2026-10-22T00:00:00Z'}}); const ms = GSTR.months(), n = m => GSTAdv.month(m, S.gstReg || '').at.length; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); pg.wait_for_timeout(600)
     if pg.locator('select[aria-label="Rate"]').count():
         rid = pg.evaluate("GSTAdv.month(S.gstYm, S.gstReg || '').at[0].id")
         pg.locator('select[aria-label="Rate"]').first.select_option("5"); pg.wait_for_timeout(400)

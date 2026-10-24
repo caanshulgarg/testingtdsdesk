@@ -292,6 +292,67 @@ Deno.test("a request to post or delete: refused, with the screen that does it; n
   eq(ofType(r2.events, "screen").map((x) => x.screen), ["tally_sync"], "a delete goes to Tally");
 });
 
+// the owner, 22-Oct-2026: "make entries for Leads Insurance in their Tally, or prepare XML to upload" was refused (the
+// system prompt's "you never post ... call point_to_screen"). Now drafted: the model calls draft_entries; FinCom checks the
+// ledgers against the client's Tally ledgers in the cloud, Dr = Cr and the books' period; a voucher that does not balance
+// goes back to the model; the draft is shown as a preview (a result of kind "entries"); nothing is posted, no screen card
+Deno.test("entries asked for (Hinglish, as the owner asked): drafted and checked by FinCom, shown as a preview; never refused, never posted", async () => {
+  const q = "mujhe na is book ke andar Rukmini Sethuraman ko ek lakh ki payment ki entry karni hai " + crypto.randomUUID().slice(0, 6);
+  const v1 = (cr: number) => ({ type: "Payment", date: "2026-10-13", narration: "Paid to Rukmini Sethuraman", lines: [{ ledger: "rukmini sethuraman", dr: 100000, cr: 0 }, { ledger: "KAVERI BANK - CA 0815", dr: 0, cr }] });
+  const v2 = { type: "Journal", date: "2026-10-13", narration: "Electricity for October", lines: [{ ledger: "Electricity Charges", dr: 2500, cr: 0 }, { ledger: "Cash", dr: 0, cr: 2500 }] };
+  const c = new MockClaude([
+    [tool("draft_entries", { vouchers: [v1(10000)] })],                       // Dr 1,00,000, Cr 10,000: sent back
+    [tool("draft_entries", { vouchers: [v1(100000), v2] })],
+    [text("I have drafted a payment of ₹1,00,000.00 to Rukmini Sethuraman from Kaveri Bank, dated 13-Oct-2026 (today). Electricity Charges is not a ledger in the books: pick one from the list.")],
+  ]);
+  const r = await ask(c, { question: q, client_id: CLIENT, lang: "hinglish" });
+  eq(ofType(r.events, "screen").length, 0, "no 'cannot, use this screen' card");
+  eq(c.routerCalls.length, 0, "not routed by Haiku");
+  const back = JSON.stringify((c.calls[1] as any).messages.slice(-1));
+  assert(/NOT_SHOWN/.test(back) && /is not equal to Cr/.test(back), "the unbalanced draft went back to the model: " + back.slice(0, 400));
+  const res = ofType(r.events, "result").filter((x) => x.kind === "entries");
+  eq(res.length, 1, "one preview");
+  const p = res[0];
+  eq(p.vouchers[0].lines.map((l: any) => [l.ledger, l.known, l.dr, l.cr]), [["Rukmini Sethuraman", true, 100000, 0], ["Kaveri Bank - CA 0815", true, 0, 100000]], "the book's own ledger names");
+  eq([p.vouchers[0].dr, p.vouchers[0].cr, p.vouchers[0].problems], [100000, 100000, []], "balanced");
+  eq([p.vouchers[1].lines[0].known, p.ok], [false, false], "an unknown ledger: red, and the draft is not ready");
+  eq(p.period, { from: "2025-04-01", to: "2027-03-31" }, "the books' period");
+  eq([p.client, p.columns, p.rows], [CLIENT, [], []], "for the client open; no table");
+  assert(r.done.labels.includes("entries") && !r.done.labels.includes("books"), "labelled as drafted entries: " + r.done.labels);
+  assert(!/posted to tally|has been posted|is posted/i.test(r.done.text), "never says posted");
+  // the model was told what FinCom found, and that nothing is posted
+  const told = JSON.stringify((c.calls[2] as any).messages.slice(-1));
+  assert(/Electricity Charges/.test(told) && /Nothing has been posted/.test(told), "the model is told: " + told.slice(0, 300));
+  // the system prompt drafts; it no longer refuses entries
+  const sys = String(((c.calls[0] as any).system || [])[0]?.text || "");
+  assert(/draft them with draft_entries/.test(sys) && /never say the entries are posted/.test(sys) && /here in the chat/.test(sys), "the system prompt drafts entries; posting is in the chat");
+  // logged like every question: who, when, and the tool
+  const log = await svc("/rest/v1/assistant_log?select=user_id,question,tools,at&question=eq." + encodeURIComponent(q));
+  assert(log[0] && log[0].user_id === ME && log[0].at && (log[0].tools || []).includes("draft_entries"), "logged with who and when: " + JSON.stringify(log[0]));
+  // in English, through the keyword router's words ("cash"): still the model, still drafted
+  const c2 = new MockClaude([[tool("draft_entries", { vouchers: [{ type: "Journal", date: "2026-03-31", narration: "Rent for March", lines: [{ ledger: "Office Rent", dr: 50000, cr: 0 }, { ledger: "Cash", dr: 0, cr: 50000 }] }] })], [text("Drafted the rent entry.")]]);
+  const r2 = await ask(c2, { question: "Pass a journal entry: rent 50,000 debit Office Rent credit cash paid on 31 March 2026", client_id: CLIENT });
+  eq([ofType(r2.events, "screen").length, c2.routerCalls.length, c2.calls.length], [0, 0, 2], "the model drafts it (no router, no screen)");
+  eq(ofType(r2.events, "result").filter((x) => x.kind === "entries").map((x) => x.ok), [true], "a clean draft is ready");
+  // dates (the owner, 22-Oct-2026: "as person say or today or earlier"): a future date the person did not state becomes
+  // today, with one line; a future date the person stated is kept (inside the books' period)
+  const jv = (date: string) => ({ vouchers: [{ type: "Journal", date, narration: "Audit fee provision", lines: [{ ledger: "Legal and Professional Fees", dr: 25000, cr: 0 }, { ledger: "Cash", dr: 0, cr: 25000 }] }] });
+  const c4 = new MockClaude([[tool("draft_entries", jv("2026-12-31"))], [text("Drafted.")]]);
+  const r4 = await ask(c4, { question: "make a journal entry for the audit fee provision of 25,000 " + crypto.randomUUID().slice(0, 4), client_id: CLIENT });
+  const p4 = ofType(r4.events, "result").find((x) => x.kind === "entries");
+  eq([p4.vouchers[0].date, p4.vouchers[0].notes.length, p4.ok], ["2026-10-13", 1, true], "a future date not stated: today, said in one line");
+  assert(/31-Dec-2026 was not in your request/.test(p4.vouchers[0].notes[0]), "the line: " + p4.vouchers[0].notes[0]);
+  assert(/today's date \(13-Oct-2026\) is used/.test(JSON.stringify((c4.calls[1] as any).messages.slice(-1))), "the model is told");
+  const c5 = new MockClaude([[tool("draft_entries", jv("2026-12-31"))], [text("Drafted.")]]);
+  const r5 = await ask(c5, { question: "make a journal entry for the audit fee provision of 25,000 dated 31-12-2026", client_id: CLIENT });
+  const p5 = ofType(r5.events, "result").find((x) => x.kind === "entries");
+  eq([p5.vouchers[0].date, p5.vouchers[0].notes], ["2026-12-31", []], "a future date the person stated: kept");
+  // the whole firm open (no client): not drafted
+  const c3 = new MockClaude([[tool("draft_entries", { vouchers: [] })], [text("Open the client first.")]]);
+  const r3 = await ask(c3, { question: "make a journal entry for rent", client_id: null });
+  eq(ofType(r3.events, "result").filter((x) => x.kind === "entries").length, 0, "no client open: no draft");
+});
+
 Deno.test("files: an Excel whose cells are the tool's figures to the paisa (totals as formulas), a Word letter and a PDF that open", async () => {
   const c = new MockClaude([
     [tool("make_file", { format: "xlsx", title: "TDS by deductee 2025-26", file_name: "tds-deductees", sections: [{ heading: "TDS by deductee", text: null, table: { tool: "tds_deductees", input: { from: "2025-04-01", to: "2026-03-31", section: null } } }] }),

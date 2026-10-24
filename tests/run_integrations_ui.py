@@ -164,8 +164,8 @@ def main():
         pg.click('[data-books-source-go="zoho"]'); pg.wait_for_timeout(1200)
         ok(E("location.hash") == "#/integrations/zoho", "its link opens the Zoho Books page")
         E("(c) => { openCompany(c).then(() => { S.tab = 'cotally'; render(); }); }", tid); pg.wait_for_timeout(1800)
-        ok(E("() => (document.querySelector('[data-books-source]') || {getAttribute: () => ''}).getAttribute('data-books-source')") == "tally" and "Tally company TALLY CO" in txt('[data-books-source]') and pg.locator('#app [data-tally-link]').count() == 1,
-           "a Tally client: Books source Tally company TALLY CO, with the Link to Tally card (%r)" % txt('[data-books-source]')[:120])
+        ok(E("() => (document.querySelector('[data-books-source]') || {getAttribute: () => ''}).getAttribute('data-books-source')") == "tally" and pg.locator('#app [data-books-source] [data-tally-one]').count() == 1 and pg.locator('#app [data-tally-link]').count() == 0,
+           "a Tally client: Books source with its one Tally line (24-Oct-2026: linked on the Tally page only) (%r)" % txt('[data-books-source]')[:120])
         no_secrets("Client setup")
 
         # ---------------------------------------------------------------- 8. a Zoho client's books, as a Tally client's

@@ -47,6 +47,16 @@ export function ConfirmFooter({ id, cid, label, saveText = "Save", empty }) {
   </div>;
 }
 
+// a settings panel opened again over changes not saved when it was last closed (next-fix-settings-panels; the owner,
+// 22-Oct-2026: "Yes, same as others"): closing never asks, the changes stay as a draft (Drafts), and the panel says so
+// once, at its top, with Discard. Save (the footer) clears it like Discard.
+export function KeptLine({ id }) {
+  const kept = useRef(null), [, tick] = useState(0);
+  if (kept.current === null) kept.current = !!Drafts.dirty(id);
+  if (!kept.current || !Drafts.dirty(id)) return null;
+  return <p className="note cfm-kept" data-draft-kept="">Unsaved changes kept · <button type="button" className="linkbtn" data-draft-discard="" onClick={() => { Drafts.discard(id); kept.current = false; tick((n) => n + 1); }}>Discard</button></p>;
+}
+
 // a section of settings with its draft and its footer
 export default function Confirm({ id, label, stores = [], cid, custom, onSave, saveText, empty, children, className = "" }) {
   const c = cid === undefined ? S.coId : cid;

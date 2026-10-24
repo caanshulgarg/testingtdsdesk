@@ -34,7 +34,7 @@ try:
     srv = SUPA.start(db, port)
     env = dict(os.environ, STAND_URL="http://127.0.0.1:%d" % port, NO_COLOR="1")
     if os.path.exists("/root/.ccr/ca-bundle.crt"): env.setdefault("DENO_CERT", "/root/.ccr/ca-bundle.crt")
-    r = subprocess.run([DENO, "test", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "server/assistant/assistant_test.ts", "server/assistant/router_test.ts", "server/assistant/filetable_test.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+    r = subprocess.run([DENO, "test", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "server/assistant/assistant_test.ts", "server/assistant/router_test.ts", "server/assistant/filetable_test.ts", "server/assistant/entries_test.ts", "server/assistant/mis_test.ts"], cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
     out = r.stdout + r.stderr
     for line in out.splitlines():
         if (" ... ok" in line or " ... FAILED" in line) and "=>" not in line: print("   ", line.strip())

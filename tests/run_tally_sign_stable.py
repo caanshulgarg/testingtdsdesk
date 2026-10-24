@@ -125,7 +125,7 @@ with sync_playwright() as p:
     s = watch("unlinked")
     ok(s["code"] == "unlinked" and s["text"] == "Company not linked", "Tally open, the client not linked: “Company not linked” (%s)" % (s,))
     # 15-Oct-2026: the one place to link is the Tally page's Connect Tally (step 4, this client)
-    c = card(); ok(c and c["next"] and c["next"][0] == ["connectTally", "Open Connect Tally"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
+    c = card(); ok(c and c["next"] and c["next"][0] == ["connectTally", "Tally page"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
     press("connectTally"); pg.wait_for_timeout(300)
     ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid == S.coId]") == ["home", "tally", 4, True], "Open Connect Tally: the guide's step 4 for this client (%s)" % pg.evaluate("[S.view, S.homeTab, S.tallyGuide]"))
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid); pg.wait_for_timeout(300)
@@ -139,7 +139,7 @@ with sync_playwright() as p:
     ok("NWS144" not in s["text"] and not re.search(r"\b(via|through)\b", s["text"]), "the sign never names another computer (%s)" % s["text"])
     c = card()
     ok(c and c["other"] == "Posting goes through NWS144 (Ranjeet).", "the hover's quiet second line: “Posting goes through NWS144 (Ranjeet).” (%s)" % ((c or {}).get("other"),))
-    ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Open Connect Tally"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
+    ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Tally page"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
     dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
     ok(dot not in ("rgb(185, 28, 28)", "rgb(21, 128, 61)"), "grey, not an alarm (%s)" % dot)
     # two computers: still "not on this computer", the second line counts them

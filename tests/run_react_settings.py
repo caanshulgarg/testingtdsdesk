@@ -51,7 +51,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     save()
     nav("Tally"); pg.wait_for_timeout(300)
-    ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 1, "Tally section (the client's Tally card; 15-Oct-2026 it points to Connect Tally)")
+    ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")
@@ -121,9 +121,11 @@ with sync_playwright() as p:
     cid1 = pg.evaluate("S.coId")
     ok(pg.locator('select[aria-label="Client for BETA"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
     pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(600)
-    pg.select_option("#app [data-guide-client]", cid1); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", "BETA"); pg.wait_for_timeout(200)
-    pg.click("#app [data-guide-link]"); pg.wait_for_timeout(600)
-    ok(pg.evaluate("window.__tc[0]") == ["tally_company_link", {"p_company": "BETA", "p_client": cid1}], "the cloud's Tally company linked to a client, in Connect Tally (%s)" % pg.evaluate("window.__tc"))
+    # 23-Oct-2026 (next-tally-suvit): Companies in Tally; from the client, "Link to <client>" on BETA's row
+    ok(pg.evaluate("S.homeTab") == "tally" and pg.locator('#app [data-tco-list=firm] [data-tco-row="BETA"]').count() == 1, "the pointer opens Companies in Tally, BETA listed")
+    pg.evaluate("(c) => openConnectTally(4, c)", cid1); pg.wait_for_timeout(600)
+    pg.click('#app [data-tco-list=firm] [data-tco-row="BETA"] [data-tco-act=link]'); pg.wait_for_timeout(800)
+    ok(pg.evaluate("window.__tc[0]") == ["tally_company_link", {"p_company": "BETA", "p_client": cid1}], "the cloud's Tally company linked to a client, in Companies in Tally (%s)" % pg.evaluate("window.__tc"))
     pg.evaluate("() => { window.__tc = []; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; S.view = 'home'; render(); }"); pg.wait_for_timeout(400)
     pg.click('button:text-is("Remove")'); pg.wait_for_timeout(300)
     ok(pg.locator("#confirmBox .cbx").is_visible(), "removing a computer asks first")

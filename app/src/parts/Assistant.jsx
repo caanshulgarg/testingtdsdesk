@@ -35,6 +35,10 @@ const LABELS = {
   certificate: ["neutral", "Certificate figures – source in each row"],
   // a file made from the user's own sheet (server/assistant/filetable.ts): the cells copied from it, not the books
   file: ["neutral", "your file – figures as in it, not checked against the books"],
+  // entries drafted from the person's words (the owner, 22-Oct-2026): a preview to correct, posted only by their click
+  entries: ["warn", "entries drafted by AI from your words – check before posting"],
+  // an MIS laid out from the person's words (ROUND 105): the layout only; FinCom works out every figure from the books
+  mis: ["neutral", "a layout drafted by AI from your words – every figure worked out by FinCom from the books"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -169,6 +173,10 @@ function Cases({ t }) {
 // one Upload (the owner's request of 14-Oct-2026): the files as FinCom found them, in their own small file
 // (AssistantUploads.jsx), fetched when the panel first shows one, so the app's first file stays within its budget
 const Uploads = lazy(() => import("./AssistantUploads.jsx"));
+// entries drafted (draft_entries): the preview to correct, Post to Tally and Download XML, in their own file
+const Entries = lazy(() => import("./AssistantEntries.jsx"));
+// My MIS laid out from the person's words (build_mis, ROUND 105): a card with "Open in My MIS"
+const MisCard = lazy(() => import("./AssistantMis.jsx"));
 
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null), [src, setSrc] = useState(false);
@@ -202,7 +210,9 @@ function Turn({ t, latest }) {
         {t.prefileRes && <button className="iconbtn" onClick={() => { S.prefile = { open: true, res: t.prefileRes }; ASST.close(); render(); }}>Open the checklist</button>}</header>
       {t.prefileRes ? <PreFileList res={t.prefileRes} compact /> : <p className="note">{t.prefileErr || "Running…"}</p>}
     </section>}
-    {(t.results || []).map((r) => <Table key={r.id} r={r} t={t} many={(t.results || []).length > 1} />)}
+    {(t.results || []).map((r) => r.kind === "entries" ? <Suspense key={r.id} fallback={<p className="note">Loading the entries…</p>}><Entries r={r} t={t} /></Suspense>
+      : r.kind === "mis" ? <Suspense key={r.id} fallback={<p className="note">Loading the layout…</p>}><MisCard r={r} t={t} /></Suspense>
+      : <Table key={r.id} r={r} t={t} many={(t.results || []).filter((x) => x.kind !== "entries" && x.kind !== "mis").length > 1} />)}
     {(t.drafts || []).map((d) => <section key={d.id} className="asst-card draft" data-asst-draft="">
       <header><span className="asst-src warn">DRAFT - for the CA to review</span><b>{d.title}</b>
         <button className="iconbtn" title="Word" onClick={() => asstDraftFile(d, "doc")}>Word</button><button className="iconbtn" title="PDF" onClick={() => asstDraftFile(d, "pdf")}>PDF</button></header>
@@ -341,7 +351,7 @@ export default function Assistant() {
               {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
                 <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading} aria-label="Upload files"><Paperclip size={15} aria-hidden="true" /> {a.uploading ? "Reading…" : "Upload"}</button>
                 {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
-              <VoiceInput a={a} onText={(s) => { a.q = s; ASST.draw(); }} />
+              <VoiceInput a={a} client={ASST.cid()} onText={(s) => { a.q = s; ASST.draw(); }} />
               <span className="asst-hint" id="asstHint">{a.busy ? "FinCom is answering… you can type the next question" : <><kbd>Enter</kbd> to ask · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</>}</span>
               <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || !String(a.q || "").trim()} title={a.busy ? "FinCom is answering the last question" : !String(a.q || "").trim() ? "Type a question first" : "Ask (Enter)"}>
                 {a.busy ? <span className="asst-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />} Ask</Button>

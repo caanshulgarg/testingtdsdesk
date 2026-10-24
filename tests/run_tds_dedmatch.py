@@ -195,9 +195,12 @@ try:
         pg.click("[data-dreg-confirm-all]"); pg.wait_for_timeout(700)
         after = state()
         ok(J("() => document.querySelectorAll('[data-dreg-confirm]').length") == 0 and after["mapped"] - before["mapped"] == nconf and before["pending"] - after["pending"] == nconf, "Confirm all %d: off Pending, on Mapped at once (%s → %s)" % (nconf, before, after))
+        # (next-tds-autoplace: ZZ Contractor 1, moved to 194J above with ₹10,200, is no longer filled onto chJ oldest-first: R5
+        # finds the one set of April's 194J that is chJ's ₹12,345, the eight consultants, so it may be in either tab)
+        J("() => { S.tdsDedReg = TDS.rows().some(r => r.party === 'ZZ Contractor 1' && r.challan) ? 'mapped' : 'pending'; render(); }"); pg.wait_for_timeout(300)
+        fx = J("() => { const t = [...document.querySelectorAll('[data-dreg-body] tr[data-dreg-row]')].find(tr => /ZZ Contractor 1\\b/.test(tr.innerText)); const f = t && t.querySelector('[data-dreg-flag=pan]'); return f ? [f.innerText.trim(), f.title] : null; }")
+        ok(fx == ["No PAN", "no PAN"], "the register: ZZ Contractor 1's chip “No PAN”, its words on a hover (%s)" % fx)
         J("() => { S.tdsDedReg = 'mapped'; render(); }"); pg.wait_for_timeout(300)
-        fx = J("() => { const t = [...document.querySelectorAll('[data-dreg-body=\"mapped\"] tr[data-dreg-row]')].find(tr => /ZZ Contractor 1\\b/.test(tr.innerText)); const f = t && t.querySelector('[data-dreg-flag=pan]'); return f ? [f.innerText.trim(), f.title] : null; }")
-        ok(fx == ["No PAN", "no PAN"], "Mapped: ZZ Contractor 1's chip “No PAN”, its words on a hover (%s)" % fx)
         # no challan at all: every deduction Pending, each “Needs a challan”
         J("() => { S.books.challans = []; S.books.alloc = {}; S.books.allocFrom = {}; S.books.matchNo = {}; S.books.tdsSplits = {}; TDSReg.forget && TDSReg.forget(); S.tdsDedReg = 'pending'; render(); }"); pg.wait_for_timeout(800)
         nd = J("() => [...document.querySelectorAll('[data-dreg-body=\"pending\"] tr[data-dreg-row] .dreg-next')].map(e => e.innerText.trim())")
@@ -239,7 +242,7 @@ try:
             return J("(id) => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === id); return {amt: num(c.tax), used: TDSReg.usedTax(c, cx), bal: TDSReg.balance(c, cx).tax, n: TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === id).length}; }", cid)
         f0, w0 = foot(), want_foot(cur)
         ok(f0 and all(abs(f0[k] - w0[k]) < 0.01 for k in ("amt", "used", "bal", "n")) and all(x in f0["text"] for x in ["Used here", "Balance", "Number of deductions"]) and "Challan amount" not in f0["text"],
-           "the footer: Used here (round 89; Amount utilised (all returns) only when other returns use it too) · Balance · Number of deductions equal the challan; no Challan amount, the dropdown has it (%s / %s)" % (f0, w0))
+           "the footer: Used here (round 89; 'Also used in <return>: ₹X · Open' for each other return using it, next-fix-challan-over) · Balance · Number of deductions equal the challan; no Challan amount, the dropdown has it (%s / %s)" % (f0, w0))
         vis = J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top >= 0; }")
         ok(vis, "the footer is in view without scrolling")
         last = J("() => { const t = [...document.querySelectorAll('#app [data-wd-table] tbody tr')]; return t.length ? t[t.length - 1].innerText.trim() : ''; }")

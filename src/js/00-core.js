@@ -356,24 +356,34 @@ const LocalOwner = {
 /*   companies/<cid>/entries/<eid>    invoices of that client         */
 /*   inbox/<id>                       uploads not yet matched         */
 /* ------------------------------------------------------------------ */
+// books-speed (the owner's Mac Safari, 24-Oct-2026 10:14 UTC: all 560 day files of Leads and every client's work fetched
+// again from the start right after signing in): the database's opening was given up after 5 s for good (the page's
+// promise kept null), and the page then ran with no copy at all: the books, the days and the work's sync marks all came
+// from the server again, and nothing could be kept. Safari can take longer than that to open it (several tabs opening at
+// once, right after a publish). Now the opening is never given up: open() is the real opening (null only on an error);
+// wait(ms) is it or null after ms, for a caller that cannot wait longer (Store.init), and the next call still gets the
+// database once it is open. Each read and write waits for it up to WAIT (then fails as before, so a page is never held)
 const IDBStore = {
-  dbp: null,
+  dbp: null, db: null, WAIT: 20000,
   open(){
     if (this.dbp) return this.dbp;
     this.dbp = new Promise(ok => {
-      let done = false; const fin = v => { if (!done){ done = true; ok(v); } };
+      let done = false; const fin = v => { if (!done){ done = true; this.db = v; ok(v); } };
       try {
         const r = indexedDB.open(LocalOwner.db("tdsdesk-work"), 1);
         r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("docs")) r.result.createObjectStore("docs"); };
-        r.onsuccess = () => fin(r.result); r.onerror = () => fin(null); r.onblocked = () => fin(null);
+        r.onsuccess = () => fin(r.result); r.onerror = () => fin(null);
+        // blocked: another tab holds an older version open; its versionchange closes it and this opening goes on
+        r.onblocked = () => {};
       } catch (e){ fin(null); }
-      setTimeout(() => fin(null), 5000);
     });
     return this.dbp;
   },
-  async get(key){ const db = await this.open(); return new Promise((ok, no) => { const q = db.transaction("docs").objectStore("docs").get(key); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }); },
+  wait(ms){ if (this.db) return Promise.resolve(this.db); const p = this.open(); return Promise.race([p, new Promise(ok => setTimeout(() => ok(null), ms))]); },
+  async ready(){ const db = await this.wait(this.WAIT); if (!db) throw new Error("This browser's database did not open."); return db; },
+  async get(key){ const db = await this.ready(); return new Promise((ok, no) => { const q = db.transaction("docs").objectStore("docs").get(key); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }); },
   async prefix(p){
-    const db = await this.open();
+    const db = await this.ready();
     return new Promise((ok, no) => {
       const out = [], q = db.transaction("docs").objectStore("docs").openCursor(IDBKeyRange.bound(p, p + "\uffff"));
       q.onsuccess = () => { const c = q.result; if (c){ out.push([c.key, c.value]); c.continue(); } else ok(out); };
@@ -381,7 +391,7 @@ const IDBStore = {
     });
   },
   async write(pairs){
-    const db = await this.open();
+    const db = await this.ready();
     return new Promise((ok, no) => {
       const tx = db.transaction("docs", "readwrite"), st = tx.objectStore("docs");
       pairs.forEach(([k, v]) => { if (v == null) st.delete(k); else st.put(v, k); });

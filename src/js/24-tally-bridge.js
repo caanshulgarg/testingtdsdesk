@@ -347,13 +347,8 @@ function addDays(iso, n){ const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d
 // Poll the bridge; follow the company open in Tally
 let bridgeTimer = null, bridgeBusy = false;
 // only the small Tally chip changes on a routine check; the page is left alone
-let lastBridgeChip = "";
-function refreshBridgeChip(){
-  const el = document.getElementById("sideBridge");
-  if (!el) return;
-  const html = bridgeChip(S.view === "company" ? CO() : null);
-  if (html !== lastBridgeChip){ el.innerHTML = html; lastBridgeChip = html; }
-}
+// (24-Oct-2026: the old sidebar's Tally chip, #sideBridge, is gone with the old page; the top bar's sign says it)
+function refreshBridgeChip(){}
 // One ledger's vouchers for a period. Bridge 1.12.3 asks Tally for that ledger only; older bridges read the Day Book month by month.
 function ledgerLinesUrl(company, ledger, from, to){
   const light = bridgeVer(Bridge.st.version) >= bridgeVer("1.12.3");
@@ -396,7 +391,8 @@ async function bridgeTick(first){
     if (Bridge.up() && Bridge.cfg().follow && changed){
       const clients = Bridge.openClients();
       const busyTyping = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== "checkbox";
-      const working = S.view === "company" && ((S.tab === "bank" && B() && (B().q || B().sel.size || bankRangeOn())) || S.selected || S.revQuery || S.drawerOpen || (S.revSel && S.revSel.size));
+      // next-tally-firstlink: not away from the Tally page while it is connecting or linking (its steps or the list)
+      const working = (S.view === "home" && S.homeTab === "tally") || S.view === "company" && ((S.tab === "bank" && B() && (B().q || B().sel.size || bankRangeOn())) || S.selected || S.revQuery || S.drawerOpen || (S.revSel && S.revSel.size));
       if (clients.length === 1 && S.coId !== clients[0].id && !busyTyping && !working && !document.querySelector("#confirmBox[style*='flex']")){
         await openCompany(clients[0].id);
         // (a toast although it happened by itself: the page itself changed, and this says why)
@@ -431,32 +427,6 @@ function startBridgePolling(){
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Bridge.on() && Date.now() - (Bridge.st.lastAsk || 0) > 30000) bridgeTick(false); });
 
-function bridgeChip(co){
-  if (!Bridge.on()) return "";
-  const st = Bridge.st;
-  if (st.state === "down") return '<button class="tchip off" data-act="openSettings" title="' + esc(st.error) + '">FinCom Bridge offline \u2014 check</button>';
-  if (st.state === "key") return '<span class="tchip bad" title="' + esc(st.error) + '">FinCom Bridge: wrong key</span>';
-  if (st.state !== "ok") return '<span class="tchip off">FinCom Bridge\u2026</span>';
-  const run = (st.jobs || []).find(j => ["queued", "waiting", "running"].includes(j.status));
-  if (run) return '<span class="tchip ok" title="' + esc((run.company || "") + ": " + (run.message || "")) + '">\u25CF Posting to Tally: ' + num(run.done) + " of " + num(run.total) + "</span>";
-  // build 194: Tally stopped answering (a message box open in Tally, or a long report): said plainly, with since when
-  // go-bridge: a slow Tally is busy, never "disconnected" (it is open; the bridge asks again by itself)
-  const busyAt = (st.stuck && st.stuck.since) || (st.tallyState === "busy" && st.busySince) || "";
-  if (busyAt || st.tallyState === "busy") return '<span class="tchip warn" title="Tally is open but answering slowly' + (busyAt ? " since " + esc(fmtTime(busyAt)) : "") + '. A message box (a pop-up) in Tally, or a report still working, holds it up: close it, and FinCom carries on by itself. Nothing is lost meanwhile.">\u25D0 Tally busy' + (busyAt ? " since " + esc(fmtTime(busyAt)) : "") + "</span>";
-  // the steady sign (11-Oct-2026): a bridge slow to answer once is still connected (no "reconnecting…" flicker)
-  const why = Bridge.diag && (Bridge.diag.findings || []).find(f => f.level !== "ok");
-  if (st.pinMissing) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "The Tally chosen in Settings is not running") + '">Your Tally is not connected \u2014 check</button>';
-  if (!st.tallyUp) return '<button class="tchip warn" data-act="openSettings" title="' + esc(why ? why.text : "No TallyPrime is answering in your Windows session") + '">Tally not connected \u2014 check</button>';
-  if (co){
-    const o = Bridge.openFor(co);
-    if (o) return '<span class="tchip ok" title="' + esc(o.name) + " is open in Tally (port " + o.port + ')">\u25CF Open in Tally</span>';
-    if ((st.clash || []).some(n => norm(n) === norm(Bridge.tallyName(co)))) return '<span class="tchip bad" title="This company is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
-    return '<span class="tchip warn" title="Open ' + esc(Bridge.tallyName(co)) + ' in TallyPrime to post and to load its ledgers">\u25CB Not open in Tally</span>';
-  }
-  if ((st.clash || []).length) return '<span class="tchip bad" title="' + esc(st.clash.join(", ")) + ' is open in more than one Tally. Choose yours in Settings \u2192 FinCom Bridge.">Choose your Tally</span>';
-  const n = st.open.length;
-  return '<span class="tchip ok" title="' + esc(st.open.map(o => o.name).join(", ")) + '">\u25CF Tally: ' + (n === 1 ? esc(st.open[0].name) : n + " companies open") + "</span>";
-}
 
 /* ---------- ledgers and bank entries straight from Tally ---------- */
 // The client's ledgers are one list for the whole app (Ledgers, src/js/58-ledgers.js): read from FinCom's cloud copy

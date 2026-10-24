@@ -403,7 +403,11 @@ const Live = {
     if (changed && took && r.updated_by && r.updated_by !== this.me()) this.noteRec(row, r.updated_by, r.updated_at);
     // quiet refresh (14-Oct-2026): this computer's own save coming back (Realtime sends each row to every computer, the
     // saver's too) changes nothing here and draws nothing; a colleague's change is drawn quietly
-    if (took) quietRender();
+    // books-speed (24-Oct-2026: one client's setup saved 3,774 times in a day by two computers, each change coming in
+    // live on the other): another client's setup changes only the client list, so the open client's page is drawn with
+    // its figures as they are (renderTop: memoKeep), not worked out again from its books
+    if (took && table === "clients" && S.view === "company" && row.id !== S.coId && typeof renderTop === "function") renderTop();
+    else if (took) quietRender();
   },
   // ---------- notes: who changed what
   who(uid){ const m = ((Cloud.st && Cloud.st.members) || []).find(x => x.user_id === uid); return m ? (m.name || m.email) : "a colleague"; },

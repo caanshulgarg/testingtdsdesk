@@ -19,7 +19,7 @@ const {load, HTML, OUT} = require("./harness");
 const KEEP = path.join(OUT, "forms2025"); fs.mkdirSync(KEEP, {recursive: true});
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "money", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
+  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "TDSF25", "money", "Market", "TDSMatch", "TDSAdd", "TDS_REMARK", "TDSDecl"].concat(require("./harness").TM_NAMES);
 const have = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
 const {ctx, x} = load(HTML, have);
 ctx.S.companies = {t: {id: "t", name: "Co"}}; ctx.S.coId = "t"; ctx.CO = () => ctx.S.companies.t; ctx.saveBooks = () => {}; ctx.whoAmI = () => "t";
@@ -402,6 +402,26 @@ if (x.TDSMatch){
   x.TDSReg.setPortion("sh", "26Q", "2026-27", "Q1", 40, 0);
   const q2 = build("2026-27", "Q2", FIRM, "26Q"), c2 = of(q2.text, "CD").find(c => c[16] === "00041") || [];
   ok(!q2.error && c2[8] === "60.00" && c2[23] === "20.00", "M. the shared challan in Q2: 20 allocated to Q2 (field 24); together never more than the 60 paid");
+}
+
+// ---------------- R (next-fvu87, 24-Oct-2026): Form 140 with the remarks of a deduction with no tax: T (a transporter's
+// declaration, 194C, PAN), B (Form 121, its UIN in DD field 31), Y (194H below the limit); kept as R140.txt for FVU 1.2
+{
+  b = books([V("r1", "20260510", "Alpha Ltd", 100000, 2000, "TDS 194C", "Contract Charges")]);
+  Object.assign(b.pans, {"Road Kings": "ABCPR1234K", "Saver": "ABCPV1234S", "Small Agent": "ABCPS1234G"});
+  b.challans = [{id: "rc", bsr: "0240020", serial: "00051", date: "20260607", tax: 2000, interest: 0}]; b.alloc = {"r1|TDS 194C": "rc"};
+  ctx.S.tdsFy = "2026-27";
+  const add = (party, section, date, paid, basis) => x.TDSAdd.save({party, section, date, credit: date, paid, rate: 0, tds: 0, basis: basis || ""});
+  const ad = [add("Road Kings", "194C", "20260512", 80000), add("Saver", "194A", "20260515", 30000), add("Small Agent", "194H", "20260520", 5000, "Y")];
+  const UIN = "ABCPV1234S2026270000000001";
+  const dl = [x.TDSDecl.set("Road Kings", "2026-27", {transporter: true}), x.TDSDecl.set("Saver", "2026-27", {form: "121", date: "20260401", uin: UIN})];
+  f = build("2026-27", "Q1", FIRM, "26Q");
+  against("26Q", f.text, "Form 140 (remarks T, B, Y)");
+  const rd = of(f.text, "DD"), rb = (p) => rd.find(d => d[8] === p) || [];
+  ok(ad.every(r => r.ok) && dl.every(r => r.ok) && !f.error && rd.length === 4, "R. Form 140: one deduction and three with no tax under the one challan (" + (f.error || J(ad.concat(dl).filter(r => !r.ok)) || rd.length) + ")");
+  ok(J(["Road Kings", "Saver", "Small Agent"].map(p => [rb(p)[31], rb(p)[14], rb(p)[23], rb(p)[26], rb(p)[30]])) === J([["T", "1023", "0.00", "", ""], ["B", "1022", "0.00", "", UIN], ["Y", "1006", "0.00", "", ""]]),
+    "R. T with 1023, B with 1022 and its Form 121 UIN (field 31), Y with 1006; no tax, no date of deduction (field 27) (" + J(["Road Kings", "Saver", "Small Agent"].map(p => [rb(p)[31], rb(p)[14], rb(p)[26], rb(p)[30]])) + ")");
+  fvuCopy("26Q", "R");
 }
 
 // ---------------- O: up to 2025-26, the old files as before

@@ -1,7 +1,8 @@
 import ListTable from "../../parts/ListTable.jsx";
 import SrcTag from "../../parts/SrcTag.jsx";
 // The input register: every document in Tally that takes input tax for the GSTIN, for the month or the whole year,
-// with what 2B says about each, and how it ties to GSTR-3B table 4. Was viewInputRegister (src/js/18). The rows are
+// with what 2B says about each, the input-tax ledger it is booked to, eligible or not (section 17(5)), and how it ties
+// to GSTR-3B table 4 (the first tab of 2B & ITC, next-itc-simple). Was viewInputRegister (src/js/18). The rows are
 // inregRows() (src/js/18); the Excel is inregExcel().
 //
 // State: S.inregScope ("month" or "year"), S.inregF (a kind or a 2B status), S.inregQ (the find box).
@@ -73,12 +74,28 @@ function inregCols(cess) {
     { k: "cgst", label: "CGST", cls: "n", w: 7, v: (r) => sg(r) * num(r.cgst), sum: true, fmt: money, cell: (r) => money(sg(r) * r.cgst) },
     { k: "sgst", label: "SGST", cls: "n", w: 7, v: (r) => sg(r) * num(r.sgst), sum: true, fmt: money, cell: (r) => money(sg(r) * r.sgst) },
     cess && { k: "cess", label: "Cess", cls: "n", w: 5, v: (r) => sg(r) * num(r.cess), sum: true, fmt: money, cell: (r) => money(sg(r) * r.cess) },
-    { k: "kind", label: "Kind", w: 8, v: (r) => r.kindL || "", cell: (r) => r.kindL },
+    { k: "led", label: "ITC ledger", w: 10, v: (r) => r.led || "", cell: (r) => <span className="nr" title={r.led}>{r.led}</span> },
+    { k: "kind", label: "Eligible", w: 10, v: (r) => r.kindL || "", cell: (r) => { const x = r.reg != null ? ITCF.lineOfDoc(r.reg, r.id) : null;
+      // next-itc-excel-edit: the same Eligible? as on the 2B reconciliation's line (and the Excel), on the bill the line is decided on
+      if (x && x.docs[0].id === r.id) { const el = (x.e && x.e.el) || x.defE || "eligible";
+        return <><select aria-label="Eligible?" data-ir-elig={r.id} value={el} onChange={(ev) => { ITCF.setElig(r.reg, x, ev.target.value); render(); }}>
+          {ITCF.ELIG.map(([k, l]) => <option key={k} value={k}>{l + (k === x.defE ? " (books)" : "")}</option>)}</select><div className="nr">{r.kindL}{r.blocked ? " · 17(5) in Tally" : ""}</div></>; }
+      return <>{r.kindL}{r.blocked && <div className="nr">section 17(5)</div>}</>; } },
   ];
+}
+
+// next-itc-simple: the input-tax ledgers each entry takes its credit in, from the voucher's lines
+let ledMemo = { v: null, m: null };
+function ledgersOf(b, id) {
+  if (ledMemo.v !== b.vouchers) ledMemo = { v: b.vouchers, m: new Map((b.vouchers || []).map((v) => [v.id, v])) };
+  const v = ledMemo.m.get(id);
+  if (!v) return "";
+  return Array.from(new Set((v.ent || []).filter((e) => { const m = Books.ledgerOf(e.l); return ((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") || m.kind === "ineligible"; }).map((e) => e.l))).join(", ");
 }
 
 export default function InputRegister({ b }) {
   const R = inregRows(b), f = S.inregF || "", q = String(S.inregQ || "").toLowerCase();
+  R.rows.forEach((r) => { if (r.led == null) r.led = ledgersOf(b, r.id); r.reg = R.reg; });
   let list = R.rows.filter((r) => !f || r.kindL === f || r.twoB === f || (f === TWICE && r.dupe));
   if (q) list = list.filter((r) => [r.party, r.gstin, r.no, r.voucher, r.hsn, r.type].join(" ").toLowerCase().includes(q));
   const all = tot(R.rows), shown = tot(list);

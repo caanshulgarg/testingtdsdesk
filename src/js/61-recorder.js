@@ -608,16 +608,6 @@ const Rec = {
   // (bridge 2.3.1, the owner's last change: nothing is switched off by the 2-second rule any more; the per-company
   // "switched off" lines and their "Changes come from" advice are gone. A request not answered in time is said on the
   // computer's line, TCloud.readState)
-  // the computers keeping a client's company open without recording it: [{pc, company}]
-  clientNotRecording(cid){
-    const st = (typeof TLight === "object" && TLight.st) || {}, out = [];
-    (st.cos || []).filter(c => c.client_id === cid && c.device_id).forEach(c => {
-      const d = (st.devs || []).find(x => x.id === c.device_id && !x.revoked);
-      if (d && this.notRecording(d).includes(c.company)) out.push({pc: this.pcOf(d), company: c.company});
-    });
-    return out;
-  },
-
   // ---------------------------------------------------------------- the GAP flag (tally_sync_cursor.gap)
   gaps: {},                // {byClient: {cid: [{book, company, gap}]}, at, busy, no44}
   gapsOf(){
@@ -639,13 +629,6 @@ const Rec = {
     g.busy = false; g.at = Date.now(); quietChanged("rec:gaps", [g.byClient, !!g.no44]);
   },
   gapFor(cid){ const g = this.gapsOf(); return ((g.byClient || {})[cid] || []); },
-  // gap.words + " (Tally's change number N, received up to M)"; M: the baseline the cloud compared with (the starting
-  // point, the recorder lines' highest AlterID, the day books' highest), the greatest of them
-  gapWords(gap){
-    const base = [gap.start_point, gap.recorder_max, gap.day_max].map(x => x == null || x === "" ? NaN : Number(x)).filter(x => !Number.isNaN(x));
-    const words = gap.words || ("up to " + (gap.missingMax || gap.missing || "some") + " changes not received" + (gap.since ? " since " + fmtDateTime(gap.since) : ""));
-    return words + " (Tally's change number " + (gap.tally_altvchid != null ? gap.tally_altvchid : "?") + ", received up to " + (base.length ? Math.max(...base) : "?") + ")";
-  },
   // Upload the Day Book for these days: Books -> From Tally with the Day Book's dates from gap.since to today
   async uploadDays(cid, gap){
     S.dbFrom = this.ymdLocal(gap && (gap.since || gap.last_match_at || gap.at) || Date.now()) || ""; S.dbTo = this.ymdLocal(Date.now());
@@ -703,13 +686,5 @@ const Rec = {
     await this.alertsLoad();
     render();                                   // asked for by the person: drawn, with its words, whatever the list did
   },
-  alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); },
-
-  // ---------------------------------------------------------------- H52: Tally not responding
-  notResponding(r){
-    const beat = ((r.device || {}).info || {}).beat || {}, since = beat.notAnsweringSince;
-    if (!since) return "";
-    const last = (r.reqs || beat.reqs || {}).last;
-    return "Tally not responding on " + r.computer + " since " + tallyHm(since) + (last && last.kind ? ", last request " + last.kind + " " + ((Number(last.ms) || 0) / 1000).toFixed(1) + " s" : "");
-  }
+  alertKind(k){ return {gap: "Changes not received", silent: "Silent", summary: "Today"}[k] || String(k || ""); }
 };

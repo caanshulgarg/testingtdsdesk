@@ -57,7 +57,7 @@ function Head({ b, r, rg }) {
         </Confirm>
       </details>
       <span className="note mis-period" data-mis-period="">{rg.from && rg.to ? fmtDate(rg.from) + " to " + fmtDate(rg.to) : ""}</span>
-      <span className="mis-btns">{r && <><Act act="misExcel">Excel</Act><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act></>}
+      <span className="mis-btns"><button className="btn small" data-mymis-open="" title="Build your own MIS: choose the figures, add charts, save and share" onClick={() => goClient("books:mymis")}>My MIS</button>{r && <><Act act="misExcel">Excel</Act><Act act="misPack" className="btn small">Download the MIS pack (PDF)</Act></>}
         <Act act="misRun" className="btn small primary">Run now</Act></span>
     </div>
   </section>;

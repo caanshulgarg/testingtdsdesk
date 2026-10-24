@@ -9,14 +9,16 @@
 // leaving with unsaved changes asks. Sections not yet redrawn in React show the old screen's HTML through <Legacy>.
 import { SheetFormats } from "../parts/SheetPanel.jsx";
 import HowPage from "../parts/HowPage.jsx";
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
+// Academy batches (calls, stage 1): in the calls' own small-windows file, loaded when the section is opened
+const Batches = lazy(() => import("../calls/CallMenu.jsx").then((m) => ({ default: m.Batches })));
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
+import AutoPostSettings from "../parts/AutoPostSettings.jsx";
 import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
-import TallyLink from "../parts/TallyLink.jsx";
 import BooksSource from "../parts/BooksSource.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
@@ -25,6 +27,7 @@ import GstSettings from "./gst/GstSettings.jsx";
 import Parties from "./Parties.jsx";
 import GstApiAll from "./GstApiAll.jsx";
 import LogoPick from "../parts/LogoPick.jsx";
+import { clientTallyState } from "../lib/tallyState.js";
 // TDSF25 (src/js/83-tds-forms-2025.js: the deductor's details) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
 
@@ -51,7 +54,7 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
 
 // "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
 export function BackTo() {
@@ -104,13 +107,14 @@ function firmGroups() {
       { id: "firm", label: "Firm details", about: "The firm’s name, as it appears on the page and on what you give clients.", status: S.firm.firmName || "no name yet" },
       { id: "account", label: "Sign-in and people", about: "Who is signed in, the people in the firm and what each may do, and keeping work in step across computers.",
         status: Cloud.on() ? (a && a.me ? a.me.email : "signed in") : "not signed in" },
+      ...(Cloud.on() ? [{ id: "batches", label: "Academy batches", about: "Classes by video call: a batch's members and Start class.", status: "" }] : []),
       { id: "plan", label: "Plan and credit", about: "What the firm pays, the credit left, and this month’s use.",
         status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
-      { id: "bridge", label: "Connect Tally", about: "Connecting Tally (six steps), its status, and help: all on the one Tally page in the sidebar.",
+      { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
         status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
-      { id: "tcloud", label: "Books in the cloud", about: "Computers that send Tally’s books to the firm account, and which Tally company is which client.",
+      { id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
         status: "Tally: " + tallyStatus(null).label },
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },
     ] },
@@ -123,6 +127,8 @@ function firmGroups() {
       { id: "reading", label: "Reading bills", about: "How bills and statements are read — free reading first, then Google OCR or Claude — and a test of each.",
         status: S.engine === "api" ? "free steps, then Claude" : hasGoogle() ? "free steps, then Google OCR" : "free reading only" },
       { id: "ai", label: "AI help", about: "Claude’s suggestions in TDS, GST, audit and notices: on or off.", status: AIH.sub() },
+      { id: "autopost", label: "Post automatically", about: "Bank lines and purchase bills that copy what a person approved before go to Tally by themselves; the rest waits for you. Off unless switched on, client by client.",
+        status: (() => { const all = Object.values(S.companies || {}), n = all.filter((c) => c.choices && c.choices.autopost && c.choices.autopost.value && c.choices.autopost.value.on).length; return n ? "on for " + n + " of " + all.length + " clients" : "off"; })() },
       { id: "moves", label: "Move on by itself", about: "When a piece of work ends, the page opens what comes next. It never approves, posts or sends anything to Tally, never moves while you are typing or have unsaved changes, and says so with Stay here; Back undoes it.",
         status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
@@ -155,14 +161,16 @@ export function FirmSettings() {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
     plan: () => <><PlanCredit /><RecordsUsed /></>,
+    batches: () => <Suspense fallback={<p className="note">Loading…</p>}><Batches /></Suspense>,
     // clean-up batch 2: one home each, the Tally page; here one line that leads there
-    bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (six steps, its status, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
+    bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (its companies, which client each is, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
     tcloud: () => <CloudBooks />,
     postlog: () => <Card><HomeLink id="sent" text="One record for every client: what was sent, by whom and when." link="Open it on the Tally page" go={() => { goTallyPage("sent"); S.logAll = true; render(); }} /></Card>,
     gstapi: () => <GstApiAll />,
     rates: () => <Rates />,
     reading: () => <Reading />,
     ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
+    autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
     platform: () => <Platform />,
   }[cur];
@@ -408,7 +416,7 @@ function clientGroups() {
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the round-off ledger.", "Tally: " + tallyLinkOf(co).word + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
+      it("cotally", "How entries are numbered and the round-off ledger; the client's company in Tally is on the Tally page.", "Tally: " + clientTallyState(co).word + (clientTallyState(co).company ? " · " + clientTallyState(co).company : "")),
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),

@@ -50,12 +50,13 @@ with sync_playwright() as p:
     # this computer's bridge: one status check not answered (1.15.0 busy with Tally) is not a lost bridge
     r = pg.evaluate("""async () => { Bridge.on = () => true; Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "open"}; Bridge.okAt = Date.now() - 30000;
       Bridge.call = async () => { throw {code: "bridge_down", message: "The Tally Bridge did not answer in time."}; };
-      await Bridge.refresh(false); clearTimeout(Bridge.again); const a = [Bridge.up(), !!Bridge.st.shaky, bridgeChip(null)];
+      await Bridge.refresh(false); clearTimeout(Bridge.again); const a = [Bridge.up(), !!Bridge.st.shaky, tallyHereNow(null).label];
       Bridge.okAt = Date.now() - 130000; await Bridge.refresh(false); clearTimeout(Bridge.again); return a.concat([Bridge.st.state]); }""")
     ok(r[0] and r[1] and "reconnecting" not in r[2].lower(), "this computer's bridge not answering for 30 s: still connected, no “reconnecting…” (the steady sign, 11-Oct-2026)")
     ok(r[3] == "down", "not answering for over two minutes: offline")
-    chip = pg.evaluate("""() => { Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "busy", busySince: "2026-10-01T12:40:00", stuck: {since: "2026-10-01T12:40:00"}}; return bridgeChip(null); }""")
-    ok("Tally busy since 12:40" in chip and "tchip warn" in chip and "not responding" not in chip, "Tally stuck on this computer: “Tally busy since 12:40” (amber), not “not responding”")
+    chip = pg.evaluate("""() => { Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "busy", busySince: "2026-10-01T12:40:00", stuck: {since: "2026-10-01T12:40:00"}}; const h = tallyHereNow(null); return [h.label, h.level]; }""")
+    # 24-Oct-2026 (next-tally-one-page): the old sidebar chip (bridgeChip) is gone; the one Tally sign (tallyHereNow) says it
+    ok(chip == ["Tally busy", "warn"], "Tally stuck on this computer: the sign says “Tally busy” (amber), not “not responding” (%s)" % chip)
     # Settings → FinCom Bridge: the three parts and the history
     hist = [{"kind": "bridge", "state": "online", "at": iso(20000)}, {"kind": "bridge", "state": "offline", "at": iso(9000), "to": iso(8800)},
             {"kind": "tally", "state": "busy", "at": iso(5000), "was": "open"}, {"kind": "tally", "state": "open", "at": iso(4800), "was": "busy"},

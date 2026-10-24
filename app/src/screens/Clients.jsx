@@ -8,33 +8,42 @@ import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import More from "../parts/More.jsx";
-import { goTallyCard } from "../parts/TallyChip.jsx";
+import { goTallyRow } from "../parts/TallyChip.jsx";
+import { clientTallyState } from "../lib/tallyState.js";
 import Filters, { Search } from "../parts/Filters.jsx";
+import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
 
+// Add client: a client without Tally, typed (a client of the same or a similar name, or the same GSTIN, is said under the
+// name with Open it; adding one of the same name again is asked first). 24-Oct-2026 (next-tally-one-page; the owner: "I
+// have to go everywhere to see where to add.. I need a clear page only"): a client from Tally is added on the Tally page
+// only (Companies in Tally: Add as client); here one button opens that list. No Tally company is picked here.
 function AddClient() {
   const others = sortedCompanies();
-  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false, tallyCompany: "", postOnly: true });
+  const [v, setV] = useState({ name: "", gstin: "", copyFrom: "", turnover10cr: false });
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
-  // the Tally companies the bridge here sees open, and the ones the firm's Tally computers reported (02-Oct-2026)
-  if (typeof TCloud === "object" && TCloud.on() && TCloud.pane.devices === null && !TCloud.pane.busy) setTimeout(() => TCloud.refreshPane(), 0);
-  const seen = tallyCompaniesSeen(), pick = (name) => { const x = seen.find((c) => c.name === name);
-    setV({ ...v, tallyCompany: name, tallyName: name || v.tallyName, name: v.name || name, gstin: v.gstin || (x && x.gstin) || "" }); };
-  const save = () => saveNewCompany(v);
+  const live = Object.values(S.companies || {}).filter((c) => !c.deleted);
+  const dups = typeof similarClients === "function" && (v.name.trim() || v.gstin.trim()) ? similarClients(v.name, v.gstin, live) : [];
+  const openIt = (c) => { S.addingCo = false; openCompany(c.id); };
+  const save = async () => {
+    const same = dups.find((d) => d.why === "same");
+    if (same && !(await askConfirm({ title: same.client.name + " already exists", ok: "Add another",
+      body: "<p>A client named <b>" + esc(same.client.name) + "</b> is already in FinCom. Open it from Clients instead, or add another client with this name.</p>" }))) return;
+    saveNewCompany({ ...v, dupOk: !!same });
+  };
   return <>
     <h2>Add client</h2>
+    <p className="note addc-tally" data-add-from-tally="" style={{ margin: "4px 0 0" }}>{"A client whose books are in Tally? "}
+      <button className="linkbtn" data-add-tally-go="" onClick={() => { S.addingCo = false; S.tallyGuide = {}; S.tallyFocus = ""; navHome("tally"); }}>Add it from the Tally page</button>
+      {" (Companies in Tally: Add as client). Or type a client below."}</p>
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
-      <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
-      <label className="f"><span>GSTIN</span><input type="text" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
-      <label className="f wide"><span>Company in Tally</span>
-        <select aria-label="Company in Tally" data-add-tally="" value={v.tallyCompany} onChange={(e) => pick(e.target.value)}>
-          <option value="">{seen.length ? "Choose the company in Tally (optional)" : "No Tally company seen yet: open it in Tally on a connected computer"}</option>
-          {seen.map((c) => <option key={c.name} value={c.name} disabled={!!c.client}>{c.name + (c.client ? " — linked to " + ((CO(c.client) || {}).name || "another client") : " — " + (c.where || (c.open ? "open in Tally" : "seen")))}</option>)}
-        </select></label>
-      {v.tallyCompany && <label className="chk wide" data-add-postonly=""><input type="checkbox" checked={v.postOnly} onChange={set("postOnly")} /> Post this client’s entries only into <b>{v.tallyCompany}</b></label>}
-      <label className="f"><span>Company name in Tally</span><input type="text" placeholder="Same as client name" value={v.tallyName} onChange={set("tallyName")} /></label>
+      <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus autoComplete="off" placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
+      <label className="f"><span>GSTIN</span><input type="text" autoComplete="off" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
+      {dups.length > 0 && <div className="addc-dup wide" data-add-dup={dups[0].why} role="status">
+        <span>{dups[0].why === "gstin" ? dups[0].client.name + " already has this GSTIN." : dups[0].why === "same" ? dups[0].client.name + " already exists." : "A client with a similar name exists: " + dups[0].client.name + "."}</span>
+        <button className="linkbtn" data-add-dup-open={dups[0].client.id} onClick={() => openIt(dups[0].client)}>Open it</button></div>}
       {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
         <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </label>}
@@ -62,11 +71,13 @@ function TallyLight({ cid }) {
   // the one status (review item 5); the heartbeat's detail (updated when, Tally closed) stays in the tip
   // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
   // round 39: the chip says the client's link in the same four words as its Link to Tally card and the top bar's sign
-  const l = typeof tallyLine === "function" ? tallyLine(co) : null, k = tallyLinkOf(co);
-  // ui-tidy (13-Oct-2026); 15-Oct-2026: a client not linked points to Connect Tally, step 4 (goTallyCard, parts/TallyChip.jsx)
-  return <button type="button" className={"tag tchip " + k.level} title={(k.company ? k.word + ": " + k.company + ". " : "") + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
-    data-tally={t.state} data-tally-link-chip={k.state} data-tally-chip={k.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
-    onClick={(ev) => { ev.stopPropagation(); goTallyCard(cid); }}>{MARK[k.level] + k.word}</button>;
+  const l = typeof tallyLine === "function" ? tallyLine(co) : null;
+  // 24-Oct-2026 (next-tally-one-page): the one status (lib/tallyState.js: Connected / Disconnected / Not linked), the same
+  // words as the client's title chip and its row on the Tally page; a click opens that row
+  const p = clientTallyState(co);
+  return <button type="button" className={"tag tchip " + p.level} title={p.text + (p.company ? " (" + p.company + ")" : "") + ". " + (l ? l.text + ". " : "") + t.label + ". " + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")}
+    data-tally={t.state} data-tally-link-chip={p.state} data-tally-chip={p.state} data-tally-pill={p.state} data-tally-chip-at="clients" data-tally-line-tip={l ? l.state : ""}
+    onClick={(ev) => { ev.stopPropagation(); goTallyRow(cid); }}>{MARK[p.level] + p.word}</button>;
 }
 
 // the panels under More, one at a time (S.clientsPanel); the Day Books panel stays while its files are being matched
@@ -107,7 +118,7 @@ export default function Clients() {
     {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
     {panel && <Panel id={panel} />}
     <Jobs which="auto" />
-    {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p></div> : <>
+    {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p><FirstRunTally /></div> : <>
       {/* the one list table (spec K6): the client, its Tally sign (the status), then the counts; the foot adds them up */}
       <ListTable name="clients" className="data" rows={cos} rowKey={(c) => c.id} unit={["client", "clients"]} of={all.length}
         rowProps={(c) => ({ className: "rowlink", onClick: () => openCompany(c.id) })}
@@ -115,7 +126,7 @@ export default function Clients() {
         cols={[
           { k: "name", role: "party", label: "Client", v: (c) => c.name, cell: (c) => { const inbox = docqCount(c.id);
             return <><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
-              {c.tallyName && c.tallyName !== c.name && <div className="note">Tally: {c.tallyName}</div>}</>; } },
+              {(() => { const tc = clientTallyState(c).company; return tc && tc !== c.name ? <div className="note" data-client-tally-co="">Tally: {tc}</div> : null; })()}</>; } },
           { k: "tally", role: "status", label: "Tally", v: (c) => tallyStatus(c).label, cell: (c) => <TallyLight cid={c.id} /> },
           { k: "gstin", label: "GSTIN / PAN", v: (c) => c.gstin || c.pan || "", cell: (c) => <>{c.gstin ? <span className="code">{c.gstin}</span> : "—"}{c.pan && (!c.gstin || c.gstin.slice(2, 12) !== c.pan) ? <div className="nr">PAN {c.pan}</div> : null}</> },
           { k: "drafts", label: "To review", cls: "n", v: (c) => (c.stats || {}).drafts || 0, sum: true, fmt: String, cell: (c) => (c.stats || {}).drafts || "—" },

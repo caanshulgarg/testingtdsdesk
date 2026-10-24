@@ -15,9 +15,10 @@ client and how to link tally"; of a purchase bill opening: "there is some glitch
   6. a client is reachable from the sidebar, the Clients list, Ctrl+K (by name, GSTIN or PAN) and the header's switcher;
      the breadcrumb is Clients › <client> › <page>;
   7. every Tally entry point (the client strip's chip, the Clients list's chip, Today's not-linked line, Getting ready, the
-     firm's Tally page, the top bar's sign while not linked) lands on the one place to link (15-Oct-2026): the Tally page's
-     Connect Tally, step 4 with that client, whose four steps tick by themselves with the stand: none, the bridge beating,
-     Tally answering, a company open, linked;
+     firm's Tally page, the top bar's sign while not linked) lands on the one place to link (15-Oct-2026; 23-Oct-2026,
+     next-tally-suvit, Suvit's flow): the client's own Tally card, which lists the companies in Tally it may be, each with
+     Link, or the Tally page's Companies in Tally with "Link to <client>"; Connect Tally's three steps tick by themselves
+     with the stand: none, the bridge beating, a company open, a company added;
   8. the purchase bill's drawer: opened from the list and from its address, at 1440x900 and 1280x800, the CPU slowed 4x
      and its PDF arriving late: no layout shift above 0.01, the PDF's place its final size before the PDF arrives, the
      drawer at its top (no jump to a field) and in place within one animation; its name once, Read again and Delete under
@@ -233,49 +234,55 @@ try:
         def scene(companies, devs):
             E2(TL.SETUP, [devs, [], companies, "owner", []]); W2(300)
         def on_card(where):
+            W2(600)
+            ok(E2("[S.view, S.coId, S.tab]") == ["company", lcid, "cotally"] and tl.locator("#app [data-tally-link] [data-tco-act=link]").count() >= 1,
+               "%s → Link Co's Tally card, its companies in Tally with Link (%s)" % (where, E2("[S.view, S.coId, S.tab]")))
+        def on_list(where):
             g = E2("S.tallyGuide || {}")
-            ok(E2("S.view") == "home" and E2("S.homeTab") == "tally" and g.get("step") == 4 and g.get("cid") == lcid and tl.locator("#app [data-connect-guide] [data-guide-client]").count() == 1
-               and E2("() => document.querySelector('#app [data-guide-client]').value") == lcid,
-               "%s → Connect Tally, step 4, Link Co chosen (%s %s %s)" % (where, E2("S.view"), E2("S.homeTab"), g))
+            ok(E2("S.view") == "home" and E2("S.homeTab") == "tally" and g.get("step") == 4 and g.get("cid") == lcid and tl.locator('#app [data-tco-for="%s"]' % lcid).count() == 1
+               and tl.locator("#app [data-tco-list=firm] [data-tco-act=link]").count() >= 1,
+               "%s → Companies in Tally for Link Co, each company with Link (%s %s %s)" % (where, E2("S.view"), E2("S.homeTab"), g))
         scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(1200)
-        tl.click('#cobar [data-tally-chip]'); W2(900); on_card("the title line's chip")
+        # 24-Oct-2026 (next-tally-one-page): every pointer of a client not linked opens the Tally page's list for it
+        tl.click('#cobar [data-tally-chip]'); W2(900); on_list("the title line's chip")
         E2("navHome('clients')"); W2(900)
-        tl.click('#app table[data-list="clients"] tr:has-text("Link Co") [data-tally-chip]'); W2(900); on_card("the Clients list's chip")
+        tl.click('#app table[data-list="clients"] tr:has-text("Link Co") [data-tally-chip]'); W2(900); on_list("the Clients list's chip")
         E2("navHome('today')"); W2(900)
-        tl.click('#app [data-not-linked-line] [data-not-linked-open="%s"]' % lcid); W2(900); on_card("Today's not-linked line")
+        tl.click('#app [data-not-linked-line] [data-not-linked-go]'); W2(900)
+        ok(E2("[S.view, S.homeTab]") == ["home", "tally"] and tl.locator("#app [data-tco-list=firm]").count() == 1, "Today's not-linked chip → the Tally page's list")
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
-        tl.click('#app button:has-text("Next: Open Connect Tally"), #app button:has-text("Open Connect Tally")'); W2(900); on_card("Getting ready's Link to Tally")
+        tl.click('#app button:has-text("Next: Choose on Tally page"), #app button:has-text("Choose on Tally page")'); W2(900); on_list("Getting ready's Link to Tally")
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
-        tl.click('#cobar [data-tally-sign]'); W2(900); on_card("the top bar's Tally sign (not linked)")
+        tl.click('#cobar [data-tally-sign]'); W2(900); on_list("the top bar's Tally sign (not linked)")
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
-        tl.click('#app [data-tally-link] [data-open-connect]'); W2(900); on_card("the client's Tally card")
-        E2("() => { S.tallyFocus = ''; S.tallyGuide = {}; S.tallyMore = {page: true}; navHome('tally'); }"); W2(1200)   # round 66: the clients' table is in Help & support
-        ok(tl.locator('#app [data-tally-clients] [data-client-link="%s"]' % lcid).count() == 1, "the firm's Tally page: the client not linked, with Link")
-        tl.click('#app [data-tally-clients] [data-client-link="%s"]' % lcid); W2(900); on_card("the Tally page's Link")
+        tl.click("#app [data-tally-one-go]"); W2(900); on_list("Client setup's Tally line")
+        E2("() => { S.tallyFocus = ''; S.tallyGuide = {}; S.tallyMore = {page: true}; navHome('tally'); }"); W2(1200)
+        ok(tl.locator('#app [data-tally-clients]').count() == 0, "the firm's Tally page: no clients' table (the list is the one place)")
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
-        chip = E2("() => [...document.querySelectorAll('[data-tally-chip], [data-tally-link-state]')].map(e => e.innerText.trim())")
-        ok(chip and all(c.endswith("Not linked → Link") for c in chip), "the same words on the chip and the card (%s)" % chip)
+        chip = E2("() => [...document.querySelectorAll('[data-tally-chip], [data-tally-one] .tag')].map(e => e.innerText.trim())")
+        ok(chip and all(c.endswith("Not linked") for c in chip), "the same words on the chip and the line (%s)" % chip)
         tl.screenshot(path=os.path.join(OUT, "tally-card-not-linked.png"), full_page=True)
-        # the guide's four steps tick by themselves
+        # the guide's three steps tick by themselves
         steps = lambda: E2("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(s => s.hasAttribute('data-done') ? 1 : 0)")
         def card_again():
             E2("() => { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); }"); W2(1500)
         scene([], []); card_again()
-        ok(steps() == [0, 0, 0, 0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
+        ok(steps() == [0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())
         scene([], [TL.dev(1, "NWS144", "anshul", opened=(), tally="closed")]); card_again()
-        ok(steps() == [1, 0, 0, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
+        ok(steps() == [1, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
         scene(TL.SEEN, TL.DEVS); card_again()
-        ok(steps()[:3] == [1, 1, 1] and steps()[3] == 0, "Tally open on a company: steps 1 to 3 ticked, not 4 (%s)" % steps())
+        ok(steps() == [1, 1, 0], "Tally open on a company: steps 1 and 2 ticked, not 3 (%s)" % steps())
         E2("(c) => openConnectTally(4, c)", lcid); W2(900)
-        tl.select_option("#app [data-guide-company]", "GARG SHEKHAR"); W2(300); tl.click("#app [data-guide-link]"); W2(1500)
+        tl.click('#app [data-tco-list=firm] [data-tco-row="GARG SHEKHAR"] [data-tco-act=link]'); W2(1500)
+        ok(E2("(c) => tallyLinkOf(S.companies[c]).company", lcid) == "GARG SHEKHAR", "Link to Link Co on GARG SHEKHAR's row: linked")
         E2(TL.SETUP, [[TL.dev(1, "NWS144", "anshul", tally="closed", opened=())], [], TL.LINKED(), "owner", []]); W2(300)
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
-        st = E2("() => (document.querySelector('#app [data-tally-link]') || {}).dataset ? document.querySelector('#app [data-tally-link]').dataset.tallyLink : ''")
-        ok(st == "waiting", "linked, Tally closed: the client's card says Waiting for Tally (%s)" % st)
+        st = E2("() => (document.querySelector('#app [data-tally-one]') || {getAttribute: () => ''}).getAttribute('data-tally-one')")
+        ok(st == "notopen", "linked, Tally closed: the client's line says Disconnected, not open (%s)" % st)
         tl.screenshot(path=os.path.join(OUT, "tally-card-waiting.png"), full_page=True)
         tl.close()
 

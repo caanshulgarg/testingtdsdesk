@@ -11,6 +11,8 @@ page (TCloud.rpc: tally_period_status / tally_period_choose / tally_period_pause
   4. a day Tally could not give: ONE quiet line (not an error) with its words and Upload (that day only).
   5. a cloud without migration 98: no card, no error.
   6. Connect Tally: step 5 while reading shows "312 of 1,240 ledgers" (the bridge's progress); after step 6 the same card.
+     23-Oct-2026 (next-tally-suvit): steps 5 and 6 are the company row's first sync on the Tally page: "312 of 1,240
+     ledgers" there; the card stays on Books › From Tally (the Tally page is Suvit's list, with no card of its own).
   7. its own lazy chunk: not in the first file (index-*.js) nor legacy.js; both within their budgets (260 / 600 KB gzip).
   No console error; at 390 wide the page does not scroll sideways.
 Run: TDSDESK_SITE=../app/dist-test python3 run_older_entries_ui.py"""
@@ -137,18 +139,16 @@ def main():
         if n('button[data-act="useOffline"]'): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         d6 = TP.dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.5")
         five = {"garg shekhar & company": TP.book("garg shekhar & company"), "ABC TRADERS": TP.book("ABC TRADERS"), "GB TEXCOAT": TP.book("GB TEXCOAT", ledgers=False, days=False)}
-        all3 = TP.companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"])
-        ids = E(TP.SETUP, [[d6], all3, [], "owner", TP.CLIENTS, True, five]); pg.wait_for_timeout(1800)
+        two = TP.companies(linked=("ABC TRADERS", "garg shekhar & company"), seen=("GB TEXCOAT",), d=d6["id"])
+        ids = E(TP.SETUP, [[d6], two, [], "owner", TP.CLIENTS, True, five]); pg.wait_for_timeout(1800)
         E("""() => { const base = TCloud.rpc; window.__led = null; TCloud.rpc = async (fn, a) => {
             if (fn === 'tally_period_status') return {ok: true, pull: null, ledger: window.__led}; return base(fn, a); }; }""")
-        s5 = '#app [data-connect-step="ledgers"]'
-        pg.click(s5 + " [data-guide-ledgers-import]"); pg.wait_for_timeout(800)
+        s5 = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
+        pg.click(s5 + " [data-tco-act]"); pg.wait_for_timeout(800)
         E("() => { window.__led = {read: 312, of: 1240, done: false, at: new Date().toISOString(), round: 'r1'}; }")
         pg.wait_for_timeout(11500)
-        ok(txt(s5 + " [data-guide-ledgers-count]") == "312 of 1,240 ledgers" and "Reading GB TEXCOAT" in txt(s5 + " [data-guide-ledgers-reading]"), "step 5 while reading: '312 of 1,240 ledgers' (%s)" % txt(s5 + " [data-guide-ledgers-reading]"))
-        ids = E(TP.SETUP, [[d6], all3, [], "owner", TP.CLIENTS, True, TP.HELD_ALL]); pg.wait_for_timeout(2500)
-        ok(n('#app [data-connect-guide="done"] [data-older-entries="connect"]') == 1, "all six done: the same card after step 6 (%s)" % n("#app [data-older-entries]"))
-        ok(n('#app [data-older-entries="connect"] [data-older-big]') == 0, "the Day Book words on From Tally only")
+        ok("312 of 1,240 ledgers" in txt(s5 + " [data-tco-sync=running]") and "Reading ledgers from Tally" in txt(s5 + " [data-tco-sync=running]"), "the first sync while reading: '312 of 1,240 ledgers' (%s)" % txt(s5 + " [data-tco-sync]"))
+        ok(n('#app [data-older-entries]') == 0, "the Tally page is the companies' list: the card is on Books › From Tally only")
 
         print("== 7. its own chunk, the budgets")
         older = [f for f in glob.glob(os.path.join(SITE, "assets", "*.js")) if "Bring older entries from Tally" in open(f, encoding="utf-8", errors="replace").read()]

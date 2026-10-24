@@ -13,6 +13,12 @@ every other check runs. A clean run here says the file is laid out and filled as
 Known limits of FVU 8.7 (June 2024), older than the law of FY 2025-26:
   T_FV_6138  it caps the standard deduction (16(ia)) at 50,000; from FY 2024-25 it is 75,000 in the new regime (section
              16(ia) as amended by the Finance (No. 2) Act, 2024): expected on a new-regime employee's section 16 record.
+  T-FV-4301  it has no section code for 194T (partners, from 1 April 2025): expected on the 194T record of 26R2 only.
+
+next-fvu87 (24-Oct-2026): besides the 16 files, the cases of fvu_books.js cases() (26R2: remarks T, B, Y, a 194Q below
+the limit, an inoperative PAN, 194T; 27D2: a treaty-rate deductee with a PAN and one with nature 99, both with their
+foreign address kept; 26P3: a challan of the year before; 26O4: one of two years before), each with what FVU 8.7 must say
+(EXPECT): nothing, or exactly the errors named.
 Needs java and javac (a JDK)."""
 import os, re, sys, glob, shutil, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,11 +41,16 @@ subprocess.run(["javac", "-cp", os.path.join(FVU, JAR), "-d", CLS, os.path.join(
 built = subprocess.run(["node", os.path.join(HERE, "fvu_books.js"), IN], capture_output=True, text=True, cwd=HERE)
 ok(built.returncode == 0, "FinCom built the files (" + (built.stderr.strip()[-300:] or "ok") + ")")
 files = sorted(glob.glob(os.path.join(IN, "*.txt")))
-ok(len(files) == 16, "16 files: 26Q, 27Q, 27EQ, 24Q, four quarters each (" + str(len(files)) + ")")
+# the cases (fvu_books.js cases()): the FVU's error codes each must give, no more, no fewer ("": none)
+EXPECT = {"26R2.txt": {"T-FV-4301"}, "27D2.txt": set(), "26P3.txt": set(), "26O4.txt": {"T-FV-3166"}}
+ok(len(files) == 16 + len(EXPECT), "20 files: 26Q, 27Q, 27EQ, 24Q, four quarters each, and the cases " + ", ".join(EXPECT) + " (" + str(len(files)) + ")")
 
 def known(name, line, text):
     """an error of FVU 8.7's own age (see above), on the record it names"""
     f = line.split("^")
+    if len(f) > 5 and f[5] == "T-FV-4301" and name == "26R2.txt":
+        rec = text.split("\r\n")[int(f[0]) - 1].split("^") if f[0].isdigit() else []
+        return len(rec) > 32 and rec[1] == "DD" and rec[12] == "Anil Partner"
     if len(f) > 5 and f[5] == "T_FV_6138" and name.startswith("24Q"):
         rec = text.split("\r\n")[int(f[0]) - 1].split("^") if f[0].isdigit() else []
         return len(rec) > 6 and rec[1] == "S16" and rec[5] == "16(ia)" and float(rec[6]) <= 75000
@@ -56,6 +67,11 @@ for path in files:
     bad = [e for e in errs if not known(name, e, text)]
     for e in errs:
         if e not in bad: print("        known limit of FVU 8.7: " + e)
-    ok(not bad, name + ": no error" + ("" if not bad else ": " + " | ".join(bad[:6])))
+    if name in EXPECT and EXPECT[name]:
+        got = {e.split("^")[5] for e in errs if len(e.split("^")) > 5}
+        rest = [e for e in bad if e.split("^")[5] not in EXPECT[name]]
+        ok(EXPECT[name] <= got and not rest, name + ": FVU 8.7 gives " + ", ".join(sorted(EXPECT[name])) + " and nothing else" + ("" if not rest and EXPECT[name] <= got else ": " + " | ".join((rest or errs or ["no error"])[:6])))
+    else:
+        ok(not bad, name + ": no error" + ("" if not bad else ": " + " | ".join(bad[:6])))
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))
 sys.exit(1 if fails else 0)

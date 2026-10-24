@@ -191,15 +191,19 @@ with sync_playwright() as p:
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render();")
     wait_for(pg, "TCloud.pane.devices && TCloud.pane.companies", 20); pg.evaluate("render()"); pg.wait_for_timeout(300)
     t = pg.inner_text("#app")
-    ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
+    # 24-Oct-2026 (next-tally-one-page): which client each company is: the Tally page's list only (Settings points there)
+    ok("OFFICE-PC" in t and CO not in t and "Nothing to press" in t and "Connect this computer" not in t and "Companies in Tally" in t, "Settings shows the computers that send, no companies' table (it points to Companies in Tally); no button to connect")
     # 15-Oct-2026: Settings links nothing itself; its Open Connect Tally leads to the guide's step 4, where the same RPC links
     ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
     # c_vms already has the cloud's copy of CO's books (so step 4 shows it as linked, with no Link to press); a second
     # client, not linked yet, is linked here
     pg.evaluate("() => { const c = newCompany({name: 'New Client Pvt Ltd', gstin: ''}); c.id = 'c_new'; S.companies[c.id] = c; Store.saveCompany(c); }")
     calls["link"].clear(); pg.click('#app [data-open-connect="4"] >> nth=0'); pg.wait_for_timeout(1200)
-    pg.select_option("#app [data-guide-client]", "c_new"); pg.wait_for_timeout(200); pg.select_option("#app [data-guide-company]", CO); pg.wait_for_timeout(200)
-    pg.click("#app [data-guide-link]"); pg.wait_for_timeout(1200)
+    # 23-Oct-2026 (next-tally-suvit): the pointer lands on Companies in Tally; for the client chosen (c_new), CO's row says
+    # "Link to New Client Pvt Ltd"
+    ok(pg.evaluate("S.homeTab") == "tally" and pg.locator('#app [data-tco-list=firm] [data-tco-row="%s"]' % CO).count() == 1, "the pointer lands on Companies in Tally, %s listed" % CO)
+    pg.evaluate("() => openConnectTally(4, 'c_new')"); pg.wait_for_timeout(900)
+    pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=link]' % CO); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_new"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed
     calls["link"].clear()

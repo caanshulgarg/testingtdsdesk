@@ -294,7 +294,7 @@ const Audit = {
     },
     gstr1(A, V, ctx){
       const rows = [];
-      Object.values(S.books.filed || {}).filter(f => !f.notFiled && f.ym >= ctx.from.slice(0, 6) && f.ym <= ctx.to.slice(0, 6)).forEach(f => {
+      GSTAmend.filed().filter(f => !f.notFiled && f.ym >= ctx.from.slice(0, 6) && f.ym <= ctx.to.slice(0, 6)).forEach(f => {
         const c = GSTAmend.check(f.ym, f.gstin.slice(0, 2));
         (c ? c.rows : []).forEach(r => rows.push({vid: "", date: r.doc.date, no: r.doc.num, type: r.kind, party: r.doc.ctin || "", amount: r.doc.txval, note: GSTR.label(f.ym) + ": " + r.changes.join("; ")}));
       });

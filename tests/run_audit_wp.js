@@ -16,6 +16,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const f = makeBooks();
+f.company.choices = Object.assign(f.company.choices || {}, {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}});   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
 ctx.S.books = f.books; ctx.S.coId = "cfix"; ctx.S.companies = {cfix: f.company}; ctx.CO = () => f.company; ctx.S.data = {};
 let saved = 0; ctx.saveBooks = () => { saved++; }; ctx.whoAmI = () => "tester@fincom";
 finish(f, x);

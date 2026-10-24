@@ -4,8 +4,10 @@
 //   - every entry an AI answer cites ([V:<no>|<date>]) must be in the Day Book slice it read, else it is dropped;
 //   - every figure Claude records (record_figures) is computed again by the book tool it names: the same figure is
 //     "matches FinCom" (green); a different one is replaced by FinCom's, with the AI's struck out, and kept as a mismatch;
-//   - a request to post, file, delete or change something is answered with the screen that does it.
-// Plain module: no Deno, no imports.
+//   - a request to post, file, delete or change something is answered with the screen that does it; a request to make
+//     entries (or their Tally XML) is not: the assistant drafts them (entries.ts) and the person posts them with a click.
+// Plain module: no Deno; its one import is entries.ts (plain).
+import { entriesAsked } from "./entries.ts";
 
 export type Claim = { name: string, value: number, text: string, tool: string, input: Record<string, unknown>, field: string };
 export type Verdict = Claim & { status: "match" | "mismatch" | "unchecked", fincom: number | null, why?: string, entries: string[], id: number };
@@ -109,11 +111,12 @@ const ACTS: [RegExp, string][] = [
   [/\b(file|submit|upload)\b.{0,30}\b(gstr|return|3b|gstr-?1|gstr-?3b|itr|26q|24q|27q|tds return)/i, "gst_filing"],
   [/\b(delete|remove|erase|cancel)\b.{0,40}\b(entry|entries|voucher|vouchers|bill|bills|duplicate|ledger|invoice|client)\b/i, "tally_ledgers"],
   [/\b(change|edit|alter|modify|correct|fix|rename|update)\b.{0,40}\b(entry|entries|voucher|vouchers|ledger|ledgers|books|amount|narration|setting|settings|gstin|pan)\b/i, "tally_ledgers"],
-  [/\b(pass|make|create|book|record)\b.{0,20}\b(a |an |the )?(journal|entry|voucher|credit note|debit note)\b/i, "post_to_tally"],
   [/\b(pay|deposit)\b.{0,30}\b(tds|gst|challan|tax)\b/i, "tds_challans"],
 ];
+// (22-Oct-2026: "make / pass / create a journal entry" was answered with the Post page; it is now drafted: entriesAsked)
 export function actionAsked(q: string): { screen: string } | null {
   const s = String(q || "");
+  if (entriesAsked(s)) return null;                 // entries to make: drafted as a preview, the person posts them
   if (/\b(how (do|to|can)|what is|explain|why)\b/i.test(s) && !/\b(please|now|for me)\b/i.test(s)) return null;   // a question about doing it, not a request to do it
   for (const [re, screen] of ACTS) if (re.test(s)) {
     if (screen === "tally_ledgers" && /\b(delete|remove|cancel)\b/i.test(s) && /\b(entry|entries|voucher|bill|duplicate|invoice)\b/i.test(s)) return { screen: "tally_sync" };

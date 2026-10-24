@@ -18,7 +18,7 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 def read(p): return open(os.path.join(ROOT, p), encoding="utf-8").read()
 NAMES_JS = "server/_shared/names.js"
 # plain JavaScript shared with the server functions, put at the head of the app without its export line, in this order
-SHARED_JS = [NAMES_JS, "server/_shared/match2b.js", "server/_shared/tdsmatch.js"]
+SHARED_JS = [NAMES_JS, "server/_shared/match2b.js", "server/_shared/tdsmatch.js", "server/_shared/tallyname.js"]
 # of those, the ones the React app loads with a screen of its own (its lazy chunk imports the module itself and puts its
 # names on globalThis: app/src/lib/tdsGlobals.js), kept out of legacy.js and its size budget (tests/run_stability.py)
 SHARED_LAZY = ["server/_shared/tdsmatch.js"]

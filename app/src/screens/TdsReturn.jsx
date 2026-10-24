@@ -37,6 +37,7 @@ import { DedByChallan, retChallans } from "./tds/Winman.jsx";
 import { unplacedOf } from "./tds/onChallan.js";
 import { ColF, useCF } from "./tds/ColF.jsx";
 import { DedName } from "./tds/DedName.jsx";
+import { uploadExcel, downloadExcel } from "./tds/TdsExcel.jsx";
 import Deductions24 from "./tds/Ded24.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
@@ -140,7 +141,8 @@ const selSet = (ids, on) => { const s = { ...(S.tdsSel || {}) }; ids.forEach((id
 // the reason under the rate, in short ("should be 20% (no PAN, 206AA)"); in the row's details and Validate & file in full
 const shortWhy = (w) => String(w || "").replace(/no valid PAN, section /, "no PAN, ").replace(/, section 206AA/, ", 206AA").replace(/\s*\(higher rate\)/, "").replace(/\s*\(PAN's 4th letter \w\)/, "")
   .replace(/:\s*[\d.]+%$/, "").replace(/^(certificate [^ (:]+).*$/, "$1").replace(/^the section's higher rate.*$/, "the section's higher rate");
-const Rate = ({ r, issue }) => <>{r.rate != null ? r.rate + "%" : ""}{issue && <span className="rt-dot" data-rate-q="" title={"should be " + issue.expected + "%" + (issue.why ? " (" + shortWhy(issue.why) + ")" : "")} aria-label={"rate question: should be " + issue.expected + "%"}>•</span>}</>;
+// the TDS check of 22-Oct-2026 (H1): a rate deducted that is not the TDS ledger's own, said under the rate
+const Rate = ({ r, issue }) => <>{r.rate != null ? r.rate + "%" : ""}{r.ledgerRate ? <small className="note" data-rate-ledger="" style={{ display: "block" }}>{r.rate}% deducted on a {r.ledgerRate}% ledger</small> : null}{issue && <span className="rt-dot" data-rate-q="" title={"should be " + issue.expected + "%" + (issue.why ? " (" + shortWhy(issue.why) + ")" : "")} aria-label={"rate question: should be " + issue.expected + "%"}>•</span>}</>;
 
 // t70: the corrected Excel brought back: each change, old → new, what is refused and why; nothing applied until Apply.
 // In a drawer beside the table (design §3.6), not a card above it
@@ -166,11 +168,13 @@ function ImportPreview({ rows }) {
       <button className="btn small" onClick={close}>{p.changes.length && !p.error ? "Cancel" : "Close"}</button></div>
     </div></SideDrawer>;
 }
-async function importExcel(file, rows) {
+async function importExcel(file, rows, form, fy, q) {
   if (!file) return;
   try {
     await ensureXlsx();
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    // next-tds-excel: the whole return's Excel (Download Excel) brought back here goes to its own preview
+    if (wb.SheetNames.includes("About") && wb.SheetNames.includes("Deductor") && form) { uploadExcel(file, form, fy, q); return; }
     S.tdsImport = Object.assign({ name: file.name }, TDSEdit.read(wb, rows));
   } catch (e) { S.tdsImport = { name: file.name, error: "Could not read this file: " + ((e && e.message) || e), changes: [], refused: [], unmatched: [], notes: [] }; }
   render();
@@ -365,8 +369,6 @@ export function Return26({ b, allRows, form = "26Q" }) {
     challan: [["", "Challan: any"], ["no", "Not against a challan"], ["yes", "Against a challan"]].concat(chOpts.filter((c) => rows.some((r) => r.challan === c.id)).map((c) => ["ch:" + c.id, "Challan " + TDSCH.label(c)])),
     rate: [["", "Rate: any"], ["q", "Rate questions"], ["low", "Below the rate that applies"], ["high", "Above the rate that applies"], ["cert", "Lower-deduction certificate"], ["ok", "Rate as expected"]],
   };
-  const fD = (S.tdsFl || {}).deductions || {};
-  const shownD = tdsSorted("deductions", rows.filter((r) => pass(r, fD)), (r, k) => k === "date" ? TDS.ymd(r.date) : k === "challan" ? (r.challan ? 1 : 0) : r[k] == null ? "" : r[k]);
   const fixN = rows.filter((r) => probs[r.id]).length, file = useRef(null), dm = S.tdsTab === "deductions" ? dedMatch(form, fy, q) : null;
   const sfx = dm ? safeFixes(rows, issueOf, dm) : [];
   const unit = form === "27EQ" ? "collections" : "deductions";
@@ -387,9 +389,10 @@ export function Return26({ b, allRows, form = "26Q" }) {
   ];
   const confirmable = (() => { try { return TDSMatch.suggest(form, fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
   const primary = (S.tdsTab === "challans" || S.tdsTab === "deductions") && confirmable && !TDSReg.locked(fy, q, form) ? null : undefined;
-  const more = retMore({ fy, q, form, extra: [["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")],
-    ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
-    ["Import corrected Excel…", () => { S.tdsTab = "deductions"; render(); setTimeout(() => { const el = document.querySelector("[data-ded-import]"); if (el) el.click(); }, 50); }]] });
+  // next-tds-excel: "Excel to correct and bring back" and "Import corrected Excel…" of this menu are now the whole return's
+  // Download Excel and Upload Excel (ReturnShell, tds/TdsExcel.jsx). next-tds-excel2: the plain "working" Excel is gone from
+  // the return's pages: every Excel of a step is that workbook, opened on the step's sheet
+  const more = retMore({ fy, q, form });
   const reviews = {
     unmatched: <FixRows title={un.length + " " + unit + " without a challan · " + money(notCh)} rows={un} unit={unit} />,
     over: TDSReg.overUsed(fy, q, form).length ? <section className="dash-card" style={{ marginBottom: 12 }} data-over-used=""><h3>Challans used beyond their amount</h3>
@@ -417,7 +420,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
     <div className="vf-frow" data-prefile-slot="">
       <PrnBox fy={fy} q={q} form={form} />
       <button className="btn small primary" data-make-fvu="" disabled={val.errors.length > 0} title={val.errors.length ? undefined : "Make the text file the FVU checks, and download it"} onClick={make}>Make FVU file{draft ? " (draft)" : ""}</button>
-      <button className="btn small" onClick={() => doAct("tdsExcel")}>Download working</button>
+      <button className="btn small" data-file-excel="" title="The whole return as one Excel, opened on its Checks" onClick={() => downloadExcel(form, fy, q, "Checks")}>Download Excel</button>
       <button className="btn small" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check with FVU</button>
     </div>
     {val.errors.length > 0 && <p className="note bad" data-make-why="">Fix the errors above first: the file is not made while any is left.</p>}
@@ -434,17 +437,17 @@ export function Return26({ b, allRows, form = "26Q" }) {
     {sfx.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-fix-all="" title={sfx.map((f) => f.label).join("; ")} onClick={() => { let n = 0; sfx.forEach((f) => { const x = f.apply(); if (x && x.ok) n++; }); TDSReg.forget(); TDSReg.done(); saveBooks(); toast(n + " safe fix" + (n === 1 ? "" : "es") + " applied."); render(); }}>Apply all safe fixes ({sfx.length})</button>}
     {!todo && dm && dm.accept.length > 0 && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small primary" data-dd-accept-all="" data-cm-confirm-all="" onClick={() => tdsMatchConfirmAll()}>Accept all {dm.accept.reduce((a, s) => a + s.ids.length, 0)} suggestions</button>}
     {form !== "27EQ" && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-add-open="" onClick={() => openAdd({ chId: S.tdsDedChF && S.tdsDedChF !== "__none" ? S.tdsDedChF : "" })}>Add deduction</button>}
-    <More label="⋯" ariaLabel="Export" data-fb-out="" items={[S.tdsDedView === "sections" ? ["All " + unit + " in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }] : ["By section", () => { S.tdsDedView = "sections"; render(); }, { "data-ded-sections": "" }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Excel to correct and bring back (these " + shownD.length + ")", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
-      ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
-    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} />
+    <More label="⋯" ariaLabel="Export" data-fb-out="" items={[S.tdsDedView === "sections" ? ["All " + unit + " in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }] : ["By section", () => { S.tdsDedView = "sections"; render(); }, { "data-ded-sections": "" }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Download Excel", () => downloadExcel(form, fy, q, "Deductions"), { "data-ded-excel": "" }],
+      ["Upload Excel", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
+    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows, form, fy, q); }} />
   </div>;
   // round 88 (as Winman): the step opens on a challan (tds/Winman.jsx DedByChallan); "Not on any challan" is the to-do
   // list; the table with every filter and By section are under ⋯
   const winTools = <span className="wd-tools"><More label="⋯" ariaLabel="More" data-wd-more="" items={[["All " + unit + " in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }],
       ["By section", () => { S.tdsDedView = "sections"; render(); }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")],
-      ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
-      ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
-    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} /></span>;
+      ["Download Excel", () => downloadExcel(form, fy, q, "Deductions"), { "data-ded-excel": "" }],
+      ["Upload Excel", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
+    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows, form, fy, q); }} /></span>;
   return <>
     <ReturnShell fy={fy} q={q} form={form} status={status} statusTitle={drift && drift.rows.length ? "Filed, and changed in Tally since: a correction is needed" : TDSReg.corrOpen(fy, q, form) ? "A correction is open: this return’s challans may change" : undefined}
       draft={draft && !filed} val={val} primary={primary} more={more} steps={steps}>
@@ -517,7 +520,7 @@ function Employees({ fy, q, a1 }) {
   ], a1);
   const shown = tdsSorted("employees", cf.shown, (e, k) => e[k]);
   return <>
-    <div className="rt-tool" data-step-tool=""><span className="rt-sp" /><More label="⋯" ariaLabel="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable("q24Table", CO().name + " 24Q " + q + " " + fy)], ["Excel", () => doAct("q24Excel")]]} /></div>
+    <div className="rt-tool" data-step-tool=""><span className="rt-sp" /><More label="⋯" ariaLabel="Export" data-fb-out="" items={[["Print or save as PDF", () => printTable("q24Table", CO().name + " 24Q " + q + " " + fy)], ["Download Excel", () => downloadExcel("24Q", fy, q, "Deductions"), { "data-ded-excel": "" }]]} /></div>
     {/* the one list table (spec K6): employee (party), paid and TDS (amounts), then the rest */}
     <ListTable name="q24Employees" id="q24Table" className="bk-table gf-off" rows={shown} rowKey={(e) => e.pan || e.name} unit={["employee", "employees"]} of={a1.length} sortVia={via("employees")} footNote={cf.foot()}
       empty="No employee matches these filters."
@@ -565,7 +568,7 @@ export function Return24({ b }) {
   ];
   const confirmable = (() => { try { return TDSMatch.suggest("24Q", fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
   const primary = !has && S.tdsTab !== "challans" && S.tdsTab !== "file" ? ["Bring in the salary sheet", () => doAct("salaryPick")] : S.tdsTab === "challans" && confirmable && !TDSReg.locked(fy, q, "24Q") ? null : undefined;
-  const more = retMore({ fy, q, form: "24Q", extra: [["Download the 24Q working (Excel)", () => doAct("q24Excel")], ["Bring in a new salary sheet", () => doAct("salaryPick")], has && ["Remove the salary sheet", () => doAct("salaryClear")]] });
+  const more = retMore({ fy, q, form: "24Q", extra: [["Bring in a new salary sheet", () => doAct("salaryPick")], has && ["Remove the salary sheet", () => doAct("salaryClear")]] });
   const reviews = {
     unmatched: <FixRows title={un.length + " salary payments without a challan"} rows={un} unit="salary payments" />,
     nopan: <FixRows title="Without a valid PAN" rows={TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !Certs.validPan(r.pan))} unit="salary payments" />,
@@ -580,7 +583,7 @@ export function Return24({ b }) {
       <PrnBox fy={fy} q={q} form="24Q" />
       {TDS.isNew(fy) && q === "Q4" ? <p className="note" data-q4-wait="">Protean has not yet released the Q4 layout for Form 138: the fourth quarter's file is made once it has.</p>
         : <button className="btn small primary" data-sheet-fvu="" disabled={val.errors.length > 0} title={val.errors.length ? "Fix the errors above first" : undefined} onClick={() => { payFvuDownload(fy, q); try { if (!TDS24Q_FILE.build(fy, q, TDS26Q.firmDetails()).error) FvuMade.mark(fy, q, "24Q"); } catch (e) { /* */ } render(); }}>Make FVU file</button>}
-      {has && <button className="btn small" onClick={() => doAct("q24Excel")}>Download working</button>}
+      {has && <button className="btn small" data-file-excel="" title="The whole return as one Excel, opened on its Checks" onClick={() => downloadExcel("24Q", fy, q, "Checks")}>Download Excel</button>}
     </div>
     <MarkFiled fy={fy} q={q} form="24Q" />
   </div>;

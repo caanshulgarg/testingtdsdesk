@@ -101,7 +101,9 @@ try:
         ok("Pay with the next challan" not in stxt and "if filed today" not in stxt, "no 'Pay with the next challan' and no long late-fee text")
         ok(stxt.count(money(fee["fee"])) == 1, "the late fee %s once in the section (%d)" % (money(fee["fee"]), stxt.count(money(fee["fee"]))))
         ch = J("() => { const tr = document.querySelector('#app [data-int-ch=\"zzlate\"]'); return tr ? {due: +tr.dataset.due, alloc: +tr.dataset.alloc, diff: +tr.dataset.diff, bad: tr.querySelector('.bad') != null} : null; }")
-        ok(ch and ch["due"] == 150 and ch["alloc"] == 0 and ch["diff"] == 150 and ch["bad"], "by challan: 20001 due 150, allocated 0, short 150 marked (%s)" % ch)
+        # the TDS check of 22-Oct-2026, M6: with nothing typed, the file's interest is what the return's late deductions on the
+        # challan owe, never more than the challan has: its 50 (was 0)
+        ok(ch and ch["due"] == 150 and ch["alloc"] == 50 and ch["diff"] == 100 and ch["bad"], "by challan: 20001 due 150, its interest 50 allocated by default, short 100 marked (%s)" % ch)
         heads2 = [h.strip() for h in pg.locator('#app [data-int-chs] thead th').all_inner_texts()]
         ok(heads2 == ["Challan", "Interest due", "Fee due", "Allocated to this return", "Status"], "one summary: Challan, Interest due, Fee due, Allocated, Status (%s)" % heads2)
         ok(pg.locator('#app [data-int-sec] table').count() == 2, "two tables only: the interest and the summary")

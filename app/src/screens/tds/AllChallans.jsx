@@ -75,12 +75,14 @@ function PayCells({ x }) {
     <button type="button" className="linkbtn" onClick={() => setOpen(false)}>Cancel</button></span>;
 }
 
-async function toExcel(rows, fy) {
-  await ensureXlsx();
-  const head = ["Date", "BSR code", "Serial / CIN", "Section", "Form / quarter", "Tax", "Interest", "Others", "Total", "Used on deductions", "Left", "Status"];
-  const aoa = [head].concat(rows.map((x) => [day(x.date), x.bsr, x.cin || x.serial, x.secs.join(", "), x.fq, x.tax, x.interest, x.others, x.total, x.used, x.left, STATUS_WORDS[x.st][0]]));
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Challans " + fy);
-  XLSX.writeFile(wb, ((CO() || {}).name || "Client") + " challans " + fy + ".xlsx");
+// next-tds-excel2: a proper sheet (tdsExcel.js allChallans, loaded when asked): an Excel Table with a filter on every
+// header, the totals by SUBTOTAL above it, Total and Balance by formula, what the return it was opened from uses beside
+// every return's use, red below nil. The rows the filters here show.
+async function toExcel(rows, fy, from) {
+  const here = (x) => r2((x.uses || []).filter((u) => (from ? u.form === from.form && u.fy === from.fy && u.q === from.q : u.fy === fy)).reduce((a, u) => a + num(u.tax), 0));
+  const m = await import("./tdsExcel.js");
+  await m.downloadAllChallans(rows.map((x) => Object.assign({}, x, { here: x.kind === "ch" ? here(x) : 0, status: STATUS_WORDS[x.st][0] })),
+    { fy, client: (CO() || {}).name || "Client", hereWord: from ? "Used in " + TDS.formShort(from.form, from.fy) + " " + from.q : "Used in " + fy + " returns" });
 }
 
 export default function AllChallans({ fys }) {
@@ -103,7 +105,7 @@ export default function AllChallans({ fys }) {
       <label className="ac-f"><span>{TDS.yearWord(fy)}</span><select aria-label="Year" data-allch-year="" value={fy} onChange={(ev) => { S.tdsFy = ev.target.value; S.allchFl = {}; render(); }}>
         {(fys || [fy]).map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
       <span className="rt-sp" />
-      <button type="button" className="btn small" data-allch-excel="" onClick={() => toExcel(rows, fy).then(() => toast("Downloaded."))}>Excel</button>
+      <button type="button" className="btn small" data-allch-excel="" onClick={() => toExcel(rows, fy, from).then(() => toast("Downloaded."), (e) => toast("Could not make the Excel: " + ((e && e.message) || e)))}>Excel</button>
       <button type="button" className="btn small" data-allch-register="" onClick={() => tdsNav("register")}>Add or upload challans</button>
     </div>
     <p className="ac-sum" data-allch-sum="">{all.length - nBsr} challan{all.length - nBsr === 1 ? "" : "s"} · every form and quarter of {fy}{nBsr ? <> · <b className="ac-red">{nBsr} TDS payment{nBsr === 1 ? "" : "s"} in Tally without a BSR code</b></> : null}</p>

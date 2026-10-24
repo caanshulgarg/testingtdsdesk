@@ -69,7 +69,6 @@
  "68-due-list.js",
  "69-tds-26as.js",
  "70-traces-files.js",
- "71-supplier-health.js",
  "72-tds-tally.js",
  "73-payroll.js",
  "74-zoho-books.js",
@@ -88,5 +87,11 @@
  "86-tds-match.js",
  "87-pan-check.js",
  "88-tds-added.js",
- "88-fin-statements.js"
+ "89-tds-adjust.js",
+  "91-tds-audit.js",
+  "92-tds-file.js",
+  "93-tds-autoplace.js",
+  "94-tds-remarks.js",
+ "88-fin-statements.js",
+ "90-autopost.js"
 ]

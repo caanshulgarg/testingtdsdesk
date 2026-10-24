@@ -40,6 +40,9 @@ FAKE_REC = """(() => {
     abort(){ if (this.state !== 'listening') return; this.state = 'aborted'; if (this.onerror) this.onerror({error: 'aborted'}); if (this.onend) this.onend(); }
   }
   window.SpeechRecognition = FakeRec; window.webkitSpeechRecognition = FakeRec;
+  // the recording for clearer listening (VoiceRecorder.js) is not part of this test: the microphone prompt left unanswered,
+  // as a headless browser may leave it (run_voice_whisper.py tests the recording)
+  if (navigator.mediaDevices) navigator.mediaDevices.getUserMedia = () => new Promise(() => {});
   window.__rec = () => window.__recs[window.__recs.length - 1];
   window.__say = (parts) => { const r = window.__rec(); const results = parts.map(([t, fin]) => Object.assign([{transcript: t, confidence: .9}], {isFinal: !!fin}));
     r.onresult({resultIndex: 0, results}); };
@@ -128,12 +131,15 @@ with sync_playwright() as p:
     pg.evaluate("__end()"); pg.wait_for_timeout(200)
     ok(box(pg) == "TDS on rent for March", "the final words in the box (%r)" % box(pg))
     ok(pg.evaluate("window.__bodies.length") == 0 and pg.evaluate("ASST.turns().length") == 0, "nothing is asked by itself: the person presses Ask")
-    ok(pg.locator("[data-asst-mic][aria-pressed=false]").count() == 1, "silence ends it: the mic is off again")
+    # 22-Oct-2026 (the owner: "it took only the first sentence and stopped listening"): the browser ending a session is not
+    # the end; FinCom listens again while the mic is on (run_assistant_voice_continuous.py checks it in full)
+    ok(pg.locator("[data-asst-mic][aria-pressed=true]").count() == 1 and pg.evaluate("__recs.length") == 2 and pg.evaluate("__rec().state") == "listening",
+       "the browser ending a session is not the end: it listens again")
     # a second tap stops it; the words said so far stay, and the person can edit them
-    pg.click("[data-asst-mic]"); pg.wait_for_timeout(100)
     pg.evaluate("__say([['and', false]])"); pg.wait_for_timeout(100)
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(150)
-    ok(pg.evaluate("__rec().state") == "aborted" and pg.locator("[data-asst-mic][aria-pressed=false]").count() == 1, "a second tap stops listening")
+    ok(pg.evaluate("__rec().state") == "stopped" and pg.locator("[data-asst-mic][aria-pressed=false]").count() == 1, "a second tap stops listening")
+    ok(box(pg) == "TDS on rent for March and", "the words heard so far stay in the box (%r)" % box(pg))
     pg.fill("#asstQ", "TDS on rent for April"); ok(box(pg) == "TDS on rent for April", "the words can be corrected before asking")
     note2 = pg.inner_text("[data-asst-voice-msg]") if pg.locator("[data-asst-voice-msg]").count() else ""
     ok("Google/Apple" not in note2, "the browser note only once (%r)" % note2)

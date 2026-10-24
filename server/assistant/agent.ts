@@ -13,6 +13,8 @@
 // (The answer cache, lever 6, is in index.ts: the same first question on the same books is answered from there.)
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { ALL_BOOK_TOOLS, BOOK_TOOLS, SCREENS, SLICE_TOOL, bookTool, claudeTools, plainWords, routerTools, safeArgs, toolLabel } from "./tools.ts";
+import { booksPeriod, checkEntries, entriesAsked } from "./entries.ts";
+import { checkMis, figuresIn, lookFromDb, MIS_SYSTEM, misAsked } from "./mis.ts";
 import { actionAsked, checkCitations, Claim, compare, fieldOf, markFigures, numbersOf, uncheckedFigures, Verdict } from "./checks.ts";
 import { DocSpec, Section, TableData } from "./files.ts";
 import { dropSentences, FileTableSpec, fileFigures, SheetFile, tableFromFile } from "./filetable.ts";
@@ -110,7 +112,11 @@ Files: when the user asks for a file (Excel, Word, PDF), call make_file. A table
 
 In what the user reads, never name a tool (say "the ledger's balance", not ledger_balance); when a ledger name is not one, the user is shown the names as buttons: ask which one.
 
-What you never do: you never post, change, delete or file anything - not entries, ledgers, settings, returns or challans - and you never change data to make figures agree. If the user asks for one of these, say plainly that you cannot, and call point_to_screen with the FinCom screen that does it.
+What you never do: you never post, change, delete or file anything yourself - not entries, ledgers, settings, returns or challans - and you never change data to make figures agree. If the user asks you to file, delete or change something, say plainly that you cannot, and call point_to_screen with the FinCom screen that does it.
+
+Entries: when the user asks you to make, pass or record entries for the client open (journal, payment, receipt, contra, sales, purchase, debit or credit note), or to prepare the Tally XML for them, do not refuse: draft them with draft_entries. Use each ledger's name exactly as in the client's books (call find_ledgers first when unsure; never make one up); every voucher's debits equal its credits; the date exactly as the user states it (even after today); today's date when the user gives none (say so); never a future date the user did not state; a short narration. Amounts said in words are figures (ek lakh = 100000). FinCom checks the draft and shows it to the user as a preview to correct, with Post to Tally (only when the client's Tally is connected) and Download XML. The user posts it with a click on that preview, here in the chat, and sees the result there: you never post, never say the entries are posted, and never point to the Post to Tally page for them. If FinCom says a ledger is not in the books, say which and ask the user to pick one from the list shown.
+
+${MIS_SYSTEM}
 
 Writing: answer first, in at most 5 short lines or 5 bullets, in plain words for a CA: no headings, no preamble, no repeating the question, no closing offers or summaries. Tables and files are shown to the user separately: never restate them. Answer at length only when the user asks for it (in detail, explain fully, elaborate, step by step, the full answer); a draft, letter, reply or notice keeps its own length. Amounts with ₹ in the Indian style (₹1,23,450.00); dates as 05-Mar-2026. Name the period you used. Say when the books held do not cover the dates asked.
 
@@ -178,7 +184,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const seenUrls = new Set<string>(), pages = new Map<string, string>();
   let checked: Checked[] = [];
   let notice: { id: string | null, n: Notice, items: Item[], annexures: Annexure[] } | null = null;
-  let resultN = 0, draftFails = 0, fileFails = 0, extBooks = false, extAi = false, fileUsed = false;
+  let resultN = 0, draftFails = 0, fileFails = 0, entryFails = 0, misFails = 0, extBooks = false, extAi = false, fileUsed = false;
   const extLabels = new Set<string>();            // a tool's own neutral labels (the certificates: 'confirm', 'certificate')
   const files: FileOut[] = [];
 
@@ -187,6 +193,10 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
 
   // a request to change something: FinCom says where, before anything else (no model has a tool that changes anything)
   const act = actionAsked(ctx.question);
+  // entries to make (or their Tally XML): drafted by the model (draft_entries), never routed to a book tool by words
+  const entries = entriesAsked(ctx.question);
+  // an MIS to lay out (My MIS): by the model (build_mis), never routed to a book tool by its words
+  const misWanted = misAsked(ctx.question);
   if (act) emit({ t: "screen", screen: act.screen, label: SCREENS[act.screen], why: "FinCom Assistant only reads, works out, drafts and exports. Changing, posting, filing or deleting is done on this screen." });
 
   const finish = (text0: string, labels: string[], o: { route: string, feature: string, fellThrough?: boolean, stopped?: string, cacheable?: boolean }): TurnResult => {
@@ -312,7 +322,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const extHit = EXT_TOOLS.find((t) => t.firmWide && (t.words.test(ctx.question) || ctx.history.slice(-2).some((h) => t.words.test(String(h.content || "")))));
   // ---------------------------------------------------------------- 1. the keyword router (no model)
   const native = notEnglish(ctx.question, ctx.lang);
-  if (L.router && !native && !ctx.attachments.length && !act && ctx.clientId && !ctx.firmWide && !extHit) {
+  if (L.router && !native && !ctx.attachments.length && !act && !entries && !misWanted && ctx.clientId && !ctx.firmWide && !extHit) {
     const rt = route(ctx.question, anchor);
     if (rt && "prefile" in rt) {
       used.push("prefiling_check");
@@ -342,7 +352,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   const P0full: Plan = L.opusOnly ? P : plan(task, ctx.chatEffort, false);
   let retriedLong = false, cutShort = false;
   let fellThrough = false;
-  if (L.haiku && !native && task === "book" && ctx.clientId && !ctx.firmWide && !WHY_Q.test(ctx.question) && !compound(ctx.question) && !act) {
+  if (L.haiku && !native && task === "book" && ctx.clientId && !ctx.firmWide && !WHY_Q.test(ctx.question) && !compound(ctx.question) && !act && !entries && !misWanted) {
     const pick = async (p: Plan): Promise<{ name: string, input: any } | null | "capped" | "none"> => {
       const msg = await call(p, { system: [{ type: "text", text: ROUTER_SYSTEM, cache_control: { type: "ephemeral", ttl: "1h" } }], tools: routerTools(ctx.strict !== false),
         messages: [{ role: "user", content: "[Today: " + anchor + " (periods are read against this date).]\n\n" + mk.text(ctx.question) }] });
@@ -581,6 +591,44 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
         }
         return okr("shown to the user as a DRAFT (id " + id + "); offer a Word or PDF file");
       }
+      if (name === "draft_entries") {
+        // FinCom's check of the draft (entries.ts): the client's ledgers (asst_ledger_pick), Dr = Cr, the books' period.
+        // A voucher the model must put right (Dr not Cr, a line with both or neither) goes back to it twice; then it is
+        // shown with its problems, and the preview blocks Post and Download until the user corrects it. Nothing is posted.
+        if (!ctx.clientId || ctx.firmWide) return err("open the client the entries are for: entries are drafted for the client open");
+        let books: any = null;
+        try { books = await ctx.exec("asst_books", { p_client: ctx.clientId }); } catch { books = null; }
+        const period = booksPeriod(books && !books.none && Array.isArray(books.rows) ? books.rows : [], ctx.today);
+        const chk = await checkEntries(input, { pick: (text) => ctx.exec("asst_ledger_pick", { p_client: ctx.clientId, p_text: text }), period,
+          today: ctx.today, question: ctx.question, history: ctx.history.filter((h) => h.role === "user").map((h) => String(h.content || "")) });
+        if (chk.fix.length && entryFails < 2) {
+          entryFails++;
+          return err(JSON.stringify({ NOT_SHOWN: "put these vouchers right and call draft_entries again with every voucher", vouchers: chk.vouchers.filter((v) => chk.fix.includes(v.n)).map((v) => ({ voucher: v.n, problems: v.problems })) }));
+        }
+        const id = ++resultN;
+        extLabels.add("entries");
+        results.push({ rows: chk.vouchers.flatMap((v) => v.lines.map((l) => ({ dr: l.dr, cr: l.cr }))), summary: { total: chk.vouchers.reduce((a, v) => a + v.dr, 0) } });
+        emit({ t: "result", id, tool: "draft_entries", kind: "entries", title: "Entries drafted (not posted)", client: ctx.clientId, clientName: ctx.clientName, params: {}, columns: [], rows: [],
+          vouchers: chk.vouchers, period: chk.period, problems: chk.problems, ok: chk.ok, noBooks: chk.noBooks });
+        return okr(JSON.stringify({ shown: true, ok: chk.ok, problems: chk.problems,
+          vouchers: chk.vouchers.map((v) => ({ voucher: v.n, date: v.date, problems: v.problems, changed: v.notes, not_ledgers: v.lines.filter((l) => !l.known).map((l) => ({ typed: l.typed, closest: l.choices })) })),
+          say: "FinCom shows these to the user as a preview: they check it, pick any ledger shown in red from the client's list, and press Post to Tally (when the client's Tally is connected) or Download XML. Nothing has been posted: never say it was. In two or three lines say what you drafted and what the user must check." }));
+      }
+      if (name === "build_mis") {
+        // My MIS (ROUND 105, B4): the layout the model wrote, checked here (mis.ts): the schema (wrong values replaced and
+        // said), the client's real groups and ledgers (unknown names flagged with the closest), no figure in it. A layout
+        // that cannot be read goes back to the model twice; then it is said. The builder works out every figure.
+        if (!ctx.clientId || ctx.firmWide) return err("open the client the MIS is for: an MIS is laid out for the client open");
+        const chk = await checkMis(input, lookFromDb(ctx.exec, ctx.clientId));
+        if (chk.parseError) { if (misFails < 2) { misFails++; return err(JSON.stringify({ NOT_SHOWN: chk.parseError + "; call build_mis again" })); } return err(chk.parseError); }
+        if (figuresIn(chk.def).length) return err("the layout must not carry a figure");
+        const id = ++resultN;
+        extLabels.add("mis");
+        emit({ t: "result", id, tool: "build_mis", kind: "mis", title: "My MIS: " + chk.def.name, client: ctx.clientId, clientName: ctx.clientName, params: {}, columns: [], rows: [],
+          definition: chk.def, unknown: chk.unknown, problems: chk.problems, summary: String(input.summary || "").slice(0, 300) });
+        return okr(JSON.stringify({ shown: true, blocks: chk.def.blocks.length, not_in_books: chk.unknown.map((u) => ({ typed: u.name, where: u.where, closest: u.choices })), changed: chk.problems,
+          say: "FinCom shows this layout to the user with Open in My MIS; FinCom works out every figure from the books. Never state a figure. In two lines say what the report shows" + (chk.unknown.length ? ", and which names are not in the books (the user picks one in the builder)" : "") + "." }));
+      }
       if (name === "point_to_screen") {
         const s = String(input.screen || "");
         if (!SCREENS[s]) return err("unknown screen");
@@ -730,7 +778,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   emit({ t: "done", text, labels, unchecked, verdicts: verdicts.map((v) => ({ id: v.id, name: v.name, ai: v.value, fincom: v.fincom, status: v.status, text: v.text, tool: v.tool })),
     citations: { ok: cites.ok, dropped: cites.dropped }, cases, casesRemoved: ap.removed, links: Array.from(links, ([url, title]) => ({ url, title })), notice: notice ? notice.id : null,
     usage: { ...usage, calls }, route: "model", models, stopped: stopped || null });
-  const cacheable = !stopped && !cutShort && !noBooks && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
+  const cacheable = !stopped && !cutShort && !noBooks && !ctx.attachments.length && !files.length && !notice && !used.includes("prefiling_check") && !used.includes("record_figures") && !used.includes("draft_entries") && !used.includes("build_mis") && !entries && !misWanted && !act && !extHit && !used.some((n) => EXT_TOOLS.some((t) => t.firmWide && t.name === n));
   return { text, labels, tools: used, usage, calls, stopped, route: "model", models, costUsd: usd, feature: P.feature, fellThrough, cacheable };
 }
 

@@ -157,18 +157,16 @@ try:
         go(CL("goClient('dash'); doAct('tallyPanel');"), 900)
         pg.click("[data-panel-sent]"); W(1300)
         ok(E("S.homeTab") == "tally" and E("S.tallyTab") == "sent", "the Tally panel's Everything sent to Tally opens the same page")
-        # the Link to Tally card: whole in Client setup → Tally only
+        # 24-Oct-2026 (next-tally-one-page): a client's Tally is linked on the Tally page only; Client setup → Tally has one line,
+        # From Tally and the Overview none
         go(CL("S.step = null; S.tab = 'cotally'; render();"))
-        ok(pg.locator("#app .tlink .tlink-title").count() == 1, "Client setup → Tally: the client's Tally card")
+        ok(pg.locator("#app .tlink").count() == 0 and pg.locator("#app [data-tally-one]").count() == 1, "Client setup → Tally: one Tally line, no card")
+        pg.click("#app [data-tally-one-go]"); W(1000)
+        ok(E("S.homeTab") == "tally" and pg.locator("#app [data-tco-list=firm], #app [data-connect-guide=signin]").count() == 1, "  … its Choose on Tally page opens Companies in Tally")
         go(CL("goClient('books:import');"))
-        ok(pg.locator("#app .tlink-title").count() == 0 and pg.locator("#app [data-tally-link-line]").count() == 1, "From Tally: the link's one status line, not the card")
-        # 15-Oct-2026: a client not linked: the line points to the one place to link, Connect Tally (step 4)
-        pg.click("#app [data-tally-link-line] [data-open-connect]"); W(1000)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4] and pg.locator("#app [data-connect-guide]").count() == 1, "  … its Open Connect Tally opens the guide's step 4")
+        ok(pg.locator("#app .tlink, #app [data-tally-link-line], #app [data-tally-one]").count() == 0, "From Tally: no Tally link line")
         E("() => { const co = CO(); co.onbHide = true; }"); go(CL("goClient('dash');"))
-        ok(pg.locator("#app .tlink-title").count() == 0 and pg.locator("#app [data-tally-link-line]").count() == 1, "Overview (checklist folded): the link's one status line")
-        pg.click("#app [data-tally-link-line] [data-open-connect]"); W(1000)
-        ok(E("[S.homeTab, (S.tallyGuide || {}).step]") == ["tally", 4], "  … its Open Connect Tally opens the guide's step 4")
+        ok(pg.locator("#app [data-tally-link-line], #app [data-tally-one]").count() == 0, "Overview (checklist folded): no Tally link line (the title's chip)")
         E("() => { const co = CO(); co.onbHide = false; }"); go(CL("goClient('dash');"))
         ok(pg.locator("#app [data-tally-link-line]").count() == 0 and pg.locator("#app [data-onb-step=link]").count() == 1, "Overview (checklist open): its Link to Tally step says it, once")
         # the bridge card and the post log: nowhere else among the pages

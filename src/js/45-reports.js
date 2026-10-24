@@ -38,7 +38,7 @@ const RPT = {
     ["gst-r3b", "gst", "GSTR-3B", "Tax, credit and cash to pay, month by month", {gst: "r3b"}],
     ["gst-inreg", "gst", "Input register", "Every bill with its credit", {gst: "inreg"}],
     ["gst-r2b", "gst", "2B reconciliation", "Bills in Tally against 2B", {gst: "r2b"}],
-    ["gst-follow", "gst", "ITC follow-up", "Credit waiting on suppliers, carried month to month", {gst: "follow"}],
+    ["gst-itcfinal", "gst", "Final credit for 3B", "The ITC that goes into GSTR-3B table 4, from the decisions in 2B reconciliation", {gst: "itcfinal"}],
     ["gst-vault", "gst", "Returns filed", "The portal’s copy of every return", {gst: "vault"}],
     ["gst-g9", "gst", "GSTR-9 and 9C", "The annual return and reconciliation", {gst: "g9"}],
     // round 46: what falls due is the firm's Compliance page (every client's returns and payments); MIS keeps the figures by month

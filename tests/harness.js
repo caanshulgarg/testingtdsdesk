@@ -16,6 +16,9 @@ function load(htmlPath, names){
   // since GST2B.fromJson reads a 2B through them
   names = decl.filter(d => /^(m2b|M2B_)/.test(d.name) && !names.includes(d.name)).map(d => d.name).concat(names);
   // next-tds-interest2: TDSReg's allocation actions live in src/js/86 (TDSRegActs, put on TDSReg there): loaded with TDSReg
+  // the TDS check of 22-Oct-2026: TDS26Q's file builders live in src/js/92 (TDS26QFile, put on TDS26Q there): loaded with TDS26Q
+  const fi = names.indexOf("TDS26Q");
+  if (fi >= 0 && !names.includes("TDS26QFile") && decl.some(d => d.name === "TDS26QFile")) names = names.slice(0, fi + 1).concat(["TDS26QFile"], names.slice(fi + 1));
   const ri = names.indexOf("TDSReg");
   if (ri >= 0 && !names.includes("TDSRegActs") && decl.some(d => d.name === "TDSRegActs")) names = names.slice(0, ri + 1).concat(["TDSRegActs"], names.slice(ri + 1));
   const parts = names.map(n => {

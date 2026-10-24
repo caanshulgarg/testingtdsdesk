@@ -6,8 +6,8 @@
 //   each field where the FVU reads it: form, TAN, PAN, assessment year, financial year, quarter, the deductor's and the
 //   responsible person's details, the challan's BSR code, serial and date, the deductee's PAN, amounts, dates and codes
 "use strict";
-const {books, buildAll, FIRM, FY} = require("./fvu_books");
-const fails = [];
+const {books, buildAll, cases, FIRM, FY} = require("./fvu_books");
+const fails = [], J = JSON.stringify;
 function ok(c, w){ console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails.push(w); }
 const {x} = books(), all = buildAll(x);
 const recs = (t, type) => String(t || "").split("\r\n").filter(Boolean).map(l => l.split("^")).filter(f => f[1] === type);
@@ -111,6 +111,60 @@ ok(t24.some(l => /\^S16\^1\^1\^1\^16\(ia\)\^50000\.00\^$/.test(l)) && t24.some(l
   ctx.S.companies.t.tds26q = {deductorType: "F"}; const tset = cat();
   ok(t === "K" && tf === "F" && te === "?" && tset === "F" && x3.TDS26Q.firmDetails().deductorType === "F",
     "deductor category from the PAN: company K, firm F, an LLP asked; one set in the settings kept; the new forms' F as before (" + [t, tf, te, tset] + ")");
+}
+// next-fvu87 (24-Oct-2026): the cases of fvu_books.js cases(), as FVU 8.7 takes them (run_fvu87.py runs the FVU on them)
+{
+  const {ctx, x: x4, files} = cases();
+  const dd = (name) => recs(files[name].text, "DD"), by = (name, who) => dd(name).find(d => F(d, 13) === who);
+  const r2f = files["26R2.txt"];
+  ok(!r2f.error && F(by("26R2.txt", "Inop Carriers"), 10) === "AABFI1234N" && F(by("26R2.txt", "Inop Carriers"), 30) === "" && F(by("26R2.txt", "Inop Carriers"), 26) === "20.0000",
+    "26R2: an inoperative PAN is written as it is, at 20%, without remark C (FVU 8.7, T-FV-4323) (" + [10, 26, 30].map(n => F(by("26R2.txt", "Inop Carriers"), n)) + ")");
+  const nil = ["Road Kings", "Saver", "Small Agent"].map(p => by("26R2.txt", p));
+  ok(nil.every(Boolean) && nil.map(d => F(d, 30)).join("") === "TBY" && nil.every(d => F(d, 24) === "" && F(d, 14) === "0.00" && F(d, 23) !== ""),
+    "26R2: no TDS: remarks T, B, Y, the date paid kept and the date of deduction empty (FVU 8.7, T-FV-4257 / T-FV-4252) (" + nil.map(d => d && [F(d, 30), F(d, 23), F(d, 24)].join("/")) + ")");
+  ok(F(by("26R2.txt", "Quillfeather Weddings LLP"), 24) === "10072025", "26R2: a deduction with tax keeps its date of deduction");
+  // (the owner, 24-Oct-2026: a row FVU 8.7 takes no Y for is included, with no remark; not left out)
+  const bs = by("26R2.txt", "Big Supplier");
+  ok(bs && F(bs, 33) === "94Q" && F(bs, 30) === "" && F(bs, 24) === "" && F(bs, 14) === "0.00" && F(bs, 22) === "100000.00" && r2f.notes.some(n => /Big Supplier/.test(n) && /no remark/.test(n) && /T_FV_6210/.test(n)),
+    "26R2: 194Q below the limit with no TDS: in the file with no remark and no date of deduction (FVU 8.7 takes no Y for 194Q, T_FV_6210) (" + (bs && [33, 30, 24, 14].map(n => F(bs, n))) + ") " + J(r2f.notes));
+  ok(F(by("26R2.txt", "Anil Partner"), 33) === "94T" && r2f.problems.some(p => /194T/.test(p) && /T-FV-4301/.test(p)), "26R2: 194T: the file says FVU 8.7 has no code for it (T-FV-4301): " + J(r2f.problems));
+  const cd = recs(r2f.text, "CD")[0];
+  ok(F(cd, 5) === String(dd("26R2.txt").length) && F(cd, 5) === "7", "26R2: the challan counts its 7 deductee records (" + F(cd, 5) + ")");
+  const tp = by("27D2.txt", "Treaty Partner Inc"), rh = by("27D2.txt", "Royalty Holder SA");
+  ok(tp && F(tp, 10) === "AABCT1234T" && F(tp, 35) === "B" && F(tp, 36) === "16" && [39, 40, 41, 42].every(n => F(tp, n) === ""),
+    "27D2: a PAN at the treaty rate (B): no foreign address, e-mail, phone or tax ID (FVU 8.7, T-FV-4335 to 4338) (" + (tp && [10, 35, 36, 39, 40, 41, 42].map(n => F(tp, n))) + ")");
+  ok(rh && F(rh, 10) === "PANNOTAVBL" && F(rh, 30) === "C" && F(rh, 36) === "99" && [39, 40, 41, 42].every(n => F(rh, n) === ""),
+    "27D2: no PAN, remark C, nature 99: the details left out too (FVU 8.7, T-FV-4340 to 4343) (" + (rh && [10, 30, 36, 39].map(n => F(rh, n))) + ")");
+  ok(!files["26P3.txt"].error && F(recs(files["26P3.txt"].text, "CD")[0], 18) === "07032025", "26P3: the challan of 07-03-2025 (the year before) is in the file as tagged");
+  // Validate & file's FVU 8.7 checks (TDS26Q.fvu87Checks)
+  const ck = (q, form) => x4.TDS26Q.fvu87Checks(FY, q, form), k = (l, kk) => l.find(c => c.k === kk);
+  const c26 = ck("Q2", "26Q"), c27 = ck("Q2", "27Q");
+  ok(k(c26, "no-code") && k(c26, "no-code").level === "warn" && /Anil Partner/.test(k(c26, "no-code").words) && /T-FV-4301/.test(k(c26, "no-code").words), "Validate: 194T, a warning naming T-FV-4301 (" + J(k(c26, "no-code")) + ")");
+  ok(k(c26, "y-out") && k(c26, "y-out").level === "info" && /Big Supplier/.test(k(c26, "y-out").words) && /with no remark/.test(k(c26, "y-out").words) && !/left out/.test(k(c26, "y-out").words) && k(c26, "inop") && /Inop Carriers/.test(k(c26, "inop").words) && !k(c26, "b-sec"),
+    "Validate: the 194Q row written with no remark and the inoperative PAN said (info); no remark B error (" + J(c26.map(c => c.k)) + ")");
+  ok(k(c27, "contact") && /Treaty Partner Inc/.test(k(c27, "contact").words) && /Royalty Holder SA/.test(k(c27, "contact").words) && !k(c27, "nature"), "Validate 27Q: the details left out said for both, natures 16 and 99 in FVU 8.7's list (" + J(c27.map(c => c.k)) + ")");
+  ok(ck("Q1", "26Q").length === 0 && x4.TDS26Q.fvu87Checks("2026-27", "Q2", "26Q").length === 0, "Validate: nothing for a quarter with none of these, nor for 2026-27 (Form 140: FVU 1.2)");
+  // remark B where FVU 8.7 refuses it (194H), a nature not in its list, and Y on a 27Q deductee
+  ctx.S.books.pans["B Agent"] = "ABCPB1234H";
+  x4.TDSAdd.save({party: "B Agent", section: "194H", date: "20250809", credit: "20250809", paid: 9000, rate: 0, tds: 0});
+  x4.TDSDecl.set("B Agent", FY, {form: "15H", date: "20250401"});
+  ctx.S.books.nrInfo["Royalty Holder SA"].nature = "02";
+  x4.TDSAdd.save({party: "NR Small", section: "195", date: "20250725", credit: "20250725", paid: 1000, rate: 0, tds: 0, basis: "Y"});
+  const c26b = ck("Q2", "26Q"), c27b = ck("Q2", "27Q"), f26b = x4.TDS26Q.build(FY, "Q2", FIRM, "26Q"), f27b = x4.TDS26Q.build(FY, "Q2", FIRM, "27Q");
+  ok(k(c26b, "b-sec") && k(c26b, "b-sec").level === "error" && /B Agent \(194H\)/.test(k(c26b, "b-sec").words) && f26b.problems.some(p => /B Agent/.test(p) && /T_FV_4245/.test(p)),
+    "remark B on 194H: an error in Validate and a problem of the file (FVU 8.7, T_FV_4245) (" + J(k(c26b, "b-sec")) + ")");
+  ok(k(c27b, "nature") && k(c27b, "nature").level === "error" && /Royalty Holder SA \(02\)/.test(k(c27b, "nature").words) && f27b.problems.some(p => /nature of remittance 02/.test(p)),
+    "27Q nature 02 (not in FVU 8.7's list): an error in Validate and a problem of the file (T-FV-4312)");
+  ok(!recs(f27b.text, "DD").some(d => F(d, 13) === "NR Small"), "27Q: a deductee with no TDS and remark Y is not written (FVU 8.7 takes no Y on 27Q, T-FV-4280)");
+}
+// next-fvu87: the challan of an earlier year, in words that say what each FVU does (tdsmatch's tmCannot, shared with the app)
+{
+  const {x: x5} = books();
+  const why = (rd, cd) => x5.tmCannot({date: cd, minor: "200"}, {date: rd}, "20261024");
+  const w1 = why("20250510", "20250307"), w2 = why("20250510", "20240307"), w3 = why("20260510", "20260407"), w4 = why("20260510", "20250307");
+  ok(/year before/.test(w1) && /FVU 8\.7/.test(w1) && !/T-FV-3076/.test(w1), "a 2025-26 deduction on a 2024-25 challan: refused by FinCom, the words say FVU 8.7 itself takes the year before (" + w1 + ")");
+  ok(/T-FV-3166/.test(w2), "a 2025-26 deduction on a 2023-24 challan: FVU 8.7 refuses it (T-FV-3166) (" + w2 + ")");
+  ok(w3 === "" && /T-FV-3076/.test(w4), "2026-27: a challan of the year is taken; one of 2025-26 is refused by FVU 1.2 (T-FV-3076) (" + w4 + ")");
 }
 console.log(fails.length ? "\n" + fails.length + " FAILED" : "\nall passed");
 process.exit(fails.length ? 1 : 0);

@@ -7,3 +7,8 @@ Object.assign(globalThis, TM);
 import "../../../src/js/86-tds-match.js";
 import "../../../src/js/87-pan-check.js";
 import "../../../src/js/88-tds-added.js";
+import "../../../src/js/89-tds-adjust.js";
+import "../../../src/js/91-tds-audit.js";
+import "../../../src/js/92-tds-file.js";
+import "../../../src/js/93-tds-autoplace.js";
+import "../../../src/js/94-tds-remarks.js";

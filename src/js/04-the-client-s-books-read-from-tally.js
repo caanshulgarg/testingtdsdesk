@@ -330,8 +330,28 @@ const Books = {
     let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
     return r;
   },
+  // the party's line(s) of an entry: the receivable on a sale, the payable on a bill. The owner's reconciliation of
+  // 22-Oct-2026 (a client's GSTR-1 at 20.52 crore against 8.64 crore filed): Tally keeps the buyer's name (the voucher's
+  // party) apart from the ledger debited ("The Oriental Insurance Co Ltd CG" on the invoice, "The Oriental Insurance
+  // Company Limited-CG" the ledger), so the party line is known by its place, not by that name alone: the ledger named as
+  // the party, and any other line on the party's side (opposite the tax; with no tax, a sale's debit or a bill's credit)
+  // whose ledger sits under Sundry Debtors or Sundry Creditors, or that carries the bill-wise allocation. Never a tax,
+  // TDS, bank or round-off line.
+  partyEnts(v){
+    const ent = v.ent || [], k = e => this.ledgerOf(e.l).kind, nm = ent.find(e => e.l === v.party);
+    let tax = 0;
+    ent.forEach(e => { if (/^(gst|gst_common|ineligible)$/.test(k(e))) tax += e.a; });
+    // the party's side: -1 debited, 1 credited
+    const side = Math.abs(tax) > 0.004 ? -Math.sign(tax) : nm ? (nm.a < 0 ? -1 : 1)
+      : /CREDIT NOTE/i.test(v.type) ? 1 : /DEBIT NOTE/i.test(v.type) ? -1 : this.isSale(v) ? -1 : this.isPurchase(v) ? 1 : 0;
+    return ent.filter(e => e.l === v.party || (side && Math.sign(e.a) === side && !k(e) && this.sundry(e)));
+  },
+  // a party's line by its place: its ledger under Sundry Debtors or Sundry Creditors, or a bill-wise allocation on it
+  // (partyEnts; TDS.led, src/js/09)
+  sundry(e){ return (e.b && e.b.length) || ledGroupPath(S.books || {}, e.l).some(g => /^\s*sundry\s+(debtors|creditors)\s*$/i.test(g)); },
   linesNow(v){
     const out = {taxable: 0, tax: {CGST: 0, SGST: 0, IGST: 0, CESS: 0}, tds: [], tdsPaid: [], tcs: [], tcsPaid: [], party: 0, rates: {}, roundoff: 0}, vals = [];
+    const pe = new Set(this.partyEnts(v));
     v.ent.forEach(e => {
       const m = Books.ledgerOf(e.l), amt = Math.abs(e.a), sign = e.a < 0 ? -1 : 1;
       if (m.kind === "ineligible"){ out.ineligible = r2((out.ineligible || 0) + amt); out.taxable = r2(out.taxable + amt); return; }
@@ -348,11 +368,15 @@ const Books = {
         if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) out.tdsPaid.push({ledger: e.l, section: "", amount: amt});   // paid from the bank
         return;
       }
-      if (m.kind === "tds_payable"){
+      // the TDS check of 22-Oct-2026, H5: a pay head marked "Not TDS" (payTds false) is none, unless its name says TDS or
+      // income tax (Leads' "TDS 192B" stays the salary TDS; its "ESIC Employee Contribution" does not)
+      if (m.kind === "tds_payable" && !(m.payTds === false && !/\bTDS\b|INCOME[\s-]*TAX/i.test(e.l))){
         // the month-end move of each section's TDS into a clearing account is neither a deduction nor a payment
         if (e.a < 0 && v.ent.some(z => Books.ledgerOf(z.l).kind === "tds_clearing" && z.a > 0)) return;
         if (e.a > 0) out.tds.push({ledger: e.l, section: m.section, rate: m.rate, amount: amt});   // credited: tax deducted
-        else if (!v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")) return;                     // debited without the bank: an adjustment, not a payment
+        // debited without the bank: an adjustment, not a payment; against a party's or an expense's credit, the deduction
+        // undone (H4: TDS.unDo)
+        else if (!v.ent.some(z => Books.ledgerOf(z.l).kind === "bank")){ if (v.ent.some(z => z.a > 0 && !Books.ledgerOf(z.l).kind)) (out.tdsBack = out.tdsBack || []).push({ledger: e.l, section: m.section, amount: amt}); }
         else out.tdsPaid.push({ledger: e.l, section: m.section, amount: amt});                      // debited: tax paid over
         return;
       }
@@ -364,7 +388,7 @@ const Books = {
         return;
       }
       if (m.kind === "tax_other" || m.kind === "tcs_receivable") return;
-      if (e.l === v.party){ out.party = amt; return; }
+      if (pe.has(e)){ out.party = r2(out.party + amt); return; }
       if (m.kind === "bank" || m.kind === "tds_receivable") return;
       out.taxable = r2(out.taxable + amt);
       if (e.r){ const key = String(r2(e.r * 2)); out.rates[key] = r2((out.rates[key] || 0) + amt); }
@@ -470,11 +494,20 @@ const Books = {
     if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
     return this.byContent(v, /^sales accounts$/i, false);
   },
+  // books-speed (24-Oct-2026): the books of the last MEM clients opened in this page are kept in memory as last saved or
+  // read here, so a client opened again in the same session (A -> B -> A) is not read from this browser's store again
+  // (Leads: 4,414 entries, about 3 MB, read and copied on each opening). ver: this page's saves of each client's books
+  // (the due list on Today works a client out again only when its books were saved since)
+  MEM: 3, mem: new Map(), ver: {},
+  remember(cid, data){ this.mem.delete(cid); if (data) this.mem.set(cid, data); while (this.mem.size > this.MEM) this.mem.delete(this.mem.keys().next().value); },
   async save(cid, data){
+    this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
     await IDBStore.write([["books:" + cid, data]]);
   },
   async load(cid){
-    try { return await IDBStore.get("books:" + cid); } catch (e){ return null; }
-  }
+    if (this.mem.has(cid)){ const d = this.mem.get(cid); this.remember(cid, d); return d; }
+    try { const d = await IDBStore.get("books:" + cid); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
+  },
+  forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 };
 

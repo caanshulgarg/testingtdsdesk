@@ -22,8 +22,12 @@ with sync_playwright() as p:
     # 4. linked in the cloud, the Tally computer off: the step is done
     step = lambda: pg.evaluate("(c) => ONB.steps(S.companies[c]).find(s => s.id === 'link').done", cid)
     ok(step() is False, "4. not linked anywhere: Link the Tally company is still to do")
-    pg.evaluate("(c) => { TCloud.st[c] = {books: [{book: 'bk1', from: '2025-04-01', company: 'ZZ LINK CO'}], at: Date.now()}; Bridge.on = () => false; }", cid)
-    ok(step() is True, "4. linked in Books in the cloud while the Tally computer is off: the step is ticked")
+    # 24-Oct-2026 (next-tally-one-page): linked means the cloud's link (tally_companies), whatever computer is on; a copy of
+    # the books kept here alone does not tick it
+    pg.evaluate("(c) => { TCloud.st[c] = {books: [{book: 'bk1', from: '2025-04-01', company: 'ZZ LINK CO'}], at: Date.now()}; Bridge.on = () => false; TLight.st.loaded = true; TLight.st.cos = []; TCloud.pane.companies = []; }", cid)
+    ok(step() is False, "4. a copy of the books kept here, no link in the cloud: still to do")
+    pg.evaluate("(c) => { TLight.st.cos = [{company: 'ZZ LINK CO', client_id: c, device_id: 'off-pc', gstin: '', last_seen: '2026-10-01T10:00:00Z'}]; }", cid)
+    ok(step() is True, "4. linked in the cloud while the Tally computer is off: the step is ticked")
     pg.evaluate("(c) => { delete TCloud.st[c]; TLight.st.cos = [{client_id: c, company: 'ZZ LINK CO'}]; }", cid)
     ok(step() is True, "4. and from the cloud's list of linked companies too")
     # 5. Transactions at 1,050 px: a fade and an arrow at the right edge while columns wait; the arrow scrolls; at the end it goes
@@ -79,12 +83,18 @@ with sync_playwright() as p:
       TCloud.pane = Object.assign(TCloud.pane || {}, {devices: [], companies: [{company: 'ZZ LINK CO', client_id: c, gstin: '', last_seen: new Date().toISOString()}], at: Date.now(), busy: '', err: ''});
       TCloud.refreshPane = async () => {}; TCloud.status = async () => [{book: 'bk1', from: '2025-04-01'}];
       TCloud.restAll = async (q) => q.startsWith('tally_groups') ? Array.from({length: 28}, (_, i) => ({name: 'G' + i})) : Array.from({length: 300}, (_, i) => ({parent: i < 290 ? 'Sundry Debtors' : ''}));
-      TCloud.rpc = async (f, a) => { window.__asked = [f, a]; return {ok: true}; }; Bridge.on = () => false; goSettings('tcloud'); }""", cid)
-    pg.wait_for_timeout(800)
-    ok(pg.locator('button:has-text("Send ledgers and groups now")').count() == 1, "Books in the cloud: “Send ledgers and groups now” beside the linked company")
-    pg.click('button:has-text("Send ledgers and groups now")'); pg.wait_for_timeout(2500)
-    ok(pg.evaluate("window.__asked") == ["tally_want_update", {"p_client": cid}], "from another computer it asks the Tally computer through the cloud, as Update now does")
-    ok("In the cloud: 28 groups · 290 of 300 ledgers with a group" in pg.inner_text("#app"), "and shows what is in the cloud: groups, and ledgers with a group")
+      TLight.st.cos = TCloud.pane.companies; TLight.st.at = Date.now(); TLight.refresh = () => Promise.resolve();   // the companies as set here, not read again
+      window.__allAsked = []; TCloud.rpc = async (f, a) => { window.__asked = [f, a]; window.__allAsked.push([f, a]); return {ok: true}; }; Bridge.on = () => false; S.tallyGuide = {}; navHome('tally'); }""", cid)
+    pg.wait_for_timeout(1200)
+    # 24-Oct-2026 (next-tally-one-page): the support tools are on the company's row of the Tally page (⋯): Sync master is
+    # the "Send ledgers and groups now"; What is in the cloud? says the groups and the ledgers with a group
+    row = '#app [data-tco-list=firm] [data-tco-row="ZZ LINK CO"]'
+    pg.click(row + " [data-tco-more] summary"); pg.wait_for_timeout(300)
+    ok(pg.locator(row + ' button:has-text("Send ledgers and groups now")').count() == 1, "the linked company's row: ⋯ Sync master, “Send ledgers and groups now”")
+    pg.click(row + ' button:has-text("Send ledgers and groups now")'); pg.wait_for_timeout(2500)
+    ok(["tally_want_update", {"p_client": cid}] in pg.evaluate("window.__allAsked"), "from another computer it asks the Tally computer through the cloud, as Update now does (%s)" % pg.evaluate("window.__allAsked")[:3])
+    pg.click(row + " [data-tco-more] summary"); pg.wait_for_timeout(300); pg.click(row + " [data-tco-cloud-check]"); pg.wait_for_timeout(1500)
+    ok("In the cloud: 28 groups · 290 of 300 ledgers with a group" in pg.inner_text("#app"), "and What is in the cloud? shows the groups, and ledgers with a group")
     # "Read the kept day books again" (owners): FinCom's cloud reads month after month until there is no next
     pg.evaluate("""() => { window.__months = []; TCloudUp.post = async (body, who) => { if (body.kind === 'reparse_queue') throw new Error('unknown kind');   /* a cloud without the queue (fast-sync): read again as before */
       window.__months.push(body.month || 'first'); const all = ['202504', '202505', '202506'];

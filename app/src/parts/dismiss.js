@@ -22,7 +22,7 @@ const openMenus = () => Array.from(document.querySelectorAll(MENUS)).filter((d) 
 function swallowNextClick() { swallowUntil = Date.now() + 700; }
 function inside(el, t) { return !!(el && t && (el === t || (el.contains && el.contains(t)))); }
 // something above every overlay (the legacy confirm box, the toast) or inside a portal the overlay owns
-function above(t) { return !!(t && t.closest && t.closest("#confirmBox, #toast, [data-overlay-keep]")); }
+function above(t) { return !!(t && t.closest && t.closest("#confirmBox, #toast, [data-overlay-keep], [data-cf-pop], .datebox-pop")); }
 function confirmOpen() { const c = typeof document !== "undefined" && document.getElementById("confirmBox"); return !!(c && c.style && c.style.display === "flex"); }
 
 async function ask(top) {
@@ -62,7 +62,8 @@ function onPointerUp() { if (swallowUntil) setTimeout(() => { swallowUntil = 0; 
 // the older pop-ups that handle their own Esc (a column's filter, a grid filter, the suggestions under a field)
 function legacyPop() {
   const ac = document.getElementById("acBox");
-  return !!(document.querySelector("#colpop, #gfpop") || (ac && ac.offsetParent !== null && ac.childElementCount));
+  // and a TDS column's funnel (tds/ColF.jsx) or a date box's calendar: its Esc closes it only, the panel under it stays
+  return !!(document.querySelector("#colpop, #gfpop, [data-cf-pop], .datebox-pop") || (ac && ac.offsetParent !== null && ac.childElementCount));
 }
 function onKey(ev) {
   if (ev.key !== "Escape" || confirmOpen() || legacyPop()) return;
@@ -102,7 +103,8 @@ function onBack() {
 }
 function open(entry) {
   stack.push(entry);
-  if (PHONE() && entry.opts.back !== false && typeof history !== "undefined") {
+  // a side panel (DetailDrawer's Panel: back "always") takes the step on a computer too
+  if ((PHONE() || entry.opts.back === "always") && entry.opts.back !== false && typeof history !== "undefined") {
     try { history.pushState({ fcOverlay: entry.id }, "", location.href); entry.pushed = true; } catch (e) { /* no step: Back leaves as before */ }
   }
 }

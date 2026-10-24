@@ -10,7 +10,7 @@ let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + 
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
   Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t"; ctx.S.data = {};
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED", choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}}); ctx.S.coId = "t"; ctx.S.data = {};
   x.LedMaster.refresh(b);
   const t0 = Date.now(), run = x.Audit.run("20250401", "20260331", "test");
   console.log("ran in " + (Date.now() - t0) + " ms, " + run.vouchers + " vouchers; notes: " + run.notes.join(" | ") + (run.errors.length ? "\nERRORS: " + run.errors.join(" | ") : ""));

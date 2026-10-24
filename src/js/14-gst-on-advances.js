@@ -3,7 +3,12 @@
 /* ================================================================== */
 const GSTAdv = {
   RATES: [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 18, 28, 40],
-  ready(){ const b = S.books; return !!(b && b.meta && b.meta.bills); },
+  // the owner, 22-Oct-2026: "don't treat advance unless we say": 11A/11B (GSTR-1, 3B 3.1(a), GSTR-9, the JSON and Excel,
+  // the checks) only for a client whose "Show advances in GST returns" is on: co.choices.advGst = {value: "on" | "off",
+  // state, by, at, prev} (choiceConfirm, from the Advances page or Client setup → GST: app/src/parts/AdvOptIn.jsx). Off
+  // unless turned on. Every reader of advances asks ready() first (month() gives nothing without it), so off reads as no
+  // advances at all; written inline, as legacy.js is at its size budget (tests/run_stability.py)
+  ready(){ const b = S.books; return !!(b && b.meta && b.meta.bills) && (((CO() || {}).choices || {}).advGst || {}).value == "on"; },
   nearRate(x){ let best = 18, d = 1e9; this.RATES.forEach(r => { if (Math.abs(r - x) < d){ d = Math.abs(r - x); best = r; } }); return d < 0.6 ? best : r2(x); },
   // a ledger is a customer when it sits under Sundry Debtors; without the masters, when it was billed
   isCustomer(name, billed){
@@ -29,10 +34,10 @@ const GSTAdv = {
       const L = Books.lines(v), tax = L.tax.CGST + L.tax.SGST + L.tax.IGST;
       const supply = v.supply || ((v.hsn || []).some(h => /^99/.test(h)) ? "Services" : (v.hsn || []).length ? "Goods" : "");
       if (supply) firstSupply[supply]++;
-      const list = billed.get(v.party) || [];
-      list.push({date: v.date, rate: L.taxable ? this.nearRate(tax / L.taxable * 100) : null, reg: GSTR.regOf(v), gstin: (v.gstin || "").toUpperCase(),
-        pos: v.pos || "", supply, cls: Books.supplyClass(v)});
-      billed.set(v.party, list);
+      // by the buyer's name and by the party ledger (the receipt names the ledger; review of 22-Oct-2026: the two differ)
+      const h = {date: v.date, rate: L.taxable ? this.nearRate(tax / L.taxable * 100) : null, reg: GSTR.regOf(v), gstin: (v.gstin || "").toUpperCase(),
+        pos: v.pos || "", supply, cls: Books.supplyClass(v)};
+      new Set([v.party].concat(Books.partyEnts(v).map(e => e.l))).forEach(k => billed.set(k, (billed.get(k) || []).concat([h])));
     });
     const refs = new Map(), pieces = [];
     const take = (r, amount, ym, date, by, how) => {
@@ -49,11 +54,13 @@ const GSTAdv = {
       const sale = Books.isSale(v) && !/CREDIT NOTE/i.test(v.type);
       const refund = /PAYMENT/i.test(v.type) || /CREDIT NOTE/i.test(v.type);
       if (!rcpt && !sale && !refund) return;
-      const ym = GSTR.ym(v.date);
+      const ym = GSTR.ym(v.date), pe = sale ? new Set(Books.partyEnts(v)) : null;
       v.ent.forEach((e, ei) => {
         if (!e.b) return;
         if (rcpt && !this.isCustomer(e.l, billed)) return;
-        if (sale && e.l !== v.party) return;
+        // the invoice's bills are on its party line, whatever the buyer's name on it (review of 22-Oct-2026: an invoice to
+        // "HDFC Life Insurance Company" debits "HDFC Life Insurance Company-DL"; its receipt before it stayed in 11A)
+        if (sale && !pe.has(e)) return;
         e.b.forEach((x, bi) => {
           const name = x[0], type = x[1], amt = x[2];
           const k = e.l + "|" + (type === "On Account" ? "\u0000on-account" : name);
@@ -116,11 +123,11 @@ const GSTAdv = {
       pos: p.pos, reg: p.reg, received: amount}, this.taxOf(amount, p.rate, p.pos, p.reg), extra || {});
   },
   // one month: 11A is what came in and was not billed in the same month; 11B is an earlier advance billed now
+  // (without ready(): no pieces, so every list empty and every sum nil; the result's ready is not read by any caller)
   month(ym, reg){
     const zero = {n: 0, taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0, received: 0};
-    if (!this.ready()) return {ready: false, at: [], txpd: [], atSum: zero, txpdSum: zero, net: zero, untaxed: [], open: [], unmatched: [], unmatchedSum: zero};
     const months = ym ? GSTR.expand(ym) : GSTR.months();
-    const {pieces, billed} = this.build();
+    const {pieces, billed} = this.ready() ? this.build() : {pieces: []};
     const at = [], txpd = [], untaxed = [], unmatched = [];
     // review of 02-Oct-2026: an advance is adjusted in 11B only against an invoice to that customer in the same return
     // period (the month, or the quarter for a QRMP filer). One marked as adjusted by hand in a period with no invoice

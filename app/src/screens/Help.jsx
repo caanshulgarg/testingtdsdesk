@@ -8,6 +8,7 @@
 // files, rtext, rfiles, rint, dstat, dpri, dfirm, dq, busy).
 import Loading from "../parts/Loading.jsx";
 import ListTable from "../parts/ListTable.jsx";
+import { Calls } from "../calls/launch.js";
 
 const Pill = ({ kind, v }) => {
   const lab = kind === "st" ? (SUP.ST[v] || v) : kind === "pri" ? ((SUP.PRI.find((p) => p[0] === v) || [, v])[1]) : kind === "sla" ? ({ track: "on track", risk: "at risk", late: "late", met: "met" })[v] : v;
@@ -30,7 +31,7 @@ function Guide() {
     {hits && !hits.length && <p className="note">{"Nothing in the guide for “" + q + "”."}</p>}
     {groups.map(([a, xs]) => <div key={a} style={{ display: "contents" }}><h4 className="sp-area">{a}</h4>{xs.map((x) => <button key={x.k} className={"sp-art" + (x.k === s.art ? " on" : "")} onClick={() => supArt(x.k)}>{x.t}</button>)}</div>)}
   </div><div className="sp-gright">{art ? <Article x={art} /> : <p className="note">Choose a topic on the left, or search.</p>}
-    <div className="sp-still"><b>Did not find the answer?</b> {SUP.on() ? <Sup a="new">Raise a ticket</Sup> : <span className="note">Sign in to the firm account to raise a ticket.</span>}</div></div></div>;
+    <div className="sp-still"><b>Did not find the answer?</b> {SUP.on() ? <><Sup a="new">Raise a ticket</Sup>{(Cloud.st.role === "owner" || Cloud.st.role === "staff") && <> or <button className="btn small" onClick={() => Calls.start({ kind: "help", title: "Help call" })} data-help-call="">Start help call</button></>}</> : <span className="note">Sign in to the firm account to raise a ticket.</span>}</div></div></div>;
 }
 
 // the tickets: the one list table (spec K6): updated (date), ticket no., status, then the rest; a click on a row opens it

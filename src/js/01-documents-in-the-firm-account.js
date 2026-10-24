@@ -151,7 +151,9 @@ const Store = {
     let db = null;
     try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch(e){ db = null; }
     if (db){ this.db = db; S.storeKind = "db"; return; }
-    try { if (typeof indexedDB !== "undefined" && await IDBStore.open()){ S.storeKind = "idb"; return; } } catch (e){}
+    // books-speed: this browser's database is waited for up to 15 s (Safari can be slow to open it right after a publish;
+    // it was given up after 5 s and the whole page then ran without its copy)
+    try { if (typeof indexedDB !== "undefined" && await IDBStore.wait(15000)){ S.storeKind = "idb"; return; } } catch (e){}
     try { localStorage.setItem("tdsdesk:probe", "1"); localStorage.removeItem("tdsdesk:probe"); S.storeKind = "local"; }
     catch(e){ S.storeKind = "memory"; }
   },
@@ -529,7 +531,9 @@ function plainText(s){ const p = plainMessage(s); return p ? p.text.replace(/\.$
 function toast(msg, o){
   const t = document.getElementById("toast"); if (!t) return;
   let s = msg == null ? "" : String(msg);
-  if (o && o.background){ S.quiet = {text: s, at: Date.now()}; if (typeof render === "function") try { render(); } catch (e){} return; }
+  // books-speed: the quiet line is the sidebar's (React): drawn with the page's figures as they are (renderTop, memoKeep),
+  // not by working out the open client's TDS figures again for each note
+  if (o && o.background){ S.quiet = {text: s, at: Date.now()}; try { if (typeof renderTop === "function" && window.FinComReact) renderTop(); else if (typeof render === "function") render(); } catch (e){} return; }
   if (o && o.stay) toastStay = {msg, o};
   else if (toastStay && t.dataset.stay === "1") toastStay = Object.assign({}, toastStay);   // shown again after this one
   t.dataset.stay = o && o.stay ? "1" : "";
@@ -4156,9 +4160,16 @@ function refreshStats(cid){
     dups: v.filter(e => e.status === "duplicate").length
   };
   const old = co.stats || {};
-  if (["drafts","check","waiting","ready","attention","inTally","tdsFy","invoicesFy","records","dups"].some(k => old[k] !== st[k])){
-    co.stats = Object.assign(st, {fy, updatedAt: new Date().toISOString()});
-    Store.saveCompany(co);
+  // books-speed (24-Oct-2026): "check", "ready" and "attention" depend on what this computer has (bills being read, the
+  // ledger list, the bank lines, Tally's replies), so two computers count them differently; each saved its own count
+  // whenever it differed from the other's, and the client's setup went back and forth all day (3,774 saves of one client
+  // on staging, each drawn again on every open computer). They are kept here; the setup is saved when a count that
+  // comes from the bills themselves changed (the same on every computer)
+  const shared = ["drafts","waiting","inTally","tdsFy","invoicesFy","records","dups"];
+  if (shared.concat(["check","ready","attention"]).some(k => old[k] !== st[k])){
+    const send = old.fy !== fy || shared.some(k => old[k] !== st[k]);
+    co.stats = Object.assign(st, {fy, updatedAt: send ? new Date().toISOString() : old.updatedAt || new Date().toISOString()});
+    if (send) Store.saveCompany(co);
   }
 }
 
@@ -4341,6 +4352,18 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => requ
 // build 190: a figure worked out from the whole books (TDS rows, say) is worked out once per drawing of the page, not
 // each time a part of the page asks for it (the TDS page asked 15 times). Outside a drawing it is always fresh
 let RENDER_GEN = 0, IN_RENDER = 0;
+// books-speed (24-Oct-2026, Leads at 4x CPU: each drawing of a TDS page 500-800 ms): the top bar's own news (Saving…,
+// Saved 14:05, offline, back online), a colleague's change to another client and the like drew the whole page again and
+// worked out every figure from the 4,414 entries again. BOOKS_REV: moved by every save of the books (saveBooks), so a change
+// to the books is never missed; LAST_DRAW: the drawing whose figures are held. memoKeep(fn) draws with the figures of the
+// last drawing when the open books, their saves and the client are the same as then (else as memoScope: worked out again)
+let BOOKS_REV = 0, LAST_DRAW = null;
+function drawStamp(){ LAST_DRAW = {gen: RENDER_GEN, books: S.books, rev: BOOKS_REV, co: S.coId}; }
+function memoKeep(fn){
+  const d = LAST_DRAW;
+  if (IN_RENDER || !d || d.gen !== RENDER_GEN || d.books !== S.books || d.rev !== BOOKS_REV || d.co !== S.coId) return memoScope(fn);
+  IN_RENDER++; try { return fn(); } finally { IN_RENDER--; }
+}
 function perRender(o, key, fn){
   if (!IN_RENDER) return fn();
   const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
@@ -4349,9 +4372,9 @@ function perRender(o, key, fn){
 }
 // a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
 // 48 times in one MIS run, and the TDS rows 18 times
-function memoScope(fn){ if (!IN_RENDER) RENDER_GEN++; IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
+function memoScope(fn){ if (!IN_RENDER){ RENDER_GEN++; drawStamp(); } IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
-  RENDER_GEN++; IN_RENDER++;
+  RENDER_GEN++; drawStamp(); IN_RENDER++;
   try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the

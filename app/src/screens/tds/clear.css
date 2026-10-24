@@ -9,6 +9,9 @@
 .rt-prob { border: 0; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--warn-soft); color: var(--warn); }
 .rt-prob.bad { background: var(--bad-soft); color: var(--bad); }
 .rt-head .more-btn { min-width: 32px; justify-content: center; }
+/* next-tds-excel2: the return's Download Excel / Upload Excel beside ⋯; on a narrow screen in ⋯ only */
+.rt-xl { display: inline-flex; gap: 6px; }
+@media (max-width: 760px) { .rt-xl { display: none; } }
 /* round 94: the steps as one row of underlined tabs (Arc's tab look, arc-clean.css §1, the same as other pages' tab rows),
    kept in view under the header as the page scrolls; the count muted after the label; a dot for a step with an error
    (red) or a warning (amber) */
@@ -325,6 +328,8 @@ table.rt-rows > tbody > tr > td, table.rt-rows > thead > tr > th { padding-left:
 .rt { --rt-bottom: var(--bottom-banner-h, 0px); }
 @media (max-width: 600px) { body:has(.side:not(.hidden)) .rt { --rt-bottom: calc(var(--bottom-banner-h, 0px) + 64px + env(safe-area-inset-bottom, 0px)); } }
 .wd-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 4px; }
+/* next-tds-autoplace: the one line a "Place automatically" leaves */
+.wd-ap { margin: 2px 0 6px; }
 .wd-sel { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--ink); }
 .wd-sel select { min-width: 260px; max-width: 100%; font-size: 14px; font-variant-numeric: tabular-nums; }
 .wd-chw { font-size: 13px; color: var(--ink); }
@@ -439,3 +444,14 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 .dreg-to { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dreg-to select { max-width: 260px; }
 .dreg-table .dt-flag, .dreg-table .dreg-how, .dreg-table .dreg-vl, .dreg-table td[data-dreg-ch] { white-space: nowrap !important; margin-left: 0; }
+
+/* next-tds-autoplace: the deductee's declarations (Deductees › a deductee) */
+.dee-decl { border: 1px solid var(--border, var(--rule)); border-radius: 8px; padding: 8px 10px 10px; margin: 0 0 10px; min-width: 0; }
+.dee-decl legend { font-size: 12px; color: var(--text-secondary, var(--muted)); padding: 0 4px; }
+.dee-chk { display: flex; gap: 8px; align-items: flex-start; margin: 2px 0 6px; }
+.dee-chk small { display: block; }
+/* next-fix-challan-over: where a challan is used beyond its tax, one red line across the footer; the grid's other returns */
+.wd-foot .wd-over-line { flex-basis: 100%; color: var(--bad); font-weight: 600; }
+.wd-foot .wd-over-line .linkbtn, .chg-table .chg-also .linkbtn { font-weight: 600; }
+.chg-table .chg-also { font-size: 12px; white-space: normal; line-height: 1.3; }
+.chg .chg-over-line { color: var(--bad); font-weight: 600; }

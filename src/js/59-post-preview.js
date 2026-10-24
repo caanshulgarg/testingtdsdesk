@@ -904,7 +904,8 @@ const PostOwner = {
 // one line on the page after a check or a posting ("Already in Tally (voucher no. …)"): S.postNote
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 
-function goChooseTallyCompany(){ Smart.setReturn(); S.step = null; S.arm = null; S.tab = "cotally"; render(); window.scrollTo(0, 0); }
+// 24-Oct-2026 (next-tally-one-page): the posting company is chosen on the Tally page (its row's ⋯ Post entries here)
+function goChooseTallyCompany(){ Smart.setReturn(); const co = CO(); S.step = null; S.arm = null; if (co && tallyLinkOf(co).state !== "unlinked"){ S.tallyGuide = {}; openTallyFor(co.id); } else openConnectTally(4, co ? co.id : ""); window.scrollTo(0, 0); }
 function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
 const PV_ROLE = {party: "party", expense: "expense", gst: "gst", "rcm-in": "gst", "rcm-out": "gst", tds: "tds"};
@@ -1116,7 +1117,7 @@ async function autoPostTo(co, force){
   if (!one.gstins.has(mine) || one.gstins.size !== 1 || co.postTo) return false;
   choiceGuess(co, "postTo", one.name, "the one Tally company linked, same GSTIN " + mine);
   Store.saveCompany(co);
-  toast(co.name + ": " + one.name + " is the one Tally company linked (same GSTIN " + mine + "). Confirm it in Client setup \u2192 Tally before posting.");
+  toast(co.name + ": " + one.name + " is the one Tally company linked (same GSTIN " + mine + "). Confirm it on the Tally page (its row: Post entries here) before posting.");
   render();
   return true;
 }

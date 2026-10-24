@@ -12,17 +12,36 @@
 // "Needs fixing" (the deductions' filter) uses the problems the return already finds: no valid PAN, a PAN inoperative,
 // the rate question (Certs.issues), not against a challan, the payment code to confirm (TDS26Q.payCodeRows), and a
 // section FinCom does not know. No new tax rule here.
+// next-tds-excel (24-Oct-2026; the owner: "prepare this type of download and upload return .. in all types of TDS return..
+// user can add or delete or modify the details"): the whole return's Excel (app/src/lib/tdsXlsx.js, TDSX) keeps what it
+// changes here too, with three more fields: basis (the remark B, T or Y of a deduction with no tax), code (27EQ's
+// collection code of one collection) and out ({by, at, reason}: the deduction taken out of the return, kept in the books
+// and in this store: TDS.allRowsNow, tcsRowsNow and salaryRowsNow leave it out, wrapped below). The corrections now reach
+// 27EQ's collections and 24Q's salary rows too (they were 26Q's and 27Q's alone).
 const TDSEdit = {
-  FIELDS: ["pan", "section", "rate", "paid", "tds", "dcode", "cert", "remarks", "date", "credit"],
-  WORDS: {party: "Deductee name", pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan", date: "Date of deduction", credit: "Date paid or credited"},
+  FIELDS: ["pan", "section", "rate", "paid", "tds", "dcode", "cert", "remarks", "date", "credit", "basis", "code"],
+  WORDS: {party: "Deductee name", pan: "PAN", section: "Section", rate: "Rate", paid: "Amount paid", tds: "TDS", dcode: "Deductee code", cert: "Lower-deduction certificate", remarks: "Remarks", challan: "Challan", date: "Date of deduction", credit: "Date paid or credited",
+    basis: "Remark (no tax)", code: "Collection code", out: "Taken out of the return"},
   all(){ return (S.books && S.books.tdsEdits) || {}; },
   // the deductee code as the return file has carried it: 01 a company (the PAN's fourth letter C), else 02
   codeOf(pan){ return Certs.validPan(pan) && /^[A-Z]{3}C/.test(String(pan).toUpperCase()) ? "01" : "02"; },
+  // taken out of the return (kept in the books): by its id, or the row it is a part of (a split)
+  isOut(r){ const e = this.all()[r.splitOf || r.id]; return !!(e && e.f && e.f.out); },
+  outList(){ const a = this.all(); return Object.keys(a).filter(k => a[k] && a[k].f && a[k].f.out).map(k => Object.assign({id: k}, a[k].f.out)); },
+  // a list of rows with the corrections over each (once: a row worked out again is not corrected twice) and those taken out left out
+  over(rows){
+    if (!S.books || !S.books.tdsEdits) return rows;
+    const out = [];
+    rows.forEach(r => { if (!r) return; this.apply(r); if (!this.isOut(r)) out.push(r); });
+    return out;
+  },
   // a deduction as the books give it, with FinCom's corrections over it (TDS.allRowsNow)
   apply(r){
+    if (r._ed) return r;
     const e = this.all()[r.id], f = e && e.f;
     if (!f || !Object.keys(f).length) return r;
-    r.books = {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date};
+    r._ed = 1;
+    r.books = {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date, basis: r.basis || "", code: r.code || ""};
     // next-tds-addlist: the deductee's name given in FinCom where Tally has none (its PAN from the PAN book, unless given)
     if (f.party != null && String(f.party).trim()){ r.party = String(f.party).trim(); if (f.pan == null) r.pan = TDS.panOf(r.party); r.partyFrom = "fincom"; }
     if (f.pan != null) r.pan = f.pan;
@@ -36,11 +55,13 @@ const TDSEdit = {
     // next-tds-clear: the dates corrected on the Deductions step (the date of deduction decides the quarter)
     if (f.date != null && TDS.ymd(f.date).length === 8){ r.date = TDS.ymd(f.date); r.q = TDS.qOf(r.date); r.fy = TDS.fyOf(r.date); }
     if (f.credit != null && TDS.ymd(f.credit).length === 8) r.credit = TDS.ymd(f.credit) === r.date ? undefined : TDS.ymd(f.credit);
-    r.edited = Object.keys(f);
+    if (f.basis != null) r.basis = f.basis;
+    if (f.code != null) r.code = f.code;
+    r.edited = Object.keys(f).filter(k => k !== "out");
     return r;
   },
   // what the books say for a field of a deduction (to put back, an edit equal to it is dropped)
-  booksOf(r, k){ const b = r.books || {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date}; return b[k]; },
+  booksOf(r, k){ const b = r.books || {party: r.party, pan: r.pan, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, dcode: this.codeOf(r.pan), cert: "", remarks: "", date: r.date, credit: r.credit || r.date, basis: r.basis || "", code: r.code || ""}; return b[k]; },
   same(k, a, b){ return ["rate", "paid", "tds"].includes(k) ? Math.abs(num(a) - num(b)) < 0.005 : String(a == null ? "" : a) === String(b == null ? "" : b); },
   set(r, k, v){
     const b = S.books; b.tdsEdits = b.tdsEdits || {};
@@ -68,12 +89,19 @@ const TDSEdit = {
   P_NAME: "deductee name missing",
   P_EARLY: "challan TRACES will not accept",
   FY_WORDS: "Protean's FVU refuses a challan dated before the financial year (T-FV-3076); use this year's challan or file it through a correction",
+  // next-fvu87: what each FVU does with it (FVU 1.2 from 2026-27: T-FV-3076; FVU 8.7 up to 2025-26: the year just before
+  // taken, older refused with T-FV-3166); FinCom uses neither for the deduction
+  fyWords(r, g){
+    if (TDS.isNew(TDS.fyOf(r.date))) return this.FY_WORDS;
+    if (g < -1) return "Protean's FVU 8.7 refuses a challan two or more years before the financial year (T-FV-3166); use this year's challan";
+    return "FinCom does not use a challan of the year before for this deduction (Protean's FVU 8.7 itself takes one of the year just before); use this year's challan, or ask before filing";
+  },
   fyGap(r, c){ return +TDS.fyOf(c.date).slice(0, 4) - +TDS.fyOf(r.date).slice(0, 4); },
   today(){ try { return istToday(); } catch (e){ return ""; } },
   badOf(r, c){
     if (!c || TDS.ymd(c.date).length !== 8 || TDS.ymd(r.date).length !== 8) return null;
     const g = this.fyGap(r, c), t = this.today();
-    if (g < 0) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", before this deduction's FY " + TDS.fyOf(r.date) + ": " + this.FY_WORDS};
+    if (g < 0) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", before this deduction's FY " + TDS.fyOf(r.date) + ": " + this.fyWords(r, g)};
     if (g > 1) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", more than a year after this deduction's FY " + TDS.fyOf(r.date)};
     if (t && TDS.ymd(c.date) > t) return {k: "future", words: "Challan dated " + fmtDate(tallyDate(TDS.ymd(c.date))) + ", after today: Protean's FVU refuses a future date (T-FV-3040)"};
     if (c.minorHead && String(c.minorHead) !== "200") return {k: "minor", words: "Challan is minor head " + c.minorHead + ", not 200 (TDS payable by the deductor): it cannot pay a deduction"};
@@ -251,6 +279,49 @@ const TDSEdit = {
     return {ok: !why.length, n, why};
   }
 };
+
+// next-tds-excel: the corrections over every return's rows, without a line more in legacy.js (its size budget). Each wrap is
+// made once, when TDS, TDS24Q and TDS26Q are there (legacy.js runs before this bundle):
+//   TDS.allRowsNow   26Q / 27Q (and the books' 192): the rows taken out left out; a collection added in FinCom (section
+//                    206C) goes to 27EQ, not 26Q
+//   TDS.tcsRowsNow   27EQ: the corrections, those taken out left out, the collections added in FinCom
+//   TDS.salaryRowsNow, TDS24Q.dedRows  24Q (Tally's payroll, the salary sheet, the books' 192): the corrections, those taken
+//                    out left out; a salary payment added in FinCom read as the books' own employee row (from "books")
+//   TDS26Q.remark    a lower-deduction certificate number given in FinCom (r.cert) is remark A with that number
+const isTcs = (r) => /^206C/.test(String((r && r.section) || ""));
+const isSal = (r) => /^(192|392)/.test(String((r && r.section) || ""));
+function wrapOnce(o, k, f){ if (!o || typeof o[k] !== "function" || o[k].tdsx) return; const was = o[k]; o[k] = function(){ return f.call(this, was.apply(this, arguments), arguments); }; o[k].tdsx = true; }
+function wrapAll(){
+  const G = globalThis;
+  if (typeof G.TDS !== "object" && typeof TDS === "undefined") return false;
+  const T = typeof TDS !== "undefined" ? TDS : G.TDS;
+  wrapOnce(T, "allRowsNow", (rows) => rows.filter(r => !TDSEdit.isOut(r) && !(r.added && isTcs(r))));
+  wrapOnce(T, "tcsRowsNow", (rows) => {
+    const b = S.books || {}, add = [];
+    if (typeof TDSAdd === "object" && b.tdsAdded){ const tmp = []; TDSAdd.addTo(tmp, b); tmp.filter(isTcs).forEach(r => { const x = b.tdsAdded[r.id.slice(3)] || {}; add.push(Object.assign(r, {code: x.code || "", ledger: x.code ? "" : "", type: "Added in FinCom"})); }); }
+    return TDSEdit.over(rows.concat(add)).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  });
+  wrapOnce(T, "salaryRowsNow", (rows) => TDSEdit.over(rows.map(r => r.added && isSal(r) ? Object.assign(r, {employee: r.employee || r.party, unsplitBooks: false, from: "books"}) : r)));
+  if (typeof TDS24Q === "object") wrapOnce(TDS24Q, "dedRows", (rows) => {
+    if (!rows.length) return rows;
+    const fys = new Set(rows.map(r => r.fy)), b = S.books || {}, tmp = [];
+    if (typeof TDSAdd === "object" && b.tdsAdded) TDSAdd.addTo(tmp, b);
+    return TDSEdit.over(rows.concat(tmp.filter(r => isSal(r) && fys.has(r.fy)).map(r => Object.assign(r, {employee: r.party, from: "books"})))).sort((a, c) => String(a.date).localeCompare(String(c.date)));
+  });
+  if (typeof TDS26Q === "object" && TDS26Q.remark && !TDS26Q.remark.certSet){
+    const was = TDS26Q.remark;
+    TDS26Q.remark = function(r, form){
+      const c = r && String(r.cert || "").toUpperCase().replace(/\s/g, "");
+      if (c && form !== "24Q" && !(typeof TDSDecl === "object" && TDSDecl.remark(r, form))) return {remark: "A", certNo: c.slice(0, 10), certFull: c};
+      return was.call(this, r, form);
+    };
+    Object.keys(was).forEach(k => { TDS26Q.remark[k] = was[k]; });
+    TDS26Q.remark.certSet = true;
+  }
+  return true;
+}
+TDSEdit.wrap = wrapAll;
+wrapAll();
 
 window.TDSEdit = TDSEdit;
 export default TDSEdit;

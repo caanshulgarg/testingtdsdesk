@@ -59,14 +59,14 @@ function useTicks(shown) {
   const tickAll = (v) => { const n = Object.assign({}, sel); shown.forEach((x) => { if (v) n[x.r.id] = true; else delete n[x.r.id]; }); S.tdsDregSel = n; render(); };
   return { sel, picked, tick, all, tickAll, clear: () => { S.tdsDregSel = {}; } };
 }
-const TickTh = ({ t, locked }) => <th className="ck">{!locked ? <input type="checkbox" checked={t.all} aria-label="Tick all shown" data-dreg-tickall="" onChange={(ev) => t.tickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>;
+const TickTh = ({ t, locked }) => <th className="ck">{!locked ? <input type="checkbox" checked={t.all} aria-label="Select all shown" title="Select all shown" data-dreg-tickall="" onChange={(ev) => t.tickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>;
 const TickTd = ({ t, r, locked }) => <td className="ck">{!locked && <input type="checkbox" checked={!!t.sel[r.id]} data-dreg-tick={r.id} aria-label={"Tick " + (r.party || r.employee || "this deduction")} onChange={(ev) => t.tick(r.id, ev.target.checked)} />}</td>;
 const NameTd = ({ r, locked }) => <td className="dreg-name" data-dreg-name={r.id}><DedName r={r} locked={locked} title="Details" onOpen={() => { S.tdsRowDet = r.id; render(); }} /></td>;
 // the return's challans to map or move to
-function ToChallan({ form, fy, q, cx, verb, n, onGo, data }) {
+function ToChallan({ form, fy, q, cx, verb, n, onGo, data, pick }) {
   const list = winChallans(form, fy, q, cx), cur = S.tdsDregTo && list.some((c) => c.id === S.tdsDregTo) ? S.tdsDregTo : "";
-  return <span className="dreg-to"><select aria-label="Challan" data-dreg-to="" value={cur} onChange={(ev) => { S.tdsDregTo = ev.target.value; render(); }}>
-      <option value="">Challan…</option>
+  return <span className="dreg-to"><select aria-label={pick || "Challan"} data-dreg-to="" value={cur} onChange={(ev) => { S.tdsDregTo = ev.target.value; render(); }}>
+      <option value="">{pick || "Challan…"}</option>
       {list.map((c) => <option key={c.id} value={c.id}>{c.serial + " · " + dm6(c.date) + (chSec(c) ? " · " + chSec(c) : "") + " · " + money(TDSReg.balance(c, cx).tax) + " left"}</option>)}</select>
     <button type="button" className="btn small" disabled={!cur || !n} {...data} onClick={() => onGo(cur)}>{verb} {n}</button></span>;
 }
@@ -86,11 +86,12 @@ function Pending({ rows, m, probs, issueOf, form, fy, q, locked, cx }) {
     { k: "date", title: "Date", kind: "pick", get: (x) => TDS.ymd(x.r.date).slice(0, 6), label: monW },
     { k: "paid", title: "Amount paid", kind: "num", get: (x) => x.r.paid },
     { k: "tds", title: "TDS", kind: "num", get: (x) => x.r.tds },
-    { k: "next", title: "Next", kind: "pick", get: (x) => (!(x.r.tds > 0.005) ? "No TDS to pay" : x.s ? "Suggested" : x.best.length ? "Fits a challan" : "Needs a challan") },
+    // next-tds-autoplace: a suggestion by its rule (R5 … R9), so the column's filter picks a rule
+    { k: "next", title: "Next", kind: "pick", get: (x) => (!(x.r.tds > 0.005) ? "No TDS to pay" : x.s ? "Suggested" + (x.s.code ? " · " + x.s.code : "") : x.best.length ? "Fits a challan" : "Needs a challan") },
   ], items), shown = cf.shown, t = useTicks(shown);
   const tot = r2(t.picked.reduce((a, x) => a + x.r.tds, 0));
   const map = (ch) => { const idl = t.picked.map((x) => x.r.id), y = TDSMatch.move(idl, ch); if (!y.ok) toast(y.why); else { t.clear(); toast(idl.length + " mapped to challan " + ((TDS.challans().find((c) => c.id === ch) || {}).serial || "") + "."); } render(); };
-  const confirm = (x) => { const y = TDSCH.tag([x.r.id], x.s.chId, { via: "suggestion", note: "suggestion confirmed: " + x.s.words + (x.s.rule === "g" ? " (" + x.s.reason + ")" : "") }); if (!y.ok) toast(y.why); render(); };
+  const confirm = (x) => { const y = TDSCH.tag([x.r.id], x.s.chId, { via: "suggestion", note: TDSMatch.noteOf(x.s) }); if (!y.ok) toast(y.why); render(); };
   const put = (x, id) => { const y = TDSMatch.move([x.r.id], id); if (!y.ok) toast(y.why); render(); };
   if (!items.length) return <p className="note" data-dreg-body="pending" data-dreg-none="">Every deduction is on a challan ✓</p>;
   const nSugg = items.filter((x) => x.s).length;
@@ -98,7 +99,7 @@ function Pending({ rows, m, probs, issueOf, form, fy, q, locked, cx }) {
     {!locked && nSugg > 0 && <div className="rt-tool"><span className="note">{nSugg} with a suggested challan</span><span className="rt-sp" />
       <button type="button" className="btn small primary" data-dreg-confirm-all={nSugg} onClick={() => tdsMatchConfirmAll()}>Confirm all {nSugg}</button></div>}
     {t.picked.length > 0 && !locked && <div className="wd-bulk" data-dreg-bulk={t.picked.length}><span><b>{t.picked.length} ticked</b> · TDS <b>{money(tot)}</b></span><span className="rt-sp" />
-      <ToChallan form={form} fy={fy} q={q} cx={cx} verb="Map" n={t.picked.length} onGo={map} data={{ "data-dreg-bulk-map": "" }} />
+      <ToChallan form={form} fy={fy} q={q} cx={cx} verb="Place" pick="Place on challan…" n={t.picked.length} onGo={map} data={{ "data-dreg-bulk-map": "" }} />
       <button type="button" className="linkbtn" onClick={() => { t.clear(); render(); }}>Clear</button></div>}
     <div className="bk-tablewrap"><table className="bk-table gf-off dreg-table">
       <thead><tr><TickTh t={t} locked={locked} /><Th cf={cf} k="name">Name</Th><Th cf={cf} k="chk">Check</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="date" cls="dt">Date</Th><Th cf={cf} k="paid" cls="n">Amount paid</Th><Th cf={cf} k="tds" cls="n">TDS</Th><Th cf={cf} k="next">Next</Th></tr></thead>
@@ -107,7 +108,7 @@ function Pending({ rows, m, probs, issueOf, form, fy, q, locked, cx }) {
           <td className="dreg-f">{x.miss ? <span className="dt-flag" data-dreg-miss={x.miss} title={"Its challan " + missingName(x.miss) + " is missing — choose again"}>Challan {missingName(x.miss)} missing</span>
             : x.prob && x.prob.k !== "name" ? <span className="dt-flag" data-dreg-flag={x.prob.k} title={x.prob.words}>{chipW(x.prob)}</span> : null}</td>
           <td>{secOf(x.r)}</td><td className="dt">{day(x.r.date)}</td><td className="n">{money(x.r.paid)}</td><td className="n">{money(x.r.tds)}</td>
-          <td className="dreg-next">{x.s ? <><span className="tag info" title={(x.s.rule === "g" ? "AI: " : "") + (x.s.words || "") + (x.s.reason ? " · " + x.s.reason : "")}>{c ? c.serial + " · " + dm6(c.date) : "Suggested"}</span>
+          <td className="dreg-next">{x.s ? <><span className="tag info" data-dreg-rule={x.s.code || ""} title={(x.s.code ? x.s.code + " " : "") + (x.s.rule === "g" ? "AI: " : "") + (x.s.words || "") + (x.s.reason ? " · " + x.s.reason : "") + (x.s.warn ? " · " + x.s.warn : "")}>{(x.s.code ? x.s.code + " · " : "") + (c ? c.serial + " · " + dm6(c.date) : "Suggested")}</span>
               {!locked && <button type="button" className="btn small" data-dreg-confirm={x.r.id} onClick={() => confirm(x)}>Confirm</button>}</>
             : x.best.length ? (!locked ? x.best.map((b) => <button key={b.c.id} type="button" className="btn small" data-dreg-put={b.c.id} title={money(b.left) + " left"} onClick={() => put(x, b.c.id)}>{b.c.serial} · {dm6(b.c.date)}</button>) : null)
               : !(x.r.tds > 0.005) ? <span className="wd-dim">No TDS to pay</span>

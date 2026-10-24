@@ -21,7 +21,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
   const avail = NAMES.filter(n => { try { load(HTML, [n]); return true; } catch (e){ return false; } });
   const {ctx, x} = load(HTML, avail);
   const cl = setup.client;
-  ctx.S.companies = {[cl.id]: {id: cl.id, name: cl.name, tallyName: cl.tallyName, gstin: cl.gstin, pan: cl.pan, tan: cl.tan, choices: {}}};
+  ctx.S.companies = {[cl.id]: {id: cl.id, name: cl.name, tallyName: cl.tallyName, gstin: cl.gstin, pan: cl.pan, tan: cl.tan, choices: {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}}};   // the client has advances turned on (owner, 22-Oct-2026: off unless turned on; GSTAdv.ready)
   ctx.S.coId = cl.id; ctx.CO = () => ctx.S.companies[cl.id]; ctx.D = () => ({parties: {}, entries: {}}); ctx.whoAmI = () => "e2e";
   const out = {loaded: avail, phases: {}};
   let keep = {};          // what the person did and FinCom keeps between the phases: filed returns, certificates, challans, allocation, ledger choices
@@ -85,6 +85,7 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
     b.challans = setup.challans.map(c => ({id: c.id, bsr: c.bsr, serial: c.serial, date: c.date, tax: c.tax, interest: c.interest, section: c.section || ""}));
     b.alloc = Object.assign({}, keep.alloc || {});
     if (keep.filed) b.filed = JSON.parse(JSON.stringify(keep.filed));
+    if (keep.gstFiled) b.gstFiled = JSON.parse(JSON.stringify(keep.gstFiled));
     const T = x.TDS;
     // the rows whose entry changed since the last allocation go again: a person allocates what is new
     const ids = new Set(T.rows().concat(T.nrRows(), T.tcsRows()).map(r => r.id));
@@ -115,8 +116,9 @@ const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "ST
     (ph.gstr1 || []).forEach(ym => { try { R.pending[ym] = x.GSTAmend.pending(ym, reg).rows.map(r => ({P: r.P, kind: r.kind, what: r.what, act: r.act, changes: r.changes, num: (r.now || r.was || {}).num})); } catch (e){ R.pending[ym] = {error: String(e)}; } });
     R.optional = (b.vouchers || []).filter(v => v.opt).map(v => v.no);
     // the returns filed now (May's GSTR-1, as downloaded and filed from here): what later amendments are measured against
-    (ph.fileGstr1 || []).forEach(ym => { x.GSTAmend.keep(JSON.parse(JSON.stringify(R.gstr1[ym] || x.GSTR.toJson(ym, reg))), "downloaded"); });
-    keep = {filed: b.filed, alloc: b.alloc, map: b.map, vouchers: b.vouchers, copyMeta: b.meta.copy, gone: b.gone};
+    // (since 22-Oct-2026 a JSON downloaded here counts as filed only once the month is marked filed: marked, as the person does)
+    (ph.fileGstr1 || []).forEach(ym => { x.GSTAmend.keep(JSON.parse(JSON.stringify(R.gstr1[ym] || x.GSTR.toJson(ym, reg))), "downloaded"); const r = x.GSTF.rec(ym, reg); if (!r.r1) r.r1 = x.GSTF.today(); });
+    keep = {filed: b.filed, gstFiled: b.gstFiled, alloc: b.alloc, map: b.map, vouchers: b.vouchers, copyMeta: b.meta.copy, gone: b.gone};
   }
   fs.writeFileSync(outPath, JSON.stringify(out, null, 1));
   // bridge 2.4.3 (run_e2e_tdsgst.py part E): the cloud copy's TDS challans and Tally's TDS masters, as TCloud.load reads them

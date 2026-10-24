@@ -292,6 +292,13 @@ html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var
 .asst-voice-msg { order: 9; flex: 1 0 100%; display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
 .asst-voice-msg .linkbtn { margin-left: auto; text-decoration: none; }
 .asst-askbar:has(.asst-voice-msg) { flex-wrap: wrap; }
+/* the names matched to the books after voice typing: underlined, the heard words on a tap, one tap to undo */
+.asst-voice-fixes { flex-wrap: wrap; row-gap: 2px; }
+.asst-fix { display: inline-flex; align-items: center; gap: 2px; }
+.asst-fix-word { padding: 0; border: 0; background: none; font: inherit; color: var(--foreground); cursor: pointer; text-decoration: underline dotted; text-decoration-color: var(--text-secondary); text-underline-offset: 3px; }
+.asst-fix-heard { color: var(--text-secondary); font-style: italic; }
+.asst-fix-undo { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--radius-control); background: none; color: var(--text-secondary); cursor: pointer; }
+.asst-fix-undo:hover, .asst-fix-undo:focus-visible, .asst-fix-word:focus-visible { color: var(--foreground); background-color: var(--surface-muted); }
 @media (prefers-reduced-motion: reduce) { .asst-mic-pulse { animation: none; opacity: .6; } }
 @media (max-width: 600px) {
   .asst-askbar { gap: 4px; }

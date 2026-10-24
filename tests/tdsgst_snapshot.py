@@ -25,7 +25,9 @@ def amounts(text):
 
 # the books in the page: the fixture's 2025-26, and a copy a year on (2026-27), with challans for each quarter
 LOAD = """(bk) => {
-  const c = newCompany({name: "ZZ TDSGST", gstin: "07AAGCL4827M1Z3"}); c.tan = "DELZ12345A"; S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+  const c = newCompany({name: "ZZ TDSGST", gstin: "07AAGCL4827M1Z3"}); c.tan = "DELZ12345A"; S.companies[c.id] = c;
+  // the fixture client shows its advances in GST returns (off unless turned on, the owner 22-Oct-2026; GSTAdv.ready)
+  c.choices = Object.assign(c.choices || {}, {advGst: {value: "on", state: "confirmed", by: "test", at: "2026-10-22T00:00:00Z"}}); S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
   const on = (d) => { const t = String(d || ""); return /^\\d{8}$/.test(t) ? String(+t.slice(0, 4) + 1) + t.slice(4) : t; };
   const next = bk.vouchers.map((v) => Object.assign({}, v, {id: v.id + "+1y", date: on(v.date)}));
   const b = Object.assign({loading: false, challans: [], alloc: {}}, bk, {vouchers: bk.vouchers.concat(next), cid: c.id});
@@ -152,6 +154,9 @@ def snapshot(site, port=8290, shots=None):
                             pg.wait_for_timeout(200)
                             for f in pg.evaluate("window.__files"):
                                 files["%s/%s" % (key, f["name"])] = {"sha256": hashlib.sha256(f["text"].encode()).hexdigest(), "bytes": len(f["text"].encode())}
+                            # the walk files each month as it goes: until 22-Oct-2026 the download itself counted as filing; now a
+                            # JSON downloaded here counts only once the month is marked filed (on today's date: no late fee changes)
+                            if part == "r1": pg.evaluate("([ym, reg]) => { const r = GSTF.rec(ym, reg); if (!r.r1 && !r.iff) r.r1 = GSTF.today(); }", [ym, reg])
         br.close()
     srv.shutdown()
     return {"files": files, "figures": {k: sorted(v) for k, v in figures.items()}, "errors": errors}

@@ -29,13 +29,14 @@ const GST2B = {
     b.vouchers.forEach(v => {
       if (Books.isSale(v) || v.opt) return;                                   // an Optional entry is no document
       const tax = {IGST: 0, CGST: 0, SGST: 0, CESS: 0};
-      let signed = 0, reg = "", inel = 0, any = false, setOff = false;
+      let signed = 0, reg = "", inel = 0, any = false, setOff = false, hold = 0, claim = 0, bare = true;
       v.ent.forEach(e => {
         const m = Books.ledgerOf(e.l);
         if ((m.kind === "gst" || m.kind === "gst_common") && m.side === "output" && !m.rcm) setOff = true;
+        if (m.kind === "tax_other" && m.what === "gst_setoff") setOff = true;
         if (m.kind === "gst" && m.rcm && m.side === "output") return;
-        if (!((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") && m.kind !== "ineligible") return;
-        any = true;
+        if (!((m.kind === "gst" || m.kind === "gst_common") && m.side === "input") && m.kind !== "ineligible"){ if (m.kind !== "roundoff") bare = false; return; }
+        any = true; if (GSTR.held(e.l)) hold++; else claim++;
         const amt = Math.abs(e.a), t = m.tax || "IGST";
         tax[t] = r2(tax[t] + amt); signed += e.a;
         if (m.kind === "ineligible") inel = r2(inel + amt);
@@ -44,6 +45,10 @@ const GST2B = {
       if (!any) return;
       // the month's set-off of output tax against credit is not a purchase
       if (setOff){ this.skipped.setOff++; return; }
+      // 3B input check (23-Oct-2026): credit moved from the held ledger ("NOT SHOWN IN 2B", GSTR.held) to the input ledger,
+      // or input lines only (a rounding): no document
+      // (and the held ledger credited alone: its credit written off, not a supplier's note)
+      if (bare || (hold && claim) || (hold && signed > 0)){ this.skipped.taxOnly++; return; }
       // the supplier: the voucher's party, else the one ledger in it that carries a GSTIN
       let party = v.party, gstin = String(v.gstin || gst[v.party] || "").toUpperCase();
       if (!gstin){ const e = v.ent.find(x => gst[x.l]); if (e){ party = e.l; gstin = String(gst[e.l]).toUpperCase(); } }
@@ -53,15 +58,43 @@ const GST2B = {
       v.ent.forEach(e => { if (e.l !== party && !Books.ledgerOf(e.l).kind && (e.a < 0) === (signed < 0)) taxable = r2(taxable + Math.abs(e.a)); });
       // tax alone, with no supplier's GSTIN and no value beside it: a rounding or reversal entry
       if (!taxable && !gstin){ this.skipped.taxOnly++; return; }
+      // next-itc-simple (Leads, 24-Oct-2026: JMD's ticket 36,630 booked with its fee, tax 180): the value is what carries GST.
+      // Far more value than the tax at any rate: the GST rate is worked out from what is known, never assumed (the owner:
+      // "we have the tax rate — if charged 5% then no ITC, if charged 18% then full ITC"): Tally's rate on the lines (their
+      // value is the value), else the rate in a tax ledger's name ("Input IGST 18%", "Input CGST 9%" is 18), else the rate
+      // in the narration ("@ 18%"); the value is then the tax at that rate, the rest kept apart (other). No rate anywhere:
+      // ru (rate unknown), for 2B's own rate to settle (GST2B.run, ITCF) or to be looked at. At 5% (a tour operator's
+      // rate) the credit is not eligible: noItc.
+      let other = 0, gstRate = 0, ru = false, noItc = "";
+      const gt = r2(tax.IGST + tax.CGST + tax.SGST);
+      if (taxable > 0 && gt > 0){
+        const rt = gt * 100 / taxable;
+        if (rt < 4.5 && ![0.1, 0.25, 1, 1.5, 3].some(x => Math.abs(rt - x) < 0.05)){
+          const lines = v.ent.filter(e => e.l !== party && !Books.ledgerOf(e.l).kind && num(e.gr) >= 5 && (e.a < 0) === (signed < 0));
+          const rated = r2(lines.reduce((a, e) => a + Math.abs(e.a), 0));
+          let named = 0;
+          v.ent.forEach(e => { const m = Books.ledgerOf(e.l); if (named || !((m.kind === "gst" || m.kind === "gst_common") && m.side === "input")) return;
+            const x = num((String(e.l).match(/(\d+(?:\.\d+)?)\s*%/) || [])[1]); if (x > 0) named = (m.tax === "CGST" || m.tax === "SGST") ? x * 2 : x; });
+          const nr = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]);
+          let base = 0;
+          if (rated > 0 && rated < taxable){ base = rated; gstRate = num(lines[0].gr); }
+          else if (named || nr){ gstRate = named || nr; base = r2(gt * 100 / gstRate); }
+          else ru = true;
+          if (base > 0 && base < taxable){ other = r2(taxable - base); taxable = base; }
+          if (gstRate && Math.abs(gstRate - 5) < 0.01) noItc = "5% tour operator rate: no ITC";
+        }
+      }
       if (!reg) reg = String(v.cmp || "").slice(0, 2) || (regs.length === 1 ? regs[0] : "");
       const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
-        taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
-        dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, narr: v.narr || ""});
+        taxable, other, gstRate, ru, noItc, blocked: !!v.ineligibleFlag, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
+        dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, held: hold > 0, narr: v.narr || ""});
     });
     return out;
   },
+  // a 2B document's GST rate (its tax on its taxable value), when that is a GST rate; else 0
+  rateOf(p){ const t = num(p.igst) + num(p.cgst) + num(p.sgst), v = num(p.taxable); if (!(v > 0) || !(t > 0)) return 0; const r = t * 100 / v; return [0.1, 0.25, 1, 1.5, 3, 5, 6, 12, 18, 28, 40].find(x => Math.abs(r - x) < 0.05) || 0; },
   settings(){ return Object.assign({tol: 1}, (S.books && S.books.reco2b && S.books.reco2b.opt) || {}); },
   state(){ const b = S.books; b.reco2b = b.reco2b || {}; ["confirm", "link", "tag"].forEach(k => { b.reco2b[k] = b.reco2b[k] || {}; }); return b.reco2b; },
   all2b(reg){
@@ -76,7 +109,7 @@ const GST2B = {
   // match every 2B document against every book document, strongest evidence first
   run(reg){
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
-    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref"].join("|");
+    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref", typeof M2B === "object" && M2B.aiSig ? M2B.aiSig(reg) : ""].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
@@ -109,6 +142,9 @@ const GST2B = {
       if (p.gstin && bd.gstin && p.gstin !== bd.gstin) issues.push("GSTIN " + p.gstin + " in 2B, " + bd.gstin + " in Tally");
       if (!bd.gstin) issues.push("no GSTIN in Tally for " + (bd.party || "the supplier") + "; 2B says " + p.gstin);
       if (list.length > 1) issues.push("booked in " + list.length + " vouchers");
+      // next-itc-simple: the books do not give the GST rate of a bill whose value is more than its GST base: 2B's rate settles
+      // it; when 2B's is no GST rate either, it is to be looked at
+      if (list.some(d => d.ru) && !this.rateOf(p)) issues.push("rate unknown: neither the books nor 2B give the GST rate");
       const timing = list.some(d => d.ym !== p.ym);
       const confirmed = st.confirm[p.key] === "yes";
       if (list.length > 1 && list.every(d => d.noN === list[0].noN && near(taxOf(d), taxOf(list[0])))) issues.push("the same bill booked " + list.length + " times");
@@ -132,6 +168,16 @@ const GST2B = {
       if (list.length) pair(p, list, 0, "manual");
     });
     const rejected = (p, list) => list.some(d => st.confirm[p.key + ">" + d.id] === "no");
+    // next-itc-simple: the automatic matching's AI pairs (M2B, src/js/85) as links: matched by AI is a match (its row says
+    // "AI", with the reason), suggested only is a probable match to accept or reject on the reconciliation's row
+    const by2 = new Map(portal.map(p => [p.key, p]));
+    (typeof M2B === "object" && M2B.aiLinks ? M2B.aiLinks(reg) : []).forEach(a => {
+      const p = by2.get(a.g); if (!p || used2b.has(p.key) || st.confirm[p.key] === "no") return;
+      const list = a.b.map(id => byId.get(id)).filter(d => d && free(d) && d.dir === p.dir);
+      if (!list.length || list.length !== a.b.length || rejected(p, list)) return;
+      pair(p, list, a.st === "probable" ? 4 : 0, a.st === "probable" ? "probable" : "ai");
+      Object.assign(pairs[pairs.length - 1], {ai: a.why || "matched by AI", aiId: a.id});
+    });
     const tiers = [
       // 1. same GSTIN, same number, same amounts
       p => { const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && d.noN === p.noN); const s = sumOf(c); return c.length && near(s.taxable, p.taxable) && near(taxOf(s), taxOf(p)) ? [c, 1, "exact"] : null; },

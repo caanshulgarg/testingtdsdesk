@@ -79,21 +79,22 @@ def main():
         # the Overview of a client not linked: its line is shown; Today: the quiet not-linked line; Clients: the chip
         nl = E("""() => { const c = newCompany({name: 'NOT LINKED CO', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; c.onbHide = true; return c.id; }""")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", nl); pg.wait_for_timeout(1500)
-        ok(E("() => (document.querySelector('#app [data-tally-link-line]') || {}).getAttribute ? document.querySelector('#app [data-tally-link-line]').getAttribute('data-tally-link-line') : ''") == "unlinked",
-           "a client not linked: the Overview shows its Tally line (%s)" % lines())
+        # 24-Oct-2026 (next-tally-one-page): no Tally line on the Overview; the title's chip says Not linked and opens the list
+        ok(n("#app [data-tally-link-line]") == 0 and E("() => (document.querySelector('[data-tally-chip-at=title]') || {getAttribute: () => ''}).getAttribute('data-tally-pill')") == "unlinked",
+           "a client not linked: no Tally line on the Overview; the title's chip says Not linked (%s)" % lines())
         E("() => navHome('today')"); pg.wait_for_timeout(1200)
         tl = "#app [data-not-linked-line]"
-        ok(n(tl) == 1 and n(tl + " .warn-text") == 0 and "client not linked to Tally" in txt(tl), "Today: kept, one quiet line (%s)" % txt(tl))
+        ok(n(tl) == 1 and n(tl + " .warn-text") == 0 and "client not linked to Tally" in txt(tl) and n(tl + " [data-not-linked-go]") == 1, "Today: one quiet chip (%s)" % txt(tl))
         E("() => navHome('clients')"); pg.wait_for_timeout(1200)
         ok(n('#app [data-tally-chip-at="clients"]') >= 2, "Clients: kept, the Linked / Not linked chip (%d)" % n('#app [data-tally-chip-at="clients"]'))
         # From Tally keeps its link line; Post to Tally keeps its posting line; the Tally page keeps its guide
         cid = E("() => Object.values(S.companies).find(c => c.name === 'GARG SHEKHAR & COMPANY').id")
         E(BOOKS, [cid, 10]); pg.wait_for_timeout(800); tab("import")
-        ok(n("#app [data-tally-link-line]") == 1, "Books > From Tally: kept, its Tally line")
+        ok(n("#app [data-tally-link-line]") == 0 and n("#app [data-up-drop]") == 1, "Books > From Tally: the upload only, no Tally line (the Tally page is the one place)")
         E("(c) => { S.view = 'company'; S.coId = c; S.tab = 'post'; render(); }", cid); pg.wait_for_timeout(1200)
         ok(n("#app [data-post-line]") >= 1 or n("#app [data-post-problem]") >= 1, "Post to Tally: kept, the posting company and its state (%s)" % txt("#app [data-post-line]"))
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); pg.wait_for_timeout(1500)
-        ok(n("#app [data-connect-guide]") == 1 and n("#app [data-pc-line]") >= 1, "the Tally page: kept, everything")
+        ok(n("#app [data-connect-guide]") == 1 and n("#app [data-tco-list=firm]") == 1, "the Tally page: kept, its guide (or the computers' line) and Companies in Tally")
         ok(not errors, "no page errors %s" % errors[:2])
         br.close()
     srv.shutdown()

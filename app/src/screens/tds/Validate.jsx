@@ -36,7 +36,8 @@ export function checkReturn(fy, q, form) {
   const ov = blk("over");
   put(out.errors, { k: "over", n: ov ? ov.n : 0, words: ov ? ov.words : "", step: "challans", review: true });
   // next-tds-addlist (19-Oct-2026), next-tds-early (20-Oct-2026): a deduction on a challan Protean's FVU refuses for it (a
-  // challan dated before the financial year, T-FV-3076; after today, T-FV-3040; not minor head 200): an error. An advance
+  // challan dated before the financial year, T-FV-3076 in FVU 1.2, T-FV-3166 in FVU 8.7 two years back, and FinCom refuses the year
+  // before too; after today, T-FV-3040; not minor head 200): an error. An advance
   // challan (dated before the deduction, the same year) or the next year's is allowed: no error, no warning (its chip
   // says it). On a challan naming another section: a warning, below
   const chBy = {}; TDS.challans().forEach((c) => { chBy[c.id] = c; });
@@ -46,6 +47,15 @@ export function checkReturn(fy, q, form) {
   put(out.errors, { k: "early", n: early.length, words: s_(early.length, unitW[0] + " on a challan Protean's FVU refuses for it", unitW[1] + " on a challan Protean's FVU refuses for them") + " · " + money(early.reduce((a, r) => a + r.tds, 0)) + (ek ? ": " + ek.words : ""), step: "deductions" });
   const st = blk("stale");
   put(out.errors, { k: "stale", n: st ? st.n : 0, words: st ? st.words : "", step: "challans" });
+  // next-tds-autoplace: the remarks of the rows with no tax (src/js/94): B needs its declaration, T a PAN, Y a payment below the
+  // limit; each said only when it is wrong (not counted among the checks passed)
+  let rk = []; try { rk = TDSDecl.checks(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  rk.forEach((x) => (x.level === "warn" ? out.warnings : out.errors).push({ k: "rm-" + x.k, n: x.n, words: x.words, step: "deductees" }));
+  // next-fvu87 (24-Oct-2026): up to FY 2025-26, what Protean's FVU 8.7 refuses on a deductee record (remark B for a section it
+  // does not take, a 27Q nature not in its list: errors; 194T, which it has no code for: a warning) and what FinCom changed
+  // for it in the file (a row left out, an inoperative PAN without C, a foreign address left out: info), in plain words
+  let f87 = []; try { f87 = TDS26Q.fvu87Checks(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  f87.forEach((x) => (x.level === "error" ? out.errors : x.level === "warn" ? out.warnings : out.info).push({ k: "fvu87-" + x.k, n: x.n, words: x.words, step: "deductees" }));
   // the salary return without the salary sheet or Tally's payroll: no file can be made
   const sheet = form === "24Q" && (((S.books || {}).salary || []).length > 0), tally = form === "24Q" && !sheet && Payroll.has(fy);
   if (form === "24Q") put(out.errors, { k: "nosheet", n: !sheet && !tally ? 1 : 0, words: "24Q needs the salary sheet: the books cannot say whose TDS it is", act: ["Bring in the salary sheet", () => doAct("salaryPick")] });
@@ -106,6 +116,18 @@ export function checkReturn(fy, q, form) {
   // information: what goes elsewhere, and the matcher's notes
   if (form === "26Q") { const pr = TDS.portalRows().filter((r) => r.fy === fy && r.q === q).length; if (pr) out.info.push({ k: "portal", n: pr, words: s_(pr, "deduction goes on the portal (26QB / 26QC / 26QD), not this return", "deductions go on the portal (26QB / 26QC / 26QD), not this return"), review: true }); }
   mc.info.forEach((x, i) => out.info.push({ k: "i-" + x.k + i, n: 1, words: x.words }));
+  // the owner, 22-Oct-2026 (Leads Insurance, a blank 194J row of ₹0.71): an entry that adjusts a TDS ledger without a
+  // deductee (a round-off journal) is no deduction (TDS.adjOnly); each such entry said once here, a note, with the entry
+  let adj = []; try { adj = TDSAdj.list(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  adj.forEach((x, i) => out.info.push({ k: "tdsadj" + i, n: 1, words: x.words, adj: x.vid, act: ["Open the entry", () => TDSAdj.open(x)] }));
+  // the TDS check of 22-Oct-2026 (src/js/91: TDSAudit.notes): reversals, top-ups, sections against the expense, payments
+  // against deductions, Tally's old rates, one PAN under two names, the remarks
+  let au = []; try { au = TDSAudit.notes(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  au.forEach((x, i) => (x.level === "warn" ? out.warnings : out.info).push({ k: "au-" + x.k + i, n: 1, words: x.words, step: x.step, act: x.vid ? ["Open the entry", () => TDSAdj.open({ date: x.date, no: x.no || "", ledgers: [x.ledger || ""] })] : undefined }));
+  // next-tds-excel: rows taken out of this return by an Excel brought back (kept in the books), with Put back
+  let outs = []; try { outs = TDSEdit.outList().filter((o) => o.form === form && o.fy === fy && o.q === q); } catch (e) { /* */ }
+  if (outs.length) out.info.push({ k: "tdsx-out", n: outs.length, words: s_(outs.length, unitW[0], unitW[1]) + " taken out of this return by an Excel brought back (kept in the books): " + outs.slice(0, 3).map((o) => (o.party || "—") + " " + money(o.tds)).join(", ") + (outs.length > 3 ? " …" : ""),
+    act: ["Put back", () => { outs.forEach((o) => TDSX.putBack(o.id)); render(); }] });
   out.drift = dn; out.n = out.errors.length + out.warnings.length;
   return out;
 }
@@ -120,7 +142,7 @@ function Line({ it, level, open, onOpen, form, review }) {
     if (it.step === "deductions" && it.k === "rate") { S.tdsFl = Object.assign({}, S.tdsFl || {}, { deductions: Object.assign({}, (S.tdsFl || {}).deductions || {}, { rate: "q" }) }); S.tdsDedView = "table"; S.tdsDedCh = ""; }
     tdsTabGo(it.step); try { window.scrollTo(0, 0); } catch (e) { /* */ }
   };
-  return <li className={"vf-line " + level} data-val-item={it.k} data-val-level={level}>
+  return <li className={"vf-line " + level} data-val-item={it.k} data-val-level={level} data-tds-adj={it.adj}>
     <div className="vf-row">
       <span className="vf-ic" aria-hidden="true">{level === "error" ? "✕" : level === "warn" ? "!" : "i"}</span>
       <span className="vf-w">{it.words}</span>

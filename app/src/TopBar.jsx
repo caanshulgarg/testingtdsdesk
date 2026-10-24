@@ -1,11 +1,15 @@
 // The top bar: the page title (client header with its status tabs, or the home screen's name), the Tally chip, the
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
+// calls (stage 1): the one button on a client's page (calls/CallButton.jsx; the call screen loads only when used)
+import CallButton from "./calls/CallButton.jsx";
 import TallyPill from "./parts/TallyPill.jsx";
 import TallyLine, { PanelBooks, panelBooksShown } from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, Suspense, lazy } from "react";
+// next-tally-firstlink: the companies open in Tally, not linked, with their one-click link, at the top of the Tally panel
+const TallyOffer = lazy(() => import("./parts/TallyOffer.jsx"));
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 import { Inbox as InboxIcon } from "lucide-react";
@@ -20,12 +24,13 @@ import { goTallyPage } from "./parts/HomeLink.jsx";
 import { StateBar } from "./parts/StateBar.jsx";
 import { useDismiss } from "./parts/dismiss.js";
 import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
+import { clientTallyState, unlinkedOpen, mayLink } from "./lib/tallyState.js";
 
-const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help" };
+const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
 // the Tally ledgers as its tab, and Audit the tie-out with Tally
 const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "From Tally", tieout: "Audit", reports: "Reports", lookup: "Look up",
-  letters: "Letters", mis: "MIS", fs: "Financial statements", audit: "Audit", recon: "Reconciliations" };
+  letters: "Letters", mis: "MIS", mymis: "My MIS", fs: "Financial statements", audit: "Audit", recon: "Reconciliations" };
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 
 // Arc's page header: the breadcrumb (Clients › <client>, or Firm › <firm>) over the title, then the page's actions
@@ -99,6 +104,7 @@ function ClientHeader() {
     // the client's one Tally chip ("Not linked → Link") beside the page's name (it was in the client's row of pages, gone)
     <Title title={title} sub={crumbs} crumb="client-nav" after={!S.loadingCo ? <TallyChip co={co} where="title" /> : null}>
       <div className="tbar-actions">
+        {S.tab === "dash" && !S.loadingCo && <CallButton co={co} />}
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
       </div>
     </Title>
@@ -184,7 +190,7 @@ export function HereCard({ h, link = null }) {
     <dl className="tdetail" data-tally-detail="" data-tally-reason={h.level === "ok" ? "" : h.code}>
       {pc && <><dt>Computer</dt><dd>{pc}</dd></>}
       {h.company && <><dt>Company</dt><dd>{h.company}</dd></>}
-      {link && <><dt>Link</dt><dd data-tally-link-word={link.state}>{link.word}</dd></>}
+      {link && <><dt>Link</dt><dd data-tally-link-word={link.state} data-tally-pill={link.pill ? link.pill.state : undefined}>{link.pill && link.state !== "unlinked" ? link.pill.text : link.word}</dd></>}
       {h.code !== "none" && <><dt>Last confirmed</dt><dd data-tally-confirmed="">{h.confirmed ? tallyIst(h.confirmed) : "\u2014"}</dd></>}
     </dl>
     {h.hint && <p className="note there-hint" data-tally-hint="">{h.hint}</p>}
@@ -194,16 +200,22 @@ export function HereCard({ h, link = null }) {
   </div>;
 }
 function TallySign() {
-  const co = S.view === "company" ? CO() : null, h = tallyHere(co), t = tallyStatus(co), k = co ? tallyLinkOf(co) : null;
+  const co = S.view === "company" ? CO() : null, h = tallyHere(co), t = tallyStatus(co), lk = co ? tallyLinkOf(co) : null;
+  // next-tally-suvit: the client's company in the one pill's words (lib/tallyState.js), as its card and chip say them
+  const k = lk ? Object.assign({}, lk, { pill: clientTallyState(co) }) : null;
   const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
+  // next-tally-firstlink (the owner: "it should be above, on the Tally icon"): a badge with the companies open in Tally
+  // that are no client's; a click then opens the panel, which starts with their link (TallyOffer). Only for who may link
+  const nOpen = mayLink() ? unlinkedOpen().length : 0, offer = nOpen ? " — " + nOpen + (nOpen === 1 ? " company open in Tally is" : " companies open in Tally are") + " not linked: click to link" : "";
   return <span className="tsign-wrap">
     <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
-      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — link: " + k.word : "")}
+      aria-haspopup="dialog" aria-label={"Tally: " + h.label + offer} title={tallyHereWords(h) + (k ? " — " + (k.state === "unlinked" ? k.word : k.pill.text) : "") + offer}
       // ui-tidy; 15-Oct-2026: while the client is not linked, the sign points to the Tally page's Connect Tally, step 4 with this
       // client (goTallyCard, parts/TallyChip.jsx), as every Tally chip does
-      onClick={() => (co && k && k.state === "unlinked" ? goTallyCard(co.id) : doAct("tallyPanel"))}>
+      onClick={() => (co && k && k.state === "unlinked" && !nOpen ? goTallyCard(co.id) : doAct("tallyPanel"))}>
       <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
     </button>
+    {nOpen > 0 && <span className="bell-n tsign-n" data-tally-badge={nOpen} aria-hidden="true">{nOpen}</span>}
     {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}
   </span>;
 }
@@ -278,7 +290,8 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
-        <HereCard h={tallyHere(co)} link={co ? tallyLinkOf(co) : null} />
+        {mayLink() && <Suspense fallback={null}><TallyOffer /></Suspense>}
+        <HereCard h={tallyHere(co)} link={co ? Object.assign({}, tallyLinkOf(co), { pill: clientTallyState(co) }) : null} />
         <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>
         <p><TallyPill co={co} /></p>{co && typeof tallyLine === "function" && tallyLine(co) && <p data-panel-tally-line=""><TallyLine co={co} update={!panelBooksShown(co.id)} /></p>}

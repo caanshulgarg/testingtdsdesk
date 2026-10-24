@@ -317,3 +317,10 @@
   #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > thead th:nth-child(7) { width: 116px; }
   #app [data-phone-scroll].audit-ftable > .lt-wrap > table.lt.lt > tbody > tr > td { white-space: normal; min-width: 0; }
 }
+/* no microphone or camera reached this browser (parts/NoDeviceNote.jsx; calls and Ask FinCom's mic) */
+.no-device-note { font-size: 13px; line-height: 1.45; background: var(--warn-soft, #FEF3C7); color: var(--foreground, #0F172A); border-radius: 8px; padding: 8px 10px; }
+.no-device-steps { margin: 6px 0 0; padding-left: 20px; }
+.no-device-steps li { margin: 2px 0; }
+.call-in .no-device-note { background: transparent; color: inherit; padding: 0; }
+.asst-voice .no-device-note.asst-nodev { display: block; flex-basis: 100%; margin-top: 6px; }
+.asst-voice-msg .no-device-note { margin-top: 6px; }

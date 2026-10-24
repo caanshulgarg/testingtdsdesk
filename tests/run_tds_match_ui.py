@@ -249,7 +249,9 @@ try:
         before = J("(p) => TDS.rows().filter(r => r.party === p).map(r => [r.pan, TDS26Q.remark(r, '26Q').remark])", party)
         pg.click("[data-dee-save]"); pg.wait_for_timeout(500)
         after = J("(p) => TDS.rows().filter(r => r.party === p).map(r => [r.pan, TDS26Q.remark(r, '26Q').remark])", party)
-        ok(all(x == ["", "C"] for x in before) and all(x == ["AABCZ9999K", ""] for x in after), "saved for the deductee: every deduction now carries the PAN, remark C gone (%s -> %s)" % (before[:1], after[:1]))
+        # the TDS check of 22-Oct-2026, N10: remark C only where the higher rate (20%) was deducted; this no-PAN 194J deduction
+        # is at 10%, so it had no C before the PAN either (the FVU refuses C at a lower rate; Validate says the short deduction)
+        ok(all(x == ["", ""] for x in before) and all(x == ["AABCZ9999K", ""] for x in after), "saved for the deductee: every deduction now carries the PAN, no remark C at 10%% (%s -> %s)" % (before[:1], after[:1]))
         f = J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
         ok("AABCZ9999K" in f.get("text", ""), "the file carries the PAN for that deductee")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-desktop-4-deductees.png"), full_page=True)

@@ -149,7 +149,9 @@ function serviceWorker(mode) {
     // written once the files are on disk (Vite drops a CSS-only chunk after generateBundle): only files that are there
     writeBundle(o, bundle) {
       const v = fs.existsSync(legacyFile) ? crypto.createHash("sha256").update(fs.readFileSync(legacyFile, "utf8")).digest("hex").slice(0, 12) : "";
-      const all = Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f));
+      // calls (stage 1, 23-Oct-2026): the call screen's files are fetched only when a call is opened, never kept ahead
+      const all = Object.keys(bundle).filter((f) => fs.existsSync(o.dir + "/" + f)).filter((f) => (/^assets\/.*\.(js|css)$/.test(f) || /^assets\/(inter|geist)-latin(-ext)?-wght-normal-[\w-]+\.woff2$/.test(f)) && !/^assets\/bridge-go\//.test(f)
+        && !/^assets\/(CallScreen|CallMenu|guest|calls)-[\w-]+\.(js|css)$/.test(f));
       // the entry chunk and what it imports at once (not import()), with their styles
       const first = new Set(), walk = (f) => {
         const c = bundle[f]; if (!c || first.has(f)) return; first.add(f);

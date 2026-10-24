@@ -5,9 +5,11 @@
 import CommitBox from "../../parts/CommitBox.jsx";
 import { Gstr1a } from "./Filing.jsx";
 import { ListRows } from "../../parts/ListTable.jsx";
+import { AdvOptIn, AdvOffLine, advOn } from "../../parts/AdvOptIn.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
+const istDay = (at) => { const t = Date.parse(at); return isNaN(t) ? "" : fmtDate(new Date(t + 330 * 60000).toISOString().slice(0, 10)); };
 const Card = ({ title, children, style }) => <section className="dash-card" style={{ marginTop: 12, ...style }}>{title && <h3>{title}</h3>}{children}</section>;
 const Tile = ({ label, value, small, warn }) => <div className={"dtile" + (warn ? " warn" : "")}><span>{label}</span><b>{value}</b>{[].concat(small || []).map((s, i) => <small key={i}>{s}</small>)}</div>;
 
@@ -21,11 +23,11 @@ const b2csTotal = (n) => { let s = 0; n.b2cs.forEach((x) => { s += num(x.txval);
 function FiledCopies({ all }) {
   return (
     <section className="dash-card"><h3>Filed GSTR-1 returns kept here</h3>
-      <p className="note">Amendments are found by comparing the books now with what was filed. A copy is kept each time the GSTR-1 JSON is downloaded here; for a month filed some other way, bring in the JSON that was uploaded to the portal.</p>
+      <p className="note">Amendments are found by comparing the books now with what was filed. A copy is kept each time the GSTR-1 JSON is downloaded here; it counts as filed only once the month is marked filed (its filing date, or the portal’s return status), and then the last one downloaded by the filing date is used. For a month filed some other way, bring in the JSON that was uploaded to the portal: that counts at once.</p>
       <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("filedPick")}>Bring in filed GSTR-1 JSON</button></div>
       {all.length ? <ListRows name="filedCopies" unit={["copy", "copies"]} head={[{ label: "Month" }, { label: "Registration" }, { label: "Copy from" }, { label: "Kept on", role: "date", cls: "dt" }, { label: "Documents", cls: "n", sum: true, fmt: String }, { label: "B2C small", role: "amount", cls: "n" }, { label: "Not filed", role: "status" }]}>
         {all.map((f) => { const n = GSTAmend.norm(f.json), key = f.gstin + "|" + f.fp; return <tr key={key}>
-          <td>{GSTR.label(f.ym)}</td><td>{f.gstin}</td><td>{f.source === "portal" ? "brought in" : "downloaded here"}</td><td>{fmtDate(String(f.at).slice(0, 10))}</td>
+          <td>{GSTR.label(f.ym)}</td><td>{f.gstin}</td><td>{f.source === "portal" ? "brought in" : GSTAmend.proof(f.ym, String(f.gstin).slice(0, 2)) ? "downloaded here" : <span data-draft-copy="">Downloaded, not filed</span>}</td><td>{fmtDate(String(f.at).slice(0, 10))}</td>
           <td className="n">{n.docs.size}</td><td className="n">{money(b2csTotal(n))}</td>
           <td><input type="checkbox" checked={!!f.notFiled} aria-label="This copy was not filed" onChange={(ev) => filedSetNotFiled(key, ev.target.checked)} /></td></tr>; })}
       </ListRows> : <p className="note lt-empty" data-list-empty="" style={{ border: 0 }}>None yet. Use Bring in filed GSTR-1 JSON above, or download this month’s JSON here.</p>}
@@ -41,6 +43,7 @@ function BooksAgainstFiled({ c, ym }) {
       {c.rows.length ? <ListRows name="booksVsFiled" unit={["document", "documents"]} of={c.rows.length} head={[{ label: "Document" }, { label: "Party", role: "party" }, { label: "Number", role: "number" }, { label: "Date", role: "date", cls: "dt" }, { label: "What differs", role: "status" }]}>
         {c.rows.slice(0, gfN(200)).map((r, i) => <tr key={i}><td>{KIND[r.kind] || r.kind}</td><td>{r.doc.ctin || "—"}</td><td>{r.doc.num}</td><td>{day(r.doc.date)}</td><td>{r.changes.join("; ")}</td></tr>)}
       </ListRows> : <p className="note">Every document in the books matches the return filed.</p>}
+      {c.file.source !== "portal" && <p className="note" data-compared-with="">Compared with the JSON downloaded on {istDay(c.file.at)}; if a different file was uploaded to the portal, bring that one in.</p>}
       <p className="note">Differences here are reported as amendments in a later month’s return, not by filing this month again.</p>
     </Card>
   );
@@ -74,7 +77,7 @@ function ToReport({ p, ym }) {
 }
 
 export function Amendments({ b }) {
-  const ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [], all = GSTAmend.filed(reg);
+  const ym = S.gstYm || "", reg = S.gstReg || "", regs = GSTR.gstins(b) || [], all = GSTAmend.filed(reg, true);
   if (regs.length > 1 && !reg) return <><FiledCopies all={all} /><p className="note" style={{ marginTop: 12 }}>Choose a registration above to see its amendments.</p></>;
   if (!ym) return <FiledCopies all={all} />;
   const c = GSTAmend.check(ym, reg);
@@ -154,10 +157,13 @@ function LeftOut({ a }) {
 }
 
 export function Advances() {
-  if (!GSTAdv.ready()) return <section className="dash-card"><h3>Advances need the day book read again</h3><p className="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section>;
+  // off unless turned on for the client (the owner, 22-Oct-2026): the switch and one quiet line, nothing worked out
+  if (!advOn(CO())) return <><AdvOptIn /><AdvOffLine /></>;
+  if (!GSTAdv.ready()) return <><AdvOptIn /><section className="dash-card"><h3>Advances need the day book read again</h3><p className="note">Advances are worked out from the bill-wise details in Tally (New Ref, Advance, On Account, Agst Ref). The day book here was read before those were kept. Under “From Tally”, choose the same day book XML again; nothing you set is lost.</p></section></>;
   const ym = S.gstYm || "", a = GSTAdv.month(ym, S.gstReg || "");
   const box = (s) => [money(s.received) + " received, " + money(s.igst + s.cgst + s.sgst + s.cess) + " tax"];
   return <>
+    <AdvOptIn />
     <div className="dash-tiles">
       <Tile label="Received, not billed this month (11A)" value={a.atSum.n} small={box(a.atSum)} />
       <Tile label="Billed now, received earlier (11B)" value={a.txpdSum.n} small={box(a.txpdSum)} />

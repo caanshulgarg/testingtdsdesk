@@ -3,12 +3,14 @@ the gst-2b-match function stood in by tests/m2b_standin.mjs (the same rules file
 place of Claude, never the real API):
   - a 2B brought in (the real file box, #twoBIn): the page asks the server to match at once, saying "uploaded"; only the
     fields the matching reads are sent (no narration, no ledger); the year's 2B by return period;
-  - the line "N matched (n by rules, m by AI) · k to look at · x in books only · y in 2B only" and the run line (when, why,
-    what the AI did, its cost); probable matches first, each with Accept / Reject, and "Accept all suggestions (N)";
-  - Accept: kept on the server and linked for the rest of the 2B page; the line moves;
-  - a new purchase entry in the books: matched again by itself ("new entries"); "Match again" ("match again");
-  - AI help off: the app says so to the server, and the line says the rules' result stands;
-  - the server down: matched here by the rules only (the same file), and said so.
+  - next-itc-simple (the owner, 24-Oct-2026: "this should not even show every time and every month in 2B.. it should be in
+    input register or 2B reco as the case may be.. why confuse the user"): no box of its own anywhere (no line "N matched ·
+    k to look at", no run line, no AI cost, no table of its own); the result is each line's status in the 2B
+    reconciliation (a pair matched by AI: Matched with an "AI" tag, its reason on hover; one the AI only suggests: a
+    probable match with Same / Not the same on its row) and the 2B column of the input register;
+  - Same on the row: kept on the server and linked; the line is Matched;
+  - a new purchase entry in the books: matched again by itself ("new entries"); "Match again" under the tab's ⋯;
+  - AI help off: the app says so to the server; the server down: the rules here, nothing shown about it.
 Screenshots (desktop 1366 and phone 390) to TDSDESK_SHOTS (default tests/out/2b-automatch). Run on the React build:
 TDSDESK_SITE=../app/dist-test python3 run_2b_automatch_ui.py"""
 import json, os, sys, time, threading, functools, http.server, subprocess, tempfile
@@ -79,60 +81,59 @@ with sync_playwright() as p:
     n0 = len(calls)
     pg.set_input_files("#twoBIn", f)
     t0 = time.time()
-    while time.time() - t0 < 15 and not pg.locator("[data-m2b-line]").count(): pg.wait_for_timeout(250)
-    pg.wait_for_timeout(1500)
+    while time.time() - t0 < 15 and not [c for c in calls[n0:] if c.get("action") == "run"]: pg.wait_for_timeout(250)
+    pg.wait_for_timeout(2000)
     runs = [c for c in calls[n0:] if c.get("action") == "run"]
-    ok(len(runs) == 1 and runs[0].get("why") == "uploaded", "a 2B brought in: matched at once, the server told \"uploaded\" (%s)" % [c.get("why") for c in runs])
+    ok(len(runs) == 1 and runs[0].get("why") == "uploaded", "a 2B brought in: matched at once, silently, the server told \"uploaded\" (%s)" % [c.get("why") for c in runs])
     r0 = runs[0] if runs else {}
     keys_b = sorted(set(k for x in r0.get("books", []) for k in x)); keys_g = sorted(set(k for t in r0.get("twob", []) for x in t["rows"] for k in x))
     ok(keys_b == ["cess", "cgst", "date", "dir", "gstin", "id", "igst", "no", "party", "sgst", "taxable", "voucher", "ym"] and "narr" not in json.dumps(r0.get("books", [])[:3]),
        "only the fields the matching reads go to the server (books: %s)" % ",".join(keys_b))
     ok([t["period"] for t in r0.get("twob", [])] == ["032026"] and r0.get("gstin") == G and r0.get("fy") == "2025-26" and r0.get("ai") is True and r0.get("client_id"),
        "the year's 2B by return period, the GSTIN, the year, AI help on, the client")
-    line = pg.inner_text("[data-m2b-line]") if pg.locator("[data-m2b-line]").count() else ""
-    ok(line.startswith("3 matched (2 by rules, 1 by AI)") and "1 to look at" in line and "in books only" in line and "1 in 2B only" in line, "the line: " + line)
-    run_line = pg.inner_text("[data-m2b-run]") if pg.locator("[data-m2b-run]").count() else ""
-    ok("after 2B was brought in" in run_line and "cost ₹1.87" in run_line, "the run line: when, why, what AI did and its cost: " + run_line)
-    rows = pg.locator("[data-m2b-row]")
-    ok(rows.count() == 1 and "Probable match" in rows.first.inner_text() and "AI: invoice number written differently" in rows.first.inner_text(), "the probable match first, with the AI's reason and the figures of both sides")
-    ok(pg.locator("[data-m2b-accept-all]").count() == 1 and "Accept all suggestions (1)" in pg.inner_text("[data-m2b-accept-all]"), "Accept all suggestions (1)")
-    rj = pg.locator("[data-m2b-reject]")
-    inside = pg.evaluate("() => { const b = document.querySelector('[data-m2b]').getBoundingClientRect(); return Array.from(document.querySelectorAll('[data-m2b-accept],[data-m2b-reject]')).every(x => { const r = x.getBoundingClientRect(); return r.width > 0 && r.right <= b.right + 0.5 && r.left >= b.left; }); }")
-    ok(rj.count() == 1 and rj.first.is_visible() and inside, "each probable match has Accept and Reject, both shown inside the box at 1366")
-    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "1-desktop-box.png")); pg.screenshot(path=os.path.join(SHOTS, "2-desktop-page.png"))
-    pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(600)
-    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "3-phone-box.png"))
-    ok(pg.evaluate("document.documentElement.scrollWidth") <= 392, "phone 390 with a row to look at: no sideways page scroll (the table scrolls in its box)")
-    pg.set_viewport_size({"width": 1366, "height": 1000}); pg.wait_for_timeout(600)
-    # Accept
-    pid = pg.get_attribute("[data-m2b-accept]", "data-m2b-accept")
-    pg.click("[data-m2b-accept]"); pg.wait_for_timeout(1500)
+    def no_box(where):
+        t = pg.inner_text("#app")
+        ok(pg.locator("[data-m2b],[data-m2b-line],[data-m2b-run],[data-m2b-look]").count() == 0 and "to look at" not in t and "AI looked at" not in t and "cost ₹" not in t, where + ": no auto-match box, line, run line or cost")
+    no_box("2B reconciliation")
+    rowof = lambda no: 'tr[data-ic-row]:has(.code:text-is("%s"))' % no
+    ai_no = pg.evaluate("() => { const x = GST2B.run('07').pairs.find(p => p.ai && p.status === 'matched'); return x ? x.p.no : ''; }")
+    pr_no = pg.evaluate("() => { const x = GST2B.run('07').pairs.find(p => p.ai && p.status === 'probable'); return x ? x.p.no : ''; }")
+    ok(ai_no and pg.locator(rowof(ai_no) + " [data-ic-ai]").count() == 1 and pg.get_attribute(rowof(ai_no), "data-ic-chip-of") in ("matched", "cf") and "invoice number written differently" in (pg.get_attribute(rowof(ai_no) + " [data-ic-ai]", "title") or ""),
+       "the pair matched by AI: Matched in the table (Carried forward when booked in an earlier month), with an AI tag and its reason on hover (%s)" % ai_no)
+    ok(pr_no and pg.locator(rowof(pr_no) + " [data-reco-accept]").count() == 1 and pg.locator(rowof(pr_no) + " [data-reco-reject]").count() == 1, "the AI's suggestion: a probable match on its row, Same / Not the same (%s)" % pr_no)
+    pg.screenshot(path=os.path.join(SHOTS, "1-desktop-table.png"), full_page=True)
+    for part in ("inreg", "r3b", "itcfinal"):
+        pg.evaluate("(p) => { S.gstPart = p; render(); }", part); pg.wait_for_timeout(500); no_box(part)
+    pg.evaluate("() => { S.gstView = 'year'; render(); }"); pg.wait_for_timeout(400); no_box("the year's grid")
+    pg.evaluate("() => { S.gstPart = 'inreg'; S.gstView = 'return'; S.inregScope = 'year'; render(); }"); pg.wait_for_timeout(500)
+    ok(pg.evaluate("(no) => { const x = GST2B.run('07').pairs.find(p => p.p.no === no); return !!x && inregRows(S.books).rows.some(r => r.id === x.books[0].id && r.twoB === 'In 2B'); }", ai_no), "the input register's 2B column: the AI's pair is In 2B")
+    pg.evaluate("() => { S.gstPart = 'r2b'; render(); }"); pg.wait_for_timeout(600)
+    # Same on the row
+    pid = pg.evaluate("() => GST2B.run('07').pairs.find(p => p.ai && p.status === 'probable').aiId")
+    pg.click(rowof(pr_no) + " [data-reco-accept]"); pg.wait_for_timeout(1500)
     dec = [c for c in calls if c.get("action") == "decide"]
-    line = pg.inner_text("[data-m2b-line]")
-    ok(dec and dec[-1]["pairs"] == [pid] and dec[-1]["decision"] == "accept" and line.startswith("4 matched (2 by rules, 2 by AI)") and "0 to look at" in line, "Accept: kept on the server, the line moves: " + line)
+    ok(dec and dec[-1]["pairs"] == [pid] and dec[-1]["decision"] == "accept" and pg.get_attribute(rowof(pr_no), "data-ic-chip-of") in ("matched", "diff", "cf") and pg.evaluate("(no) => (GST2B.run('07').pairs.find(p => p.p.no === no) || {}).status", pr_no) != "probable", "Same: kept on the server, the line is matched (%s)" % (dec[-1] if dec else None))
     g_key = pid.split(">")[0]
-    ok(pg.evaluate("(k) => !!(GST2B.state().link || {})[k]", g_key), "the accepted pair is linked for the rest of the 2B page")
+    ok(pg.evaluate("(k) => !!(GST2B.state().link || {})[k] || (GST2B.state().confirm || {})[k] === 'yes'", g_key), "the accepted pair is kept for the rest of the 2B page")
     # a new purchase entry: matched again by itself
     n1 = len(calls)
     pg.evaluate("""() => { const v = JSON.parse(JSON.stringify(S.books.vouchers.find(x => x.type === 'Purchase'))); v.id = v.id + '-new'; v.no = 'N1'; v.ref = 'NEW/1'; v.date = '20260320'; v.refDate = '20260320'; S.books.vouchers = S.books.vouchers.concat([v]); GST2B._memo = null; render(); }""")
     pg.wait_for_timeout(2000)
     ok([c.get("why") for c in calls[n1:] if c.get("action") == "run"] == ["new entries"], "a new purchase entry: matched again by itself (\"new entries\")")
-    # Match again
-    n2 = len(calls); pg.click("[data-m2b-again]"); pg.wait_for_timeout(1500)
-    ok([c.get("why") for c in calls[n2:] if c.get("action") == "run"] == ["match again"], "Match again: run again (\"match again\")")
-    # AI help off
-    pg.evaluate("S.firm.ai = {on: false}; render()"); n3 = len(calls); pg.click("[data-m2b-again]"); pg.wait_for_timeout(1500)
+    # Match again, under ⋯
+    def again():
+        pg.click("[data-r2-more] > summary"); pg.wait_for_timeout(300); pg.click("[data-m2b-again]"); pg.wait_for_timeout(1500)
+    n2 = len(calls); again()
+    ok([c.get("why") for c in calls[n2:] if c.get("action") == "run"] == ["match again"], "Match again, under the tab's ⋯: run again (\"match again\")")
+    pg.evaluate("S.firm.ai = {on: false}; render()"); n3 = len(calls); again()
     c3 = [c for c in calls[n3:] if c.get("action") == "run"]
-    ok(c3 and c3[-1].get("ai") is False and "rules' result stands" in pg.inner_text("[data-m2b-run]"), "AI help off: the server is told, the run line says the rules' result stands")
-    # the server down: the rules here
-    SV["down"] = True; pg.click("[data-m2b-again]"); pg.wait_for_timeout(1500)
-    run_line = pg.inner_text("[data-m2b-run]"); line = pg.inner_text("[data-m2b-line]")
-    ok("rules only" in run_line and "by AI)" in line and pg.locator("[data-m2b-accept]").count() == 0, "the server down: matched here by the rules only, said so: " + run_line)
-    SV["down"] = False; pg.evaluate("S.firm.ai = {on: true}; render()"); pg.click("[data-m2b-again]"); pg.wait_for_timeout(1500)
-    # phone
+    ok(c3 and c3[-1].get("ai") is False, "AI help off: the server is told")
+    SV["down"] = True; again(); no_box("the server down")
+    ok(pg.locator("[data-ic-row]").count() > 0 and not errors, "the server down: the rules here, the table as before, no error")
+    SV["down"] = False; pg.evaluate("S.firm.ai = {on: true}; render()"); again()
     pg.set_viewport_size({"width": 390, "height": 900}); pg.wait_for_timeout(600)
     sw = pg.evaluate("document.documentElement.scrollWidth")
-    pg.locator("[data-m2b]").screenshot(path=os.path.join(SHOTS, "4-phone-after.png"))
+    pg.screenshot(path=os.path.join(SHOTS, "2-phone.png"))
     ok(sw <= 392, "phone 390: no sideways page scroll (page width %d)" % sw)
     ok(not errors, "no page errors" + (": " + "; ".join(errors[:3]) if errors else ""))
     br.close()

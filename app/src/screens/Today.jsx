@@ -3,21 +3,20 @@
 // same on Today, Clients, a client's Overview and the review table's status.
 import ListTable from "../parts/ListTable.jsx";
 import { DueLine } from "../parts/DueList.jsx";
-import { goTallyCard } from "../parts/TallyChip.jsx";
+import { AutoToday } from "../parts/AutoPost.jsx";
+import { MeetToday } from "../calls/MeetLine.jsx";
 
-// ui-tidy (13-Oct-2026; the owner: "how to link tally"): the clients not linked to Tally, in one line; each name points to
-// the Tally page's Connect Tally, step 4 with that client (15-Oct-2026: the one place to link), the rest are on that page
+// 24-Oct-2026 (next-tally-one-page): the clients not linked to Tally, as one small chip that opens the Tally page's list
+// (where a company is added or linked: the one place); no names or links here
 function NotLinkedLine() {
-  const list = sortedCompanies().filter((c) => typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked");
-  if (!list.length) return null;
-  // round 63: kept, as one quiet line (not a warning)
-  return <div className="due-line due-quiet" data-not-linked-line={list.length}>
-    <span className="note"><b>{list.length}</b>{list.length === 1 ? " client not linked to Tally:" : " clients not linked to Tally:"}</span>
-    {list.slice(0, 3).map((c, i) => <span key={c.id}>{i ? ", " : " "}<button className="linkbtn" data-not-linked-open={c.id} onClick={() => goTallyCard(c.id)}>{c.name + " → Link"}</button></span>)}
-    {list.length > 3 && <>{" and "}<button className="linkbtn" data-not-linked-more="" onClick={() => { S.tallyFocus = ""; navHome("tally"); }}>{list.length - 3} more</button></>}
+  const n = sortedCompanies().filter((c) => typeof tallyLinkOf === "function" && tallyLinkOf(c).state === "unlinked").length;
+  if (!n) return null;
+  return <div className="due-line due-quiet" data-not-linked-line={n}>
+    <button type="button" className="tag tchip warn" data-not-linked-go="" onClick={() => { S.tallyFocus = ""; S.tallyGuide = {}; navHome("tally"); }}>{"◐ " + n + (n === 1 ? " client not linked to Tally" : " clients not linked to Tally")}</button>
   </div>;
 }
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
+import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
@@ -49,7 +48,9 @@ export default function Today() {
         <Metric label="Ready to post" n={sum("post")} tone="indigo" Icon={Send} />
         <Metric label="Needs you" n={sum("look")} warn tone="rose" Icon={TriangleAlert} />
       </div>
-      {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
+      <AutoToday />
+      <MeetToday />
+      {!rows.length ? <><p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p><FirstRunTally /></> : <>
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
           cols={[

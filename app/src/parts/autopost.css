@@ -1,0 +1,30 @@
+/* Post automatically (parts/AutoPost.jsx): the chip with its hover, the "Not auto" reason, the filter under the tabs,
+   the Today line, the Post page's run cards. Wraps at a phone's width; no sideways scroll. */
+.ap-chip { position: relative; display: inline-flex; max-width: 100%; margin: 3px 0 0; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--brand, #4F46E5) 35%, transparent);
+  border-radius: 999px; background: color-mix(in srgb, var(--brand, #4F46E5) 9%, transparent); color: var(--brand, #4F46E5); font-size: 12px; font-weight: 600; line-height: 1.5; cursor: help; vertical-align: middle; }
+.ap-chip-t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-tip { display: none; position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: max-content; max-width: min(340px, 82vw); padding: 9px 11px; border-radius: 8px;
+  background: #0F172A; color: #F8FAFC; font-size: 12.5px; font-weight: 400; line-height: 1.45; white-space: normal; box-shadow: 0 6px 18px rgb(0 0 0 / .25); }
+.ap-tip b { color: #fff; }
+.ap-chip:hover .ap-tip, .ap-chip:focus .ap-tip, .ap-chip:focus-within .ap-tip { display: block; }
+.ap-why { display: inline-block; max-width: 100%; margin: 3px 0 0; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); border-radius: 6px;
+  background: var(--warn-soft); color: var(--warn); font-size: 12px; font-weight: 600; line-height: 1.45; white-space: normal; }
+.ap-filter { display: inline-flex; flex-wrap: wrap; max-width: 100%; margin: 8px 0 4px; padding: 2px; gap: 2px; border: 1px solid var(--border, var(--rule)); border-radius: 8px; background: var(--surface-muted, var(--sheet-2)); }
+.ap-filter button { border: 0; border-radius: 6px; background: transparent; padding: 4px 11px; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-secondary, var(--muted)); cursor: pointer; }
+.ap-filter button.on { background: #0F172A; color: #fff; font-weight: 600; }
+.ap-filter .n { opacity: .8; font-weight: 500; }
+.ap-today { margin: 10px 0 2px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--brand, #4F46E5) 30%, transparent); border-radius: 10px;
+  background: color-mix(in srgb, var(--brand, #4F46E5) 6%, var(--sheet)); font-size: 14px; overflow-wrap: anywhere; }
+.ap-runline { margin: 8px 0; font-size: 13px; color: var(--muted); }
+.ap-run { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 12px; background: var(--sheet); }
+.ap-run h3 { margin: 0 0 4px; font-size: 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ap-run table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }
+.ap-run th, .ap-run td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+.ap-run td.n, .ap-run th.n { text-align: right; white-space: nowrap; }
+.ap-run tr.undone td { text-decoration: line-through; color: var(--muted); }
+.ap-run .ap-msg { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: var(--bad-soft); color: var(--bad); }
+@media (max-width: 700px) {
+  .ap-run table, .ap-run tbody, .ap-run tr, .ap-run td { display: block; width: 100%; }
+  .ap-run thead { display: none; }
+  .ap-run td.n { text-align: left; }
+}

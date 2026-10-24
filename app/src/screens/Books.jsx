@@ -26,6 +26,9 @@ import { booksNeedTally } from "../parts/FreshBar.jsx";
 import HeldBooks from "../parts/HeldBooks.jsx";
 import UnknownLedgers from "../parts/UnknownLedgers.jsx";
 import Loading from "../parts/Loading.jsx";
+import { lazy, Suspense } from "react";
+// My MIS (ROUND 105): the custom MIS builder, a lazy chunk of its own (the engine, the charts, the downloads)
+const MyMis = lazy(() => import("./books/MyMis.jsx"));
 import { AlertLine } from "../parts/Bell.jsx";
 
 // the date of the books' last entry (yyyymmdd), worked out once for each set of entries
@@ -57,6 +60,7 @@ const BRING = "Bring in from Tally";
 const EMPTY_TAB = {
   // clean-up batch 3: one sentence, one button
   mis: ["MIS is worked out from the day book, which is not in yet.", BRING, () => goClient("books:import")],
+  mymis: ["My MIS is worked out from the day book, which is not in yet.", BRING, () => goClient("books:import")],
   fs: ["The financial statements are made from the day book, which is not in yet.", BRING, () => goClient("books:import")],
   audit: ["The audit checks run over the day book, which is not in yet.", BRING, () => goClient("books:import")],
 };
@@ -100,14 +104,15 @@ function BooksPage() {
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
   // MIS, Financial statements and Audit: pages of their own in the sidebar (review item 7); the tie-out is Audit's tab
-  if (tab === "mis" || tab === "fs" || tab === "audit" || tab === "tieout") {
+  if (tab === "mis" || tab === "fs" || tab === "audit" || tab === "tieout" || tab === "mymis") {
     // the page's title is in the top bar
     return <>
       {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><UnknownLedgers cid={co.id} where="books" byBook /><BooksStale cid={co.id} /></>}
       <JobsNote cid={co.id} active />
       {busy}
       {tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
-        : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} /> : tab === "audit" ? <AuditTab b={b} /> : <FinStatements b={b} />}
+        : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} />
+        : tab === "mymis" ? <Suspense fallback={<Loading what="My MIS" page="books" />}><MyMis b={b} /></Suspense> : tab === "audit" ? <AuditTab b={b} /> : <FinStatements b={b} />}
     </>;
   }
   // clean-up batch 1: TDS and GST are each a page of the sidebar (Returns), with no tab row here. ledger-confirm

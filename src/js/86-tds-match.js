@@ -36,6 +36,15 @@ const TDSRegActs = {
     if (interest < 0 || fee < 0 || others < 0) return {ok: false, why: "An amount cannot be below nil."};
     // each head past its own from the tax not used, in turn: interest, the fee, others
     let r = M(r2(num(c.tax) - this.usedTax(c) - M(-hi) - M(-hf) - M(-ho)));
+    // the TDS check of 22-Oct-2026, H8 (Leads: ₹16,200 of the 30-Apr-2026 194J challan, which pays March 2026, given to Q1
+    // 2026-27 as its fee, March left short): the tax of a challan is first for the deductions of the month it was deposited
+    // for (its section's, not yet on a challan); only what is beyond them may pay another return's interest or fee
+    const cd = TDS.ymd(c.date), cm = num(cd.slice(4, 6)), om = num(cd.slice(6, 8)) <= (cm === 4 ? 30 : 7) ? (cm === 1 ? (num(cd.slice(0, 4)) - 1) + "12" : cd.slice(0, 4) + String(cm - 1).padStart(2, "0")) : cd.slice(0, 6), sec = TDSCH.secNorm(c.section), own = TDS.rows().concat(TDS.salaryRows()).filter(z => !z.challan && TDS.ymd(z.date).slice(0, 6) === om && (!sec || TDSCH.secNorm(z.section) === sec));
+    const keep = r2(own.reduce((a, z) => a + num(z.tds), 0));
+    if (keep > 0.005 && this.key(form, TDS.fyOf(om + "01"), TDS.qOf(om + "01")) !== k){
+      const need = r2(M(interest - hi) + M(fee - (others == null ? hf + ho : hf)) + (others == null ? 0 : M(others - ho)));
+      if (TDSCH.p(need) > TDSCH.p(M(r - keep))) return {ok: false, why: money(keep) + " of this challan's tax is for its own deductions (" + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][num(om.slice(4, 6)) - 1] + " " + om.slice(0, 4) + (sec ? ", " + sec : "") + "), not yet on it: " + money(M(r - keep)) + " can go to another return's interest or fee."};
+    }
     for (const [v, h, w] of [[interest, hi, "interest"], [fee, hf, "the fee"], [others, ho, "others"]]){
       const x = r2(M(h) + r);
       if (TDSCH.p(v) > TDSCH.p(x)) return {ok: false, why: money(x) + " free on this challan for " + w + ": " + money(r2(v - x)) + " more cannot be given."};
@@ -75,7 +84,7 @@ const TDSRegActs = {
       n = r.n; tax = r2(ids.reduce((a, id) => a + cx.byRow[id].r.tds, 0));
     }
     if (wi || wf){
-      const cur = this.portionFor(c, form, fy, q, cx);
+      const cur = this.portionSet(c, form, fy, q, cx);
       const r = this.setPortion(chId, form, fy, q, r2(cur.interest + wi), r2(cur.fee + wf), {nosave: true});
       if (!r.ok){ if (ids.length) TDSCH.untag(ids, {cx, nosave: true}); return r; }
       was = r.was || {interest: 0, fee: 0};
@@ -127,11 +136,31 @@ const TDSMatch = {
     (b.vouchers || []).forEach(v => { vs[v.id] = v; });
     return TDS.challans().map(c => {
       const sec = TDSCH.secNorm(c.section);
-      return {id: c.id, sec: /^206C/.test(sec) ? "206C" : sec, date: TDS.ymd(c.date), minor: String(c.minorHead || "200"), bal: TDSReg.balance(c, cx).tax, interestLeft: TDSReg.balance(c, cx).interest, fy: TDS.fyOf(c.date), label: this.label(c),
+      const ly = this.lastYear(c);
+      return {id: c.id, sec: /^206C/.test(sec) ? "206C" : sec, date: TDS.ymd(c.date), minor: String(c.minorHead || "200"), bal: TDSReg.balance(c, cx).tax, interestLeft: TDSReg.balance(c, cx).interest, fy: TDS.fyOf(c.date), label: this.label(c), ...(ly ? {forFy: ly} : {}),
         bsr: c.bsr || "", serial: c.serial || "", narr: c.fromVoucher && vs[c.fromVoucher] ? vs[c.fromVoucher].narr || "" : ""};
     }).filter(c => c.bal > 0.005 || (all && c.interestLeft > 0.005) || all === "any");
   },
   label(c){ return c ? (c.bsr || "") + " / " + (c.serial || "") + " · " + (c.date ? fmtDate(tallyDate(TDS.ymd(c.date))) : "") : ""; },
+  // the TDS check of 22-Oct-2026, H7 (Leads, Payments 151-154 of 29-Apr-2025: March 2025's TDS, offered to Q1 2025-26): an
+  // April challan (by 30 April) whose tax is, within a rupee, a TDS ledger's balance on 1 April of that year (its section's,
+  // where the challan names one) pays last year's March: the year before its own ("2024-25"), else ""
+  lastYear(c){
+    const d = TDS.ymd(c && c.date);
+    if (!d || d.slice(4, 6) !== "04") return "";
+    const sec = TDSCH.secNorm(c.section), y = d.slice(0, 4), map = this.books().map || {};
+    const hit = Object.keys(map).some(l => map[l].kind === "tds_payable" && (!sec || TDSCH.secNorm(map[l].section) === sec) && Math.abs(this.openOn(l, y + "0401") - num(c.tax)) <= 1);
+    return hit ? (+y - 1) + "-" + y.slice(2) : "";
+  },
+  // a ledger's credit balance at the start of a day, from the balances FinCom holds (b.tb: Tally's openings at tb.from) and
+  // the entries between; null without them
+  openOn(l, d){
+    const tb = this.books().tb, x = tb && tb.led && tb.led[l];
+    if (!x) return null;
+    let bal = num(x.open);
+    (this.books().vouchers || []).forEach(v => { if (v.opt || v.cancel) return; const t = TDS.ymd(v.date), f = TDS.ymd(tb.from); if (t >= f && t < d) v.ent.forEach(e => { if (e.l === l) bal += e.a; }); else if (t < f && t >= d) v.ent.forEach(e => { if (e.l === l) bal -= e.a; }); });
+    return r2(bal);
+  },
   // next-24q-split (the owner on Leads' Form 138 Q1: "24Q has only 2 month TDS challan… why only 2 months?"): a challan
   // naming no section, made from a Tally TDS payment, pays what that payment debits: 6-Jul ₹2,27,543 is TDS 192B ₹1,98,578
   // (June's salary TDS, Form 138 Q1's) with 194C, 194J and 194I (26Q's). [{sec, amount}] (sec "" for a TDS ledger of no
@@ -174,6 +203,17 @@ const TDSMatch = {
     return out;
   },
   no(){ return this.books().matchNo || {}; },
+  // the section and month of other returns' deductions on no challan (a later month's own challan is theirs: tmRules' H6
+  // across a quarter's end): [{sec, ym}], once each
+  waiting(form, fy, q, cx){
+    const seen = new Set(), out = [];
+    Object.values((cx || TDSReg.ctx()).byRow).forEach(({r, form: f}) => {
+      if (r.challan || !(r.tds > 0.005) || (f === form && r.fy === fy && r.q === q)) return;
+      const sec = f === "24Q" ? "192" : f === "27EQ" ? "206C" : this.sec(r), ym = TDS.ymd(r.date).slice(0, 6), k = sec + "|" + ym;
+      if (!seen.has(k)){ seen.add(k); out.push({sec, ym}); }
+    });
+    return out;
+  },
   // ---------------- next-24q-auto (the owner on Leads' Form 138 Q1, 20-Oct-2026: "FinCom has now shown the challans, but the
   // deductions are being filled by me by adding"). Salary TDS is one figure a month paid on one challan: on opening a 24Q
   // return its deductions are PLACED by the sure rules (a Tally's link, b/c the exact amount, s below), each tagged "Rule"
@@ -212,15 +252,14 @@ const TDSMatch = {
     });
     return out;
   },
-  // the rules of a return: 26Q, 27Q, 27EQ tmRules as they are; 24Q a, b, c first, then s, then the rest on what is left
+  // the rules of a return (next-tds-autoplace: tmPlan, R1 to R8 in order, each placing with its rule code and whether it is
+  // certain); 24Q's salary rule s after a, b, c
   rulesFor(form, rows, chs, opt, cx){
-    if (form !== "24Q") return tmRules(rows, chs, opt);
-    const less = (list, ss) => { const use = {}, taken = new Set(); ss.forEach(s => { s.ids.forEach(id => taken.add(id)); (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
-      return {rows: list.rows.filter(r => !taken.has(r.id)), chs: list.chs.map(c => Object.assign({}, c, {bal0: c.bal0 != null ? c.bal0 : c.bal, bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100})).filter(c => c.bal > 0.005)}; };
-    const first = tmRules(rows, chs, opt).filter(s => ["a", "b", "c"].includes(s.rule)), l1 = less({rows, chs}, first);
-    const sal = l1.rows.length && l1.chs.length ? this.salRule(l1.rows, l1.chs, opt, cx || TDSReg.ctx()) : [], l2 = less(l1, sal);
-    return first.concat(sal, l2.rows.length && l2.chs.length ? tmRules(l2.rows, l2.chs, opt) : []);
+    const mid = form === "24Q" ? (r, c) => this.salRule(r, c, opt, cx || TDSReg.ctx()) : null;
+    return tmPlan(rows, chs, mid ? Object.assign({}, opt, {mid}) : opt);
   },
+  // a confirmed suggestion's words in the trail: its rule code first (R6 …), the AI's as before
+  noteOf(s){ return "suggestion confirmed: " + (s.code && s.rule !== "g" ? s.code + " " : "") + s.words + (s.rule === "g" ? " (" + s.reason + ")" : ""); },
   // what a person took off a challan stays off (the trail's "untag" of it, not a stale one dropped)
   offRows(){ return new Set((this.books().allocLog || []).filter(l => l.act === "untag" && l.row && !/^stale/.test(l.note || "")).map(l => l.row)); },
   // allocations naming a deduction that is no longer in the books: a payroll entry's books 192 line or its "TDS not split by
@@ -290,7 +329,7 @@ const TDSMatch = {
     TDS.challans().forEach(c => { chBy[c.id] = c; });
     const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
-    const opt = {fy, q, today, links: rows.length ? this.links(rows) : {}, no: this.no()};
+    const opt = {fy, q, today, links: rows.length ? this.links(rows) : {}, no: this.no(), waiting: rows.length ? this.waiting(form, fy, q, cx) : []};
     let out = rows.length && chs.length ? this.rulesFor(form, rows, chs, opt, cx) : [];
     // the AI's pairings (a run kept for these deductions), checked again against what is free now
     const ai = this.aiOf(form, fy, q);
@@ -298,7 +337,7 @@ const TDSMatch = {
       const taken = new Set([].concat(...out.map(s => s.ids))), use = {};
       out.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
       const chs2 = this.chs(cx, true).filter(kind).map(c => Object.assign({}, c, {bal: Math.max(0, tmP(c.bal) - (use[c.id] || 0)) / 100}));
-      out = out.concat(tmAiCheck(ai.raw, rows.filter(r => !taken.has(r.id)), chs2, opt).sugg.filter(s => s.rule !== "int"));
+      out = out.concat(tmAiCheck(ai.raw, rows.filter(r => !taken.has(r.id)), chs2, opt).sugg.filter(s => s.rule !== "int").map(s => Object.assign(s, {code: "R9", auto: false})));
     }
     return out.concat(this.interestSugg(form, fy, q, cx, ai && ai.raw));
   },
@@ -308,7 +347,7 @@ const TDSMatch = {
   interestSugg(form, fy, q, cx, raw){
     const k = TDSReg.key(form, fy, q), no = this.no(), out = [];
     TDS.challans().filter(c => (cx.uses[c.id] || {})[k]).forEach(c => {
-      const key = "int:" + c.id, cur = TDSReg.portionFor(c, form, fy, q, cx), d = this.defaultPortion(c, form, fy, q);
+      const key = "int:" + c.id, cur = TDSReg.portionSet(c, form, fy, q, cx), d = this.defaultPortion(c, form, fy, q);
       // a person's own allocation for this return is never offered over (only none yet)
       if (no[key] || ((TDSReg.portions(c) || {})[k]) || (d.interest <= cur.interest + 0.005 && d.fee <= cur.fee + 0.005)) return;
       const interest = Math.max(d.interest, cur.interest), fee = Math.max(d.fee, cur.fee);
@@ -318,7 +357,7 @@ const TDSMatch = {
     if (raw && raw.interest && raw.interest.length){
       const chs = this.chs(cx, true).filter(c => (cx.uses[c.id] || {})[k]);
       tmAiCheck({pairs: [], splits: [], interest: raw.interest}, [], chs, {fy, q, no}).sugg.filter(s => !out.some(o => o.chId === s.chId)).forEach(s => {
-        const cur = TDSReg.portionFor(TDS.challans().find(c => c.id === s.chId), form, fy, q, cx);
+        const cur = TDSReg.portionSet(TDS.challans().find(c => c.id === s.chId), form, fy, q, cx);
         out.push(Object.assign(s, {interest: r2(cur.interest + s.interest / 100), fee: cur.fee}));
       });
     }
@@ -342,7 +381,7 @@ const TDSMatch = {
       const qs = ["Q1", "Q2", "Q3", "Q4"], i = qs.indexOf(q), nfy = i === 3 ? (+String(fy).slice(0, 4) + 1) + "-" + String((+String(fy).slice(0, 4) + 2) % 100).padStart(2, "0") : fy, nq = qs[(i + 1) % 4];
       const allCh = TDS.challans();
       return TDS.paymentsFromBooks().filter(p => num(p.tax) > 0.005 && [fy + q, nfy + nq].includes(TDS.fyOf(p.date) + TDS.qOf(p.date)) && TDSTally.notChallan(p, allCh))
-        .map(p => ({vid: p.vid, date: TDS.ymd(p.date), tax: p.tax, sections: (p.sections || []).filter(Boolean).map(x => TDS.sec(x) || x)}));
+        .map(p => ({vid: p.vid, date: TDS.ymd(p.date), tax: p.tax, sections: (p.sections || []).filter(Boolean).map(x => TDSCH.secNorm(x) || TDS.sec(x) || x)}));
     } catch (e){ return []; }
   },
   // "N of M matched automatically · K need you": M the deductions with tax; N those on a challan or in a suggestion the
@@ -360,7 +399,7 @@ const TDSMatch = {
     if (!s) return {ok: false, why: "That suggestion is no longer there."};
     if (s.rule === "split") return {ok: false, split: true, why: "A split is made in its own window: Split the row."};
     if (s.rule === "int"){ const r = TDSReg.setPortion(s.chId, form || "26Q", fy, q, s.interest, s.fee, opt); return r.ok ? Object.assign(r, {n: 0, interest: s.interest}) : r; }
-    return TDSCH.tag(s.ids, s.chId, Object.assign({via: "suggestion", note: "suggestion confirmed: " + s.words + (s.rule === "g" ? " (" + s.reason + ")" : "")}, opt || {}));
+    return TDSCH.tag(s.ids, s.chId, Object.assign({via: "suggestion", note: this.noteOf(s)}, opt || {}));
   },
   // every suggestion but the splits, in one go (worked out together, they never use a challan beyond its balance)
   confirmAll(form, fy, q){
@@ -368,7 +407,7 @@ const TDSMatch = {
     const list = this.suggestNow(form, fy, q).filter(s => s.rule !== "split" && s.rule !== "int");
     const cx = TDSReg.ctx(); let n = 0, ints = 0; const chs = new Set(), why = [];
     list.forEach(s => {
-      const r = TDSCH.tag(s.ids, s.chId, {via: "suggestion", note: "suggestion confirmed: " + s.words + (s.rule === "g" ? " (" + s.reason + ")" : ""), cx, nosave: true});
+      const r = TDSCH.tag(s.ids, s.chId, {via: "suggestion", note: this.noteOf(s), cx, nosave: true});
       if (r.ok && r.n){ n += r.n; chs.add(s.chId); } else if (!r.ok) why.push(r.why);
     });
     // then the interest and fee of the challans now used (worked out again with the new matches)
@@ -447,7 +486,7 @@ const TDSMatch = {
     if (log.act === "tally") return {kind: "tally", words: "Matched by: Tally"};
     if (log.act === "split") return {kind: "you", words: "Matched by: " + when(log).replace(/, /, " (") + ") · split"};
     // next-24q-auto: placed by a rule on opening the return, or carried from a payroll month's total (Payroll.carry)
-    if (log.act === "auto" && /^rule: /.test(log.note || "")) return {kind: "rule", words: "Matched by: rule · " + log.note.slice(6).split(" · ")[0] + " (FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) + ")"};
+    if (log.act === "auto" && /^rule: /.test(log.note || "")) return {kind: "rule", words: "Matched by: rule " + ((log.note.match(/ · (R\d) · run /) || [])[1] ? log.note.match(/ · (R\d) · run /)[1] + " " : "") + "· " + log.note.slice(6).split(" · ")[0] + " (FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) + ")"};
     if (/^carried from the month's total/.test(log.note || "")) return {kind: "rule", words: "Matched by: rule · carried from the month's total challan (FinCom, " + fmtDate(String(log.at || "").slice(0, 10)) + ")"};
     if (log.act === "auto" || log.act === "balance") return {kind: "auto", words: "Matched by: FinCom's earlier automatic allocation (" + when(log) + ")"};
     return {kind: "you", words: "Matched by: " + when(log).replace(/, /, " (") + ")"};
@@ -456,10 +495,18 @@ const TDSMatch = {
   // interest: what this return's late deductions on this challan owe (TDS.interest), else, when this return is the only one
   // using the challan, its interest left; never more than is left. Fee (and others): the challan's, when this return is
   // its only user. {interest, fee, due}
-  defaultPortion(c, form, fy, q){
-    const cx = TDSReg.ctx(), bal = TDSReg.balance(c, cx), cur = TDSReg.portionFor(c, form, fy, q, cx), only = Object.keys(cx.uses[c.id] || {}).length <= 1;
+  // the interest a return's late deductions on a challan owe (TDS.interest): paid late, and deducted late
+  dueOn(c, form, fy, q){ return r2(TDS.interest(fy, q, form).filter(x => (x.kind === "pay" && x.challan && x.challan.id === c.id) || (x.kind === "deduct" && x.row.challan === c.id)).reduce((a, x) => a + x.amount, 0)); },
+  defaultPortion(c, form, fy, q, dflt){
+    const cx = TDSReg.ctx(), bal = TDSReg.balance(c, cx), cur = TDSReg.portionSet(c, form, fy, q, cx), only = Object.keys(cx.uses[c.id] || {}).length <= 1;
     const iLeft = r2(bal.interest + cur.interest), fLeft = r2(bal.fee + cur.fee);
     const due = r2(TDS.interest(fy, q, form).filter(x => (x.kind === "pay" && x.challan && x.challan.id === c.id) || (x.kind === "deduct" && x.row.challan === c.id)).reduce((a, x) => a + x.amount, 0));
+    // (the TDS check, M6: the default the file takes when nobody has allocated: the interest this return's late deductions on
+    // the challan owe, from the challan's own interest only, after what the returns before it (in date order) take)
+    if (dflt){
+      const ks = Object.keys(cx.uses[c.id] || {}).filter(x => { const u = cx.uses[c.id][x]; return u && (u.fy + u.q < fy + q || (u.fy + u.q === fy + q && u.form < form)); }), before = r2(ks.reduce((a, x) => { const u = cx.uses[c.id][x]; return a + (u ? this.dueOn(c, u.form, u.fy, u.q) : 0); }, 0));
+      return {interest: r2(Math.max(0, Math.min(Math.ceil(due - 0.005), r2(iLeft - before)))), fee: 0, due};
+    }
     const interest = due > 0 ? Math.min(Math.ceil(due), TDSMatch.free(c, form, fy, q, cx).interest) : only ? iLeft : 0;
     return {interest: r2(Math.max(0, interest)), fee: only ? fLeft : 0, due};
   },
@@ -494,7 +541,7 @@ const TDSMatch = {
   // the most a return may have of a challan's interest, its 234E fee and its others (TDSReg.setPortion's limit): its own,
   // the head left, and the challan's tax not used (kept here, out of legacy.js)
   free(c, form, fy, q, cx){
-    const b = TDSReg.balance(c, cx), cur = TDSReg.portionFor(c, form, fy, q, cx), t = Math.max(0, b.tax);
+    const b = TDSReg.balance(c, cx), cur = TDSReg.portionSet(c, form, fy, q, cx), t = Math.max(0, b.tax);
     return {interest: r2(cur.interest + b.interest + t), fee: r2(cur.fee234 + b.fee234 + t), others: r2(cur.others + b.others + t)};
   },
   // "Allocate interest due": each challan of the return its interest due (whole rupees, up), within what it has free
@@ -504,7 +551,7 @@ const TDSMatch = {
     const cx = TDSReg.ctx(); let n = 0;
     this.interestTable(form, fy, q).perChallan.forEach(x => {
       if (!(x.due > 0)) return;
-      const cur = TDSReg.portionFor(x.c, form, fy, q, cx), want = Math.min(Math.ceil(x.due - 0.005), TDSMatch.free(x.c, form, fy, q, cx).interest);
+      const cur = TDSReg.portionSet(x.c, form, fy, q, cx), want = Math.min(Math.ceil(x.due - 0.005), TDSMatch.free(x.c, form, fy, q, cx).interest);
       if (Math.abs(want - cur.interest) < 0.005) return;
       if (TDSReg.setPortion(x.c.id, form, fy, q, want, cur.fee234, {nosave: true}, cur.others).ok) n++;
     });
@@ -518,7 +565,7 @@ const TDSMatch = {
     const cx = TDSReg.ctx(), t = this.interestTable(form, fy, q); let left = r2(Math.ceil(t.totals.feeShort - 0.005)), n = 0;
     t.perChallan.forEach(x => {
       if (left <= 0) return;
-      const cur = TDSReg.portionFor(x.c, form, fy, q, cx), give = r2(Math.min(left, Math.max(0, TDSMatch.free(x.c, form, fy, q, cx).fee - cur.fee234)));
+      const cur = TDSReg.portionSet(x.c, form, fy, q, cx), give = r2(Math.min(left, Math.max(0, TDSMatch.free(x.c, form, fy, q, cx).fee - cur.fee234)));
       if (give > 0 && TDSReg.setPortion(x.c.id, form, fy, q, cur.interest, r2(cur.fee234 + give), {nosave: true}, cur.others).ok){ left = r2(left - give); n++; }
     });
     if (n){ TDSReg.done(); saveBooks(); }
@@ -537,7 +584,7 @@ const TDSMatch = {
     if (stale.length) out.block.push({k: "stale", n: stale.length, words: stale.length + " split deduction" + (stale.length === 1 ? "'s" : "s'") + " tax changed in the books: undo the split and split it again."});
     const mine = TDS.challans().filter(c => (cx.uses[c.id] || {})[TDSReg.key(form, fy, q)]);
     const notPortioned = mine.filter(c => this.warnShort(num(c.interest) + TDSReg.feeOf(c)) && !TDSReg.explicit(c));
-    if (notPortioned.length) out.warn.push({k: "portion", words: notPortioned.map(c => TDSCH.label(c)).join(", ") + ": interest or fee paid on " + (notPortioned.length === 1 ? "this challan is" : "these challans is") + " not allocated to any return; the file writes only what is allocated."});
+    if (notPortioned.length) out.warn.push({k: "portion", words: notPortioned.map(c => TDSCH.label(c)).join(", ") + ": interest or fee paid on " + (notPortioned.length === 1 ? "this challan is" : "these challans is") + " not allocated by a person; the file takes the interest due on the return's late deductions on it (and, its only return, its fee): check it on Challans."});
     mine.forEach(c => {
       const n = TDSReg.notes(c, form, fy, q);
       if (n.some(w => /^challan of/.test(w))) out.warn.push({k: "earlier", words: "Challan " + TDSCH.label(c) + ": " + n.filter(w => /^challan of/.test(w)).join("; ") + ". Check its balance with TRACES' challan status."});
@@ -562,7 +609,7 @@ const TDSMatch = {
     TDS.challans().forEach(c => { chBy[c.id] = c; });
     const chs = this.chs(cx).filter(kind);
     let today = ""; try { today = istToday(); } catch (e){}
-    const rules = this.rulesFor(form, rows, chs, {fy, q, today, links: this.links(rows), no: this.no()}, cx), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
+    const rules = this.rulesFor(form, rows, chs, {fy, q, today, links: this.links(rows), no: this.no(), waiting: this.waiting(form, fy, q, cx)}, cx), taken = new Set([].concat(...rules.map(s => s.ids))), use = {};
     rules.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
     return {rows: rows.filter(r => !taken.has(r.id)), chs: chs.map(c => Object.assign({}, c, {bal: r2((tmP(c.bal) - (use[c.id] || 0)) / 100)})).filter(c => c.bal > 0.005)};
   },

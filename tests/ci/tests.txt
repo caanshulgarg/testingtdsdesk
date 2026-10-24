@@ -15,6 +15,8 @@ run_assistant_settings_ui.py          180  TDSDESK_SITE=../app/dist-test
 run_bottom_banner_ui.py               180  TDSDESK_SITE=../app/dist-test
 run_assistant_ui.py                   300  TDSDESK_SITE=../app/dist-test
 run_assistant_voice.py                180  TDSDESK_SITE=../app/dist-test
+run_transcribe_server.py              120
+run_voice_whisper.py                  240  TDSDESK_SITE=../app/dist-test
 run_ask_fab_overlap.py                480  TDSDESK_SITE=../app/dist-test
 run_audit2.js                         120
 run_no_lookbehind_same.js             120
@@ -29,10 +31,12 @@ run_backup_history_server.py          120
 run_balances_copy.py                  120  TDSDESK_SITE=../app/dist-test
 run_bankpost_e2e.py                   300  TDSDESK_SITE=../app/dist-test
 run_bankrules.py                      120
+run_bank_smart.py                     240  TDSDESK_SITE=../app/dist-test
 run_beat_history.py                   120
 run_bill_typing_echo.py               180  TDSDESK_SITE=../app/dist-test
 run_block17.js                        120
 run_booksync.js                       120
+run_boot_watch.py                     120  TDSDESK_SITE=../app/dist-test
 run_bridge_control_server.py          120
 run_bridge_fast.py                    630
 run_bridgejobs.py                     240
@@ -53,7 +57,7 @@ run_fixture_books.js                  120
 run_fs.js                             120
 run_fs_ui.py                          120  TDSDESK_SITE=../app/dist-test
 run_fin_statements.js                 120
-run_fin_xlsx.py                       180  # needs LibreOffice: ci.yml installs libreoffice-calc on the share that runs it
+run_fin_xlsx.py                       180  @libreoffice  # needs LibreOffice: tagged, so run_ci.sh deals it to one share with run_mis_xlsx.py and ci.yml installs libreoffice-calc there only
 run_fin_statements_ui.py              300  TDSDESK_SITE=../app/dist-test
 run_reports_pack.js                   120
 run_reports_pack_ui.py                300  TDSDESK_SITE=../app/dist-test
@@ -89,6 +93,27 @@ run_migration_order.py                180
 # automatic grants, then 97; every privilege equals staging's snapshot and no table is left without service_role
 run_migration_grants.py               120
 run_mis.js                            120
+run_mis_custom.js                     120  # My MIS engine = MIS / FinSt (ROUND 105)
+run_mis_xlsx.py                       300  TDSDESK_SITE=../app/dist-test @libreoffice  # needs LibreOffice: tagged, so run_ci.sh deals it to one share with run_fin_xlsx.py and ci.yml installs libreoffice-calc there only
+run_my_mis_ui.py                      300  TDSDESK_SITE=../app/dist-test
+run_mis_schedule_ui.py                300  TDSDESK_SITE=../app/dist-test
+run_mis_run_server.py                 300
+run_migration100.py                   180
+run_migration101.py                   180
+run_autopost_rules.js                 120
+run_autopost_replay.js                120
+run_autopost_ui.py                    300  TDSDESK_SITE=../app/dist-test
+run_migration102.py                   180
+run_call_rules.mjs                    120
+run_call_glare.py                     120
+run_call_recorder.py                  120
+run_video_calls_server.py             120
+run_video_calls_ui.py                 600  TDSDESK_SITE=../app/dist-test
+run_work_together_ui.py               480  TDSDESK_SITE=../app/dist-test
+run_remote_help_ui.py                 480  TDSDESK_SITE=../app/dist-test
+run_migration103.py                   180
+run_calls_meet_ui.py                  900  TDSDESK_SITE=../app/dist-test
+run_no_device_ui.py                   600  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
 run_mis_sales.py                      120
@@ -98,6 +123,7 @@ run_names_shared.js                   120
 run_no_delete_on_reload.py            120
 run_overlays.py                       240
 run_page_tops.py                      180
+run_panels_close.py                   900
 run_pair_ui.py                        120
 run_parts_ui.py                       120  TDSDESK_SITE=../app/dist-test
 run_party_hist.js                     120
@@ -267,6 +293,11 @@ run_round4_ux.py                      180  TDSDESK_SITE=../app/dist-test
 # the Tally redesign (09-Oct-2026): Your Tally connection, Back to the client, the client's Tally link line, phone width
 run_tally_ux.py                       240  TDSDESK_SITE=../app/dist-test
 run_tally_link_simple.py              300  TDSDESK_SITE=../app/dist-test
+run_tally_link_fix.py                 300  TDSDESK_SITE=../app/dist-test
+run_tally_suvit.py                    600  TDSDESK_SITE=../app/dist-test
+run_tally_one_page.py                 600  TDSDESK_SITE=../app/dist-test
+run_tally_name_rules.mjs              60
+run_tally_autolink_server.py          120
 # app-tdsgst (09-Oct-2026): the TDS and GST return pages redesigned; every file and amount as before (tests/fixtures/tdsgst-before.json)
 run_tdsgst_ui.py                      600  TDSDESK_SITE=../app/dist-test
 # tds-challans (10-Oct-2026): smart challan tagging: auto-match, Tally bill-wise, many at once, uploads, FVU challan records
@@ -282,7 +313,6 @@ run_gst_bills.py                      300  TDSDESK_SITE=../app/dist-test
 run_sidebar_compact.py                300  TDSDESK_SITE=../app/dist-test
 run_26as_recon.py                     180  TDSDESK_SITE=../app/dist-test
 run_traces_files.py                   180  TDSDESK_SITE=../app/dist-test
-run_supplier_health.py                180  TDSDESK_SITE=../app/dist-test
 # round 43: the TDS and GST end-to-end proof on a real TallyPrime 7.1 (test company; known FAILs in tests/fixtures/tdsgst-e2e/known-fails.json)
 run_e2e_tdsgst.py                     600
 # round 44: TDS and GST from both the Day Book and the bridge (the cloud copy): one entry per Tally GUID, the later AlterID
@@ -423,3 +453,40 @@ run_migration98.py                    300
 run_period_ingest.py                  180
 run_older_entries_ui.py               240  TDSDESK_SITE=../app/dist-test
 run_tally_ini_ui.py                  180  TDSDESK_SITE=../app/dist-test
+# GSTR-1 (22-Oct-2026): the party line found by group or bill allocation; advances shown only when turned on per client
+run_gstr1_party.js                    120
+run_adv_optin_ui.py                   180  TDSDESK_SITE=../app/dist-test
+# GSTR-1 (22-Oct-2026, Leads Insurance): a JSON downloaded here counts as filed only once the month is marked filed
+run_gst_draftcopy.js                  120
+run_gst_draftcopy_ui.py               180  TDSDESK_SITE=../app/dist-test
+run_adv_line_ui.py                    180  TDSDESK_SITE=../app/dist-test
+# TDS (22-Oct-2026): the deductee is the party's ledger by structure (TDS.led), not the name Tally keeps for the voucher's party
+run_tds_party.js                      120
+# the TDS check of 22-Oct-2026 (H1-H9, M1-M9, L1-L3, N1-N14): rows, challans and the matcher, the checks and the file
+run_tds_audit_rows.js                 120
+run_tds_audit_challans.js             120
+run_tds_audit_checks.js               120
+# next-tds-autoplace (23-Oct-2026, the owner's approval of the TDS check's C and D): Place automatically (R1-R5 placed, R6-R9
+# suggested, Undo, a filed return untouched, 10,000 deductions timed) and the remarks B, T, Y (FVU lines, Excel, Validate)
+run_tds_autoplace.js                  180
+run_tds_autoplace_ui.py               300  TDSDESK_SITE=../app/dist-test
+# GST (23-Oct-2026, Leads Insurance): a remark in 2B reconciliation and the decision in ITC follow-up are one, kept with the books
+run_2b_follow_ui.py                   240  TDSDESK_SITE=../app/dist-test
+# next-itc-simple (24-Oct-2026): 2B & ITC in three tabs (Input register, 2B reconciliation with one Decision a line, Final
+# credit for 3B with adjustments), 3B figures in windows, the Excel round trip (LibreOffice when present)
+run_itc_final.js                      120
+run_itc_simple_ui.py                  600  TDSDESK_SITE=../app/dist-test
+# next-gstr1-excel (24-Oct-2026): GSTR-1 as an Excel (a sheet a portal table, Excel Tables, lists, formulas) downloaded,
+# changed (add, delete, modify) and brought back: preview, errors, Apply as FinCom's corrections (JSON, screen, 3B 3.1), Undo
+run_gstr1_excel.js                    120
+run_gstr1_excel.py                    300  TDSDESK_SITE=../app/dist-test @libreoffice  # LibreOffice recalculates the Excel (dealt to the LibreOffice share)
+# next-tds-excel (24-Oct-2026, the owner: "download and upload return .. in all types of TDS return.. add or delete or modify"; "add
+# challan, add deduction, add deductee within this smart excel.. dynamic"; "challan balance"): a return as one Excel and back
+run_tds_excel.js                      120
+run_tds_excel.py                      600  TDSDESK_SITE=../app/dist-test @libreoffice
+# ship-121 (24-Oct-2026): the books kept between opens (next-fix-booksload); GSTR-9 8C / 13 credit held as not shown in 2B
+# (next-fix-gst-not2b; migration 105 on a throwaway PostgreSQL); one smart TDS Excel on every return page (next-tds-excel2)
+run_books_speed.py                    600  TDSDESK_SITE=../app/dist-test
+run_gst_not2b.js                      120
+run_migration105.py                   180
+run_tds_excel2.py                     600  TDSDESK_SITE=../app/dist-test @libreoffice

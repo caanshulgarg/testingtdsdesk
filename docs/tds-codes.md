@@ -32,7 +32,8 @@ FVU 8.7's own list (read from the FVU, 17-Oct-2026) of the codes a 26Q deductee 
 94D, 4EE, 94F, 94G, 94H, 4IA, 4IB, 94J, 94L, 194, 4BA, 4DA, LBB, 9IA, 2AA, LBC, 4IC, 94N, 94K, 4JA, 4JB, BA1, BA2, 4NF, 94O,
 94Q, 94S, 94R, 4BP, 4RP, 4SP, 9BA, 4NC, 9FT, 4AP; 27Q's: 94E, 195, 96A, 96B, 96C, 96D, 4LB, 4LC, 4LD, 4BA, LBB, 2AA, LBC, 94N,
 BA1, BA2, BA3, 4NF, 6DA, LC1, LC2, LC3, 94B, 4BP, 9BA, 4AP, 4BB, 4NC, 9FT. 194T (from April 2025) is not in FVU 8.7's list: a
-later FVU is needed for it. 27EQ's collection code is written as its letter (6CE is E).
+later FVU is needed for it. (24-Oct-2026: confirmed on the FVU itself: 4T, 94T, 194T, 4TA and 9TA are all refused, T-FV-4301; FinCom
+writes 94T and Validate & file warns. Which remarks FVU 8.7 takes with which code: `docs/fvu-check.md`, "FVU 8.7's rules".) 27EQ's collection code is written as its letter (6CE is E).
 
 What FinCom used to write before 14-Oct-2026:
 

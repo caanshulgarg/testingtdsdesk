@@ -9,12 +9,12 @@
 //   is in the "N to fix" count)
 // The problem count is the Validate & file panel's (tds/Validate.jsx: errors + warnings), shown once, in the header.
 // The status words are one vocabulary everywhere (STATUS, the TDS home's grid too).
-import { useRef } from "react";
-import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
+import { Panel } from "../../parts/DetailDrawer.jsx";
 import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
 import { openAllChallans } from "./AllChallans.jsx";
+import { excelItems, ExcelBox, ExcelButtons } from "./TdsExcel.jsx";
 
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 export const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -87,18 +87,11 @@ export function nextStep(cur, form, filed) {
   return ids[i + 1] === "after" && !filed ? "" : ids[i + 1] || "";
 }
 
-// a right-hand drawer kept in the page (#app), for a row's or a check's details
-export function SideDrawer({ open, onClose, title, description, kind, wide, children }) {
-  const last = useRef(null);
-  if (open) last.current = { title, description, children };
-  const shown = last.current;
-  return <Drawer open={!!open} onOpenChange={(o) => { if (!o) onClose(); }}>
-    <DrawerContent className={"ddraw rt-drawer" + (wide ? " ddraw-wide" : "")} data-drawer={kind || ""} title={(shown && shown.title) || ""}
-      description={(shown && shown.description) || undefined} closeLabel="Close" aria-describedby={undefined}
-      portal={document.getElementById("app")} onEscapeKeyDown={(ev) => { ev.preventDefault(); onClose(); }}>
-      {shown ? shown.children : null}
-    </DrawerContent>
-  </Drawer>;
+// a right-hand drawer kept in the page (#app), for a row's or a check's details: the app's one side panel (parts/DetailDrawer's
+// Panel: ✕, Cancel, Esc, a click outside and Back close it at once; draft: a useDraft() for what was typed and not saved)
+export function SideDrawer({ open, onClose, title, description, kind, wide, draft, children }) {
+  return <Panel open={!!open} onClose={() => onClose()} title={title} description={description} wide={wide} draft={draft}
+    cls="rt-drawer" attrs={{ "data-drawer": kind || "" }}>{children}</Panel>;
 }
 
 // the frame (round 94, 19-Oct-2026; the owner: "Deductor, Deductee, Challan, Deduction can come horizontally; remove
@@ -116,7 +109,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(more);
+  // next-tds-excel: the whole return as one Excel, down and back up (tds/TdsExcel.jsx), in every return's ⋯
+  const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(excelItems(form, fy, q), more);
   return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
@@ -125,6 +119,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
       <span className="rt-sp" />
+      {/* next-tds-excel2: the return's Excel, down and back, beside ⋯ (in ⋯ too) */}
+      <ExcelButtons form={form} fy={fy} q={q} />
       <More label="⋯" ariaLabel="More" items={moreAll} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
     </header>
@@ -139,5 +135,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
         {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id !== "file" && s.count != null ? " · " + s.count : ""}</option>)}</select></label>
     <div className="rt-main" data-ret-step={cur}>{children}</div>
+    <ExcelBox form={form} fy={fy} q={q} />
   </div>;
 }

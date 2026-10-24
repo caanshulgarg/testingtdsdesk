@@ -5,6 +5,7 @@
 // through doAct (cloudSignIn, cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or
 // data-cloud as before, and acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudAuto, signOutAll, docsKeep,
 // docYearsSet (src/js/27, 19, 43).
+import { useEffect, useState } from "react";
 import Msg from "../parts/Msg.jsx";
 
 import { KeepBox } from "./SignIn.jsx";
@@ -175,6 +176,27 @@ export function PeopleEtc() {
   return <div className="pane"><People canManage={(a.me || {}).role === "owner" || a.superadmin === true} /><DocsSettings /><DropKeys /><Backups /></div>;
 }
 
+// the voice minutes used today (fincom-transcribe, {action: "usage"}): all firms' against Groq's free allowance of about
+// 8 hours of audio a day on the platform's key
+function VoiceUsage() {
+  const [u, setU] = useState(null);
+  useEffect(() => {
+    let live = true;
+    if (!(typeof Cloud === "object" && Cloud.on && Cloud.on())) return undefined;
+    (async () => {
+      try { await Cloud.fresh(); } catch (e) { /* the token as it is */ }
+      const c = Cloud.cfg(), s = Cloud.sess() || {};
+      const r = await fetch(String(c.url || "").replace(/\/+$/, "") + "/functions/v1/fincom-transcribe", { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json" }, body: JSON.stringify({ action: "usage" }) });
+      const j = await r.json();
+      if (live && j && j.ok) setU(j);
+    })().catch(() => {});
+    return () => { live = false; };
+  }, []);
+  if (!u) return null;
+  const mins = Math.round(Number(u.all_secs != null ? u.all_secs : u.firm_secs) / 60);
+  return <p className="note" data-voice-usage="" style={{ margin: "6px 0 0" }}>Voice minutes used today: {mins} of about 480 free a day{u.all_secs != null ? " (all firms)" : ""}.</p>;
+}
+const SECRETS = [["claude_api_key", "Claude API key"], ["google_vision_key", "Google Cloud Vision key"], ["groq_api_key", "Groq key (voice: clearer listening)"]];
 const Admin = ({ act, firm, name, plan, className = "btn small", children }) => <button className={className} onClick={() => adminAct(act, firm, { name, plan })}>{children}</button>;
 
 // the platform page (FinCom's administrators only): firms, prices, new firms, plans, new accounts, keys
@@ -229,9 +251,10 @@ export function Platform() {
       <label><span>Credit to start with</span><input type="number" id="suCredit" aria-label="Credit to start with" defaultValue={num(su.trial_credit || 0)} step="50" min="0" /></label>
       <label><span>Plan they start on</span><select id="suPlan" aria-label="Plan they start on" defaultValue={su.plan}>{plans.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</select></label></div>
     <div className="row" style={{ marginTop: 6 }}><Admin act="saveSignup">Save</Admin></div>
-    <H3>Keys (only you)</H3><p className="note" style={{ margin: "0 0 6px" }}>These stay on the server. Firms use Claude and Google through us and never see a key. A key cannot be read back here — only replaced.</p>
-    <div className="tblwrap"><table className="data" data-statement=""><tbody>{[["claude_api_key", "Claude API key"], ["google_vision_key", "Google Cloud Vision key"]].map(([k, label]) => { const s = (d.secrets || []).find((x) => x.name === k);
-      return <tr key={k}><td>{label}</td><td>{s ? <><span className="tag ok">set</span>{" …" + (s.tail || "") + " · " + fmtDate(s.updated_at)}</> : <span className="tag no">not set</span>}</td>
+    <H3>Keys (only you)</H3><p className="note" style={{ margin: "0 0 6px" }}>These stay on the server. Firms use Claude, Google and Groq through us and never see a key. A key cannot be read back here — only replaced.</p>
+    <div className="tblwrap"><table className="data" data-statement=""><tbody>{SECRETS.map(([k, label]) => { const s = (d.secrets || []).find((x) => x.name === k);
+      return <tr key={k}><td>{label}</td><td>{s ? <><span className="tag ok">set</span>{k === "groq_api_key" ? " on " + fmtDate(s.updated_at) : " …" + (s.tail || "") + " · " + fmtDate(s.updated_at)}</> : <span className="tag no">not set</span>}</td>
         <td><input type="password" id={"sec_" + k} aria-label={"New " + label} placeholder="paste a new key" /></td><td><Admin act="saveSecret" name={k}>Save</Admin></td></tr>; })}</tbody></table></div>
+    <VoiceUsage />
   </div>;
 }

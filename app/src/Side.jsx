@@ -17,15 +17,15 @@ import { useDismiss } from "./parts/dismiss.js";
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
 import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
   Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
-  TrendingUp, Users, X } from "lucide-react";
+  TrendingUp, Users, Video, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale };
+  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale, meetings: Video };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
-  settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald" };
+  settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", mymis: "indigo", lookup: "sky", audit: "rose", letters: "amber",
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald", meetings: "emerald" };
 
 const RAIL = { Transactions: "Trans\u00ADactions", Reconciliations: "Reconcil\u00ADiations", Integrations: "Integra\u00ADtions", Compliance: "Compli\u00ADance" };
 function Item({ icon, label, on, count, onClick, title, bar }) {
@@ -44,6 +44,7 @@ function Item({ icon, label, on, count, onClick, title, bar }) {
 }
 
 const FOLD = "fincom:sideFolded";
+const meetOn = () => { try { return typeof Cloud === "object" && Cloud.on() && ["owner", "staff"].includes(String((Cloud.st && Cloud.st.role) || "")); } catch (e) { return false; } };
 // the person's choice, kept in this browser (t70: never folded on its own: "only icons make the system unreadable"; folded
 // is a rail with each item's words under its icon, styles/arc-shell.css)
 const readFold = () => { try { return localStorage.getItem(FOLD) === "1"; } catch (e) { return false; } };
@@ -62,6 +63,9 @@ function tree() {
       { icon: "today", label: "Today", on: t === "today" || t === "inbox", go: () => navHome("today"), bar: true, title: "What needs doing, every client" },
       { icon: "compliance", label: "Compliance", on: t === "compliance", go: () => navHome("compliance"), bar: true, title: "Returns and payments due, every client" },
       { icon: "clients", label: "Clients", on: t === "clients", go: () => navHome("clients"), bar: true },
+      // next-calls-meet (23-Oct-2026; the owner: "a proper system like Meet/Zoom"): video calls and meetings, for the
+      // firm's owner and staff signed in (a look-only member joins by link or code, from Today or the bell)
+      ...(meetOn() ? [{ icon: "meetings", label: "Meetings", on: t === "meetings", go: () => navHome("meetings"), title: "Video calls: start one, share a link or a code, join with a code" }] : []),
       { icon: "books", label: "Tally", on: t === "tally", go: () => { S.tallyFocus = ""; navHome("tally"); }, bar: true },
       // zoho-books (13-Oct-2026): Tally, Zoho Books and what comes next, one page (src/js/74, screens/Integrations.jsx)
       { icon: "integrations", label: "Integrations", on: t === "integrations", go: () => goIntegrations(""), title: "Tally, Zoho Books and other books" },
@@ -94,6 +98,8 @@ function tree() {
     ["Books", [
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
+      // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)
+      { icon: "mymis", label: "My MIS", on: bt === "mymis", go: () => goClient("books:mymis"), title: "Build your own MIS: choose the figures, add charts, save and share" },
       { icon: "books", label: "Statements", on: bt === "fs", go: () => { S.fsTab = ""; goClient("books:fs"); }, title: "Financial statements: balance sheet, P&L, cash flow, notes and computation, linked to the trial balance" },
       // the tie-out with Tally is a tab of Audit
       { icon: "audit", label: "Audit", on: bt === "audit" || bt === "tieout", go: () => goClient("books:audit"), title: "Checks over the books, and the tie-out with Tally" },

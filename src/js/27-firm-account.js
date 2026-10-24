@@ -122,6 +122,16 @@ const Cloud = {
   }
 };
 /* ---------- what is kept in the cloud ---------- */
+// books-speed (24-Oct-2026): a client's counts that depend on what this computer has (refreshStats, src/js/01: bills
+// being read, the bank lines, Tally's replies) stay on this computer; the firm account gets the client without them, so two
+// computers no longer send their own counts back and forth (3,774 saves of one client's setup on staging in a day)
+const STATS_HERE = ["check", "ready", "attention"];
+function cloudClientView(c){
+  const st = c && c.stats;
+  if (!st || typeof st !== "object" || !STATS_HERE.some(k => k in st)) return c;
+  const s2 = Object.assign({}, st); STATS_HERE.forEach(k => { delete s2[k]; });
+  return Object.assign({}, c, {stats: s2});
+}
 function cloudSnapshot(){
   const out = [];
   // a settings page with unsaved changes (Drafts, src/js/60): the cloud gets the saved values, not the draft
@@ -130,7 +140,7 @@ function cloudSnapshot(){
   // an empty firm record (a reload with nothing kept here) is never sent: it would replace the firm's name and rules
   const f = S.firm || {}, filled = Object.keys(f).some(k => { const v = f[k]; return v != null && v !== "" && !(typeof v === "object" && !Object.keys(v).length); });
   if (filled && String(f.firmName || "").trim()) add("firm", "firm", "", S.firm);
-  Object.values(S.companies).forEach(c => add("client", c.id, c.id, c));
+  Object.values(S.companies).forEach(c => add("client", c.id, c.id, cloudClientView(c)));
   Object.entries(S.data || {}).forEach(([cid, d]) => {
     Object.values((d && d.entries) || {}).forEach(e => add("entry", e.id, cid, e));
     Object.values((d && d.parties) || {}).forEach(p => add("party", p.id, cid, p));
@@ -402,9 +412,14 @@ async function cloudApplyNow(rows){
       if (r.deleted){ delete S.companies[r.id]; Store.put("companies/" + r.id, null); }
       else {
         // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
-        const here = S.companies[r.id], pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
+        const here0 = S.companies[r.id], here = here0 && typeof cloudClientView === "function" ? cloudClientView(here0) : here0;
+        const pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
         const data = pending && plainObj(r.data) ? merge3(await ClientBase.get(r.id), here, r.data) : r.data;
-        S.companies[r.id] = fixCompany(clone(data)); Store.saveCompany(S.companies[r.id]);
+        S.companies[r.id] = fixCompany(clone(data));
+        // this computer's own counts (STATS_HERE) stay as they were here
+        const st0 = here0 && here0.stats, st1 = S.companies[r.id].stats;
+        if (st0 && st1 && typeof STATS_HERE === "object") STATS_HERE.forEach(x => { if (x in st0) st1[x] = st0[x]; });
+        Store.saveCompany(S.companies[r.id]);
         await ClientBase.set(r.id, r.data);
         if (pending) marks[k] = markWas;
       }
@@ -1071,7 +1086,7 @@ function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; save
 function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
 function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
-function r2Tag(key, tag){ const st = GST2B.state(); if (tag) st.tag[key] = {tag, at: new Date().toISOString()}; else delete st.tag[key]; saveBooks(); render(); }
+// a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)
 // a note to a supplier listing the invoices not in their return, to the clipboard (or on screen to copy)
 function r2Copy(k){
   const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);
@@ -1096,9 +1111,9 @@ function tdsAlloc(rowId, chId){
   if (!r.ok) toast(r.why);
   render();
 }
-// many deductions at once (Entries: the ticked ones): to a challan, or off their challans
+// many deductions at once (Entries: the ticked ones): to a challan (off their challans: tdsTakeOff, src/js/86; the old
+// tdsUntagMany here, called by nothing since the React screens, taken out with next-fix-tds-party for legacy.js's budget)
 function tdsTagMany(ids, chId){ const r = TDSCH.tag(ids, chId); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " tagged to challan " + TDSCH.label(TDS.challans().find(c => c.id === chId)) + "."); S.tdsSel = {}; render(); return r; }
-function tdsUntagMany(ids){ const r = TDSCH.untag(ids); if (!r.ok){ toast(r.why); return r; } toast(r.n + " deduction" + (r.n === 1 ? "" : "s") + " taken off " + (r.n === 1 ? "its challan" : "their challans") + "."); S.tdsSel = {}; render(); return r; }
 // a challan taken out (tds-layout): a soft delete with its reason, the one dialog; TDSReg.canDelete says when it cannot be
 // (read from Tally, or anything allocated to it); Undo brings it back
 async function challanDelete(id){
@@ -1119,12 +1134,16 @@ function challanFromBooks(vid, bsr, ser){
   const k = TDSCH.cin(bsr);
   if (!k && (!String(bsr || "").trim() || !String(ser || "").trim())){ toast("Fill the BSR code and the challan serial number, or the 20-digit CIN, first."); return false; }
   const secs = (p.sections || []).filter(Boolean);
-  S.books.challans = (S.books.challans || []).concat([{id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: p.tax, interest: num(p.interest), fromVoucher: p.vid,
-    section: secs.length === 1 ? TDS.sec(secs[0]) : "", minorHead: "200", from: "books", autoPlace: "pending"}].map(c => {
-      if (k) c.cin = k.cin;
-      if (num(p.fee)) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
-      if (num(p.others)) c.others = num(p.others);
-      return c; }));
+  // the TDS check of 22-Oct-2026, H3: a payment of several sections, a challan a section (whole rupees, adding up to what the
+  // bank paid); the serial given goes on the largest, the others are drafts that ask for their own (Challans)
+  S.books.challans = (S.books.challans || []).concat((p.parts || [{section: secs.length === 1 ? secs[0] : "", tax: p.tax}]).map((x, i) => {
+    const c = {id: uid("ch"), bsr: k ? k.bsr : bsr.trim(), serial: i ? "" : k ? k.serial : ser.trim(), date: k ? k.date : p.date, tax: x.tax, interest: i ? 0 : num(p.interest), fromVoucher: p.vid,
+      section: TDS.sec(x.section), minorHead: "200", from: "books", autoPlace: "pending"};
+    if (i) c.draft = "serial";
+    if (k && !i) c.cin = k.cin;
+    if (num(p.fee) && !i) c.fee = num(p.fee);              // bridge 2.4.3 (review 243 R2): the interest and fee Tally marks on the payment
+    if (num(p.others) && !i) c.others = num(p.others);
+    return c; }));
   const pl = typeof TDSReg === "object" ? TDSReg.placeNew().filter(x => x.suggested) : [];
   saveBooks(); toast("Challan added from the books." + (pl.length ? " What it pays is suggested on " + pl[0].form + " " + pl[0].q + " " + pl[0].fy + ": confirm it on Challans." : "")); render(); return true;
 }
@@ -1687,8 +1706,6 @@ function doAct(act, t){
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
     case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
-    case "itctExcel": itctExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "itctCopy": case "itctMail": case "itctWa": itctWrite(act, t.dataset.sup); break;
     case "inregExcel": inregExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }
@@ -1990,15 +2007,20 @@ function doAct(act, t){
     case "csv": exportCsv(); break;
   }
 }
-// v: {name, gstin, tallyName, copyFrom, turnover10cr} from the add-client form; false when something is missing
+// v: {name, gstin, copyFrom, turnover10cr, tallyCompany, postOnly, dupOk} from the add-client form; false when something is
+// missing. 23-Oct-2026 (next-fix-tally-link): the client's Tally name is the Tally company chosen, else its own name (the
+// form's free "Company name in Tally" box is gone: a company picked and then cleared stayed in it, and tally-ingest linked
+// that company to the new client by itself); a client of the same name is not added again unless the person said so (dupOk)
 function saveNewCompany(v){
   const name = String(v.name || "").trim(), gstin = String(v.gstin || "").trim().toUpperCase();
   if (!name){ toast("Enter the client name."); return false; }
   if (gstin && !gstinValid(gstin)){ toast("That GSTIN fails its check digit. Check each character or leave it blank."); return false; }
-  if (gstin && Object.values(S.companies).some(c => c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return false; }
+  if (gstin && Object.values(S.companies).some(c => !c.deleted && c.gstin === gstin)){ toast("A client with this GSTIN already exists."); return false; }
+  const twin = similarClients(name, "", Object.values(S.companies)).find(x => x.why === "same");
+  if (twin && !v.dupOk){ toast(twin.client.name + " already exists. Open it from Clients, or add again to keep both."); return false; }
   const src = v.copyFrom ? S.companies[v.copyFrom] : null;
   const co = newCompany(Object.assign(src ? {voucherType:src.voucherType, createOptional:src.createOptional, billwise:src.billwise, gst:src.gst, roundOff:src.roundOff, tdsLedgers:src.tdsLedgers, expenseLedgers:src.expenseLedgers} : {},
-    {name, gstin, tallyName:String(v.tallyName || "").trim() || name, turnover10cr:!!v.turnover10cr}));
+    {name, gstin, tallyName:String(v.tallyCompany || "").trim() || name, turnover10cr:!!v.turnover10cr}));
   S.companies[co.id] = co; S.data[co.id] = {parties:{}, entries:{}, loaded:true};
   co.stats = {drafts:0, check:0, waiting:0, tdsFy:0, invoicesFy:0, records:1, fy:fyOf(null)};
   // 02-Oct-2026: the Tally company chosen here, and (ticked) the one company its entries may be posted to
@@ -2008,11 +2030,11 @@ function saveNewCompany(v){
   Store.saveCompany(co);
   S.addingCo = false;
   toast(name + " added." + (co.postTo ? " Entries go only into " + co.postTo + "." : ""));
-  // round 39: the new client opens on its Tally card (Client setup → Tally). 15-Oct-2026 (one place to connect): a Tally
-  // company chosen here is linked in the Tally page's Connect Tally guide, step 4, with the client and that company
-  // already chosen; a person presses Link there (nothing links by itself here)
+  // round 39: the new client opens on its Tally card (Client setup → Tally). 23-Oct-2026: a Tally company the person
+  // picked here (Pick from Tally) is linked at once: it is the person's own choice (tally_company_link, linked_by them);
+  // the card then says what is next (open it in Tally, the ledgers, the entries)
   openCompany(co.id); S.tab = "cotally"; render();
-  if (tco) openConnectTally(4, co.id, tco);
+  if (tco && typeof tallyLinkClient === "function") tallyLinkClient(tco, co.id).then(ok => { if (!ok) toast(name + " was added; link it to " + tco + " on its Tally card."); });
   return true;
 }
 let pickMode = "company";
@@ -2317,15 +2339,23 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   // long block of up to 200 ms on an office computer before); the same work, in the same order
   const pause = () => new Promise(r => (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield().then(r, r) : setTimeout(r, 0));
   // whose copy is opened (owner, 21-Oct-2026): the signed-in person's, before any of this browser's databases is opened
+  // 24-Oct-2026 (Sentry FINCOM-APP-STAGING-3/-4, "did not open in 20 s" with no error): the step the opening is at, for
+  // the "FinCom did not open" report (public/oldcheck.js)
+  const stage = s => { window.__fincomStage = s; };
+  stage("owner");
   LocalOwner.boot();
   if (LocalOwner.displaced) S.signedOutWhy = "Your sign-in ended: someone else signed in in another tab. Sign in again; your work is kept.";
+  stage("store-init");
   await Store.init();
   await pause();
+  stage("load-firm:" + S.storeKind);
   try { await Store.loadFirm(); }
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
+  stage("firm-loaded");
   await pause();
   Object.keys(S.data).forEach(refreshStats);
   render();
+  stage("drawn");
   await pause();
   // a page link (#/…) opens that page; otherwise the client open last time
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;

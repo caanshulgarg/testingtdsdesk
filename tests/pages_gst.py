@@ -55,7 +55,7 @@ with sync_playwright() as p:
     pg.evaluate("() => { const id = GSTAmend.pending(S.gstYm, S.gstReg || '').rows[0]; if (id) S.books.amendFix = {[id.id]: 'skip'}; render(); }"); grab("amend-skip")
     # reversal with a capital good and the 5% rule; advances in the busiest month for receipts
     pg.evaluate("() => { S.books.assets = [{id: 'as1', name: 'LED wall', date: '2025-05-10', igst: 180000, cgst: 0, sgst: 0, cess: 0, use: 'common', reg: S.gstReg || '', sold: ''}]; S.gstPart = 'rev'; render(); }"); grab("rev-asset")
-    pg.evaluate("() => { const ms = GSTR.months(), n = m => GSTAdv.ready() ? GSTAdv.month(m, S.gstReg || '').at.length + GSTAdv.month(m, S.gstReg || '').open.length : 0; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); grab("adv-busiest")
+    pg.evaluate("() => { CO().choices = Object.assign(CO().choices || {}, {advGst: {value: 'on', state: 'confirmed', by: 'test', at: '2026-10-22T00:00:00Z'}}); const ms = GSTR.months(), n = m => GSTAdv.ready() ? GSTAdv.month(m, S.gstReg || '').at.length + GSTAdv.month(m, S.gstReg || '').open.length : 0; S.gstYm = ms.slice().sort((a, c) => n(c) - n(a))[0]; S.gstPart = 'adv'; render(); }"); grab("adv-busiest")
     # GSTR-9 and 9C with figures typed, and the text of both PDFs
     pg.evaluate("() => { const ms = GSTR.months(); S.gstYm = ms[0]; const w = {fy: GST9.fyOf(S.gstYm), reg: S.gstReg || ''}; const t = GST9.typed(w.fy, S.gstReg || ''); t['15E'] = {igst: 5000}; const c = GST9C.st(w.fy, w.reg); c.adj['5B'] = 100000; c.reasons['6'] = 'Unbilled revenue of March'; c.turnover = 1234567; S.gstPart = 'g9'; render(); }")
     grab("g9-typed")
