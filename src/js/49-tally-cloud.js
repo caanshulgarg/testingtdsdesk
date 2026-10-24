@@ -188,7 +188,7 @@ const TCloud = {
       const co = S.companies[r.client_id] || {name: "The client"}, what = r.kind === "reparse" ? "reading the kept day books again" : "reading the day book" + (r.message && r.status === "done" ? " " + r.message : "");
       toast(co.name + ": the server " + (r.status === "done" ? "has finished " + what + "." : "stopped " + what + ": " + (r.message || "")));
       // what the server read comes in here
-      if (r.status === "done" && S.books && S.books.cid === r.client_id){ this.st[r.client_id] = {}; this.openLoad(r.client_id).catch(() => {}); }
+      if (r.status === "done" && S.books && S.books.cid === r.client_id){ this.st[r.client_id] = {}; this.openLoad(r.client_id, {full: true}).catch(() => {}); }
     }
     if (!quiet) render();
     this.jobsPoll(r.client_id);
@@ -280,7 +280,13 @@ const TCloud = {
     TallyRead.yearOpen(b);
   },
   // ---------- bring the cloud's copy into FinCom: only the months with a day that changed
-  async load(force){
+  // books-speed (24-Oct-2026): on opening a client the cloud copy's entries were checked one by one every time (Leads: the
+  // GUID, AlterID and deletion of 4,414 entries, 396 KB, on each opening and each switch back to the client). A client
+  // opened again within FULL_EVERY of its last full check is checked by the bridge's lines since (as the once-a-minute
+  // look does); a job of the server finished (jobRow) and a client new to this browser are still checked in full
+  FULL_EVERY: 6 * 3600000,
+  checkedLately(c, bk){ return !!(c && bk && c.book === bk.book && c.fullAt && Date.now() - Date.parse(c.fullAt) < this.FULL_EVERY); },
+  async load(force, opening){
     const co = CO(), b = S.books;
     if (!co || !b || b.cid !== co.id || !this.on()) return false;
     const books = await this.status(co.id, force) || [];
@@ -310,8 +316,9 @@ const TCloud = {
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
     // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
     let copy = null;
-    try { copy = await this.copyHeads(b, bk, force || !same); } catch (e){ copy = null; }
-    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
+    const lately = same && opening && this.checkedLately(meta.copy, bk);
+    try { copy = await this.copyHeads(b, bk, (force && !lately) || !same); } catch (e){ copy = null; }
+    if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || "", fullAt: this.fullAtOf(copy, meta.copy, bk)};
     if (!todo.length && !ledNew && !(copy && (copy.changes || !same))){
       // next-24q-load: nothing new, but the payroll here is missing or not right: read it (next-24q-ready: PayLoad.ensure,
       // app/src/lib/payLoad.js, the one read the 24Q pages share; it checks the copy kept here)
@@ -412,7 +419,7 @@ const TCloud = {
         catch (e){ if (i === cols.length - 1 || !(/42703|PGRST204|does not exist/i.test(String((e && e.message) || e) + " " + String((e && e.code) || "")))) throw e; }
       }
     };
-    let seen = c ? c.seen || "" : "", heads;
+    let seen = c ? c.seen || "" : "", heads, checked = false;
     // zoho-books (src/js/74): a Zoho client's copy has no bridge lines to follow; its entries are read again whenever the
     // cloud says its book changed (tally_books.days_at, moved by every read from Zoho)
     if (/^Zoho Books · /.test(String(bk.company || ""))){
@@ -438,9 +445,10 @@ const TCloud = {
           if (BookSrc.wins(h.alter_id, v)) return true;
           return !!v && !v.tdsx && v.alt != null && v.alt !== "" && h.tds_tally_alter_id != null && h.tds_tally_alter_id !== "" && alt(v.alt) === alt(h.alter_id) && alt(h.tds_tally_alter_id) === alt(h.alter_id);
         }).map(h => String(h.guid)));
+        checked = true;
       } catch (e){ heads = null; }
     }
-    if (!heads && (full || !c)) heads = await read("");
+    if (!heads && (full || !c)){ heads = await read(""); checked = true; }
     else if (!heads){
       if (!newest || newest === seen) return {heads: [], seen, changes: false};
       const ls = await this.restPages("tally_recorder_lines?select=object_guid&state=eq.applied&object_guid=not.is.null" + B + "&applied_at=gt." + encodeURIComponent(seen) + "&order=id.asc");
@@ -450,7 +458,7 @@ const TCloud = {
     const by = BookSrc.index(b.vouchers), list = b.vouchers || [];
     const changes = heads.some(h => { if (!h || !h.guid) return false; const v = by.has(h.guid) ? list[by.get(h.guid)] : null;
       return h.deleted_at ? !!v : BookSrc.wins(h.alter_id, v) || !!(v && !v.tdsx && BookSrc.tdsxOf(h) && BookSrc.alt(v.alt) === BookSrc.alt(h.alter_id)); });
-    return {heads, seen: newest, changes, daysAt: bk.daysAt || ""};
+    return {heads, seen: newest, changes, daysAt: bk.daysAt || "", fullAt: checked ? new Date().toISOString() : ""};
   },
   // bridge 2.4.3 (migration 73): the natures of payment Tally keeps (their section, rates and thresholds by date); a cloud
   // without the table leaves what is held
@@ -462,6 +470,8 @@ const TCloud = {
     b.tdsNat = o;
     return Object.keys(o).length;
   },
+  // when the entries were last checked in full: now when this read did, else as kept for the same book
+  fullAtOf(copy, was, bk){ return (copy && copy.fullAt) || (was && was.book === bk.book ? was.fullAt || "" : ""); },
   async copyInto(b, bk, copy){ return this.copyPut(b, bk, copy, await this.copyRows(b, bk, copy)); },
   // the lines and bills of the entries to take; held (TCloud.load): the entries the books will hold once the months read
   // are put in (guid -> entry), when they are read before anything is put into the books
@@ -479,13 +489,14 @@ const TCloud = {
   copyPut(b, bk, copy, rows){
     const n = BookSrc.apply(b, copy.heads, rows.lines, rows.bills);
     const meta = b.meta = b.meta || {};
-    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || ""};
+    meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || "", fullAt: this.fullAtOf(copy, meta.copy, bk)};
     return n;
   },
   // server-books: opening a client on any computer brings its books in from the cloud copy, with no button and no upload
   // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
   // worked out again from what came in.
-  async openLoad(cid){
+  // o.full: every entry checked again (a job of the server finished), not only what the bridge's lines say changed
+  async openLoad(cid, o){
     if (!this.on() || S.coId !== cid) return false;
     const f = LK.fr();
     if (f.busy) return false;
@@ -495,7 +506,7 @@ const TCloud = {
     if (empty){ f.busy = b.busy = "Looking for the books in FinCom's cloud…"; render(); }
     // a day book chosen on this computer that has not reached the cloud yet goes first
     try { if (await TCloudUp.retry(cid, t => { if (S.books && S.books.cid === cid){ f.busy = S.books.busy = t; render(); } })) this.st[cid] = {}; } catch (e){}
-    try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true); } } catch (e){}
+    try { await this.status(cid, true); if (this.has(cid) && S.books && S.books.cid === cid){ if (empty) f.busy = ""; r = await this.load(true, !(o && o.full)); } } catch (e){}
     if (S.books && S.books.cid === cid && /FinCom.s cloud/.test(S.books.busy || "")){ f.busy = S.books.busy = ""; render(); }
     if (r === "new" && S.books && S.books.cid === cid) this.rework(S.books);
     // how long until every entry was in (said on the books' first line, with the time to open)

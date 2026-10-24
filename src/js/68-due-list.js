@@ -127,9 +127,17 @@ const DueList = {
     const items = [], missing = [];
     for (const co of cos){
       let b = S.books && S.books.cid === co.id && !S.books.loading ? S.books : null;
+      // books-speed: a client not open here is read from this browser's store once a session, and again only when its
+      // books were saved in this page since (Books.ver), its setup changed or the day changed: Today and Compliance read
+      // every client's whole books from the store on each visit and each change of the open client
+      const ver = Books.ver[co.id] || 0, sig = b ? "" : fpHash(stableStr(co)) + "|" + this.today(), c = this.cache[co.id];
+      if (!b && c && c.stored && c.ver === ver && c.sig === sig){ c.items.forEach(x => items.push(x)); continue; }
       if (!b) b = await Books.load(co.id);
       if (!b || b.cid !== co.id){ missing.push(co); continue; }
-      try { this.forClient(co, b).forEach(x => items.push(x)); } catch (e){ missing.push(co); }
+      try {
+        this.forClient(co, b).forEach(x => items.push(x));
+        if (b !== S.books) Object.assign(this.cache[co.id], {stored: true, ver, sig});
+      } catch (e){ missing.push(co); }
     }
     items.sort((a, c) => a.due.localeCompare(c.due) || a.client.localeCompare(c.client) || a.what.localeCompare(c.what));
     return {items, missing, at: Date.now()};

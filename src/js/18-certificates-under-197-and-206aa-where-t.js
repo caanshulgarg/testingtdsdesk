@@ -185,9 +185,13 @@ async function openBooksNow(cid){
     let taken; const first = new Promise(ok => { taken = ok; });
     const pull = BookSync.pull(cid, {taken, after: drawn}).catch(() => {});
     pull.then(taken);
-    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 1500 : 6000))]);
+    // books-speed (24-Oct-2026): books kept here are shown after 250 ms at most (1.5 s before: on the owner's office line
+    // each reopening waited for the round trip); the server's changes since this computer last looked come in behind
+    // them, item by item, as before (BookItems.take: a change made here and not sent yet is never overwritten)
+    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 250 : 6000))]);
     if (!S.books || S.books.cid !== cid) return;
-    if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid) render(); });
+    // (item by item, BookItems draws the page itself when something came in: not drawn again for nothing)
+    if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid && !(typeof BookItems === "object" && BookItems.on())) render(); });
     else if (late || Live.sv.state === "offline"){ S.books.offline = true; toast("The server could not be reached: this is this computer’s copy of the books, as last saved here. It is brought up to date as soon as the server answers.", {background: true}); pull.then(() => { if (S.books && S.books.cid === cid){ S.books.offline = false; render(); } }); }
   }
   S.books.loading = false; delete S.books.cached; S.books.openMs = Date.now() - t0; S.books.openAt = t0;
@@ -207,6 +211,7 @@ async function openBooksNow(cid){
 const BOOKS_KEYS = ["vouchers", "map", "meta", "challans", "alloc", "allocFrom", "pans", "twoB", "gstins", "under", "states", "groups", "salary", "certs", "advFix", "assets", "rev", "filed", "amendFix", "twoBs", "reco2b", "ledInfo", "ledInfoAt", "audit", "auditCfg", "auditRel", "ledSnaps", "gst9c", "groupInfo", "fs", "tb", "mis", "misCfg", "msme", "budget", "gst3b", "gst9", "gstOpen", "itcBasis", "itcTrack", "outRej", "gstFiled", "gstAato", "filed1a", "rule37On", "gstCashLedger", "gstSet", "gstContacts", "gstApi", "gstEst", "gstVault", "gstRegs", "letters", "ai", "tallyCo", "tbCheck", "nrInfo", "tcsCodes", "panInoperative", "filed3b", "apiTaken", "trashLog", "gone", "filedDocs", "portalFiled", "gstNotes", "ledOk", "ledCheck", "tdsFiled", "tdsSnap", "tds26as", "tanParty", "f16a", "tracesJr", "tracesConso", "payDetails", "auditWp", "chPortions", "tdsCorr", "allocLog", "tracesChStatus", "tcsCodesFixed", "fixedAssets", "tdsEdits", "matchNo", "tdsSplits", "panFix", "tdsAdded", "tdsPayKind", "payroll", "itcDec", "itcAdj", "r1Fix"];
 async function saveBooks(opts, bb){
   const b = bb || S.books; if (!b || !b.cid) return;
+  if (typeof BOOKS_REV === "number") BOOKS_REV++;      // the figures held for the top bar's redraws are worked out again (memoKeep, src/js/01)
   if (typeof Drafts === "object" && Drafts.hold("books:" + b.cid)) return;     // a settings section not saved yet (src/js/60)
   const keep = {cid: b.cid}; BOOKS_KEYS.forEach(k => { keep[k] = b[k]; });
   await Books.save(b.cid, keep);
@@ -720,7 +725,8 @@ function readingToggle(which, on){
 function viewTallyHome(){ return '<div data-react="TallyHome"></div>'; }
 
 // the top bar is drawn by React (app/src/TopBar.jsx); a change that touches only it redraws React alone
-function renderTop(){ if (window.FinComReact) FinComReact.redraw(); }
+// books-speed: the top bar's news is drawn with the figures of the last drawing when the books did not change (memoKeep)
+function renderTop(){ if (window.FinComReact) FinComReact.redraw({keep: true}); }
 
 /* ---------- Home: client list ---------- */
 /* ---------- Home: unsorted uploads ---------- */
