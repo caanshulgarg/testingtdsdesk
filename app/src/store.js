@@ -80,7 +80,9 @@ function drawReactNow() {
 // stability batch 1: the grey "why" words beside each disabled button (WhyNotes.jsx) are put in with the drawing, before
 // the page is painted, not a frame later (a note arriving a frame late pushed the buttons after it sideways)
 function why() { try { whyPass(); } catch (e) { /* never in the way of the page */ } }
-export function redraw() { const f = noteFocus(); drawReact(); why(); giveFocus(f); }
+// o.keep (renderTop: the top bar's own news): the figures of the last drawing are used again when the books did not change
+// since (memoKeep, src/js/01)
+export function redraw(o) { const f = noteFocus(); if (o && o.keep && typeof window.memoKeep === "function") window.memoKeep(drawReactNow); else drawReact(); why(); giveFocus(f); }
 window.FinComReact = { redraw };
 
 window.render = function render() {

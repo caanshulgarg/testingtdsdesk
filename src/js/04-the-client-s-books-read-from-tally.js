@@ -494,11 +494,20 @@ const Books = {
     if (/PUR|PURCHASE|DEBIT NOTE/i.test(v.type)) return false;
     return this.byContent(v, /^sales accounts$/i, false);
   },
+  // books-speed (24-Oct-2026): the books of the last MEM clients opened in this page are kept in memory as last saved or
+  // read here, so a client opened again in the same session (A -> B -> A) is not read from this browser's store again
+  // (Leads: 4,414 entries, about 3 MB, read and copied on each opening). ver: this page's saves of each client's books
+  // (the due list on Today works a client out again only when its books were saved since)
+  MEM: 3, mem: new Map(), ver: {},
+  remember(cid, data){ this.mem.delete(cid); if (data) this.mem.set(cid, data); while (this.mem.size > this.MEM) this.mem.delete(this.mem.keys().next().value); },
   async save(cid, data){
+    this.remember(cid, data); this.ver[cid] = (this.ver[cid] || 0) + 1;
     await IDBStore.write([["books:" + cid, data]]);
   },
   async load(cid){
-    try { return await IDBStore.get("books:" + cid); } catch (e){ return null; }
-  }
+    if (this.mem.has(cid)){ const d = this.mem.get(cid); this.remember(cid, d); return d; }
+    try { const d = await IDBStore.get("books:" + cid); if (d && d.cid === cid) this.remember(cid, d); return d; } catch (e){ return null; }
+  },
+  forget(cid){ if (cid) this.mem.delete(cid); else this.mem.clear(); }
 };
 

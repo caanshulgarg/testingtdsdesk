@@ -171,7 +171,8 @@ const TDS = {
   },
   // 26Q: every deduction from a resident other than salary, and other than those filed in a challan-cum-statement on the
   // portal (194-IA 26QB, 194-IB 26QC, 194M 26QD: RULE_DEFAULTS' form; the TDS review of 14-Oct-2026, M3)
-  rows(){ return this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section)) && !this.portalForm(r.section)); },
+  // books-speed: worked out once a drawing (a TDS page asks 15 times; each a test of every deduction's section)
+  rows(){ const f = () => this.allRows().filter(r => !/^192/.test(String(r.section || "")) && !this.NR.test(this.sec(r.section)) && !this.portalForm(r.section)); return typeof perRender === "function" ? perRender(this, "rows", f) : f(); },
   // the portal's own statement a section is filed in (26QB, 26QC, 26QD), "" for the returns FinCom makes
   portalForm(section){
     const s = this.sec(section);
@@ -179,9 +180,9 @@ const TDS = {
     return this._portal[s] || "";
   },
   // those deductions, listed apart (To fix of 26Q: "file in 26QB / 26QC / 26QD on the portal")
-  portalRows(){ return this.allRows().filter(r => this.portalForm(r.section)).map(r => Object.assign({}, r, {portalForm: this.portalForm(r.section)})); },
+  portalRows(){ const f = () => this.allRows().filter(r => this.portalForm(r.section)).map(r => Object.assign({}, r, {portalForm: this.portalForm(r.section)})); return typeof perRender === "function" ? perRender(this, "portalRows", f) : f(); },
   // 27Q: deductions from non-residents
-  nrRows(){ return this.allRows().filter(r => this.NR.test(this.sec(r.section))); },
+  nrRows(){ const f = () => this.allRows().filter(r => this.NR.test(this.sec(r.section))); return typeof perRender === "function" ? perRender(this, "nrRows", f) : f(); },
   // 27EQ: tax collected at source on sales, one row per voucher and TCS ledger
   tcsRows(){ return typeof perRender === "function" ? perRender(this, "tcsRows", () => this.tcsRowsNow()) : this.tcsRowsNow(); },
   tcsRowsNow(){

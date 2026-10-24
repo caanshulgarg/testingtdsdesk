@@ -122,6 +122,16 @@ const Cloud = {
   }
 };
 /* ---------- what is kept in the cloud ---------- */
+// books-speed (24-Oct-2026): a client's counts that depend on what this computer has (refreshStats, src/js/01: bills
+// being read, the bank lines, Tally's replies) stay on this computer; the firm account gets the client without them, so two
+// computers no longer send their own counts back and forth (3,774 saves of one client's setup on staging in a day)
+const STATS_HERE = ["check", "ready", "attention"];
+function cloudClientView(c){
+  const st = c && c.stats;
+  if (!st || typeof st !== "object" || !STATS_HERE.some(k => k in st)) return c;
+  const s2 = Object.assign({}, st); STATS_HERE.forEach(k => { delete s2[k]; });
+  return Object.assign({}, c, {stats: s2});
+}
 function cloudSnapshot(){
   const out = [];
   // a settings page with unsaved changes (Drafts, src/js/60): the cloud gets the saved values, not the draft
@@ -130,7 +140,7 @@ function cloudSnapshot(){
   // an empty firm record (a reload with nothing kept here) is never sent: it would replace the firm's name and rules
   const f = S.firm || {}, filled = Object.keys(f).some(k => { const v = f[k]; return v != null && v !== "" && !(typeof v === "object" && !Object.keys(v).length); });
   if (filled && String(f.firmName || "").trim()) add("firm", "firm", "", S.firm);
-  Object.values(S.companies).forEach(c => add("client", c.id, c.id, c));
+  Object.values(S.companies).forEach(c => add("client", c.id, c.id, cloudClientView(c)));
   Object.entries(S.data || {}).forEach(([cid, d]) => {
     Object.values((d && d.entries) || {}).forEach(e => add("entry", e.id, cid, e));
     Object.values((d && d.parties) || {}).forEach(p => add("party", p.id, cid, p));
@@ -402,9 +412,14 @@ async function cloudApplyNow(rows){
       if (r.deleted){ delete S.companies[r.id]; Store.put("companies/" + r.id, null); }
       else {
         // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
-        const here = S.companies[r.id], pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
+        const here0 = S.companies[r.id], here = here0 && typeof cloudClientView === "function" ? cloudClientView(here0) : here0;
+        const pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
         const data = pending && plainObj(r.data) ? merge3(await ClientBase.get(r.id), here, r.data) : r.data;
-        S.companies[r.id] = fixCompany(clone(data)); Store.saveCompany(S.companies[r.id]);
+        S.companies[r.id] = fixCompany(clone(data));
+        // this computer's own counts (STATS_HERE) stay as they were here
+        const st0 = here0 && here0.stats, st1 = S.companies[r.id].stats;
+        if (st0 && st1 && typeof STATS_HERE === "object") STATS_HERE.forEach(x => { if (x in st0) st1[x] = st0[x]; });
+        Store.saveCompany(S.companies[r.id]);
         await ClientBase.set(r.id, r.data);
         if (pending) marks[k] = markWas;
       }
