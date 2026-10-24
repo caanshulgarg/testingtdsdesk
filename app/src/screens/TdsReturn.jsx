@@ -37,6 +37,7 @@ import { DedByChallan, retChallans } from "./tds/Winman.jsx";
 import { unplacedOf } from "./tds/onChallan.js";
 import { ColF, useCF } from "./tds/ColF.jsx";
 import { DedName } from "./tds/DedName.jsx";
+import { uploadExcel } from "./tds/TdsExcel.jsx";
 import Deductions24 from "./tds/Ded24.jsx";
 // TDSF25 (src/js/83-tds-forms-2025.js: the 2026-27 forms' text file, TDS26Q.build) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/83-tds-forms-2025.js";
@@ -167,11 +168,13 @@ function ImportPreview({ rows }) {
       <button className="btn small" onClick={close}>{p.changes.length && !p.error ? "Cancel" : "Close"}</button></div>
     </div></SideDrawer>;
 }
-async function importExcel(file, rows) {
+async function importExcel(file, rows, form, fy, q) {
   if (!file) return;
   try {
     await ensureXlsx();
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    // next-tds-excel: the whole return's Excel (Download Excel) brought back here goes to its own preview
+    if (wb.SheetNames.includes("About") && wb.SheetNames.includes("Deductor") && form) { uploadExcel(file, form, fy, q); return; }
     S.tdsImport = Object.assign({ name: file.name }, TDSEdit.read(wb, rows));
   } catch (e) { S.tdsImport = { name: file.name, error: "Could not read this file: " + ((e && e.message) || e), changes: [], refused: [], unmatched: [], notes: [] }; }
   render();
@@ -388,9 +391,9 @@ export function Return26({ b, allRows, form = "26Q" }) {
   ];
   const confirmable = (() => { try { return TDSMatch.suggest(form, fy, q).filter((s) => s.rule !== "split").length; } catch (e) { return 0; } })();
   const primary = (S.tdsTab === "challans" || S.tdsTab === "deductions") && confirmable && !TDSReg.locked(fy, q, form) ? null : undefined;
-  const more = retMore({ fy, q, form, extra: [["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")],
-    ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
-    ["Import corrected Excel…", () => { S.tdsTab = "deductions"; render(); setTimeout(() => { const el = document.querySelector("[data-ded-import]"); if (el) el.click(); }, 50); }]] });
+  // next-tds-excel: "Excel to correct and bring back" and "Import corrected Excel…" of this menu are now the whole return's
+  // Download Excel and Upload Excel (ReturnShell, tds/TdsExcel.jsx); the Deductions step keeps its quick Excel of the rows shown
+  const more = retMore({ fy, q, form, extra: [["Download the " + fname + " working (Excel)", () => doAct("tdsExcel")]] });
   const reviews = {
     unmatched: <FixRows title={un.length + " " + unit + " without a challan · " + money(notCh)} rows={un} unit={unit} />,
     over: TDSReg.overUsed(fy, q, form).length ? <section className="dash-card" style={{ marginBottom: 12 }} data-over-used=""><h3>Challans used beyond their amount</h3>
@@ -437,7 +440,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
     {form !== "27EQ" && !TDSReg.locked(fy, q, form) && <button type="button" className="btn small" data-add-open="" onClick={() => openAdd({ chId: S.tdsDedChF && S.tdsDedChF !== "__none" ? S.tdsDedChF : "" })}>Add deduction</button>}
     <More label="⋯" ariaLabel="Export" data-fb-out="" items={[S.tdsDedView === "sections" ? ["All " + unit + " in one table", () => { S.tdsDedView = "table"; render(); }, { "data-wd-all": "" }] : ["By section", () => { S.tdsDedView = "sections"; render(); }, { "data-ded-sections": "" }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")], ["Excel to correct and bring back (these " + shownD.length + ")", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
       ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
-    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} />
+    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows, form, fy, q); }} />
   </div>;
   // round 88 (as Winman): the step opens on a challan (tds/Winman.jsx DedByChallan); "Not on any challan" is the to-do
   // list; the table with every filter and By section are under ⋯
@@ -445,7 +448,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
       ["By section", () => { S.tdsDedView = "sections"; render(); }], ["Print or save as PDF", () => printTable("tdsDnTable", title + " deductions")],
       ["Excel to correct and bring back", () => TDSEdit.toExcel(shownD, probs, fy, title + " deductions").then(() => toast("Downloaded."))],
       ["The return’s working (Excel)", () => doAct("tdsExcel")], ["Import corrected Excel…", () => file.current && file.current.click(), { "data-ded-import-btn": "" }]]} />
-    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows); }} /></span>;
+    <input ref={file} type="file" hidden accept=".xlsx,.xls" aria-label="Import corrected Excel" data-ded-import="" onChange={(ev) => { const x = ev.target.files && ev.target.files[0]; ev.target.value = ""; importExcel(x, rows, form, fy, q); }} /></span>;
   return <>
     <ReturnShell fy={fy} q={q} form={form} status={status} statusTitle={drift && drift.rows.length ? "Filed, and changed in Tally since: a correction is needed" : TDSReg.corrOpen(fy, q, form) ? "A correction is open: this return’s challans may change" : undefined}
       draft={draft && !filed} val={val} primary={primary} more={more} steps={steps}>

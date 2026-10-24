@@ -142,7 +142,8 @@ const TDSTally = {
   // (review 243 R3)
   notChallan(p, challans){
     const cs = challans || [];
-    if (cs.some(c => c.fromVoucher === p.vid)) return false;
+    // next-tds-excel: a challan a person removed (removedByUser, kept deleted) still names its payment: not proposed again
+    if (cs.concat(((S.books || {}).challans || []).filter(c => c.removedByUser)).some(c => c.fromVoucher === p.vid)) return false;
     return !cs.some(c => !c.fromVoucher && TDS.ymd(c.date) === TDS.ymd(p.date) && Math.abs(num(c.tax) - num(p.tax)) < 1);
   },
   keyOf(c){ return TDSCH.chKey(c); },
@@ -229,7 +230,7 @@ const TDSTally = {
     // when nothing is tagged to it; kept with its tags otherwise, the difference shown (never a second one made then)
     const held = new Set();
     b.challans = b.challans.filter(c => {
-      if (!this.made(c) || (now[c.fromVoucher] && now[c.fromVoucher].has(this.keyOf(c)))) return true;
+      if (c.removedByUser || !this.made(c) || (now[c.fromVoucher] && now[c.fromVoucher].has(this.keyOf(c)))) return true;
       // (review 243 N5) only one nobody changed in FinCom leaves; one a person corrected stays, shown like a tagged one
       const was = c.tallyWas || {}, touched = FIELDS.some(k => (k in was) && val(was, k) !== val(c, k));
       if (!tagged.has(c.id) && !touched){ res.removed++; return false; }
@@ -243,6 +244,8 @@ const TDSTally = {
     const use = TDS.challanUse ? TDS.challanUse() : {};
     tallyCh.forEach(t => {
       if (t.bad){ res.bad.push(t); return; }
+      // next-tds-excel: a challan removed by a person (an Excel brought back) is never made again from its Tally payment
+      if ((byVid[t.vid] || []).some(c => c.removedByUser) || (byKey[t.key] && byKey[t.key].removedByUser)) return;
       const have = byKey[t.key];
       const fields = {tax: t.tax, interest: t.interest || 0, fee: t.fee || 0, others: t.others || 0, section: t.section || ""};
       if (have && this.made(have)){
@@ -287,7 +290,7 @@ const TDSTally = {
     const rows = {}; TDSCH.rowsAll().forEach(r => { rows[r.id] = r; });
     const want = {};
     this.links(b).forEach(l => {
-      const chs = byVid[l.vid] || [];
+      const chs = (byVid[l.vid] || []).filter(c => !c.deleted);
       if (!rows[l.row]) return;
       if (l.why && !l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: l.why}); return; }
       if (l.many){ res.disagree.push({row: l.row, party: rows[l.row].party, date: rows[l.row].date, fincom: b.alloc[l.row] || "", tally: "", why: "Tally's reference " + l.ref + " is on " + l.many + " deductions of this party: tag it by hand"}); return; }

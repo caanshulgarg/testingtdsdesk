@@ -118,6 +118,10 @@ export function checkReturn(fy, q, form) {
   // against deductions, Tally's old rates, one PAN under two names, the remarks
   let au = []; try { au = TDSAudit.notes(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
   au.forEach((x, i) => (x.level === "warn" ? out.warnings : out.info).push({ k: "au-" + x.k + i, n: 1, words: x.words, step: x.step, act: x.vid ? ["Open the entry", () => TDSAdj.open({ date: x.date, no: x.no || "", ledgers: [x.ledger || ""] })] : undefined }));
+  // next-tds-excel: rows taken out of this return by an Excel brought back (kept in the books), with Put back
+  let outs = []; try { outs = TDSEdit.outList().filter((o) => o.form === form && o.fy === fy && o.q === q); } catch (e) { /* */ }
+  if (outs.length) out.info.push({ k: "tdsx-out", n: outs.length, words: s_(outs.length, unitW[0], unitW[1]) + " taken out of this return by an Excel brought back (kept in the books): " + outs.slice(0, 3).map((o) => (o.party || "—") + " " + money(o.tds)).join(", ") + (outs.length > 3 ? " …" : ""),
+    act: ["Put back", () => { outs.forEach((o) => TDSX.putBack(o.id)); render(); }] });
   out.drift = dn; out.n = out.errors.length + out.warnings.length;
   return out;
 }
