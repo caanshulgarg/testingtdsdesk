@@ -4,6 +4,7 @@ package main
 // key of the test's own under HKCU
 
 import (
+	"net"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
@@ -31,5 +32,25 @@ func TestWindowsPairStoreRegistry(t *testing.T) {
 	notePairOpen(st, []string{"--mode", "sole"}, 0, func(s string) { t.Error(s) })
 	if st.get(pairDueVal) != "" {
 		t.Fatal("asked without --pairopen")
+	}
+}
+
+// the first start's check of the program on the bridge's port: this user's own listener passes for an install just for
+// me; for all users only the FinCom Bridge service's process (not installed here: none)
+func TestWindowsBridgeIsOwnOn(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	if !bridgeIsOwnOn(port, true) {
+		t.Fatal("this user's own listener not taken as its bridge")
+	}
+	if bridgeIsOwnOn(port, false) {
+		t.Fatal("a listener that is not the service's taken as the service")
+	}
+	if servicePID() != 0 {
+		t.Skip("the FinCom Bridge service runs here")
 	}
 }

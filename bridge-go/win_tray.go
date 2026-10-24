@@ -201,13 +201,55 @@ func trayCall(method, path string, body any) M {
 
 // 2.4.6 (pairopen.go): what the tray opens FinCom with: this session, never the service, only the bridge's owner
 func trayPairEnv() pairOpenEnv {
-	o := cfgS("Owner")
+	// the bridge's owner by the Windows account's SID (the install's OwnerSid), not by the session's user name
+	own := cfgS("OwnerSid")
 	return pairOpenEnv{
 		call:  trayCall,
 		open:  openURL,
 		show:  showMessage,
-		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: o != "" && sameUser(o, currentUser())},
+		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: own != "" && strings.EqualFold(own, userSID())},
 	}
+}
+
+// 2.4.6: the program on the bridge's port is this install's bridge (this user's own process for an install just for
+// me; the FinCom Bridge service's process for all users), never another user's program squatting on the port: checked
+// before the first start opens FinCom by itself
+func trayBridgeIsOwn() bool { return bridgeIsOwnOn(toInt(cfg("Port")), perUserInstall()) }
+
+func bridgeIsOwnOn(port int, perUser bool) bool {
+	rows, err := tcpTable()
+	if err != nil {
+		return false
+	}
+	pid := listenerPidFrom(rows, port)
+	if pid == 0 {
+		return false
+	}
+	if perUser {
+		sid, err := processSID(pid)
+		return err == nil && strings.EqualFold(sid, userSID())
+	}
+	return pid == servicePID()
+}
+
+// the FinCom Bridge service's process id (0 when not running); a standard user may ask the service manager this
+func servicePID() int {
+	m, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return 0
+	}
+	defer windows.CloseServiceHandle(m)
+	s, err := windows.OpenService(m, u16(serviceName), windows.SERVICE_QUERY_STATUS)
+	if err != nil {
+		return 0
+	}
+	defer windows.CloseServiceHandle(s)
+	var st windows.SERVICE_STATUS_PROCESS
+	var need uint32
+	if windows.QueryServiceStatusEx(s, windows.SC_STATUS_PROCESS_INFO, (*byte)(unsafe.Pointer(&st)), uint32(unsafe.Sizeof(st)), &need) != nil {
+		return 0
+	}
+	return int(st.ProcessId)
 }
 
 // FinCom's address the bridge was installed for (its status says it), else the review site
@@ -303,7 +345,7 @@ func (t *tray) poll() {
 			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
 			t.check(st)
 			// 2.4.6: the first start after the setup: FinCom opens with the code, once per install (pairopen.go)
-			if truthy(st["pairOpenReady"]) && pairOpenAskedHere() && t.opening.CompareAndSwap(false, true) {
+			if truthy(st["pairOpenReady"]) && pairOpenAskedHere() && trayBridgeIsOwn() && t.opening.CompareAndSwap(false, true) {
 				go func(u string) {
 					defer t.opening.Store(false)
 					trayFirstOpen(trayPairEnv(), u)

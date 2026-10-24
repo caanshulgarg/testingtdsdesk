@@ -440,8 +440,8 @@ func TestFirstStartGraceClock(t *testing.T) {
 	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 || dueExists() {
 		t.Fatal("an ask over a day old opened FinCom")
 	}
-	if logLines("over a day old") != 3 {
-		t.Errorf("the log: %d lines", logLines("over a day old"))
+	if logLines("over a day old") != 1 || logLines("has a time that cannot be trusted") != 2 {
+		t.Errorf("the log: %d / %d lines", logLines("over a day old"), logLines("has a time that cannot be trusted"))
 	}
 	// within the day: opened
 	dueAt(t, pairOpenMaxAge-time.Minute, false)

@@ -212,20 +212,20 @@ func pairOpenConnected() bool {
 // the ask read, nothing changed: ready (for the owner's tray to take) when asked at once (the Finish page), or 2 minutes
 // old (the take then opens nothing on a computer connected before, or for an ask over a day old, and drops it). An ask
 // that could not be removed is never ready again until the bridge restarts. Call with pairOpenMu held
+// age -1: the time cannot be trusted (unreadable, or the clock set back over an hour): ready, and the take drops it
 func pairOpenStateLocked(st pairStore) (due, now, ready bool, age time.Duration) {
 	v := st.get(pairDueVal)
 	if v == "" || pairOpenStuck {
 		return v != "", false, false, 0
 	}
-	at := time.Unix(int64(num(parseObj(v)["atUnix"])), 0)
-	if num(parseObj(v)["atUnix"]) <= 0 || time.Until(at) > time.Hour {
-		return true, st.get(pairNowVal) != "", true, pairOpenMaxAge + time.Second // unreadable, or a clock set back: as old
+	now = st.get(pairNowVal) != ""
+	sec := num(parseObj(v)["atUnix"])
+	at := time.Unix(int64(sec), 0)
+	if sec <= 0 || time.Until(at) > time.Hour {
+		return true, now, true, -1
 	}
 	age = time.Since(at)
-	if st.get(pairNowVal) != "" {
-		return true, true, true, age
-	}
-	return true, false, age >= pairOpenGrace, age
+	return true, now, now || age >= pairOpenGrace, age
 }
 
 func pairOpenReady() bool {
@@ -280,8 +280,12 @@ func pairOpenRoute(method string, body M) (M, error) {
 	}
 	_ = st.del(pairNowVal)
 	pairOpenMu.Unlock()
-	if age > pairOpenMaxAge {
-		writeLog("The install's first-start opening of FinCom is over a day old: dropped, FinCom not opened (Connect FinCom on this computer... in the tray does it).")
+	if age < 0 || age > pairOpenMaxAge {
+		why := "is over a day old"
+		if age < 0 {
+			why = "has a time that cannot be trusted (unreadable, or the clock was set back)"
+		}
+		writeLog("The install's first-start opening of FinCom " + why + ": dropped, FinCom not opened (Connect FinCom on this computer... in the tray does it).")
 		return M{"ok": true, "take": false}, nil
 	}
 	if !now && pairOpenConnected() {
