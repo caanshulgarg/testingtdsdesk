@@ -10,7 +10,7 @@ unchanged: FinCom already takes `#pair=<code>` off its address and pairs (src/js
 | Fingerprint | SHA-256 `a64a93cf596a1c644ee352ed69ca75b7ff53d689e481d224f654abd9f4a55917` (FinComBridge-Setup-2.4.6.exe, built 24-Oct-2026 22:12 IST at 716568447, bridge sources 3f5575332, POSTONLY=any; compare with the .sha256 file next to the setup) |
 | Program | FinComBridge-2.4.6.exe, SHA-256 `d7b5a613130b3d479037105a26c987180f8a8b7550648658aea6cf88eb5ceecf` |
 | Replaces | 2.4.5 (kept on the computer, so the tray can roll back to it) |
-| Published | not published. assets-test/bridge-go/latest.json still names 2.4.5; the owner publishes after the gates |
+| Published | 25-Oct-2026 00:15 IST (24-Oct 18:45 UTC) to staging review (main 5a59ac008, from staging-next 246bbc372: next-246-pairopen with staging-next 87b640328 merged), the owner's "yes" of 24-Oct-2026. latest.json says 2.4.6, setup SHA-256 `a64a93cf596a1c644ee352ed69ca75b7ff53d689e481d224f654abd9f4a55917` (the published setup's bytes and its .sha256 match), program `d7b5a613130b3d479037105a26c987180f8a8b7550648658aea6cf88eb5ceecf`. On the merged head: release-check passed (FORCE_REBUILD=1, with latest.json as before the release, since step 1 refuses a version latest.json already names; e6edfa918, not pushed), and run_tally_firstlink, run_stability, run_ui_standards, run_safari_compat and run_boot_watch all passed. No tally-ingest change, no migration |
 
 ## What is in 2.4.6
 
