@@ -81,8 +81,9 @@ with sync_playwright() as p:
     ok(not strip and "20,985.00" in J("() => (document.querySelector('#app [data-chg] tfoot [data-chg-here-sum]') || {}).innerText || ''"), "no strip; the grid's foot says ₹20,985.00 on challans")
     j = J("""() => { const t = document.querySelector('#app [data-chg] tr[data-chg-row="chJ"]'); return [...t.cells].slice(-3).map(c => c.innerText.trim()); }""")
     alln = J("() => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === 'chJ'); return [TDSReg.usedTax(c, cx), TDSReg.balance(c, cx).tax]; }")
-    ok(j[0] == "₹12,345.00" and j[1] == "₹" + format(alln[0], ",.2f") and alln[0] > 12345 and j[2] == "₹" + format(alln[1], ",.2f"),
-       "00456, also used by 24Q: Used here ₹12,345.00, Used in all returns %s, Balance overall %s (%s)" % (alln[0], alln[1], j))
+    # next-fix-challan-over: under Used in all returns, the other return by name (Form 138 2026-27 Q1)
+    ok(j[0] == "₹12,345.00" and j[1].split("\n")[0] == "₹" + format(alln[0], ",.2f") and "Form 138 2026-27 Q1" in j[1] and alln[0] > 12345 and j[2] == "₹" + format(alln[1], ",.2f"),
+       "00456, also used by 24Q: Used here ₹12,345.00, Used in all returns %s with Form 138 2026-27 Q1 named, Balance overall %s (%s)" % (alln[0], alln[1], j))
     pg.screenshot(path=os.path.join(SHOTS, "challans-grid-1440.png"), full_page=True)
     print("3. a deduction whose challan is missing")
     J(GO, "deductions"); pg.wait_for_timeout(800)
