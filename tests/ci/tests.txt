@@ -31,6 +31,7 @@ run_backup_history_server.py          120
 run_balances_copy.py                  120  TDSDESK_SITE=../app/dist-test
 run_bankpost_e2e.py                   300  TDSDESK_SITE=../app/dist-test
 run_bankrules.py                      120
+run_bank_smart.py                     240  TDSDESK_SITE=../app/dist-test
 run_beat_history.py                   120
 run_bill_typing_echo.py               180  TDSDESK_SITE=../app/dist-test
 run_block17.js                        120
