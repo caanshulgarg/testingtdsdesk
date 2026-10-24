@@ -36,7 +36,8 @@ export function checkReturn(fy, q, form) {
   const ov = blk("over");
   put(out.errors, { k: "over", n: ov ? ov.n : 0, words: ov ? ov.words : "", step: "challans", review: true });
   // next-tds-addlist (19-Oct-2026), next-tds-early (20-Oct-2026): a deduction on a challan Protean's FVU refuses for it (a
-  // challan dated before the financial year, T-FV-3076; after today, T-FV-3040; not minor head 200): an error. An advance
+  // challan dated before the financial year, T-FV-3076 in FVU 1.2, T-FV-3166 in FVU 8.7 two years back, and FinCom refuses the year
+  // before too; after today, T-FV-3040; not minor head 200): an error. An advance
   // challan (dated before the deduction, the same year) or the next year's is allowed: no error, no warning (its chip
   // says it). On a challan naming another section: a warning, below
   const chBy = {}; TDS.challans().forEach((c) => { chBy[c.id] = c; });
@@ -50,6 +51,11 @@ export function checkReturn(fy, q, form) {
   // limit; each said only when it is wrong (not counted among the checks passed)
   let rk = []; try { rk = TDSDecl.checks(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
   rk.forEach((x) => (x.level === "warn" ? out.warnings : out.errors).push({ k: "rm-" + x.k, n: x.n, words: x.words, step: "deductees" }));
+  // next-fvu87 (24-Oct-2026): up to FY 2025-26, what Protean's FVU 8.7 refuses on a deductee record (remark B for a section it
+  // does not take, a 27Q nature not in its list: errors; 194T, which it has no code for: a warning) and what FinCom changed
+  // for it in the file (a row left out, an inoperative PAN without C, a foreign address left out: info), in plain words
+  let f87 = []; try { f87 = TDS26Q.fvu87Checks(fy, q, form); } catch (e) { /* the TDS screens' program not loaded */ }
+  f87.forEach((x) => (x.level === "error" ? out.errors : x.level === "warn" ? out.warnings : out.info).push({ k: "fvu87-" + x.k, n: x.n, words: x.words, step: "deductees" }));
   // the salary return without the salary sheet or Tally's payroll: no file can be made
   const sheet = form === "24Q" && (((S.books || {}).salary || []).length > 0), tally = form === "24Q" && !sheet && Payroll.has(fy);
   if (form === "24Q") put(out.errors, { k: "nosheet", n: !sheet && !tally ? 1 : 0, words: "24Q needs the salary sheet: the books cannot say whose TDS it is", act: ["Bring in the salary sheet", () => doAct("salaryPick")] });

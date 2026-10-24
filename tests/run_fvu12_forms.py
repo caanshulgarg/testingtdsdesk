@@ -6,7 +6,8 @@ needs the challan file (.csi) from TIN / the e-filing portal for a challan ("C")
 without it, so: a V or B file must pass with no error at all; an F file with none but T-FV-1041 (the .csi is missing);
 an I file (an inoperative PAN with remark C) with none at all; an S file (next-challan-match: a challan shared by two
 quarters, each with its own interest allocated, and a deduction split across two challans) with none at all; an X file
-(next-tds-interest: interest and others allocated past the challan's own, from its tax not used) with none at all; a G file (the samples' own data) with none but T_FV_6506 (the samples leave the DDO serial number out).
+(next-tds-interest: interest and others allocated past the challan's own, from its tax not used) with none at all; an R file
+(next-fvu87: Form 140 with remarks T, B with its Form 121 UIN, and Y on deductions with no tax) with none at all; a G file (the samples' own data) with none but T_FV_6506 (the samples leave the DDO serial number out).
 
 FVU 1.2 is Protean's and is never committed: TDSDESK_FVU12 names the folder with TDS_STANDALONE_FVU_1.2.jar and its
 libraries; without it (or without java / xvfb-run) the test says so and passes as skipped."""
@@ -30,8 +31,8 @@ work = os.path.join(OUT, "fvu12"); shutil.rmtree(work, ignore_errors=True); os.m
 cp = jar + os.pathsep + os.path.join(FVU, "*")
 c = subprocess.run(["javac", "-cp", cp, "-d", work, os.path.join(HERE, "fvu12", "RunFvu12.java")], capture_output=True, text=True)
 ok(c.returncode == 0, "the harness compiles" + ("" if c.returncode == 0 else ": " + c.stderr[-500:]))
-ALLOWED = {"F": {"T-FV-1041"}, "V": set(), "B": set(), "I": set(), "S": set(), "X": set(), "G": {"T_FV_6506"}}
-files = sorted(glob.glob(os.path.join(OUT, "forms2025", "[FVBGISX]1[34]?.txt")))
+ALLOWED = {"F": {"T-FV-1041"}, "V": set(), "B": set(), "I": set(), "S": set(), "X": set(), "R": set(), "G": {"T_FV_6506"}}
+files = sorted(glob.glob(os.path.join(OUT, "forms2025", "[FVBGISXR]1[34]?.txt")))
 ok(len(files) >= 16, "the statements to check: %s" % [os.path.basename(f) for f in files])
 for f in files:
     name = os.path.basename(f)            # at most 12 characters, as the FVU wants
