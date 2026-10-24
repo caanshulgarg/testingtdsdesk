@@ -33,6 +33,8 @@ books = json.load(open(CACHE))
 # the file a download makes, kept as base64 (saveFile replaced)
 CATCH = """() => { window.__files = []; window.saveFile = async (name, data) => { const a = new Uint8Array(await data.arrayBuffer()); let s = ''; for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); window.__files.push({name, b64: btoa(s)}); return true; }; }"""
 # the last file downloaded, read with the app's own SheetJS
+# the deductions-only Excel to correct (TDSEdit.toExcel), of the return's rows
+QUICK = """() => { const rs = TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1'); return TDSEdit.toExcel(rs, TDSEdit.problems(rs, '2026-27', 'Q1', '26Q'), '2026-27', 'ZZ 26Q Q1 deductions'); }"""
 READ = """() => { const f = window.__files[window.__files.length - 1]; const bin = atob(f.b64), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
   window.__wb = XLSX.read(a, {type: 'array', cellFormula: true, cellNF: true}); const ws = window.__wb.Sheets.Deductions, sm = window.__wb.Sheets.Summary;
   const z = XLSX.CFB.read(a, {type: 'array'}), x = XLSX.CFB.find(z, '/xl/worksheets/sheet1.xml');
@@ -95,8 +97,11 @@ try:
         E(CATCH)
         pg.click("#app [data-step-tool] details.more > summary"); W(200)
         items = E("[...document.querySelectorAll('#app [data-step-tool] .more-item')].map(b => b.textContent)")
-        ok(any(i.startswith("Excel to correct") for i in items) and "Import corrected Excel…" in items, "Export: the Excel to correct, and Import corrected Excel (%s)" % items)
-        pg.click('#app [data-step-tool] .more-item:has-text("Excel to correct")'); W(1500)
+        # next-tds-excel2: the step's ⋯ downloads the return's own workbook (run_tds_excel2.py) and Upload Excel takes either
+        # file back; the deductions-only Excel (TDSEdit.toExcel) is still read back here, made as before
+        ok("Download Excel" in items and "Upload Excel" in items and not any(i.startswith("Excel to correct") for i in items), "the step's ⋯: Download Excel and Upload Excel (%s)" % items)
+        pg.keyboard.press("Escape"); E("document.querySelectorAll('#app details.more[open]').forEach(d => d.open = false)")
+        E(QUICK); W(1500)
         x = E(READ) if E("window.__files.length") else None
         ok(x and x["sheets"] == ["Deductions", "Summary"] and x["head"][0].startswith("FinCom id") and x["n"] == len(rows) + 2, "Deductions and Summary; the FinCom id first; one row a deduction and the totals (%s)" % (x and [x["sheets"], x["head"][:3], x["n"]]))
         if x:
@@ -134,7 +139,7 @@ try:
         log = E("S.books.tdsEdits['%s'].log.map(l => [l.field, !!l.by, !!l.at])" % r1["id"])
         ok(sorted(l[0] for l in log) == ["pan", "tds"] and all(l[1] and l[2] for l in log), "each change kept with who and when (%s)" % log)
         E(CATCH)
-        pg.click("#app [data-step-tool] details.more > summary"); W(200); pg.click('#app [data-step-tool] .more-item:has-text("Excel to correct")'); W(1500)
+        E(QUICK); W(1500)
         y = E(READ)
         ok(y["rows"][1][4] == newpan and y["rows"][2][5] == newsec and abs(y["J2"]["v"] - newtds) < 0.005 and abs(y["K2"]["v"] - r1["tds"]) < 0.005 and abs(y["L2"]["v"] - 500) < 0.005,
            "exported again: the corrections, TDS in books as the books say, the Difference 500 (%s %s %s)" % (y["rows"][1][4], y["J2"], y["L2"]))

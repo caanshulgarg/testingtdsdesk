@@ -119,7 +119,7 @@ try:
         E("() => { S.tdsTab = 'file'; render(); }"); W(400)
         ok(vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0 and pg.locator("#app [data-make-fvu].primary").count() == 1, "Validate & file: Make FVU file is then the one main button")
         pg.click("#app [data-return-card] details.more > summary"); W(200)
-        ok(any("working" in x for x in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")), "the card's More: the working (Excel)")
+        ok("Download Excel" in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)"), "the card's More: the return's Excel (Download Excel)")
         for t in ["deductor", "deductees", "challans", "deductions", "file"]:
             pg.click('#app [data-ret-tab="%s"]' % t); W(300)
         ok(not errors, "every tab of the return draws")

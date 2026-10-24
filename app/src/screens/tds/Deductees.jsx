@@ -12,6 +12,7 @@ import { SideDrawer } from "./Shell.jsx";
 import { useDraft } from "../../parts/DetailDrawer.jsx";
 import { F16Link } from "./Files.jsx";
 import More from "../../parts/More.jsx";
+import { downloadExcel } from "./TdsExcel.jsx";
 import { useCF, Th } from "./ColF.jsx";
 import { PanBox, PanConflict } from "./PanBook.jsx";
 import "../../lib/tdsGlobals.js";   // next-challan-match: TDSMatch, PANCheck and the matcher's rules come with the TDS screens
@@ -57,7 +58,7 @@ export default function DeducteesPan({ form, fy, q, issueOf = {}, title }) {
     <div className="rt-tool" data-step-tool="">
       <span className="rt-sp" />
       <button className="btn small" data-pan-check-all="" disabled={!unknown.length || typeof PANCheck.provider !== "function"} onClick={() => tdsPanCheck(unknown)}>Check PANs on TRACES{typeof PANCheck.provider !== "function" ? " · not connected yet" : ""}</button>
-      <More label="⋯" ariaLabel="Export" items={[["Paste PANs / import Excel (name, PAN)", () => { S.tdsPanPaste = true; render(); }, { "data-pan-paste-open": "" }], ["PAN book", () => { S.tdsPanBook = true; render(); }, { "data-pan-book-open": "" }], ["Print or save as PDF", () => printTable("tdsDeTable", (title || "") + " deductees")], ["Excel (the return’s working)", () => doAct(form === "24Q" ? "q24Excel" : "tdsExcel")]]} />
+      <More label="⋯" ariaLabel="Export" items={[["Paste PANs / import Excel (name, PAN)", () => { S.tdsPanPaste = true; render(); }, { "data-pan-paste-open": "" }], ["PAN book", () => { S.tdsPanBook = true; render(); }, { "data-pan-book-open": "" }], ["Print or save as PDF", () => printTable("tdsDeTable", (title || "") + " deductees")], ["Download Excel", () => downloadExcel(form, fy, q, "Deductees"), { "data-dee-excel": "" }]]} />
     </div>
     <div className="bk-tablewrap"><table className="bk-table rt-rows" id="tdsDeTable" data-statement="">
       <thead><tr><Th cf={cf} k="name">{form === "24Q" ? "Employee" : form === "27EQ" ? "Buyer" : "Deductee"}</Th><Th cf={cf} k="pan" cls="pan">PAN</Th><Th cf={cf} k="sec">Section</Th><Th cf={cf} k="n" cls="n">Deductions</Th><Th cf={cf} k="paid" cls="n">Paid or credited</Th><Th cf={cf} k="tds" cls="n">{form === "27EQ" ? "TCS" : "TDS"}</Th></tr></thead>
