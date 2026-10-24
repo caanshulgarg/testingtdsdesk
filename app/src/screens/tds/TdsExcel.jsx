@@ -4,6 +4,10 @@
 // (TDSX.preview, app/src/lib/tdsXlsx.js, with Validate & file's own checkReturn), and shown sheet by sheet in a drawer:
 // what is added, taken out and changed (old → new), each challan's balance before → after, the Excel's Summary beside
 // FinCom's; errors block Apply, warnings need a tick. Apply keeps it all as FinCom's corrections of the return.
+// next-tds-excel2 (24-Oct-2026; the owner: "TDS return Excel download is very basic.. it should be very dynamic"): this
+// workbook is the one Excel of a return: Download Excel and Upload Excel are also buttons in the return's header (in ⋯ only
+// on a narrow screen), and every other Excel of the return's steps (the Deductions' ⋯, the Deductees' ⋯, Validate & file's
+// Download, 24Q's) downloads it too, opened on that step's sheet (sheetOf).
 import { useRef, useState } from "react";
 import { SideDrawer } from "./Shell.jsx";
 import { checkReturn } from "./Validate.jsx";
@@ -27,15 +31,20 @@ async function upload(file, form, fy, q) {
   } catch (e) { S.tdsX = { name: file.name, error: "Could not read this Excel: " + ((e && e.message) || e) }; }
   render();
 }
-export async function downloadExcel(form, fy, q) {
-  try { const m = await mod(); await m.download(form, fy, q); toast("Downloaded: change it in Excel, then Upload Excel here."); }
+// the sheet the workbook opens on, by the step it is downloaded from
+export function sheetOf(tab, form, q) {
+  return { deductor: "Deductor", deductees: "Deductees", people: form === "24Q" && q === "Q4" ? "Salary annexure II" : "Deductees", challans: "Challans", deductions: "Deductions", file: "Checks", after: "Summary" }[tab] || "Deductions";
+}
+export async function downloadExcel(form, fy, q, sheet) {
+  try { const m = await mod(); await m.download(form, fy, q, { sheet: sheet || sheetOf(S.tdsTab, form, q) }); toast("Downloaded: change it in Excel, then Upload Excel here."); }
   catch (e) { toast("Could not make the Excel: " + ((e && e.message) || e)); }
 }
+export const pickUpload = () => { const el = document.querySelector("[data-tdsx-upload]"); if (el) el.click(); };
 // the ⋯ items of a return
 export function excelItems(form, fy, q) {
   const last = typeof TDSX === "object" ? TDSX.last(form, fy, q) : null;
   return [["Download Excel", () => downloadExcel(form, fy, q), { "data-tdsx": "down" }],
-    ["Upload Excel", () => { const el = document.querySelector("[data-tdsx-upload]"); if (el) el.click(); }, { "data-tdsx": "up" }],
+    ["Upload Excel", pickUpload, { "data-tdsx": "up" }],
     last && ["Undo the last Excel upload (version " + last.ver + ")", () => { const r = TDSX.undo(form, fy, q); toast(r.ok ? "Undone: the return is as it was before the upload." : r.why); render(); }, { "data-tdsx": "undo" }]].filter(Boolean);
 }
 
@@ -93,6 +102,13 @@ export function ExcelPreview({ form, fy, q }) {
   </SideDrawer>;
 }
 
+// the header's two buttons (ReturnShell; hidden on a narrow screen, where the ⋯ has them)
+export function ExcelButtons({ form, fy, q }) {
+  return <span className="rt-xl" data-tdsx-btns="">
+    <button type="button" className="btn small" data-tdsx-btn="down" title="The whole return as one Excel, opened on this step's sheet" onClick={() => downloadExcel(form, fy, q)}>Download Excel</button>
+    <button type="button" className="btn small" data-tdsx-btn="up" title="Bring the Excel back: a preview of every change first" onClick={pickUpload}>Upload Excel</button>
+  </span>;
+}
 // the upload's file box and its preview, once per return (ReturnShell)
 export function ExcelBox({ form, fy, q }) {
   const f = useRef(null);

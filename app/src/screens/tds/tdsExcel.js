@@ -20,7 +20,13 @@
 //   Checks          a row a deduction: the PAN's form, no challan or a challan over-used, the remark's rules, TDS over the
 //                   amount; at the head the counts, and the pickers' last entry (proof that a new row is in the list)
 //   About, Lists    what return the file is (read back to refuse another's), and the lists (hidden)
-//   make(form, fy, q) -> {buffer, name}; download(form, fy, q); read(file | buffer) -> x for TDSX.preview
+//   make(form, fy, q, {sheet}) -> {buffer, name}; download(form, fy, q, {sheet}); read(file | buffer) -> x for TDSX.preview
+// next-tds-excel2 (24-Oct-2026; the owner: "TDS return Excel download is very basic.. it should be very dynamic"): the
+// workbook opens on the sheet of the step it was downloaded from (sheet); every list frozen at its header and filtered;
+// Summary's lines and Checks' rows are links to the rows they speak of; red for an error (a challan below nil, a PAN not in
+// its form, TDS over the amount), amber for a warning (no challan yet, TDS not as in the books); columns as wide as their
+// data; "How to use" on top of About. What the upload reads (the columns, the keys, About's fields) is unchanged.
+//   allChallans(rows, meta) -> {buffer, name}; downloadAllChallans(rows, meta): All challans of a year as one Excel Table
 const G = globalThis;
 const LAST = 2002;          // the dropdowns and the totals reach this row
 const SPARE = { ded: 300, ch: 60, dee: 60 };
@@ -59,9 +65,31 @@ function table(ws, name, colsInOrder, rows, style) {
     columns: colsInOrder.map((c) => ({ name: c.h, filterButton: true })), rows: rows.length ? rows : [colsInOrder.map(() => null)] });
 }
 function listV(cell, f, strict, words) { cell.dataValidation = { type: "list", allowBlank: true, formulae: [f], showErrorMessage: !!strict, errorStyle: strict ? "stop" : "warning", error: words || "Choose from the list." }; }
+// next-tds-excel2: red (an error) and amber (a warning) for conditional formatting; a link inside the workbook
+const RED = { font: { color: { argb: "FFC00000" }, bold: true }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFDE2E2" } } };
+const AMBER = { font: { color: { argb: "FF9C5700" } }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFFF2CC" } } };
+let PRI = 1;
+function cf(ws, ref, formula, style) { ws.addConditionalFormatting({ ref, rules: [{ type: "expression", formulae: [formula], priority: PRI++, style }] }); }
+const LINK = { color: { argb: "FF0563C1" }, underline: true };
+function link(cell, text, sheet, at, font) { cell.value = { text: String(text), hyperlink: "#" + Q(sheet) + at }; cell.font = Object.assign({}, font || {}, LINK); }
+// a column as wide as its data (a value's result for a formula; a header wraps on two lines)
+const lenOf = (v) => {
+  if (v == null || v === "") return 0;
+  if (v instanceof Date) return 10;
+  if (typeof v === "object") return "result" in v ? lenOf(v.result) : "text" in v ? String(v.text).length : 0;
+  if (typeof v === "number") { const s = Number.isInteger(v) && Math.abs(v) < 100 ? String(Math.abs(v)) : Math.abs(v).toFixed(2), n = s.split(".")[0].length; return s.length + Math.floor((n - 1) / 3) + (v < 0 ? 1 : 0); }
+  return String(v).length;
+};
+function fit(ws, cols, rows, lo = 6, hi = 46) {
+  cols.forEach((c, i) => {
+    const h = String(c.h || ""), head = Math.max(...h.split(/\s+/).map((w) => w.length), Math.ceil(h.length / 2)) + 2;
+    const data = rows.reduce((a, r) => Math.max(a, lenOf(r[i])), 0) + 2;
+    ws.getColumn(c.L ? idx(c.L) : i + 1).width = Math.max(lo, Math.min(hi, Math.max(head, data)));
+  });
+}
 
-export async function build(ExcelJS, d) {
-  const wb = new ExcelJS.Workbook(); wb.creator = "FinCom"; wb.created = new Date();
+export async function build(ExcelJS, d, opts = {}) {
+  const wb = new ExcelJS.Workbook(); wb.creator = "FinCom"; wb.created = new Date(); PRI = 1;
   const { form, fy, q } = d.meta, L = d.lists, tcs = form === "27EQ", sal = form === "24Q";
   const unit = tcs ? "collection" : sal ? "salary payment" : "deduction", TAXW = tcs ? "TCS" : "TDS";
   // ---- Lists (hidden; written first so every other sheet can point at it)
@@ -107,7 +135,7 @@ export async function build(ExcelJS, d) {
   for (let i = 0; i < SPARE.ch; i++) { const r = d.challans.length + i + 3, f = chF(r); chRows.push(CC.map((x) => f[x.k] ? Object.assign({}, f[x.k], { result: "" }) : null)); }
   wc.getCell("A1").value = "Total"; wc.getCell("B1").value = "Challans · add a row under the last (no Key) for a new challan";
   table(wc, "tChallans", CC, chRows, "TableStyleLight9"); wc.getCell("B1").alignment = { wrapText: false };
-  CC.forEach((x) => { wc.getColumn(idx(x.L)).width = x.w; });
+  CC.forEach((x) => { wc.getColumn(idx(x.L)).width = x.w; }); fit(wc, CC, chRows.slice(0, d.challans.length).concat([CC.map((x) => (x.k === "label" ? "0000000/00-00-0000/00000" : null))]));
   ["tax", "interest", "fee", "others", "total", "ia", "fa", "oa", "usedHere", "usedElse", "bal", "allocElse", "left"].forEach((k) => { wc.getColumn(idx(CH[k])).numFmt = NF; wc.getCell(CH[k] + "1").value = { formula: "SUBTOTAL(109," + CH[k] + "3:" + CH[k] + LAST + ")" }; wc.getCell(CH[k] + "1").font = { bold: true }; });
   wc.getColumn(idx(CH.date)).numFmt = DF; wc.getColumn(idx(CH.serial)).numFmt = "@"; wc.getColumn(idx(CH.bsr)).numFmt = "@"; wc.getColumn(1).hidden = true;
   for (let r = 3; r <= LAST; r++) {
@@ -116,7 +144,9 @@ export async function build(ExcelJS, d) {
     listV(wc.getCell(CH.minor + r), LR("minor"), true, "200 or 400"); listV(wc.getCell(CH.mode + r), LR("mode"), true, "online or bank");
     if (r > 2 + d.challans.length + SPARE.ch) break;
   }
-  wc.addConditionalFormatting({ ref: CH.bal + "3:" + CH.bal + LAST, rules: [{ type: "cellIs", operator: "lessThan", formulae: ["-0.004"], priority: 1, style: { font: { color: { argb: "FFC00000" }, bold: true }, fill: { type: "pattern", pattern: "solid", bgColor: { argb: "FFFDE2E2" } } } }] });
+  wc.addConditionalFormatting({ ref: CH.bal + "3:" + CH.bal + LAST, rules: [{ type: "cellIs", operator: "lessThan", formulae: ["-0.004"], priority: PRI++, style: RED }] });
+  cf(wc, CH.left + "3:" + CH.left + LAST, "AND(ISNUMBER(" + CH.left + "3)," + CH.left + "3<-0.004)", RED);
+  cf(wc, CH.usedHere + "3:" + CH.usedHere + LAST, "AND(" + CH.bsr + '3<>"",N(' + CH.usedHere + "3)=0)", AMBER);
   wc.views = [{ state: "frozen", ySplit: 2, xSplit: 4 }];
 
   // ---- Deductions
@@ -145,7 +175,7 @@ export async function build(ExcelJS, d) {
   for (let i = 0; i < SPARE.ded; i++) { const r = d.deductions.length + i + 3, f = dF(r); dRows.push(DC.map((c) => (f[c.k] ? Object.assign({}, f[c.k], { result: "" }) : null))); }
   wx.getCell("A1").value = "Total"; wx.getCell("B1").value = (tcs ? "Collections" : "Deductions") + " · add a row under the last (no Key); delete a row to take it out of the return (it stays in the books)";
   table(wx, "tDeductions", DC, dRows, "TableStyleLight9"); wx.getCell("B1").alignment = { wrapText: false };
-  DC.forEach((c) => { wx.getColumn(idx(c.L)).width = c.w; });
+  DC.forEach((c) => { wx.getColumn(idx(c.L)).width = c.w; }); fit(wx, DC, dRows.slice(0, d.deductions.length).concat([DC.map((c) => (c.k === "challan" ? "0000000/00-00-0000/00000" : c.k === "pan" ? "AAAAA0000A" : null))]));
   ["paid", "tds", "books", "diff", "chBal", "tdsNow"].forEach((k) => { wx.getColumn(idx(DED[k])).numFmt = NF; });
   ["paid", "tds", "books", "diff"].forEach((k) => { wx.getCell(DED[k] + "1").value = { formula: "SUBTOTAL(109," + DED[k] + "3:" + DED[k] + LAST + ")" }; wx.getCell(DED[k] + "1").font = { bold: true }; });
   wx.getColumn(idx(DED.rate)).numFmt = "0.00##"; wx.getColumn(idx(DED.date)).numFmt = DF; wx.getColumn(idx(DED.credit)).numFmt = DF;
@@ -162,6 +192,13 @@ export async function build(ExcelJS, d) {
     wx.getCell(LD("pan", r)).font = { color: GREY };
   }
   wx.views = [{ state: "frozen", ySplit: 2, xSplit: 4 }];
+  const dr = (Lt) => Lt + "3:" + Lt + lastD;
+  cf(wx, dr(DED.pan), 'AND($D3<>"",LEN($E3)<>10)', RED);
+  cf(wx, dr(DED.tds), "AND(N(I3)>0,N(J3)>N(I3))", RED);
+  cf(wx, dr(DED.chBal), 'OR(Q3="not on Challans",AND(ISNUMBER(Q3),Q3<-0.004))', RED);
+  cf(wx, dr(DED.challan), 'AND($D3<>"",$P3="")', AMBER);
+  cf(wx, dr(DED.diff), "AND(ISNUMBER(L3),ABS(L3)>=0.005)", AMBER);
+  cf(wx, dr(DED.fix), "LEN(T3)>0", AMBER);
 
   // ---- Deductees
   const wde = wb.addWorksheet(SH.dee), DM = deeCols(form), hd = { key: "Key (do not change)", name: tcs ? "Buyer" : sal ? "Employee" : "Deductee", nameFile: "Name in the file (if not as in the books)", pan: "PAN", status: "PAN status", type: "Type",
@@ -173,7 +210,7 @@ export async function build(ExcelJS, d) {
   for (let i = 0; i < SPARE.dee; i++) { const f = eF(d.deductees.length + i + 3); eRows.push(EC.map((c) => (f[c.k] ? Object.assign({}, f[c.k], { result: "" }) : null))); }
   wde.getCell("A1").value = ""; wde.getCell("B1").value = (tcs ? "Buyers" : sal ? "Employees" : "Deductees") + " (the PAN book) · add a row under the last for a new one; the Deductions sheet picks from here";
   table(wde, "tDeductees", EC, eRows, "TableStyleLight9"); wde.getCell("B1").alignment = { wrapText: false };
-  EC.forEach((c) => { wde.getColumn(idx(c.L)).width = c.w; }); wde.getColumn(1).hidden = true; wde.getColumn(idx(DM.tds)).numFmt = NF; if (DM.declDate) wde.getColumn(idx(DM.declDate)).numFmt = DF;
+  EC.forEach((c) => { wde.getColumn(idx(c.L)).width = c.w; }); fit(wde, EC, eRows.slice(0, d.deductees.length).concat([EC.map((c) => (c.k === "pan" ? "AAAAA0000A" : null))])); wde.getColumn(1).hidden = true; wde.getColumn(idx(DM.tds)).numFmt = NF; if (DM.declDate) wde.getColumn(idx(DM.declDate)).numFmt = DF;
   const lastE = d.deductees.length + SPARE.dee + 2;
   for (let r = 3; r <= lastE; r++) {
     Object.keys(DM).filter((k) => !/^(key|secs|n|tds)$/.test(k)).forEach((k) => { wde.getCell(DM[k] + r).fill = OPEN; });
@@ -183,6 +220,7 @@ export async function build(ExcelJS, d) {
     if (DM.dtaa) { listV(wde.getCell(DM.dtaa + r), LR("yesno"), true); listV(wde.getCell(DM.trc + r), LR("yesno"), true); listV(wde.getCell(DM.country + r), LR("country"), false); }
   }
   wde.views = [{ state: "frozen", ySplit: 2, xSplit: 2 }];
+  cf(wde, DM.pan + "3:" + DM.pan + lastE, 'AND($B3<>"",LEN($D3)<>10)', RED);
 
   // ---- Salary annexure II (24Q Q4)
   if (d.salary) {
@@ -203,6 +241,8 @@ export async function build(ExcelJS, d) {
   [8, 46, 18, 18].forEach((w, i) => { wsu.getColumn(i + 1).width = w; }); wsu.getColumn(1).hidden = true; wsu.getColumn(3).numFmt = NF; wsu.getColumn(4).numFmt = NF;
   const at = {}; let sr = 3;
   const put = (k, label, f, fin, fmt) => { const row = wsu.getRow(sr); row.values = [k, label, f, fin]; if (fmt) { row.getCell(3).numFmt = fmt; row.getCell(4).numFmt = fmt; } at[k] = sr++; return row; };
+  // next-tds-excel2: each line a link to the sheet it is worked out on
+  const goTo = { n: [SH.ded, "D2"], paid: [SH.ded, DED.paid + "2"], tds: [SH.ded, DED.tds + "2"], onch: [SH.ded, DED.challan + "2"], gap: [SH.ded, DED.challan + "2"], chtax: [SH.ch, CH.tax + "2"], chused: [SH.ch, CH.usedHere + "2"], over: [SH.ch, CH.bal + "2"], ia: [SH.ch, CH.ia + "2"] };
   put("n", unit[0].toUpperCase() + unit.slice(1) + "s", { formula: "COUNT(" + rg(SH.ded, DED.tds) + ")" }, s.n, "0");
   put("paid", tcs ? "Amount received" : "Amount paid or credited", { formula: "SUM(" + rg(SH.ded, DED.paid) + ")" }, s.paid);
   put("tds", TAXW + " total", { formula: "SUM(" + rg(SH.ded, DED.tds) + ")" }, s.tds).font = { bold: true };
@@ -217,23 +257,27 @@ export async function build(ExcelJS, d) {
   put("asof", "Filed on, or as of", dt(s.asOf), dt(s.asOf), DF);
   put("days", "Days late", { formula: "MAX(0,C" + at.asof + "-C" + at.due + ")" }, null, "0");
   put("fee", "Late fee 234E (₹200 a day, up to the " + TAXW + ")", { formula: "MIN(200*C" + at.days + ",C" + at.tds + ")" }, s.fee).font = { bold: true };
+  { const row = wsu.getRow(sr); row.values = ["", "Rows with something to look at (Checks)", { formula: "SUMPRODUCT(--((" + ["C", "D", "E", "F"].map((Lt) => Q(SH.chk) + "$" + Lt + "$3:$" + Lt + "$" + (d.deductions.length + SPARE.ded + 2)).join("&") + ')<>""))' }, null]; row.getCell(3).numFmt = "0"; at.checks = sr++; }
+  Object.keys(at).forEach((k) => { const c = wsu.getCell("B" + at[k]), g = k === "checks" ? [SH.chk, "A2"] : goTo[k]; if (g) link(c, c.value, g[0], g[1], c.font || (wsu.getRow(at[k]).font || {})); });
+  cf(wsu, "C" + at.gap, "ABS(N(C" + at.gap + "))>=0.005", AMBER); cf(wsu, "C" + at.over, "N(C" + at.over + ")>0", RED); cf(wsu, "C" + at.fee, "N(C" + at.fee + ")>0", AMBER); cf(wsu, "C" + at.checks, "N(C" + at.checks + ")>0", AMBER);
   sr++; wsu.getRow(sr).values = ["", "By " + (tcs ? "collection code" : "section"), unit + "s · amount · " + TAXW]; wsu.getRow(sr).font = { bold: true }; sr++;
   const secs = Array.from(new Set(Object.keys(s.bySec).concat(lists.sec))).filter(Boolean);
   wsu.getRow(sr).values = ["", "", "Count", "Amount", TAXW]; sr++;
   secs.filter((x) => s.bySec[x] || secList.length < 30).forEach((x) => {
     const row = wsu.getRow(sr), crit = '"' + x + '"';
-    row.values = ["sec:" + x, x + " · " + ((secList.find((z) => z[0] === x) || [])[1] || ""), { formula: "COUNTIF(" + rg(SH.ded, DED.section) + "," + crit + ")" }, { formula: "SUMIF(" + rg(SH.ded, DED.section) + "," + crit + "," + rg(SH.ded, DED.paid) + ")" }, { formula: "SUMIF(" + rg(SH.ded, DED.section) + "," + crit + "," + rg(SH.ded, DED.tds) + ")" }];
-    row.getCell(3).numFmt = "0"; row.getCell(5).numFmt = NF; sr++;
+    row.values = ["sec:" + x, { text: x + " · " + ((secList.find((z) => z[0] === x) || [])[1] || ""), hyperlink: "#" + Q(SH.ded) + DED.section + "2" }, { formula: "COUNTIF(" + rg(SH.ded, DED.section) + "," + crit + ")" }, { formula: "SUMIF(" + rg(SH.ded, DED.section) + "," + crit + "," + rg(SH.ded, DED.paid) + ")" }, { formula: "SUMIF(" + rg(SH.ded, DED.section) + "," + crit + "," + rg(SH.ded, DED.tds) + ")" }];
+    row.getCell(3).numFmt = "0"; row.getCell(5).numFmt = NF; row.getCell(2).font = LINK; sr++;
   });
-  wsu.getColumn(5).width = 16;
+  wsu.getColumn(5).width = 16; wsu.views = [{ state: "frozen", ySplit: 2 }];
   await wsu.protect("", { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true });
 
   // ---- Checks
   const wk = wb.addWorksheet(SH.chk);
   [8, 30, 18, 24, 34, 22].forEach((w, i) => { wk.getColumn(i + 1).width = w; });
-  wk.getRow(1).values = ["Row", "Challans", { formula: 'IF(COUNTIF(' + rg(SH.ch, CH.bal) + ',"<-0.004")>0,"Challan over-used: "&COUNTIF(' + rg(SH.ch, CH.bal) + ',"<-0.004"),"No challan over-used")' }, "Pickers' last entries",
+  wk.getRow(1).values = ["Row", "Challans ›", { formula: 'IF(COUNTIF(' + rg(SH.ch, CH.bal) + ',"<-0.004")>0,"Challan over-used: "&COUNTIF(' + rg(SH.ch, CH.bal) + ',"<-0.004"),"No challan over-used")' }, "Pickers' last entries",
     { formula: 'IFERROR(INDEX(' + chPick + ",COUNTA(" + rg(SH.ch, CH.bsr) + ')),"")' }, { formula: 'IFERROR(INDEX(' + deePick + ",COUNTA(" + rg(SH.dee, "B") + ')),"")' }];
-  wk.getRow(2).values = ["Row", tcs ? "Buyer" : sal ? "Employee" : "Deductee", "PAN", "Challan", "Remark", "Amount"]; wk.getRow(2).font = { bold: true };
+  link(wk.getCell("B1"), "Challans ›", SH.ch, CH.bal + "2");
+  wk.getRow(2).values = ["Row ›", tcs ? "Buyer" : sal ? "Employee" : "Deductee", "PAN", "Challan", "Remark", "Amount"]; wk.getRow(2).font = { bold: true }; wk.getRow(2).height = 30; wk.getRow(2).alignment = { wrapText: true, vertical: "middle" };
   const D_ = (Lt, r) => Q(SH.ded) + Lt + r;
   const lastK = lastD;
   for (let r = 3; r <= lastK; r++) {
@@ -244,17 +288,29 @@ export async function build(ExcelJS, d) {
       { formula: "IF(" + live + ',"",IF(' + D_(DED.challan, r) + '="","No challan",IF(N(' + D_(DED.chBal, r) + ')<-0.004,"Challan over-used",IF(' + D_(DED.chBal, r) + '="not on Challans","Challan not on Challans",""))))' },
       { formula: "IF(OR(" + live + "," + m + '=""),"",IF(AND(OR(' + m + '="B",' + m + '="T",' + m + '="Y"),N(' + D_(DED.tds, r) + ')>0),"Remark "&' + m + '&" is for no tax",IF(AND(' + m + '="A",' + D_(DED.cert, r) + '=""),"Remark A needs the certificate no.",IF(AND(' + m + '="T",LEFT(' + D_(DED.section, r) + ',4)<>"194C"),"Remark T is for 194C",""))))' },
       { formula: "IF(" + live + ',"",IF(AND(N(' + D_(DED.paid, r) + ")>0,N(" + D_(DED.tds, r) + ")>N(" + D_(DED.paid, r) + ')),"' + TAXW + ' over the amount",""))' }];
+    // the row's number opens it on Deductions: a link on the rows downloaded; on the spare rows once one is typed in
+    if (r < 3 + d.deductions.length) link(wk.getCell("A" + r), r, SH.ded, DED.party + r);
+    else { wk.getCell("A" + r).value = { formula: "IF(" + live + ',"",HYPERLINK("#' + Q(SH.ded).replace(/!$/, "") + "!" + DED.party + r + '",' + r + "))" }; wk.getCell("A" + r).font = LINK; }
   }
-  wk.views = [{ state: "frozen", ySplit: 2 }];
-  await wk.protect("", { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true });
+  wk.views = [{ state: "frozen", ySplit: 2, xSplit: 2 }];
+  wk.autoFilter = "A2:F" + lastK;
+  cf(wk, "D3:D" + lastK, 'D3="No challan"', AMBER);
+  cf(wk, "C3:F" + lastK, "LEN(C3)>0", RED);
+  cf(wk, "C1", 'LEFT(C1,8)="Challan "', RED);
+  await wk.protect("", { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, autoFilter: true, sort: true });
 
   // ---- About
-  const wa = wb.addWorksheet(SH.about); wa.getColumn(1).width = 20; wa.getColumn(2).width = 90;
-  [["Client", d.meta.client], ["Client id", d.meta.cid], ["TAN", d.meta.tan], ["Form", form], ["Form name", d.meta.formName], ["Year", fy], ["Quarter", q], ["Made", d.meta.made], ["Format", VERSION]].forEach((x) => wa.addRow(x));
+  const wa = wb.addWorksheet(SH.about); wa.getColumn(1).width = 20; wa.getColumn(2).width = 100;
+  // next-tds-excel2: "How to use" first (the fields under it are what the upload reads: found by their names, not rows)
+  [["How to use", "1. Change any yellow cell; the grey ones work themselves out (formulas)."],
+    ["", "2. Add a challan, a " + (tcs ? "buyer" : sal ? "employee" : "deductee") + " or a " + unit + " in the first empty row under its table (leave the Key empty); pick the " + (tcs ? "buyer" : sal ? "employee" : "deductee") + ", " + (tcs ? "collection code" : "section") + " and challan from the lists."],
+    ["", "3. Delete a row of " + SH.ded + " to take it out of the return: it stays in the books. The ▾ in each header filters the list."],
+    ["", "4. Summary and Checks work themselves out as you go: red is an error to fix before filing, amber a warning. Click a line of Summary or a row of Checks to go to it."],
+    ["", "5. Then in FinCom, on the return: Upload Excel (beside Download Excel, or in its ⋯). A preview shows every change; Apply saves it; Undo takes it back."]].forEach((x) => wa.addRow(x));
+  wa.getCell("A1").font = { bold: true }; for (let r = 1; r <= 5; r++) wa.getCell("B" + r).alignment = { wrapText: true, vertical: "top" };
+  [SH.ded, SH.ch, SH.sum, SH.chk].forEach((n, i) => link(wa.getCell(String.fromCharCode(67 + i) + "1"), n + " ›", n, "A1"));
   wa.addRow([]);
-  ["How to use: change any yellow cell. Add a challan, a deductee or a " + unit + " in the first empty row under its table (leave the Key empty).",
-    "Delete a row of Deductions to take it out of the return: it stays in the books. Pick each " + unit + "'s challan from the list (new challans too).",
-    "Summary and Checks work themselves out as you go. Then in FinCom, the return's ⋯, Upload Excel: a preview shows every change, Apply saves it, Undo takes it back."].forEach((t) => wa.addRow(["", t]));
+  [["Client", d.meta.client], ["Client id", d.meta.cid], ["TAN", d.meta.tan], ["Form", form], ["Form name", d.meta.formName], ["Year", fy], ["Quarter", q], ["Made", d.meta.made], ["Format", VERSION]].forEach((x) => wa.addRow(x));
   await wa.protect("", { selectLockedCells: true, selectUnlockedCells: true });
   const wl = wb.addWorksheet(SH.lists, { state: "hidden" });
   const nmax = Math.max(...Object.values(lists).map((l) => l.length), 1);
@@ -263,17 +319,20 @@ export async function build(ExcelJS, d) {
   const wk2 = wb.addWorksheet("Keys", { state: "hidden" }); wk2.getCell("A1").value = "Challans"; wk2.getCell("B1").value = "Deductions";
   ((d.meta.keys || {}).ch || []).forEach((k, i) => { wk2.getCell("A" + (i + 2)).value = k; });
   ((d.meta.keys || {}).ded || []).forEach((k, i) => { wk2.getCell("B" + (i + 2)).value = k; });
-  // the sheets in the return's order: Deductor, Deductees, Challans, Deductions, (Salary), Summary, Checks
+  // next-tds-excel2: the workbook opens on the step's sheet (the Deductions when none is asked or it is not in this one)
+  const want = (opts.sheet && wb.getWorksheet(opts.sheet)) || wx, all = wb.worksheets;
+  all.forEach((ws) => { const v = (ws.views && ws.views[0]) || {}; ws.views = [Object.assign({}, v, { tabSelected: ws === want })]; });
+  wb.views = [{ x: 0, y: 0, width: 28800, height: 15000, firstSheet: 0, activeTab: Math.max(0, all.indexOf(want)), visibility: "visible" }];
   return wb;
 }
 
-export async function make(form, fy, q) {
-  const ExcelJS = await excelJs(), d = G.TDSX.data(form, fy, q), wb = await build(ExcelJS, d);
+export async function make(form, fy, q, opts) {
+  const ExcelJS = await excelJs(), d = G.TDSX.data(form, fy, q), wb = await build(ExcelJS, d, opts);
   const buffer = await wb.xlsx.writeBuffer(), co = String(d.meta.client || "client").replace(/[^A-Za-z0-9]+/g, "-");
   return { buffer, name: co + "-" + String(d.meta.formName).replace(/[^A-Za-z0-9]+/g, "-").replace(/-+$/, "") + "-" + q + "-" + fy + ".xlsx", data: d };
 }
-export async function download(form, fy, q) {
-  const x = await make(form, fy, q);
+export async function download(form, fy, q, opts) {
+  const x = await make(form, fy, q, opts);
   await saveFile(x.name, new Blob([x.buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
   return x;
 }
@@ -335,4 +394,40 @@ export async function read(src) {
   if (wsu) wsu.eachRow((r, i) => { const k = String(txt(r.getCell(1))); if (!k || i < 3) return; const v = val(r.getCell(3)); out.summary[k] = typeof v === "number" ? Math.round(v * 100) / 100 : v instanceof Date ? v : null; });
   return out;
 }
-if (typeof window !== "undefined") window.TDSExcel = { make, download, read, build };
+// ---- All challans of a year (next-tds-excel2): one Excel Table (a ▾ on every header), the totals by SUBTOTAL above it (they
+// follow the filter), Total and Balance by formula, what the return it was opened from uses, every return's use, red for a
+// balance below nil. rows: AllChallans.jsx allChallanRows (+ here: this return's use); meta: {fy, client, hereWord}
+export async function allChallans(rows, meta) {
+  const ExcelJS = await excelJs(), wb = new ExcelJS.Workbook(); wb.creator = "FinCom"; wb.created = new Date(); PRI = 1;
+  const ws = wb.addWorksheet("Challans " + meta.fy), top = 4, n = rows.length, last = top + Math.max(n, 1) - 1;
+  const C = [["date", "Date of deposit"], ["bsr", "BSR code"], ["serial", "Serial / CIN"], ["sec", "Section"], ["fq", "Form / quarter"], ["tax", "Tax"], ["interest", "Interest"], ["others", "Fee and others"],
+    ["total", "Total"], ["here", meta.hereWord || "Used here"], ["used", "Used in all returns"], ["bal", "Balance"], ["st", "Status"]].map(([k, h], i) => ({ k, h, L: col(i) }));
+  const A = {}; C.forEach((c) => { A[c.k] = c.L; });
+  const body = rows.map((x, i) => {
+    const r = top + i, ch = x.kind === "ch";
+    const v = { date: dt(x.date), bsr: x.bsr || "", serial: ch ? x.cin || x.serial : "Tally voucher " + ((x.p && x.p.voucher) || ""), sec: (x.secs || []).join(", "), fq: x.fq, tax: x.tax, interest: x.interest, others: x.others,
+      total: { formula: "N(" + A.tax + r + ")+N(" + A.interest + r + ")+N(" + A.others + r + ")", result: x.total }, here: ch ? x.here || 0 : null, used: ch ? x.used : null,
+      bal: ch ? { formula: "N(" + A.tax + r + ")-N(" + A.used + r + ")", result: x.left } : null, st: x.status };
+    return C.map((c) => v[c.k]);
+  });
+  ws.getCell("A1").value = "All challans of " + meta.fy + " · " + (meta.client || ""); ws.getCell("A1").font = { bold: true, size: 13 };
+  ws.getCell("A2").value = "Total (of the rows the filters show)"; ws.getCell("A2").font = { bold: true };
+  ws.addTable({ name: "tAllChallans", ref: "A3", headerRow: true, totalsRow: false, style: { theme: "TableStyleLight9", showRowStripes: true }, columns: C.map((c) => ({ name: c.h, filterButton: true })), rows: body.length ? body : [C.map(() => null)] });
+  ["tax", "interest", "others", "total", "here", "used", "bal"].forEach((k) => { const c = ws.getCell(A[k] + "2"); c.value = { formula: "SUBTOTAL(109," + A[k] + top + ":" + A[k] + last + ")", result: rows.reduce((a, x) => a + (k === "total" ? x.total : k === "bal" ? (x.kind === "ch" ? x.left : 0) : Number(x[k]) || 0), 0) }; c.font = { bold: true }; c.numFmt = NF; ws.getColumn(A[k]).numFmt = NF; });
+  ws.getColumn(A.date).numFmt = DF; ws.getColumn(A.bsr).numFmt = "@"; ws.getColumn(A.serial).numFmt = "@";
+  ws.getRow(3).alignment = { wrapText: true, vertical: "middle" }; ws.getRow(3).height = 30;
+  fit(ws, C, body.concat([C.map((c) => (c.k === "date" ? new Date() : c.k === "tax" || c.k === "total" ? 99999999.99 : null))]), 8, 34);
+  ws.getColumn(1).width = Math.max(ws.getColumn(1).width, 12);
+  cf(ws, A.bal + top + ":" + A.bal + last, "AND(ISNUMBER(" + A.bal + top + ")," + A.bal + top + "<-0.004)", RED);
+  cf(ws, A.st + top + ":" + A.st + last, "OR(" + A.st + top + '="Used beyond its tax",' + A.st + top + '="From Tally: needs BSR")', RED);
+  cf(ws, A.st + top + ":" + A.st + last, A.st + top + '="Not used"', AMBER);
+  ws.views = [{ state: "frozen", ySplit: 3, xSplit: 3, tabSelected: true }];
+  const buffer = await wb.xlsx.writeBuffer();
+  return { buffer, name: String(meta.client || "client").replace(/[^A-Za-z0-9]+/g, "-") + "-challans-" + meta.fy + ".xlsx" };
+}
+export async function downloadAllChallans(rows, meta) {
+  const x = await allChallans(rows, meta);
+  await saveFile(x.name, new Blob([x.buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  return x;
+}
+if (typeof window !== "undefined") window.TDSExcel = { make, download, read, build, allChallans };

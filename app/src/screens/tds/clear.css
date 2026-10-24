@@ -9,6 +9,9 @@
 .rt-prob { border: 0; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--warn-soft); color: var(--warn); }
 .rt-prob.bad { background: var(--bad-soft); color: var(--bad); }
 .rt-head .more-btn { min-width: 32px; justify-content: center; }
+/* next-tds-excel2: the return's Download Excel / Upload Excel beside ⋯; on a narrow screen in ⋯ only */
+.rt-xl { display: inline-flex; gap: 6px; }
+@media (max-width: 760px) { .rt-xl { display: none; } }
 /* round 94: the steps as one row of underlined tabs (Arc's tab look, arc-clean.css §1, the same as other pages' tab rows),
    kept in view under the header as the page scrolls; the count muted after the label; a dot for a step with an error
    (red) or a warning (amber) */

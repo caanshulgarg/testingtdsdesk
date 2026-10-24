@@ -14,7 +14,7 @@ import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
 import { openAllChallans } from "./AllChallans.jsx";
-import { excelItems, ExcelBox } from "./TdsExcel.jsx";
+import { excelItems, ExcelBox, ExcelButtons } from "./TdsExcel.jsx";
 
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 export const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -119,6 +119,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
       <span className="rt-sp" />
+      {/* next-tds-excel2: the return's Excel, down and back, beside ⋯ (in ⋯ too) */}
+      <ExcelButtons form={form} fy={fy} q={q} />
       <More label="⋯" ariaLabel="More" items={moreAll} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
     </header>
