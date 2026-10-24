@@ -77,12 +77,21 @@ function tmYearOk(c, fy, q){
 const tmTdsHead = c => !c.minor || String(c.minor) === "200";
 // next-tds-early: the years from a deduction's (or a return's) financial year to a challan's: 0 the same, 1 the next, -1 the one before
 const tmFyGap = (d, c) => +tmFyOf(c.date).slice(0, 4) - +tmFyOf(d).slice(0, 4);
+// next-fvu87 (24-Oct-2026): a challan of a year before the deduction's, in words that say what each FVU does (run on both):
+// FVU 1.2 (tax year 2026-27 on) refuses any (T-FV-3076, "Date prior to Financial Year"); FVU 8.7 (up to FY 2025-26) takes one
+// of the year just before and refuses older ones (T-FV-3166, "Date prior to immediate previous Financial Year"). FinCom
+// takes neither for a deduction: a challan deposited in an earlier year than the deduction is not used for it
+function tmEarlyWords(d, g){
+  if (+tmFyOf(d).slice(0, 4) >= 2026) return "a challan dated before the deduction's financial year: Protean's FVU 1.2 refuses it (T-FV-3076)";
+  if (g < -1) return "a challan dated two or more years before the deduction's financial year: Protean's FVU 8.7 refuses it (T-FV-3166)";
+  return "a challan of the year before the deduction's: FinCom does not use it for the deduction (Protean's FVU 8.7 itself takes a challan of the year just before)";
+}
 // what Protean's FVU takes for a deduction: minor head 200, a challan of its year or the next, not dated after today.
 // "" when it does, else why not
 function tmCannot(c, r, today){
   if (!c || !tmTdsHead(c)) return "a challan not minor head 200 cannot pay a deduction";
   const g = tmFyGap(r.date, c);
-  if (g < 0) return "a challan dated before the deduction's financial year: Protean's FVU refuses it (T-FV-3076)";
+  if (g < 0) return tmEarlyWords(r.date, g);
   if (g > 1) return "a challan more than a year after the deduction's financial year";
   if (today && tmYmd(c.date) > tmYmd(today)) return "a challan dated after today: Protean's FVU refuses it (T-FV-3040)";
   return "";

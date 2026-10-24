@@ -89,12 +89,19 @@ const TDSEdit = {
   P_NAME: "deductee name missing",
   P_EARLY: "challan TRACES will not accept",
   FY_WORDS: "Protean's FVU refuses a challan dated before the financial year (T-FV-3076); use this year's challan or file it through a correction",
+  // next-fvu87: what each FVU does with it (FVU 1.2 from 2026-27: T-FV-3076; FVU 8.7 up to 2025-26: the year just before
+  // taken, older refused with T-FV-3166); FinCom uses neither for the deduction
+  fyWords(r, g){
+    if (TDS.isNew(TDS.fyOf(r.date))) return this.FY_WORDS;
+    if (g < -1) return "Protean's FVU 8.7 refuses a challan two or more years before the financial year (T-FV-3166); use this year's challan";
+    return "FinCom does not use a challan of the year before for this deduction (Protean's FVU 8.7 itself takes one of the year just before); use this year's challan, or ask before filing";
+  },
   fyGap(r, c){ return +TDS.fyOf(c.date).slice(0, 4) - +TDS.fyOf(r.date).slice(0, 4); },
   today(){ try { return istToday(); } catch (e){ return ""; } },
   badOf(r, c){
     if (!c || TDS.ymd(c.date).length !== 8 || TDS.ymd(r.date).length !== 8) return null;
     const g = this.fyGap(r, c), t = this.today();
-    if (g < 0) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", before this deduction's FY " + TDS.fyOf(r.date) + ": " + this.FY_WORDS};
+    if (g < 0) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", before this deduction's FY " + TDS.fyOf(r.date) + ": " + this.fyWords(r, g)};
     if (g > 1) return {k: "fy", words: "Challan of FY " + TDS.fyOf(c.date) + ", more than a year after this deduction's FY " + TDS.fyOf(r.date)};
     if (t && TDS.ymd(c.date) > t) return {k: "future", words: "Challan dated " + fmtDate(tallyDate(TDS.ymd(c.date))) + ", after today: Protean's FVU refuses a future date (T-FV-3040)"};
     if (c.minorHead && String(c.minorHead) !== "200") return {k: "minor", words: "Challan is minor head " + c.minorHead + ", not 200 (TDS payable by the deductor): it cannot pay a deduction"};

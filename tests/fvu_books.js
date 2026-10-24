@@ -11,7 +11,7 @@ process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "MONTHS3", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "TDS", "Certs", "TDS26Q", "TDS_FORMS", "TCS27EQ", "PAY_CODES",
   "NEW_FORMS_VALIDATED", "noPanRate", "NO_PAN_RATE", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "TDSCH", "TDSRate", "TDSLdc", "TDSWatch", "TDSFiled", "TDSInt", "TDSTally", "AIH", "Payroll",
-  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "money", "Market", "TDSMatch"].concat(require("./harness").TM_NAMES);
+  "PayTax", "TDS24Q", "TDS24Q_FILE", "TDSYear", "TDSReg", "TRF", "istParts", "p2ist", "istDay", "istToday", "TDS_SEC_CODES", "money", "Market", "TDSMatch", "TDSAdd", "TDS_REMARK", "TDSDecl", "TDSEdit"].concat(require("./harness").TM_NAMES);
 const FY = "2025-26", QS = ["Q1", "Q2", "Q3", "Q4"];
 const FIRM = {tan: "DELL04827E", pan: "AAGCL4827M", name: "Larkspur Fixture Events Private Limited", deductorType: "K", branch: "Head Office", flat: "Unit 4", premises: "Larkspur House", road: "Ring Road",
   area: "Lajpat Nagar", town: "New Delhi", state: "09", pin: "110024", email: "accounts@larkspur.example", phone: "9811000000",
@@ -77,10 +77,53 @@ function buildAll(x, firm){
   QS.forEach(q => { out["24Q" + q.slice(1) + ".txt"] = x.TDS24Q_FILE.build(FY, q, firm || FIRM); });
   return out;
 }
-module.exports = {books, buildAll, FIRM, FY, QS};
+// next-fvu87 (24-Oct-2026): the cases FVU 8.7 was run on beyond the books above, FY 2025-26, each its own statement:
+//   26R2  26Q Q2: remark T (a transporter's declaration, 194C, PAN), remark B (Form 15G, 194A), remark Y (194H below the
+//         limit), a 194Q purchase below the limit (Y: FVU 8.7 takes no Y for 194Q, T_FV_6210, so it is left out), an
+//         inoperative PAN at 20% (FVU 8.7 takes remark C only for a PAN that is structurally invalid, T-FV-4323: the PAN,
+//         no remark) and a 194T payment to a partner (FVU 8.7 has no section code for 194T, T-FV-4301: a known limit)
+//   27D2  27Q Q2: a deductee with a PAN at the treaty rate (B) whose address, e-mail, phone and tax ID are kept (FVU 8.7
+//         takes them only with remark C, no PAN and natures 16, 21, 27, 31, 49, 52, 66-70: T-FV-4335 to 4343, so left
+//         out), and one with no PAN, nature 99, the same details (left out too)
+//   26P3  26Q Q3 on a challan of 07-03-2025, the year before (FVU 8.7 takes it; FinCom's Validate & file does not)
+//   26O4  26Q Q4 on a challan of 07-03-2024, two years before (FVU 8.7: T-FV-3166)
+function cases(){
+  const {ctx, x} = books();
+  const V = (id, date, party, exp, tds, led, expLed) => ({id, date, type: "Journal", no: id, party, ent: [{l: party, a: exp - tds}, {l: led, a: tds}, {l: expLed, a: -exp}]});
+  const b = {cid: "t", vouchers: [
+      V("k1", "20250710", "Quillfeather Weddings LLP", 100000, 2000, "TDS ON CONTRACT 194C", "Sound and Light Hire"),
+      V("k2", "20250712", "Inop Carriers", 50000, 10000, "TDS ON CONTRACT 194C", "Freight"),
+      V("k3", "20250715", "Anil Partner", 200000, 20000, "TDS ON PARTNER 194T", "Partner Remuneration"),
+      V("n1", "20250720", "Treaty Partner Inc", 100000, 10000, "TDS ON NON RESIDENT 195", "Design Fees"),
+      V("n2", "20250722", "Royalty Holder SA", 100000, 20800, "TDS ON NON RESIDENT 195", "Royalty"),
+      V("p1", "20251010", "Quillfeather Weddings LLP", 100000, 2000, "TDS ON CONTRACT 194C", "Sound and Light Hire"),
+      V("p2", "20260110", "Quillfeather Weddings LLP", 100000, 2000, "TDS ON CONTRACT 194C", "Sound and Light Hire")],
+    challans: [{id: "k", bsr: "0510308", serial: "00041", date: "20250807", tax: 32000, interest: 0, section: "194C"},
+      {id: "nk", bsr: "0510308", serial: "00042", date: "20250807", tax: 30800, interest: 0, section: "195"},
+      {id: "py", bsr: "0510308", serial: "00043", date: "20250307", tax: 2000, interest: 0, section: "194C"},
+      {id: "po", bsr: "0510308", serial: "00044", date: "20240307", tax: 2000, interest: 0, section: "194C"}],
+    alloc: {"k1|TDS ON CONTRACT 194C": "k", "k2|TDS ON CONTRACT 194C": "k", "k3|TDS ON PARTNER 194T": "k", "n1|TDS ON NON RESIDENT 195": "nk", "n2|TDS ON NON RESIDENT 195": "nk",
+      "p1|TDS ON CONTRACT 194C": "py", "p2|TDS ON CONTRACT 194C": "po"},
+    certs: [], meta: {from: "20250401", to: "20260331"},
+    map: {"TDS ON CONTRACT 194C": {kind: "tds_payable", section: "194C"}, "TDS ON PARTNER 194T": {kind: "tds_payable", section: "194T"},
+      "TDS ON NON RESIDENT 195": {kind: "tds_payable", section: "195"}, "Bank": {kind: "bank"}},
+    pans: {"Quillfeather Weddings LLP": "AAAFQ1234K", "Inop Carriers": "AABFI1234N", "Anil Partner": "ABCPA1234P", "Treaty Partner Inc": "AABCT1234T", "Road Kings": "ABCPR1234K",
+      "Saver": "ABCPV1234S", "Small Agent": "ABCPS1234G", "Big Supplier": "AABCB1234Q"},
+    panInoperative: {"AABFI1234N": true},
+    nrInfo: {"Treaty Partner Inc": {dtaa: true, trc: true, nature: "16", country: "49", email: "tax@treaty.example", phone: "4930999999", address: "2 Hauptstrasse Berlin", tin: "DE999999999"},
+      "Royalty Holder SA": {nature: "99", country: "49", email: "ap@royalty.example", phone: "4930888888", address: "3 Hauptstrasse Berlin", tin: "DE888888888"}}};
+  ctx.S.books = b;
+  const add = (party, section, date, paid, basis) => { const r = x.TDSAdd.save({party, section, date, credit: date, paid, rate: 0, tds: 0, basis: basis || ""}); if (!r.ok) throw new Error(party + ": " + r.why); };
+  add("Road Kings", "194C", "20250718", 80000); add("Saver", "194A", "20250801", 30000); add("Small Agent", "194H", "20250805", 5000, "Y"); add("Big Supplier", "194Q", "20250806", 100000, "Y");
+  [x.TDSDecl.set("Road Kings", FY, {transporter: true}), x.TDSDecl.set("Saver", FY, {form: "15G", date: "20250410"})].forEach(r => { if (!r.ok) throw new Error(r.why); });
+  const files = {"26R2.txt": x.TDS26Q.build(FY, "Q2", FIRM, "26Q"), "27D2.txt": x.TDS26Q.build(FY, "Q2", FIRM, "27Q"),
+    "26P3.txt": x.TDS26Q.build(FY, "Q3", FIRM, "26Q"), "26O4.txt": x.TDS26Q.build(FY, "Q4", FIRM, "26Q")};
+  return {ctx, x, b, files};
+}
+module.exports = {books, buildAll, cases, FIRM, FY, QS};
 if (require.main === module){
   const dir = process.argv[2]; fs.mkdirSync(dir, {recursive: true});
-  const {x} = books(), all = buildAll(x), res = {};
+  const {x} = books(), all = Object.assign(buildAll(x), cases().files), res = {};
   Object.entries(all).forEach(([n, f]) => { if (f.text) fs.writeFileSync(path.join(dir, n), f.text); res[n] = f.error || {name: f.name, rows: f.rows}; });
   console.log(JSON.stringify(res));
 }
