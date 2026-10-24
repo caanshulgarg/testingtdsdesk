@@ -14,8 +14,6 @@ package main
 //      fragment (no key), and nothing is sent to Tally.
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"net/http/httptest"
 	"os"
@@ -544,19 +542,34 @@ func TestInstallerFinishOpensToConnect(t *testing.T) {
 	}
 }
 
-// the version; no request added or changed: docs/tally-allowlist.md byte for byte as at 2.4.5's release (its sha256 in
-// the release log's last 2.4.5 row), the table's hash as the code's; the test sheet names this version's new steps
+// the version; no request added or changed: the allow-list's table (its hash) exactly as at 2.4.5's release; the doc's
+// decision line names 2.4.6 by the owner's standing decision (no request on the list and no request shape changed),
+// 2.4.5's decision kept as history, a dated line for 2.4.6 saying nothing was measured again; the test sheet names this
+// version's new steps
 func TestRelease246VersionAllowListUnchanged(t *testing.T) {
 	if BridgeVersion != "2.4.6" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
-	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
-	sum := sha256.Sum256([]byte(al))
-	if h := hex.EncodeToString(sum[:]); !strings.HasPrefix(h, "6bf9d43c248e097c") {
-		t.Fatalf("docs/tally-allowlist.md changed since 2.4.5 (sha256 %s): 2.4.6 adds no request", h)
+	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" // 2.4.5's table hash (docs/tally-allowlist.md at 69de7a79d)
+	if h := allowListHash(allowListRows()); h != table245 {
+		t.Fatalf("the allow-list's table changed since 2.4.5 (%s): 2.4.6 adds or changes no request", h)
 	}
-	if !strings.Contains(al, "Table hash (SHA-256): "+allowListHash(allowListRows())) {
-		t.Fatal("the table hash in the doc is not the table's")
+	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	if !strings.Contains(al, "Table hash (SHA-256): "+table245) {
+		t.Fatal("the table hash in the doc is not 2.4.5's")
+	}
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	for _, w := range []string{"allowed for 2.4.6 by the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed",
+		"the owner's approval of 2026-10-24", "as for 2.4.5: the owner's decision of 2026-10-21"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("the decision line does not say %q", w)
+		}
+	}
+	if strings.Contains(al, "allowed for 2.4.5 by") {
+		t.Error("2.4.5's decision still worded as the current one")
+	}
+	if !regexp.MustCompile(`re-measured on 2026-10-24 for 2\.4\.6: no request was measured again[^\n]*allowed for 2\.4\.6 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+		t.Error("no dated line for 2.4.6")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.4.6-test-sheet.txt"))
 	for _, w := range []string{"2.4.6", "#pair=", "Open FinCom to connect", "Connect FinCom on this computer"} {

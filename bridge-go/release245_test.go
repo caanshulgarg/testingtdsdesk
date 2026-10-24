@@ -18,7 +18,7 @@ func TestRelease245VersionAndDecisionLine(t *testing.T) {
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range []string{
-		"allowed for 2.4.5 by the owner's decision of 2026-10-21",
+		"as for 2.4.5: the owner's decision of 2026-10-21", // 2.4.6: kept as history (r246pair_test.go)
 		dayHeadsID, ledIdsID, "GUID, MASTERID, ALTERID, DATE", "MASTERID",
 		"as for 2.4.4: the owner's decision of 2026-10-12"} {
 		if !strings.Contains(line, w) {
@@ -36,7 +36,7 @@ func TestRelease245VersionAndDecisionLine(t *testing.T) {
 	if !strings.Contains(al, "Table hash (SHA-256): "+allowListHash(allowListRows())) {
 		t.Error("the table hash in the doc is not the table's")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-21 for 2\.4\.5[^\n]*allowed for 2\.4\.5 by the owner's decision of 2026-10-21`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-21 for 2\.4\.5[^\n]*2\.4\.5 allowed by the owner's decision of 2026-10-21`).MatchString(al) {
 		t.Error("no dated re-measured line for 2.4.5")
 	}
 	notes := strings.Join(strings.Fields(readText(filepath.Join("..", "docs", "bridge-2.4.5-notes.md"))), " ")
