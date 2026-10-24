@@ -370,6 +370,8 @@ def main():
         pg4 = open_page(1440, 900, "/#pair=161803-" + "6f" * 16); pg4.wait_for_timeout(4000)
         ok(not any(x[1] == "/pair" and x[2].get("code") for x in BR["log"]), "15. a secret that does not prove itself is not sent (%s)" % [x[2] for x in BR["log"] if x[1] == "/pair"])
         ok(not any(x[1] == "/pair2" for x in BR["log"]) and pg4.evaluate("() => Bridge.cfg().key") == "", "15. no SPAKE2 run by itself (none of the bridge's tries used), no key")
+        t4 = re.sub(r"\s+", " ", pg4.inner_text("body"))
+        ok("This link from FinCom Bridge has run out" in t4, "15. it says the link ran out and how to get a new one")
         pg4.close()
 
         ok(not errors, "no page errors (%s)" % errors[:3])

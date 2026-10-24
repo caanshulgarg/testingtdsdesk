@@ -831,19 +831,20 @@ func localCall(method, path string, body any) M {
 }
 
 func bridgeCall(method, path string, body any, timeout time.Duration) M {
-	// 2.4.7: the key goes only over a connection to a program that proved it holds it (pairopen.go bridgeProvenClient)
-	c := bridgeProvenClient(toInt(cfg("Port")), cfgS("Key"), timeout)
-	if c == nil {
-		return nil
-	}
-	defer c.CloseIdleConnections()
 	var rd io.Reader
 	if body != nil {
 		rd = strings.NewReader(jsonText(body))
 	}
 	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
-	req.Header.Set("X-Bridge-Key", cfgS("Key"))
+	// 2.4.7: never the key itself: a one-use proof for this request, only to a program that proved it holds the key
+	// (pairopen.go bridgeAuthorize)
+	auth, ok := bridgeAuthorize(toInt(cfg("Port")), cfgS("Key"), method, req.URL.RequestURI(), 5*time.Second)
+	if !ok {
+		return nil
+	}
+	req.Header.Set("X-Bridge-Auth", auth)
 	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
 	r, err := c.Do(req)
 	if err != nil {
 		return nil

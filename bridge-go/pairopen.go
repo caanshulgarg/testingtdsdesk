@@ -18,12 +18,11 @@ package main
 // The code works as before: once, 10 minutes, proved by pairProof before FinCom sends it. Nothing goes to Tally.
 
 import (
-	"context"
 	"crypto/hmac"
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -280,57 +279,102 @@ func freshPairCode(min int) (code, secret, until string) {
 	return c, s, u.Format("2006-01-02T15:04:05")
 }
 
-// 2.4.7: a client for 127.0.0.1:port whose one connection is to a program that proved it holds the bridge key (HMAC of
-// a fresh nonce, bound to its id and that port); nil when it did not. The client may open no second connection, so a
-// program that takes the port after the proof (the bridge restarting) never gets the key: the request then fails
-func bridgeProvenClient(port int, key string, timeout time.Duration) *http.Client {
-	if port <= 0 || key == "" {
-		return nil
+// 2.4.7: the tray (and the measuring tool) never send the bridge key. Before each request: /ping with a fresh nonce
+// proves the program on the port holds the key (else nothing is sent) and hands out a one-use challenge (30 s); the
+// request then carries X-Bridge-Auth: <challenge>.<HMAC(key, "fincom-tray-auth|" challenge "|" method "|" path?query)>.
+// A program that takes the port in between gets only that proof, good for nothing: the bridge takes each challenge it
+// issued once, for that request only, and answers no other Windows user's program.
+func bridgeAuthorize(port int, key, method, requestURI string, timeout time.Duration) (string, bool) {
+	ch, ok := bridgeChallenge(port, key, timeout)
+	if !ok {
+		return "", false
 	}
-	var dials int32
-	var mu sync.Mutex
-	d := &net.Dialer{Timeout: timeout}
-	tr := &http.Transport{Proxy: nil, MaxConnsPerHost: 1, MaxIdleConnsPerHost: 1, IdleConnTimeout: 30 * time.Second,
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			mu.Lock()
-			dials++
-			first := dials == 1
-			mu.Unlock()
-			if !first {
-				return nil, errors.New("the bridge's connection closed after it proved itself")
-			}
-			return d.DialContext(ctx, network, addr)
-		}}
-	c := &http.Client{Timeout: timeout, Transport: tr}
+	return ch + "." + trayAuthMAC(key, ch, method, requestURI), true
+}
+
+func trayAuthMAC(key, ch, method, requestURI string) string {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("fincom-tray-auth|" + ch + "|" + method + "|" + requestURI))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// the program on 127.0.0.1:port proved it holds the key (HMAC of our nonce, bound to its id and that port); its challenge
+func bridgeChallenge(port int, key string, timeout time.Duration) (string, bool) {
+	if port <= 0 || key == "" {
+		return "", false
+	}
 	n := randHex16() + randHex16()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/ping?n=%s", port, n), nil)
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/ping?n=%s&challenge=1", port, n), nil)
 	req.Header.Set("X-FinCom-Tray", "1")
 	r, err := c.Do(req)
 	if err != nil {
-		tr.CloseIdleConnections()
-		return nil
+		return "", false
 	}
 	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
 	r.Body.Close()
 	j := parseObj(string(b))
-	want := ""
-	if j != nil && toInt(j["port"]) == port && str(j["bridgeId"]) != "" {
-		want = proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
+	if j == nil || toInt(j["port"]) != port || str(j["bridgeId"]) == "" {
+		return "", false
 	}
-	if want == "" || !hmac.Equal([]byte(want), []byte(str(j["proof"]))) {
-		tr.CloseIdleConnections()
-		return nil
+	want := proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
+	ch := str(j["challenge"])
+	if want == "" || !hmac.Equal([]byte(want), []byte(str(j["proof"]))) || !re(`^[0-9a-f]{64}$`).MatchString(ch) {
+		return "", false
 	}
-	return c
+	return ch, true
 }
 
-// the proof alone (the tests; the first start's checks)
+// the proof alone (the tests)
 func bridgeProves(port int, key string, timeout time.Duration) bool {
-	c := bridgeProvenClient(port, key, timeout)
-	if c != nil {
-		c.CloseIdleConnections()
+	_, ok := bridgeChallenge(port, key, timeout)
+	return ok
+}
+
+// --- the bridge's side of the tray's proof
+var (
+	trayAuthMu     sync.Mutex
+	trayAuthIssued = map[string]time.Time{}
+)
+
+func issueTrayChallenge() string {
+	trayAuthMu.Lock()
+	defer trayAuthMu.Unlock()
+	now := time.Now()
+	for k, exp := range trayAuthIssued {
+		if now.After(exp) {
+			delete(trayAuthIssued, k)
+		}
 	}
-	return c != nil
+	if len(trayAuthIssued) >= 64 { // a program asking without using them: the oldest go
+		for k := range trayAuthIssued {
+			delete(trayAuthIssued, k)
+			if len(trayAuthIssued) < 32 {
+				break
+			}
+		}
+	}
+	ch := randHex16() + randHex16()
+	trayAuthIssued[ch] = now.Add(30 * time.Second)
+	return ch
+}
+
+// X-Bridge-Auth: a challenge this bridge issued (taken once), with the key's HMAC over it and this request
+func trayAuthOK(r *http.Request) bool {
+	v := r.Header.Get("X-Bridge-Auth")
+	ch, mac, found := strings.Cut(v, ".")
+	key := cfgS("Key")
+	if !found || key == "" || len(ch) != 64 || len(mac) != 64 {
+		return false
+	}
+	trayAuthMu.Lock()
+	exp, ok := trayAuthIssued[ch]
+	delete(trayAuthIssued, ch)
+	trayAuthMu.Unlock()
+	if !ok || time.Now().After(exp) {
+		return false
+	}
+	return hmac.Equal([]byte(trayAuthMAC(key, ch, r.Method, r.URL.RequestURI())), []byte(mac))
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state

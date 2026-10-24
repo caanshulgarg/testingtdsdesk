@@ -293,34 +293,6 @@ func TestR247FiveTriesInAllAndOriginOnly(t *testing.T) {
 	_ = p2
 }
 
-// review round 1: a program that takes the port after the bridge proved itself never gets the key (the proven client
-// opens no second connection)
-func TestR247NoKeyAfterTheProvenConnectionCloses(t *testing.T) {
-	newPairStand(t, "")
-	kw := &keyWatch{}
-	port := 0
-	port = startOn(t, func(w http.ResponseWriter, r *http.Request) {
-		kw.mu.Lock()
-		if k := r.Header.Get("X-Bridge-Key"); k != "" {
-			kw.keys = append(kw.keys, r.URL.Path)
-		}
-		kw.mu.Unlock()
-		if r.URL.Path == "/ping" {
-			w.Header().Set("Connection", "close") // the bridge "restarts" right after it proved itself
-		}
-		handle(w, r)
-	})
-	setCfg("Port", float64(port))
-	if r := bridgeCall("GET", "/status", nil, 2*time.Second); r != nil {
-		t.Fatalf("a second connection was opened after the proof: %v", r)
-	}
-	kw.mu.Lock()
-	defer kw.mu.Unlock()
-	if len(kw.keys) != 0 {
-		t.Fatalf("the key went over a new connection: %v", kw.keys)
-	}
-}
-
 func TestR247SecretFromTheAddress(t *testing.T) {
 	p := newPairStand(t, "")
 	_, secret, _ := freshPairCode(10)
@@ -410,11 +382,73 @@ func TestR247KeyOnlyToAProvenBridge(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("the key went to the impostor: %v", got)
 	}
-	// and the tray's own call (win_tray.go's trayCall) asks the same before the key goes
+	// the real bridge: the call goes through (review round 2: a positive check)
+	setCfg("Port", float64(real))
+	if r := bridgeCall("GET", "/status", nil, 2*time.Second); r == nil || r["ok"] != true {
+		t.Fatalf("bridgeCall to the real bridge: %v", r)
+	}
+	// and the tray's own call (win_tray.go's trayCall): a proof for each request, never the key
 	tray := readText("win_tray.go")
 	body := group(`(?s)func trayCall\(method, path string, body any\) M \{(.*?)\n\}`, tray, 1)
-	if !strings.Contains(body, "bridgeProvenClient(") || strings.Index(body, "bridgeProvenClient(") > strings.Index(body, `req.Header.Set("X-Bridge-Key"`) || !strings.Contains(body, "c.Do(req)") {
-		t.Fatalf("trayCall sends the key before the bridge proves itself:\n%s", body)
+	if !strings.Contains(body, "bridgeAuthorize(") || strings.Index(body, "bridgeAuthorize(") > strings.Index(body, `req.Header.Set("X-Bridge-Auth"`) || strings.Contains(body, "X-Bridge-Key") {
+		t.Fatalf("trayCall sends the key, or no proof first:\n%s", body)
+	}
+}
+
+// review round 2: the tray never sends the key; its proof is good once, for that request only
+func TestR247TrayNeverSendsTheKey(t *testing.T) {
+	newPairStand(t, "")
+	var mu sync.Mutex
+	var keys, auths []string
+	port := startOn(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		if k := r.Header.Get("X-Bridge-Key"); k != "" {
+			keys = append(keys, r.URL.Path)
+		}
+		if a := r.Header.Get("X-Bridge-Auth"); a != "" {
+			auths = append(auths, a)
+		}
+		mu.Unlock()
+		handle(w, r)
+	})
+	setCfg("Port", float64(port))
+	if r := bridgeCall("GET", "/tray/status", nil, 2*time.Second); r == nil || r["ok"] != true {
+		t.Fatalf("the tray's status: %v", r)
+	}
+	mu.Lock()
+	k, a := append([]string{}, keys...), append([]string{}, auths...)
+	mu.Unlock()
+	if len(k) != 0 || len(a) != 1 {
+		t.Fatalf("keys sent %v, proofs %v", k, a)
+	}
+	do := func(method, path, auth string) int {
+		req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), nil)
+		req.Header.Set("X-Bridge-Auth", auth)
+		r, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r.Body.Close()
+		return r.StatusCode
+	}
+	if c := do("GET", "/tray/status", a[0]); c != 401 {
+		t.Fatalf("a proof used twice: %d", c)
+	}
+	// a fresh proof for one request does not open another
+	ch, ok := bridgeChallenge(port, "k246", 2*time.Second)
+	if !ok {
+		t.Fatal("no challenge")
+	}
+	if c := do("POST", "/tray/pause", ch+"."+trayAuthMAC("k246", ch, "GET", "/tray/status")); c != 401 {
+		t.Fatalf("a proof for /tray/status opened /tray/pause: %d", c)
+	}
+	// a made-up challenge
+	if c := do("GET", "/tray/status", strings.Repeat("a", 64)+"."+trayAuthMAC("k246", strings.Repeat("a", 64), "GET", "/tray/status")); c != 401 {
+		t.Fatalf("a challenge the bridge never issued: %d", c)
+	}
+	// a challenge is given only to the tray's kind of request (no Origin, X-FinCom-Tray), and only with the key's proof
+	if j := pingAs(t, "https://staging.fincom.live", "nonce0123456789abcdefXYZ&challenge=1", nil); j["challenge"] != nil {
+		t.Fatalf("FinCom's page got a tray challenge: %v", j)
 	}
 }
 

@@ -185,6 +185,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				if pr := proofFor(cfgS("Key"), n, bound); pr != "" {
 					p["proof"] = pr
 				}
+				if program && qs.Get("challenge") == "1" {
+					p["challenge"] = issueTrayChallenge() // 2.4.7: the tray proves the key per request, never sends it
+				}
 				pairMu.Lock()
 				if page && time.Now().Before(pairUntil) && pairSecret != "" {
 					// 2.4.7: no proof over the 6-digit code (an offline test for it); the window's secret's proof (128 bits, in
@@ -300,7 +303,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			if code != "" {
 				msg = "That is not the code shown in the bridge window."
 			}
-			sendJSON(w, 403, M{"ok": false, "error": msg, "needCode": true}, origin)
+			sendJSON(w, 403, M{"ok": false, "error": msg, "needCode": true, "closed": n >= 5}, origin)
 			return
 		}
 		if open {
@@ -315,7 +318,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, 403, M{"ok": false, "error": closedMsg, "closed": true}, origin)
 		return
 	}
-	if r.Header.Get("X-Bridge-Key") != cfgS("Key") {
+	if r.Header.Get("X-Bridge-Key") != cfgS("Key") && !trayAuthOK(r) { // 2.4.7: or the tray's one-use proof (pairopen.go)
 		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key. Copy the key shown in the bridge window into FinCom Settings."}, origin)
 		return
 	}

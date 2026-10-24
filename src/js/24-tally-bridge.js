@@ -306,11 +306,13 @@ const Bridge = {
     const pc = /^(\d{6})(?:-([0-9a-f]{32}))?$/.exec(code), digits = pc ? pc[1] : code, secret = pc && pc[2] ? pc[2] : "";
     const c = this.cfg(), usable = (b) => b && (b.pairProven || (!auto && b.spake));
     let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code), cands = usable(hit) ? [hit] : [];
-    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); if (f) cands = (this.lastOk || [f]).filter(usable); }
+    if (!usable(hit) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); if (f) cands = (this.lastOk || [f]).filter(usable); }
     const proven = cands.find(b => b.pairProven);
-    if (proven) cands = [proven];
+    // one SPAKE2 run per code typed, with the likeliest bridge (each run is one guess for whoever answers it)
+    cands = proven ? [proven] : cands.slice(0, 1);
     if (!cands.length){
       const any = (this.lastFound || []).length || hit;
+      if (auto && any) throw {code: "pair", closed: true, message: "This link from FinCom Bridge has run out (a newer one was opened, or the bridge started again). Right-click the FinCom icon near the clock \u203a Connect FinCom on this computer\u2026 again."};
       throw {code: any ? "pair" : "bridge_down", message: any
         ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
         : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};

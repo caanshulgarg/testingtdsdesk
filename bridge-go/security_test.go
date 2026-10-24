@@ -88,7 +88,7 @@ func TestTrayRoutesRefuseBrowserOrigin(t *testing.T) {
 	if strings.Contains(string(src), `"Origin"`) {
 		t.Fatal("win_tray.go sets an Origin header: the bridge would refuse the tray")
 	}
-	if !strings.Contains(string(src), `req.Header.Set("X-Bridge-Key"`) {
+	if !strings.Contains(string(src), `req.Header.Set("X-Bridge-Auth"`) { // 2.4.7: a one-use proof, never the key
 		t.Fatal("win_tray.go's trayCall changed: check that it still sends no Origin")
 	}
 }
