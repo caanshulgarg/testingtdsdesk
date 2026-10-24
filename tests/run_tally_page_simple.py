@@ -177,7 +177,10 @@ def main():
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
         ok([s[0] for s in steps] == ["install", "open", "add"], "guide: Install -> Open your company in TallyPrime -> Add as client (%s)" % [s[0] for s in steps])
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
-        ok(pg.locator(g + ' [data-connect-step="install"] [data-bridge-download]').count() == 1 and "2.3.4" in txt(g + ' [data-connect-step="install"] [data-bridge-download]'), "guide: step 1 has the download (%s)" % txt(g + ' [data-connect-step="install"]')[:120])
+        # 24-Oct-2026 (next-tally-firstlink, fd7efe4e4): step 1's download is in Connect this computer under the steps
+        # (Download, Open it, Type its code), as run_tally_page_clean and run_tally_suvit read it
+        dl = g + ' [data-firstlink] [data-fl-step="download"] [data-bridge-download]'
+        ok(pg.locator(dl).count() == 1 and "2.3.4" in txt(dl), "guide: step 1 has the download, in Connect this computer (%s)" % txt(g + ' [data-connect-step="install"]')[:120])
         ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
         shot("guide-empty")
         # this browser's own bridge connect (the 6-digit code) is only under Advanced (for support)

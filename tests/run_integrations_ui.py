@@ -222,7 +222,10 @@ def main():
     steps = [f for f in files if "In the list of GSPs" in open(f, encoding="utf-8", errors="replace").read()]
     ok(len(steps) == 1, "the e-invoice set-up steps are there (einvoice1.gst.gov.in, Create API User, Through GSP)")
     src = os.path.join(HERE, "..")
-    for rel in ("app/src/screens/GstApiAll.jsx", "app/src/screens/gst/SupplierHealth.jsx"):
+    # (Supplier health, app/src/screens/gst/SupplierHealth.jsx, was taken out on purpose by next-itc-simple, 990293842: the
+    # owner, 24-Oct-2026, "supplier health is not required"; the GSP's name in the built files is checked above)
+    ok(not os.path.exists(os.path.join(src, "app/src/screens/gst/SupplierHealth.jsx")), "Supplier health is gone (next-itc-simple): no page left to name the GSP")
+    for rel in ("app/src/screens/GstApiAll.jsx",):
         t = "\n".join(l for l in open(os.path.join(src, rel)).read().splitlines() if not l.lstrip().startswith("//"))     # (comments are never shown)
         ok("TaxPro" not in t and "FinCom" in t and "GST connection" in t, "%s says FinCom's GST connection, never the GSP" % rel)
     import subprocess
