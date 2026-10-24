@@ -484,3 +484,9 @@ run_gstr1_excel.py                    300  TDSDESK_SITE=../app/dist-test @libreo
 # challan, add deduction, add deductee within this smart excel.. dynamic"; "challan balance"): a return as one Excel and back
 run_tds_excel.js                      120
 run_tds_excel.py                      600  TDSDESK_SITE=../app/dist-test @libreoffice
+# ship-121 (24-Oct-2026): the books kept between opens (next-fix-booksload); GSTR-9 8C / 13 credit held as not shown in 2B
+# (next-fix-gst-not2b; migration 105 on a throwaway PostgreSQL); one smart TDS Excel on every return page (next-tds-excel2)
+run_books_speed.py                    600  TDSDESK_SITE=../app/dist-test
+run_gst_not2b.js                      120
+run_migration105.py                   180
+run_tds_excel2.py                     600  TDSDESK_SITE=../app/dist-test @libreoffice
