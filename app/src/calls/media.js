@@ -17,7 +17,7 @@ export function createMedia(mode, o) { return mode === "sfu" ? sfuMedia(o) : p2p
 
 // ---------------------------------------------------------------- peer to peer (mesh)
 function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
-  const peers = new Map();
+  const peers = new Map(), waiting = new Map();
   let local = null, screen = null, videoTrack = null, audioOnly = false, level = "high", statsTimer = null;
   const say = (to, data) => signal.send("rtc", Object.assign({ from: me, to }, data));
   function streamsOf(p) { return { cam: p.cam, screen: p.screen }; }
@@ -25,12 +25,12 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
     let p = peers.get(id);
     if (p) return p;
     const pc = new RTCPeerConnection({ iceServers: ice, bundlePolicy: "max-bundle" });
-    p = { id, pc, polite: me > id, makingOffer: false, ignoreOffer: false, cam: null, screen: null, kinds: {}, senders: {}, lost: 0, downAt: 0 };
+    p = { id, pc, polite: me > id, makingOffer: false, ignoreOffer: false, inbox: Promise.resolve(), cam: null, screen: null, kinds: {}, senders: {}, lost: 0, downAt: 0, restarts: 0, watch: null };
     peers.set(id, p);
     pc.onicecandidate = (e) => { if (e.candidate) say(id, { ice: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate }); };
     pc.onnegotiationneeded = async () => {
       try { p.makingOffer = true; await pc.setLocalDescription(); say(id, { desc: pc.localDescription && pc.localDescription.toJSON ? pc.localDescription.toJSON() : pc.localDescription, kinds: myKinds() }); }
-      catch (e) { console.warn("FinCom call: offer", e); } finally { p.makingOffer = false; }
+      catch (e) { console.warn("FinCom call: offer", e); } finally { p.makingOffer = false; watch(p); }
     };
     pc.ontrack = (e) => {
       const s = e.streams[0] || new MediaStream([e.track]);
@@ -64,9 +64,16 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
     if (!screen && p.senders.screen) { try { p.pc.removeTrack(p.senders.screen); } catch (e) { /* */ } p.senders.screen = null; }
     applyLevel(p);
   }
-  async function onSignal(m) {
+  // each person's messages one after another, in the order sent: an offer that comes while their answer is still being
+  // applied is then seen in a settled state (not taken for a collision and dropped)
+  function onSignal(m) {
     if (!m || m.to !== me || !m.from || m.from === me) return;
+    if (waiting.has(m.from)) { clearTimeout(waiting.get(m.from)); waiting.delete(m.from); }
     const p = peer(m.from);
+    p.inbox = p.inbox.then(() => handle(p, m));
+  }
+  async function handle(p, m) {
+    if (peers.get(p.id) !== p) return;
     if (m.kinds) Object.assign(p.kinds, m.kinds);
     try {
       if (m.desc) {
@@ -75,12 +82,27 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
         if (p.ignoreOffer) return;
         await p.pc.setRemoteDescription(m.desc);
         if (m.desc.type === "offer") { await p.pc.setLocalDescription(); say(m.from, { desc: p.pc.localDescription.toJSON ? p.pc.localDescription.toJSON() : p.pc.localDescription, kinds: myKinds() }); }
+        watch(p);
       } else if (m.ice) {
         try { await p.pc.addIceCandidate(m.ice); } catch (e) { if (!p.ignoreOffer) console.warn("FinCom call: ice", e); }
-      } else if (m.bye) drop(m.from);
+      } else if (m.bye) drop(p.id);
     } catch (e) { console.warn("FinCom call: signal", e); }
   }
-  function drop(id) { const p = peers.get(id); if (!p) return; try { p.pc.close(); } catch (e) { /* */ } peers.delete(id); onRemote(id, null); }
+  // a line set up but whose ICE never gets going (its candidates lost on the way, or the browser's): the side that is not
+  // polite restarts ICE after 10 s (new candidates, a new offer), a few times at most; "failed" and "disconnected" are
+  // handled below as before
+  function watch(p) {
+    if (p.watch || p.polite) return;
+    p.watch = setTimeout(() => {
+      p.watch = null;
+      const pc = p.pc, st = pc.iceConnectionState;
+      if (peers.get(p.id) !== p || pc.signalingState === "closed" || st === "connected" || st === "completed") return;
+      if (pc.signalingState !== "stable" || !pc.remoteDescription) { watch(p); return; }
+      if ((st === "new" || st === "checking") && p.restarts < 3) { p.restarts++; try { pc.restartIce(); } catch (e) { /* older browser */ } }
+      watch(p);
+    }, 10000);
+  }
+  function drop(id) { const p = peers.get(id); if (!p) return; clearTimeout(p.watch); try { p.pc.close(); } catch (e) { /* */ } peers.delete(id); onRemote(id, null); }
   // a weak line: the picture made smaller, then stopped (the voice goes on)
   function applyLevel(p) {
     const s = p.senders.video; if (!s || !s.getParameters) return;
@@ -114,15 +136,23 @@ function p2pMedia({ signal, me, ice, onRemote, onLevel }) {
       offSignal = signal.on("rtc", onSignal);
       statsTimer = setInterval(measure, 4000);
     },
-    // a person seen in presence: the one with the smaller id offers first (the other's offer is the polite side's)
-    meet(id) { if (id && id !== me && !peers.has(id)) peer(id); },
-    forget(id) { drop(id); },
+    // a person seen in presence: only the one with the smaller id (the side that is not polite) offers; the other waits
+    // for that offer and makes its own only if none has come in 4 s (the other did not see it). Both offering at once
+    // (glare) is handled by the polite side rolling its offer back, but Chromium then loses that side's ICE now and then:
+    // no candidates gathered, the line "new" for ever, no picture either way (run_call_glare.py; CI's
+    // run_video_calls_ui.py "the host receives the owner's picture")
+    meet(id) {
+      if (!id || id === me || peers.has(id) || waiting.has(id)) return;
+      if (id > me) { peer(id); return; }
+      waiting.set(id, setTimeout(() => { waiting.delete(id); if (!peers.has(id)) peer(id); }, 4000));
+    },
+    forget(id) { clearTimeout(waiting.get(id)); waiting.delete(id); drop(id); },
     setVideoTrack(t) { videoTrack = t; peers.forEach((p) => { if (p.senders.video) p.senders.video.replaceTrack(t || null).catch(() => {}); }); },
     setScreen(s) { screen = s; peers.forEach((p) => { attach(p); }); },
     setAudioOnly(on) { audioOnly = !!on; peers.forEach(applyLevel); },
     get level() { return level; },
     peers: () => [...peers.keys()],
-    stop() { clearInterval(statsTimer); if (offSignal) offSignal(); peers.forEach((p, id) => { say(id, { bye: true }); try { p.pc.close(); } catch (e) { /* */ } }); peers.clear(); },
+    stop() { clearInterval(statsTimer); if (offSignal) offSignal(); waiting.forEach((t) => clearTimeout(t)); waiting.clear(); peers.forEach((p, id) => { clearTimeout(p.watch); say(id, { bye: true }); try { p.pc.close(); } catch (e) { /* */ } }); peers.clear(); },
   };
 }
 // a sender needs a track to start with (the camera off from the start): a tiny black picture
