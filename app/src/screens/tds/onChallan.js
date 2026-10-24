@@ -22,6 +22,23 @@ export function missingName(id) {
 }
 // this return's TDS on a challan ("Used here"); all returns' is TDSReg.usedTax
 export const usedHere = (c, key, cx) => r2(num(((cx.uses[c.id] || {})[key] || {}).tax));
+// next-fix-challan-over (the owner, 24-Oct-2026: "Amount utilised (all returns) ₹4,775.78 · Balance ₹-2,208.78 … we have not
+// utilised it anywhere"): WHERE a challan is used, by name. A return's name as the app writes it ("26Q 2025-26 Q4",
+// "Form 140 2026-27 Q1"); the other returns using a challan, oldest first [{form, fy, q, tax, n, key}]; one opened on its
+// Deductions with that challan chosen
+export const retName = (u) => TDS.formName(u.form, u.fy) + " " + u.fy + " " + u.q;
+export const otherUses = (c, key, cx) => Object.keys(cx.uses[c.id] || {}).filter((k) => k !== key).map((k) => Object.assign({ key: k }, cx.uses[c.id][k]))
+  .filter((u) => Math.abs(num(u.tax)) > 0.005).sort((a, b) => (a.fy + a.q + a.form).localeCompare(b.fy + b.q + b.form));
+export function openUse(u, chId) {
+  tdsGoTab(u.fy, u.q, u.form, "deductions", { tdsWinCh: chId, tdsWinRet: TDSReg.key(u.form, u.fy, u.q), tdsDedView: "", tdsDedCh: chId, tdsWinAdd: "", tdsWinSel: {}, tdsWinRSel: {} });
+}
+// a challan used beyond its tax: {over, names} (the returns using it, by name; "this return" for the one open), else null
+export function overOf(c, key, cx) {
+  const bal = TDSReg.balance(c, cx).tax;
+  if (bal >= -0.005) return null;
+  const here = usedHere(c, key, cx) > 0.005, others = otherUses(c, key, cx);
+  return { over: r2(-bal), others, names: (here ? ["this return"] : []).concat(others.map(retName)) };
+}
 // next-tds-addlist / next-tds-early: what is wrong with a deduction on a challan (TDSEdit.placeIssues: a challan of an
 // earlier year, dated after today, not minor head 200, another section), whether a challan cannot pay a deduction (never
 // offered, never ticked), and the note of one allowed (TDSEdit.placeNote: an advance challan, the next year's)

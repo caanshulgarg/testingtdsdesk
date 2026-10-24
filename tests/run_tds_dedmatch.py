@@ -242,7 +242,7 @@ try:
             return J("(id) => { const cx = TDSReg.ctx(), c = TDS.challans().find(x => x.id === id); return {amt: num(c.tax), used: TDSReg.usedTax(c, cx), bal: TDSReg.balance(c, cx).tax, n: TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && r.challan === id).length}; }", cid)
         f0, w0 = foot(), want_foot(cur)
         ok(f0 and all(abs(f0[k] - w0[k]) < 0.01 for k in ("amt", "used", "bal", "n")) and all(x in f0["text"] for x in ["Used here", "Balance", "Number of deductions"]) and "Challan amount" not in f0["text"],
-           "the footer: Used here (round 89; Amount utilised (all returns) only when other returns use it too) · Balance · Number of deductions equal the challan; no Challan amount, the dropdown has it (%s / %s)" % (f0, w0))
+           "the footer: Used here (round 89; 'Also used in <return>: ₹X · Open' for each other return using it, next-fix-challan-over) · Balance · Number of deductions equal the challan; no Challan amount, the dropdown has it (%s / %s)" % (f0, w0))
         vis = J("() => { const f = document.querySelector('#app [data-wd-foot]').getBoundingClientRect(); return f.bottom <= innerHeight + 1 && f.top >= 0; }")
         ok(vis, "the footer is in view without scrolling")
         last = J("() => { const t = [...document.querySelectorAll('#app [data-wd-table] tbody tr')]; return t.length ? t[t.length - 1].innerText.trim() : ''; }")
