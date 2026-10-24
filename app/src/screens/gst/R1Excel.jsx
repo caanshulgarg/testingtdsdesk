@@ -7,6 +7,7 @@
 import { useRef, useState } from "react";
 import "../../lib/gstr1Fix.js";
 import { Pop } from "./ItcParts.jsx";
+import { Download, Upload, Undo2 } from "lucide-react";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const NAME = { b2b: "4A, 4B, 6B, 6C – B2B, SEZ, DE Invoices", b2cl: "5 – B2C (Large) Invoices", exp: "6A – Exports Invoices", b2cs: "7 – B2C (Others)", nil: "8 – Nil Rated, Exempted and Non-GST",
@@ -36,9 +37,13 @@ export default function R1ExcelBar({ ym, reg }) {
   const can = p && p.n > 0 && !errs.length && (!warns.length || ok);
   const tabs = p ? Object.keys(p.tables).filter((t) => { const o = p.tables[t]; return o.added.length + o.deleted.length + o.modified.length; }) : [];
   return <>
-    <button type="button" className="btn small" data-r1x="down" disabled={!!busy} onClick={down}>{busy === "down" ? "Making…" : "Download Excel"}</button>
-    <button type="button" className="btn small" data-r1x="up" disabled={!!busy} onClick={() => file.current && file.current.click()}>{busy === "up" ? "Reading…" : "Upload Excel"}</button>
-    {inf && inf.canUndo && <button type="button" className="linkbtn" data-r1x="undo" title={inf.last ? "Last upload " + fmtDate(String(inf.last.at || "").slice(0, 10)) + (inf.last.by ? " by " + inf.last.by : "") : ""} onClick={undo}>Undo upload</button>}
+    {/* the return's actions stay on one line at 1366 px (a client with several GSTINs has a GSTIN box in the title too): below
+        1600 px an icon each, named and titled Download Excel / Upload Excel; the whole words on a wide screen */}
+    <button type="button" className="btn small r1x-btn" data-r1x="down" aria-label="Download Excel" title="Download Excel: GSTR-1 in the portal's tables, to change (add, delete, modify)" disabled={!!busy} onClick={down}>
+      <Download size={14} aria-hidden="true" />{busy === "down" ? "Making…" : <span className="r1x-w">Download Excel</span>}</button>
+    <button type="button" className="btn small r1x-btn" data-r1x="up" aria-label="Upload Excel" title="Upload Excel: see what it changes, then Apply" disabled={!!busy} onClick={() => file.current && file.current.click()}>
+      <Upload size={14} aria-hidden="true" />{busy === "up" ? "Reading…" : <span className="r1x-w">Upload Excel</span>}</button>
+    {inf && inf.canUndo && <button type="button" className="linkbtn r1x-undo" data-r1x="undo" aria-label="Undo upload" title={"Undo the last upload: GSTR-1 as it was before it" + (inf.last ? " (" + fmtDate(String(inf.last.at || "").slice(0, 10)) + (inf.last.by ? " by " + inf.last.by : "") + ")" : "")} onClick={undo}><Undo2 size={14} aria-hidden="true" /><span className="r1x-w">Undo upload</span></button>}
     <input ref={file} type="file" hidden accept=".xlsx" aria-label="Upload the GSTR-1 Excel" data-r1x-upload="" onChange={(ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; up(f); }} />
     <Pop open={!!pv} onClose={() => setPv(null)} id="r1x-import" title={"GSTR-1 Excel brought back · " + GSTR.label(ym)} description={p ? (p.n ? p.n + " change" + (p.n === 1 ? "" : "s") : "Nothing changed") + (errs.length ? " · " + errs.length + " error" + (errs.length === 1 ? "" : "s") + " to fix" : "") : ""}>
       {p && <div data-r1x-preview="" data-pv-n={p.n}>

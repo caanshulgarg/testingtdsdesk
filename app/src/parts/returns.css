@@ -480,3 +480,7 @@ details.more .more-words p{margin:0 0 6px}
 #app table.bk-table td.r1p-nw { white-space: nowrap; }
 #app [data-r1-portal] table.bk-table thead th { white-space: normal; vertical-align: bottom; }
 .ret-card .r1x-bar{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ret-card .r1x-btn,.ret-card .r1x-undo{display:inline-flex;align-items:center;gap:5px}
+.ret-card .r1x-bar{gap:4px}
+@media (max-width:1599px){.ret-card .r1x-bar .r1x-w{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.ret-card .r1x-btn{padding-left:9px;padding-right:9px}}
+@media (max-width:1399px){.ret-card .r1x-bar .r1x-btn{display:none}}

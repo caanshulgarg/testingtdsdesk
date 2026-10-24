@@ -165,6 +165,7 @@ function OptionalNote() {
   return <p className="note" style={{ margin: "0 0 10px" }} data-optional-note="">{n} Optional entr{n === 1 ? "y" : "ies"} with GST in {fy} {n === 1 ? "is" : "are"} in no return. <button className="linkbtn" onClick={() => { S.reconTab = "optional"; gstPartGo("recon"); }}>See the list</button></p>;
 }
 
+const r1xClick = (k) => { const b = document.querySelector('[data-r1x-bar] [data-r1x="' + k + '"]'); if (b) b.click(); };
 // a GSTR-1 or 3B open: its summary card (round 46) — the return and period, its status as the year's grid says it, the
 // one download, and More
 function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledger, retPick, oneGstin }) {
@@ -189,7 +190,9 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
       <div className="ret-acts">
         {prefile && <span data-prefile-bar="">{prefile}</span>}
         {part === "r1" && !noReturn && <span className="r1x-bar" data-r1x-bar="">{<R1ExcelBar ym={ym} reg={reg} />}</span>}
-        <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]]}>
+        <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]].concat(
+          // next-gstr1-excel: under 1400 px the card has no room beside its actions: the GSTR-1 Excel's two are here (the bar stays, hidden)
+          part === "r1" && !noReturn && typeof window !== "undefined" && window.innerWidth < 1400 ? [["Download Excel (to change)", () => r1xClick("down")], ["Upload Excel", () => r1xClick("up")]] : [])}>
           <p>Check the JSON in the portal’s offline tool before filing.</p></More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
       </div>
