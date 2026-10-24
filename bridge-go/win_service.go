@@ -416,7 +416,7 @@ func installCmd(args []string) int {
 	}
 	installLog(fmt.Sprintf("Install: FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
-	clearPairOpenFiles(o.home) // 2.4.6: an earlier install's first-start ask never outlives this install (pairopen.go)
+	clearPairOpen(regPairStore{registry.LOCAL_MACHINE}) // 2.4.6: an earlier install's first-start ask never outlives this install (pairopen.go)
 	stopService()
 	cfgPath, code := writeSettings(o, mode, fincom)
 	if code != 0 {
@@ -445,7 +445,7 @@ func installCmd(args []string) int {
 	}
 	rc := waitAnswer(cfgPath, false, "Windows starts the service with it")
 	// 2.4.6: the setup run by a person asks for FinCom to open with the connect code at the first start (pairopen.go)
-	notePairOpen(filepath.Dir(cfgPath), args, rc, installLog)
+	notePairOpen(regPairStore{registry.LOCAL_MACHINE}, args, rc, installLog)
 	return rc
 }
 

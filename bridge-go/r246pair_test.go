@@ -1,3 +1,5 @@
+//go:build !windows
+
 package main
 
 // FinCom Bridge 2.4.6 (the owner's approval of 24-Oct-2026: "the bridge opens FinCom with the code already filled in, so
@@ -26,13 +28,13 @@ import (
 
 func TestPairOpenURLOnlyFinComSites(t *testing.T) {
 	good := map[string]string{
-		"https://staging.fincom.live/review/":        "https://staging.fincom.live/review/#pair=123456",
-		"https://app.fincom.live/":                   "https://app.fincom.live/#pair=123456",
-		"https://app.fincom.live":                    "https://app.fincom.live#pair=123456",
-		"https://fincom.live/x/?a=1":                 "https://fincom.live/x/?a=1#pair=123456",
-		"https://caanshulgarg.github.io/testing/":    "https://caanshulgarg.github.io/testing/#pair=123456",
-		"https://staging.fincom.live/review/#/tally": "https://staging.fincom.live/review/#pair=123456", // its own fragment replaced
-		"HTTPS://Staging.FinCom.live/review/":        "https://staging.fincom.live/review/#pair=123456",
+		"https://staging.fincom.live/review/":               "https://staging.fincom.live/review/#pair=123456",
+		"https://app.fincom.live/":                          "https://app.fincom.live/#pair=123456",
+		"https://app.fincom.live":                           "https://app.fincom.live#pair=123456",
+		"https://fincom.live/x/?next=https://evil.example/": "https://fincom.live/x/#pair=123456", // its query dropped
+		"https://caanshulgarg.github.io/testing/":           "https://caanshulgarg.github.io/testing/#pair=123456",
+		"https://staging.fincom.live/review/#/tally":        "https://staging.fincom.live/review/#pair=123456", // its own fragment replaced
+		"HTTPS://Staging.FinCom.live/review/":               "https://staging.fincom.live/review/#pair=123456",
 	}
 	for base, want := range good {
 		if got, ok := pairOpenURL(base, "123456"); !ok || got != want {
@@ -212,7 +214,7 @@ func TestTrayConnectBridgeNotAnswering(t *testing.T) {
 
 func dueAt(t *testing.T, ago time.Duration, now bool) {
 	t.Helper()
-	notePairOpen(Home, []string{"--pairopen"}, 0, func(string) {})
+	notePairOpen(filePairStore{Home}, []string{"--pairopen"}, 0, func(string) {})
 	if !dueExists() {
 		t.Fatal("the install did not note the first start")
 	}
@@ -232,20 +234,20 @@ func TestInstallNotesFirstStart(t *testing.T) {
 	newPairStand(t, "")
 	var said []string
 	logf := func(s string) { said = append(said, s) }
-	notePairOpen(Home, []string{"--mode", "sole"}, 0, logf) // silent setup: no --pairopen
+	notePairOpen(filePairStore{Home}, []string{"--mode", "sole"}, 0, logf) // silent setup: no --pairopen
 	if dueExists() {
 		t.Fatal("noted without --pairopen")
 	}
-	notePairOpen(Home, []string{"--pairopen"}, 4, logf) // installed but not answering
+	notePairOpen(filePairStore{Home}, []string{"--pairopen"}, 4, logf) // installed but not answering
 	if dueExists() {
 		t.Fatal("noted for a failed install")
 	}
 	dueAt(t, time.Hour, true)
-	notePairOpen(Home, []string{"--pairopen"}, 1, logf) // the next install fails: the earlier note goes
+	notePairOpen(filePairStore{Home}, []string{"--pairopen"}, 1, logf) // the next install fails: the earlier note goes
 	if dueExists() || exists(filepath.Join(Home, pairOpenNowName)) {
 		t.Fatal("an earlier install's note kept")
 	}
-	notePairOpen(Home, []string{"--per-user", "--pairopen"}, 0, logf)
+	notePairOpen(filePairStore{Home}, []string{"--per-user", "--pairopen"}, 0, logf)
 	m := readObjFile(filepath.Join(Home, pairOpenDueName))
 	if str(m["version"]) != BridgeVersion || str(m["at"]) == "" || len(said) != 0 {
 		t.Fatalf("the note: %v %v", m, said)
@@ -402,8 +404,8 @@ func TestFirstStartOneTrayOnly(t *testing.T) {
 func TestFirstStartNotTakenWhenStuck(t *testing.T) {
 	p := newPairStand(t, "")
 	dueAt(t, 0, true)
-	pairOpenRemove = func(string) error { return os.ErrPermission }
-	t.Cleanup(func() { pairOpenRemove = os.Remove })
+	pairStoreRemove = func(string) error { return os.ErrPermission }
+	t.Cleanup(func() { pairStoreRemove = os.Remove })
 	for i := 0; i < 3; i++ {
 		if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
 			t.Fatal("taken though the ask stays")
@@ -425,10 +427,26 @@ func TestFirstStartGraceClock(t *testing.T) {
 	if !truthy(trayStatus()["pairOpenReady"]) {
 		t.Fatal("not ready after a clock set back")
 	}
+	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 || dueExists() {
+		t.Fatal("a clock set back by hours: opened (or kept) as if fresh")
+	}
 	b, _ := json.Marshal(M{"at": "garbled"})
 	_ = os.WriteFile(filepath.Join(Home, pairOpenDueName), b, 0o644)
-	if !truthy(trayStatus()["pairOpenReady"]) || !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
-		t.Fatal("an unreadable time not taken as old")
+	if !truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 || dueExists() {
+		t.Fatal("an unreadable time not dropped as old")
+	}
+	// over a day old (the first sign-in days after the setup): dropped, never opened
+	dueAt(t, pairOpenMaxAge+time.Minute, false)
+	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 || dueExists() {
+		t.Fatal("an ask over a day old opened FinCom")
+	}
+	if logLines("over a day old") != 3 {
+		t.Errorf("the log: %d lines", logLines("over a day old"))
+	}
+	// within the day: opened
+	dueAt(t, pairOpenMaxAge-time.Minute, false)
+	if !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
+		t.Fatal("an ask of 23 hours not opened")
 	}
 }
 
@@ -440,7 +458,7 @@ func TestConnectAfterTakeLeavesNoStray(t *testing.T) {
 		t.Fatal("a stray at-once file")
 	}
 	_ = os.WriteFile(filepath.Join(Home, pairOpenNowName), []byte("x"), 0o644)
-	clearPairOpenFiles(Home) // the next install's start
+	clearPairOpen(filePairStore{Home}) // the next install's start
 	dueAt(t, time.Second, false)
 	if truthy(trayStatus()["pairOpenReady"]) {
 		t.Fatal("the stray made a later install's ask ready at once")
@@ -453,7 +471,8 @@ func TestFirstStartNotFinComSite(t *testing.T) {
 	setCfg("FinComUrl", "https://evil.example/")
 	dueAt(t, 0, true)
 	trayFirstOpen(p.env(ownSessionFacts), fincomURL())
-	if len(p.opened) != 0 || len(p.shown) != 1 || !strings.Contains(p.shown[0], "go to the Tally page and type this code") {
+	if len(p.opened) != 0 || len(p.shown) != 1 || !strings.Contains(p.shown[0], "Open FinCom in a browser on this computer, go to the Tally page and type this code") ||
+		strings.Contains(p.shown[0], "evil") {
 		t.Fatalf("opened %v shown %v", p.opened, p.shown)
 	}
 }
@@ -505,8 +524,11 @@ func TestInstallerFinishOpensToConnect(t *testing.T) {
 	// the tray item uses the shared path, the old words gone
 	svc, usr, tray, mainGo := readText("win_service.go"), readText("win_user.go"), readText("win_tray.go"), readText("main.go")
 	for name, src := range map[string]string{"win_service.go": svc, "win_user.go": usr} {
-		if !regexp.MustCompile(`rc := waitAnswer\(cfgPath, [a-z]+, "[^"]+"\)\n.*\n\tnotePairOpen\(filepath\.Dir\(cfgPath\), args, rc, installLog\)\n\treturn rc\n`).MatchString(src) {
+		if !regexp.MustCompile(`rc := waitAnswer\(cfgPath, [a-z]+, "[^"]+"\)\n.*\n\tnotePairOpen\(regPairStore\{registry\.(LOCAL_MACHINE|CURRENT_USER)\}, args, rc, installLog\)\n\treturn rc\n`).MatchString(src) {
 			t.Errorf("%s does not note the first start at the install's end", name)
+		}
+		if !regexp.MustCompile(`_ = os\.MkdirAll\(o\.home, 0o755\)\n\tclearPairOpen\(regPairStore\{registry\.(LOCAL_MACHINE|CURRENT_USER)\}\)`).MatchString(src) {
+			t.Errorf("%s does not clear an earlier ask at the install's start", name)
 		}
 	}
 	if strings.Contains(tray, "Settings > Tally Bridge > Connect") || !strings.Contains(tray, "trayConnectNow(") || !strings.Contains(tray, "trayFirstOpen(") {

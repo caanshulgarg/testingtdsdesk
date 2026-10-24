@@ -206,7 +206,7 @@ func trayPairEnv() pairOpenEnv {
 		call:  trayCall,
 		open:  openURL,
 		show:  showMessage,
-		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: o == "" || sameUser(o, currentUser())},
+		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: o != "" && sameUser(o, currentUser())},
 	}
 }
 
@@ -303,7 +303,7 @@ func (t *tray) poll() {
 			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
 			t.check(st)
 			// 2.4.6: the first start after the setup: FinCom opens with the code, once per install (pairopen.go)
-			if truthy(st["pairOpenReady"]) && t.opening.CompareAndSwap(false, true) {
+			if truthy(st["pairOpenReady"]) && pairOpenAskedHere() && t.opening.CompareAndSwap(false, true) {
 				go func(u string) {
 					defer t.opening.Store(false)
 					trayFirstOpen(trayPairEnv(), u)
