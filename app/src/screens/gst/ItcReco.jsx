@@ -149,6 +149,8 @@ export default function ItcReco({ reg }) {
             {r.kind === "pair" && r.tm !== M && r.tm && r.chip !== "matched" && <div className="tg-sub">in 2B of {GSTR.label(r.tm)}</div>}
             {r.kind === "pair" && r.bm !== M && r.bm && r.chip !== "cf" && r.chip !== "matched" && <div className="tg-sub">booked {GSTR.label(r.bm)}</div>}
             {r.kind === "books" && r.nob && <div className="tg-sub">2B not brought in</div>}
+            {r.noItc && <div className="tg-sub bad" data-ic-noitc="">{r.noItc}</div>}
+            {r.rateUnknown && <div className="tg-sub bad" data-ic-rate="">rate unknown: neither the books nor 2B give the GST rate</div>}
             {r.ims === "P" && <div className="tg-sub">pending in IMS</div>}
             {r.kind === "rej" && <div className="tg-sub bad">rejected in IMS{r.remarks ? ": " + r.remarks : ""}</div>}
             {r.kind === "pair" && r.issues && r.status === "diff" && <div className="tg-sub" title={r.issues.join("; ")}>{r.issues.filter((w) => !/^date |^value differs /.test(w)).slice(0, 2).join("; ")}</div>}</td>

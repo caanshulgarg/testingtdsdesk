@@ -47,7 +47,7 @@ const bkey = (d) => "B|" + (d.gstin || d.party) + "|" + d.noN + "|" + d.dir;
 const pkey = (p) => "P|" + p.gstin + "|" + p.noN + "|" + p.dir;
 // which decisions a line may take
 const ALLOW = { pair: ["now", "later", "booksnow", "follow", "correct", "reverse"], books: ["now", "booksnow", "later", "follow", "correct", "reverse"],
-  "2b": ["now", "later", "follow", "correct", "reverse", "book"], rej: ["now", "follow", "correct", "reverse"], fixed: ["follow", "correct"] };
+  "2b": ["now", "later", "follow", "correct", "reverse", "book"], cn: ["now", "reverse", "follow"], rej: ["now", "follow", "correct", "reverse"], fixed: ["follow", "correct"] };
 const who = () => { try { return (Cloud.st && Cloud.st.email) || ((Cloud.sess && Cloud.sess()) || {}).email || ""; } catch (e) { return ""; } };
 const lab = (ym) => (ym && typeof GSTR === "object" ? GSTR.label(ym) : ym || "");
 
@@ -79,6 +79,11 @@ function build(reg) {
     r.def = p.ym > r.bm && on(r.bm) ? p.ym : r.bm;
     r.defAmt = r.def === r.bm ? lower : full;
     r.laterAmt = p.ym > r.bm ? full : lower;
+    // the GST rate (the owner, 24-Oct-2026: "if charged 5% then no ITC, if charged 18% then full ITC"): the books' own
+    // (GST2B.bookDocs), else 2B's; at 5% (a tour operator's rate) the credit is not taken unless decided; none: unknown
+    const rate = (docs.find((d) => d.gstRate) || {}).gstRate || (docs.some((d) => d.ru) ? GST2B.rateOf(p) : 0);
+    if (docs.some((d) => d.noItc) || (docs.some((d) => d.ru || d.gstRate) && Math.abs(rate - 5) < 0.01)) { r.noItc = "5% tour operator rate: no ITC"; r.def = ""; }
+    else if (docs.some((d) => d.ru) && !rate) { r.rateUnknown = true; r.def = ""; }   // not taken until the rate is known (decided)
     rows.push(r);
   });
   res.onlyBooks.forEach((d) => {
@@ -86,6 +91,7 @@ function build(reg) {
       nob: !loaded.has(d.ym) };
     if (!claim(d)) { r.fixed = why(d); rows.push(r); return; }
     money(r, [d]); r.full = r.lower = r.laterAmt = r.defAmt = heads(d); r.def = on(d.ym) ? "" : d.ym;
+    if (d.noItc) { r.noItc = d.noItc; r.def = ""; } else if (d.ru) r.rateUnknown = true;
     rows.push(r);
   });
   res.only2b.forEach((p) => {
@@ -109,7 +115,7 @@ function build(reg) {
     r.full = r.lower = r.laterAmt = r.defAmt = docs.reduce((a, d) => add(a, d, d.dir || 1), z()); r.def = "";
     rows.push(r);
   });
-  rows.forEach((r) => { r.home = [r.bm, r.tm].filter(Boolean).sort()[0] || ""; r.allow = ALLOW[r.fixed ? "fixed" : r.kind]; });
+  rows.forEach((r) => { r.home = [r.bm, r.tm].filter(Boolean).sort()[0] || ""; r.allow = ALLOW[r.fixed ? "fixed" : r.cn ? "cn" : r.kind]; });
   return { rows, res, loaded, on };
 }
 
@@ -131,7 +137,7 @@ export function credit(r, s) {
 export function shown(r, e, M) {
   if (r.fixed) return { code: e.code, ym: "" };
   let code = e.code;
-  if (e.auto) code = e.C ? "now" : r.kind === "books" ? "follow" : r.kind === "2b" ? "book" : r.kind === "rej" ? "reverse" : "follow";
+  if (e.auto) code = e.C ? "now" : r.noItc ? "reverse" : r.kind === "books" ? "follow" : r.cn ? "follow" : r.kind === "2b" ? "book" : r.kind === "rej" ? "reverse" : "follow";
   if ((code === "now" || code === "booksnow" || code === "later") && e.C && e.C !== M) return { code: "later", ym: e.C };
   if (code === "later" && !e.C) return { code: "later", ym: "" };
   if (code === "later" && e.C === M) return { code: "now", ym: "" };
@@ -139,7 +145,7 @@ export function shown(r, e, M) {
 }
 // the line's effect on 4(A)(5) of month M
 export function effect(r, e, M) { const o = sub(e.C === M ? e.amt : z(), (r.booksBy || {})[M] || z()); return o; }
-const isOpen = (r, e) => !r.fixed && !e.C && e.code !== "reverse";
+const isOpen = (r, e) => !r.fixed && !e.C && e.code !== "reverse" && !(e.auto && r.noItc);
 
 // ---------- the model, worked out once for what it depends on
 let memo = null;

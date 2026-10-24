@@ -147,4 +147,34 @@ ITCF.applyImport(reg, "202604", p);
 ok(line("E/1").e.code === "booksnow" && line("B/7").e.code === "later" && line("B/7").e.C === "202606" && (line("O/5").s || {}).note === "asked the supplier", "Apply: the decisions, the month and the note as in the file");
 const fin = T("202604");
 ok(near(fin.other.igst - r0.other.igst, 0) && near(tax(fin.other) - tax(r0.other), 900 - 3600 + 250) && near(fin.rev1.cgst - r0.rev1.cgst, -150), "and 3B: Echo + 900, Beta - 3,600, the new adjustment + 250, 4(B)(1) - 150 (" + f(fin.other) + ")");
+
+// ---- 6. a travel agent's journal (Leads, 24-Oct-2026: JMD): the ticket and the fee in one expense line, GST only on the
+// fee, no rate anywhere in the books. The rate is never assumed (the owner: "if charged 5% then no ITC, if charged 18% then
+// full ITC"): Tally's rate on the line, a tax ledger's name, the narration, else 2B's own rate; none: rate unknown
+{
+  const J = (id, date, no, value, cg, extra) => Object.assign({id, type: "Journal", date, no, party: "Juno Travels", gstin: GJ, pos: "", cmp: CMP, narr: "", hsn: [],
+    ent: [{l: "Tour & Travels", a: -value}, {l: "Input CGST", a: -cg}, {l: "Input SGST", a: -cg}, {l: "Juno Travels", a: value + 2 * cg}]}, extra || {});
+  const GJ = "09AAJFJ4444D1Z4";
+  const b0 = books();
+  b0.vouchers = vs.concat([J("j1", "20260602", "JE/1", 36630, 90), J("j2", "20260603", "JE/2", 40000, 90), J("j3", "20260604", "JE/3", 40000, 90), J("j4", "20260605", "JE/4", 21000, 50, {narr: "service charge @ 5%"}),
+    J("j5", "20260606", "JE/5", 40000, 90)]);
+  b0.under["Juno Travels"] = "Sundry Creditors"; b0.map = x.Books.mapLedgers(b0.vouchers, {});
+  ["CGST", "SGST"].forEach((t) => { b0.map[t] = Object.assign(b0.map[t] || {n: 0}, {what: "gst", kind: "gst", tax: t, side: "output", reg, ok: true, byHand: true}); b0.map["Input " + t] = Object.assign(b0.map["Input " + t] || {n: 0}, {what: "gst", kind: "gst", tax: t, side: "input", reg, ok: true, byHand: true}); });
+  b0.twoBs[CMP + "|062026"] = {ym: "202606", gstin: CMP, period: "062026", rows: [row("202606", GJ, "JUNO TRAVELS", "JE/1", "20260602", 1000, 90), row("202606", GJ, "JUNO TRAVELS", "JE/2", "20260603", 3600, 90),
+    row("202606", GJ, "JUNO TRAVELS", "JE/3", "20260604", 7000, 90)]};
+  x.GST2B._memo = null; G._carry = null;
+  const docs = Object.fromEntries(x.GST2B.bookDocs().filter((d) => d.party === "Juno Travels").map((d) => [d.no, d]));
+  ok(docs["JE/1"].ru && docs["JE/1"].taxable === 36630 && !docs["JE/1"].gstRate, "6. JE/1: no rate in the books: rate unknown, nothing assumed");
+  ok(docs["JE/4"].gstRate === 5 && docs["JE/4"].taxable === 2000 && docs["JE/4"].other === 19000 && docs["JE/4"].noItc, "JE/4: 5% in its narration: its value 2,000 (the tax at 5%), the rest apart, no ITC");
+  const r1 = line("JE/1"), r2 = line("JE/2"), r3 = line("JE/3"), r4 = line("JE/4"), r5 = line("JE/5");
+  ok(r1.kind === "pair" && r1.status === "matched" && !r1.noItc && !r1.rateUnknown && r1.e.C === "202606", "JE/1 in 2B at 18% (180 on 1,000): matched, full ITC taken in June");
+  ok(r2.kind === "pair" && r2.noItc && !r2.e.C && inMonth("202606", "JE/2").show.code === "reverse", "JE/2 in 2B at 5% (180 on 3,600): matched, \"5% tour operator rate: no ITC\", not taken (Reverse / do not take)");
+  ok(r3.kind === "pair" && r3.status === "diff" && r3.rateUnknown, "JE/3 with no GST rate in 2B either (180 on 7,000): Amount differs, rate unknown");
+  ok(r4.noItc && !r4.e.C && r5.rateUnknown, "JE/4 (5% in the books, not in 2B): no ITC; JE/5 (not in 2B, no rate): rate unknown");
+  const jun = T("202606");
+  ok(near(tax(jun.other), 180) && near(tax(jun.held), 180 + 180 + 100 + 180), "June 4(A)(5): JE/1 180 taken; JE/2 and JE/4 (5%), JE/3 (rate unknown) and JE/5 (not in 2B) not until decided (" + tax(jun.other) + ", held " + tax(jun.held) + ")");
+  ok(inMonth("202606", "JE/3").show.code === "follow", "JE/3, rate unknown: Follow up (FinCom's rule), to be decided");
+  decide("JE/3", "now", "", "202606");
+  ok(near(tax(T("202606").other), 360), "JE/3 decided Take now: June + 180");
+}
 console.log(fails ? "\n" + fails + " FAILED" : "\nall ok"); process.exit(fails ? 1 : 0);

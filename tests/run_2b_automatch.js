@@ -80,11 +80,22 @@ const J = JSON.stringify;
     const bs = [bb("be1", E1, "ETWTT/2526/4681", "20260105", 4092, 368), bb("be2", CH, "2162017469400000", "20250402", 9844, 885.78), bb("be3", E1, "ETWTT/2526/1739", "20250611", 4664, 420),
       bb("be4", AT, "MF2609I003801464", "20250824", 1000, 90), bb("bj1", JM, "JE20250083", "20250526", 36630, 90), bb("bj2", JM, "JE20250106", "20250621", 1023223, 360), bb("bj3", JM, "JE20250158", "20250702", 217381, 45),
       bb("bx1", AT, "MF-77", "20250806", 1000, 91.01), bb("bx2", AT, "MF-78", "20260330", 1000, 90)];
+    // JMD's journals give no rate (no rate on the lines, the tax ledgers or the narration): ru, the rate taken from 2B
+    bs.filter(d => d.gstin === JM).forEach(d => { d.ru = true; });
     const rr = M.m2bRules(tw, bs), by2 = k => rr.pairs.find(p => p.g.includes(k)) || {}, note = k => (by2(k).note || []).join("; ");
     ok(["e1", "e2", "e3", "e4"].every(k => by2(k).st === "matched-rules"), "B2. ET INFRA, Cholamandalam, ET INFRA, Airtel: a date that differs only: matched (" + ["e1", "e2", "e3", "e4"].map(k => by2(k).st).join(", ") + ")");
     ok(/date differs: 2B 09-01-2026, books 05-01-2026/.test(note("e1")) && /paise rounding/.test(note("e1")) && /paise rounding/.test(note("e2")) && !/paise/.test(note("e4")), "B2. the notes say it: \"" + note("e1") + "\"; Airtel's tax identical, no paise note");
     ok(/timing: in 2B of 07-2025, booked 06-2025/.test(note("e3")), "B2. booked in another return period than 2B's: a timing note, still matched (\"" + note("e3") + "\")");
-    ok(["j1", "j2", "j3"].every(k => by2(k).st === "matched-rules") && /books taxable includes other lines ₹35,630.00/.test(note("j1")) && /₹10,19,223.00/.test(note("j2")), "B2. JMD: the tax equal, the books' taxable counting the ticket: matched, \"" + note("j1") + "\"");
+    ok(["j1", "j2", "j3"].every(k => by2(k).st === "matched-rules") && /books taxable includes other lines ₹35,630.00/.test(note("j1")) && /₹10,19,223.00/.test(note("j2")) && /GST rate 18% from 2B/.test(note("j1")), "B2. JMD: the tax equal, the books' taxable counting the ticket, no rate in the books, 18% in 2B: matched, \"" + note("j1") + "\"");
+    // the rate never assumed: 2B at 5% (a tour operator's rate) is said; no GST rate in 2B either: to look at
+    {
+      const t5 = [gg("r5", JM, "JE20250201", "20250801", 3600, 90), gg("r0", JM, "JE20250202", "20250802", 7000, 90)];
+      const b5 = [Object.assign(bb("br5", JM, "JE20250201", "20250801", 40000, 90), {ru: true}), Object.assign(bb("br0", JM, "JE20250202", "20250802", 40000, 90), {ru: true})];
+      const q = M.m2bRules(t5, b5), f = k => q.pairs.find(p => p.g.includes(k)) || {};
+      ok(f("r5").st === "matched-rules" && /5% tour operator rate: no ITC/.test((f("r5").note || []).join()), "B2. 2B at 5%: matched, \"" + (f("r5").note || []).join("; ") + "\"");
+      ok(f("r0").st === "mismatch" && /rate unknown/.test((f("r0").why || []).join()), "B2. no GST rate in the books or 2B (180 on 7,000): to look at, \"" + (f("r0").why || []).join("; ") + "\"");
+      ok(J(M.m2bRowBk(b5[0])).includes('"ru":true') && !J(M.m2bRowBk(bs[0])).includes("ru"), "B2. the books row sent to the server says ru only when the rate is unknown");
+    }
     ok(by2("x1").st === "mismatch" && /tax ₹180.00 in 2B, ₹182.02 in books/.test(by2("x1").why.join()), "B2. the tax differing by Rs 2.02: still to look at (" + (by2("x1").why || []).join("; ") + ")");
     ok(by2("x2").st === "mismatch" && /another financial year/.test(by2("x2").why.join()), "B2. a date in another financial year: still to look at (" + (by2("x2").why || []).join("; ") + ")");
     ok(M.m2bLine(M.m2bRulesOnly(tw, bs, {}).counts) === "7 matched (7 by rules, 0 by AI) · 2 to look at · 0 in books only · 0 in 2B only", "B2. the line: " + M.m2bLine(M.m2bRulesOnly(tw, bs, {}).counts));
