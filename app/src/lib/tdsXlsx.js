@@ -25,8 +25,8 @@
 //                            books in S.books.matchNo "xlsx|<form|fy|q>", synced; the allocation trail keeps both ways)
 const G = globalThis;
 const VERSION = "fincom-tds-1";
-const KEEP = ["tdsEdits", "tdsAdded", "alloc", "allocFrom", "challans", "chPortions", "panFix", "nrInfo", "panInoperative", "payDetails", "tdsSplits", "tcsCodes"];
-const ARR = { challans: 1, payDetails: 1 };
+const KEEP = ["tdsEdits", "tdsAdded", "alloc", "allocFrom", "challans", "chPortions", "panFix", "nrInfo", "panInoperative", "payDetails", "tdsSplits", "tcsCodes", "certs"];
+const ARR = { challans: 1, payDetails: 1, certs: 1 };
 const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
 const R2 = (v) => Math.round((+v || 0) * 100) / 100;
 const N = (v) => (typeof v === "number" ? v : v == null || String(v).trim() === "" ? NaN : Number(String(v).replace(/[₹,\s]/g, "")));
@@ -151,10 +151,10 @@ const TDSX = {
         v: Object.fromEntries(this.SAL.map(([k]) => [k, k === "regime" ? (dd.regime === "old" ? "Old" : "New") : /^(senior|hraMetro|parentsSenior)$/.test(k) ? (dd[k] === "yes" ? "Yes" : "No") : dd[k] == null ? "" : dd[k]])) }; });
       else if (((S.books || {}).salary || []).length) salary = TDS24Q.annexII(fy).map((e) => ({ key: "", name: e.name, pan: e.pan || "", fig: { gross: e.gross, exempt: e.exempt, standard: e.standard, chapter6: e.chapter6, taxable: e.taxable, tax: R2(e.tds), tds: R2(e.tds) }, v: { regime: e.regime === "O" ? "Old" : e.regime === "N" ? "New" : "" } }));
     }
-    return { meta: { client: co.name || "", cid: (S.books || {}).cid || "", tan: co.tan || "", form, fy, q, formName: TDS.formShort(form, fy), made: new Date().toISOString(), ver: VERSION },
+    return { meta: { client: co.name || "", cid: (S.books || {}).cid || "", tan: co.tan || "", form, fy, q, formName: TDS.formShort(form, fy), made: new Date().toISOString(), ver: VERSION, keys: { ch: challans.map((c) => c.key), ded: deductions.map((r) => r.key) } },
       deductor, challans, deductions, deductees, salary, summary: this.summary(form, fy, q),
       lists: { sections: this.sections(form), remarks: this.remarks(form), types: ["Company", "Non-company"], rates: this.rates(), status: ["Operative", "Inoperative", "Not checked"], yesno: ["Yes", "No"],
-        codes: form === "27EQ" ? TCS27EQ.CODES.map(([c, t]) => [c, t]) : [], minor: ["200", "400"], decl: ["15G", "15H"], modes: ["online", "bank"], regime: ["New", "Old"],
+        codes: form === "27EQ" ? TCS27EQ.CODES.map(([c, t]) => [c, t]) : [], minor: ["200", "400"], decl: TDS.isNew(fy) ? ["121"] : ["15G", "15H"], modes: ["online", "bank"], regime: ["New", "Old"],
         states: Object.keys(TDSF25.STATES || {}).map((n) => TDSF25.STATES[n] + " · " + n), cats: Object.keys(TDSF25.CATEGORY || {}).map((c) => this.catWord(c)),
         countries: form === "27Q" ? Object.keys(TDSF25.COUNTRIES || {}).map((n) => TDSF25.COUNTRIES[n] + " · " + n) : [] } };
   },
@@ -218,9 +218,11 @@ const TDSX = {
         const cur = { bsr: c.bsr || "", date: TDS.ymd(c.date), serial: c.serial || "", section: String(TDSReg.natureCode(c) || c.section || "").toUpperCase(), minor: String(c.minorHead || "200"), mode: c.mode || "online", tax: R2(c.tax), interest: R2(c.interest), fee: R2(c.fee), others: R2(c.others) };
         const fields = Object.keys(want).filter((k) => (AM.includes(k) ? Math.abs(cur[k] - want[k]) >= 0.005 : k === "mode" ? !!c.mode && cur[k] !== want[k] : String(cur[k]) !== String(want[k]))).map((k) => ({ k, from: cur[k], to: want[k] }));
         const onlyNature = fields.every((f) => f.k === "section");
+        // (the owner, 24-Oct-2026: "even challan can be altered.. or deleted"): any challan, from Tally too (Tally is not
+        // changed: the next sync keeps FinCom's figures and shows the difference), not while a filed return uses it
         if (fields.length) {
-          if (TDSReg.srcOf(c) === "tally" && !onlyNature) E("Challans", y.row, "challan " + chLab(c.bsr, c.date, c.serial) + " was read from Tally: change its figures in Tally (only its nature can be set here)");
-          else { const no = onlyNature ? TDSReg.filedWords(c) : TDSReg.canEdit(c); if (no) E("Challans", y.row, no); else pv.challans.edit.push({ row: y.row, c, fields, want }); }
+          const no = TDSReg.filedWords(c);
+          if (no) E("Challans", y.row, no); else pv.challans.edit.push({ row: y.row, c, fields, want, onlyNature, tally: !onlyNature && /^(tally|books)$/.test(TDSReg.srcOf(c)) });
         }
         const por = TDSReg.portionFor(c, form, fy, q), pc = { ia: R2(por.interest), fa: R2(por.fee234 != null ? por.fee234 : por.fee), oa: R2(por.others || 0) };
         if (["ia", "fa", "oa"].some((k) => al[k] === null)) E("Challans", y.row, "an allocated amount is not a number of rupees");
@@ -233,7 +235,20 @@ const TDSX = {
         pv.challans.add.push(add); fileCh[lab] = { add, row: y.row, tax: amt.tax };
       }
     });
-    { const k0 = TDSReg.key(form, fy, q), us = TDSReg.uses(); now.filter((c) => !seenCh.has(c.id) && ((us[c.id] || {})[k0] || (TDSReg.portions(c) || {})[k0])).forEach((c) => pv.challans.out.push({ c, used: true })); }
+    // a challan row taken off the sheet: the challan deleted in FinCom (kept, marked deleted; back on Undo). Refused while
+    // another return or a filed one uses it; this return's deductions on it are then on no challan
+    const k0 = TDSReg.key(form, fy, q), us = TDSReg.uses(), expCh = x.keys && Array.isArray(x.keys.ch) ? new Set(x.keys.ch) : null;
+    const gone = new Set();
+    (expCh ? allCh.filter((c) => expCh.has(c.id)) : now).filter((c) => !seenCh.has(c.id)).forEach((c) => {
+      const lab = chLab(c.bsr, c.date, c.serial), u = us[c.id] || {}, others = Object.keys(u).filter((k) => k !== k0), por = TDSReg.portions(c) || {}, porOther = Object.keys(por).filter((k) => k !== k0 && (num(por[k].interest) || num(por[k].fee) || num(por[k].others)));
+      const filed = Object.values(u).concat(Object.keys(por).map((k) => { const [f2, y2, q2] = k.split("|"); return { form: f2, fy: y2, q: q2 }; })).find((z) => TDSReg.locked(z.fy, z.q, z.form));
+      if (filed) return E("Challans", "", "challan " + lab + " was taken off the sheet, but " + filed.form + " " + filed.fy + " " + filed.q + " is marked filed and uses it: open a correction for it first");
+      if (others.length) return E("Challans", "", "challan " + lab + " was taken off the sheet, but it is used in " + others.map((k) => { const z = u[k]; return z.form + " " + z.fy + " " + z.q + " ₹" + INR.format(z.tax); }).join(", ") + " — take those off first");
+      if (porOther.length) return E("Challans", "", "challan " + lab + " was taken off the sheet, but its interest or fee is allocated to " + porOther.map((k) => k.split("|").join(" ")).join(", ") + " — take that off first");
+      gone.add(c.id);
+      const src = TDSReg.srcOf(c);
+      pv.challans.out.push({ c, lab, rows: ((u[k0] || {}).ids || []).slice(), src, words: src === "tally" || src === "books" ? "deleted in FinCom only: Tally is not changed, and it is not made again from its Tally payment" : "" });
+    });
     // ---- Deductees (before Deductions: a new deduction's PAN and type come from here)
     const dees = (() => { try { return TDSPanFix.list(form, fy, q); } catch (e) { return []; } })(), deeBy = {}; dees.forEach((p) => { deeBy[normName(p.party)] = p; });
     const fileDee = {};
@@ -261,7 +276,7 @@ const TDSX = {
         const wt = YES(y.t), wd = T(y.decl).toUpperCase().replace(/^FORM\s*/, ""), wdd = ymd(y.declDate), wu = T(y.uin).toUpperCase().replace(/\s/g, "");
         if (wt !== !!curDecl.t) fields.push({ k: "t", from: curDecl.t ? "Yes" : "No", to: wt ? "Yes" : "No" });
         const cb = curDecl.b || {};
-        if (wd && !/^15[GH]$/.test(wd)) E("Deductees", y.row, name + ": declaration “" + T(y.decl) + "”: 15G or 15H (Form 121 from 2026-27 is written 15G / 15H as FinCom keeps it)");
+        if (wd && wd !== (cb.form || "") && !(TDS.isNew(fy) ? /^121$/ : /^15[GH]$/).test(wd)) E("Deductees", y.row, name + ": declaration “" + T(y.decl) + "”: " + (TDS.isNew(fy) ? "Form 121 (from tax year 2026-27)" : "15G or 15H"));
         else if (wdd === null) E("Deductees", y.row, name + ": date received “" + T(y.declDate) + "” is not a date");
         else if (wu && !/^[A-Z0-9]{1,26}$/.test(wu)) E("Deductees", y.row, name + ": UIN “" + wu + "”: letters and digits, 26 at most");
         else if (wd !== (cb.form || "") || (wd && (wdd || "") !== (cb.date || "")) || (wd && wu !== (cb.uin || ""))) fields.push({ k: "decl", from: [cb.form, dmy(cb.date), cb.uin].filter(Boolean).join(" · "), to: [wd, dmy(wdd), wu].filter(Boolean).join(" · "), v: { form: wd, date: wdd || "", uin: wu } });
@@ -282,6 +297,7 @@ const TDSX = {
       const f = Object.keys(fileCh).find((k) => { const z = parseLab(k); return z && z.key === L.key; });
       if (f) return fileCh[f].add ? { add: fileCh[f].add, lab: f } : { id: fileCh[f].c.id, lab: f };
       const c = keyIdx[L.key];
+      if (c && gone.has(c.id)) return { id: "", gone: c.id };
       if (c) return { id: c.id, lab: chLab(c.bsr, c.date, c.serial) };
       E("Deductions", row, "challan “" + T(s) + "” is not on the Challans sheet: add it there first"); return null;
     };
@@ -360,9 +376,22 @@ const TDSX = {
       if (ch.add || (ch.id || "") !== (r.challan || "")) F("challan", this.labOfId(r.challan), chTo);
       if (fields.length) pv.deductions.edit.push({ row: y.row, r, fields, want });
     });
-    rows.filter((r) => !seen.has(r.id)).forEach((r) => { if (r.splitOf) E("Deductions", "", (r.party || "") + ": a part of a split row is missing; take the split off on Challans first"); else pv.deductions.out.push({ r }); });
+    const expDed = x.keys && Array.isArray(x.keys.ded) ? new Set(x.keys.ded) : null;
+    rows.filter((r) => !seen.has(r.id) && (!expDed || expDed.has(r.id) || (r.splitOf && expDed.has(r.splitOf)))).forEach((r) => { if (r.splitOf) E("Deductions", "", (r.party || "") + ": a part of a split row is missing; take the split off on Challans first"); else pv.deductions.out.push({ r }); });
+    // ---- a lower-deduction certificate given with remark A and not in the client's list of section 197 certificates: added to
+    // it (the deductee, PAN, section and rate of the row; valid for the year unless the list has it otherwise), so the rate
+    // that applies is the certificate's (the owner, 24-Oct-2026)
+    pv.certs = [];
+    const certKey = (n) => String(n || "").toUpperCase().replace(/\s/g, ""), haveCert = new Set(Certs.all().map((c) => certKey(c.certNo)));
+    pv.deductions.add.concat(pv.deductions.edit).forEach((e) => {
+      const w = e.want; if (!w || w.rm !== "A" || !w.cert || haveCert.has(certKey(w.cert))) return;
+      haveCert.add(certKey(w.cert));
+      const y0 = +fy.slice(0, 4);
+      pv.certs.push({ row: e.row, party: w.party, pan: Certs.validPan(w.pan) ? w.pan : "", section: TDS.sec(w.section) || w.section, certNo: w.cert, rate: R2(w.rate * 10000) / 10000, from: y0 + "-04-01", to: (y0 + 1) + "-03-31" });
+    });
     // ---- the challans' balance as the file has them: deposited less this return's use in the file and the others' use (FinCom)
     const elseOf = (c) => { const k = TDSReg.key(form, fy, q), here = R2(((TDSReg.uses()[c.id] || {})[k] || {}).tax); return R2(num(c.tax) - TDSReg.balance(c).tax - here); };
+    pv.challans.out.forEach((o) => { o.rows = o.rows.map((id) => rBy[id]).filter(Boolean); });
     pv.balances = Object.keys(fileCh).map((lab) => {
       const f = fileCh[lab], c = f.c, tax = f.tax, used = R2(fileUse[lab] || 0), other = c ? elseOf(c) : 0, before = c ? R2(TDSReg.balance(c).tax) : null, after = R2(tax - used - other);
       if (after < -0.005) E("Challans", f.row, "challan " + lab + " is over-used: deposited ₹" + INR.format(tax) + ", this return ₹" + INR.format(used) + (other ? ", other returns ₹" + INR.format(other) : "") + ": ₹" + INR.format(-after) + " more than it has");
@@ -387,7 +416,7 @@ const TDSX = {
     return pv;
   },
   labOfId(id) { const c = id && TDS.challans().find((z) => z.id === id); return c ? chLab(c.bsr, c.date, c.serial) : ""; },
-  count(pv) { const c = pv.challans, d = pv.deductions, e = pv.deductees; return pv.deductor.length + c.add.length + c.edit.length + c.out.filter((o) => o.used).length + c.alloc.length + d.add.length + d.edit.length + d.out.length + d.back.length + e.add.length + e.edit.length + pv.salary.edit.length; },
+  count(pv) { const c = pv.challans, d = pv.deductions, e = pv.deductees; return pv.deductor.length + c.add.length + c.edit.length + c.out.length + c.alloc.length + (pv.certs || []).length + d.add.length + d.edit.length + d.out.length + d.back.length + e.add.length + e.edit.length + pv.salary.edit.length; },
 
   // ---------------------------------------------------------------- doing it
   snap() { const b = S.books || {}, co = CO() || {}, o = {}; KEEP.concat(["allocLog", "matchNo"]).forEach((k) => { o[k] = clone(b[k]); }); o.__co = { tds26q: clone(co.tds26q), tan: co.tan }; return o; },
@@ -496,7 +525,20 @@ const TDSX = {
       const r = TDSReg.setPortion(x.c.id, form, fy, q, x.to.ia, x.to.fa, { nosave: true }, x.to.oa); if (!r.ok) no("Challans", x.row, r.why);
     });
     const k = TDSReg.key(form, fy, q);
-    pv.challans.out.forEach((o) => { const p = TDSReg.portions(o.c); if (p && p[k]) { b.chPortions = Object.assign({}, b.chPortions); const m2 = Object.assign({}, b.chPortions[o.c.id]); delete m2[k]; b.chPortions[o.c.id] = m2; TDSReg.log({ act: "portion", ch: o.c, form, fy, q, note: "interest and fee given back: challan taken off the Excel" }); } });
+    // the challans taken off the sheet: this return's deductions off them, its interest and fee given back, then deleted (kept)
+    const offIds = [].concat(...pv.challans.out.map((o) => Object.keys(b.alloc || {}).filter((id) => b.alloc[id] === o.c.id)));
+    if (offIds.length) { const u = TDSCH.untag(offIds, { nosave: true }); if (!u.ok) no("Challans", "", u.why); }
+    TDSReg.forget();
+    pv.challans.out.forEach((o) => {
+      const p = TDSReg.portions(o.c); if (p && p[k]) { b.chPortions = Object.assign({}, b.chPortions); const m2 = Object.assign({}, b.chPortions[o.c.id]); delete m2[k]; b.chPortions[o.c.id] = m2; }
+      const left = Object.keys(TDSReg.uses()[o.c.id] || {});
+      if (left.length) return no("Challans", "", "challan " + o.lab + " is still used in " + left.join(", ") + ": not deleted");
+      b.challans = (b.challans || []).map((c) => c.id === o.c.id ? Object.assign({}, c, { deleted: { at, by, reason: "removed by Excel upload" + (pv.name ? " (" + pv.name + ")" : "") }, removedByUser: true }) : c);
+      TDSReg.log({ act: "challan-delete", ch: o.c, tax: o.c.tax, form, fy, q, note: "removed by Excel upload" + (o.words ? "; " + o.words : "") });
+      TDSReg.forget();
+    });
+    // the section 197 certificates given in the Excel
+    (pv.certs || []).forEach((c) => { b.certs = (b.certs || []).concat([{ id: uid("ct"), party: c.party, pan: c.pan, section: c.section, certNo: c.certNo, rate: c.rate, from: c.from, to: c.to, limit: 0, src: "excel", by, at }]); });
     // the employees' declarations (24Q Q4)
     pv.salary.edit.forEach((s) => s.fields.forEach((f) => { Payroll.setDetail(s.e, f.k, f.k === "regime" ? f.to : /^(senior|hraMetro|parentsSenior)$/.test(f.k) ? f.to : f.to); }));
     TDSReg.forget(); if (b.panIndex) b.panIndex = null;

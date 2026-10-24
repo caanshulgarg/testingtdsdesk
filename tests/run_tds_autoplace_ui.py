@@ -6,7 +6,7 @@ the owner's approval of 23-Oct-2026: "Don't change the layout.. just tweak"). On
      restores the allocation exactly; nothing new opens by itself; the button is not there on a return marked filed
   B. the Deductions register: How placed says the rule (R1 / R2) and its reason on a hover, and its column filter picks a
      rule; Pending's Next says the suggestion's rule (R6) and filters by it; "Select all shown" and "Place on challan…"
-  C. Deductees › a deductee: the transporter's declaration and Form 15G/15H (date, UIN) kept with the books; Validate &
+  C. Deductees › a deductee: the transporter's declaration and Form 121 (2026-27; 15G/15H before) (date, UIN) kept with the books; Validate &
      file says what is wrong with a remark (B without its declaration, T without a PAN)
   D. 10,000 deductions: the click to the result line, timed
 Runs on the React build: app/dist-test, or TDSDESK_SITE. AUTOPLACE_SHOTS=dir: the screenshots (Deductions step and the
@@ -116,11 +116,11 @@ try:
         ok(pg.locator("[data-dee-decl]").count() == 1 and pg.locator("[data-dee-transporter]").count() == 1, "C. the deductee's editor: Declarations for FY 2026-27 with the transporter's tick (194C)")
         pg.check("[data-dee-transporter]"); pg.wait_for_timeout(300)
         ok(J("(k) => !!TDSDecl.of(k, '2026-27').t", party), "C. the transporter's declaration kept with the books")
-        pg.select_option("[data-dee-bform]", "15H"); pg.fill("[data-dee-bdate]", "2026-04-15"); pg.fill("[data-dee-buin]", "abcde12345f1234567890123"); pg.wait_for_timeout(200)
+        pg.select_option("[data-dee-bform]", "121"); pg.fill("[data-dee-bdate]", "2026-04-15"); pg.fill("[data-dee-buin]", "abcde12345f1234567890123"); pg.wait_for_timeout(200)
         shot(pg, "deductees-editor-1440")
         pg.click("[data-dee-bsave]"); pg.wait_for_timeout(300)
         d = J("(k) => TDSDecl.of(k, '2026-27').b", party)
-        ok(d and d["form"] == "15H" and d["date"] == "20260415" and d["uin"] == "ABCDE12345F1234567890123", "C. Form 15H with its date and UIN kept: %s" % d)
+        ok(d and d["form"] == "121" and d["date"] == "20260415" and d["uin"] == "ABCDE12345F1234567890123", "C. Form 121 (2026-27's declaration, next-tds-excel) with its date and UIN kept: %s" % d)
         # a nil row for this deductee: its remark B (the declaration first), its UIN 24 characters: Validate says it
         J("(k) => TDSAdd.save({party: k, section: '194C', date: '20260615', credit: '20260615', paid: 25000, rate: 0, tds: 0})", party)
         J(GO, "file"); pg.wait_for_timeout(700)
@@ -154,7 +154,7 @@ try:
         shot(pp, "deductions-390")
         pp.evaluate(GO, "deductees"); pp.wait_for_timeout(500)
         pp.evaluate("() => { const p = TDSPanFix.list('26Q', '2026-27', 'Q1').find(p => p.secs.some(s => /194C/.test(s))); S.tdsDee = 'k:' + p.key; render(); }"); pp.wait_for_timeout(500)
-        pp.select_option("[data-dee-bform]", "15G"); pp.wait_for_timeout(200)
+        pp.select_option("[data-dee-bform]", "121"); pp.wait_for_timeout(200)
         ok(pp.evaluate("() => { const f = document.querySelector('[data-dee-decl]').getBoundingClientRect(); return f.width > 0 && f.right <= innerWidth + 1; }"), "phone: the declarations fit the editor")
         shot(pp, "deductees-editor-390")
         ph.close()

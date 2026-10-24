@@ -121,8 +121,8 @@ function Declarations({ p, fy, locked }) {
     {c194 && <label className="dee-chk"><input type="checkbox" data-dee-transporter="" checked={!!d.t} onChange={(ev) => tdsDeclSet(p.party, fy, { transporter: ev.target.checked })} />
       <span>Transporter declaration received <small className="note">(10 goods carriages or fewer, PAN given): remark T where no TDS</small></span></label>}
     <div className="ach-grid">
-      <label className="ach-f">{isNew ? "Form 121 (15G / 15H)" : "Form 15G / 15H"}<select aria-label="Declaration form" data-dee-bform="" value={cur.form} onChange={(ev) => set("form", ev.target.value)}>
-        <option value="">None</option><option value="15G">15G</option><option value="15H">15H</option></select></label>
+      <label className="ach-f">{isNew ? "Form 121" : "Form 15G / 15H"}<select aria-label="Declaration form" data-dee-bform="" value={cur.form} onChange={(ev) => set("form", ev.target.value)}>
+        <option value="">None</option>{isNew && <option value="121">Form 121</option>}{(!isNew || /^15[GH]$/.test(cur.form)) && <><option value="15G">15G</option><option value="15H">15H</option></>}</select></label>
       {cur.form && <label className="ach-f">Received on<input type="date" aria-label="Declaration received on" data-dee-bdate="" value={cur.date} onChange={(ev) => set("date", ev.target.value)} /></label>}
       {cur.form && <label className="ach-f">UIN{isNew ? "" : " (optional)"}<input type="text" aria-label="Declaration UIN" data-dee-buin="" maxLength={26} value={cur.uin} placeholder={isNew ? "26 letters and digits" : ""} style={{ textTransform: "uppercase" }} onChange={(ev) => set("uin", ev.target.value)} /></label>}
     </div>

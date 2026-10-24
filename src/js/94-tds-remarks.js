@@ -38,7 +38,9 @@ const TDSDecl = {
     if (x.form !== undefined){
       if (!x.form) delete d.b;
       else {
-        if (!/^15[GH]$/.test(x.form)) return {ok: false, why: "The declaration is Form 15G or Form 15H."};
+        // next-tds-excel (the owner, 24-Oct-2026): from tax year 2026-27 Form 121 is its own choice; 15G / 15H for earlier years
+        // (15G / 15H kept before on a 2026-27 declaration still read)
+        if (x.form === "121" ? !TDS.isNew(fy) : !/^15[GH]$/.test(x.form)) return {ok: false, why: TDS.isNew(fy) ? "The declaration is Form 121 (from tax year 2026-27)." : "The declaration is Form 15G or Form 15H."};
         const uin = String(x.uin == null ? (d.b || {}).uin || "" : x.uin).toUpperCase().replace(/\s/g, "");
         if (uin && !/^[A-Z0-9]{1,26}$/.test(uin)) return {ok: false, why: "The UIN is letters and digits, 26 at most."};
         d.b = {form: x.form, date: x.date == null ? (d.b || {}).date || "" : TDS.ymd(x.date), uin, at, by: who};
@@ -80,7 +82,7 @@ const TDSDecl = {
       const m = TDS26Q.remark(r, form) || {};
       if (m.remark === "B"){
         const d = this.of(r.party, fy).b || {}, miss = [];
-        if (!d.form) miss.push("the form (15G or 15H)");
+        if (!d.form) miss.push(isNew ? "the form (Form 121)" : "the form (15G or 15H)");
         if (!d.date) miss.push("the date it was received");
         if (miss.length) bad["b-decl"].push({r, w: r.party + ": " + miss.join(", ")});
         // (the owner, 23-Oct-2026: the UIN is optional, as the format has DD field 31: a warning, the file is still made)
@@ -91,7 +93,7 @@ const TDSDecl = {
       if (m.remark === "Y" && this.below(r) === false){ const w = this.limitOf(r) || {}; bad["y-over"].push({r, w: r.party + " (" + TDS.sec(r.section) + " ₹" + INR.format(r2(num(w.credited))) + " in " + fy + ", limit " + (w.limitWords || "") + ")"}); }
     });
     const uniq = (l) => Array.from(new Set(l.map(x => x.w)));
-    const W = {"b-decl": "Remark B (Form 15G/15H) needs the declaration: ", "b-uin": "Remark B: the Form 121 UIN (26 characters, DD field 31) is not given (optional; give it if the deductee has it): ", "t-pan": "Remark T (transporter) needs the deductee's PAN: ",
+    const W = {"b-decl": "Remark B (" + (isNew ? "Form 121" : "Form 15G/15H") + ") needs the declaration: ", "b-uin": "Remark B: the Form 121 UIN (26 characters, DD field 31) is not given (optional; give it if the deductee has it): ", "t-pan": "Remark T (transporter) needs the deductee's PAN: ",
       "t-sec": "Remark T is only for 194C (a transporter's contract): ", "y-over": "Remark Y (below the threshold), but the payments are above it: "};
     return Object.keys(bad).filter(k => bad[k].length).map(k => ({k, level: k === "b-uin" ? "warn" : "error", n: bad[k].length, ids: bad[k].map(x => x.r.id), words: W[k] + uniq(bad[k]).join("; ")}));
   }

@@ -15,6 +15,9 @@ on (tdsgst_snapshot.LOAD, CHALLANS):
      text's lines and the Excel downloaded again equal the file; the deleted row is still in the books; Undo puts it back
   5. 24Q Q1 2026-27 (Form 138, the salary sheet): a TDS changed, a row deleted, one added: applied, the Form 138 text
   6. 27Q and 27EQ (smoke): a deduction and a collection added in the Excel, applied
+  7. 26Q Q1 2026-27 (the owner's answers of 24-Oct-2026): a challan row deleted while its deductions move to a new challan
+     of the same file (the challan deleted in FinCom, kept, back on Undo); Form 121 (2026-27's only declaration); remark A
+     with a certificate number: the certificate added to the client's section 197 list, the rate question gone
 Screenshots (1440 and 390) to TDSDESK_SHOTS (default tests/out/tdsx-shots)."""
 import os, sys, json, threading, functools, http.server, base64, shutil, subprocess, tempfile, datetime
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -257,6 +260,40 @@ with sync_playwright() as p:
         pg.click("#app [data-tdsx-apply]"); W(1200)
         after = rows(form, "2026-27", "Q1")
         ok(len(after) == len(before) + 1 and all(r["challan"] for r in after) and abs(sum(r["tds"] for r in after) - sum(r["tds"] for r in before) - paid * rate / 100) < 0.005, "%s applied: %d rows, each on its challan" % (form, len(after)))
+    print("7. 26Q Q1 2026-27: a challan deleted, Form 121, a certificate (the owner's answers of 24-Oct-2026)")
+    FY, Q = "2026-27", "Q1"
+    go("%s/%s/26Q/deductions" % (FY, Q))
+    R7 = rows("26Q", FY, Q); old = R7[0]["challan"]
+    f7 = os.path.join(WORK, "26Q-q1-down.xlsx"); download(f7)
+    wb = openpyxl.load_workbook(f7); wc, wd, we = wb["Challans"], wb["Deductions"], wb["Deductees"]
+    ok(wb["Lists"]["I1"].value == "121" and not wb["Lists"]["I2"].value, "the declaration's list for 2026-27: Form 121 only (%s)" % wb["Lists"]["I1"].value)
+    rc = next(r for r in range(3, 40) if wc["A%d" % r].value == old)
+    del_row(wc, rc)
+    nc = last_row(wc, "B")
+    wc["B%d" % nc] = "0510308"; wc["C%d" % nc] = datetime.datetime(2026, 6, 30); wc["D%d" % nc] = "00501"; wc["E%d" % nc] = "94C"; wc["F%d" % nc] = "200"; wc["G%d" % nc] = 1000; wc["T%d" % nc] = "online"
+    lab = "0510308/30-06-2026/00501"
+    rn = next(r for r in range(3, 30) if we["B%d" % r].value == "Nightjar Sound & Light Co")
+    we["D%d" % rn] = "AAAFN1234C"; we["K%d" % rn] = "121"; we["L%d" % rn] = "ABCDE12345F123456789012345"; we["M%d" % rn] = datetime.datetime(2026, 4, 10)
+    wd["H3"] = 0; wd["M3"] = "B"; wd["P3"] = lab
+    wd["H4"] = 0.5; wd["M4"] = "A"; wd["N4"] = "LDC7654321"; wd["P4"] = lab
+    g7 = os.path.join(WORK, "26Q-q1-good.xlsx"); wb.save(g7)
+    if SOFFICE: g7 = recalc(g7)
+    x = upload(g7)
+    pvx = E("() => { const pv = S.tdsX.pv; return {out: pv.challans.out.map(o => [o.c.id, o.rows.length]), certs: pv.certs.map(c => [c.certNo, c.rate, c.pan, c.section])}; }")
+    ok(not x["errors"] and pvx["out"] == [[old, 2]] and pvx["certs"] == [["LDC7654321", 0.5, "AAAFN1234C", "194C"]], "the preview: the challan deleted with its 2 deductions named, the certificate to add (%s %s)" % (x["errors"][:2], pvx))
+    ok(pg.locator("#app [data-tdsx-chout]").count() == 1 and pg.locator("#app [data-tdsx-cert]").count() == 1, "and shown in the drawer")
+    if x["warnings"]: pg.check("#app [data-tdsx-tick]"); W(200)
+    pg.locator("#app [data-tdsx-chout]").scroll_into_view_if_needed(); shot("6-challan-deleted-preview-desktop")
+    pg.click("#app [data-tdsx-apply]"); W(1500)
+    R8 = rows("26Q", FY, Q); newc = E("TDS.challans().find(c => c.serial === '00501').id")
+    st = E("(id) => { const c = S.books.challans.find(z => z.id === id); return c && c.deleted ? c.deleted.reason : ''; }", old)
+    ok(st.startswith("removed by Excel upload") and all(r["challan"] == newc for r in R8), "Apply: the old challan deleted in FinCom (kept, %r), the deductions on the new one" % st)
+    rm = E("() => TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1').map(r => TDS26Q.remark(r, '26Q').remark)")
+    ok(sorted(rm) == ["A", "B"] and E("TDSDecl.of('Nightjar Sound & Light Co', '2026-27').b.form") == "121" and E("Certs.all().some(c => c.certNo === 'LDC7654321')"), "remarks B (Form 121) and A (the certificate, now in the client's list) (%s)" % rm)
+    iss = E("() => Certs.issues('2026-27', 'Q1').map(i => [TDS26Q.remark(i.row, '26Q').remark, i.expected])")
+    ok(not any(rk == "A" for rk, _ in iss), "no rate question on the certificate's row (its rate is the certificate's) (%s)" % iss)
+    menu(); pg.click("#app [data-return-card] [data-tdsx=undo]"); W(1000)
+    ok(E("(id) => TDS.challans().some(c => c.id === id)", old) and all(r["challan"] == old for r in rows("26Q", FY, Q)) and not E("Certs.all().some(c => c.certNo === 'LDC7654321')"), "Undo: the challan back with its deductions on it, the certificate gone")
     br.close()
 
 shutil.rmtree(WORK, ignore_errors=True)

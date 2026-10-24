@@ -165,7 +165,7 @@ export async function build(ExcelJS, d) {
 
   // ---- Deductees
   const wde = wb.addWorksheet(SH.dee), DM = deeCols(form), hd = { key: "Key (do not change)", name: tcs ? "Buyer" : sal ? "Employee" : "Deductee", nameFile: "Name in the file (if not as in the books)", pan: "PAN", status: "PAN status", type: "Type",
-    secs: tcs ? "Codes" : "Sections", n: "Rows", tds: TAXW, t: "Transporter declaration (T, 194C)", decl: "15G / 15H (B)", uin: "UIN (Form 121)", declDate: "Declaration received", country: "Country", nature: "Nature of remittance",
+    secs: tcs ? "Codes" : "Sections", n: "Rows", tds: TAXW, t: "Transporter declaration (T, 194C)", decl: "15G / 15H / Form 121 (B)", uin: "UIN (Form 121)", declDate: "Declaration received", country: "Country", nature: "Nature of remittance",
     ack15ca: "15CA acknowledgement", tin: "Tax ID in the country", email: "E-mail", phone: "Phone", address: "Address", dtaa: "Treaty (DTAA) rate", trc: "TRC and Form 10F" };
   const EC = Object.keys(DM).map((k) => ({ k, h: hd[k], L: DM[k], w: { key: 8, name: 30, nameFile: 24, pan: 12, status: 12, type: 12, secs: 14, n: 7, tds: 13, address: 30 }[k] || 14 }));
   const eF = (r) => ({ n: { formula: 'IF(B' + r + '="","",COUNTIF(' + rg(SH.ded, DED.party) + ",B" + r + "))" }, tds: { formula: 'IF(B' + r + '="","",SUMIF(' + rg(SH.ded, DED.party) + ",B" + r + "," + rg(SH.ded, DED.tds) + "))" } });
@@ -259,6 +259,10 @@ export async function build(ExcelJS, d) {
   const wl = wb.addWorksheet(SH.lists, { state: "hidden" });
   const nmax = Math.max(...Object.values(lists).map((l) => l.length), 1);
   for (let i = 0; i < nmax; i++) { const row = wl.getRow(i + 1); Object.keys(LST).forEach((k) => { const v = lists[k][i]; if (v != null) row.getCell(idx(LST[k])).value = k === "rate" ? v : String(v); }); }
+  // what was downloaded (hidden): a row taken off a sheet is one of these; a challan or deduction FinCom has had since is not
+  const wk2 = wb.addWorksheet("Keys", { state: "hidden" }); wk2.getCell("A1").value = "Challans"; wk2.getCell("B1").value = "Deductions";
+  ((d.meta.keys || {}).ch || []).forEach((k, i) => { wk2.getCell("A" + (i + 2)).value = k; });
+  ((d.meta.keys || {}).ded || []).forEach((k, i) => { wk2.getCell("B" + (i + 2)).value = k; });
   // the sheets in the return's order: Deductor, Deductees, Challans, Deductions, (Salary), Summary, Checks
   return wb;
 }
@@ -325,6 +329,8 @@ export async function read(src) {
   }
   const ws2 = wb.getWorksheet(SH.sal);
   if (ws2 && G.TDSX) { const SAL = G.TDSX.SAL; ws2.eachRow((r, i) => { if (i < 3) return; const key = String(txt(r.getCell(1))); if (!key) return; const y = { row: i, key }; SAL.forEach(([k], j) => { const v = val(r.getCell(j + 4)); y[k] = v == null ? "" : String(v).trim(); }); out.salary.push(y); }); }
+  const wk = wb.getWorksheet("Keys");
+  if (wk) { out.keys = { ch: [], ded: [] }; for (let r = 2; r <= wk.rowCount; r++) { const a = String(txt(wk.getCell("A" + r))), b2 = String(txt(wk.getCell("B" + r))); if (a) out.keys.ch.push(a); if (b2) out.keys.ded.push(b2); } }
   const wsu = wb.getWorksheet(SH.sum);
   if (wsu) wsu.eachRow((r, i) => { const k = String(txt(r.getCell(1))); if (!k || i < 3) return; const v = val(r.getCell(3)); out.summary[k] = typeof v === "number" ? Math.round(v * 100) / 100 : v instanceof Date ? v : null; });
   return out;

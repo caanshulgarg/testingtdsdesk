@@ -52,13 +52,15 @@ function books(extra){
 }
 // the workbook as tdsExcel.read gives it back, made from TDSX.data (dates dd-mm-yyyy, the PAN column a formula)
 function toX(d){
-  return {meta: Object.assign({}, d.meta), name: "test.xlsx", deductor: d.deductor.map((y, i) => ({row: i + 3, k: y.k, v: y.v})),
+  return {meta: Object.assign({}, d.meta), keys: d.meta.keys, name: "test.xlsx", deductor: d.deductor.map((y, i) => ({row: i + 3, k: y.k, v: y.v})),
     challans: d.challans.map((c, i) => ({row: i + 3, key: c.key, bsr: c.bsr, date: X.dmy(c.date), serial: c.serial, section: c.section, minor: c.minor, tax: c.tax, interest: c.interest, fee: c.fee, others: c.others, ia: c.ia, fa: c.fa, oa: c.oa, mode: c.mode})),
     deductions: d.deductions.map((r, i) => ({row: i + 3, key: r.key, date: X.dmy(r.date), credit: X.dmy(r.credit), party: r.party, pan: r.pan, panF: !r.panOwn, section: r.section, rate: r.rate, paid: r.paid, tds: r.tds, tdsF: true, remark: r.remark, cert: r.cert, challan: r.challan})),
     deductees: d.deductees.map((p, i) => Object.assign({row: i + 3}, p)), salary: (d.salary || []).map((s, i) => Object.assign({row: i + 3, key: s.key}, s.v)), summary: null};
 }
 const STORES = ["tdsEdits", "tdsAdded", "alloc", "allocFrom", "challans", "chPortions", "panFix", "nrInfo", "panInoperative", "payDetails"];
-const state = () => { const b = ctx.S.books, o = {}; STORES.forEach((k) => { o[k] = J(b[k] === undefined ? null : b[k]); }); o.co = J(ctx.CO().tds26q); return o; };
+// each store as JSON with its keys in order (an object's keys put back by Undo may come in another order: the same store)
+const sorted = (v) => Array.isArray(v) ? v.map(sorted) : v && typeof v === "object" ? Object.keys(v).sort().reduce((o, k) => { o[k] = sorted(v[k]); return o; }, {}) : v;
+const state = () => { const b = ctx.S.books, o = {}; STORES.forEach((k) => { o[k] = J(sorted(b[k] === undefined ? null : b[k])); }); o.co = J(sorted(ctx.CO().tds26q)); return o; };
 const rowsOf = (form, fy, q) => x.TDS.formRows(form).filter((r) => r.fy === fy && r.q === q);
 const FIRM = () => x.TDS26Q.firmDetails();
 const ddLines = (t) => String(t || "").split("\r\n").filter((l) => l.split("^")[1] === "DD");
@@ -204,6 +206,76 @@ ok(!pv.errors.length && pv.deductions.add.length === 1 && pv.deductions.edit.len
 ok(X.apply(pv, true).ok && rowsOf("27EQ", FY, Q).length === 2 && rowsOf("27EQ", FY, Q).every((r) => r.code === "6CE" && r.challan === "chT") && rowsOf("26Q", FY, Q).every((r) => !/^206C/.test(r.section)), "27EQ applied: two collections, code 6CE, on the challan; the added one not in 26Q");
 const te = x.TDS26Q.build(FY, Q, FIRM(), "27EQ");
 ok(!te.error && ddLines(te.text).length === 2, "the Form 143 text: two DD lines (" + (te.error || "") + ")");
+
+// ================================================================ F. the owner's answers of 24-Oct-2026
+console.log("F. Form 121, certificates, challans altered and deleted");
+{
+  // F1. Form 121 is its own choice from 2026-27 (15G / 15H for earlier years)
+  b = books(); b.challans = [{id: "chA", bsr: "0240020", serial: "10001", date: "20260607", tax: 4500, section: "194C", minorHead: "200", from: "upload"}];
+  R = rowsOf("26Q", FY, Q); x.TDSCH.tag(R.map((r) => r.id), "chA", {nosave: true}); x.TDSReg.forget();
+  ok(x.TDSDecl.set("Nightjar Sound & Light Co", FY, {form: "121", date: "2026-04-10", uin: "ABCDE12345F123456789012345"}).ok && !x.TDSDecl.set("Nightjar Sound & Light Co", "2025-26", {form: "121", date: "2025-04-10"}).ok, "F1. TDSDecl: Form 121 kept for 2026-27, refused for 2025-26");
+  x.TDSDecl.set("Nightjar Sound & Light Co", FY, {form: ""});
+  let d1 = X.data("26Q", FY, Q), xf = toX(d1);
+  ok(J(d1.lists.decl) === J(["121"]) && J(X.data("26Q", "2025-26", "Q4").lists.decl) === J(["15G", "15H"]), "F1. the Excel's list: Form 121 for 2026-27, 15G / 15H for 2025-26");
+  xf.deductees[0].decl = "121"; xf.deductees[0].declDate = "10-04-2026"; xf.deductees[0].uin = "ABCDE12345F123456789012345";
+  xf.deductions[0].rate = 0; xf.deductions[0].tds = 0; xf.deductions[0].remark = "B";
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && X.apply(pv, true).ok && x.TDSDecl.of("Nightjar Sound & Light Co", FY).b.form === "121", "F1. a Form 121 given in the Excel: applied, kept as 121 (" + J(pv.errors) + ")");
+  const nil = rowsOf("26Q", FY, Q).find((r) => !(r.tds > 0));
+  ok(nil && x.TDS26Q.remark(nil, "26Q").remark === "B" && !x.TDSDecl.checks(FY, Q, "26Q").some((c) => c.level === "error"), "F1. its row: remark B, Validate's remark checks pass");
+  xf = toX(X.data("26Q", FY, Q)); xf.deductees[0].decl = "15G";
+  ok(X.preview("26Q", FY, Q, xf).errors.some((e) => /Form 121/.test(e.words)), "F1. 15G given for 2026-27: refused, Form 121 asked");
+  // F2. a certificate number with remark A: into the section 197 list, so the rate question goes
+  b = books(); b.challans = [{id: "chA", bsr: "0240020", serial: "10001", date: "20260607", tax: 4500, section: "194C", minorHead: "200", from: "upload"}];
+  R = rowsOf("26Q", FY, Q); x.TDSCH.tag(R.map((r) => r.id), "chA", {nosave: true}); x.TDSReg.forget();
+  xf = toX(X.data("26Q", FY, Q)); xf.deductees[0].pan = "AAAFN1234C"; xf.deductions[1].remark = "A"; xf.deductions[1].cert = "LDC1234567"; xf.deductions[1].rate = 0.5; xf.deductions[1].tds = null;
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && pv.certs.length === 1 && pv.certs[0].certNo === "LDC1234567" && pv.certs[0].rate === 0.5 && pv.certs[0].from === "2026-04-01" && pv.certs[0].to === "2027-03-31", "F2. remark A with a certificate no.: the certificate to add (" + J([pv.errors, pv.certs]) + ")");
+  ok(X.apply(pv, true).ok && x.Certs.all().some((c) => c.certNo === "LDC1234567" && c.pan === "AAAFN1234C" && c.section === "194C"), "F2. applied: in the client's certificates (PAN, section, rate, the year)");
+  const rA = rowsOf("26Q", FY, Q).find((r) => r.id === R[1].id);
+  ok(rA && x.Certs.forRow(rA) && x.TDS26Q.remark(rA, "26Q").remark === "A" && !x.Certs.issues(FY, Q).some((i) => i.row.id === rA.id), "F2. the row: covered by the certificate, remark A, no rate question");
+  ok(X.undo("26Q", FY, Q).ok && !x.Certs.all().some((c) => c.certNo === "LDC1234567"), "F2. Undo: the certificate gone with the upload");
+  // F3. a challan deleted in the Excel; refused while another return uses it
+  b = books();
+  b.challans = [{id: "chA", bsr: "0240020", serial: "10001", date: "20260607", tax: 4500, section: "194C", minorHead: "200", from: "upload"},
+    {id: "chX", bsr: "0240020", serial: "10009", date: "20260610", tax: 20000, section: "194C", minorHead: "200", from: "upload"}];
+  R = rowsOf("26Q", FY, Q); x.TDSCH.tag([R[0].id], "chA", {nosave: true}); x.TDSCH.tag([R[1].id], "chX", {nosave: true});
+  const sal = rowsOf("24Q", FY, Q)[0]; x.TDSCH.tag([sal.id], "chX", {nosave: true}); x.TDSReg.forget();
+  const s3 = state();
+  xf = toX(X.data("26Q", FY, Q)); xf.challans = xf.challans.filter((c) => c.key !== "chA");
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && pv.challans.out.length === 1 && pv.challans.out[0].rows.length === 1 && pv.challans.out[0].rows[0].id === R[0].id, "F3. a challan row deleted: the challan to delete; this return's deduction on it named (" + J(pv.errors) + ")");
+  ok(X.apply(pv, true).ok && !x.TDS.challans().some((c) => c.id === "chA") && ctx.S.books.challans.find((c) => c.id === "chA").deleted.reason.startsWith("removed by Excel upload") && !rowsOf("26Q", FY, Q).find((r) => r.id === R[0].id).challan, "F3. applied: deleted in FinCom (kept, marked who/when/why), its deduction on no challan");
+  ok(X.undo("26Q", FY, Q).ok && x.TDS.challans().some((c) => c.id === "chA") && rowsOf("26Q", FY, Q).find((r) => r.id === R[0].id).challan === "chA" && J(state()) === J(s3), "F3. Undo: the challan back, its deduction on it again, every store as before (" + Object.keys(s3).filter((k) => state()[k] !== s3[k]).map((k) => k + ": " + s3[k].slice(0, 300) + " => " + state()[k].slice(0, 300)).join(" | ") + ")");
+  xf = toX(X.data("26Q", FY, Q)); xf.challans = xf.challans.filter((c) => c.key !== "chX");
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(pv.errors.some((e) => /used in 24Q 2026-27 Q1 ₹[\d,.]+ — take those off first/.test(e.words)) && !X.apply(pv, true).ok, "F3. a challan another return uses: refused, the return named (" + J(pv.errors.map((e) => e.words)) + ")");
+  // F4. any challan field altered, Tally's too; the tax below what is used refused
+  xf = toX(X.data("26Q", FY, Q)); xf.challans.find((c) => c.key === "chA").tax = 1000;
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(pv.errors.some((e) => /over-used/.test(e.words)), "F4. a challan's tax below what this return uses: refused as over-used");
+  b.challans.push({id: "tally:V1:k", from: "tally", madeBy: "tally-sync", fromVoucher: "V1", bsr: "0510308", serial: "00077", date: "20260611", tax: 9000, section: "194C", minorHead: "200", tallyWas: {tax: 9000, interest: 0, fee: 0, others: 0, section: "194C"}});
+  x.TDSReg.forget();
+  xf = toX(X.data("26Q", FY, Q)); const tc = xf.challans.find((c) => c.key === "tally:V1:k");
+  tc.tax = 9500; tc.interest = 120;
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && pv.challans.edit.length === 1 && X.apply(pv, true).ok && x.TDS.challans().find((c) => c.id === "tally:V1:k").tax === 9500, "F4. a challan from Tally altered in the Excel: applied in FinCom (" + J(pv.errors) + ")");
+  // F5. deleted: a challan from Tally is not made again by the next Tally sync; one made from a Tally payment is not proposed again
+  xf = toX(X.data("26Q", FY, Q)); xf.challans = xf.challans.filter((c) => c.key !== "tally:V1:k");
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && /Tally is not changed/.test(pv.challans.out[0].words) && X.apply(pv, true).ok, "F5. a challan from Tally deleted: the preview says Tally is not changed (" + J(pv.challans.out.map((o) => o.words)) + ")");
+  const fv = x.TDSTally.fromVouchers, lk = x.TDSTally.links;
+  x.TDSTally.fromVouchers = () => [{vid: "V1", key: x.TDSCH.chKey({bsr: "0510308", date: "20260611", serial: "00077"}), bsr: "0510308", serial: "00077", date: "20260611", tax: 9000, section: "194C"},
+    {vid: "V1", key: x.TDSCH.chKey({bsr: "0510308", date: "20260612", serial: "00078"}), bsr: "0510308", serial: "00078", date: "20260612", tax: 9000, section: "194C"}];
+  x.TDSTally.links = () => [];
+  const res = x.TDSTally.sync(ctx.S.books);
+  x.TDSTally.fromVouchers = fv; x.TDSTally.links = lk;
+  ok(!x.TDS.challans().some((c) => c.fromVoucher === "V1") && res.challans === 0 && ctx.S.books.challans.some((c) => c.id === "tally:V1:k" && c.deleted), "F5. the next Tally sync: the challan not made again (the same details or new ones), kept deleted (" + J({made: res.challans}) + ")");
+  b.challans.push({id: "chV2", from: "hand", fromVoucher: "V2", bsr: "0510308", serial: "00079", date: "20260613", tax: 700, section: "194C", minorHead: "200"}); x.TDSReg.forget();
+  xf = toX(X.data("26Q", FY, Q)); xf.challans = xf.challans.filter((c) => c.key !== "chV2");
+  pv = X.preview("26Q", FY, Q, xf);
+  ok(!pv.errors.length && X.apply(pv, true).ok && !x.TDSTally.notChallan({vid: "V2", date: "20260613", tax: 700}, x.TDS.challans()), "F5. a challan made from a Tally payment deleted: the payment is not proposed as a challan again");
+}
 
 // ================================================================ E. the workbook itself (ExcelJS): written, read back, nothing changed
 (async () => {
