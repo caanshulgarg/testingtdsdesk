@@ -76,6 +76,7 @@ Var Why         ; what went wrong (line 1 of install-result.txt) and what to do 
 Var WhatToDo
 Var KeepPairing ; uninstall: 1 keeps this computer's pairing with FinCom
 Var KeepBox
+Var PairOpen    ; 2.4.6: " --pairopen" (FinCom opens to connect at the first start) unless the setup runs silent (/S)
 
 !define MUI_ICON "fincom.ico"
 !define MUI_UNICON "fincom.ico"
@@ -99,6 +100,7 @@ Var KeepBox
 Page custom ScopePage ScopeLeave
 !insertmacro MUI_PAGE_INSTFILES
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE FinishLeave
 !insertmacro MUI_PAGE_FINISH
 UninstPage custom un.KeepPage un.KeepLeave
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -458,6 +460,12 @@ FunctionEnd
 
 Section "FinCom Bridge"
   StrCpy $Failed "1"
+  ; 2.4.6: a person at the setup: FinCom opens with the connect code (the last page's "Open FinCom to connect"; at the
+  ; first start by itself if that page is never answered); a silent setup (/S: IT, FinCom's own tests) opens nothing
+  StrCpy $PairOpen " --pairopen"
+  ${If} ${Silent}
+    StrCpy $PairOpen ""
+  ${EndIf}
   ${Log} "Installing: $Scope, $Mode mode, into $INSTDIR, as $UserName"
   ${If} $Scope == "user"
     Call InstallJustForMe
@@ -519,7 +527,7 @@ Function InstallForAll
 
   ; the service, the user it works for, the settings (and, in the final install, bridge 1.15.0 taken off)
   DetailPrint "Setting up the FinCom Bridge service ($Mode)..."
-  Push '"$INSTDIR\FinComBridge.exe" install --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"'
+  Push '"$INSTDIR\FinComBridge.exe" install --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"$PairOpen'
   Call RunInstall
 FunctionEnd
 
@@ -569,7 +577,7 @@ Function InstallJustForMe
 
   ; the settings, the start at sign-in (HKCU Run) and the start now (and, in the final install, bridge 1.15.0 taken off)
   DetailPrint "Setting up FinCom Bridge just for you ($Mode)..."
-  Push '"$INSTDIR\FinComBridge.exe" install --per-user --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"'
+  Push '"$INSTDIR\FinComBridge.exe" install --per-user --mode $Mode --fincom "${FINCOM}" --postonly "${POSTONLY}"$PairOpen'
   Call RunInstall
 FunctionEnd
 
@@ -584,7 +592,7 @@ Function SetFinish
       StrCpy $1 ", Switch to main bridge"
     ${EndIf}
     StrCpy $FinText "Look for the FinCom icon near the clock. Right-click it for Open FinCom, Test connection, Show log$1.$\r$\n$\r$\n$0.$\r$\n$\r$\nNot there? Click the ^ arrow near the clock: drag the FinCom icon from there onto the taskbar."
-    StrCpy $RunText "Open FinCom"
+    StrCpy $RunText "Open FinCom to connect"
     ${Log} "Finished: installed and running ($Mode mode)"
   ${Else}
     ${If} $Failed == "2"
@@ -605,9 +613,24 @@ Function FinishShow
   ${EndIf}
 FunctionEnd
 
+; 2.4.6: unticked "Open FinCom to connect": the bridge does not open FinCom by itself at its first start
+Function FinishLeave
+  ${If} $Failed == "0"
+    ${NSD_GetState} $mui.FinishPage.Run $0
+    ${If} $0 <> ${BST_CHECKED}
+    ${AndIf} ${FileExists} "$INSTDIR\FinComBridge.exe"
+      ${Log} "Open FinCom to connect: left unticked on the last page"
+      Exec '"$INSTDIR\FinComBridge.exe" connect --skip'
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
 Function FinishRun
   ${If} $Failed == "0"
-    ExecShell "open" "${FINCOM}"
+    ; 2.4.6: the bridge's own tray (this Windows user's, in this session) opens FinCom with the connect code filled in;
+    ; the setup opens no browser itself (it may run as an administrator)
+    ${Log} "Open FinCom to connect: chosen on the last page"
+    Exec '"$INSTDIR\FinComBridge.exe" connect --first'
     Return
   ${EndIf}
   ${Log} "Send install log to FinCom: chosen on the last page"

@@ -44,7 +44,7 @@ func removeOwnFiles(home, mode string, keepPairing bool) []string {
 		}
 	}
 	oldLived := exists(filepath.Join(home, "TDSBridge.ps1")) || exists(filepath.Join(home, "TDSBridge.ps1.replaced-by-go"))
-	for _, n := range []string{"go-sync", "go-jobs", "go-bridge.log", "compare-report.txt"} {
+	for _, n := range []string{"go-sync", "go-jobs", "go-bridge.log", "compare-report.txt", pairOpenDueName} {
 		rm(filepath.Join(home, n))
 	}
 	for i := 1; i <= 5; i++ {

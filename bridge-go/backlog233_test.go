@@ -445,7 +445,7 @@ func TestBacklog233BeatWaiting(t *testing.T) {
 // --- the version, the allow-list's decision line (no request added or changed: TestAllowListUnchanged keeps the table's
 // hash) and the notes with their test sheet
 func TestBacklog233VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.5" { // 2.4.5 (r245_test.go): kept as history
+	if BridgeVersion != "2.4.6" { // 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")

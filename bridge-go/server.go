@@ -42,7 +42,7 @@ func allowedOrigin(o string) bool {
 	if o == "" {
 		return true
 	}
-	for _, a := range []string{"https://app.fincom.live", "https://staging.fincom.live", "https://fincom.live", "https://caanshulgarg.github.io"} {
+	for _, a := range fincomSites { // pairopen.go: also the only sites the tray opens
 		if o == a {
 			return true
 		}
@@ -210,6 +210,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			pairUntil = time.Now().Add(-time.Minute) // one connection per code
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
+			clearPairOpenDue("Connected with the code: the install's first-start opening of FinCom is not needed.") // 2.4.6
 			sendJSON(w, 200, M{"ok": true, "key": cfgS("Key"), "computer": computerName(), "user": ownerName(), "version": BridgeVersion, "bridgeId": "go-" + instanceID(), "port": toInt(cfg("Port"))}, origin)
 			return
 		}
@@ -814,6 +815,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	// --- the tray icon's own questions
 	case "/tray/status":
 		return trayStatus(), nil
+	case "/tray/pairopen":
+		// 2.4.6 (pairopen.go): the install's first-start opening of FinCom: the setup's Finish page, the owner's tray
+		return pairOpenRoute(r.Method, parseObj(body))
 	case "/tray/pause":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

@@ -14,13 +14,12 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -172,6 +171,7 @@ type tray struct {
 	started   time.Time
 	tallySeen bool
 	gate      *noticeGate // every balloon goes through it (notices.go)
+	opening   atomic.Bool // 2.4.6: the first start's opening of FinCom on its way (one at a time)
 }
 
 var tr = &tray{started: time.Now()}
@@ -180,21 +180,32 @@ var taskbarCreated uintptr
 // --- talking to the service
 func trayCall(method, path string, body any) M {
 	loadConfigRO()
-	var rd io.Reader
-	if body != nil {
-		rd = strings.NewReader(jsonText(body))
+	return bridgeCall(method, path, body, 20*time.Second) // 2.4.6: the same call as measure.go's
+}
+
+// 2.4.6 (pairopen.go): what the tray opens FinCom with: this session, never the service, only the bridge's owner
+func trayPairEnv() pairOpenEnv {
+	o := cfgS("Owner")
+	return pairOpenEnv{
+		call: trayCall,
+		open: func(u string) { shellOpen(u, "") },
+		show: func(title, text string, warn bool) {
+			icon := uintptr(mbIconInfo)
+			if warn {
+				icon = mbIconWarning
+			}
+			msgBox(title, text, icon)
+		},
+		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: o == "" || sameUser(o, currentUser())},
 	}
-	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
-	req.Header.Set("X-Bridge-Key", cfgS("Key"))
-	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	r, err := c.Do(req)
-	if err != nil {
-		return nil
+}
+
+// FinCom's address the bridge was installed for (its status says it), else the review site
+func trayFinComURL(st M) string {
+	if st != nil && str(st["fincomUrl"]) != "" {
+		return str(st["fincomUrl"])
 	}
-	defer r.Body.Close()
-	b, _ := io.ReadAll(r.Body)
-	return parseObj(string(b))
+	return "https://staging.fincom.live/review/"
 }
 
 func (t *tray) setIcon(green bool, tip string) {
@@ -281,6 +292,13 @@ func (t *tray) poll() {
 			t.setIcon(tally && online && !pausedNow, trayTip(st))
 			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
 			t.check(st)
+			// 2.4.6: the first start after the setup: FinCom opens with the code, once per install (pairopen.go)
+			if truthy(st["pairOpenReady"]) && t.opening.CompareAndSwap(false, true) {
+				go func(u string) {
+					defer t.opening.Store(false)
+					trayFirstOpen(trayPairEnv(), u)
+				}(trayFinComURL(st))
+			}
 			// bridge 1.15.0's computer key, protected for this Windows user: handed to the service, which cannot open it
 			if truthy(st["needKey"]) && time.Since(keyTried) > 10*time.Minute {
 				keyTried = time.Now()
@@ -504,21 +522,8 @@ func (t *tray) command(id int, st M) {
 	case 10:
 		msgBox("FinCom Bridge", t.statusText(), mbIconInfo)
 	case 7:
-		r := trayCall("POST", "/paircode", M{})
-		if r == nil || str(r["code"]) == "" {
-			msgBox("FinCom Bridge", "The bridge is not answering, so no connect code could be made.", mbIconWarning)
-			return
-		}
-		u := "https://staging.fincom.live/review/"
-		if st != nil && str(st["fincomUrl"]) != "" {
-			u = str(st["fincomUrl"])
-		}
-		shellOpen(u, "")
-		until := str(r["until"])
-		if len(until) >= 16 {
-			until = until[11:16]
-		}
-		msgBox("Connect FinCom", "In FinCom on this computer: Settings > Tally Bridge > Connect, and type this code:\n\n        "+str(r["code"])+"\n\n(until "+until+")", mbIconInfo)
+		// 2.4.6: FinCom opens with the code filled in (#pair=), only FinCom's own sites (pairopen.go)
+		trayConnectNow(trayPairEnv(), trayFinComURL(st))
 	case 3:
 		on := !(st != nil && truthy(st["paused"]))
 		trayCall("POST", "/tray/pause", M{"on": on})

@@ -422,6 +422,12 @@ func installUserCmd(args []string) int {
 	if code != 0 {
 		return code
 	}
+	if contains(args, "--pairopen") {
+		// 2.4.6: the setup asks for FinCom to open with the connect code at the first start (pairopen.go)
+		if err := markPairOpenDue(filepath.Dir(cfgPath)); err != nil {
+			installLog("Install: the first-start opening of FinCom could not be noted (" + err.Error() + ")")
+		}
+	}
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, regKey, registry.ALL_ACCESS)
 	if err != nil {

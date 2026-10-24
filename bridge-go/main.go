@@ -68,6 +68,9 @@ func main() {
 	_ = fs.Bool("keep-pairing", false, "uninstall: keep this computer's pairing with FinCom")
 	_ = fs.Bool("per-user", false, "install, uninstall, stop: the install just for this Windows user")
 	_ = fs.String("parent", "", "worker: the supervisor's process (the worker ends with it)")
+	_ = fs.Bool("pairopen", false, "install: FinCom opens to connect at the first start (the setup; pairopen.go)")
+	_ = fs.Bool("first", false, "connect: the setup's Finish page, Open FinCom to connect ticked")
+	_ = fs.Bool("skip", false, "connect: the setup's Finish page, Open FinCom to connect unticked")
 	_ = fs.Parse(rest)
 	if cmd == "" && *userFlag {
 		cmd = "user"
@@ -76,7 +79,7 @@ func main() {
 		cmd = "worker"
 	}
 	switch cmd {
-	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker":
+	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker", "connect":
 	default:
 		attachConsole() // the program is a windowed one (no console flashes for the tray): commands typed in a window print there
 	}
@@ -100,6 +103,8 @@ func main() {
 	switch cmd {
 	case "sendlog":
 		os.Exit(sendLogCmd(rest))
+	case "connect":
+		os.Exit(connectCmd(rest)) // 2.4.6: the setup's Finish page (pairopen.go)
 	case "log":
 		loadConfigRO()
 		openFile(logFile())
