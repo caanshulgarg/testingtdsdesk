@@ -23,10 +23,16 @@
   // testing site report the browser and the first error (the error reports of src/sentry.js start only once the app is up)
   function watch() {
     var first = null, me = document.currentScript, report = me && me.getAttribute("data-report");
-    window.addEventListener("error", function (e) { if (!first) first = (e && (e.message || (e.error && e.error.message))) || "error"; }, true);
+    // 24-Oct-2026: a file that did not load (a script, style or font: the event has no words) is named by its element and file
+    window.addEventListener("error", function (e) {
+      if (first) return;
+      var t = e && e.target, f = t && t !== window && t.tagName ? String(t.src || t.href || "").split("?")[0].split("/").pop() : "";
+      first = (e && (e.message || (e.error && e.error.message))) || (t && t.tagName ? "error loading " + t.tagName.toLowerCase() + " " + f : "error");
+    }, true);
     window.addEventListener("unhandledrejection", function (e) { if (!first) first = "promise: " + String(e && e.reason && (e.reason.message || e.reason)); });
     setTimeout(function () {
-      if (window.__fincomOld || !document.querySelector("[data-boot-part]")) return;
+      // 24-Oct-2026: a meeting's guest page (data-guest, src/calls/guest.jsx) is drawn in place of FinCom: it has opened
+      if (window.__fincomOld || document.documentElement.hasAttribute("data-guest") || !document.querySelector("[data-boot-part]")) return;
       var box = document.createElement("div");
       box.setAttribute("data-boot-stuck", "");
       box.setAttribute("role", "alert");
@@ -37,10 +43,15 @@
       box.querySelector("button").onclick = function () { location.reload(); };
       box.lastChild.textContent = navigator.userAgent + (first ? " · " + first : "");
       document.body.appendChild(box);
+      // 24-Oct-2026: where the opening stopped (the step src/js/27's start reached; "no program" when legacy.js never ran),
+      // whether React started, and the page's state, so a report says which step to look at
+      var stage = window.__fincomStage || (typeof S === "object" ? "program, not started" : "no program");
+      var where = { stage: stage, react: !!document.querySelector("#react-root > *, .react-host"), hidden: document.visibilityState || "",
+        kept: document.documentElement.hasAttribute("data-boot-kept"), sw: !!(navigator.serviceWorker && navigator.serviceWorker.controller), hash: String(location.hash || "").slice(0, 12), framed: window.top !== window };
       if (report && location.hostname === "staging.fincom.live") try {
         fetch(report, { method: "POST", mode: "no-cors", keepalive: true, headers: { "Content-Type": "text/plain" },
           body: JSON.stringify({ message: "FinCom did not open in 20 s: " + (first || "no error seen"), level: "error", platform: "javascript",
-            tags: { boot: "stuck" }, extra: { ua: navigator.userAgent, url: location.pathname } }) });
+            tags: { boot: "stuck", stage: stage }, extra: { ua: navigator.userAgent, url: location.pathname, where: where } }) });
       } catch (e) { /* nothing more to do */ }
     }, 20000);
   }
