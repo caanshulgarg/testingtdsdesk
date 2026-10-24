@@ -391,10 +391,12 @@ const TDSX = {
     });
     // ---- the challans' balance as the file has them: deposited less this return's use in the file and the others' use (FinCom)
     const elseOf = (c) => { const k = TDSReg.key(form, fy, q), here = R2(((TDSReg.uses()[c.id] || {})[k] || {}).tax); return R2(num(c.tax) - TDSReg.balance(c).tax - here); };
+    // ship-118: where the other use is, by name, as next-fix-challan-over words it (onChallan.retName: "26Q 2025-26 Q4")
+    const elseNames = (c) => { const u = TDSReg.uses()[c.id] || {}; return Object.keys(u).filter((k) => k !== k0 && Math.abs(num(u[k].tax)) > 0.005).map((k) => TDS.formName(u[k].form, u[k].fy) + " " + u[k].fy + " " + u[k].q).sort().join(", "); };
     pv.challans.out.forEach((o) => { o.rows = o.rows.map((id) => rBy[id]).filter(Boolean); });
     pv.balances = Object.keys(fileCh).map((lab) => {
       const f = fileCh[lab], c = f.c, tax = f.tax, used = R2(fileUse[lab] || 0), other = c ? elseOf(c) : 0, before = c ? R2(TDSReg.balance(c).tax) : null, after = R2(tax - used - other);
-      if (after < -0.005) E("Challans", f.row, "challan " + lab + " is over-used: deposited ₹" + INR.format(tax) + ", this return ₹" + INR.format(used) + (other ? ", other returns ₹" + INR.format(other) : "") + ": ₹" + INR.format(-after) + " more than it has");
+      if (after < -0.005) E("Challans", f.row, "challan " + lab + " is over-used: deposited ₹" + INR.format(tax) + ", this return ₹" + INR.format(used) + (other ? ", other returns ₹" + INR.format(other) + (c && elseNames(c) ? " (" + elseNames(c) + ")" : "") : "") + ": ₹" + INR.format(-after) + " more than it has");
       return { lab, before, after, used, show: before == null || Math.abs(before - after) >= 0.005 || used > 0 };
     }).filter((z) => z.show || z.after < -0.005);
     // ---- Salary annexure II (24Q Q4, Tally's payroll): the employees' declarations
