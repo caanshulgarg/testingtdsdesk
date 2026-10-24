@@ -2324,15 +2324,23 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   // long block of up to 200 ms on an office computer before); the same work, in the same order
   const pause = () => new Promise(r => (typeof scheduler === "object" && scheduler && typeof scheduler.yield === "function") ? scheduler.yield().then(r, r) : setTimeout(r, 0));
   // whose copy is opened (owner, 21-Oct-2026): the signed-in person's, before any of this browser's databases is opened
+  // 24-Oct-2026 (Sentry FINCOM-APP-STAGING-3/-4, "did not open in 20 s" with no error): the step the opening is at, for
+  // the "FinCom did not open" report (public/oldcheck.js)
+  const stage = s => { window.__fincomStage = s; };
+  stage("owner");
   LocalOwner.boot();
   if (LocalOwner.displaced) S.signedOutWhy = "Your sign-in ended: someone else signed in in another tab. Sign in again; your work is kept.";
+  stage("store-init");
   await Store.init();
   await pause();
+  stage("load-firm:" + S.storeKind);
   try { await Store.loadFirm(); }
   catch (e){ S.firm = S.firm || Object.assign({}, DEFAULT_FIRM); toast("Saved data could not be loaded. Reload the page to try again."); }
+  stage("firm-loaded");
   await pause();
   Object.keys(S.data).forEach(refreshStats);
   render();
+  stage("drawn");
   await pause();
   // a page link (#/…) opens that page; otherwise the client open last time
   if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;

@@ -9,10 +9,14 @@ import { makeApi } from "./api.js";
 import { openCall } from "./CallScreen.jsx";
 import { codeFrom } from "./rules.js";
 import { joinHash } from "./launch.js";
+import { clearBoot } from "../boot.js";
 import "./calls.css";
 
 export function mountGuest() {
   document.documentElement.setAttribute("data-guest", "");
+  // 24-Oct-2026 (Sentry FINCOM-APP-STAGING-3/-4): the frame drawn before the program (data-boot-part) goes, as when FinCom
+  // opens; left, it made public/oldcheck.js say "FinCom did not open" 20 s into every guest's page, and report it
+  clearBoot();
   const el = document.createElement("div"); el.id = "fincom-guest"; document.body.appendChild(el);
   const h = String(location.hash || "");
   const token = /^#join=/.test(h) ? h.slice(6) : "";

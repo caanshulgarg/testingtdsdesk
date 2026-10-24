@@ -136,6 +136,9 @@ if (guestPage) startGuest().catch((e) => { try { document.body.textContent = "Th
 else if (!window.__fincomOld && !window.__fincomSwapping) {
   takeJoin();
   const check = document.documentElement.hasAttribute("data-boot-kept") && window.__fincomBootCheck;
-  if (!check) start();
-  else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) start(); }, start);
+  // 24-Oct-2026: legacy.js did not load (public/oldcheck.js): the app does not start (the page is being refreshed, or
+  // says so)
+  const go = () => (window.__fincomLegacy ? window.__fincomLegacy.then((ok) => { if (ok) start(); }) : start());
+  if (!check) go();
+  else Promise.race([check, new Promise((ok) => setTimeout(() => ok(false), 6000))]).then((swapping) => { if (!swapping && !window.__fincomSwapping) go(); }, go);
 }
