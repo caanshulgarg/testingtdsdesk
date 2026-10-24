@@ -184,38 +184,26 @@ def main():
         ok("in three steps" not in body and n("#app [data-tally-guide]") == 0, "no old three-steps guide (%s)" % [l for l in body.split("\n") if "three steps" in l])
         # 0. the guide (23-Oct-2026, next-tally-suvit: Suvit's three steps; linking, the ledgers and the entries are the rows
         # of Companies in Tally)
+        # 24-Oct-2026 (next-tally-one-page): companies are linked, so no steps: one line of the computers instead
         gd = "#app [data-connect-guide]"
-        ok(n(gd) == 1 and txt(gd).startswith("Connect Tally"), "one Connect Tally guide")
-        ok(steps() == [["install", True], ["open", False], ["add", True]], "the steps tick from the beat: installed, no company read now, companies added before (%s)" % steps())
-        ok(n(gd + " [data-guide-strip], " + gd + " [data-strip-step]") == 0 and [x[0] for x in steps()] == ["install", "open", "add"],
-           "three steps, no strip of six (%s)" % [x[0] for x in steps()])
-        ok(txt(gd + " [data-guide-count]") == "2 of 3 done" and n(gd + ' [data-connect-step="open"].now') == 1, "'2 of 3 done', Open your company the current one (%s)" % txt(gd + " [data-guide-count]"))
-        gt = txt(gd)
-        ok("Open TallyPrime on NWS144, signed in as anshul, and open your company." in gt and "F1 (Help) \u2192 Settings \u2192 Connectivity" in gt and "Both" in gt
-           and "choose any free port from 9000 to 9999 (9002 is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself." in gt,
-           "step 2: the plain words, any free port, the one found here suggested (%s)" % gt[:400])
-        ok("Reading is paused on NWS144." in gt and "right-click the FinCom icon near the clock \u2192 Resume background reading" in gt
-           and "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work." in gt, "step 2: paused, the tray's own words, what a pause stops")
-        # the owner, 15-Oct-2026: VMS EVENTS was seen once, not open; Suvit's list shows it with why it is not connected
+        ok(n("#app [data-connect-step]") == 0 and txt('#app [data-connect-guide="done"]').startswith("Connected computers: NWS144 ○ reading paused"),
+           "a company linked: no steps; 'Connected computers: NWS144 ○ reading paused' (%s)" % txt('#app [data-connect-guide="done"]'))
+        # the owner, 15-Oct-2026: VMS EVENTS was seen once, not open; the list shows it, not a client yet
         vr = E("() => { const r = document.querySelector('#app [data-tco-list=firm] [data-tco-row=\"VMS EVENTS\"]'); return r ? [r.getAttribute('data-tco-state'), r.innerText.replace(/\\s+/g, ' ')] : null; }")
-        ok(vr and vr[0] == "notopen" and "Disconnected — not open in Tally on NWS144" in vr[1] and "Add as client" in vr[1],
-           "Companies in Tally: VMS EVENTS (seen, not open): 'Disconnected — not open in Tally on NWS144', Add as client (%s)" % vr)
-        ok(n(gd + " [data-check-again]") == 1 and n(gd + " [data-bridge-download]") == 0, "one Check again; installed: no download in the guide")
-        r0 = E("window.__reads"); pg.click(gd + " [data-check-again]"); pg.wait_for_timeout(1200)
-        ok(E("window.__reads") > r0 and [w for w in E("window.__wakes") if w.get("kind") == "wake"], "Check again wakes the bridge (the existing wake) and reads the computers again (%s)" % E("window.__wakes"))
+        ok(vr and vr[0] == "notopen" and "Not a client · not open in Tally now" in vr[1] and "Add as client" in vr[1],
+           "Companies in Tally: VMS EVENTS (seen, not open): Not a client · not open in Tally now, Add as client (%s)" % vr)
         # 1. the computers: only those heard in 7 days
         lines = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => [e.getAttribute('data-pc-line'), e.innerText.replace(/\\s+/g, ' ').trim()])")
         ok(len(lines) == 1 and lines[0][0] == D1 and "OLDPC" not in body and "Older bridge" not in body, "one line per computer heard in 7 days; the old bridge is not on the page (%s)" % lines)
         l1 = lines[0][1] if lines else ""
-        ok("NWS144" in l1 and "anshul" in l1 and re.search(r"Online, last heard \d\d:\d\d IST", l1) and "Tally not open" in l1 and "Reading paused (tray: Resume background reading)" in l1 and "FinCom Bridge 2.4.1" in l1,
-           "the computer line: online and last heard, Tally, reading, version (%s)" % l1)
+        ok("NWS144" in l1 and "reading paused" in l1, "the computer's word: reading paused (%s)" % l1)
         up = "#app [data-pc-line=\"%s\"] [data-pc-update]" % D1
         ok(n(up) == 1 and txt(up) == "Update to 2.4.4" and "2.4.4" in (pg.get_attribute(up, "href") or ""), "an older bridge: Update to 2.4.4, the one download (%s)" % txt(up))
         # 2. nothing said twice, no Day Book counts
         body = page()
-        once = ["Reading is paused on NWS144", "Update to 2.4.4", "Open TallyPrime on NWS144", "Connect Tally"]
+        once = ["Update to 2.4.4", "Connected computers"]
         ok(all(body.count(w) == 1 for w in once), "each problem's words once on the page (%s)" % [(w, body.count(w)) for w in once])
-        gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you"]
+        gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you", "Clients and their Tally company"]
         ok(not [w for w in gone if w in body], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in body])
         ok(n("#app [data-all-good]") == 0, "something needs him: no All good")
         # round 66: the reading table and the clients' table are in Help & support (closed by default): open it
@@ -227,27 +215,15 @@ def main():
            and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
         ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
         ok(n("#app [data-reading][data-folded]") == 1 and n('#app [data-show-all="reading"]') == 0, "Reading: folded; its one row (paused) above the fold, so no Show all")
-        # 3. the clients table (round 63: folded to its summary; the client not linked above the fold; Show all opens it)
-        tb = "#app [data-tally-clients]"
-        fr = E("() => [...document.querySelectorAll('#app [data-tally-clients] [data-client-row]')].map(e => e.getAttribute('data-client-row'))")
-        ok(n(tb + "[data-folded]") == 1 and txt(tb + " [data-clients-head]") == "3 clients \u00b7 2 linked \u00b7 1 not linked" and fr == [G],
-           "Clients: folded, '3 clients \u00b7 2 linked \u00b7 1 not linked', only the client not linked shown (%s / %s)" % (txt(tb + " [data-clients-head]"), fr))
-        ok(txt('#app [data-show-all="clients"]') == "Show all 3", "Clients: Show all 3")
-        pg.click('#app [data-show-all="clients"]'); pg.wait_for_timeout(500)
-        heads = E("() => [...document.querySelectorAll('#app [data-tally-clients] thead th')].map(e => e.innerText.trim())")
-        ok(n(tb) == 1 and [h for h in heads if h] == ["Client", "Tally company", "Linked", "Last entry received"], "one table: Client, Tally company, Linked, Last entry received (%s)" % heads)
-        rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tally-clients] [data-client-row]')].map(e => [e.getAttribute('data-client-row'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())]))")
-        gb = rows.get(ids["GB TEXCOAT"], [])
-        ok(len(rows) == 3 and "GB TEXCOAT" in gb and "Linked" in gb and any(re.match(r"^\d\d-[A-Z][a-z]{2} \d\d:\d\d$", c) for c in gb), "a linked client: its company, Linked, the last entry like 10-Oct 10:28 (%s)" % gb)
-        ok("Not linked" in rows.get(G, []) and n(tb + " [data-client-link]") == 1 and n(tb + " td .btn") == 1, "the one action: Link for the client not linked; nothing for the others (%s)" % rows.get(G))
+        # 3. the clients' table is gone (24-Oct-2026: the list is the one place); a client not linked: the list for it
+        ok(n("#app [data-tally-clients]") == 0 and n("#app [data-client-link]") == 0, "no clients' table, even with Help & support open")
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "desktop: no sideways scroll")
         shot("after-desktop-1440")
-        # Link in the table: Companies in Tally with that client: the companies not linked offer "Link to <client>"
-        E("() => window.scrollTo(0, 0)"); pg.click(tb + " [data-client-link=\"%s\"]" % G); pg.wait_for_timeout(900)
+        E("(c) => openConnectTally(4, c)", G); pg.wait_for_timeout(900)
         ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, G] and n('#app [data-tco-for="%s"]' % G) == 1,
-           "Link: Companies in Tally for that client (%s)" % E("[S.view, S.homeTab, S.tallyGuide]"))
-        ok(txt('#app [data-tco-list=firm] [data-tco-row="VMS EVENTS"] [data-tco-act]') == "Link to garg shekhar & company" and n("#app [data-tco-list=firm] [data-tco-linked]:not([data-tco-linked=''])") == 0,
-           "his scene: the company seen (not open) is offered, 'Link to garg shekhar & company'; the linked ones are not (%s)" % txt('#app [data-tco-list=firm]')[:200])
+           "a pointer: Companies in Tally for that client (%s)" % E("[S.view, S.homeTab, S.tallyGuide]"))
+        ok(txt('#app [data-tco-list=firm] [data-tco-row="VMS EVENTS"] [data-tco-act]') == "Link to garg shekhar & company" and all(t == "Move here" for t in E("() => [...document.querySelectorAll(\"#app [data-tco-list=firm] [data-tco-linked]:not([data-tco-linked='']) [data-tco-act]\")].map(b => b.innerText.trim())")),
+           "his scene: the company seen (not open) is offered, 'Link to garg shekhar & company'; the linked ones show their client and 'Move here' (%s)" % txt('#app [data-tco-list=firm]')[:200])
         # the fold, opened: everything else, nothing removed
         ids = scene([PAUSED, OLD], companies(), DAYBOOK)
         fold(True)
@@ -262,16 +238,16 @@ def main():
         pg.click('#app [data-tally-tab="computers"]'); pg.wait_for_timeout(700)
         ok(n("#app [data-pc-line]") == 1, "back on the Tally page")
         fold(False)
-        # the Day Book need stays on the client's own page (Client setup -> Tally: its Tally card)
-        E("(c) => { openCompany(c); S.tab = 'cotally'; render(); }", ids["GB TEXCOAT"]); pg.wait_for_timeout(1200)
-        ok("Day Book" in txt("#app [data-tally-link]"), "the Day Book need is on the client's own Tally card (%s)" % txt("#app [data-tally-link]")[:160])
+        # the Day Book upload stays on the client's own Books › From Tally
+        E("(c) => { openCompany(c); S.tab = 'books'; S.booksTab = 'import'; render(); }", ids["GB TEXCOAT"]); pg.wait_for_timeout(1200)
+        ok(n("#app [data-up-drop]") == 1 and n("#app [data-tally-link]") == 0, "Books › From Tally: the Day Book upload, no Tally card")
 
         # ---- 2. the guide in each state (no company added yet: the steps stay on the page)
         def guide_scene(d, cos=None):
             scene([d], cos if cos is not None else companies(linked=(), d=d["id"])); return d["id"]
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
-        ok(steps() == [["install", True], ["open", False], ["add", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]")
-           and "Offline" in txt("#app [data-pc-line=\"%s\"]" % d), "offline: installed, the rest not; step 2 says it is offline (%s)" % steps())
+        ok(steps() == [["install", True], ["open", False], ["add", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]"),
+           "offline: installed, the rest not; step 2 says it is offline (%s)" % steps())
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))
         ok(steps() == [["install", True], ["open", False], ["add", False]] and "Reading is paused" not in page() and "Open your company in TallyPrime on NWS144" in txt("#app [data-connect-guide]"),
            "Tally answering, no company: one ticked, open your company (%s)" % steps())
@@ -303,10 +279,10 @@ def main():
         d6 = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
         d = d6["id"]; scene([d6], companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]), books=HELD_ALL)
         gl = txt('#app [data-connect-guide="done"]')
-        ok(n("#app [data-connect-step]") == 0 and re.search(r"Connected \u00b7 1 company open in Tally \u00b7 last entry \d\d:\d\d IST", gl), "all three done: one green line, the number of companies open (%s)" % gl)
-        ok(n("#app [data-all-good]") == 1 and "All good" in gl and n("#app [data-needs-you]") == 0, "nothing needs him: All good")
+        ok(n("#app [data-connect-step]") == 0 and gl.startswith("Connected computers: NWS144 ● online"), "linked: one line, 'Connected computers: NWS144 ● online' (%s)" % gl)
+        ok(n("#app [data-all-good]") == 1 and n("#app [data-needs-you]") == 0, "nothing needs him: All good, no Needs you")
         pl = txt("#app [data-pc-line=\"%s\"]" % d)
-        ok("Connected" in pl and "Reading on" in pl and "FinCom Bridge 2.4.4" in pl and "Update to" not in pl, "all well: the line says connected, reading on, the version, no update (%s)" % pl)
+        ok("● online" in pl and "Update to" not in pl, "all well: online, no update (%s)" % pl)
         pg.wait_for_timeout(1500)
         held_l = txt('#app [data-tco-row="GB TEXCOAT"] [data-tco-sync=held]')
         ok(re.match(r"Ledgers [\d,]+ \u00b7 Entries Apr\u2013\w{3} 2026$", held_l) or held_l.startswith("Ledgers"), "a linked company's row: what FinCom holds (%s)" % held_l)
@@ -411,7 +387,7 @@ def main():
         h = E("() => document.querySelector('#app [data-connect-guide]').getBoundingClientRect().height")
         ok(h < 700, "100 companies, 100 clients: the guide stays compact (%d px high)" % h)
         pcl = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => e.innerText).join(' ')")
-        ok("Tally open: 100 companies" in pcl and "CO 050" not in pcl, "100 open: the computer line says the count, not the names (%s)" % pcl[:160])
+        ok("CO 050" not in pcl, "100 open: the computers' line names no company (%s)" % pcl[:160])
         c42 = ids["CLIENT 042"]
         E("(c) => openConnectTally(4, c)", c42); pg.wait_for_timeout(1200)
         ok(n("#app [data-tco-list=firm] [data-tco-q]") == 1, "100: the list has type-to-search")
@@ -420,15 +396,6 @@ def main():
         ok(rr == ["CO 057"], "100 companies: typing 'co 057' finds it (%s)" % rr)
         E("() => { window.__calls = []; }"); pg.click('#app [data-tco-row="CO 057"] [data-tco-act=link]'); pg.wait_for_timeout(1200)
         ok([c for c in E("window.__calls") if c[0] == "tally_company_link"] == [["tally_company_link", {"p_company": "CO 057", "p_client": c42}]], "100: Link links CLIENT 042 to CO 057 (%s)" % E("window.__calls"))
-        E("() => window.scrollTo(0, 0)")
-        fold(True)   # round 66: the clients' table is in Help & support
-        fr = E("() => document.querySelectorAll('#app [data-tally-clients] [data-client-row]').length")
-        ok(fr == 5 and re.match(r"and 9\d more", txt('#app [data-fold-more="clients"]')) and txt("#app [data-tally-clients] [data-clients-head]").startswith("100 clients"),
-           "100 clients: folded, at most 5 needing a link shown, 'and N more' (%d / %s)" % (fr, txt('#app [data-fold-more="clients"]')))
-        pg.click('#app [data-fold-more="clients"] button'); pg.wait_for_timeout(600)
-        ok(E("() => document.querySelectorAll('#app [data-tally-clients] [data-client-row]').length") > 5, "and N more → Show all: the table opens")
-        E("() => { S.tallyFold = {}; render(); }"); pg.wait_for_timeout(400)
-        fold(False)
         shot("list-100-companies")
         # ---- a company linked to another client: its row's ⋯ Not this client moves it, by the person's own choice
         ids = scene([d6], companies(linked=("GB TEXCOAT",), seen=(), d=d6["id"]), books=HELD_ALL)
@@ -436,7 +403,8 @@ def main():
         pg.click('#app [data-tco-row="GB TEXCOAT"] [data-tco-more] summary'); pg.wait_for_timeout(300)
         pg.click('#app [data-tco-row="GB TEXCOAT"] [data-tco-not-this]'); pg.wait_for_timeout(300)
         pg.select_option('#app [data-tco-row="GB TEXCOAT"] [data-tco-relink-pick]', G2)
-        E("() => { window.__calls = []; }"); pg.click('#app [data-tco-row="GB TEXCOAT"] [data-tco-relink]'); pg.wait_for_timeout(1200)
+        E("() => { window.__calls = []; }"); pg.click('#app [data-tco-row="GB TEXCOAT"] [data-tco-relink]')
+        pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1200)   # it moves: asked once
         ok([c for c in E("window.__calls") if c[0] == "tally_company_link"][:1] == [["tally_company_link", {"p_company": "GB TEXCOAT", "p_client": G2}]], "Not this client: tally_company_link moves it (%s)" % E("window.__calls"))
         # ---- the Tally port changes (9002 -> 9500, the same company open): the client stays linked
         dp = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
@@ -450,7 +418,7 @@ def main():
             E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1200)
             rw = E("() => { const r = document.querySelector('#app [data-tco-row=\"GB TEXCOAT\"]'); return r ? [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.querySelectorAll('[data-tco-act]').length] : null; }")
             t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-guide]').forEach(e => e.remove()); return a.innerText; }""")
-            ok(sign == "reading" and chip == ["reading", "connected"] and rw == ["connected", T, 0] and not re.search(r"\bport\b|9500|9002", t2, re.I),
+            ok(sign == "reading" and chip == ["connected", "connected"] and rw == ["connected", T, 0] and not re.search(r"\bport\b|9500|9002", t2, re.I),
                "%s: still linked and Connected: the top bar (%s), the Clients chip (%s), its row (%s); no re-link asked, no port words" % (label, sign, chip, rw))
         linked_everywhere("port 9002")
         E("""() => { window.__devs.forEach(d => { d.info.beat.ports = [{port: 9500, ok: true, skipped: false, n: 1, error: '', state: 'open'}]; d.info.beat.tallyPort = 9500;
@@ -495,16 +463,17 @@ def main():
             g = E("[S.view, S.homeTab, S.tallyTab, S.tallyGuide || {}]")
             good = g[0] == "home" and g[1] == "tally" and g[2] == "computers" and g[3].get("step") == step and (cid is None or g[3].get("cid") == cid) and n("#app [data-tco-list=firm]") == 1
             ok(good, "%s: lands on Companies in Tally%s (%s)" % (label, " for the client" if cid else "", g))
+        # 24-Oct-2026 (next-tally-one-page): every pointer of a client not linked lands on Companies in Tally for that client
         def card(label):
-            g = E("[S.view, S.coId, S.tab]")
-            ok(g == ["company", G, "cotally"] and n('#app [data-tally-link] [data-tco-row="VMS EVENTS"] [data-tco-act=link]') == 1, "%s: lands on the client's Tally card, its companies with Link (%s)" % (label, g))
+            g = E("[S.view, S.homeTab, (S.tallyGuide || {}).cid]")
+            ok(g == ["home", "tally", G] and n('#app [data-tco-list=firm] [data-tco-row="VMS EVENTS"] [data-tco-act=link]') == 1, "%s: lands on Companies in Tally for the client, its companies with Link (%s)" % (label, g))
         def at_client(tab="cotally"):
             E("(c) => { S.tallyGuide = {}; openCompany(c); S.tab = '%s'; render(); }" % tab, G); pg.wait_for_timeout(1200)
         LINKERS = '[data-tally-link-to], [data-tally-link-picker], select[data-card-link], select[aria-label^="Client for"], [data-act="bridgeConnect"], [data-connect-section]'
         # the client's Tally card (Client setup -> Tally): the rows with Link, nothing else to link with
         at_client(); pg.wait_for_timeout(600)
-        ok(n("#app [data-tally-link]") == 1 and n("#app " + LINKERS.replace(", ", ", #app ")) == 0, "the client's Tally card: nothing to link with but its companies' rows (%s)" % txt("#app [data-tally-link]")[:120])
-        card("the client's Tally card")
+        ok(n("#app [data-tally-link]") == 0 and n("#app [data-tally-one]") == 1 and n("#app " + LINKERS.replace(", ", ", #app ")) == 0, "Client setup → Tally: one line, nothing to link with (%s)" % txt("#app [data-tally-one]")[:120])
+        pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1200); card("Client setup's Tally line")
         # the client's chip on its title line, and the top bar's sign
         at_client("dash")
         chip = '#app [data-tally-chip], #cobar [data-tally-chip]'
@@ -533,9 +502,9 @@ def main():
         if n(cc): pg.click(cc + " >> nth=0"); pg.wait_for_timeout(1200); card("the Clients list chip")
         # Today's not-linked line
         E("() => { S.tallyGuide = {}; navHome('today'); }"); pg.wait_for_timeout(1200)
-        tl = '#app [data-not-linked-open]'
-        ok(n(tl) >= 1, "Today: the not-linked line")
-        if n(tl): pg.click(tl + " >> nth=0"); pg.wait_for_timeout(1200); card("Today's not-linked line")
+        tl = '#app [data-not-linked-go]'
+        ok(n(tl) == 1, "Today: the not-linked chip")
+        if n(tl): pg.click(tl); pg.wait_for_timeout(1200); ok(E("[S.view, S.homeTab]") == ["home", "tally"] and n("#app [data-tco-list=firm]") == 1, "Today's chip: Companies in Tally")
         # Settings -> Books in the cloud
         E("() => { S.tallyGuide = {}; doAct('goTcloud'); }"); pg.wait_for_timeout(1500)
         ok(n('#app select[aria-label^="Client for"]') == 0 and n('#app [data-open-connect="4"]') >= 1, "Books in the cloud: no Link here, a pointer to Companies in Tally")
@@ -546,8 +515,7 @@ def main():
         # the per-computer "Seen, not linked" (Advanced -> each computer)
         fold(True)
         sn = '#app [data-advanced] [data-card-seen]'
-        ok(n(sn) == 1 and n(sn + " select") == 0 and n(sn + " [data-open-connect]") == 1, "a computer's 'Seen, not linked': a pointer, no Link… box")
-        if n(sn + " [data-open-connect]"): pg.click(sn + " [data-open-connect]"); pg.wait_for_timeout(900); landed("a computer's Seen, not linked", 4)
+        ok(n(sn) == 0 and n("#app [data-advanced] select[aria-label^='Client for']") == 0, "Help & support: no 'Seen, not linked', no Link… box (the list is the one place)")
         fold(False)
         ok(not [c for c in E("window.__calls") if c[0] in ("tally_company_link",)], "none of the entry points linked anything on its own (%s)" % E("window.__calls"))
         # Add client with its Tally company picked (23-Oct-2026, next-fix-tally-link: Pick from Tally): the person's own

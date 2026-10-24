@@ -77,7 +77,7 @@ def expect(name, d, calls, fx):
     if "[data-guide-link=" in name: return "tally_company_link" in rpc, "Link -> tally_company_link"
     if "[data-check-again]" in name and "Check again" in name: return d["wakes"] > 0 or d["reads"] > 0 or "refreshPane" in fxn, "Check again -> the wake and a read"
     if "[data-read-resume=" in name or "[data-pc-resume=" in name or "[data-read-resume-line]" in name: return "tally_read_resume" in rpc, "Resume -> tally_read_resume"
-    if "[data-tally-link-unlink]" in name: return "tally_company_link" in rpc and d["asked"], "Unlink -> asked, then tally_company_link (no client)"
+    if "[data-tally-link-unlink]" in name or "[data-tco-unlink=" in name: return "tally_company_link" in rpc and d["asked"], "Unlink -> asked, then tally_company_link (no client)"
     if "[data-release-hold]" in name: return "tally_release_hold" in rpc and d["asked"], "Hold -> asked, then tally_release_hold"
     if "[data-release-rollback]" in name: return "tally_release_rollback" in rpc and d["asked"], "Roll back -> asked, then tally_release_rollback"
     if "[data-read-stop-all]" in name or "[data-read-stop=" in name: return "tally_read_stop" in rpc and d["asked"], "Stop reading -> asked, then tally_read_stop"
@@ -85,8 +85,8 @@ def expect(name, d, calls, fx):
     # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update now
     if "[data-tco-act=" in name or "[data-tco-relink]" in name: return "tally_company_link" in rpc, "Add as client / Link -> tally_company_link"
     if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update now"
-    # Today's not-linked line: the client's own Tally card (its companies in Tally, each with Link)
-    if "[data-not-linked-open=" in name: return d["view"] == "company" and d["tab"] == "cotally", "-> the client's Tally card"
+    # next-tally-one-page: Today's chip, a client's one Tally line and its chips: the Tally page (the one place)
+    if "[data-not-linked-go]" in name or "[data-tally-one-go]" in name: return d["home"] == "tally", "-> the Tally page"
     if "[data-open-connect" in name or "[data-client-link=" in name: return '"step"' in d["guide"] and d["home"] == "tally", "-> Connect Tally"
     return None, ""
 
@@ -144,8 +144,8 @@ def main():
             ("Clients list chips", at_home("clients"), "#app table[data-list=\"clients\"]"),
             ("Today's not-linked line", at_home("today"), "#app [data-not-linked-line]"),
             ("Getting ready (not linked client)", at_client(G, "dash"), "#app [data-onb-step=\"link\"]"),
-            ("Client setup -> Tally (not linked)", at_client(G, "cotally"), "#app [data-tally-link]"),
-            ("Client setup -> Tally (linked)", at_client(T, "cotally"), "#app [data-tally-link]"),
+            ("Client setup -> Tally (not linked)", at_client(G, "cotally"), "#app [data-tally-one]"),
+            ("Client setup -> Tally (linked)", at_client(T, "cotally"), "#app [data-tally-one]"),
             ("Settings -> Books in the cloud", at_tcloud, "#app .setbody"),
         ]
         total = dead = 0

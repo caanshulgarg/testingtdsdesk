@@ -18,7 +18,10 @@ export function seenWords(iso) {
   const gap = day(now) - day(d), hm = String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
   return gap <= 0 ? "today " + hm : gap === 1 ? "yesterday " + hm : String(d.getUTCDate()).padStart(2, "0") + "-" + MON[d.getUTCMonth()] + (d.getUTCFullYear() !== now.getUTCFullYear() ? "-" + d.getUTCFullYear() : "");
 }
-export const coKey = (n) => (typeof ledNm === "function" ? ledNm(String(n || "")) : String(n || "").trim()).toLowerCase();
+// (24-Oct-2026, Suvit: names with extra spaces break sync: the spaces are collapsed for comparing; the exact name is kept
+// for the link, as the cloud has it)
+export const coKey = (n) => (typeof ledNm === "function" ? ledNm(String(n || "")) : String(n || "")).replace(/\s+/g, " ").trim().toLowerCase();
+export const spacesOdd = (n) => { const s = String(n || ""); return s !== s.replace(/\s+/g, " ").trim(); };
 // the firm's computers, as TLight or the Tally page last read them (the newer beat of each)
 export function tallyDevs() {
   const by = new Map(), at = (d) => String((((d && d.info) || {}).beat || {}).at || "");
@@ -65,4 +68,11 @@ export function clientTallyState(co) {
   const cloud = typeof TCloud === "object" && TCloud.on();
   if (!cloud && k.line && k.line.state === "open") return { state: "connected", level: "ok", word: "Connected", text: "Connected", computer: k.line.computer || "", seen: "", company: k.company };
   return Object.assign(tallyCoState(k.company), { company: k.company });
+}
+// the last entry: Tally's change recorder on the company's computer (its heartbeat), else the bridge's last read
+export function lastEntry(co, k) {
+  const tl = (typeof TLight === "object" && TLight.st) || {};
+  const row = (tl.cos || []).find((c) => String(c.client_id || "") === String(co.id) && c.device_id && (!k || !k.company || c.company === k.company)), dev = row && (tl.devs || []).find((d) => d.id === row.device_id);
+  let rec = ""; try { const rc = dev && typeof Rec === "object" && Rec.recOf ? Rec.recOf(dev) : null, y = rc && row.company ? rc[row.company] : null; rec = (y && y.lastAt) || ""; } catch (e) { rec = ""; }
+  return [k && k.line && k.line.read, rec].filter(Boolean).sort().pop() || "";
 }

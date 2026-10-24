@@ -14,7 +14,6 @@
 // removals, and the bridge's own update settings when this computer has one).
 import { lazy, Suspense, useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
-import { TallyLinkLine } from "../../parts/TallyLink.jsx";
 import DateBox from "../../parts/DateBox.jsx";
 // 2.4.5 (ROUND 102): "Bring older entries from Tally" for a period the person chooses; its own lazy chunk
 const OlderEntries = lazy(() => import("../../parts/OlderEntries.jsx"));
@@ -78,10 +77,9 @@ function Status({ b, days }) {
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
   const k = days.reduce((a, x) => a + x.days, 0);
   if (k) bits.push(k + (k === 1 ? " day needs" : " days need") + " a Day Book");
-  // the Tally redesign (09-Oct-2026): Update now is on the client's Tally link line, above (one place, not two); without a
-  // link line (no Tally computer and no bridge here know this client) it stays here
-  const linked = typeof tallyLine === "function" && !!tallyLine(CO());
-  const can = !linked && n > 0 && ((typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
+  // Update now (24-Oct-2026: the link line that carried it is gone; the Tally page's row has Sync now too)
+  const linked = typeof tallyLinkOf === "function" && tallyLinkOf(CO()).state !== "unlinked";
+  const can = n > 0 && (linked || (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
   return <p className="up-status" style={{ margin: "10px 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
     {can && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
 }
@@ -223,8 +221,8 @@ export default function FromTally({ b }) {
   const n = (b.vouchers || []).length, m = b.meta || {}, other = m.gstins ? notThisClient(m.gstins) : [];
   const days = needDays(b, S.coId);
   return <div className="up-page" data-upload-page="">
-    {/* clean-up batch 2: the Link to Tally card's home is Client setup → Tally; here its one status line and a link */}
-    <div style={{ marginTop: 10 }}><TallyLinkLine co={CO()} where="books" b={b} /></div>
+    {/* 24-Oct-2026 (next-tally-one-page): only the upload of Tally's files here; the link and its status are the Tally
+        page's (the client's title chip opens its row) */}
     <Status b={b} days={days} />
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     <Upload b={b} />

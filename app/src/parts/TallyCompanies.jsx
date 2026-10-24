@@ -1,30 +1,39 @@
-// Companies in Tally (23-Oct-2026, next-tally-suvit; the owner: "make sure it should connect like Suvit.. every step..
-// thoroughly.. don't need extra steps in connection"). Suvit's connector lists the companies open in Tally ("Add
-// Companies"); Subscribe makes one a company on the website, its first sync starts by itself and a message says the
-// ledgers are synced; "My Companies" says Connected / Disconnected and has Sync master. FinCom does the same in ONE list:
-// every company the firm's computers have seen (tally_companies, and what their heartbeats say is open), open now first,
-// then the latest seen. Each row: the company, its computer, the status pill (lib/tallyState.js, the words every place
-// uses), the last entry or last seen, and ONE action:
-//   not linked   "Add as client": the client is made with the company's name (its period taken off, clientNameFromTally)
-//                and GSTIN, linked (tallyLinkClient: tally_company_link, the person's own choice), and the first sync
-//                starts by itself (Ledgers.askTally: the ledgers wake, one call); the row shows the progress, then
-//                "Ledgers 1,240 ✓ · Entries Apr–Oct 2026 ✓". A client of the same name or GSTIN already there
-//                (similarClients, server/_shared/tallyname.js): "Link to <client>" instead, never a second client.
-//   linked       the client (opens it), "Sync now" (Update now: tallyUpdateNow) and ⋯: Not this client (link another
-//                client, or unlink), Open client, and "Upload older entries (Day Book)" only while days are missing.
-// The same rows are Add client's "Pick from Tally" and, for a client not linked, its Tally card's choice (with Link).
+// Companies in Tally: THE one place where a Tally company becomes a client, is linked, moved, unlinked and synced
+// (24-Oct-2026, next-tally-one-page; the owner: "I was trying to delink Salesify.. after delinking and relinking it is not
+// showing.. make it completely like Suvit.. I need a clear page only"; "if there is a company open in Tally, it should
+// show in the dropdown always"). Suvit's "My Companies" (help.suvit.io), on the Tally page only:
+//   - every company the firm's computers have seen (tally_companies) or have open now (the heartbeats, read every 20 s on
+//     the page): ALWAYS listed, open now first, then the latest seen; linked, not linked, linked to another client, just
+//     unlinked or never seen before. A company is never left out for its name, a Tally name left on a client, the
+//     duplicate guard or a copy kept here; hidden ("Remove company", soft) only while not linked and not open.
+//   - one source of truth: the cloud's link (tally_companies.client_id); every pill comes from lib/tallyState.js.
+//   - each row: the company, its computer, the pill (linked: Connected / Disconnected with the reason and the fix, or
+//     Earlier year when a newer year of the same client is in use; not linked: Not a client), the last entry, ONE action
+//     and ⋯:
+//       not linked      Add as client / Link to <client of the same name or GSTIN> / New year of <client> · Link (a newer
+//                       year's company beside the one before, the client already chosen) / Link to <client> (from a
+//                       client's "Choose on Tally page"); ⋯ Link to a client…, Remove company (not open)
+//       linked          the client, Sync now (masters and vouchers); ⋯ Sync master, Sync vouchers, Post entries here,
+//                       Link to another client (moves it: asked once), Unlink, Upload older entries (Day Book: only while
+//                       days of this year are missing), Open client
+//       another client  (from a client's "Choose on Tally page") Linked to X · Move here (asked once)
+//   - a company open in Tally that its computer has not sent to FinCom's cloud yet (a new company: tally_company_link
+//     says "no computer has reported it yet"): the click is kept and done by itself as soon as the computer sends it
+//     (on 24-Oct-2026 the owner's two clicks on "Salesify Marketing LLP 2026-27" were refused that way and lost).
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
 import { useState, useEffect } from "react";
-import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey } from "../lib/tallyState.js";
-import { lastEntry } from "./TallyLink.jsx";
+import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
 
-const SEARCH_AT = 10, POLL_MS = 10000, WAIT_MS = 10 * 60000;
+const SEARCH_AT = 10, POLL_MS = 10000, WAIT_MS = 10 * 60000, PEND_MS = 10 * 60000;
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
+const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const live = () => Object.values(S.companies || {}).filter((c) => c && !c.deleted);
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
+const yearKey = (n) => (typeof tallyYearKey === "function" ? tallyYearKey(n) : coKey(n));
 
 // ---------- what FinCom holds of a client's books (the cloud's book, tally_status; its ledgers' count, tally_ledgers)
 export const d8Of = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
@@ -85,19 +94,25 @@ export function booksLoad(cids) {
     .finally(() => { booksBusy = false; render(); });
 }
 
+
 // ---------- the companies
-// [{company, gstin, client (id or ""), device (id), seen, st (tallyCoState), at (sort key)}]: every company a computer of
-// the firm reported or has open now, once each (the name compared as ledNm does), open now first, then the latest seen
-export function companyRows() {
-  const by = new Map(), put = (name, x) => { const k = coKey(name); if (!k) return; const r = by.get(k) || { company: String(name).trim(), gstin: "", client: "", device: "", seen: "" };
-    by.set(k, Object.assign(r, { gstin: r.gstin || x.gstin || "", client: r.client || x.client || "", device: r.device || x.device || "", seen: [r.seen, x.seen || ""].sort().pop() })); };
+// [{company (the exact name, as the cloud keeps it), gstin, client (id or ""), device, seen, open (open in Tally now),
+// reported (the cloud has its row: it can be linked), st (tallyCoState)}], once each (spaces collapsed), open first
+const hidden = () => new Set([].concat((S.firm && S.firm.tallyHidden) || []));
+export function companyRows(opts) {
+  const by = new Map(), put = (name, x) => { const k = coKey(name); if (!k) return; const r = by.get(k) || { company: String(name), gstin: "", client: "", device: "", seen: "", open: false, reported: false };
+    if (x.reported && !r.reported) r.company = String(name);   // the link names the company exactly as the cloud has it
+    by.set(k, Object.assign(r, { gstin: r.gstin || x.gstin || "", client: r.client || x.client || "", device: r.device || x.device || "", seen: [r.seen, x.seen || ""].sort().pop(), open: r.open || !!x.open, reported: r.reported || !!x.reported })); };
   [].concat((typeof TLight === "object" && TLight.st.cos) || [], (TCloud.pane || {}).companies || [])
-    .forEach((r) => { if (r && r.company) put(r.company, { gstin: r.gstin, client: String(r.client_id || ""), device: r.device_id || "", seen: r.last_seen || "" }); });
-  tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => put(n, { device: d.id, seen: ((d.info || {}).beat || {}).at || "" })); });
-  try { if (typeof Bridge === "object" && Bridge.up()) [].concat(Bridge.st.open || []).forEach((o) => { if (o && o.name) put(o.name, {}); }); } catch (e) { /* no bridge here */ }
+    .forEach((r) => { if (r && r.company) put(r.company, { gstin: r.gstin, client: String(r.client_id || ""), device: r.device_id || "", seen: r.last_seen || "", reported: true }); });
+  tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => put(n, { device: d.id, seen: ((d.info || {}).beat || {}).at || "", open: true })); });
+  try { if (typeof Bridge === "object" && Bridge.up()) [].concat(Bridge.st.open || []).forEach((o) => { if (o && o.name) put(o.name, { open: true }); }); } catch (e) { /* no bridge here */ }
+  const hid = hidden();
   // a client deleted here: its company is not linked to anyone FinCom shows
-  const rows = [...by.values()].map((r) => { const co = r.client && S.companies && S.companies[r.client]; return Object.assign(r, { client: co && co.deleted ? "" : r.client, st: tallyCoState(r.company) }); });
-  return rows.sort((a, b) => ((b.st.state === "connected") - (a.st.state === "connected")) || String(b.seen).localeCompare(String(a.seen)) || a.company.localeCompare(b.company));
+  let rows = [...by.values()].map((r) => { const co = r.client && S.companies && S.companies[r.client]; return Object.assign(r, { client: co && co.deleted ? "" : r.client, st: tallyCoState(r.company) }); })
+    .map((r) => Object.assign(r, { open: r.open || r.st.state === "connected", hidden: !r.client && !r.open && hid.has(coKey(r.company)) }));
+  if (!(opts && opts.hidden)) rows = rows.filter((r) => !r.hidden);
+  return rows.sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)) || a.company.localeCompare(b.company));
 }
 // a client of the same name (the period off) or the same GSTIN, already in FinCom: the row links to it, never a second one
 export function twinOf(r) {
@@ -106,28 +121,43 @@ export function twinOf(r) {
   const t = similarClients(name, r.gstin || "", live()).find((d) => d.why === "same" || d.why === "gstin");
   return t ? t.client : null;
 }
+// a newer (or older) year of a company already linked: the same business once the period is off (Suvit: a split or a
+// year's copy of a company), its client already chosen
+export function yearOf(r, rows) {
+  if (r.client) return null;
+  const k = yearKey(r.company);
+  if (!k) return null;
+  const x = (rows || companyRows()).find((o) => o.client && o.company !== r.company && yearKey(o.company) === k && S.companies[o.client] && !S.companies[o.client].deleted);
+  return x ? S.companies[x.client] : null;
+}
+// the clients ranked for a company: the same GSTIN, the same name, then alike, then the rest by name
+function rankClients(r, skip) {
+  const g = String(r.gstin || "").toUpperCase(), nm = (c) => (typeof sameTallyName === "function" && sameTallyName(c.name, r.company) ? 2 : typeof nameScore === "function" ? nameScore(c.name, r.company) : 0);
+  return live().filter((c) => c.id !== skip).map((c) => ({ c, s: (g && String(c.gstin || "").toUpperCase() === g ? 3 : 0) + nm(c) }))
+    .sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name)).map((x) => x.c);
+}
 
 // ---------- the actions
-// the link (tallyLinkClient: tally_company_link, then the client's Tally name). Drawn inside the client's setup (its
-// Tally card), the Tally name it sets is the link's, not the person's edit of the section: it is not left as "Not saved
-// yet: Tally" there, and it is saved at once (Drafts.direct, src/js/60)
-export async function linkClient(company, cid) {
+// the link (tallyLinkClient: tally_company_link, then the client's Tally name hint). opts: keep (a year beside the one
+// before), move (the company leaves another client: the person said so)
+export async function linkClient(company, cid, opts) {
   const D = typeof Drafts === "object" && Drafts.secs ? Drafts : null;
   if (D) D.attributeAll();
-  const ok = await tallyLinkClient(company, cid);
+  const ok = await tallyLinkClient(company, cid, opts);
   if (ok && D && cid) {
     Object.values(D.secs).forEach((s) => { if (s.paths) s.paths.forEach((c, k) => { if (c && c.path && c.path[0] === "tallyName") s.paths.delete(k); }); if (s.armed && s.stores) s.pre = s.stores.map((st) => st.snap()); });
     const co = S.companies[cid]; if (co) D.direct(() => Store.saveCompany(co), { bypass: true });
   }
+  const k = coKey(company), E = (S.tcoErr = S.tcoErr || {});
+  if (ok) delete E[k]; else if (TCloud.linkErr) E[k] = TCloud.linkErr;
   return ok;
 }
-// Add as client: made with the company's name and GSTIN, linked, the first sync started. The client is made as Add
-// client makes it (newCompany, Store.saveCompany: saveNewCompany's own steps), without leaving the page (Suvit's list
-// stays where it is). Returns the client's id, or "" when nothing was added.
+// Add as client: made with the company's name and GSTIN, linked, the first sync started; the page stays (Suvit's list).
+// Returns the client's id, or "" when nothing was added.
 export async function addAsClient(r) {
   const tw = twinOf(r);
   if (tw) return (await linkTo(r, tw)) ? tw.id : "";
-  const name = typeof clientNameFromTally === "function" ? clientNameFromTally(r.company) : r.company;
+  const name = typeof clientNameFromTally === "function" ? clientNameFromTally(shown(r.company)) : shown(r.company);
   const g = String(r.gstin || "").trim().toUpperCase(), gstin = g && typeof gstinValid === "function" && gstinValid(g) ? g : "";
   const co = newCompany({ name, gstin, tallyName: r.company, turnover10cr: false });
   S.companies[co.id] = co; S.data[co.id] = { parties: {}, entries: {}, loaded: true };
@@ -135,22 +165,80 @@ export async function addAsClient(r) {
   Store.saveCompany(co);
   render();
   const ok = await linkClient(r.company, co.id);
-  if (!ok) { toast(name + " was added; link it to " + r.company + " from its row."); return co.id; }
+  if (!ok) { toast(name + " was added; link it to " + shown(r.company) + " from its row."); return co.id; }
   firstSync(co.id, r.company);
   return co.id;
 }
-// Link (to a client already in FinCom): asked first when the client is linked to another company now (it moves)
-export async function linkTo(r, co) {
+// Link (to a client already in FinCom). The client linked to another company: a newer year of it is linked beside it
+// (opts.keep); any other company is asked first (it moves). A company linked to another client moves only with opts.move.
+export async function linkTo(r, co, opts) {
+  opts = Object.assign({}, opts);
   const was = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).company || "" : "";
   if (was && coKey(was) !== coKey(r.company)) {
-    const ok = await askConfirm({ title: "Link " + co.name + " to " + r.company + "?", ok: "Link this company",
-      body: "<p>" + esc(co.name) + " is linked to <b>" + esc(was) + "</b> now. It will be linked to <b>" + esc(r.company) + "</b> instead, and " + esc(was) + " unlinked. Nothing in Tally changes.</p>" });
-    if (!ok) return false;
+    if (yearKey(was) === yearKey(r.company)) opts.keep = true;
+    else if (!opts.asked) {
+      const ok = await askConfirm({ title: "Link " + co.name + " to " + shown(r.company) + "?", ok: "Link this company",
+        body: "<p>" + esc(co.name) + " is linked to <b>" + esc(was) + "</b> now. It will be linked to <b>" + esc(shown(r.company)) + "</b> instead, and " + esc(was) + " unlinked. Nothing in Tally changes.</p>" });
+      if (!ok) return false;
+    }
   }
-  const ok = await linkClient(r.company, co.id);
+  const ok = await linkClient(r.company, co.id, opts);
   if (ok) firstSync(co.id, r.company);
   return ok;
 }
+// a company linked to another client, moved to this one: asked once
+export async function moveTo(r, co) {
+  const from = S.companies[r.client];
+  // asked once: what the client it goes to had linked is said in the same question (a year of it stays beside it)
+  const was = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).company || "" : "", also = was && coKey(was) !== coKey(r.company) && yearKey(was) !== yearKey(r.company);
+  const ok = await askConfirm({ title: "Move " + shown(r.company) + " to " + co.name + "?", ok: "Move it",
+    body: "<p><b>" + esc(shown(r.company)) + "</b> is linked to <b>" + esc((from && from.name) || "another client") + "</b> now. Its books will go to <b>" + esc(co.name) + "</b> instead" + (also ? ", and " + esc(was) + " is unlinked from " + esc(co.name) : "") + ". Nothing in Tally changes.</p>" });
+  if (!ok) return false;
+  return linkTo(r, co, { move: true, asked: true });
+}
+export const unlink = (r) => {
+  const co = S.companies[r.client];
+  return askConfirm({ title: "Unlink " + shown(r.company) + " from " + ((co && co.name) || "its client") + "?", ok: "Unlink", danger: true,
+    body: "<p>Its books stop coming to " + esc((co && co.name) || "the client") + ". The company stays in this list (Not a client), to add or link again in one click. Nothing in Tally changes.</p>" })
+    .then((ok) => (ok ? linkClient(r.company, null) : false));
+};
+// Remove company (Suvit: an unused company taken off the list): hidden, never deleted; Show hidden puts it back
+export function hideCo(r, on) {
+  const k = coKey(r.company), h = hidden();
+  if (on) h.add(k); else h.delete(k);
+  S.firm.tallyHidden = [...h]; try { Store.saveFirm(); } catch (e) { /* kept here */ }
+  render();
+}
+// Post entries here: the client's one posting company (choiceConfirm postTo, asked first; nothing is posted without it)
+export function postHere(co, company, on) {
+  const v = on ? company : "";
+  return askConfirm({ title: v ? "Post " + co.name + "’s entries into " + shown(v) + "?" : "Stop posting for " + co.name + "?", ok: v ? "Allow" : "Stop posting",
+    body: v ? "<p>FinCom and the bridge will post this client’s bills, bank lines and sales <b>only</b> into the Tally company <b>" + esc(shown(v)) + "</b>. A posting meant for any other company is refused.</p>"
+      : "<p>Nothing will be posted for this client until a company is chosen again.</p>" })
+    .then((ok) => { if (!ok) return; choiceConfirm(co, "postTo", v); if (S.postStop && S.postStop.cid === co.id) S.postStop = null; toast(v ? "Posting allowed into " + shown(v) + "." : "Posting stopped."); render(); });
+}
+export const postsHere = (co, company) => { const pc = typeof choiceGet === "function" ? choiceGet(co, "postTo") : null; return !!(pc && pc.state === "confirmed" && co.postTo && coKey(co.postTo) === coKey(company)); };
+// Sync now: Suvit's two syncs at once (the masters: the ledgers' wake; the vouchers: Update now)
+export function syncNow(cid, company) { firstSync(cid, company); tallyUpdateNow(cid); }
+
+// a click on a company its computer has not sent to FinCom's cloud yet: kept, and done by itself when it is sent
+// S.tcoPend[key] = {company, kind: add | link | move, cid, keep, at, late}
+const PEND = () => (S.tcoPend = S.tcoPend || {});
+function keep(r, job) { PEND()[coKey(r.company)] = Object.assign({ company: r.company, at: Date.now(), late: false }, job); if (typeof TLight === "object") TLight.st.at = 0; render(); }
+function doJob(r, job) {
+  const co = job.cid ? S.companies[job.cid] : null;
+  return job.kind === "add" ? addAsClient(r) : job.kind === "move" && co ? moveTo(r, co) : co ? linkTo(r, co, { keep: job.keep }) : Promise.resolve(false);
+}
+let pendBusy = false;
+function pendTick(rows) {
+  const P = PEND();
+  Object.entries(P).forEach(([k, job]) => {
+    const r = rows.find((x) => coKey(x.company) === k);
+    if (r && r.reported && !pendBusy) { delete P[k]; pendBusy = true; Promise.resolve(doJob(r, job)).finally(() => { pendBusy = false; render(); }); }
+    else if (!job.late && Date.now() - job.at > PEND_MS) { job.late = true; render(); }
+  });
+}
+
 // the first sync of a client just added or linked (Suvit: "the first sync starts by itself"): the ledgers wake (one call,
 // Ledgers.askTally: the bridge here when it has the company open, else FinCom's cloud, tally-ingest's wake "ledgers"),
 // then FinCom's cloud is read every 10 seconds until the ledgers and this year's entries are in (10 minutes at most).
@@ -226,102 +314,138 @@ export function SyncLine({ cid, compact = false }) {
   return <p className="note tco-sync" data-tco-sync="held">{[led ? (n > 0 ? "Ledgers " + Number(n).toLocaleString("en-IN") : "Ledgers in FinCom") : "Ledgers not in FinCom yet", ent ? ent.replace(" ✓", "") : "this year’s entries not in FinCom yet"].join(" · ")}</p>;
 }
 
+
 // ---------- one row
-function Pill({ st }) {
+// the pill: a linked company's state (lib/tallyState.js, the words every place uses), Earlier year when a newer year of
+// the same client is in use, Not a client when not linked
+function Pill({ r, st, co, earlier }) {
+  if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not a client">
+    <span className="tag warn">Not a client</span><span className="tco-why">{r.open ? " · open in Tally" + (st.computer ? " on " + st.computer.split(" · ")[0] : "") : " · not open in Tally now"}</span></span>;
+  if (earlier) return <span className="tco-pill" data-tco-pill="earlier" data-tco-pill-text={"Earlier year of " + earlier}>
+    <span className="tag">Earlier year</span><span className="tco-why">{" · " + earlier + " is the newer year"}</span></span>;
   return <span className="tco-pill" data-tco-pill={st.state} data-tco-pill-text={st.text}>
     <span className={"tag " + st.level}>{st.word}</span>{st.state !== "connected" && <span className="tco-why">{st.text.replace(/^Disconnected/, "")}</span>}</span>;
 }
-// Not this client: another client of the firm, or unlinked (tallyLinkClient moves or unlinks; nothing in Tally changes)
-function Relink({ r, co, onClose }) {
-  const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
-  const cs = live().filter((c) => c.id !== co.id).sort((a, b) => a.name.localeCompare(b.name));
-  const go = async (cid) => { setBusy(true); const ok = await linkClient(r.company, cid || null); setBusy(false); if (ok) { if (cid) firstSync(cid, r.company); onClose(); } };
-  const unlink = () => askConfirm({ title: "Unlink " + r.company + " from " + co.name + "?", ok: "Unlink", danger: true,
-    body: "<p>Its books stop coming to " + esc(co.name) + ". FinCom will not link it again by itself. Nothing in Tally changes.</p>" }).then((ok) => { if (ok) go(null); });
-  return <div className="tco-relink" data-tco-relink-box={r.company}>
-    <span className="note">{r.company + " is not " + co.name + "’s? Link it to"}</span>
-    <select data-tco-relink-pick="" aria-label={"The client " + r.company + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
-      <option value="">Choose a client…</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-    <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={() => go(pick)}>Link</button>
-    <button className="btn small" data-tco-unlink="" disabled={busy} onClick={unlink}>Unlink only</button>
-    <button className="linkbtn" onClick={onClose}>Cancel</button></div>;
+// Disconnected, in words: what to do (Suvit: open the company in Tally on its computer)
+function fixOf(r, st) {
+  const pc = (st.computer || "").split(" · ")[0];
+  return st.state === "offline" ? "Turn " + (pc || "the Tally computer") + " on and sign in to Windows: FinCom Bridge starts by itself."
+    : st.state === "notopen" ? "Open " + shown(r.company) + " in TallyPrime on " + (pc || "its computer") + "."
+    : st.state === "unseen" ? "Open " + shown(r.company) + " in TallyPrime on the computer with FinCom Bridge." : "";
 }
-export function CompanyRow({ r, forCo = null, verb = "", onDone = null }) {
-  const [busy, setBusy] = useState(""), [relink, setRelink] = useState(false);
+// choose a client: "Link to a client…" (not linked) and "Link to another client" (linked: it moves, asked once)
+function Pick({ r, co, onClose }) {
+  const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
+  const cs = rankClients(r, co ? co.id : "");
+  const go = async () => { const t = S.companies[pick]; if (!t) return; setBusy(true);
+    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
+  return <div className="tco-relink" data-tco-relink-box={r.company}>
+    <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>
+    <select data-tco-relink-pick="" aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
+      <option value="">Choose a client…</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+    <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={go}>{co ? "Move" : "Link"}</button>
+    <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button></div>;
+}
+export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null }) {
+  const [busy, setBusy] = useState(""), [pick, setPick] = useState(false);
   const co = r.client && S.companies ? S.companies[r.client] : null, may = canWrite(), st = r.st || tallyCoState(r.company);
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
-  const last = co && k ? lastEntry(co, k) : "";
-  const meta = [st.computer || "", last ? "last entry " + seenWords(last) : st.state === "connected" ? "open now" : r.seen ? "last seen " + seenWords(r.seen) : ""].filter(Boolean).join(" · ");
-  const tw = !co && !forCo ? twinOf(r) : null, target = forCo || tw;
-  const run = (kind, fn) => async () => { setBusy(kind); let id = ""; try { id = await fn(); } finally { setBusy(""); } if (id && onDone) onDone(id === true ? target.id : id); };
+  // its other years (the same business once the period is off; another company of the same client is not a year)
+  const sib = co ? (rows || []).filter((o) => o.client === co.id && o.company !== r.company && yearKey(o.company) === yearKey(r.company)) : [];
+  const newer = co && !r.open ? sib.find((o) => o.open || String(o.seen) > String(r.seen)) : null, earlier = newer ? shown(newer.company) : "";
+  const last = co && k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
+  const meta = [st.computer || "", last ? "last entry " + seenWords(last) : r.open ? "open now" : r.seen ? "last seen " + seenWords(r.seen) : ""].filter(Boolean).join(" · ");
+  const yr = !co && !r.client ? yearOf(r, rows) : null, tw = !co && !forCo && !yr ? twinOf(r) : null;
+  const pend = PEND()[coKey(r.company)], err = (S.tcoErr || {})[coKey(r.company)];
+  const run = (kind, job, fn) => async () => {
+    if (!r.reported) { keep(r, job); return; }
+    setBusy(kind); let id = ""; try { id = await fn(); } finally { setBusy(""); }
+    if (id && onDone) onDone(id === true ? (job.cid || "") : id);
+  };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const syncing = co && k && k.line && k.line.reading;
   let act;
-  if (r.client && !co) act = <span className="note" data-tco-elsewhere="">Linked to a client not on this computer</span>;
+  if (pend) act = <span className="tco-wait" data-tco-pending={pend.kind}>
+    <button className="btn small" disabled>{pend.late ? "Not sent yet" : "Waiting…"}</button>
+    <button className="linkbtn" data-tco-pending-cancel="" onClick={() => { delete PEND()[coKey(r.company)]; render(); }}>Cancel</button></span>;
+  else if (r.client && !co) act = <span className="note" data-tco-elsewhere="">Linked to a client not on this computer</span>;
+  else if (co && forCo && co.id !== forCo.id) act = <>
+    <span className="note tco-linked-to" data-tco-linked-to={co.id}>{"Linked to " + co.name}</span>
+    {may && <button className="btn small" data-tco-act="move" data-tco-move={forCo.id} disabled={!!busy} onClick={run("move", { kind: "move", cid: forCo.id }, () => moveTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Moving…" : "Move here"}</button>}</>;
   else if (co) act = <>
     <button className="linkbtn tco-client" data-tco-client={co.id} onClick={() => openCompany(co.id)}>{co.name + " ›"}</button>
-    {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => tallyUpdateNow(co.id)}>{syncing ? "Syncing…" : "Sync now"}</button>}
+    {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
     <details className="bk-menu tco-more" data-tco-more={r.company}>
-      <summary className="btn small" aria-label={"More for " + r.company}>⋯</summary>
+      <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
       <div className="bk-menu-list">
-        <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
-        {may && <button data-tco-not-this={r.company} onClick={close(() => setRelink(true))}>Not this client<small>Link it to another client, or unlink it.</small></button>}
+        {may && <button data-tco-sync-master={co.id} onClick={close(() => firstSync(co.id, r.company))}>Sync master<small>Ledgers, groups, parties, stock items and banks from Tally.</small></button>}
+        {may && <button data-tco-sync-vouchers={co.id} onClick={close(() => tallyUpdateNow(co.id))}>Sync vouchers<small>The entries made in Tally since the last read.</small></button>}
+        {may && (postsHere(co, r.company) ? <button data-tco-post-stop={co.id} onClick={close(() => postHere(co, r.company, false))}>Stop posting here<small>{co.name + "’s entries are posted into this company now."}</small></button>
+          : <button data-tco-post-here={co.id} onClick={close(() => postHere(co, r.company, true))}>Post entries here<small>{"Post " + co.name + "’s entries into this company (asked first)."}</small></button>)}
+        {may && <button data-tco-not-this={r.company} onClick={close(() => setPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
+        {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>It stays in this list as Not a client.</small></button>}
         {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
+        {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
+        <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
       </div></details></>;
   else if (!may) act = <span className="note">A member of the firm who may make changes adds it.</span>;
-  else if (target) act = <button className={"btn small" + (forCo ? " primary" : "")} data-tco-act="link" data-tco-link={target.id} disabled={!!busy} onClick={run("link", () => linkTo(r, target))}>
-    {busy ? "Linking…" : verb || "Link to " + target.name}</button>;
-  else act = <button className="btn small primary" data-tco-act="add" disabled={!!busy} onClick={run("add", () => addAsClient(r))}>{busy ? "Adding…" : "Add as client"}</button>;
-  return <li className="tco-row" data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-why={r.why || undefined}>
-    <div className="tco-main"><b className="tco-name">{r.company}</b>
+  else {
+    const target = forCo || yr || tw;
+    const main = target ? <button className={"btn small" + (forCo || yr ? " primary" : "")} data-tco-act={yr && !forCo ? "year" : "link"} data-tco-link={target.id} disabled={!!busy}
+        onClick={run("link", { kind: "link", cid: target.id, keep: !!(yr && !forCo) }, () => linkTo(r, target, { keep: !!(yr && !forCo) }).then((ok) => ok && target.id))}>
+        {busy ? "Linking…" : yr && !forCo ? "New year of " + yr.name + " · Link" : "Link to " + target.name}</button>
+      : <button className="btn small primary" data-tco-act="add" disabled={!!busy} onClick={run("add", { kind: "add" }, () => addAsClient(r))}>{busy ? "Adding…" : "Add as client"}</button>;
+    act = <>{main}
+      <details className="bk-menu tco-more" data-tco-more={r.company}>
+        <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
+        <div className="bk-menu-list">
+          <button data-tco-link-pick={r.company} onClick={close(() => setPick(true))}>Link to a client…<small>Choose the client this company belongs to.</small></button>
+          {!target && <button data-tco-add-new={r.company} onClick={close(run("add", { kind: "add" }, () => addAsClient(r)))}>Add as client<small>A new client with this company’s name and GSTIN.</small></button>}
+          {r.hidden ? <button data-tco-unhide={r.company} onClick={close(() => hideCo(r, false))}>Show again<small>Back in the list.</small></button>
+            : !r.open && <button data-tco-hide={r.company} onClick={close(() => hideCo(r, true))}>Remove company<small>Off this list (not deleted; Show hidden puts it back).</small></button>}
+        </div></details></>;
+  }
+  return <li className={"tco-row" + (focus ? " tco-focus" : "")} data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-tco-open={r.open ? "" : undefined}
+    data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined}>
+    <div className="tco-main"><b className="tco-name">{shown(r.company)}</b>
       {r.why && <span className={"tag " + (r.why === "like" ? "warn" : "ok")} data-tco-why={r.why}>{r.why === "gstin" ? "same GSTIN" : r.why === "name" ? "same name" : "similar name"}</span>}
+      {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}
       {meta && <span className="note tco-meta">{meta}</span>}</div>
-    <Pill st={st} />
+    <Pill r={r} st={st} co={co} earlier={earlier} />
     <div className="tco-act">{act}</div>
+    {co && !earlier && st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>}
+    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{(st.computer ? st.computer.split(" · ")[0] : "Its computer") + " has not sent this company to FinCom yet (a minute or two after it is opened). A click now is kept and done by itself then."}</div>}
+    {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
+      : "Waiting for " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + " to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
+    {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
     {co && <div className="tco-under"><SyncLine cid={co.id} /></div>}
-    {relink && co && <div className="tco-under"><Relink r={r} co={co} onClose={() => setRelink(false)} /></div>}
+    {pick && <div className="tco-under"><Pick r={r} co={co} onClose={() => setPick(false)} /></div>}
   </li>;
 }
 
-// ---------- the list. rows: the rows to show (default: every company); forCo: the client the list links to (its card,
-// or a pointer from it); show: how many before "Show all" (0: all)
-export default function CompaniesInTally({ rows = null, forCo = null, verb = "", show = 0, title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm" }) {
-  const [q, setQ] = useState(""), [all, setAll] = useState(false);
-  const list = rows || companyRows();
-  useEffect(() => { booksLoad(list.filter((r) => r.client).map((r) => r.client)); });
+// ---------- the list. rows: the rows to show (default: every company); forCo: the client the list links to (from its
+// "Choose on Tally page"); focus: the client whose rows are marked (from its "Open in Tally page")
+export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm" }) {
+  const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [, tick] = useState(0);
+  const all = companyRows({ hidden: true }), list = rows || all.filter((r) => showHid || !r.hidden), nHid = all.filter((r) => r.hidden).length;
+  useEffect(() => { booksLoad(list.filter((r) => r.client).map((r) => r.client)); pendTick(all); });
+  // a click kept for a company not sent yet: the computers and companies are read again every 10 seconds
+  const waiting = Object.keys(PEND()).length > 0;
+  useEffect(() => { if (!waiting) return; const t = setInterval(() => {
+    if (typeof TLight === "object") TLight.st.at = 0;
+    Promise.resolve(TCloud.refreshPane()).then(() => (typeof TLight === "object" ? TLight.refresh() : null)).then(() => tick((n) => n + 1), () => tick((n) => n + 1));
+  }, POLL_MS); return () => clearInterval(t); }, [waiting]);
+  useEffect(() => { if (!focus) return; const t = setTimeout(() => { const e = document.querySelector("#app [data-tco-row][data-focus]"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 120); return () => clearTimeout(t); }, [focus]);
   const k = list.length > SEARCH_AT ? coKey(q) : "", hits = k ? list.filter((r) => coKey(r.company).includes(k) || (r.client && S.companies[r.client] && coKey(S.companies[r.client].name).includes(k))) : list;
-  const shown = show && !all && !k ? hits.slice(0, show) : hits;
-  const nOpen = list.filter((r) => r.st && r.st.state === "connected").length;
+  const nOpen = list.filter((r) => r.open).length;
   return <section className="tco" data-tco-list={hook} data-tco-n={list.length}>
     <div className="tco-head">{title && <h3>{title}</h3>}
       {title && list.length > 0 && <span className="note" data-tco-count="">{nOf(list.length, "company", "companies") + " · " + nOpen + " open in Tally now"}</span>}
       {list.length > SEARCH_AT && <input type="search" className="tco-q" data-tco-q="" aria-label="Find a company" placeholder="Find a company or client" value={q} onChange={(ev) => setQ(ev.target.value)} />}</div>
     {note}
     {list.length === 0 ? (empty || <p className="note" data-tco-empty="">No company seen in Tally yet. Open your company in TallyPrime on the computer with FinCom Bridge: it shows here within a minute.</p>)
-      : <ul className="tco-rows">{shown.map((r) => <CompanyRow key={r.company} r={r} forCo={forCo} verb={verb} onDone={onDone} />)}</ul>}
+      : <ul className="tco-rows">{hits.map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} />)}</ul>}
     {k && !hits.length && <p className="note" data-tco-none="">No company matches “{q}”.</p>}
-    {shown.length < hits.length && <button className="linkbtn" data-tco-all="" onClick={() => setAll(true)}>{"Show all " + hits.length}</button>}
+    {!rows && nHid > 0 && <button className="linkbtn" data-tco-show-hidden={nHid} onClick={() => setShowHid(!showHid)}>{showHid ? "Hide removed companies" : "Show hidden (" + nHid + ")"}</button>}
   </section>;
-}
-
-// a client not linked (its Tally card): the rows it may be (not linked to another client), the likeliest first, each with
-// Link (the link, then the first sync by itself)
-export function ClientPick({ co }) {
-  const list = companyRows().filter((r) => !r.client || String(r.client) === String(co.id));
-  const ranked = typeof suggestFor === "function" ? suggestFor(co, list) : list;
-  return <div className="tlink-choose" data-tally-link-choose="link">
-    <CompaniesInTally rows={ranked} forCo={co} verb="Link" show={4} hook="card" title="Choose its company in Tally"
-      empty={<p className="note" data-tco-empty="">{"FinCom has not seen a company in Tally that is not linked. Open " + co.name + "’s company in TallyPrime on the computer with FinCom Bridge; it shows here within a minute."}</p>} />
-  </div>;
-}
-// Add client's Pick from Tally: the companies not linked to a client, the best match for what is typed (name or GSTIN) on
-// top; Add as client (or Link to the client already there), then onDone(the client's id)
-export function AddPick({ v, onDone }) {
-  const list = companyRows().filter((r) => !r.client);
-  const ranked = typeof suggestFor === "function" && (v.name || v.gstin) ? suggestFor({ id: "", name: v.name, gstin: v.gstin }, list) : list;
-  return <div className="addc-pick" data-add-pick={ranked.length}>
-    <CompaniesInTally rows={ranked} show={6} hook="add" title="Pick from Tally" onDone={onDone}
-      note={ranked.length ? <p className="note" style={{ margin: "0 0 4px" }}>The companies FinCom has seen in Tally and not linked to a client yet. One click adds the client, links it and brings its books.</p> : null}
-      empty={<p className="note" data-tco-empty="">No Tally company is waiting to be added. Open the client’s company in TallyPrime on a computer with FinCom Bridge and it shows here within a minute, or type the client below.</p>} />
-  </div>;
 }

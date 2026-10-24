@@ -125,9 +125,13 @@ def main():
         rs = rows()
         ok([r["co"] for r in rs][:2] == sorted([VMS, GSC], key=lambda c: c) or set(r["co"] for r in rs[:2]) == {VMS, GSC}, "1. the companies open in Tally now come first (%s)" % [r["co"] for r in rs])
         ok([r["co"] for r in rs][2:] == [SAL, OLD] or [r["co"] for r in rs][2:] == [OLD, SAL], "1. then the ones seen before (%s)" % [r["co"] for r in rs])
-        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Connected", "1. VMS EVENTS open on NWS144: Connected (%s)" % row(VMS)["pill"])
-        ok(row(SAL)["pill"] == "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)", "1. Salesify: 'Disconnected — not open in Tally on NWS144 (last seen 20-Oct)' (%s)" % row(SAL)["pill"])
+        # next-tally-one-page (Suvit: Connected / Disconnected are a linked company's): not linked, "Not a client", open or not
+        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not a client · open in Tally on NWS144", "1. VMS EVENTS open on NWS144, not linked: Not a client · open in Tally (%s)" % row(VMS)["pill"])
+        ok(row(SAL)["pill"] == "Not a client · not open in Tally now", "1. Salesify, not linked, not open (%s)" % row(SAL)["pill"])
+        scene(cos(sal="GS", old="GS")); tally_page()
+        ok(row(SAL)["pill"] == "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)", "1. linked: 'Disconnected — not open in Tally on NWS144 (last seen 20-Oct)' (%s)" % row(SAL)["pill"])
         ok(re.match(r"^Disconnected — computer offline since \d\d:\d\d$", row(OLD)["pill"] or "") is not None and row(OLD)["st"] == "offline", "1. its computer off: 'Disconnected — computer offline since 12:02' (%s)" % row(OLD)["pill"])
+        scene(cos()); tally_page()
         ok("NWS144" in row(VMS)["text"] and "LAPTOP" in row(OLD)["text"] and "last seen 20-Oct" in row(SAL)["text"], "1. each row names its computer and when it was last seen")
         ok(row(VMS)["act"] == "Add as client" and row(SAL)["act"] == "Add as client", "1. not linked: 'Add as client' (%s, %s)" % (row(VMS)["act"], row(SAL)["act"]))
         ok(row(GSC)["act"] == "Link to Garg Shekhar & Company", "3. GARG SHEKHAR & COMPANY (2025-26) with Garg Shekhar & Company already a client: 'Link to Garg Shekhar & Company' (%s)" % row(GSC)["act"])
@@ -184,11 +188,11 @@ def main():
         ok(calls("tally_want_update") == [["tally_want_update", {"p_client": cid}]], "4. Sync now: the existing Update now (tally_want_update) (%s)" % calls())
         pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % VMS); pg.wait_for_timeout(300)
         items = E("(co) => [...document.querySelectorAll('#app [data-tco-row=\"' + co + '\"] .bk-menu-list button')].map(b => b.innerText.split('\\n')[0])", VMS)
-        ok(items == ["Open client", "Not this client"], "4. ⋯: Open client, Not this client; no Day Book while this year's days are in (%s)" % items)
+        ok(items == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "Read the kept day books again", "Open client"], "4. ⋯: Sync master, Sync vouchers, Post entries here, Link to another client, Unlink, …; no Day Book while this year's days are in (%s)" % items)
         pg.click('#app [data-tco-row="%s"] [data-tco-not-this]' % VMS); pg.wait_for_timeout(300)
         pg.select_option('#app [data-tco-row="%s"] [data-tco-relink-pick]' % VMS, gs)
         E("() => { window.__calls = []; }")
-        pg.click('#app [data-tco-row="%s"] [data-tco-relink]' % VMS); pg.wait_for_timeout(1000)
+        pg.click('#app [data-tco-row="%s"] [data-tco-relink]' % VMS); confirm()
         ok(calls("tally_company_link")[:1] == [["tally_company_link", {"p_company": VMS, "p_client": gs}]], "4. Not this client: the company moves to the client chosen (%s)" % calls("tally_company_link"))
         # a linked client with no entries of this year: the Day Book under ⋯
         scene(cos(sal="GS"), books={"GS": [{"book": "bk-S", "company": SAL, "from": "2025-04-01", "to": "2026-03-31", "days": 300, "ledgersAt": "ago:9"}]}, ledn={"bk-S": 88})
@@ -211,8 +215,8 @@ def main():
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.hasAttribute('data-done'))")
         ok(g == [True, False, False] and "Open TallyPrime on NWS144" in txt("#app [data-connect-step=open]"), "5. bridge on, Tally closed: step 2 says open TallyPrime on NWS144 (%s)" % txt("#app [data-connect-step=open]"))
         scene(cos(vms="GS"), devs=[dev()]); tally_page()
-        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-connected-line]").count() == 1 and "● Connected" in txt("#app [data-connected-line]"),
-           "5. all three done: one green line under the list (%s)" % txt("#app [data-connected-line]"))
+        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-connected-line]").count() == 1 and "Connected computers: NWS144 ● online" in txt("#app [data-pc-lines]"),
+           "5. a company linked: no steps, one line 'Connected computers: NWS144 ● online' (%s)" % txt("#app [data-pc-lines]"))
         shot("tally-page-all-done-desktop-light")
 
         # ---- 1b. more than 10 companies: a search box
@@ -226,54 +230,47 @@ def main():
         scene(cos(sal="GS"))
         gs = E("window.__ids.GS")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", gs); pg.wait_for_timeout(1200)
-        line = re.sub(r"\s+", " ", txt("#app [data-tally-link] [data-tally-link-status]"))
-        ok(line.startswith("Disconnected") and "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" in line and pg.locator("#app [data-tally-link] [data-tally-sync-now]").count() == 1,
-           "6. the client's card: the same pill words, Sync now (%s)" % line)
+        # next-tally-one-page: Client setup has ONE line (no card); Sync now is on the Tally page's row
+        line = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
+        ok(line.startswith("Tally: " + SAL + " ○ Disconnected") and "not open in Tally on NWS144 (last seen 20-Oct)" in line and line.endswith("Open in Tally page"),
+           "6. the client's one line: the same pill words, Open in Tally page (%s)" % line)
         sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? b.getAttribute('title') : ''; }")
         ok("Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" in sign, "6. the top bar's sign says the same words (%s)" % sign)
         shot("client-card-linked-desktop-light", full=False)
-        E("() => { window.__calls = []; }")
-        pg.click("#app [data-tally-link] [data-tally-sync-now]"); pg.wait_for_timeout(600)
-        ok(E("(c) => typeof TallyAsk === 'object' && !!TallyAsk[c]", gs), "6. Sync now on the card is Update now (tallyUpdateNow asked a read)")
         # Clients list chip
         E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(900)
         chip = E("(c) => { const r = [...document.querySelectorAll('#app [data-tally-chip-at=clients]')]; return r.map(b => [b.getAttribute('data-tally-pill'), b.innerText.trim(), b.getAttribute('title')]); }", gs)
         ok(any(c[0] == "notopen" and c[1].endswith("Disconnected") and "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" in (c[2] or "") for c in chip), "6. Clients list: the chip says Disconnected, its tip the same words (%s)" % chip)
-        # a client not linked: its card lists the companies with Link
+        # a client not linked: its line points to the Tally page's list, every company with "Link to <client>"
         E("() => { const c = newCompany({name: 'Salesify Marketing LLP'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
         scene(cos())
         s1 = E("window.__ids.S1")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", s1); pg.wait_for_timeout(1500)
-        cr = E("() => [...document.querySelectorAll('#app [data-tally-link] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), (r.querySelector('[data-tco-act]') || {}).innerText])")
-        ok(cr[:1] == [[SAL, "Link"]] and all(a == "Link" for _, a in cr), "6. not linked: its card lists the companies, Salesify's on top, each with Link (%s)" % cr)
+        t6 = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
+        ok(t6 == "Tally: ◐ Not linked · Choose on Tally page", "6. not linked: 'Choose on Tally page' (%s)" % t6)
+        pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1400)
+        cr = [[r["co"], r["act"]] for r in rows()]
+        ok([SAL, "Link to Salesify Marketing LLP"] in cr and all(a.startswith("Link to Salesify") or l == GSC for l, a in cr), "6. the Tally page's list for it: each company 'Link to Salesify Marketing LLP' (%s)" % cr)
         shot("client-card-not-linked-desktop-light", full=False)
         E("() => { window.__calls = []; }")
-        pg.click('#app [data-tally-link] [data-tco-row="%s"] [data-tco-act=link]' % SAL); pg.wait_for_timeout(1200)
+        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=link]' % SAL); pg.wait_for_timeout(1200)
         ok(calls("tally_company_link") == [["tally_company_link", {"p_company": SAL, "p_client": s1}]] and len(wakes()) == 1, "6. Link: linked once, the first sync started (%s)" % calls())
-        # Add client: the same rows; a new name without Tally still works
+        # Add client: no Pick from Tally (one button to the Tally page); a new name without Tally still works
         scene(cos(vms="GS"))
         E("() => { S.view = 'home'; navHome('clients'); doAct('addCo'); }"); pg.wait_for_timeout(1200)
-        ar = E("() => [...document.querySelectorAll('#app [data-tco-list=add] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), (r.querySelector('[data-tco-act]') || {}).innerText])")
-        ok(VMS not in [a[0] for a in ar] and [OLD, "Add as client"] in ar and [SAL, "Link to Salesify Marketing LLP"] in ar, "6. Add client: Pick from Tally is the same rows, only the companies not linked; Salesify there already: Link to it (%s)" % ar)
+        ok(pg.locator("#app [data-tco-list=add]").count() == 0 and pg.locator("#app [data-add-tally-go]").count() == 1, "6. Add client: no Pick from Tally; 'Add it from the Tally page'")
         shot("add-client-desktop-light")
         pg.fill("#ncName", "Kumar Medicos"); pg.wait_for_timeout(300)
         E("() => { window.__calls = []; }")
         pg.click('#app button:has-text("Add and open")'); pg.wait_for_timeout(1200)
         ok(len(by_name("Kumar Medicos")) == 1 and calls("tally_company_link") == [], "6. a new name without Tally: added, nothing linked")
-        E("() => doAct('addCo')"); pg.wait_for_timeout(700)
-        n0 = len(E("() => Object.values(S.companies).filter(c => !c.deleted)")); E("() => { window.__calls = []; }")
-        pg.click('#app [data-tco-list=add] [data-tco-row="%s"] [data-tco-act=add]' % OLD); pg.wait_for_timeout(1500)
-        sm = by_name(OLD)
-        ok(len(E("() => Object.values(S.companies).filter(c => !c.deleted)")) == n0 + 1 and len(sm) == 1 and calls("tally_company_link") == [["tally_company_link", {"p_company": OLD, "p_client": sm[0]}]] and len(wakes()) == 1,
-           "6. Add client → Add as client: added, linked, first sync started (%s)" % calls())
-        ok(E("[S.view, S.tab]") == ["company", "cotally"], "6. and its Tally card opens, with the progress")
 
         # ---- 7. phone 390, light and dark: no sideways scroll; pictures
         for scheme in ("light", "dark"):
             for w, h, tag in ((1440, 900, "desktop"), (390, 844, "phone")):
                 q = open_page(w, h, scheme)
                 q.evaluate("() => { const c = newCompany({name: 'Salesify Marketing LLP'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
-                for nm, comp, act in (("tally-page-list", cos(sal="S1"), "page"), ("guide-3-steps", cos(), "page"), ("client-card", cos(sal="S1"), "card"), ("add-client", cos(), "add")):
+                for nm, comp, act in (("tally-page-list", cos(sal="S1"), "page"), ("guide-3-steps", cos(), "page"), ("client-card", cos(sal="S1"), "card")):
                     q.evaluate(SETUP, [[dev(), dev(D2, "LAPTOP", at="ago:42", opened=())], comp, {}, {}]); q.wait_for_timeout(300)
                     if act == "page": q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1300)
                     elif act == "add": q.evaluate("() => { navHome('clients'); doAct('addCo'); }"); q.wait_for_timeout(1300)

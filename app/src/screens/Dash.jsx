@@ -6,7 +6,6 @@
 import HowPage from "../parts/HowPage.jsx";
 import { OnbCard } from "../parts/Notes.jsx";
 import PageSkeleton from "../parts/PageSkeleton.jsx";
-import { TallyLinkLine } from "../parts/TallyLink.jsx";
 import { Inbox, ReceiptText, Send, Landmark } from "lucide-react";
 
 const money = (x) => "₹" + INR.format(r2(x || 0));
@@ -49,9 +48,8 @@ export default function Dash() {
   return (<>
     <section className="dash">
       <OnbCard co={co} />
-      {/* the client's Tally link in one line, its home being Client setup → Tally (the checklist's first step says it while open);
-          round 63: only when not linked or it needs the person (linked and reading is the top bar's dot) */}
-      {!(ONB.steps(co).some((x) => !x.done) && !co.onbHide) && <TallyLinkLine co={co} only={["unlinked", "needs"]} />}
+      {/* 24-Oct-2026 (next-tally-one-page): no Tally line here; the client's title carries its one Tally chip, which opens
+          its row on the Tally page */}
       <div className="dash-tiles">
         <Tile label="To read" n={docqCount(co.id)} sub="in the inbox" go="inbox" tone="violet" Icon={Inbox} />
         <Tile tone="amber" Icon={ReceiptText} label="To review" n={drafts.length} sub={drafts.length ? sumTotal(drafts) : "nothing waiting"} go="bills" />

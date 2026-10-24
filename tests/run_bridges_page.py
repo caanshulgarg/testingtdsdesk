@@ -65,9 +65,10 @@ with sync_playwright() as p:
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
     E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)   # fold Advanced (for support) again
     # 15-Oct-2026 (the calm page): one line a computer on the page; its card (Details) under Advanced
-    ln = pg.inner_text("#app [data-pc-lines]")
-    ok(pg.locator("#app [data-pc-line]").count() == 1 and all(x in ln for x in ("NWS144", "anshul", "FinCom Bridge 2.1.1", "Tally open: ZZ TEST, Testing AAD")),
-       "5. one line: NWS144 (anshul) · Tally open: the companies · FinCom Bridge 2.1.1 (%s)" % ln.replace("\n", " "))
+    # 24-Oct-2026 (next-tally-one-page): no company linked yet, so the three steps lead (no computers' line); the
+    # computer's facts are on its card under Help & support
+    ok(pg.locator("#app [data-pc-line]").count() == 0 and pg.locator('#app [data-connect-step="install"][data-done]').count() == 1 and "2 companies open in Tally on NWS144" in pg.inner_text("#app [data-connect-guide]"),
+       "5. the steps: installed, 2 companies open (the count, not the names) (%s)" % pg.inner_text("#app [data-connect-guide]").replace("\n", " ")[:160])
     ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-details]").count() == 1,
        "5. no card and no table: the download and the details behind More")
     t = pg.inner_text("#app")

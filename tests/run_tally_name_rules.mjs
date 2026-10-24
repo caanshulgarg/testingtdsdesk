@@ -1,7 +1,7 @@
 // node tests/run_tally_name_rules.mjs - the one rule for linking a client to its Tally company (server/_shared/tallyname.js,
 // 23-Oct-2026: Salesify was linked by itself to VMS EVENTS, and its own company "SALESIFY MARKETING LLP - (from 1-Apr-25)"
 // never matched "Salesify Marketing LLP"). The names are the firm's own from staging.
-import { tallyNameKey, sameTallyName, autoLinkFor, suggestFor, similarClients, clientNameFromTally } from "../server/_shared/tallyname.js";
+import { tallyNameKey, sameTallyName, tallyYearKey, autoLinkFor, suggestFor, similarClients, clientNameFromTally } from "../server/_shared/tallyname.js";
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 
@@ -56,5 +56,11 @@ ok(d.length === 1 && d[0].client.id === S2.id && d[0].why === "same", "a new cli
 ok(similarClients("Zeta Ltd", "06AEVFS5010H1ZV", [S2, GS])[0].why === "gstin", "the same GSTIN is a duplicate whatever the name");
 ok(similarClients("Salesify Marketing", "", [S2])[0].why === "like", "a name much alike is said too");
 ok(similarClients("Gamma Industries", "", [S2, GS]).length === 0, "another name: no warning");
+// 5. years of one business (24-Oct-2026, next-tally-one-page): a bare year at the end is one more period; the automatic
+// rule (tallyNameKey, autoLinkFor) is unchanged
+ok(tallyYearKey("Salesify Marketing LLP 2026-27") === tallyYearKey("SALESIFY MARKETING LLP - (from 1-Apr-25)"), "a new year 'Salesify Marketing LLP 2026-27' is the same business as '- (from 1-Apr-25)'");
+ok(tallyYearKey("VMS EVENTS PRIVATE LIMITED (2024-25)") === tallyYearKey("VMS Events Pvt Ltd FY 2025-26"), "'FY 2025-26' too");
+ok(tallyYearKey("Company 21") !== tallyYearKey("Company") && tallyYearKey("Alpha 123 Traders") === "alpha 123 traders", "a number that is not a year stays");
+ok(!sameTallyName("Salesify Marketing LLP 2026-27", "Salesify Marketing LLP"), "tallyNameKey unchanged: FinCom does not link a bare-year company by itself");
 console.log(fails ? "\n" + fails + " failed" : "\nall passed");
 process.exit(fails ? 1 : 0);

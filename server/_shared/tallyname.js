@@ -37,6 +37,13 @@ function tallyNameKey(s) {
   return t;
 }
 function sameTallyName(a, b) { const x = tallyNameKey(a); return !!x && x === tallyNameKey(b); }
+// one business's years (24-Oct-2026, next-tally-one-page; Suvit: "a split copy can replace the original"): the key with a
+// bare year at the end taken off too ("Salesify Marketing LLP 2026-27", "X FY 2026-27", "X 2026"), so a new year's company
+// is offered for the client of the year before. Used by the app only (its "New year of <client>"); tallyNameKey, and so
+// what FinCom links by itself (autoLinkFor), are unchanged.
+function tallyYearKey(s) {
+  return tallyNameKey(s).replace(/(?:\s+(?:fy|f y|from|for|year))?\s+(?:(?:19|20)\d\d(?:\s+\d{2,4})?|\d\d\s+\d\d)$/, "").trim();
+}
 
 const tnGstKey = (g) => String(g || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
 const TN_GST = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
@@ -114,4 +121,4 @@ function clientNameFromTally(company) {
   for (let i = 0; i < 3; i++) { const u = t.replace(TN_PERIOD, "").replace(TN_TAIL, "").trim(); if (u === t) break; t = u; }
   return t || String(company || "").trim();
 }
-export { tallyNameKey, sameTallyName, autoLinkFor, nameScore, suggestFor, similarClients, clientNameFromTally };
+export { tallyNameKey, sameTallyName, tallyYearKey, autoLinkFor, nameScore, suggestFor, similarClients, clientNameFromTally };

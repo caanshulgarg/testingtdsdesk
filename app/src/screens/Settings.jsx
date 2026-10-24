@@ -19,7 +19,6 @@ import AutoPostSettings from "../parts/AutoPostSettings.jsx";
 import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
-import TallyLink from "../parts/TallyLink.jsx";
 import BooksSource from "../parts/BooksSource.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
@@ -113,9 +112,9 @@ function firmGroups() {
         status: a && a.firm ? (a.firm.plan ? a.firm.plan.name : "no plan") + " · " + money(num(a.firm.balance)) + " left" : "" },
     ] },
     { title: "Tally", items: [
-      { id: "bridge", label: "Connect Tally", about: "Connecting Tally (six steps), its status, and help: all on the one Tally page in the sidebar.",
+      { id: "bridge", label: "Connect Tally", about: "Connecting Tally, its companies and clients, and help: all on the one Tally page in the sidebar.",
         status: "Tally: " + tallyStatus(null).label + (Bridge.on() && Bridge.up() && !Bridge.st.tallyUp ? " (bridge here running, Tally not open)" : "") },
-      { id: "tcloud", label: "Books in the cloud", about: "Computers that send Tally’s books to the firm account, and which Tally company is which client.",
+      { id: "tcloud", label: "Books in the cloud", about: "The computers that send Tally’s books to the firm account (which company is which client: the Tally page).",
         status: "Tally: " + tallyStatus(null).label },
       { id: "postlog", label: "Sent to Tally", about: "A record of every entry posted to Tally, by whom and when: it is kept on the Tally page.", status: (S.firm.postLog || []).length + " entries" },
     ] },
@@ -164,7 +163,7 @@ export function FirmSettings() {
     plan: () => <><PlanCredit /><RecordsUsed /></>,
     batches: () => <Suspense fallback={<p className="note">Loading…</p>}><Batches /></Suspense>,
     // clean-up batch 2: one home each, the Tally page; here one line that leads there
-    bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (six steps, its status, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
+    bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (its companies, which client each is, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,
     tcloud: () => <CloudBooks />,
     postlog: () => <Card><HomeLink id="sent" text="One record for every client: what was sent, by whom and when." link="Open it on the Tally page" go={() => { goTallyPage("sent"); S.logAll = true; render(); }} /></Card>,
     gstapi: () => <GstApiAll />,
@@ -417,7 +416,7 @@ function clientGroups() {
   return [
     { title: "The client", items: [
       it("settings", "Who the client is: name, GSTIN and PAN.", co.gstin || "no GSTIN yet"),
-      it("cotally", "Which Tally company entries go into, how they are numbered, and the round-off ledger.", "Tally: " + (tallyLinkOf(co).state === "needs" ? tallyLinkOf(co).word : clientTallyState(co).word) + (tallyLinkOf(co).company ? " · " + tallyLinkOf(co).company : "")),
+      it("cotally", "How entries are numbered and the round-off ledger; the client's company in Tally is on the Tally page.", "Tally: " + clientTallyState(co).word + (clientTallyState(co).company ? " · " + clientTallyState(co).company : "")),
     ] },
     { title: "Tax", items: [
       it("cotds", "Whether the client deducts TDS, and the expense ledger of each payment type (TDS ledgers: on the TDS page).", co.mustDeduct === false ? "does not deduct" : "deducts TDS"),

@@ -968,9 +968,9 @@ const TCloud = {
   },
   // true when the cloud took it (round 39: the Link to Tally card sets the client's Tally name only then)
   async link(company, client){
-    let ok = false;
+    let ok = false; this.linkErr = "";
     try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); ok = true; toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
-    catch (e){ toast("Could not link it: " + ((e && e.message) || e)); }
+    catch (e){ this.linkErr = String((e && e.message) || e); toast("Could not link it: " + this.linkErr); }
     await this.refreshPane();
     return ok;
   }
@@ -1592,7 +1592,7 @@ function tallyHm(t){
 function tallyLine(co){
   if (!co) return null;
   const st = (typeof TLight === "object" && TLight.st) || {}, now = Date.now();
-  const link = (st.cos || []).find(c => c.client_id === co.id && c.device_id);
+  const link = tallyRowOf(co, st.cos);
   const dev = link && (st.devs || []).find(d => d.id === link.device_id && !d.revoked);
   let comp = "", beat = null, bridge = "online", tally = "closed", since = "", paused = false, read = "", notOpen = false;
   if (dev){
@@ -1607,7 +1607,9 @@ function tallyLine(co){
     const lists = [beat.open].concat(Object.values(info.bridges || {}).map(b => b && b.open)).filter(Array.isArray);
     const k = n => ledNm(String(n || "")).toLowerCase();
     notOpen = lists.length > 0 && !lists.some(l => l.some(n => k(n) === k(link.company)));
-  } else if (typeof Bridge === "object" && Bridge.on() && Bridge.up() && Bridge.openFor(co) && Bridge.openFor(co).name){
+  } else if (!(typeof TCloud === "object" && TCloud.on()) && typeof Bridge === "object" && Bridge.on() && Bridge.up() && Bridge.openFor(co) && Bridge.openFor(co).name){
+    // (24-Oct-2026: only without FinCom's cloud: with it, the cloud's link alone says a client is linked; a Tally name left
+    // on a client, matched by the bridge here, made "Testing AAD" look linked to GARG SHEKHAR & COMPANY)
     // no word from the cloud for it: the bridge on this computer
     const b = Bridge.st || {}, man = (typeof LK === "object" && LK.fr ? (LK.fr() || {}).man : null) || {};
     comp = b.computer || "this computer"; tally = b.tallyState || (b.tallyUp ? "open" : "closed");
@@ -2181,17 +2183,18 @@ function tallyHereNow(co){
     at: B && B.okAt ? B.okAt : 0, hint: "", next: [], other}, o || {});
   if (!on) return out("none", "idle", "Tally not on this computer", {short: "Not on this PC", computer: "", user: "",
     hint: "FinCom Bridge is not set up in this browser." + (firm.on ? "" : " Connect this computer to post to Tally from here."),
-    next: [{act: "tallyConnect", label: "Open Connect Tally"}]});
+    next: [{act: "tallyConnect", label: "Tally page"}]});
   if (!st.state || st.state === "off") return out("checking", "idle", "Checking Tally…", {short: "Checking…"});
   if (st.state === "key") return out("key", "bad", "Bridge not connected", {hint: "FinCom Bridge on this computer did not accept this browser's key. Connect again with the 6-digit code (right-click the FinCom icon near the clock → Connect FinCom on this computer…).",
-    next: [{act: "tallyConnect", label: "Open Connect Tally"}]});
+    next: [{act: "tallyConnect", label: "Tally page"}]});
   if (st.state !== "ok") return out("stopped", "bad", "Bridge stopped", {hint: "Start FinCom Bridge: its icon near the clock, or FinCom Bridge in the Start menu.", next: [check]});
   const tally = st.tallyState || (st.tallyUp ? "open" : "closed");
   if (tally === "closed") return out("closed", "warn", "Tally closed", {hint: "Open TallyPrime" + (want ? " and load " + want : "") + ".", next: [check]});
-  const here = co ? B.openFor(co) : null;
+  // (24-Oct-2026: with FinCom's cloud, a client not linked there is not linked, whatever Tally name it carries)
+  const linked = co && typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).state !== "unlinked" : true;
+  const here = co && (linked || !(typeof TCloud === "object" && TCloud.on())) ? B.openFor(co) : null;
   if (co && !here){
-    const linked = typeof tallyLinkOf === "function" ? (tallyLinkOf(co) || {}).state !== "unlinked" : true;
-    if (!linked && (st.open || []).length) return out("unlinked", "warn", "Company not linked", {hint: co.name + " is not linked to a Tally company yet.", next: [{act: "connectTally", label: "Open Connect Tally"}]});
+    if (!linked && (st.open || []).length) return out("unlinked", "warn", "Company not linked", {hint: co.name + " is not linked to a Tally company yet.", next: [{act: "connectTally", label: "Tally page"}]});
     return out("nocompany", "warn", "Company not open", {hint: "Open " + want + " in TallyPrime" + (user ? " (" + user + ")" : "") + ".", next: [check]});
   }
   const company = here ? here.name : (st.open || []).map(x => x.name).join(", ");
@@ -2233,43 +2236,40 @@ function tallyHistory(){
   });
   return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
 }
-// The Tally companies a new client can be linked to (02-Oct-2026: "Add client" links to a company the bridge sees open,
-// and sets the one company the client may post to, in one step): the ones open in Tally through the bridge on this
-// computer, and the ones the firm's Tally computers have reported (tally_companies, and what their heartbeats say is
-// open). Each: {name, gstin, client (linked to), open (seen open now), where, reported (the cloud can link it)}
-function tallyCompaniesSeen(){
-  const by = new Map(), put = (name, x) => { const n = ledNm(name); if (!n) return; by.set(n, Object.assign(by.get(n) || {name: n, gstin: "", client: "", open: false, where: "", reported: false}, x)); };
-  if (typeof Bridge === "object" && Bridge.up()) (Bridge.st.open || []).forEach(o => put(o.name, {open: true, where: "open in Tally on this computer"}));
-  const p = typeof TCloud === "object" ? TCloud.pane : null;
-  ((p && p.devices) || []).filter(d => !d.revoked).forEach(d => {
-    const info = d.info || {}, comp = info.computer || d.name;
-    [].concat((info.beat || {}).open || []).concat(...Object.values(info.bridges || {}).map(b => b.open || [])).forEach(n => put(n, Object.assign({open: true}, (by.get(ledNm(n)) || {}).where ? {} : {where: "open in Tally on " + comp})));
-  });
-  ((p && p.companies) || []).forEach(c => put(c.company, Object.assign({reported: true, gstin: c.gstin || "", client: c.client_id || ""}, by.has(ledNm(c.company)) ? {} : {where: "seen by the firm's Tally computer"})));
-  return Array.from(by.values()).sort((a, b) => (a.client ? 1 : 0) - (b.client ? 1 : 0) || (b.open ? 1 : 0) - (a.open ? 1 : 0) || a.name.localeCompare(b.name));
-}
 // Round 39 (10-Oct-2026, the owner: "can't tell if a client is linked, when it will link, or whether he needs a port"):
 // a person links a client to its Tally company in one action. The cloud link (tally_company_link, the same RPC as
 // Settings → Books in the cloud) and the client's Tally name (co.tallyName, what the bridge on this computer matches by)
 // are set together; the name only once the cloud took the link. cid null: unlinked (the name is kept).
-async function tallyLinkClient(company, cid){
+// 24-Oct-2026 (next-tally-one-page; the owner unlinked Salesify and could not link it again): ONE source of truth, the
+// cloud's link (tally_companies.client_id). opts.keep: a new year's company linked beside the one before (the client keeps
+// both books); otherwise the client's other companies are unlinked once the new link is taken. A company linked to
+// another client moves only when the person said so (opts.move: the list asks once). Unlinking clears the client's Tally
+// name too (it is only a hint), and the books' copy kept here for the clients concerned is read again.
+async function tallyLinkClient(company, cid, opts){
   if (typeof TCloud !== "object" || !TCloud.on() || !company) return false;
-  const co = cid ? CO(cid) : null;
+  opts = opts || {};
+  const co = cid ? CO(cid) : null, all = [].concat((typeof TLight === "object" && TLight.st.cos) || [], TCloud.pane.companies || []);
+  const was = Array.from(new Set(all.filter(r => r && r.company === company && r.client_id).map(r => String(r.client_id))));
+  if (cid && !opts.move && was.some(x => x !== String(cid))){ toast(company + " is linked to " + ((CO(was.find(x => x !== String(cid))) || {}).name || "another client") + ": move it from its row on the Tally page."); return false; }
   if (co){ try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){} }
-  // 23-Oct-2026: a change of company moves the client: the companies it was linked to before are unlinked in the cloud
-  // too, once the new link is taken (it used to look moved here only, the old link staying in the cloud)
-  const before = cid ? Array.from(new Set([].concat((typeof TLight === "object" && TLight.st.cos) || [], TCloud.pane.companies || [])
-    .filter(r => r && r.company && r.company !== company && String(r.client_id || "") === String(cid)).map(r => r.company))) : [];
+  const before = cid && !opts.keep ? Array.from(new Set(all.filter(r => r && r.company && r.company !== company && String(r.client_id || "") === String(cid)).map(r => r.company))) : [];
   const ok = await TCloud.link(company, cid || null);
   if (!ok) return false;
   for (const old of before){ try { await TCloud.rpc("tally_company_link", {p_company: old, p_client: null}); } catch (e){ toast("Could not unlink " + old + ": " + ((e && e.message) || e)); } }
   // what this browser shows follows at once; the next read of the cloud confirms it
-  const mark = rows => (rows || []).forEach(r => { if (r.company === company) r.client_id = cid || null; else if (cid && r.client_id === cid) r.client_id = null; });
+  const mark = rows => (rows || []).forEach(r => { if (r.company === company) r.client_id = cid || null; else if (before.includes(r.company)) r.client_id = null; });
   if (typeof TLight === "object"){ mark(TLight.st.cos); TLight.st.at = 0; }
   mark(TCloud.pane.companies);
-  if (co && co.tallyName !== company){ co.tallyName = company; Store.saveCompany(co); }
+  [cid].concat(was).filter(Boolean).forEach(x => { if (TCloud.st[x]) TCloud.st[x].at = 0; });
+  if (co && co.tallyName !== company && !opts.keep){ co.tallyName = company; Store.saveCompany(co); }
+  // unlinked (or moved away): the client it left keeps no Tally name that names it
+  was.filter(x => x !== String(cid || "")).forEach(x => { const k = CO(x); if (k && k.tallyName && !all.some(r => r.company !== company && String(r.client_id || "") === x)){ k.tallyName = ""; Store.saveCompany(k); } });
   render();
   return true;
+}
+// the client's company in the cloud's link: of several (a client with a company a year), the latest seen
+function tallyRowOf(co, rows){
+  return co ? (rows || []).filter(c => c && String(c.client_id || "") === String(co.id)).sort((a, b) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0] || null : null;
 }
 // The one link state of a client, in four words, for its Link to Tally card (app/src/parts/TallyLink.jsx), the Clients
 // list and the top bar's sign:
@@ -2291,10 +2291,12 @@ function tallyLinkOf(co){
   const cloud = typeof TCloud === "object" && TCloud.on();
   // the companies as TLight last read them (every 30 s), else as the Tally page read them
   const cos = (st.cos && st.cos.length ? st.cos : pane.companies) || [];
-  const row = cos.find(c => String(c.client_id || "") === String(co.id));
+  const row = tallyRowOf(co, cos);
   const l = tallyLine(co), local = !cloud && l && typeof Bridge === "object" ? Bridge.openFor(co) : null;
-  // the cloud's copy of this client's books names its company too (tally_books, TCloud.book)
-  const bk = cloud && TCloud.book ? TCloud.book(co.id) : null;
+  // 24-Oct-2026: the cloud's link alone (tally_companies). The books' copy kept here (TCloud.book) named the company for
+  // minutes after an unlink, so the client still looked linked and its company was not offered again
+  // (until the cloud's companies are first read, the books' copy says it, so a linked client does not flash "Not linked")
+  const bk = cloud && !st.loaded && !Array.isArray(pane.companies) && TCloud.book ? TCloud.book(co.id) : null;
   const company = (row && row.company) || (bk && bk.company) || (local && local.name) || "";
   const dev = row && row.device_id && [].concat(st.devs || [], pane.devices || []).find(d => d.id === row.device_id);
   // 23-Oct-2026: when the company was last seen by a computer (any row of it: TLight's or the Tally page's), and whether

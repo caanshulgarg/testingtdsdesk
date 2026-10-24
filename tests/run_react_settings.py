@@ -51,7 +51,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("CO().name") == "ZZ Zeta Exports Pvt Ltd", "the client's name")
     save()
     nav("Tally"); pg.wait_for_timeout(300)
-    ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 1, "Tally section (the client's Tally card; 15-Oct-2026 it points to Connect Tally)")
+    ok(head() == "Tally" and pg.locator("#app .setbody [data-tally-link]").count() == 0 and pg.locator("#app .setbody [data-tally-one]").count() == 1, "Tally section: one line for the client's Tally (24-Oct-2026: linked on the Tally page only)")
     pg.check('#app label:has-text("Purchase voucher") input[type=radio]'); pg.wait_for_timeout(300)   # review item 36: a choice, not a list
     pg.click('#app label:has-text("Optional vouchers") input'); pg.wait_for_timeout(300)
     ok(pg.evaluate("CO().voucherType") == "Purchase" and pg.evaluate("CO().createOptional") is False, "voucher type and Optional vouchers")

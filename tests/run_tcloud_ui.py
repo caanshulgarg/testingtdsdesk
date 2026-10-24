@@ -191,7 +191,8 @@ with sync_playwright() as p:
     pg.evaluate("S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render();")
     wait_for(pg, "TCloud.pane.devices && TCloud.pane.companies", 20); pg.evaluate("render()"); pg.wait_for_timeout(300)
     t = pg.inner_text("#app")
-    ok("OFFICE-PC" in t and CO in t and "Nothing to press" in t and "Connect this computer" not in t, "Settings shows the computers that send and the companies seen; no button to connect")
+    # 24-Oct-2026 (next-tally-one-page): which client each company is: the Tally page's list only (Settings points there)
+    ok("OFFICE-PC" in t and CO not in t and "Nothing to press" in t and "Connect this computer" not in t and "Companies in Tally" in t, "Settings shows the computers that send, no companies' table (it points to Companies in Tally); no button to connect")
     # 15-Oct-2026: Settings links nothing itself; its Open Connect Tally leads to the guide's step 4, where the same RPC links
     ok(pg.locator('select[aria-label="Client for ' + CO + '"]').count() == 0 and pg.locator('#app [data-open-connect="4"]').count() >= 1, "Books in the cloud: no Link here, Open Connect Tally")
     # c_vms already has the cloud's copy of CO's books (so step 4 shows it as linked, with no Link to press); a second

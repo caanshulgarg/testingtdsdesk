@@ -37,7 +37,8 @@ SETUP = """async () => {
   TCloud.st[c.id] = {at: Date.now(), books: [{from: "2025-04-01", book: "bk1", company: "GARG SHEKHAR & COMPANY"}]};
   TCloud.pane = {devices: [{id: "d-1", name: "NWS144", main_bridge: "go-1", revoked: false, info: {computer: "NWS144", user: "anshul", beat: {at: now, every: 30, tally: true, tallyState: "open", open: ["GARG SHEKHAR & COMPANY"], computer: "NWS144"}, bridges: {"go-1": {computer: "NWS144", user: "anshul", version: "2.1.1", mode: "main", at: now, tallyState: "open", open: ["GARG SHEKHAR & COMPANY"]}}}}],
     companies: [{company: "GARG SHEKHAR & COMPANY", client_id: c.id, gstin: "09AANFG3202D1ZR"}], busy: "", err: "", at: Date.now()};
-  TCloud.restAll = async (u) => /tally_post_jobs/.test(u) ? [] : [];
+  // (the Tally page reads the companies again: the same link)
+  window.__cos = TCloud.pane.companies; TCloud.restAll = async (u) => /tally_companies/.test(u) ? JSON.parse(JSON.stringify(window.__cos)) : [];
   TCloud.rpc = async (fn, a) => { window.__rpc.push([fn, JSON.parse(JSON.stringify(a))]);
     if (fn === "tally_post_enqueue") return window.__enqueue;
     if (fn === "tally_post_record"){ if (window.__noRecord) throw {message: "Could not find the function public.tally_post_record(p_client, ...) in the schema cache"}; return {ok: true, id: a.p_id}; }
@@ -74,14 +75,15 @@ with sync_playwright() as p:
     ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
     # #11 (the owner's rule of 05-Oct-2026): any member who may write confirms the posting company (who and when kept);
     # round 39: the tick on the client's Link to Tally card, "Post this client's entries into X"
-    E("() => { window.__acct = S.account; S.account = Object.assign({}, S.account || {}, {me: Object.assign({}, (S.account || {}).me || {}, {role: 'staff'})}); S.postStop = null; S.step = null; S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(500)
-    pt = pg.inner_text("#app [data-tally-link-post]") if pg.locator("#app [data-tally-link-post]").count() else ""
-    ok(pg.locator('#app [data-tally-link-post-tick]:not([disabled])').count() == 1 and not pg.is_checked('#app [data-tally-link-post-tick]') and "Found by FinCom" in pt and "An owner of the firm" not in pt,
-       "#11. staff: the found company is not ticked, and can be ticked (no 'An owner of the firm chooses it') (%s)" % pt.replace("\n", " ")[:160])
-    pg.click('#app [data-tally-link-post-tick]'); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
+    # 24-Oct-2026 (next-tally-one-page): "Post entries here" on the client's row of the Tally page (its ⋯), asked first
+    E("() => { window.__acct = S.account; S.account = Object.assign({}, S.account || {}, {me: Object.assign({}, (S.account || {}).me || {}, {role: 'staff'})}); S.postStop = null; goChooseTallyCompany(); }"); pg.wait_for_timeout(1200)
+    rsel = '#app [data-tco-list=firm] [data-tco-row="%s"]' % GARG
+    ok(E("S.homeTab") == "tally" and pg.locator(rsel + " [data-tco-post-here]").count() == 1 and pg.locator(rsel + " [data-tco-post-stop]").count() == 0,
+       "#11. staff: Choose the Tally company opens its row on the Tally page; the found company is not chosen, and can be (⋯ Post entries here)")
+    pg.click(rsel + " [data-tco-more] summary"); pg.wait_for_timeout(250); pg.click(rsel + " [data-tco-post-here]"); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
     pc = E("(() => { const r = choiceGet(CO(), 'postTo'); return {state: r && r.state, by: !!(r && r.by), at: !!(r && r.at)}; })()")
     ok(pc == {"state": "confirmed", "by": True, "at": True}, "#11. staff's Confirm: confirmed, with who and when kept (%s)" % pc)
-    E("() => { S.account = window.__acct; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
+    E("() => { S.account = window.__acct; S.view = 'company'; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
     ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY on NWS144 (anshul) · Tally ready · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
@@ -132,8 +134,8 @@ with sync_playwright() as p:
        "B14. the bills stay under Post to Tally, waiting, not failed nor sent (%s)" % st)
     ok(any(r[0] == "tally_post_enqueue" for r in E("window.__rpc")), "B11. the posting went to the cloud queue (the client is linked there)")
     pg.click("#app [data-not-allowed] [data-choose-company]"); pg.wait_for_timeout(500)
-    ok(E("S.tab") == "cotally" and pg.locator("#app [data-tally-link-post]").count() == 1, "B14. the button opens Client setup → Tally (the Link to Tally card and its posting tick)")
-    E("() => { goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
+    ok(E("S.homeTab") == "tally" and pg.locator("#app [data-tco-post-here], #app [data-tco-post-stop]").count() == 1, "B14. the button opens the client's row on the Tally page (⋯ Post entries here)")
+    E("() => { S.view = 'company'; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     # B11: with the bridge on this computer too, the posting goes through the queue (not to /jobs)
     E("""() => { window.__rpc = []; window.__enqueue = {ok: true}; S.postStop = null; window.__direct = 0;
       Bridge.on = () => true; Bridge.up = () => true; Bridge.st = Object.assign({}, Bridge.st, {state: "ok", version: "2.1.1", tallyUp: true, open: [{name: "GARG SHEKHAR & COMPANY", port: 9000, gstin: "09AANFG3202D1ZR"}]});
