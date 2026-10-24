@@ -82,6 +82,8 @@ export function Gstr1({ b, sub }) {
     <p className="note" data-r1-books="" style={{ margin: "8px 2px 0" }}>In the books this month: {g.total.n} document{g.total.n === 1 ? "" : "s"} · taxable {money(g.total.taxable)} · tax {money(g.total.igst + g.total.cgst + g.total.sgst)}
       {adv && (adv.at.length > 0 || adv.txpd.length > 0) ? <> · advances: <button className="linkbtn" onClick={() => gstPartGo("adv")}>see them</button></> : null}</p>
     <AdvLine />
+    {/* next-gstr1-excel: the month's GSTR-1 corrected in FinCom (an Excel brought back): said once, with when */}
+    {typeof R1Fix === "object" && (() => { const f = R1Fix.info(S.gstYm || "", S.gstReg || ""); return f && f.cur ? <p className="note" data-r1x-note="" style={{ margin: "4px 2px 0" }}>This month’s GSTR-1 has {f.n} correction{f.n === 1 ? "" : "s"} made in FinCom (the Excel brought back{f.cur.at ? " on " + fmtDate(String(f.cur.at).slice(0, 10)) : ""}): the tables, the JSON and 3B’s 3.1 include them; the books are not changed.</p> : null; })()}
     </>}
     {on("details") && <>
     {/* round 72 (the owner: "should match the GSTN schema"): the portal's tables first; t70's one row a bill, and By

@@ -479,3 +479,4 @@ details.more .more-words p{margin:0 0 6px}
 #app [data-r3b-portal] tr.r3b-groups th.r3b-grp { text-align: center; border-bottom: 1px solid var(--border); }
 #app table.bk-table td.r1p-nw { white-space: nowrap; }
 #app [data-r1-portal] table.bk-table thead th { white-space: normal; vertical-align: bottom; }
+.ret-card .r1x-bar{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}

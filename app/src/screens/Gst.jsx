@@ -43,6 +43,8 @@ import { r1Lists, r1BillsExcel } from "./gst/R1Bills.jsx";
 import { r1PortalExcel } from "./gst/R1Portal.jsx";
 import { Answer } from "../parts/Answer.jsx";
 import BrowserHelper from "./gst/BrowserHelper.jsx";
+// next-gstr1-excel: GSTR-1 as an Excel to download, change (add, delete, modify) and bring back
+import R1ExcelBar from "./gst/R1Excel.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (s) => (s ? GSTAmend.dmy(String(s).replace(/-/g, "")) : "");
@@ -186,6 +188,7 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
       {ctx}
       <div className="ret-acts">
         {prefile && <span data-prefile-bar="">{prefile}</span>}
+        {part === "r1" && !noReturn && <span className="r1x-bar" data-r1x-bar="">{<R1ExcelBar ym={ym} reg={reg} />}</span>}
         <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]]}>
           <p>Check the JSON in the portal’s offline tool before filing.</p></More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}

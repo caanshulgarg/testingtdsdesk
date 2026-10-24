@@ -24,6 +24,9 @@ import "./lib/tdsEdit.js";
 import "./lib/itcSync.js";
 // next-itc-simple: the credit of GSTR-3B table 4 from the decisions in 2B reconciliation and the adjustments (wraps GSTR.threeBm)
 import "./lib/itcFinal.js";
+// next-gstr1-excel: FinCom's GSTR-1 corrections (an Excel brought back) laid over GSTR.toJson and 3B's 3.1 (wraps them).
+// Its own file (the first file is at its size budget), fetched at once; the GST screen imports it too
+import("./lib/gstr1Fix.js").then(() => { try { if (typeof S === "object" && S.books && S.books.r1Fix) render(); } catch (e) { /* drawn later */ } }).catch((e) => staleReload(e, true));
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)
