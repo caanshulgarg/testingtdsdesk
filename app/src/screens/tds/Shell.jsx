@@ -14,6 +14,7 @@ import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
 import { openAllChallans } from "./AllChallans.jsx";
+import { excelItems, ExcelBox } from "./TdsExcel.jsx";
 
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 export const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -108,7 +109,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(more);
+  // next-tds-excel: the whole return as one Excel, down and back up (tds/TdsExcel.jsx), in every return's ⋯
+  const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(excelItems(form, fy, q), more);
   return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
       <button className="linkbtn ret-back" onClick={() => tdsGo(fy)} aria-label={"Back to TDS " + fy} title={"Back to TDS " + TDS.yearWord(fy) + " " + fy}>← TDS {fy}</button>
@@ -131,5 +133,6 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
         {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id !== "file" && s.count != null ? " · " + s.count : ""}</option>)}</select></label>
     <div className="rt-main" data-ret-step={cur}>{children}</div>
+    <ExcelBox form={form} fy={fy} q={q} />
   </div>;
 }

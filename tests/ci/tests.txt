@@ -474,3 +474,7 @@ run_2b_follow_ui.py                   240  TDSDESK_SITE=../app/dist-test
 # credit for 3B with adjustments), 3B figures in windows, the Excel round trip (LibreOffice when present)
 run_itc_final.js                      120
 run_itc_simple_ui.py                  600  TDSDESK_SITE=../app/dist-test
+# next-tds-excel (24-Oct-2026, the owner: "download and upload return .. in all types of TDS return.. add or delete or modify"; "add
+# challan, add deduction, add deductee within this smart excel.. dynamic"; "challan balance"): a return as one Excel and back
+run_tds_excel.js                      120
+run_tds_excel.py                      600  TDSDESK_SITE=../app/dist-test @libreoffice
