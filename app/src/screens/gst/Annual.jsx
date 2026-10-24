@@ -29,7 +29,7 @@ export function Gst9({ b }) {
       <Legacy html={GST9.html(d)} />
       {Math.abs(gap6J) >= 1 && <p className="bk-alert">{"6J: ₹" + m(gap6J) + " of the credit in the 3Bs is not in 6B to 6H. It usually comes from bills marked as ITC not available, or credit entered in a 3B that is not in the books; check before filing."}</p>}
       {d.heldEnd && Math.abs(gap6J + d.heldEnd) < 2 ? <p className="note">{"6J: ₹" + m(d.heldEnd) + " of this year’s bills was held back from 3B because it was not in 2B by March; it is taken in next year’s returns and belongs in 8C and 13 when it is."}</p> : null}
-      <p className="note">{"Table 8C and 13 count bills of this year booked in Tally from April to November of the next year; table 12, this year’s credit reversed then (₹" + m(all4(b12)) + " in the books). Figures that are not in the books are typed below."}</p>
+      <p className="note">{"Table 8C and 13 count bills of this year booked in Tally from April to November of the next year, and credit of this year’s bills kept in a “not shown in 2B” ledger that the books move to the input ledger then; table 12, this year’s credit reversed then (₹" + m(all4(b12)) + " in the books). Figures that are not in the books are typed below."}</p>
     </section>
     <Card title="Figures not in the books">
       <p className="note">Amendments made on the portal, credit from an ISD, reversals under rules 37 and 39, refunds and demands, late fee. Typed here, they go into the tables above and into the PDF and Excel.{b12 && (b12.igst + b12.cgst + b12.sgst) ? " Table 12 is taken from the books unless typed." : ""}</p>
