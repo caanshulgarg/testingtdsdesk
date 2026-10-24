@@ -5,7 +5,7 @@ repository. These are the same rounds as the code review (bridge-2.4.7-code-revi
 correctness and security together. Claude Code's security-review command could not run in this session, because it needs
 origin/HEAD in the checkout, so its scope was given to those sessions.
 
-Range: 3e00356f0..61fb40fec
+Range: 3e00356f0..281635423
 
 ## What was closed (the 2.4.6 security review's "for the owner" items, the owner's "yes" of 24-Oct-2026)
 
