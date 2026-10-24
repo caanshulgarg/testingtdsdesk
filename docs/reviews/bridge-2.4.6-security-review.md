@@ -6,7 +6,7 @@ the whole range, and rounds 4 to 7 re-reviewed its fixes for correctness and sec
 command could not run in this session: it needs origin/HEAD in the checkout, the same limit as for 2.4.5. Its scope was
 given to the round-3 session instead.
 
-Range: 69de7a79d..3f5575332
+Range: 69de7a79d..ff082c4df
 
 ## Security checks made (on the final code)
 
