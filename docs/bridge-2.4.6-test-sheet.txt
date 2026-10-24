@@ -1,7 +1,7 @@
 FINCOM 2.4.6 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.6.exe
-Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 a64a93cf596a1c644ee352ed69ca75b7ff53d689e481d224f654abd9f4a55917 (FinComBridge-Setup-2.4.6.exe, built 24-Oct-2026 22:12 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.6 changes (the owner's approval of 24-Oct-2026; nothing else changes, and nothing new is asked of Tally):
 A. The installer's last page has a ticked "Open FinCom to connect". Press Finish: FinCom opens in your browser with this
