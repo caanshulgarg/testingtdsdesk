@@ -461,7 +461,8 @@ func TestR247TrayNeverSendsTheKey(t *testing.T) {
 	mu.Lock()
 	bs := append([]string{}, bodies...)
 	mu.Unlock()
-	if len(bs) != 1 || strings.Contains(bs[0], "on") || !regexp.MustCompile(`^[0-9a-f]+$`).MatchString(bs[0]) {
+	raw, _ := hex.DecodeString(bs[0])
+	if len(bs) != 1 || len(raw) == 0 || strings.Contains(string(raw), `"on"`) || strings.Contains(bs[0], hex.EncodeToString([]byte(`"on"`))) {
 		t.Fatalf("the body on the wire: %v", bs)
 	}
 	// sealed under another challenge: refused
@@ -561,5 +562,32 @@ func TestRelease247VersionAllowListUnchanged(t *testing.T) {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the test sheet does not say %q", w)
 		}
+	}
+}
+
+// review round 4: a reply the bridge did not MAC (a program that took the port after the proof) is not taken
+type dropReplyMAC struct{ http.ResponseWriter }
+
+func (d dropReplyMAC) WriteHeader(code int) {
+	d.ResponseWriter.Header().Del("X-Bridge-Reply-MAC")
+	d.ResponseWriter.WriteHeader(code)
+}
+
+func TestR247TrayTakesOnlyTheBridgesReply(t *testing.T) {
+	newPairStand(t, "")
+	strip := false
+	port := startOn(t, func(w http.ResponseWriter, r *http.Request) {
+		if strip && r.URL.Path != "/ping" {
+			w = dropReplyMAC{w}
+		}
+		handle(w, r)
+	})
+	setCfg("Port", float64(port))
+	if r := bridgeCall("GET", "/tray/status", nil, 2*time.Second); r == nil {
+		t.Fatal("the bridge's own reply not taken")
+	}
+	strip = true
+	if r := bridgeCall("GET", "/tray/status", nil, 2*time.Second); r != nil {
+		t.Fatalf("a reply without the bridge's MAC taken: %v", r)
 	}
 }

@@ -321,10 +321,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 	// 2.4.7: the key compared in constant time (as before, an install's settings always hold one), or the tray's one-use
 	// proof with its sealed body (pairopen.go trayRequest)
-	keyOK := hmac.Equal([]byte(cfgS("Key")), []byte(r.Header.Get("X-Bridge-Key")))
+	keyOK := cfgS("Key") != "" && hmac.Equal([]byte(cfgS("Key")), []byte(r.Header.Get("X-Bridge-Key")))
 	trayCh, trayOK := "", false
 	if !keyOK {
 		trayCh, trayOK = trayAuth(r)
+	}
+	if trayOK {
+		tw := &trayReplyWriter{ResponseWriter: w, key: cfgS("Key"), ch: trayCh}
+		defer tw.flush()
+		w = tw
 	}
 	if !keyOK && !trayOK {
 		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key. Copy the key shown in the bridge window into FinCom Settings."}, origin)

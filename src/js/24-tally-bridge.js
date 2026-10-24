@@ -306,7 +306,11 @@ const Bridge = {
     const pc = /^(\d{6})(?:-([0-9a-f]{32}))?$/.exec(code), digits = pc ? pc[1] : code, secret = pc && pc[2] ? pc[2] : "";
     const c = this.cfg(), usable = (b) => b && (b.pairProven || (!auto && b.spake));
     let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code), cands = usable(hit) ? [hit] : [];
-    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); if (f) cands = (this.lastOk || [f]).filter(usable); }
+    if (!(hit && hit.pairProven) && this.localUrl(base)){
+      this.foundAt = 0; const f = await this.find(code);
+      // the configured bridge keeps its place first for the one SPAKE2 run unless another proves the code
+      if (f) cands = (usable(hit) ? [hit] : []).concat((this.lastOk || [f]).filter(b => usable(b) && !(hit && b.url === hit.url)));
+    }
     const proven = cands.find(b => b.pairProven);
     // one SPAKE2 run per code typed, with the likeliest bridge (each run is one guess for whoever answers it)
     cands = proven ? [proven] : cands.slice(0, 1);

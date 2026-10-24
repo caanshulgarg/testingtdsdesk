@@ -317,7 +317,41 @@ func trayRequest(method, path string, body any, proofTimeout, timeout time.Durat
 	}
 	defer r.Body.Close()
 	b, _ := io.ReadAll(r.Body)
+	// the reply is the bridge's own: its MAC over this challenge, the status and the body (a program that took the port
+	// cannot make one up)
+	if !hmac.Equal([]byte(trayReplyMAC(key, ch, r.StatusCode, b)), []byte(r.Header.Get("X-Bridge-Reply-MAC"))) {
+		return nil
+	}
 	return parseObj(string(b))
+}
+
+func trayReplyMAC(key, ch string, status int, body []byte) string {
+	sum := sha256.Sum256(body)
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte(fmt.Sprintf("fincom-tray-reply|%s|%d|%x", ch, status, sum)))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// the bridge's side: a reply to the tray's proven request is held back and sent with its MAC (X-Bridge-Reply-MAC)
+type trayReplyWriter struct {
+	http.ResponseWriter
+	key, ch string
+	status  int
+	buf     []byte
+}
+
+func (w *trayReplyWriter) WriteHeader(code int) { w.status = code }
+func (w *trayReplyWriter) Write(b []byte) (int, error) {
+	w.buf = append(w.buf, b...)
+	return len(b), nil
+}
+func (w *trayReplyWriter) flush() {
+	if w.status == 0 {
+		w.status = 200
+	}
+	w.ResponseWriter.Header().Set("X-Bridge-Reply-MAC", trayReplyMAC(w.key, w.ch, w.status, w.buf))
+	w.ResponseWriter.WriteHeader(w.status)
+	_, _ = w.ResponseWriter.Write(w.buf)
 }
 
 func traySealKey(key, ch string) []byte {
