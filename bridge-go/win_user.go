@@ -422,12 +422,6 @@ func installUserCmd(args []string) int {
 	if code != 0 {
 		return code
 	}
-	if contains(args, "--pairopen") {
-		// 2.4.6: the setup asks for FinCom to open with the connect code at the first start (pairopen.go)
-		if err := markPairOpenDue(filepath.Dir(cfgPath)); err != nil {
-			installLog("Install: the first-start opening of FinCom could not be noted (" + err.Error() + ")")
-		}
-	}
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, regKey, registry.ALL_ACCESS)
 	if err != nil {
@@ -461,7 +455,10 @@ func installUserCmd(args []string) int {
 		return installFailed(5, "FinCom Bridge did not start ("+err.Error()+"); an antivirus may have blocked "+exe+".", "Allow FinCom Bridge in the antivirus, or sign out and in again; if it stays, send the install log to FinCom.")
 	}
 	_ = c.Process.Release()
-	return waitAnswer(cfgPath, true, "it starts when you sign in")
+	rc := waitAnswer(cfgPath, true, "it starts when you sign in")
+	// 2.4.6: the setup run by a person asks for FinCom to open with the connect code at the first start (pairopen.go)
+	notePairOpen(filepath.Dir(cfgPath), args, rc, installLog)
+	return rc
 }
 
 // uninstall --per-user: the start at sign-in and the record go, the bridge stops, and its own files (uninstall.go); bridge

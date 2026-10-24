@@ -209,17 +209,44 @@ func TestTrayConnectBridgeNotAnswering(t *testing.T) {
 
 func dueAt(t *testing.T, ago time.Duration, now bool) {
 	t.Helper()
-	if err := markPairOpenDue(Home); err != nil {
-		t.Fatal(err)
+	notePairOpen(Home, []string{"--pairopen"}, 0, func(string) {})
+	if !dueExists() {
+		t.Fatal("the install did not note the first start")
 	}
-	m := readObjFile(filepath.Join(Home, pairOpenDueName))
-	m["at"] = fmtTime(time.Now().Add(-ago))
-	m["now"] = now
-	b, _ := json.Marshal(m)
+	b, _ := json.Marshal(M{"at": fmtTime(time.Now().Add(-ago)), "version": BridgeVersion})
 	_ = os.WriteFile(filepath.Join(Home, pairOpenDueName), b, 0o644)
+	if now && connectCmd([]string{"--first"}) != 0 {
+		t.Fatal("connect --first")
+	}
 }
 
 func dueExists() bool { return exists(filepath.Join(Home, pairOpenDueName)) }
+
+// the install notes the first start only when a person ran the setup (--pairopen) and the bridge answers; an earlier
+// install's note is cleared either way
+func TestInstallNotesFirstStart(t *testing.T) {
+	newPairStand(t, "")
+	var said []string
+	logf := func(s string) { said = append(said, s) }
+	notePairOpen(Home, []string{"--mode", "sole"}, 0, logf) // silent setup: no --pairopen
+	if dueExists() {
+		t.Fatal("noted without --pairopen")
+	}
+	notePairOpen(Home, []string{"--pairopen"}, 4, logf) // installed but not answering
+	if dueExists() {
+		t.Fatal("noted for a failed install")
+	}
+	dueAt(t, time.Hour, true)
+	notePairOpen(Home, []string{"--pairopen"}, 1, logf) // the next install fails: the earlier note goes
+	if dueExists() || exists(filepath.Join(Home, pairOpenNowName)) {
+		t.Fatal("an earlier install's note kept")
+	}
+	notePairOpen(Home, []string{"--per-user", "--pairopen"}, 0, logf)
+	m := readObjFile(filepath.Join(Home, pairOpenDueName))
+	if str(m["version"]) != BridgeVersion || str(m["at"]) == "" || len(said) != 0 {
+		t.Fatalf("the note: %v %v", m, said)
+	}
+}
 
 // 2. the first start after the installer: once, after the Finish page had its chance (2 minutes), or at once when asked
 func TestFirstStartOpensOncePerInstall(t *testing.T) {
@@ -236,8 +263,8 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 		t.Fatal("opened before the Finish page had its chance")
 	}
 	dueAt(t, pairOpenGrace+time.Second, false)
-	if !truthy(trayStatus()["pairOpenReady"]) {
-		t.Fatal("not ready after the grace")
+	if !truthy(trayStatus()["pairOpenReady"]) || !dueExists() {
+		t.Fatal("not ready after the grace (or the status read changed it)")
 	}
 	if !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 || !rePairURL.MatchString(p.opened[0]) {
 		t.Fatalf("first start: opened %v", p.opened)
@@ -256,7 +283,7 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 	if c, _ := p.pair(code); c != 200 {
 		t.Fatal("the code did not pair")
 	}
-	if logLines("FinCom opened in the browser to connect this computer") != 1 {
+	if logLines("FinCom opened in the browser to connect this computer (the first start after the setup, session 1)") != 1 {
 		t.Error("no log line for the first-start open")
 	}
 	if tallySent.Load() != sent {
@@ -266,44 +293,54 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 
 func TestFinishPageAsksAtOnceOrDrops(t *testing.T) {
 	p := newPairStand(t, "")
-	dueAt(t, time.Second, false)
-	if r := p.call("POST", "/tray/pairopen", M{"action": "now"}); !truthy(r["ok"]) || !truthy(r["due"]) {
-		t.Fatalf("now: %v", r)
+	dueAt(t, time.Second, true) // ticked
+	if r := p.call("GET", "/tray/pairopen", nil); !truthy(r["due"]) || !truthy(r["now"]) || !truthy(r["ready"]) {
+		t.Fatalf("ticked: %v", r)
 	}
 	if !truthy(trayStatus()["pairOpenReady"]) || !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
 		t.Fatalf("Finish ticked: opened %v", p.opened)
 	}
+	if logLines("Open FinCom to connect ticked") != 1 {
+		t.Error("the log does not say the Finish page asked")
+	}
 	// ticked again after it was done (or with no install asking): nothing is made up
-	if r := p.call("POST", "/tray/pairopen", M{"action": "now"}); truthy(r["due"]) || dueExists() {
-		t.Fatalf("now with nothing due: %v", r)
+	connectCmd([]string{"--first"})
+	if dueExists() || truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
+		t.Fatal("connect --first with nothing due opened FinCom")
 	}
 	// unticked: dropped for good
 	dueAt(t, time.Second, false)
-	p.call("POST", "/tray/pairopen", M{"action": "skip"})
+	connectCmd([]string{"--skip"})
 	if dueExists() {
 		t.Fatal("unticked, still due")
 	}
 	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
 		t.Fatalf("opened after unticked: %v", p.opened)
 	}
-	if r := p.call("POST", "/tray/pairopen", M{"action": "other"}); truthy(r["ok"]) {
-		t.Fatalf("an unknown action: %v", r)
+	if r := p.call("POST", "/tray/pairopen", M{"action": "now"}); truthy(r["ok"]) {
+		t.Fatalf("the web server takes only the tray's take: %v", r)
 	}
 }
 
 func TestFirstStartNotWhenConnectedOrPaired(t *testing.T) {
-	// connected to FinCom already (an upgrade of a working computer): the first start opens nothing, the ask is dropped
+	// connected to FinCom already (an upgrade of a working computer): the first start opens nothing
 	p := newPairStand(t, `,"CloudUrl":"http://127.0.0.1:1","CloudKey":"plain:fcd_test"`)
 	dueAt(t, pairOpenGrace+time.Second, false)
 	if truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 {
 		t.Fatalf("connected: opened %v", p.opened)
 	}
-	if dueExists() {
-		t.Fatal("connected: the ask kept")
+	// the service of an upgrade whose computer key is still protected for the Windows user (not handed over yet): the
+	// same (connected before), though it cannot read the key
+	p = newPairStand(t, `,"CloudUrl":"http://127.0.0.1:1","CloudKey":"dpapi:AAAA"`)
+	if cloudOn() {
+		t.Fatal("the stand reads a dpapi key")
+	}
+	dueAt(t, pairOpenGrace+time.Second, false)
+	if truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 {
+		t.Fatalf("connected, key not handed over: opened %v", p.opened)
 	}
 	// connected, the Finish page ticked: FinCom opens, without a code (no pairing window opened)
-	dueAt(t, time.Second, false)
-	p.call("POST", "/tray/pairopen", M{"action": "now"})
+	dueAt(t, time.Second, true)
 	if !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 || p.opened[0] != "https://staging.fincom.live/review/" {
 		t.Fatalf("connected, ticked: opened %v", p.opened)
 	}
@@ -349,14 +386,30 @@ func TestFirstStartOneTrayOnly(t *testing.T) {
 	}
 }
 
+// the ask that cannot be removed is not taken (else every look of the tray would open FinCom again)
+func TestFirstStartNotTakenWhenStuck(t *testing.T) {
+	p := newPairStand(t, "")
+	dueAt(t, 0, true)
+	pairOpenRemove = func(string) error { return os.ErrPermission }
+	t.Cleanup(func() { pairOpenRemove = os.Remove })
+	for i := 0; i < 3; i++ {
+		if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
+			t.Fatal("taken though the ask stays")
+		}
+	}
+	if len(p.opened) != 0 {
+		t.Fatalf("opened %v", p.opened)
+	}
+}
+
 // the address FinCom is configured with but not one of FinCom's sites: the ask is taken, nothing opened, the code shown
 func TestFirstStartNotFinComSite(t *testing.T) {
 	p := newPairStand(t, "")
 	setCfg("FinComUrl", "https://evil.example/")
 	dueAt(t, 0, true)
 	trayFirstOpen(p.env(ownSessionFacts), fincomURL())
-	if len(p.opened) != 0 {
-		t.Fatalf("opened %v", p.opened)
+	if len(p.opened) != 0 || len(p.shown) != 1 || !strings.Contains(p.shown[0], "go to the Tally page and type this code") {
+		t.Fatalf("opened %v shown %v", p.opened, p.shown)
 	}
 }
 
@@ -382,34 +435,6 @@ func TestPairOpenRefusedForWebPages(t *testing.T) {
 	}
 }
 
-// the installer's command: --first asks at once, --skip drops; a bridge still starting is asked again, for 30 s at most
-func TestConnectCommand(t *testing.T) {
-	var asked []string
-	n := 0
-	oldCall, oldWait := connectCall, connectWait
-	t.Cleanup(func() { connectCall, connectWait = oldCall, oldWait })
-	connectWait = func(time.Duration) {}
-	connectCall = func(method, path string, body any) M {
-		n++
-		if n < 3 {
-			return nil
-		}
-		asked = append(asked, method+" "+path+" "+str(obj(body)["action"]))
-		return M{"ok": true}
-	}
-	if connectCmd([]string{"--first"}) != 0 || len(asked) != 1 || asked[0] != "POST /tray/pairopen now" {
-		t.Fatalf("--first: %v", asked)
-	}
-	n, asked = 10, nil
-	if connectCmd([]string{"--skip"}) != 0 || len(asked) != 1 || asked[0] != "POST /tray/pairopen skip" {
-		t.Fatalf("--skip: %v", asked)
-	}
-	n, asked = -1000, nil
-	if connectCmd([]string{"--first"}) != 0 || len(asked) != 0 || n > -1000+16 {
-		t.Fatalf("never answering: asked %d times", n+1000)
-	}
-}
-
 // the installer: Finish's ticked "Open FinCom to connect" runs the bridge's connect, unticked drops it; both installs ask
 func TestInstallerFinishOpensToConnect(t *testing.T) {
 	nsi := readText(filepath.Join("installer", "FinComBridge.nsi"))
@@ -431,12 +456,12 @@ func TestInstallerFinishOpensToConnect(t *testing.T) {
 	if strings.Contains(ok, "ExecShell") || !strings.Contains(ok, "connect --first") {
 		t.Errorf("FinishRun on success: %s", ok)
 	}
-	// the bridge program: the install marks the first start only when the setup asks (--pairopen), the tray item uses
-	// the shared path, the old words gone
+	// the bridge program: the install notes the first start at its end (only with --pairopen and an answering bridge),
+	// the tray item uses the shared path, the old words gone
 	svc, usr, tray, mainGo := readText("win_service.go"), readText("win_user.go"), readText("win_tray.go"), readText("main.go")
 	for name, src := range map[string]string{"win_service.go": svc, "win_user.go": usr} {
-		if !strings.Contains(src, `if contains(args, "--pairopen") {`) || !strings.Contains(src, "markPairOpenDue(filepath.Dir(cfgPath))") {
-			t.Errorf("%s does not mark the first start", name)
+		if !regexp.MustCompile(`rc := waitAnswer\(cfgPath, [a-z]+, "[^"]+"\)\n.*\n\tnotePairOpen\(filepath\.Dir\(cfgPath\), args, rc, installLog\)\n\treturn rc\n`).MatchString(src) {
+			t.Errorf("%s does not note the first start at the install's end", name)
 		}
 	}
 	if strings.Contains(tray, "Settings > Tally Bridge > Connect") || !strings.Contains(tray, "trayConnectNow(") || !strings.Contains(tray, "trayFirstOpen(") {

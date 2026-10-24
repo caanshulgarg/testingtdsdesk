@@ -540,8 +540,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/paircode":
 		// the tray (or the FinCom Connector), which holds the key, opens a fresh connect code for FinCom on this computer
 		if r.Method == "POST" {
-			openPairWindow(10)
+			code, until := freshPairCode(10) // pairopen.go: the same as the first start's
 			writeLog("A new connect code was opened for 10 minutes.")
+			return M{"ok": true, "open": true, "code": code, "until": until}, nil
 		}
 		pairMu.Lock()
 		defer pairMu.Unlock()

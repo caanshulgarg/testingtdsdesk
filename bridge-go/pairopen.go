@@ -31,37 +31,33 @@ var fincomSites = []string{"https://app.fincom.live", "https://staging.fincom.li
 
 var reSixDigits = re(`^[0-9]{6}$`)
 
-// FinCom's address with the connect code in its fragment; false unless base is one of FinCom's own https sites (no
-// user, no port) and the code is 6 digits
-func pairOpenURL(base, code string) (string, bool) {
-	if !reSixDigits.MatchString(code) {
-		return "", false
-	}
+// FinCom's address without a fragment when base is one of FinCom's own https sites (no user, no port); false otherwise
+func fincomPlainURL(base string) (string, bool) {
 	u, err := url.Parse(strings.TrimSpace(base))
 	if err != nil || !strings.EqualFold(u.Scheme, "https") || u.User != nil || u.Opaque != "" || u.Port() != "" {
 		return "", false
 	}
 	host := strings.ToLower(u.Host)
-	ok := false
 	for _, s := range fincomSites {
 		if "https://"+host == s {
-			ok = true
+			u.Scheme, u.Host, u.Fragment, u.RawFragment = "https", host, "", ""
+			return u.String(), true
 		}
 	}
-	if !ok {
-		return "", false
-	}
-	u.Scheme, u.Host, u.Fragment, u.RawFragment = "https", host, "", ""
-	return u.String() + "#pair=" + code, true
+	return "", false
 }
 
-// FinCom's address as it is shown (and opened plain): one of FinCom's sites, without a fragment; false otherwise
-func fincomPlainURL(base string) (string, bool) {
-	s, ok := pairOpenURL(base, "000000")
+// FinCom's address with the connect code in its fragment; false unless base is one of FinCom's own sites and the code
+// is 6 digits
+func pairOpenURL(base, code string) (string, bool) {
+	if !reSixDigits.MatchString(code) {
+		return "", false
+	}
+	u, ok := fincomPlainURL(base)
 	if !ok {
 		return "", false
 	}
-	return strings.TrimSuffix(s, "#pair=000000"), true
+	return u + "#pair=" + code, true
 }
 
 // where the tray runs: its Windows session, whether it is the service, whether its user is the bridge's owner
@@ -103,9 +99,10 @@ func untilHM(s string) string {
 func pairOpenText(addr, code, until string, opened bool) string {
 	if opened {
 		return "FinCom is opening in your browser and connects this computer by itself.\n\nIf it doesn't, open " + addr +
-			" on this computer and type this code:\n\n        " + code + "\n\n(until " + until + ")"
+			" on this computer, go to the Tally page and type this code:\n\n        " + code + "\n\n(until " + until + ")"
 	}
-	return "Open " + addr + " in a browser on this computer and type this code:\n\n        " + code + "\n\n(until " + until + ")"
+	return "Open " + addr + " in a browser on this computer, go to the Tally page and type this code:\n\n        " + code +
+		"\n\n(until " + until + ")"
 }
 
 // opens FinCom with the code when allowed; the message either way
@@ -157,130 +154,140 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 
 // --- the bridge's side: the install's ask, kept in its folder
 
-const pairOpenDueName = "pair-open-due.json"
+const (
+	pairOpenDueName = "pair-open-due.json" // the install (a person at the setup) asks for FinCom to open at the first start
+	pairOpenNowName = "pair-open-now.txt"  // the Finish page's "Open FinCom to connect", ticked: at once
+)
 
 // the time the Finish page has to say (ticked: at once; unticked: dropped) before the first start opens by itself
 var pairOpenGrace = 2 * time.Minute
 
 var pairOpenMu sync.Mutex
+var pairOpenRemove = os.Remove // the tests: a file an antivirus holds
 
 func pairOpenDueFile() string { return filepath.Join(Home, pairOpenDueName) }
+func pairOpenNowFile() string { return filepath.Join(Home, pairOpenNowName) }
 
-// the install (FinComBridge.exe install ... --pairopen): FinCom opens to connect at the first start
-func markPairOpenDue(home string) error {
-	b := jsonText(M{"at": fmtTime(time.Now()), "version": BridgeVersion, "now": false})
-	return saveFile(filepath.Join(home, pairOpenDueName), b)
-}
-
-func clearPairOpenDue(why string) {
-	pairOpenMu.Lock()
-	defer pairOpenMu.Unlock()
-	if exists(pairOpenDueFile()) && os.Remove(pairOpenDueFile()) == nil && why != "" {
-		writeLog(why)
+// the install's end (installCmd, installUserCmd): an earlier install's ask cleared; asked again only when the setup
+// asked (--pairopen, a person at the setup) and the bridge answers (rc 0), timed from then for the Finish page's grace
+func notePairOpen(home string, args []string, rc int, logf func(string)) {
+	_ = os.Remove(filepath.Join(home, pairOpenNowName))
+	_ = os.Remove(filepath.Join(home, pairOpenDueName))
+	if rc != 0 || !contains(args, "--pairopen") {
+		return
+	}
+	if err := markPairOpenDue(home); err != nil {
+		logf("Install: the first-start opening of FinCom could not be noted (" + err.Error() + ")")
 	}
 }
 
-// the ask read; ready: asked at once (the Finish page), or 2 minutes old and this computer not connected to FinCom.
-// Connected (an upgrade of a working computer) and not asked at once: the ask is dropped. Call with pairOpenMu held
-func pairOpenStateLocked() (due, ready bool) {
+func markPairOpenDue(home string) error {
+	return saveFile(filepath.Join(home, pairOpenDueName), jsonText(M{"at": fmtTime(time.Now()), "version": BridgeVersion}))
+}
+
+// connected to FinCom before (its cloud address and a computer key, readable or still protected for the Windows user:
+// the service of an upgrade before the tray hands the key over); read from the settings only, nothing decrypted
+func pairOpenConnected() bool {
+	return cfgS("CloudUrl") != "" && (cfgS("CloudKeyGo") != "" || cfgS("CloudKey") != "")
+}
+
+// the ask read, nothing changed: ready when asked at once (the Finish page), or 2 minutes old and this computer never
+// connected to FinCom. Call with pairOpenMu held
+func pairOpenStateLocked() (due, now, ready bool) {
 	f := pairOpenDueFile()
 	if !exists(f) {
-		return false, false
+		return false, false, false
 	}
-	m := readObjFile(f)
-	if truthy(m["now"]) {
-		return true, true
+	if exists(pairOpenNowFile()) {
+		return true, true, true
 	}
-	if cloudOn() {
-		if os.Remove(f) == nil {
-			writeLog("Already connected to FinCom: the install's first-start opening of FinCom is not needed.")
-		}
-		return false, false
+	if pairOpenConnected() {
+		return true, false, false
 	}
-	at, err := time.ParseInLocation("2006-01-02T15:04:05", str(m["at"]), time.Local)
+	at, err := time.ParseInLocation("2006-01-02T15:04:05", str(readObjFile(f)["at"]), time.Local)
 	if err != nil {
-		return true, true // unreadable time: as old
+		return true, false, true // unreadable time: as old
 	}
-	return true, time.Since(at) >= pairOpenGrace
+	return true, false, time.Since(at) >= pairOpenGrace
 }
 
 func pairOpenReady() bool {
 	pairOpenMu.Lock()
 	defer pairOpenMu.Unlock()
-	_, ready := pairOpenStateLocked()
+	_, _, ready := pairOpenStateLocked()
 	return ready
 }
 
-// POST /tray/pairopen {action}: "now" (Finish ticked), "skip" (unticked), "take" (the owner's tray: one only); GET: state
+// the ask dropped (FinCom connected with the code typed by hand); the reason logged when there was one
+func clearPairOpenDue(why string) {
+	pairOpenMu.Lock()
+	defer pairOpenMu.Unlock()
+	had := exists(pairOpenDueFile())
+	_ = os.Remove(pairOpenNowFile())
+	if had && os.Remove(pairOpenDueFile()) == nil && why != "" {
+		writeLog(why)
+	}
+}
+
+// a fresh connect window of min minutes: its code and end, as /paircode gives them
+func freshPairCode(min int) (code, until string) {
+	openPairWindow(min)
+	pairMu.Lock()
+	defer pairMu.Unlock()
+	return pairCode, pairUntil.Format("2006-01-02T15:04:05")
+}
+
+// POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state
 func pairOpenRoute(method string, body M) (M, error) {
 	if method != "POST" {
 		pairOpenMu.Lock()
-		due, ready := pairOpenStateLocked()
+		due, now, ready := pairOpenStateLocked()
 		pairOpenMu.Unlock()
-		return M{"ok": true, "due": due, "ready": ready}, nil
+		return M{"ok": true, "due": due, "now": now, "ready": ready}, nil
 	}
-	switch a := str(body["action"]); a {
-	case "now":
-		pairOpenMu.Lock()
-		defer pairOpenMu.Unlock()
-		f := pairOpenDueFile()
-		if !exists(f) {
-			return M{"ok": true, "due": false}, nil // done already, or no install asked: nothing made up
-		}
-		m := readObjFile(f)
-		m["now"] = true
-		if err := saveFile(f, jsonText(m)); err != nil {
-			return nil, err
-		}
-		writeLog("The setup's Finish page: Open FinCom to connect (ticked).")
-		return M{"ok": true, "due": true}, nil
-	case "skip":
-		clearPairOpenDue("The setup's Finish page: Open FinCom to connect left unticked; FinCom is not opened by itself.")
-		return M{"ok": true, "due": false}, nil
-	case "take":
-		pairOpenMu.Lock()
-		_, ready := pairOpenStateLocked()
-		if !ready {
-			pairOpenMu.Unlock()
-			return M{"ok": true, "take": false}, nil
-		}
-		_ = os.Remove(pairOpenDueFile())
-		pairOpenMu.Unlock()
-		if cloudOn() {
-			writeLog(fmt.Sprintf("FinCom opened in the browser after the setup (session %d); this computer is connected already, no code.", toInt(body["session"])))
-			return M{"ok": true, "take": true, "plain": true}, nil
-		}
-		openPairWindow(10)
-		writeLog(fmt.Sprintf("FinCom opened in the browser to connect this computer (the first start after the setup, session %d): a new connect code for 10 minutes.", toInt(body["session"])))
-		pairMu.Lock()
-		code, until := pairCode, pairUntil.Format("2006-01-02T15:04:05")
-		pairMu.Unlock()
-		return M{"ok": true, "take": true, "code": code, "until": until}, nil
-	default:
+	if a := str(body["action"]); a != "take" {
 		return M{"ok": false, "error": "Unknown action " + a + "."}, nil
 	}
+	pairOpenMu.Lock()
+	_, now, ready := pairOpenStateLocked()
+	if !ready {
+		pairOpenMu.Unlock()
+		return M{"ok": true, "take": false}, nil
+	}
+	// taken only when the ask is gone: a file that cannot be removed is never taken again and again
+	if err := pairOpenRemove(pairOpenDueFile()); err != nil {
+		pairOpenMu.Unlock()
+		writeLog("The install's first-start opening of FinCom could not be taken (" + err.Error() + "); FinCom is not opened by itself.")
+		return M{"ok": true, "take": false}, nil
+	}
+	_ = os.Remove(pairOpenNowFile())
+	pairOpenMu.Unlock()
+	how := fmt.Sprintf("the first start after the setup, session %d", toInt(body["session"]))
+	if now {
+		how += ", the setup's Finish page: Open FinCom to connect ticked"
+	}
+	if pairOpenConnected() {
+		writeLog("FinCom opened in the browser (" + how + "); this computer is connected already, no code.")
+		return M{"ok": true, "take": true, "plain": true}, nil
+	}
+	code, until := freshPairCode(10)
+	writeLog("FinCom opened in the browser to connect this computer (" + how + "): a new connect code for 10 minutes.")
+	return M{"ok": true, "take": true, "code": code, "until": until}, nil
 }
 
-// --- FinComBridge.exe connect --first | --skip: the setup's Finish page tells the bridge (the owner's tray opens FinCom)
-
-var connectCall = func(method, path string, body any) M {
-	loadConfigRO()
-	return bridgeCall(method, path, body, 5*time.Second)
-}
-var connectWait = time.Sleep
-
+// --- FinComBridge.exe connect --first | --skip: the setup's Finish page. The files in the bridge's folder are changed
+// directly (the setup may run as another administrator, whom the bridge's web server does not answer); the owner's tray
+// then opens FinCom (--first) or never does (--skip)
 func connectCmd(args []string) int {
-	action := "now"
+	if !exists(pairOpenDueFile()) {
+		return 0 // done already, or no install asked: nothing made up
+	}
+	// the setup's own install.log says which (the bridge's log is the bridge's to write)
 	if contains(args, "--skip") {
-		action = "skip"
+		_ = os.Remove(pairOpenNowFile())
+		_ = os.Remove(pairOpenDueFile())
+		return 0
 	}
-	// the bridge may still be starting (the service waits for Windows): asked again for 30 s at most; never an error for
-	// the setup (the first start opens FinCom by itself after 2 minutes when this did not reach the bridge)
-	for i := 0; i < 15; i++ {
-		if r := connectCall("POST", "/tray/pairopen", M{"action": action}); r != nil {
-			return 0
-		}
-		connectWait(2 * time.Second)
-	}
+	_ = saveFile(pairOpenNowFile(), fmtTime(time.Now()))
 	return 0
 }

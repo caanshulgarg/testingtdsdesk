@@ -421,12 +421,6 @@ func installCmd(args []string) int {
 	if code != 0 {
 		return code
 	}
-	if contains(args, "--pairopen") {
-		// 2.4.6: the setup asks for FinCom to open with the connect code at the first start (pairopen.go)
-		if err := markPairOpenDue(filepath.Dir(cfgPath)); err != nil {
-			installLog("Install: the first-start opening of FinCom could not be noted (" + err.Error() + ")")
-		}
-	}
 	exe, _ := os.Executable()
 	k, _, err := registry.CreateKey(registry.LOCAL_MACHINE, regKey, registry.ALL_ACCESS|registry.WOW64_64KEY)
 	if err == nil {
@@ -448,7 +442,10 @@ func installCmd(args []string) int {
 	if err := startService(); err != nil {
 		return installFailed(5, "The Windows service FinCom Bridge did not start ("+err.Error()+").", "Restart the computer; if the icon near the clock stays red, send the install log to FinCom.")
 	}
-	return waitAnswer(cfgPath, false, "Windows starts the service with it")
+	rc := waitAnswer(cfgPath, false, "Windows starts the service with it")
+	// 2.4.6: the setup run by a person asks for FinCom to open with the connect code at the first start (pairopen.go)
+	notePairOpen(filepath.Dir(cfgPath), args, rc, installLog)
+	return rc
 }
 
 // the settings for the bridge's owner (the same for the service and for an install just for one user): test mode beside

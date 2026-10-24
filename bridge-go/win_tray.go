@@ -14,6 +14,8 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -180,7 +182,21 @@ var taskbarCreated uintptr
 // --- talking to the service
 func trayCall(method, path string, body any) M {
 	loadConfigRO()
-	return bridgeCall(method, path, body, 20*time.Second) // 2.4.6: the same call as measure.go's
+	var rd io.Reader
+	if body != nil {
+		rd = strings.NewReader(jsonText(body))
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
+	req.Header.Set("X-Bridge-Key", cfgS("Key"))
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	return parseObj(string(b))
 }
 
 // 2.4.6 (pairopen.go): what the tray opens FinCom with: this session, never the service, only the bridge's owner

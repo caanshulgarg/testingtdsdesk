@@ -184,8 +184,8 @@ func trayStatus() M {
 		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
 		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow(), "readStopped": readStopAny(),
 		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn()),
-		"uploadDays": pullUploadList(), "stoppedCompanies": pullStoppedList(),
-		"pairOpenReady": pairOpenReady()} // 2.4.5: the days to upload by hand (daypull.go), one quiet notice each // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
+		"uploadDays": pullUploadList(), "stoppedCompanies": pullStoppedList(), // 2.4.5: the days to upload by hand (daypull.go), one quiet notice each // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
+		"pairOpenReady": pairOpenReady()} // 2.4.6: the install's first-start opening of FinCom (pairopen.go), read only
 }
 
 // the way it runs, in words for the log and the tray
