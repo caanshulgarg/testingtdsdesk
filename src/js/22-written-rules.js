@@ -956,7 +956,7 @@ function exportBankCsv(){
 // the same three steps on Purchase, Bank and Sales (review of 01-Oct-2026): To review · Post to Tally · In Tally
 // upload-pages (14-Oct-2026): the same words as the state bar of every upload page (STATE_WORDS, src/js/02); a line
 // ignored is under Ignored, not under In Tally (it never went there)
-const BANK_TABS = [["review", "To review"], ["ready", "Ready to post"], ["done", "In Tally"], ["ignored", "Ignored"]];
+const BANK_TABS = [["review", "To do"], ["ready", "Ready to post"], ["done", "Posted"], ["ignored", "Ignored"]];
 function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? ["sent", "intally"] : tab === "ignored" ? ["ignored"] : tab === "all" ? null : ["attention", "suggested"]; }
 // a line is in Tally only when it is matched to a Tally voucher: found there (intally), or posted through the bridge and
 // Tally gave back the voucher (review of 02-Oct-2026: 184 lines showed "In Tally" after a Tally file was only made, with

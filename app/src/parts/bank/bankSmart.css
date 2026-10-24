@@ -1,0 +1,149 @@
+/* The bank page made dense (24-Oct-2026, the owner: "page of bank statement in 100% has minimum info.. staff is getting
+   problem in updating that"). Loaded with the bank page's chunk. At 1366x768 the page showed 3 lines (69 px each, the
+   Ledger column scrolled sideways out of view); here a line is about 32 px, the header is one line, the filters two, and
+   the table's header stays in view under the app's header while the page scrolls. Phones (600 px and less) keep FinCom's
+   cards (src/js/53-phone.js); only the filter bar is laid out for them. */
+
+/* ---- the filter bar ---- */
+#app .bk-smart .bs-bar { display: flex; flex-direction: column; gap: 5px; margin: 6px 0 5px; min-width: 0; }
+#app .bk-smart .bs-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; font-size: 12.5px; }
+#app .bk-smart .bs-gap { flex: 1 1 0; min-width: 0; }
+#app .bk-smart .bs-search { width: 210px; max-width: 100%; height: 28px; margin: 0; font-size: 13px; padding: 0 10px; }
+#app .bk-smart .bs-seg { display: inline-flex; border: 1px solid var(--border, var(--rule)); border-radius: 7px; overflow: hidden; }
+#app .bk-smart .bs-seg button { height: 26px; padding: 0 10px; border: 0; background: var(--surface, var(--sheet)); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+#app .bk-smart .bs-seg button + button { border-left: 1px solid var(--border, var(--rule)); }
+#app .bk-smart .bs-seg button[aria-pressed="true"] { background: var(--ledger-soft, var(--paper)); color: var(--foreground, var(--ink)); font-weight: 600; }
+#app .bk-smart .bs-tog { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; color: var(--foreground, var(--ink)); cursor: pointer; }
+#app .bk-smart .bs-tog input { width: 14px; height: 14px; min-width: 0; margin: 0; }
+#app .bk-smart .bs-more { position: relative; }
+#app .bk-smart .bs-more > summary { list-style: none; height: 26px; min-height: 0; padding: 0 10px; font-size: 12.5px; display: inline-flex; align-items: center; }
+#app .bk-smart .bs-more > summary::-webkit-details-marker { display: none; }
+#app .bk-smart .bs-pop { position: absolute; z-index: 20; top: 30px; left: 0; display: grid; grid-template-columns: auto auto; gap: 8px 12px; padding: 12px; width: max-content; max-width: calc(100vw - 32px);
+  background: var(--surface, var(--sheet)); border: 1px solid var(--border, var(--rule)); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
+#app .bk-smart .bs-pop label { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 12.5px; }
+#app .bk-smart .bs-pop input, #app .bk-smart .bs-pop select { height: 28px; width: 140px; min-width: 0; }
+#app .bk-smart .bs-count { margin-left: auto; padding-left: 8px; white-space: nowrap; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; align-self: center; }
+#app .bk-smart .bs-count b { color: var(--foreground, var(--ink)); }
+#app .bk-smart .bs-keys { margin-left: auto; color: var(--muted); cursor: help; white-space: nowrap; font-size: 12px; align-self: center; }
+#app .bk-smart .bs-keys + .bs-count { margin-left: 0; }
+#app .bk-smart .bs-chips { display: flex; flex-wrap: wrap; gap: 5px; min-width: 0; max-width: 100%; }
+#app .bk-smart .bs-chips::-webkit-scrollbar { display: none; }
+#app .bk-smart .bs-chip { flex: none; height: 24px; padding: 0 8px; border-radius: 12px; border: 1px solid var(--border, var(--rule)); background: var(--surface, var(--sheet));
+  color: var(--foreground, var(--ink)); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+#app .bk-smart .bs-chip:hover { border-color: var(--ledger, var(--accent)); }
+#app .bk-smart .bs-chip[aria-pressed="true"] { background: var(--ledger, var(--accent)); border-color: var(--ledger, var(--accent)); color: #fff; }
+#app .bk-smart .bs-chip-n { font-size: 11px; font-variant-numeric: tabular-nums; opacity: .75; }
+#app .bk-smart .bs-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 10px; border: 1px solid var(--ledger, var(--accent)); border-radius: 8px;
+  background: var(--ledger-soft, var(--paper)); font-size: 12.5px; }
+#app .bk-smart .bs-rule .bs-in { height: 26px; width: 150px; min-width: 0; font-size: 12.5px; }
+#app .bk-smart .bs-rule select.bs-in { width: auto; }
+#app .bk-smart .bs-rule .lgbox.bs-in { width: 200px; }
+#app .bk-smart .bs-note { flex-basis: 100%; color: var(--muted); font-size: 12px; }
+
+/* ---- the bar at the foot (the bank's own, bs-bankbar: this file stays loaded on other pages): lower, and the bulk
+   voucher type and narration ---- */
+#app .bk-actionbar.bs-bankbar { padding-top: 6px; padding-bottom: 6px; min-height: 0; }
+#app .bk-actionbar.bs-bankbar .bs-in { height: 32px; min-width: 0; flex: none; }
+#app .bk-actionbar.bs-bankbar select.bs-in { width: 128px; }
+#app .bk-actionbar.bs-bankbar .bs-narrin { width: 150px; }
+#app .bk-actionbar.bs-bankbar input.lgbox[data-bulkled] { flex: none; width: 190px; min-width: 0; }
+/* with many lines ticked the bar's buttons wrap to a second row rather than run off the screen */
+#app .bk-actionbar.bs-bankbar .ab-right { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; min-width: 0; }
+
+@media (min-width: 601px) {
+  /* ---- the header: the status tabs closer, not kept in view (the table's header is), and one line for the statement ---- */
+  #app:has(.bk-smart) .sbar-band { position: static; padding-top: 2px; margin-bottom: 4px; }
+  #app:has(.bk-smart) .sbar-band [role="tablist"] { margin-top: 0; margin-bottom: 0; }
+  #app:has(.bk-smart) .sbar-band [role="tab"] { min-height: 0; height: 32px; }
+  #app .bk-smart .bs-head { display: flex; flex-wrap: nowrap; align-items: center; gap: 16px; padding: 4px 12px; margin: 0; }
+  #app .bk-smart .bs-head .bk-id { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 10px; }
+  #app .bk-smart .bs-head .bk-id > .bk-sub { grid-column: 1 / -1; }
+  #app .bk-smart .bs-head .bk-ledline { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); margin: 0; padding: 0; border: 0; background: none; }
+  #app .bk-smart .bs-head:has(.bk-setup) { flex-wrap: wrap; }
+  #app .bk-smart .bs-head .bk-setup { flex-basis: 100%; }
+  #app .bk-smart .bs-head .bk-title { font-size: 15px; line-height: 20px; white-space: nowrap; }
+  #app .bk-smart .bs-head .bk-stmtsel { height: 26px; font-size: 13px; }
+  #app .bk-smart .bs-head .bk-sub { font-size: 11.5px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app .bk-smart .bs-head .bk-check { flex: 1 1 0; min-width: 60px; padding: 0; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app .bk-smart .bs-head .bk-figs { gap: 14px; flex: none; }
+  #app .bk-smart .bs-head .bk-figs dt { font-size: 10px; line-height: 12px; }
+  #app .bk-smart .bs-head .bk-figs dd { font-size: 13px; line-height: 17px; margin: 0; }
+  #app .bk-smart .bs-head .bk-actions { flex: none; }
+  #app .bk-smart .bs-head .bk-actions .btn, #app .bk-smart .bs-head .bk-actions summary { height: 28px; min-height: 0; }
+
+  /* ---- the table: fixed columns that fit 1366 without a sideways scroll, a line of about 32 px ---- */
+  #app .bk-smart .bk-tablewrap { overflow: visible; }
+  #app .bk-smart .bs-grid { outline: none; }
+  #app .bk-smart .bs-grid:focus-visible { box-shadow: 0 0 0 2px var(--ledger, var(--accent)); border-radius: 10px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) { table-layout: fixed; width: 100%; font-size: 12.5px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th { position: sticky; top: var(--head-h, 0px); z-index: 4; padding: 4px 6px; height: 28px; font-size: 12px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th[data-sortable] { padding: 0; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th .lt-sort { min-height: 28px; padding: 4px 6px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tfoot td { position: static; padding: 6px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tbody > tr > td { padding: 2px 6px; line-height: 13px; vertical-align: middle; overflow-wrap: normal; }
+  #app .bk-smart table.bk-table:not(.cards) > tbody > tr { contain-intrinsic-size: auto 32px; scroll-margin-top: calc(var(--head-h, 0px) + 34px); scroll-margin-bottom: 64px; }
+  #app .bk-smart table.bk-table:not(.cards) th.ck { width: 30px; }
+  #app .bk-smart table.bk-table:not(.cards) .ck input { width: 14px; height: 14px; }
+  #app .bk-smart table.bk-table:not(.cards) th.dt { width: 90px; }
+  #app .bk-smart table.bk-table:not(.cards) td.dt { white-space: nowrap; font-size: 12px; }
+  #app .bk-smart table.bk-table:not(.cards) th.pt { width: auto; min-width: 0; max-width: none; }
+  #app .bk-smart table.bk-table:not(.cards) td.pt { min-width: 0; max-width: none; }
+  #app .bk-smart table.bk-table:not(.cards) th.n { width: 92px; }
+  #app .bk-smart table.bk-table:not(.cards) th.bal { width: 96px; }
+  #app .bk-smart table.bk-table:not(.cards) td.bal { color: var(--muted); }
+  #app .bk-smart table.bk-table:not(.cards) th[data-role="status"] { width: 90px; }
+  #app .bk-smart table.bk-table:not(.cards) td[data-role="status"] .tag, #app .bk-smart table.bk-table:not(.cards) td .tag { font-size: 11px; padding: 1px 6px; white-space: nowrap; }
+  #app .bk-smart table.bk-table:not(.cards) th.lg { width: 222px; min-width: 0; }
+  #app .bk-smart table.bk-table:not(.cards) td.lg { min-width: 0; overflow: hidden; }
+  #app .bk-smart table.bk-table:not(.cards) th.vt { width: 78px; }
+  #app .bk-smart table.bk-table:not(.cards) th.ac { width: 104px; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac { padding-left: 2px; padding-right: 4px; overflow: hidden; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac .btn { height: 22px; min-height: 0; padding: 0 8px; font-size: 12px; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac .icon { width: 22px; height: 22px; min-height: 0; min-width: 0; padding: 0; }
+
+  /* Particulars: the party, the mode and reference small, then the narration; two lines at most */
+  #app .bk-smart .bs-narr { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; white-space: normal; max-height: 26px; }
+  #app .bk-smart .bs-narr .pn { display: inline; font-weight: 600; white-space: normal; max-width: none; margin-right: 6px; color: var(--foreground, var(--ink)); }
+  #app .bk-smart .bs-narr .md { display: inline; font-size: 10.5px; font-weight: 600; margin-right: 6px; opacity: .7; text-transform: uppercase; letter-spacing: .02em; }
+  #app .bk-smart .bs-narr .nr { display: inline; font-size: 12px; white-space: normal; max-width: none; overflow: visible; color: var(--muted); }
+
+  /* the ledger: the box, Confirm beside a suggestion; where it came from is on the box (title) */
+  #app .bk-smart .bs-led { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  #app .bk-smart .bs-led .lgbox { flex: 1 1 auto; min-width: 0; width: auto; height: 24px; padding: 0 7px; font-size: 12.5px; border-radius: 5px; }
+  #app .bk-smart .bs-led .bs-ok { flex: none; height: 24px; min-height: 0; padding: 0 8px; font-size: 12px; }
+  #app .bk-smart td.lg .bs-led + .src:not(.bad) { display: none; }
+  #app .bk-smart td.lg .src { display: block; font-size: 11px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app .bk-smart td.lg .lgtext { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app .bk-smart .bs-vt { width: 100%; height: 24px; min-width: 0; max-width: none; padding: 0 4px; font-size: 12px; border-radius: 5px; }
+
+  /* the line the keys are on */
+  #app .bk-smart table.bk-table > tbody > tr.kb-on > td { background: var(--ledger-soft, var(--paper)) !important; }
+  #app .bk-smart table.bk-table > tbody > tr.kb-on > td:first-child { box-shadow: inset 3px 0 0 var(--ledger, var(--accent)); }
+}
+
+/* the narrowest desktops: the four figures go before the narration does */
+@media (min-width: 601px) and (max-width: 1300px) {
+  #app .bk-smart .bs-head .bk-check { display: none; }
+}
+
+@media (max-width: 600px) {
+  #app .bk-smart .bs-search { width: 100%; }
+  #app .bk-smart .bs-count { margin-left: 0; white-space: normal; }
+  #app .bk-smart .bs-keys { display: none; }
+  #app .bk-actionbar.bs-bankbar .bs-in, #app .bk-actionbar.bs-bankbar .bs-narrin { width: 100%; }
+}
+
+/* a line split into several ledgers (opens under the line) */
+#app .bk-smart .bs-split { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; font-size: 12.5px; background: var(--ledger-soft, var(--paper)); }
+#app .bk-smart .bs-split-part { display: inline-flex; gap: 4px; }
+#app .bk-smart .bs-split .bs-in { height: 26px; min-width: 0; }
+#app .bk-smart .bs-split .lgbox.bs-in { width: 190px; }
+#app .bk-smart .bs-split .bs-amt { width: 100px; }
+#app .bk-smart .bs-split .bs-note { flex-basis: auto; }
+#app .bk-smart .bs-split .bs-note.bad { color: var(--stop, var(--bad)); }
+#app .bk-smart table.bk-table td.ac .linkbtn + .linkbtn { margin-left: 6px; }
+
+/* after a search: "set them all to" in one line (it was a card of about 110 px) */
+#app .bk-smart .bk-found { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 10px; margin: 6px 0 0; font-size: 12.5px; }
+#app .bk-smart .bk-found .bk-allled { width: 220px; height: 26px; min-width: 0; margin: 0; }
+#app .bk-smart .bk-found .btn { height: 26px; min-height: 0; }
