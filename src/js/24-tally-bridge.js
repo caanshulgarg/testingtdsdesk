@@ -316,7 +316,8 @@ const Bridge = {
     cands = proven ? [proven] : cands.slice(0, 1);
     if (!cands.length){
       const any = (this.lastFound || []).length || hit;
-      if (auto && any) throw {code: "pair", closed: true, message: "This link from FinCom Bridge has run out (a newer one was opened, or the bridge started again). Right-click the FinCom icon near the clock \u203a Connect FinCom on this computer\u2026 again."};
+      // a 2.4.7 bridge in its window that does not prove the address's secret: the link ran out (older bridges: as before)
+      if (auto && [hit].concat(this.lastFound || []).some(b => b && b.pairV === 2)) throw {code: "pair", closed: true, message: "This link from FinCom Bridge has run out (a newer one was opened, or the bridge started again). Right-click the FinCom icon near the clock \u203a Connect FinCom on this computer\u2026 again."};
       throw {code: any ? "pair" : "bridge_down", message: any
         ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
         : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
