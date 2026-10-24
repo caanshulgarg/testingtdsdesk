@@ -276,7 +276,7 @@ def main():
 
         # ---- 5./6. the actions: Add as client, Link to a client…, the ⋯ of a linked row, Sync now, Post entries here
         it = [x for x in menu(GSC) if not x.startswith("Upload older entries")]
-        ok(it == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
+        ok(it == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
         pg.click(R(GSC) + " [data-tco-more] summary"); pg.wait_for_timeout(250); shot("menu-linked-desktop-light", full=False); E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
         E("() => { window.__calls = []; S.coId = null; }")
         pg.click(R(GSC) + " [data-tco-sync-now]"); pg.wait_for_timeout(800)
@@ -284,7 +284,7 @@ def main():
         ok(calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]] and len(wk) == 1, "6. Sync now = Sync vouchers (tally_want_update) + Sync master (the ledgers' wake) (%s)" % calls())
         E("() => { window.__calls = []; }")
         more(GSC, "[data-tco-sync-master]"); pg.wait_for_timeout(500)
-        ok([c[1].get("what") for c in calls("post")] == ["ledgers"] and calls("tally_want_update") == [], "6. Sync master alone: the ledgers' wake")
+        ok([c[1].get("what") for c in calls("post")] == ["ledgers"] and calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]], "6. Sync master: the ledgers' wake, and the existing Send ledgers and groups now (tally_want_update)")
         E("() => { window.__calls = []; }")
         more(GSC, "[data-tco-sync-vouchers]")
         ok(calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]] and not calls("post"), "6. Sync vouchers alone: Update now")

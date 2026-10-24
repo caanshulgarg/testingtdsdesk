@@ -102,7 +102,9 @@ with sync_playwright() as p:
 
     M["jobs"].clear(); M["jobs"]["left-over-job-1"] = {"status": "running", "done": 4, "total": 10, "items": [], "creates": 1}
     pg.evaluate("Bridge.refresh()")
-    ok("Posting to Tally: 4 of 10" in pg.evaluate("bridgeChip(null)"), "while the bridge posts, the chip says so instead of anything alarming")
+    # 24-Oct-2026 (next-tally-one-page): the old sidebar chip (bridgeChip, drawn into #sideBridge, gone with the old page) is
+    # removed; the one Tally sign (tallyHere) must not alarm while the bridge posts
+    ok(pg.evaluate("Bridge.up() && tallyHere(null).level !== 'bad'"), "while the bridge posts, the Tally sign says nothing alarming (%s)" % pg.evaluate("tallyHere(null).label"))
     M["jobs"]["left-over-job-1"].update(status="done", done=10, items=["x%d" % i for i in range(10)])
     pg.evaluate("() => { for (const k of ['tdsdesk:bridgejob', 'tdsdesk-test:bridgejob']) lsSet(k, JSON.stringify({id: 'left-over-job-1', at: Date.now()})); }")
     t = pg.evaluate("async () => { const was = toast; let said = ''; toast = m => { said = m; }; try { await bridgeLeftover(); } finally { toast = was; } return said; }") or ""

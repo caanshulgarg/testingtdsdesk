@@ -90,7 +90,9 @@ export function booksLoad(cids) {
   const want = cids.filter((cid) => { const s = TCloud.st[cid]; return !s || !s.at || Date.now() - s.at > 300000; }).slice(0, 25);
   if (!want.length) return;
   booksBusy = true;
-  Promise.all(want.map((cid) => Promise.resolve(TCloud.status(cid)).then(() => (ledgersOf(cid) > 0 ? null : cloudLedgerCount(cid))).catch(() => null)))
+  // (a read that leaves no time behind is kept as read now, so the list does not ask again at every drawing)
+  const stamp = (cid) => { const s = TCloud.st[cid] = TCloud.st[cid] || {}; if (!s.at) s.at = Date.now(); };
+  Promise.all(want.map((cid) => Promise.resolve(TCloud.status(cid)).then(() => (ledgersOf(cid) > 0 ? null : cloudLedgerCount(cid))).catch(() => null).finally(() => stamp(cid))))
     .finally(() => { booksBusy = false; render(); });
 }
 
@@ -218,8 +220,24 @@ export function postHere(co, company, on) {
     .then((ok) => { if (!ok) return; choiceConfirm(co, "postTo", v); if (S.postStop && S.postStop.cid === co.id) S.postStop = null; toast(v ? "Posting allowed into " + shown(v) + "." : "Posting stopped."); render(); });
 }
 export const postsHere = (co, company) => { const pc = typeof choiceGet === "function" ? choiceGet(co, "postTo") : null; return !!(pc && pc.state === "confirmed" && co.postTo && coKey(co.postTo) === coKey(company)); };
+// Sync master (Suvit): the existing "Send ledgers and groups now" (TCloud.sendLedgers: the bridge here, and the Tally
+// computer asked through the cloud) with the ledgers' wake and its progress (firstSync)
+export function syncMaster(cid, company) { if (TCloud.sendLedgers) TCloud.sendLedgers(cid); firstSync(cid, company); }
+// what the support tools said for this client, on its row (was Settings › Books in the cloud): what is in the cloud, and
+// the kept day books read again
+function CloudSays({ cid }) {
+  const p = TCloud.pane || {}, g = (p.gs || {})[cid], r = (p.rp || {})[cid];
+  const jb = r && r.job && TCloud.jobs ? (TCloud.jobs[cid] || []).find((x) => x.id === r.job) : null;
+  return <>
+    {g && <p className={"note" + (g.err ? " bad" : "")} data-tco-cloud-says={cid} style={{ margin: "2px 0 0" }}>{g.err ? g.err : g.none ? "No books in the cloud yet."
+      : "In the cloud: " + g.groups + " groups · " + g.grouped + " of " + g.ledgers + " ledgers with a group" + (g.pl ? " (and Profit & Loss A/c, which has no group in Tally)" : "")}</p>}
+    {r && <p className={"note" + (r.err || (jb && jb.status === "failed") ? " bad" : "")} data-rp={cid} style={{ margin: "2px 0 0" }}>{r.job ? (jb ? TCloud.jobLine(jb) : "handed to FinCom’s server (" + r.months + " months)…")
+      : r.err ? "Could not read again: " + r.err + (r.n ? " (" + r.n + " days done)" : "") : r.busy ? "reading again… " + r.n + " days so far"
+      : "read again: " + Number(r.n || 0).toLocaleString("en-IN") + " day" + (Number(r.n) === 1 ? "" : "s") + " of " + Number(r.months || 0) + " month" + (Number(r.months) === 1 ? "" : "s") + ", " + fmtTime(r.at) + (r.bad ? ", " + r.bad + " could not be read" : "") + (r.host ? " (cloud " + r.host + ")" : "")}</p>}
+  </>;
+}
 // Sync now: Suvit's two syncs at once (the masters: the ledgers' wake; the vouchers: Update now)
-export function syncNow(cid, company) { firstSync(cid, company); tallyUpdateNow(cid); }
+export function syncNow(cid, company) { firstSync(cid, company); tallyUpdateNow(cid); }   // (tallyUpdateNow asks tally_want_update, as Send ledgers does)
 
 // a click on a company its computer has not sent to FinCom's cloud yet: kept, and done by itself when it is sent
 // S.tcoPend[key] = {company, kind: add | link | move, cid, keep, at, late}
@@ -378,13 +396,14 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     <details className="bk-menu tco-more" data-tco-more={r.company}>
       <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
       <div className="bk-menu-list">
-        {may && <button data-tco-sync-master={co.id} onClick={close(() => firstSync(co.id, r.company))}>Sync master<small>Ledgers, groups, parties, stock items and banks from Tally.</small></button>}
+        {may && <button data-tco-sync-master={co.id} onClick={close(() => syncMaster(co.id, r.company))}>Sync master<small>Send ledgers and groups now: ledgers, groups, parties, stock items and banks from Tally.</small></button>}
         {may && <button data-tco-sync-vouchers={co.id} onClick={close(() => tallyUpdateNow(co.id))}>Sync vouchers<small>The entries made in Tally since the last read.</small></button>}
         {may && (postsHere(co, r.company) ? <button data-tco-post-stop={co.id} onClick={close(() => postHere(co, r.company, false))}>Stop posting here<small>{co.name + "’s entries are posted into this company now."}</small></button>
           : <button data-tco-post-here={co.id} onClick={close(() => postHere(co, r.company, true))}>Post entries here<small>{"Post " + co.name + "’s entries into this company (asked first)."}</small></button>)}
         {may && <button data-tco-not-this={r.company} onClick={close(() => setPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
         {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>It stays in this list as Not a client.</small></button>}
         {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
+        {TCloud.groupStatus && <button data-tco-cloud-check={co.id} onClick={close(() => TCloud.groupStatus(co.id))}>What is in the cloud?<small>The groups, and the ledgers with a group, FinCom’s cloud holds.</small></button>}
         {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
         <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
       </div></details></>;
@@ -418,7 +437,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
       : "Waiting for " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + " to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
-    {co && <div className="tco-under"><SyncLine cid={co.id} /></div>}
+    {co && <div className="tco-under"><SyncLine cid={co.id} /><CloudSays cid={co.id} /></div>}
     {pick && <div className="tco-under"><Pick r={r} co={co} onClose={() => setPick(false)} /></div>}
   </li>;
 }
