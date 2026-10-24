@@ -217,32 +217,42 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	closedMsg := fmt.Sprintf("The connect window has closed. In the FinCom Bridge tray icon choose Connect FinCom, then type the code shown within %d minutes.", toInt(cfg("PairWindowMin")))
+	if (path == "/pair" || path == "/pair2") && !(sentOrigin != "" && originOK) {
+		// 2.4.7: connecting is for FinCom's page only (a CORS request names its Origin); a request with none (another site's
+		// image or link, which sends none) never uses up one of the window's tries
+		sendJSON(w, 403, M{"ok": false, "error": "This is for FinCom's page only."}, origin)
+		return
+	}
 	if path == "/pair2" {
-		// 2.4.7 (pairspake.go): a typed code, one SPAKE2 run; every run counts against the window's five tries
+		// 2.4.7 (pairspake.go): a typed code, one SPAKE2 run; every run counts against the window's five tries (runs and
+		// wrong codes together)
+		pairMu.Lock()
+		if !time.Now().Before(pairUntil) {
+			pairMu.Unlock()
+			sendJSON(w, 403, M{"ok": false, "error": closedMsg, "closed": true}, origin)
+			return
+		}
+		pairMu.Unlock()
 		Xs := qs.Get("X")
-		if _, err := spakeElement(Xs); err != nil {
+		X, err := spakeElement(Xs)
+		if err != nil {
 			sendJSON(w, 400, M{"ok": false, "error": "That is not a connect request from FinCom."}, origin)
 			return
 		}
 		pairMu.Lock()
-		if !time.Now().Before(pairUntil) {
+		if !time.Now().Before(pairUntil) || pairTries >= 5 {
+			pairUntil, pairPending = time.Now().Add(-time.Minute), map[string]string{}
 			pairMu.Unlock()
-			sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
+			writeLog("Five connect attempts: connecting is closed until the bridge is started again (or Connect FinCom on this computer... in the tray).")
+			sendJSON(w, 403, M{"ok": false, "error": closedMsg, "closed": true}, origin)
 			return
 		}
 		pairTries++
 		n := pairTries
-		if n > 5 {
-			pairUntil, pairPending = time.Now().Add(-time.Minute), map[string]string{}
-			pairMu.Unlock()
-			writeLog("Five connect attempts: connecting is closed until the bridge is started again (or Connect FinCom on this computer... in the tray).")
-			sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
-			return
-		}
 		code, salt := pairCode, pairSalt
 		pairMu.Unlock()
 		ctx := "go-" + instanceID() + fmt.Sprint(toInt(cfg("Port"))) + "|" + salt
-		Y, confirmB, confirmA, err := spakeServerStep(Xs, spakeW(code, ctx), ctx, nil)
+		Y, confirmB, confirmA, err := spakeServerStepElem(X, Xs, spakeW(code, ctx), ctx, nil)
 		if err != nil {
 			sendJSON(w, 400, M{"ok": false, "error": "That is not a connect request from FinCom."}, origin)
 			return
@@ -273,7 +283,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 				sendJSON(w, 403, M{"ok": false, "error": "That is not the code shown in the bridge window.", "needCode": true}, origin)
 				return
 			}
-		} else if open && !((len(code) == 6 && hmac.Equal([]byte(code), []byte(pairCode))) || (pairSecret != "" && len(code) == 32 && hmac.Equal([]byte(code), []byte(pairSecret)))) {
+		} else if open && (pairTries >= 5 || !(pairSecret != "" && len(code) == 32 && hmac.Equal([]byte(code), []byte(pairSecret)))) {
+			// 2.4.7: only the window's secret (FinCom opened by the bridge) or a finished SPAKE2 run; the 6 digits alone are
+			// no longer taken here (the page checks them by SPAKE2), and nothing is taken once the five tries are used
 			pairTries++
 			n := pairTries
 			if n >= 5 {
@@ -300,7 +312,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pairMu.Unlock()
-		sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
+		sendJSON(w, 403, M{"ok": false, "error": closedMsg, "closed": true}, origin)
 		return
 	}
 	if r.Header.Get("X-Bridge-Key") != cfgS("Key") {

@@ -61,8 +61,11 @@ const Bridge = {
     const pick = (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
     this.foundAt = Date.now();
     this.lastFound = found;
+    // FinCom Bridge 2.4.7: every bridge of this user with its window open, the likeliest first (pair() tries each)
+    const brief = (b) => ({url: b.url, bridgeId: b.bridgeId || "", port: b.port, pairProven: !!b.pairProven, pairBy: b.pairBy || "", spake: !!b.spake, pairSalt: b.pairSalt || ""});
+    this.lastOk = pick ? [pick].concat(ok.filter(b => b !== pick)).map(brief) : [];
     if (pick && !code) this.proven[pick.url] = Date.now();
-    return pick ? {url: pick.url, bridgeId: pick.bridgeId || "", port: pick.port, pairProven: !!pick.pairProven, pairBy: pick.pairBy || "", spake: !!pick.spake, pairSalt: pick.pairSalt || ""} : null;
+    return pick ? brief(pick) : null;
   },
   // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s)
   async refind(){
@@ -295,38 +298,47 @@ const Bridge = {
   // (bridge 1.11: only for a few minutes after it starts, once, and never for another web page)
   // pairing: only with a bridge that proves it shows this code now (its pairing window open), on this address or found
   // on 9100..9199; the code goes to it only then, and the key it hands over must prove itself before it is kept
-  async pair(code){
+  // opts.auto: FinCom opened by the bridge (#pair=): only a bridge that proved it holds the address's secret (or, before
+  // 2.4.7, shows the code) is used; never a SPAKE2 run, which would use up one of a bridge's tries with nobody typing
+  async pair(code, opts){
     code = String(code || "").trim();
+    const auto = !!(opts && opts.auto);
     const pc = /^(\d{6})(?:-([0-9a-f]{32}))?$/.exec(code), digits = pc ? pc[1] : code, secret = pc && pc[2] ? pc[2] : "";
-    const c = this.cfg();
-    let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code);
-    if (!(hit && (hit.pairProven || hit.spake)) && this.localUrl(base)){ this.foundAt = 0; hit = await this.find(code); }
-    if (!hit || !(hit.pairProven || hit.spake)){
+    const c = this.cfg(), usable = (b) => b && (b.pairProven || (!auto && b.spake));
+    let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code), cands = usable(hit) ? [hit] : [];
+    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); if (f) cands = (this.lastOk || [f]).filter(usable); }
+    const proven = cands.find(b => b.pairProven);
+    if (proven) cands = [proven];
+    if (!cands.length){
       const any = (this.lastFound || []).length || hit;
       throw {code: any ? "pair" : "bridge_down", message: any
         ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
         : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
     }
-    base = hit.url;
-    let q = "code=" + encodeURIComponent(hit.pairBy === "secret" ? secret : digits);
-    if (!hit.pairProven){
+    let q = "", spake = false, last = null;
+    for (const b of cands){
+      base = b.url;
+      if (b.pairProven){ q = "code=" + encodeURIComponent(b.pairBy === "secret" ? secret : digits); break; }
       // FinCom Bridge 2.4.7: SPAKE2 (src/js/24-pair-spake.js): the six digits never leave this page; one run is one of the
       // bridge's five tries, and its answer proves it shows this code before anything else is sent
-      const st = await PairSpake.start(digits, hit.bridgeId + hit.port + "|" + hit.pairSalt);
+      spake = true;
+      const st = await PairSpake.start(digits, b.bridgeId + b.port + "|" + b.pairSalt);
       const r1 = await fetch(base + "/pair2?X=" + st.X, {cache: "no-store"}).catch(() => null);
-      if (!r1) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
+      if (!r1){ last = {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."}; continue; }
       const j1 = await r1.json().catch(() => null);
-      if (r1.status === 403 && j1 && j1.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
-      if (!j1 || !j1.ok) throw {code: "pair", spake: true, message: (j1 && j1.error) || "The bridge would not check the code."};
+      if (r1.status === 403 && j1 && j1.notYours){ last = {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."}; continue; }
+      if (!j1 || !j1.ok){ last = {code: "pair", spake: true, closed: !!(j1 && j1.closed), message: (j1 && j1.error) || "The bridge would not check the code."}; continue; }
       const confirm = await PairSpake.finish(st, j1.Y, j1.confirm);
-      if (!confirm) throw {code: "pair", spake: true, message: "That is not the code shown by FinCom Bridge on this computer."};
+      if (!confirm){ last = {code: "pair", spake: true, message: "That is not the code shown by FinCom Bridge on this computer."}; continue; }
       q = "X=" + st.X + "&confirm=" + confirm;
+      break;
     }
+    if (!q) throw last || {code: "pair", spake: true, message: "That is not the code shown by FinCom Bridge on this computer."};
     const r = await fetch(base + "/pair?" + q, {cache: "no-store"}).catch(() => null);
     if (!r) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
     const j = await r.json().catch(() => null);
     if (r.status === 403 && j && j.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
-    if (!j || !j.ok) throw {code: "pair", message: (j && j.error) || "The bridge would not hand over its key."};
+    if (!j || !j.ok) throw {code: "pair", spake, closed: !!(j && j.closed), message: (j && j.error) || "The bridge would not hand over its key."};
     const chk = await this.probeUrl(base, 2500, j.key);
     if (!chk || !chk.proven) throw {code: "pair", message: "The bridge's key did not prove itself, so it was not kept. Connect again."};
     this.proven[base] = Date.now();

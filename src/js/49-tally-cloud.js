@@ -1010,7 +1010,7 @@ function resumeRows(all){
     const code = m[1] + (m[2] ? "-" + m[2] : "");
     const go = async () => {
       try {
-        const j = await Bridge.pair(code);
+        const j = await Bridge.pair(code, {auto: true}); // 2.4.7: the address's secret only, never a try used up by itself
         toast("Connected to FinCom Bridge on " + (j.computer || "this computer") + ".");
         try { await Bridge.refresh(); } catch (e){}
         // next-tally-firstlink: the firm's computer key at once (not at TCloud.auto's next minute), on the Tally page,

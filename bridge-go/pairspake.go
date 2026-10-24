@@ -123,6 +123,11 @@ func spakeServerStep(Xs string, w *big.Int, ctx string, y *big.Int) (Y, confirmB
 	if err != nil {
 		return "", "", "", err
 	}
+	return spakeServerStepElem(X, Xs, w, ctx, y)
+}
+
+// the same with X already checked (spakeElement) once
+func spakeServerStepElem(X *big.Int, Xs string, w *big.Int, ctx string, y *big.Int) (Y, confirmB, confirmA string, err error) {
 	if y == nil {
 		y = spakeScalar()
 	}

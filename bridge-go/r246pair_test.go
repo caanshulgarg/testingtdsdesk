@@ -143,7 +143,7 @@ func (p *pairStand) env(f browserFacts) pairOpenEnv {
 
 var ownSessionFacts = browserFacts{Session: 1, OwnerOK: true}
 
-var rePairURL = regexp.MustCompile(`^https://staging\.fincom\.live/review/#pair=(\d{6})-[0-9a-f]{32}$`)
+var rePairURL = regexp.MustCompile(`^https://staging\.fincom\.live/review/#pair=(\d{6})-([0-9a-f]{32})$`) // 2.4.7: the code and the window's secret
 
 // 1. the tray item: the browser opens with the code of the window just opened; the code works once
 func TestTrayConnectOpensFinComWithCode(t *testing.T) {
@@ -173,10 +173,10 @@ func TestTrayConnectOpensFinComWithCode(t *testing.T) {
 	if strings.Contains(msg, "Settings > Tally Bridge") || strings.Contains(msg, "#pair") {
 		t.Errorf("the message: %s", msg)
 	}
-	if c, r := p.pair(code); c != 200 || str(r["key"]) != "k246" {
+	if c, r := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 || str(r["key"]) != "k246" { // 2.4.7: the address's secret
 		t.Fatalf("pairing with the code from the address: %d %v", c, r)
 	}
-	if c, _ := p.pair(code); c == 200 {
+	if c, _ := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c == 200 {
 		t.Fatal("the code worked twice")
 	}
 	if tallySent.Load() != sent {
@@ -285,7 +285,7 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
 		t.Fatalf("opened twice: %v", p.opened)
 	}
-	if c, _ := p.pair(code); c != 200 {
+	if c, _ := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 {
 		t.Fatal("the code did not pair")
 	}
 	if logLines("FinCom handed to the tray to open in the browser and connect this computer (the first start after the setup, session 1)") != 1 {
@@ -367,7 +367,7 @@ func TestFirstStartNotWhenConnectedOrPaired(t *testing.T) {
 	p = newPairStand(t, "")
 	dueAt(t, time.Second, false)
 	r := p.call("POST", "/paircode", M{})
-	if c, _ := p.pair(str(r["code"])); c != 200 {
+	if c, _ := p.pair(str(r["secret"])); c != 200 {
 		t.Fatal("pairing")
 	}
 	if dueExists() {

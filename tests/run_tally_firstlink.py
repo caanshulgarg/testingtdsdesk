@@ -27,7 +27,8 @@ a stub cloud (TCloud/Cloud):
  13. FinCom Bridge 2.4.7 (no proof over the 6-digit code any more): a typed code is checked by SPAKE2 (/pair2, then /pair
      with the page's confirmation; the six digits never leave the page; a wrong code is one online try); FinCom opened
      with #pair=<code>-<secret> pairs with the window's 128-bit secret after the bridge proved it holds it; a secret that
-     does not prove itself is not sent (the code's SPAKE2 run instead). Older bridges (2.4.6 and before) as in 1-10.
+     does not prove itself is not sent, and an address never starts a SPAKE2 run by itself (that would use up a try with
+     nobody typing). Older bridges (2.4.6 and before) as in 1-10.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_firstlink.py [--shots DIR]"""
 import hashlib, hmac, json, os, re, sys, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -364,11 +365,11 @@ def main():
         ok(len(fin) == 1 and fin[0][2].get("code") == BR["secret"], "14. #pair=<code>-<secret>: paired with the window's secret (%s)" % [x[2] for x in fin])
         ok("pair=" not in pg3.evaluate("() => location.hash") and pg3.evaluate("() => Bridge.cfg().key") == KEY, "14. taken off the address at once; the key kept")
         pg3.close()
-        # ---- 15. a secret the bridge does not prove: never sent; the code's SPAKE2 run instead
+        # ---- 15. a secret the bridge does not prove (an old or made-up address): nothing sent, no try used
         bridge_reset(v=2, code="161803")
         pg4 = open_page(1440, 900, "/#pair=161803-" + "6f" * 16); pg4.wait_for_timeout(4000)
         ok(not any(x[1] == "/pair" and x[2].get("code") for x in BR["log"]), "15. a secret that does not prove itself is not sent (%s)" % [x[2] for x in BR["log"] if x[1] == "/pair"])
-        ok(any(x[1] == "/pair2" for x in BR["log"]) and pg4.evaluate("() => Bridge.cfg().key") == KEY, "15. the code's SPAKE2 run connected instead")
+        ok(not any(x[1] == "/pair2" for x in BR["log"]) and pg4.evaluate("() => Bridge.cfg().key") == "", "15. no SPAKE2 run by itself (none of the bridge's tries used), no key")
         pg4.close()
 
         ok(not errors, "no page errors (%s)" % errors[:3])

@@ -18,9 +18,12 @@ package main
 // The code works as before: once, 10 minutes, proved by pairProof before FinCom sends it. Nothing goes to Tally.
 
 import (
+	"context"
 	"crypto/hmac"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -277,28 +280,57 @@ func freshPairCode(min int) (code, secret, until string) {
 	return c, s, u.Format("2006-01-02T15:04:05")
 }
 
-// 2.4.7: the program answering on 127.0.0.1:port proves it holds the bridge key (HMAC of a fresh nonce, bound to its id
-// and that port) before anything carries the key there; the key itself is not sent
-func bridgeProves(port int, key string, timeout time.Duration) bool {
+// 2.4.7: a client for 127.0.0.1:port whose one connection is to a program that proved it holds the bridge key (HMAC of
+// a fresh nonce, bound to its id and that port); nil when it did not. The client may open no second connection, so a
+// program that takes the port after the proof (the bridge restarting) never gets the key: the request then fails
+func bridgeProvenClient(port int, key string, timeout time.Duration) *http.Client {
 	if port <= 0 || key == "" {
-		return false
+		return nil
 	}
+	var dials int32
+	var mu sync.Mutex
+	d := &net.Dialer{Timeout: timeout}
+	tr := &http.Transport{Proxy: nil, MaxConnsPerHost: 1, MaxIdleConnsPerHost: 1, IdleConnTimeout: 30 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			mu.Lock()
+			dials++
+			first := dials == 1
+			mu.Unlock()
+			if !first {
+				return nil, errors.New("the bridge's connection closed after it proved itself")
+			}
+			return d.DialContext(ctx, network, addr)
+		}}
+	c := &http.Client{Timeout: timeout, Transport: tr}
 	n := randHex16() + randHex16()
-	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
 	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/ping?n=%s", port, n), nil)
 	req.Header.Set("X-FinCom-Tray", "1")
 	r, err := c.Do(req)
 	if err != nil {
-		return false
+		tr.CloseIdleConnections()
+		return nil
 	}
-	defer r.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	r.Body.Close()
 	j := parseObj(string(b))
-	if j == nil || toInt(j["port"]) != port || str(j["bridgeId"]) == "" {
-		return false
+	want := ""
+	if j != nil && toInt(j["port"]) == port && str(j["bridgeId"]) != "" {
+		want = proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
 	}
-	want := proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
-	return want != "" && hmac.Equal([]byte(want), []byte(str(j["proof"])))
+	if want == "" || !hmac.Equal([]byte(want), []byte(str(j["proof"]))) {
+		tr.CloseIdleConnections()
+		return nil
+	}
+	return c
+}
+
+// the proof alone (the tests; the first start's checks)
+func bridgeProves(port int, key string, timeout time.Duration) bool {
+	c := bridgeProvenClient(port, key, timeout)
+	if c != nil {
+		c.CloseIdleConnections()
+	}
+	return c != nil
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state

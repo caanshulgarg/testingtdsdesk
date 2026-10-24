@@ -182,11 +182,13 @@ var taskbarCreated uintptr
 // --- talking to the service
 func trayCall(method, path string, body any) M {
 	loadConfigRO()
-	// 2.4.7: the key goes only to a program on the port that proved it holds it (pairopen.go bridgeProves): another
+	// 2.4.7: the key goes only over a connection to a program that proved it holds it (pairopen.go bridgeProvenClient): another
 	// Windows user's program that took the port while the bridge was down gets nothing
-	if !bridgeProves(toInt(cfg("Port")), cfgS("Key"), 5*time.Second) {
+	c := bridgeProvenClient(toInt(cfg("Port")), cfgS("Key"), 20*time.Second)
+	if c == nil {
 		return nil
 	}
+	defer c.CloseIdleConnections()
 	var rd io.Reader
 	if body != nil {
 		rd = strings.NewReader(jsonText(body))
@@ -194,7 +196,6 @@ func trayCall(method, path string, body any) M {
 	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
 	req.Header.Set("X-Bridge-Key", cfgS("Key"))
 	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
 	r, err := c.Do(req)
 	if err != nil {
 		return nil

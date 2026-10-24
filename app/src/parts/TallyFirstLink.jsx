@@ -70,7 +70,7 @@ export async function submitCode(raw) {
     say({ busy: false, code: "" });
     await afterPair();
   } catch (e) {
-    const closed = was && !(was.pairProof || was.pairWindow);
+    const closed = (was && !(was.pairProof || was.pairWindow)) || !!(e && e.closed);
     // FinCom Bridge 2.4.7 checks a typed code with the bridge (SPAKE2: the digits never leave the page, but each check is
     // one of its five tries); older bridges' codes were checked here alone
     const m = e && e.code === "pair" && !(e.message || "").includes("another Windows user")

@@ -253,6 +253,74 @@ func TestR247SpakeRefusesBadElements(t *testing.T) {
 	}
 }
 
+// review round 1: no 6th guess (the 6 digits alone are not taken by /pair, nothing after five tries), and no try used
+// up by a request without FinCom's Origin (another site's image or link)
+func TestR247FiveTriesInAllAndOriginOnly(t *testing.T) {
+	p := newPairStand(t, "")
+	code, secret, _ := freshPairCode(10)
+	if c, _ := p.get("/pair?code=" + code); c == 200 {
+		t.Fatal("the 6 digits alone paired (an online guess outside SPAKE2)")
+	}
+	ping := pingAs(t, "https://staging.fincom.live", "nonce0123456789abcdefXYZ", nil)
+	for i := 0; i < 4; i++ { // 1 wrong code above + 4 runs = 5 tries
+		if c, _ := p.get("/pair2?X=" + newSpakePage(t, "000000", ping).X); c != 200 {
+			t.Fatalf("run %d refused early", i+1)
+		}
+	}
+	if c, _ := p.get("/pair?code=" + secret); c == 200 {
+		t.Fatal("paired after five tries")
+	}
+	// another site: no Origin, no try used
+	p2 := newPairStand(t, "")
+	freshPairCode(10)
+	pg := newSpakePage(t, "000000", pingAs(t, "https://staging.fincom.live", "nonce0123456789abcdefXYZ", nil))
+	for _, path := range []string{"/pair2?X=" + pg.X, "/pair?code=" + strings.Repeat("a", 32)} {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:9100"+path, nil)
+		r.RemoteAddr = "127.0.0.1:50140"
+		r.Header.Set("Sec-Fetch-Mode", "no-cors")
+		w := httptest.NewRecorder()
+		handle(w, r)
+		if w.Code != 403 {
+			t.Fatalf("%s without an Origin: %d", path, w.Code)
+		}
+	}
+	pairMu.Lock()
+	tries := pairTries
+	pairMu.Unlock()
+	if tries != 0 {
+		t.Fatalf("tries used by requests without an Origin: %d", tries)
+	}
+	_ = p2
+}
+
+// review round 1: a program that takes the port after the bridge proved itself never gets the key (the proven client
+// opens no second connection)
+func TestR247NoKeyAfterTheProvenConnectionCloses(t *testing.T) {
+	newPairStand(t, "")
+	kw := &keyWatch{}
+	port := 0
+	port = startOn(t, func(w http.ResponseWriter, r *http.Request) {
+		kw.mu.Lock()
+		if k := r.Header.Get("X-Bridge-Key"); k != "" {
+			kw.keys = append(kw.keys, r.URL.Path)
+		}
+		kw.mu.Unlock()
+		if r.URL.Path == "/ping" {
+			w.Header().Set("Connection", "close") // the bridge "restarts" right after it proved itself
+		}
+		handle(w, r)
+	})
+	setCfg("Port", float64(port))
+	if r := bridgeCall("GET", "/status", nil, 2*time.Second); r != nil {
+		t.Fatalf("a second connection was opened after the proof: %v", r)
+	}
+	kw.mu.Lock()
+	defer kw.mu.Unlock()
+	if len(kw.keys) != 0 {
+		t.Fatalf("the key went over a new connection: %v", kw.keys)
+	}
+}
+
 func TestR247SecretFromTheAddress(t *testing.T) {
 	p := newPairStand(t, "")
 	_, secret, _ := freshPairCode(10)
@@ -345,7 +413,7 @@ func TestR247KeyOnlyToAProvenBridge(t *testing.T) {
 	// and the tray's own call (win_tray.go's trayCall) asks the same before the key goes
 	tray := readText("win_tray.go")
 	body := group(`(?s)func trayCall\(method, path string, body any\) M \{(.*?)\n\}`, tray, 1)
-	if !strings.Contains(body, "bridgeProves(") || strings.Index(body, "bridgeProves(") > strings.Index(body, `req.Header.Set("X-Bridge-Key"`) {
+	if !strings.Contains(body, "bridgeProvenClient(") || strings.Index(body, "bridgeProvenClient(") > strings.Index(body, `req.Header.Set("X-Bridge-Key"`) || !strings.Contains(body, "c.Do(req)") {
 		t.Fatalf("trayCall sends the key before the bridge proves itself:\n%s", body)
 	}
 }
