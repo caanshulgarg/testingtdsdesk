@@ -45,6 +45,9 @@ function goStep(step, type){
 // state bar, the bars at the foot and the empty states read these and nothing else.
 const STATE_WORDS = {review: "To review", ready: "Ready to post", errors: "Errors", intally: "In Tally", duplicate: "Duplicates",
   deleted: "Deleted", rejected: "No entry", ignored: "Ignored"};
+// the bank page's own words (the owner, 24-Oct-2026: "To do · Ready to post · Posted · Ignored"; Purchase and Sales keep
+// theirs), Ignored always shown there
+const BANK_STATE_WORDS = {review: "To do", intally: "Posted"};
 // Purchase: To review = the bills to review (the review table's rows); Ready to post, Errors and In Tally = the three
 // lists of Post to Tally (postTabCounts, src/js/59: its To post, Errors and Posted rows); Duplicates, Deleted, No entry =
 // the bills held so. null when the client's bills are not on this computer
@@ -86,8 +89,8 @@ function pageStates(page){
   if (!c) return [];
   const now = pageState(page);
   const order = page === "bills" ? ["review", "ready", "errors", "intally", "duplicate", "deleted", "rejected"] : ["review", "ready", "intally", "ignored"];
-  const optional = ["errors", "rejected", "ignored"];
-  return order.filter(id => !optional.includes(id) || c[id] > 0 || now === id).map(id => [id, STATE_WORDS[id], num(c[id])]);
+  const optional = page === "bank" ? [] : ["errors", "rejected", "ignored"];
+  return order.filter(id => !optional.includes(id) || c[id] > 0 || now === id).map(id => [id, (page === "bank" && BANK_STATE_WORDS[id]) || STATE_WORDS[id], num(c[id])]);
 }
 // the state open now
 function pageState(page){

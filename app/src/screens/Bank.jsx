@@ -29,8 +29,8 @@ import { loadAP } from "../lib/autopostBoot.js";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
-const EMPTY = { review: "Nothing to review: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To review its ledger; it then waits here.",
-  done: "Nothing in Tally yet. Post the lines under Ready to post.", ignored: "No line ignored." };
+const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
+  done: "Nothing posted to Tally yet. Post the lines under Ready to post.", ignored: "No line ignored. A line you set aside with ✕ waits here, with Restore." };
 const live = () => Bridge.on() && Bridge.up();
 
 

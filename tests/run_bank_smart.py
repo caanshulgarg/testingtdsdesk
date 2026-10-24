@@ -73,6 +73,10 @@ with sync_playwright() as pw:
 
     pg, n = open_page(br, {"width": 1440, "height": 900})
     app = lambda: pg.inner_text("#app")
+    # the owner (24-Oct-2026): the bank page's tabs are "To do · Ready to post · Posted · Ignored"; Purchase keeps its words
+    tabs = pg.evaluate("() => [...document.querySelectorAll('#app nav.statebar [data-state]')].map(t => t.innerText.replace(/\\s*\\d+$/, '').trim())")
+    ok(tabs == ["To do", "Ready to post", "Posted", "Ignored"], "the bank page's tabs: To do · Ready to post · Posted · Ignored (%s)" % tabs)
+    ok(pg.evaluate("pageStates('bills').length === 0 || pageStates('bills')[0][1] === 'To review'") and pg.evaluate("STATE_WORDS.review") == "To review", "Purchase and Sales keep their words")
     count_text = lambda: pg.inner_text("#app [data-f-count]").replace("\n", " ")
     shown = lambda: pg.evaluate("() => [...document.querySelectorAll('#app table.bk-table tbody tr[data-rid]')].map(tr => tr.dataset.rid)")
     # every line, whatever its state (the chips count what the tab shows)
