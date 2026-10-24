@@ -1,18 +1,18 @@
-"""python3 run_tally_nudge.py - "Tally is open: link it", wherever the person is (24-Oct-2026, next-tally-firstlink; the
-owner: "I could not find how to link.. what to do after installing bridge and opening Tally").
+"""python3 run_tally_nudge.py - "Tally is open: link it", on the Tally icon (24-Oct-2026, next-tally-firstlink; the owner:
+"I could not find how to link.. what to do after installing bridge and opening Tally", then "I do not want 'Tally is
+open and link' on every page.. it should be above, on the Tally icon").
 Stub cloud as run_tally_suvit.py (TLight: the computers' beats and the companies FinCom keeps):
-  1. On Today (any firm page), a company open in Tally that is no client's: "Tally is open on NWS144 with <company>.
-     Link it:" [Add as new client] [Link to existing client ▾] · Not now; "+ 1 more open in Tally: see them on the
-     Tally page". A client of the same name: [Link to <client>] instead of Add.
-  2. Add as new client: one click: the client made, tally_company_link once, the ledgers' wake; the line goes on to the
-     next company. Link to existing client: one choice in the list links it.
-  3. Not now: that company's line is hidden in this browser.
-  4. A client's own page while not linked: "<client> is not linked to Tally. Open in Tally now:" [Link <company>] (one
-     click links THIS client); none open: what to do; Choose on the Tally page.
-  5. The Tally page shows the line at its top too.
-  6. No Tally computer heard: "Tally is not connected yet…" with Connect Tally (to the Tally page); a bridge heard, no
-     company open or linked: "FinCom Bridge on NWS144 is connected. Open your company in TallyPrime there…".
-  7. No sideways scroll at 1440 and 390; --shots DIR.
+  1. No line on any page (Today, Clients, a client's page): the top bar's Tally sign carries a badge with the number of
+     companies open in Tally that are no client's ("2").
+  2. A click on the sign opens the Tally panel, which starts with each one: "Tally is open on NWS144 with <company>."
+     [Add as new client] [Link to existing client ▾]; a client of the same name: [Link to Garg Shekhar & Company] first.
+  3. Add as new client: one click: the client made, tally_company_link once, the ledgers' wake; the badge goes to 1.
+     Link to existing client: one choice (asked first when that client has another company).
+  4. On a client's own page not linked: the click opens the panel (not the Tally page) and offers [Link to <this
+     client>] first; one click links THIS client.
+  5. Only for who may link (owner, staff): a viewer sees no badge and no offer.
+  6. Nothing open unlinked: no badge, and a client not linked still goes to its Tally card on a click (as before).
+  7. No sideways scroll at 1440 and 390; --shots DIR (the top bar with the badge, the panel open).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_nudge.py [--shots DIR]"""
 import json, os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -29,7 +29,8 @@ def ok(c, w):
 SETUP = SV.SETUP.replace("TLight.st.at = Date.now();", "TLight.st.at = Date.now(); TLight.st.loaded = true;")
 assert SETUP != SV.SETUP
 VMS, GSC, SAL = SV.VMS, SV.GSC, SV.SAL
-NB = "#app [data-tally-nudge]"
+BADGE, SIGN, PANEL = "[data-tally-badge]", "#cobar [data-tally-sign], [data-tally-sign]", '[data-overlay="tallypanel"]'
+OFF = PANEL + " [data-tally-offers]"
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(SV.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -42,87 +43,93 @@ def main():
         E = lambda js, *a: pg.evaluate(js, *a)
         SV.GST[0] = SV.VMS_GST[:14] + E("(g) => gstinCheckChar(g)", SV.VMS_GST[:14] + "0")
         E("""() => { const g = newCompany({name: 'Garg Shekhar & Company', gstin: '09AANFG3202D1ZR'}); S.companies[g.id] = g; S.data[g.id] = {parties: {}, entries: {}, loaded: true}; g.stats = {};
-            Store.saveCompany(g); window.__ids = {GS: g.id}; try { localStorage.removeItem('fc:tallyNudgeHide'); } catch (e) {} }""")
+            Store.saveCompany(g); window.__ids = {GS: g.id}; }""")
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         calls = lambda kind=None: [c for c in E("window.__calls || []") if kind is None or c[0] == kind]
-        kind = lambda: E("() => { const e = document.querySelector('#app [data-tally-nudge]'); return e ? e.getAttribute('data-tally-nudge') : ''; }")
-        def shot(name):
+        badge = lambda: txt(BADGE) if pg.locator(BADGE).count() else ""
+        sign = lambda: pg.locator("[data-tally-sign]").first
+        def shot(name, full=False):
             if not SHOTS: return
             os.makedirs(SHOTS, exist_ok=True)
             for w, h in ((1440, 900), (390, 844)):
-                pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(350)
-                pg.screenshot(path=os.path.join(SHOTS, "nudge-%s-%d.png" % (name, w)), full_page=False)
-            pg.set_viewport_size({"width": 1440, "height": 900}); pg.wait_for_timeout(200)
+                pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(400)
+                pg.screenshot(path=os.path.join(SHOTS, "icon-%s-%d.png" % (name, w)), full_page=full)
+            pg.set_viewport_size({"width": 1440, "height": 900}); pg.wait_for_timeout(250)
         def narrow(where):
             pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(400)
             sc = E("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
             ok(sc <= 0, "7. no sideways scroll at 390 (%s): %d" % (where, sc))
             pg.set_viewport_size({"width": 1440, "height": 900}); pg.wait_for_timeout(250)
-        def scene(devs, cos, where="today"):
-            E(SETUP, [devs, cos, {}, {}]); pg.wait_for_timeout(150)
+        def close_panel():
+            if pg.locator(PANEL).count(): E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(400)
+        def scene(devs, cos, where="today", role="owner"):
+            close_panel()
+            E(SETUP, [devs, cos, {}, {}]); E("(r) => { S.account.me.role = r; }", role); pg.wait_for_timeout(150)
             E("(w) => { navHome(w); }", where); pg.wait_for_timeout(1300)
+        def open_panel():
+            sign().click(); pg.wait_for_timeout(900)
 
-        # ---- 1. on Today: the company open in Tally, its line with one click
+        # ---- 1. no line on the pages; the badge on the Tally sign
         scene([SV.dev(opened=(VMS, GSC))], SV.cos())
-        ok(pg.locator(NB).count() == 1 and kind() == "open", "1. on Today: one Tally line (%s)" % kind())
-        first = E("() => document.querySelector('#app [data-tally-nudge]').getAttribute('data-tally-nudge-co')")
-        t = txt(NB)
-        ok(t.startswith("T Tally is open on NWS144 with " + first + ". Link it:") or ("Tally is open on NWS144 with " + first + ". Link it:") in t, "1. 'Tally is open on NWS144 with <company>. Link it:' (%s)" % t[:120])
-        ok("+ 1 more open in Tally: see them on the Tally page" in t, "1. '+ 1 more open in Tally: see them on the Tally page'")
-        if first == GSC:
-            ok(pg.locator(NB + " [data-tally-nudge-twin]").inner_text().strip() == "Link to Garg Shekhar & Company", "1. a client of the same name: 'Link to Garg Shekhar & Company'")
-            shot("1-open-twin")
-            pg.click(NB + " [data-tally-nudge-hide]"); pg.wait_for_timeout(500)
-            ok(E("() => document.querySelector('#app [data-tally-nudge]').getAttribute('data-tally-nudge-co')") == VMS, "3. Not now: the next company's line")
-        ok(pg.locator(NB + " [data-tally-nudge-add]").inner_text().strip() == "Add as new client" and pg.locator(NB + " [data-tally-nudge-link]").count() == 1, "1. [Add as new client] [Link to existing client ▾]")
-        ok(E("() => document.querySelector('#app [data-tally-nudge-link] option').textContent") == "Link to existing client ▾", "1. the list says 'Link to existing client ▾'")
-        shot("1-open"); narrow("Today line")
-        # ---- 2. Add as new client: one click
+        ok(pg.locator("[data-tally-nudge]").count() == 0, "1. Today: no 'Tally is open' line on the page")
+        ok(badge() == "2", "1. the Tally sign's badge: 2 companies open in Tally, not linked (%s)" % badge())
+        ok("2 companies open in Tally are not linked: click to link" in (sign().get_attribute("aria-label") or ""), "1. the sign says so to a screen reader (%s)" % sign().get_attribute("aria-label"))
+        ok(pg.locator(PANEL).count() == 0 and pg.locator("[data-tally-offers]").count() == 0, "1. nothing offered until the sign is clicked")
+        shot("1-badge")
+        E("() => { navHome('clients'); }"); pg.wait_for_timeout(900)
+        ok(pg.locator("[data-tally-nudge]").count() == 0 and badge() == "2", "1. Clients: no line, the same badge")
+        E("() => { navHome('today'); }"); pg.wait_for_timeout(700)
+        # ---- 2. the click: the panel starts with the offers
+        open_panel()
+        ok(pg.locator(OFF).count() == 1, "2. a click on the sign opens the Tally panel with the offers")
+        offers = E("(s) => [...document.querySelectorAll(s + ' [data-tally-offer]')].map(o => [o.getAttribute('data-tally-offer'), o.innerText.replace(/\\s+/g, ' ').trim()])", OFF)
+        ok(sorted(o[0] for o in offers) == sorted([VMS, GSC]), "2. both companies offered (%s)" % [o[0] for o in offers])
+        ok(E("(s) => { const p = document.querySelector(s), o = p.querySelector('[data-tally-offers]'), h = p.querySelector('[data-tally-here-card]'); return !!o && (!h || !!(o.compareDocumentPosition(h) & 4)); }", PANEL), "2. at the top of the panel")
+        vm = next((o[1] for o in offers if o[0] == VMS), "")
+        ok(vm.startswith("Tally is open on NWS144 with " + VMS + ".") and "Add as new client" in vm and "Link to existing client ▾" in vm, "2. 'Tally is open on NWS144 with VMS…' [Add as new client] [Link to existing client ▾] (%s)" % vm[:160])
+        gs_btn = PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link-to]' % GSC
+        ok(pg.locator(gs_btn).count() == 1 and pg.locator(gs_btn).inner_text().strip() == "Link to Garg Shekhar & Company", "2. the same name: [Link to Garg Shekhar & Company] first")
+        shot("2-panel-open"); narrow("panel open")
+        # ---- 3. Add as new client
         E("() => { window.__calls = []; }")
-        pg.click(NB + " [data-tally-nudge-add]"); pg.wait_for_timeout(1800)
-        vm = E("(n) => Object.values(S.companies).filter(c => !c.deleted && c.tallyName === n).map(c => c.id)", VMS)
-        ok(len(vm) == 1 and calls("tally_company_link") == [["tally_company_link", {"p_company": VMS, "p_client": vm[0]}]], "2. Add as new client: the client made and linked once (%s)" % calls("tally_company_link"))
-        ok(any(c[0] == "post" and c[1].get("what") == "ledgers" for c in calls()), "2. and the ledgers' first sync asked")
-        E("() => { TLight.st.at = 0; render(); }"); pg.wait_for_timeout(800)
-        ok(E("() => { const e = document.querySelector('#app [data-tally-nudge]'); return e ? e.getAttribute('data-tally-nudge-co') : ''; }") != VMS, "2. VMS EVENTS' line is gone (linked)")
-        # Link to existing client: one choice
-        try: E("() => { localStorage.removeItem('fc:tallyNudgeHide'); }")
-        except Exception: pass
+        pg.click(PANEL + ' [data-tally-offer="%s"] [data-tally-offer-add]' % VMS); pg.wait_for_timeout(1800)
+        ids = E("(n) => Object.values(S.companies).filter(c => !c.deleted && c.tallyName === n).map(c => c.id)", VMS)
+        ok(len(ids) == 1 and calls("tally_company_link") == [["tally_company_link", {"p_company": VMS, "p_client": ids[0]}]], "3. Add as new client: the client made and linked once (%s)" % calls("tally_company_link"))
+        ok(any(c[0] == "post" and c[1].get("what") == "ledgers" for c in calls()), "3. and the ledgers' first sync asked")
+        E("() => { TLight.st.at = 0; render(); }"); pg.wait_for_timeout(900)
+        ok(badge() == "1", "3. the badge goes to 1 (%s)" % badge())
+        # Link to existing client
         scene([SV.dev(opened=(SAL,))], SV.cos(vms="GS"))
-        E("() => { window.__calls = []; }")
-        ok(E("() => document.querySelector('#app [data-tally-nudge]').getAttribute('data-tally-nudge-co')") == SAL, "2. Salesify open, no client: its line")
         gs = E("window.__ids.GS")
-        pg.select_option(NB + " [data-tally-nudge-link]", gs); pg.wait_for_timeout(800)
-        # Garg Shekhar & Company has VMS EVENTS: asked once (the Tally page's own question), then linked
-        ok(pg.locator('#confirmBox [data-cbx="yes"]').is_visible() and "is linked to" in txt("#confirmBox"), "2. the client has another company: asked once (%s)" % txt("#confirmBox")[:120])
+        open_panel(); E("() => { window.__calls = []; }")
+        pg.select_option(PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link]' % SAL, gs); pg.wait_for_timeout(800)
+        ok(pg.locator('#confirmBox [data-cbx="yes"]').is_visible(), "3. that client has another company: asked once")
         pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1500)
-        ok(calls("tally_company_link")[:1] == [["tally_company_link", {"p_company": SAL, "p_client": gs}]], "2. Link to existing client: one choice links it (the company it had is let go, as asked) (%s)" % calls("tally_company_link"))
-        # ---- 4. a client's own page while not linked
-        scene([SV.dev(opened=(VMS, SAL))], SV.cos())
+        ok(calls("tally_company_link")[:1] == [["tally_company_link", {"p_company": SAL, "p_client": gs}]], "3. Link to existing client: one choice links it (%s)" % calls("tally_company_link"))
+        # ---- 4. a client's own page, not linked
+        scene([SV.dev(opened=(VMS,))], SV.cos())
         E("(c) => openCompany(c)", gs); pg.wait_for_timeout(1500)
-        ok(kind() == "client", "4. the client's page: its own line (%s)" % kind())
-        t = txt(NB)
-        ok("Garg Shekhar & Company is not linked to Tally. Open in Tally now:" in t and "Link " + VMS in t and "Choose on the Tally page" in t, "4. 'Garg Shekhar & Company is not linked to Tally. Open in Tally now: [Link …]' (%s)" % t[:160])
-        shot("4-client-not-linked"); narrow("client line")
-        E("() => { window.__calls = []; }")
-        pg.click(NB + ' [data-tally-nudge-client-link="%s"]' % VMS); pg.wait_for_timeout(1500)
+        ok(pg.locator("[data-tally-nudge]").count() == 0 and badge() == "1", "4. the client's page: no line, the badge (%s)" % badge())
+        open_panel()
+        here = PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link-to="%s"]' % (VMS, gs)
+        ok(pg.locator(OFF).count() == 1 and pg.locator(here).count() == 1 and pg.locator(here).inner_text().strip() == "Link to Garg Shekhar & Company", "4. the panel (not the Tally page), with [Link to Garg Shekhar & Company] first")
+        shot("4-client-panel")
+        E("() => { window.__calls = []; }"); pg.click(here); pg.wait_for_timeout(1500)
         ok(calls("tally_company_link") == [["tally_company_link", {"p_company": VMS, "p_client": gs}]], "4. one click links THIS client (%s)" % calls("tally_company_link"))
+        # ---- 5. a viewer: nothing
+        scene([SV.dev(opened=(VMS, GSC))], SV.cos(), role="viewer")
+        ok(badge() == "", "5. a viewer: no badge")
+        open_panel()
+        ok(pg.locator(PANEL).count() == 1 and pg.locator(OFF).count() == 0, "5. a viewer: the panel without offers")
+        E("() => { S.account.me.role = 'staff'; render(); }"); pg.wait_for_timeout(500)
+        close_panel()
+        ok(badge() == "2", "5. staff (may link): the badge (%s)" % badge())
+        # ---- 6. nothing open unlinked
         scene([SV.dev(opened=())], SV.cos())
+        ok(badge() == "", "6. nothing open unlinked: no badge")
         E("(c) => openCompany(c)", gs); pg.wait_for_timeout(1500)
-        ok("Open its company in TallyPrime on the Tally computer: it shows here to link." in txt(NB), "4. none open: what to do (%s)" % txt(NB)[:140])
-        # ---- 5. the Tally page shows it at its top
-        scene([SV.dev(opened=(VMS,))], SV.cos(), where="tally")
-        ok(E("() => { const n = document.querySelector('#app [data-tally-nudge]'), l = document.querySelector('#app [data-tco-list]'); return !!n && !!l && !!(n.compareDocumentPosition(l) & 4); }"), "5. the Tally page: the line at its top, above the list")
-        shot("5-tally-page")
-        # ---- 6. nothing connected yet; connected, nothing open
-        scene([], [])
-        ok(kind() == "connect" and "Tally is not connected yet." in txt(NB) and "download FinCom Bridge, open it, then type the code it shows" in txt(NB), "6. no Tally computer: 'Tally is not connected yet…' (%s)" % txt(NB)[:140])
-        shot("6-not-connected")
-        pg.click(NB + " [data-tally-nudge-connect]"); pg.wait_for_timeout(1000)
-        ok(E("() => S.homeTab") == "tally" and pg.locator("#app [data-firstlink]").count() == 1, "6. Connect Tally: the Tally page with Connect this computer")
-        scene([SV.dev(opened=())], [])
-        ok(kind() == "openit" and "FinCom Bridge on NWS144 is connected. Open your company in TallyPrime there" in txt(NB), "6. a bridge heard, nothing open: 'Open your company in TallyPrime there' (%s)" % txt(NB)[:140])
-        shot("6-open-your-company")
+        sign().click(); pg.wait_for_timeout(1000)
+        ok(pg.locator(PANEL).count() == 0 and E("() => S.view") == "home" and E("() => S.homeTab") == "tally", "6. a client not linked: the sign still goes to its Tally card (%s)" % E("() => [S.view, S.homeTab]"))
         ok(not errors, "no page errors (%s)" % errors[:3])
         br.close()
     srv.shutdown()

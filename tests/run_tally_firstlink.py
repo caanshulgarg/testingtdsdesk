@@ -23,6 +23,7 @@ a stub cloud (TCloud/Cloud):
  10. Help & support's Connect (no key yet) opens the code box (it only re-checked before); #pair=123456 in the address
      connects without typing.
  11. No sideways scroll at 1440 and 390; --shots DIR saves each step at both widths.
+ 12. Migration 104: each state reached is sent once to tally_connect_step (step, version, detail), never the code or a key.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_firstlink.py [--shots DIR]"""
 import hashlib, hmac, json, os, re, sys, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -274,6 +275,14 @@ def main():
         ok("Tally is not answering" in lt and "F1 (Help) → Settings → Connectivity" in lt and "Both" in lt, "9. Tally not answering on this computer: F1 (Help) → Settings → Connectivity, Both (%s)" % lt)
         ok("Open TallyPrime" in txt("#app [data-connect-step=open]"), "9. step 2 says to open TallyPrime")
         shot("09-tally-not-open"); check_narrow("tally not open")
+        # ---- 12. migration 104: each state once per change to tally_connect_step; never the code or a key
+        st = [c[1] for c in calls("tally_connect_step")]
+        seq = [x.get("p_step") for x in st]
+        ok(all(k in seq for k in ("waiting", "other_user", "old_bridge", "found", "wrong_code", "code_ran_out", "paired", "linked", "link_failed")), "12. every state logged (%s)" % seq)
+        ok(all(seq[i] != seq[i + 1] or seq[i] == "wrong_code" for i in range(len(seq) - 1)), "12. once per change, not at every look (%s)" % seq)
+        raw = json.dumps(st)
+        ok(CODE not in raw and "905117" not in raw and KEY not in raw and "fcd_" not in raw, "12. never the code or a key")
+        ok(all(set(x) == {"p_step", "p_version", "p_detail"} for x in st) and any(x.get("p_version") == "2.4.5" for x in st), "12. step, the bridge's version, a short detail")
         # ---- 10. Help & support's Connect opens the code box; #pair= connects without typing
         E(FRESH); bridge_reset(); scene([dev()], cos()); E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(800)
         if pg.locator("#app [data-bridge-details]").count(): pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)

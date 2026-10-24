@@ -7,7 +7,9 @@ import TallyPill from "./parts/TallyPill.jsx";
 import TallyLine, { PanelBooks, panelBooksShown } from "./parts/TallyLine.jsx";
 import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
-import { useLayoutEffect } from "react";
+import { useLayoutEffect, Suspense, lazy } from "react";
+// next-tally-firstlink: the companies open in Tally, not linked, with their one-click link, at the top of the Tally panel
+const TallyOffer = lazy(() => import("./parts/TallyOffer.jsx"));
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 import { Inbox as InboxIcon } from "lucide-react";
@@ -22,7 +24,7 @@ import { goTallyPage } from "./parts/HomeLink.jsx";
 import { StateBar } from "./parts/StateBar.jsx";
 import { useDismiss } from "./parts/dismiss.js";
 import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
-import { clientTallyState } from "./lib/tallyState.js";
+import { clientTallyState, unlinkedOpen, mayLink } from "./lib/tallyState.js";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -202,14 +204,18 @@ function TallySign() {
   // next-tally-suvit: the client's company in the one pill's words (lib/tallyState.js), as its card and chip say them
   const k = lk ? Object.assign({}, lk, { pill: clientTallyState(co) }) : null;
   const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
+  // next-tally-firstlink (the owner: "it should be above, on the Tally icon"): a badge with the companies open in Tally
+  // that are no client's; a click then opens the panel, which starts with their link (TallyOffer). Only for who may link
+  const nOpen = mayLink() ? unlinkedOpen().length : 0, offer = nOpen ? " — " + nOpen + (nOpen === 1 ? " company open in Tally is" : " companies open in Tally are") + " not linked: click to link" : "";
   return <span className="tsign-wrap">
     <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
-      aria-haspopup="dialog" aria-label={"Tally: " + h.label} title={tallyHereWords(h) + (k ? " — " + (k.state === "unlinked" ? k.word : k.pill.text) : "")}
+      aria-haspopup="dialog" aria-label={"Tally: " + h.label + offer} title={tallyHereWords(h) + (k ? " — " + (k.state === "unlinked" ? k.word : k.pill.text) : "") + offer}
       // ui-tidy; 15-Oct-2026: while the client is not linked, the sign points to the Tally page's Connect Tally, step 4 with this
       // client (goTallyCard, parts/TallyChip.jsx), as every Tally chip does
-      onClick={() => (co && k && k.state === "unlinked" ? goTallyCard(co.id) : doAct("tallyPanel"))}>
+      onClick={() => (co && k && k.state === "unlinked" && !nOpen ? goTallyCard(co.id) : doAct("tallyPanel"))}>
       <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
     </button>
+    {nOpen > 0 && <span className="bell-n tsign-n" data-tally-badge={nOpen} aria-hidden="true">{nOpen}</span>}
     {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}
   </span>;
 }
@@ -284,6 +290,7 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
+        {mayLink() && <Suspense fallback={null}><TallyOffer /></Suspense>}
         <HereCard h={tallyHere(co)} link={co ? Object.assign({}, tallyLinkOf(co), { pill: clientTallyState(co) }) : null} />
         <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>

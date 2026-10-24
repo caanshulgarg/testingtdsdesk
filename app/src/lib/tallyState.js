@@ -76,3 +76,16 @@ export function lastEntry(co, k) {
   let rec = ""; try { const rc = dev && typeof Rec === "object" && Rec.recOf ? Rec.recOf(dev) : null, y = rc && row.company ? rc[row.company] : null; rec = (y && y.lastAt) || ""; } catch (e) { rec = ""; }
   return [k && k.line && k.line.read, rec].filter(Boolean).sort().pop() || "";
 }
+// next-tally-firstlink (the owner, 24-Oct-2026: "it should be above, on the Tally icon"): the companies open in Tally now,
+// on a computer heard from, that are no client's (a client deleted here: not linked), once each. The top bar's Tally sign
+// counts them (its badge) and its panel offers each one's link (parts/TallyOffer.jsx)
+export function unlinkedOpen() {
+  if (typeof TCloud !== "object" || !TCloud.on()) return [];
+  const linked = new Set(), seen = new Set(), out = [];
+  [].concat((typeof TLight === "object" && TLight.st.cos) || [], (TCloud.pane && TCloud.pane.companies) || [])
+    .forEach((r) => { const co = r && r.client_id && S.companies ? S.companies[r.client_id] : null; if (r && r.client_id && !(co && co.deleted)) linked.add(coKey(r.company)); });
+  tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => { const k = coKey(n); if (k && !linked.has(k) && !seen.has(k)) { seen.add(k); out.push(n); } }); });
+  return out;
+}
+// who may link a company to a client: the cloud's can_write (members owner or staff)
+export const mayLink = () => !!(S.account && S.account.me && ["owner", "staff"].includes(S.account.me.role));

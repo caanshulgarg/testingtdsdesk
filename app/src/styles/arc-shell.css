@@ -102,6 +102,9 @@ header.top { background: var(--surface); box-shadow: inset 0 -1px 0 var(--border
 .firmbtn { border-color: var(--border); background: var(--surface); border-radius: var(--radius-control); }
 .firmbtn:hover { border-color: var(--border-strong); background: var(--surface-muted); }
 .tsign { border-radius: var(--radius-pill); }
+/* next-tally-firstlink: companies open in Tally, not linked (a click links them in the panel) */
+.tsign-wrap { position: relative; }
+.tsign-wrap .tsign-n { background: var(--accent); color: var(--accent-foreground, #fff); pointer-events: none; z-index: 1; }
 .tsign-pop { border-color: var(--border); border-radius: var(--radius-panel); box-shadow: var(--shadow-floating); background: var(--surface-raised); }
 
 /* ---------- surfaces: Arc's card ---------- */

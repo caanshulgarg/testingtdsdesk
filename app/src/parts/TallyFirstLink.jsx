@@ -24,6 +24,19 @@ const FRESH = { ...FL };
 // for support and the tests (tests/run_tally_firstlink.py): the watcher's state, and a fresh start
 if (typeof window !== "undefined") window.FCFirstLink = { FL, reset() { Object.keys(FL).forEach((k) => { delete FL[k]; }); Object.assign(FL, FRESH); } };
 const say = (p) => { Object.assign(FL, p); if (typeof render === "function") render(); };
+// migration 104 (run on staging 24-Oct-2026): each state the panel reaches, once per change, to tally_connect_step, so the
+// owner sees where a first connection stops (none of this was ever seen by the cloud before). Never the code or a key;
+// a refusal or an older cloud is ignored (the panel works the same without it)
+export function logStep(step, version, detail, again) {
+  const k = step + (again ? "#" + again : "");
+  if (FL.logged === k) return;
+  FL.logged = k;
+  try {
+    if (typeof TCloud !== "object" || !TCloud.on()) return;
+    const v = /^\d+\.\d+\.\d+$/.test(String(version || "")) ? String(version) : null;
+    Promise.resolve(TCloud.rpc("tally_connect_step", { p_step: step, p_version: v, p_detail: detail ? String(detail).slice(0, 300) : null })).catch(() => {});
+  } catch (e) { /* never in the way */ }
+}
 const pcWords = (b) => (b && b.computer ? b.computer + (b.user ? " (" + String(b.user).split("\\").pop() + ")" : "") : "this computer");
 
 // /ping on every port of this user's range at once (nothing secret is sent): mine (with its proof window), another
@@ -38,10 +51,10 @@ async function scan() {
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;
-  if (mine) say({ st: "code", found: mine, windowOpen: !!mine.pairProof });
-  else if (other) say({ st: "other", other, found: null });
-  else if (old) say({ st: "old", old, found: null });
-  else say({ st: "waiting", found: null });
+  if (mine) { say({ st: "code", found: mine, windowOpen: !!mine.pairProof }); logStep("found", mine.version); }
+  else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
+  else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
+  else { say({ st: "waiting", found: null }); logStep("waiting"); }
 }
 
 // the six digits: checked against the bridge's proof here first (Bridge.pair sends nothing to a bridge that does not
@@ -63,6 +76,7 @@ export async function submitCode(raw) {
         : "That is not the code in the FinCom Bridge box. Nothing was sent: check the six digits, or choose Connect FinCom on this computer… again for a new code.")
       : ((e && e.message) || String(e));
     say({ busy: false, st: was ? "code" : "waiting", msg: m, code: "" });
+    logStep(e && e.code === "pair" && closed ? "code_ran_out" : "wrong_code", was && was.version, e && e.code !== "pair" ? (e.message || "") : "", FL.tries);
   }
 }
 
@@ -70,6 +84,7 @@ export async function submitCode(raw) {
 async function afterPair() {
   if (!FL.pairedAt) FL.pairedAt = Date.now();
   say({ st: "linking", msg: "" });
+  logStep("paired", (Bridge.st && Bridge.st.version) || (FL.found && FL.found.version));
   try { await Bridge.refresh(); } catch (e) { /* the line below says so */ }
   if (typeof startBridgePolling === "function") startBridgePolling();
   await linkFirm();
@@ -78,7 +93,7 @@ export async function linkFirm() {
   if (typeof TCloud !== "object") return;
   TCloud.autoAt = 0; TCloud.autoErr = "";
   try { await TCloud.auto(); } catch (e) { TCloud.autoErr = (e && e.message) || String(e); }
-  if (TCloud.autoErr) say({ st: "error", err: TCloud.autoErr });
+  if (TCloud.autoErr) { say({ st: "error", err: TCloud.autoErr }); logStep("link_failed", Bridge.st && Bridge.st.version, TCloud.autoErr); }
   try { await TCloud.refreshPane(); } catch (e) { /* read again in 5 seconds */ }
   if (typeof render === "function") render();
 }
@@ -90,7 +105,7 @@ function useWatch(linked) {
     const tick = async () => {
       if (stop) return;
       try {
-        if (FL.st === "linking") { await TCloud.refreshPane(); if (!(TCloud.pane.devices || []).length && Date.now() - (TCloud.lastAutoKick || 0) > 30000) { TCloud.lastAutoKick = Date.now(); await linkFirm(); } if (typeof render === "function") render(); }
+        if (FL.st === "linking") { await TCloud.refreshPane(); if ((TCloud.pane.devices || []).length) logStep("linked", Bridge.st && Bridge.st.version); if (!(TCloud.pane.devices || []).length && Date.now() - (TCloud.lastAutoKick || 0) > 30000) { TCloud.lastAutoKick = Date.now(); await linkFirm(); } if (typeof render === "function") render(); }
         else await scan();
       } catch (e) { /* the next tick */ }
       if (!stop) t = setTimeout(tick, FL.st === "linking" ? LINK_MS : SCAN_MS);
