@@ -46,9 +46,21 @@ a 2.4.7 bridge pairs only with the app of this branch or later. The app still pa
 - Tests first: r247pair_test.go, tests/run_pair_spake.mjs (Go's SPAKE2 vectors against the page's JavaScript), and
   run_tally_firstlink.py checks 13 to 15.
 - `go vet` Linux and Windows: clean. `go test ./...` passed.
-- release_check_test.sh: all cases as expected. release-check.sh: PASSED for 2.4.7 at be7c3a98a.
+- release_check_test.sh: all cases as expected. release-check.sh: PASSED for 2.4.7 at be7c3a98a, and again at d70b8c100
+  (FORCE_REBUILD=1: the setup is committed and 2.4.7 was never published) after the app fix 281635423, which touched no
+  bridge source.
 - App tests: run_tally_firstlink, run_stability, run_ui_standards, run_safari_compat and run_boot_watch all passed, and
   run_pair_spake.mjs passed.
 - Five review rounds (docs/reviews/bridge-2.4.7-{code,security}-review.md). 0 High and 0 Medium are open; the Lows are
   recorded there.
-- CI, Windows CI and the real-Tally gate (upgrade from 2.4.6): @CI@
+- CI run 40135517184 at d70b8c100: app, bridge-linux and bridge-linux-typed green, and tests shares 1-6 green. Shares
+  7-10 failed on tests that fail the same way on staging-next without 2.4.7 (checked locally on 3e00356f0 and in
+  staging-next's own CI 40118356855 at 87b640328 and 40122260794 at 3e00356f0): run_upload_pages "Bank: the same words";
+  the top bar's Tally sign test; the M4 nil-deductions test; SupplierHealth.jsx missing; cloudClientView not defined.
+  CI 40131853747 at 915592c42 had found two of 2.4.7's own (run_bridge_ports_ui 5, run_pair_ui), fixed in 281635423.
+- Windows CI (FinCom Bridge on Windows: go-tests-windows, build, the committed setup installed on windows-2022 and
+  windows-2025): run 40135512532 at d70b8c100, success. Run 40131853855 at 915592c42 also succeeded.
+- Real Tally (tally-versions run 40131862793, modes quick and upg, upg_from=2.4.6; TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1;
+  harness branch tally-versions e0016db59, results b54d1215c): 40 of 40 PASS with the committed setup (setup origin:
+  COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe SHA-256 69aa6b74...8799). On every release: c1, c2, u1
+  "2.4.7 installed over 2.4.6: settings changed: none", u2, u3 "each asked once in all and ended: 50" and u4.
