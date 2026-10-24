@@ -60,11 +60,25 @@ bridge answers).
 - `bash bridge-go/release_check_test.sh`: all cases as expected.
 - `bridge-go/release-check.sh`: RELEASE CHECK PASSED for 2.4.6 at 716568447 (1 version new; 2 vet, tests, size test,
   allow-list tests; 3 go.mod; 4 allow-list sha256 03784caabea64a2d, re-measured line of 2026-10-24; 5 code and
-  security reviews; 6 test sheet).
+  security reviews; 6 test sheet). The self-test release_check_test.sh then needed 2.4.6's decision line (ff082c4df, a
+  shell test only; no Go source changed after the build). It passed again at 809c0c54e with FORCE_REBUILD=1: the setup
+  is committed, and 2.4.6 was never published.
 - Build: `POSTONLY=any bridge-go/build.sh`. The setup, its .sha256 and the program are in assets-test/bridge-go/.
   latest.json is not changed.
 - Reviews: docs/reviews/bridge-2.4.6-code-review.md and -security-review.md (8 rounds; 0 High and 0 Medium open).
-- CI and real Tally: @CI@
+- CI (app, bridge-linux, bridge-linux-typed and tests 1-10): run 40116981253, success at 809c0c54e. Earlier, run
+  40112876276 at 9faa45b35 failed only in bridge-linux's release-check self-test, both attempts; fixed in ff082c4df.
+- Windows CI (FinCom Bridge on Windows: go-tests-windows, build, the committed setup installed on windows-2022 and
+  windows-2025 "just for me" and for all users, then removed): run 40116981562, success at 809c0c54e. Run 40112867970
+  at 9faa45b35 also succeeded.
+- Real Tally (tally-versions run 40112893171, modes quick and upg, upg_from=2.4.5; TallyPrime 3.0, 4.1, 5.1, 6.2 and
+  7.1; harness branch tally-versions 35919fc3f, results 48f04be00): 40 of 40 PASS with the committed setup
+  (`setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.6.exe SHA-256 a64a93cf...5917`). On every
+  release: c1 install and open the company, c2 port and company list, u1 2.4.6 installed over 2.4.5 with the version
+  and settings carried, u2 the recorder state carried (nothing sent twice, nothing lost), u3 held lines from 2.4.5 each
+  asked once in all and ended (50 of 50), and u4 a new save after the upgrade arrives with its body. The harness
+  installs silently (/S), so FinCom is never opened there, by design. The two triggers are covered by the Go tests and
+  by the test sheet's checks 7 to 9 on a real desktop.
 
 ## For the owner
 
