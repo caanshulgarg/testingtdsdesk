@@ -123,10 +123,13 @@ ok(t24.some(l => /\^S16\^1\^1\^1\^16\(ia\)\^50000\.00\^$/.test(l)) && t24.some(l
   ok(nil.every(Boolean) && nil.map(d => F(d, 30)).join("") === "TBY" && nil.every(d => F(d, 24) === "" && F(d, 14) === "0.00" && F(d, 23) !== ""),
     "26R2: no TDS: remarks T, B, Y, the date paid kept and the date of deduction empty (FVU 8.7, T-FV-4257 / T-FV-4252) (" + nil.map(d => d && [F(d, 30), F(d, 23), F(d, 24)].join("/")) + ")");
   ok(F(by("26R2.txt", "Quillfeather Weddings LLP"), 24) === "10072025", "26R2: a deduction with tax keeps its date of deduction");
-  ok(!by("26R2.txt", "Big Supplier") && r2f.notes.some(n => /Big Supplier/.test(n) && /T_FV_6210/.test(n)), "26R2: 194Q below the limit with no TDS left out (FVU 8.7 takes no Y for 194Q, T_FV_6210): " + J(r2f.notes));
+  // (the owner, 24-Oct-2026: a row FVU 8.7 takes no Y for is included, with no remark; not left out)
+  const bs = by("26R2.txt", "Big Supplier");
+  ok(bs && F(bs, 33) === "94Q" && F(bs, 30) === "" && F(bs, 24) === "" && F(bs, 14) === "0.00" && F(bs, 22) === "100000.00" && r2f.notes.some(n => /Big Supplier/.test(n) && /no remark/.test(n) && /T_FV_6210/.test(n)),
+    "26R2: 194Q below the limit with no TDS: in the file with no remark and no date of deduction (FVU 8.7 takes no Y for 194Q, T_FV_6210) (" + (bs && [33, 30, 24, 14].map(n => F(bs, n))) + ") " + J(r2f.notes));
   ok(F(by("26R2.txt", "Anil Partner"), 33) === "94T" && r2f.problems.some(p => /194T/.test(p) && /T-FV-4301/.test(p)), "26R2: 194T: the file says FVU 8.7 has no code for it (T-FV-4301): " + J(r2f.problems));
   const cd = recs(r2f.text, "CD")[0];
-  ok(F(cd, 5) === String(dd("26R2.txt").length) && F(cd, 5) === "6", "26R2: the challan counts its 6 deductee records (" + F(cd, 5) + ")");
+  ok(F(cd, 5) === String(dd("26R2.txt").length) && F(cd, 5) === "7", "26R2: the challan counts its 7 deductee records (" + F(cd, 5) + ")");
   const tp = by("27D2.txt", "Treaty Partner Inc"), rh = by("27D2.txt", "Royalty Holder SA");
   ok(tp && F(tp, 10) === "AABCT1234T" && F(tp, 35) === "B" && F(tp, 36) === "16" && [39, 40, 41, 42].every(n => F(tp, n) === ""),
     "27D2: a PAN at the treaty rate (B): no foreign address, e-mail, phone or tax ID (FVU 8.7, T-FV-4335 to 4338) (" + (tp && [10, 35, 36, 39, 40, 41, 42].map(n => F(tp, n))) + ")");
@@ -137,8 +140,8 @@ ok(t24.some(l => /\^S16\^1\^1\^1\^16\(ia\)\^50000\.00\^$/.test(l)) && t24.some(l
   const ck = (q, form) => x4.TDS26Q.fvu87Checks(FY, q, form), k = (l, kk) => l.find(c => c.k === kk);
   const c26 = ck("Q2", "26Q"), c27 = ck("Q2", "27Q");
   ok(k(c26, "no-code") && k(c26, "no-code").level === "warn" && /Anil Partner/.test(k(c26, "no-code").words) && /T-FV-4301/.test(k(c26, "no-code").words), "Validate: 194T, a warning naming T-FV-4301 (" + J(k(c26, "no-code")) + ")");
-  ok(k(c26, "y-out") && /Big Supplier/.test(k(c26, "y-out").words) && k(c26, "inop") && /Inop Carriers/.test(k(c26, "inop").words) && !k(c26, "b-sec"),
-    "Validate: the 194Q row left out and the inoperative PAN said (info); no remark B error (" + J(c26.map(c => c.k)) + ")");
+  ok(k(c26, "y-out") && k(c26, "y-out").level === "info" && /Big Supplier/.test(k(c26, "y-out").words) && /with no remark/.test(k(c26, "y-out").words) && !/left out/.test(k(c26, "y-out").words) && k(c26, "inop") && /Inop Carriers/.test(k(c26, "inop").words) && !k(c26, "b-sec"),
+    "Validate: the 194Q row written with no remark and the inoperative PAN said (info); no remark B error (" + J(c26.map(c => c.k)) + ")");
   ok(k(c27, "contact") && /Treaty Partner Inc/.test(k(c27, "contact").words) && /Royalty Holder SA/.test(k(c27, "contact").words) && !k(c27, "nature"), "Validate 27Q: the details left out said for both, natures 16 and 99 in FVU 8.7's list (" + J(c27.map(c => c.k)) + ")");
   ok(ck("Q1", "26Q").length === 0 && x4.TDS26Q.fvu87Checks("2026-27", "Q2", "26Q").length === 0, "Validate: nothing for a quarter with none of these, nor for 2026-27 (Form 140: FVU 1.2)");
   // remark B where FVU 8.7 refuses it (194H), a nature not in its list, and Y on a 27Q deductee

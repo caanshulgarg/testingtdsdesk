@@ -205,7 +205,8 @@ const TDS26QFile = {
   // next-fvu87 (24-Oct-2026): what Protean's FVU 8.7 takes on a deductee record, read off the FVU itself by running it on
   // FinCom's files with one thing changed at a time (tests/run_fvu87.py; docs/fvu-check.md, "FVU 8.7's rules"):
   //   B (Form 15G / 15H) only with these 26Q codes (T_FV_4245; 4JA and 4JB refused though the message names 194J)
-  //   Y (below the threshold) only with these 26Q codes (T-FV-4282; 194Q: T_FV_6210, C, S and U only)
+  //   Y (below the threshold) only with these 26Q codes (T-FV-4282; 194Q: T_FV_6210, C, S and U only); with another code
+  //   the row is written with no remark (the owner, 24-Oct-2026), which FVU 8.7 takes
   //   T (transporter) only with 94C and a valid PAN (T-FV-4265, T-FV-4266)
   //   with no tax deducted the date of deduction is left empty (T-FV-4257; with B: T-FV-4252)
   //   C only for a PAN that is structurally invalid (PANNOTAVBL; T-FV-4323): an inoperative PAN is written as it is, no C
@@ -216,11 +217,12 @@ const TDS26QFile = {
     Y: ["193", "194", "4BB", "4EE", "4IA", "4IB", "4JA", "4JB", "94A", "94B", "94C", "94D", "94G", "94H", "94K", "94L", "94O", "94R", "94S"], T: ["94C"],
     NATURES: ["16", "21", "27", "28", "31", "49", "52", "66", "67", "68", "69", "70", "99"], NATURE_CONTACT: ["16", "21", "27", "31", "49", "52", "66", "67", "68", "69", "70"],
     NO_CODE: {"194T": "Protean's FVU 8.7 has no section code for 194T (payments to partners, from 1 April 2025): it refuses the record (T-FV-4301); a later FVU from Protean is needed"}},
-  // a deductee record's remark as FVU 8.7 takes it: {remark, drop (left out of the file: why), why (FVU 8.7 refuses it: why)}
+  // a deductee record's remark as FVU 8.7 takes it: {remark, note (what FinCom wrote for it), yOff (Y taken off), why (FVU 8.7 refuses it: why)}
   fvu87Remark(r, form, code, m){
     const s = TDS.sec(r.section), zero = !(num(r.tds) > 0.005), pan = String(r.pan || "").toUpperCase();
     if (m.remark === "C" && Certs.validPan(pan)) return {remark: "", note: r.party + ": the PAN " + pan + " is inoperative: written as it is, without remark C (FVU 8.7 takes C only for a PAN that is not valid, T-FV-4323); the higher rate stays"};
-    if (zero && m.remark === "Y" && !this.FVU87.Y.includes(code)) return {remark: "", drop: r.party + " (" + s + ", no TDS, below the limit): left out of the file; FVU 8.7 takes no remark Y for " + s + (s === "194Q" ? " (T_FV_6210)" : " (T-FV-4282)")};
+    // (the owner, 24-Oct-2026: such a row is in the file with no remark, not left out; FVU 8.7 takes it so)
+    if (zero && m.remark === "Y" && !this.FVU87.Y.includes(code)) return {remark: "", yOff: true, note: r.party + " (" + s + ", no TDS, below the limit): written with no remark; FVU 8.7 takes no remark Y for " + s + (s === "194Q" ? " (T_FV_6210)" : " (T-FV-4282)")};
     if (zero && m.remark === "B" && !this.FVU87.B.includes(code)) return {remark: "B", why: r.party + ": remark B (Form 15G / 15H) is not allowed for " + s + " (code " + code + "); FVU 8.7 refuses it (T_FV_4245)"};
     if (zero && m.remark === "T" && !this.FVU87.T.includes(code)) return {remark: "T", why: r.party + ": remark T (transporter) is only for 194C; FVU 8.7 refuses it for " + s + " (T-FV-4265)"};
     return {remark: m.remark};
@@ -235,8 +237,8 @@ const TDS26QFile = {
       const s = TDS.sec(r.section), code = this.codeFor(r), m = this.fvu87Remark(r, form, code, this.remark(r, form));
       if (this.FVU87.NO_CODE[s]) bad["no-code"].push({r, w: r.party});
       if (m.why && /remark B/.test(m.why)) bad["b-sec"].push({r, w: r.party + " (" + s + ")"});
-      if (m.drop) bad["y-out"].push({r, w: r.party + " (" + s + ")"});
-      if (m.note) bad["inop"].push({r, w: r.party});
+      if (m.yOff) bad["y-out"].push({r, w: r.party + " (" + s + ")"});
+      else if (m.note) bad["inop"].push({r, w: r.party});
       if (form === "27Q"){
         const i = this.nrInfo(r.party), nat = String(i.nature || "").trim();
         if (nat && !this.FVU87.NATURES.includes(nat.padStart(2, "0"))) bad["nature"].push({r, w: r.party + " (" + nat + ")"});
@@ -247,7 +249,7 @@ const TDS26QFile = {
     const W = {"no-code": ["warn", "194T: Protean's FVU 8.7 has no section code for payments to partners and refuses these records (T-FV-4301); a later FVU from Protean is needed: "],
       "b-sec": ["error", "Remark B (Form 15G / 15H) is only for interest, dividends, insurance commission, rent, NSS, life insurance payouts and mutual fund units; FVU 8.7 refuses it here (T_FV_4245): "],
       "nature": ["error", "Nature of remittance not in FVU 8.7's list for 27Q (16, 21, 27, 28, 31, 49, 52, 66-70, 99; T-FV-4312): "],
-      "y-out": ["info", "Below the limit with no TDS, left out of the file: FVU 8.7 takes no remark Y for this section: "],
+      "y-out": ["info", "Below the limit with no TDS, written in the file with no remark: FVU 8.7 takes no remark Y for this section: "],
       "inop": ["info", "Inoperative PAN: written as it is, without remark C (FVU 8.7 takes C only for a PAN that is not valid, T-FV-4323); the higher rate stays: "],
       "contact": ["info", "Foreign address, e-mail, phone and tax ID left out of the file: FVU 8.7 takes them only with no PAN, remark C and natures 16, 21, 27, 31, 49, 52, 66-70: "]};
     const uniq = (l) => Array.from(new Set(l.map(x => x.w)));
@@ -262,9 +264,8 @@ const TDS26QFile = {
       const part = typeof TDSReg === "object" ? TDSReg.portionFor(c, form, fy, q) : {interest: num(c.interest), fee: num(c.fee) + num(c.others)};
       const dds = (used[c.id] || []).map(r => {
         const code = form === "27EQ" ? r.code || "" : this.codeFor(r), m0 = this.remark(r, form);
-        // next-fvu87: the remark as FVU 8.7 takes it (a row it takes no remark for is left out; what it refuses is a problem)
+        // next-fvu87: the remark as FVU 8.7 takes it (Y where it takes none: no remark; what it refuses is a problem)
         const fv = form === "27EQ" ? {remark: m0.remark} : this.fvu87Remark(r, form, code, m0), m = Object.assign({}, m0, {remark: fv.remark});
-        if (fv.drop){ notes.add(fv.drop); return null; }
         if (fv.note) notes.add(fv.note);
         if (fv.why) problems.add(fv.why);
         if (form !== "27EQ" && this.FVU87.NO_CODE[TDS.sec(r.section)]) problems.add(r.party + ": " + this.FVU87.NO_CODE[TDS.sec(r.section)]);
@@ -295,7 +296,7 @@ const TDS26QFile = {
         // party is marked so (S.books.nrInfo[party].optOut115BAC)
         if (form === "27Q" || form === "27EQ") d[49] = this.nrInfo(r.party).optOut115BAC ? "Y" : "N";
         return d;
-      }).filter(Boolean);
+      });
       return {c, part, dds};
     });
     const firmMissing = this.oldAsks(form, fy, q, firm);
