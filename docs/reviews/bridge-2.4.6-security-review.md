@@ -6,7 +6,7 @@ the whole range, and rounds 4 to 7 re-reviewed its fixes for correctness and sec
 command could not run in this session: it needs origin/HEAD in the checkout, the same limit as for 2.4.5. Its scope was
 given to the round-3 session instead.
 
-Range: 69de7a79d..3ff0fc423
+Range: 69de7a79d..0b4c5929c
 
 ## Security checks made (on the final code)
 
@@ -49,9 +49,12 @@ Range: 69de7a79d..3ff0fc423
 - **The Finish page.** It runs `FinComBridge.exe connect --first|--skip`, which changes only the install's record. It
   opens no browser itself: the setup may run as an administrator or as another account. 2.4.5's Finish page ran
   `ExecShell open ${FINCOM}` from the setup's own, possibly elevated, process; 2.4.6 no longer does.
-- **Tally.** No request is added or changed, and nothing new is sent. `docs/tally-allowlist.md` is unchanged (sha256
-  6bf9d43c248e097c..., the 2.4.5 release row). The tests check that no request reaches the stand-in Tally during either
-  trigger (`tallySent` unchanged).
+- **Tally.** No request is added or changed, and nothing new is sent. The allow-list's table and its hash are unchanged
+  (b4df290484f5..., as at 2.4.5). TestAllowListUnchanged and TestRelease246VersionAllowListUnchanged pin it. The doc's
+  file hash moves from 6bf9d43c248e097c to 03784caabea64a2d only because of words (0b4c5929c): its decision line now
+  names 2.4.6 by the owner's standing decision of 2026-10-06, and a dated line says no request was measured again.
+  release-check needs the line to name the version built. The tests check that no request reaches the stand-in Tally
+  during either trigger (`tallySent` unchanged).
 - **No AI** in the bridge; nothing here calls a model.
 
 ## Round-3 findings and what was done
