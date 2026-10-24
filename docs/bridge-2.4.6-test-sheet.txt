@@ -22,8 +22,9 @@ CHECK 7 - THE INSTALL CONNECTS BY ITSELF (2.4.6; a computer or Windows user not 
    leave "Open FinCom to connect" ticked and press Finish.
    You should see: FinCom opens in the default browser within a few seconds; its address bar shows no #pair= (taken off
    at once); Connect Tally says connected to FinCom Bridge on this computer, then the firm link within a minute; open a
-   company in Tally and "Add as client" is the only step left. The log says "The setup's Finish page: Open FinCom to
-   connect (ticked)" and "FinCom opened in the browser to connect this computer (the first start after the setup ...)".
+   company in Tally and "Add as client" is the only step left. The bridge's log says "FinCom handed to the tray to open
+   in the browser and connect this computer (the first start after the setup, session N, the setup's Finish page: Open
+   FinCom to connect ticked)"; install.log says "Open FinCom to connect: chosen on the last page".
    Restart the computer and sign in: FinCom does NOT open again (once per install).
 
 CHECK 8 - THE TRAY ITEM
@@ -33,8 +34,8 @@ CHECK 8 - THE TRAY ITEM
    says this browser is connected. Choosing the item again gives a new code; the old one no longer works.
 
 CHECK 9 - NOT FOR ANOTHER USER, NOT WHEN UNTICKED, NOT WHEN CONNECTED
-   (a) Install again, untick "Open FinCom to connect", press Finish, wait 3 minutes: FinCom does not open; the log says
-       "Open FinCom to connect left unticked".
+   (a) Install again, untick "Open FinCom to connect", press Finish, wait 3 minutes: FinCom does not open; install.log says
+       "Open FinCom to connect: left unticked on the last page".
    (b) On a computer already connected to FinCom (upgrade from 2.4.5), install 2.4.6 and untick the box: FinCom does not
        open by itself, then or after a restart; the log says "Already connected to FinCom" once.
    (c) For all users (the service): sign in as another Windows user on the same computer: no browser opens for that

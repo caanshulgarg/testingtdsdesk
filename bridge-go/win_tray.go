@@ -346,7 +346,8 @@ func (t *tray) poll() {
 			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
 			t.check(st)
 			// 2.4.6: the first start after the setup: FinCom opens with the code, once per install (pairopen.go)
-			// (the port's program checked at most once a minute, and again right before FinCom opens: env.verify)
+			// (the port's program checked at most once a minute before the take, so the take never goes to another user's
+			// program on the port; and again right before FinCom opens, env.verify, for one that took the port meanwhile)
 			if truthy(st["pairOpenReady"]) && time.Since(ownChecked) > time.Minute && t.opening.CompareAndSwap(false, true) {
 				ownChecked = time.Now()
 				go func(u string) {

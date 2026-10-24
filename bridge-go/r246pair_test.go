@@ -289,7 +289,7 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 	if c, _ := p.pair(code); c != 200 {
 		t.Fatal("the code did not pair")
 	}
-	if logLines("FinCom opened in the browser to connect this computer (the first start after the setup, session 1)") != 1 {
+	if logLines("FinCom handed to the tray to open in the browser and connect this computer (the first start after the setup, session 1)") != 1 {
 		t.Error("no log line for the first-start open")
 	}
 	if tallySent.Load() != sent {
@@ -571,10 +571,21 @@ func TestRelease246VersionAllowListUnchanged(t *testing.T) {
 func TestFirstStartPortNotOwn(t *testing.T) {
 	p := newPairStand(t, "")
 	dueAt(t, 0, true)
+	pairOpenSleep = func(time.Duration) {}
+	t.Cleanup(func() { pairOpenSleep = time.Sleep })
 	e := p.env(ownSessionFacts)
-	e.verify = func() bool { return false }
+	n := 0
+	e.verify = func() bool { n++; return false }
 	trayFirstOpen(e, fincomURL())
-	if len(p.opened) != 0 || len(p.shown) != 0 {
-		t.Fatalf("opened %v shown %v", p.opened, p.shown)
+	if len(p.opened) != 0 || len(p.shown) != 1 || regexp.MustCompile(`\d{6}`).MatchString(p.shown[0]) || !strings.Contains(p.shown[0], "Connect FinCom on this computer") || n != 4 {
+		t.Fatalf("opened %v shown %v, checked %d times", p.opened, p.shown, n)
+	}
+	// a passing glitch: opened after it
+	p.shown = nil
+	dueAt(t, 0, true)
+	n = 0
+	e.verify = func() bool { n++; return n > 2 }
+	if !trayFirstOpen(e, fincomURL()) || len(p.opened) != 1 {
+		t.Fatalf("after a glitch: opened %v", p.opened)
 	}
 }

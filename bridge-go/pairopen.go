@@ -140,8 +140,19 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 	if r == nil || !truthy(r["take"]) {
 		return false
 	}
-	if e.verify != nil && !e.verify() {
-		return true // taken from a program that is not this install's bridge (any more): nothing opened, no code shown
+	// the port's program checked again before FinCom opens (the tray checked it before the take too); a passing glitch
+	// (the service manager or the connection table not answering) is given 3 more seconds
+	if e.verify != nil {
+		ok := e.verify()
+		for i := 0; i < 3 && !ok; i++ {
+			pairOpenSleep(time.Second)
+			ok = e.verify()
+		}
+		if !ok {
+			// not this install's bridge (any more): no code shown, nothing opened; the way to connect said instead
+			e.show("FinCom Bridge", "To connect FinCom on this computer: right-click the FinCom icon near the clock and choose Connect FinCom on this computer...", false)
+			return true
+		}
 	}
 	if truthy(r["plain"]) {
 		if may, _ := mayOpenBrowser(e.facts); may {
@@ -186,7 +197,10 @@ var pairOpenGrace = 2 * time.Minute
 var pairOpenMaxAge = 24 * time.Hour
 
 var pairOpenMu sync.Mutex
-var pairOpenStuck bool // the ask could not be removed: said once, never taken again until the bridge restarts
+var pairOpenSleep = time.Sleep // the tests: no waiting
+
+const ageUntrusted = time.Duration(-1) // pairOpenStateLocked: the ask's time cannot be trusted
+var pairOpenStuck bool                 // the ask could not be removed: said once, never taken again until the bridge restarts
 
 // the install's end (installCmd, installUserCmd): asked only when the setup asked (--pairopen, a person at the setup)
 // and the bridge answers (rc 0), timed from then for the Finish page's grace. clearPairOpen ran at the install's start
@@ -216,7 +230,7 @@ func pairOpenConnected() bool {
 // the ask read, nothing changed: ready (for the owner's tray to take) when asked at once (the Finish page), or 2 minutes
 // old (the take then opens nothing on a computer connected before, or for an ask over a day old, and drops it). An ask
 // that could not be removed is never ready again until the bridge restarts. Call with pairOpenMu held
-// age -1: the time cannot be trusted (unreadable, or the clock set back over an hour): ready, and the take drops it
+// age ageUntrusted: the time cannot be trusted (unreadable, or the clock set back over an hour): ready, and the take drops it
 func pairOpenStateLocked(st pairStore) (due, now, ready bool, age time.Duration) {
 	v := st.get(pairDueVal)
 	if v == "" || pairOpenStuck {
@@ -226,7 +240,7 @@ func pairOpenStateLocked(st pairStore) (due, now, ready bool, age time.Duration)
 	sec := num(parseObj(v)["atUnix"])
 	at := time.Unix(int64(sec), 0)
 	if sec <= 0 || time.Until(at) > time.Hour {
-		return true, now, true, -1
+		return true, now, true, ageUntrusted
 	}
 	age = max(time.Since(at), 0) // a little ahead (a small clock step back): as just written
 	return true, now, now || age >= pairOpenGrace, age
@@ -284,9 +298,9 @@ func pairOpenRoute(method string, body M) (M, error) {
 	}
 	_ = st.del(pairNowVal)
 	pairOpenMu.Unlock()
-	if age == -1 || age > pairOpenMaxAge {
+	if age == ageUntrusted || age > pairOpenMaxAge {
 		why := "is over a day old"
-		if age < 0 {
+		if age == ageUntrusted {
 			why = "has a time that cannot be trusted (unreadable, or the clock was set back)"
 		}
 		writeLog("The install's first-start opening of FinCom " + why + ": dropped, FinCom not opened (Connect FinCom on this computer... in the tray does it).")
@@ -302,11 +316,11 @@ func pairOpenRoute(method string, body M) (M, error) {
 		how += ", the setup's Finish page: Open FinCom to connect ticked"
 	}
 	if pairOpenConnected() {
-		writeLog("FinCom opened in the browser (" + how + "); this computer is connected already, no code.")
+		writeLog("FinCom handed to the tray to open in the browser (" + how + "); this computer is connected already, no code.")
 		return M{"ok": true, "take": true, "plain": true}, nil
 	}
 	code, until := freshPairCode(10)
-	writeLog("FinCom opened in the browser to connect this computer (" + how + "): a new connect code for 10 minutes.")
+	writeLog("FinCom handed to the tray to open in the browser and connect this computer (" + how + "): a new connect code for 10 minutes.")
 	return M{"ok": true, "take": true, "code": code, "until": until}, nil
 }
 
