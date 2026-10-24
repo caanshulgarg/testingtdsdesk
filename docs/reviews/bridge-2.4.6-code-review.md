@@ -5,10 +5,10 @@ the repository. Rounds 1 to 4 were high effort and rounds 5 to 7 medium (short r
 fixes were reviewed again, until no High or Medium was left open. The security review is in
 bridge-2.4.6-security-review.md: round 3 there is security-only, and rounds 4 to 7 cover both.
 
-Range: 69de7a79d..0b4c5929c
+Range: 69de7a79d..3f5575332
 
 (next-246-pairopen starts at origin/next-245 69de7a79d, the published 2.4.5. Its last code commit is 3ff0fc423;
-0b4c5929c changes only the allow-list doc's decision line and the two tests that read it. Round 8 covers it.)
+0b4c5929c and 3f5575332 change only the allow-list doc's decision line and the three tests that read it. Round 8 covers them.)
 
 ## What 2.4.6 changes (the owner's approval of 24-Oct-2026)
 
@@ -47,7 +47,7 @@ Range: 69de7a79d..0b4c5929c
 | 5 | fc7ea144c..9bd853512 | 6. A small clock step back dropped a ticked ask (age < 0). A time-of-check gap on the port. A service not started by the service manager never opens. A Windows test with a dead Skip. A test gap for the tick with the clock ahead. The port check ran on every poll. | 7283d4ad0 |
 | 6 | 9bd853512..7283d4ad0 | 1 Medium: the check after the take lost the ask on a passing glitch and showed nothing. 2 Low: the double check was not documented, and the -1 sentinel. | 3ff0fc423 |
 | 7 | 7283d4ad0..3ff0fc423 | 0 High, 0 Medium. 2 Low, below. | - |
-| 8 | 3ff0fc423..0b4c5929c (self-review: words and tests only) | 0. The decision line names 2.4.6 by the owner's standing decision of 2026-10-06, as 2.4.1's did. 2.4.5's decision is kept as "as for 2.4.5". The dated 2.4.6 line says no request was measured again. The table hash is unchanged (b4df2904...); TestAllowListUnchanged and TestRelease246VersionAllowListUnchanged pin it. release-check's check 4 needs this line. | - |
+| 8 | 3ff0fc423..3f5575332 (self-review: words and tests only) | 0. The decision line names 2.4.6 by the owner's standing decision of 2026-10-06, as 2.4.1's did. 2.4.5's decision is kept as "as for 2.4.5". The dated 2.4.6 line says no request was measured again. The table hash is unchanged (b4df2904...); TestAllowListUnchanged and TestRelease246VersionAllowListUnchanged pin it. release-check's check 4 needs this line. recorder_live_test reads the line for BridgeVersion, not for 2.4.5. | - |
 
 Tests for each round's fixes were written in the same commit as the fixes. The feature itself was written test-first:
 r246pair_test.go failed to build (undefined: browserFacts ...) before pairopen.go existed.
