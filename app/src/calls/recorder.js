@@ -40,6 +40,10 @@ export function compositeRecorder({ tiles, screen, audio, onPart, fps = 12 }) {
   const ctx = canvas.getContext("2d");
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC(), dest = ac.createMediaStreamDestination();
+  // a steady silence always in the mix: with nothing connected (no microphone here, the others' voices not yet in) the
+  // mix's track carries no sound at all, and Chromium's MediaRecorder then records nothing, not even the picture
+  let hum = null;
+  try { hum = ac.createConstantSource(); hum.offset.value = 0; hum.connect(dest); hum.start(); } catch (e) { /* older browser */ }
   const sources = new Map();
   function mixAudio() {
     const want = new Set();
@@ -65,15 +69,19 @@ export function compositeRecorder({ tiles, screen, audio, onPart, fps = 12 }) {
   const stream = new MediaStream([...canvas.captureStream(fps).getVideoTracks(), ...dest.stream.getAudioTracks()]);
   const mime = pickMime("video");
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 900000, audioBitsPerSecond: 64000 } : {});
-  let seq = 0;
+  let seq = 0, started = false;
   rec.ondataavailable = (e) => { if (e.data && e.data.size) onPart(e.data, seq++); };
+  // "start" comes when the encoder has begun, which on a busy computer can be many seconds after rec.start(): stopped
+  // before that, the recording is empty (no part at all); so a stop that early waits for it (15 s at most), drawing on
+  const begun = new Promise((ok) => { rec.onstart = () => { started = true; ok(); }; });
   rec.start(10000);
   return {
     mime: rec.mimeType || mime || "video/webm",
-    stop() {
+    async stop() {
+      if (!started && rec.state === "recording") await Promise.race([begun, new Promise((ok) => setTimeout(ok, 15000))]);
       return new Promise((ok) => {
         clearInterval(timer); clearInterval(mixTimer);
-        rec.onstop = () => { stream.getTracks().forEach((t) => t.stop()); try { ac.close(); } catch (e) { /* */ } ok(seq); };
+        rec.onstop = () => { stream.getTracks().forEach((t) => t.stop()); try { hum && hum.stop(); } catch (e) { /* */ } try { ac.close(); } catch (e) { /* */ } ok(seq); };
         try { rec.stop(); } catch (e) { ok(seq); }
       });
     },
