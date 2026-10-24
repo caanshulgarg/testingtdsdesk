@@ -22,7 +22,7 @@
 //     (on 24-Oct-2026 the owner's two clicks on "Salesify Marketing LLP 2026-27" were refused that way and lost).
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
 import { useState, useEffect } from "react";
-import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, spacesOdd, lastEntry } from "../lib/tallyState.js";
+import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
 
 const SEARCH_AT = 10, POLL_MS = 10000, WAIT_MS = 10 * 60000, PEND_MS = 10 * 60000;
@@ -39,10 +39,17 @@ const yearKey = (n) => (typeof tallyYearKey === "function" ? tallyYearKey(n) : c
 export const d8Of = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
 export function fyStart() { const t = new Date(Date.now() + 5.5 * 3600e3), y = t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); return y + "0401"; }
 export const cloudBook = (cid) => (typeof TCloud === "object" && TCloud.on() && TCloud.book ? TCloud.book(cid) : null);
+// next-tally-firstlink: the client's book for its LEDGERS, also before any entry came in. TCloud.book is the book with a
+// first day (tally_books.from_date), which a company whose ledgers came but no Day Book yet does not have (staging,
+// 24-Oct-2026: ITSEasy Solutions and VMS EVENTS, ledgers in, from_date null); the bar then never saw the ledgers, their
+// count or the bridge's progress, and after 10 minutes said "Ledgers not received". tally_status lists every book.
+export const ledBook = (cid) => { const b = cloudBook(cid); if (b) return b;
+  const s = typeof TCloud === "object" && TCloud.on() && TCloud.st ? TCloud.st[cid] : null;
+  return (s && Array.isArray(s.books) && (s.books.find((x) => x && x.book && x.ledgersAt) || s.books.find((x) => x && x.book))) || null; };
 // round 64: the cloud's own count of a client's ledgers, kept with its books (TCloud.st[cid].ledN) for a minute
 export const LED_N = { get: (cid) => ((TCloud.st || {})[cid] || {}).ledN, set: (cid, v) => { (TCloud.st[cid] = TCloud.st[cid] || {}).ledN = v; } };
 export async function cloudLedgerCount(cid, force, maxAge) {
-  const bk = cloudBook(cid);
+  const bk = ledBook(cid);
   if (!bk || !bk.book) return null;
   const k = LED_N.get(cid);
   if (!force && k && k.book === bk.book && Date.now() - k.at < (maxAge || 60000)) return k.n;
@@ -56,7 +63,7 @@ export async function cloudLedgerCount(cid, force, maxAge) {
   return n;
 }
 export const ledgersOf = (cid) => Math.max(typeof Ledgers === "object" ? Ledgers.status(cid).n || 0 : 0, (LED_N.get(cid) || {}).n || 0);
-export const ledgersHeld = (cid) => ledgersOf(cid) > 0 || !!(cloudBook(cid) || {}).ledgersAt;
+export const ledgersHeld = (cid) => ledgersOf(cid) > 0 || !!(ledBook(cid) || {}).ledgersAt;
 export function daybookHeld(cid) {
   const bk = cloudBook(cid), fy = fyStart();
   if (bk && Number(bk.days) > 0 && d8Of(bk.to) >= fy) return true;
@@ -262,9 +269,31 @@ function pendTick(rows) {
 // then FinCom's cloud is read every 10 seconds until the ledgers and this year's entries are in (10 minutes at most).
 // S.tcoSync[cid] = {cid, company, at, via, err, end, late, led, prog}
 const SYNC = () => (S.tcoSync = S.tcoSync || {});
+// next-tally-firstlink (the owner, 24-Oct-2026: "Automatic master ledger import is also not working.. a smart bar like 34
+// out of 342 completed.. currently it runs and after some time it fails"). The ledgers came in about a second (staging:
+// tally_ledger_rounds complete, tally_ledger_progress done) but the bar waited for this year's ENTRIES as well (a Day Book,
+// days_at), which a company of an earlier year, or one not read yet, never has: after 10 minutes it said it failed. Now:
+//   - the bar is the ledgers' only: "34 of 342 ledgers" from the bridge's progress (2.4.5 ledger_progress, kept by
+//     tally-ingest in tally_ledger_progress, read with tally_period_status's ledger), the bar's width that share;
+//   - done when THIS read is done: its progress says done, or the book's ledger time (tally_books.ledgers_at) moved; a
+//     read that sent only the changed ledgers (rows_received < rows_read) is done the same way (both are set by it). What
+//     was there before the click (snapshot ledger0 / la0) never counts, whatever the clocks say;
+//   - then "342 ledgers imported ✓ at 16:20"; this year's entries are said beside it, and never make it fail;
+//   - no progress yet: after 30 seconds the plain reason from the computer's beat (offline, Tally not open, the company
+//     not open, reading paused or stopped), and after 10 minutes that reason, not a guess.
+async function ledgerNow(cid) {
+  const bk = ledBook(cid); if (!bk || !bk.book) return null;
+  const p = await TCloud.rpc("tally_period_status", { p_book: bk.book });
+  return (p && p.ledger) || null;
+}
+const sameLp = (a, b) => !!a && !!b && a.round === b.round && String(a.at) === String(b.at) && Number(a.read) === Number(b.read) && !!a.done === !!b.done;
 export async function firstSync(cid, company) {
-  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null };
+  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "" };
   render();
+  // what is there before this read (so an earlier read never counts as this one's)
+  try { await TCloud.status(cid, true); } catch (e) { /* the time check below then */ }
+  // (no book yet: nothing to compare with, so the time since the click decides)
+  try { const b0 = ledBook(cid); x.la0 = String((b0 || {}).ledgersAt || ""); x.ledger0 = b0 ? await ledgerNow(cid) : null; x.snap = !!b0; } catch (e) { x.snap = false; }
   let r;
   try { r = await Ledgers.askTally(cid); } catch (e) { r = { err: (e && e.message) || String(e) }; }
   const a = (r && r.ans) || {};
@@ -287,24 +316,46 @@ export async function syncPoll(cid) {
   try {
     try { await TCloud.status(cid, true); } catch (e) { /* the next read */ }
     let n = null; try { n = await cloudLedgerCount(cid, true); } catch (e) { /* */ }
-    // 2.4.5: the exact count while the bridge reads ("312 of 1,240 ledgers"; tally_period_status's ledger)
-    try { const bk = cloudBook(cid), p = bk && bk.book ? await TCloud.rpc("tally_period_status", { p_book: bk.book }) : null, lp = p && p.ledger;
-      if (lp && Date.parse(lp.at) >= x.at - 60000) { x.prog = lp; if (lp.done && Number(lp.read) > 0 && n == null) n = Number(lp.read); } } catch (e) { /* */ }
-    if (n != null) x.led = n;
-    // the ledgers are in: a count, or the book's ledger time set since this sync began (the bridge's whole list sets it)
-    const la = Date.parse((cloudBook(cid) || {}).ledgersAt || "") || 0;
-    if (!(x.led > 0) && la >= x.at - 60000) x.led = ledgersOf(cid) || -1;
-    if ((x.led > 0 || x.led === -1) && daybookHeld(cid)) x.end = Date.now();
-    else if (Date.now() - x.at > WAIT_MS) x.late = true;
+    let lp = null; try { lp = await ledgerNow(cid); } catch (e) { /* */ }
+    const since = x.at - 60000, la = String((ledBook(cid) || {}).ledgersAt || "");
+    // this read's progress: not the one there before the click (or, with no snapshot, one from since the click)
+    const fresh = lp && (x.snap ? !sameLp(lp, x.ledger0) : Date.parse(lp.at) >= since);
+    if (fresh) x.prog = lp;
+    const laNew = !!la && (x.snap ? la !== x.la0 : Date.parse(la) >= since);
+    if (!x.ledAt && ((x.prog && x.prog.done) || laNew)) {
+      x.ledAt = (x.prog && x.prog.done && Date.parse(x.prog.at)) || Date.parse(la) || Date.now();
+      x.led = (x.prog && x.prog.done && Number(x.prog.read) > 0 ? Number(x.prog.read) : 0) || (n > 0 ? n : 0) || ledgersOf(cid) || -1;
+    }
+    if (n != null && n > 0 && x.ledAt && !(x.led > 0)) x.led = n;
+    if (x.ledAt) x.end = Date.now();
+    else {
+      x.why = Date.now() - x.at > 30000 && !(x.prog && Number(x.prog.read) > 0) ? stallWhy(cid, x.company) : "";
+      if (Date.now() - x.at > WAIT_MS) x.late = true;
+    }
   } finally { polling[cid] = false; render(); }
 }
+// why nothing comes, from the computer's beat (plain words; "" when its beat says all is well)
+export function stallWhy(cid, company) {
+  const co = S.companies && S.companies[cid], name = company || (co && (co.tallyName || co.name)) || "the company";
+  const rows = coRows(name), devs = tallyDevs();
+  const d = devs.find((v) => rows.some((r) => r.device_id === v.id)) || (devs.length === 1 ? devs[0] : null);
+  if (!d) return "No computer with FinCom Bridge holds " + name + " yet: open it in TallyPrime on the Tally computer.";
+  const pc = pcOf(d), b = ((d.info || {}).beat) || {};
+  if (!pcLive(d)) return "FinCom Bridge on " + pc + " is offline: turn that computer on and sign in to Windows; the ledgers come as soon as it is back.";
+  if (b.readStopped) return "Reading is stopped on " + pc + (b.readStopped.reason ? " (" + b.readStopped.reason + ")" : "") + ": an owner can resume it on the Tally page.";
+  if (b.paused) return "Reading is paused on " + pc + ": right-click the FinCom icon near the clock → Resume background reading.";
+  if (!(b.tally === true || b.tallyState === "open" || b.tallyState === "busy")) return "Tally is not open on " + pc + ": open TallyPrime there with " + name + ".";
+  if (!openOn(d).some((o) => coKey(o) === coKey(name))) return name + " is not open in Tally on " + pc + ": open it in TallyPrime; the ledgers come within a minute.";
+  return "";
+}
+const hmIST = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : ""; return t ? (/IST$/.test(t) ? t : t + " IST") : ""; };
 
 // ---------- the progress and the confirmation (a row of the list, and the client's Tally card)
 function Masters({ cid }) {
   const [busy, setBusy] = useState(false), [res, setRes] = useState(null);
   const up = async (ev) => { const f = (ev.target.files || [])[0]; ev.target.value = ""; if (!f) return;
     setBusy(true); const r = await Ledgers.fromMasters(cid, f); setBusy(false); setRes(r);
-    if (r.ok) { LED_N.set(cid, { n: r.n, at: Date.now(), book: (cloudBook(cid) || {}).book || "" }); const x = SYNC()[cid]; if (x) { x.led = r.n; if (x.late) x.at = Date.now(); x.late = false; x.err = ""; } render(); } };
+    if (r.ok) { LED_N.set(cid, { n: r.n, at: Date.now(), book: (ledBook(cid) || {}).book || "" }); const x = SYNC()[cid]; if (x) { x.led = r.n; if (x.late) x.at = Date.now(); x.late = false; x.err = ""; x.ledAt = x.end = Date.now(); } render(); } };
   return <><label className="btn small" data-tco-masters="" title="TallyPrime: Gateway → Display More Reports → List of Accounts → Alt+E → XML (Masters)">{busy ? "Reading the file…" : "Or upload the masters file"}
     <input type="file" accept=".xml" hidden onChange={up} /></label>
     {res && !res.ok && <span className="bk-warn" data-tco-masters-err="">{res.err}</span>}</>;
@@ -316,16 +367,20 @@ export function SyncLine({ cid, compact = false }) {
   useEffect(() => { if (!running) return; const t = setInterval(() => syncPoll(cid), POLL_MS); return () => clearInterval(t); }, [running, x && x.at]);
   const co = S.companies && S.companies[cid], bk = cloudBook(cid), n = Math.max(ledgersOf(cid), (x && x.led) || 0), days = daybookHeld(cid);
   // the ledgers: their count when FinCom has it, else ✓ alone when the book says they came (tally_books.ledgers_at)
-  const ledIn = n > 0 || (x ? x.led === -1 : !!(bk && bk.ledgersAt));
+  const ledIn = n > 0 || (x ? x.led === -1 : !!(ledBook(cid) || {}).ledgersAt);
   const led = ledIn ? "Ledgers " + (n > 0 ? Number(n).toLocaleString("en-IN") + " " : "") + "✓" : "", ent = days ? "Entries " + (entriesWords(bk) || "this year") + " ✓" : "";
-  if (x && x.end) return <p className="tco-sync ok" data-tco-sync="done" role="status">{led + " · " + ent}<span className="note">{" · first sync took " + mmss(x.end - x.at)}</span></p>;
-  if (running) return <div className="tco-sync" data-tco-sync="running" role="status">
-    <div className="tco-bar" role="progressbar" aria-label={"Reading " + ((co && co.name) || "the company") + " from Tally"} aria-busy="true"><i /></div>
-    <span>{led ? <>{led + " · "}<b>Reading entries…</b></> : <><b>Reading ledgers from Tally…</b>{x.prog && Number(x.prog.of) > 0 ? " " + Number(x.prog.read).toLocaleString("en-IN") + " of " + nOf(Number(x.prog.of), "ledger", "ledgers") : ""}</>}
-      {" "}<b className="tco-clock">{mmss(Date.now() - x.at)}</b><span className="note">{x.via === "cloud" ? " · the Tally computer picks it up within a minute" : ""}</span></span></div>;
+  if (x && x.end) { const ln = x.led > 0 ? x.led : n;
+    return <p className="tco-sync ok" data-tco-sync="done" role="status">{(ln > 0 ? nOf(ln, "ledger", "ledgers") : "Ledgers") + " imported ✓" + (x.ledAt ? " at " + hmIST(x.ledAt) : "")}
+      {" · " + (ent || "this year’s entries come in by themselves")}<span className="note">{" · took " + mmss(Math.max(1000, (x.ledAt || x.end) - x.at))}</span></p>; }
+  if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.max(2, Math.round(100 * rd / of)) : 0;
+    return <div className="tco-sync" data-tco-sync="running" role="status">
+    <div className="tco-bar" role="progressbar" aria-label={"Reading " + ((co && co.name) || "the company") + "’s ledgers from Tally"} aria-busy="true"
+      {...(of > 0 ? { "aria-valuemin": 0, "aria-valuemax": of, "aria-valuenow": rd, "data-tco-pct": pct } : {})}><i className={of > 0 ? "det" : ""} style={of > 0 ? { width: pct + "%" } : undefined} /></div>
+    <span><b>Reading ledgers from Tally…</b>{of > 0 ? " " + rd.toLocaleString("en-IN") + " of " + nOf(of, "ledger", "ledgers") : ""}
+      {" "}<b className="tco-clock">{mmss(Date.now() - x.at)}</b><span className="note">{x.via === "cloud" && !x.why && !of ? " · the Tally computer picks it up within a minute" : ""}</span>
+      {x.why && <span className="tco-why" data-tco-sync-why="">{" " + x.why}</span>}</span></div>; }
   if (x && (x.err || x.late)) return <div className="tco-sync bad" data-tco-sync={x.err ? "error" : "late"} role="status">
-    <span>{x.err || (led ? led + " · Entries not received yet: keep " + (x.company || "the company") + " open in TallyPrime; they come by themselves."
-      : "Ledgers not received in 10 minutes: keep " + (x.company || "the company") + " open in TallyPrime on its computer, with reading not paused.")}</span>
+    <span>{x.err || ("Ledgers not received in 10 minutes: " + (stallWhy(cid, x.company) || "keep " + (x.company || "the company") + " open in TallyPrime on its computer, with reading not paused."))}</span>
     <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, x.company)}>Try again</button>{!led && <Masters cid={cid} />}</span></div>;
   // no first sync here now: what FinCom holds, when known
   if (compact || !(TCloud.st && TCloud.st[cid] && TCloud.st[cid].at)) return null;

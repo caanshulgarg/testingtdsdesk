@@ -327,8 +327,8 @@ def main():
         E("""(t) => { window.__books[t] = [Object.assign(window.__books[t][0], {ledgersAt: new Date().toISOString(), days: 190, to: new Date().toISOString().slice(0, 10), entries: 4000})];
             window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 1240}, (_, i) => ({name: 'Ledger ' + (i + 1), parent: 'Sundry Creditors'})); }""", T)
         pg.wait_for_selector(row5 + " [data-tco-sync=done]", timeout=25000)
-        ok(txt(row5 + " [data-tco-sync=done]").startswith("Ledgers 1,240 \u2713 \u00b7 Entries Apr\u2013") and "first sync took 0:" in txt(row5 + " [data-tco-sync=done]"),
-           "the books arrive: 'Ledgers 1,240 \u2713 \u00b7 Entries Apr\u2013\u2026 \u2713', with the time (%s)" % txt(row5 + " [data-tco-sync]"))
+        ok(re.match(r"^1,240 ledgers imported \u2713 at \d\d:\d\d IST \u00b7 Entries Apr\u2013", txt(row5 + " [data-tco-sync=done]")) is not None and "took 0:" in txt(row5 + " [data-tco-sync=done]"),
+           "the books arrive: '1,240 ledgers imported \u2713 at 16:20 IST \u00b7 Entries Apr\u2013\u2026 \u2713', with the time (next-tally-firstlink) (%s)" % txt(row5 + " [data-tco-sync]"))
         shot("row-first-sync-done")
         # nothing in 10 minutes
         ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
@@ -349,7 +349,7 @@ def main():
         ok(len(up) == 1 and up[0]["complete"] is True and up[0]["count"] == 3 and up[0]["from"] == "20260401" and up[0]["openAsOn"] == "20260331"
            and [l[0] for l in up[0]["ledgers"]] == ["Cash", "Rent", "VMS EVENTS"] and all(l[2] == "0" for l in up[0]["ledgers"]),
            "the cloud: upload_ledgers declared complete with its count, the book's own dates, no opening from the file (%s)" % [(k, v) for k, v in (up[0] if up else {}).items() if k != "groups"])
-        ok("Ledgers 3 \u2713" in txt(row5), "the row: 'Ledgers 3 \u2713' from the file (%s)" % txt(row5 + " [data-tco-sync]"))
+        ok("3 ledgers imported \u2713" in txt(row5), "the row: '3 ledgers imported \u2713' from the file (next-tally-firstlink) (%s)" % txt(row5 + " [data-tco-sync]"))
         # the reply that nobody was asked: stopped at once with the reason
         for ans, why, words in (({"ok": True, "woken": 0, "debounced": 0, "asked": 0}, "woken 0", "No computer with Tally was asked"),
                                 (None, "not started", "FinCom Bridge did not read GB TEXCOAT\u2019s ledgers: background reading is paused in the tray")):

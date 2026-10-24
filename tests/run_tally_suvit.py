@@ -8,7 +8,7 @@ Companies says Connected / Disconnected; Sync master re-syncs. FinCom, website o
      "Disconnected — computer offline since …") and ONE action. A search box once there are more than 10.
   2. Add as client: one click: the client made with the company's name (the period off) and GSTIN, linked
      (tally_company_link once), the first sync's wake sent once (TCloudUp kind wake, what ledgers), the progress, then
-     "Ledgers 1,240 ✓ · Entries Apr–Oct 2026 ✓". The page stays.
+     "1,240 ledgers imported ✓ at 16:20 IST · Entries Apr–Oct 2026 ✓". The page stays.
   3. A client of the same name already there: the row says "Link to <client>", no second client.
   4. Linked: the client's name, Sync now (the existing Update now: tally_want_update), ⋯ Not this client (link another
      client / unlink), Upload older entries (Day Book) only while days are missing.
@@ -166,10 +166,10 @@ def main():
         ok("Reading ledgers from Tally" in pr and re.search(r"\d:\d\d", pr), "2. progress: 'Reading ledgers from Tally… 0:02' (%s)" % pr)
         shot("after-add-progress-desktop-light")
         # the cloud gets the books: the confirmation
-        E("(c) => { window.__books[c] = %s; window.__ledn['bk-VMS'] = 1240; }" % json.dumps(BOOK("VMS")), cid)
+        E("(c) => { window.__books[c] = %s.map(b => Object.assign(b, {ledgersAt: new Date().toISOString()})); window.__ledn['bk-VMS'] = 1240; }" % json.dumps(BOOK("VMS")), cid)   # (the read just ended: the book's ledger time now)
         pg.wait_for_selector('#app [data-tco-row="%s"] [data-tco-sync=done]' % VMS, timeout=25000)
         dn = txt('#app [data-tco-row="%s"] [data-tco-sync=done]' % VMS)
-        ok(dn.startswith("Ledgers 1,240 ✓ · Entries Apr–Oct 2026 ✓"), "2. then the confirmation: 'Ledgers 1,240 ✓ · Entries Apr–Oct 2026 ✓' (%s)" % dn)
+        ok(re.match(r"^1,240 ledgers imported ✓ at \d\d:\d\d IST · Entries Apr–Oct 2026 ✓", dn) is not None, "2. then the confirmation: '1,240 ledgers imported ✓ at 16:20 IST · Entries Apr–Oct 2026 ✓' (next-tally-firstlink) (%s)" % dn)
         ok(len(wakes()) == 1, "2. still one wake (%d)" % len(wakes()))
         shot("after-add-confirmed-desktop-light")
 

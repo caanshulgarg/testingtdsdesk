@@ -23,7 +23,9 @@
 #app .tco-bar { position: relative; flex: 0 0 140px; height: 6px; overflow: hidden; border-radius: 6px; background: var(--surface-muted); }
 #app .tco-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: 35%; border-radius: 6px; background: var(--accent); animation: tco-slide 1.6s ease-in-out infinite; }
 @keyframes tco-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
-@media (prefers-reduced-motion: reduce) { #app .tco-bar i { animation: none; width: 100%; opacity: .45; } }
+#app .tco-bar i.det { animation: none; transition: width .4s ease; }
+#app .tco-why { display: block; margin-top: 2px; color: var(--st-attention, var(--warning)); }
+@media (prefers-reduced-motion: reduce) { #app .tco-bar i { animation: none; width: 100%; opacity: .45; } #app .tco-bar i.det { opacity: 1; transition: none; } }
 #app .tco-relink { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; }
 #app .tco-relink select { max-width: 100%; }
 #app .tco-for { margin: 0 0 8px; }

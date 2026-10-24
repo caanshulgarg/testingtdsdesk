@@ -15,6 +15,8 @@ import { StatusTabs } from "./TopBar.jsx";
 import { UploadLine } from "./parts/StateBar.jsx";
 // the register panel: with the registers' engine, only when a register is read
 const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
+// next-tally-firstlink: "Tally is open on NWS144 with <company>. Link it" at the top of every page (its own file)
+const TallyNudge = lazy(() => import("./parts/TallyNudge.jsx"));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations, Meetings } = SCREENS;
@@ -74,6 +76,7 @@ export default function Main({ v }) {
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
+    <Guard name="the Tally line" v={v} quiet><Suspense fallback={null}><TallyNudge /></Suspense></Guard>
     {/* a screen whose file is still coming (screens/lazy.js) shows the page's shape meanwhile */}
     <Guard name="this screen" v={v} key={S.view + ":" + (company ? S.tab : S.homeTab)}><Suspense fallback={<PageSkeleton what="the page" />}><Screen /></Suspense></Guard>
     {drawerEntry() && <Guard name="the bill drawer" v={v}><Drawer /></Guard>}
