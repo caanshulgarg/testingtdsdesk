@@ -24,6 +24,10 @@ a stub cloud (TCloud/Cloud):
      connects without typing.
  11. No sideways scroll at 1440 and 390; --shots DIR saves each step at both widths.
  12. Migration 104: each state reached is sent once to tally_connect_step (step, version, detail), never the code or a key.
+ 13. FinCom Bridge 2.4.7 (no proof over the 6-digit code any more): a typed code is checked by SPAKE2 (/pair2, then /pair
+     with the page's confirmation; the six digits never leave the page; a wrong code is one online try); FinCom opened
+     with #pair=<code>-<secret> pairs with the window's 128-bit secret after the bridge proved it holds it; a secret that
+     does not prove itself is not sent (the code's SPAKE2 run instead). Older bridges (2.4.6 and before) as in 1-10.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_firstlink.py [--shots DIR]"""
 import hashlib, hmac, json, os, re, sys, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -46,9 +50,34 @@ D1 = "58d73e82-0000-4000-8000-000000000001"
 # ---------------------------------------------------------------- the stub FinCom Bridge (bridge-go/server.go's answers)
 BR = {}
 def bridge_reset(**kw):
-    BR.clear(); BR.update({"on": True, "yours": True, "old": False, "window": True, "code": CODE, "tally": True, "open": [VMS, GSC], "log": [], "linked": False, "user": "NW144\\anshul"}); BR.update(kw)
+    BR.clear(); BR.update({"on": True, "yours": True, "old": False, "window": True, "code": CODE, "tally": True, "open": [VMS, GSC], "log": [], "linked": False, "user": "NW144\\anshul",
+        "v": 1, "secret": "5e" * 16, "salt": "a1" * 16, "pending": {}, "runs": 0}); BR.update(kw)
 bridge_reset(on=False)
 def mac(secret, msg): return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
+# ---- FinCom Bridge 2.4.7's SPAKE2 (bridge-go/pairspake.go), the bridge's side, for the stub
+SP_P = int("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+           "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+           "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+           "83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B"
+           "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
+           "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16)
+SP_Q = (SP_P - 1) // 2
+def sp_expand(label): return int.from_bytes(b"".join(hashlib.sha256(("%s|%d" % (label, i)).encode()).digest() for i in range(9)), "big")
+SP_M = pow(sp_expand("FinCom pair v2 M") % SP_P, 2, SP_P); SP_N = pow(sp_expand("FinCom pair v2 N") % SP_P, 2, SP_P)
+def sp_w(code, ctx): return sp_expand("FinCom pair v2 w|" + code + "|" + ctx) % SP_Q
+def sp_tt(parts):
+    h = hashlib.sha256()
+    for x in parts: b = x.encode(); h.update(len(b).to_bytes(8, "big")); h.update(b)
+    return h.digest()
+def sp_server(Xs, code, ctx):
+    if not re.match(r"^[0-9a-f]{512}$", Xs or ""): return None
+    X = int(Xs, 16)
+    if not (1 < X < SP_P - 1) or pow(X, SP_Q, SP_P) != 1: return None
+    w = sp_w(code, ctx); y = int.from_bytes(os.urandom(32), "big") or 1
+    Y = pow(2, y, SP_P) * pow(SP_N, w, SP_P) % SP_P
+    Z = pow(X * pow(SP_M, SP_Q - w, SP_P) % SP_P, y, SP_P)
+    Ys = "%0512x" % Y; k = sp_tt(["FinCom pair v2", ctx, Xs, Ys, "%0512x" % Z, "%0512x" % w])
+    return Ys, hmac.new(k, b"bridge", hashlib.sha256).hexdigest(), hmac.new(k, b"page", hashlib.sha256).hexdigest()
 def on_bridge(route):
     req = route.request; u = urlparse(req.url); port = u.port; q = parse_qs(u.query); path = u.path
     origin = req.headers.get("origin", "")
@@ -64,9 +93,25 @@ def on_bridge(route):
             p.update({"bridgeId": BID, "port": 9100}); n = q.get("n", [""])[0]
             if n and origin:
                 p["proof"] = mac(KEY, n + BID + "9100")
-                if BR["window"]: p["pairProof"] = mac(BR["code"], n + BID + "9100")
+                if BR["window"] and BR["v"] == 2: p.update({"version": "2.4.7", "pairWindow": True, "pairV": 2, "pairSalt": BR["salt"], "pairProofS": mac(BR["secret"], n + BID + "9100")})
+                elif BR["window"]: p["pairProof"] = mac(BR["code"], n + BID + "9100")
         return send(200, p)
     if not BR["yours"]: return send(403, {"ok": False, "error": "This FinCom Bridge works for another Windows user.", "notYours": True})
+    if path == "/pair2" and BR["v"] == 2:
+        if not BR["window"]: return send(403, {"ok": False, "error": "The connect window has closed."})
+        Xs = q.get("X", [""])[0]; r = sp_server(Xs, BR["code"], BID + "9100|" + BR["salt"])
+        if not r: return send(400, {"ok": False, "error": "That is not a connect request from FinCom."})
+        BR["runs"] += 1
+        if BR["runs"] > 5: BR["window"] = False; return send(403, {"ok": False, "error": "The connect window has closed."})
+        BR["pending"][Xs] = r[2]
+        return send(200, {"ok": True, "Y": r[0], "confirm": r[1]})
+    if path == "/pair" and BR["v"] == 2 and BR["window"]:
+        Xs, cf, code = q.get("X", [""])[0], q.get("confirm", [""])[0], q.get("code", [""])[0]
+        good = (Xs and BR["pending"].pop(Xs, None) == cf and cf) or (code and code in (BR["code"], BR["secret"]))
+        if good:
+            BR["window"] = False
+            return send(200, {"ok": True, "key": KEY, "computer": "NWS144", "user": BR["user"], "version": "2.4.7", "bridgeId": BID, "port": 9100})
+        return send(403, {"ok": False, "error": "That is not the code shown in the bridge window.", "needCode": True})
     if path == "/pair":
         if BR["window"] and q.get("code", [""])[0] == BR["code"]:
             BR["window"] = False
@@ -298,6 +343,33 @@ def main():
         ok(any(x[1] == "/pair" and x[2].get("code") == CODE for x in BR["log"]), "10. #pair=… in the address: connected without typing")
         ok("pair=" not in pg2.evaluate("() => location.hash"), "10. the code is taken off the address at once")
         pg2.close()
+
+        # ---- 13. FinCom Bridge 2.4.7: a typed code by SPAKE2; the address's secret
+        E(FRESH); bridge_reset(v=2, code="314159"); scene([], []); E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(800)
+        ok(wait_state("code"), "13. a 2.4.7 bridge (no pairProof) found with its window open (%s)" % state())
+        type_code("271828"); pg.wait_for_timeout(3000)
+        runs = [x for x in BR["log"] if x[1] == "/pair2"]
+        ok(len(runs) == 1 and not pairs(), "13. a wrong code: one SPAKE2 run (one online try), no /pair (%s)" % [x[1] for x in BR["log"] if x[1] != "/ping"])
+        ok("That is not the code in the FinCom Bridge box" in txt("#app [data-fl-code-msg]") and E("() => Bridge.cfg().key") == "", "13. a wrong code: said plainly, no key kept (%s)" % txt("#app [data-fl-code-msg]"))
+        type_code("314159")
+        ok(wait_state("linking", 15000), "13. the right code: connected by itself (%s)" % state())
+        fin = [x for x in BR["log"] if x[1] == "/pair"]
+        ok(len(fin) == 1 and fin[0][2].get("X") and len(fin[0][2].get("confirm", "")) == 64 and not fin[0][2].get("code"), "13. finished with the page's confirmation, no code sent (%s)" % [sorted(x[2]) for x in fin])
+        ok(E("() => Bridge.cfg().key") == KEY, "13. the bridge's key kept")
+        ok(not any("314159" in json.dumps(x[2]) or "271828" in json.dumps(x[2]) for x in BR["log"]), "13. the six digits never left the page")
+        # ---- 14. 2.4.7: FinCom opened with #pair=<code>-<secret>
+        bridge_reset(v=2, code="161803")
+        pg3 = open_page(1440, 900, "/#pair=161803-" + BR["secret"]); pg3.wait_for_timeout(3000)
+        fin = [x for x in BR["log"] if x[1] == "/pair"]
+        ok(len(fin) == 1 and fin[0][2].get("code") == BR["secret"], "14. #pair=<code>-<secret>: paired with the window's secret (%s)" % [x[2] for x in fin])
+        ok("pair=" not in pg3.evaluate("() => location.hash") and pg3.evaluate("() => Bridge.cfg().key") == KEY, "14. taken off the address at once; the key kept")
+        pg3.close()
+        # ---- 15. a secret the bridge does not prove: never sent; the code's SPAKE2 run instead
+        bridge_reset(v=2, code="161803")
+        pg4 = open_page(1440, 900, "/#pair=161803-" + "6f" * 16); pg4.wait_for_timeout(4000)
+        ok(not any(x[1] == "/pair" and x[2].get("code") for x in BR["log"]), "15. a secret that does not prove itself is not sent (%s)" % [x[2] for x in BR["log"] if x[1] == "/pair"])
+        ok(any(x[1] == "/pair2" for x in BR["log"]) and pg4.evaluate("() => Bridge.cfg().key") == KEY, "15. the code's SPAKE2 run connected instead")
+        pg4.close()
 
         ok(not errors, "no page errors (%s)" % errors[:3])
         br.close()

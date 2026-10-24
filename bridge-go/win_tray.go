@@ -182,6 +182,11 @@ var taskbarCreated uintptr
 // --- talking to the service
 func trayCall(method, path string, body any) M {
 	loadConfigRO()
+	// 2.4.7: the key goes only to a program on the port that proved it holds it (pairopen.go bridgeProves): another
+	// Windows user's program that took the port while the bridge was down gets nothing
+	if !bridgeProves(toInt(cfg("Port")), cfgS("Key"), 5*time.Second) {
+		return nil
+	}
 	var rd io.Reader
 	if body != nil {
 		rd = strings.NewReader(jsonText(body))

@@ -18,7 +18,10 @@ package main
 // The code works as before: once, 10 minutes, proved by pairProof before FinCom sends it. Nothing goes to Tally.
 
 import (
+	"crypto/hmac"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -29,6 +32,9 @@ import (
 var fincomSites = []string{"https://app.fincom.live", "https://staging.fincom.live", "https://fincom.live", "https://caanshulgarg.github.io"}
 
 var reSixDigits = re(`^[0-9]{6}$`)
+
+// 2.4.7: what the address carries: the 6-digit code and the window's 128-bit secret (#pair=<code>-<secret>)
+var rePairValue = re(`^[0-9]{6}-[0-9a-f]{32}$`)
 
 // FinCom's address without a fragment when base is one of FinCom's own https sites (no user, no port); false otherwise
 func fincomPlainURL(base string) (string, bool) {
@@ -46,17 +52,17 @@ func fincomPlainURL(base string) (string, bool) {
 	return "", false
 }
 
-// FinCom's address with the connect code in its fragment; false unless base is one of FinCom's own sites and the code
-// is 6 digits
-func pairOpenURL(base, code string) (string, bool) {
-	if !reSixDigits.MatchString(code) {
+// FinCom's address with the connect code and the window's secret in its fragment; false unless base is one of FinCom's
+// own sites and pair is <6 digits>-<32 hex>
+func pairOpenURL(base, pair string) (string, bool) {
+	if !rePairValue.MatchString(pair) {
 		return "", false
 	}
 	u, ok := fincomPlainURL(base)
 	if !ok {
 		return "", false
 	}
-	return u + "#pair=" + code, true
+	return u + "#pair=" + pair, true
 }
 
 // where the tray runs: its Windows session, whether it is the service, whether its user is the bridge's owner
@@ -106,10 +112,10 @@ func pairOpenText(addr, code, until string, opened bool) string {
 }
 
 // opens FinCom with the code when allowed; the message either way
-func openWithCode(e pairOpenEnv, fincom, code, until string) {
+func openWithCode(e pairOpenEnv, fincom, code, secret, until string) {
 	opened := false
 	if may, _ := mayOpenBrowser(e.facts); may {
-		if u, ok := pairOpenURL(fincom, code); ok {
+		if u, ok := pairOpenURL(fincom, code+"-"+secret); ok {
 			e.open(u)
 			opened = true
 		}
@@ -128,7 +134,7 @@ func trayConnectNow(e pairOpenEnv, fincom string) {
 		e.show("FinCom Bridge", "The bridge is not answering, so no connect code could be made.", true)
 		return
 	}
-	openWithCode(e, fincom, str(r["code"]), str(r["until"]))
+	openWithCode(e, fincom, str(r["code"]), str(r["secret"]), str(r["until"]))
 }
 
 // the first start after the installer: true when this tray took the install's ask (and opened FinCom when allowed)
@@ -165,7 +171,7 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 		return true
 	}
 	if str(r["code"]) != "" {
-		openWithCode(e, fincom, str(r["code"]), str(r["until"]))
+		openWithCode(e, fincom, str(r["code"]), str(r["secret"]), str(r["until"]))
 	}
 	return true
 }
@@ -266,9 +272,33 @@ func clearPairOpenDue(why string) {
 }
 
 // a fresh connect window of min minutes: its code and end, as /paircode gives them
-func freshPairCode(min int) (code, until string) {
-	c, u := openPairWindow(min)
-	return c, u.Format("2006-01-02T15:04:05")
+func freshPairCode(min int) (code, secret, until string) {
+	c, s, u := openPairWindow(min)
+	return c, s, u.Format("2006-01-02T15:04:05")
+}
+
+// 2.4.7: the program answering on 127.0.0.1:port proves it holds the bridge key (HMAC of a fresh nonce, bound to its id
+// and that port) before anything carries the key there; the key itself is not sent
+func bridgeProves(port int, key string, timeout time.Duration) bool {
+	if port <= 0 || key == "" {
+		return false
+	}
+	n := randHex16() + randHex16()
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/ping?n=%s", port, n), nil)
+	req.Header.Set("X-FinCom-Tray", "1")
+	r, err := c.Do(req)
+	if err != nil {
+		return false
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	j := parseObj(string(b))
+	if j == nil || toInt(j["port"]) != port || str(j["bridgeId"]) == "" {
+		return false
+	}
+	want := proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
+	return want != "" && hmac.Equal([]byte(want), []byte(str(j["proof"])))
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state
@@ -319,9 +349,9 @@ func pairOpenRoute(method string, body M) (M, error) {
 		writeLog("FinCom handed to the tray to open in the browser (" + how + "); this computer is connected already, no code.")
 		return M{"ok": true, "take": true, "plain": true}, nil
 	}
-	code, until := freshPairCode(10)
+	code, secret, until := freshPairCode(10)
 	writeLog("FinCom handed to the tray to open in the browser and connect this computer (" + how + "): a new connect code for 10 minutes.")
-	return M{"ok": true, "take": true, "code": code, "until": until}, nil
+	return M{"ok": true, "take": true, "code": code, "secret": secret, "until": until}, nil
 }
 
 // the tray's own look at the install's record before it acts on the bridge's "ready" (a program squatting on the

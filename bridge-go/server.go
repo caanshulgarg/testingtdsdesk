@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -24,21 +25,41 @@ var (
 	pairCode  string
 	pairUntil time.Time
 	pairTries int
+	// 2.4.7 (pairspake.go): the window's 128-bit secret (FinCom opened by the bridge carries it: #pair=<code>-<secret>),
+	// its salt for SPAKE2, and the SPAKE2 runs answered and not yet finished (X -> the confirmation expected)
+	pairSecret  string
+	pairSalt    string
+	pairPending map[string]string
 )
+
+func randHex16() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 func newPairCode() string {
 	b := make([]byte, 4)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%06d", binary.LittleEndian.Uint32(b)%1000000)
 }
-func openPairWindow(min int) (string, time.Time) {
+func openPairWindow(min int) (string, string, time.Time) {
 	pairMu.Lock()
 	defer pairMu.Unlock()
 	pairCode, pairUntil, pairTries = newPairCode(), time.Now().Add(time.Duration(min)*time.Minute), 0
-	return pairCode, pairUntil // 2.4.6: read under the same lock (freshPairCode)
+	pairSecret, pairSalt, pairPending = randHex16(), randHex16(), map[string]string{}
+	return pairCode, pairSecret, pairUntil // 2.4.6: read under the same lock (freshPairCode)
 }
 
-// the pages allowed to talk to the bridge: FinCom's own addresses (settings: AllowedOrigins); 'http://localhost' any port
+// a test or developer's page ("null", http://localhost or 127.0.0.1 on any port): allowed only with the settings' switch
+// DevOrigins (2.4.7: off by default; until 2.4.6 both were in the default AllowedOrigins, so any website's sandboxed
+// frame or any local web server was taken for FinCom's page)
+func devOrigin(o string) bool {
+	return o == "null" || o == "http://localhost" || re(`^http://(localhost|127\.0\.0\.1)(:\d+)?$`).MatchString(o)
+}
+
+// the pages allowed to talk to the bridge: FinCom's own addresses (settings: AllowedOrigins); with DevOrigins on,
+// 'http://localhost' any port and 'null' when the settings name them
 func allowedOrigin(o string) bool {
 	if o == "" {
 		return true
@@ -48,7 +69,11 @@ func allowedOrigin(o string) bool {
 			return true
 		}
 	}
+	dev := truthy(cfg("DevOrigins"))
 	for _, a := range strs(cfg("AllowedOrigins")) {
+		if (devOrigin(a) || devOrigin(o)) && !dev {
+			continue
+		}
 		if o == a {
 			return true
 		}
@@ -149,17 +174,23 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// Review M1 of 2.3.0: only to FinCom's own page (an allowed, non-empty Origin) or to the tray (a program of this
 			// computer holding the key: X-Bridge-Key); never to an empty Origin (a page's same-origin request after DNS
 			// rebinding sends none). Both proofs are bound to the bridge's id and port
-			if n := qs.Get("n"); n != "" && ((sentOrigin != "" && originOK) || keyGiven(r)) {
+			// 2.4.7: the tray (a program: no Origin, no Sec-Fetch headers, X-FinCom-Tray: 1, a header no page can send here
+			// without the bridge's leave) gets the key's proof too, so it sends the key only to
+			// a bridge that proved it holds it (bridgeProves); the window's facts go to FinCom's page and key holders only
+			page := (sentOrigin != "" && originOK) || keyGiven(r)
+			program := sentOrigin == "" && r.Header.Get("X-FinCom-Tray") == "1" && r.Header.Get("Sec-Fetch-Site") == "" && r.Header.Get("Sec-Fetch-Mode") == ""
+			if n := qs.Get("n"); n != "" && (page || program) {
 				bound := "go-" + instanceID() + fmt.Sprint(toInt(cfg("Port")))
 				// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
 				if pr := proofFor(cfgS("Key"), n, bound); pr != "" {
 					p["proof"] = pr
 				}
 				pairMu.Lock()
-				if time.Now().Before(pairUntil) {
-					// HMAC-SHA256(pairing code, nonce || bridge id || port)
-					if pr := proofFor(pairCode, n, bound); pr != "" {
-						p["pairProof"] = pr
+				if page && time.Now().Before(pairUntil) && pairSecret != "" {
+					// 2.4.7: no proof over the 6-digit code (an offline test for it); the window's secret's proof (128 bits, in
+					// the address FinCom is opened with) and the salt for SPAKE2 (pairspake.go)
+					if pr := proofFor(pairSecret, n, bound); pr != "" {
+						p["pairProofS"], p["pairWindow"], p["pairV"], p["pairSalt"] = pr, true, 2, pairSalt
 					}
 				}
 				pairMu.Unlock()
@@ -185,11 +216,64 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, 403, M{"ok": false, "error": "This is for the FinCom Bridge tray icon only."}, origin)
 		return
 	}
+	closedMsg := fmt.Sprintf("The connect window has closed. In the FinCom Bridge tray icon choose Connect FinCom, then type the code shown within %d minutes.", toInt(cfg("PairWindowMin")))
+	if path == "/pair2" {
+		// 2.4.7 (pairspake.go): a typed code, one SPAKE2 run; every run counts against the window's five tries
+		Xs := qs.Get("X")
+		if _, err := spakeElement(Xs); err != nil {
+			sendJSON(w, 400, M{"ok": false, "error": "That is not a connect request from FinCom."}, origin)
+			return
+		}
+		pairMu.Lock()
+		if !time.Now().Before(pairUntil) {
+			pairMu.Unlock()
+			sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
+			return
+		}
+		pairTries++
+		n := pairTries
+		if n > 5 {
+			pairUntil, pairPending = time.Now().Add(-time.Minute), map[string]string{}
+			pairMu.Unlock()
+			writeLog("Five connect attempts: connecting is closed until the bridge is started again (or Connect FinCom on this computer... in the tray).")
+			sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
+			return
+		}
+		code, salt := pairCode, pairSalt
+		pairMu.Unlock()
+		ctx := "go-" + instanceID() + fmt.Sprint(toInt(cfg("Port"))) + "|" + salt
+		Y, confirmB, confirmA, err := spakeServerStep(Xs, spakeW(code, ctx), ctx, nil)
+		if err != nil {
+			sendJSON(w, 400, M{"ok": false, "error": "That is not a connect request from FinCom."}, origin)
+			return
+		}
+		pairMu.Lock()
+		if pairSalt == salt && time.Now().Before(pairUntil) {
+			if pairPending == nil {
+				pairPending = map[string]string{}
+			}
+			pairPending[Xs] = confirmA
+		}
+		pairMu.Unlock()
+		writeLog(fmt.Sprintf("FinCom asked to connect with the code (%d of 5).", n))
+		sendJSON(w, 200, M{"ok": true, "Y": Y, "confirm": confirmB}, origin)
+		return
+	}
 	if path == "/pair" {
 		code := qs.Get("code")
 		pairMu.Lock()
 		open := time.Now().Before(pairUntil)
-		if open && code != pairCode {
+		if Xs := qs.Get("X"); open && Xs != "" {
+			// 2.4.7: the end of a SPAKE2 run: the page's confirmation that it holds the same code
+			want, has := pairPending[Xs]
+			delete(pairPending, Xs)
+			if !has || !hmac.Equal([]byte(want), []byte(strings.ToLower(qs.Get("confirm")))) {
+				pairMu.Unlock()
+				writeLog("A connect attempt did not confirm the code.")
+				sendJSON(w, 403, M{"ok": false, "error": "That is not the code shown in the bridge window.", "needCode": true}, origin)
+				return
+			}
+		} else if open && !((len(code) == 6 && hmac.Equal([]byte(code), []byte(pairCode))) || (pairSecret != "" && len(code) == 32 && hmac.Equal([]byte(code), []byte(pairSecret)))) {
 			pairTries++
 			n := pairTries
 			if n >= 5 {
@@ -208,7 +292,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if open {
-			pairUntil = time.Now().Add(-time.Minute) // one connection per code
+			pairUntil, pairPending = time.Now().Add(-time.Minute), map[string]string{} // one connection per code
 			pairMu.Unlock()
 			writeLog("FinCom connected with the code (" + sentOrigin + ").")
 			clearPairOpenDue("Connected with the code: the install's first-start opening of FinCom is not needed.") // 2.4.6
@@ -216,7 +300,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pairMu.Unlock()
-		sendJSON(w, 403, M{"ok": false, "error": fmt.Sprintf("The connect window has closed. In the FinCom Bridge tray icon choose Connect FinCom, then type the code shown within %d minutes.", toInt(cfg("PairWindowMin")))}, origin)
+		sendJSON(w, 403, M{"ok": false, "error": closedMsg}, origin)
 		return
 	}
 	if r.Header.Get("X-Bridge-Key") != cfgS("Key") {
@@ -541,9 +625,9 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 	case "/paircode":
 		// the tray (or the FinCom Connector), which holds the key, opens a fresh connect code for FinCom on this computer
 		if r.Method == "POST" {
-			code, until := freshPairCode(10) // pairopen.go: the same as the first start's
+			code, secret, until := freshPairCode(10) // pairopen.go: the same as the first start's
 			writeLog("A new connect code was opened for 10 minutes.")
-			return M{"ok": true, "open": true, "code": code, "until": until}, nil
+			return M{"ok": true, "open": true, "code": code, "secret": secret, "until": until}, nil
 		}
 		pairMu.Lock()
 		defer pairMu.Unlock()

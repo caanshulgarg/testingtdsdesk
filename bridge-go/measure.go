@@ -831,6 +831,10 @@ func localCall(method, path string, body any) M {
 }
 
 func bridgeCall(method, path string, body any, timeout time.Duration) M {
+	// 2.4.7: the key goes only to a program on the port that proved it holds it (pairopen.go bridgeProves)
+	if !bridgeProves(toInt(cfg("Port")), cfgS("Key"), timeout) {
+		return nil
+	}
 	var rd io.Reader
 	if body != nil {
 		rd = strings.NewReader(jsonText(body))

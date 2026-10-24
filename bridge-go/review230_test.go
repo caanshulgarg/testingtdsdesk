@@ -42,28 +42,25 @@ func TestPingProof(t *testing.T) {
 		return parseObj(w.Body.String())
 	}
 	n := "nonce0123456789abcdefXYZ"
-	openPairWindow(15)
-	pairMu.Lock()
-	code := pairCode
-	pairMu.Unlock()
+	_, secret, _ := openPairWindow(15) // 2.4.7: the window's secret's proof (pairProofS); none over the 6-digit code
 	o := ping("?n=" + n)
 	// the owner's condition: HMAC-SHA256(bridge key, nonce || bridge id || port)
-	if str(o["proof"]) != hmacOf("proof-key-123456", n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["pairProof"]) != hmacOf(code, n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["bridgeId"]) != "go-"+instanceID() {
-		t.Fatalf("own user: proof %v pairProof %v", o["proof"], o["pairProof"])
+	if str(o["proof"]) != hmacOf("proof-key-123456", n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || str(o["pairProofS"]) != hmacOf(secret, n+"go-"+instanceID()+fmt.Sprint(toInt(cfg("Port")))) || o["pairProof"] != nil || str(o["bridgeId"]) != "go-"+instanceID() {
+		t.Fatalf("own user: proof %v pairProofS %v", o["proof"], o["pairProofS"])
 	}
 	if o := ping("?n=short"); o["proof"] != nil {
 		t.Fatalf("a nonce too short is not answered: %v", o["proof"])
 	}
 	who = sidRavi
-	if o := ping("?n=" + n); o["proof"] != nil || o["pairProof"] != nil || o["yours"] != false {
+	if o := ping("?n=" + n); o["proof"] != nil || o["pairProofS"] != nil || o["yours"] != false {
 		t.Fatalf("another user gets no proof: %v", o)
 	}
 	who = sidAnshul
 	pairMu.Lock()
 	pairUntil = time.Now().Add(-time.Minute)
 	pairMu.Unlock()
-	if o := ping("?n=" + n); o["pairProof"] != nil || str(o["proof"]) == "" {
-		t.Fatalf("pairing window closed: no pairProof (%v)", o)
+	if o := ping("?n=" + n); o["pairProofS"] != nil || str(o["proof"]) == "" {
+		t.Fatalf("pairing window closed: no pairProofS (%v)", o)
 	}
 }
 

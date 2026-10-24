@@ -39,7 +39,13 @@ const Bridge = {
       const o = Object.assign({port, url: base.replace(/\/+$/, "")}, j, {proven: false, pairProven: false});
       if (key && typeof j.proof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.proven = j.proof === await this.hmac(key, n + j.bridgeId + port);
       // review M1 of 2.3.0: the pairing code's proof is bound to the bridge's id and this port too
-      if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(String(code).trim(), n + j.bridgeId + port);
+      // FinCom Bridge 2.4.7: code may be "<6 digits>-<the window's 32-hex secret>" (FinCom opened by the bridge): the
+      // bridge proves the secret (pairProofS); a 2.4.7 bridge gives no proof over the 6 digits (an offline test for
+      // them), so a typed code is checked by SPAKE2 in pair() (o.spake: a 2.4.7 bridge with its window open)
+      const pc = /^(\d{6})(?:-([0-9a-f]{32}))?$/.exec(String(code || "").trim()), digits = pc ? pc[1] : String(code || "").trim();
+      if (code && pc && pc[2] && typeof j.pairProofS === "string" && typeof j.bridgeId === "string" && Number(j.port) === port && j.pairProofS === await this.hmac(pc[2], n + j.bridgeId + port)) { o.pairProven = true; o.pairBy = "secret"; }
+      else if (code && typeof j.pairProof === "string" && typeof j.bridgeId === "string" && Number(j.port) === port) o.pairProven = j.pairProof === await this.hmac(digits, n + j.bridgeId + port);
+      if (code && pc && !o.pairProven && j.pairV === 2 && j.pairWindow === true && typeof j.bridgeId === "string" && Number(j.port) === port && /^[0-9a-f]{32}$/.test(String(j.pairSalt || ""))) o.spake = true;
       return o;
     } catch (e){ return null; } finally { clearTimeout(t); }
   },
@@ -50,13 +56,13 @@ const Bridge = {
     const c = this.cfg();
     if (!this.localUrl(c.url)) return null;
     const found = (await Promise.all(this.PORTS.map(p => this.probe(p, 1500, c.key, code)))).filter(Boolean);
-    const ok = found.filter(b => code ? b.pairProven : b.proven);
+    const ok = found.filter(b => code ? (b.pairProven || b.spake) : b.proven);
     const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
     const pick = (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
     this.foundAt = Date.now();
     this.lastFound = found;
     if (pick && !code) this.proven[pick.url] = Date.now();
-    return pick ? {url: pick.url, bridgeId: pick.bridgeId || "", port: pick.port} : null;
+    return pick ? {url: pick.url, bridgeId: pick.bridgeId || "", port: pick.port, pairProven: !!pick.pairProven, pairBy: pick.pairBy || "", spake: !!pick.spake, pairSalt: pick.pairSalt || ""} : null;
   },
   // the bridge did not answer, did not prove itself, or is another Windows user's: looked for once (at most every 15 s)
   async refind(){
@@ -291,17 +297,32 @@ const Bridge = {
   // on 9100..9199; the code goes to it only then, and the key it hands over must prove itself before it is kept
   async pair(code){
     code = String(code || "").trim();
+    const pc = /^(\d{6})(?:-([0-9a-f]{32}))?$/.exec(code), digits = pc ? pc[1] : code, secret = pc && pc[2] ? pc[2] : "";
     const c = this.cfg();
     let base = c.url.replace(/\/+$/, ""), hit = await this.probeUrl(base, 2500, "", code);
-    if (!(hit && hit.pairProven) && this.localUrl(base)){ this.foundAt = 0; const f = await this.find(code); hit = f ? {url: f.url, bridgeId: f.bridgeId, pairProven: true} : null; }
-    if (!hit || !hit.pairProven){
+    if (!(hit && (hit.pairProven || hit.spake)) && this.localUrl(base)){ this.foundAt = 0; hit = await this.find(code); }
+    if (!hit || !(hit.pairProven || hit.spake)){
       const any = (this.lastFound || []).length || hit;
       throw {code: any ? "pair" : "bridge_down", message: any
         ? "No FinCom Bridge on this computer proved it shows that code, so it was not sent. Check the code in the FinCom Bridge window (it works for 15 minutes); a bridge older than 2.3.0 must be updated first."
         : "FinCom Bridge is not running on this computer yet. Install FinCom Bridge from the Tally page."};
     }
     base = hit.url;
-    const r = await fetch(base + "/pair?code=" + encodeURIComponent(code), {cache: "no-store"}).catch(() => null);
+    let q = "code=" + encodeURIComponent(hit.pairBy === "secret" ? secret : digits);
+    if (!hit.pairProven){
+      // FinCom Bridge 2.4.7: SPAKE2 (src/js/24-pair-spake.js): the six digits never leave this page; one run is one of the
+      // bridge's five tries, and its answer proves it shows this code before anything else is sent
+      const st = await PairSpake.start(digits, hit.bridgeId + hit.port + "|" + hit.pairSalt);
+      const r1 = await fetch(base + "/pair2?X=" + st.X, {cache: "no-store"}).catch(() => null);
+      if (!r1) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
+      const j1 = await r1.json().catch(() => null);
+      if (r1.status === 403 && j1 && j1.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};
+      if (!j1 || !j1.ok) throw {code: "pair", spake: true, message: (j1 && j1.error) || "The bridge would not check the code."};
+      const confirm = await PairSpake.finish(st, j1.Y, j1.confirm);
+      if (!confirm) throw {code: "pair", spake: true, message: "That is not the code shown by FinCom Bridge on this computer."};
+      q = "X=" + st.X + "&confirm=" + confirm;
+    }
+    const r = await fetch(base + "/pair?" + q, {cache: "no-store"}).catch(() => null);
     if (!r) throw {code: "bridge_down", message: "FinCom Bridge stopped answering while connecting. Try again."};
     const j = await r.json().catch(() => null);
     if (r.status === 403 && j && j.notYours) throw {code: "pair", message: "That FinCom Bridge is another Windows user's on this computer. Install FinCom Bridge for your own Windows user (the setup, \u201cJust for me\u201d), then connect again."};

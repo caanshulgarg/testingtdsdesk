@@ -71,8 +71,8 @@ func TestM1EmptyOriginNoProof(t *testing.T) {
 	if _, o := m1Req(t, host, "/ping?n="+n, map[string]string{"Origin": "http://evil.example"}); o["proof"] != nil || o["pairProof"] != nil {
 		t.Fatalf("another page: %v", o)
 	}
-	// FinCom's page: both
-	if _, o := m1Req(t, host, "/ping?n="+n, map[string]string{"Origin": "https://app.fincom.live"}); str(o["proof"]) == "" || str(o["pairProof"]) == "" {
+	// FinCom's page: both (2.4.7: the window's secret's proof, pairProofS; no proof over the 6-digit code)
+	if _, o := m1Req(t, host, "/ping?n="+n, map[string]string{"Origin": "https://app.fincom.live"}); str(o["proof"]) == "" || str(o["pairProofS"]) == "" || o["pairProof"] != nil {
 		t.Fatalf("FinCom's page: %v", o)
 	}
 	// the tray (a program of this computer holding the key, no Origin): the proof
@@ -88,15 +88,12 @@ func TestM1PairProofBound(t *testing.T) {
 	m1Setup(t)
 	port := toInt(cfg("Port"))
 	n := "nonce0123456789abcdefXYZ"
-	openPairWindow(15)
-	pairMu.Lock()
-	code := pairCode
-	pairMu.Unlock()
+	_, secret, _ := openPairWindow(15) // 2.4.7: the window's secret's proof (r247pair_test.go); none over the code
 	_, o := m1Req(t, "127.0.0.1:"+fmt.Sprint(port), "/ping?n="+n, map[string]string{"Origin": "https://app.fincom.live"})
-	if str(o["pairProof"]) != hmacOf(code, n+"go-"+instanceID()+fmt.Sprint(port)) {
-		t.Fatalf("pairProof bound to the bridge's id and port: %v", o["pairProof"])
+	if str(o["pairProofS"]) != hmacOf(secret, n+"go-"+instanceID()+fmt.Sprint(port)) {
+		t.Fatalf("pairProofS bound to the bridge's id and port: %v", o["pairProofS"])
 	}
-	if str(o["pairProof"]) == hmacOf(code, n) {
-		t.Fatal("an unbound pairProof")
+	if str(o["pairProofS"]) == hmacOf(secret, n) || o["pairProof"] != nil {
+		t.Fatal("an unbound pairProofS, or a pairProof")
 	}
 }
