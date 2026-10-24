@@ -8,11 +8,11 @@
 //  - only FinCom's own code, styles and fonts are kept: nothing from Supabase (the firm's data), the bridge, Sentry or
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
-const VERSION = "mvm9ml8c-2f0393";
+const VERSION = "mvmb4m8s-79004e";
 // round 73 B: FILES, kept at install, are what the first page needs; REST, the other files of this build, are kept once
 // the first page is up and the computer is idle (the page sends "fincom:keep-rest", main.jsx)
-const FILES = ["./","./legacy.js?v=96b84b6d2e7e","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-CGNNH3HZ.css","./assets/index-WsWolOD-.js"];
-const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/Books-CA1y7bS_.css","./assets/Gst-BmwLksAm.css","./assets/Tally-hihPiakF.css","./assets/returns-BiAmgzaN.css","./assets/Integrations-C1RPLvE9.css","./assets/AssistantEntries-BiMrQpZd.css","./assets/MyMis-CEycmWma.css","./assets/Reports-Dci7HM2A.css","./assets/registers-CzgUIo79.js","./assets/sentry-D_Ay9kiL.js","./assets/Assistant-DYeFUfQa.js","./assets/MeetCard-C6V3J5cK.js","./assets/autopost-DkhF0JGc.js","./assets/Books-DDYaaHuJ.js","./assets/88-fin-statements-zUVODDMw.js","./assets/chevron-down-D4XxS5hW.js","./assets/Gst-CjYAGlmr.js","./assets/gstr1Fix-CQwojyNF.js","./assets/undo-2-B3tbUE_C.js","./assets/Settings-BlKTk1Az.js","./assets/AdvOptIn-R8cc9uMM.js","./assets/Tally-3NzbPRtO.js","./assets/NeedAction-CsvkqDMs.js","./assets/Bank-BEpRX_2W.js","./assets/BankSettings-ovibsjgu.js","./assets/Sales-CC_odnHz.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-pBiC6VlK.js","./assets/Post-D3mRTU9i.js","./assets/BankChecks-BeE5QDiW.js","./assets/Help-CWgaQC1s.js","./assets/Txn-Cg48tyvI.js","./assets/Parties-CjHFIwwh.js","./assets/VendorRecon-rvisngLB.js","./assets/Compliance-eKB8DLii.js","./assets/Integrations-Blgq5BAD.js","./assets/Meetings-6P1Pa4gK.js","./assets/GstApiCard-DkJ6S9u1.js","./assets/GstApiAll-CWNp-A8f.js","./assets/FiledCompare-zV-tqgBd.js","./assets/FileApi-B3RLGHg-.js","./assets/SheetPanel-eOTXrANB.js","./assets/LedgerBox-CYfbgxnx.js","./assets/OlderEntries-BNAzZy5G.js","./assets/AssistantUploads-EMTGm8QM.js","./assets/AssistantEntries-bmfvMlFu.js","./assets/finExport-BhhvSwJj.js","./assets/AssistantVoice-mGa9MEvx.js","./assets/plus-CwdhYSxD.js","./assets/NoDeviceNote-BS9JegJK.js","./assets/trash-Dlpoo5Ox.js","./assets/AssistantMis-Dl4LM9b9.js","./assets/misdef-Xh-mU6XF.js","./assets/VoiceRecorder-D3g-ZI8x.js","./assets/MyMis-CgwT2Lhw.js","./assets/Reports-CwzqdMTB.js","./assets/reportsExport-COrL1KJI.js","./assets/r1Excel-JT_1J0vX.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DN6ANTCg.js","./assets/tdsExcel-CKv7McyG.js","./assets/itcExcel-BvD8-Tm1.js","./assets/MisSchedule-DMrGQAy-.js","./assets/misExport-BS5U15x5.js"];
+const FILES = ["./","./legacy.js?v=96b84b6d2e7e","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-CGNNH3HZ.css","./assets/index-B4fELNP-.js"];
+const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/Books-CA1y7bS_.css","./assets/Gst-BmwLksAm.css","./assets/Tally-hihPiakF.css","./assets/returns-BiAmgzaN.css","./assets/Integrations-C1RPLvE9.css","./assets/AssistantEntries-BiMrQpZd.css","./assets/MyMis-CEycmWma.css","./assets/Reports-Dci7HM2A.css","./assets/registers-CzgUIo79.js","./assets/sentry-eU-PtcEN.js","./assets/Assistant-DHphdHVM.js","./assets/MeetCard-CfdyxfAi.js","./assets/autopost-DkhF0JGc.js","./assets/Books-C8yBwWh8.js","./assets/88-fin-statements-zUVODDMw.js","./assets/chevron-down-CTdgTAcp.js","./assets/Gst-B-AUBesy.js","./assets/gstr1Fix-CQwojyNF.js","./assets/undo-2-tbGej8Mh.js","./assets/Settings-PFmSfKqc.js","./assets/AdvOptIn-BwtBjd3F.js","./assets/Tally-Yp9lLePt.js","./assets/NeedAction-DTIUpVAD.js","./assets/Bank-DmTHAmBo.js","./assets/BankSettings-DINVk-KL.js","./assets/Sales-C8Pe96Q3.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-DSDBjnfv.js","./assets/Post-Bf16RN-Q.js","./assets/BankChecks-BRltwDE9.js","./assets/Help-CpcmvZ4K.js","./assets/Txn-BUwSeiue.js","./assets/Parties-DWJdx_p0.js","./assets/VendorRecon-CadrPczh.js","./assets/Compliance-BQKjacfE.js","./assets/Integrations-CYv7Kk3n.js","./assets/Meetings-CMwiLGQa.js","./assets/GstApiCard-BDlYvDQC.js","./assets/GstApiAll-BQKDRq7p.js","./assets/FiledCompare-Bxdry9QA.js","./assets/FileApi-DgZ4cAuk.js","./assets/SheetPanel-BVvHnkNz.js","./assets/LedgerBox-BALuWxzm.js","./assets/OlderEntries-HOdbvvg3.js","./assets/AssistantUploads-BIaPxmJW.js","./assets/AssistantEntries-ioGnTXyR.js","./assets/finExport-BhhvSwJj.js","./assets/AssistantVoice-lYvrwk3g.js","./assets/plus-eh477FfQ.js","./assets/NoDeviceNote-oWtGyn36.js","./assets/trash-CdyjZH7t.js","./assets/AssistantMis-Cg2_JfQb.js","./assets/misdef-Xh-mU6XF.js","./assets/VoiceRecorder-D_GCjQgC.js","./assets/MyMis-BdEjw14U.js","./assets/Reports-4eA2ZxK0.js","./assets/reportsExport-COrL1KJI.js","./assets/r1Excel-JT_1J0vX.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DN6ANTCg.js","./assets/tdsExcel-CKv7McyG.js","./assets/itcExcel-BvD8-Tm1.js","./assets/MisSchedule-D-nEAEN0.js","./assets/misExport-umJD7wn0.js"];
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = "fincom-shell:" + SCOPE + ":" + VERSION, RUNTIME = "fincom-files:" + SCOPE;
 const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
@@ -21,8 +21,14 @@ const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
 // not again over the line); the page and the two little scripts without a hash past it
 const HASHED = (f) => /^\.\/assets\//.test(f) || /^\.\/legacy\.js\?v=/.test(f);
 const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
+// 24-Oct-2026 (Safari, right after a publish): each file kept on its own, and only a real answer (keepable); one file
+// that does not come (a publish half way across GitHub's servers) no longer fails the whole install and leaves the older
+// worker in charge. A file not kept now is fetched and kept when it is first used
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map(ask))).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => {
+    const q = ask(f);
+    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(q, r) : null).catch(() => null);
+  }))).then(() => self.skipWaiting()));
 });
 // the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
 let keeping = null;
@@ -44,28 +50,55 @@ self.addEventListener("message", (e) => {
 });
 
 // the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
-// A page asked for by its build (?v=…: index.html's check found a newer build than the page it was given) waits for the
-// network as long as it takes (17-Oct-2026: on a slow line the 4 s wait handed back the old page again)
+// 24-Oct-2026 (Sentry FINCOM-APP-STAGING-3 / -5, Mac Safari, right after a publish: "did not open in 20 s", the page the
+// worker's kept copy, "error loading script legacy.js"): a page asked for by its build (?v=…, index.html's check found a
+// newer build than the kept page) waited for the network with no end. When that one request hung, the kept page
+// stayed on screen with its program held back (it was being swapped; in Safari its scripts' loads were cancelled by the
+// swap), until Safari was quit. Now no wait is without an end, and a request that hangs is given up and asked again:
+//  - the plain page: the network for 4 s; then, before the kept copy is handed back, build.json (2.5 s) says which build
+//    is out: a kept copy of another build is never handed back while the line answers, the page is asked again instead;
+//  - the page by its build: 6 s, then asked once more past every cache (10 s); the kept copy only when that fails too.
+const wait = (ms) => new Promise((ok) => setTimeout(() => ok(null), ms));
+function net(req, ms, cacheMode) {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  const p = fetch(req, ctl ? { cache: cacheMode, signal: ctl.signal } : { cache: cacheMode });
+  return { p, stop: () => { try { if (ctl) ctl.abort(); } catch (e) { /* */ } }, within: () => Promise.race([p.catch(() => null), wait(ms)]) };
+}
+const keptBuild = (t) => { const m = /"fincom:opened"\)===\"([^"]+)\"/.exec(t || ""); return m ? m[1] : ""; };
+async function serverBuild() {
+  try {
+    const r = await Promise.race([fetch("./build.json?t=" + Date.now(), { cache: "no-store" }), wait(2500)]);
+    if (!r || !r.ok) return "";
+    const j = await r.json();
+    return (j && j.build) || "";
+  } catch (e) { return ""; }
+}
 async function page(req) {
   const cache = await caches.open(SHELL);
-  const net = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) cache.put("./", r.clone()); return r; });
-  const byBuild = new URL(req.url).searchParams.has("v");
-  try {
-    const r = byBuild ? await net : await Promise.race([net, new Promise((ok) => setTimeout(ok, 4000)).then(() => null)]);
-    if (r) return r;
-    const c = await cache.match("./");
-    return c ? kept(c) : await net;
-  } catch (e) {
-    const c = await cache.match("./");
-    if (c) return kept(c);
-    throw e;
-  }
+  const keep = (r) => { if (r && r.ok && !r.redirected) cache.put("./", r.clone()).catch(() => {}); return r; };
+  const want = new URL(req.url).searchParams.get("v");
+  const first = net(req, want ? 6000 : 4000, "no-cache");
+  let r = await first.within();
+  if (r) return keep(r);
+  const c = await cache.match("./").catch(() => null);
+  const ct = c ? await c.clone().text().catch(() => "") : "", cb = keptBuild(ct);
+  if (!want) {
+    const sb = await serverBuild();
+    if (c && (!sb || sb === cb)) { first.p.then(keep, () => {}); return kept(c, ct); }   // no line, or the kept one is current
+  } else if (c && cb === want) { first.p.then(keep, () => {}); return kept(c, ct); }
+  // the line answers but the page did not come: asked again past every cache
+  first.stop();
+  const again = net(req, 10000, "reload");
+  r = await again.within();
+  if (r) return keep(r);
+  if (c) return kept(c, ct);
+  return again.p;
 }
 // the kept copy is marked (data-boot-kept on <html>): its program waits for index.html's build check before it starts,
 // so an older build is swapped before it is drawn (src/main.jsx)
-async function kept(c) {
+async function kept(c, text) {
   try {
-    const t = await c.clone().text();
+    const t = text || await c.clone().text();
     return new Response(t.replace("<html ", '<html data-boot-kept="" '), { status: c.status, statusText: c.statusText, headers: c.headers });
   } catch (e) { return c; }
 }
@@ -76,6 +109,9 @@ self.addEventListener("fetch", (e) => {
   const u = new URL(req.url);
   if (u.origin !== self.location.origin || !u.pathname.startsWith(SCOPE)) return;   // Supabase, the bridge, Sentry: never here
   if (req.mode === "navigate") { e.respondWith(page(req)); return; }
+  // 24-Oct-2026: a file the page asks for straight from the network (?fincom-net=…: legacy.js's second try, oldcheck.js)
+  // is not answered here at all
+  if (u.searchParams.has("fincom-net")) return;
   const rest = u.pathname.slice(SCOPE.length);
   // the two little scripts without a hash in their name: the network first, this computer's copy without a line
   if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
@@ -96,9 +132,11 @@ async function asset(req) {
   let hit = null;
   try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }
   if (hit && hit.ok && !hit.redirected && hit.type !== "opaque" && hit.type !== "opaqueredirect") return hit;
+  // 24-Oct-2026: a request that hangs (no answer in 15 s) is given up and asked once more, as a dropped line is
   let r;
-  try { r = await fetch(req); } catch (e) {
-    try { r = await fetch(new Request(req, { cache: "reload" })); } catch (e2) { return Response.error(); }
+  const once = (q, ms) => Promise.race([fetch(q), new Promise((ok, no) => setTimeout(() => no(new Error("timeout")), ms))]);
+  try { r = await once(req, 15000); } catch (e) {
+    try { r = await once(new Request(req.url, { cache: "reload", credentials: "same-origin" }), 30000); } catch (e2) { return Response.error(); }
   }
   if (keepable(r)) { const c = r.clone(); caches.open(RUNTIME).then((s) => s.put(req, c)).catch(() => {}); }
   return r;
