@@ -20,8 +20,10 @@ import "./nav.js";
 import { guestLink, startGuest, joinHash, memberHere, takeJoin } from "./calls/launch.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)
 import "./lib/tdsEdit.js";
-// a remark in 2B reconciliation and the decision in ITC follow-up kept as one (r2Tag, itctSetAct, ITCT.items)
+// the decision on each line of 2B reconciliation, one store (ITCDec; the old remarks and follow-up decisions read into it)
 import "./lib/itcSync.js";
+// next-itc-simple: the credit of GSTR-3B table 4 from the decisions in 2B reconciliation and the adjustments (wraps GSTR.threeBm)
+import "./lib/itcFinal.js";
 // next-24q-ready: the payroll read for the 24Q pages and TCloud.load (PayLoad, src/lib/payLoad.js)
 import "./lib/payLoad.js";
 // Post automatically: who approved and how, the run, the bell (lib/autopostBoot.js; the rules load when needed)

@@ -1,90 +1,79 @@
-// A remark in 2B reconciliation and the decision in ITC follow-up are one (the owner, 23-Oct-2026, Leads Insurance: "I
-// have done some vendor to be followed but it was not showing up there"). They are kept in two places with the books,
-// each item by item on the server (client_book_items, src/js/18 BOOKS_KEYS):
-//   - the reconciliation's remark: reco2b.tag[k] = {tag, at}, k the Tally document's id (in Tally only) or the 2B
-//     document's key (in 2B only, or a pair); set by r2Tag from app/src/screens/gst/Reco2b.jsx and TwoB.jsx;
-//   - ITC follow-up's decision: itcTrack[reg].dec[k] = {act, at, ts, note}, k "B|gstin|no|dir" (in Tally only),
-//     "P|…" (in 2B only), "D|…" (amounts differ); set by itctSetAct from app/src/screens/gst/ItcFollow.jsx.
-// Before, nothing read one from the other, so "Follow up with supplier" set in the reconciliation never put the bill or
-// its supplier under ITC follow-up's "Suppliers to write to". Now each change is written to both, and each line of
-// ITCT.items (src/js/32) carries the later of the two, for remarks set before this (or on another computer at the same
-// time). The two are matched through the same GST2B.run result ITCT.items is worked out from: the supplier's GSTIN,
-// the invoice number written the one way (noN) and whether it is an invoice or a note.
-// Kept out of legacy.js (its size budget, tests/run_stability.py): r2Tag and itctSetAct were src/js/27 and src/js/32.
+// What to do with each bill's credit: the ONE store (next-itc-simple, the owner, 24-Oct-2026: "2B & ITC page is not clear
+// .. Input register, 2B reconciliation, and in 2B reconciliation there should be follow-up also .. and one main tab should
+// be Final credit taking into 3B"). Every line of the 2B reconciliation has one Decision:
+//   now       Take now (in this month's 3B)                 later     Take in a later month (with the month)
+//   booksnow  Take now though not in 2B (the owner's choice) follow    Follow up with supplier
+//   correct   Ask supplier to correct                        reverse   Reverse / do not take
+//   book      Book in Tally (in 2B, not in the books)
+// Kept with the books as S.books.itcDec["<reg>|<line key>"] = {d, ym, note, at, by} (one of BOOKS_KEYS, so each decision
+// is its own item on the server, client_book_items, and two people deciding two bills never clash). ym is the month the
+// credit goes into ("" = the line's own month). A decision taken off is kept as d "" (so it also overrides an old remark).
+//
+// Decisions made before this (23-Oct-2026 and earlier) are read, never lost: the 2B reconciliation's remark
+// (reco2b.tag[k] = {tag, at}, k the Tally document's id or the 2B document's key) and ITC follow-up's decision
+// (itcTrack[reg].dec[k] = {act, at, ts, note}, k "B|gstin|no|dir", "D|…", "P|…", "R|<2B key>") are mapped onto the choices
+// below; the latest of the three (by its time) is the line's decision. The two old stores are no longer written.
+// The line keys are ITC follow-up's: "B|<GSTIN or party>|<number written the one way>|<1 invoice, -1 note>" for a bill in
+// the books (alone or matched: a decision stays with the bill when it turns up in a later 2B), "P|<GSTIN>|<no>|<dir>" for
+// a document only in 2B, "R|<2B key>" for one rejected in IMS. The 3B side is app/src/lib/itcFinal.js.
 
-// what a remark means on each kind of line of ITC follow-up (ITCT.CATS), and back
-const TAG_ACT = {
-  waiting: { "Follow up with supplier": "follow", "Expect in next 2B": "wait" },
-  ournote: { "Follow up with supplier": "follow" },
-  diff: { "Ask supplier to correct": "supplier", "Follow up with supplier": "supplier" },
-  tobook: { "Ask supplier to correct": "supplier", "Follow up with supplier": "supplier", "To book in Tally": "book", "Not our purchase": "reject" },
-};
-const ACT_TAG = {};
-Object.entries(TAG_ACT).forEach(([cat, m]) => { ACT_TAG[cat] = {}; Object.entries(m).forEach(([tag, act]) => { if (!ACT_TAG[cat][act]) ACT_TAG[cat][act] = tag; }); });
-// a decision that settles its line (as ITCT.items has it)
-const CLOSED = { "waiting:expense": 1, "diff:accept": 1, "tobook:reject": 1, "ournote:ok": 1 };
+export const DECS = [["now", "Take now"], ["later", "Take in a later month"], ["booksnow", "Take now though not in 2B"], ["follow", "Follow up with supplier"],
+  ["correct", "Ask supplier to correct"], ["reverse", "Reverse / do not take"], ["book", "Book in Tally"]];
+export const DEC_LABEL = Object.fromEntries(DECS);
+export const DEC_CODE = Object.fromEntries(DECS.map(([c, l]) => [l, c]));
+
+// the old remarks and follow-up decisions, as choices
+export const TAG_DEC = { "To book in Tally": "book", "Booked in a later month": "later", "Not our purchase": "reverse", "Blocked, section 17(5)": "reverse", "Ask supplier to correct": "correct",
+  "Follow up with supplier": "follow", "Expect in next 2B": "later", "Reverse in 3B": "reverse", "Reverse charge or import": "reverse", "No credit claimed": "reverse" };
+export const ACT_DEC = { B: { follow: "follow", wait: "later", expense: "reverse" }, D: { supplier: "correct", books: "correct" },
+  P: { book: "book", pending: "later", reject: "reverse", supplier: "correct" }, R: { keep: "reverse", accept: "now" } };
 
 const ms = (iso) => Date.parse(iso || "") || 0;
-// when a decision was made: its time, or for one made before this the start of its day
+// when an old follow-up decision was made: its time, or for one made before times were kept the start of its day
 const decAt = (d) => (d.ts ? ms(d.ts) : /^\d{8}$/.test(d.at || "") ? ms(d.at.slice(0, 4) + "-" + d.at.slice(4, 6) + "-" + d.at.slice(6, 8) + "T00:00:00") : 0);
-const tags = () => (((S.books || {}).reco2b || {}).tag) || {};
+const who = () => { try { return (Cloud.st && Cloud.st.email) || ((Cloud.sess && Cloud.sess()) || {}).email || ""; } catch (e) { return ""; } };
 
-// the reconciliation's key for each line of ITC follow-up
-function recoKeys(res) {
-  const m = {};
-  (res.onlyBooks || []).forEach((d) => { m["B|" + (d.gstin || d.party) + "|" + d.noN + "|" + d.dir] = d.id; });
-  (res.pairs || []).forEach((x) => { if (x.status === "diff") m["D|" + x.p.gstin + "|" + x.p.noN + "|" + x.p.dir] = x.p.key; });
-  (res.only2b || []).forEach((p) => { m["P|" + p.gstin + "|" + p.noN + "|" + p.dir] = p.key; });
-  return m;
-}
+export const ITCDec = {
+  all() { return ((S.books || {}).itcDec) || {}; },
+  // the line's decision: {d, ym, note, at, src: "you" | "remark" | "follow-up", was} or null. keys: its key and the keys it
+  // had before (a 2B-only document booked later), tagKeys: the old remarks' keys (Tally ids, 2B keys)
+  get(reg, keys, tagKeys) {
+    const b = S.books || {}, mine = b.itcDec || {}, tags = ((b.reco2b || {}).tag) || {}, dec = (((b.itcTrack || {})[reg || ""]) || {}).dec || {};
+    let best = null, note = "";
+    const take = (c) => { if (!best || c.t > best.t) best = c; };
+    keys.forEach((k) => { const x = mine[(reg || "") + "|" + k]; if (x) take({ d: x.d || "", ym: x.ym || "", note: x.note, t: ms(x.at) + 1, at: x.at, by: x.by, src: "you" }); });
+    (tagKeys || []).forEach((k) => { const t = tags[k]; if (t && TAG_DEC[t.tag]) take({ d: TAG_DEC[t.tag], ym: "", t: ms(t.at), at: t.at, src: "remark", was: t.tag }); });
+    keys.forEach((k) => { const x = dec[k]; if (!x) return; if (x.note && !note) note = x.note; const d = x.act && (ACT_DEC[k[0]] || {})[x.act]; if (d) take({ d, ym: "", t: decAt(x), at: x.ts || x.at, src: "follow-up", was: x.act }); });
+    if (best && best.note == null) best.note = note;
+    if (!best && note) best = { d: "", ym: "", note, t: 0, src: "follow-up" };
+    return best;
+  },
+  // set the decision of one or more lines (keys: each line's own key); d "" takes it off
+  set(reg, keys, d, ym) {
+    const b = S.books, at = new Date().toISOString(), by = who();
+    b.itcDec = Object.assign({}, b.itcDec || {});
+    keys.forEach((k) => { const id = (reg || "") + "|" + k, was = b.itcDec[id] || {}; b.itcDec[id] = Object.assign({}, was, { d: d || "", ym: d === "later" || d === "now" || d === "booksnow" ? ym || "" : "", at, by }); });
+    saveBooks();
+  },
+  note(reg, key, note, cur) {
+    const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
+    b.itcDec = Object.assign({}, b.itcDec || {});
+    // a note alone keeps the decision as it is (the one in force, from wherever it came)
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "" } : { d: "", ym: "" }), { note: String(note || ""), at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), by: who() });
+    saveBooks();
+  },
+  // what changed since: a signature of everything a decision is read from (the 3B's carried credit is kept against it)
+  sig(b) { b = b || S.books || {}; return JSON.stringify([b.itcDec || {}, b.itcAdj || {}, (b.reco2b || {}).tag || {}, b.itcTrack || {}, b.itcBasis || {}]); },
+};
 
-// each line: its reconciliation key (rk), and the remark's decision when the remark is the later
-function apply(reg, items) {
-  const rk = recoKeys(GST2B.run(reg)), tg = tags(), dec = ((((S.books || {}).itcTrack || {})[reg || ""]) || {}).dec || {};
-  items.forEach((x) => {
-    const map = TAG_ACT[x.cat], k = rk[x.key];
-    if (!map || !k) return;
-    x.rk = k;
-    const t = tg[k], act = t && map[t.tag], d = dec[x.key] || {};
-    if (!act || (d.act && decAt(d) >= ms(t.at))) return;
-    x.act = act; x.decidedAt = String(t.at || "").slice(0, 10).replace(/-/g, ""); x.open = !CLOSED[x.cat + ":" + act];
-  });
-  return items;
-}
-
-function line(reg, test) { return ITCT.items(reg).items.find(test); }
-function decide(reg, key, act, ts) {
-  const st = ITCT.store(reg), d = Object.assign({}, st.dec[key]);
-  if (act) Object.assign(d, { act, at: ITCT.today(), ts }); else { delete d.act; delete d.at; delete d.ts; }
-  st.dec[key] = d;
-}
-
-// a remark set in the reconciliation: kept, and the line of ITC follow-up decided the same way; a remark taken off, or
-// one that means nothing there, leaves the line to its first choice when its decision was one a remark gives
+// the old entry points, for anything still calling them: they now write the one store
 function r2Tag(key, tag) {
-  const st = GST2B.state(), ts = new Date().toISOString(), reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
-  const x = line(reg, (i) => i.rk === key);
-  if (x) { const act = TAG_ACT[x.cat][tag], had = (ITCT.store(reg).dec[x.key] || {}).act; if (act || (had && ACT_TAG[x.cat][had])) decide(reg, x.key, act || "", ts); }
-  if (tag) st.tag[key] = { tag, at: ts }; else delete st.tag[key];
-  saveBooks(); render();
+  const reg = (typeof r2Reg === "function" ? r2Reg(S.books) : "") || S.gstReg || "";
+  const row = typeof ITCF === "object" ? ITCF.rowByTagKey(reg, key) : null;
+  if (row) { ITCDec.set(reg, [row.key], TAG_DEC[tag] || "", ""); render(); }
 }
-
-// what the user decides on a line of ITC follow-up (kept, carried to later months), and the remark in the
-// reconciliation to match: the one that means the same, or none where the remark there means another decision
 function itctSetAct(key, act) {
-  const reg = S.gstReg || "", ts = new Date().toISOString(), x = line(reg, (i) => i.key === key);
-  decide(reg, key, act, ts);
-  if (x && x.rk) {
-    const st = GST2B.state(), tag = (ACT_TAG[x.cat] || {})[act], cur = st.tag[x.rk];
-    if (tag) st.tag[x.rk] = { tag, at: ts };
-    else if (cur && TAG_ACT[x.cat][cur.tag]) delete st.tag[x.rk];
-  }
-  saveBooks(); render();
+  const reg = S.gstReg || "", d = (ACT_DEC[key[0]] || {})[act] || "";
+  ITCDec.set(reg, [key], d, ""); render();
 }
-
-if (typeof ITCT !== "undefined" && !ITCT.items.synced) {
-  const items = ITCT.items;
-  ITCT.items = function (reg) { const R = items.call(this, reg); apply(reg, R.items); return R; };
-  ITCT.items.synced = true;
-}
-Object.assign(globalThis, { r2Tag, itctSetAct, ITCSync: { TAG_ACT, ACT_TAG, apply } });
+Object.assign(globalThis, { ITCDec, r2Tag, itctSetAct });

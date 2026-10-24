@@ -125,7 +125,7 @@ try:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
         E, W = pg.evaluate, pg.wait_for_timeout
         start(pg)
-        ok(E("typeof GSTPortal === 'object' && typeof GSTReco === 'object'"), "the portal layer and the reconciliation's rows are in the app (GSTPortal, GSTReco)")
+        ok(E("typeof GSTPortal === 'object' && typeof ITCF === 'object'"), "the portal layer and the reconciliation's lines are in the app (GSTPortal, ITCF)")
         regs, months = E("GSTR.gstins(S.books).map(g => g.slice(0, 2))"), E("GSTR.months()")
 
         print("1. GSTR-1 in the portal's tables")
@@ -210,16 +210,18 @@ try:
         # EXPECTED.md: March 2026, 07: 3.1(a) taxable 2,00,000, IGST 9,000, CGST 7,000; 3.1(d) 60,000; 4(A)(3) IGST 7,200
         t31a = E("[...document.querySelectorAll('[data-r3b-row=\"3.1a\"] td')].slice(1).map(t => t.innerText.trim())")
         ok(t31a[:3] == ["₹2,00,000.00", "₹9,000.00", "₹7,000.00"], "3.1(a) as worked out by hand (EXPECTED.md: 2,00,000 · 9,000 · 7,000) (%s)" % t31a)
-        pg.click('[data-r3b-fig="4A3|igst"]'); W(500)
-        ft = E("() => { const f = document.querySelector('[data-r3b-bills=\"4A3\"] [data-r3b-bills-foot]'); return f ? f.innerText : ''; }")
-        n3 = pg.locator('[data-r3b-bills="4A3"] tr[data-r3b-bill]').count()
-        ok(n3 == 2 and "₹7,200.00" in ft and "the figure in the return" in ft, "4(A)(3) clicked: its two bills (the advocate, the landlord), adding up to IGST 7,200 (%d; %s)" % (n3, ft.replace("\n", " ")))
+        # next-itc-simple: a figure opens a window (Pop), not the bills below the table
+        pg.click('[data-r3b-fig="4A3|igst"]'); W(700)
+        ft = E("() => { const f = document.querySelector('[data-pop=\"r3b-4A3\"] [data-fig-part=bills] .itc-part-sum'); return f ? f.innerText : ''; }")
+        n3 = pg.locator('[data-pop="r3b-4A3"] [data-fig-part=bills] tr[data-pop-line]').count()
+        ok(n3 == 2 and "IGST ₹7,200.00" in ft and pg.locator("#app .r3b-bills").count() == 0, "4(A)(3) clicked: a window with its two bills (the advocate, the landlord), adding up to IGST 7,200 (%d; %s)" % (n3, ft))
+        pg.keyboard.press("Escape"); W(500)
         wide = E("[...document.querySelectorAll('[data-r3b-table] > .bk-tablewrap')].filter(w => w.scrollWidth > w.clientWidth + 1).map(w => w.parentNode.dataset.r3bTable)")
         ok(not wide and pg.locator("[data-r3b-portal] .gf-btn, [data-r3b-portal] th button[aria-label^='Filter']").count() == 0, "at 1440 every 3B table fits, no grid filter buttons in the return's form (%s)" % wide)
         shot(pg, "r3b-summary-desktop")
-        pg.click('[data-r3b-fig="3.1a|taxable"]'); W(500)
-        ok(pg.locator('[data-r3b-bills="3.1a"]').count() == 1 and pg.locator('[data-r3b-bills="4A3"]').count() == 0, "another figure opens its own bills (3.1(a))")
-        E("() => { S.r3bOpen = ''; render(); }")
+        pg.click('[data-r3b-fig="3.1a|taxable"]'); W(600)
+        ok(pg.locator('[data-pop="r3b-3.1a"] [data-r3b-bills="3.1a"]').count() == 1 and pg.locator('[data-pop="r3b-4A3"]').count() == 0, "another figure opens its own window (3.1(a))")
+        pg.keyboard.press("Escape"); W(400)
         subs = E("[...document.querySelectorAll('#app nav[aria-label=Return] button')].map(b => b.textContent)")
         ok(subs == ["Summary", "Details", "2B match", "Files"], "GSTR-3B keeps its one tab row (%s)" % subs)
 
@@ -270,67 +272,32 @@ try:
            and "ISD GSTR-6 Period" in h and "Eligibility of ITC" in h and n_isda == 2 and fi == 270, "ISDA: the original beside the amended, the portal's columns; its footer nets the credit note (360 - 90 = %s; %d rows; %s)" % (fi, n_isda, h[1:9]))
         shot(pg, "2b-isda-desktop")
 
-        print("4. 2B reconciliation")
-        gst(pg, "202603", "r2b", None, "S.r2Scope = 'year'; S.r2View = ''; S.r2Tab = ''; S.rcF = {}; S.rcView = '';")
-        ok(pg.locator("[data-reco]").count() == 1, "the 2B part opens on the reconciliation")
-        ref = E("""() => { const reg = '07', sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months), inSpan = (ym) => !sc0.months || sc0.months.includes(ym), tx = (o) => (num(o.igst) + num(o.cgst) + num(o.sgst) + num(o.cess)) * (o.dir || 1);
-          const S2b = sc.pairs.map(x => x.p).concat(sc.only2b).filter(p => inSpan(p.ym)), avl = S2b.filter(p => p.itcavl !== 'N'), booksIn = sc.pairs.flatMap(x => x.books).filter(d => inSpan(d.ym)).concat(sc.onlyBooks);
-          return {twoB: r2(avl.reduce((a, p) => a + tx(p), 0)), books: r2(booksIn.reduce((a, d) => a + tx(d), 0)), matched: sc.matched.length, mismatch: sc.diff.length, probable: sc.probable.length, b2: sc.only2b.length, bk: sc.onlyBooks.length}; }""")
-        tot = E("() => Object.fromEntries([...document.querySelectorAll('[data-reco-total]')].map(e => [e.dataset.recoTotal, Number(e.innerText.replace(/[₹,]/g, ''))]))")
-        ok(abs(tot["books"] - ref["books"]) < 0.01 and abs(tot["2b"] - ref["twoB"]) < 0.01 and abs(tot["diff"] - round(ref["twoB"] - ref["books"], 2)) < 0.01,
-           "ITC as per books, as per 2B and the difference: the figures the 2B page showed (%s / %s)" % (tot, ref))
-        chips = E("() => Object.fromEntries([...document.querySelectorAll('[data-reco-chip]')].map(b => [b.dataset.recoChip, Number(b.querySelector('.sbar-n').textContent)]))")
-        ok(chips == {"all": ref["matched"] + ref["mismatch"] + ref["probable"] + ref["b2"] + ref["bk"], "mismatch": ref["mismatch"], "probable": ref["probable"], "books": ref["bk"], "2b": ref["b2"], "matched": ref["matched"]},
-           "the chips' counts are GST2B's: matched, mismatch, probable, books only, 2B only (%s / %s)" % (chips, ref))
-        st = E("() => Object.fromEntries(GSTReco.recoRows(GST2B.scope('07', r2Scope().months), r2Scope().months, GST2B.state(), 1).map(r => [(r.twoB || r.books).no, r.status + (r.kind ? ':' + r.kind : '') + (r.diffs.length ? '[' + r.diffs.join(',') + ']' : '')]))")
-        ok(st.get("QB/ECO/5521") == "2b" and st.get("ISD/25/27A") == "2b" and st.get("ISDC/25/4A") == "2b", "the ECO and ISDA documents, with no bill in the books, are reconciled as In 2B only (%s)" % {k: st.get(k) for k in ("QB/ECO/5521", "ISD/25/27A", "ISDC/25/4A")})
-        ok(st.get("NSL/112", "").startswith("mismatch:amount") and st.get("KC/1187", "").startswith("matched[date") and st.get("SS-AUG-077", "").startswith("matched") and "no" in st.get("SS-AUG-077", "")
-           and st.get("INV-9001", "").startswith("probable") and st.get("WPH/88") == "2b" and st.get("JLA/311") == "books" and st.get("7712345") == "2b",
-           "each fixture case has the right status and differing field (%s)" % st)
-        ok(pg.locator("#recoTable tbody tr[data-reco-row=mismatch] .rc-diff").count() >= 1, "the differing field of a mismatch is highlighted")
-        rows = E("() => [...document.querySelectorAll('#recoTable tbody tr[data-reco-row]')].map(r => r.dataset.recoRow)")
-        ok(rows and rows[0] == "mismatch" and rows[-1] == "matched", "what to look at first: mismatches first, matched last (%s)" % rows)
-        heads = E("[...document.querySelectorAll('#recoTable thead tr:nth-child(2) th')].map(t => (t.querySelector('.colh > span') || t).textContent)")
-        ok(heads == ["Status", "Supplier · GSTIN", "Invoice no · date", "Taxable", "Tax", "Invoice no · date", "Taxable", "Tax", "Difference in ITC", "Action"] and "As per books" in pg.inner_text("#recoTable thead") and "As per GSTR-2B" in pg.inner_text("#recoTable thead"),
-           "Books and 2B side by side (%s)" % heads)
-        ok(E("() => { const w = document.querySelector('#recoTable').closest('.bk-tablewrap'); return w.scrollWidth <= w.clientWidth + 1; }"), "at 1440 the reconciliation fits without sideways scroll")
+        print("4. 2B reconciliation (next-itc-simple: one table, a Decision on each line)")
+        gst(pg, "202603", "r2b", None, "S.r2View = ''; S.icF = {};")
+        ok(pg.locator("[data-itc-reco]").count() == 1, "the 2B part opens on the reconciliation")
+        chips = E("() => Object.fromEntries([...document.querySelectorAll('[data-ic-chip]')].map(b => [b.dataset.icChip, Number(b.querySelector('.sbar-n').textContent)]))")
+        ref = E("() => { const m = {all: 0}; ITCF.month('07', '202603').rows.forEach(r => { m[r.chip] = (m[r.chip] || 0) + 1; m.all++; }); return m; }")
+        ok(all(chips.get(k, 0) == ref.get(k, 0) for k in ("all", "matched", "books", "2b", "diff", "ims", "cf")), "the chips' counts are the month's lines (%s / %s)" % (chips, ref))
+        st = E("() => Object.fromEntries(ITCF.rows('07').map(r => { const v = ITCF.month('07', r.home).rows.find(x => x.key === r.key) || {}; return [r.no || r.bookNo, v.chip + (r.kind === 'pair' && r.status === 'probable' ? ':probable' : '')]; }))")
+        ok(st.get("QB/ECO/5521") == "2b" and st.get("NSL/112") == "diff" and st.get("KC/1187") == "matched" and st.get("INV-9001", "").endswith("probable") and st.get("WPH/88") == "2b" and st.get("JLA/311") == "books",
+           "each fixture case on its chip (%s)" % {k: st.get(k) for k in ("QB/ECO/5521", "NSL/112", "KC/1187", "INV-9001", "WPH/88", "JLA/311")})
+        ok(E("document.documentElement.scrollWidth <= innerWidth + 1"), "at 1440 the page does not scroll sideways (a wide table scrolls in its own box)")
         shot(pg, "reco-desktop")
-        pg.click('[data-reco-chip="books"]'); W(400)
-        ok(E("() => [...document.querySelectorAll('#recoTable tbody tr[data-reco-row]')].every(r => r.dataset.recoRow === 'books')") and "%d invoice" % ref["bk"] in pg.inner_text("[data-reco-foot]"), "a chip shows its rows only, the footer counts them")
-        # actions: follow up, claim next month (the existing remarks); accept a probable match
-        first = pg.locator('#recoTable tbody tr[data-reco-row=books] select[data-reco-act]').first
-        first.select_option("Expect in next 2B"); W(400)
-        ok("Expect in next 2B" in E("JSON.stringify(GST2B.state().tag)"), "Claim next month: kept as the existing remark (Expect in next 2B)")
-        pg.click('[data-reco-chip="probable"]'); W(300)
-        pg.locator("#recoTable [data-reco-accept]").first.click(); W(500)
-        ok("yes" in E("Object.values(GST2B.state().confirm)") and E("GSTReco.recoCounts(GSTReco.recoRows(GST2B.scope('07', r2Scope().months), r2Scope().months, GST2B.state(), 1)).probable") == ref["probable"] - 1, "Accept: the existing confirm, the row leaves Probable match")
-        E("() => { GST2B.state().confirm = {}; GST2B.state().tag = {}; S.rcF = {}; render(); }"); W(300)
-        # Export: formulas
-        E("""() => { window.__files = []; window.saveFile = async (name, data) => { const a = new Uint8Array(await data.arrayBuffer()); let s = ''; for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); window.__files.push({name, b64: btoa(s)}); return true; }; }""")
-        pg.click("[data-reco-excel]"); W(1500)
-        x = E("""() => { const f = window.__files[0]; if (!f) return null; const bin = atob(f.b64), a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
-          const wb = XLSX.read(a, {type: 'array', cellFormula: true}), ws = wb.Sheets[wb.SheetNames[0]], r = XLSX.utils.decode_range(ws['!ref']), L = r.e.r + 1;
-          return {name: f.name, k: (ws['K' + L] || {}).f, kv: (ws['K' + L] || {}).v, s: (ws['S' + L] || {}).v, t: (ws['T' + L] || {}).f, t3: (ws['T3'] || {}).f, head: (ws['D1'] || {}).v + ' / ' + (ws['L1'] || {}).v}; }""")
-        ok(x and x["k"].startswith("SUM(K3:K") and x["t3"] == "S3-K3" and abs(x["kv"] - ref["books"]) < 0.01 and abs(x["s"] - ref["twoB"]) < 0.01 and x["head"] == "AS PER BOOKS / AS PER GSTR-2B",
-           "the Excel: Books and 2B side by side, the difference a formula, SUMs in the totals row equal to the screen (%s)" % x)
-        # By supplier
-        pg.click('[data-reco-view] button:has-text("By supplier")'); W(400)
-        ok(pg.locator("#recoSup tr[data-reco-sup]").count() >= 5, "By supplier: a row a supplier")
-        pg.locator("#recoSup tr[data-reco-sup]").first.click(); W(400)
-        ok(E("S.rcView || ''") == "" and E("(S.rcF || {}).party"), "a supplier opens its invoices")
-        E("() => { S.rcF = {}; render(); }"); W(200)
-        # the automatic matcher's hook: a 2B-only invoice and a books-only bill paired by "AI" become one row; amounts untouched
-        E("""() => { const sc = GST2B.scope('07', r2Scope().months), p = sc.only2b.find(x => x.no === 'WPH/88'), d = sc.onlyBooks.find(x => x.no === 'JLA/311');
-          window.GSTAutoMatch = {result: () => ({results: [{key2b: p.key, books: [d.id], status: 'probable', reason: 'test pairing', confidence: 0.62}, {key2b: sc.pairs.find(x => x.p.no === 'KC/1187').p.key, status: 'matched-rules', reason: 'date within 3 days'}]})}; render(); }"""); W(400)
-        tot2 = E("() => Object.fromEntries([...document.querySelectorAll('[data-reco-total]')].map(e => [e.dataset.recoTotal, Number(e.innerText.replace(/[₹,]/g, ''))]))")
-        chips2 = E("() => Object.fromEntries([...document.querySelectorAll('[data-reco-chip]')].map(b => [b.dataset.recoChip, Number(b.querySelector('.sbar-n').textContent)]))")
-        ok(tot2 == tot and chips2["all"] == chips["all"] - 1 and chips2["probable"] == chips["probable"] + 1 and pg.locator('[data-reco-auto="probable"]').count() == 1 and pg.locator('[data-reco-auto="matched-rules"]').count() == 1,
-           "the matcher's hook: its pairing is one Probable match row, its rule match is labelled, the totals do not move (%s → %s)" % (chips, chips2))
-        E("() => { delete window.GSTAutoMatch; render(); }")
-        # the workbench of before is still there
-        pg.click('[data-r2-view="work"]'); W(400)
-        ok(pg.locator('nav[aria-label="2B reconciliation"]').count() == 1, "the workbench of before (tiles, tabs, linking by hand) under Workbench")
-        E("() => { S.r2View = ''; S.r2Tab = ''; render(); }")
+        pg.click('[data-ic-chip="books"]'); W(400)
+        ok(E("() => [...document.querySelectorAll('#icTable tbody tr[data-ic-row]')].every(r => r.dataset.icChipOf === 'books')"), "a chip shows its lines only")
+        pg.click('[data-ic-chip="books"]'); W(300)
+        home = E("() => (ITCF.rows('07').find(r => r.kind === 'pair' && r.status === 'probable') || {}).home || '202603'")
+        gst(pg, home, "r2b", None, "S.r2View = ''; S.icF = {};")
+        pg.locator("#icTable [data-reco-accept]").first.click(); W(500)
+        ok("yes" in E("Object.values(GST2B.state().confirm)"), "Same on a probable match: the existing confirm")
+        E("() => { GST2B.state().confirm = {}; S.icF = {}; render(); }"); W(300)
+        gst(pg, "202603", "r2b", None, "S.r2View = ''; S.icF = {};")
+        E("""() => { window.__files = []; window.saveFile = async (name) => { window.__files.push({name}); return true; }; }""")
+        pg.click("[data-itc-excel=down]"); W(2500)
+        ok(E("window.__files.length") == 1 and "2B-and-ITC" in E("window.__files[0].name"), "Download Excel")
+        pg.click("[data-r2-more] > summary"); W(300); pg.click('[data-r2-more] [data-r2-view="portal"]'); W(500)
+        ok(pg.locator("[data-itc-reco]").count() == 0 and E("S.r2View") == "portal", "⋯ › See the 2B as the portal shows it")
+        E("() => { S.r2View = ''; render(); }")
 
         print("6. GSTR-1 table 14: supplies through e-commerce operators")
         before = E(R1_FROM_JSON, ["202603", "07"])

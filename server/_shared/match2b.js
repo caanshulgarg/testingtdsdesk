@@ -9,9 +9,13 @@
 //   - the same supplier GSTIN, and both are invoices (or both notes),
 //   - the same invoice number once written the same way (m2bNormNo: case, spaces, "/", "-", leading zeros and a financial
 //     year written in the number, "2024-25", "24-25", "FY 2024-2025", do not count),
-//   - dates no more than 3 days apart,
-//   - taxable value, IGST, CGST, SGST, cess and the total tax each equal within Rs 1.00 (compared in paise: 0.99 and 1.00
-//     are within, 1.01 is not).
+//   - dates in the same financial year (next-itc-simple, the owner, 24-Oct-2026: a date differing only is no problem; it was
+//     "no more than 3 days apart"),
+//   - IGST, CGST, SGST, cess and the total tax each equal within Rs 1.00 (compared in paise: 0.99 and 1.00 are within, 1.01
+//     is not). The taxable value is not compared (it was): with the tax equal, a taxable value that differs is the books
+//     counting other lines of the voucher (a travel agent's ticket booked with its service fee), a note, not a problem.
+// A matched pair carries notes (pair.note) for what differs without mattering: "date differs: 2B dd-mm-yyyy, books
+// dd-mm-yyyy", "paise rounding", "books taxable includes other lines ₹x", "timing: in 2B of mm-yyyy, booked mm-yyyy".
 // A bill booked in two or more entries under the same number whose sums match is matched too ("booked in 2 entries").
 // Same GSTIN and number but something else differs: a MISMATCH, with the difference in plain words. What is left over goes
 // to step 2 (one Claude call per run, server/gst-2b-match/match.ts): m2bAiInput builds what is sent (GSTIN, name, number,
@@ -23,7 +27,7 @@
 // The AI never gives an amount: every figure shown comes from the 2B or the books, never from its answer, and it never
 // decides credit (ITC).
 
-const M2B_VERSION = "m2b-1";
+const M2B_VERSION = "m2b-2";
 const M2B_TOL_PAISE = 100;            // Rs 1.00
 const M2B_DAYS = 3;
 const M2B_AI_DAYS = 31;
@@ -122,13 +126,32 @@ function m2bSameAmounts(a, b){
   if (M2B_H.some(h => Math.abs(m2bPaise(a[h]) - m2bPaise(b[h])) > M2B_TOL_PAISE)) return false;
   return Math.abs(m2bTax(a) - m2bTax(b)) <= M2B_TOL_PAISE;
 }
+// the tax of a and b (rows or sums) each head and the total within Rs 1.00 (the taxable value not compared)
+function m2bSameTax(a, b){
+  if (M2B_H.some(h => Math.abs(m2bPaise(a[h]) - m2bPaise(b[h])) > M2B_TOL_PAISE)) return false;
+  return Math.abs(m2bTax(a) - m2bTax(b)) <= M2B_TOL_PAISE;
+}
+// the financial year of a yyyymmdd date (April to March), "" when there is no date
+function m2bFy(d){ const s = String(d || ""); if (!/^\d{8}$/.test(s)) return ""; const y = +s.slice(0, 4), m = +s.slice(4, 6); return String(m >= 4 ? y : y - 1); }
+function m2bSameFy(a, b){ const x = m2bFy(a), y = m2bFy(b); return !x || !y || x === y; }
+// what differs in a matched pair without mattering, in plain words
+function m2bNotes(p, list){
+  const s = m2bSum(list), out = [], d0 = list[0];
+  if (p.date && d0.date && p.date !== d0.date) out.push("date differs: 2B " + m2bDmy(p.date) + ", books " + m2bDmy(d0.date));
+  if (M2B_H.some(h => m2bPaise(p[h]) !== m2bPaise(s[h]))) out.push("paise rounding");
+  const dt = m2bPaise(s.taxable) - m2bPaise(p.taxable);
+  if (Math.abs(dt) > M2B_TOL_PAISE) out.push(dt > 0 ? "books taxable includes other lines " + m2bInr(dt / 100) : "taxable " + m2bInr(p.taxable) + " in 2B, " + m2bInr(s.taxable) + " in books");
+  const ym = (x) => String(x.ym || String(x.date || "").slice(0, 6));
+  if (ym(p) && ym(d0) && ym(p) !== ym(d0)) { const w = (v) => v.slice(4, 6) + "-" + v.slice(0, 4); out.push("timing: in 2B of " + w(ym(p)) + ", booked " + w(ym(d0))); }
+  return out;
+}
 // what differs between a 2B document (or several) and the books, in plain words, from their own figures
 function m2bWhy(p, list){
   const s = m2bSum(list), q = Array.isArray(p) ? m2bSum(p) : p, out = [];
   const one = Array.isArray(p) ? p[0] : p;
   const dd = m2bDays(one.date, list[0].date);
-  if (dd != null && dd > M2B_DAYS) out.push("date " + m2bDmy(one.date) + " in 2B, " + m2bDmy(list[0].date) + " in books (" + dd + " days apart)");
-  if (Math.abs(m2bPaise(q.taxable) - m2bPaise(s.taxable)) > M2B_TOL_PAISE) out.push("taxable " + m2bInr(q.taxable) + " in 2B, " + m2bInr(s.taxable) + " in books (differs by " + m2bInr((m2bPaise(q.taxable) - m2bPaise(s.taxable)) / 100) + ")");
+  if (dd != null && !m2bSameFy(one.date, list[0].date)) out.push("date " + m2bDmy(one.date) + " in 2B, " + m2bDmy(list[0].date) + " in books (" + dd + " days apart, another financial year)");
+  if (Math.abs(m2bPaise(q.taxable) - m2bPaise(s.taxable)) > M2B_TOL_PAISE && Math.abs(m2bTax(q) - m2bTax(s)) > M2B_TOL_PAISE) out.push("taxable " + m2bInr(q.taxable) + " in 2B, " + m2bInr(s.taxable) + " in books (differs by " + m2bInr((m2bPaise(q.taxable) - m2bPaise(s.taxable)) / 100) + ")");
   const tq = m2bTax(q), ts = m2bTax(s);
   if (Math.abs(tq - ts) > M2B_TOL_PAISE) out.push("tax " + m2bInr(tq / 100) + " in 2B, " + m2bInr(ts / 100) + " in books (differs by " + m2bInr((tq - ts) / 100) + ")");
   else {
@@ -153,20 +176,21 @@ function m2bRules(twob, books){
   B.forEach(d => { const n = nk.get("b:" + d.id); if (!d.gstin || !/\d/.test(n)) return; const k = d.gstin + "|" + d.dir + "|" + n; (idx.get(k) || idx.set(k, []).get(k)).push(d); });
   const usedB = new Set(), usedG = new Set(), pairs = [];
   const cands = p => { const n = nk.get("g:" + p.key); return p.gstin && /\d/.test(n) ? (idx.get(p.gstin + "|" + p.dir + "|" + n) || []).filter(d => !usedB.has(d.id)) : []; };
-  const near = (p, d) => { const x = m2bDays(p.date, d.date); return x != null && x <= M2B_DAYS; };
-  const take = (p, list, st, why) => { usedG.add(p.key); list.forEach(d => usedB.add(d.id)); pairs.push({st, g: [p.key], b: list.map(d => d.id), why}); };
-  // a. one entry, everything equal (the nearest date first)
+  const near = (p, d) => m2bSameFy(p.date, d.date);
+  const gap = (p, d) => { const x = m2bDays(p.date, d.date); return x == null ? 0 : x; };
+  const take = (p, list, st, why, note) => { usedG.add(p.key); list.forEach(d => usedB.add(d.id)); const x = {st, g: [p.key], b: list.map(d => d.id), why}; if (note && note.length) x.note = note; pairs.push(x); };
+  // a. one entry, the tax equal, in the same year (the nearest date, then the nearest taxable value first)
   G.forEach(p => {
-    const c = cands(p).filter(d => near(p, d) && m2bSameAmounts(p, d));
+    const c = cands(p).filter(d => near(p, d) && m2bSameTax(p, d));
     if (!c.length) return;
-    c.sort((a, x) => (m2bDays(p.date, a.date) - m2bDays(p.date, x.date)) || (a.id < x.id ? -1 : 1));
-    take(p, [c[0]], "matched-rules", []);
+    c.sort((a, x) => (gap(p, a) - gap(p, x)) || (Math.abs(m2bPaise(a.taxable) - m2bPaise(p.taxable)) - Math.abs(m2bPaise(x.taxable) - m2bPaise(p.taxable))) || (a.id < x.id ? -1 : 1));
+    take(p, [c[0]], "matched-rules", [], m2bNotes(p, [c[0]]));
   });
   // b. the same number booked in two or more entries that add up
   G.forEach(p => {
     if (usedG.has(p.key)) return;
     const c = cands(p);
-    if (c.length > 1 && c.every(d => near(p, d)) && m2bSameAmounts(p, m2bSum(c))) take(p, c, "matched-rules", ["booked in " + c.length + " entries"]);
+    if (c.length > 1 && c.every(d => near(p, d)) && m2bSameTax(p, m2bSum(c))) take(p, c, "matched-rules", ["booked in " + c.length + " entries"], m2bNotes(p, c));
   });
   // c. the same GSTIN and number, something else differs: paired, with what differs
   G.forEach(p => {
@@ -178,7 +202,7 @@ function m2bRules(twob, books){
       : [c.slice().sort((a, x) => (Math.abs(m2bTax(a) - m2bTax(p)) - Math.abs(m2bTax(x) - m2bTax(p))) || (a.id < x.id ? -1 : 1))[0]];
     const why = m2bWhy(p, pick);
     if (pick.length > 1) why.push("booked in " + pick.length + " entries");
-    take(p, pick, why.length ? "mismatch" : "matched-rules", why.length ? why : []);
+    take(p, pick, why.length ? "mismatch" : "matched-rules", why.length ? why : [], why.length ? [] : m2bNotes(p, pick));
   });
   return {pairs, left2b: G.filter(p => !usedG.has(p.key)).map(p => p.key), leftBooks: B.filter(d => !usedB.has(d.id)).map(d => d.id)};
 }
@@ -296,4 +320,4 @@ function m2bRulesOnly(twob, books, decisions){
   return m2bAiApply(twob, books, r, [], decisions);
 }
 
-export { M2B_VERSION, M2B_TOL_PAISE, M2B_DAYS, M2B_AI_DAYS, M2B_AI_MAX, M2B_SCHEMA, M2B_SYSTEM, M2B_KINDS, m2bNum, m2bPaise, m2bInr, m2bDmy, m2bDays, m2bNormNo, m2bFrom2bJson, m2bRow2b, m2bRowBk, m2bSum, m2bSameAmounts, m2bWhy, m2bRules, m2bAiInput, m2bAiPrompt, m2bAiParse, m2bPairId, m2bAiApply, m2bCounts, m2bLine, m2bRulesOnly };
+export { M2B_VERSION, M2B_TOL_PAISE, M2B_DAYS, M2B_AI_DAYS, M2B_AI_MAX, M2B_SCHEMA, M2B_SYSTEM, M2B_KINDS, m2bNum, m2bPaise, m2bInr, m2bDmy, m2bDays, m2bNormNo, m2bFrom2bJson, m2bRow2b, m2bRowBk, m2bSum, m2bSameAmounts, m2bSameTax, m2bFy, m2bNotes, m2bWhy, m2bRules, m2bAiInput, m2bAiPrompt, m2bAiParse, m2bPairId, m2bAiApply, m2bCounts, m2bLine, m2bRulesOnly };

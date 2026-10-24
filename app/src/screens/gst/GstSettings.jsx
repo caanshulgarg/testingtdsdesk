@@ -147,7 +147,7 @@ function Contacts({ b }) {
   const q = String(S.gcontQ || "").toLowerCase(), all = GSTSet.parties(), shown = all.filter((p) => !q || (p.party + " " + p.gstin).toLowerCase().includes(q)), c = b.gstContacts || {};
   return (
     <section className="dash-card"><h3>Contacts for GST letters</h3>
-      <p className="note">Email and phone for the letters to suppliers (ITC follow-up) and customers (IMS rejections). Taken from Tally where it has them; type or correct them here.</p>
+      <p className="note">Email and phone for the letters to suppliers (2B reconciliation, Write to suppliers) and customers (IMS rejections). Taken from Tally where it has them; type or correct them here.</p>
       <input type="search" aria-label="Party or GSTIN" data-fk="gcontq" value={S.gcontQ || ""} placeholder="Party or GSTIN" style={{ width: 260 }} onChange={(ev) => setAndShow("gcontQ", ev.target.value, true)} />
       {" "}<span className="note">{shown.length} of {all.length} parties with a GSTIN</span>
       <ListRows name="gstContacts" className="bk-table compact" unit={["party", "parties"]} of={all.length} empty="No party matches. Clear the search to see them all." head={[{ label: "Party", role: "party" }, { label: "GSTIN" }, { label: "In the books as" }, { label: "Email" }, { label: "Phone" }]}>

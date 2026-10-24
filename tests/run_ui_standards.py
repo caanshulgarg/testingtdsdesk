@@ -138,7 +138,7 @@ MORE = [
     ("tds-return-deductees", """(cid) => { if (S.tdsFy) tdsTabGo('deductees'); }"""),
     ("gst-2b", """(cid) => { if (!S.books || !(S.books.vouchers || []).length) return; goClient('books:gst'); gstPartGo('r2b'); }"""),
     ("gst-input-register", """(cid) => { if (!S.books || !(S.books.vouchers || []).length) return; gstPartGo('inreg'); }"""),
-    ("gst-itc-follow-up", """(cid) => { if (!S.books || !(S.books.vouchers || []).length) return; gstPartGo('follow'); }"""),
+    ("gst-final-credit", """(cid) => { if (!S.books || !(S.books.vouchers || []).length) return; gstPartGo('itcfinal'); }"""),
     ("gst-filed-vs-books", """(cid) => { if (!S.books || !(S.books.vouchers || []).length) return; gstPartGo('recon'); }"""),
 ]
 

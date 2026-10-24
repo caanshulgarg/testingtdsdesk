@@ -309,7 +309,6 @@ run_gst_bills.py                      300  TDSDESK_SITE=../app/dist-test
 run_sidebar_compact.py                300  TDSDESK_SITE=../app/dist-test
 run_26as_recon.py                     180  TDSDESK_SITE=../app/dist-test
 run_traces_files.py                   180  TDSDESK_SITE=../app/dist-test
-run_supplier_health.py                180  TDSDESK_SITE=../app/dist-test
 # round 43: the TDS and GST end-to-end proof on a real TallyPrime 7.1 (test company; known FAILs in tests/fixtures/tdsgst-e2e/known-fails.json)
 run_e2e_tdsgst.py                     600
 # round 44: TDS and GST from both the Day Book and the bridge (the cloud copy): one entry per Tally GUID, the later AlterID
@@ -469,3 +468,7 @@ run_tds_autoplace.js                  180
 run_tds_autoplace_ui.py               300  TDSDESK_SITE=../app/dist-test
 # GST (23-Oct-2026, Leads Insurance): a remark in 2B reconciliation and the decision in ITC follow-up are one, kept with the books
 run_2b_follow_ui.py                   240  TDSDESK_SITE=../app/dist-test
+# next-itc-simple (24-Oct-2026): 2B & ITC in three tabs (Input register, 2B reconciliation with one Decision a line, Final
+# credit for 3B with adjustments), 3B figures in windows, the Excel round trip (LibreOffice when present)
+run_itc_final.js                      120
+run_itc_simple_ui.py                  600  TDSDESK_SITE=../app/dist-test

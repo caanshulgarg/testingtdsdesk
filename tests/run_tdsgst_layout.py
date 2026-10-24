@@ -8,7 +8,8 @@ illogical"), used as a person would, on the fixture books (tests/fixtures/books,
     addresses open the register, Reconciliations, After filing and To fix; Every year and the downloads under More;
   - a return: the summary card (the figures, the status, one main button, More) on top, Deductions · Challans · To fix ·
     Return file · After filing below;
-  - GST: Returns · 2B & ITC · Supplier health · Checks, every part reachable;
+  - GST: Returns · 2B & ITC · Checks (next-itc-simple: Supplier health gone; 2B & ITC is Input register · 2B reconciliation
+    · Final credit for 3B; Reversal under Returns), every part reachable;
   - old addresses go to the new places (…/certs → Checks, a return's …/summary → its entries);
   - the sidebar's TDS opens the returns, not From Tally (clean-up batch 1: TDS and GST each a sidebar item); the ledgers-to-confirm banner once, on Returns;
   - Reports' and MIS's compliance links open the Compliance page;
@@ -133,9 +134,9 @@ try:
         hash_go("#/c/%s/books/gst/07/202603/year" % cid)
         gsecs = E("[...document.querySelectorAll('#app nav[aria-label=\"GST sections\"] button')].map(b => b.textContent)")
         # ledger-confirm (14-Oct-2026): the GST ledgers are a section of the GST page ("Ledgers", with the count to confirm)
-        ok(gsecs[:4] == ["Returns", "2B & ITC", "Supplier health", "Checks"] and len(gsecs) == 5 and gsecs[4].startswith("Ledgers"), "GST tabs: %s" % gsecs)
+        ok(gsecs[:3] == ["Returns", "2B & ITC", "Checks"] and len(gsecs) == 4 and gsecs[3].startswith("Ledgers"), "GST tabs: %s" % gsecs)
         ok(pg.locator("#app [data-gst-grid]").count() == 1 and pg.locator("#app [data-ledger-banner]").count() == 1, "Returns: the year's grid, and the banner once")
-        sec_parts = {"returns": ["r1", "r3b", "amend", "adv", "g9", "g9c", "vault"], "itc": ["r2b", "inreg", "follow", "rev"], "health": ["health"], "checks": ["filedcmp", "recon"]}
+        sec_parts = {"returns": ["r1", "r3b", "amend", "adv", "rev", "g9", "g9c", "vault"], "itc": ["inreg", "r2b", "itcfinal"], "checks": ["filedcmp", "recon"]}
         for sec, parts in sec_parts.items():
             pg.click("#app [data-gst-sec='%s']" % sec); W(600)
             shown = E("[...document.querySelectorAll('#app nav[aria-label=GST] [data-part]')].map(b => b.dataset.part)")

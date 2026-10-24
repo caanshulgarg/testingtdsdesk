@@ -1071,7 +1071,7 @@ function r2Confirm(key){ const st = GST2B.state(); st.confirm[key] = "yes"; save
 function r2Unlink(key, ids){ const st = GST2B.state(); ids.forEach(id => { st.confirm[key + ">" + id] = "no"; }); delete st.link[key]; delete st.confirm[key]; saveBooks(); render(); }
 // a 2B document not found in Tally, linked by hand to the entry it was booked as
 function r2Link(key, id){ const st = GST2B.state(); if (id){ st.link[key] = [id]; delete st.confirm[key]; } saveBooks(); render(); }
-// a remark on a document (r2Tag): app/src/lib/itcSync.js, where it is also ITC follow-up's decision on that bill
+// a remark on a document (r2Tag): app/src/lib/itcSync.js, the decision on that bill (ITCDec)
 // a note to a supplier listing the invoices not in their return, to the clipboard (or on screen to copy)
 function r2Copy(k){
   const reg = r2Reg(S.books), sc0 = r2Scope(), sc = GST2B.scope(reg, sc0.months);
@@ -1691,8 +1691,6 @@ function doAct(act, t){
     }
     case "auditUnlock": { const run = (S.books.audit || {}).last; if (run && S.books.audit.final){ delete S.books.audit.final[run.from + "-" + run.to]; saveBooks(); toast("Unlocked."); render(); } break; }
     case "gst9Pdf": case "gst9cPdf": { const w = act === "gst9Pdf" ? "9" : "9C"; printView(CO().name + " GSTR-" + w, "<style>@page{size:A4 portrait;margin:12mm}</style>" + gst9PackHtml(w)); break; }
-    case "itctExcel": itctExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
-    case "itctCopy": case "itctMail": case "itctWa": itctWrite(act, t.dataset.sup); break;
     case "inregExcel": inregExcel().then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "gst9Excel": case "gst9cExcel": gst9Excel(act === "gst9Excel" ? "9" : "9C").then(() => toast("Downloaded."), e => toast("Could not build the file: " + (e && e.message))); break;
     case "lmPostAll": { const n2 = LedMaster.applyPosting(S.books, CO()); toast(n2 + " posting ledger" + (n2 === 1 ? "" : "s") + " set from the master."); render(); break; }

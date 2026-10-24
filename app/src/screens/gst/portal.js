@@ -256,26 +256,35 @@ export function r3bBills(id, ym, reg, t) {
     case "4A5": {
       bills = B(inn.filter((r) => !r.import && !r.rcm));
       if (t.basis === "2b") {
-        A("Held back: not yet in 2B (or more tax in Tally than in 2B)", neg(t.held)); A("Taken now: booked earlier, in this month's 2B", t.released);
+        A("Not taken this month: not in 2B, a later month, follow-up or reversed (or more tax in Tally than in 2B)", neg(t.held)); A("Taken now: booked in another month, or only in 2B", t.released);
         A("Suppliers' credit notes in 2B, not in Tally", neg(t.cn2b)); A("Credit notes rejected in IMS, not reducing credit", t.rejBack);
       }
       A("ITC reclaimed (shown again in 4(D)(1))", t.reclaim);
       figure = S5(t.other); figure.taxable = V(t.other, "taxable"); break; }
     case "4B1": bills = B(inn.filter((r) => r.blocked)); A("Rules 42 and 43", t.rules); figure = S5(t.rev1); break;
-    case "4B2": if (t.r37) A("Rule 37: unpaid after 180 days", t.r37.rev); A("Typed in FinCom", { igst: V(t.rev2, "igst") - V(t.r37 && t.r37.rev, "igst"), cgst: V(t.rev2, "cgst") - V(t.r37 && t.r37.rev, "cgst"), sgst: V(t.rev2, "sgst") - V(t.r37 && t.r37.rev, "sgst"), cess: V(t.rev2, "cess") - V(t.r37 && t.r37.rev, "cess") }); figure = S5(t.rev2); break;
+    case "4B2": { const ad = (t.itcAdj || {})["4B2"] || {}; if (t.r37) A("Rule 37: unpaid after 180 days", t.r37.rev); A("Typed in FinCom", { igst: V(t.rev2, "igst") - V(t.r37 && t.r37.rev, "igst") - V(ad, "igst"), cgst: V(t.rev2, "cgst") - V(t.r37 && t.r37.rev, "cgst") - V(ad, "cgst"), sgst: V(t.rev2, "sgst") - V(t.r37 && t.r37.rev, "sgst") - V(ad, "sgst"), cess: V(t.rev2, "cess") - V(t.r37 && t.r37.rev, "cess") - V(ad, "cess") }); figure = S5(t.rev2); break; }
     case "4D1": if (t.r37) A("Rule 37: paid, credit reclaimed", t.r37.re); A("Typed in FinCom", { igst: V(t.reclaim, "igst") - V(t.r37 && t.r37.re, "igst"), cgst: V(t.reclaim, "cgst") - V(t.r37 && t.r37.re, "cgst"), sgst: V(t.reclaim, "sgst") - V(t.r37 && t.r37.re, "sgst"), cess: V(t.reclaim, "cess") - V(t.r37 && t.r37.re, "cess") }); figure = S5(t.reclaim); break;
     case "4D2": {
       (typeof GST2B === "object" ? GST2B.all2b(reg) : []).filter((z) => z.ym === ym).forEach((z) => z.rows.filter((r) => r.itcavl === "N" && !r.rej).forEach((r) => bills.push(Object.assign({}, r, { sg: r.dir || 1, from2b: true }))));
       figure = S5(t.na); break; }
+    case "4C": A("4(A) ITC available", t.itc); A("Less 4(B)(1)", neg(t.rev1)); A("Less 4(B)(2)", neg(t.rev2)); figure = S5(t.netItc); break;
+    case "5gst": case "5ng": {
+      const own = String(reg || "").slice(0, 2), inter = (r) => !!String(r.gstin || "").slice(0, 2) && String(r.gstin).slice(0, 2) !== own;
+      bills = B(inn.filter((r) => r.bill && !r.import && !r.rcm && r.dir > 0 && !(V(r, "igst") || V(r, "cgst") || V(r, "sgst")) && r.taxable && (id === "5ng" ? r.cls === "nongst" : r.cls !== "nongst")));
+      figure = { taxable: R(V(t.inw5, id === "5ng" ? "ngInter" : "gstInter") + V(t.inw5, id === "5ng" ? "ngIntra" : "gstIntra")) };
+      bills.forEach((r) => { r.inter = inter(r); });
+      break; }
     default: return null;
   }
+  // next-itc-simple: the adjustments typed on Final credit for 3B (app/src/lib/itcFinal.js) are in the figure
+  if (t.itcAdj && t.itcAdj[id] && id !== "4C") A("Adjustments added in FinCom", t.itcAdj[id]);
   // the 4 tables carry no value: only the tax is compared
-  const heads = /^4/.test(id) ? ["igst", "cgst", "sgst", "cess"] : HEADS;
+  const heads = /^4/.test(id) ? ["igst", "cgst", "sgst", "cess"] : /^5/.test(id) ? ["taxable"] : HEADS;
   const sum = z5(); bills.forEach((r) => addTo(sum, r, r.sg)); adj.forEach((a) => addTo(sum, a));
   const off = heads.filter((k) => Math.abs(R(sum[k] - V(figure, k))) > 0.01);
   return { id, bills, adj, figure, sum, heads, off };
 }
-export const R3B_CLICK = new Set(["3.1a", "3.1b", "3.1c", "3.1d", "3.1e", "4A1", "4A2", "4A3", "4A5", "4B1", "4B2", "4D1", "4D2"]);
+export const R3B_CLICK = new Set(["3.1a", "3.1b", "3.1c", "3.1d", "3.1e", "4A1", "4A2", "4A3", "4A5", "4B1", "4B2", "4C", "4D1", "4D2", "5gst", "5ng"]);
 
 /* ---------------------------------------------------------------- GSTR-2B */
 

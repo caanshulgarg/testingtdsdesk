@@ -58,11 +58,25 @@ const GST2B = {
       v.ent.forEach(e => { if (e.l !== party && !Books.ledgerOf(e.l).kind && (e.a < 0) === (signed < 0)) taxable = r2(taxable + Math.abs(e.a)); });
       // tax alone, with no supplier's GSTIN and no value beside it: a rounding or reversal entry
       if (!taxable && !gstin){ this.skipped.taxOnly++; return; }
+      // next-itc-simple (Leads, 24-Oct-2026: JMD's ticket 36,630 booked with its fee, tax 180): the value is what carries GST.
+      // Far more value than the tax at any rate: the lines with a GST rate (Tally's), else the tax at the rate in the
+      // narration ("@ 18%", else 18%); the rest is kept apart (other)
+      let other = 0;
+      const gt = r2(tax.IGST + tax.CGST + tax.SGST);
+      if (taxable > 0 && gt > 0){
+        const rt = gt * 100 / taxable;
+        if (rt < 4.5 && ![0.1, 0.25, 1, 1.5, 3].some(x => Math.abs(rt - x) < 0.05)){
+          const rated = ((Books.lines(v) || {}).parts || []).filter(x => num(x.rate) >= 5).reduce((a, x) => a + num(x.taxable), 0);
+          const nr = num((String(v.narr || "").match(/@\s*(\d+(?:\.\d+)?)\s*%/) || [])[1]) || 18;
+          const base = rated > 0 && rated < taxable ? r2(rated) : r2(gt * 100 / nr);
+          if (base > 0 && base < taxable){ other = r2(taxable - base); taxable = base; }
+        }
+      }
       if (!reg) reg = String(v.cmp || "").slice(0, 2) || (regs.length === 1 ? regs[0] : "");
       const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
-        taxable, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
+        taxable, other, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
         dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, held: hold > 0, narr: v.narr || ""});
     });
     return out;
@@ -81,7 +95,7 @@ const GST2B = {
   // match every 2B document against every book document, strongest evidence first
   run(reg){
     const b = S.books, st = this.state(), tol = num(this.settings().tol) || 1;
-    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref"].join("|");
+    const key = [reg, b.vouchers && b.vouchers.length, b.mapV || 0, Object.keys(b.gstins || {}).length, Object.keys(b.twoBs || {}).join(","), JSON.stringify(st.confirm), JSON.stringify(st.link), tol, S.coId, (CO() || {}).supInvFrom || "ref", typeof M2B === "object" && M2B.aiSig ? M2B.aiSig(reg) : ""].join("|");
     if (this._memo && this._memo.key === key && this._memo.v === b.vouchers) return this._memo.res;
     const portal = [], rejRows = [];
     this.all2b(reg).forEach(t => t.rows.forEach(r => (r.rej ? rejRows : portal).push(r)));
@@ -137,6 +151,16 @@ const GST2B = {
       if (list.length) pair(p, list, 0, "manual");
     });
     const rejected = (p, list) => list.some(d => st.confirm[p.key + ">" + d.id] === "no");
+    // next-itc-simple: the automatic matching's AI pairs (M2B, src/js/85) as links: matched by AI is a match (its row says
+    // "AI", with the reason), suggested only is a probable match to accept or reject on the reconciliation's row
+    const by2 = new Map(portal.map(p => [p.key, p]));
+    (typeof M2B === "object" && M2B.aiLinks ? M2B.aiLinks(reg) : []).forEach(a => {
+      const p = by2.get(a.g); if (!p || used2b.has(p.key) || st.confirm[p.key] === "no") return;
+      const list = a.b.map(id => byId.get(id)).filter(d => d && free(d) && d.dir === p.dir);
+      if (!list.length || list.length !== a.b.length || rejected(p, list)) return;
+      pair(p, list, a.st === "probable" ? 4 : 0, a.st === "probable" ? "probable" : "ai");
+      Object.assign(pairs[pairs.length - 1], {ai: a.why || "matched by AI", aiId: a.id});
+    });
     const tiers = [
       // 1. same GSTIN, same number, same amounts
       p => { const c = (byG.get(p.gstin) || []).filter(d => free(d) && d.dir === p.dir && d.noN === p.noN); const s = sumOf(c); return c.length && near(s.taxable, p.taxable) && near(taxOf(s), taxOf(p)) ? [c, 1, "exact"] : null; },

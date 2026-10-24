@@ -144,7 +144,7 @@ export function Gstr3b({ b, sub }) {
   const stateName = (pos) => (Object.keys(STATE_CODES).find((k) => STATE_CODES[k] === pos) || "").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
   if (sub === "file") return <Filing b={b} t={t} />;
   if (sub === "diff") return <><Unclaimed reg={S.gstReg || ""} ym={S.gstYm || ""} /><Checks />
-    <p className="note" style={{ marginTop: 12 }}>Bills against 2B, one by one: <button className="linkbtn" onClick={() => gstPartGo("r2b")}>2B reconciliation</button> · credit held back: <button className="linkbtn" onClick={() => gstPartGo("follow")}>ITC follow-up</button> · the 3B as filed against this working: <button className="linkbtn" onClick={() => gstPartGo("filedcmp")}>Filed vs FinCom</button></p></>;
+    <p className="note" style={{ marginTop: 12 }}>Bills against 2B, one by one: <button className="linkbtn" onClick={() => gstPartGo("r2b")}>2B reconciliation</button> · the credit for table 4: <button className="linkbtn" onClick={() => gstPartGo("itcfinal")}>Final credit for 3B</button> · the 3B as filed against this working: <button className="linkbtn" onClick={() => gstPartGo("filedcmp")}>Filed vs FinCom</button></p></>;
   return <>
     <div className="gf-ctl" style={{ marginBottom: 10 }}>
       <span className="note">Credit in table 4: <b>{choice === "2b" ? "as far as 2B shows it" : "as booked in Tally"}</b> · filing {typeof GSTSet === "object" ? GSTSet.typeLabel(ft).toLowerCase() : "monthly"} · <SetLink /></span>
@@ -179,11 +179,11 @@ export function Gstr3b({ b, sub }) {
         <Row label="(A)(1) Import of goods" x={t.impGoods} /><Row label="(A)(2) Import of services" x={t.impServ} />
         <Row label="(A)(3) Inward supplies on reverse charge" x={t.rcmIn} /><Row label="(A)(5) All other ITC" x={t.other} />
         {heldNote ? <tr><td colSpan={5} className="nr" style={{ whiteSpace: "normal" }}>
-          {t.held.n ? "Held back, not yet in 2B: " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + ". " : ""}
-          {t.released.n ? "Taken now, booked earlier and in this month’s 2B: " + t.released.n + ", " + money(all4(t.released)) + ". " : ""}
+          {t.held.n ? "Not taken this month (not in 2B, a later month, follow-up or reversed): " + t.held.n + " bill" + (t.held.n === 1 ? "" : "s") + ", " + money(all4(t.held)) + ". " : ""}
+          {t.released.n ? "Taken now, booked in another month or only in 2B: " + t.released.n + ", " + money(all4(t.released)) + ". " : ""}
           {t.rejBack && t.rejBack.n ? "Credit notes rejected in IMS, not reducing credit: " + t.rejBack.n + ", " + money(all4(t.rejBack)) + ". " : ""}
           {t.cn2b && t.cn2b.n ? "Less suppliers’ credit notes in 2B, not in Tally: " + t.cn2b.n + ", " + money(all4(t.cn2b)) + ". " : ""}
-          <button className="linkbtn" onClick={() => gstPartGo("follow")}>See them</button></td></tr> : null}
+          <button className="linkbtn" data-r3b-see="" onClick={() => gstPartGo("itcfinal")}>See them</button></td></tr> : null}
         <Gap /><Row label="(B)(1) Reversed: rules 38, 42, 43 and section 17(5)" x={tax(t.rev1)} />
         <tr><td>(B)(2) Reversed: others (rule 37, and credit that may come back)<div className="nr">type any here</div></td><td className="n"></td><Typed b={b} grp="rev2" /></tr>
         <Gap /><Row label="(C) Net ITC available" x={tax(t.netItc)} bold />

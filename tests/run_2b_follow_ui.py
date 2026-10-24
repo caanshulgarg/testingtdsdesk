@@ -1,13 +1,12 @@
-"""python3 run_2b_follow_ui.py - a remark in 2B reconciliation and the decision in ITC follow-up are one (the owner,
-23-Oct-2026, Leads Insurance: "I have done some vendor to be followed but it was not showing up there"). The 2B
-reconciliation kept its remarks (reco2b.tag) and ITC follow-up its decisions (itcTrack.dec) apart, and nothing read one
-from the other, so "Follow up with supplier" set in the reconciliation never reached ITC follow-up's "Suppliers to
-write to". Now:
+"""python3 run_2b_follow_ui.py - the follow-up is part of the 2B reconciliation, and its decisions are kept in one store
+(the owner, 23-Oct-2026, Leads Insurance: "I have done some vendor to be followed but it was not showing up there"; then
+next-itc-simple, 24-Oct-2026: no separate ITC follow-up, "in 2B reconciliation there should be follow-up also"):
   1. "Follow up with supplier" on a bill in Tally only, on a document in 2B only, and "Ask supplier to correct" on a
-     mismatch, set in the reconciliation: the line in ITC follow-up is to follow up / to ask the supplier, and its
-     supplier is under "Suppliers to write to", even over an older decision made there;
-  2. a decision made in ITC follow-up shows as the remark in the reconciliation; the later of the two always wins;
-  3. both are kept with the books item by item (client_book_items): after a reload, and on a second computer.
+     mismatch, chosen on the reconciliation's line: kept as the line's Decision (S.books.itcDec, one item each on the
+     server) and its supplier is under "Write to suppliers", with the letter;
+  2. the decisions made before (a remark in reco2b.tag, ITC follow-up's itcTrack.dec) read as decisions: the latest wins;
+  3. kept with the books item by item (client_book_items): after a reload, and on a second computer; a change on one
+     reaches the other without a reload.
 A stand-in for Supabase here (REST and the Realtime socket), shared by both browsers (as run_live_sync.py). Made-up
 books only. Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_2b_follow_ui.py"""
 import os, re, json, time, threading, functools, http.server, itertools, datetime
@@ -113,21 +112,17 @@ def start(pg, tok):
       Cloud.st.firm = firm; Cloud.st.state = "ok"; Cloud.st.members = [{user_id: "u-asha", name: "Asha"}, {user_id: "u-rahul", name: "Rahul"}]; startCloudSync2(); }""", [tok, USERS[tok][0], FIRM])
     wait_for(pg, "Live.st === 'live'", 10)
 def open_part(pg, part):
-    pg.evaluate("""([cid, part, reg]) => { S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "gst"; S.gstPart = part; S.gstYm = "202604"; S.gstReg = reg; S.r2Scope = "all"; S.r2View = "reco"; S.itctShow = "all";
+    pg.evaluate("""([cid, part, reg]) => { S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "gst"; S.gstPart = part; S.gstYm = "202604"; S.gstReg = reg; S.gstView = "return";
       if (!S.books || S.books.cid !== cid) S.books = null; render(); }""", [CID, part, REG])
-    return wait_for(pg, "S.books && S.books.cid === '%s' && !S.books.loading && document.querySelector(%s)" % (CID, json.dumps("[data-reco]" if part == "r2b" else ".gf-ctl")), 20)
-# the line of ITC follow-up for a supplier, and the remark on the reconciliation's row for an invoice number
-ITEM = "(ITCT.items(%s).items.find(x => x.supplier && x.supplier.toLowerCase().startsWith(%%s)) || {})" % json.dumps(REG)
-def item(pg, who): return pg.evaluate("(() => { const x = " + ITEM % json.dumps(who) + "; return {key: x.key, cat: x.cat, act: x.act, open: x.open}; })()")
-def suppliers(pg): return pg.evaluate("ITCT.suppliers(%s, ITCT.items(%s).items).map(s => s.party)" % (json.dumps(REG), json.dumps(REG)))
-def reco_row(pg, no): return 'tr[data-reco-row]:has(td.rc-doc .code:text-is("%s"))' % no
-def remark(pg, no): return pg.evaluate("(no) => { const r = [...document.querySelectorAll('tr[data-reco-row]')].find(tr => [...tr.querySelectorAll('td.rc-doc .code')].some(c => c.textContent.trim() === no)); const s = r && r.querySelector('select[data-reco-act]'); return s ? s.value : null; }", no)
-def choose(pg, sel, v, what):
-    try: pg.select_option(sel, v, timeout=3000)
-    except Exception: ok(False, "%s: no choice %r there" % (what, v))
+    return wait_for(pg, "S.books && S.books.cid === '%s' && !S.books.loading && document.querySelector('[data-itc-reco]')" % CID, 20)
+def row(no): return 'tr[data-ic-row]:has(.code:text-is("%s"))' % no
+def dec(pg, no): return pg.evaluate("(no) => { const r = [...document.querySelectorAll('tr[data-ic-row]')].find(tr => [...tr.querySelectorAll('.code')].some(c => c.textContent.trim() === no)); const s = r && r.querySelector('select[data-ic-dec]'); return s ? s.value : null; }", no)
+def line(pg, no): return pg.evaluate("(no) => { const r = ITCF.rows('%s').find(x => x.no === no || x.bookNo === no); return r ? {code: r.e.code, auto: !!r.e.auto, src: (r.s || {}).src || ''} : null; }" % REG, no)
+def letters(pg): return pg.evaluate("ITCF.letters('%s', ITCF.month('%s', '202604').rows).map(s => s.party)" % (REG, REG))
+def choose(pg, no, v):
+    try: pg.select_option(row(no) + " select[data-ic-dec]", v, timeout=4000)
+    except Exception: ok(False, "the line %s: no choice %r there" % (no, v))
     pg.wait_for_timeout(600)
-def set_remark(pg, no, v): choose(pg, reco_row(pg, no) + " select[data-reco-act]", v, "the reconciliation's row " + no)
-def set_act(pg, key, v): choose(pg, 'tr[data-key=%s] select[aria-label="What to do"]' % json.dumps(key), v, "ITC follow-up's line " + str(key))
 with sync_playwright() as p:
     br = p.chromium.launch()
     ctxA, A = computer(br, "tA", "A")
@@ -136,69 +131,39 @@ with sync_playwright() as p:
     ok(wait_for(B, "S.companies['%s']" % CID, 5) is not None, "computer B: the client made on A is there")
     for pg in (A, B): pg.evaluate(SETUP, [CID, VS, TWOB, CMP, REG])
     # ---------- the lines as worked out, before anything is decided
-    ok(open_part(A, "follow") is not None, "A: ITC follow-up opens")
-    a0, o0, d0 = item(A, "alpha"), item(A, "omega"), item(A, "delta")
-    ok(a0["cat"] == "waiting" and o0["cat"] == "tobook" and d0["cat"] == "diff", "the three lines: Alpha in Tally not in 2B, Omega in 2B not in Tally, Delta amounts differ (%s, %s, %s)" % (a0["cat"], o0["cat"], d0["cat"]))
-    # an older decision in ITC follow-up: no letter to Alpha, correct Tally for Delta
-    set_act(A, a0["key"], "wait"); set_act(A, d0["key"], "books")
-    ok(item(A, "alpha")["act"] == "wait" and "Alpha Supplies" not in suppliers(A), "before: Alpha set to wait in ITC follow-up, not among the suppliers to write to")
-    time.sleep(1.1)
-    # ---------- 1. remarks set in the 2B reconciliation reach ITC follow-up
-    ok(open_part(A, "r2b") is not None, "A: the 2B reconciliation opens")
-    ok(remark(A, "A/101") == "Expect in next 2B", "2. the decision made in ITC follow-up (wait) shows as the remark in the reconciliation (%s)" % remark(A, "A/101"))
-    set_remark(A, "A/101", "Follow up with supplier")
-    set_remark(A, "O/5", "Follow up with supplier")
-    set_remark(A, "D/9", "Ask supplier to correct")
-    ok(remark(A, "A/101") == "Follow up with supplier" and remark(A, "O/5") == "Follow up with supplier" and remark(A, "D/9") == "Ask supplier to correct", "the three remarks set in the reconciliation")
-    open_part(A, "follow"); A.wait_for_timeout(800)
-    a1, o1, d1 = item(A, "alpha"), item(A, "omega"), item(A, "delta")
-    ok(a1["act"] == "follow" and a1["open"], "1. Alpha's bill (in Tally only), Follow up with supplier in 2B reco: in ITC follow-up as Follow up the supplier (%s)" % a1["act"])
-    ok(o1["act"] == "supplier" and o1["open"], "Omega's document (in 2B only), Follow up with supplier in 2B reco: in ITC follow-up to ask the supplier (%s)" % o1["act"])
-    ok(d1["act"] == "supplier", "Delta's mismatch, Ask supplier to correct in 2B reco: Ask the supplier to amend (%s)" % d1["act"])
-    sel = lambda key: A.evaluate("(k) => { const s = document.querySelector('tr[data-key=\"' + k + '\"] select[aria-label=\"What to do\"]'); return s ? s.options[s.selectedIndex].text : null; }", key)
-    ok(sel(a1["key"]) == "Follow up the supplier", "the line's What to do reads “Follow up the supplier” (%s)" % sel(a1["key"]))
-    sup = suppliers(A)
-    ok(all(n in sup for n in ("Alpha Supplies", "OMEGA LOGISTICS", "DELTA SERVICES")), "Suppliers to write to: Alpha, Omega and Delta (%s)" % sup)
-    card = A.inner_text("section.dash-card:has(h3:text-is('Suppliers to write to'))")
-    ok("Alpha Supplies" in card and "OMEGA LOGISTICS" in card and "DELTA SERVICES" in card, "and on the page, under Suppliers to write to")
+    ok(open_part(A, "r2b") is not None, "A: 2B reconciliation opens")
+    ok(dec(A, "A/101") == "follow" and dec(A, "O/5") == "book" and dec(A, "D/9") == "now", "FinCom's rule: Alpha (in Tally only) Follow up, Omega (2B only) Book in Tally, Delta (differs) Take now")
+    ok("Alpha Supplies" in letters(A), "Alpha (followed up by the rule) is among the suppliers to write to")
+    # ---------- 1. decisions on the reconciliation's lines
+    choose(A, "A/101", "reverse"); choose(A, "O/5", "follow"); choose(A, "D/9", "correct")
+    ok(dec(A, "A/101") == "reverse" and dec(A, "O/5") == "follow" and dec(A, "D/9") == "correct", "1. the decisions set on the lines")
+    sup = letters(A)
+    ok("Alpha Supplies" not in sup and "OMEGA LOGISTICS" in sup and "DELTA SERVICES" in sup, "Write to suppliers: Omega and Delta, not Alpha (%s)" % sup)
+    A.click("[data-ic-letters]"); A.wait_for_timeout(600)
     ctxA.grant_permissions(["clipboard-read", "clipboard-write"])
-    try: A.click('tr[data-key=%s] button:text-is("copy")' % json.dumps(VO), timeout=3000); A.wait_for_timeout(800); clip = A.evaluate("navigator.clipboard.readText()")
+    try: A.click('[data-letter-copy=%s]' % json.dumps(VO), timeout=3000); A.wait_for_timeout(800); clip = A.evaluate("navigator.clipboard.readText()")
     except Exception: clip = ""
     ok("O/5" in clip, "the letter to Omega names its document O/5")
-    # ---------- 2. a decision in ITC follow-up shows in the reconciliation; the later wins
-    set_act(A, d1["key"], "accept")
-    open_part(A, "r2b"); A.wait_for_timeout(500)
-    ok(remark(A, "D/9") == "", "2. Delta set to accept in ITC follow-up: the reconciliation's Ask supplier to correct is taken off (%r)" % remark(A, "D/9"))
-    open_part(A, "follow"); set_act(A, d1["key"], "supplier")
-    open_part(A, "r2b"); A.wait_for_timeout(500)
-    ok(remark(A, "D/9") == "Ask supplier to correct", "and set back to ask the supplier: the remark is back (%s)" % remark(A, "D/9"))
-    set_remark(A, "O/5", ""); open_part(A, "follow"); A.wait_for_timeout(500)
-    ok(item(A, "omega")["act"] == "book" and "OMEGA LOGISTICS" not in suppliers(A), "the remark cleared in the reconciliation: Omega back to its first choice, off the letters (%s)" % item(A, "omega")["act"])
-    set_act(A, item(A, "omega")["key"], "supplier")
-    ok(item(A, "omega")["act"] == "supplier", "Omega set to ask the supplier in ITC follow-up")
-    # ---------- 3. kept with the books: the server has both, a reload and a second computer show the same
+    A.keyboard.press("Escape"); A.wait_for_timeout(400)
+    # ---------- 2. an old remark and an old follow-up decision
+    A.evaluate("() => { S.books.reco2b = S.books.reco2b || {}; S.books.reco2b.tag = Object.assign({}, S.books.reco2b.tag, {zza1: {tag: 'Follow up with supplier', at: new Date(Date.now() + 60000).toISOString()}}); render(); }"); A.wait_for_timeout(500)
+    ok(line(A, "A/101")["code"] == "follow" and line(A, "A/101")["src"] == "remark", "2. a remark kept before (reco2b.tag), later than the decision: the line follows it (%s)" % line(A, "A/101"))
+    A.evaluate("() => { S.books.reco2b.tag = {}; render(); }")
+    choose(A, "A/101", "follow")
     time.sleep(1.5)
+    # ---------- 3. kept with the books: the server, a second computer, a reload
     keys = sorted(set(k[1] for k in DB["items"] if k[0] == CID))
-    ok("reco2b" in keys and "itcTrack" in keys, "kept on the server item by item: reco2b and itcTrack (%s)" % [k for k in keys if k in ("reco2b", "itcTrack")])
-    open_part(B, "follow"); B.wait_for_timeout(1500)
-    b1, bo, bd = item(B, "alpha"), item(B, "omega"), item(B, "delta")
-    ok(b1["act"] == "follow" and bo["act"] == "supplier" and bd["act"] == "supplier", "computer B: Alpha to follow up, Omega and Delta to ask the supplier (%s, %s, %s)" % (b1["act"], bo["act"], bd["act"]))
-    ok(all(n in suppliers(B) for n in ("Alpha Supplies", "OMEGA LOGISTICS", "DELTA SERVICES")), "computer B: the same suppliers to write to")
-    open_part(B, "r2b"); B.wait_for_timeout(800)
-    ok(remark(B, "A/101") == "Follow up with supplier" and remark(B, "O/5") == "Ask supplier to correct" and remark(B, "D/9") == "Ask supplier to correct", "computer B: the same remarks in the reconciliation (%s, %s, %s)" % (remark(B, "A/101"), remark(B, "O/5"), remark(B, "D/9")))
-    # a change on B reaches A without a reload
-    open_part(B, "follow"); set_act(B, b1["key"], "wait")
-    t = wait_for(A, "(" + ITEM % json.dumps("alpha") + ").act === 'wait'", 6)
-    ok(t is not None, "Alpha set to wait on B: wait on A in %.2f s, no reload" % (t or 99))
-    # A reloads: the server's state
+    items = [k[2] for k in DB["items"] if k[0] == CID and k[1] == "itcDec" and k[2]]
+    ok("itcDec" in keys and len(items) >= 3, "kept on the server item by item: itcDec, one item a line (%d)" % len(items))
+    ok(open_part(B, "r2b") is not None, "B: 2B reconciliation opens"); B.wait_for_timeout(1500)
+    ok(dec(B, "A/101") == "follow" and dec(B, "O/5") == "follow" and dec(B, "D/9") == "correct", "computer B: the same decisions (%s, %s, %s)" % (dec(B, "A/101"), dec(B, "O/5"), dec(B, "D/9")))
+    ok(all(n in letters(B) for n in ("Alpha Supplies", "OMEGA LOGISTICS", "DELTA SERVICES")), "computer B: the same suppliers to write to")
+    choose(B, "A/101", "later")
+    t = wait_for(A, "(ITCF.rows('%s').find(x => x.bookNo === 'A/101') || {e: {}}).e.code === 'later'" % REG, 6)
+    ok(t is not None, "Alpha set to a later month on B: on A in %.2f s, no reload" % (t or 99))
     A.close(); A = ctxA.new_page(); A.on("pageerror", lambda e: errors.append("A2: " + str(e))); start(A, "tA")
-    open_part(A, "follow"); A.wait_for_timeout(1500)
-    ok(item(A, "alpha")["act"] == "wait" and item(A, "omega")["act"] == "supplier" and item(A, "delta")["act"] == "supplier", "A after a reload: the same decisions (%s, %s, %s)" % (item(A, "alpha")["act"], item(A, "omega")["act"], item(A, "delta")["act"]))
-    open_part(A, "r2b"); A.wait_for_timeout(800)
-    ok(remark(A, "A/101") == "Expect in next 2B", "and the reconciliation's remark for Alpha follows: Expect in next 2B (%s)" % remark(A, "A/101"))
-    # a remark kept before this build (only in reco2b.tag, as Leads Insurance's), later than the decision: it decides
-    A.evaluate("() => { S.books.reco2b.tag.zza1 = {tag: 'Follow up with supplier', at: new Date(Date.now() + 1000).toISOString()}; }")
-    ok(item(A, "alpha")["act"] == "follow" and "Alpha Supplies" in suppliers(A), "a remark made before, only in the reconciliation and later than the decision: the line follows it (%s)" % item(A, "alpha")["act"])
+    open_part(A, "r2b"); A.wait_for_timeout(1500)
+    ok(dec(A, "A/101") == "later" and dec(A, "O/5") == "follow" and dec(A, "D/9") == "correct", "A after a reload: the same decisions (%s, %s, %s)" % (dec(A, "A/101"), dec(A, "O/5"), dec(A, "D/9")))
     A.screenshot(path=os.path.join(os.environ.get("TDSDESK_OUT", os.path.join(HERE, "out")), "2b-follow.png"), full_page=False)
     br.close()
 srv.shutdown()
