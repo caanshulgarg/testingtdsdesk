@@ -72,9 +72,9 @@ const GST9 = {
     // 8C: credit on the year's bills taken in the next year's returns, up to November
     const nextFrom = String(num(fy) + 1) + "0401", nextTo = String(num(fy) + 1) + "1130";
     let c8 = this.Z();
-    GST2B.bookDocs().filter(d => (!reg || d.reg === reg) && d.bookDate >= nextFrom && d.bookDate <= nextTo && String(d.date) >= fy + "0401" && String(d.date) < nextFrom && !d.rcm)
+    GST2B.bookDocs().filter(d => (!reg || d.reg === reg) && d.bookDate >= nextFrom && d.bookDate <= nextTo && String(d.date) >= fy + "0401" && String(d.date) < nextFrom && !d.rcm && !d.held)
       .forEach(d => { c8 = this.add(c8, {taxable: d.taxable, igst: d.igst, cgst: d.cgst, sgst: d.sgst, cess: d.cess}, d.dir); });
-    T["8C"] = c8;
+    T["8C"] = c8 = this.add(c8, this.heldNext(fy, reg, nextFrom, nextTo));
     T["8D"] = this.add(T["8A"], this.add(T["8B"], T["8C"]), -1);
     T["8G"] = T["6E"]; T["8H"] = T["6E"]; T["8I"] = this.Z();
     T["13"] = T["8C"];
@@ -103,6 +103,22 @@ const GST9 = {
     const heldEnd = inBooks.reduce((a, m) => { const x = t3[m]; return x.held ? r2(a + x.held.igst + x.held.cgst + x.held.sgst + x.held.cess - x.released.igst - x.released.cgst - x.released.sgst - x.released.cess) : a; }, 0);
     return {fy, reg, months, inBooks, missing: months.filter(m => !have.has(m)), T, pay, twoB, part6, heldEnd, typed: ty,
       hsnOut: Object.values(hsn).sort((a, c) => c.taxable - a.taxable), hsnIn: Object.values(hin).sort((a, c) => c.taxable - a.taxable)};
+  },
+  // 8C and 13 (24-Oct-2026): credit of this year's bills the books held ("NOT SHOWN IN 2B", GSTR.held), moved to the input
+  // ledger from April to November of the next year. Each move (or write-off) is a held bill's: the one its number,
+  // reference or narration names, else the one of the same amount, else the oldest still held
+  heldNext(fy, reg, from, to){
+    const bills = [], k = x => String(x || "").trim().toUpperCase(); let c = this.Z();
+    GSTR.vIn().filter(v => v.date <= to && v.ent.some(e => GSTR.held(e.l)) && !Books.isSale(v) && (!reg || GSTR.regOf(v) === reg)).map(v => ({v, n: GSTR.netIn(v)}))
+      .sort((a, b) => a.v.date < b.v.date ? -1 : a.v.date > b.v.date ? 1 : b.n.hold - a.n.hold).forEach(({v, n}) => {
+        if (n.hold > 0.004) return bills.push({v, left: n.hold, no: [k(v.no), k(v.ref)].filter(x => x.length > 4)});
+        if (n.hold > -0.005) return;
+        const w = new Set([k(v.no), k(v.ref)].concat(k(v.narr).split(/[\s,;:()]+/))), open = bills.filter(x => x.left > 0.004);
+        const bl = open.find(x => x.no.some(y => w.has(y))) || open.find(x => Math.abs(x.left + n.hold) < 0.01) || open[0], bd = bl && String(bl.v.refDate || bl.v.date);
+        if (!bl) return; bl.left = r2(bl.left + n.hold);
+        if (v.date >= from && bd >= fy + "0401" && bd < from) c = this.add(c, {igst: n.IGST, cgst: n.CGST, sgst: n.SGST, cess: n.CESS});
+      });
+    return c;
   },
   // figures that are not in the books, typed once per year and registration
   typed(fy, reg){ const b = S.books; b.gst9 = b.gst9 || {}; return b.gst9[fy + "|" + (reg || "")] = b.gst9[fy + "|" + (reg || "")] || {}; },
