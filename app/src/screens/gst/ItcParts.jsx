@@ -47,7 +47,7 @@ export function ExcelBar({ reg, M }) {
     }, (e) => toast("Could not read the Excel: " + ((e && e.message) || e))).finally(() => setBusy(""));
   };
   const apply = () => { ITCF.applyImport(reg, M, pv.p); setPv(null); toast("Applied from the Excel."); render(); };
-  const p = pv && pv.p, n = p ? p.changes.length + p.notes.length + p.adj.add.length + p.adj.edit.length + p.adj.del.length : 0;
+  const p = pv && pv.p, n = p ? p.changes.length + p.notes.length + (p.eligs || []).length + p.adj.add.length + p.adj.edit.length + p.adj.del.length : 0;
   const now = p ? ITCF.table4(reg, M).lines : [];
   return <>
     <button type="button" className="btn small" data-itc-excel="down" disabled={!!busy} onClick={down}>{busy === "down" ? "Making…" : "Download Excel"}</button>
@@ -58,10 +58,10 @@ export function ExcelBar({ reg, M }) {
         {p.unknown.length > 0 && <p className="bad" data-pv-unknown={p.unknown.length}>{p.unknown.length} row{p.unknown.length === 1 ? "" : "s"} refused: the hidden key is not one of this month’s lines (edited, or from another month or client){p.unknown.length <= 5 ? ": " + p.unknown.map((y) => (y.party || "") + " " + (y.no || y.bookNo || "") + " (row " + y.row + ")").join(", ") : ""}.</p>}
         {p.refused.length > 0 && <div className="bad" data-pv-refused={p.refused.length}>{p.refused.length} decision{p.refused.length === 1 ? "" : "s"} refused:<ul>{p.refused.slice(0, 8).map((x, i) => <li key={i}>{(x.r.party || "") + " " + (x.r.no || x.r.bookNo || "")}: {x.why}</li>)}</ul></div>}
         {p.adj.bad.length > 0 && <div className="bad" data-pv-adjbad={p.adj.bad.length}>Adjustments refused:<ul>{p.adj.bad.map((x, i) => <li key={i}>row {x.row}: {x.why}</li>)}</ul></div>}
-        <h4 data-pv-changes={p.changes.length}>{p.changes.length} decision{p.changes.length === 1 ? "" : "s"} changed</h4>
-        {p.changes.length > 0 && <div className="itc-pop-table"><table className="bk-table gf-off"><thead><tr><th>Supplier · GSTIN</th><th>Invoice</th><th>Now</th><th>From the Excel</th></tr></thead>
-          <tbody>{p.changes.map((c, i) => <tr key={i} data-pv-change={c.r.key}><td>{c.r.party || "—"}<div className="nr">{c.r.gstin}</div></td><td>{c.r.no || c.r.bookNo}</td><td>{word(c.from)}</td><td><b>{word(c.to)}</b></td></tr>)}</tbody></table></div>}
-        {p.notes.length > 0 && <p data-pv-notes={p.notes.length}>{p.notes.length} note{p.notes.length === 1 ? "" : "s"} changed.</p>}
+        <h4 data-pv-changes={p.changes.length} data-pv-eligs={(p.eligs || []).length} data-pv-notes={p.notes.length}>{p.changes.length} decision{p.changes.length === 1 ? "" : "s"}, {(p.eligs || []).length} eligibilit{(p.eligs || []).length === 1 ? "y" : "ies"} and {p.notes.length} note{p.notes.length === 1 ? "" : "s"} changed</h4>
+        {(p.fields || []).length > 0 && <div className="itc-pop-table"><table className="bk-table gf-off" data-pv-fields=""><thead><tr><th>Supplier · GSTIN</th><th>Invoice</th><th>What</th><th>Now</th><th>From the Excel</th></tr></thead>
+          <tbody>{p.fields.map((c, i) => <tr key={i} data-pv-field={c.field} data-pv-change={c.field === "Decision" ? c.r.key : undefined} data-pv-key={c.r.key}><td>{c.r.party || "—"}<div className="nr">{c.r.gstin}</div></td><td>{c.r.no || c.r.bookNo}</td><td>{c.field}</td>
+            <td>{c.field === "Decision" ? word(c.from) : c.from || "—"}</td><td><b>{c.field === "Decision" ? word(c.to) : c.to || "—"}</b></td></tr>)}</tbody></table></div>}
         <h4 data-pv-adj={p.adj.add.length + "|" + p.adj.edit.length + "|" + p.adj.del.length}>Adjustments: {p.adj.add.length} added, {p.adj.edit.length} changed, {p.adj.del.length} removed</h4>
         {(p.adj.add.length + p.adj.edit.length + p.adj.del.length) > 0 && <ul>{p.adj.add.map((a, i) => <li key={"a" + i}>Add {ITCF.LINE_LABEL[a.line]}, {a.head.toUpperCase()} {money(a.amt)}: {a.reason}</li>)}
           {p.adj.edit.map((a, i) => <li key={"e" + i}>Change {ITCF.LINE_LABEL[a.line]}, {a.head.toUpperCase()} {money(a.amt)}: {a.reason}</li>)}

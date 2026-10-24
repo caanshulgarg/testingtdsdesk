@@ -81,16 +81,17 @@ function build(reg) {
     r.laterAmt = p.ym > r.bm ? full : lower;
     // the GST rate (the owner, 24-Oct-2026: "if charged 5% then no ITC, if charged 18% then full ITC"): the books' own
     // (GST2B.bookDocs), else 2B's; at 5% (a tour operator's rate) the credit is not taken unless decided; none: unknown
+    r.def2 = r.def;
     const rate = (docs.find((d) => d.gstRate) || {}).gstRate || (docs.some((d) => d.ru) ? GST2B.rateOf(p) : 0);
     if (docs.some((d) => d.noItc) || (docs.some((d) => d.ru || d.gstRate) && Math.abs(rate - 5) < 0.01)) { r.noItc = "5% tour operator rate: no ITC"; r.def = ""; }
-    else if (docs.some((d) => d.ru) && !rate) { r.rateUnknown = true; r.def = ""; }   // not taken until the rate is known (decided)
+    else if (docs.some((d) => d.ru) && !rate) { r.rateUnknown = true; r.def = r.def2 = ""; }   // not taken until the rate is known (decided)
     rows.push(r);
   });
   res.onlyBooks.forEach((d) => {
     const r = { key: bkey(d), alt: [], tagKeys: [d.id], kind: "books", docs: [d], party: d.party, gstin: d.gstin, bookNo: d.no, voucher: d.voucher, date: d.date, bm: d.ym, bTax: heads(d, d.dir || 1),
       nob: !loaded.has(d.ym) };
     if (!claim(d)) { r.fixed = why(d); rows.push(r); return; }
-    money(r, [d]); r.full = r.lower = r.laterAmt = r.defAmt = heads(d); r.def = on(d.ym) ? "" : d.ym;
+    money(r, [d]); r.full = r.lower = r.laterAmt = r.defAmt = heads(d); r.def = r.def2 = on(d.ym) ? "" : d.ym;
     if (d.noItc) { r.noItc = d.noItc; r.def = ""; } else if (d.ru) r.rateUnknown = true;
     rows.push(r);
   });
@@ -101,7 +102,7 @@ function build(reg) {
     else if (p.rcm && p.dir > 0) r.fixed = "reverse charge: credit through the books, 4(A)(3)";
     if (r.fixed) { rows.push(r); return; }
     r.booksBy = {}; r.full = r.lower = r.laterAmt = r.defAmt = heads(p, p.dir || 1);
-    r.def = p.dir < 0 && on(p.ym) ? p.ym : "";
+    r.def = r.def2 = p.dir < 0 && on(p.ym) ? p.ym : "";
     rows.push(r);
   });
   (res.rejected || []).forEach((x) => {
@@ -112,24 +113,43 @@ function build(reg) {
     const docs = x.books.filter((d) => !d.rcm && !d.ineligible && !d.held).map((d) => Object.assign({}, d, { eb: on(d.ym) ? d.ym : p.ym > d.ym && on(p.ym) ? p.ym : "" })).filter((d) => d.eb);
     if (!docs.length) { r.fixed = x.books.length ? "taken as booked (no 2B for its month)" : "rejected in IMS, not in the books: no credit"; rows.push(r); return; }
     money(r, docs); r.bm = docs[0].eb;
-    r.full = r.lower = r.laterAmt = r.defAmt = docs.reduce((a, d) => add(a, d, d.dir || 1), z()); r.def = "";
+    r.full = r.lower = r.laterAmt = r.defAmt = docs.reduce((a, d) => add(a, d, d.dir || 1), z()); r.def = r.def2 = "";
     rows.push(r);
   });
-  rows.forEach((r) => { r.home = [r.bm, r.tm].filter(Boolean).sort()[0] || ""; r.allow = ALLOW[r.fixed ? "fixed" : r.cn ? "cn" : r.kind]; });
+  rows.forEach((r) => {
+    r.home = [r.bm, r.tm].filter(Boolean).sort()[0] || ""; r.allow = ALLOW[r.fixed ? "fixed" : r.cn ? "cn" : r.kind];
+    // eligibility (next-itc-excel-edit): as the books have it (a bill marked ineligible, section 17(5), in Tally; a 5% tour
+    // operator's bill) unless a person says otherwise (ITCDec el: eligible, ineligible, notours); blkBy: what GSTR.threeBm
+    // already reverses in 4(B)(1) for the line's bills marked in Tally, month by month
+    if (!r.fixed) {
+      const bl = (r.docs || []).filter((d) => d.blocked && claim(d));
+      r.blkBy = {}; bl.forEach((d) => { r.blkBy[d.ym] = add(r.blkBy[d.ym] || z(), d, d.dir || 1); });
+      r.defE = bl.length || r.noItc ? "ineligible" : "eligible";
+    }
+  });
   return { rows, res, loaded, on };
 }
 
 // ---------- a line's decision and its credit month
+export const ELIG = [["eligible", "Eligible"], ["ineligible", "Ineligible 17(5)"], ["notours", "Not ours"]];
+export const ELIG_LABEL = Object.fromEntries(ELIG);
+// the line's eligibility: a person's (s.el), else as the books have it
+export const eligOf = (r, s) => (r.fixed ? "" : (s && ELIG_LABEL[s.el] ? s.el : r.defE || "eligible"));
 export function credit(r, s) {
   const allowed = r.allow || [];
   const d = s && s.d && allowed.includes(s.d) ? s.d : "";
   if (r.fixed) return { code: d, C: "", amt: z(), auto: !d };
-  if (!d) return { code: "", C: r.def || "", amt: r.defAmt, auto: true };
+  const el = eligOf(r, s);
+  if (el === "notours") return { code: d, C: "", amt: z(), auto: !d, el };
+  if (!d) return { code: "", C: (el === "eligible" ? r.def2 : r.def) || "", amt: r.defAmt, auto: true, el };
+  const c = credit0(r, s, d, el === "eligible" ? r.def2 : r.def); c.el = el; return c;
+}
+function credit0(r, s, d, dm) {
   const own = r.bm || r.tm || "";
   if (d === "now") return { code: d, C: (s.ym || own), amt: r.lower };
   if (d === "booksnow") return { code: d, C: (s.ym || own), amt: r.full };
-  if (d === "later") return { code: d, C: s.ym || (r.kind === "pair" ? r.def : ""), amt: r.laterAmt };
-  if (d === "follow" || d === "correct") return r.kind === "pair" ? { code: d, C: r.def, amt: r.defAmt } : { code: d, C: "", amt: z() };
+  if (d === "later") return { code: d, C: s.ym || (r.kind === "pair" ? dm : ""), amt: r.laterAmt };
+  if (d === "follow" || d === "correct") return r.kind === "pair" ? { code: d, C: dm, amt: r.defAmt } : { code: d, C: "", amt: z() };
   return { code: d, C: "", amt: z() };
 }
 // the decision as the screen and the Excel say it in month M: an automatic one in words (Take now in its month, Take in a
@@ -145,7 +165,13 @@ export function shown(r, e, M) {
 }
 // the line's effect on 4(A)(5) of month M
 export function effect(r, e, M) { const o = sub(e.C === M ? e.amt : z(), (r.booksBy || {})[M] || z()); return o; }
-const isOpen = (r, e) => !r.fixed && !e.C && e.code !== "reverse" && !(e.auto && r.noItc);
+// its effect on 4(B)(1): nothing while its eligibility is as the books have it; marked ineligible, the credit it takes in M
+// is reversed there; marked eligible or not ours, what GSTR.threeBm reverses for its bills marked in Tally is taken back
+export function revEffect(r, e, M) {
+  if (r.fixed || !e.el || e.el === r.defE) return z();
+  return sub(e.el === "ineligible" && e.C === M ? e.amt : z(), (r.blkBy || {})[M] || z());
+}
+const isOpen = (r, e) => !r.fixed && !e.C && e.code !== "reverse" && e.el !== "notours" && !(e.auto && r.noItc && e.el !== "eligible");
 
 // ---------- the model, worked out once for what it depends on
 let memo = null;
@@ -180,14 +206,16 @@ function chipOf(r, M) {
 function month(reg, M) {
   const m = model(reg);
   const cats = { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] };
-  const out = { rows: [], cats, effect: z() };
+  const out = { rows: [], cats, effect: z(), rev: z(), revList: [] };
   if (!m) return out;
   m.rows.forEach((r) => {
     const e = r.e, inM = r.bm === M || r.tm === M || !!(r.booksBy || {})[M] || e.C === M;
     if (!inM && !(r.open && r.home && r.home < M)) return;
     const ef = r.fixed ? z() : effect(r, e, M), bk = (r.booksBy || {})[M], tk = e.C === M ? e.amt : null;
-    const v = Object.assign({}, r, { chip: chipOf(r, M), show: shown(r, e, M), eff: ef });
+    const re = r.fixed ? z() : revEffect(r, e, M);
+    const v = Object.assign({}, r, { chip: chipOf(r, M), show: shown(r, e, M), eff: ef, rev: re, el: e.el || "" });
     out.rows.push(v);
+    if (nz(re)) { add(out.rev, re); out.revList.push({ r: v, amt: re }); }
     if (r.fixed || !nz(ef) && !(bk && tk)) return;
     add(out.effect, ef);
     const put = (k, amt) => { if (nz(amt)) cats[k].push({ r: v, amt }); };
@@ -246,18 +274,18 @@ function apply(t, ym, reg) {
   const g = (o) => o || z(), base = z();
   H.forEach((k) => { base[k] = R(N(t.other[k]) + N(g(t.held)[k]) - N(g(t.released)[k]) + N(g(t.cn2b)[k]) - N(g(t.rejBack)[k]) - N(g(t.reclaim)[k])); });
   if (!anyAdj && !hasDec && !has2b) return Object.assign(t, { itcBase: base, itcAdj: A });
-  const mo = has2b || hasDec ? month(reg, ym) : { cats: { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] }, effect: z(), rows: [] };
+  const mo = has2b || hasDec ? month(reg, ym) : { cats: { held: [], excess: [], released: [], from2b: [], cn2b: [], rejBack: [] }, effect: z(), rows: [], rev: z(), revList: [] };
   const c = mo.cats, held = sumCat(c.held.concat(c.excess)), released = sumCat(c.released.concat(c.from2b)), cn2b = sumCat(c.cn2b), rejBack = sumCat(c.rejBack);
   const other = Object.assign({}, t.other);
   H.forEach((k) => { other[k] = R(base[k] - held[k] + released[k] - cn2b[k] + rejBack[k] + N(g(t.reclaim)[k]) + A["4A5"][k]); });
   const plus = (o, a) => { const x = Object.assign({}, o || {}); H.forEach((k) => { x[k] = R(N(x[k]) + a[k]); }); return x; };
   const impGoods = plus(t.impGoods, A["4A1"]), impServ = plus(t.impServ, A["4A2"]), rcmIn = plus(t.rcmIn, A["4A3"]);
   const itc = {}; H.forEach((k) => { itc[k] = R(N(impGoods[k]) + N(impServ[k]) + N(rcmIn[k]) + N(other[k])); });
-  const rev1 = plus(t.rev1, A["4B1"]), rev2 = plus(t.rev2, A["4B2"]), na = plus(t.na, A["4D2"]);
+  const rev1 = plus(plus(t.rev1, A["4B1"]), mo.rev), rev2 = plus(t.rev2, A["4B2"]), na = plus(t.na, A["4D2"]);
   const netItc = {}; H.forEach((k) => { netItc[k] = R(itc[k] - N(rev1[k]) - N(rev2[k])); });
   const pay = GSTR.setOff(t.net, t.rcmOut, netItc, t.opening);
   return Object.assign(t, { other, impGoods, impServ, rcmIn, itc, rev1, rev2, na, netItc, pay, payable: pay.cash, held, released, cn2b, rejBack, itcBase: base, itcAdj: A,
-    itcCats: { held: sumCat(c.held), excess: sumCat(c.excess), released: sumCat(c.released), from2b: sumCat(c.from2b), cn2b, rejBack } });
+    itcRev: sumCat(mo.revList), itcCats: { held: sumCat(c.held), excess: sumCat(c.excess), released: sumCat(c.released), from2b: sumCat(c.from2b), cn2b, rejBack } });
 }
 if (typeof GSTR === "object" && GSTR.threeBm && !GSTR.threeBm.itcFinal) {
   const orig = GSTR.threeBm;
@@ -299,7 +327,10 @@ function letter(reg, s) {
 
 // ---------- what the screens, the Excel and the tests use
 export const ITCF = {
-  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, credit, shown, effect,
+  DECS, DEC_LABEL, LINES, LINE_LABEL, CHIPS, HEADS, ELIG, ELIG_LABEL, credit, shown, effect, revEffect,
+  // the line a bill of the books is decided on (the input register's Eligible?), and its eligibility set by a person
+  lineOfDoc(reg, id) { const m = model(reg); return m ? m.rows.find((r) => !r.fixed && (r.docs || []).some((d) => d.id === id)) || null : null; },
+  setElig(reg, r, el) { ITCDec.setEl(reg, r.key, el === r.defE ? "" : el, r.s); },
   rows(reg) { const m = model(reg); return m ? m.rows : []; },
   month(reg, M) { return month(reg, M); },
   rowByTagKey(reg, k) { const m = model(reg); return m ? m.byTag.get(k) || null : null; },
@@ -333,32 +364,79 @@ export const ITCF = {
       rows: lines.map((r) => ({ key: r.key, chip: r.chip, status: (CHIPS.find((c) => c[0] === r.chip) || [])[1] || "", kind: r.fixed ? "fixed" : r.kind, party: r.party || "", gstin: r.gstin || "",
         no: r.no || "", bookNo: r.bookNo || "", date: r.date || "", bm: lab(r.bm), tm: lab(r.tm), bTax: g(r.bTax), pTax: g(r.pTax), dec: r.show.code ? DEC_LABEL[r.show.code] : "", takeIn: lab(r.show.ym), note: (r.s && r.s.note) || "",
         def: lab(r.def), booksM: g((r.booksBy || {})[M]), lower: g(r.lower), full: g(r.full), later: g(r.laterAmt), defAmt: g(r.defAmt), fixed: r.fixed || "", allow: r.allow,
-        eff: g(r.eff) })),
-      base: { "4A5": base, reclaim, "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sansAdj(t.rev1, "4B1"), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
+        eff: g(r.eff), elig: r.fixed ? "" : ELIG_LABEL[r.el] || "", defE: r.fixed ? "" : ELIG_LABEL[r.defE] || "Eligible", def2: lab(r.def2), blkM: g((r.blkBy || {})[M]), rev: g(r.rev) })),
+      base: { "4A5": base, reclaim, "4A1": sansAdj(t.impGoods, "4A1"), "4A2": sansAdj(t.impServ, "4A2"), "4A3": sansAdj(t.rcmIn, "4A3"), "4B1": sub(sansAdj(t.rev1, "4B1"), g((t.itcRev || {}))), "4B2": sansAdj(t.rev2, "4B2"), "4D2": sansAdj(t.na, "4D2") },
       adj: Adj.list(reg, M).map((a) => ({ id: a.id, line: a.line, head: a.head, amt: a.amt, reason: a.reason })),
       table4: this.table4(reg, M).lines,
-      inreg: typeof inregRows === "function" ? (() => { const keep = S.inregScope; S.inregScope = "month"; try { return inregRows(S.books).rows; } finally { S.inregScope = keep; } })() : [],
+      inreg: typeof inregRows === "function" ? (() => { const keep = S.inregScope; S.inregScope = "month"; try { return inregRows(S.books).rows; } finally { S.inregScope = keep; } })().map((x) => {
+        // the input register's bill and the line it is decided on (its first bill: the others say so)
+        const r = mo.rows.find((y) => !y.fixed && (y.docs || []).some((d) => d.id === x.id)), first = r && r.docs[0].id === x.id;
+        const itc = r ? (r.e.C === M ? "Take now" : r.e.C && r.e.C > M ? "Later month" : "Do not take") : "";
+        return Object.assign({}, x, r ? { key: first ? r.key : "", with: first ? "" : "decided with " + (r.docs[0].no || ""), elig: ELIG_LABEL[r.el] || "", itc, takeIn: itc === "Later month" ? lab(r.e.C) : "", note: (r.s && r.s.note) || "" } : { key: "" });
+      }) : [],
     };
   },
-  // what an Excel brought back would change: {changes: [{r, from, to}], unknown: [keys], missing: [rows], adj: {add, edit, del}, refused}
+  // the input register's "ITC to take" for a line in month M (the 2B reconciliation's Decision in three words)
+  // what an Excel brought back would change: {changes: [{r, from, to}], notes, eligs: [{r, from, to}], fields: [{r, field, from,
+  // to}], unknown: [rows], missing: [rows], refused: [{r, why}], adj: {add, edit, del, bad}}. The 2B reconciliation sheet
+  // gives each line's Decision, month, note and eligibility; the input register sheet the same for its bills where it was
+  // changed there (its hidden copy of what was exported says so); changed differently in both: refused
   preview(reg, M, x) {
-    const mo = month(reg, M), byKey = new Map(mo.rows.map((r) => [r.key, r])), seen = new Set(), changes = [], unknown = [], refused = [], notes = [];
+    const mo = month(reg, M), byKey = new Map(mo.rows.map((r) => [r.key, r])), seen = new Set(), unknown = [], refused = [];
     const codeOf = (l) => { const f = DECS.find(([, w]) => w.toLowerCase() === String(l || "").trim().toLowerCase()); return f ? f[0] : l ? null : ""; };
     const ymOf = (l) => { if (!l) return ""; const s = String(l).trim(), f = this.months(M).find((m) => lab(m).toLowerCase() === s.toLowerCase() || m === s); return f || null; };
+    const elOf = (l) => { const t = String(l || "").trim().toLowerCase(); if (!t) return ""; const f = ELIG.find(([k, w]) => w.toLowerCase() === t || k === t); return f ? f[0] : null; };
+    const want = new Map(), curOf = (r) => ({ code: r.show.code, ym: r.show.ym || "", note: (r.s && r.s.note) || "", el: r.el || "" });
+    const W = (r) => { if (!want.has(r.key)) want.set(r.key, Object.assign({ from2b: {} }, curOf(r))); return want.get(r.key); };
+    const decide = (r, code, ym, where) => {
+      if (code === null) return "“" + where + "” is not one of the choices";
+      if (ym === null) return "the month is not a month";
+      if (code && !(r.allow || []).includes(code)) return DEC_LABEL[code] + " is not a choice for this line";
+      if (code === "later" && ym && ym <= M && r.show.code !== "later") return "Take in a later month: the month " + lab(ym) + " is not after " + lab(M);
+      return "";
+    };
     (x.rows || []).forEach((y) => {
       const r = byKey.get(y.key);
       if (!r) { unknown.push(y); return; }
       seen.add(y.key);
-      const code = codeOf(y.dec), ym = ymOf(y.takeIn);
-      if (code === null) { refused.push({ r, why: "“" + y.dec + "” is not one of the choices" }); return; }
-      if (ym === null) { refused.push({ r, why: "“" + y.takeIn + "” is not a month" }); return; }
-      if (code && !(r.allow || []).includes(code)) { refused.push({ r, why: DEC_LABEL[code] + " is not a choice for this line" }); return; }
-      if (code === "later" && ym && ym <= M && r.show.code !== "later") { refused.push({ r, why: "Take in a later month: the month " + lab(ym) + " is not after " + lab(M) }); return; }
-      const now = r.show, to = { code: code === "later" && !ym ? "later" : code, ym: code === "later" ? ym : "" };
-      if (code === "now" || code === "booksnow") to.ym = "";
-      const same = now.code === to.code && (now.ym || "") === (to.ym || "");
-      if (!same) changes.push({ r, from: now, to });
-      if (String(y.note || "") !== String((r.s && r.s.note) || "")) notes.push({ r, note: String(y.note || "") });
+      const code = codeOf(y.dec), ym = ymOf(y.takeIn), why = decide(r, code, ym, y.dec);
+      const w = W(r);
+      if (why) refused.push({ r, why });
+      else { w.code = code === "later" && !ym ? "later" : code; w.ym = code === "later" ? ym : ""; w.from2b.dec = w.code !== curOf(r).code || w.ym !== curOf(r).ym; }
+      if (y.note != null) { w.note = String(y.note || ""); w.from2b.note = w.note !== curOf(r).note; }
+      if (y.elig != null && !r.fixed) { const el = elOf(y.elig); if (el === null) refused.push({ r, why: "“" + y.elig + "” is not Eligible, Ineligible 17(5) or Not ours" }); else { w.el = el || r.defE; w.from2b.el = w.el !== curOf(r).el; } }
+    });
+    (x.inreg || []).forEach((y) => {
+      if (!y.key) return;
+      const r = byKey.get(y.key);
+      if (!r) { unknown.push(y); return; }
+      seen.add(y.key);
+      const w = W(r), ex = y.x || {};
+      if (String(y.elig || "") !== String(ex.elig || "") && !r.fixed) {
+        const el = elOf(y.elig);
+        if (el === null) refused.push({ r, why: "“" + y.elig + "” is not Eligible, Ineligible 17(5) or Not ours" });
+        else if (w.from2b.el && w.el !== (el || r.defE)) refused.push({ r, why: "eligibility changed differently in the 2B reconciliation and the input register" });
+        else w.el = el || r.defE;
+      }
+      if (String(y.itc || "") !== String(ex.itc || "") || String(y.takeIn || "") !== String(ex.takeIn || "")) {
+        const t = String(y.itc || "").trim().toLowerCase(), ym = ymOf(y.takeIn);
+        const code = t === "take now" ? (r.kind === "books" ? "booksnow" : "now") : t === "later month" ? "later" : t === "do not take" ? "reverse" : t === "" ? "" : null;
+        const why = decide(r, code, ym, y.itc), to = { code: code === "later" && !ym ? "later" : code, ym: code === "later" ? ym || "" : "" };
+        if (why) refused.push({ r, why });
+        else if (w.from2b.dec && (w.code !== to.code || w.ym !== to.ym)) refused.push({ r, why: "the decision changed differently in the 2B reconciliation and the input register" });
+        else { w.code = to.code; w.ym = to.ym; }
+      }
+      if (String(y.note || "") !== String(ex.note || "")) {
+        if (w.from2b.note && w.note !== String(y.note || "")) refused.push({ r, why: "the note changed differently in both sheets" });
+        else w.note = String(y.note || "");
+      }
+    });
+    const changes = [], notes = [], eligs = [], fields = [];
+    want.forEach((w, k) => {
+      const r = byKey.get(k), c = curOf(r);
+      if (w.code !== c.code || (w.ym || "") !== (c.ym || "")) { changes.push({ r, from: { code: c.code, ym: c.ym }, to: { code: w.code, ym: w.ym } }); fields.push({ r, field: "Decision", from: c, to: w }); }
+      if (w.note !== c.note) { notes.push({ r, note: w.note }); fields.push({ r, field: "Note", from: c.note, to: w.note }); }
+      if (!r.fixed && w.el !== c.el) { eligs.push({ r, from: c.el, to: w.el }); fields.push({ r, field: "Eligible?", from: ELIG_LABEL[c.el] || "", to: ELIG_LABEL[w.el] || "" }); }
     });
     const missing = mo.rows.filter((r) => !seen.has(r.key));
     const cur = Adj.list(reg, M), byId = new Map(cur.map((a) => [a.id, a])), aseen = new Set(), adj = { add: [], edit: [], del: [], bad: [] };
@@ -373,7 +451,7 @@ export const ITCF = {
       else adj.add.push(v);
     });
     cur.forEach((a) => { if (!aseen.has(a.id)) adj.del.push(a); });
-    return { changes, notes, unknown, missing, refused, adj, final: x.final || null };
+    return { changes, notes, eligs, fields, unknown, missing, refused, adj, final: x.final || null };
   },
   // Apply: every decision, month, note and adjustment as in the file
   applyImport(reg, M, pv) {
@@ -389,6 +467,12 @@ export const ITCF = {
       const id = (reg || "") + "|" + r.key, was = b.itcDec[id];
       if (was) b.itcDec[id] = Object.assign({}, was, { note });
       else { const sh = r.s && r.s.src !== "you" && r.s.d ? { d: r.s.d, ym: r.s.ym || "" } : { d: "", ym: "" }; b.itcDec[id] = Object.assign(sh, { note, at: (r.s && r.s.at) || at, by }); }
+    });
+    (pv.eligs || []).forEach(({ r, to }) => {
+      const id = (reg || "") + "|" + r.key, was = b.itcDec[id];
+      const el = to === r.defE ? "" : to;
+      if (was) b.itcDec[id] = Object.assign({}, was, { el, elAt: at });
+      else { const sh = r.s && r.s.src !== "you" && r.s.d ? { d: r.s.d, ym: r.s.ym || "", note: r.s.note || "" } : { d: "", ym: "" }; b.itcDec[id] = Object.assign(sh, { el, elAt: at, at: (r.s && r.s.at) || at, by }); }
     });
     pv.adj.add.forEach((a) => Adj.save(reg, M, a));
     pv.adj.edit.forEach((a) => Adj.save(reg, M, a, a.id));

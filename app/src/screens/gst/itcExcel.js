@@ -2,8 +2,9 @@
 // also so bulky work can be done there .. that Excel should also work like our system features and there should be the
 // final ITC-to-be-taken figure there also .. after importing, the system should take all the details from there only").
 // Smart Excel, no macros (the owner's choice): ExcelJS (the site's assets/exceljs.min.js, loaded the first time), sheets
-//   Input register        the month's bills (as the first tab), with totals
-//   2B reconciliation     a row a line: a hidden key, the data locked; Decision (a list of the seven choices), Take in month
+//   Input register        the month's bills (as the first tab), with totals; Eligible?, ITC to take (Take now · Later month ·
+//                         Do not take), Take in month and Note to fill on each bill a line is decided on (next-itc-excel-edit)
+//   2B reconciliation     a row a line: a hidden key, the data locked; Decision (a list of the seven choices), Eligible?, Take in month
 //                         (a list of months) and Note to fill; Credit month and ITC this month worked out by formulas, with
 //                         hidden workings: the line's tax in the books this month, the lower of books and 2B, all of it, what
 //                         a later month takes, FinCom's rule (its month and amount), and the effect on 4(A)(5)
@@ -24,7 +25,7 @@ const SH = { inreg: "Input register", reco: "2B reconciliation", adj: "Adjustmen
 const Q = (n) => "'" + n + "'!";
 const NF = "#,##0.00;[Red]-#,##0.00";
 const ADJ_ROWS = 200;
-const VERSION = "fincom-itc-1";
+const VERSION = "fincom-itc-2";
 
 async function excelJs() {
   if (G.ExcelJS) return G.ExcelJS;
@@ -37,13 +38,19 @@ const col = (n) => { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s 
 const day = (d) => (/^\d{8}$/.test(String(d || "")) ? d.slice(6, 8) + "-" + d.slice(4, 6) + "-" + d.slice(0, 4) : String(d || ""));
 const tot = (o) => Math.round(H.reduce((a, k) => a + (+((o || {})[k]) || 0), 0) * 100) / 100;
 
-// the reconciliation sheet's columns
+// the reconciliation sheet's columns (next-itc-excel-edit: Eligible? to fill; the effective decision, month and eligibility,
+// what the books reverse already and the effect on 4(B)(1) worked out, hidden)
 const RC = (() => {
   const c = {}; let i = 0;
-  ["key", "status", "party", "gstin", "no", "date", "bm", "tm", "bTax", "pTax", "dec", "takeIn", "note", "credit", "take", "kind", "def"].forEach((k) => { c[k] = i++; });
-  ["booksM", "lower", "full", "later", "defAmt", "takeH", "eff"].forEach((k) => { c[k] = i; i += 4; });
+  ["key", "status", "party", "gstin", "no", "date", "bm", "tm", "bTax", "pTax", "dec", "takeIn", "elig", "note", "credit", "take", "kind", "def", "def2", "defE", "effDec", "effMonth", "effElig"].forEach((k) => { c[k] = i++; });
+  ["booksM", "lower", "full", "later", "defAmt", "takeH", "eff", "blkM", "rev"].forEach((k) => { c[k] = i; i += 4; });
   c.n = i; return c;
 })();
+// the input register sheet's columns: the books' facts locked; Eligible?, ITC to take, Take in month and Note to fill; a
+// hidden copy of those four as exported, to tell what was changed here
+const IC = (() => { const c = {}; ["key", "date", "voucher", "party", "gstin", "no", "taxable", "igst", "cgst", "sgst", "cess", "tax", "twoB", "elig", "itc", "takeIn", "note", "xElig", "xItc", "xTakeIn", "xNote"].forEach((k, i) => { c[k] = i; }); return c; })();
+const ITC_WORDS = ["Take now", "Later month", "Do not take"];
+const ELIG_WORDS = ["Eligible", "Ineligible 17(5)", "Not ours"];
 const L = (k, h) => col(RC[k] + (h == null ? 0 : H.indexOf(h)));
 
 function head(ws, names, widths) {
@@ -64,47 +71,87 @@ export async function build(ExcelJS, d) {
   const prot = { selectLockedCells: true, selectUnlockedCells: true, formatColumns: true, formatRows: true, autoFilter: true, sort: false };
 
   // ---- Input register
-  const wi = wb.addWorksheet(SH.inreg);
-  head(wi, ["Booked", "Voucher", "Supplier", "GSTIN", "Bill no.", "Taxable", "IGST", "CGST", "SGST", "Cess", "Total tax", "Eligible", "Status in 2B"], [11, 10, 30, 17, 16, 13, 12, 12, 12, 10, 13, 16, 18]);
-  (d.inreg || []).forEach((r) => { const sg = r.dir < 0 ? -1 : 1; wi.addRow([day(r.date), r.voucher || "", r.party || "", r.gstin || "", r.no || "", sg * (+r.taxable || 0), sg * (+r.igst || 0), sg * (+r.cgst || 0), sg * (+r.sgst || 0), sg * (+r.cess || 0), sg * (+r.tax || 0), r.kindL || "", r.twoB || ""]); });
+  const wi = wb.addWorksheet(SH.inreg), IL = (k) => col(IC[k]), irRow = {};
+  const inames = []; [["key", "Key (do not change)"], ["date", "Booked"], ["voucher", "Voucher"], ["party", "Supplier"], ["gstin", "GSTIN"], ["no", "Bill no."], ["taxable", "Taxable"], ["igst", "IGST"], ["cgst", "CGST"],
+    ["sgst", "SGST"], ["cess", "Cess"], ["tax", "Total tax"], ["twoB", "Status in 2B"], ["elig", "Eligible?"], ["itc", "ITC to take"], ["takeIn", "Take in month"], ["note", "Note"], ["xElig", "as exported: Eligible?"], ["xItc", "as exported: ITC to take"],
+    ["xTakeIn", "as exported: month"], ["xNote", "as exported: note"]].forEach(([k, w]) => { inames[IC[k]] = w; });
+  head(wi, inames, []);
+  [["key", 6], ["date", 11], ["voucher", 10], ["party", 28], ["gstin", 17], ["no", 16], ["taxable", 13], ["igst", 11], ["cgst", 11], ["sgst", 11], ["cess", 9], ["tax", 12], ["twoB", 16], ["elig", 16], ["itc", 14], ["takeIn", 13], ["note", 24]].forEach(([k, w]) => { wi.getColumn(IC[k] + 1).width = w; });
+  ["taxable", "igst", "cgst", "sgst", "cess", "tax"].forEach((k) => { wi.getColumn(IC[k] + 1).numFmt = NF; });
+  ["key", "xElig", "xItc", "xTakeIn", "xNote"].forEach((k) => { wi.getColumn(IC[k] + 1).hidden = true; });
+  (d.inreg || []).forEach((r, j) => {
+    const sg = r.dir < 0 ? -1 : 1, v = [];
+    v[IC.key] = r.key || ""; v[IC.date] = day(r.date); v[IC.voucher] = r.voucher || ""; v[IC.party] = r.party || ""; v[IC.gstin] = r.gstin || ""; v[IC.no] = r.no || "";
+    ["taxable", "igst", "cgst", "sgst", "cess", "tax"].forEach((k) => { v[IC[k]] = sg * (+r[k] || 0); });
+    v[IC.twoB] = r.twoB || "";
+    if (r.key) { v[IC.elig] = v[IC.xElig] = r.elig || ""; v[IC.itc] = v[IC.xItc] = r.itc || ""; v[IC.takeIn] = v[IC.xTakeIn] = r.takeIn || ""; v[IC.note] = v[IC.xNote] = r.note || ""; irRow[r.key] = j + 2; }
+    else { v[IC.elig] = r.with || (r.kindL === "Not to be taken" ? "as booked: not to be taken" : r.kindL || ""); }
+    const row = wi.addRow(v);
+    if (r.key) {
+      ["elig", "itc", "takeIn", "note"].forEach((k) => open(row.getCell(IC[k] + 1)));
+      row.getCell(IC.elig + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$E$1:$E$3"], showErrorMessage: true, error: "Eligible, Ineligible 17(5) or Not ours." };
+      row.getCell(IC.itc + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$F$1:$F$3"], showErrorMessage: true, error: "Take now, Later month or Do not take." };
+      row.getCell(IC.takeIn + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$B$1:$B$" + months.length], showErrorMessage: true, error: "Choose a month from the list." };
+    }
+  });
   const il = (d.inreg || []).length + 1;
-  const it = wi.addRow(["Total", "", (d.inreg || []).length + " bills", "", ""].concat(["F", "G", "H", "I", "J", "K"].map((c) => ({ formula: "SUM(" + c + "2:" + c + Math.max(2, il) + ")" }))));
+  const it = wi.getRow(il + 1); it.getCell(IC.date + 1).value = "Total"; it.getCell(IC.party + 1).value = (d.inreg || []).length + " bills";
+  ["taxable", "igst", "cgst", "sgst", "cess", "tax"].forEach((k) => { it.getCell(IC[k] + 1).value = { formula: "SUM(" + IL(k) + "2:" + IL(k) + Math.max(2, il) + ")" }; });
   it.font = { bold: true };
-  ["F", "G", "H", "I", "J", "K"].forEach((c) => { wi.getColumn(c).numFmt = NF; });
-  wi.autoFilter = { from: "A1", to: "M1" };
+  wi.autoFilter = { from: "A1", to: IL("note") + "1" };
   await wi.protect("", prot);
 
   // ---- 2B reconciliation
   const wr = wb.addWorksheet(SH.reco);
   const names = []; names[RC.key] = "Key (do not change)"; names[RC.status] = "Status"; names[RC.party] = "Supplier"; names[RC.gstin] = "GSTIN"; names[RC.no] = "Invoice"; names[RC.date] = "Date";
-  names[RC.bm] = "Books month"; names[RC.tm] = "2B month"; names[RC.bTax] = "ITC as per books"; names[RC.pTax] = "ITC as per 2B"; names[RC.dec] = "Decision"; names[RC.takeIn] = "Take in month";
-  names[RC.note] = "Note"; names[RC.credit] = "Credit month"; names[RC.take] = "ITC in " + d.label; names[RC.kind] = "Kind"; names[RC.def] = "FinCom's rule: month";
-  [["booksM", "In the books this month"], ["lower", "Lower of books and 2B"], ["full", "All of it"], ["later", "Taken in a later month"], ["defAmt", "FinCom's rule: amount"], ["takeH", "Taken this month"], ["eff", "Effect on 4(A)(5)"]]
+  names[RC.bm] = "Books month"; names[RC.tm] = "2B month"; names[RC.bTax] = "ITC as per books"; names[RC.pTax] = "ITC as per 2B"; names[RC.dec] = "Decision"; names[RC.takeIn] = "Take in month"; names[RC.elig] = "Eligible?";
+  names[RC.note] = "Note"; names[RC.credit] = "Credit month"; names[RC.take] = "ITC in " + d.label; names[RC.kind] = "Kind"; names[RC.def] = "FinCom's rule: month"; names[RC.def2] = "FinCom's rule: month if eligible";
+  names[RC.defE] = "As the books have it"; names[RC.effDec] = "Decision in force"; names[RC.effMonth] = "Month in force"; names[RC.effElig] = "Eligible? in force";
+  [["booksM", "In the books this month"], ["lower", "Lower of books and 2B"], ["full", "All of it"], ["later", "Taken in a later month"], ["defAmt", "FinCom's rule: amount"], ["takeH", "Taken this month"], ["eff", "Effect on 4(A)(5)"],
+    ["blkM", "Reversed in the books (17(5) in Tally)"], ["rev", "Effect on 4(B)(1)"]]
     .forEach(([k, w]) => H.forEach((h, i) => { names[RC[k] + i] = w + ": " + heads[i]; }));
   head(wr, names, []);
-  [[RC.key, 6], [RC.status, 19], [RC.party, 30], [RC.gstin, 17], [RC.no, 18], [RC.date, 11], [RC.bm, 10], [RC.tm, 10], [RC.bTax, 14], [RC.pTax, 14], [RC.dec, 27], [RC.takeIn, 14], [RC.note, 26], [RC.credit, 12], [RC.take, 15], [RC.kind, 7], [RC.def, 12]]
+  [[RC.key, 6], [RC.status, 19], [RC.party, 30], [RC.gstin, 17], [RC.no, 18], [RC.date, 11], [RC.bm, 10], [RC.tm, 10], [RC.bTax, 14], [RC.pTax, 14], [RC.dec, 27], [RC.takeIn, 14], [RC.elig, 16], [RC.note, 26], [RC.credit, 12], [RC.take, 15]]
     .forEach(([i, w]) => { wr.getColumn(i + 1).width = w; });
   for (let i = RC.booksM; i < RC.n; i++) { wr.getColumn(i + 1).width = 13; wr.getColumn(i + 1).numFmt = NF; }
   [RC.bTax, RC.pTax, RC.take].forEach((i) => { wr.getColumn(i + 1).numFmt = NF; });
   wr.getColumn(RC.key + 1).hidden = true;
   for (let i = RC.kind; i < RC.n; i++) wr.getColumn(i + 1).hidden = true;
+  const IR = (k, n) => Q(SH.inreg) + "$" + IL(k) + "$" + n;
   d.rows.forEach((x, j) => {
     const r = j + 2, v = [];
     v[RC.key] = x.key; v[RC.status] = x.status + (x.fixed ? " · " + x.fixed : ""); v[RC.party] = x.party; v[RC.gstin] = x.gstin; v[RC.no] = x.no || x.bookNo; v[RC.date] = day(x.date);
-    v[RC.bm] = x.bm; v[RC.tm] = x.tm; v[RC.bTax] = tot(x.bTax); v[RC.pTax] = tot(x.pTax); v[RC.dec] = x.dec; v[RC.takeIn] = x.takeIn; v[RC.note] = x.note; v[RC.kind] = x.kind; v[RC.def] = x.def;
-    ["booksM", "lower", "full", "later", "defAmt"].forEach((k) => H.forEach((h, i) => { v[RC[k] + i] = +((x[k] || {})[h]) || 0; }));
-    const K = "$" + L("dec") + r, T = "$" + L("takeIn") + r, KI = "$" + L("kind") + r, DF = "$" + L("def") + r, C = "$" + L("credit") + r;
+    v[RC.bm] = x.bm; v[RC.tm] = x.tm; v[RC.bTax] = tot(x.bTax); v[RC.pTax] = tot(x.pTax); v[RC.dec] = x.dec; v[RC.takeIn] = x.takeIn; v[RC.elig] = x.elig || ""; v[RC.note] = x.note; v[RC.kind] = x.kind;
+    v[RC.def] = x.def; v[RC.def2] = x.def2; v[RC.defE] = x.defE || "";
+    ["booksM", "lower", "full", "later", "defAmt", "blkM"].forEach((k) => H.forEach((h, i) => { v[RC[k] + i] = +((x[k] || {})[h]) || 0; }));
+    const KI = "$" + L("kind") + r, C = "$" + L("credit") + r, DE = "$" + L("defE") + r;
+    // the decision, month and eligibility in force: the input register's where it was changed there, else this sheet's
+    const ir = irRow[x.key];
+    if (ir) {
+      const chD = "OR(" + IR("itc", ir) + "<>" + IR("xItc", ir) + "," + IR("takeIn", ir) + "<>" + IR("xTakeIn", ir) + ")";
+      v[RC.effDec] = { formula: "IF(" + chD + ",IF(" + IR("itc", ir) + '="Take now",IF(' + KI + '="books","Take now though not in 2B","Take now"),IF(' + IR("itc", ir) + '="Later month","Take in a later month",IF(' + IR("itc", ir) + '="Do not take","Reverse / do not take",""))),$' + L("dec") + r + ")" };
+      v[RC.effMonth] = { formula: "IF(" + chD + "," + IR("takeIn", ir) + ",$" + L("takeIn") + r + ")" };
+      v[RC.effElig] = { formula: "IF(" + IR("elig", ir) + "<>" + IR("xElig", ir) + ",IF(" + IR("elig", ir) + '="",' + DE + "," + IR("elig", ir) + "),IF($" + L("elig") + r + '="",' + DE + ",$" + L("elig") + r + "))" };
+    } else {
+      v[RC.effDec] = { formula: "$" + L("dec") + r + "&\"\"" };
+      v[RC.effMonth] = { formula: "$" + L("takeIn") + r + "&\"\"" };
+      v[RC.effElig] = { formula: "IF($" + L("elig") + r + '="",' + DE + ",$" + L("elig") + r + ")" };
+    }
+    const K = "$" + L("effDec") + r, T = "$" + L("effMonth") + r, E = "$" + L("effElig") + r;
+    const DM = "IF(" + E + '="Eligible",$' + L("def2") + r + ",$" + L("def") + r + ")";
     const fu = 'OR(' + K + '="Follow up with supplier",' + K + '="Ask supplier to correct")';
-    v[RC.credit] = { formula: "IF(" + K + '="",' + DF + ",IF(OR(" + K + '="Take now",' + K + '="Take now though not in 2B"),' + M + ",IF(" + K + '="Take in a later month",IF(' + T + '="",IF(' + KI + '="pair",' + DF + ',""),' + T + "),IF(AND(" + KI + '="pair",' + fu + ")," + DF + ',""))))' };
+    v[RC.credit] = { formula: "IF(" + E + '="Not ours","",IF(' + K + '="",' + DM + ",IF(OR(" + K + '="Take now",' + K + '="Take now though not in 2B"),' + M + ",IF(" + K + '="Take in a later month",IF(' + T + '="",IF(' + KI + '="pair",' + DM + ',""),' + T + "),IF(AND(" + KI + '="pair",' + fu + ")," + DM + ',"")))))' };
     H.forEach((h) => {
       v[RC.takeH + H.indexOf(h)] = { formula: "IF(" + C + "=" + M + ",IF(" + K + '="Take now though not in 2B",' + L("full", h) + r + ",IF(OR(" + K + '="",AND(' + KI + '="pair",' + fu + "))," + L("defAmt", h) + r + ",IF(" + K + '="Take in a later month",' + L("later", h) + r + "," + L("lower", h) + r + "))),0)" };
       v[RC.eff + H.indexOf(h)] = { formula: L("takeH", h) + r + "-" + L("booksM", h) + r };
+      v[RC.rev + H.indexOf(h)] = { formula: "IF(OR(" + KI + '="fixed",' + E + "=" + DE + "),0,IF(" + E + '="Ineligible 17(5)",' + L("takeH", h) + r + ",0)-" + L("blkM", h) + r + ")" };
     });
     v[RC.take] = { formula: "SUM(" + L("takeH", "igst") + r + ":" + L("takeH", "cess") + r + ")" };
     const row = wr.addRow(v);
-    [RC.dec, RC.takeIn, RC.note].forEach((i) => open(row.getCell(i + 1)));
+    [RC.dec, RC.takeIn, RC.note].concat(x.kind === "fixed" ? [] : [RC.elig]).forEach((i) => open(row.getCell(i + 1)));
     row.getCell(RC.dec + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$A$1:$A$" + decs.length], showErrorMessage: true, errorTitle: "Decision", error: "Choose one of the decisions in the list (or leave it blank for FinCom's rule)." };
     row.getCell(RC.takeIn + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$B$1:$B$" + months.length], showErrorMessage: true, errorTitle: "Take in month", error: "Choose a month from the list." };
+    if (x.kind !== "fixed") row.getCell(RC.elig + 1).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$E$1:$E$3"], showErrorMessage: true, error: "Eligible, Ineligible 17(5) or Not ours." };
   });
   wr.autoFilter = { from: "A1", to: col(RC.take) + "1" };
   await wr.protect("", prot);
@@ -120,7 +167,7 @@ export async function build(ExcelJS, d) {
     row.getCell(5).dataValidation = { type: "list", allowBlank: true, formulae: [Q(SH.lists) + "$D$1:$D$" + lines.length], showErrorMessage: true, error: "Choose the 3B line from the list." };
     row.getCell(3).dataValidation = { type: "decimal", allowBlank: true, operator: "between", formulae: [-1e12, 1e12], showErrorMessage: true, error: "A number: a minus reduces the line." };
   }
-  await wa.protect("", prot);
+  await wa.protect("", Object.assign({}, prot, { insertRows: true, deleteRows: true }));
 
   // ---- Final credit for 3B
   const wf = wb.addWorksheet(SH.fin);
@@ -150,7 +197,7 @@ export async function build(ExcelJS, d) {
   const r3 = add("4(A)(3) Inward supplies on reverse charge", "4A3", plusAdj("4A3"));
   const r5 = add("4(A)(5) All other ITC", "4A5", C4((i) => ({ formula: sumAt([rb, re, rr, ra], i) })), true);
   const rA = add("4(A) Total ITC available", "4A", C4((i) => ({ formula: sumAt([r1, r2a, r3, r5], i) })), true);
-  const rb1 = add("4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B1", plusAdj("4B1"));
+  const rb1 = add("4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)", "4B1", C4((i) => ({ formula: num0(B["4B1"], H[i]) + "+" + adjF("4B1", i) + "+SUM(" + rng("rev", H[i]) + ")" })));
   const rb2 = add("4(B)(2) Reversed: others", "4B2", plusAdj("4B2"));
   add("4(C) Net ITC available, (A) less (B)", "4C", C4((i) => ({ formula: col(i + 1) + rA + "-" + col(i + 1) + rb1 + "-" + col(i + 1) + rb2 })), true);
   add("4(D)(1) ITC reclaimed, reversed under 4(B)(2) earlier", "4D1", C4((i) => num0(B.reclaim, H[i])));
@@ -196,7 +243,7 @@ export async function build(ExcelJS, d) {
   await wab.protect("", prot);
   const wl = wb.addWorksheet(SH.lists, { state: "hidden" });
   const nmax = Math.max(decs.length, months.length, 4, lines.length);
-  for (let i = 0; i < nmax; i++) wl.addRow([decs[i] || null, months[i] || null, heads[i] || null, lines[i] || null]);
+  for (let i = 0; i < nmax; i++) wl.addRow([decs[i] || null, months[i] || null, heads[i] || null, lines[i] || null, ELIG_WORDS[i] || null, ITC_WORDS[i] || null]);
   return wb;
 }
 
@@ -240,7 +287,14 @@ export async function read(src) {
     if (i === 1) return;
     const key = txt(r.getCell(RC.key + 1)), dec = txt(r.getCell(RC.dec + 1)), party = txt(r.getCell(RC.party + 1));
     if (!key && !dec && !party) return;
-    rows.push({ row: i, key, dec, takeIn: txt(r.getCell(RC.takeIn + 1)), note: txt(r.getCell(RC.note + 1)), party, no: txt(r.getCell(RC.no + 1)) });
+    rows.push({ row: i, key, dec, takeIn: txt(r.getCell(RC.takeIn + 1)), note: txt(r.getCell(RC.note + 1)), elig: txt(r.getCell(RC.elig + 1)), party, no: txt(r.getCell(RC.no + 1)) });
+  });
+  const inreg = [], wi = wb.getWorksheet(SH.inreg);
+  if (wi) wi.eachRow((r, i) => {
+    if (i === 1) return;
+    const key = txt(r.getCell(IC.key + 1)); if (!key) return;
+    const g = (k) => txt(r.getCell(IC[k] + 1));
+    inreg.push({ row: i, key, elig: g("elig"), itc: g("itc"), takeIn: g("takeIn"), note: g("note"), x: { elig: g("xElig"), itc: g("xItc"), takeIn: g("xTakeIn"), note: g("xNote") }, party: g("party"), no: g("no") });
   });
   const adj = [];
   if (wa) wa.eachRow((r, i) => {
@@ -254,6 +308,6 @@ export async function read(src) {
     final = { calc: true };
     wf.eachRow((r) => { const code = txt(r.getCell(7)); if (!/^4[A-D]\d?$/.test(code)) return; const o = {}; H.forEach((h, i) => { const v = val(r.getCell(i + 2)); if (typeof v !== "number") final.calc = false; o[h] = typeof v === "number" ? Math.round(v * 100) / 100 : null; }); final[code] = o; });
   }
-  return { meta, rows, adj, final };
+  return { meta, rows, inreg, adj, final };
 }
 if (typeof window !== "undefined") window.ITCExcel = { make, download, read, build };

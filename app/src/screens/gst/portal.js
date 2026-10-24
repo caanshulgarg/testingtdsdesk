@@ -278,6 +278,8 @@ export function r3bBills(id, ym, reg, t) {
   }
   // next-itc-simple: the adjustments typed on Final credit for 3B (app/src/lib/itcFinal.js) are in the figure
   if (t.itcAdj && t.itcAdj[id] && id !== "4C") A("Adjustments added in FinCom", t.itcAdj[id]);
+  // next-itc-excel-edit: lines marked ineligible (or eligible, or not ours) in FinCom against what the books say
+  if (id === "4B1" && t.itcRev) A("Eligibility set in FinCom", t.itcRev);
   // the 4 tables carry no value: only the tax is compared
   const heads = /^4/.test(id) ? ["igst", "cgst", "sgst", "cess"] : /^5/.test(id) ? ["taxable"] : HEADS;
   const sum = z5(); bills.forEach((r) => addTo(sum, r, r.sg)); adj.forEach((a) => addTo(sum, a));

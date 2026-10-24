@@ -34,6 +34,8 @@ function DecisionCell({ r, reg, M }) {
       {!r.show.ym && <option value="">Pick the month…</option>}
       {r.show.ym && r.show.ym <= M && <option value={r.show.ym}>{GSTR.label(r.show.ym)}</option>}
       {months.map((m) => <option key={m} value={m}>{GSTR.label(m)}</option>)}</select>}
+    {!r.fixed && <select aria-label="Eligible?" data-ic-elig={r.key} value={r.el || r.defE || "eligible"} title="Eligible? (as the books have it unless you change it)"
+      onChange={(ev) => { ITCF.setElig(reg, r, ev.target.value); render(); }}>{ITCF.ELIG.map(([k, l]) => <option key={k} value={k}>{l + (k === r.defE ? " (books)" : "")}</option>)}</select>}
     {r.fixed ? <div className="nr">{r.fixed}</div> : r.e.auto ? <div className="nr" title="Nothing decided yet: FinCom's rule">FinCom's rule</div>
       : r.show.code === "booksnow" ? <div className="nr bad" data-ic-risk="">not in 2B: the credit may be questioned until the supplier reports it</div> : null}
   </div>;

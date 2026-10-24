@@ -88,7 +88,7 @@ const GST2B = {
       const no = Books.supInv(v);
       out.push({id: v.id, voucher: v.no || "", type: v.type, party: party || "", gstin, no: String(no), noN: this.normNo(no), core: this.coreNo(no),
         date: v.refDate || v.date, bookDate: v.date, ym: String(v.date).slice(0, 6), reg,
-        taxable, other, gstRate, ru, noItc, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
+        taxable, other, gstRate, ru, noItc, blocked: !!v.ineligibleFlag, igst: tax.IGST, cgst: tax.CGST, sgst: tax.SGST, cess: tax.CESS,
         dir: signed <= 0 ? 1 : -1, rcm: Books.isRcm(v), ineligible: inel > 0, held: hold > 0, narr: v.narr || ""});
     });
     return out;

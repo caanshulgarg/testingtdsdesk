@@ -5,7 +5,8 @@
 //   booksnow  Take now though not in 2B (the owner's choice) follow    Follow up with supplier
 //   correct   Ask supplier to correct                        reverse   Reverse / do not take
 //   book      Book in Tally (in 2B, not in the books)
-// Kept with the books as S.books.itcDec["<reg>|<line key>"] = {d, ym, note, at, by} (one of BOOKS_KEYS, so each decision
+// Kept with the books as S.books.itcDec["<reg>|<line key>"] = {d, ym, note, el, at, by} (el: eligible, ineligible,
+// notours, or "" as the books have it; next-itc-excel-edit) (one of BOOKS_KEYS, so each decision
 // is its own item on the server, client_book_items, and two people deciding two bills never clash). ym is the month the
 // credit goes into ("" = the line's own month). A decision taken off is kept as d "" (so it also overrides an old remark).
 //
@@ -46,6 +47,9 @@ export const ITCDec = {
     keys.forEach((k) => { const x = dec[k]; if (!x) return; if (x.note && !note) note = x.note; const d = x.act && (ACT_DEC[k[0]] || {})[x.act]; if (d) take({ d, ym: "", t: decAt(x), at: x.ts || x.at, src: "follow-up", was: x.act }); });
     if (best && best.note == null) best.note = note;
     if (!best && note) best = { d: "", ym: "", note, t: 0, src: "follow-up" };
+    // the eligibility a person set (next-itc-excel-edit) is the line's whatever a later old remark says of its decision
+    let el = ""; keys.forEach((k) => { const x = mine[(reg || "") + "|" + k]; if (x && x.el && !el) el = x.el; });
+    if (el) { if (!best) best = { d: "", ym: "", note: "", t: 0, src: "you" }; best = Object.assign({}, best, { el }); }
     return best;
   },
   // set the decision of one or more lines (keys: each line's own key); d "" takes it off
@@ -53,6 +57,14 @@ export const ITCDec = {
     const b = S.books, at = new Date().toISOString(), by = who();
     b.itcDec = Object.assign({}, b.itcDec || {});
     keys.forEach((k) => { const id = (reg || "") + "|" + k, was = b.itcDec[id] || {}; b.itcDec[id] = Object.assign({}, was, { d: d || "", ym: d === "later" || d === "now" || d === "booksnow" ? ym || "" : "", at, by }); });
+    saveBooks();
+  },
+  // the line's eligibility: "eligible", "ineligible" (section 17(5)), "notours"; "" as the books have it. A record made
+  // only for it keeps the decision in force (from wherever it came)
+  setEl(reg, key, el, cur) {
+    const b = S.books, id = (reg || "") + "|" + key, was = (b.itcDec || {})[id];
+    b.itcDec = Object.assign({}, b.itcDec || {});
+    b.itcDec[id] = Object.assign({}, was || (cur && cur.src !== "you" && cur.d ? { d: cur.d, ym: cur.ym || "", note: cur.note || "" } : { d: "", ym: "" }), { el: el || "", at: (was && was.at) || (cur && cur.at) || new Date().toISOString(), elAt: new Date().toISOString(), by: who() });
     saveBooks();
   },
   note(reg, key, note, cur) {

@@ -16,7 +16,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const {load, HTML} = require("./harness");
 const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR",
-  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ"];
+  "normName", "nameSim", "ITCT", "GSTSet", "CustIMS", "GSTF", "GSTQ", "inregRows"];
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const {ctx, x} = load(HTML, NAMES);
 const CMP = "09AAACZ1234A1Z5", reg = "09", G = x.GSTR, H = ["igst", "cgst", "sgst", "cess"];
@@ -176,5 +176,52 @@ ok(near(fin.other.igst - r0.other.igst, 0) && near(tax(fin.other) - tax(r0.other
   ok(inMonth("202606", "JE/3").show.code === "follow", "JE/3, rate unknown: Follow up (FinCom's rule), to be decided");
   decide("JE/3", "now", "", "202606");
   ok(near(tax(T("202606").other), 360), "JE/3 decided Take now: June + 180");
+}
+
+// ---- 7. eligibility (next-itc-excel-edit; the owner: "if I want to change .. not-to-be-taken to eligible or vice versa"):
+// each line's Eligible? (as the books have it unless a person says otherwise) moves 4(B)(1) as the books' own 17(5) does
+{
+  const GK = "09AABCK9999J1Z2", b7 = books();
+  b7.vouchers = vs.concat([Object.assign(V("k1", "20260420", "K/1", "Kappa Caterers", GK, 2000, 180), {ineligibleFlag: true})]);
+  b7.under["Kappa Caterers"] = "Sundry Creditors"; b7.map = x.Books.mapLedgers(b7.vouchers, {});
+  ["CGST", "SGST"].forEach((t) => { b7.map[t] = Object.assign(b7.map[t] || {n: 0}, {what: "gst", kind: "gst", tax: t, side: "output", reg, ok: true, byHand: true}); b7.map["Input " + t] = Object.assign(b7.map["Input " + t] || {n: 0}, {what: "gst", kind: "gst", tax: t, side: "input", reg, ok: true, byHand: true}); });
+  b7.twoBs[CMP + "|042026"].rows.push(row("202604", GK, "KAPPA CATERERS", "K/1", "20260420", 2000, 180));
+  x.GST2B._memo = null; G._carry = null;
+  const o = G.threeBm.orig.call(G, "202604", reg), t0 = T("202604");
+  ok(H.every((h) => near(t0.rev1[h], o.rev1[h]) && near(t0.other[h], o.other[h])), "7. nothing set: 4(A)(5) and 4(B)(1) as GSTR.threeBm (Kappa's 17(5) bill in both: " + f(t0.rev1) + ")");
+  ok(line("K/1").e.el === "ineligible" && line("K/1").defE === "ineligible" && line("B/7").e.el === "eligible", "Kappa (17(5) in Tally): Ineligible as the books have it; Beta: Eligible");
+  ITCF.setElig(reg, line("B/7"), "ineligible");
+  let t = T("202604");
+  ok(near(tax(t.other), tax(t0.other)) && near(tax(t.rev1) - tax(t0.rev1), 3600) && near(tax(t.netItc) - tax(t0.netItc), -3600), "Beta marked Ineligible 17(5): in 4(A)(5) still, reversed in 4(B)(1): 4(C) - 3,600");
+  ITCF.setElig(reg, line("K/1"), "eligible");
+  t = T("202604");
+  ok(near(tax(t.rev1) - tax(t0.rev1), 3600 - 360), "Kappa marked Eligible: its 360 no longer reversed (4(B)(1) " + f(t.rev1) + ")");
+  ITCF.setElig(reg, line("K/1"), "notours");
+  t = T("202604");
+  ok(near(tax(t.other) - tax(t0.other), -360) && near(tax(t.rev1) - tax(t0.rev1), 3600 - 360), "Kappa marked Not ours: out of 4(A)(5) and no longer reversed");
+  ok(line("K/1").e.el === "notours" && ctx.S.books.itcDec[reg + "|" + line("K/1").key].el === "notours", "kept with the line (itcDec el)");
+  ITCF.setElig(reg, line("E/1"), "notours");
+  ok(!inMonth("202605", "E/1"), "Echo marked Not ours: not carried forward");
+  ITCF.setElig(reg, line("E/1"), "eligible"); ITCF.setElig(reg, line("K/1"), "ineligible"); ITCF.setElig(reg, line("B/7"), "eligible");
+  t = T("202604");
+  ok(H.every((h) => near(t.rev1[h], o.rev1[h]) && near(t.other[h], o.other[h])) && !ctx.S.books.itcDec[reg + "|" + line("K/1").key].el, "set back as the books have it: as GSTR.threeBm, the override cleared");
+  // the Excel: eligibility from the 2B sheet and from the input register; the same field changed differently in both refused
+  const d7 = ITCF.excelData(reg, "202604"), rk = (no) => d7.rows.find((y) => (y.no || y.bookNo) === no).key;
+  ok(d7.rows.find((y) => y.no === "K/1").elig === "Ineligible 17(5)" && d7.inreg.find((y) => y.no === "K/1").key && d7.inreg.find((y) => y.no === "K/1").itc === "Take now", "the Excel's data: Eligible? on the 2B line and on the input register's bill");
+  const y0 = d7.rows.map((y) => ({key: y.key, dec: y.dec, takeIn: y.takeIn, note: y.note, elig: y.elig}));
+  const ir = d7.inreg.filter((y) => y.key).map((y) => ({key: y.key, elig: y.elig, itc: y.itc, takeIn: y.takeIn, note: y.note, x: {elig: y.elig, itc: y.itc, takeIn: y.takeIn, note: y.note}, no: y.no}));
+  y0.find((y) => y.key === rk("D/9")).elig = "Ineligible 17(5)";
+  ir.find((y) => y.no === "K/1").elig = "Eligible";
+  ir.find((y) => y.no === "E/1").itc = "Take now";
+  const pv = ITCF.preview(reg, "202604", {rows: y0, inreg: ir, adj: d7.adj});
+  ok(pv.eligs.length === 2 && pv.changes.length === 1 && pv.changes[0].to.code === "booksnow" && pv.fields.length === 3 && !pv.refused.length, "preview: Delta Ineligible (2B sheet), Kappa Eligible and Echo Take now (input register): 3 fields (" + pv.fields.map((c) => c.r.no || c.r.bookNo).join(",") + ")");
+  const ir2 = JSON.parse(JSON.stringify(ir)); ir2.find((y) => y.no === "D/9").elig = "Not ours";
+  const pv2 = ITCF.preview(reg, "202604", {rows: y0, inreg: ir2, adj: d7.adj});
+  ok(pv2.refused.some((x) => /changed differently in the 2B reconciliation and the input register/.test(x.why)), "the same line's eligibility changed differently in both sheets: refused (" + pv2.refused.map((x) => x.why).join("; ") + ")");
+  const before = T("202604");
+  ITCF.applyImport(reg, "202604", pv);
+  t = T("202604");
+  ok(line("D/9").e.el === "ineligible" && line("K/1").e.el === "eligible" && line("E/1").e.code === "booksnow", "Apply: the eligibilities and the decision are FinCom's");
+  ok(near(tax(t.rev1) - tax(before.rev1), 4500 - 360) && near(tax(t.other) - tax(before.other), 900), "and 3B: 4(B)(1) + 4,500 (Delta) - 360 (Kappa); 4(A)(5) + 900 (Echo)");
 }
 console.log(fails ? "\n" + fails + " FAILED" : "\nall ok"); process.exit(fails ? 1 : 0);

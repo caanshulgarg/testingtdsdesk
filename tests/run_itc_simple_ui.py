@@ -93,9 +93,21 @@ with sync_playwright() as p:
     print("3. 2B reconciliation")
     IB.open_part(pg, "r2b")
     c = chips(pg)
-    ok(c == {"all": 6, "matched": 1, "books": 2, "2b": 2, "diff": 1, "ims": 0, "cf": 0}, "April's chips: matched 1, in books not in 2B 2, in 2B not in books 2, amount differs 1, IMS 0, carried forward 0 (%s)" % c)
+    ok(c == {"all": 7, "matched": 2, "books": 2, "2b": 2, "diff": 1, "ims": 0, "cf": 0}, "April's chips: matched 2, in books not in 2B 2, in 2B not in books 2, amount differs 1, IMS 0, carried forward 0 (%s)" % c)
     base = a5(pg)
-    ok(abs(base - 7920) < 0.01, "Final credit 4(A)(5) before any decision: 7,920 (%s)" % base)
+    ok(abs(base - 8280) < 0.01, "Final credit 4(A)(5) before any decision: 8,280 (Kappa's 17(5) bill in it, and reversed in 4(B)(1)) (%s)" % base)
+    # next-itc-excel-edit: Eligible? on the 2B line and on the input register's bill, the app's own
+    b41 = tot(T4(pg)["4B1"])
+    pg.select_option(row_sel("B/7") + " select[data-ic-elig]", "ineligible"); W(pg, 500)
+    ok(abs(tot(T4(pg)["4B1"]) - b41 - 3600) < 0.01 and abs(a5(pg) - base) < 0.01, "2B reconciliation, Eligible? Ineligible 17(5) on Beta: 4(B)(1) + 3,600, 4(A)(5) as it was")
+    pg.select_option(row_sel("B/7") + " select[data-ic-elig]", "eligible"); W(pg, 500)
+    IB.open_part(pg, "inreg")
+    pg.select_option("select[data-ir-elig=k1]", "eligible"); W(pg, 500)
+    ok(abs(tot(T4(pg)["4B1"]) - b41 + 360) < 0.01, "Input register, Eligible? Eligible on Kappa (17(5) in Tally): 4(B)(1) - 360")
+    ok(pg.evaluate("ITCF.rows('09').find(r => r.bookNo === 'K/1').e.el") == "eligible", "the same line's eligibility on the 2B reconciliation")
+    pg.select_option("select[data-ir-elig=k1]", "ineligible"); W(pg, 500)
+    ok(abs(tot(T4(pg)["4B1"]) - b41) < 0.01, "set back as the books have it")
+    IB.open_part(pg, "r2b")
     ok(dec(pg, "B/7") == "now" and dec(pg, "E/1") == "follow" and dec(pg, "O/5") == "book" and dec(pg, "A/101") == "later", "FinCom's rule as decisions: Beta Take now, Echo Follow up, Omega Book in Tally, Alpha Take in a later month")
     shot(pg, "2-reco-desktop", True)
     choose(pg, "E/1", "booksnow")
@@ -197,6 +209,11 @@ with sync_playwright() as p:
     wb = openpyxl.load_workbook(xp)
     ok(wb.sheetnames[:6] == ["Input register", "2B reconciliation", "Adjustments", "Final credit for 3B", "Summary", "Write to suppliers"], "its sheets: %s" % wb.sheetnames)
     wr = wb["2B reconciliation"]
+    def editable(ws, r): return sorted(c.column_letter for c in ws[r] if c.protection.locked is False)
+    wi = wb["Input register"]
+    kr = next(c.row for c in wi["F"] if c.value == "K/1")
+    ok(editable(wi, kr) == ["N", "O", "P", "Q"] and wi.protection.sheet and wi.column_dimensions["A"].hidden, "Input register: only Eligible?, ITC to take, Take in month and Note can be changed (%s)" % editable(wi, kr))
+    ok(editable(wr, 2) == ["K", "L", "M", "N"] and editable(wb["Adjustments"], 2) == ["B", "C", "D", "E"], "2B reconciliation: only Decision, Take in month, Eligible? and Note; Adjustments: head, amount, reason, line (%s, %s)" % (editable(wr, 2), editable(wb["Adjustments"], 2)))
     ok(wr.column_dimensions["A"].hidden and wr.protection.sheet and wr["K2"].protection.locked is False and wr["C2"].protection.locked is not False, "the key column hidden, the sheet protected, Decision open, the data locked")
     dvs = [d for d in wr.data_validations.dataValidation]
     ok(any("Lists" in (d.formula1 or "") and "K2" in str(d.sqref) for d in dvs) and any("L2" in str(d.sqref) for d in dvs), "Decision and Take in month are lists (data validation)")
@@ -209,37 +226,44 @@ with sync_playwright() as p:
         f0 = final_of(r0); t4 = T4(pg)
         ok(all(abs(f0[k][h] - t4[k][h]) < 0.01 for k in ("4A1", "4A3", "4A5", "4A", "4B1", "4B2", "4C", "4D2") for h in H), "LibreOffice works the downloaded Excel out to FinCom's table 4 (4(A)(5) %s / %s)" % (f0.get("4A5"), t4["4A5"]))
         ws0 = openpyxl.load_workbook(r0, data_only=True)["2B reconciliation"]
-        tk = sum((r[14].value or 0) for r in ws0.iter_rows(min_row=2) if r[0].value)
+        tk = sum((r[15].value or 0) for r in ws0.iter_rows(min_row=2) if r[0].value)
         scr = pg.evaluate("() => Number(document.querySelector('[data-ic-take-sum]').innerText.replace(/[₹,]/g, ''))")
         ok(abs(tk - scr) < 0.01, "the Excel's ITC in Apr-2026 column adds up to the screen's (%s / %s)" % (tk, scr))
     else: print("  (LibreOffice not here: the recalculation checks are skipped)")
     # decisions changed in the file, an adjustment added
     rows = {r[2].value: r[0].row for r in wr.iter_rows(min_row=2) if r[0].value}
-    wr.cell(rows["Echo Stores"], 11).value = "Take now though not in 2B"
+    # Echo taken now from the input register; Kappa made eligible there; Delta made ineligible on the 2B sheet
+    irow = {c.value: c.row for c in wi["F"] if c.value}
+    wi.cell(irow["E/1"], 15).value = "Take now"
+    wi.cell(irow["K/1"], 14).value = "Eligible"
+    wr.cell(rows["DELTA SERVICES"], 13).value = "Ineligible 17(5)"
     wr.cell(rows["BETA TRADERS"], 11).value = "Take in a later month"; wr.cell(rows["BETA TRADERS"], 12).value = pg.evaluate("GSTR.label('202606')")
-    wr.cell(rows["OMEGA LOGISTICS"], 13).value = "asked them on 24-Oct"
+    wr.cell(rows["OMEGA LOGISTICS"], 14).value = "asked them on 24-Oct"
     wa = wb["Adjustments"]; wa["B2"] = "SGST"; wa["C2"] = -250; wa["D2"] = "reversal of a blocked credit"; wa["E2"] = "4(B)(1) Reversed: rules 38, 42, 43 and section 17(5)"
     ed = os.path.join(tmp, "edited.xlsx"); wb.save(ed)
     d1 = os.path.join(tmp, "lo1"); os.makedirs(d1)
+    b41c, b41s = T4(pg)["4B1"]["cgst"], T4(pg)["4B1"]["sgst"]
     r1 = recalc(ed, d1)
     f1 = final_of(r1) if r1 else {}
-    if r1: ok(f1 and abs(tot(f1["4A5"]) - (base + 900 - 3600)) < 0.01 and abs(f1["4B1"]["sgst"] + 250) < 0.01, "LibreOffice: the changed decisions and adjustment move the Excel's table 4 (4(A)(5) %s, 4(B)(1) SGST %s)" % (f1.get("4A5"), (f1.get("4B1") or {}).get("sgst")))
+    if r1: ok(f1 and abs(tot(f1["4A5"]) - (base + 900 - 3600)) < 0.01 and abs(f1["4B1"]["sgst"] - (b41s + 2250 - 180 - 250)) < 0.01 and abs(f1["4B1"]["cgst"] - (b41c + 2250 - 180)) < 0.01, "LibreOffice: the changed decisions and adjustment move the Excel's table 4 (4(A)(5) %s, 4(B)(1) SGST %s)" % (f1.get("4A5"), (f1.get("4B1") or {}).get("sgst")))
     # upload: the preview, then Apply
     pg.set_input_files("[data-itc-upload]", r1 or ed); W(pg, 2500)
     pv = '[data-pop="itc-import"]'
     ok(pg.locator(pv).count() == 1, "Upload Excel: the preview opens")
     if pg.locator(pv).count():
-        ok(pg.get_attribute(pv + " [data-pv-changes]", "data-pv-changes") == "2" and pg.locator(pv + " [data-pv-change]").count() == 2 and pg.get_attribute(pv + " [data-pv-adj]", "data-pv-adj") == "1|0|0"
-           and pg.get_attribute(pv + " [data-pv-notes]", "data-pv-notes") == "1", "the preview: 2 decisions changed (which), 1 note, 1 adjustment added")
+        flds = pg.evaluate("() => [...document.querySelectorAll('[data-pop=\"itc-import\"] [data-pv-field]')].map(t => t.dataset.pvField + ':' + t.children[1].innerText)")
+        ok(pg.get_attribute(pv + " [data-pv-changes]", "data-pv-changes") == "2" and pg.get_attribute(pv + " [data-pv-eligs]", "data-pv-eligs") == "2" and pg.get_attribute(pv + " [data-pv-adj]", "data-pv-adj") == "1|0|0"
+           and pg.get_attribute(pv + " [data-pv-notes]", "data-pv-notes") == "1" and sorted(flds) == sorted(["Decision:B/7", "Decision:E/1", "Eligible?:D/9", "Eligible?:K/1", "Note:O/5"]), "the preview: each changed field per line (%s), 1 adjustment added" % flds)
         ok(pg.locator(pv + " [data-pv-final] [data-pv-line='4A5']").count() == 1, "and the Excel's table 4 beside FinCom's")
         shot(pg, "10-excel-preview-desktop")
         pg.click(pv + " [data-pv-apply]"); W(pg, 900)
     t4 = T4(pg)
     if not f1: f1 = {"4A5": {"igst": 0, "cgst": round(t4["4A5"]["cgst"], 2), "sgst": round(t4["4A5"]["sgst"], 2), "cess": 0}} if abs(tot(t4["4A5"]) - (base + 900 - 3600)) < 0.01 else {}
     ok(f1 and all(abs(f1[k][h] - t4[k][h]) < 0.005 for k in ("4A1", "4A2", "4A3", "4A5", "4A", "4B1", "4B2", "4C", "4D1", "4D2") if k in f1 for h in H), "after Apply, FinCom's table 4 is the Excel's to the paisa (%s / %s)" % (t4["4A5"], f1.get("4A5")))
+    ok(pg.evaluate("ITCF.rows('09').find(r => r.no === 'D/9').e.el") == "ineligible" and pg.evaluate("ITCF.rows('09').find(r => r.bookNo === 'K/1').e.el") == "eligible", "the eligibilities are FinCom's (Delta ineligible, Kappa eligible), on the 2B line and the input register")
     ok(dec(pg, "E/1") == "booksnow" and dec(pg, "B/7") == "later" and pg.evaluate("S.books.itcDec['09|P|%s|O5|1'].note" % IB.GO) == "asked them on 24-Oct", "the decisions, the month and the note are FinCom's")
     # an edited key is refused
-    wb2 = openpyxl.load_workbook(ed); w2 = wb2["2B reconciliation"]; w2.cell(rows["Echo Stores"], 1).value = "B|edited|X|1"; bad = os.path.join(tmp, "bad.xlsx"); wb2.save(bad)
+    wb2 = openpyxl.load_workbook(ed); w2 = wb2["2B reconciliation"]; w2.cell(rows["BETA TRADERS"], 1).value = "B|edited|X|1"; bad = os.path.join(tmp, "bad.xlsx"); wb2.save(bad)
     pg.set_input_files("[data-itc-upload]", bad); W(pg, 2000)
     ok(pg.locator(pv + " [data-pv-unknown]").count() == 1 and "refused" in pg.inner_text(pv + " [data-pv-unknown]"), "an edited key: that row refused, said plainly")
     pg.keyboard.press("Escape"); W(pg, 400)
