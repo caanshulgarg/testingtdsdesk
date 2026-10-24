@@ -210,7 +210,7 @@ def main():
         scene(cos(), devs=[])
         tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", False], ["open", False], ["add", False]] and pg.locator("#app [data-connect-step=install] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (%s)" % g)
+        ok(g == [["install", False], ["open", False], ["add", False]] and pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
         scene(cos(), devs=[dev(opened=(), tally="closed")]); tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.hasAttribute('data-done'))")
         ok(g == [True, False, False] and "Open TallyPrime on NWS144" in txt("#app [data-connect-step=open]"), "5. bridge on, Tally closed: step 2 says open TallyPrime on NWS144 (%s)" % txt("#app [data-connect-step=open]"))

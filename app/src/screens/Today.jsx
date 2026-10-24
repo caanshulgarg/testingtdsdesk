@@ -16,6 +16,7 @@ function NotLinkedLine() {
   </div>;
 }
 import { Inbox, ReceiptText, Send, TriangleAlert } from "lucide-react";
+import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
 const openAt = (cid, step) => openCompany(cid).then(() => goStep(step, "bills"));
 const initials = (name) => String(name || "").replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
@@ -49,7 +50,7 @@ export default function Today() {
       </div>
       <AutoToday />
       <MeetToday />
-      {!rows.length ? <p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p> : <>
+      {!rows.length ? <><p className="note lt-empty" data-list-empty="">No clients yet. Use <button className="linkbtn" onClick={() => navHome("clients")}>Add your first client</button> to start.</p><FirstRunTally /></> : <>
         {/* the one list table (spec K6) */}
         <ListTable name="today" className="data" rows={rows} rowKey={(r) => r.c.id} unit={["client", "clients"]}
           cols={[

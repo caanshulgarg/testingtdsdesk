@@ -1001,6 +1001,10 @@ function resumeRows(all){
         const j = await Bridge.pair(code);
         toast("Connected to FinCom Bridge on " + (j.computer || "this computer") + ".");
         try { await Bridge.refresh(); } catch (e){}
+        // next-tally-firstlink: the firm's computer key at once (not at TCloud.auto's next minute), on the Tally page,
+        // where Connect Tally shows the linking and then the companies open in Tally
+        if (typeof startBridgePolling === "function") startBridgePolling();
+        if (TCloud.on()){ TCloud.autoAt = 0; setTimeout(() => TCloud.auto(), 0); S.tallyGuide = {}; S.tallyTab = "computers"; if (typeof navHome === "function") navHome("tally"); }
         render();
       } catch (e){ toast("Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
     };

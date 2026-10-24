@@ -451,8 +451,8 @@ def main():
         ok(rows and rows[0][1] == "stopped" and "Stopped: a request to Tally (TDSDeskCompanies) took 21.2 s" in rows[0][2], "Stopped by the bridge itself (2.3.0): its reason (%s)" % rows)
         # nothing installed: step 1 with the one download
         scene([], [])
-        ok(steps() == [["install", False], ["open", False], ["add", False]] and n('#app [data-connect-step="install"] [data-bridge-download]') == 1
-           and "2.4.4" in txt('#app [data-connect-step="install"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: step 1 with the download (%s)" % steps())
+        ok(steps() == [["install", False], ["open", False], ["add", False]] and n('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') == 1
+           and "2.4.4" in txt('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: step 1 with the download (%s)" % steps())
 
         # ---- 5. every former entry point lands on the one place to link a client: its own Tally card (the companies in Tally
         # it may be, each with Link) or Companies in Tally; none links or connects on its own

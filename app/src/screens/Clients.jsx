@@ -11,6 +11,7 @@ import More from "../parts/More.jsx";
 import { goTallyRow } from "../parts/TallyChip.jsx";
 import { clientTallyState } from "../lib/tallyState.js";
 import Filters, { Search } from "../parts/Filters.jsx";
+import { FirstRunTally } from "../parts/TallyFirstRun.jsx";
 
 // "Needs you" of a client: its duplicates and its bills to check, the same count as on Today
 const needsYou = (c) => { const st = c.stats || {}; return (st.dups || 0) + (st.check || 0); };
@@ -117,7 +118,7 @@ export default function Clients() {
     {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
     {panel && <Panel id={panel} />}
     <Jobs which="auto" />
-    {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p></div> : <>
+    {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p><FirstRunTally /></div> : <>
       {/* the one list table (spec K6): the client, its Tally sign (the status), then the counts; the foot adds them up */}
       <ListTable name="clients" className="data" rows={cos} rowKey={(c) => c.id} unit={["client", "clients"]} of={all.length}
         rowProps={(c) => ({ className: "rowlink", onClick: () => openCompany(c.id) })}

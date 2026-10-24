@@ -391,7 +391,8 @@ async function bridgeTick(first){
     if (Bridge.up() && Bridge.cfg().follow && changed){
       const clients = Bridge.openClients();
       const busyTyping = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && document.activeElement.type !== "checkbox";
-      const working = S.view === "company" && ((S.tab === "bank" && B() && (B().q || B().sel.size || bankRangeOn())) || S.selected || S.revQuery || S.drawerOpen || (S.revSel && S.revSel.size));
+      // next-tally-firstlink: not away from the Tally page while it is connecting or linking (its steps or the list)
+      const working = (S.view === "home" && S.homeTab === "tally") || S.view === "company" && ((S.tab === "bank" && B() && (B().q || B().sel.size || bankRangeOn())) || S.selected || S.revQuery || S.drawerOpen || (S.revSel && S.revSel.size));
       if (clients.length === 1 && S.coId !== clients[0].id && !busyTyping && !working && !document.querySelector("#confirmBox[style*='flex']")){
         await openCompany(clients[0].id);
         // (a toast although it happened by itself: the page itself changed, and this says why)

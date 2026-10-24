@@ -14,6 +14,7 @@ import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry } from "../lib/tallyState.js";
 import CompaniesInTally, { companyRows } from "../parts/TallyCompanies.jsx";
+import ConnectThisComputer, { LocalTally } from "../parts/TallyFirstLink.jsx";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -642,14 +643,14 @@ function ConnectGuide({ x, m, connectStep }) {
       <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
         {d.install ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + ". "}
             {g.step === 1 && g.at ? <><span>On another computer: </span><DownloadBtn m={m} primary /></> : null}</span>
-          : <><span className="note">On the computer where TallyPrime runs. If Windows says “Windows protected your PC”, press More info, then Run anyway.</span>{" "}<DownloadBtn m={m} primary />
+          : <><span className="note">Download it, open it, then type the code it shows: below, step by step. FinCom finds it on this computer by itself.</span>
             {connectStep && <div data-guide-connect-slot="">{connectStep}</div>}</>}
       </Step>
       <Step k="open" n={2} title="Open your company in TallyPrime" done={d.open} now={now === "open"}>
         {d.open ? <span className="note" data-guide-open-count={x.openNow.length}>{openWords(x)}</span>
           : !d.install ? <span className="note">After step 1.</span>
-          : r && !r.online ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
-          : <>{s && s.stopped && <p className="tc3-p" data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
+          : r && !r.online && !(Bridge.on() && Bridge.up()) ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
+          : <><LocalTally />{s && s.stopped && <p className="tc3-p" data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
               {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</p>}
             {s && s.paused && <p className="tc3-p" data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}</p>}
             {s && !s.tallyOk ? <p className="tc3-p note">{"Open TallyPrime on " + pc + ", signed in as " + user + ", and open your company. If it does not show below within a minute: in TallyPrime press F1 (Help) → Settings → Connectivity, set “TallyPrime acts as” to Both and choose any free port from 9000 to 9999 (" + (r ? tallyPortOf(r) : 9002) + " is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself."}</p>
@@ -661,6 +662,9 @@ function ConnectGuide({ x, m, connectStep }) {
           : <span className="note">One click: FinCom adds the client with the company’s name and GSTIN, links it and brings its ledgers and entries by itself.</span>}
       </Step>
     </ol>
+    {/* next-tally-firstlink: until a bridge of the firm is heard (or Connect another computer, this browser not connected
+        yet): Download, Open it, Type its code, watched live on this computer (parts/TallyFirstLink.jsx) */}
+    {(!d.install || (g.step === 1 && g.at && !Bridge.on())) && <ConnectThisComputer download={<DownloadBtn m={m} primary />} linked={d.install && Bridge.on()} />}
     {!all && d.install && <button className="btn small" data-check-again="" style={{ marginTop: 8 }} onClick={checkAgain}>Check again</button>}
   </section>;
 }
@@ -1049,7 +1053,7 @@ export function BridgeSettings({ inDetails = false }) {
       <div className="grid"><label className="f"><span>Bridge address</span><CommitBox data-bridge="url" aria-label="Bridge address" value={c.url} onCommit={(v) => bridgeSet("url", v)} /></label>
         <label className="f"><span>Bridge key (filled in by Connect)</span><CommitBox data-bridge="key" data-fk="bridgekey" aria-label="Bridge key" value={c.key} autoComplete="off" placeholder="press Connect below" onCommit={(v) => bridgeSet("key", v)} /></label></div>
       <label className="chk" style={{ marginTop: 8 }}><input type="checkbox" checked={!!c.follow} onChange={(ev) => bridgeSet("follow", ev.target.checked)} /> Follow the company open in Tally (switch FinCom to it automatically)</label>
-      <div className="row" style={{ marginTop: 10 }}><Act act="bridgeTest" className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}</div>
+      <div className="row" style={{ marginTop: 10 }}><Act act={c.key ? "bridgeTest" : "bridgeConnect"} className="btn small primary">{c.key ? "Check connection" : "Connect"}</Act>{c.key && <Act act="bridgeOff">Disconnect</Act>}</div>
       <div style={{ margin: "12px 0 0" }}><TallyStates co={S.coId ? CO() : null} /></div>
       {!(Bridge.on() && Bridge.up()) && <SetupSteps />}
       {c.key && <div style={{ marginTop: 12 }}>{st.state === "ok" ? <>
