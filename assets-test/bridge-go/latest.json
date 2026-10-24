@@ -1,5 +1,5 @@
 {
- "at": "2026-10-22T03:21:04Z",
- "bridge": {"version": "2.4.5", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-2.4.5.exe", "sha256": "17e2fff318ae0c95a40d9ba27bc16828ce09652b237d80d7d16ce6695464537c", "requireSignature": false},
- "setup": {"version": "2.4.5", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.4.5.exe", "sha256": "bfe87c2afc3c5ad737e83e6c3aba8c33a80ae8e1a966c36640c4eeee64fa0168"}
+ "at": "2026-10-24T18:12:07Z",
+ "bridge": {"version": "2.4.6", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-2.4.6.exe", "sha256": "d7b5a613130b3d479037105a26c987180f8a8b7550648658aea6cf88eb5ceecf", "requireSignature": false},
+ "setup": {"version": "2.4.6", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.4.6.exe", "sha256": "a64a93cf596a1c644ee352ed69ca75b7ff53d689e481d224f654abd9f4a55917"}
 }
