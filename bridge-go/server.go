@@ -31,10 +31,11 @@ func newPairCode() string {
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%06d", binary.LittleEndian.Uint32(b)%1000000)
 }
-func openPairWindow(min int) {
+func openPairWindow(min int) (string, time.Time) {
 	pairMu.Lock()
+	defer pairMu.Unlock()
 	pairCode, pairUntil, pairTries = newPairCode(), time.Now().Add(time.Duration(min)*time.Minute), 0
-	pairMu.Unlock()
+	return pairCode, pairUntil // 2.4.6: read under the same lock (freshPairCode)
 }
 
 // the pages allowed to talk to the bridge: FinCom's own addresses (settings: AllowedOrigins); 'http://localhost' any port

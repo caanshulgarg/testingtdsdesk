@@ -416,6 +416,7 @@ func installCmd(args []string) int {
 	}
 	installLog(fmt.Sprintf("Install: FinCom Bridge %s for %s (%s), %s mode, folder %s", BridgeVersion, o.name, o.sid, mode, o.home))
 	_ = os.MkdirAll(o.home, 0o755)
+	clearPairOpenFiles(o.home) // 2.4.6: an earlier install's first-start ask never outlives this install (pairopen.go)
 	stopService()
 	cfgPath, code := writeSettings(o, mode, fincom)
 	if code != 0 {

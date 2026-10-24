@@ -93,6 +93,9 @@ func newPairStand(t *testing.T, extra string) *pairStand {
 	pairMu.Lock()
 	pairUntil, pairTries = time.Time{}, 0
 	pairMu.Unlock()
+	pairOpenMu.Lock()
+	pairOpenStuck = false
+	pairOpenMu.Unlock()
 	return &pairStand{t: t}
 }
 
@@ -213,7 +216,8 @@ func dueAt(t *testing.T, ago time.Duration, now bool) {
 	if !dueExists() {
 		t.Fatal("the install did not note the first start")
 	}
-	b, _ := json.Marshal(M{"at": fmtTime(time.Now().Add(-ago)), "version": BridgeVersion})
+	at := time.Now().Add(-ago)
+	b, _ := json.Marshal(M{"at": fmtTime(at), "atUnix": at.Unix(), "version": BridgeVersion})
 	_ = os.WriteFile(filepath.Join(Home, pairOpenDueName), b, 0o644)
 	if now && connectCmd([]string{"--first"}) != 0 {
 		t.Fatal("connect --first")
@@ -323,11 +327,19 @@ func TestFinishPageAsksAtOnceOrDrops(t *testing.T) {
 }
 
 func TestFirstStartNotWhenConnectedOrPaired(t *testing.T) {
-	// connected to FinCom already (an upgrade of a working computer): the first start opens nothing
+	// connected to FinCom already (an upgrade of a working computer): the first start opens nothing; the ask is dropped
+	// (a later disconnect never finds it)
 	p := newPairStand(t, `,"CloudUrl":"http://127.0.0.1:1","CloudKey":"plain:fcd_test"`)
+	dueAt(t, 10*time.Second, false)
+	if truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
+		t.Fatal("connected: taken within the grace")
+	}
 	dueAt(t, pairOpenGrace+time.Second, false)
-	if truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 {
-		t.Fatalf("connected: opened %v", p.opened)
+	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 || len(p.shown) != 0 {
+		t.Fatalf("connected: opened %v shown %v", p.opened, p.shown)
+	}
+	if dueExists() || logLines("Already connected to FinCom: the install's first-start opening of FinCom is not needed") != 1 {
+		t.Fatal("connected: the ask kept, or not said once")
 	}
 	// the service of an upgrade whose computer key is still protected for the Windows user (not handed over yet): the
 	// same (connected before), though it cannot read the key
@@ -336,7 +348,7 @@ func TestFirstStartNotWhenConnectedOrPaired(t *testing.T) {
 		t.Fatal("the stand reads a dpapi key")
 	}
 	dueAt(t, pairOpenGrace+time.Second, false)
-	if truthy(trayStatus()["pairOpenReady"]) || trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 {
+	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 0 {
 		t.Fatalf("connected, key not handed over: opened %v", p.opened)
 	}
 	// connected, the Finish page ticked: FinCom opens, without a code (no pairing window opened)
@@ -397,8 +409,41 @@ func TestFirstStartNotTakenWhenStuck(t *testing.T) {
 			t.Fatal("taken though the ask stays")
 		}
 	}
-	if len(p.opened) != 0 {
-		t.Fatalf("opened %v", p.opened)
+	if len(p.opened) != 0 || logLines("could not be taken") != 1 || truthy(trayStatus()["pairOpenReady"]) {
+		t.Fatalf("opened %v; said %d times", p.opened, logLines("could not be taken"))
+	}
+}
+
+// the grace is timed in Unix seconds: a clock change never moves it; a clock set back over an hour counts as old
+func TestFirstStartGraceClock(t *testing.T) {
+	p := newPairStand(t, "")
+	dueAt(t, -30*time.Minute, false) // written "in the future" (DST back): not yet
+	if truthy(trayStatus()["pairOpenReady"]) {
+		t.Fatal("ready 30 minutes ahead")
+	}
+	dueAt(t, -2*time.Hour, false) // the clock set back by hours
+	if !truthy(trayStatus()["pairOpenReady"]) {
+		t.Fatal("not ready after a clock set back")
+	}
+	b, _ := json.Marshal(M{"at": "garbled"})
+	_ = os.WriteFile(filepath.Join(Home, pairOpenDueName), b, 0o644)
+	if !truthy(trayStatus()["pairOpenReady"]) || !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) {
+		t.Fatal("an unreadable time not taken as old")
+	}
+}
+
+// a stray "at once" from a connect that lost the race with the tray: removed, a later install keeps its grace
+func TestConnectAfterTakeLeavesNoStray(t *testing.T) {
+	newPairStand(t, "")
+	connectCmd([]string{"--first"}) // nothing due
+	if exists(filepath.Join(Home, pairOpenNowName)) {
+		t.Fatal("a stray at-once file")
+	}
+	_ = os.WriteFile(filepath.Join(Home, pairOpenNowName), []byte("x"), 0o644)
+	clearPairOpenFiles(Home) // the next install's start
+	dueAt(t, time.Second, false)
+	if truthy(trayStatus()["pairOpenReady"]) {
+		t.Fatal("the stray made a later install's ask ready at once")
 	}
 }
 

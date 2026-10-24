@@ -141,9 +141,13 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 		return false
 	}
 	if truthy(r["plain"]) {
-		if u, ok := fincomPlainURL(fincom); ok {
-			e.open(u)
+		if may, _ := mayOpenBrowser(e.facts); may {
+			if u, ok := fincomPlainURL(fincom); ok {
+				e.open(u)
+				return true
+			}
 		}
+		e.show("FinCom Bridge", "This computer is connected to FinCom. Open "+fincom+" in a browser on this computer.", false)
 		return true
 	}
 	if str(r["code"]) != "" {
@@ -164,6 +168,7 @@ var pairOpenGrace = 2 * time.Minute
 
 var pairOpenMu sync.Mutex
 var pairOpenRemove = os.Remove // the tests: a file an antivirus holds
+var pairOpenStuck bool         // the ask could not be removed: said once, never taken again until the bridge restarts
 
 func pairOpenDueFile() string { return filepath.Join(Home, pairOpenDueName) }
 func pairOpenNowFile() string { return filepath.Join(Home, pairOpenNowName) }
@@ -171,8 +176,7 @@ func pairOpenNowFile() string { return filepath.Join(Home, pairOpenNowName) }
 // the install's end (installCmd, installUserCmd): an earlier install's ask cleared; asked again only when the setup
 // asked (--pairopen, a person at the setup) and the bridge answers (rc 0), timed from then for the Finish page's grace
 func notePairOpen(home string, args []string, rc int, logf func(string)) {
-	_ = os.Remove(filepath.Join(home, pairOpenNowName))
-	_ = os.Remove(filepath.Join(home, pairOpenDueName))
+	clearPairOpenFiles(home)
 	if rc != 0 || !contains(args, "--pairopen") {
 		return
 	}
@@ -181,8 +185,16 @@ func notePairOpen(home string, args []string, rc int, logf func(string)) {
 	}
 }
 
+// the install's start (before the bridge is stopped and started again): an earlier install's ask never outlives it
+func clearPairOpenFiles(home string) {
+	_ = os.Remove(filepath.Join(home, pairOpenNowName))
+	_ = os.Remove(filepath.Join(home, pairOpenDueName))
+}
+
+// "atUnix" times the grace (a clock change never moves it); "at" for people
 func markPairOpenDue(home string) error {
-	return saveFile(filepath.Join(home, pairOpenDueName), jsonText(M{"at": fmtTime(time.Now()), "version": BridgeVersion}))
+	now := time.Now()
+	return saveFile(filepath.Join(home, pairOpenDueName), jsonText(M{"at": fmtTime(now), "atUnix": now.Unix(), "version": BridgeVersion}))
 }
 
 // connected to FinCom before (its cloud address and a computer key, readable or still protected for the Windows user:
@@ -191,24 +203,23 @@ func pairOpenConnected() bool {
 	return cfgS("CloudUrl") != "" && (cfgS("CloudKeyGo") != "" || cfgS("CloudKey") != "")
 }
 
-// the ask read, nothing changed: ready when asked at once (the Finish page), or 2 minutes old and this computer never
-// connected to FinCom. Call with pairOpenMu held
+// the ask read, nothing changed: ready (for the owner's tray to take) when asked at once (the Finish page), or 2 minutes
+// old (the take then opens nothing on a computer connected before, and drops the ask). An ask that could not be removed
+// is never ready again until the bridge restarts. Call with pairOpenMu held
 func pairOpenStateLocked() (due, now, ready bool) {
 	f := pairOpenDueFile()
-	if !exists(f) {
-		return false, false, false
+	if !exists(f) || pairOpenStuck {
+		return exists(f), false, false
 	}
 	if exists(pairOpenNowFile()) {
 		return true, true, true
 	}
-	if pairOpenConnected() {
-		return true, false, false
+	m := readObjFile(f)
+	at := time.Unix(int64(num(m["atUnix"])), 0)
+	if num(m["atUnix"]) <= 0 {
+		return true, false, true // no readable time: as old
 	}
-	at, err := time.ParseInLocation("2006-01-02T15:04:05", str(readObjFile(f)["at"]), time.Local)
-	if err != nil {
-		return true, false, true // unreadable time: as old
-	}
-	return true, false, time.Since(at) >= pairOpenGrace
+	return true, false, time.Since(at) >= pairOpenGrace || time.Until(at) > time.Hour // a clock set back: as old
 }
 
 func pairOpenReady() bool {
@@ -231,10 +242,8 @@ func clearPairOpenDue(why string) {
 
 // a fresh connect window of min minutes: its code and end, as /paircode gives them
 func freshPairCode(min int) (code, until string) {
-	openPairWindow(min)
-	pairMu.Lock()
-	defer pairMu.Unlock()
-	return pairCode, pairUntil.Format("2006-01-02T15:04:05")
+	c, u := openPairWindow(min)
+	return c, u.Format("2006-01-02T15:04:05")
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state
@@ -254,14 +263,20 @@ func pairOpenRoute(method string, body M) (M, error) {
 		pairOpenMu.Unlock()
 		return M{"ok": true, "take": false}, nil
 	}
-	// taken only when the ask is gone: a file that cannot be removed is never taken again and again
+	// taken only when the ask is gone: a file that cannot be removed is said once and never taken again
 	if err := pairOpenRemove(pairOpenDueFile()); err != nil {
+		pairOpenStuck = true
 		pairOpenMu.Unlock()
 		writeLog("The install's first-start opening of FinCom could not be taken (" + err.Error() + "); FinCom is not opened by itself.")
 		return M{"ok": true, "take": false}, nil
 	}
 	_ = os.Remove(pairOpenNowFile())
 	pairOpenMu.Unlock()
+	if !now && pairOpenConnected() {
+		// an upgrade of a computer connected before, the Finish page never answered: nothing to open, the ask dropped
+		writeLog("Already connected to FinCom: the install's first-start opening of FinCom is not needed.")
+		return M{"ok": true, "take": false}, nil
+	}
 	how := fmt.Sprintf("the first start after the setup, session %d", toInt(body["session"]))
 	if now {
 		how += ", the setup's Finish page: Open FinCom to connect ticked"
@@ -289,5 +304,8 @@ func connectCmd(args []string) int {
 		return 0
 	}
 	_ = saveFile(pairOpenNowFile(), fmtTime(time.Now()))
+	if !exists(pairOpenDueFile()) {
+		_ = os.Remove(pairOpenNowFile()) // the tray took the ask meanwhile: no stray "at once" for a later install
+	}
 	return 0
 }

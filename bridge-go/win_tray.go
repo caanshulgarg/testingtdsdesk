@@ -203,15 +203,9 @@ func trayCall(method, path string, body any) M {
 func trayPairEnv() pairOpenEnv {
 	o := cfgS("Owner")
 	return pairOpenEnv{
-		call: trayCall,
-		open: func(u string) { shellOpen(u, "") },
-		show: func(title, text string, warn bool) {
-			icon := uintptr(mbIconInfo)
-			if warn {
-				icon = mbIconWarning
-			}
-			msgBox(title, text, icon)
-		},
+		call:  trayCall,
+		open:  openURL,
+		show:  showMessage,
 		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: o == "" || sameUser(o, currentUser())},
 	}
 }
