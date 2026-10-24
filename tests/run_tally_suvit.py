@@ -188,7 +188,7 @@ def main():
         ok(calls("tally_want_update") == [["tally_want_update", {"p_client": cid}]], "4. Sync now: the existing Update now (tally_want_update) (%s)" % calls())
         pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % VMS); pg.wait_for_timeout(300)
         items = E("(co) => [...document.querySelectorAll('#app [data-tco-row=\"' + co + '\"] .bk-menu-list button')].map(b => b.innerText.split('\\n')[0])", VMS)
-        ok(items == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "Read the kept day books again", "Open client"], "4. ⋯: Sync master, Sync vouchers, Post entries here, Link to another client, Unlink, …; no Day Book while this year's days are in (%s)" % items)
+        ok(items == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "4. ⋯: Sync master, Sync vouchers, Post entries here, Link to another client, Unlink, …; no Day Book while this year's days are in (%s)" % items)
         pg.click('#app [data-tco-row="%s"] [data-tco-not-this]' % VMS); pg.wait_for_timeout(300)
         pg.select_option('#app [data-tco-row="%s"] [data-tco-relink-pick]' % VMS, gs)
         E("() => { window.__calls = []; }")

@@ -36,7 +36,9 @@ with sync_playwright() as p:
     pg.evaluate("() => { const c = newCompany({name: 'ZZ Delta Foods', gstin: '', tallyName: 'Delta Foods (Tally)'}); c.stats = {drafts: 3, check: 1, waiting: 2}; S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; }")
     pg.click('#side .side-link[data-side="Clients"]'); pg.wait_for_timeout(700)   # ui-tidy: Clients (was All clients)
     ok("2 clients" in app() and pg.locator("#app table.data tbody tr").count() == 2, "Clients: both in the list")
-    ok("Tally: Delta Foods (Tally)" in app(), "a Tally name that differs is shown under the client")
+    # 24-Oct-2026 (next-tally-one-page): under the client, its company in Tally as the cloud links it; a Tally name typed
+    # alone (a hint, not a link) is not shown as if linked
+    ok("Tally: Delta Foods (Tally)" not in app() and pg.locator("#app [data-client-tally-co]").count() == 0, "a Tally name typed alone is not shown as the client's Tally company")
     pg.fill('input[placeholder="Name, GSTIN, PAN or Tally name"]', "delta"); pg.wait_for_timeout(300)
     ok(pg.locator("#app table.data tbody tr").count() == 1 and "ZZ Delta Foods" in app(), "Find a client narrows the list")
     pg.evaluate("render()"); pg.wait_for_timeout(300)
