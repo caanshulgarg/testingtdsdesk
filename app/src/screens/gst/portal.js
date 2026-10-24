@@ -276,6 +276,9 @@ export function r3bBills(id, ym, reg, t) {
       break; }
     default: return null;
   }
+  // next-gstr1-excel: what FinCom's GSTR-1 corrections (an Excel brought back) change in 3.1
+  const fx = t.r1Fix && { "3.1a": t.r1Fix.a, "3.1b": t.r1Fix.b, "3.1c": t.r1Fix.c && { taxable: t.r1Fix.c.taxable }, "3.1e": t.r1Fix.e && { taxable: t.r1Fix.e.taxable } }[id];
+  if (fx) A("GSTR-1 corrected in FinCom (Excel brought back)", fx);
   // next-itc-simple: the adjustments typed on Final credit for 3B (app/src/lib/itcFinal.js) are in the figure
   if (t.itcAdj && t.itcAdj[id] && id !== "4C") A("Adjustments added in FinCom", t.itcAdj[id]);
   // next-itc-excel-edit: lines marked ineligible (or eligible, or not ours) in FinCom against what the books say

@@ -36,3 +36,18 @@
   #app [data-itc-final] table.if-table td:first-child { min-width: 160px; }
   #app table.bk-table.ic-table .ic-dec { min-width: 130px; }
 }
+
+/* GSTR-1's Excel brought back (next-gstr1-excel, R1Excel.jsx): errors, warnings, and each table's changes */
+.itc-pop .r1x-errs, .itc-pop .r1x-warns { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; }
+.itc-pop .r1x-errs { border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); background: color-mix(in oklab, var(--bad) 7%, transparent); }
+.itc-pop .r1x-warns { border-color: color-mix(in oklab, var(--warn, #b7791f) 45%, var(--border)); }
+.itc-pop .r1x-ok { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.itc-pop .r1x-t { border-top: 1px solid var(--border); padding-top: 4px; }
+.itc-pop .r1x-list { list-style: none; padding-left: 0; font-size: 13px; }
+.itc-pop .r1x-list > li { margin: 3px 0; overflow-wrap: anywhere; }
+.itc-pop .r1x-list ul { list-style: disc; }
+.itc-pop .r1x-list s { color: var(--text-secondary, var(--muted)); }
+.itc-pop tr.bad td { color: var(--bad); }
+.itc-pop [data-r1x-preview] { display: grid; gap: 8px; min-width: 0; }
+.itc-pop [data-r1x-preview] > * { min-width: 0; }
+.itc-pop [data-r1x-preview] h4 { overflow-wrap: anywhere; }

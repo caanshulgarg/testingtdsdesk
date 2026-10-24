@@ -1,0 +1,243 @@
+{
+ "cmp": "09AAACZ1234A1Z5",
+ "reg": "09",
+ "cid": "zzg1x1",
+ "vouchers": [
+  {
+   "id": "s10",
+   "type": "Sales",
+   "date": "20260410",
+   "no": "S/101",
+   "party": "Bravo Retail",
+   "gstin": "09AABCB1234B1ZE",
+   "pos": "UTTAR PRADESH",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "8471"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Bravo Retail",
+     "a": -118000
+    },
+    {
+     "l": "Sales",
+     "a": 100000,
+     "h": "8471",
+     "gr": 18,
+     "q": 10,
+     "u": "NOS",
+     "sp": "Goods",
+     "hd": "Laptop"
+    },
+    {
+     "l": "CGST",
+     "a": 9000
+    },
+    {
+     "l": "SGST",
+     "a": 9000
+    }
+   ]
+  },
+  {
+   "id": "s12",
+   "type": "Sales",
+   "date": "20260412",
+   "no": "S/102",
+   "party": "Charlie Corp",
+   "gstin": "07AABCC5678C1ZR",
+   "pos": "DELHI",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "8471"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Charlie Corp",
+     "a": -59000
+    },
+    {
+     "l": "Sales",
+     "a": 50000,
+     "h": "8471",
+     "gr": 18,
+     "q": 5,
+     "u": "NOS",
+     "sp": "Goods",
+     "hd": "Laptop"
+    },
+    {
+     "l": "IGST",
+     "a": 9000
+    }
+   ]
+  },
+  {
+   "id": "s14",
+   "type": "Sales",
+   "date": "20260414",
+   "no": "S/103",
+   "party": "Kilo Retail",
+   "gstin": "",
+   "pos": "UTTAR PRADESH",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "9983"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Kilo Retail",
+     "a": -23600
+    },
+    {
+     "l": "Sales",
+     "a": 20000,
+     "h": "9983",
+     "gr": 18,
+     "q": 0,
+     "u": "",
+     "sp": "Services",
+     "hd": "Repairs"
+    },
+    {
+     "l": "CGST",
+     "a": 1800
+    },
+    {
+     "l": "SGST",
+     "a": 1800
+    }
+   ]
+  },
+  {
+   "id": "s16",
+   "type": "Sales",
+   "date": "20260416",
+   "no": "S/104",
+   "party": "Lima Traders",
+   "gstin": "",
+   "pos": "DELHI",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "8471"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Lima Traders",
+     "a": -236000
+    },
+    {
+     "l": "Sales",
+     "a": 200000,
+     "h": "8471",
+     "gr": 18,
+     "q": 20,
+     "u": "NOS",
+     "sp": "Goods",
+     "hd": "Laptop"
+    },
+    {
+     "l": "IGST",
+     "a": 36000
+    }
+   ]
+  },
+  {
+   "id": "s18",
+   "type": "Sales",
+   "date": "20260418",
+   "no": "S/105",
+   "party": "Kilo Retail",
+   "gstin": "",
+   "pos": "UTTAR PRADESH",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "0401"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Kilo Retail",
+     "a": -5000
+    },
+    {
+     "l": "Sales",
+     "a": 5000,
+     "h": "0401",
+     "gr": 0,
+     "q": 50,
+     "u": "LTR",
+     "sp": "Goods",
+     "hd": "Milk"
+    }
+   ],
+   "taxability": "Nil Rated"
+  },
+  {
+   "id": "s20",
+   "type": "Credit Note",
+   "date": "20260420",
+   "no": "CN/1",
+   "party": "Bravo Retail",
+   "gstin": "09AABCB1234B1ZE",
+   "pos": "UTTAR PRADESH",
+   "cmp": "09AAACZ1234A1Z5",
+   "narr": "",
+   "hsn": [
+    "8471"
+   ],
+   "cancel": false,
+   "opt": false,
+   "ent": [
+    {
+     "l": "Bravo Retail",
+     "a": 11800
+    },
+    {
+     "l": "Sales",
+     "a": -10000,
+     "h": "8471",
+     "gr": 18,
+     "q": 1,
+     "u": "NOS",
+     "sp": "Goods",
+     "hd": "Laptop"
+    },
+    {
+     "l": "CGST",
+     "a": -900
+    },
+    {
+     "l": "SGST",
+     "a": -900
+    }
+   ]
+  }
+ ],
+ "parties": [
+  "Bravo Retail",
+  "Charlie Corp",
+  "Kilo Retail",
+  "Lima Traders"
+ ],
+ "gstins": {
+  "GB": "09AABCB1234B1ZE",
+  "GC": "07AABCC5678C1ZR",
+  "GD": "09AABCD4321D1Z6"
+ }
+}

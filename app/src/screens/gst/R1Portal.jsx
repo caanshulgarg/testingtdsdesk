@@ -20,6 +20,8 @@ const FILTERS = { b2b: ["ctin", "pos", "rate", "typ"], b2cl: ["pos", "rate"], ex
 export function r1PortalData(ym, reg) {
   const full = GSTR.toJson(ym, reg), plain = GSTR.toJson(ym, reg, { plain: true }), g = GSTR.one(ym, reg), names = {};
   g.rows.forEach((r) => { if (r.gstin && !names[r.gstin]) names[r.gstin] = r.party; });
+  // next-gstr1-excel: a receiver's name given in the GSTR-1 Excel
+  if (typeof R1Fix === "object") Object.assign(names, R1Fix.names(reg, ym));
   // table 14: an operator's GSTIN → its name (Amazon, Flipkart)
   GSTR.eco14(ym, reg, g).a.forEach((x) => { if (!names[x.etin]) names[x.etin] = GSTR.ECO_NAME[x.eco] || x.eco; });
   let amend = [];
