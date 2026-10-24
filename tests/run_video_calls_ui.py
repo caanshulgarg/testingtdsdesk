@@ -14,13 +14,24 @@ process (tests/calls_stand.py), peer to peer between the browsers for real (WebR
   9. raise hand and a reaction reach the others; mute all mutes the others
  10. the host ends the call: the transcript (stubbed Whisper) in the order said with names, the summary (stubbed AI),
      the action items added to the client's due list
-Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_video_calls_ui.py
+Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_video_calls_ui.py (CALLS_PORT=8462 for a
+second run beside it)
 CALL_SHOTS=<folder> saves screenshots."""
 import os, sys, hashlib, time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 from calls_stand import *
 from playwright.sync_api import sync_playwright
-PORT = 8461
+PORT = int(os.environ.get("CALLS_PORT", "8461"))   # another port: two runs side by side
+# the fake microphone says something all the time (a steady tone, as a person talking), as in run_calls_meet_ui.py:
+# Chromium's own fake sound is a short beep a second, so a transcript piece (half a second of speech at least, sampled
+# every 100 ms) from the owner or the guest was now and then too quiet to be sent ("the people's own microphone pieces")
+import wave, math, struct, tempfile
+TONE = os.path.join(tempfile.gettempdir(), "fincom-call-tone-%d.wav" % os.getpid())
+with wave.open(TONE, "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+    w.writeframes(b"".join(struct.pack("<h", int(9000 * math.sin(2 * math.pi * 330 * i / 16000) * (0.6 + 0.4 * math.sin(2 * math.pi * 3 * i / 16000)))) for i in range(16000 * 4)))
+ARGS = ARGS + ["--use-file-for-fake-audio-capture=" + TONE]
+import atexit; atexit.register(lambda: os.path.exists(TONE) and os.remove(TONE))
 serve(PORT)
 C = Checks(); ok = C.ok
 hub, fn, rest = Hub(), Fn(allow_recording=True), Rest()
@@ -116,7 +127,10 @@ with sync_playwright() as p:
     ok(wait_for(A, "!!document.querySelector('[data-knock]') && document.querySelector('[data-knock]').textContent.includes('Ram Kumar wants to join')", 10000), "the host is told over the call: Ram Kumar wants to join")
     press(A, "[data-knock-view]")
     ok(wait_for(A, "!!document.querySelector('[data-waiting=\"Ram Kumar\"]')", 10000), "View: the people list with Ram Kumar waiting")
-    ok("email checked" in A.inner_text("[data-waiting='Ram Kumar']"), "with the email checked")
+    # the people list is the roster the host's screen asks for every 3 s; the knock (and the row) can come from a roster
+    # read before the guest typed the code, so the row says "email checked" at the next read, not at once
+    ok(wait_for(A, "(document.querySelector(\"[data-waiting='Ram Kumar']\") || {textContent: ''}).textContent.includes('email checked')", 10000),
+       "with the email checked (%r)" % A.evaluate("(document.querySelector(\"[data-waiting='Ram Kumar']\") || {}).textContent"))
     press(A, "[data-waiting='Ram Kumar'] [data-admit]")
     ok(wait_for(G, "!!document.querySelector('#fincom-call [data-call=in]')", 10000), "admitted: the guest is in the call at once")
     ok(wait_for(A, "document.querySelectorAll('#fincom-call [data-tile]').length === 3", 20000), "three in the call (%s)" % tiles(A))
@@ -165,8 +179,13 @@ with sync_playwright() as p:
     ok(wait_for(A, "document.querySelectorAll('#fincom-call [data-tile]').length === 2", 15000), "two left in the call")
     ok(fn.people[[k for k, v in fn.people.items() if v["name"] == "Ram Kumar"][0]]["state"] == "removed", "the function marked them removed")
     ok(wait_for(B, "[...document.querySelectorAll('#fincom-call [data-tile]')].length === 2", 10000), "the owner's call goes on")
+    # the host joins the new channel at once; the owner only after the "rekey" broadcast and its own "topic" request, so
+    # the channel's members are waited for (as the page's own state is above), not read at one moment
+    moved = lambda: [t for t in hub.topics_of(lambda t: t.startswith("realtime:call:") and t.endswith("-e2")) if len(hub.members.get(t, {})) >= 2]
+    t0 = time.time()
+    while time.time() - t0 < 15 and not moved(): pump([A, B], 250)
     newtopics = hub.topics_of(lambda t: t.startswith("realtime:call:") and t.endswith("-e2"))
-    ok(len(newtopics) == 1 and len(set(id(x) for x in hub.members.get(newtopics[0], {}))) >= 2 if newtopics else False, "the host and the owner moved to the new channel (%s)" % newtopics)
+    ok(len(newtopics) == 1 and moved() == newtopics, "the host and the owner moved to the new channel (%s, members %s)" % (newtopics, [len(hub.members.get(t, {})) for t in newtopics]))
     shot(A, "08-after-remove")
 
     print("10. the end: transcript, summary, action items")
