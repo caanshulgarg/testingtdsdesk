@@ -1,7 +1,7 @@
 FINCOM 2.4.7 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.7.exe
-Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799 (FinComBridge-Setup-2.4.7.exe, built 25-Oct-2026 02:23 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.7 changes (the owner's "yes" of 24-Oct-2026: close the pairing gap of the 2.4.6 security review; nothing new is
 asked of Tally; FinCom's page is updated with it and must be the review build of the same day or later):
