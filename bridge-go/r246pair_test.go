@@ -419,10 +419,15 @@ func TestFirstStartNotTakenWhenStuck(t *testing.T) {
 // the grace is timed in Unix seconds: a clock change never moves it; a clock set back over an hour counts as old
 func TestFirstStartGraceClock(t *testing.T) {
 	p := newPairStand(t, "")
-	dueAt(t, -30*time.Minute, false) // written "in the future" (DST back): not yet
+	dueAt(t, -30*time.Minute, false) // written "in the future" (a clock stepped back): not yet
 	if truthy(trayStatus()["pairOpenReady"]) {
 		t.Fatal("ready 30 minutes ahead")
 	}
+	dueAt(t, -30*time.Minute, true) // the same, the Finish page ticked: opened at once
+	if !trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
+		t.Fatalf("ticked, 30 minutes ahead: opened %v", p.opened)
+	}
+	p.opened = nil
 	dueAt(t, -2*time.Hour, false) // the clock set back by hours
 	if !truthy(trayStatus()["pairOpenReady"]) {
 		t.Fatal("not ready after a clock set back")
@@ -558,5 +563,18 @@ func TestRelease246VersionAllowListUnchanged(t *testing.T) {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the test sheet does not say %q", w)
 		}
+	}
+}
+
+// the program that answered the take is not this install's bridge (any more) when FinCom would open: nothing opened, no
+// code shown
+func TestFirstStartPortNotOwn(t *testing.T) {
+	p := newPairStand(t, "")
+	dueAt(t, 0, true)
+	e := p.env(ownSessionFacts)
+	e.verify = func() bool { return false }
+	trayFirstOpen(e, fincomURL())
+	if len(p.opened) != 0 || len(p.shown) != 0 {
+		t.Fatalf("opened %v shown %v", p.opened, p.shown)
 	}
 }

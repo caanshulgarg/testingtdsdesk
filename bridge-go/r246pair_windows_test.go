@@ -50,7 +50,7 @@ func TestWindowsBridgeIsOwnOn(t *testing.T) {
 	if bridgeIsOwnOn(port, false) {
 		t.Fatal("a listener that is not the service's taken as the service")
 	}
-	if servicePID() != 0 {
-		t.Skip("the FinCom Bridge service runs here")
-	}
+	// the service's branch is met for real by the bridge-windows workflow's install for all users and the real-Tally
+	// harness; here only: no service, no id
+	t.Logf("servicePID() = %d", servicePID())
 }

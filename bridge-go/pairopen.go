@@ -81,10 +81,11 @@ func mayOpenBrowser(f browserFacts) (bool, string) {
 
 // what the tray hands to the shared steps (the tests give stand-ins)
 type pairOpenEnv struct {
-	call  func(method, path string, body any) M
-	open  func(u string)
-	show  func(title, text string, warn bool)
-	facts browserFacts
+	call   func(method, path string, body any) M
+	open   func(u string)
+	show   func(title, text string, warn bool)
+	verify func() bool // the first start: the bridge's port still this install's bridge, right before FinCom opens (nil: yes)
+	facts  browserFacts
 }
 
 func untilHM(s string) string {
@@ -138,6 +139,9 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 	r := e.call("POST", "/tray/pairopen", M{"action": "take", "session": e.facts.Session})
 	if r == nil || !truthy(r["take"]) {
 		return false
+	}
+	if e.verify != nil && !e.verify() {
+		return true // taken from a program that is not this install's bridge (any more): nothing opened, no code shown
 	}
 	if truthy(r["plain"]) {
 		if may, _ := mayOpenBrowser(e.facts); may {
@@ -224,7 +228,7 @@ func pairOpenStateLocked(st pairStore) (due, now, ready bool, age time.Duration)
 	if sec <= 0 || time.Until(at) > time.Hour {
 		return true, now, true, -1
 	}
-	age = time.Since(at)
+	age = max(time.Since(at), 0) // a little ahead (a small clock step back): as just written
 	return true, now, now || age >= pairOpenGrace, age
 }
 
@@ -280,7 +284,7 @@ func pairOpenRoute(method string, body M) (M, error) {
 	}
 	_ = st.del(pairNowVal)
 	pairOpenMu.Unlock()
-	if age < 0 || age > pairOpenMaxAge {
+	if age == -1 || age > pairOpenMaxAge {
 		why := "is over a day old"
 		if age < 0 {
 			why = "has a time that cannot be trusted (unreadable, or the clock was set back)"

@@ -204,10 +204,11 @@ func trayPairEnv() pairOpenEnv {
 	// the bridge's owner by the Windows account's SID (the install's OwnerSid), not by the session's user name
 	own := cfgS("OwnerSid")
 	return pairOpenEnv{
-		call:  trayCall,
-		open:  openURL,
-		show:  showMessage,
-		facts: browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: own != "" && strings.EqualFold(own, userSID())},
+		call:   trayCall,
+		open:   openURL,
+		show:   showMessage,
+		verify: trayBridgeIsOwn,
+		facts:  browserFacts{Session: ownSession(), Service: isWindowsService(), OwnerOK: own != "" && strings.EqualFold(own, userSID())},
 	}
 }
 
@@ -313,7 +314,7 @@ func (t *tray) check(st M) {
 }
 
 func (t *tray) poll() {
-	keyTried := time.Time{}
+	keyTried, ownChecked := time.Time{}, time.Time{}
 	for {
 		trayCall("POST", "/tray/idle", M{"idleSec": localIdleSec(), "tallyFront": localFrontIsTally(), "session": ownSession()})
 		st := trayCall("GET", "/tray/status", nil)
@@ -345,10 +346,14 @@ func (t *tray) poll() {
 			// down, FinCom refused this computer's id (Fix 2c), offline, Tally not open: trayProblems (notices.go)
 			t.check(st)
 			// 2.4.6: the first start after the setup: FinCom opens with the code, once per install (pairopen.go)
-			if truthy(st["pairOpenReady"]) && pairOpenAskedHere() && trayBridgeIsOwn() && t.opening.CompareAndSwap(false, true) {
+			// (the port's program checked at most once a minute, and again right before FinCom opens: env.verify)
+			if truthy(st["pairOpenReady"]) && time.Since(ownChecked) > time.Minute && t.opening.CompareAndSwap(false, true) {
+				ownChecked = time.Now()
 				go func(u string) {
 					defer t.opening.Store(false)
-					trayFirstOpen(trayPairEnv(), u)
+					if pairOpenAskedHere() && trayBridgeIsOwn() {
+						trayFirstOpen(trayPairEnv(), u)
+					}
 				}(trayFinComURL(st))
 			}
 			// bridge 1.15.0's computer key, protected for this Windows user: handed to the service, which cannot open it
