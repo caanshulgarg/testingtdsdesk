@@ -482,7 +482,12 @@ def main():
         else:
             ok(False, "the client's Tally chip is on its page")
         at_client("dash")
-        pg.click('[data-tally-sign]'); pg.wait_for_timeout(1200); card("the top bar's Tally sign")
+        # next-tally-firstlink (the owner: "it should be above, on the Tally icon"): VMS EVENTS is open in Tally and no
+        # client's, so the sign carries the badge and opens its panel, starting with [Link to Garg Shekhar & Company]
+        pg.click('[data-tally-sign]'); pg.wait_for_timeout(1200)
+        ok(n('[data-overlay="tallypanel"] [data-tally-offer="VMS EVENTS"] [data-tally-offer-link-to="%s"]' % G) == 1 and n("[data-tally-badge]") == 1,
+           "the top bar's Tally sign (a company open, not linked: its badge): the panel offers Link to this client (%s)" % E("[S.view, S.homeTab, !!S.tallyPanel]"))
+        E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(500)
         # Getting ready's Link to Tally step
         at_client("dash")
         gr = '#app [data-onb-step="link"] button'
