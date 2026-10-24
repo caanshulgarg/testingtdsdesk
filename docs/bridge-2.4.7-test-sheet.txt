@@ -14,8 +14,10 @@ P2. A typed code is checked without ever giving away anything that lets the code
 P3. FinCom opened by the bridge (the tray's Connect FinCom on this computer..., the installer's last page, the first
     start) carries the code and a long secret of that connect window (#pair=123456-<32 letters and digits>); FinCom
     pairs with the secret once the bridge proved it holds it. The message box still shows the 6 digits only.
-P4. The tray sends the bridge's key only to the program on the bridge's port that proved it holds that key (a program of
-    another Windows user that took the port while the bridge was down gets nothing).
+P4. The tray never sends the bridge's key: it asks the program on the bridge's port to prove it holds the key, then sends
+    a one-use proof for each request and seals what it sends (a program of another Windows user that took the port while
+    the bridge was down gets nothing it can use). A tray of another version than the bridge starts again from the
+    program on disk.
 
 CHECK 10 - CONNECT BY THE TRAY (2.4.7)
    Right-click the FinCom icon near the clock > "Connect FinCom on this computer...".

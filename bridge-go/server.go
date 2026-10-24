@@ -175,8 +175,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 			// computer holding the key: X-Bridge-Key); never to an empty Origin (a page's same-origin request after DNS
 			// rebinding sends none). Both proofs are bound to the bridge's id and port
 			// 2.4.7: the tray (a program: no Origin, no Sec-Fetch headers, X-FinCom-Tray: 1, a header no page can send here
-			// without the bridge's leave) gets the key's proof too, so it sends the key only to
-			// a bridge that proved it holds it (bridgeProves); the window's facts go to FinCom's page and key holders only
+			// without the bridge's leave) gets the key's proof too and a one-use challenge: it never sends the key, only a
+			// proof per request to a bridge that proved it holds the key (pairopen.go trayRequest); the window's facts go to
+			// FinCom's page and key holders only
 			page := (sentOrigin != "" && originOK) || keyGiven(r)
 			program := sentOrigin == "" && r.Header.Get("X-FinCom-Tray") == "1" && r.Header.Get("Sec-Fetch-Site") == "" && r.Header.Get("Sec-Fetch-Mode") == ""
 			if n := qs.Get("n"); n != "" && (page || program) {
@@ -318,7 +319,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		sendJSON(w, 403, M{"ok": false, "error": closedMsg, "closed": true}, origin)
 		return
 	}
-	if r.Header.Get("X-Bridge-Key") != cfgS("Key") && !trayAuthOK(r) { // 2.4.7: or the tray's one-use proof (pairopen.go)
+	// 2.4.7: the key compared in constant time (as before, an install's settings always hold one), or the tray's one-use
+	// proof with its sealed body (pairopen.go trayRequest)
+	keyOK := hmac.Equal([]byte(cfgS("Key")), []byte(r.Header.Get("X-Bridge-Key")))
+	trayCh, trayOK := "", false
+	if !keyOK {
+		trayCh, trayOK = trayAuth(r)
+	}
+	if !keyOK && !trayOK {
 		sendJSON(w, 401, M{"ok": false, "error": "Wrong bridge key. Copy the key shown in the bridge window into FinCom Settings."}, origin)
 		return
 	}
@@ -326,6 +334,14 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		sendJSON(w, 400, M{"ok": false, "error": "Request too large."}, origin)
 		return
+	}
+	if r.Header.Get("X-Bridge-Seal") == "1" {
+		plain, err := trayUnseal(cfgS("Key"), trayCh, string(bodyB))
+		if !trayOK || err != nil {
+			sendJSON(w, 400, M{"ok": false, "error": "The request's body could not be opened."}, origin)
+			return
+		}
+		bodyB = plain
 	}
 	body := string(bodyB)
 	// FinCom in use on this computer (for the nightly catch-up, when the cloud has no signal): a person's request, not

@@ -14,8 +14,6 @@ import (
 	_ "embed"
 	"encoding/binary"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -182,27 +180,10 @@ var taskbarCreated uintptr
 // --- talking to the service
 func trayCall(method, path string, body any) M {
 	loadConfigRO()
-	var rd io.Reader
-	if body != nil {
-		rd = strings.NewReader(jsonText(body))
-	}
-	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
-	// 2.4.7: the key is never sent: a one-use proof for this request (pairopen.go bridgeAuthorize), and only to a program
-	// on the port that proved it holds the key; another Windows user's program that took the port gets nothing usable
-	auth, ok := bridgeAuthorize(toInt(cfg("Port")), cfgS("Key"), method, req.URL.RequestURI(), 5*time.Second)
-	if !ok {
-		return nil
-	}
-	req.Header.Set("X-Bridge-Auth", auth)
-	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{Proxy: nil}}
-	r, err := c.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer r.Body.Close()
-	b, _ := io.ReadAll(r.Body)
-	return parseObj(string(b))
+	// 2.4.7: the key is never sent: a one-use proof for this request and its body sealed (pairopen.go trayRequest), and
+	// only to a program on the port that proved it holds the key; another Windows user's program that took the port gets
+	// nothing usable. No Origin header: the bridge refuses the tray's addresses to web pages
+	return trayRequest(method, path, body, 15*time.Second, 20*time.Second)
 }
 
 // 2.4.6 (pairopen.go): what the tray opens FinCom with: this session, never the service, only the bridge's owner
@@ -320,7 +301,7 @@ func (t *tray) check(st M) {
 }
 
 func (t *tray) poll() {
-	keyTried, ownChecked := time.Time{}, time.Time{}
+	keyTried, ownChecked, verTried := time.Time{}, time.Time{}, time.Time{}
 	for {
 		trayCall("POST", "/tray/idle", M{"idleSec": localIdleSec(), "tallyFront": localFrontIsTally(), "session": ownSession()})
 		st := trayCall("GET", "/tray/status", nil)
@@ -335,6 +316,15 @@ func (t *tray) poll() {
 		} else if st == nil {
 			t.setIcon(false, trayTip(nil))
 			t.check(nil)
+			// 2.4.7: a bridge of another version (a rollback, or the icon started before an update finished) cannot take
+			// this icon's proofs: when the program on disk is that version, the icon starts again from it (a program on the
+			// port cannot change the program on disk, so it cannot make the icon restart for nothing)
+			if p := pingLocal(toInt(cfg("Port")), 2*time.Second); p != nil && truthy(p["yours"]) && str(p["version"]) != "" && str(p["version"]) != BridgeVersion && time.Since(verTried) > time.Minute {
+				verTried = time.Now()
+				if exe, err := os.Executable(); err == nil && exeVersionFn(exe) == str(p["version"]) {
+					restartTray()
+				}
+			}
 			// switched to main (or installed again): the install's record names other settings, on another port; the icon
 			// starts again from them
 			if c := installedConfig(); !trayConfigGiven && c != "" && exists(c) && !strings.EqualFold(c, ConfigPath) {

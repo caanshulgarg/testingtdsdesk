@@ -1018,7 +1018,7 @@ function resumeRows(all){
         if (typeof startBridgePolling === "function") startBridgePolling();
         if (TCloud.on()){ TCloud.autoAt = 0; setTimeout(() => TCloud.auto(), 0); S.tallyGuide = {}; S.tallyTab = "computers"; if (typeof navHome === "function") navHome("tally"); }
         render();
-      } catch (e){ toast(e && e.closed ? e.message : "Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
+      } catch (e){ toast(e && e.closed ? "This link from FinCom Bridge has run out (a newer one was opened, the bridge started again, or its tries were used). Right-click the FinCom icon near the clock \u203a Connect FinCom on this computer\u2026 again." : "Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
     };
     // after the page has drawn itself
     setTimeout(go, 600);

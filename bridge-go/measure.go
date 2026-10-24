@@ -831,27 +831,9 @@ func localCall(method, path string, body any) M {
 }
 
 func bridgeCall(method, path string, body any, timeout time.Duration) M {
-	var rd io.Reader
-	if body != nil {
-		rd = strings.NewReader(jsonText(body))
-	}
-	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", toInt(cfg("Port")), path), rd)
-	// 2.4.7: never the key itself: a one-use proof for this request, only to a program that proved it holds the key
-	// (pairopen.go bridgeAuthorize)
-	auth, ok := bridgeAuthorize(toInt(cfg("Port")), cfgS("Key"), method, req.URL.RequestURI(), 5*time.Second)
-	if !ok {
-		return nil
-	}
-	req.Header.Set("X-Bridge-Auth", auth)
-	req.Header.Set("Content-Type", "application/json")
-	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
-	r, err := c.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer r.Body.Close()
-	b, _ := io.ReadAll(r.Body)
-	return parseObj(string(b))
+	// 2.4.7: never the key itself: a one-use proof for this request, its body sealed, only to a program that proved it
+	// holds the key (pairopen.go trayRequest)
+	return trayRequest(method, path, body, 15*time.Second, timeout)
 }
 
 // the measuring tool's requests (measure-only on the allow-list)

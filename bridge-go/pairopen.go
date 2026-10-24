@@ -18,9 +18,13 @@ package main
 // The code works as before: once, 10 minutes, proved by pairProof before FinCom sends it. Nothing goes to Tally.
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -281,15 +285,80 @@ func freshPairCode(min int) (code, secret, until string) {
 
 // 2.4.7: the tray (and the measuring tool) never send the bridge key. Before each request: /ping with a fresh nonce
 // proves the program on the port holds the key (else nothing is sent) and hands out a one-use challenge (30 s); the
-// request then carries X-Bridge-Auth: <challenge>.<HMAC(key, "fincom-tray-auth|" challenge "|" method "|" path?query)>.
-// A program that takes the port in between gets only that proof, good for nothing: the bridge takes each challenge it
-// issued once, for that request only, and answers no other Windows user's program.
-func bridgeAuthorize(port int, key, method, requestURI string, timeout time.Duration) (string, bool) {
-	ch, ok := bridgeChallenge(port, key, timeout)
+// request then carries X-Bridge-Auth: <challenge>.<HMAC(key, "fincom-tray-auth|" challenge "|" method "|" path?query)>,
+// and its body sealed (AES-256-GCM under a key made from the bridge key and the challenge: X-Bridge-Seal: 1). A program
+// that takes the port between the two connections gets a proof good for nothing and a body it cannot open: the bridge
+// takes each challenge it issued once, for that request only, and answers no other Windows user's program.
+func trayRequest(method, path string, body any, proofTimeout, timeout time.Duration) M {
+	port, key := toInt(cfg("Port")), cfgS("Key")
+	ch, ok := bridgeChallenge(port, key, proofTimeout)
 	if !ok {
-		return "", false
+		return nil
 	}
-	return ch + "." + trayAuthMAC(key, ch, method, requestURI), true
+	var rd io.Reader
+	sealed := false
+	if body != nil {
+		s, err := traySeal(key, ch, []byte(jsonText(body)))
+		if err != nil {
+			return nil
+		}
+		rd, sealed = strings.NewReader(s), true
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), rd)
+	req.Header.Set("X-Bridge-Auth", ch+"."+trayAuthMAC(key, ch, method, req.URL.RequestURI()))
+	if sealed {
+		req.Header.Set("X-Bridge-Seal", "1")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	return parseObj(string(b))
+}
+
+func traySealKey(key, ch string) []byte {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("fincom-tray-seal|" + ch))
+	return m.Sum(nil)
+}
+
+func traySeal(key, ch string, plain []byte) (string, error) {
+	blk, err := aes.NewCipher(traySealKey(key, ch))
+	if err != nil {
+		return "", err
+	}
+	g, err := cipher.NewGCM(blk)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, g.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(g.Seal(nonce, nonce, plain, []byte(ch))), nil
+}
+
+func trayUnseal(key, ch, sealed string) ([]byte, error) {
+	b, err := hex.DecodeString(strings.TrimSpace(sealed))
+	if err != nil {
+		return nil, err
+	}
+	blk, err := aes.NewCipher(traySealKey(key, ch))
+	if err != nil {
+		return nil, err
+	}
+	g, err := cipher.NewGCM(blk)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) < g.NonceSize() {
+		return nil, errors.New("too short")
+	}
+	return g.Open(nil, b[:g.NonceSize()], b[g.NonceSize():], []byte(ch))
 }
 
 func trayAuthMAC(key, ch, method, requestURI string) string {
@@ -346,35 +415,37 @@ func issueTrayChallenge() string {
 			delete(trayAuthIssued, k)
 		}
 	}
-	if len(trayAuthIssued) >= 64 { // a program asking without using them: the oldest go
-		for k := range trayAuthIssued {
-			delete(trayAuthIssued, k)
-			if len(trayAuthIssued) < 32 {
-				break
+	for len(trayAuthIssued) >= 64 { // a program asking without using them: the oldest (earliest to run out) go first
+		oldest, at := "", time.Time{}
+		for k, exp := range trayAuthIssued {
+			if oldest == "" || exp.Before(at) {
+				oldest, at = k, exp
 			}
 		}
+		delete(trayAuthIssued, oldest)
 	}
 	ch := randHex16() + randHex16()
 	trayAuthIssued[ch] = now.Add(30 * time.Second)
 	return ch
 }
 
-// X-Bridge-Auth: a challenge this bridge issued (taken once), with the key's HMAC over it and this request
-func trayAuthOK(r *http.Request) bool {
+// X-Bridge-Auth: a challenge this bridge issued (taken once), with the key's HMAC over it and this request; the challenge
+// (to open a sealed body) when it holds
+func trayAuth(r *http.Request) (string, bool) {
 	v := r.Header.Get("X-Bridge-Auth")
 	ch, mac, found := strings.Cut(v, ".")
 	key := cfgS("Key")
 	if !found || key == "" || len(ch) != 64 || len(mac) != 64 {
-		return false
+		return "", false
 	}
 	trayAuthMu.Lock()
 	exp, ok := trayAuthIssued[ch]
 	delete(trayAuthIssued, ch)
 	trayAuthMu.Unlock()
-	if !ok || time.Now().After(exp) {
-		return false
+	if !ok || time.Now().After(exp) || !hmac.Equal([]byte(trayAuthMAC(key, ch, r.Method, r.URL.RequestURI())), []byte(mac)) {
+		return "", false
 	}
-	return hmac.Equal([]byte(trayAuthMAC(key, ch, r.Method, r.URL.RequestURI())), []byte(mac))
+	return ch, true
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state

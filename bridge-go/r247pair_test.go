@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -387,11 +388,12 @@ func TestR247KeyOnlyToAProvenBridge(t *testing.T) {
 	if r := bridgeCall("GET", "/status", nil, 2*time.Second); r == nil || r["ok"] != true {
 		t.Fatalf("bridgeCall to the real bridge: %v", r)
 	}
-	// and the tray's own call (win_tray.go's trayCall): a proof for each request, never the key
-	tray := readText("win_tray.go")
-	body := group(`(?s)func trayCall\(method, path string, body any\) M \{(.*?)\n\}`, tray, 1)
-	if !strings.Contains(body, "bridgeAuthorize(") || strings.Index(body, "bridgeAuthorize(") > strings.Index(body, `req.Header.Set("X-Bridge-Auth"`) || strings.Contains(body, "X-Bridge-Key") {
-		t.Fatalf("trayCall sends the key, or no proof first:\n%s", body)
+	// and the tray's own call (win_tray.go's trayCall is trayRequest): a proof for each request, never the key
+	tray := group(`(?s)func trayCall\(method, path string, body any\) M \{(.*?)\n\}`, readText("win_tray.go"), 1)
+	body := group(`(?s)func trayRequest\(.*?\) M \{(.*?)\n\}`, readText("pairopen.go"), 1)
+	if !strings.Contains(tray, "return trayRequest(") || strings.Contains(tray, "X-Bridge-Key") || strings.Contains(body, "X-Bridge-Key") ||
+		strings.Index(body, "bridgeChallenge(") < 0 || strings.Index(body, "bridgeChallenge(") > strings.Index(body, `req.Header.Set("X-Bridge-Auth"`) {
+		t.Fatalf("the tray sends the key, or no proof first:\n%s\n%s", tray, body)
 	}
 }
 
@@ -399,14 +401,19 @@ func TestR247KeyOnlyToAProvenBridge(t *testing.T) {
 func TestR247TrayNeverSendsTheKey(t *testing.T) {
 	newPairStand(t, "")
 	var mu sync.Mutex
-	var keys, auths []string
+	var keys, auths, bodies []string
 	port := startOn(t, func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(strings.NewReader(string(b)))
 		mu.Lock()
 		if k := r.Header.Get("X-Bridge-Key"); k != "" {
 			keys = append(keys, r.URL.Path)
 		}
 		if a := r.Header.Get("X-Bridge-Auth"); a != "" {
 			auths = append(auths, a)
+		}
+		if len(b) > 0 {
+			bodies = append(bodies, string(b))
 		}
 		mu.Unlock()
 		handle(w, r)
@@ -445,6 +452,27 @@ func TestR247TrayNeverSendsTheKey(t *testing.T) {
 	// a made-up challenge
 	if c := do("GET", "/tray/status", strings.Repeat("a", 64)+"."+trayAuthMAC("k246", strings.Repeat("a", 64), "GET", "/tray/status")); c != 401 {
 		t.Fatalf("a challenge the bridge never issued: %d", c)
+	}
+	// a body goes sealed (the cloud key handed over by the tray is in one): the bridge opens it; on the wire it is not JSON
+	if r := bridgeCall("POST", "/tray/pause", M{"on": true}, 2*time.Second); r == nil || !paused() {
+		t.Fatalf("a sealed body not taken: %v", r)
+	}
+	setPaused(false)
+	mu.Lock()
+	bs := append([]string{}, bodies...)
+	mu.Unlock()
+	if len(bs) != 1 || strings.Contains(bs[0], "on") || !regexp.MustCompile(`^[0-9a-f]+$`).MatchString(bs[0]) {
+		t.Fatalf("the body on the wire: %v", bs)
+	}
+	// sealed under another challenge: refused
+	ch2, _ := bridgeChallenge(port, "k246", 2*time.Second)
+	ch3, _ := bridgeChallenge(port, "k246", 2*time.Second)
+	sealed, _ := traySeal("k246", ch3, []byte(`{"on":true}`))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("http://127.0.0.1:%d/tray/pause", port), strings.NewReader(sealed))
+	req.Header.Set("X-Bridge-Auth", ch2+"."+trayAuthMAC("k246", ch2, "POST", "/tray/pause"))
+	req.Header.Set("X-Bridge-Seal", "1")
+	if r, err := http.DefaultClient.Do(req); err != nil || r.StatusCode != 400 || paused() {
+		t.Fatalf("a body sealed under another challenge: %v %v", r, err)
 	}
 	// a challenge is given only to the tray's kind of request (no Origin, X-FinCom-Tray), and only with the key's proof
 	if j := pingAs(t, "https://staging.fincom.live", "nonce0123456789abcdefXYZ&challenge=1", nil); j["challenge"] != nil {
