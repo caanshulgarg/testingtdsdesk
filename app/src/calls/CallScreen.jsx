@@ -285,7 +285,7 @@ function Call({ opts, onClose }) {
     if (phase !== "in" || !sess) return;
     openChannel(sess.topic);
     const local = new MediaStream([...(R.raw ? R.raw.getAudioTracks() : []), ...(outVideo() && cam ? [outVideo()] : [])]);
-    R.media = createMedia(sess.mode, { signal: sig, me: sess.me.id, ice: sess.ice, api,
+    R.media = createMedia(sess.mode, { signal: sig, me: sess.me.id, ice: sess.ice, api, room: sess.room.id,
       onRemote: (pid, s) => { if (!s) R.remotes.delete(pid); else R.remotes.set(pid, Object.assign(R.remotes.get(pid) || {}, s)); force(); },
       onLevel: (l) => { setLevel(l); if (l === "audio") { setAudioOnly(true); say("The line is weak: audio only for now."); } } });
     R.media.start(local).catch((e) => setErr("The call could not connect: " + e.message));

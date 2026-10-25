@@ -1,6 +1,6 @@
 // The media layer of a call, behind one small interface, so another SFU (a self-hosted LiveKit, later) can take its place
 // without the call screen changing:
-//   const m = createMedia(mode, {signal, me, ice, api, onRemote, onLevel});
+//   const m = createMedia(mode, {signal, me, ice, api, room, onRemote, onLevel});   room: the call's id (fincom-call's room_id)
 //   await m.start(localStream)        the camera and microphone (already through the effects, if any)
 //   m.setVideoTrack(track|null)       a new picture (effects on or off, camera off) without a new connection
 //   m.setScreen(stream|null)          the shared screen
@@ -170,13 +170,15 @@ function dummyVideo() {
 }
 
 // ---------------------------------------------------------------- Cloudflare Realtime (SFU)
-function sfuMedia({ signal, me, ice, api, onRemote, onLevel }) {
+function sfuMedia({ signal, me, ice, api, room, onRemote, onLevel }) {
   let pc = null, sessionId = "", local = null, screen = null, level = "high", audioOnly = false, statsTimer = null, chain = Promise.resolve();
   const mine = {};                 // trackName -> sender
   const pulled = new Map();        // mid -> {peer, kind}
   const people = new Map();        // peer -> {sessionId, tracks: [{trackName, kind}], cam, screen}
   const serial = (f) => (chain = chain.then(f, f));
-  const cf = (op, body) => api.call("cf", Object.assign({ op }, body || {}));
+  // 25-Oct-2026 (no picture and no voice in any call since Cloudflare's keys were set): fincom-call finds a member's call
+  // by room_id (a guest's by its pass); without it every step was refused, 400 "Say which call." (tests/run_call_sfu.py)
+  const cf = (op, body) => api.call("cf", Object.assign({ op }, room ? { room_id: room } : {}, body || {}));
   async function push(tracks) {
     const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
     const res = await cf("push", { sdp: { type: "offer", sdp: offer.sdp }, tracks: tracks.map((t) => ({ mid: t.tr.mid, trackName: t.name })) });
