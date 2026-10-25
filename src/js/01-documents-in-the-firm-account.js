@@ -4364,7 +4364,23 @@ function memoKeep(fn){
   if (IN_RENDER || !d || d.gen !== RENDER_GEN || d.books !== S.books || d.rev !== BOOKS_REV || d.co !== S.coId) return memoScope(fn);
   IN_RENDER++; try { return fn(); } finally { IN_RENDER--; }
 }
+// next-fix-books-crash (the owner, 25-Oct-2026 23:45 IST, Mac: TDS, GST, MIS "crashing", then "took too long"; no error
+// reached Sentry): FinCom opened again on a client's TDS page (a reload, a new tab) held the page in one task of 17 s on
+// the Leads stand at 4x (99 s before 25-Oct). React drew the TDS page by itself (the Books screen's file arriving: a render
+// React schedules, not drawReact's memoScope), so IN_RENDER was 0: each part asking for TDS.rows, nrRows, salaryRows,
+// quarters... worked out TDS.allRowsNow over every entry again (105 times), and Books.lines every entry's lines each time.
+// Now such a render is a drawing too: its figures are kept until the task it runs in ends (as within drawReact, whose
+// flushSync is one task). React says whether it is drawing a component (window.__fincomReactRendering, app/src/main.jsx);
+// tests/run_books_reopen_freeze.py
+function reactScope(){
+  if (IN_RENDER || typeof window !== "object" || typeof window.__fincomReactRendering !== "function") return;
+  let on = false; try { on = window.__fincomReactRendering(); } catch (e){ on = false; }
+  if (!on) return;
+  RENDER_GEN++; drawStamp(); IN_RENDER++;
+  queueMicrotask(() => { IN_RENDER--; });
+}
 function perRender(o, key, fn){
+  reactScope();
   if (!IN_RENDER) return fn();
   const m = o._pr = o._pr && o._pr.gen === RENDER_GEN && o._pr.books === S.books ? o._pr : {gen: RENDER_GEN, books: S.books, v: {}};
   if (Object.prototype.hasOwnProperty.call(m.v, key)) return m.v[key];

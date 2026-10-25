@@ -325,6 +325,8 @@ const Books = {
   // the purchase and sales side of a voucher, ready for GST and TDS
   // build 193: an entry's lines are worked out once per drawing or calculation (the same entry is asked many times)
   lines(v){
+    // next-fix-books-crash: a render React schedules by itself is a drawing too (reactScope, src/js/01)
+    if (typeof reactScope === "function") reactScope();
     if (typeof IN_RENDER === "undefined" || !IN_RENDER) return this.linesNow(v);
     const c = this._lc && this._lc.gen === RENDER_GEN && this._lc.books === S.books ? this._lc : (this._lc = {gen: RENDER_GEN, books: S.books, map: new WeakMap()});
     let r = c.map.get(v); if (!r){ r = this.linesNow(v); c.map.set(v, r); }
