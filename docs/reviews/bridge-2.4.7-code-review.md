@@ -5,7 +5,7 @@ the repository. Every round reviewed correctness and security together: rounds 1
 medium as short re-reviews of each set of fixes. Rounds continued until no High or Medium was left open. The security
 summary is in bridge-2.4.7-security-review.md.
 
-Range: 3e00356f0..281635423
+Range: 3e00356f0..a1d9c3806
 
 (next-247-pairsafe starts at 3e00356f0, the head of the published 2.4.6 on staging-next.)
 
@@ -49,6 +49,7 @@ Range: 3e00356f0..281635423
 | 4 | cc92f5072..84baf5eac | 1 Medium: replies to the tray were not authenticated. Lows: candidate order, a flood of challenges by a same-user program, an empty key, the measure tool across versions, a weak test check, connections per poll. | 61fb40fec (reply MAC, empty key refused, candidate order, the test) |
 | 5 | 84baf5eac..61fb40fec | 0 High, 0 Medium. 3 Low: a signed empty 200 on a panic (read as nothing); keyGiven could be reused; a filter condition. | - |
 | 6 | 61fb40fec..281635423 (self-review: the app only, from CI 40131853747) | 0. An address whose code an older bridge does not prove got 2.4.7's run-out words; now those words need a bridge that answered pairV 2, and older bridges keep the words they had (run_bridge_ports_ui 5, run_pair_ui). No bridge source changed. | - |
+| 7 | 281635423..a1d9c3806 (the staging release: the merge of staging-next fff835cf9, tests only; latest.json names 2.4.7, 2.4.6 kept in bridge-go-old) | 0. The merge brings only tests/ (CI shares 7-10); no bridge or app source changed. | - |
 
 Tests were written before the code: r247pair_test.go failed to build (undefined: spakeP), tests/run_pair_spake.mjs had no
 file to load, and run_tally_firstlink.py's checks 13 to 15 failed against the old app. Each round's fixes came with their
