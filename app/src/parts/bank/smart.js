@@ -37,8 +37,75 @@ export const chipsOn = (b) => (b && b.chips) || [];
 // the lines the table lists: the old filters (tab, search, columns, dates), then the chips and "suggestions only"
 export function baseRows(b, rows) { return b.sugOnly ? rows.filter((r) => r.state === "suggested") : rows; }
 export function smartRows(b, rows) {
-  const on = chipsOn(b), base = baseRows(b, rows);
+  const on = chipsOn(b), f = (b && b.f) || {}, base = baseRows(b, rows).filter((r) => headPass(f, r));
   return on.length ? base.filter((r) => on.some((k) => chipHit(r, k))) : base;
+}
+
+// ---- the header filters this page adds to the old ones (25-Oct-2026, the owner: "I need filters within column as
+// earlier"). Date, Particulars, Withdrawal, Deposit and Ledger keep the old pop-up (colPopHtml, src/js/23: b.from / b.to,
+// b.f.narr, modes, wmin..dmax, led, leds); Balance (b.f.bmin, bmax), Status (b.f.sts: states) and Type (b.f.vts:
+// voucher types) are kept on b.f too and read here. They combine with the chips, the search and each other. ----
+const set = (v) => v !== undefined && v !== null && v !== "";
+export const STATE_WORDS = { attention: "No ledger", suggested: "Suggested", ready: "Ready to post", sent: "In Tally", intally: "Already in Tally", ignored: "Ignored" };
+export function headPass(f, r) {
+  if (set(f.bmin) || set(f.bmax)) {
+    if (!set(r.balance)) return false;
+    const v = num(r.balance);
+    if (set(f.bmin) && v < num(f.bmin)) return false;
+    if (set(f.bmax) && v > num(f.bmax)) return false;
+  }
+  if (f.sts && f.sts.length && !f.sts.includes(r.state)) return false;
+  if (f.vts && f.vts.length && !f.vts.includes(vtypeOf(r))) return false;
+  return true;
+}
+export function headOn(f, k) {
+  f = f || {};
+  return k === "bal" ? set(f.bmin) || set(f.bmax) : k === "st" ? !!(f.sts && f.sts.length) : k === "vt" ? !!(f.vts && f.vts.length) : false;
+}
+// what the header filters hold, as chips (the old columns' from colChips, src/js/23, and this page's three)
+export function headChips(b) {
+  const f = b.f || {}, out = typeof colChips === "function" ? colChips("bank").map(([k, w]) => ({ k, w, old: true })) : [];
+  const rng = (a, z) => (set(a) && set(z) ? money(a) + " – " + money(z) : set(a) ? "≥ " + money(a) : "≤ " + money(z));
+  if (headOn(f, "bal")) out.push({ k: "bal", w: "Balance " + rng(f.bmin, f.bmax) });
+  if (headOn(f, "st")) out.push({ k: "st", w: "Status: " + f.sts.map((s) => STATE_WORDS[s] || s).join(", ") });
+  if (headOn(f, "vt")) out.push({ k: "vt", w: "Type: " + f.vts.join(", ") });
+  return out;
+}
+export function headClear(k, old) {
+  if (old) { colChipX("bank", k); return; }
+  const b = B(); b.f = Object.assign({}, b.f || {});
+  ({ bal: ["bmin", "bmax"], st: ["sts"], vt: ["vts"] }[k] || []).forEach((x) => delete b.f[x]);
+  b.limit = 100; b.sticky.clear(); b.sel.clear(); redraw();
+}
+
+// ---- the client's ledger list from its books (25-Oct-2026, Testing AAD: "I have already uploaded masters xml.. still it
+// is asking again"). The ledger masters uploaded on Books -> From Tally (bringMastersFile, src/js/23) are kept in the
+// books (ledInfo, under; shared through client_book_items), but every ledger box and the bank's "Bring in the Tally
+// ledger list" read only Ledgers (src/js/58: FinCom's cloud copy of the books, the bridge, or a list kept in this
+// browser). A client with no book in the cloud and no bridge (Testing AAD) so had no list on the bank page. Now, when
+// Ledgers has none, the books' list is taken as the client's list (src "file", dated when the masters were uploaded, so a
+// later cloud or bridge read still replaces it), and the bank's lines are suggested again. The books are opened for it
+// when they are not open yet (as the bill page does). ----
+export function booksLedgerList(bk) {
+  const info = (bk && bk.ledInfo) || {}, under = (bk && bk.under) || {}, groups = (bk && bk.groups) || {};
+  const names = Array.from(new Set(Object.keys(info).concat(Object.keys(under).filter((n) => !groups[n])))).filter(Boolean).sort((a, z) => a.localeCompare(z));
+  return names.map((n) => ({ name: n, group: (info[n] && info[n].group) || under[n] || "", gstin: String((info[n] && info[n].gstin) || ((bk.gstins || {})[n]) || "").toUpperCase(),
+    pan: String((info[n] && info[n].pan) || ((bk.pans || {})[n]) || "").toUpperCase(), taxType: (info[n] && info[n].taxType) || "", dutyHead: (info[n] && info[n].dutyHead) || "", tdsNature: (info[n] && info[n].tdsNature) || "" }));
+}
+// "loading": the books are being opened; "taken": the list came from them now; "": nothing there (or a list is held)
+export function ledgersFromBooks(cid) {
+  if (typeof Ledgers !== "object" || !cid || Ledgers.list(cid).length) return "";
+  const bk = S.books && S.books.cid === cid ? S.books : null;
+  if (!bk) { if (typeof openBooks === "function") setTimeout(() => { if (!(S.books && S.books.cid === cid) && S.coId === cid) openBooks(cid).then(() => redraw(), () => {}); }, 0); return "loading"; }
+  if (bk.openFailed) return "";
+  if (bk.loading) return "loading";
+  const list = booksLedgerList(bk);
+  if (!list.length) return "";
+  const at = bk.ledInfoAt || "";
+  const parents = {}; Object.entries(bk.groups || {}).forEach(([g, p]) => { if (g) parents[g] = typeof p === "string" ? p : (p && p.parent) || ""; });
+  if (!Ledgers.take(cid, { list, parents, at: at || new Date().toISOString(), srcAt: at || "1970-01-01T00:00:00.000Z", src: "file", file: "Ledger masters uploaded on Books" + (at ? " " + fmtDate(at.slice(0, 10)) : "") })) return "";
+  if (typeof ledgersChanged === "function") setTimeout(() => { try { ledgersChanged(cid); } catch (e) {} redraw(); }, 0);
+  return "taken";
 }
 // each chip's count among the lines the other filters leave
 export function chipCounts(b, rows) {
@@ -47,7 +114,7 @@ export function chipCounts(b, rows) {
   base.forEach((r) => CHIPS.forEach((c) => { if (chipHit(r, c[0])) n[c[0]]++; }));
   return n;
 }
-export function smartOn(b) { return !!(b && (chipsOn(b).length || b.sugOnly || (b.q || "").trim() || bankRangeOn())); }
+export function smartOn(b) { return !!(b && (chipsOn(b).length || b.sugOnly || (b.q || "").trim() || bankRangeOn() || ["bal", "st", "vt"].some((k) => headOn(b.f, k)))); }
 
 const redraw = () => render();
 export function toggleChip(k) {

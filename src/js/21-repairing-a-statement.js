@@ -261,7 +261,7 @@ function nameSim(a, b){
   small.forEach((v, k) => { const w = big.get(k); if (w) inter += Math.min(v, w); });
   return 2 * inter / (ga.n + gb.n);
 }
-const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|BRN)\b/gi;
+const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|INF|BRN)\b/gi;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 function decodeNarr(n, clientName){
   const t = String(n || "").replace(/\s+/g, " ").replace(/\bUP[1l|I][1l|]?\//g, "UPI/").replace(/\bUP[1l|]-/g, "UPI-").trim(), u = t.toUpperCase();

@@ -71,51 +71,73 @@
   #app .bk-smart .bs-head .bk-actions { flex: none; }
   #app .bk-smart .bs-head .bk-actions .btn, #app .bk-smart .bs-head .bk-actions summary { height: 28px; min-height: 0; }
 
-  /* ---- the table: fixed columns that fit 1366 without a sideways scroll, a line of about 32 px ---- */
+  /* ---- the table (25-Oct-2026, the owner on Mac Safari: "size has become too short", "column name Type is overlapping"):
+     the app's own table text (13.5px, headings 12.5px, as Purchase and Sales), a line of about 40 px with the particulars on
+     two lines, fixed columns that fit 1366 with no sideways scroll, and no heading or cell running into the next one: every
+     cell clips what does not fit, and the boxes in it (the ledger, the voucher type) are drawn by the page, not by the
+     browser, so Safari's wider native select cannot spill over ---- */
   #app .bk-smart .bk-tablewrap { overflow: visible; }
   #app .bk-smart .bs-grid { outline: none; }
   #app .bk-smart .bs-grid:focus-visible { box-shadow: 0 0 0 2px var(--ledger, var(--accent)); border-radius: 10px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) { table-layout: fixed; width: 100%; font-size: 12.5px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th { position: sticky; top: var(--head-h, 0px); z-index: 4; padding: 4px 6px; height: 28px; font-size: 12px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th[data-sortable] { padding: 0; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th .lt-sort { min-height: 28px; padding: 4px 6px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tfoot td { position: static; padding: 6px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tbody > tr > td { padding: 2px 6px; line-height: 13px; vertical-align: middle; overflow-wrap: normal; }
-  #app .bk-smart table.bk-table:not(.cards) > tbody > tr { contain-intrinsic-size: auto 32px; scroll-margin-top: calc(var(--head-h, 0px) + 34px); scroll-margin-bottom: 64px; }
-  #app .bk-smart table.bk-table:not(.cards) th.ck { width: 30px; }
-  #app .bk-smart table.bk-table:not(.cards) .ck input { width: 14px; height: 14px; }
-  #app .bk-smart table.bk-table:not(.cards) th.dt { width: 90px; }
-  #app .bk-smart table.bk-table:not(.cards) td.dt { white-space: nowrap; font-size: 12px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) { table-layout: fixed; width: 100%; font-size: 13.5px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th { position: sticky; top: var(--head-h, 0px); z-index: 4; padding: 0 6px; height: 34px; font-size: 12.5px;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-sizing: border-box; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th[data-sortable] { padding: 0 4px 0 0; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th .lt-sort { min-height: 34px; padding: 6px 2px 6px 6px; min-width: 0; }
+  #app .bk-smart table.bk-table:not(.cards) > thead th .colh { display: flex; align-items: center; gap: 0; min-width: 0; max-width: 100%; }
+  #app .bk-smart table.bk-table:not(.cards) > thead th .colh > .lt-sort, #app .bk-smart table.bk-table:not(.cards) > thead th .colh > .gfl { flex: 1 1 auto; width: auto; min-width: 0; overflow: hidden; }
+  #app .bk-smart table.bk-table:not(.cards) > thead th .lt-sort > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #app .bk-smart table.bk-table:not(.cards) > thead th.n .lt-sort > span { justify-content: flex-end; }
+  #app .bk-smart table.bk-table:not(.cards) > thead th .colf { flex: none; width: 20px; height: 20px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tfoot td { position: static; padding: 6px 8px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tbody > tr > td { padding: 4px 6px; line-height: 17px; vertical-align: middle; overflow: hidden; overflow-wrap: normal; box-sizing: border-box; }
+  #app .bk-smart table.bk-table:not(.cards) > tbody > tr { contain-intrinsic-size: auto 40px; scroll-margin-top: calc(var(--head-h, 0px) + 40px); scroll-margin-bottom: 64px; }
+  #app .bk-smart table.bk-table:not(.cards) > tbody > tr > td { height: 40px; }
+  #app .bk-smart table.bk-table:not(.cards) th.ck, #app .bk-smart table.bk-table:not(.cards) td.ck { width: 30px; padding: 0; text-align: center; }
+  #app .bk-smart table.bk-table:not(.cards) .ck input { width: 15px; height: 15px; min-width: 0; margin: 0; vertical-align: middle; }
+  #app .bk-smart table.bk-table:not(.cards) th.dt { width: 114px; }
+  #app .bk-smart table.bk-table:not(.cards) td.dt { white-space: nowrap; text-overflow: ellipsis; }
   #app .bk-smart table.bk-table:not(.cards) th.pt { width: auto; min-width: 0; max-width: none; }
   #app .bk-smart table.bk-table:not(.cards) td.pt { min-width: 0; max-width: none; }
-  #app .bk-smart table.bk-table:not(.cards) th.n { width: 92px; }
-  #app .bk-smart table.bk-table:not(.cards) th.bal { width: 96px; }
+  #app .bk-smart table.bk-table:not(.cards) th.n { width: 100px; }
+  #app .bk-smart table.bk-table:not(.cards) td.n { white-space: nowrap; text-overflow: ellipsis; }
+  #app .bk-smart table.bk-table:not(.cards) th.bal { width: 104px; }
   #app .bk-smart table.bk-table:not(.cards) td.bal { color: var(--muted); }
-  #app .bk-smart table.bk-table:not(.cards) th[data-role="status"] { width: 90px; }
-  #app .bk-smart table.bk-table:not(.cards) td[data-role="status"] .tag, #app .bk-smart table.bk-table:not(.cards) td .tag { font-size: 11px; padding: 1px 6px; white-space: nowrap; }
-  #app .bk-smart table.bk-table:not(.cards) th.lg { width: 222px; min-width: 0; }
-  #app .bk-smart table.bk-table:not(.cards) td.lg { min-width: 0; overflow: hidden; }
-  #app .bk-smart table.bk-table:not(.cards) th.vt { width: 78px; }
+  #app .bk-smart table.bk-table:not(.cards) th[data-role="status"] { width: 102px; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > tbody > tr > td[data-role="status"], #app .bk-smart table.bk-table.lt.lt:not(.cards) > tbody > tr > td.vt { padding-left: 4px; padding-right: 4px; }
+  #app .bk-smart table.bk-table:not(.cards) td[data-role="status"] .tag, #app .bk-smart table.bk-table:not(.cards) td .tag { font-size: 11.5px; padding: 1px 7px; white-space: nowrap; }
+  #app .bk-smart table.bk-table:not(.cards) th.lg { width: 200px; min-width: 0; }
+  #app .bk-smart table.bk-table:not(.cards) td.lg { min-width: 0; }
+  #app .bk-smart table.bk-table:not(.cards) th.vt { width: 92px; }
   #app .bk-smart table.bk-table:not(.cards) th.ac { width: 104px; }
-  #app .bk-smart table.bk-table:not(.cards) td.ac { padding-left: 2px; padding-right: 4px; overflow: hidden; }
-  #app .bk-smart table.bk-table:not(.cards) td.ac .btn { height: 22px; min-height: 0; padding: 0 8px; font-size: 12px; }
-  #app .bk-smart table.bk-table:not(.cards) td.ac .icon { width: 22px; height: 22px; min-height: 0; min-width: 0; padding: 0; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac { padding-left: 4px; padding-right: 6px; white-space: nowrap; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac .btn { height: 26px; min-height: 0; padding: 0 8px; font-size: 12.5px; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac .icon { width: 24px; height: 24px; min-height: 0; min-width: 0; padding: 0; }
+  #app .bk-smart table.bk-table:not(.cards) td.ac .linkbtn { font-size: 13px; }
 
-  /* Particulars: the party, the mode and reference small, then the narration; two lines at most */
-  #app .bk-smart .bs-narr { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; white-space: normal; max-height: 26px; }
-  #app .bk-smart .bs-narr .pn { display: inline; font-weight: 600; white-space: normal; max-width: none; margin-right: 6px; color: var(--foreground, var(--ink)); }
-  #app .bk-smart .bs-narr .md { display: inline; font-size: 10.5px; font-weight: 600; margin-right: 6px; opacity: .7; text-transform: uppercase; letter-spacing: .02em; }
-  #app .bk-smart .bs-narr .nr { display: inline; font-size: 12px; white-space: normal; max-width: none; overflow: visible; color: var(--muted); }
+  /* Particulars: the party in bold on line 1; line 2 small and grey: the mode and reference, then the narration (all of it
+     on hover). Each line is cut with "…", never run into the next column */
+  #app .bk-smart .bs-narr { display: block; min-width: 0; overflow: hidden; }
+  #app .bk-smart .bs-narr .pn { display: block; font-weight: 600; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: none; color: var(--foreground, var(--ink)); }
+  #app .bk-smart .bs-narr .l2 { display: block; font-size: 12px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  #app .bk-smart .bs-narr .l2:empty { display: none; }
+  #app .bk-smart .bs-narr .md { font-weight: 600; letter-spacing: .02em; }
+  #app .bk-smart .bs-narr .nr { font-size: inherit; white-space: nowrap; max-width: none; overflow: visible; color: inherit; }
 
-  /* the ledger: the box, Confirm beside a suggestion; where it came from is on the box (title) */
+  /* the ledger: a box with its list (type to search) on every open line, Confirm beside a suggestion; where it came from is
+     on the box (title) */
   #app .bk-smart .bs-led { display: flex; align-items: center; gap: 4px; min-width: 0; }
-  #app .bk-smart .bs-led .lgbox { flex: 1 1 auto; min-width: 0; width: auto; height: 24px; padding: 0 7px; font-size: 12.5px; border-radius: 5px; }
-  #app .bk-smart .bs-led .bs-ok { flex: none; height: 24px; min-height: 0; padding: 0 8px; font-size: 12px; }
+  #app .bk-smart .bs-led .lgbox { flex: 1 1 auto; min-width: 0; width: 100%; height: 28px; padding: 0 22px 0 8px; font-size: 13px; border-radius: 6px; border: 1px solid var(--border, var(--rule));
+    background: var(--surface, var(--sheet)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 8px center; }
+  #app .bk-smart .bs-led .lgbox::placeholder { color: var(--muted); opacity: 1; }
+  #app .bk-smart .bs-led .lgbox.sugg { border-color: var(--warn, #d97706); }
+  #app .bk-smart .bs-led .bs-ok { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; min-height: 0; padding: 0; font-size: 14px; }
   #app .bk-smart td.lg .bs-led + .src:not(.bad) { display: none; }
-  #app .bk-smart td.lg .src { display: block; font-size: 11px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #app .bk-smart td.lg .src { display: block; font-size: 11.5px; line-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #app .bk-smart td.lg .lgtext { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #app .bk-smart .bs-vt { width: 100%; height: 24px; min-width: 0; max-width: none; padding: 0 4px; font-size: 12px; border-radius: 5px; }
-
+  #app .bk-smart .bs-vt { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; min-width: 0; max-width: 100%; margin: 0; padding: 0 20px 0 8px; font: inherit; font-size: 13px;
+    border-radius: 6px; border: 1px solid var(--border, var(--rule)); color: var(--foreground, var(--ink)); box-sizing: border-box; text-overflow: ellipsis;
+    background: var(--surface, var(--sheet)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 7px center; }
   /* the line the keys are on */
   #app .bk-smart table.bk-table > tbody > tr.kb-on > td { background: var(--ledger-soft, var(--paper)) !important; }
   #app .bk-smart table.bk-table > tbody > tr.kb-on > td:first-child { box-shadow: inset 3px 0 0 var(--ledger, var(--accent)); }
@@ -128,6 +150,11 @@
 
 @media (max-width: 600px) {
   #app .bk-smart .bs-search { width: 100%; }
+  /* a phone's card: the party, then the mode, reference and narration under it, wrapped */
+  #app .bk-smart .bs-narr { min-width: 0; overflow-wrap: anywhere; }
+  #app .bk-smart table.bk-table .bs-narr .pn { display: block; font-weight: 600; white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }
+  #app .bk-smart table.bk-table .bs-narr .l2 { display: block; font-size: 12px; color: var(--muted); white-space: normal; }
+  #app .bk-smart .bs-narr .l2:empty { display: none; }
   #app .bk-smart .bs-count { margin-left: 0; white-space: normal; }
   #app .bk-smart .bs-keys { display: none; }
   #app .bk-actionbar.bs-bankbar .bs-in, #app .bk-actionbar.bs-bankbar .bs-narrin { width: 100%; }
@@ -147,3 +174,10 @@
 #app .bk-smart .bk-found { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 4px 10px; margin: 6px 0 0; font-size: 12.5px; }
 #app .bk-smart .bk-found .bk-allled { width: 220px; height: 26px; min-width: 0; margin: 0; }
 #app .bk-smart .bk-found .btn { height: 26px; min-height: 0; }
+
+/* the header filters' chips (what a column's funnel holds), each with its ✕ */
+#app .bk-smart .bs-fchip { cursor: default; background: var(--ledger-soft, var(--paper)); border-color: var(--ledger, var(--accent)); color: var(--foreground, var(--ink)); padding-right: 2px; }
+#app .bk-smart .bs-fchip .bs-fx { border: 0; background: none; color: var(--muted); cursor: pointer; width: 20px; height: 20px; padding: 0; font-size: 11px; border-radius: 10px; }
+#app .bk-smart .bs-fchip .bs-fx:hover { color: var(--foreground, var(--ink)); background: var(--surface, var(--sheet)); }
+#app .bs-hfpop .cp-foot:first-child { border-top: 0; }
+#app .bs-hfpop { white-space: normal; font-weight: 400; text-align: left; color: var(--foreground, var(--ink)); }

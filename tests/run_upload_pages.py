@@ -34,7 +34,7 @@ ROWS = {
       if (st === 'errors') return q('#app [data-post-panel="errors"] li[data-entry-row]') + q('#app [data-post-panel="errors"] li[data-attn-row]');
       if (st === 'intally') return q('#app [data-post-panel="posted"] li[data-entry-row]');
       return q('#app ul.queue > li'); }""",
-    "bank": """() => document.querySelectorAll('#app table.bk-table[data-list="bank"] tbody tr:not(.lt-open)').length""",
+    "bank": """() => document.querySelectorAll('#app table.bk-table[data-list="bank"] tbody tr:not(.lt-open):not(.lt-none)').length""",
     "sales": """() => document.querySelectorAll('#app table[data-list="sales"] tbody tr:not(.lt-open)').length""",
 }
 TOP = lambda pg: pg.inner_text("#cobar").replace("\n", " ")
@@ -154,7 +154,9 @@ with sync_playwright() as p:
     ok(E("document.querySelectorAll('#app .revfilter input[type=search]').length") == 1, "Purchase: its one filter bar")
     E(BK.BANK); pg.wait_for_timeout(1200)
     t = E(TITLE); ok(t and t[0] == "Bank" and t[1] <= t[2], "1400 px: the title “Bank” in full (%s)" % t)
-    ok(E(ARROWS) == 0 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Bank: no filter arrows on the headings (%d), one search" % E(ARROWS))
+    # the owner, 25-Oct-2026 ("I need filters within column as earlier"): the bank page has a filter in each column's heading
+    # again (Date, Particulars, Withdrawal, Deposit, Balance, Status, Ledger, Type), with its one search and chips above
+    ok(E(ARROWS) == 8 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Bank: a filter on each of the 8 headings (%d), one search" % E(ARROWS))
     E(BK.SALES); pg.wait_for_timeout(1200)
     t = E(TITLE); ok(t and t[0] == "Sales" and t[1] <= t[2], "1400 px: the title “Sales” in full (%s)" % t)
     ok(E(ARROWS) == 0 and E("document.querySelectorAll('#app .bk-search').length") == 1, "Sales: no filter arrows on the headings (%d), one search" % E(ARROWS))
