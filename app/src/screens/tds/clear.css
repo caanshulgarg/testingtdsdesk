@@ -455,3 +455,23 @@ tr.wd-cffoot > td { padding: 6px 10px; text-align: left !important; }
 .wd-foot .wd-over-line .linkbtn, .chg-table .chg-also .linkbtn { font-weight: 600; }
 .chg-table .chg-also { font-size: 12px; white-space: normal; line-height: 1.3; }
 .chg .chg-over-line { color: var(--bad); font-weight: 600; }
+
+/* next-tds-validate-short (25-Oct-2026): one short line a warning, its details in a side panel; Suggestions and More checks
+   folded; the interest working's sum */
+.vf-w { overflow-wrap: anywhere; }
+.vf-sugg, .vf-more { margin-top: 10px; }
+.vf-sugg > summary, .vf-more > summary { padding: 7px 2px; border-bottom: 1px solid var(--rule, var(--border)); }
+.vf-more > .vf-orow:first-of-type { border-top: 0; }
+.vf-inline { border-bottom: 0; padding: 0 0 8px 24px; }
+.vf-detail { display: grid; gap: 10px; min-width: 0; }
+.vf-detail > p { margin: 0; }
+.vf-dlist { margin: 0; padding-left: 18px; font-size: 13.5px; display: grid; gap: 6px; }
+.vf-isum { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 14px; margin: 10px 0 0; font-size: 13.5px; }
+.vf-isum dt { color: var(--text-secondary, var(--muted)); }
+.vf-isum dd { margin: 0; font-variant-numeric: tabular-nums; }
+.vf-law { margin: 8px 0 0; font-size: 12px; }
+[data-dup-side] .btn { margin-top: 4px; }
+@media (max-width: 640px) {
+  .vf-isum { grid-template-columns: minmax(0, 1fr); }
+  .vf-isum dd { margin-bottom: 6px; }
+}

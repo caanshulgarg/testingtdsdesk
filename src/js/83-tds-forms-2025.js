@@ -221,7 +221,8 @@ const TDSF25 = {
     // the deductions (collections) of the quarter that are against a challan, with the challans they use
     const data = this.rowsOf(fy, q, form);
     if (data.error) return data;
-    const {rows, live, used} = data;
+    const {rows, live, used, lo} = data;
+    if (lo && lo.length) notes.push(TDS26Q.leftNote(lo));
     const yrs = this.years(fy), prev = this.previous(fy, q, form, firm);
     if (prev.flag === "Y" && !/^\d{15}$/.test(prev.token)) P("Form " + fno + " of " + (prev.pq || "the quarter before") + " " + (prev.pfy || "") + " is marked filed but its 15-digit token number is not given: BH field 9 needs it.");
     if (prev.how === "not marked") notes.push("Form " + fno + " of " + prev.pq + " " + prev.pfy + " is not marked filed in FinCom, so the file says no earlier regular statement (BH field 52 “N”). If it was filed, mark it filed with its token first.");
@@ -307,7 +308,7 @@ const TDSF25 = {
     const draft = typeof NEW_FORMS_VALIDATED === "undefined" || !NEW_FORMS_VALIDATED;
     return {text: lines.join("\r\n") + "\r\n", rows: rows.length, challans: live.length, form, formNo: fno, isNew: true, draft,
       name: (tan || "TAN") + "_Form" + fno + "_" + q + "_" + fy.replace("-", "") + (draft ? "_DRAFT" : "") + ".txt",
-      missingCodes: Array.from(missing), problems, notes, format: this.FORMAT,
+      missingCodes: Array.from(missing), problems, notes, format: this.FORMAT, leftOut: (lo || []).map(x => ({id: x.r.id, k: x.k, party: x.r.party || x.r.employee || "", tds: r2(num(x.r.tds))})),
       remarks: lines.filter(l => /^\d+\^DD\^/.test(l) && l.split("^")[31]).length, salaryRecords: 0,
       words: "Built to " + this.FORMAT + "; check it with Protean's FVU before filing."};
   },
@@ -366,21 +367,23 @@ const TDSF25 = {
 
   // the rows of the return that are on a challan, and the challans: as the old builders choose them (the quarter's own
   // challans and any other that pays this return's deductions)
-  // next-challan-match: a deduction with tax on no challan stops the file with the list (TDS26Q.untaggedError), never left
-  // out silently; Form 138's rows are TDS24Q_FILE.rowsOf's (Tally's payroll, else the salary sheet)
+  // next-tds-validate-short: a deduction with tax on no challan (or one the FVU refuses) is left out and said (TDS26Q.leftOut,
+  // lo), never a refusal; Form 138's rows are TDS24Q_FILE.rowsOf's (Tally's payroll, else the salary sheet)
   rowsOf(fy, q, form){
-    let rows, nil = [];
+    let rows, nil = [], lo = [];
     if (form === "24Q"){
       const s = TDS24Q_FILE.rowsOf(fy, q);
       if (s.error) return s;
+      lo = TDS26Q.leftOut(form, fy, q).filter(x => x.k === "nochallan");
       rows = s.rows.filter(r => r.tds > 0.005).map(r => Object.assign({}, r, {party: r.employee || r.party}));
     } else {
-      const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = TDS26Q.untaggedError(all, form === "27EQ");
-      if (un) return un;
-      rows = all.filter(r => r.challan);
+      const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q);
+      // next-tds-validate-short: the rows the file cannot carry left out and said (TDS26Q.leftOut), not a refusal
+      lo = TDS26Q.leftOut(form, fy, q, all); const out = new Set(lo.map(x => x.r.id));
+      rows = all.filter(r => r.challan && !out.has(r.id));
       // next-tds-autoplace: a deduction with no tax and its reason (remark B, T or Y: src/js/94) goes in the file: under the
       // quarter's first challan, else under a nil challan (CD field 6 "Y"), as Protean's general note 11 asks
-      if (form === "26Q") nil = all.filter(r => !r.challan && !(num(r.tds) > 0.005) && /^[BTY]$/.test((TDS26Q.remark(r, form) || {}).remark || ""));
+      if (form === "26Q") nil = all.filter(r => !r.challan && !out.has(r.id) && !(num(r.tds) > 0.005) && /^[BTY]$/.test((TDS26Q.remark(r, form) || {}).remark || ""));
     }
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
@@ -393,7 +396,7 @@ const TDSF25 = {
       : "No challan for " + q + " " + fy + " has " + (form === "27EQ" ? "collections" : "deductions") + " in Form " + TDS.formNo(form, fy) + " against it yet."};
     const useAll = TDS.challanUse(), over = live.filter(c => Math.round((useAll[c.id] || 0) * 100) > Math.round(num(c.tax) * 100));
     if (over.length) return {error: "Challan " + over.map(c => c.bsr + "/" + c.serial).join(", ") + " has more deductions against it than its amount. Take some off it first (Entries, tick them, Untag)."};
-    return {rows, live, used};
+    return {rows, live, used, lo};
   },
 
   // the section code of a deduction for the new form: Form 138 by the deductor's category (Annexure 2: 1001 State

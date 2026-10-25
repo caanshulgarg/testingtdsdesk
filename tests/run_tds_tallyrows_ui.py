@@ -106,6 +106,8 @@ try:
             ok("TDS on Tally" not in J("document.getElementById('app').innerText") and pg.locator("#app [data-tds-lines]").count() == 0, "26Q Q4 %s: no TDS on Tally's entries" % step)
         print("4. Validate & file › Checks from Tally")
         go("2025-26", "Q4", "file")
+        # next-tds-validate-short: under the folded More checks
+        if not J("() => !!(document.querySelector('#app [data-val-morechecks]') || {}).open"): pg.click("#app [data-val-morechecks] > summary"); pg.wait_for_timeout(200)
         tc = pg.locator("#app [data-tally-checks]")
         ok(tc.count() == 1 and J("() => !document.querySelector('#app [data-tally-checks]').open"), "Checks from Tally, folded")
         if tc.count():

@@ -151,10 +151,13 @@ ok(t24.some(l => /\^S16\^1\^1\^1\^16\(ia\)\^50000\.00\^$/.test(l)) && t24.some(l
   ctx.S.books.nrInfo["Royalty Holder SA"].nature = "02";
   x4.TDSAdd.save({party: "NR Small", section: "195", date: "20250725", credit: "20250725", paid: 1000, rate: 0, tds: 0, basis: "Y"});
   const c26b = ck("Q2", "26Q"), c27b = ck("Q2", "27Q"), f26b = x4.TDS26Q.build(FY, "Q2", FIRM, "26Q"), f27b = x4.TDS26Q.build(FY, "Q2", FIRM, "27Q");
-  ok(k(c26b, "b-sec") && k(c26b, "b-sec").level === "error" && /B Agent \(194H\)/.test(k(c26b, "b-sec").words) && f26b.problems.some(p => /B Agent/.test(p) && /T_FV_4245/.test(p)),
-    "remark B on 194H: an error in Validate and a problem of the file (FVU 8.7, T_FV_4245) (" + J(k(c26b, "b-sec")) + ")");
-  ok(k(c27b, "nature") && k(c27b, "nature").level === "error" && /Royalty Holder SA \(02\)/.test(k(c27b, "nature").words) && f27b.problems.some(p => /nature of remittance 02/.test(p)),
-    "27Q nature 02 (not in FVU 8.7's list): an error in Validate and a problem of the file (T-FV-4312)");
+  // next-tds-validate-short (the owner, 25-Oct-2026: no blocker for some rows): what FVU 8.7 refuses is left out of the file
+  // (its leftOut, its note) and said in Validate, not a refusal of the whole file
+  const out = (f, id) => (f.leftOut || []).some(z => z.id === id && z.k === "fvu87");
+  ok(k(c26b, "b-sec") && k(c26b, "b-sec").level === "error" && /B Agent \(194H\)/.test(k(c26b, "b-sec").words) && out(f26b, k(c26b, "b-sec").ids[0]) && !f26b.problems.some(p => /B Agent/.test(p)) && /refused by FVU 8\.7/.test((f26b.notes || [])[0] || ""),
+    "remark B on 194H (FVU 8.7, T_FV_4245): the row left out of the file, said (" + J(k(c26b, "b-sec")) + ")");
+  ok(k(c27b, "nature") && k(c27b, "nature").level === "error" && /Royalty Holder SA \(02\)/.test(k(c27b, "nature").words) && k(c27b, "nature").ids.every(id => out(f27b, id)) && !f27b.problems.some(p => /nature of remittance 02/.test(p)),
+    "27Q nature 02 (not in FVU 8.7's list, T-FV-4312): its rows left out of the file, said");
   ok(!recs(f27b.text, "DD").some(d => F(d, 13) === "NR Small"), "27Q: a deductee with no TDS and remark Y is not written (FVU 8.7 takes no Y on 27Q, T-FV-4280)");
 }
 // next-fvu87: the challan of an earlier year, in words that say what each FVU does (tdsmatch's tmCannot, shared with the app)

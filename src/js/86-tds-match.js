@@ -522,8 +522,9 @@ const TDSMatch = {
     chs.forEach(c => { ch[c.id] = c; });
     L.forEach(x => {
       const id = x.row.id + (x.kind === "unpaid" ? ":u" : "");
-      const r = by[id] || (by[id] = rows[rows.push({id, row: x.row, unpaid: x.kind === "unpaid", challan: ch[x.row.challan] || null, months1: 0, months2: 0, rate2: 0, from: "", due: "", interest: 0}) - 1]);
-      if (x.kind === "deduct"){ r.months1 = x.months; r.from = x.from; } else { r.months2 = x.months; r.rate2 = x.rate; r.due = x.due; }
+      const r = by[id] || (by[id] = rows[rows.push({id, row: x.row, unpaid: x.kind === "unpaid", challan: ch[x.row.challan] || null, months1: 0, months2: 0, rate2: 0, from: "", due: "", to: "", int1: 0, int2: 0, interest: 0}) - 1]);
+      // next-tds-validate-short: each part apart (1% deducted late, 1.5% paid late), and the date it runs to (the challan's, or today)
+      if (x.kind === "deduct"){ r.months1 = x.months; r.from = x.from; r.int1 = x.amount; } else { r.months2 = x.months; r.rate2 = x.rate; r.due = x.due; r.to = x.kind === "unpaid" ? x.to : x.challan ? TDS.ymd(x.challan.date) : ""; r.int2 = x.amount; }
       r.interest = r2(r.interest + x.amount);
     });
     rows.sort((a, b) => TDS.ymd(a.row.date).localeCompare(TDS.ymd(b.row.date)) || String(a.row.party || "").localeCompare(String(b.row.party || "")));
@@ -533,7 +534,10 @@ const TDSMatch = {
     });
     const filed = TDSFiled.get(fy, q, form), sum = (f) => r2(perChallan.reduce((a, x) => a + x[f], 0)), fee = TDS.lateFee(fy, q, filed ? filed.on : "", form);
     const due = sum("due"), allocated = sum("allocated"), feeDue = fee && fee.days > 0 ? r2(fee.fee) : 0, feeAllocated = sum("fee");
-    return {rows, perChallan, filed, fee, totals: {interest: r2(L.reduce((a, x) => a + x.amount, 0)), due, allocated, short: r2(Math.max(0, due - allocated)),
+    // interest: the whole 201(1A) (206C(7)) of the return = due (on its challans) + unpaid (the rest: on deductions on no
+    // challan, to today); short: due less allocated
+    const interest = r2(L.reduce((a, x) => a + x.amount, 0));
+    return {rows, perChallan, filed, fee, totals: {interest, unpaid: r2(interest - due), due, allocated, short: r2(Math.max(0, due - allocated)),
       feeDue, feeAllocated, feeShort: r2(Math.max(0, feeDue - feeAllocated))}};
   },
   // a money difference worth a warning: TDS.MIN_WARN (₹10, the owner, 20-Oct-2026) or more
@@ -577,7 +581,7 @@ const TDSMatch = {
     form = form || "26Q";
     const cx = TDSReg.ctx(), rows = TDS.formRows(form).filter(r => r.fy === fy && r.q === q), out = {block: [], warn: [], info: []};
     const un = rows.filter(r => !r.challan && r.tds > 0.005);
-    if (un.length) out.block.push({k: "untagged", n: un.length, ids: un.map(r => r.id), words: un.length + " deduction" + (un.length === 1 ? " is" : "s are") + " on no challan (" + money(un.reduce((a, r) => a + r.tds, 0)) + "): match " + (un.length === 1 ? "it" : "them") + " first. The file is not made while any is left out."});
+    if (un.length) out.block.push({k: "untagged", n: un.length, ids: un.map(r => r.id), words: un.length + " deduction" + (un.length === 1 ? " is" : "s are") + " on no challan (" + money(un.reduce((a, r) => a + r.tds, 0)) + "): left out of the file until matched to a challan."});
     const over = TDSReg.overUsed(fy, q, form);
     if (over.length) out.block.push({k: "over", n: over.length, words: over.map(c => "Challan " + TDSCH.label(c) + " is used " + money(-TDSReg.balance(c, cx).tax) + " beyond its tax").join("; ") + ": take deductions off it."});
     const stale = rows.filter(r => r.splitStale);

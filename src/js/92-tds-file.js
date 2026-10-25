@@ -14,12 +14,13 @@ const TDS26QFile = {
     // tax year 2026-27 on: Forms 140, 144, 143 as Protean's file format has them (src/js/83); earlier years below, as before
     if (TDS.isNew(fy) && typeof TDSF25 === "object") return TDSF25.build(fy, q, firm, form);
     const isNew = TDS.isNew(fy), fno = TDS.formNo(form, fy), missing = new Set();
-    const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q), un = this.untaggedError(all, form === "27EQ");
-    if (un) return un;
+    const all = TDS_FORMS[form].rows().filter(r => r.fy === fy && r.q === q);
+    // next-tds-validate-short: the rows the file cannot carry are left out and said (leftOut), never a refusal
+    const lo = this.leftOut(form, fy, q, all), loIds = new Set(lo.map(x => x.r.id)), leftOut = lo.map(x => ({id: x.r.id, k: x.k, party: x.r.party || "", tds: r2(num(x.r.tds))}));
     // M4: a nil deduction with remark T or Y goes in the file under the quarter's first challan (not left out); next-tds-autoplace:
     // B too (a 15G/15H declaration, src/js/94)
     // (next-fvu87: 26Q only; FVU 8.7 takes no B, T or Y on a 27Q deductee, T-FV-4280, and src/js/94 writes them on 26Q only)
-    const nil = form !== "26Q" ? [] : all.filter(r => !r.challan && !(num(r.tds) > 0.005) && /^[BTY]$/.test(this.remark(r, form).remark)), rows = all.filter(r => r.challan), nilOut = this.nilOut(all) - nil.length;
+    const nil = form !== "26Q" ? [] : all.filter(r => !r.challan && !loIds.has(r.id) && !(num(r.tds) > 0.005) && /^[BTY]$/.test(this.remark(r, form).remark)), rows = all.filter(r => r.challan && !loIds.has(r.id)), nilOut = this.nilOut(all) - nil.length - lo.filter(x => !x.r.challan && !(num(x.r.tds) > 0.005)).length;
     const used = {};
     rows.forEach(r => { (used[r.challan] = used[r.challan] || []).push(r); });
     if (nil.length && rows.length) used[rows[0].challan] = used[rows[0].challan].concat(nil);
@@ -40,7 +41,7 @@ const TDS26QFile = {
     const qNum = {Q1: "Q1", Q2: "Q2", Q3: "Q3", Q4: "Q4"}[q];
     const ay = (num(fy.slice(0, 4)) + 1) + "-" + String(num(fy.slice(0, 4)) + 2).slice(2);
     // up to FY 2025-26: the old forms, laid out as Protean's file format (oldBuild, below)
-    if (!isNew) return Object.assign(this.oldBuild(form, fy, q, firm, rows, live, used), {nilOut});
+    if (!isNew){ const o = Object.assign(this.oldBuild(form, fy, q, firm, rows, live, used), {nilOut, leftOut}); if (lo.length) o.notes = [this.leftNote(lo)].concat(o.notes || []); return o; }
     const lines = [];
     let ln = 0;
     const put = arr => { ln++; lines.push([ln].concat(arr).join("^")); };
@@ -80,7 +81,7 @@ const TDS26QFile = {
     });
     return {text: lines.join("\r\n") + "\r\n", rows: rows.length, challans: live.length,
       name: (firm.tan || "TAN") + "_" + (isNew ? "Form" + fno : form) + "_" + q + "_" + fy.replace("-", "") + (isNew && !NEW_FORMS_VALIDATED ? "_DRAFT" : "") + ".txt", form,
-      formNo: fno, isNew, draft: isNew && !NEW_FORMS_VALIDATED, missingCodes: Array.from(missing),
+      formNo: fno, isNew, draft: isNew && !NEW_FORMS_VALIDATED, missingCodes: Array.from(missing), leftOut, notes: lo.length ? [this.leftNote(lo)] : [],
       remarks: rows.filter(r => this.remark(r, form).remark).length};
   },
   // what is missing before a 27Q can be filed
@@ -254,6 +255,40 @@ const TDS26QFile = {
       "contact": ["info", "Foreign address, e-mail, phone and tax ID left out of the file: FVU 8.7 takes them only with no PAN, remark C and natures 16, 21, 27, 31, 49, 52, 66-70: "]};
     const uniq = (l) => Array.from(new Set(l.map(x => x.w)));
     return Object.keys(bad).filter(k => bad[k].length).map(k => ({k, level: W[k][0], n: bad[k].length, ids: bad[k].map(x => x.r.id), words: W[k][1] + uniq(bad[k]).join("; ")}));
+  },
+  // next-tds-validate-short (the owner, 25-Oct-2026: "there should not be any blocker also if we do not file any deductions..
+  // we can say that certain deductions are not there but it cannot be a blocker"). A deductee record needs its challan, and
+  // Protean's FVU refuses some records; the file is made from the rest, and the rows it leaves out are said (Validate & file's
+  // warning, the file's notes). [{r, k, why}]: k "nochallan" tax on no challan; "early" on a challan the FVU refuses for it
+  // (TDSEdit.placeIssues: a year before, after today, not minor head 200); "stale" a split whose tax changed in the books;
+  // "remark" a nil row whose remark B, T or Y is wrong (TDSDecl.checks); "fvu87" a record FVU 8.7 refuses (fvu87Checks).
+  // all: the return's rows of the quarter (else TDS.formRows)
+  leftOut(form, fy, q, all){
+    all = all || TDS.formRows(form).filter(r => r.fy === fy && r.q === q);
+    const ch = {}, out = [], seen = new Set(), put = (r, k, why) => { if (r && !seen.has(r.id)){ seen.add(r.id); out.push({r, k, why: why || ""}); } };
+    TDS.challans().forEach(c => { ch[c.id] = c; });
+    const BAD = ["fy", "future", "minor"];
+    all.forEach(r => {
+      if (!r.challan || !ch[r.challan]){ if (num(r.tds) > 0.005) put(r, "nochallan", "on no challan"); return; }
+      if (r.splitStale) return put(r, "stale", "a split whose tax changed in the books: undo the split and split it again");
+      const p = typeof TDSEdit === "object" && TDSEdit.placeIssues ? TDSEdit.placeIssues(r, ch[r.challan]).find(x => BAD.includes(x.k)) : null;
+      if (p) put(r, "early", p.words);
+    });
+    const byId = {}; all.forEach(r => { byId[r.id] = r; });
+    const more = [];
+    try { if (typeof TDSDecl === "object") more.push(...TDSDecl.checks(fy, q, form).filter(x => x.level === "error").map(x => ["remark", x])); } catch (e){ /* the remarks not loaded */ }
+    try { more.push(...this.fvu87Checks(fy, q, form).filter(x => x.level === "error").map(x => ["fvu87", x])); } catch (e){ /* */ }
+    more.forEach(([k, x]) => (x.ids || []).forEach(id => put(byId[id], k, x.words.split(":")[0])));
+    return out;
+  },
+  // the file's own note of what it left out, in one line ("" when nothing)
+  leftNote(lo){
+    if (!lo || !lo.length) return "";
+    const W = {nochallan: "on no challan", early: "on a challan the FVU refuses for it", stale: "split, its tax changed in the books", remark: "with a remark B, T or Y to correct", fvu87: "refused by FVU 8.7"};
+    const by = {}; lo.forEach(x => { (by[x.k] = by[x.k] || []).push(x.r); });
+    const rs = (v) => "₹" + (typeof INR === "object" ? INR.format(r2(num(v))) : r2(num(v)).toFixed(2));
+    return "Left out of the file: " + Object.keys(by).map(k => by[k].length + " " + W[k] + " (" + rs(by[k].reduce((a, r) => a + num(r.tds), 0)) + ")").join("; ") + ". " +
+      lo.slice(0, 5).map(x => (x.r.party || x.r.employee || "?") + " " + rs(x.r.tds)).join(", ") + (lo.length > 5 ? " …" : "");
   },
   // 26Q, 27Q, 27EQ up to FY 2025-26: the deductee (collectee) records of each challan, and the file
   oldBuild(form, fy, q, firm, rows, live, used){

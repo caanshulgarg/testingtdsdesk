@@ -151,8 +151,10 @@ try:
         ok(ft and "Challan amount" not in ft and "Used here" in ft and "Balance" in ft, "Deductions: the footer without Challan amount (%s)" % ft.replace("\n", " "))
         go("26Q", "file")
         why = J("(document.querySelector('#app [data-make-why]') || {}).innerText || ''")
-        ok(why and not re.search(r"\d", why) and J("document.querySelectorAll('#app [data-validate] .vf-counts [data-val-errors], #app [data-validate] .vf-counts .bad').length") == 0,
-           "Validate & file: one 'fix the errors first', with no count (%s)" % why)
+        # next-tds-validate-short: a deduction on no challan is no error: the file is made without it, the File row says so
+        left = J("(document.querySelector('#app [data-file-left]') || {}).innerText || ''")
+        ok(((why and not re.search(r"\d", why)) or (not why and left.startswith("Left out of the file: 1 on no challan"))) and J("document.querySelectorAll('#app [data-validate] .vf-counts [data-val-errors], #app [data-validate] .vf-counts .bad').length") == 0,
+           "Validate & file: 'fix the errors first' with no count, or (no error) what the file leaves out (%s %s)" % (why, left[:60]))
         J("() => { S.booksTab = 'tds'; tdsGo('2026-27'); }"); pg.wait_for_timeout(600)
         allch = J("() => [...document.querySelectorAll('#app button, #app a')].filter(b => b.offsetParent && /all challans/i.test(b.innerText)).map(b => b.innerText.trim())")
         ok(len(allch) == 1, "the TDS home: one All challans (%s)" % allch)
@@ -290,8 +292,12 @@ try:
         btn = J("+((document.querySelector('#app [data-wd-fix-early]') || {dataset: {}}).dataset.wdFixEarly || 0)")
         ok(btn == len(early) > 0, "C. 'Put %d on the right challans' in the step's header (%s)" % (len(early), btn))
         go("26Q", "file")
-        ve = J("(document.querySelector('#app [data-val-item=early][data-val-level=error]') || {}).innerText || ''")
-        ok("T-FV-3076" in ve, "C. Validate & file: an error, Protean's FVU refuses a challan dated before the year (%s)" % ve[:160])
+        # next-tds-validate-short: not an error: the file leaves them out, one warning, the reason in its panel
+        ve = J("(document.querySelector('#app [data-val-item=leftout][data-val-level=warn]') || {}).innerText || ''")
+        J("() => { S.tdsFix = 'leftout'; S.tdsFixAt = '2026-27|Q1|26Q'; render(); }"); pg.wait_for_timeout(300)
+        vd = J("(document.querySelector('[data-val-drawer=leftout]') || {}).innerText || ''")
+        J("() => { S.tdsFix = ''; render(); }")
+        ok("not in the file (FVU would refuse)" in ve and "T-FV-3076" in vd, "C. Validate & file: left out of the file, Protean's FVU refuses a challan dated before the year (%s | %s)" % (ve[:80], vd[:160]))
         go("26Q", "deductions"); J(CHOSE); pg.wait_for_timeout(300)
         # a challan for them: 194C, dated after them, enough left
         J("() => { S.books.challans = S.books.challans.concat([{id: 'chLate', bsr: '0240020', serial: '20999', date: '2026-07-07', section: '194C', tax: 900000}]); TDSReg.forget(); render(); }"); pg.wait_for_timeout(300)

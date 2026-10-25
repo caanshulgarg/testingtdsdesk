@@ -261,9 +261,11 @@ try:
         pg.evaluate("(i) => tdsMoveTo([i], 'chPart')", one)   # 1,000.00 against 800.00 left
         ok(pg.evaluate("(i) => S.books.alloc[i] || ''", one) == "", "a single move refuses it too")
         ok(all(pg.evaluate("TDS.challans().every(c => (TDS.challanUse()[c.id] || 0) <= num(c.tax) + 0.001)") for _ in [0]), "no challan is used beyond its amount, to the paisa")
-        # the file refuses while anything is on no challan (next-challan-match: never left out silently), then a challan for the rest
+        # next-tds-validate-short (the owner, 25-Oct-2026: "there should not be any blocker"): the file is made without what is
+        # on no challan, and says so (never left out silently); then a challan for the rest
         fr = pg.evaluate("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
-        ok("on no challan" in (fr.get("error") or "") and len(fr.get("untagged") or []) == 3, "the file refuses: 3 deductions on no challan, listed (%s)" % (fr.get("error") or "")[:120])
+        lo = fr.get("leftOut") or []
+        ok(not fr.get("error") and len(lo) == 3 and all(x["k"] == "nochallan" for x in lo) and (fr.get("notes") or [""])[0].startswith("Left out of the file: 3 on no challan"), "the file leaves out the 3 deductions on no challan, and says so (%s)" % ((fr.get("error") or "") + str((fr.get("notes") or [""])[0]))[:120])
         pg.evaluate("""(ids) => { S.books.challans.push({id: "chRest", bsr: "0510308", serial: "00303", date: "20260707", tax: 2000, interest: 0, section: "194C", minorHead: "200"});
           TDSCH.tag(ids.r, 'chRest'); TDSCH.tag(ids.j, 'chPart'); render(); }""", {"r": pg.evaluate("TDS.rows().filter(r => r.fy === '2026-27' && r.q === 'Q1' && !r.challan && TDS.sec(r.section) === '194C').map(r => r.id)"), "j": [two[0]]})
 

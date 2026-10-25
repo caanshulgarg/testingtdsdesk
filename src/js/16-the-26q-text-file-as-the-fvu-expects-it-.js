@@ -76,18 +76,9 @@ const TDS_SEC_CODES = {
   "194LBA": {by: {}, note: "BA1 or BA2 by the clause of 194LBA: not known to FinCom"}
 };
 const TDS26Q = {
-  // next-challan-match (the owner, 17-Oct-2026): no deduction is left out of a file silently. A deduction with tax on no
-  // challan stops the file, with the list ({error, untagged}); one with no tax on no challan (a nil deduction: a nil challan
-  // FinCom does not make) is counted in the file's answer (nilOut). rows: the return's deductions of the quarter
-  untaggedError(rows, collections){
-    const un = (rows || []).filter(r => !r.challan && num(r.tds) > 0.005);
-    if (!un.length) return null;
-    const w = collections ? ["collection", "collections"] : ["deduction", "deductions"];
-    const rs = (v) => "\u20b9" + (typeof INR === "object" ? INR.format(r2(num(v))) : r2(num(v)).toFixed(2)), dt = (d) => { const t = TDS.ymd(d); return t.slice(6, 8) + "-" + t.slice(4, 6) + "-" + t.slice(0, 4); };
-    return {error: un.length + " " + (un.length === 1 ? w[0] + " is" : w[1] + " are") + " on no challan (" + rs(un.reduce((a, r) => a + num(r.tds), 0)) + "): match " + (un.length === 1 ? "it" : "them") +
-      " on the return's Challans tab first; the file is not made while any is left out. " + un.slice(0, 5).map(r => (r.party || r.employee || "?") + " " + dt(r.date) + " " + rs(r.tds)).join("; ") + (un.length > 5 ? " \u2026" : ""),
-      untagged: un.map(r => r.id)};
-  },
+  // next-challan-match (the owner, 17-Oct-2026): no deduction is left out of a file silently; next-tds-validate-short (25-Oct-
+  // 2026): a deduction the file cannot carry is left out and said (TDS26Q.leftOut, src/js/92), never a refusal. A nil
+  // deduction on no challan (a nil challan FinCom does not make) is counted in the file's answer (nilOut)
   // the deductee's name as the file writes it: the name corrected in FinCom (Deductees (PAN), b.panFix), else the books'
   fileName(r){ const f = (TDS.panRec ? TDS.panRec(r.party || r.employee) : ((S.books || {}).panFix || {})[r.party || r.employee]) || {}; return f.name || r.party || r.employee || ""; },
   nilOut(rows){ return (rows || []).filter(r => !r.challan && !(num(r.tds) > 0.005)).length; },

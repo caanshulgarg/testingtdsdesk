@@ -14,7 +14,7 @@
 import SrcTag, { srcWords } from "../parts/SrcTag.jsx";
 import { useRef, useState } from "react";
 import ListTable from "../parts/ListTable.jsx";
-import { MarkFiled, InterestFee } from "./tds/Filed.jsx";
+import { MarkFiled } from "./tds/Filed.jsx";
 import { Correction } from "./tds/Smart.jsx";
 import { TracesDefaults } from "./tds/Files.jsx";
 import More from "../parts/More.jsx";
@@ -329,7 +329,7 @@ export function Return26({ b, allRows, form = "26Q" }) {
   // T-E1, T-S3 (10-Oct-2026): every form has its interest and late fee; a return marked filed (or its quarter's date under
   // Settings › Closed periods) has its fee worked out to that date, and the fee is then not an error to fix
   const filed = TDSFiled.get(fy, q, form), filedOn = filed ? filed.on : "";
-  const int1A = TDS.interest(fy, q, form), fee = TDS.lateFee(fy, q, filedOn, form), noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
+  const noPan = rows.filter((r) => !Certs.validPan(r.pan)).length;
   const drift = filed ? TDSDrift.check(fy, q, form) : null;
   const fname = TDS.formName(form, fy), draft = TDS.isNew(fy) && !NEW_FORMS_VALIDATED;
   const title = CO().name + " " + fname + " " + q + " " + fy;
@@ -404,7 +404,6 @@ export function Return26({ b, allRows, form = "26Q" }) {
     nrdetails: <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />,
     nocode: <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />,
     tcsrate: <ChecksOther fy={fy} q={q} form={form} other={other} rows={rows} />,
-    interest: <InterestFee fy={fy} q={q} form={form} list={int1A} fee={fee} filed={filedOn} />,
     tally: <TallyDiffs kind="challan" />,
     chtype: <UnknownChallans fy={fy} q={q} form={form} />,
     corr: <Correction fy={fy} q={q} form={form} drift={drift} />,
@@ -424,6 +423,8 @@ export function Return26({ b, allRows, form = "26Q" }) {
       <button className="btn small" disabled={!Bridge.on() || draft} title={draft ? "A draft is not sent to the FVU" : Bridge.on() ? undefined : "Needs FinCom Bridge"} onClick={() => doAct("tdsFvu")}>Check with FVU</button>
     </div>
     {val.errors.length > 0 && <p className="note bad" data-make-why="">Fix the errors above first: the file is not made while any is left.</p>}
+    {/* next-tds-validate-short: the file's own note of the rows it leaves out (TDS26Q.leftNote), with their list */}
+    {!val.errors.length && val.leftOut && val.leftOut.length > 0 && <p className="note" data-file-left={val.leftOut.length}>{TDS26Q.leftNote(val.leftOut)} <button type="button" className="linkbtn" onClick={() => { S.tdsFix = val.leftOut.some((x) => x.k === "nochallan") ? "unmatched" : "leftout"; S.tdsFixAt = fy + "|" + q + "|" + form; render(); }}>List</button></p>}
     <MarkFiled fy={fy} q={q} form={form} />
   </div>;
   // next-tds-allchallans (the owner's layout): the Deductions step opens on its to-do list (tds/DedTodo.jsx); "All rows"
@@ -554,7 +555,6 @@ export function Return24({ b }) {
   const val = checkReturn(fy, q, "24Q"), filed = TDSFiled.get(fy, q, "24Q"), filedOn = filed ? filed.on : "";
   const a1 = has ? TDS24Q.annexI(fy, q) : [];
   const status = statusOf({ fy, q, form: "24Q", has: has ? a1.length > 0 || inBooks.length > 0 : inBooks.length > 0, errors: val.errors.length, problems: val.n });
-  const int1A = TDS.interest(fy, q, "24Q"), fee = TDS.lateFee(fy, q, filedOn, "24Q");
   const sal = val.warnings.find((x) => x.k === "salary");
   const un = unplacedOf(TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q));
   const steps = [
@@ -573,7 +573,6 @@ export function Return24({ b }) {
     unmatched: <FixRows title={un.length + " salary payments without a challan"} rows={un} unit="salary payments" />,
     nopan: <FixRows title="Without a valid PAN" rows={TDS.formRows("24Q").filter((r) => r.fy === fy && r.q === q && !Certs.validPan(r.pan))} unit="salary payments" />,
     salary: <SalaryChecks list={sal ? sal.list : []} />,
-    interest: <InterestFee fy={fy} q={q} form="24Q" list={int1A} fee={fee} filed={filedOn} />,
     chtype: <UnknownChallans fy={fy} q={q} form="24Q" />,
     traces: <TracesDefaults jr={TRF.jrFor(fy, q, "24Q")} />,
   };

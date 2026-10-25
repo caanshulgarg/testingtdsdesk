@@ -125,11 +125,18 @@ try:
         J("(k) => TDSAdd.save({party: k, section: '194C', date: '20260615', credit: '20260615', paid: 25000, rate: 0, tds: 0})", party)
         J(GO, "file"); pg.wait_for_timeout(700)
         it = pg.locator('[data-val-item="rm-b-uin"]')
-        ok(it.count() == 1 and "UIN" in it.inner_text() and it.get_attribute("data-val-level") == "warn" and pg.locator('[data-val-item="rm-b-decl"]').count() == 0, "C. Validate & file: the Form 121 UIN missing is a warning, not an error: %s" % (it.inner_text() if it.count() else "none"))
+        # next-tds-validate-short: the optional UIN is a suggestion (under Suggestions), not an error
+        ok(it.count() == 1 and "UIN" in it.text_content() and it.get_attribute("data-val-level") == "info" and pg.locator('[data-val-item="rm-b-decl"]').count() == 0, "C. Validate & file: the Form 121 UIN missing is a suggestion, not an error: %s" % (it.text_content() if it.count() else "none"))
         J("(k) => TDSDecl.set(k, '2026-27', {form: ''})", party); J("() => render()"); pg.wait_for_timeout(400)
-        it = pg.locator('[data-val-item="rm-t-pan"]')
-        ok(it.count() == 1 and party in it.inner_text(), "C. Validate & file: remark T needs the PAN: %s" % (it.inner_text() if it.count() else "none"))
-        ok(pg.locator("[data-make-fvu]").is_disabled(), "C. the file is not made while a remark is wrong")
+        # next-tds-validate-short: a wrong remark leaves that row out of the file (said, with why), never a blocker
+        it = pg.locator('[data-val-item="leftout"]')
+        J("() => { S.tdsFix = 'leftout'; S.tdsFixAt = '2026-27|Q1|26Q'; render(); }"); pg.wait_for_timeout(300)
+        dw = pg.locator('[data-val-drawer="leftout"]')
+        dtx = dw.inner_text() if dw.count() else ""
+        J("() => { S.tdsFix = ''; render(); }"); pg.wait_for_timeout(200)
+        ok(it.count() == 1 and it.get_attribute("data-val-level") == "warn" and party in dtx and "Remark T" in dtx, "C. Validate & file: remark T needs the PAN: the row left out of the file, said with why: %s" % dtx[:200])
+        fb = J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
+        ok(any(x["k"] == "remark" and x["party"] == party for x in (fb.get("leftOut") or [])), "C. the file leaves the row out while its remark is wrong (%s)" % (fb.get("error") or fb.get("leftOut")))
 
         # ---------------- the return marked filed: no button
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; }"); J(GO, "deductions"); pg.wait_for_timeout(500)

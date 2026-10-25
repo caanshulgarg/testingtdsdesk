@@ -110,6 +110,8 @@ def snapshot(site, port=8290, shots=None):
             # (S.tdsView 'checks' is still read), so it is asked for whenever the page has the grid (as every build since round 46)
             for chk in ["tieout", "limits"]:
                 pg.evaluate("([fy, c]) => { S.tdsFy = fy; S.tdsQ = ''; S.tdsView = typeof tdsNav === 'function' && (document.querySelector('[data-tds-sec]') || typeof TDSReg === 'object') ? 'checks' : 'year'; S.tdsCheck = c; render(); }", [fy, chk]); take("tds/%s/year" % fy)
+            # next-tds-validate-short (25-Oct-2026): the return's interest and late fee working, a click away (Details), opened
+            pg.evaluate("() => { if (S.tdsView === 'return') { S.tdsFix = 'intwork'; S.tdsFixAt = S.tdsFy + '|' + S.tdsQ + '|' + S.tdsForm; render(); } }"); take("tds/%s/year" % fy); pg.evaluate("() => { S.tdsFix = ''; render(); }")
             for q in ["Q1", "Q2", "Q3", "Q4"]:
                 for form in ["26Q", "27Q", "27EQ", "24Q"]:
                     key = "tds/%s/%s/%s" % (fy, q, form)
@@ -136,6 +138,8 @@ def snapshot(site, port=8290, shots=None):
                                 if os.environ.get("SNAP_TEXT_DIR"):   # the text itself, to read a difference (tds-layout, 14-Oct-2026)
                                     o = os.path.join(os.environ["SNAP_TEXT_DIR"], key, f["name"]); os.makedirs(os.path.dirname(o), exist_ok=True); open(o, "w").write(t)
             pg.evaluate("(fy) => { S.tdsFy = fy; S.tdsView = 'certs'; render(); }", fy); take("tds/%s/certs" % fy)
+            # next-tds-validate-short (25-Oct-2026): the interest and late fee working is a click away (Details): opened
+            pg.evaluate("() => { S.tdsFix = 'intwork'; S.tdsFixAt = S.tdsFy + '|' + S.tdsQ + '|' + S.tdsForm; render(); }"); take("tds/%s/certs" % fy); pg.evaluate("() => { S.tdsFix = ''; render(); }")
         # GST: each GSTIN and month, each part (the parts and, on the new page, each tab of GSTR-1 and 3B)
         regs = pg.evaluate("GSTR.gstins(S.books).map((g) => g.slice(0, 2))")
         months = pg.evaluate("GSTR.months()")

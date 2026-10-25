@@ -66,7 +66,7 @@ try:
         go(pg, "2025-26", "Q1", "26Q", "checks")
         t = app(pg); fr = fee_row(pg); lf = fee_today(pg, "2025-26", "Q1", "26Q")
         ok(fr and lf["fee"] > 0 and abs(fr["fee"] - lf["fee"]) < 0.005 and ("%d days past 31-Jul-2025" % lf["days"]) in fr["note"] and "filed" not in fr["note"]
-           and ("Late fee 234E %s due" % ("₹" + format(lf["fee"], ",.2f"))) in t,
+           and ("Late fee 234E ₹%s" % format(round(lf["fee"]), ",")) in t,
            "before: Errors to fix shows a late fee 'if filed today' (to today: %s; %s)" % (lf, fr))
         go(pg, "2025-26", "Q1", "26Q", "file")
         box = '#app [data-filed="26Q|Q1"]'
@@ -113,7 +113,7 @@ try:
         # an unfiled quarter of an earlier year still has its fee 'if filed today', counted as an error
         go(pg, "2025-26", "Q3", "26Q", "checks"); t = app(pg); fr = fee_row(pg); lf = fee_today(pg, "2025-26", "Q3", "26Q")
         ok(fr and lf["fee"] > 0 and abs(fr["fee"] - lf["fee"]) < 0.005 and ("%d days past 31-Jan-2026" % lf["days"]) in fr["note"] and "filed" not in fr["note"]
-           and ("Late fee 234E %s due" % ("₹" + format(lf["fee"], ",.2f"))) in t,
+           and ("Late fee 234E ₹%s" % format(round(lf["fee"]), ",")) in t,
            "an unfiled quarter (Q3 2025-26): the fee 'if filed today' is still shown (%s; %s)" % (lf, fr))
         # take the mark off: asked first
         pg.evaluate("() => { TDSFiled.unmark('2025-26', 'Q1', '26Q'); }"); pg.wait_for_timeout(300)
@@ -186,16 +186,16 @@ try:
         ok(lf["cap"] == 22968 and lf["fee"] == 22968 and lf["p271h"], "24Q Q1 2025-26 not filed: the fee capped at the salary sheet's TDS ₹22,968, and past a year: 271H (%s)" % lf)
         go(pg, "2025-26", "Q2", "27Q", "checks"); t = app(pg); ir = int_row(pg, "Oslo Design AS"); fr = fee_row(pg)
         # the row: section, TDS, deducted 12-Aug, challan of 20-Oct (paid late: due 07-Sep), no months at 1%, 3 at 1.5%, ₹936
-        ok(pg.locator('#app [data-int-sec="27Q"]').count() == 1 and len(ir) == 1 and ir[0][1:] == ["195", "₹20,800.00", "12-Aug-2025", "12-Aug-2025", "20001 · 20-Oct-2025", "", "3", "₹936.00"]
+        ok(pg.locator('#app [data-int-sec="27Q"]').count() == 1 and len(ir) == 1 and ir[0][1:5] == ["195", "₹20,800.00", "12-Aug-2025", "12-Aug-2025"] and ir[0][5].startswith("20001 · 20-Oct-2025") and ir[0][-3:] == ["3", "₹936.00", "₹936.00"]
            and fr and fr["fee"] == 1000, "27Q's Errors to fix: interest and late fee, ₹936.00 paid late (%s; fee %s)" % (ir, fr))
         # "Pay with the next challan" went on purpose (next-tds-interest2): the summary says the challan's ₹936 is not yet
         # allocated to the return, and Errors to fix sends the person to the Challans step to allocate it
         ch = pg.evaluate("() => { const tr = document.querySelector('#app [data-int-ch=\"chNR\"]'); return tr ? [+tr.dataset.due, +tr.dataset.alloc, (tr.querySelector('[data-status]') || {dataset: {}}).dataset.status] : null; }")
-        ok(ch == [936, 0, "short"] and "Interest ₹936.00 not allocated" in t, "it says what to pay with the next challan: ₹936.00 on challan 20001, not allocated (%s)" % ch)
+        ok(ch == [936, 0, "short"] and "Interest ₹936.00 due · ₹936.00 not allocated" in t, "it says what to pay with the next challan: ₹936.00 on challan 20001, not allocated (%s)" % ch)
         go(pg, "2025-26", "Q2", "27EQ", "checks"); t = app(pg); ir = int_row(pg, "Tern Traders")
         heads = [h.strip() for h in pg.locator('#app [data-int-sec="27EQ"] [data-int-table] thead th').all_inner_texts()]
         # 206C(7): 1% a month (no 1.5% column for TCS): 3 months on ₹100 = ₹3
-        ok(pg.locator('#app [data-int-sec="27EQ"]').count() == 1 and "Months at 1%" in heads and not any("1.5%" in h for h in heads) and len(ir) == 1 and ir[0][-2:] == ["3", "₹3.00"],
+        ok(pg.locator('#app [data-int-sec="27EQ"]').count() == 1 and "Months at 1%" in heads and not any("1.5%" in h for h in heads) and len(ir) == 1 and ir[0][-3:] == ["3", "₹3.00", "₹3.00"],
            "27EQ's Errors to fix: interest under 206C(7) (%s; %s)" % (heads, ir))
         go(pg, "2025-26", "Q1", "24Q", "checks"); t = app(pg); fr = fee_row(pg)
         ok(pg.locator('#app [data-int-sec="24Q"]').count() == 1 and fr and fr["fee"] == 22968 and "₹22,968.00" in fr["text"] and "271H" in fr["title"],

@@ -152,7 +152,8 @@ const sA = sg.find(s => s.chId === "chA"), sM = sg.find(s => s.chId === "chM"), 
 ok(sA && sA.rule === "b" && sA.ids.length === 2 && sM && sM.rule === "b" && sSplit && sSplit.ids[0] === "v3|TDS 194J", "B. suggested: April's 194C to chA, May's to chM, the ₹10,000 194J split across chJ1 and chJ2 (" + sg.map(s => s.rule + ":" + s.chId).join(", ") + ")");
 // file refused while anything is on no challan
 let f = x.TDS26Q.build("2026-27", "Q1", FIRM, "26Q");
-ok(f.error && /4 deductions are on no challan/.test(f.error) && (f.untagged || []).length === 4, "B. the file refuses while deductions are on no challan, and lists them: " + f.error);
+// next-tds-validate-short: the file leaves out what is on no challan, and says so; with nothing on a challan, no file
+ok(f.error && /No challan/.test(f.error) && x.TDS26Q.leftOut("26Q", "2026-27", "Q1").filter(z => z.k === "nochallan").length === 4, "B. nothing on a challan: no file; the 4 on no challan listed as left out: " + f.error);
 let r = x.TDSMatch.confirm(sA.key, "26Q", "2026-27", "Q1");
 ok(r.ok && b.alloc["v1|TDS 194C"] === "chA" && b.alloc["v2|TDS 194C"] === "chA", "B. Confirm one: its deductions on chA");
 ok(/Same section, same month, exact amount/.test(x.TDSMatch.matchedBy("v1|TDS 194C").words) && /suggestion confirmed by/.test(x.TDSMatch.matchedBy("v1|TDS 194C").words), "B. Matched by: " + x.TDSMatch.matchedBy("v1|TDS 194C").words);
@@ -217,7 +218,7 @@ b = books([], [CH("chSal", "20260507", 9000, "192"), CH("chSal2", "20260606", 50
 const sal = x.TDS.salaryRows().filter(z => z.fy === "2026-27");
 ok(sal.length === 3 && sal.every(z => /^sal:/.test(z.id)) && J(x.TDS.salaryRows().map(z => z.id)) === J(sal.map(z => z.id)), "S. the salary sheet's rows have stable ids (" + sal.map(z => z.id).join(", ") + ")");
 f = x.TDS24Q_FILE.build("2026-27", "Q1", FIRM);
-ok(f.error && /on no challan/.test(f.error), "S. Form 138 refused while salary TDS is on no challan: " + f.error);
+ok(f.error && /tagged to a challan yet|No challan/.test(f.error), "S. Form 138: nothing on a challan, no file: " + f.error);
 const s138 = x.TDSMatch.suggest("24Q", "2026-27", "Q1");
 ok(s138.length === 2 && s138[0].rule === "b" && s138[0].chId === "chSal" && s138[1].chId === "chSal2", "S. matched like the others: April ₹9,000 = chSal, May ₹5,000 = chSal2 (" + s138.map(s => s.rule + ":" + s.chId).join(", ") + ")");
 x.TDSMatch.confirmAll("24Q", "2026-27", "Q1");

@@ -2,10 +2,12 @@
 interest and fee a return claims allocated on the Challans grid itself (next-tds-interest, 20-Oct-2026). On the fixture books
 (tdsgst_snapshot.py) plus one deduction made late (bill 05-Apr-2026, deducted 10-Jun-2026) on a challan paid late
 (20-Aug-2026: tax 2,500, interest 50), in the React build (app/dist-test, or TDSDESK_SITE):
-  1. Validate & file: no "Interest of ₹x is due on late deductions or payments" warning and no Review line for interest; ONE
-     warning "Interest ₹x not allocated" (the interest due on the return's challans less what is allocated to it) while
-     short, and "Late fee 234E ₹x due" while a fee is due and the return is not filed
-  2. the "Interest & fee" section: a row for each deduction with interest (deducted late and paid late on one row),
+  1. Validate & file: no "Interest of ₹x is due on late deductions or payments" warning; ONE warning "Interest ₹x due · ₹y
+     not allocated" (next-tds-validate-short: the return's whole interest, and the interest due on its challans less what is
+     allocated to it) while short, its one action Details, and "Late fee 234E ₹x" while a fee is due and the return is not
+     filed
+  2. the "Interest & fee" working (next-tds-validate-short: in the line's side panel, not on the page): a row for each
+     deduction with interest (deducted late and paid late on one row),
      its figures and total those of TDS.interest; the 234E line that of TDS.lateFee; due, allocated and the difference by
      challan
   3. the Challans grid: Interest allocated and Others allocated typed in the row (kept; the row click not set off); more
@@ -60,24 +62,30 @@ try:
           const d = r2(TDS.interest('2026-27', 'Q1', '26Q').filter(x => x.kind !== 'unpaid').reduce((a, x) => a + x.amount, 0));
           const g = r2(mine.reduce((a, c) => a + TDSReg.portionFor(c, '26Q', '2026-27', 'Q1', cx).interest, 0)); return r2(Math.max(0, d - g)); }"""
         item = lambda k: J("(k) => { const e = document.querySelector('#app [data-val-item=\"' + k + '\"] .vf-w'); return e ? e.textContent : null; }", k)
+        # next-tds-validate-short: the working is in a side panel (Details, or More checks › Interest & late fee)
+        work = lambda: (J("() => { S.tdsFix = 'intwork'; S.tdsFixAt = '2026-27|Q1|26Q'; render(); }"), pg.wait_for_timeout(400))
+        amtw = lambda v: J("(v) => '₹' + (Math.abs(r2(v) - Math.round(v)) < 0.005 ? Math.round(v).toLocaleString('en-IN') : INR.format(r2(v)))", v)
+        TOT = "() => TDSMatch.interestTable('26Q', '2026-27', 'Q1').totals.interest"
 
         print("1. Validate & file")
         go("file")
         txt = J("document.querySelector('#app').innerText")
         ok("is due on late deductions" not in txt, "no 'Interest of ₹x is due on late deductions or payments' warning")
-        ok(J("!document.querySelector('#app [data-val-review=\"interest\"]')"), "no Review line for interest")
+        ok(J("document.querySelectorAll('#app [data-val-item=\"interest\"] .vf-act button').length") == 1 and J("(document.querySelector('#app [data-val-review=\"interest\"]') || {}).textContent") == "Details", "the interest line's one action: Details")
         short = J(SHORT)
-        ok(short >= 1 and item("interest") == "Interest %s not allocated" % money(short), "one warning: Interest %s not allocated (%s)" % (money(short), item("interest")))
-        ok(J("document.querySelectorAll('#app [data-val-item=\"interest\"]').length") == 1 and len(re.findall(r"Interest .{0,20}not allocated", txt)) == 1, "the interest warning once")
+        ok(short >= 1 and item("interest") == "Interest %s due · %s not allocated" % (money(J(TOT)), money(short)), "one warning: Interest %s due · %s not allocated (%s)" % (money(J(TOT)), money(short), item("interest")))
+        ok(J("document.querySelectorAll('#app [data-val-item=\"interest\"]').length") == 1 and len(re.findall(r"Interest .{0,40}not allocated", txt)) == 1, "the interest warning once")
         fee = J("TDS.lateFee('2026-27', 'Q1', '', '26Q')")
         FEEALLOC = "() => TDSMatch.interestTable('26Q', '2026-27', 'Q1').totals.feeAllocated"
         J("() => { TDS.challans().forEach(c => { const p = TDSReg.portionFor(c, '26Q', '2026-27', 'Q1'); if (p.fee234) TDSReg.setPortion(c.id, '26Q', '2026-27', 'Q1', p.interest, 0, {nosave: true}, p.others); }); render(); }")
-        ok(fee and fee["fee"] > 0 and J(FEEALLOC) == 0 and item("fee") == "Late fee 234E %s due" % money(fee["fee"]), "Late fee 234E %s due (%s)" % (money(fee and fee["fee"]), item("fee")))
+        ok(fee and fee["fee"] > 0 and J(FEEALLOC) == 0 and item("fee") == "Late fee 234E %s" % amtw(fee["fee"]), "Late fee 234E %s (%s)" % (amtw(fee and fee["fee"]), item("fee")))
         ok("No interest or late fee yet" not in txt and not re.search(r"Interest 201\(1A\) ₹[\d,.]+ · late fee", txt), "no old 'Interest 201(1A) ₹x · late fee' summary line")
 
-        print("2. the Interest & fee section")
-        sec = pg.locator('#app [data-int-sec="26Q"]')
-        ok(sec.count() == 1 and "Interest & fee" in sec.text_content(), "Validate & file has an Interest & fee section")
+        print("2. the Interest & fee working")
+        ok(pg.locator('#app [data-validate] > [data-int-sec]').count() == 0, "no Interest & fee table on the page itself")
+        pg.click('#app [data-val-review="interest"]'); pg.wait_for_timeout(500)
+        sec = pg.locator('[data-val-drawer="interest"] [data-int-sec="26Q"]')
+        ok(sec.count() == 1 and "Interest & fee" in sec.text_content(), "Details opens the Interest & fee working")
         heads = [h.strip() for h in pg.locator('#app [data-int-sec] [data-int-table] thead th').all_inner_texts()]
         want_heads = ["Deductee", "Section", "Amount", "Deducted on", "Paid/credited on", "Challan", "Months at 1%", "Months at 1.5%", "Interest"]
         ok(all(any(w in h for h in heads) for w in want_heads), "its columns: %s (%s)" % (want_heads, heads))
@@ -89,7 +97,8 @@ try:
         mine = [a for k, a in rows if k == rid]
         ok(mine == [150], "the late deduction: one row, interest 150 (%s)" % mine)
         tot = J("() => { const e = document.querySelector('#app [data-int-total]'); return e ? +e.dataset.intTotal : null; }")
-        ok((exp["n"] > 1 and tot is not None and abs(tot - exp["total"]) < 0.005) or (exp["n"] == 1 and tot is None), "the total is TDS.interest's, shown only for two rows or more: %s (%s, %d rows)" % (tot, exp["total"], exp["n"]))
+        rtot = J("() => { const e = document.querySelector('#app [data-int-rows-total]'); return e ? +e.dataset.intRowsTotal : null; }")
+        ok(tot is not None and abs(tot - exp["total"]) < 0.005 and ((exp["n"] > 1 and rtot is not None and abs(rtot - tot) < 0.005) or (exp["n"] == 1 and rtot is None)), "the total is TDS.interest's (the table's total row only for two rows or more): %s (%s, %d rows)" % (tot, exp["total"], exp["n"]))
         cred = J("(id) => (document.querySelector('#app [data-int-row=\"' + id + '\"] [data-int-credit]') || {}).textContent", rid)
         ok(cred == J("() => fmtDate(tallyDate('20260405'))"), "Paid/credited on: the date credited, 05-Apr-2026 (%s)" % cred)
         mrow = J("(id) => { const tr = document.querySelector('#app [data-int-row=\"' + id + '\"]'); return tr ? tr.innerText.replace(/\\s+/g, ' ') : ''; }", rid)
@@ -97,7 +106,8 @@ try:
         frow = J("() => { const e = document.querySelector('#app [data-int-fee]'); return e ? [+e.dataset.intFee, e.innerText.replace(/\\s+/g, ' '), e.title, (e.querySelector('[data-status]') || {dataset: {}}).dataset.status] : null; }")
         ok(frow and abs(frow[0] - fee["fee"]) < 0.005 and ("%d days past" % fee["days"]) in frow[1] and "₹200/day, capped at the quarter's tax" in frow[1] and frow[3] == "short", "the 234E row: TDS.lateFee's fee, its one-line note, short (%s)" % (frow,))
         ok("271H" in (frow[2] or "") and "271H" not in sec.inner_text(), "271H only in the 234E row's hover (%s)" % (frow[2],))
-        stxt = sec.inner_text()
+        ok(sec.locator('[data-int-sum]').count() == 1 and abs(J("+document.querySelector('#app [data-int-sum] [data-int-short]').dataset.intShort") - J(SHORT)) < 0.005, "the working's sum: total, on challans, allocated, not allocated (the line's)")
+        stxt = J("() => { const s = document.querySelector('#app [data-int-sec]').cloneNode(true); s.querySelectorAll('[data-int-sum], [data-int-law]').forEach(e => e.remove()); document.body.appendChild(s); const t = s.innerText; s.remove(); return t; }")
         ok("Pay with the next challan" not in stxt and "if filed today" not in stxt, "no 'Pay with the next challan' and no long late-fee text")
         ok(stxt.count(money(fee["fee"])) == 1, "the late fee %s once in the section (%d)" % (money(fee["fee"]), stxt.count(money(fee["fee"]))))
         ch = J("() => { const tr = document.querySelector('#app [data-int-ch=\"zzlate\"]'); return tr ? {due: +tr.dataset.due, alloc: +tr.dataset.alloc, diff: +tr.dataset.diff, bad: tr.querySelector('.bad') != null} : null; }")
@@ -147,11 +157,11 @@ try:
         J("() => { TDSReg.setPortion('zzlate', '26Q', '2026-27', 'Q1', 0, 0); render(); }")
         pg.click('#app [data-chg-alloc-due]'); pg.wait_for_timeout(400)
         ok(J(P)["interest"] == 150, "Allocate interest due: 150 to the late challan (%s)" % J(P))
-        go("file")
+        go("file"); work()
         ch = J("() => { const tr = document.querySelector('#app [data-int-ch=\"zzlate\"]'); return tr ? {alloc: +tr.dataset.alloc, diff: +tr.dataset.diff} : null; }")
         ok(ch and ch["alloc"] == 150 and ch["diff"] == 0, "by challan: 20001 allocated 150, no difference (%s)" % ch)
         short = J(SHORT)
-        ok((short < 1 and item("interest") is None) or (short >= 1 and item("interest") == "Interest %s not allocated" % money(short)), "the interest warning follows what is left short (%s, %s)" % (short, item("interest")))
+        ok((short < 10 and item("interest") is None) or (short >= 10 and item("interest") == "Interest %s due · %s not allocated" % (money(J(TOT)), money(short))), "the interest warning follows what is left short (%s, %s)" % (short, item("interest")))
         pg.screenshot(path=os.path.join(SHOTS, "validate-after-1440.png"), full_page=True)
 
         print("6. covered, within ₹10")
@@ -159,7 +169,7 @@ try:
         n0 = J(COUNT)
         stat = lambda: J("() => { const tr = document.querySelector('#app [data-int-ch=\"zzlate\"]'); return tr ? [(tr.querySelector('[data-status]') || {dataset: {}}).dataset.status, tr.innerText.replace(/\\s+/g, ' ')] : null; }")
         for amt, want, words in ((153, "covered", "₹3.00 more than due"), (145, "within", "Within ₹10"), (150, "covered", None)):
-            J("(a) => { TDSReg.setPortion('zzlate', '26Q', '2026-27', 'Q1', a, 0, {nosave: true}, 10); render(); }", amt); pg.wait_for_timeout(300)
+            J("(a) => { TDSReg.setPortion('zzlate', '26Q', '2026-27', 'Q1', a, 0, {nosave: true}, 10); render(); }", amt); pg.wait_for_timeout(300); work()
             st = stat()
             ok(st and st[0] == want and (words is None or words in st[1]) and not re.search(r"₹-|-₹", st[1]) and "Covered ✓" in st[1] if want == "covered" else st and st[0] == want and (words in st[1]),
                "interest allocated %d of 150: %s%s (%s)" % (amt, want, " · " + words if words else "", st))
@@ -183,20 +193,20 @@ try:
         fin = pg.locator('#app input[data-chg-fee="zzlate"]'); fin.fill("30"); fin.press("Enter"); pg.wait_for_timeout(300)
         ok(J(P)["fee234"] == 30 and J(P)["others"] == 10 and J(P)["interest"] == 150, "Fee 234E 30 typed: kept apart from others 10 (%s)" % J(P))
         go("file")
-        ok(item("fee") == "Late fee 234E %s due" % money(fee["fee"] - 30), "the 234E warning: what is left, %s (%s)" % (money(fee["fee"] - 30), item("fee")))
+        ok(item("fee") == "Late fee 234E %s still to allocate" % amtw(fee["fee"] - 30), "the 234E warning: what is left, %s (%s)" % (amtw(fee["fee"] - 30), item("fee")))
         go("challans")
         ok(pg.locator('#app [data-chg-alloc-fee]').count() == 1, "Allocate fee due offered while the fee is short")
         pg.click('#app [data-chg-alloc-fee]'); pg.wait_for_timeout(400)
         fa = J(FEEALLOC)
         ok(fa >= fee["fee"] - 0.005 and pg.locator('#app [data-chg-alloc-fee]').count() == 0, "Allocate fee due: %s allocated (%s), the button gone" % (money(fee["fee"]), fa))
         pg.screenshot(path=os.path.join(SHOTS, "challans-fee-1440.png"), full_page=True)
-        go("file")
+        go("file"); work()
         frow = J("() => { const e = document.querySelector('#app [data-int-fee]'); return e ? (e.querySelector('[data-status]') || {dataset: {}}).dataset.status : null; }")
         ok(item("fee") is None and frow == "covered", "the fee allocated: no 234E warning, the 234E row Covered ✓ (%s, %s)" % (item("fee"), frow))
         sec = pg.locator('#app [data-int-sec="26Q"]'); sec.scroll_into_view_if_needed()
         pg.screenshot(path=os.path.join(SHOTS, "validate-covered-1440.png"), full_page=True)
         # each figure once: the Allocated column apart (a figure due and the same allocated is the summary's point)
-        stxt = J("() => { const s = document.querySelector('#app [data-int-sec]').cloneNode(true); s.querySelectorAll('[data-int-chs] tr > :nth-child(4)').forEach(e => e.remove()); document.body.appendChild(s); const t = s.innerText; s.remove(); return t; }")
+        stxt = J("() => { const s = document.querySelector('#app [data-int-sec]').cloneNode(true); s.querySelectorAll('[data-int-chs] tr > :nth-child(4), [data-int-sum], [data-int-law]').forEach(e => e.remove()); document.body.appendChild(s); const t = s.innerText; s.remove(); return t; }")
         amts = re.findall(r"₹[\d,]+\.\d\d", stxt)
         dup = sorted(set(a for a in amts if amts.count(a) > 1))
         ok(not [a for a in dup if a != money(150)], "no figure twice in the section, but a deduction's interest that is its challan's whole due (%s)" % dup)

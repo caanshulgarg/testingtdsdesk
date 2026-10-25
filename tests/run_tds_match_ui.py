@@ -110,9 +110,12 @@ try:
         ok(len(heads) == len(set(heads)) and all(c == "Not matched" for c in clean) and pg.inner_text("#app #tdsDnTable").count("No challan paid yet") == 0,
            "Deductions: one header per section-month (%s), its rows only \"Not matched\" (%d), no sentence repeated" % (heads, len(clean)))
         pg.click('#app [data-ret-tab="challans"]'); pg.wait_for_timeout(400); none()
-        ok(J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q').error || ''").find("on no challan") > 0, "the file refuses while deductions are on no challan")
+        # next-tds-validate-short: the file leaves out what is on no challan (said); with nothing on a challan, no file
+        fb = J("TDS26Q.build('2026-27', 'Q1', TDS26Q.firmDetails(), '26Q')")
+        ok(("No challan" in (fb.get("error") or "")) or (fb.get("leftOut") and not fb.get("error")), "the file leaves out the deductions on no challan, never refused for them (%s)" % (fb.get("error") or len(fb.get("leftOut") or [])))
         pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(400)
-        ok(pg.locator('#app [data-val-item="unmatched"][data-val-level="error"]').count() == 1 and pg.locator("#app [data-make-fvu]").is_disabled(), "Validate & file: an error blocks the file, Make FVU file is off")
+        nof = pg.locator('#app [data-val-item="nofile"][data-val-level="error"]').count()
+        ok(pg.locator('#app [data-val-item="unmatched"][data-val-level="warn"]').count() == 1 and pg.locator("#app [data-make-fvu]").is_disabled() == (nof == 1 or "No challan" in (fb.get("error") or "")), "Validate & file: a warning, not an error; Make FVU file off only when no file can be made (%s)" % nof)
         pg.click('#app [data-ret-tab="challans"]'); pg.wait_for_timeout(400)
         pick("chA")
         pg.screenshot(path=os.path.join(SHOTS, "fresher-desktop-1-suggestions.png"), full_page=True)

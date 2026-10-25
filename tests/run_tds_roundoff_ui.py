@@ -46,8 +46,11 @@ with sync_playwright() as p:
     print("2. the note on Validate & file")
     li = pg.locator('#app [data-val-list="info"] li[data-tds-adj="ro1"]')
     ok(li.count() == 1, "one note line for the journal (%d)" % li.count())
+    # next-tds-validate-short: under the folded Suggestions; one short line, the whole words on its hover
+    pg.click('#app [data-val-sugg] > summary'); pg.wait_for_timeout(200)
     words = li.locator(".vf-w").inner_text() if li.count() else ""
-    ok(words == WANT, "its words: \"%s\"" % words)
+    full = (li.locator(".vf-w").get_attribute("title") or words) if li.count() else ""
+    ok(full == WANT and 0 < len(words) <= 70 and WANT.startswith(words.rstrip("…")), "its words: \"%s\" (the whole on its hover)" % words)
     ok(pg.locator('#app [data-val-list="errors"] [data-tds-adj], #app [data-val-list="warnings"] [data-tds-adj]').count() == 0, "not an error, not a warning")
     ok(pg.get_attribute('#app [data-val-errors]', 'data-val-errors') == e0 and pg.get_attribute('#app [data-val-warnings]', 'data-val-warnings') == w0, "the counts of errors and warnings unchanged (%s/%s)" % (e0, w0))
     li.scroll_into_view_if_needed() if li.count() else None

@@ -107,7 +107,7 @@ try:
         J("([fy, q]) => { tdsGo(fy, q, '26Q'); S.tdsTab = 'deductees'; render(); }", [fy1, q1]); pg.wait_for_timeout(500)
         ok(pg.locator('#app #tdsDeTable [data-pan-box="%s"]' % party).count() == 0 and pan in pg.inner_text('#app #tdsDeTable tr[data-dee="%s"]' % J("(p) => normName(p)", party)), "%s %s: not asked again, the PAN shown" % (fy1, q1))
         f = J("([fy, q]) => TDS26Q.build(fy, q, TDS26Q.firmDetails(), '26Q')", [fy1, q1])
-        ok(pan in (f.get("text") or "") or "on no challan" in (f.get("error") or ""), "the FVU file carries the PAN (%s)" % (f.get("error") or "")[:80])
+        ok(pan in (f.get("text") or "") or "on no challan" in (f.get("error") or "") or "No challan" in (f.get("error") or ""), "the FVU file carries the PAN (%s)" % (f.get("error") or "")[:80])
         if f.get("text"): ok(pan in f["text"], "the FVU file of %s %s has %s" % (fy1, q1, pan))
         ok(J("BOOKS_KEYS.includes('panFix') && BookSync.keys().includes('panFix')"), "the PAN book is kept with the books and synced to the cloud with them (a second login sees it)")
         cid = J("S.books.cid")
@@ -190,7 +190,8 @@ try:
         e0 = int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors'))
         r = J("() => TDSAdd.save({party: 'ZZ New Vendor Pvt Ltd', section: '194C', date: '2026-06-10', paid: 10000, tds: 200})")
         J("render()"); pg.wait_for_timeout(400)
-        ok(r.get("ok") and pg.locator('#app [data-val-item="unmatched"]').count() == 1 and int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors')) >= max(1, e0), "one on no challan: Validate & file's error (%s)" % r)
+        # next-tds-validate-short: a warning (left out of the file), not an error
+        ok(r.get("ok") and pg.locator('#app [data-val-item="unmatched"][data-val-level="warn"]').count() == 1 and int(pg.get_attribute('#app [data-val-errors]', 'data-val-errors')) <= e0, "one on no challan: Validate & file's warning, not an error (%s)" % r)
         J("(k) => TDSAdd.remove(k, 'a test')", r.get("key"))
         # the old forms' builder (26Q, 2025-26) too
         ch25 = J("() => (TDS.challans().find(c => TDS.fyOf(c.date) === '2025-26' && TDS.qOf(c.date) === 'Q1') || {}).id")

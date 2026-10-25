@@ -135,11 +135,14 @@ try:
         hdr = pg.evaluate("(() => { const b = document.querySelector('[data-return-card] [data-problem-count]'); return b ? +b.dataset.problemCount : 0; })()")
         said = pg.evaluate("document.querySelectorAll('[data-rail-problems], [data-val-counts] .bad, [data-val-counts] .warn').length")
         ok(sum(vals) == hdr and said == 0, "2. one problem count: the panel's errors + warnings %s = the header's %d, said only there (%d elsewhere)" % (vals, hdr, said))
+        # next-tds-validate-short: the online checks, the year's checks under one folded More checks
+        if not pg.evaluate("(document.querySelector('[data-val-morechecks]') || {}).open"): pg.click('[data-val-morechecks] > summary'); pg.wait_for_timeout(200)
         ok(pg.locator('[data-online="pan"] [data-online-run]').is_disabled() and "not connected yet" in pg.inner_text('[data-online="pan"]'), "2. TRACES · verify PANs: not connected yet, Run off")
         ok(all(pg.locator('[data-online="%s"]' % k).count() == 1 for k in ["pan", "challans", "csi", "ai"]), "2. the online checks: TRACES PANs, challan balances, CSI, AI match")
         if pg.locator('[data-val-review="nopan"]').count():
             pg.click('[data-val-review="nopan"]'); pg.wait_for_timeout(300)
-            ok(pg.locator('[data-fix-part="nopan"]').count() == 1, "2. Review ▸ opens the list under its line")
+            ok(pg.locator('[data-fix-part="nopan"]').count() == 1, "2. Review ▸ opens the list (in its side panel)")
+            pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         pg.click('[data-year-checks] > summary'); pg.wait_for_timeout(200)
         pg.click('[data-fix="limits"]'); pg.wait_for_timeout(300)
         ok(pg.locator('[data-fix-part="limits"]').count() == 1, "2. the year's TDS limits open from Year checks")

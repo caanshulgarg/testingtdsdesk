@@ -86,6 +86,44 @@ const TDSAdd = {
     saveBooks();
     return {ok: true};
   },
+  // next-tds-validate-short (Leads Insurance, Form 140 Q1 2026-27, 25-Oct-2026): 39 deductions typed in FinCom on 23-24 Oct
+  // were already in the books (the same day, section and TDS, the deductee's name a little different: "Garg Shekhar & Co."
+  // in Tally, "Garg Shekhar & Company" typed), so the return carried each twice. A possible duplicate: a deduction added in
+  // FinCom (not from an entry: fromVoucher) and another of the same return, the same date of deduction (a books row: within a
+  // month) and section, the same TDS within ₹1 (or the books' own TDS, where it was corrected in FinCom), the same deductee (its PAN, or the name alike:
+  // nameSim 0.8). Each row in one pair at most; the nearest date first, then a books row. [{a (added), b (the other), why}]
+  dups(form, fy, q){
+    const rows = TDS.formRows(form).filter(r => r.fy === fy && r.q === q && num(r.tds) > 0.005 && !r.splitOf), A = this.all(), used = new Set(), out = [];
+    const tdsOf = (r) => [num(r.tds)].concat(r.books && r.books.tds != null ? [num(r.books.tds)] : []);
+    const days = (a, b) => { const t = (r) => { const d = TDS.ymd(r.date); return Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)); }; return Math.abs(t(a) - t(b)) / 864e5; };
+    // (the date typed may be the bill's: Simson's ₹2,733 typed for 21-Apr, in the books on 22-May) a books row within a month
+    const same = (a, b) => TDS.sec(a.section) === TDS.sec(b.section) && (days(a, b) === 0 || (!b.added && days(a, b) <= 31)) && tdsOf(a).some(x => tdsOf(b).some(y => Math.abs(x - y) <= 1)) &&
+      ((Certs.validPan(a.pan) && a.pan === b.pan) || nameSim(a.party || "", b.party || "") >= 0.8);
+    rows.filter(r => r.added && !(A[String(r.id).slice(3)] || {}).fromVoucher).forEach(a => {
+      if (used.has(a.id)) return;
+      const c = rows.filter(b => b.id !== a.id && !used.has(b.id) && same(a, b)).sort((x, y) => days(a, x) - days(a, y) || (x.added ? 1 : 0) - (y.added ? 1 : 0))[0];
+      if (!c) return;
+      used.add(a.id); used.add(c.id);
+      const dd = days(a, c);
+      out.push({a, b: c, why: (dd ? "dates " + dd + " day" + (dd === 1 ? "" : "s") + " apart, the same section and TDS" : "the same date, section and TDS") + (c.added ? ", both added in FinCom" : ", one from the books, one added in FinCom")});
+    });
+    return out;
+  },
+  // "Keep this one" (keepId; form: the return's): the other (dropId) of a possible duplicate taken out of the return (kept: TDSEdit's out, Put back on Validate &
+  // file), its challan kept for Put back. {ok, why}
+  keepOne(form, keepId, dropId){
+    const all = TDS.formRows(form), keep = all.find(r => r.id === keepId), r = all.find(x => x.id === dropId);
+    if (!r || !keep) return {ok: false, why: "That deduction is not in the return any more."};
+    if (typeof TDSReg === "object" && TDSReg.locked(r.fy, r.q, form)) return {ok: false, why: TDSReg.lockWords(r.fy, r.q, form)};
+    const b = S.books, who = typeof TDSReg === "object" ? TDSReg.who() : "", at = new Date().toISOString();
+    b.tdsEdits = Object.assign({}, b.tdsEdits || {});
+    const e = b.tdsEdits[r.id] = Object.assign({f: {}, log: []}, b.tdsEdits[r.id] || {});
+    e.f = Object.assign({}, e.f, {out: {by: who, at, dup: keepId, reason: "possible duplicate of " + (keep.added ? "the one added in FinCom" : (keep.type || "the entry") + (keep.voucher ? " " + keep.voucher : "")) + " (kept)", form, fy: r.fy, q: r.q, party: r.party || "", tds: r2(num(r.tds))}});
+    e.log = (e.log || []).concat([{field: "out", from: "", to: "taken out", by: who, at}]);
+    if (typeof TDSReg === "object"){ TDSReg.log({act: "keep one", note: (r.party || "") + " " + r2(num(r.tds)) + ": possible duplicate taken out"}); TDSReg.forget(); TDSReg.done(); }
+    saveBooks();
+    return {ok: true};
+  },
   // the deductee's last section and its certificate, for the form's defaults
   lastSection(party){ const r = TDS.allRows().filter(x => normName(x.party) === normName(party) && x.section).pop(); return r ? r.section : ""; },
 };

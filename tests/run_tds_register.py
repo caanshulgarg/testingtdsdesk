@@ -79,7 +79,8 @@ try:
         ok("challan nature 92B used in 26Q" in notes, "A2. the note says so: %s" % notes)
         J("() => { S.tdsTab = 'file'; render(); }"); pg.wait_for_timeout(400)
         nt = pg.locator('[data-val-item^="i-nature"]')
-        ok(nt.count() == 1 and "challan nature 92B used in 26Q" in nt.inner_text(), "A2. the note shows on the return's Validate & file")
+        # next-tds-validate-short: a suggestion (under the folded Suggestions), in one short line
+        ok(nt.count() == 1 and "challan nature 92B used in 26Q" in nt.text_content() and nt.get_attribute("data-val-level") == "info", "A2. the note shows on the return's Validate & file, a suggestion")
         ok(J("() => TDSReg.trail('chS').some(t => t.act === 'tag' && /92B used in 26Q/.test(t.note))"), "A2. the trail keeps the note")
         # earlier year's balance
         J(ADD, ["chOld", "0240020", "20260305", "00103", 5000, "194J"])
@@ -91,7 +92,10 @@ try:
         txt = J(BUILD)
         # next-tds-forms-2025: Form 140's challan record (Protean's file format 1.1): BSR field 15, serial 17, date 19
         cds = [l.split("^") for l in txt.split("\r\n") if "^CD^" in l]
-        ok(any(c[14] == "0240020" and c[16] == "00103" and c[18] == "05032026" for c in cds), "A3. the earlier year's challan is in the Q1 file with its deductions (a CD record)")
+        # next-tds-validate-short: Protean's FVU refuses a challan of the year before for these (T-FV-3076): the file leaves its
+        # deductions out (said), so no CD record for it, never a refusal
+        lo = J("() => TDS26Q.leftOut('26Q', '2026-27', 'Q1').filter(x => x.r.challan === 'chOld').map(x => x.k)")
+        ok(txt and not any(c[16] == "00103" for c in cds) and lo and all(k == "early" for k in lo), "A3. the earlier year's challan's deductions left out of the Q1 file, said (%s)" % lo)
         # interest and fee apart
         J("() => { const c = TDS.challans().find(c => c.id === 'chA'); c.interest = 150; c.fee = 400; }")
         cd0 = [l.split("^") for l in J(BUILD).split("\r\n") if "^CD^" in l and "^00101^" in l]
@@ -260,6 +264,8 @@ try:
         ok(J("() => TDS.challans().find(c => c.serial === '00603').autoPlace") == "unknown" and J("() => TDSReg.usedTax(TDS.challans().find(c => c.serial === '00603'))") == 0, "C6. a challan of unknown type is not placed")
         J("() => { S.tdsView = 'return'; S.tdsQ = 'Q1'; S.tdsForm = '26Q'; S.tdsTab = 'checks'; S.tdsFix = ''; render(); }"); pg.wait_for_timeout(400)
         ok(pg.locator('[data-val-item="chtype"]').count() == 1 and "which return" in pg.locator('[data-val-item="chtype"]').inner_text(), "C6. Validate & file asks which return, in one line")
+        # next-tds-validate-short: past five lines the rest are under "N more warnings · Show"
+        if pg.locator('[data-val-more-show]').count(): pg.click('[data-val-more-show]'); pg.wait_for_timeout(200)
         pg.click('[data-val-review="chtype"]'); pg.wait_for_timeout(300)
         ok(pg.locator('[data-unknown-ch]').count() == 1, "C6. it opens the challan, with Use in this return")
         J("() => { S.books.tdsFiled = {'2026-27|Q1|26Q': {on: '2026-07-20', token: ''}}; }")

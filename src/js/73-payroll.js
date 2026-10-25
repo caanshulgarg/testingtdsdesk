@@ -459,8 +459,6 @@ const TDS24Q_FILE = {
     const src = TDS.salarySource(fy), all = TDS.salaryRows().filter(r => r.fy === fy && r.q === q);
     // round 92 (C): salary kept without payroll, every entry naming its employee's own ledger: the books' rows by employee
     if (src === "books" && all.length && all.every(r => r.from === "books")){
-      const un = TDS26Q.untaggedError(all);
-      if (un) return un;
       const rows = all.filter(r => r.tds > 0.005 && r.challan);
       return rows.length ? {rows, src: "books"} : {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
     }
@@ -469,8 +467,6 @@ const TDS24Q_FILE = {
     const mine = src === "payroll" ? all : TDS24Q.dedRows().filter(r => r.fy === fy && r.q === q);
     const uns = mine.filter(r => r.unsplit || r.unsplitBooks);
     if (uns.length) return {error: "₹" + INR.format(r2(uns.reduce((a, r) => a + r.tds, 0))) + " of " + q + " " + fy + "'s salary TDS is not split by employee: mark the TDS pay head (Employees & declarations) or check the payroll in Tally, then make the file."};
-    const un = TDS26Q.untaggedError(mine);
-    if (un) return un;
     const rows = mine.filter(r => r.tds > 0.005 && r.challan).map(r => Object.assign({}, r, {employee: r.employee || r.party}));
     if (!rows.length) return {error: "No salary TDS of " + q + " " + fy + " is tagged to a challan yet."};
     return {rows, src};

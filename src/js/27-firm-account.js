@@ -1814,7 +1814,7 @@ function doAct(act, t){
       const r = TDS26Q.build(fy, q, TDS26Q.firmDetails(), S.tdsForm);
       if (r.error){ toast(r.error); break; }
       saveFile(r.name, new Blob([r.text], {type: "text/plain"}));
-      toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
+      toast((r.draft ? "Form " + r.formNo + ", draft – not yet validated: " : "") + r.rows + (r.form === "27EQ" ? " collections" : " deductions") + " under " + r.challans + " challan" + (r.challans === 1 ? "" : "s") + (r.leftOut && r.leftOut.length ? " (" + r.leftOut.length + " left out: Validate & file lists them)" : "") + (r.remarks ? ", " + r.remarks + " with a remark (certificate or higher rate)" : "") +
         (r.missingCodes && r.missingCodes.length ? ". No payment code yet for " + r.missingCodes.join(", ") : "") +
         (r.firmMissing && r.firmMissing.length ? ". The deductor's details the FVU asks are missing: " + r.firmMissing.join(", ") : "") +
         (r.problems && r.problems.length ? ". " + r.problems.length + " thing" + (r.problems.length === 1 ? "" : "s") + " to fix first: " + r.problems.slice(0, 3).join(" ") + (r.problems.length > 3 ? " \u2026" : "") : "") +
