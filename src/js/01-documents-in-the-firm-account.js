@@ -4360,6 +4360,7 @@ let RENDER_GEN = 0, IN_RENDER = 0;
 let BOOKS_REV = 0, LAST_DRAW = null;
 function drawStamp(){ LAST_DRAW = {gen: RENDER_GEN, books: S.books, rev: BOOKS_REV, co: S.coId}; }
 function memoKeep(fn){
+  reactScopeEnd();
   const d = LAST_DRAW;
   if (IN_RENDER || !d || d.gen !== RENDER_GEN || d.books !== S.books || d.rev !== BOOKS_REV || d.co !== S.coId) return memoScope(fn);
   IN_RENDER++; try { return fn(); } finally { IN_RENDER--; }
@@ -4370,14 +4371,19 @@ function memoKeep(fn){
 // React schedules, not drawReact's memoScope), so IN_RENDER was 0: each part asking for TDS.rows, nrRows, salaryRows,
 // quarters... worked out TDS.allRowsNow over every entry again (105 times), and Books.lines every entry's lines each time.
 // Now such a render is a drawing too: its figures are kept until the task it runs in ends (as within drawReact, whose
-// flushSync is one task). React says whether it is drawing a component (window.__fincomReactRendering, app/src/main.jsx);
-// tests/run_books_reopen_freeze.py
+// flushSync is one task). React says whether it is drawing a component (window.__fincomReactRendering, app/src/main.jsx).
+// Only while React draws: the first ask from outside a component (an effect, an action after the render), a drawing of
+// our own (render, memoScope, memoKeep) or the end of the task closes it, so nothing outside React's drawing ever gets
+// figures kept from it; tests/run_books_reopen_freeze.py
+let REACT_SCOPE = false;
+function reactScopeEnd(){ if (REACT_SCOPE){ REACT_SCOPE = false; IN_RENDER--; RENDER_GEN++; } }
 function reactScope(){
-  if (IN_RENDER || typeof window !== "object" || typeof window.__fincomReactRendering !== "function") return;
-  let on = false; try { on = window.__fincomReactRendering(); } catch (e){ on = false; }
-  if (!on) return;
-  RENDER_GEN++; drawStamp(); IN_RENDER++;
-  queueMicrotask(() => { IN_RENDER--; });
+  let on = false;
+  try { on = typeof window === "object" && typeof window.__fincomReactRendering === "function" && !!window.__fincomReactRendering(); } catch (e){ on = false; }
+  if (REACT_SCOPE){ if (!on) reactScopeEnd(); return; }
+  if (IN_RENDER || !on) return;
+  REACT_SCOPE = true; RENDER_GEN++; IN_RENDER++;
+  queueMicrotask(reactScopeEnd);
 }
 function perRender(o, key, fn){
   reactScope();
@@ -4388,9 +4394,9 @@ function perRender(o, key, fn){
 }
 // a long calculation (the MIS, the audit) shares figures the same way while it runs: GST 3B for a month was worked out
 // 48 times in one MIS run, and the TDS rows 18 times
-function memoScope(fn){ if (!IN_RENDER){ RENDER_GEN++; drawStamp(); } IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
+function memoScope(fn){ reactScopeEnd(); if (!IN_RENDER){ RENDER_GEN++; drawStamp(); } IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
-  RENDER_GEN++; drawStamp(); IN_RENDER++;
+  reactScopeEnd(); RENDER_GEN++; drawStamp(); IN_RENDER++;
   try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
