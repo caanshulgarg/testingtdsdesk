@@ -23,7 +23,7 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response } = {}) {
+  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
@@ -34,7 +34,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     app_settings: [{ name: "rustdesk", value: { id_server: "", relay: "", key: "" } }],
     call_batches: [], call_batch_members: [], call_rooms: [], call_participants: [], call_invites: [], call_messages: [], call_recordings: [], call_pieces: [],
     call_transcripts: [], call_consents: [], call_client_settings: [], call_remote_sessions: [], client_due_tasks: [],
-    call_captions: [], assistant_log: [], tally_books: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, client_id: "c1" }],
+    call_captions: [], assistant_log: [], call_watch: [], tally_books: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, client_id: "c1" }],
     tally_ledgers: [{ book_id: "bbbbbbbb-0000-4000-8000-000000000001", firm_id: FIRM, name: "Sharma Traders", primary_group: "Sundry Creditors", open: 500000 }],
   };
   const tries: Record<string, number> = {};
@@ -46,7 +46,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     call_pieces: () => ({ id: T.call_pieces.length + 1, status: "new", tries: 0, text: "" }), call_batches: () => ({ id: uuid(), retention_days: 365, archived: false, created_at: new Date().toISOString() }),
     call_remote_sessions: () => ({ id: uuid(), ended_at: null }), call_transcripts: () => ({ tasks_added: [], summary: null }),
   };
-  const log = { mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[], stt: [] as any[], chat: [] as any[] };
+  const log = { broadcast: [] as any[], mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[], stt: [] as any[], chat: [] as any[] };
   const match = (row: Row, k: string, v: string) => {
     const [op, ...rest] = v.split("."); const val = rest.join(".");
     const x = row[k];
@@ -56,7 +56,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     if (op === "is") return val === "null" ? x == null : val === "true" ? x === true : x === false || x == null;
     if (op === "in") return val.replace(/^\(|\)$/g, "").split(",").includes(String(x));
     if (op === "gte") return String(x) >= val;
-    if (op === "lt") return Number(x) < Number(val);
+    if (op === "lt") return /^\d+(\.\d+)?$/.test(val) ? Number(x) < Number(val) : String(x) < val;
     throw new Error("filter " + v);
   };
   const filter = (rows: Row[], sp: URLSearchParams) => {
@@ -88,8 +88,12 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         }
         return J({ message: "no rpc " + fn }, 404);
       }
+      if (p === "/realtime/v1/api/broadcast") { log.broadcast.push({ auth: tok, apikey: h.get("apikey"), body }); return new Response(null, { status: 202 }); }
       if (p.startsWith("/rest/v1/")) {
         const table = p.slice(9), sp = url.searchParams;
+        // before migration 106: no heartbeat columns, no call_watch
+        if (o.noLobby && (table === "call_watch" || /seen_at|left_why/.test(String(sp.get("select") || "") + JSON.stringify(body || {}) + url.search)))
+          return J({ code: table === "call_watch" ? "42P01" : "42703", message: "column or relation does not exist" }, table === "call_watch" ? 404 : 400);
         if (!T[table]) return J({ message: "no table " + table }, 404);
         const service = tok === "service-key";
         // a member's own token: row-level security by firm (reads), the due list's rule (writes: owner or staff)
@@ -597,4 +601,136 @@ Deno.test("subtitles in Hinglish: Hindi taken for Urdu is heard again as Hindi, 
   const c = await h.call({ action: "start", kind: "help" }, "tok-staff");
   const r3 = await h.call({ action: "caption", room_id: c.j.room.id, audio: AUDIO, secs: 5, targets: ["hinglish"] }, "tok-staff");
   assert(/^[\x00-\x7F]+$/.test(r3.j.tr.hinglish) && h.log.chat.length === 0, "Hindi in Devanagari to Hinglish: English letters, no call: " + r3.j.tr.hinglish);
+});
+
+// ---------------------------------------------------------------- next-calls-lobby (25-Oct-2026)
+// The owner's room ff2c4c7c of 25-Oct: he started the meeting on his Mac (17:03), the guest was admitted (17:04), he
+// joined again by code on his iPhone (17:10:15) and on the Mac (17:10:29), the Mac left (17:10:51). One row a person: the
+// Mac's leave closed the iPhone's place too, and the iPhone's people list was refused (403 "You are not in this call.")
+// every 3 s, silently, from 17:10:53 and again from 17:25:16 when the phone came back; the guest's new request (17:25:54)
+// never showed.
+Deno.test("the owner's 25-Oct room: his Mac's leave does not leave his iPhone stuck; the refusal says so and joining again works", async () => {
+  const s = stand({ cf: true });
+  const made = await s.call({ action: "create", title: "Meeting" }, "tok-owner");
+  const mac = await s.call({ action: "join_code", code: made.j.code }, "tok-owner");
+  const g = await s.call({ action: "guest_start", code: made.j.code, name: "Dr. Anu Tyagi Garg", email: "anu@x.test" });
+  const gid = s.T.call_participants.find((p) => p.role === "guest")!.id;
+  await s.call({ action: "admit", room_id: mac.j.room.id, participant_id: gid }, "tok-owner");
+  const phone = await s.call({ action: "join_code", code: made.j.code }, "tok-owner");
+  eq([phone.status, phone.j.me.id], [200, mac.j.me.id], "the iPhone joins on the same row (one a person)");
+  await s.call({ action: "leave", room_id: mac.j.room.id }, "tok-owner");
+  const ro = await s.call({ action: "roster", room_id: mac.j.room.id }, "tok-owner");
+  eq([ro.status, ro.j.kind], [403, "left"], "the iPhone's people list: refused as 'left', not the guest's 'notin'");
+  assert(/another device|joined again|Rejoin/i.test(ro.j.error), "in plain words: " + ro.j.error);
+  const back = await s.call({ action: "join", room_id: mac.j.room.id }, "tok-owner");
+  eq([back.status, back.j.me.state], [200, "admitted"], "Rejoin on the iPhone: straight back in");
+  eq((await s.call({ action: "roster", room_id: mac.j.room.id }, "tok-owner")).status, 200, "the people list again");
+  eq((await s.call({ action: "roster", room_id: mac.j.room.id, gt: g.j.gt })).status, 403, "a guest still never reads it");
+});
+
+Deno.test("someone asking to join reaches the host anywhere in FinCom (lobby), with a realtime ping that names no one", async () => {
+  const s = stand();
+  const made = await s.call({ action: "create", title: "Meeting with Anu" }, "tok-owner");
+  const w0 = await s.call({ action: "lobby" }, "tok-owner");
+  assert(w0.status === 200 && /^lobby:[0-9a-f]{40}$/.test(w0.j.topic) && w0.j.knocks.length === 0 && w0.j.every === R.LOBBY.watchSecs, "the firm's lobby channel (a name from a server secret), nobody waiting: " + JSON.stringify(w0.j));
+  eq((await s.call({ action: "lobby" }, "tok-other")).j.topic === w0.j.topic, false, "another firm: another channel");
+  const g = await s.call({ action: "guest_start", code: made.j.code, name: "Dr. Anu Tyagi Garg", email: "anu@x.test" });
+  const b = s.log.broadcast.at(-1)!;
+  assert(b && b.auth === "service-key" && b.body.messages.some((m: any) => m.topic === w0.j.topic && m.event === "knock"), "a ping on the firm's lobby channel: " + JSON.stringify(b && b.body));
+  assert(!JSON.stringify(b.body).includes("Anu") && !JSON.stringify(b.body).includes("anu@"), "the ping names no one (only the room)");
+  const w1 = await s.call({ action: "lobby" }, "tok-owner");
+  eq(w1.j.knocks.map((k: any) => [k.name, k.title, k.mine, k.room_id]), [["Dr. Anu Tyagi Garg", "Meeting with Anu", true, made.j.room_id]], "the host (not in the meeting) sees who is asking, and where");
+  eq((await s.call({ action: "lobby" }, "tok-staff")).j.knocks.length, 0, "staff: not while the host is online");
+  eq((await s.call({ action: "lobby" }, "tok-look")).j.knocks.length, 0, "look-only: never");
+  const p1 = await s.call({ action: "guest_poll", gt: g.j.gt });
+  eq([p1.j.state, p1.j.host_name, p1.j.host_online], ["waiting", "Anshul", true], "the guest: waiting for Anshul (online)");
+  const notYet = await s.call({ action: "admit", room_id: made.j.room_id, participant_id: w1.j.knocks[0].id }, "tok-staff");
+  eq([notYet.status, notYet.j.kind], [403, "host"], "staff cannot admit while the host is online");
+  // the host's phone goes quiet (no lobby for 100 s); the guest keeps asking
+  s.tick(50000); await s.call({ action: "guest_poll", gt: g.j.gt }); s.tick(50000); await s.call({ action: "guest_poll", gt: g.j.gt });
+  const p2 = await s.call({ action: "guest_poll", gt: g.j.gt });
+  eq([p2.j.state, p2.j.host_online], ["waiting", false], "the host away: the guest is told so");
+  const ws = await s.call({ action: "lobby" }, "tok-staff");
+  eq(ws.j.knocks.map((k: any) => [k.name, k.mine, k.host_online]), [["Dr. Anu Tyagi Garg", false, false]], "the host away: staff are asked");
+  const adm = await s.call({ action: "admit", room_id: made.j.room_id, participant_id: ws.j.knocks[0].id }, "tok-staff");
+  eq(adm.status, 200, "staff admit while the host is away (from the pop-up, without opening the call)");
+  assert(s.log.broadcast.length >= 2, "admitting pings again (the others' pop-ups go)");
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt })).j.state, "admitted", "the guest is in");
+  eq((await s.call({ action: "lobby" }, "tok-owner")).j.knocks.length, 0, "nobody waiting any more");
+  eq(s.T.call_watch.map((x) => x.user_id).sort(), [OWNER, STAFF, LOOK, OTHER].sort(), "who has FinCom open, one row each");
+});
+
+Deno.test("the host denies from the pop-up; Ask again after a long wait pings once more", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting", title: "Review" }, "tok-staff");
+  await s.call({ action: "leave", room_id: a.j.room.id }, "tok-staff");
+  const g = await s.call({ action: "guest_start", code: a.j.room.code, name: "Ram Kumar", email: "ram@x.test" });
+  const n = s.log.broadcast.length;
+  await s.call({ action: "guest_poll", gt: g.j.gt, knock: true });
+  eq(s.log.broadcast.length, n + 1, "Ask again: one more ping");
+  const k = (await s.call({ action: "lobby" }, "tok-staff")).j.knocks[0];
+  eq([k.name, k.mine], ["Ram Kumar", true], "the host's pop-up");
+  eq((await s.call({ action: "deny", room_id: a.j.room.id, participant_id: k.id }, "tok-staff")).status, 200, "Deny");
+  eq((await s.call({ action: "guest_poll", gt: g.j.gt })).j.state, "denied", "the guest is told");
+  eq((await s.call({ action: "admit", room_id: a.j.room.id, participant_id: k.id }, "tok-staff")).j.kind, "gone", "an answer to someone no longer waiting is refused in words");
+});
+
+Deno.test("stale rows: no heartbeat for 60 s is left; a seat freed for the next; a phone back from the background comes back in", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  const rid = a.j.room.id;
+  await s.call({ action: "join", room_id: rid }, "tok-owner");
+  await s.call({ action: "join", room_id: rid }, "tok-look");
+  const inv = await s.call({ action: "invite", room_id: rid }, "tok-staff");
+  const g = await s.call({ action: "guest_start", token: inv.j.token, name: "Sita Devi", email: "sita@x.test" });
+  const gid = s.T.call_participants.find((p) => p.role === "guest")!.id;
+  await s.call({ action: "admit", room_id: rid, participant_id: gid }, "tok-staff");
+  eq((await s.call({ action: "join", room_id: rid }, "tok-staff2")).j.kind, "full", "four in a peer-to-peer call: full");
+  // 70 s: the members' people lists keep them fresh; the guest's phone sleeps (no beat)
+  for (let i = 0; i < 2; i++) { s.tick(35000); for (const t of ["tok-staff", "tok-owner", "tok-look"]) await s.call({ action: "roster", room_id: rid }, t); }
+  const gr = s.T.call_participants.find((p) => p.id === gid)!;
+  eq([gr.state, gr.left_why], ["left", "stale"], "the sleeping guest's row: left (stale), by the people list's check");
+  eq((await s.call({ action: "roster", room_id: rid }, "tok-staff")).j.people.length, 3, "not counted among the people");
+  eq((await s.call({ action: "join", room_id: rid }, "tok-staff2")).status, 200, "the seat is free for the next");
+  await s.call({ action: "leave", room_id: rid }, "tok-staff2");
+  const bk = await s.call({ action: "beat", gt: g.j.gt });
+  eq([bk.status, bk.j.state, gr.state], [200, "admitted", "admitted"], "the guest's phone wakes: its beat brings it back in");
+  eq((await s.call({ action: "topic", gt: g.j.gt })).status, 200, "and its call goes on");
+  await s.call({ action: "remove", room_id: rid, participant_id: gid }, "tok-staff");
+  eq((await s.call({ action: "beat", gt: g.j.gt })).j.state, "removed", "removed by the host: never brought back");
+  // a waiting guest who went quiet and comes back is waiting again (the host asked again)
+  const g2 = await s.call({ action: "guest_start", token: inv.j.token, name: "Mohan Lal", email: "m@x.test" });
+  s.tick(61000); await s.call({ action: "roster", room_id: rid }, "tok-staff");
+  eq(s.T.call_participants.find((p) => p.name === "Mohan Lal")!.state, "left", "a quiet waiting row: left");
+  const n = s.log.broadcast.length;
+  eq((await s.call({ action: "guest_poll", gt: g2.j.gt })).j.state, "waiting", "back: waiting again");
+  eq(s.log.broadcast.length, n + 1, "and the host is pinged again");
+});
+
+Deno.test("the old admitted row (17:04, never closed) no longer keeps the room open when the host leaves", async () => {
+  const s = stand();
+  const made = await s.call({ action: "create", title: "Meeting" }, "tok-owner");
+  const j = await s.call({ action: "join_code", code: made.j.code }, "tok-owner");
+  await s.call({ action: "guest_start", code: made.j.code, name: "Dr. Anu Tyagi Garg", email: "anu@x.test" });
+  const gid = s.T.call_participants.find((p) => p.role === "guest")!.id;
+  await s.call({ action: "admit", room_id: j.j.room.id, participant_id: gid }, "tok-owner");
+  s.tick(6 * 60000); await s.call({ action: "roster", room_id: j.j.room.id }, "tok-owner");
+  await s.call({ action: "leave", room_id: j.j.room.id }, "tok-owner");
+  eq(s.T.call_rooms[0].status, "scheduled", "the host out, the guest's row stale: the meeting waits for its code again");
+  eq(s.T.call_participants.find((p) => p.id === gid)!.state, "left", "the old row closed");
+});
+
+Deno.test("before migration 106 (no heartbeat columns, no call_watch): everything works as before, the lobby by time asked", async () => {
+  const s = stand({ noLobby: true });
+  const made = await s.call({ action: "create", title: "Meeting" }, "tok-owner");
+  const j = await s.call({ action: "join_code", code: made.j.code }, "tok-owner");
+  eq(j.status, 200, "join");
+  const g = await s.call({ action: "guest_start", code: made.j.code, name: "Ram Kumar", email: "ram@x.test" });
+  eq(g.status, 200, "ask to join");
+  const gp = await s.call({ action: "guest_poll", gt: g.j.gt });
+  eq(gp.j.state, "waiting", "poll " + JSON.stringify(gp.j));
+  eq((await s.call({ action: "roster", room_id: j.j.room.id }, "tok-owner")).j.people.length, 2, "the people list");
+  const w = await s.call({ action: "lobby" }, "tok-owner");
+  eq([w.status, w.j.knocks.length], [200, 1], "the lobby");
+  assert(!s.T.call_participants.some((p) => "seen_at" in p || "left_why" in p), "no heartbeat written without its column");
 });

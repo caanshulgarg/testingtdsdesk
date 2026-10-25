@@ -18,5 +18,7 @@ export function MeetToday() {
 // the bell's notices: a meeting in progress or starting within the hour
 export function meetAlerts(now = Date.now()) {
   return soonMeetings(now).filter((r) => r.status === "open" || Date.parse(r.scheduled_at) - now < 3600000)
-    .map((r) => ({ key: "meet:" + r.id, sev: "info", text: (r.status === "open" ? "Meeting in progress: " : "Meeting at " + meetWhen(r.scheduled_at) + ": ") + r.title, act: { label: "Join", run: () => Calls.join(r.id) } }));
+    .map((r) => ({ key: "meet:" + r.id, sev: "info", text: (r.status === "open" ? "Meeting in progress: " : "Meeting at " + meetWhen(r.scheduled_at) + ": ") + r.title, act: { label: "Join", run: () => Calls.join(r.id) } }))
+    // next-calls-lobby: people asking to join (knock.jsx, once loaded), first
+    .reduce((a, x) => a.concat([x]), window.FinComKnocks ? window.FinComKnocks() : []);
 }

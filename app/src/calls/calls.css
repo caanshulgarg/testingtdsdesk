@@ -278,3 +278,25 @@
 .call-listen { background: #3C4043; color: #E8EAED; }
 .call-listen .linkbtn { color: #8AB4F8; }
 .round[disabled] { opacity: .55; cursor: not-allowed; }
+/* ---------- next-calls-lobby: someone asking to join, over any page of FinCom (knock.jsx) ---------- */
+#fincom-knock { position: fixed; top: 0; left: 0; right: 0; z-index: 2147483100; pointer-events: none; font-family: Inter, system-ui, sans-serif; }
+.knock-pop { pointer-events: auto; position: absolute; top: 64px; right: 16px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; background: var(--surface, #fff); color: var(--foreground, #0F172A);
+  border: 1px solid var(--border, #E2E8F0); border-left: 4px solid var(--brand, #4F46E5); border-radius: 12px; box-shadow: 0 16px 40px rgba(15,23,42,.28); padding: 14px 40px 12px 16px; }
+.knock-text { margin: 0; font-size: 15px; line-height: 1.4; overflow-wrap: anywhere; }
+.knock-sub { margin: 4px 0 0; font-size: 12px; color: var(--muted, #475569); overflow-wrap: anywhere; }
+.knock-sub:empty { display: none; }
+.knock-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.knock-acts .btn { min-height: 40px; }
+.knock-x { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted, #475569); border-radius: 8px; cursor: pointer; }
+.knock-x:hover { background: var(--surface-2, #F1F5F9); }
+@media (max-width: 600px) { .knock-pop { right: 16px; left: 16px; width: auto; top: 60px; } .knock-acts .btn { flex: 1 1 auto; } }
+/* the call screen: this device's place was left (its other device left, or away too long) */
+.call-gone { position: absolute; inset: 0; z-index: 8; background: rgba(2,6,23,.82); display: grid; place-items: center; padding: 16px; }
+.call-gone > div { background: #fff; color: #202124; border-radius: 12px; padding: 18px 20px; max-width: 420px; width: 100%; box-sizing: border-box; }
+.call-gone h3 { margin: 0 0 8px; font-size: 18px; }
+.call-gone p { margin: 0 0 14px; color: #3C4043; }
+/* the guest's link page: sign in with FinCom, or join as a guest */
+.lobby-choice { display: flex; flex-direction: column; gap: 6px; align-items: stretch; margin: 12px 0 4px; padding: 12px; border: 1px solid var(--border, #E2E8F0); border-radius: 10px; background: var(--surface, #fff); text-align: left; }
+.lobby-choice .btn { min-height: 44px; }
+.lobby-choice small { color: var(--muted, #475569); }
+.lobby-or { font-size: 13px; color: var(--muted, #475569); margin: 10px 0 0; text-align: left; font-weight: 600; }

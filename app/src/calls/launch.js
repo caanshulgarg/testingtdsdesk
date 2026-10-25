@@ -8,6 +8,8 @@ const fail = (e) => { try { toast((e && e.message) || "The call could not be ope
 export const Calls = {
   start: (o) => loadCallScreen().then((m) => m.openCall({ start: o })).catch(fail),
   join: (roomId) => loadCallScreen().then((m) => m.openCall({ join: roomId })).catch(fail),
+  // next-calls-lobby: "Open the meeting" from the pop-up: straight in (no lobby)
+  enter: (roomId) => loadCallScreen().then((m) => m.openCall({ join: roomId, auto: true })).catch(fail),
   // a code typed on Meetings, or the link opened while signed in (#/join/<code>)
   joinCode: (code) => loadCallScreen().then((m) => m.openCall({ code })).catch(fail),
   schedule: (o) => loadCallMenu().then((m) => m.openSchedule(o)).catch(fail),
@@ -28,6 +30,17 @@ export function joinHash(h) {
 // someone signed in to a firm on this browser: the link opens FinCom and the meeting's lobby; else the guest's page
 export const memberHere = () => { try { return typeof Cloud === "object" && !!Cloud.on(); } catch (e) { return false; } };
 export const startGuest = () => load(() => import("./guest.jsx")).then((m) => m.mountGuest());
+// next-calls-lobby (25-Oct-2026): once someone is signed in, the waiting-room watcher (knock.jsx, its own file: a pop-up
+// wherever FinCom is open when someone asks to join), and the meeting link they opened before signing in ("Sign in with
+// FinCom" on the link's page keeps it in fincom.join-after for 30 minutes)
+const signedIn = () => { try { return typeof Cloud === "object" && Cloud.on() && Cloud.st && Cloud.st.firm && !Cloud.st.mfa; } catch (e) { return false; } };
+let knockOn = false;
+if (typeof window !== "undefined") setInterval(() => {
+  if (!signedIn()) return;
+  if (!knockOn) { knockOn = true; load(() => import("./knock.jsx")).then((m) => m.startKnocks(), () => { knockOn = false; }); }
+  let a = null; try { a = JSON.parse(localStorage.getItem("fincom.join-after") || "null"); localStorage.removeItem("fincom.join-after"); } catch (e) { a = null; }
+  if (a && a.code && Date.now() - a.at < 1800000) { try { navHome("meetings"); } catch (e) { /* */ } Calls.joinCode(a.code); }
+}, 2000);
 // FinCom started from a join link: FinCom's own address becomes #/meetings and the lobby opens over it
 let pending = "";
 export function takeJoin() {
@@ -38,8 +51,10 @@ export function takeJoin() {
 }
 export function pendingJoin() { const c = pending; pending = ""; return c; }
 // a join link pasted into a FinCom tab already open
-if (typeof window !== "undefined") window.addEventListener("hashchange", () => {
-  const j = joinHash();
+// (the link read from the event: FinCom's own router, nav.js, may already have put its route back in the address)
+if (typeof window !== "undefined") window.addEventListener("hashchange", (ev) => {
+  let h = null; try { h = new URL(ev.newURL).hash; } catch (e) { h = null; }
+  const j = joinHash(h) || joinHash();
   if (!j || !memberHere()) return;
   try { history.replaceState(history.state, "", location.pathname + location.search + "#/meetings"); } catch (e) { /* */ }
   try { navHome("meetings"); } catch (e) { /* */ }
