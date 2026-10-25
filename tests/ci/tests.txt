@@ -494,3 +494,5 @@ run_migration105.py                   180
 run_tds_excel2.py                     600  TDSDESK_SITE=../app/dist-test @libreoffice
 # next-fix-ci-shares (24-Oct-2026): run_stuck.js on what replaced booksFreshLine (booksFresh, the "Books up to" line); out of manual.txt
 run_stuck.js                          120
+# next-fix-books-crash (25-Oct-2026): FinCom opened again on a client's TDS page never holds the page for seconds
+run_books_reopen_freeze.py            300  TDSDESK_SITE=../app/dist-test
