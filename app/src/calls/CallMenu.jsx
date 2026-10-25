@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { makeApi, base, publicKey } from "./api.js";
 import { Calls } from "./launch.js";
-import { transcriptText, chatParts } from "./rules.js";
+import { chatParts, NOTES_MIME } from "./rules.js";
+import { NotesView } from "./Notes.jsx";
 import { MeetCard } from "./MeetCard.jsx";
 import "./calls.css";
 
@@ -121,10 +122,9 @@ async function rest(path) {
   return r;
 }
 function Kept({ room }) {
-  const [t, setT] = useState(null), [recs, setRecs] = useState([]), [msgs, setMsgs] = useState([]), [url, setUrl] = useState(""), [note, setNote] = useState("");
+  const [recs, setRecs] = useState([]), [msgs, setMsgs] = useState([]), [url, setUrl] = useState(""), [note, setNote] = useState("");
   useEffect(() => {
-    rest("/rest/v1/call_transcripts?select=lines,summary&room_id=eq." + room.id).then((r) => r.json()).then((x) => setT(x[0] || null)).catch(() => {});
-    rest("/rest/v1/call_recordings?select=id,prefix,mime,chunks,started_at,retain_until&room_id=eq." + room.id).then((r) => r.json()).then(setRecs).catch(() => {});
+    rest("/rest/v1/call_recordings?select=id,prefix,mime,chunks,started_at,retain_until&room_id=eq." + room.id).then((r) => r.json()).then((x) => setRecs((x || []).filter((r) => r.mime !== NOTES_MIME))).catch(() => {});
     rest("/rest/v1/call_messages?select=id,author,body,file,at&room_id=eq." + room.id + "&order=id").then((r) => r.json()).then(setMsgs).catch(() => {});
   }, []);
   async function play(rec) {
@@ -139,8 +139,8 @@ function Kept({ room }) {
     {recs.map((r) => <div key={r.id}>Recording ({r.chunks} parts, kept until {r.retain_until}) <button type="button" className="call-btn small" onClick={() => play(r)}>Play</button></div>)}
     {url && <video src={url} controls style={{ width: "100%" }} />}
     {note && <p className="call-note">{note}</p>}
-    {t && t.summary && <><h4>Summary</h4><p>{t.summary.summary}</p>{t.summary.actions && t.summary.actions.length > 0 && <ul>{t.summary.actions.map((a, i) => <li key={i}>{a.title}</li>)}</ul>}</>}
-    {t && t.lines && t.lines.length > 0 && <details><summary>Transcript</summary><pre className="call-transcript">{transcriptText(t.lines)}</pre></details>}
+    <h4>Notes</h4>
+    <NotesView api={api} roomId={room.id} />
     {msgs.length > 0 && <details><summary>Chat ({msgs.length})</summary>{msgs.map((m) => <div key={m.id}><b>{m.author}:</b> {m.file ? "📎 " + m.file.name : chatParts(m.body).map((p, i) => p.link ? <a key={i} href={p.link} target="_blank" rel="noopener noreferrer nofollow">{p.link}</a> : <span key={i}>{p.text}</span>)}</div>)}</details>}
   </div>;
 }

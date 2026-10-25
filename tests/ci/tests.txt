@@ -116,6 +116,8 @@ run_remote_help_ui.py                 480  TDSDESK_SITE=../app/dist-test
 run_migration103.py                   180
 run_calls_meet_ui.py                  900  TDSDESK_SITE=../app/dist-test
 run_call_lobby.py                     600  TDSDESK_SITE=../app/dist-test
+run_call_effects.py                   600
+run_calls_complete_ui.py              900  TDSDESK_SITE=../app/dist-test
 run_migration106.py                   180
 run_no_device_ui.py                   600  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120

@@ -103,8 +103,8 @@ export default function Meetings() {
             <small>{meetWhen(r.started_at)}{r.client_id && clientName(r.client_id) ? " · " + clientName(r.client_id) : ""}</small></div>
           <div className="meet-row-acts">
             {r.recording && <button type="button" className="linkbtn" onClick={() => Calls.kept(r)} data-meet-recording="">Recording</button>}
-            {r.transcript && <button type="button" className="linkbtn" onClick={() => Calls.kept(r)} data-meet-transcript="">Transcript</button>}
-            {!r.recording && !r.transcript && <span className="note">Nothing kept</span>}
+            {(r.notes || r.transcript) && <button type="button" className="linkbtn" onClick={() => Calls.kept(r)} data-meet-notes="" data-meet-transcript="">Notes</button>}
+            {!r.recording && !r.transcript && !r.notes && <span className="note">Nothing kept</span>}
           </div>
         </div>)}
       </section>

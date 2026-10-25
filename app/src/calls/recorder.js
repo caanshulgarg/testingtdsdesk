@@ -97,6 +97,14 @@ export function micPieces({ track, t0, onPiece, isMuted, sizes }) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC(), src = ac.createMediaStreamSource(new MediaStream([track])), an = ac.createAnalyser();
   an.fftSize = 1024; src.connect(an);
+  // next-calls-complete (25-Oct-2026; the owner's iPhone guests' words never had subtitles): Safari keeps an audio context
+  // made outside a tap "suspended", and a suspended one hears only silence, so no piece was ever cut. It is resumed now
+  // and on the next tap; until it runs, pieces are cut by time alone (fincom-call drops what Whisper finds no speech in)
+  const wake = () => { try { if (ac.state !== "running") ac.resume().catch(() => {}); } catch (e) { /* */ } };
+  wake();
+  const taps = ["pointerdown", "touchend", "keydown"];
+  taps.forEach((t) => document.addEventListener(t, wake, { passive: true }));
+  const deaf = () => ac.state !== "running";
   const buf = new Float32Array(an.fftSize);
   const mime = pickMime("audio");
   let rec = null, chunks = [], started = 0, silentSince = 0, speechMs = 0, lastTick = 0, seq = 0, running = true, timer = null;
@@ -118,13 +126,14 @@ export function micPieces({ track, t0, onPiece, isMuted, sizes }) {
     an.getFloatTimeDomainData(buf);
     let s = 0; for (let i = 0; i < buf.length; i++) s += buf[i] * buf[i];
     const rms = Math.sqrt(s / buf.length), now = Date.now(), dt = now - lastTick; lastTick = now;
-    const speaking = rms > 0.015 && !(isMuted && isMuted());
+    const speaking = (deaf() || rms > 0.015) && !(isMuted && isMuted());
     if (speaking) { silentSince = now; speechMs += dt; speechMsOf.set(rec, speechMs); }
     if (ends(now - started, now - silentSince)) { const r = rec; begin(); try { r.stop(); } catch (e) { /* */ } }
   }
   begin();
   timer = setInterval(tick, 100);
   return {
-    stop() { running = false; clearInterval(timer); try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) { /* */ } setTimeout(() => { try { ac.close(); } catch (e) { /* */ } }, 200); },
+    get deaf() { return deaf(); },
+    stop() { running = false; clearInterval(timer); taps.forEach((t) => document.removeEventListener(t, wake)); try { if (rec && rec.state !== "inactive") rec.stop(); } catch (e) { /* */ } setTimeout(() => { try { ac.close(); } catch (e) { /* */ } }, 200); },
   };
 }

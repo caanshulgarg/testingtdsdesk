@@ -603,6 +603,25 @@ Deno.test("subtitles in Hinglish: Hindi taken for Urdu is heard again as Hindi, 
   assert(/^[\x00-\x7F]+$/.test(r3.j.tr.hinglish) && h.log.chat.length === 0, "Hindi in Devanagari to Hinglish: English letters, no call: " + r3.j.tr.hinglish);
 });
 
+// next-calls-complete (25-Oct-2026): a Hindi reader got a Llama "translation" of Hindi that Whisper took for Urdu; and an
+// iPhone's pieces (cut by time while Safari's audio context was asleep) can be silence, over which Whisper says "Thank you."
+Deno.test("subtitles: Hindi taken for Urdu reaches a Hindi reader as heard in Hindi; what Whisper finds no speech in is not shown", async () => {
+  const URDU = "شرما ٹریڈرز کو ایک لاکھ روپے بھیجو", HINDI = "शर्मा ट्रेडर्स को एक लाख रुपये भेजो";
+  const s = stand({ stt: (form: FormData) => new Response(JSON.stringify(form.get("language") === "hi" ? { text: HINDI, language: "hindi" } : { text: URDU, language: "urdu" })) });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  const r = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, secs: 5, targets: ["hi", "en"] }, "tok-staff");
+  eq([r.j.lang, r.j.tr.hi], ["ur", HINDI], "the Hindi reader: the words heard again as Hindi, in Devanagari");
+  eq([s.log.stt.map((x: any) => x.language), s.log.chat.length], [[null, "hi"], 1], "heard again once; only English translated");
+  const q = stand({ stt: () => new Response(JSON.stringify({ text: " Thank you.", language: "english", segments: [{ text: " Thank you.", no_speech_prob: 0.92, avg_logprob: -1.1 }] })) });
+  const b = await q.call({ action: "start", kind: "help" }, "tok-staff");
+  const r2 = await q.call({ action: "caption", room_id: b.j.room.id, audio: AUDIO, secs: 5, targets: ["hi"] }, "tok-staff");
+  eq([r2.status, r2.j.text, q.log.chat.length], [200, "", 0], "silence: nothing shown, nothing translated");
+  const said = stand({ stt: () => new Response(JSON.stringify({ text: "GSTR-3B file karna hai. Thank you.", language: "english", segments: [{ text: "GSTR-3B file karna hai.", no_speech_prob: 0.02, avg_logprob: -0.3 }, { text: " Thank you.", no_speech_prob: 0.8, avg_logprob: -1.0 }] })) });
+  const c = await said.call({ action: "start", kind: "help" }, "tok-staff");
+  eq((await said.call({ action: "caption", room_id: c.j.room.id, audio: AUDIO, secs: 5, targets: [] }, "tok-staff")).j.text, "GSTR-3B file karna hai.", "the spoken part kept, the silent tail dropped");
+  eq(R.spokenText({ text: "Thank you.", segments: [{ text: "Thank you.", no_speech_prob: 0.03, avg_logprob: -0.2 }] }), "Thank you.", "a real Thank you is kept");
+});
+
 // ---------------------------------------------------------------- next-calls-lobby (25-Oct-2026)
 // The owner's room ff2c4c7c of 25-Oct: he started the meeting on his Mac (17:03), the guest was admitted (17:04), he
 // joined again by code on his iPhone (17:10:15) and on the Mac (17:10:29), the Mac left (17:10:51). One row a person: the
@@ -733,4 +752,53 @@ Deno.test("before migration 106 (no heartbeat columns, no call_watch): everythin
   const w = await s.call({ action: "lobby" }, "tok-owner");
   eq([w.status, w.j.knocks.length], [200, 1], "the lobby");
   assert(!s.T.call_participants.some((p) => "seen_at" in p || "left_why" in p), "no heartbeat written without its column");
+});
+
+// ---------------------------------------------------------------- meeting notes (next-calls-complete, 25-Oct-2026)
+Deno.test("notes: Take notes tells everyone and keeps each person's words only after they stay; the firm's members read them; the AI gets the title, names and words only", async () => {
+  const s = stand({ aiAnswer: JSON.stringify({ summary: "They agreed the GST return for September.", points: ["GSTR-3B for September"], decisions: ["File GSTR-3B by 20th"], actions: [{ title: "Send purchase bills", who: "S2", due: "2026-10-30" }] }) });
+  const a = await s.call({ action: "start", kind: "meeting", title: "Sharma Traders review" }, "tok-staff");
+  const rid = a.j.room.id;
+  const on = await s.call({ action: "rec_start", room_id: rid, notes: true }, "tok-staff");
+  eq([on.status, on.j.notes, on.j.notice], [200, true, R.NOTES_TEXT], "Take notes: the notes' notice");
+  eq(s.T.call_recordings.map((x) => x.mime), [R.NOTES_MIME], "kept as a recording of words only");
+  const j2 = await s.call({ action: "join", room_id: rid }, "tok-staff2");
+  eq([j2.j.recording.notes, j2.j.recording.notice], [true, R.NOTES_TEXT], "someone joining is told the notes are being taken");
+  await s.call({ action: "caption", room_id: rid, audio: AUDIO, secs: 5, start_ms: 1000, targets: [] }, "tok-staff2");
+  eq(s.T.call_captions.length, 0, "before choosing to stay: their words not kept");
+  await s.call({ action: "consent", room_id: rid, recording_id: on.j.recording_id, event: "accepted" }, "tok-staff2");
+  await s.call({ action: "caption", room_id: rid, audio: AUDIO, secs: 5, start_ms: 6000, targets: [] }, "tok-staff2");
+  await s.call({ action: "caption", room_id: rid, audio: AUDIO, secs: 5, start_ms: 12000, targets: [] }, "tok-staff");
+  eq(s.T.call_captions.map((x) => [x.who, x.start_ms]), [["S2", 6000], ["Riya", 12000]], "after staying (and the host's own): kept");
+  const look = await s.call({ action: "notes_get", room_id: rid }, "tok-look");
+  eq([look.status, look.j.lines.length, look.j.source, look.j.taking, look.j.can_edit, look.j.can_make], [200, 2, "captions", true, false, false], "a look-only member of the firm reads the words; cannot edit or make");
+  eq(look.j.people.sort(), ["Riya", "S2"], "the people in it");
+  eq((await s.call({ action: "notes_get", room_id: rid }, "tok-other")).status, 404, "another firm: not found");
+  eq((await s.call({ action: "notes_make", room_id: rid }, "tok-look")).j.kind, "role", "look-only: cannot make the notes");
+  const made = await s.call({ action: "notes_make", room_id: rid, lang: "en" }, "tok-staff2");
+  eq([made.status, made.j.notes.points, made.j.notes.actions[0].who, made.j.notes.source], [200, ["GSTR-3B for September"], "S2", "captions"], "made: key points, decisions, action items with who and when");
+  const sent = s.log.ai.at(-1)!, content = String(sent.messages[0].content);
+  assert(content.startsWith("Call: Sharma Traders review\nPeople: ") && content.includes("Transcript:\n[00:06] S2: ") && sent.messages.length === 1, "only the title, the people and the words go to the model: " + content.slice(0, 120));
+  assert(!content.includes("Client One") && !content.includes("Garg"), "nothing else of the firm");
+  eq(s.T.call_transcripts.find((x) => x.room_id === rid)!.summary.summary, "They agreed the GST return for September.", "kept with the meeting");
+  eq((await s.call({ action: "notes_save", room_id: rid, notes: { summary: "x" } }, "tok-staff2")).j.kind, "host", "only the host edits");
+  const ed = await s.call({ action: "notes_save", room_id: rid, notes: { summary: "Edited by the host.", points: [" one ", ""], decisions: [], actions: [{ title: "Call the bank", who: "Riya", due: "30-10-2026" }] } }, "tok-staff");
+  eq([ed.status, ed.j.notes.summary, ed.j.notes.points, ed.j.notes.actions[0].due, !!ed.j.notes.edited_at, ed.j.notes.edited_name], [200, "Edited by the host.", ["one"], "", true, "Riya"], "the host's edit, cleaned (a wrong date dropped)");
+  eq((await s.call({ action: "notes_save", room_id: rid, notes: { summary: "" } }, "tok-staff")).status, 400, "empty notes refused");
+  eq((await s.call({ action: "notes_make", room_id: rid }, "tok-staff2")).j.kind, "edited", "an edit is not replaced unless asked");
+  eq((await s.call({ action: "notes_make", room_id: rid, replace: true }, "tok-staff")).status, 200, "asked: made again");
+  // a recording asked while notes run takes their place (its own notice)
+  const v = await s.call({ action: "rec_start", room_id: rid }, "tok-staff");
+  eq([v.j.notes, v.j.notice, s.T.call_recordings.map((x) => [x.mime, !!x.ended_at])], [false, R.CONSENT_TEXT, [[R.NOTES_MIME, true], ["video/webm", false]]], "notes ended, the recording started");
+  await s.call({ action: "end", room_id: rid }, "tok-staff");
+  const recent = (await s.call({ action: "meetings" }, "tok-staff2")).j.recent.find((r: any) => r.id === rid);
+  eq([recent.recording, recent.notes], [true, true], "Recent: the recording and the notes");
+  const n2 = stand();
+  const b = await n2.call({ action: "start", kind: "meeting" }, "tok-staff");
+  eq((await n2.call({ action: "notes_make", room_id: b.j.room.id }, "tok-staff")).j.kind, "nolines", "nothing kept (no notes, no recording): no notes, said why");
+  const n3 = stand();
+  const c = await n3.call({ action: "start", kind: "meeting" }, "tok-staff");
+  await n3.call({ action: "rec_start", room_id: c.j.room.id, notes: true }, "tok-staff");
+  await n3.call({ action: "end", room_id: c.j.room.id }, "tok-staff");
+  eq((await n3.call({ action: "meetings" }, "tok-staff")).j.recent[0].recording, false, "notes alone are not called a recording");
 });

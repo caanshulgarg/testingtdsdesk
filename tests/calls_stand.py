@@ -111,6 +111,9 @@ class Fn:
         self.mail = mail
         self.subs = subs or {}       # speaker's name -> {"text", "lang", "tr": {lang: text}}: what Whisper and the translation give back
         self.captions = []
+        self.kept = []               # subtitle pieces kept with the call (recording or notes on, the speaker stayed)
+        self.consents = []
+        self.notes = {}              # room id -> the notes (next-calls-complete)
         self.rooms, self.people, self.invites, self.msgs, self.recs, self.pieces, self.uploads, self.tasks, self.remote, self.calls = {}, {}, {}, [], {}, [], [], [], [], []
         self.codes = {}
         self.hub = None              # the Hub: the function's realtime pings (next-calls-lobby)
@@ -131,7 +134,7 @@ class Fn:
         rec = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
         return {"ok": True, "room": dict({k: r[k] for k in ("id", "kind", "title", "client_id", "batch_id", "status", "host_user", "cowork_on", "started_at")}, code=r.get("code"), scheduled_at=r.get("scheduled_at"), minutes=r.get("minutes")),
                 "me": {"id": p["id"], "role": p["role"], "name": p["name"], "state": p["state"]}, "topic": "call:%s-e%d" % (r["id"][:8], r["epoch"]),
-                "ice": [], "mode": "p2p", "max": 4, "recording": {"id": rec["id"], "notice": "This call is being recorded"} if rec else None}
+                "ice": [], "mode": "p2p", "max": 4, "recording": {"id": rec["id"], "notes": bool(rec.get("notes")), "notice": "This meeting's notes are being taken" if rec.get("notes") else "This call is being recorded"} if rec else None}
     def handle(self, body, tok):
         a = body.get("action"); self.calls.append({"action": a, "tok": tok, "gt": body.get("gt"), "body": body})
         u = USERS.get(tok)
@@ -163,7 +166,7 @@ class Fn:
             return 200, {"ok": True, "gt": "gt-" + pid, "code_sent": self.mail, "mail": self.mail}
         if body.get("gt"):
             if not gp: return err(401, "pass", "guest")
-            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave", "caption", "beat"): return err(403, "A guest cannot do that.", "guest")
+            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave", "caption", "beat", "remote_stop"): return err(403, "A guest cannot do that.", "guest")
             if a == "beat": return 200, {"ok": True, "state": gp["state"], "status": self.rooms[gp["room"]]["status"]}
             if a == "guest_verify":
                 if body.get("code") != self.codes.get(gp["id"]): return err(400, "That code is not right.", "otp")
@@ -202,7 +205,7 @@ class Fn:
             mine = lambda r: r["host_user"] == u["id"] or u["email"] in (r.get("invitees") or [])
             row = lambda r: dict({k: r.get(k) for k in ("id", "kind", "title", "status", "client_id", "scheduled_at", "minutes", "code", "started_at", "host_user")}, mine=mine(r))
             return 200, {"ok": True, "upcoming": [row(r) for r in self.rooms.values() if r["status"] in ("scheduled", "open") and (r["kind"] == "meeting" or r["status"] == "open")],
-                         "recent": [dict(row(r), recording=any(x["room"] == r["id"] for x in self.recs.values()), transcript=False) for r in self.rooms.values() if r["status"] == "ended"]}
+                         "recent": [dict(row(r), recording=any(x["room"] == r["id"] and not x.get("notes") for x in self.recs.values()), transcript=False, notes=bool(self.notes.get(r["id"]) or any(k["room"] == r["id"] for k in self.kept))) for r in self.rooms.values() if r["status"] == "ended"]}
         if a == "join":
             r = self.rooms.get(body.get("room_id"))
             if not r or r["status"] == "ended": return err(410, "This call has ended.", "ended")
@@ -268,15 +271,42 @@ class Fn:
         if a == "rec_start":
             if not host: return err(403, "Only the host can record.", "host")
             if not self.allow: return err(403, "Recording is off for this client.", "recoff")
-            rid = "dddddddd-0000-4000-8000-%012d" % (len(self.recs) + 1); self.recs[rid] = {"id": rid, "room": r["id"], "parts": 0, "bytes": 0}
-            return 200, {"ok": True, "recording_id": rid, "notice": "This call is being recorded"}
-        if a == "consent": self.calls[-1]["who"] = p["name"]; return 200, {"ok": True}
+            notes = body.get("notes") is True
+            live = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
+            if live and live.get("notes") and not notes: live["ended"] = True; live = None
+            if live: return 200, {"ok": True, "recording_id": live["id"], "notes": bool(live.get("notes"))}
+            rid = "dddddddd-0000-4000-8000-%012d" % (len(self.recs) + 1); self.recs[rid] = {"id": rid, "room": r["id"], "parts": 0, "bytes": 0, "notes": notes}
+            return 200, {"ok": True, "recording_id": rid, "notes": notes, "notice": "This meeting's notes are being taken" if notes else "This call is being recorded"}
+        if a == "consent": self.calls[-1]["who"] = p["name"]; self.consents.append((p["id"], body.get("recording_id"), body.get("event"))); return 200, {"ok": True}
         if a == "piece": self.pieces.append(dict(body, who=p["name"])); return 200, {"ok": True}
         if a == "caption":
             said = self.subs.get(p["name"]) or {"text": "", "lang": "en", "tr": {}}
             targets = [t for t in (body.get("targets") or []) if t != said["lang"]]
             self.captions.append({"who": p["name"], "targets": targets, "bytes": len(body.get("audio") or "")})
+            live = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
+            if live and said["text"] and (host or (p["id"], live["id"], "accepted") in self.consents):
+                self.kept.append({"room": r["id"], "who": p["name"], "start_ms": body.get("start_ms", 0), "text": said["text"]})
             return 200, {"ok": True, "text": said["text"], "lang": said["lang"], "tr": {t: said["tr"].get(t) for t in targets}, "paused": False}
+        if a in ("notes_get", "notes_make", "notes_save"):
+            lines = []
+            for k in sorted([x for x in self.kept if x["room"] == r["id"]], key=lambda x: x["start_ms"]):
+                if lines and lines[-1]["who"] == k["who"]: lines[-1]["text"] += " " + k["text"]
+                else: lines.append({"who": k["who"], "start_ms": k["start_ms"], "text": k["text"]})
+            make = host or u["role"] in ("owner", "staff")
+            if a == "notes_make":
+                if not make: return err(403, "Only the host, the owner or staff can make the notes.", "role")
+                if not lines: return err(409, "Nothing was kept to make notes from.", "nolines")
+                if (self.notes.get(r["id"]) or {}).get("edited_at") and body.get("replace") is not True: return err(409, "The host has edited these notes.", "edited")
+                self.notes[r["id"]] = {"summary": "They agreed to file GSTR-3B for September.", "points": ["GSTR-3B for September"], "decisions": ["File by 20th"], "actions": [{"title": "Send the purchase bills", "who": "Ram Kumar", "due": "2026-10-30"}], "source": "captions"}
+                return 200, {"ok": True, "notes": self.notes[r["id"]]}
+            if a == "notes_save":
+                if not host: return err(403, "Only the host can change the notes.", "host")
+                n = dict(body.get("notes") or {}, edited_at="2026-10-25T20:00:00Z", edited_name=u["name"]); self.notes[r["id"]] = n
+                return 200, {"ok": True, "notes": n}
+            live = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
+            people = sorted(set(x["name"] for x in self.people.values() if x["room"] == r["id"] and x["state"] in ("admitted", "left")))
+            return 200, {"ok": True, "room": {k: r.get(k) for k in ("id", "title", "status", "kind", "client_id", "started_at")}, "lines": lines, "source": "captions" if lines else "",
+                         "notes": self.notes.get(r["id"]), "people": people, "taking": bool(live and live.get("notes")), "recording": bool(live and not live.get("notes")), "can_edit": host, "can_make": make}
         if a == "transcribe":
             if u["role"] not in ("owner", "staff"): return err(403, "Only the owner or staff can make the transcript.", "role")
             lines = [{"who": x["who"], "start_ms": x["start_ms"], "text": "words heard from " + x["who"]} for x in sorted(self.pieces, key=lambda x: x["start_ms"]) if x["room_id"] == r["id"] or True]
@@ -299,6 +329,11 @@ class Fn:
             row = next((x for x in self.remote if x["id"] == body.get("id")), None)
             if row: row["end"] = time.time()
             return 200, {"ok": True, "ended": bool(row)}
+        if a == "remote_stop":
+            n = 0
+            for x in self.remote:
+                if x["end"] is None: x["end"] = time.time(); x["stopped_by"] = p["name"] if p else ""; n += 1
+            return 200, {"ok": True, "ended": n}
         if a == "leave":
             if p: p["state"] = "left"
             if r["kind"] == "meeting" and not any(x["room"] == r["id"] and x["state"] == "admitted" for x in self.people.values()): r["status"] = "scheduled"
