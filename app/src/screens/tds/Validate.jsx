@@ -160,8 +160,14 @@ export function checkReturn(fy, q, form) {
   put(out.warnings, { k: "corr", n: dn, short: s_(dn, "change in Tally since filing: file a correction", "changes in Tally since filing: file a correction"), review: true });
   const jr = TRF.jrFor(fy, q, form), jn = jr ? jr.items.length : 0;
   put(out.warnings, { k: "traces", n: jn, short: s_(jn, "TRACES default", "TRACES defaults"), review: true });
-  let dpn = 0; try { dpn = TDSF25.deductorProblems(TDS26Q.firmDetails()).length; } catch (e) { /* */ }
-  put(out.warnings, { k: "deductor", n: dpn, short: s_(dpn, "deductor detail missing or not in the file's form", "deductor details missing or not in the file's form"), step: "deductor" });
+  // next-tds-validate-short (the owner, 26-Oct-2026): a TAN that is not a TAN, and a required detail of the deductor or the
+  // responsible person left empty (TDSF25.deductorRequired) block the file; how an address is written is not judged here
+  let req = []; try { req = TDSF25.deductorRequired(TDS26Q.firmDetails()); } catch (e) { /* the TDS screens' program not loaded */ }
+  const badTan = req.filter((x) => x.bad), miss = req.filter((x) => !x.bad), cap = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+  put(out.errors, { k: "tan", n: badTan.length, short: "Deductor's TAN is not valid (4 letters, 5 digits, a letter)", step: "deductor", go: "Fill in" });
+  const named = "Missing for the file: " + miss.map((x) => x.label).join(", ");
+  put(out.errors, { k: "dreq", n: miss.length, short: miss.length === 1 ? cap(/^responsible/.test(miss[0].label) ? miss[0].label : "deductor's " + miss[0].label) + " is missing"
+    : named.length <= SHORT_MAX - 10 ? named : s_(miss.length, "required deductor detail", "required deductor details") + " missing", words: "Required for the file: " + miss.map((x) => x.label).join(", ") + ".", step: "deductor", go: "Fill in" });
   // the Suggestions: what goes elsewhere, and the matcher's notes
   if (form === "26Q") { const pr = TDS.portalRows().filter((r) => r.fy === fy && r.q === q).length; if (pr) out.info.push({ k: "portal", n: pr, short: s_(pr, "deduction goes on the portal (26QB / 26QC / 26QD)", "deductions go on the portal (26QB / 26QC / 26QD)"), words: s_(pr, "deduction goes on the portal (26QB / 26QC / 26QD), not this return", "deductions go on the portal (26QB / 26QC / 26QD), not this return"), review: true }); }
   mc.info.forEach((x, i) => out.info.push({ k: "i-" + x.k + i, n: 1, short: x.k === "nature" ? cut(String(x.words).replace(/^Challan ([^:]+): (.*)$/, "$2 (challan $1)")) : cut(x.words), words: x.words }));

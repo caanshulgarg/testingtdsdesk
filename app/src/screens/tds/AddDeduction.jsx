@@ -44,8 +44,8 @@ function sections(form, fy) {
 export default function AddDeduction({ form, fy, q }) {
   // what is typed and not saved stays as this deduction's draft when the panel closes (next-fix-drawers); Save clears it
   const o = S.tdsAdd, dr = useDraft("add-deduction", o ? form + "|" + (o.key || o.rowId || "new") : null), x = dr.value, setX = (v) => dr.set(v);
-  const [del, setDel] = useState(null), [err, setErr] = useState("");
-  const close = () => { S.tdsAdd = null; setDel(null); setErr(""); render(); };
+  const [del, setDel] = useState(null), [err, setErr] = useState(""), [dup, setDup] = useState(null);
+  const close = () => { S.tdsAdd = null; setDel(null); setErr(""); setDup(null); render(); };
   const done = () => { dr.clear(); close(); };
   if (!o) return <SideDrawer open={false} onClose={close} kind="add-deduction" />;
   const row = o.rowId ? TDS.formRows(form).find((r) => r.id === o.rowId) || TDS.allRows().find((r) => r.id === o.rowId) : null;
@@ -70,7 +70,7 @@ export default function AddDeduction({ form, fy, q }) {
   const chs = TDS.challans().filter((c) => TDSReg.balance(c).tax > 0.005 || c.id === v.challan);
   const plist = parties(), slist = sections(form, fy);
   const rateChanged = exp && exp.rate != null && v.rate !== "" && Math.abs(num(v.rate) - exp.rate) >= 0.0001;
-  const save = () => {
+  const save = (anyway) => {
     if (rateChanged && !String(v.rateWhy || "").trim()) { const m = "Say why the rate differs from " + exp.rate + "% (" + exp.why + ")."; toast(m); setErr(m); return; }
     if (correct) {
       const ch = [["section", v.section], ["paid", r2(num(v.paid))], ["rate", rate], ["tds", r2(tds)], ["cert", v.cert || ""]].filter(([k, val]) => !TDSEdit.same(k, val, row[k] == null ? "" : row[k]));
@@ -80,6 +80,9 @@ export default function AddDeduction({ form, fy, q }) {
       TDSReg.log({ act: "correct deduction", form, fy: row.fy, q: row.q, note: row.party + ": " + ch.map(([k]) => TDSEdit.WORDS[k] || k).join(", ") + (v.rateWhy ? " (" + v.rateWhy + ")" : "") });
       TDSReg.forget(); TDSReg.done(); saveBooks(); toast("Corrected in FinCom: " + ch.map(([k]) => (TDSEdit.WORDS[k] || k).toLowerCase()).join(", ") + ". Tally is not changed."); done(); return;
     }
+    // next-tds-validate-short (the owner, 26-Oct-2026): a new deduction the books already have is asked about first
+    // (TDSAdd.inBooks): Open the entry, or Add anyway
+    if (!key && anyway !== true) { const hit = TDSAdd.inBooks({ party: v.party, section: v.section, date: v.date || v.credit, credit: v.credit, tds }); if (hit) { setDup(hit); return; } }
     if (form === "27Q" && v.party && v.basis) tdsNrSet(v.party, "dtaa", v.basis === "DTAA");
     const r = TDSAdd.save({ party: v.party, section: v.section, credit: v.credit, date: v.date || v.credit, paid: v.paid, rate: rate == null ? "" : rate, tds, cert: v.cert, basis: v.basis, challan: v.challan, rateWhy: v.rateWhy, fromVoucher: v.fromVoucher || (rec && rec.fromVoucher) || "" }, key || undefined);
     if (!r.ok) { toast(r.why); setErr(r.why); return; }
@@ -117,8 +120,13 @@ export default function AddDeduction({ form, fy, q }) {
         <ul>{bills.map(({ v: bv, amount }) => <li key={bv.id}><span>{fmtDate(tallyDate(bv.date))} · {bv.type || "entry"} {bv.no || ""} · {money(amount)}</span>
           <button type="button" className="linkbtn" data-add-bill={bv.id} onClick={() => setX(Object.assign({}, v, { paid: String(amount), credit: iso(bv.date), date: iso(bv.date), section: v.section || TDSAdd.lastSection(v.party), fromVoucher: bv.id, tdsTyped: false }))}>Use this bill</button></li>)}</ul></div>}
       {err ? <p className="note bad" role="alert" data-add-err="">{err}</p> : null}
+      {dup ? <div className="vf-amber" role="alert" data-add-dup={dup.id} style={{ marginTop: 10 }}>
+        <b>Tally already has this deduction</b> ({dup.type || "Entry"}{dup.voucher ? " " + dup.voucher : ""}, {fmtDate(tallyDate(TDS.ymd(dup.date)))}, {money(dup.tds)}{dup.party && normName(dup.party) !== normName(v.party) ? ", " + dup.party : ""}) — add anyway?
+        <div className="row" style={{ gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+          <button type="button" className="btn small" data-add-dup-open="" onClick={() => TDSAdj.open({ date: dup.date, no: dup.voucher || "", ledgers: [dup.ledger || ""] })}>Open the entry</button>
+          <button type="button" className="btn small" data-add-dup-anyway="" onClick={() => { setDup(null); save(true); }}>Add anyway</button></div></div> : null}
       <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        <button type="button" className="btn small primary" data-add-save="" onClick={save}>{correct ? "Save the correction" : key ? "Save" : "Add deduction"}</button>
+        <button type="button" className="btn small primary" data-add-save="" onClick={() => save()}>{correct ? "Save the correction" : key ? "Save" : "Add deduction"}</button>
         <button type="button" className="btn small" onClick={close}>Cancel</button>
         {key && !del && <button type="button" className="linkbtn" data-add-delete="" onClick={() => setDel("")}>Delete…</button>}
       </div>

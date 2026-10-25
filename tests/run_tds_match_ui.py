@@ -194,6 +194,9 @@ try:
         ok(left == 1 and "pay" in pg.locator("#app [data-cm-none] [data-cm-why]").first.inner_text().lower(), "one deduction left (chM is short): its next step is to pay (%s)" % pg.locator("#app [data-cm-none] [data-cm-why]").first.inner_text()[:160])
         pg.evaluate("""() => { S.books.challans.push({id: "chM2", bsr: "0510308", serial: "00501", date: "20260707", tax: 1000, interest: 0, section: "194C", minorHead: "200"}); render(); }"""); pg.wait_for_timeout(600)
         pg.click("#app [data-cm-confirm-all]"); pg.wait_for_timeout(600)
+        # next-tds-validate-short (the owner, 26-Oct-2026): the deductor's required details given (an empty one blocks the file)
+        from tdsval_case import FILL
+        J(FILL)
         pg.click('#app [data-ret-tab="file"]'); pg.wait_for_timeout(400)
         ok(pg.locator('#app [data-val-errors="0"]').count() == 1 and not pg.locator("#app [data-make-fvu]").is_disabled(), "everything matched: no error, Make FVU file is on")
         pg.click('#app [data-ret-tab="challans"]'); pg.wait_for_timeout(400)

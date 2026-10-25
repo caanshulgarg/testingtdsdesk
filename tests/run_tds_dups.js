@@ -14,6 +14,8 @@
 //   I  interest by hand (TDS.interest, TDSMatch.interestTable): ₹10,000 credited 15-Apr, deducted 20-Jun, paid 10-Aug
 //      (due 07-Jul): 1% x 3 + 1.5% x 3 = ₹750; not paid, 1.5% a month to today (25-Oct: 6 months from 05-May); the total =
 //      on challans + not yet paid; 234E 86 days x ₹200 = ₹17,200, capped at the statement's TDS
+//   A  Add deduction (the owner, 26-Oct-2026): the books' deduction a new one repeats (TDSAdd.inBooks)
+//   R  the deductor's required details (TDSF25.deductorRequired): empty ones, a TAN that is not a TAN; nothing else judged
 "use strict";
 process.env.TDSDESK_CACHE = process.env.TDSDESK_CACHE || "/dev/null";
 const fs = require("fs"), path = require("path"), vm = require("vm");
@@ -128,6 +130,28 @@ const fee = x.TDS.lateFee(FY, Q, "20261025", "26Q");
 ok(fee.days === 86 && fee.fee === 17200 && fee.cap === 22000, "I. 234E: 01-Aug to 25-Oct = 86 days x ₹200 = ₹17,200, under the statement's TDS ₹22,000 (" + J(fee) + ")");
 const capd = x.TDS.lateFee(FY, Q, "20261231", "26Q");
 ok(capd.days === 153 && capd.fee === 22000, "I. 234E capped: 153 days x ₹200 = ₹30,600, the statement's TDS ₹22,000 (" + J(capd) + ")");
+
+// ---------------------------------------------------------------- A. Add deduction: the books already have it (TDSAdd.inBooks)
+b = books(); b.tdsAdded = {};
+const kb = x.TDSAdd.inBooks({party: "Kiran Srivastava", section: "194J", date: "2026-04-10", credit: "2026-04-10", tds: 8582});
+ok(kb && kb.id === "ki7|TDS 94J 2%", "A. Kiran ₹8,582 of 10-Apr typed: Tally's Journal ki7 has it, though corrected to ₹42,910 (" + (kb && kb.id) + ")");
+const gb = x.TDSAdd.inBooks({party: "Garg Shekhar & Company", section: "194J", date: "20260430", tds: 1000.6});
+ok(gb && gb.id === "g38|TDS 94J 10%", "A. Garg Shekhar & Company ₹1,000.60 of 30-Apr: Tally's \u201cGarg Shekhar & Co.\u201d ₹1,000 (" + (gb && gb.id) + ")");
+ok(!x.TDSAdd.inBooks({party: "Garg Shekhar & Company", section: "194J", date: "20260430", tds: 1500}) && !x.TDSAdd.inBooks({party: "Garg Shekhar & Company", section: "194C", date: "20260430", tds: 1000})
+  && !x.TDSAdd.inBooks({party: "Garg Shekhar & Company", section: "194J", date: "20260501", tds: 1000}) && !x.TDSAdd.inBooks({party: "Someone Else Ltd", section: "194J", date: "20260430", tds: 1000}),
+  "A. not another amount, section, date or deductee");
+b.tdsAdded = {gA: ADD("Garg Shekhar & Company", "194J", "20260515", 25000, 2500)}; x.TDSReg.forget();
+ok(!x.TDSAdd.inBooks({party: "Garg Shekhar & Company", section: "194J", date: "20260515", tds: 2500}), "A. one added in FinCom is not the books'");
+
+// ---------------------------------------------------------------- R. the deductor's required details (TDSF25.deductorRequired)
+const FULL = {tan: "DELL12345A", pan: "AAACL1234M", name: "Leads Insurance", flat: "12", town: "Delhi", state: "DELHI", pin: "110001", email: "a@b.in", phone: "9999999999",
+  person: "A", personDesignation: "Director", personPan: "ABCPK1234K", personFlat: "12", personTown: "Delhi"};
+const req = (f) => x.TDSF25.deductorRequired(f).map(z => z.k + (z.bad ? "!" : ""));
+ok(J(req(FULL)) === "[]", "R. every required detail given: nothing (" + J(req(FULL)) + ")");
+ok(J(req(Object.assign({}, FULL, {pin: ""}))) === J(["pin"]) && J(req(Object.assign({}, FULL, {pin: "", personPin: "110002"}))) === J(["pin"]), "R. the deductor's PIN empty: required (the person's is the deductor's when not given)");
+ok(J(req(Object.assign({}, FULL, {tan: "DEL12345A"}))) === J(["tan!"]) && J(req(Object.assign({}, FULL, {tan: ""}))) === J(["tan"]), "R. a TAN that is not a TAN, or none");
+ok(J(req(Object.assign({}, FULL, {flat: "", town: "", personFlat: " ", state: "Atlantis"}))) === J(["flat", "town", "state", "personFlat"]), "R. address line 1, city / town, a state not of Annexure 1, the person's line 1");
+ok(J(req(Object.assign({}, FULL, {flat: "A very long first line of the address, past 25"}))) === "[]" && J(req(Object.assign({}, FULL, {email: "", personEmail: "p@q.in"}))) === "[]", "R. how it is written is not judged (a long line); one e-mail of the two is enough");
 
 console.log(fails.length ? "\nFAILED: " + fails.length : "\nall passed");
 process.exit(fails.length ? 1 : 0);

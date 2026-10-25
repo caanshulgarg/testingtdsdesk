@@ -18,6 +18,11 @@ deductions are not there but it cannot be a blocker"). On the Leads-like case of
   4. duplicates: the two books deductions typed again in FinCom are one warning "Possible duplicate deductions: 2"; its panel
      pairs them; "Keep this one" takes the other out of the return (kept: Put back under Suggestions), the count goes down,
      the file no longer carries it; Put back brings it back
+  5. (the owner, 26-Oct-2026) a required detail of the deductor empty: an error "Deductor's PIN is missing · Fill in", Make
+     FVU file off; Fill in opens the Deductor step with that box red and "Required" till filled; a TAN that is not a TAN
+     blocks; nothing said of how an address is written
+  6. Add deduction of one the books already have: "Tally already has this deduction (…) — add anyway?" with Open the entry
+     and Add anyway
 TDS_VALIDATE_SHOTS=dir: screenshots at 1440 and 390 (default tests/out/tds-validate)."""
 import os, sys, re, threading, functools, http.server, datetime
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -168,6 +173,45 @@ try:
             pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
             J("(id) => { TDSX.putBack(id); render(); }", aid); pg.wait_for_timeout(300)
             ok(len(J("() => TDSAdd.dups('26Q', '2026-27', 'Q1')")) == len(want), "Put back: the pair again")
+
+            print("5. the deductor's required details, the TAN (the owner, 26-Oct-2026)")
+            J(GO_FILE); pg.wait_for_timeout(300)
+            ok(pg.locator('#app [data-val-item="deductor"]').count() == 0 and not [e for e in J(LINES, "errors") if e[0] in ("dreq", "tan")], "every required detail given: no line about the deductor (no warning on how it is written)")
+            J("() => { CO().tds26q.pin = ''; render(); }"); pg.wait_for_timeout(300)
+            er = [e for e in J(LINES, "errors") if e[0] == "dreq"]
+            ok(er and er[0][1] == "Deductor's PIN is missing" and pg.locator('#app [data-make-fvu]').is_disabled() and J("(document.querySelector('#app [data-val-item=\"dreq\"] .vf-act button') || {}).textContent") == "Fill in →",
+               "the PIN empty: an error, \"Deductor's PIN is missing · Fill in\", Make FVU file off (%s)" % er)
+            pg.click('#app [data-val-item="dreq"] .vf-act button'); pg.wait_for_timeout(500)
+            ok(J("S.tdsTab") == "deductor" and pg.locator('#app [data-ded-required="pin"]').count() == 1 and J("(document.querySelector('#app [data-ded=\"pin\"] input') || {}).getAttribute('aria-invalid')") == "true"
+               and pg.locator('#app [data-ded-required]').count() == 1, "Fill in: the Deductor step, the PIN box red with \"Required\", no other (%d)" % pg.locator('#app [data-ded-required]').count())
+            if not mobile: pg.screenshot(path=os.path.join(SHOTS, "deductor-required-%d.png" % W), full_page=True)
+            pg.fill('#app [data-ded="pin"] input', "110005"); pg.locator('#app [data-ded="pin"] input').blur(); pg.wait_for_timeout(300)
+            ok(pg.locator('#app [data-ded-required]').count() == 0, "filled: \"Required\" gone")
+            J(GO_FILE); pg.wait_for_timeout(300)
+            ok(not [e for e in J(LINES, "errors") if e[0] == "dreq"], "and the error gone")
+            J("() => { window.__tan = CO().tan; CO().tan = 'DEL12345A'; render(); }"); pg.wait_for_timeout(300)
+            er = [e for e in J(LINES, "errors") if e[0] == "tan"]
+            ok(er and er[0][1].startswith("Deductor's TAN is not valid") and pg.locator('#app [data-make-fvu]').is_disabled(), "a TAN that is not a TAN blocks the file (%s)" % er)
+            J("() => { CO().tan = window.__tan; render(); }")
+
+            print("6. Add deduction: the books already have it")
+            r0 = J("() => TDS.rows().find(r => r.fy === '2026-27' && r.q === 'Q1' && !r.added && r.tds >= 100 && r.party && TDS.sec(r.section) && !TDSAdd.dups('26Q', '2026-27', 'Q1').some(p => p.b.id === r.id))")
+            J("() => { S.tdsTab = 'deductions'; S.tdsDedView = ''; render(); }"); pg.wait_for_timeout(400)
+            J("() => { S.tdsAdd = {}; render(); }"); pg.wait_for_timeout(500)
+            d = '[data-add-deduction="new"] '
+            pg.fill(d + 'input[aria-label="Deductee"]', r0["party"]); pg.select_option(d + 'select[aria-label="Section"]', J("(s) => TDS.sec(s)", r0["section"]))
+            dd = J("(d) => { const t = TDS.ymd(d); return t.slice(0, 4) + '-' + t.slice(4, 6) + '-' + t.slice(6, 8); }", r0["date"])
+            pg.fill(d + 'input[aria-label="Paid or credited on"]', dd); pg.fill(d + 'input[aria-label="Deducted on"]', dd)
+            pg.fill(d + 'input[aria-label="Amount paid or credited"]', str(r0["paid"] or r0["tds"] * 50)); pg.fill(d + 'input[aria-label="TDS"]', str(round(r0["tds"])))
+            n0 = J("Object.keys(S.books.tdsAdded || {}).length")
+            pg.click(d + '[data-add-save]'); pg.wait_for_timeout(400)
+            dup = pg.locator('[data-add-dup]')
+            ok(dup.count() == 1 and dup.get_attribute("data-add-dup") == r0["id"] and "Tally already has this deduction" in dup.inner_text() and "add anyway?" in dup.inner_text() and J("Object.keys(S.books.tdsAdded || {}).length") == n0,
+               "asked first: \"Tally already has this deduction (…) — add anyway?\", nothing added yet (%s)" % (dup.inner_text() if dup.count() else None))
+            ok(pg.locator('[data-add-dup-open]').count() == 1 and pg.locator('[data-add-dup-anyway]').count() == 1, "Open the entry · Add anyway")
+            if not mobile: pg.screenshot(path=os.path.join(SHOTS, "add-dup-%d.png" % W))
+            pg.click('[data-add-dup-anyway]'); pg.wait_for_timeout(400)
+            ok(J("Object.keys(S.books.tdsAdded || {}).length") == n0 + 1, "Add anyway: added")
             pg.close()
         br.close()
 finally:

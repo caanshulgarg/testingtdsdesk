@@ -321,6 +321,30 @@ const TDSF25 = {
   personAddr(f){ return {flat: f.personFlat, postOffice: f.personPostOffice, premises: f.personPremises, road: f.personRoad, area: f.personArea, town: f.personTown}; },
   // the deductor's details as the batch header needs them (the workbook, BH fields 13-59, 68, 69): [{k, why}], k the key in
   // co.tds26q (or tan, pan, name of the client); one function for the screen (Client setup → TDS) and the files
+  // next-tds-validate-short (the owner, 26-Oct-2026: "the REQUIRED address details must be filled"; a wrong TAN blocks the
+  // file): the details the statement cannot go without, each empty one [{k, label}] (k as deductorProblems' and the Deductor
+  // step's fields); the TAN also when it is not a TAN. What is typed is not judged here (its length, an e-mail's form): the
+  // file cuts and deductorProblems says it
+  REQUIRED: [["tan", "TAN"], ["pan", "PAN"], ["name", "name"], ["flat", "address line 1"], ["town", "city / town"], ["state", "state"], ["pin", "PIN"], ["phone", "phone"],
+    ["person", "responsible person's name"], ["personDesignation", "responsible person's designation"], ["personPan", "responsible person's PAN"], ["personFlat", "responsible person's address line 1"],
+    ["personTown", "responsible person's city / town"], ["personState", "responsible person's state"], ["personPin", "responsible person's PIN"], ["personPhone", "responsible person's mobile"]],
+  deductorRequired(firm){
+    firm = firm || {};
+    const a = (v) => this.ascii(v).trim(), out = [], cat = this.categoryFor(firm), govt = this.GOVT.test(cat);
+    // the responsible person's state, PIN and mobile are the deductor's when not given (as the file writes them)
+    const val = {personState: 1, personPin: 1, personPhone: 1};
+    this.REQUIRED.forEach(([k, label]) => {
+      // (not given and the deductor's taken, the deductor's line says it)
+      if (k in val && !a(firm[k])) return;
+      const v = a(firm[k]);
+      if (k === "pan" && govt && v.toUpperCase() === "PANNOTREQD") return;
+      if (!v || ((k === "state" || k === "personState") && !this.stateCode(v))) out.push({k, label});
+      else if (k === "tan" && !/^[A-Z]{4}\d{5}[A-Z]$/.test(v.toUpperCase())) out.push({k, label, bad: true});
+    });
+    if (!cat) out.push({k: "deductorType", label: "category"});
+    if (!a(firm.email) && !a(firm.personEmail)) out.push({k: "email", label: "e-mail"});
+    return out;
+  },
   deductorProblems(firm){
     firm = firm || {};
     const out = [], P = (k, why) => out.push({k, why}), a = (v) => this.ascii(v);

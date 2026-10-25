@@ -5,12 +5,16 @@ books (tdsgst_snapshot.py) and their challans, then on Form 140 Q1 2026-27
     Aug) = ₹450 = ₹750;
   - three deductions typed in FinCom on no challan (left out of the file);
   - two books deductions typed again in FinCom (the deductee's name a little different), put on the quarter's challan: the
-    possible duplicates.
+    possible duplicates;
+  - the deductor's required details given (FILL).
 SETUP(page) does it and returns {hand: id, loose: [ids], dups: [[books id, added id]]}."""
 import json
 from tdsgst_snapshot import LOAD, CHALLANS
 from books_data import CACHE
 
+# the deductor's required details given (TDSF25.deductorRequired), so the case has no error of its own
+FILL = """() => { const co = CO(); co.tan = co.tan || 'DELZ12345A'; co.tds26q = Object.assign({}, co.tds26q || {}, {flat: '12 First Floor', town: 'New Delhi', state: '07', pin: '110005', email: 'a@b.in',
+  phone: '9811111111', person: 'Ravi Kumar', personDesignation: 'Partner', personPan: 'ABCPK1234K', personFlat: '12 First Floor', personTown: 'New Delhi'}); }"""
 SETUP_JS = """() => {
   const out = {loose: [], dups: []};
   const h = TDSAdd.save({party: 'ZZ Hand Worked Ltd', section: '194C', credit: '2026-04-15', date: '2026-06-20', paid: 500000, tds: 10000});
@@ -35,7 +39,7 @@ def books():
 
 def SETUP(pg):
     pg.evaluate(LOAD, books()); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500)
-    pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
+    pg.evaluate(CHALLANS); pg.wait_for_timeout(300); pg.evaluate(FILL)
     return pg.evaluate(SETUP_JS)
 
 GO_FILE = """() => { S.booksTab = 'tds'; tdsGo('2026-27', 'Q1', '26Q'); S.tdsTab = 'file'; S.tdsDedView = ''; S.tdsChView = ''; S.tdsWinCh = ''; S.tdsFix = ''; S.tdsValOpen = ''; render(); window.scrollTo(0, 0); }"""

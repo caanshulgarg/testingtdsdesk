@@ -109,6 +109,17 @@ const TDSAdd = {
     });
     return out;
   },
+  // next-tds-validate-short (the owner, 26-Oct-2026: "Add deduction warns when the books already have the same entry"): the
+  // books' deduction that is this one typed (x: {party, section, date, credit, tds}): the same section, date of deduction
+  // (or the date paid or credited), TDS within ₹1 (or the books' own TDS, where corrected), the deductee by PAN or a like name;
+  // null when none. Rows added in FinCom are not the books'
+  inBooks(x){
+    if (!x || !TDS.sec(x.section) || !(num(x.tds) > 0.005)) return null;
+    const d = TDS.ymd(x.date || x.credit), c = TDS.ymd(x.credit || x.date), pan = TDS.panOf(x.party), t = num(x.tds);
+    return TDS.allRows().find(r => !r.added && TDS.sec(r.section) === TDS.sec(x.section) && (TDS.ymd(r.date) === d || TDS.ymd(r.date) === c) &&
+      [num(r.tds)].concat(r.books && r.books.tds != null ? [num(r.books.tds)] : []).some(y => Math.abs(y - t) <= 1) &&
+      ((Certs.validPan(pan) && pan === r.pan) || nameSim(x.party || "", r.party || "") >= 0.8)) || null;
+  },
   // "Keep this one" (keepId; form: the return's): the other (dropId) of a possible duplicate taken out of the return (kept: TDSEdit's out, Put back on Validate &
   // file), its challan kept for Put back. {ok, why}
   keepOne(form, keepId, dropId){

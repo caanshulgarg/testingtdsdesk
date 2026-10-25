@@ -293,22 +293,30 @@ function RuleLedger({ kind, r }) {
 // (TDSF25.deductorProblems, src/js/83): each problem shown beside its field. Required fields are marked *.
 // the deductor's fields (module level, so React keeps each box while typing)
 const DedErr = ({ p, k }) => p[k] ? <small className="err" style={{ color: "var(--danger, #b42318)", display: "block" }}>{p[k].join(" ")}</small> : null;
+// next-tds-validate-short (the owner, 26-Oct-2026: "the REQUIRED address details must be filled"): a required field still
+// empty (TDSF25.deductorRequired, the one Validate & file blocks on) has a red outline and "Required" under it till filled
+let DED_NEED = {};
+const NEED_BOX = { outline: "1.5px solid var(--danger, #b42318)", outlineOffset: -1 };
+const DedNeed = ({ k }) => DED_NEED[k] ? <small className="ded-req" data-ded-required={k} style={{ color: "var(--danger, #b42318)", display: "block" }}>{DED_NEED[k].bad ? "Not a valid TAN" : "Required"}</small> : null;
 const DedLab = ({ label, req }) => <span>{label}{req && <b className="req" title="Required" aria-label="required"> *</b>}</span>;
 function DedT({ p, k, label, req, max, placeholder, path }) {
   const co = CO(), pth = path || "tds26q." + k, v = pth.split(".").reduce((o, x) => (o || {})[x], co);
-  return <label className="f" data-ded={k}><DedLab label={label} req={req} />
-    <input type="text" value={v || ""} maxLength={max} placeholder={placeholder} aria-label={label}
-      onChange={(ev) => { coSetText(pth, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommit(pth)} /><DedErr p={p} k={k} /></label>;
+  return <label className={"f" + (DED_NEED[k] ? " ded-need" : "")} data-ded={k}><DedLab label={label} req={req} />
+    <input type="text" value={v || ""} maxLength={max} placeholder={placeholder} aria-label={label} aria-invalid={DED_NEED[k] ? true : undefined} style={DED_NEED[k] ? NEED_BOX : undefined}
+      onChange={(ev) => { coSetText(pth, ev.target.value); FinComReact.redraw(); }} onBlur={() => coCommit(pth)} /><DedNeed k={k} />{DED_NEED[k] ? null : <DedErr p={p} k={k} />}</label>;
 }
 function DedSel({ p, k, label, req, opts, first }) {
   const d = CO().tds26q || {};
-  return <label className="f" data-ded={k}><DedLab label={label} req={req} />
-    <select aria-label={label} value={d[k] || ""} onChange={(ev) => coCommit("tds26q." + k, ev.target.value)}>
-      <option value="">{first}</option>{opts.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select><DedErr p={p} k={k} /></label>;
+  return <label className={"f" + (DED_NEED[k] ? " ded-need" : "")} data-ded={k}><DedLab label={label} req={req} />
+    <select aria-label={label} value={d[k] || ""} aria-invalid={DED_NEED[k] ? true : undefined} style={DED_NEED[k] ? NEED_BOX : undefined} onChange={(ev) => coCommit("tds26q." + k, ev.target.value)}>
+      <option value="">{first}</option>{opts.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select><DedNeed k={k} />{DED_NEED[k] ? null : <DedErr p={p} k={k} />}</label>;
 }
 export function DeductorDetails() {
   const co = CO(), d = co.tds26q || {}, firm = TDS26Q.firmDetails();
   const probs = {}; TDSF25.deductorProblems(firm).forEach((p) => { (probs[p.k] = probs[p.k] || []).push(p.why); });
+  DED_NEED = {}; (TDSF25.deductorRequired ? TDSF25.deductorRequired(firm) : []).forEach((x) => { DED_NEED[x.k] = x; });
+  // one e-mail is needed, the deductor's or the responsible person's: both boxes say so while neither is given
+  if (DED_NEED.email) { DED_NEED.personEmail = DED_NEED.email; }
   const catPan = TDSF25.categoryOf(co.pan), cat = TDSF25.categoryFor(firm), govt = TDSF25.GOVT.test(cat);
   const states = Object.entries(TDSF25.STATES).map(([n, c]) => [c, c + " · " + n]);
   const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px 14px" };
@@ -331,7 +339,7 @@ export function DeductorDetails() {
       <div style={grid}>
         <DedT p={probs} k="branch" label="Branch / division (old 24Q, 26Q, 27Q, 27EQ)" max={75} />
         <DedT p={probs} k="flat" label="Flat / door / block" req max={25} /><DedT p={probs} k="postOffice" label="Post office" max={25} /><DedT p={probs} k="premises" label="Building" />
-        <DedT p={probs} k="road" label="Road / street / sector" /><DedT p={probs} k="area" label="Area / locality" max={25} /><DedT p={probs} k="town" label="District" max={25} />
+        <DedT p={probs} k="road" label="Road / street / sector" /><DedT p={probs} k="area" label="Area / locality" max={25} /><DedT p={probs} k="town" label="City / town (district)" req max={25} />
         <DedSel p={probs} k="state" label="State" req opts={states} first="Choose the State" /><DedT p={probs} k="pin" label="PIN code" req max={6} /><DedT p={probs} k="country" label="Country" max={25} placeholder="INDIA" />
         <DedT p={probs} k="email" label="E-mail" req={!d.personEmail} max={75} /><DedT p={probs} k="phoneCc" label="Phone country code" max={5} placeholder="91" /><DedT p={probs} k="phone" label="Phone" req max={10} />
       </div>
@@ -339,7 +347,7 @@ export function DeductorDetails() {
       <div style={grid}>
         <DedT p={probs} k="person" label="Name" req max={75} /><DedT p={probs} k="personDesignation" label="Designation" req max={20} /><DedT p={probs} k="personPan" label="PAN" req max={10} />
         <DedT p={probs} k="personFlat" label="Flat / door / block" req max={25} /><DedT p={probs} k="personPostOffice" label="Post office" max={25} /><DedT p={probs} k="personPremises" label="Building" />
-        <DedT p={probs} k="personRoad" label="Road / street / sector" /><DedT p={probs} k="personArea" label="Area / locality" max={25} /><DedT p={probs} k="personTown" label="District" max={25} />
+        <DedT p={probs} k="personRoad" label="Road / street / sector" /><DedT p={probs} k="personArea" label="Area / locality" max={25} /><DedT p={probs} k="personTown" label="City / town (district)" req max={25} />
         <DedSel p={probs} k="personState" label="State" req opts={states} first="Choose the State" /><DedT p={probs} k="personPin" label="PIN code" req max={6} /><DedT p={probs} k="personCountry" label="Country" max={25} placeholder="INDIA" />
         <DedT p={probs} k="personEmail" label="E-mail" req={!d.email} max={75} /><DedT p={probs} k="personPhoneCc" label="Mobile country code" max={5} placeholder="91" /><DedT p={probs} k="personPhone" label="Mobile" req max={10} />
       </div>
