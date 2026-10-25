@@ -48,6 +48,7 @@ run_clean_names_server.py             120
 run_client_merge.js                   120
 run_cloud_groups.py                   210
 run_cloud_parse.mjs                   120
+run_pair_spake.mjs                    120
 run_contrast.py                       120
 run_cors_preflight.js                 120
 run_dates.js                          120

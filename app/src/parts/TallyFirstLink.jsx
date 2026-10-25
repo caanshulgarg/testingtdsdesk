@@ -51,7 +51,7 @@ async function scan() {
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;
-  if (mine) { say({ st: "code", found: mine, windowOpen: !!mine.pairProof }); logStep("found", mine.version); }
+  if (mine) { say({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
   else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
   else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
   else { say({ st: "waiting", found: null }); logStep("waiting"); }
@@ -70,9 +70,12 @@ export async function submitCode(raw) {
     say({ busy: false, code: "" });
     await afterPair();
   } catch (e) {
-    const closed = was && !was.pairProof;
+    const closed = (was && !(was.pairProof || was.pairWindow)) || !!(e && e.closed);
+    // FinCom Bridge 2.4.7 checks a typed code with the bridge (SPAKE2: the digits never leave the page, but each check is
+    // one of its five tries); older bridges' codes were checked here alone
     const m = e && e.code === "pair" && !(e.message || "").includes("another Windows user")
       ? (closed ? "The code has run out. Right-click the FinCom icon near the clock › Connect FinCom on this computer… again: it shows a new code for 10 minutes."
+        : e.spake ? "That is not the code in the FinCom Bridge box. Check the six digits (five tries for each code), or choose Connect FinCom on this computer… again for a new code."
         : "That is not the code in the FinCom Bridge box. Nothing was sent: check the six digits, or choose Connect FinCom on this computer… again for a new code.")
       : ((e && e.message) || String(e));
     say({ busy: false, st: was ? "code" : "waiting", msg: m, code: "" });

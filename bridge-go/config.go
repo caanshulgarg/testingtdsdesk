@@ -148,7 +148,7 @@ func defaultSettings() *Ordered {
 	d.Set("AllowImport", true)
 	d.Set("SyncDir", "")
 	d.Set("SyncCompanies", []any{})
-	d.Set("AllowedOrigins", []any{"https://app.fincom.live", "https://staging.fincom.live", "https://caanshulgarg.github.io", "http://localhost", "null"})
+	d.Set("AllowedOrigins", []any{"https://app.fincom.live", "https://staging.fincom.live", "https://caanshulgarg.github.io"}) // 2.4.7: FinCom's sites only (DevOrigins: tests and development only)
 	d.Set("KeepInStep", nil)
 	d.Set("CloudUrl", "")
 	d.Set("CloudKey", "")

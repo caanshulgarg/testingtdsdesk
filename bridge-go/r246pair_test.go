@@ -25,17 +25,18 @@ import (
 )
 
 func TestPairOpenURLOnlyFinComSites(t *testing.T) {
+	pv := "123456-" + strings.Repeat("ab", 16) // 2.4.7: the code and the window's secret
 	good := map[string]string{
-		"https://staging.fincom.live/review/":               "https://staging.fincom.live/review/#pair=123456",
-		"https://app.fincom.live/":                          "https://app.fincom.live/#pair=123456",
-		"https://app.fincom.live":                           "https://app.fincom.live#pair=123456",
-		"https://fincom.live/x/?next=https://evil.example/": "https://fincom.live/x/#pair=123456", // its query dropped
-		"https://caanshulgarg.github.io/testing/":           "https://caanshulgarg.github.io/testing/#pair=123456",
-		"https://staging.fincom.live/review/#/tally":        "https://staging.fincom.live/review/#pair=123456", // its own fragment replaced
-		"HTTPS://Staging.FinCom.live/review/":               "https://staging.fincom.live/review/#pair=123456",
+		"https://staging.fincom.live/review/":               "https://staging.fincom.live/review/#pair=" + pv,
+		"https://app.fincom.live/":                          "https://app.fincom.live/#pair=" + pv,
+		"https://app.fincom.live":                           "https://app.fincom.live#pair=" + pv,
+		"https://fincom.live/x/?next=https://evil.example/": "https://fincom.live/x/#pair=" + pv, // its query dropped
+		"https://caanshulgarg.github.io/testing/":           "https://caanshulgarg.github.io/testing/#pair=" + pv,
+		"https://staging.fincom.live/review/#/tally":        "https://staging.fincom.live/review/#pair=" + pv, // its own fragment replaced
+		"HTTPS://Staging.FinCom.live/review/":               "https://staging.fincom.live/review/#pair=" + pv,
 	}
 	for base, want := range good {
-		if got, ok := pairOpenURL(base, "123456"); !ok || got != want {
+		if got, ok := pairOpenURL(base, pv); !ok || got != want {
 			t.Errorf("%q: got %q %v, want %q", base, got, ok, want)
 		}
 	}
@@ -45,11 +46,11 @@ func TestPairOpenURLOnlyFinComSites(t *testing.T) {
 		"https://staging.fincom.live:8443/review/", "javascript:alert(1)", "file:///C:/x.html", "https://localhost/",
 		"https://127.0.0.1:9100/", "//staging.fincom.live/review/", "https://fincom.live.", "https://xfincom.live/",
 	} {
-		if got, ok := pairOpenURL(base, "123456"); ok || got != "" {
+		if got, ok := pairOpenURL(base, pv); ok || got != "" {
 			t.Errorf("%q opened as %q", base, got)
 		}
 	}
-	for _, code := range []string{"", "12345", "1234567", "12345a", "123 456", "12345\n"} {
+	for _, code := range []string{"", "123456", "12345-" + strings.Repeat("ab", 16), "1234567-" + strings.Repeat("ab", 16), "123456-" + strings.Repeat("AB", 16), "123 456", "123456-" + strings.Repeat("ab", 16) + "\n"} {
 		if got, ok := pairOpenURL("https://app.fincom.live/", code); ok || got != "" {
 			t.Errorf("code %q opened as %q", code, got)
 		}
@@ -142,7 +143,7 @@ func (p *pairStand) env(f browserFacts) pairOpenEnv {
 
 var ownSessionFacts = browserFacts{Session: 1, OwnerOK: true}
 
-var rePairURL = regexp.MustCompile(`^https://staging\.fincom\.live/review/#pair=(\d{6})$`)
+var rePairURL = regexp.MustCompile(`^https://staging\.fincom\.live/review/#pair=(\d{6})-([0-9a-f]{32})$`) // 2.4.7: the code and the window's secret
 
 // 1. the tray item: the browser opens with the code of the window just opened; the code works once
 func TestTrayConnectOpensFinComWithCode(t *testing.T) {
@@ -172,10 +173,10 @@ func TestTrayConnectOpensFinComWithCode(t *testing.T) {
 	if strings.Contains(msg, "Settings > Tally Bridge") || strings.Contains(msg, "#pair") {
 		t.Errorf("the message: %s", msg)
 	}
-	if c, r := p.pair(code); c != 200 || str(r["key"]) != "k246" {
+	if c, r := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 || str(r["key"]) != "k246" { // 2.4.7: the address's secret
 		t.Fatalf("pairing with the code from the address: %d %v", c, r)
 	}
-	if c, _ := p.pair(code); c == 200 {
+	if c, _ := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c == 200 {
 		t.Fatal("the code worked twice")
 	}
 	if tallySent.Load() != sent {
@@ -284,7 +285,7 @@ func TestFirstStartOpensOncePerInstall(t *testing.T) {
 	if trayFirstOpen(p.env(ownSessionFacts), fincomURL()) || len(p.opened) != 1 {
 		t.Fatalf("opened twice: %v", p.opened)
 	}
-	if c, _ := p.pair(code); c != 200 {
+	if c, _ := p.pair(rePairURL.FindStringSubmatch(p.opened[0])[2]); c != 200 {
 		t.Fatal("the code did not pair")
 	}
 	if logLines("FinCom handed to the tray to open in the browser and connect this computer (the first start after the setup, session 1)") != 1 {
@@ -366,7 +367,7 @@ func TestFirstStartNotWhenConnectedOrPaired(t *testing.T) {
 	p = newPairStand(t, "")
 	dueAt(t, time.Second, false)
 	r := p.call("POST", "/paircode", M{})
-	if c, _ := p.pair(str(r["code"])); c != 200 {
+	if c, _ := p.pair(str(r["secret"])); c != 200 {
 		t.Fatal("pairing")
 	}
 	if dueExists() {
@@ -547,7 +548,7 @@ func TestInstallerFinishOpensToConnect(t *testing.T) {
 // 2.4.5's decision kept as history, a dated line for 2.4.6 saying nothing was measured again; the test sheet names this
 // version's new steps
 func TestRelease246VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.4.6" {
+	if BridgeVersion != "2.4.7" { // 2.4.7 (r247pair_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" // 2.4.5's table hash (docs/tally-allowlist.md at 69de7a79d)
@@ -559,7 +560,7 @@ func TestRelease246VersionAllowListUnchanged(t *testing.T) {
 		t.Fatal("the table hash in the doc is not 2.4.5's")
 	}
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.4.6 by the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed",
+	for _, w := range []string{"as for 2.4.6: the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed", // 2.4.7: kept as history
 		"the owner's approval of 2026-10-24", "as for 2.4.5: the owner's decision of 2026-10-21"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
@@ -568,7 +569,7 @@ func TestRelease246VersionAllowListUnchanged(t *testing.T) {
 	if strings.Contains(al, "allowed for 2.4.5 by") {
 		t.Error("2.4.5's decision still worded as the current one")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-24 for 2\.4\.6: no request was measured again[^\n]*allowed for 2\.4\.6 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-24 for 2\.4\.6: no request was measured again[^\n]*2\.4\.6 allowed by the owner's standing decision of 2026-10-06`).MatchString(al) {
 		t.Error("no dated line for 2.4.6")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.4.6-test-sheet.txt"))

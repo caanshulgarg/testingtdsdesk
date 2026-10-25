@@ -18,7 +18,16 @@ package main
 // The code works as before: once, 10 minutes, proved by pairProof before FinCom sends it. Nothing goes to Tally.
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -29,6 +38,9 @@ import (
 var fincomSites = []string{"https://app.fincom.live", "https://staging.fincom.live", "https://fincom.live", "https://caanshulgarg.github.io"}
 
 var reSixDigits = re(`^[0-9]{6}$`)
+
+// 2.4.7: what the address carries: the 6-digit code and the window's 128-bit secret (#pair=<code>-<secret>)
+var rePairValue = re(`^[0-9]{6}-[0-9a-f]{32}$`)
 
 // FinCom's address without a fragment when base is one of FinCom's own https sites (no user, no port); false otherwise
 func fincomPlainURL(base string) (string, bool) {
@@ -46,17 +58,17 @@ func fincomPlainURL(base string) (string, bool) {
 	return "", false
 }
 
-// FinCom's address with the connect code in its fragment; false unless base is one of FinCom's own sites and the code
-// is 6 digits
-func pairOpenURL(base, code string) (string, bool) {
-	if !reSixDigits.MatchString(code) {
+// FinCom's address with the connect code and the window's secret in its fragment; false unless base is one of FinCom's
+// own sites and pair is <6 digits>-<32 hex>
+func pairOpenURL(base, pair string) (string, bool) {
+	if !rePairValue.MatchString(pair) {
 		return "", false
 	}
 	u, ok := fincomPlainURL(base)
 	if !ok {
 		return "", false
 	}
-	return u + "#pair=" + code, true
+	return u + "#pair=" + pair, true
 }
 
 // where the tray runs: its Windows session, whether it is the service, whether its user is the bridge's owner
@@ -106,10 +118,10 @@ func pairOpenText(addr, code, until string, opened bool) string {
 }
 
 // opens FinCom with the code when allowed; the message either way
-func openWithCode(e pairOpenEnv, fincom, code, until string) {
+func openWithCode(e pairOpenEnv, fincom, code, secret, until string) {
 	opened := false
 	if may, _ := mayOpenBrowser(e.facts); may {
-		if u, ok := pairOpenURL(fincom, code); ok {
+		if u, ok := pairOpenURL(fincom, code+"-"+secret); ok {
 			e.open(u)
 			opened = true
 		}
@@ -128,7 +140,7 @@ func trayConnectNow(e pairOpenEnv, fincom string) {
 		e.show("FinCom Bridge", "The bridge is not answering, so no connect code could be made.", true)
 		return
 	}
-	openWithCode(e, fincom, str(r["code"]), str(r["until"]))
+	openWithCode(e, fincom, str(r["code"]), str(r["secret"]), str(r["until"]))
 }
 
 // the first start after the installer: true when this tray took the install's ask (and opened FinCom when allowed)
@@ -165,7 +177,7 @@ func trayFirstOpen(e pairOpenEnv, fincom string) bool {
 		return true
 	}
 	if str(r["code"]) != "" {
-		openWithCode(e, fincom, str(r["code"]), str(r["until"]))
+		openWithCode(e, fincom, str(r["code"]), str(r["secret"]), str(r["until"]))
 	}
 	return true
 }
@@ -266,9 +278,208 @@ func clearPairOpenDue(why string) {
 }
 
 // a fresh connect window of min minutes: its code and end, as /paircode gives them
-func freshPairCode(min int) (code, until string) {
-	c, u := openPairWindow(min)
-	return c, u.Format("2006-01-02T15:04:05")
+func freshPairCode(min int) (code, secret, until string) {
+	c, s, u := openPairWindow(min)
+	return c, s, u.Format("2006-01-02T15:04:05")
+}
+
+// 2.4.7: the tray (and the measuring tool) never send the bridge key. Before each request: /ping with a fresh nonce
+// proves the program on the port holds the key (else nothing is sent) and hands out a one-use challenge (30 s); the
+// request then carries X-Bridge-Auth: <challenge>.<HMAC(key, "fincom-tray-auth|" challenge "|" method "|" path?query)>,
+// and its body sealed (AES-256-GCM under a key made from the bridge key and the challenge: X-Bridge-Seal: 1). A program
+// that takes the port between the two connections gets a proof good for nothing and a body it cannot open: the bridge
+// takes each challenge it issued once, for that request only, and answers no other Windows user's program.
+func trayRequest(method, path string, body any, proofTimeout, timeout time.Duration) M {
+	port, key := toInt(cfg("Port")), cfgS("Key")
+	ch, ok := bridgeChallenge(port, key, proofTimeout)
+	if !ok {
+		return nil
+	}
+	var rd io.Reader
+	sealed := false
+	if body != nil {
+		s, err := traySeal(key, ch, []byte(jsonText(body)))
+		if err != nil {
+			return nil
+		}
+		rd, sealed = strings.NewReader(s), true
+	}
+	req, _ := http.NewRequest(method, fmt.Sprintf("http://127.0.0.1:%d%s", port, path), rd)
+	req.Header.Set("X-Bridge-Auth", ch+"."+trayAuthMAC(key, ch, method, req.URL.RequestURI()))
+	if sealed {
+		req.Header.Set("X-Bridge-Seal", "1")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	r, err := c.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	b, _ := io.ReadAll(r.Body)
+	// the reply is the bridge's own: its MAC over this challenge, the status and the body (a program that took the port
+	// cannot make one up)
+	if !hmac.Equal([]byte(trayReplyMAC(key, ch, r.StatusCode, b)), []byte(r.Header.Get("X-Bridge-Reply-MAC"))) {
+		return nil
+	}
+	return parseObj(string(b))
+}
+
+func trayReplyMAC(key, ch string, status int, body []byte) string {
+	sum := sha256.Sum256(body)
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte(fmt.Sprintf("fincom-tray-reply|%s|%d|%x", ch, status, sum)))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// the bridge's side: a reply to the tray's proven request is held back and sent with its MAC (X-Bridge-Reply-MAC)
+type trayReplyWriter struct {
+	http.ResponseWriter
+	key, ch string
+	status  int
+	buf     []byte
+}
+
+func (w *trayReplyWriter) WriteHeader(code int) { w.status = code }
+func (w *trayReplyWriter) Write(b []byte) (int, error) {
+	w.buf = append(w.buf, b...)
+	return len(b), nil
+}
+func (w *trayReplyWriter) flush() {
+	if w.status == 0 {
+		w.status = 200
+	}
+	w.ResponseWriter.Header().Set("X-Bridge-Reply-MAC", trayReplyMAC(w.key, w.ch, w.status, w.buf))
+	w.ResponseWriter.WriteHeader(w.status)
+	_, _ = w.ResponseWriter.Write(w.buf)
+}
+
+func traySealKey(key, ch string) []byte {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("fincom-tray-seal|" + ch))
+	return m.Sum(nil)
+}
+
+func traySeal(key, ch string, plain []byte) (string, error) {
+	blk, err := aes.NewCipher(traySealKey(key, ch))
+	if err != nil {
+		return "", err
+	}
+	g, err := cipher.NewGCM(blk)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, g.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(g.Seal(nonce, nonce, plain, []byte(ch))), nil
+}
+
+func trayUnseal(key, ch, sealed string) ([]byte, error) {
+	b, err := hex.DecodeString(strings.TrimSpace(sealed))
+	if err != nil {
+		return nil, err
+	}
+	blk, err := aes.NewCipher(traySealKey(key, ch))
+	if err != nil {
+		return nil, err
+	}
+	g, err := cipher.NewGCM(blk)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) < g.NonceSize() {
+		return nil, errors.New("too short")
+	}
+	return g.Open(nil, b[:g.NonceSize()], b[g.NonceSize():], []byte(ch))
+}
+
+func trayAuthMAC(key, ch, method, requestURI string) string {
+	m := hmac.New(sha256.New, []byte(key))
+	m.Write([]byte("fincom-tray-auth|" + ch + "|" + method + "|" + requestURI))
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+// the program on 127.0.0.1:port proved it holds the key (HMAC of our nonce, bound to its id and that port); its challenge
+func bridgeChallenge(port int, key string, timeout time.Duration) (string, bool) {
+	if port <= 0 || key == "" {
+		return "", false
+	}
+	n := randHex16() + randHex16()
+	c := &http.Client{Timeout: timeout, Transport: &http.Transport{Proxy: nil}}
+	req, _ := http.NewRequest("GET", fmt.Sprintf("http://127.0.0.1:%d/ping?n=%s&challenge=1", port, n), nil)
+	req.Header.Set("X-FinCom-Tray", "1")
+	r, err := c.Do(req)
+	if err != nil {
+		return "", false
+	}
+	b, _ := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	r.Body.Close()
+	j := parseObj(string(b))
+	if j == nil || toInt(j["port"]) != port || str(j["bridgeId"]) == "" {
+		return "", false
+	}
+	want := proofFor(key, n, str(j["bridgeId"])+fmt.Sprint(port))
+	ch := str(j["challenge"])
+	if want == "" || !hmac.Equal([]byte(want), []byte(str(j["proof"]))) || !re(`^[0-9a-f]{64}$`).MatchString(ch) {
+		return "", false
+	}
+	return ch, true
+}
+
+// the proof alone (the tests)
+func bridgeProves(port int, key string, timeout time.Duration) bool {
+	_, ok := bridgeChallenge(port, key, timeout)
+	return ok
+}
+
+// --- the bridge's side of the tray's proof
+var (
+	trayAuthMu     sync.Mutex
+	trayAuthIssued = map[string]time.Time{}
+)
+
+func issueTrayChallenge() string {
+	trayAuthMu.Lock()
+	defer trayAuthMu.Unlock()
+	now := time.Now()
+	for k, exp := range trayAuthIssued {
+		if now.After(exp) {
+			delete(trayAuthIssued, k)
+		}
+	}
+	for len(trayAuthIssued) >= 64 { // a program asking without using them: the oldest (earliest to run out) go first
+		oldest, at := "", time.Time{}
+		for k, exp := range trayAuthIssued {
+			if oldest == "" || exp.Before(at) {
+				oldest, at = k, exp
+			}
+		}
+		delete(trayAuthIssued, oldest)
+	}
+	ch := randHex16() + randHex16()
+	trayAuthIssued[ch] = now.Add(30 * time.Second)
+	return ch
+}
+
+// X-Bridge-Auth: a challenge this bridge issued (taken once), with the key's HMAC over it and this request; the challenge
+// (to open a sealed body) when it holds
+func trayAuth(r *http.Request) (string, bool) {
+	v := r.Header.Get("X-Bridge-Auth")
+	ch, mac, found := strings.Cut(v, ".")
+	key := cfgS("Key")
+	if !found || key == "" || len(ch) != 64 || len(mac) != 64 {
+		return "", false
+	}
+	trayAuthMu.Lock()
+	exp, ok := trayAuthIssued[ch]
+	delete(trayAuthIssued, ch)
+	trayAuthMu.Unlock()
+	if !ok || time.Now().After(exp) || !hmac.Equal([]byte(trayAuthMAC(key, ch, r.Method, r.URL.RequestURI())), []byte(mac)) {
+		return "", false
+	}
+	return ch, true
 }
 
 // POST /tray/pairopen {action: "take", session}: the owner's tray takes the install's ask (one tray only); GET: the state
@@ -319,9 +530,9 @@ func pairOpenRoute(method string, body M) (M, error) {
 		writeLog("FinCom handed to the tray to open in the browser (" + how + "); this computer is connected already, no code.")
 		return M{"ok": true, "take": true, "plain": true}, nil
 	}
-	code, until := freshPairCode(10)
+	code, secret, until := freshPairCode(10)
 	writeLog("FinCom handed to the tray to open in the browser and connect this computer (" + how + "): a new connect code for 10 minutes.")
-	return M{"ok": true, "take": true, "code": code, "until": until}, nil
+	return M{"ok": true, "take": true, "code": code, "secret": secret, "until": until}, nil
 }
 
 // the tray's own look at the install's record before it acts on the bridge's "ready" (a program squatting on the

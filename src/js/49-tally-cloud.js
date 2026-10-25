@@ -1000,16 +1000,17 @@ function resumeRows(all){
   return out;
 }
 // FinCom opened by FinCom Bridge's "Connect FinCom on this computer": the page's address carries the bridge's
-// one-time connect code (#pair=123456). It is taken off the address at once, and used to connect to the bridge.
+// one-time connect code (#pair=123456; FinCom Bridge 2.4.7: #pair=123456-<the window's 32-hex secret>). It is taken off the
+// address at once, and used to connect to the bridge.
 (function(){
   const take = () => {
-    const m = String(location.hash || "").match(/(?:^#|&)pair=(\d{6})\b/);
+    const m = String(location.hash || "").match(/(?:^#|&)pair=(\d{6})(?:-([0-9a-f]{32}))?(?![0-9A-Za-z])/);
     if (!m) return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e){ location.hash = ""; }
-    const code = m[1];
+    const code = m[1] + (m[2] ? "-" + m[2] : "");
     const go = async () => {
       try {
-        const j = await Bridge.pair(code);
+        const j = await Bridge.pair(code, {auto: true}); // 2.4.7: the address's secret only, never a try used up by itself
         toast("Connected to FinCom Bridge on " + (j.computer || "this computer") + ".");
         try { await Bridge.refresh(); } catch (e){}
         // next-tally-firstlink: the firm's computer key at once (not at TCloud.auto's next minute), on the Tally page,
@@ -1017,7 +1018,7 @@ function resumeRows(all){
         if (typeof startBridgePolling === "function") startBridgePolling();
         if (TCloud.on()){ TCloud.autoAt = 0; setTimeout(() => TCloud.auto(), 0); S.tallyGuide = {}; S.tallyTab = "computers"; if (typeof navHome === "function") navHome("tally"); }
         render();
-      } catch (e){ toast("Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
+      } catch (e){ toast(e && e.closed ? "This link from FinCom Bridge has run out (a newer one was opened, the bridge started again, or its tries were used). Right-click the FinCom icon near the clock \u203a Connect FinCom on this computer\u2026 again." : "Could not connect to the bridge: " + ((e && e.message) || e) + " Right-click the FinCom Bridge icon near the clock and choose “Connect FinCom on this computer…” again."); }
     };
     // after the page has drawn itself
     setTimeout(go, 600);
