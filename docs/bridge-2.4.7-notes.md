@@ -10,7 +10,7 @@ a 2.4.7 bridge pairs only with the app of this branch or later. The app still pa
 | Fingerprint | SHA-256 `69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799` (FinComBridge-Setup-2.4.7.exe, built 25-Oct-2026 02:23 IST at the commit after be7c3a98a, bridge sources 61fb40fec, POSTONLY=any) |
 | Program | FinComBridge-2.4.7.exe, SHA-256 `a6ea2ec52f45d2fcd4bbd8731b814f3f0b95f46680f6a83f69e3cab6c6e8b546` |
 | Replaces | 2.4.6 (kept on the computer, so the tray can roll back to it) |
-| Published | not published. assets-test/bridge-go/latest.json still names 2.4.6; the owner publishes 2.4.7 with this branch's app |
+| Published | 25-Oct-2026 09:54 IST (04:24 UTC) to staging review (main 8e9a5720f, from staging-next ed38661ee: next-247-pairsafe with staging-next fff835cf9 merged), the owner's "ok.. publish" of 25-Oct-2026, together with this branch's app (its SPAKE2 in legacy.js). latest.json says 2.4.7, setup SHA-256 `69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799` (the published setup's bytes and its .sha256 match), program `a6ea2ec52f45d2fcd4bbd8731b814f3f0b95f46680f6a83f69e3cab6c6e8b546`. On the merged head: release-check passed (FORCE_REBUILD=1, on a temporary commit with latest.json as before the release, since step 1 refuses a version latest.json already names; ff2531451, not pushed); run_tally_firstlink, run_pair_ui, run_bridge_ports_ui, run_stability, run_ui_standards, run_safari_compat, run_boot_watch and run_publish_switch passed. No tally-ingest change, no SQL |
 
 ## What is in 2.4.7
 
