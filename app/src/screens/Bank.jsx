@@ -244,9 +244,7 @@ function LedgerSetup({ co }) {
   // one row each (round 3, 05-Oct-2026), the how-to on hover and behind How
   if (hasLedgerList()) return null;
   // the ledger masters uploaded on Books are the client's list too (parts/bank/smart.js, 25-Oct-2026)
-  const fromBooks = ledgersFromBooks(co.id);
-  if (fromBooks === "taken") return null;
-  if (fromBooks === "loading") return <NoticeLine sev="info" text={"Loading ledgers from the books of " + co.name + "…"} />;
+  if (ledgersFromBooks(co.id) === "loading") return <NoticeLine sev="info" text={"Loading ledgers from the books of " + co.name + "…"} />;
   if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <NoticeLine sev="info" text={"Loading ledgers from FinCom’s cloud copy of the books of " + ((TCloud.book(co.id) || {}).company || co.name) + "…"} />;
   if (bridgeLive(co)) return <NoticeLine sev="info" text={"Loading ledgers from Tally (" + Bridge.openFor(co).name + " is open)…"} />;
   if (live()) return <NoticeLine text={"Open " + Bridge.tallyName(co) + " in TallyPrime: its ledgers load by themselves."} how="Or import the ledger list from a file."><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></NoticeLine>;

@@ -28,8 +28,23 @@ const Ledgers = {
   // the list for a client: the one held, or the bank's copy when that is longer (set by a file import or a test)
   list(cid){
     cid = cid || this.cid();
-    const s = this.st[cid], bl = this.bankList(cid);
-    return s && s.list.length >= bl.length ? s.list : bl;
+    const s = this.st[cid], bl = this.bankList(cid), l = s && s.list.length >= bl.length ? s.list : bl;
+    return l.length ? l : this.books(cid);
+  },
+  // 25-Oct-2026 (Testing AAD: "I have already uploaded masters xml.. still it is asking again"): with no list from the
+  // cloud, the bridge or a file, the ledger masters uploaded on Books (ledInfo, under) are the list. Never held: a cloud or
+  // bridge read is taken over it as over nothing. Worked out once per change of the books' masters; then the bank's lines,
+  // Client setup and the drafts are matched again (ledgersChanged), as when a list comes in
+  books(cid){
+    const b = S.books;
+    if (!b || b.cid !== cid || b.loading) return [];
+    const info = b.ledInfo || {}, under = b.under || {}, g = b.groups || {}, k = cid + (b.ledInfoAt || "") + Object.keys(info).length + "/" + Object.keys(under).length;
+    if (b._led && b._led.k === k) return b._led.l;
+    const l = Array.from(new Set(Object.keys(info).concat(Object.keys(under).filter(n => !g[n])))).filter(Boolean).sort()
+      .map(n => { const i = info[n] || {}; return {name: n, group: i.group || under[n] || "", gstin: String(i.gstin || (b.gstins || {})[n] || "").toUpperCase(), pan: String(i.pan || (b.pans || {})[n] || "").toUpperCase(), taxType: i.taxType || "", dutyHead: i.dutyHead || "", tdsNature: i.tdsNature || ""}; });
+    Object.defineProperty(b, "_led", {value: {k, l}, configurable: true, writable: true});
+    if (l.length){ this.ver++; setTimeout(() => { if (typeof ledgersChanged === "function") ledgersChanged(cid); render(); }, 0); }
+    return l;
   },
   t(x){ return new Date((x && (x.srcAt || x.importedAt || x.at)) || 0).getTime() || 0; },
   cur(cid){
@@ -196,6 +211,8 @@ const Ledgers = {
     this.seen[cid] = Date.now();
     const co = CO(cid), s = this.st[cid];
     const cloud = typeof TCloud === "object" && TCloud.on(), live = typeof bridgeLive === "function" && bridgeLive(co);
+    // no list yet: the books are opened, for their ledger masters (books())
+    if (!this.list(cid).length && !(S.books && S.books.cid === cid) && typeof openBooks === "function") openBooks(cid);
     if (!cloud && !live) return;
     if (!s || s.fromBrowser){ this.load(cid); return; }
     if (cloud) TCloud.status(cid).then(() => {

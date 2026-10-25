@@ -79,33 +79,15 @@ export function headClear(k, old) {
 }
 
 // ---- the client's ledger list from its books (25-Oct-2026, Testing AAD: "I have already uploaded masters xml.. still it
-// is asking again"). The ledger masters uploaded on Books -> From Tally (bringMastersFile, src/js/23) are kept in the
-// books (ledInfo, under; shared through client_book_items), but every ledger box and the bank's "Bring in the Tally
-// ledger list" read only Ledgers (src/js/58: FinCom's cloud copy of the books, the bridge, or a list kept in this
-// browser). A client with no book in the cloud and no bridge (Testing AAD) so had no list on the bank page. Now, when
-// Ledgers has none, the books' list is taken as the client's list (src "file", dated when the masters were uploaded, so a
-// later cloud or bridge read still replaces it), and the bank's lines are suggested again. The books are opened for it
-// when they are not open yet (as the bill page does). ----
-export function booksLedgerList(bk) {
-  const info = (bk && bk.ledInfo) || {}, under = (bk && bk.under) || {}, groups = (bk && bk.groups) || {};
-  const names = Array.from(new Set(Object.keys(info).concat(Object.keys(under).filter((n) => !groups[n])))).filter(Boolean).sort((a, z) => a.localeCompare(z));
-  return names.map((n) => ({ name: n, group: (info[n] && info[n].group) || under[n] || "", gstin: String((info[n] && info[n].gstin) || ((bk.gstins || {})[n]) || "").toUpperCase(),
-    pan: String((info[n] && info[n].pan) || ((bk.pans || {})[n]) || "").toUpperCase(), taxType: (info[n] && info[n].taxType) || "", dutyHead: (info[n] && info[n].dutyHead) || "", tdsNature: (info[n] && info[n].tdsNature) || "" }));
-}
-// "loading": the books are being opened; "taken": the list came from them now; "": nothing there (or a list is held)
+// is asking again"). The ledger masters uploaded on Books -> From Tally are kept in the books (ledInfo, under); Ledgers
+// (src/js/58) takes them as the client's list when the cloud, the bridge and a file have none (Ledgers.books). Here the
+// bank page opens the books for it when they are not open yet, and says so while they open. ----
+// "loading": the books are being opened; "": they are open (their masters, if any, are the list) or a list is held
 export function ledgersFromBooks(cid) {
   if (typeof Ledgers !== "object" || !cid || Ledgers.list(cid).length) return "";
   const bk = S.books && S.books.cid === cid ? S.books : null;
   if (!bk) { if (typeof openBooks === "function") setTimeout(() => { if (!(S.books && S.books.cid === cid) && S.coId === cid) openBooks(cid).then(() => redraw(), () => {}); }, 0); return "loading"; }
-  if (bk.openFailed) return "";
-  if (bk.loading) return "loading";
-  const list = booksLedgerList(bk);
-  if (!list.length) return "";
-  const at = bk.ledInfoAt || "";
-  const parents = {}; Object.entries(bk.groups || {}).forEach(([g, p]) => { if (g) parents[g] = typeof p === "string" ? p : (p && p.parent) || ""; });
-  if (!Ledgers.take(cid, { list, parents, at: at || new Date().toISOString(), srcAt: at || "1970-01-01T00:00:00.000Z", src: "file", file: "Ledger masters uploaded on Books" + (at ? " " + fmtDate(at.slice(0, 10)) : "") })) return "";
-  if (typeof ledgersChanged === "function") setTimeout(() => { try { ledgersChanged(cid); } catch (e) {} redraw(); }, 0);
-  return "taken";
+  return bk.loading && !bk.openFailed ? "loading" : "";
 }
 // each chip's count among the lines the other filters leave
 export function chipCounts(b, rows) {
