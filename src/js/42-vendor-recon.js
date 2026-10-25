@@ -1,3 +1,4 @@
+/* @react-lazy: begin 42-vendor-recon.js (the React app loads this file with the screens that use it: app/src/lib/vendorRecon.js; build.py react_parts) */
 /* ================================================================== */
 /* Vendor ledger reconciliation: the vendor's ledger against the      */
 /* party's ledger in Tally, for a period, with a downloadable report   */
@@ -189,7 +190,6 @@ async function bankReconExcel(){
 // what the vendor reconciliation page does
 // phase 3 (14-Oct-2026): vendor reconciliation lives under Reconciliations → Vendors (app/src/lib/registers.js); the old place (Purchase's
 // "Reconcile a vendor ledger") leads there. The live check against Tally (this one) is under Vendors' More
-function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }
 function vrOpenLive(){ S.vrec = VR.def(); render(); window.scrollTo(0, 0); }
 function vrClose(){ S.vrec = null; render(); }
 // the ledger, from and to; a ledger typed that is a Tally ledger takes Tally's spelling
@@ -200,6 +200,8 @@ function vrSet(key, val){
   render();
 }
 function vrFile(file){ if (!file || !VR.st()) return; S.vrec.file = file; S.vrec.fileName = file.name; S.vrec.res = null; render(); }
-function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
-// the bank reconciliation's Excel (app/src/parts/BankChecks.jsx)
-function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
+// fast-firstopen (25-Oct-2026): kept out of legacy.js (its size budget, tests/run_stability.py) and loaded with the
+// vendor reconciliation, the bank checks and the registers (app/src/lib/vendorRecon.js); vrOpen, vrExcel and reconExcelGo,
+// which the first file's screens call, stay in src/js/82-registers.js
+if (typeof globalThis === "object") Object.assign(globalThis, {VR, runVendorRecon, sum0, vendorReconExcel, bankReconExcel, vrOpenLive, vrClose, vrSet, vrFile});
+/* @react-lazy: end */

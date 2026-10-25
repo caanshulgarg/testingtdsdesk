@@ -5,6 +5,7 @@
 // postReportHtml (src/js/26). The work is in src/js; buttons go through bankAct, bankFocusGo, reconPick, reconExcelGo.
 
 import { useEffect } from "react";
+import "../lib/vendorRecon.js";
 import Button from "./Button.jsx";
 
 const Btn = ({ act, className = "btn small", children, disabled, title, ...rest }) => <button className={className} disabled={disabled} title={title} onClick={() => bankAct(act)} {...rest}>{children}</button>;

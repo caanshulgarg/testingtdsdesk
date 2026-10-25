@@ -3,6 +3,8 @@
 // program every page loads stays within its budget. It runs on the program's globals (S, CO, num, r2, Market, GST2B,
 // GSTAmend, LK, …) and puts its own on window, where the program and the screens find them.
 // It was src/js/81-sheet-import.js and 82-party-recon.js; the two parts follow as they were.
+// (VR.refs, the document numbers in a narration: the vendor reconciliation, loaded with it)
+import "./vendorRecon.js";
 /* ================================================================== */
 /* A register uploaded as a sheet or JSON becomes entries to review   */
 /* ================================================================== */

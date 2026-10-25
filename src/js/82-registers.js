@@ -13,3 +13,8 @@ function registersLoad(){
 function sheetStart(files, side, opts){ return registersLoad().then(() => SheetImport.start(files, side, opts), e => toast("A register cannot be read here: " + ((e && e.message) || e))); }
 // open the Reconciliations page on Vendors (or Customers), and pick a statement to read
 function reconGo(side){ S.step = null; S.tab = "books"; S.booksTab = "recon"; S.reconTab = side === "customer" ? "customers" : "vendors"; render(); window.scrollTo(0, 0); }
+// the vendor reconciliation's old place, and the vendor's and the bank reconciliation's Excel (src/js/42, loaded with
+// the screens that use it: app/src/lib/vendorRecon.js; these stay here for the first file's screens and the tests)
+function vrOpen(){ S.vrec = null; if (typeof reconGo === "function") reconGo("vendor"); else render(); }
+function vrExcel(){ vendorReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
+function reconExcelGo(){ bankReconExcel().catch(e => toast("Could not make the file: " + (e.message || e))); }
