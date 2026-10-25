@@ -28,9 +28,11 @@ const Ledgers = {
   // the list for a client: the one held, or the bank's copy when that is longer (set by a file import or a test)
   list(cid){
     cid = cid || this.cid();
-    const s = this.st[cid], bl = this.bankList(cid), l = s && s.list.length >= bl.length ? s.list : bl;
+    const l = this.held(cid);
     return l.length ? l : this.books(cid);
   },
+  // the list from the cloud, the bridge or a file (the held one, or the bank's copy), without the masters on Books
+  held(cid){ const s = this.st[cid], bl = this.bankList(cid); return s && s.list.length >= bl.length ? s.list : bl; },
   // 25-Oct-2026 (Testing AAD: "I have already uploaded masters xml.. still it is asking again"): with no list from the
   // cloud, the bridge or a file, the ledger masters uploaded on Books (ledInfo, under) are the list. Never held: a cloud or
   // bridge read is taken over it as over nothing. Worked out once per change of the books' masters; then the bank's lines,
@@ -223,7 +225,9 @@ const Ledgers = {
   status(cid){
     cid = cid || S.coId;
     const h = this.cur(cid);
-    return {n: this.list(cid).length, at: h ? h.at || h.importedAt : "", src: h ? h.src : "", busy: !!this.busy[cid], err: this.err[cid] || ""};
+    // masters: the list is the ledger masters uploaded on Books (books()), not one held: the status line says the file
+    const n = this.list(cid).length, masters = n > 0 && !this.held(cid).length;
+    return {n, masters, at: h ? h.at || h.importedAt : "", src: h ? h.src : "", busy: !!this.busy[cid], err: this.err[cid] || ""};
   },
   // FinCom Bridge 2.1.4 (owner's request of 02-Oct-2026): a bill's ledger chooser opened with a list older than the
   // client's last posting asks for the list to be read again: the bridge here when it serves the company (POST

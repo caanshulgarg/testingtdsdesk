@@ -12,7 +12,8 @@ const FX = path.join(__dirname, "fixtures", "sheets");
 const NAMES = ["num", "r2", "fpHash", "GST_STATES", "stateOfGstin", "GSTIN_RE", "normName", "normInv", "money", "INR", "Market", "GST2B", "GSTAmend", "VR", "isSheetFile"];
 const h = load(HTML, NAMES);
 // the engine is a file of its own, loaded by the app when first used: run here on the program's helpers
-const vm = require("vm"); h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8"), h.ctx);
+// (its import of the vendor reconciliation, src/js/42 since 25-Oct-2026, is left out: VR comes from the page above)
+const vm = require("vm"); h.ctx.window = h.ctx; vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "app", "src", "lib", "registers.js"), "utf8").replace(/^import .*$/gm, ""), h.ctx);
 const F = h.ctx.SheetFmt;
 h.ctx.CO = () => ({name: "ZZ Up Client", gstin: "09AANFG3202D1ZR"});
 const csv = (n) => F.csv(fs.readFileSync(path.join(FX, n), "utf8"));

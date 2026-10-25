@@ -144,7 +144,8 @@ export function Status({ b }) {
   const fy = (x) => /^\d{4}/.test(String(x.from || "")) ? String(x.from).slice(0, 4) + "-" + String(Number(String(x.from).slice(0, 4)) + 1).slice(2) : "";
   const nInfo = Object.keys(b.ledInfo || {}).length;
   let lines = books.map((x) => ({ k: x.book, label: books.length > 1 ? [x.company, fy(x)].filter(Boolean).join(" ") + ": " : "", n: (cur.book === x.book && st.n) || x.ledgers || st.n, at: x.ledgersAt || cur.srcAt || st.at }));
-  if (!lines.length && st.n) lines = [{ k: "list", label: "", n: st.n, at: Ledgers.listAt(cid) || st.at }];
+  // (a list that is only the masters uploaded on Books, Ledgers.list's fallback since 25-Oct-2026, is said as the file)
+  if (!lines.length && st.n && !(st.masters && nInfo)) lines = [{ k: "list", label: "", n: st.n, at: Ledgers.listAt(cid) || st.at }];
   if (!lines.length && nInfo) lines = [{ k: "file", label: "", n: nInfo, at: b.ledInfoAt, file: true }];
   const again = live ? <button className="btn small" data-led-read="bridge" onClick={() => doAct("ledRead")}>Read again now</button>
     : cloud ? <button className="btn small" data-led-read="cloud" disabled={st.busy} onClick={() => Ledgers.refresh(cid)}>{st.busy ? "Reading…" : "Read again now"}</button> : null;

@@ -168,10 +168,13 @@ function openBooks(cid){
   return me.p;
 }
 async function openBooksNow(cid){
-  S.books = {cid, loading: true};
+  const opening = S.books = {cid, loading: true};
   render();
   const t0 = Date.now(), saved = await Books.load(cid);
-  if (!S.books || S.books.cid !== cid) return;                // another client was opened meanwhile
+  // another client was opened meanwhile, or these books were put in meanwhile (an import, the cloud's copy; since
+  // 25-Oct-2026 Ledgers.watch opens a client's books with the client, so this opening can still be reading this browser's
+  // store when they come): never written over with the older copy kept here
+  if (S.books !== opening) return;
   const held = !!(saved && saved.cid === cid);
   S.books = held ? Object.assign({loading: true, cached: true}, saved) : {cid, loading: true, vouchers: [], map: {}, challans: [], alloc: {}, pans: {}};
   // live sync: the server's latest first (only what changed since this computer last looked); this browser's copy is
