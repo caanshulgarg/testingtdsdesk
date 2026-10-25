@@ -68,7 +68,6 @@ run_connector.py               needs Windows tools: builds the FinCom Connector 
 run_ai.js                      in progress (2026-10-02): A.pairCell is not a function
 run_cloudup.js                 in progress (2026-10-02): TCloud is not defined
 run_tlight.js                  in progress (2026-10-02): devState is not defined
-run_stuck.js                   in progress (2026-10-02): booksFreshLine not found in src/js
 run_update_btn.py              in progress (2026-10-02): booksFreshLine is not defined
 run_gstapi_session.py          in progress (2026-10-02): FinComReact is not defined on the page it opens
 run_twostep_ui.py              in progress (2026-10-02): the legacy sign-in form it fills moved to React (53a7ccf)

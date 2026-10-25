@@ -10,7 +10,7 @@
 //   N7  rent on a 194H ledger: "the section looks wrong", no rate question (Testing AAD, FA/2026-27/081)
 //   M8  Tally's nature of payment at 2020-21's reduced rates (Leads: Contractor 0.75% / 1.50%) is said
 //   M9  one PAN under two names is one deductee
-//   M4  a nil deduction with remark T or Y is in the file; B is not written yet
+//   M4  a nil deduction with remark T or Y is in the file; B is not written yet; Y where FVU 8.7 takes none: no remark
 //   L1  the working Excel: the file's deductee code and the date paid or credited
 //   N13 N14 N12 notes
 "use strict";
@@ -122,7 +122,8 @@ function books(vs, o){
 {
   const b = books([V({type: "Journal", date: "20250610", no: "R-1", party: "Roadways", ent: [{l: "Freight", a: -50000}, {l: "TDS 94C", a: 1000}, {l: "Roadways", a: 49000}]})],
     {pans: {"Roadways": "AAAPR1234R", "Small Transport": "AAAPS1234S", "Other Co": "AABCO1234O"}, challans: [{id: "chq", bsr: "0510308", serial: "00011", date: "20250707", tax: 1000, interest: 0, section: "194C", minorHead: "200"}],
-      added: {t1: {party: "Small Transport", section: "194C", date: "20250615", paid: 80000, tds: 0, rate: 0, basis: "T"}, y1: {party: "Other Co", section: "194J", date: "20250620", paid: 20000, tds: 0, rate: 0, basis: "Y"},
+      added: {t1: {party: "Small Transport", section: "194C", date: "20250615", paid: 80000, tds: 0, rate: 0, basis: "T"}, y1: {party: "Other Co", section: "194H", date: "20250620", paid: 10000, tds: 0, rate: 0, basis: "Y"},
+        y2: {party: "Other Co", section: "194J", date: "20250622", paid: 20000, tds: 0, rate: 0, basis: "Y"},
         b1: {party: "Other Co", section: "194A", date: "20250625", paid: 9000, tds: 0, rate: 0, basis: "B"}}});
   b.alloc[ctx.S.books.vouchers[0].id + "|TDS 94C"] = "chq"; x.TDSReg.forget();
   const f = x.TDS26Q.build("2025-26", "Q1", {tan: "DELT12345A", pan: "AABFT1234T", name: "T", deductorType: "F"}, "26Q");
@@ -130,6 +131,11 @@ function books(vs, o){
   const rem = dd.map(a => a[29]);
   ok(rem.includes("T") && rem.includes("Y") && !rem.includes("B"), "M4: the nil deductions with remarks T and Y are in the file; B is not written yet (" + JSON.stringify(rem) + " " + (f.error || "") + ")");
   ok(f.nilOut === 1, "M4: the one left out (B) is counted (" + f.nilOut + ")");
+  // next-fvu87 (the owner, 24-Oct-2026): FVU 8.7 takes remark Y only for some codes (194H, code 94H, yes; 194J with what was paid
+  // for not known, no): such a nil row below the limit is written with no remark and said in the file's notes
+  const j = dd.filter(a => a.includes("Other Co") && a[32] !== "94H" && a[32] !== "94A");
+  ok(j.length === 1 && j[0][29] === "" && (f.notes || []).some(n => /Other Co/.test(n) && /194J/.test(n) && /no remark/.test(n)),
+    "M4: 194J below the limit (no code FVU 8.7 takes Y for): in the file with no remark, the notes say so (" + JSON.stringify(j.map(a => [a[32], a[29]])) + " " + JSON.stringify(f.notes || []) + ")");
 }
 // ---------------------------------------------------------------- L1
 {

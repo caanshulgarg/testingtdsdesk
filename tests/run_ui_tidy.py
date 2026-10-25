@@ -254,7 +254,20 @@ try:
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
         tl.click('#app button:has-text("Next: Choose on Tally page"), #app button:has-text("Choose on Tally page")'); W2(900); on_list("Getting ready's Link to Tally")
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
-        tl.click('#cobar [data-tally-sign]'); W2(900); on_list("the top bar's Tally sign (not linked)")
+        # 24-Oct-2026 (next-tally-firstlink, 66da97db7; the owner: "it should be above, on the Tally icon"): GARG SHEKHAR and
+        # ABC LTD are open in Tally and no client's, so the sign carries their badge and opens its panel, which offers each
+        # one's link, starting with Link to Link Co (this client, not linked); not the Tally page (as run_tally_page_clean)
+        tl.click('#cobar [data-tally-sign]'); W2(1200)
+        offers = E2("() => [...document.querySelectorAll('[data-overlay=\"tallypanel\"] [data-tally-offer]')].map(e => e.getAttribute('data-tally-offer'))")
+        ok(tl.locator('[data-overlay="tallypanel"] [data-tally-offer] [data-tally-offer-link-to="%s"]' % lcid).count() == len(offers) == 2
+           and E2("(document.querySelector('#cobar [data-tally-badge]') || {}).textContent") == "2" and E2("[S.view, S.coId]") == ["company", lcid],
+           "the top bar's Tally sign (not linked, 2 companies open in Tally not linked: its badge 2) → its panel, each company with Link to Link Co (%s %s)" % (offers, E2("[S.view, S.coId, !!S.tallyPanel]")))
+        E2("() => doAct('tallyPanelClose')"); W2(500)
+        # with no company open in Tally that is no client's: no badge, and the sign opens the Tally page's list for this client
+        scene(TL.SEEN, [TL.dev(1, "NWS144", "anshul", opened=())]); E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
+        ok(tl.locator("#cobar [data-tally-badge]").count() == 0, "nothing open in Tally to link: no badge on the sign")
+        tl.click('#cobar [data-tally-sign]'); W2(900); on_list("the top bar's Tally sign (not linked, nothing open to link)")
+        scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
         tl.click("#app [data-tally-one-go]"); W2(900); on_list("Client setup's Tally line")
         E2("() => { S.tallyFocus = ''; S.tallyGuide = {}; S.tallyMore = {page: true}; navHome('tally'); }"); W2(1200)
@@ -268,7 +281,8 @@ try:
         def card_again():
             E2("() => { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); }"); W2(1500)
         scene([], []); card_again()
-        ok(steps() == [0, 0, 0] and tl.locator("#app [data-connect-step='install'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
+        # (next-tally-firstlink, fd7efe4e4: step 1's download is in Connect this computer: Download, Open it, Type its code)
+        ok(steps() == [0, 0, 0] and tl.locator("#app [data-connect-guide] [data-firstlink] [data-fl-step='download'] [data-bridge-download]").count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())

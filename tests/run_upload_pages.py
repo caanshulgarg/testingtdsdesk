@@ -112,17 +112,20 @@ with sync_playwright() as p:
     # ---- Bank
     E(BK.BANK); pg.wait_for_timeout(1200)
     st = E(STATES)
-    ok([x[1] for x in st] == ["To review", "Ready to post", "In Tally"], "Bank: the same words (%s)" % [x[3] for x in st])
+    # (the owner, 24-Oct-2026, a76743c59: the bank page has its own words, To do · Ready to post · Posted · Ignored, Ignored
+    # always shown; Purchase and Sales keep the shared ones)
+    BANK_WORDS = ["To do", "Ready to post", "Posted", "Ignored"]
+    ok([x[1] for x in st] == BANK_WORDS, "Bank: its own words, To do · Ready to post · Posted · Ignored (%s)" % [x[3] for x in st])
     ok(E("document.querySelectorAll('#app .bk-tabs').length") == 0, "Bank: no row of tabs of its own")
     res = counts_match_rows(pg, "bank")
     ok(all(n == r and on for _, n, r, on in res), "Bank: each state's count is the rows of its table (%s)" % res)
     E("() => { bankRowAct('ignore', 'r3'); }"); pg.wait_for_timeout(500)
     st = E(STATES)
-    ok([x[1] for x in st] == ["To review", "Ready to post", "In Tally", "Ignored"], "Bank: a line ignored is under Ignored, not In Tally (%s)" % [x[3] for x in st])
+    ok([x[1] for x in st] == BANK_WORDS and dict((x[1], x[2]) for x in st)["Ignored"] == 1, "Bank: a line ignored is under Ignored, not Posted (%s)" % [x[3] for x in st])
     res = counts_match_rows(pg, "bank")
     ok(all(n == r for _, n, r, _ in res) and dict((s, n) for s, n, _, _ in res).get("ignored") == 1, "Bank: Ignored 1, its one row (%s)" % res)
     bar = pg.inner_text("#app .actionbar").replace("\n", " ")
-    ok(not re.search(r"\b\d+ (to review|ready to post)\b", bar), "Bank: the bar at the foot does not count the states again (%s)" % bar[:140])
+    ok(not re.search(r"\b\d+ (to do|to review|ready to post)\b", bar), "Bank: the bar at the foot does not count the states again (%s)" % bar[:140])
     E(BK.BANK_EMPTY); pg.wait_for_timeout(600)
     ok(E("document.querySelectorAll('#app nav.statebar [data-state]').length") == 0 and "No bank statement yet" in pg.inner_text("#app"), "Bank, empty: no row of noughts, “No bank statement yet”")
     # ---- Sales

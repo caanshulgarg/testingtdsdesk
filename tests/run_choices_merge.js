@@ -3,6 +3,8 @@
 // holding an older copy (cloudPushClient / merge3), an older or guessed copy applied from the server (cloudApply →
 // fixCompany → choiceMigrate), auto-matching (choiceGuess), a supplier's record from the cloud (partyKeepChoice); and a
 // settings page with unsaved changes sends the cloud the saved values only (Drafts.view in cloudSnapshot).
+// (books-speed, 24-Oct-2026: cloudSnapshot sends a client through cloudClientView, src/js/27, which the app has in the same
+// script; loaded here with it)
 // Runs the real code of src/js/00, 01, 26, 27 and 60 against a stand-in server (PostgREST-like: GET, conditional PATCH).
 const fs = require("fs"), path = require("path"), os = require("os");
 const {load} = require("./harness");
@@ -10,7 +12,7 @@ const src = f => fs.readFileSync(path.join(__dirname, "..", "src", "js", f), "ut
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cc-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + ["00-core.js", "01-documents-in-the-firm-account.js", "26-sales-from-a-marketplace.js", "27-firm-account.js", "60-choices.js"].map(src).join("\n") + "\n</script>");
 const {ctx, x} = load(html, ["GST_DEFAULTS", "TDS_LEDGER_DEFAULTS", "EXPENSE_DEFAULTS", "fixCompany", "clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "ClientBase",
-  "takeClientHere", "cloudPushClient", "SAFE_ID", "ID_KEYS", "cleanIds", "cloudRowOk", "cloudApply", "cloudApplyNow", "cloudSnapshot",
+  "takeClientHere", "cloudPushClient", "SAFE_ID", "ID_KEYS", "cleanIds", "cloudRowOk", "cloudApply", "cloudApplyNow", "STATS_HERE", "cloudClientView", "cloudSnapshot",
   "CHOICE_LABEL", "choiceSplit", "choiceAcc", "choiceLegacy", "choiceLegacySet", "choiceDerive", "choiceRec", "choiceGet", "choiceState", "choiceValue", "choiceUsable", "choiceWho",
   "choiceWrite", "choiceGuess", "choiceConfirm", "choiceForget", "choicePick", "choiceMigrate", "partyChoice", "partyChoiceSet", "partyKeepChoice",
   "choicePathGet", "choicePathSet", "choiceSame", "choicePathDiff", "DRAFT_SKIP", "choiceStore", "Drafts"]);
