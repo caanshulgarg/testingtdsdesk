@@ -261,7 +261,7 @@ function nameSim(a, b){
   small.forEach((v, k) => { const w = big.get(k); if (w) inter += Math.min(v, w); });
   return 2 * inter / (ga.n + gb.n);
 }
-const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|INF|BRN)\b/gi;
+const NARR_STRIP = /\b(UPI|NEFT|RTGS|IMPS|MMT|P2A|P2M|DR|CR|TRF|TRANSFER|TO|BY|FROM|INB|IB|CHQ|CHEQUE|PAID|DEP|DEPOSIT|CLG|CLEARING|ACH|NACH|ECS|PAYMENT|PAY|SENT|RECEIVED|REF|UTR|NA|NO|OTHERS|OTHER|INR|RS|MICR|CTS|INWARD|OUTWARD|RETURN|REV|REVERSAL|FUND|FT|BIL|ONL|MB|NET|BANKING|MOBILE|SI|INFT|INF|POS|BRN)\b/gi;
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 function decodeNarr(n, clientName){
   const t = String(n || "").replace(/\s+/g, " ").replace(/\bUP[1l|I][1l|]?\//g, "UPI/").replace(/\bUP[1l|]-/g, "UPI-").trim(), u = t.toUpperCase();
@@ -286,10 +286,13 @@ function decodeNarr(n, clientName){
   // a dash right after a letter splits too (written as "|" first, unless a space follows, which the "- " rule takes: Safari before 16.4 cannot read a look-behind; the parts are trimmed)
   const parts = t.replace(/([A-Za-z])-(?!\s)/g, "$1|").split(/[\/*:|]+|\s*-\s+|\s+-\s*|-(?=[A-Za-z])|\s{2,}/).map(s => s.trim()).filter(Boolean);
   const bankWords = /^(?:(?:[a-z]+\s+)?bank(?:\s+(?:ltd|limited|of\s+\w+))?|hdfc|icici|sbi|axis|kotak|yes|idfc(?:\s+first)?|indusind|paytm(?:\s+payments)?|state\s+bank\s+of\s+india|punjab\s+national|canara|federal|rbl)(?:\s+bank)?$/i;
-  let name = "", best = 0, bestIsRemark = false;
-  for (let p of parts){
-    if (/@/.test(p) || IFSC_RE.test(p.toUpperCase()) || bankWords.test(p.trim())) continue;
-    p = p.replace(NARR_STRIP, " ").replace(/^\s*\d{4,}\s+|\s+\d{4,}\s*$/g, " ").replace(/\s+/g, " ").trim();
+  // HDFC names the party by its place (25-Oct-2026: "NETBANK, MUM", the channel and city, was read as the party):
+  // NEFT/RTGS DR|CR-<IFSC>-<party>-, IMPS-<ref>-<party>-, UPI-<party>-<vpa>
+  const hd = ((t.match(/^(?:(?:NEFT|RTGS) ?[DC]R-[A-Z]{4}0[A-Z0-9]{6}|IMPS-\d{6,}|UPI)-([^-@\/]+?)-/i) || [])[1] || "").trim();
+  let name = /[a-z]{2}/i.test(hd) && !/^NET ?BANK|\d{4}/i.test(hd) && !(clientKey && nameSim(hd, clientName) > 0.8) ? hd : "", best = 0, bestIsRemark = false;
+  for (let p of name ? [] : parts){
+    if (/@/.test(p) || IFSC_RE.test(p.toUpperCase()) || bankWords.test(p.trim()) || /^NET ?BANK|^(SBIN|HDFC|UTIB|ICIC|KKBK|PUNB|YESB|BARB|CNRB|UBIN|IDIB|IOBA|BKID|MAHB|INDB|IDFB|FDRL|RATN|PYTM|CBIN|UCBA|KARB|SIBL|AUBL|SCBL|CITI|HSBC)$/i.test(p.trim())) continue;
+    p = p.replace(NARR_STRIP, " ").replace(/\b\d*X{2,}\d+\b|\b\d+X{2,}\d*\b/gi, " ").replace(/^\s*\d{4,}\s+|\s+\d{4,}\s*$/g, " ").replace(/\s+/g, " ").trim();
     const letters = (p.match(/[A-Za-z]/g) || []).length, digits = (p.match(/\d/g) || []).length;
     if (letters < 3 || digits > letters / 2) continue;
     if (clientKey && nameSim(p, clientName) > 0.8) continue;          // the client's own name in NEFT narrations

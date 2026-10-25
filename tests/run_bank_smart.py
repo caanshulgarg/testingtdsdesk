@@ -19,7 +19,9 @@ On a made-up HDFC statement of 300 mixed lines (tests/fixtures/bank-smart/statem
      reference · narration), no heading or cell running into another at 1366, 1440 and 1920, the filters in the column
      headings again (combining with the chips), a ledger box on every open line, the voucher type by Dr / Cr, no "Bring in
      the Tally ledger list" when the ledgers come from the masters uploaded on Books or from FinCom's cloud copy, and ICICI's
-     narrations read (tests/fixtures/bank-smart/icici83.js).
+     narrations read (tests/fixtures/bank-smart/icici83.js);
+  9. the party read from HDFC's layouts (NEFT/RTGS DR|CR-<IFSC>-<party>-, IMPS-<ref>-<party>-, UPI-<party>-<vpa>) and ICICI's,
+     never "NETBANK, MUM", a city, a bank code, an IFSC or an account number.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_smart.py"""
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -374,6 +376,31 @@ with sync_playwright() as pw:
     pg.click('#app [data-f-clear]'); pg.wait_for_timeout(400)
     ok(re.search(r"\b83 of 83\b", count_text()) and not pg.locator('#app [data-fchip]').count(), "Clear filters clears the headings' filters too (%s)" % count_text())
     pg.screenshot(path=OUT + "/bank-icici-1440.png"); pg.close()
+
+    # ---- 9. the party read from HDFC's and ICICI's own layouts (the owner, 25-Oct-2026: "NETBANK, MUM", the channel and the
+    # city, was read as the party of an HDFC NEFT line) ----
+    PARTY = [
+        ("NEFT DR-ICIC0001234-SITA-NETBANK, MUM-N123456789012-NA", "NEFT", "SITA"),
+        ("NEFT DR-SBIN0004321-AB-NETBANK, MUM-N298765432101-RENT OCT", "NEFT", "AB"),
+        ("NEFT DR-UTIB0000456-VIKAS TRADERS-NETBANK, MUM-N123456789012-INV 431", "NEFT", "VIKAS TRADERS"),
+        ("NEFT CR-HDFC0000001-ACME INDUSTRIES LTD-SMART TRADERS-HDFCN52026102512345", "NEFT", "ACME INDUSTRIES LTD"),
+        ("RTGS DR-PUNB0123400-ORBIT LOGISTICS-NETBANK, MUM-HDFCR52026102512345-INV 77", "RTGS", "ORBIT LOGISTICS"),
+        ("RTGS CR-KKBK0005678-MEHTA BROS-SMART TRADERS-KKBKR52026102500012", "RTGS", "MEHTA BROS"),
+        ("IMPS-528114093821-MOHAN-SBIN-XXXXXXXX1234-NETBANK", "IMPS", "MOHAN"),
+        ("IMPS-528114093821-XXXXXXXX1234-SBIN-NA", "IMPS", ""),
+        ("UPI-RAJ TEA STALL-rajtea@paytm-PYTM0123456-412345678901-TEA", "UPI", "RAJ TEA STALL"),
+        ("UPI-BLINKIT-blinkit.payu@hdfcbank-HDFC0MERUPI-512345678901-UPI", "UPI", "BLINKIT"),
+        ("MMT/IMPS/528114093821/BULD80088625/KumkumRagh/SBIN0004321", "IMPS", "KumkumRagh"),
+        ("INF/NEFT/IN12345678/ICIC00NOBCL/80088625", "NEFT", ""),
+        ("UPI/110860578274/UPIPay/XXshar @axl//ICId214d4900a", "UPI", "UPIPay"),
+    ]
+    pg, n = open_page(br, {"width": 1366, "height": 768})
+    for narr, mode, name in PARTY:
+        d = pg.evaluate("(n) => decodeNarr(n, 'SMART TRADERS')", narr)
+        ok(d["mode"] == mode and d["name"] == name, "%s → %s, party “%s” (%s, “%s”)" % (narr[:46], mode, name, d["mode"], d["name"]))
+    junk = pg.evaluate("() => B().rows.map(r => r.dec.name).filter(n => /NETBANK|^(MUM|DEL)$|BULD|^[A-Z]{4}0[A-Z0-9]{6}$|\\d{6}|^(SBIN|HDFC|UTIB|ICIC|KKBK|PUNB)$/i.test(n || ''))")
+    ok(not junk, "the 300-line HDFC statement: no party is a channel, city, bank code, IFSC or account number (%s)" % junk[:3])
+    pg.close()
 
     # the ledgers in FinCom's cloud copy: no banner either; and with none anywhere the banner is still there
     for src, want in (("cloud", False), ("none", True)):
