@@ -2,8 +2,13 @@
 (cmvclkrfeoj3h1; sizes read from staging on 24-Oct-2026 with SELECT count(*) only, names and amounts made up):
 4,414 entries on 560 days (43 payroll entries), 749 ledgers, 2,806 items of TDS/GST work (ledInfo 776, under 776,
 map 374, allocLog 270, gstins 157, alloc 148, pans 73, 16 challans, an audit of 148 KB), and a second, small client.
-Used by run_books_speed.py. Every request is held as on an office line (RTT, then the body at the line's speed)."""
-import json, gzip, asyncio, time, re, datetime, random
+Used by run_books_speed.py. Every request is held as on an office line (RTT, then the body at the line's speed; the
+line is one: answers fetched side by side share its 9 Mbit/s, so fetching many at once saves round trips, never bandwidth).
+fast-firstopen (25-Oct-2026): each day file as heavy as Leads' on staging (560 files, 6,224,541 bytes packed, SELECT
+sum(bytes) FROM tally_days): every entry carries the fields Tally exports and FinCom does not read (the empty tags of a real
+Tally 7.1 export, tests/fixtures/tdsgst-e2e/real71, and user-defined fields), about 13 KB of text and 1.4 KB packed, as a
+real export packs 8 to 1. LEADS_LIGHT=1: the light files of before (346 KB)."""
+import json, gzip, asyncio, time, re, datetime, random, os
 from urllib.parse import urlparse, parse_qs
 
 STAGE = "https://qbocskaiewaxqcvaunzc.supabase.co"
@@ -36,12 +41,34 @@ for i in range(4414):
 PAYV = []
 for k in range(43):
     v = VOUCHERS[100 * k + 50]; v["type"] = "Payroll"; v["party"] = ""; v["lines"] = [("Basic", -500000), ("HRA", -100000), ("TDS 192B", 50000), ("Salary Payable", 550000)]; PAYV.append(v)
+# the fields a real Tally export carries that FinCom does not read (empty tags as Tally 7.1 writes them, then user-defined
+# fields with values of their own), so the files weigh what Leads' weigh: download, unpacking, reading and keeping
+HEAVY = os.environ.get("LEADS_LIGHT") != "1"
+EMPTY_TAGS = """VATREGISTRATIONDATE CSTREGISTRATIONDATE FROMDATE TODATE ACTIVETO ALTEREDON LUTDATEOFISSUE LUTEXPIRYDATE BONDDATEOFISSUE
+BONDEXPIRYDATE TAXCHEQUEDATE TAXCHALLANDATE SHIPPINGBILLDATE BILLOFENTRYDATE VATPARTYTRANSRETURNDATE ORIGINALVCHDATE ISDDOCUMENTDATE
+IRNCANCELDATE UAEEINVBILLDATE RECONCILATIONDATE FORM16ISSUEDATE CSTFORMISSUEDATE CSTFORMRECVDATE CERTIFICATEDATE TRADERMFGRINVOICEDT
+FBTFROMDATE FBTTODATE RETURNINVOICEDATE AGGREMENTORDERDATE GOODSRCPTDATE LORRYRECPTDATE TRANSSALELANDINGDATE TRANSBUYERLANDINGDATE
+CREDITLETTERDATE AIRWAYBILLDATE VATORDERDATE INVDELIVERYDATE BILLOFLADINGDATE VATDEPOSITDATE VATDOCUMENTDATE VATCHALLANDATE ECDATE
+VATTDSDATE ADJFROMDATE ADJTODATE VATDDCHEQUEDATE VATDUEDATE VATINTDATE VATDELAY VATGRNDATE REFUNDORDERDT VATFORMSUBMISSIONDATE
+VATCANCSALESINVOICEDATE VATFORMTWELVEDATE UTKAGREEORDDATE UTKGOODSDELDATE VATBILTYDATE EIDESPDATE VATCSTE1SERIESDATE VCHVATDEPOSITDATE
+VCHREFERENCEDATE TAXPAYPERIODFROMDATE TAXPAYPERIODTODATE STTAXCHALLANDATE GSTCHALLANDATE GSTCHALLANEXPIRYDATE ADJPARTYINVOICEDATE
+ADJPARTYPAYMENTDATE PARTYORDERDATE ADVANCERECEIPTDATE REFUNDVOUCHERDATE PAYMENTLINKEXPIRYDATE VATSUBMISSIONDATE PARTYINVDATE INSPDOCDATE
+VATCANCINVDATE VATGOODSRECEIPTDATE VATCSTE1DATE DISPATCHDATE AUDITEDON VATDISTRICTNAME VATDEALERTYPE STATENAME DISCOUNTFORMAT PRICELEVEL
+AUTOCOSTLEVEL PURPOSETYPE REMOTEGUID REMOTEALTGUID ENTEREDBY ALTEREDBY TYPEOFUPDATEACTIVITY OBJECTUPDATEACTION REQUESTORRULE
+IMPORTEREXPORTERCODE VATDEALERNATURE""".split()
+def pad(i):
+    if not HEAVY: return ""
+    r = random.Random(i)
+    tags = "".join("\r\n     <%s/>" % n for n in EMPTY_TAGS) * 3
+    udf = "".join('\r\n     <UDF:ZZNOTE%d.LIST DESC="`ZzNote`" ISLIST="YES" TYPE="String" INDEX="%d"><UDF:ZZNOTE%d DESC="`ZzNote`">%x</UDF:ZZNOTE%d></UDF:ZZNOTE%d.LIST>'
+                  % (k, k, k, r.getrandbits(320), k, k) for k in range(21))
+    return tags + udf
 def vxml(v):
     ent = "".join("<ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>%s</ISDEEMEDPOSITIVE><AMOUNT>%.2f</AMOUNT></ALLLEDGERENTRIES.LIST>"
                   % (esc(l), "Yes" if a < 0 else "No", a) for l, a in v["lines"])
     return ('<TALLYMESSAGE><VOUCHER VCHTYPE="%s" ACTION="Create"><DATE>%s</DATE><GUID>%s</GUID><ALTERID>%d</ALTERID><VOUCHERTYPENAME>%s</VOUCHERTYPENAME>'
-            "<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>zz narration of the entry %s</NARRATION><ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>%s</VOUCHER></TALLYMESSAGE>"
-            % (esc(v["type"]), v["day"], v["guid"], v["alt"], esc(v["type"]), v["no"], esc(v["party"]), v["no"], ent))
+            "<VOUCHERNUMBER>%s</VOUCHERNUMBER><PARTYLEDGERNAME>%s</PARTYLEDGERNAME><NARRATION>zz narration of the entry %s</NARRATION><ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>%s%s</VOUCHER></TALLYMESSAGE>"
+            % (esc(v["type"]), v["day"], v["guid"], v["alt"], esc(v["type"]), v["no"], esc(v["party"]), v["no"], pad(v["alt"]), ent))
 def head(v):
     return {"guid": v["guid"], "day": iso(v["day"]), "alter_id": v["alt"], "vtype": v["type"], "vno": v["no"], "party": v["party"], "narration": "zz " * 20,
             "cancelled": False, "optional": False, "deleted_at": None, "gstin": None, "pos": None, "ref": "ZZ/REF/%s" % v["no"], "ref_date": iso(v["day"]), "cmp_gstin": "09ZZZZZ0000Z1Z0",
@@ -54,7 +81,10 @@ def build_days():
     for v in VOUCHERS: by.setdefault(v["day"], []).append(vxml(v))
     for d in DAYS: GZ[d] = gzip.compress(("<ENVELOPE><BODY><DATA>" + "".join(by.get(d, [])) + "</DATA></BODY></ENVELOPE>").encode("utf-8"))
 build_days()
-T = {"tally_ledgers": [dict(l, book_id=BOOK, pan=None, gstin=None, tds_nature=None, tds_special_rate=None, tds_ldc=None, merged_into=None, deleted_at=None,
+GPARENT = {"Sundry Creditors": "Current Liabilities", "Duties & Taxes": "Current Liabilities", "Bank Accounts": "Current Assets"}
+# each ledger's group chain, as the cloud keeps it (tally_ledgers.chain, migration 33: 748 of Leads' 749 ledgers have one)
+chain_of = lambda g: [g] + ([GPARENT[g]] if g in GPARENT else [])
+T = {"tally_ledgers": [dict(l, book_id=BOOK, chain=chain_of(l["parent"]), pan=None, gstin=None, tds_nature=None, tds_special_rate=None, tds_ldc=None, merged_into=None, deleted_at=None,
                             for_payroll=l["name"] in PAYH, pay_type=None, pay_stat_type=None, it_component=None) for l in LEDGERS],
      "tally_groups": [dict(name=n, parent=pa, book_id=BOOK) for n, pa in [("Sundry Creditors", "Current Liabilities"), ("Duties & Taxes", "Current Liabilities"),
                       ("Indirect Expenses", "Primary"), ("Bank Accounts", "Current Assets"), ("Current Liabilities", "Primary"), ("Current Assets", "Primary")]
@@ -98,8 +128,18 @@ def proj(rows, q):
     if sel: cols = sel.split(","); rows = [{c: r.get(c) for c in cols} for r in rows]
     return rows
 
+PACK = [os.environ.get("LEADS_NO_PACK") != "1"]
+def pack_month(days):
+    """the month's day files as tally-ingest's month_days answers (server/tally-cloud/monthpack.js): a JSON list's length
+    (4 bytes, big-endian), the list [{day, at, n}], then each day's gzip bytes"""
+    head = json.dumps([{"day": d, "at": at, "n": len(gz or b"")} for d, at, gz in days]).encode("utf-8")
+    return len(head).to_bytes(4, "big") + head + b"".join(gz or b"" for _, _, gz in days)
+# one office line: an answer's bytes come down after its round trip, behind the bytes of the answers already coming
+WIRE = [0.0]
 async def hold(sent, got):
-    await asyncio.sleep(LINE["rtt"] + sent / LINE["up"] + got / LINE["down"])
+    now = time.time(); start = max(now + LINE["rtt"] + sent / LINE["up"], WIRE[0])
+    WIRE[0] = start + got / LINE["down"]
+    await asyncio.sleep(max(0, WIRE[0] - now))
 
 async def route(r):
     u = urlparse(r.request.url); path = u.path; q = parse_qs(u.query); body = r.request.post_data or ""
@@ -107,11 +147,33 @@ async def route(r):
         b = json.dumps(o); await hold(len(body), len(b))
         LOG.append((time.time(), name or path.split("/")[-1], detail, len(b), r.request.method))
         return await r.fulfill(status=200, content_type="application/json", body=b)
+    # fast-firstopen: tally-ingest's month_days (server/tally-cloud/monthpack.js), a month's day files in one answer;
+    # PACK[0] False: a server without it (as staging before the deploy: "No such client in this firm.")
+    if path.endswith("/functions/v1/tally-ingest"):
+        b = json.loads(body or "{}")
+        if b.get("kind") == "month_days":
+            if not PACK[0]:
+                await hold(len(body), 60); LOG.append((time.time(), "month_days", "404", 60, "POST"))
+                return await r.fulfill(status=404, content_type="application/json", body=json.dumps({"ok": False, "error": "No such client in this firm."}))
+            ym = str(b.get("month") or ""); days = [d for d in DAYS if d[:6] == ym]
+            out = pack_month([(d, DAY_AT[d], GZ.get(d)) for d in days])
+            await hold(len(body), len(out)); LOG.append((time.time(), "month_days", ym, len(out), "POST"))
+            return await r.fulfill(status=200, content_type="application/octet-stream", body=out)
+        return await j({"ok": True})
     if path.endswith("/rpc/tally_status"):
         cid = (json.loads(body or "{}") or {}).get("p_client")
         if cid != CID: return await j([])
         return await j([dict({"book": BOOK, "company": "ZZ LEADS-LIKE BROKERS PVT LTD", "from": "2025-04-01", "openAsOn": "2025-03-31", "state": {"phase": "live"},
                               "days": len(DAYS), "entries": len(VOUCHERS), "to": iso(DAYS[-1])}, **STATUS_AT)])
+    # the server's own figures (migration 14), shown while the books are not in on the computer yet
+    if path.endswith("/rpc/tally_tds_summary"):
+        a = json.loads(body or "{}")
+        return await j({"from": a.get("p_from"), "to": a.get("p_to"), "mapped": True, "deducted": 125000, "paid": 98000, "receivable": 0,
+                        "ledgers": [{"l": t, "open": 0, "deducted": 25000, "paid": 19600, "close": 5400} for t in TDSL]})
+    if path.endswith("/rpc/tally_mis"):
+        a = json.loads(body or "{}"); return await j({"from": a.get("p_from"), "to": a.get("p_to"), "heads": {"exp": 9000000}, "months": []})
+    if path.endswith("/rpc/tally_gst_summary"):
+        a = json.loads(body or "{}"); return await j({"from": a.get("p_from"), "to": a.get("p_to"), "mapped": False, "months": []})
     if path.endswith("/rpc/tally_days_list"):
         off = int((q.get("offset") or ["0"])[0]); return await j([{"day": d, "n": 1, "at": DAY_AT[d]} for d in DAYS][off:off + 1000])
     if "/tally-days/" in path:
@@ -139,6 +201,7 @@ def cat(since, until=None):
     rs = [x for x in LOG if x[0] >= since and (until is None or x[0] <= until)]
     f = lambda p: [x for x in rs if p(x)]
     return {"calls": len(rs), "kb": sum(x[3] for x in rs) // 1024, "dayfiles": len(f(lambda x: x[1] == "DAYFILE")),
+            "months": len(f(lambda x: x[1] == "month_days")),
             "items_from0": len(f(lambda x: x[1] == "client_book_items" and x[2].startswith("FROM0"))),
             "items_calls": len(f(lambda x: x[1] == "client_book_items")),
             "heads_kb": sum(x[3] for x in f(lambda x: x[1] == "tally_vouchers")) // 1024,

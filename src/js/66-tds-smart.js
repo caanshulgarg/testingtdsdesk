@@ -140,7 +140,7 @@ const TDSInt = {
     // the bill already found for the row (TDS.allRowsNow, the review's M2): from its date to the deduction
     if (r && r.credit && r.tds > 0){ const m = TDS.monthsBetween(r.credit, r.date); return m > 0 && TDS.ymd(r.credit) < TDS.ymd(r.date) ? {date: TDS.ymd(r.credit), voucher: r.bill || "", amount: r.paid, months: m} : null; }
     if (!r || r.paid > 0 || !(r.tds > 0) || r.sep) return null;   // a TDS entry of its own not matched to a bill (TDSSep): no bill to count from
-    const idx =typeof perRender === "function" ? perRender(this, "byParty", () => this.index()) : this.index();
+    const idx = typeof perRender === "function" && IN_RENDER ? perRender(this, "byParty", () => this.index()) : this.taskIndex();
     const std = TDS.STD[TDS.sec(r.section)] || [];
     const vid = String(r.id).split("|")[0], d = TDS.ymd(r.date);
     let hit = null;
@@ -152,6 +152,16 @@ const TDSInt = {
     if (!hit || hit.date >= d) return null;
     const months = TDS.monthsBetween(hit.date, d);
     return months > 0 ? {date: hit.date, voucher: hit.no, amount: hit.amount, months} : null;
+  },
+  // fast-firstopen (25-Oct-2026): outside a drawing (TDSTally.sync when the books came in: TDS.challanUse) the index was
+  // made again for every TDS entry of its own, over every entry of the books (Leads: 4.8 s at 4x CPU). It is kept until
+  // the end of the task that made it, while the entries, the ledger map and its kinds are the same
+  taskIndex(){
+    const b = S.books || {}, v = b.vouchers, m = b.map || {}, kinds = Object.keys(m).map(k => k + ":" + (m[k] || {}).kind).join("|"), t = this._task;
+    if (t && t.b === b && t.v === v && t.n === (v || []).length && t.m === m && t.kinds === kinds) return t.idx;
+    const idx = this.index(), me = this._task = {b, v, n: (v || []).length, m, kinds, idx};
+    Promise.resolve().then(() => { if (this._task === me) this._task = null; });
+    return idx;
   },
   // every entry that credits a party with an expense and carries no TDS of its own, by the party's ledger (TDS.led: the
   // deductee of the TDS entries it is looked up for; next-fix-tds-party)

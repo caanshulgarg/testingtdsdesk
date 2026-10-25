@@ -4,7 +4,13 @@ On staging that day the Mac downloaded all 560 day files of Leads again (6.2 MB,
 client's TDS/GST work from the start (seq 0), right after it signed in again: this browser's copy was not used.
 A stand-in cloud with a book shaped like Leads (tests/leads_stand.py: 4,414 entries on 560 days, 749 ledgers, 2,806 items
 of work) on an office line (150 ms, 9 Mbit/s) with the CPU 4x slower (a Mac on an office line, roughly). Budgets:
-  1. first opening (nothing kept): measured only;
+  1. first opening (nothing kept; fast-firstopen, the owner 25-Oct-2026: "start faster first open"): the client usable
+     (the TDS page with the server's figures or the entries, no page-wide loader) within FIRST_USABLE_MS (5 s); the latest
+     year's entries on the TDS page within FIRST_FY_MS (15 s), the older year still coming in, said on one quiet line, the
+     pages that need it waiting for it; every entry in and the books worked out within FIRST_ALL_MS (30 s). With FinCom's
+     server answering a month of day files at once (tally-ingest month_days, after its deploy: 19 requests, not 560) and
+     without it (today: the day files, sixteen at a time). 1z: the books end exactly as the load before fast-firstopen
+     makes them (every kept part of the books, the TDS rows, GSTR-3B of every month, the trial balances);
   2. reopening after a reload: the TDS page usable from the copy here within REOPEN_MAX_MS (1,500 ms); no day file, no
      work fetched from the start, the cloud copy's entries never read in full;
   3. switching pages (TDS, GST, MIS, Reports, Bank, back to TDS): the books are never opened or read again, nothing is
@@ -32,6 +38,19 @@ PORT = int(os.environ.get("BOOKS_SPEED_PORT") or 8473)
 CPU = float(os.environ.get("CPU_SLOWDOWN") or 4)
 REOPEN = int(os.environ.get("REOPEN_MAX_MS") or 1500)
 SWITCH = int(os.environ.get("SWITCH_MAX_MS") or 2500)
+FIRST_USABLE = int(os.environ.get("FIRST_USABLE_MS") or 5000)
+FIRST_FY = int(os.environ.get("FIRST_FY_MS") or 15000)
+FIRST_ALL = int(os.environ.get("FIRST_ALL_MS") or 30000)
+# the books as kept (every part saveBooks keeps) and what the pages work out of them, the times of things left out (and
+# MIS's basis, a hash of the books' times: MIS.basis)
+FINGER = r"""() => { const b = S.books, T = ['at', 'fullAt', 'openMs', 'readyMs', 'openAt', 'basis'];
+  const j = (o) => JSON.stringify(o === undefined ? null : o, (k, v) => T.includes(k) ? undefined : v), out = {}, tryj = (f) => { try { return j(f()); } catch (e) { return 'error: ' + e.message; } };
+  BOOKS_KEYS.forEach(k => { out['books.' + k] = j(b[k]); });
+  out.tdsRows = tryj(() => TDS.rows().map(r => [r.id, r.fy, r.q, r.section, r.party, r.pan, r.paid, r.tds, r.date, r.challan || '']));
+  out.gst3b = tryj(() => GSTR.months().map(ym => [ym, GSTR.threeBNow(ym)]));
+  out.tb2526 = tryj(() => FC.tbBooks('20260331').rows); out.tbNow = tryj(() => FC.tbBooks(Audit.today()).rows);
+  out.n = b.vouchers.length; return out; }"""
+NOFO = "Object.defineProperty(window, 'loadFirstOpen', {get(){ return undefined; }, set(v){}})"
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); srv.handle_error = lambda *a: None
@@ -72,6 +91,19 @@ WRAP = r"""() => {
 }"""
 READY = "S.books && S.books.cid === '%s' && !S.books.loading && (S.books.vouchers || []).length >= %d && document.querySelector('#app %s') && !document.querySelector('#app [data-loading]')"
 
+# tally-ingest's month_days answer, read back with the browser's rule (server/tally-cloud/monthpack_test.ts, under Deno:
+# DENO, else on the PATH; on CI it must run)
+def deno_monthpack():
+    import shutil, subprocess
+    deno = os.environ.get("DENO") or shutil.which("deno")
+    if not deno:
+        print("  FAIL Deno is not installed (CI must run monthpack_test.ts)" if os.environ.get("GITHUB_ACTIONS") else "  skipped: monthpack_test.ts (no Deno here; set DENO=/path/to/deno)")
+        if os.environ.get("GITHUB_ACTIONS"): fails.append("deno")
+        return
+    r = subprocess.run([deno, "test", "server/tally-cloud/monthpack_test.ts"], cwd=os.path.join(HERE, ".."), capture_output=True, text=True, env=dict(os.environ, NO_COLOR="1"))
+    ok(r.returncode == 0, "deno test server/tally-cloud/monthpack_test.ts" + ("" if r.returncode == 0 else ": " + (r.stdout + r.stderr)[-400:]))
+deno_monthpack()
+
 async def main():
     async with async_playwright() as p:
         br = await p.chromium.launch(); ctx = await br.new_context(viewport={"width": 1366, "height": 900})
@@ -110,15 +142,46 @@ async def main():
             om = await pg.evaluate("() => S.books && S.books.openMs")
             print("  %-34s usable in %s ms (books open %s ms)" % (label, int(t * 1000) if t is not None else "-", om))
             return t
-        # ---------- 1. a fresh browser
-        print("== 1. first opening, nothing kept (%d entries on %d days, %d items of work); CPU %gx, line %d ms / %g Mbit/s"
-              % (len(L.VOUCHERS), len(L.DAYS), len(L.ITEMS), CPU, L.LINE["rtt"] * 1000, L.LINE["down"] * 8 / 1e6))
-        await boot(); t0 = time.time(); a = await m()
-        await open_client(L.CID, "first opening (from the server):", fresh=True)
-        full = await until("S.books && S.books.cid === '%s' && S.books.vouchers.length === %d && S.books.meta && S.books.meta.cloud && !S.books.busy" % (L.CID, len(L.VOUCHERS)))
-        await quiet(); c1 = L.cat(t0); b = await m()
-        print("     every entry in after %s ms; %s; main thread %s" % (int(full * 1000) if full else "-", json.dumps(c1), json.dumps(delta(a, b))))
-        ok(full is not None, "the books come in on the first opening")
+        # ---------- 1. a fresh browser (fast-firstopen)
+        async def first_open(label):
+            """the first opening on this page's browser: (marks in s, the stand's counts)"""
+            await boot(); await quiet(1.5); t0 = time.time(); a = await m()
+            # the marks taken in the page (every 50 ms, from the moment the client is opened), not by asking it from here
+            await pg.evaluate("""([cid, n]) => { const t0 = performance.now(), mk = window.__fo = {}, app = (q) => document.querySelector('#app ' + q);
+              const probes = {usable: () => app('[data-srv-tds], [data-tds-page]') && !app('[data-loading]'),
+                fy: () => S.books && S.books.cid === cid && (S.books.vouchers || []).some(v => String(v.date) >= '20260401') && app('[data-tds-page]') && !app('[data-loading]'),
+                all: () => S.books && S.books.cid === cid && S.books.vouchers.length === n && S.books.meta && S.books.meta.cloud && !S.books.busy && S.books.readyMs > 0};
+              const tick = () => { Object.entries(probes).forEach(([k, f]) => { if (!(k in mk)) { let hit = false; try { hit = !!f(); } catch (e) {} if (hit) mk[k] = performance.now() - t0; } }); if (Object.keys(mk).length < 3) setTimeout(tick, 50); };
+              S.coId = cid; S.view = 'company'; S.tab = 'books'; S.booksTab = 'tds'; S.tdsView = 'year'; S.tdsFy = '2026-27'; S.books = null; render(); tick(); }""", [L.CID, len(L.VOUCHERS)])
+            partial = None
+            while time.time() - t0 < 240:
+                mk = await pg.evaluate("() => window.__fo")
+                if "fy" in mk and "all" not in mk and partial is None:
+                    # while the older year comes in: the quiet line, and a page that needs every year waits for it
+                    partial = await pg.evaluate("""() => { const r = {line: (document.querySelector('#app [data-first-open]') || {}).textContent || '', older: (S.books.vouchers || []).filter(v => String(v.date) < '20260401').length};
+                      S.booksTab = 'reports'; render(); r.reports = !!document.querySelector('#app [data-first-open-wait]') && !!(S.books.firstOpen) && !(S.books.meta || {}).cloud;
+                      S.booksTab = 'tds'; S.tdsFy = '2025-26'; render(); r.oldTds = !!document.querySelector('#app [data-first-open-wait]') || !S.books.firstOpen;
+                      S.tdsFy = '2026-27'; render(); return r; }""")
+                if len(mk) == 3: break
+                await asyncio.sleep(0.25)
+            marks = {k: v / 1000 for k, v in mk.items()}
+            await quiet(); c = L.cat(t0); b = await m()
+            print("  %-26s usable %s ms, 2026-27 entries %s ms, every entry in and worked out %s ms; %s; main thread %s" % (label,
+                  *[int(marks[k] * 1000) if k in marks else "-" for k in ("usable", "fy", "all")], json.dumps(c), json.dumps(delta(a, b))))
+            if partial: print("     while the older year came in: %s" % json.dumps(partial))
+            return marks, c, partial
+        print("== 1. first opening, nothing kept (%d entries on %d days, %d KB of day files, %d items of work); CPU %gx, line %d ms / %g Mbit/s"
+              % (len(L.VOUCHERS), len(L.DAYS), sum(len(v) for v in L.GZ.values()) // 1024, len(L.ITEMS), CPU, L.LINE["rtt"] * 1000, L.LINE["down"] * 8 / 1e6))
+        fm, c1, part = await first_open("a month at once:")
+        ms = lambda k: int(fm[k] * 1000) if k in fm else None
+        ok(fm.get("usable") is not None and ms("usable") <= FIRST_USABLE, "the client usable in %s ms (<= %d): the TDS page with the server's figures, no page-wide loader" % (ms("usable"), FIRST_USABLE))
+        ok(fm.get("fy") is not None and ms("fy") <= FIRST_FY, "2026-27's entries on the TDS page in %s ms (<= %d)" % (ms("fy"), FIRST_FY))
+        ok(fm.get("all") is not None and ms("all") <= FIRST_ALL, "every entry in and the books worked out in %s ms (<= %d)" % (ms("all"), FIRST_ALL))
+        ok(c1["months"] == len({d[:6] for d in L.DAYS}) and c1["dayfiles"] == 0, "one request a month of day files (%d months, %d day files)" % (c1["months"], c1["dayfiles"]))
+        ok(c1["heads_kb"] < 600, "the cloud copy's entries checked in brief, not read in full (%d KB of entry heads; 2.8 MB before)" % c1["heads_kb"])
+        ok(bool(part) and "2026-27 ready" in part["line"] and "2025-26" in part["line"] and part["older"] == 0, "while 2025-26 comes in, the books say so on one line and hold 2026-27 only (%s)" % json.dumps(part))
+        ok(bool(part) and part["reports"] and part["oldTds"], "the pages that need 2025-26 wait for it (Reports, 2025-26's TDS) (%s)" % json.dumps(part))
+        fp_new = await pg.evaluate(FINGER)
         # ---------- 2. reopen after a reload
         print("== 2. the client opened again after a reload (nothing changed in the cloud)")
         # timings: the better of two tries (the stand-in shares one machine with the browser at 4x)
@@ -130,7 +193,7 @@ async def main():
         u2 = min([x for x in u2s if x is not None] or [None])
         print("     %s; %s" % (json.dumps(c2), json.dumps(delta(a, b))))
         ok(u2 is not None and u2 * 1000 <= REOPEN, "the TDS page usable from the copy here in %s ms (<= %d)" % (int(u2 * 1000) if u2 else "-", REOPEN))
-        ok(c2["dayfiles"] == 0 and c2["items_from0"] == 0, "no day file and no work fetched from the start (%d, %d)" % (c2["dayfiles"], c2["items_from0"]))
+        ok(c2["dayfiles"] == 0 and c2["months"] == 0 and c2["items_from0"] == 0, "no day file and no work fetched from the start (%d, %d, %d)" % (c2["dayfiles"], c2["months"], c2["items_from0"]))
         ok(c2["heads_kb"] < 64, "the cloud copy's entries are not read in full on a reopening (%d KB of entry heads)" % c2["heads_kb"])
         # ---------- 2b. the stale-copy guard: a colleague changed an item while this browser was closed
         print("== 2b. a colleague's change made while this browser was closed")
@@ -252,7 +315,32 @@ async def main():
         ok(r9["same"], "the counts of bills to check, ready and needing attention (this computer's own) are not sent to the firm account")
         ok(r9["moved"], "a count from the bills themselves (drafts) is sent")
         ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
-        await ctx.unroute_all(behavior="ignoreErrors"); await br.close()
+        await ctx.unroute_all(behavior="ignoreErrors"); await ctx.close()
+        # ---------- 1b / 1z. the first opening without the month answers (the server as today), and the load before
+        # fast-firstopen (no FirstOpen, no month answers): the books must end exactly as each other
+        async def fresh(no_fo, pack):
+            nonlocal ctx, pg, cdp
+            ctx = await br.new_context(viewport={"width": 1366, "height": 900}); await ctx.add_init_script(INIT)
+            if no_fo: await ctx.add_init_script(NOFO)
+            pg = await ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e))); await ctx.route(L.STAGE + "/**", L.route)
+            cdp = await ctx.new_cdp_session(pg); await cdp.send("Emulation.setCPUThrottlingRate", {"rate": CPU}); L.PACK[0] = pack
+        print("== 1b. first opening with the day files one by one (FinCom's server without month_days, as today)")
+        await fresh(False, False)
+        fb, cb, partb = await first_open("the day files:")
+        msb = lambda k: int(fb[k] * 1000) if k in fb else None
+        ok(fb.get("usable") is not None and msb("usable") <= FIRST_USABLE and fb.get("fy") is not None and msb("fy") <= FIRST_FY and fb.get("all") is not None and msb("all") <= FIRST_ALL,
+           "without month answers: usable in %s ms, 2026-27 in %s ms, everything in %s ms (<= %d / %d / %d)" % (msb("usable"), msb("fy"), msb("all"), FIRST_USABLE, FIRST_FY, FIRST_ALL))
+        ok(cb["dayfiles"] == len(L.DAYS), "every day file fetched once (%d of %d)" % (cb["dayfiles"], len(L.DAYS)))
+        fp_days = await pg.evaluate(FINGER); await ctx.unroute_all(behavior="ignoreErrors"); await ctx.close()
+        print("== 1z. the books as the load before fast-firstopen makes them")
+        await fresh(True, False)
+        fz, cz, _ = await first_open("before fast-firstopen:")
+        fp_old = await pg.evaluate(FINGER); await ctx.unroute_all(behavior="ignoreErrors"); await ctx.close(); L.PACK[0] = True
+        for label, fp in (("with month answers", fp_new), ("with the day files", fp_days)):
+            diff = sorted(k for k in set(fp_old) | set(fp) if fp_old.get(k) != fp.get(k))
+            ok(not diff and fp_old["n"] == len(L.VOUCHERS), "the books end exactly as before fast-firstopen, %s (%d entries; %s)" % (label, fp["n"], ("differ: " + ", ".join(diff[:8])) if diff else "every part the same"))
+        ok(not errors, "no page errors in 1b and 1z" + ("" if not errors else ": " + errors[0]))
+        await br.close()
 asyncio.run(main())
 srv.shutdown()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)

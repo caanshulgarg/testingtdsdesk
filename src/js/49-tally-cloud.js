@@ -253,10 +253,13 @@ const TCloud = {
   // ---------- one day's day book, from this browser's store or the cloud
   // seen (next-fast-open): the days whose file, fetched again for a new time, is the one kept here (a Day Book uploaded
   // again with the same entries moves every day's time)
+  // fast-firstopen (25-Oct-2026): a day is kept packed as it came ({at, gz}: Leads' 560 days 6 MB, not 55 MB of text);
+  // one kept before as text ({at, text}) is read as it is
+  unzip(z){ return new Response(new Blob([z]).stream().pipeThrough(new DecompressionStream("gzip"))).text(); },
   async day(bk, d, at, seen){
     const k = "tcday:" + bk + ":" + d;
-    let kept = null;
-    try { kept = await IDBStore.get(k); if (kept && kept.at === at) return kept.text; } catch (e){}
+    let kept = null, kt;
+    try { kept = await IDBStore.get(k); kt = kept && (kept.gz ? await this.unzip(kept.gz) : kept.text); if (kept && kept.at === at) return kt; } catch (e){}
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess();
     const url = c.url.replace(/\/+$/, "") + "/storage/v1/object/authenticated/tally-days/" + Cloud.st.firm + "/" + bk + "/" + d.slice(0, 6) + "/" + d + ".xml.gz";
@@ -264,9 +267,9 @@ const TCloud = {
     if (r.status === 401 || r.status === 400){ await Cloud.refreshToken(s.access_token); r = await fetch(url, {headers: {apikey: c.key, Authorization: "Bearer " + Cloud.sess().access_token}, cache: "no-store"}); }
     if (r.status === 404) return "";
     if (!r.ok) throw new Error("Could not fetch " + d + " from the cloud (" + r.status + ").");
-    const text = await new Response(r.body.pipeThrough(new DecompressionStream("gzip"))).text();
-    if (seen && kept && kept.text === text) seen[d] = true;
-    try { await IDBStore.write([[k, {at, text}]]); } catch (e){}
+    const gz = await r.arrayBuffer(), text = await this.unzip(gz);
+    if (seen && kept && kt === text) seen[d] = true;
+    try { await IDBStore.write([[k, {at, gz}]]); } catch (e){}
     return text;
   },
   // Tally's groups, sent by the bridge from 1.14.7 (review of 01-Oct-2026): each group's parent, so a ledger's chain up
@@ -314,10 +317,15 @@ const TCloud = {
     list.forEach(x => { (byMonth[x.day.slice(0, 6)] = byMonth[x.day.slice(0, 6)] || []).push(x); });
     const todo = Object.keys(byMonth).sort().filter(ym => byMonth[ym].some(x => known[x.day] !== x.at));
     const ledNew = !same || meta.cloud.ledgersAt !== bk.ledgersAt;
+    // fast-firstopen (the owner, 25-Oct-2026: "start faster first open"): books new to this browser (or a first opening
+    // cut short, meta.fo) are brought in by FirstOpen (src/js/95, loaded with its own chunk): the days newest first, read
+    // as they come, the latest year shown as soon as it is in. It hands back what this load puts into the books below,
+    // the same way as ever; without the chunk, as before
+    const fo = !same && todo.length && (!(b.vouchers || []).length || meta.fo === bk.book) && window.loadFirstOpen ? await loadFirstOpen().then(m => m.FirstOpen, () => null) : null;
     // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
     let copy = null;
     const lately = same && opening && this.checkedLately(meta.copy, bk);
-    try { copy = await this.copyHeads(b, bk, (force && !lately) || !same); } catch (e){ copy = null; }
+    try { copy = fo ? null : await this.copyHeads(b, bk, (force && !lately) || !same); } catch (e){ copy = null; }
     if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || "", fullAt: this.fullAtOf(copy, meta.copy, bk)};
     if (!todo.length && !ledNew && !(copy && (copy.changes || !same))){
       // next-24q-load: nothing new, but the payroll here is missing or not right: read it (next-24q-ready: PayLoad.ensure,
@@ -340,7 +348,9 @@ const TCloud = {
       let got = 0, next = 0;
       const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at, seen); days[x.day] = x.at; got++;
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
-      await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
+      const pre = fo && await fo.run({b, bk, byMonth, todo, from, to, say});
+      if (pre){ want.forEach(x => { days[x.day] = x.at; }); copy = pre.copy; }
+      else await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
       // next-fast-open: a month whose every day is the file read into the books before (a Day Book uploaded again with
       // the same entries) is not read again; when nothing else changed, only the days' new times are kept
       const redo = todo.filter(ym => !byMonth[ym].every(x => seen[x.day] && known[x.day]));
@@ -351,8 +361,8 @@ const TCloud = {
         // next-fast-open: everything is read first (the ledgers, each month's entries, the bridge's lines), then put into
         // the books in one go, so a page drawn meanwhile (the books are not covered by a wait any more) never shows them
         // half changed
-        let led = null;
-        if (ledNew){
+        let led = pre ? pre.led : null;
+        if (ledNew && !led){
           // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
           // the bridge sent; a cloud without them is read as before
           // bridge 2.4.3 (migration 73): with each ledger's TDS settings (nature of payment, special rate, certificates) first
@@ -365,8 +375,7 @@ const TCloud = {
         }
         const read = [];
         for (const ym of redo){
-          const parts = byMonth[ym].map(x => text[x.day] || "");
-          const res = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
+          const res = pre ? pre.res[ym] : await Books.importDayBook(new Blob(["<ENVELOPE>" + byMonth[ym].map(x => text[x.day] || "").join("") + "</ENVELOPE>"], {type: "text/xml"}));
           const bad = notThisClient((res.meta || {}).gstins);
           if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
           read.push([ym, res]);
@@ -393,7 +402,7 @@ const TCloud = {
         try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
         try { await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
         meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
-        meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from;
+        meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; delete meta.fo; b.firstOpen = null;
         TallyRead.after(b, "after changes came from the cloud copy");
         LK.cache = {}; changed = true; await saveBooks();
       }

@@ -54,6 +54,20 @@ function FreshLine({ b, unknown = true }) {
     {quiet ? (f && f.last ? <p className="note books-upto" data-books-upto="" style={{ margin: "4px 0 8px" }}>{"Books up to " + fmtDate(tallyDate(f.last))}</p> : null) : <BooksStale cid={S.coId} />}</>;
 }
 
+// fast-firstopen (25-Oct-2026): the first opening of these books on this browser shows the latest year as soon as it is in
+// (FirstOpen, src/js/95) while the older years come in behind it: the books then say so on one quiet line, and a page that
+// needs the older years (the trial balance, MIS, statements, audit, Look up, an older year's TDS or GST) waits for them
+// with the server's figures where it has them. meta.fo: the book a first opening is bringing in (TCloud.load clears it)
+function firstOpenOf(b) {
+  const m = b.meta || {};
+  if (!m.fo || (m.cloud && m.cloud.book === m.fo) || !(b.vouchers || []).length) return null;
+  return b.firstOpen && b.firstOpen.book === m.fo ? b.firstOpen : { fy: "", older: "", text: "Books: still coming in from FinCom’s cloud…" };
+}
+const fyOfYm = (ym) => { const y = +String(ym).slice(0, 4), mo = +String(ym).slice(4, 6), s = mo < 4 ? y - 1 : y; return s + "-" + String(s + 1).slice(2); };
+function FirstOpenWait({ fo, what }) {
+  return <p className="note" data-first-open-wait="">{what + " needs every year of the books: " + (fo.older || "the older years") + " " + (fo.failed ? "could not be brought in." : "still coming in from FinCom’s cloud. It shows here when they are in.")}</p>;
+}
+
 // what a tab needs before it can show anything, and the button that brings it (review item 7). One name for bringing
 // the Tally data in (clean-up batch 1): "Bring in from Tally", which opens From Tally
 const BRING = "Bring in from Tally";
@@ -99,8 +113,12 @@ function BooksPage() {
   // fast-sync: the books not in on this computer yet (or still coming in): MIS, TDS and GST from the server meanwhile
   const srv = (!n || !!b.busy) && typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id);
   const busy = b.busy && <BusyCard title="Reading the books…" detail={b.busy} />;
+  const fo = firstOpenOf(b), foLine = fo && <p className="note" data-first-open="" role="status" style={{ margin: "4px 0 8px" }}>{fo.text}</p>;
+  if (fo && fo.fy && !S.tdsView && !S.tdsFy) { S.tdsView = "year"; S.tdsFy = fo.fy; }
   // tds-layout: Reconciliations (TDS receivable vs 26AS) works from the files brought in, with or without the books
   if (tab === "recon") return <>{busy}<Recon b={b} /></>;
+  if (fo && (tab === "reports" || tab === "lookup" || tab === "letters"))
+    return <>{foLine}<FirstOpenWait fo={fo} what={tab === "reports" ? "Reports" : tab === "lookup" ? "Look up" : "Letters"} /></>;
   if (tab === "reports" || tab === "lookup" || tab === "letters")
     return <>{busy}{tab === "reports" ? <Reports b={b} /> : tab === "lookup" ? <Lookup b={b} /> : <Letters b={b} />}</>;
   // MIS, Financial statements and Audit: pages of their own in the sidebar (review item 7); the tie-out is Audit's tab
@@ -109,8 +127,10 @@ function BooksPage() {
     return <>
       {n > 0 ? <FreshLine b={b} /> : <><HeldBooks cid={co.id} where="books" /><UnknownLedgers cid={co.id} where="books" byBook /><BooksStale cid={co.id} /></>}
       <JobsNote cid={co.id} active />
-      {busy}
-      {tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
+      {busy}{foLine}
+      {fo && tab !== "mis" ? <FirstOpenWait fo={fo} what={{ fs: "The financial statements", audit: "The audit", tieout: "The tie-out", mymis: "My MIS" }[tab] || "This page"} />
+        : fo ? <ServerMis b={b} />
+        : tab === "tieout" ? <><AuditTabs /><SyncNote cid={co.id} tab={tab} /><GstDriftNote b={b} /><Tieout b={b} /></>
         : tab === "mis" && srv ? <ServerMis b={b} /> : !n ? (b.busy ? null : <EmptyTab tab={tab} />) : tab === "mis" ? <MisTab b={b} />
         : tab === "mymis" ? <Suspense fallback={<Loading what="My MIS" page="books" />}><MyMis b={b} /></Suspense> : tab === "audit" ? <AuditTab b={b} /> : <FinStatements b={b} />}
     </>;
@@ -119,7 +139,10 @@ function BooksPage() {
   // (14-Oct-2026): From Tally is the books brought in; the TDS and GST ledgers are confirmed on the TDS and GST pages
   const tabs = [];
   let body;
+  const foOld = fo && (!fo.fy || (tab === "tds" && (S.tdsView === "years" || (S.tdsFy && S.tdsFy !== fo.fy))) || (tab === "gst" && S.gstYm && fyOfYm(S.gstYm) !== fo.fy));
   if (tab === "import") body = <FromTally b={b} />;
+  else if (foOld && (tab === "tds" || tab === "gst")) body = <>{tab === "tds" ? <ServerTds b={b} /> : <ServerGst b={b} />}<FirstOpenWait fo={fo} what={tab === "tds" ? "The TDS of " + (S.tdsView === "years" ? "every year" : S.tdsFy) : "GST for " + (S.gstYm ? GSTR.label(S.gstYm) : "this month")} /></>;
+  else if (fo && tab !== "tds" && tab !== "gst") body = <FirstOpenWait fo={fo} what="This page" />;
   else if (srv && tab === "gst") body = <><ServerGst b={b} />{n ? <Gst /> : null}</>;
   else if (srv && tab === "tds") body = <><ServerTds b={b} />{n ? <Tds b={b} /> : null}</>;
   else if (!n && tab === "gst") body = <Gst />;
@@ -137,6 +160,7 @@ function BooksPage() {
     {/* From Tally (2.4.0) says the upload's progress and the reading of the books in its own upload part */}
     {tab !== "import" && <><JobsNote cid={co.id} active /><GstDriftNote b={b} /><FreshLine b={b} unknown={!(tab === "ledgers" || (tab === "tds" && S.tdsView === "ledgers") || (tab === "gst" && S.gstView === "ledgers")) || !n} /></>}
     {tab !== "import" && busy}
+    {tab !== "import" && foLine}
     {body}
   </>;
 }

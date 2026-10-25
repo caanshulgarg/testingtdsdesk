@@ -189,6 +189,9 @@
 //   {kind:"wake", what:"ledgers", client}          -> (2.1.4) a bill's ledger chooser opened with a list older than the last
 //                                                       posting: the Tally computer is woken ("ledgers", {company, at}) to
 //                                                       read the ledger list; at most one a minute per company ({debounced})
+//   {kind:"month_days", book, month:"YYYYMM"}      -> (fast-firstopen, 25-Oct-2026) the month's day files as kept in
+//                                                       tally-days, in one binary answer (monthpack.js), for the first
+//                                                       opening of a client on a computer; a book of another firm: 404
 //   {kind:"upload_days", client, company?, days:[{day, gz}]}
 //   {kind:"upload_ledgers", client, company?, from, openAsOn, ledgers:[[name, parent, open]], groups?}
 //   {kind:"upload_new", client, name, size, from, to} -> (round 20, migration 47) {job, path '<firm>/<job>.xml', bucket
@@ -207,6 +210,7 @@
 //                                                       answers {done, next} until next is null
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
+import { packMonth, monthEnd } from "./monthpack.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -3185,6 +3189,34 @@ async function broadcast(topic: string, event: string, payload: Record<string, u
   } catch (_) { return false; }
 }
 
+// fast-firstopen (the owner, 25-Oct-2026: "start faster first open"): {kind:"month_days", book, month:"YYYYMM"} from a
+// member of the book's firm -> the month's day files as kept in the bucket, in one answer (monthpack.js: a list of
+// {day, at, n} and each day's gzip bytes). A client opened for the first time on a computer fetched every day file
+// itself (Leads Insurance: 560 requests of the storage API, each checked against its policies; 2.5 minutes on the
+// owner's line, staging 24-Oct); now one request a month, the files read here eight at a time. Each day's at is
+// tally_days.at, so the browser takes a day only when it is the version tally_days_list gave it (else fetches that day)
+async function monthDays(firm: string, body: any) {
+  const book = String(body?.book || ""), ym = String(body?.month || "");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(book) || !/^\d{4}(0[1-9]|1[0-2])$/.test(ym)) return reply(400, { ok: false, error: "Bad request" });
+  const { data: bk, error: be } = await db.from("tally_books").select("book_id").eq("book_id", book).eq("firm_id", firm).maybeSingle();
+  if (be) throw new Error(be.message);
+  if (!bk) return reply(404, { ok: false, error: "No such book in this firm." });
+  const { data: rows, error } = await db.from("tally_days").select("day, at").eq("book_id", book).eq("firm_id", firm)
+    .gte("day", ym.slice(0, 4) + "-" + ym.slice(4, 6) + "-01").lte("day", monthEnd(ym)).order("day");
+  if (error) throw new Error(error.message);
+  const list = (rows || []) as { day: string; at: string }[], out: { day: string; at: string; gz: Uint8Array | null }[] = new Array(list.length);
+  let next = 0;
+  const one = async () => {
+    while (next < list.length) {
+      const i = next++, d = String(list[i].day).replace(/-/g, "");
+      const { data: blob } = await db.storage.from("tally-days").download(`${firm}/${book}/${ym}/${d}.xml.gz`);
+      out[i] = { day: d, at: list[i].at, gz: blob ? new Uint8Array(await blob.arrayBuffer()) : null };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(8, list.length) }, one));
+  return new Response(packMonth(out), { status: 200, headers: { ...cors, "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
+}
+
 async function userUpload(req: Request, auth: string) {
   const asUser = createClient(URL, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
   const { data: who } = await asUser.auth.getUser();
@@ -3211,6 +3243,9 @@ async function userUpload(req: Request, auth: string) {
     return reply(200, { ok: true, path });
   }
   if (body.kind === "wake") return await wakeFor(firm, body, user.id);
+  // fast-firstopen (25-Oct-2026): a month of a book's day files in one answer (read only; before anything below, which
+  // may link a company)
+  if (body.kind === "month_days") return await monthDays(firm, body);
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
