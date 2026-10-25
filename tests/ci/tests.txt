@@ -84,6 +84,7 @@ run_ledgerpick_ui.py                  120  TDSDESK_SITE=../app/dist-test
 run_libs_ui.py                        120
 run_lock_beat.py                      570
 run_main_bridge_server.py             120
+run_masters_ledgers.py                120  TDSDESK_SITE=../app/dist-test
 run_migration31.py                    120
 run_migration34.py                    180
 run_migration35.py                    120

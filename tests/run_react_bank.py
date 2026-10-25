@@ -58,7 +58,7 @@ with sync_playwright() as p:
     # a line to review: confirm a suggestion, a ledger typed that Tally does not have
     pg.click(ST("review")); pg.wait_for_timeout(300)
     sug = pg.evaluate("B().rows.find(r => r.state === 'suggested').id")
-    pg.click('#app tr:has(input[data-bled="%s"]) button:has-text("Confirm")' % sug); pg.wait_for_timeout(400)
+    pg.click('#app tr:has(input[data-bled="%s"]) button[data-accept]' % sug); pg.wait_for_timeout(400)
     ok(pg.evaluate("bankRow('%s').state" % sug) == "ready", "Confirm on a suggested line: ready")
     att = pg.evaluate("B().rows.find(r => r.state === 'attention').id")
     box = pg.locator('#app input[data-bled="%s"]' % att)

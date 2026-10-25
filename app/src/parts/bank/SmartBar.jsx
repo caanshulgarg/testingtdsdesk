@@ -3,7 +3,7 @@
 // not); what is shown counted and added up; tick all of it; make a rule from it. The logic is ./smart.js.
 import { useEffect } from "react";
 import LedgerBox from "../LedgerBox.jsx";
-import { CHIPS, chipCounts, chipsOn, toggleChip, setF, setRange, setSugOnly, clearAll, smartOn, selectAll, ruleStart, rulePreviewNow, ruleSave, KEYS_HELP } from "./smart.js";
+import { CHIPS, chipCounts, chipsOn, toggleChip, setF, setRange, setSugOnly, clearAll, smartOn, selectAll, ruleStart, rulePreviewNow, ruleSave, KEYS_HELP, headChips, headClear } from "./smart.js";
 
 const DIRS = [["", "All"], ["out", "Out"], ["in", "In"]];
 
@@ -60,6 +60,9 @@ export default function SmartBar({ rows, base, grouped }) {
     <div className="bs-chips" role="group" aria-label="Quick filters on Particulars">
       {CHIPS.filter((c) => n[c[0]] > 0 || on.includes(c[0])).map((c) => <button key={c[0]} type="button" className="bs-chip" data-chip={c[0]} aria-pressed={on.includes(c[0])} onClick={() => toggleChip(c[0])}>
         <span title={c[0] === "ATM" ? "ATM and cash" : c[0] === "Card" ? "POS and card" : c[0] === "NACH" ? "NACH, ACH, ECS: EMIs and mandates" : undefined}>{c[1]}</span> <span className="bs-chip-n" data-chip-n="">{n[c[0]]}</span></button>)}
+      {/* what the column headers' filters hold (25-Oct-2026: the filters are in the headers again), each removable */}
+      {headChips(b).map((c, i) => <span key={c.k + i} className="bs-chip bs-fchip" data-fchip={c.k} aria-pressed="true">{c.w}
+        <button type="button" className="bs-fx" aria-label={"Remove the filter " + c.w} onClick={() => headClear(c.k, c.old)}>✕</button></span>)}
       <span className="bs-keys" data-kb-help="" title={KEYS_HELP} tabIndex={0} aria-label={KEYS_HELP}>⌨</span>
       <span className="bs-count" data-f-count=""><b>{rows.length}</b> of {b.rows.length} · out {money(out)} · in {money(inn)}</span>
     </div>

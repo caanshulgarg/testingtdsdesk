@@ -12,7 +12,16 @@ On a made-up HDFC statement of 300 mixed lines (tests/fixtures/bank-smart/statem
   4. a rule from the filter: the lines now open and a new upload follow it, lines set by hand do not;
   5. the keyboard: up/down, Enter opens the ledger box, type, Enter, next line; Space ticks; A accepts a suggestion;
   6. the party read from a UPI / IMPS narration matched to a Tally ledger, the suggestion accepted in one click;
-  7. a phone (390): no sideways scroll of the page.
+  7. a phone (390): no sideways scroll of the page;
+  8. the owner's first real use (25-Oct-2026, Mac Safari, an ICICI statement: "size has become too short.. I have already
+     uploaded masters xml.. still it is asking again.. plus I need filters within column as earlier.. column name Type is
+     overlapping"): the app's own table text and a line of about 40 px with the particulars on two lines (party; mode ·
+     reference · narration), no heading or cell running into another at 1366, 1440 and 1920, the filters in the column
+     headings again (combining with the chips), a ledger box on every open line, the voucher type by Dr / Cr, no "Bring in
+     the Tally ledger list" when the ledgers come from the masters uploaded on Books or from FinCom's cloud copy, and ICICI's
+     narrations read (tests/fixtures/bank-smart/icici83.js);
+  9. the party read from HDFC's layouts (NEFT/RTGS DR|CR-<IFSC>-<party>-, IMPS-<ref>-<party>-, UPI-<party>-<vpa>) and ICICI's,
+     never "NETBANK, MUM", a city, a bank code, an IFSC or an account number.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_smart.py"""
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -54,21 +63,22 @@ def open_page(p, vp):
 with sync_playwright() as pw:
     br = pw.chromium.launch()
     # ---- 1. density ----
-    for (w, h, want) in [(1366, 768, 18), (1440, 900, 22)]:
+    # 25-Oct-2026: a line of about 40 px (was 32: "size has become too short"), so fewer in view: 12 or more at 1366x768
+    for (w, h, want) in [(1366, 768, 12), (1440, 900, 15)]:
         pg, n = open_page(br, {"width": w, "height": h})
         top = pg.evaluate(MEASURE)
         pg.evaluate(TO_TABLE); pg.wait_for_timeout(400); m = pg.evaluate(MEASURE)
         ok(n == 300, "%dx%d: the statement of 300 lines is open" % (w, h))
         ok(m["rows"] >= want, "%dx%d: %d rows wholly in view while working (wanted >= %d; %d at the top of the page)" % (w, h, m["rows"], want, top["rows"]))
-        ok(m["median"] <= 34, "%dx%d: a row is about 32 px (%d)" % (w, h, m["median"]))
+        ok(36 <= m["median"] <= 46, "%dx%d: a row is about 40 px (%d)" % (w, h, m["median"]))
         ok(top["head"] <= 150, "%dx%d: the page's header area (the statement, its figures, the filters) above the table: %d px (<= 150)" % (w, h, top["head"]))
         ok(top["inner"] <= 1 and top["page"] <= 0 and top["ledIn"] and top["acIn"], "%dx%d: no sideways scroll; the Ledger and the buttons in view (inner %d, page %d)" % (w, h, top["inner"], top["page"]))
         if w == 1366:
             ok(top["cols"][:8] == ["Date", "Particulars", "Withdrawal", "Deposit", "Balance", "Status", "Ledger", "Type"], "the columns: %s" % top["cols"])
             bal = pg.evaluate("() => { const r = bankVisibleRows()[0]; const tr = document.querySelector('#app tr[data-rid=\"' + r.id + '\"]'); return [money(r.balance), tr ? tr.querySelector('td.bal').innerText : '']; }")
             ok(bal[1] and bal[1].replace("₹", "").strip() in bal[0], "the running balance of a line is shown (%s)" % bal)
-            tip = pg.evaluate("() => { const td = document.querySelector('#app table.bk-table tbody tr td.pt'); const r = bankRow(td.closest('tr').dataset.rid); return [td.querySelector('[title]') && td.querySelector('[title]').title === r.narr, getComputedStyle(td.querySelector('.bs-narr')).webkitLineClamp]; }")
-            ok(tip[0] and str(tip[1]) == "2", "Particulars: the whole narration, at most two lines, and in full on hover (%s)" % tip)
+            tip = pg.evaluate("() => { const td = document.querySelector('#app table.bk-table tbody tr td.pt'); const r = bankRow(td.closest('tr').dataset.rid); return [td.querySelector('[title]') && td.querySelector('[title]').title === r.narr, td.querySelectorAll('.bs-narr > div').length]; }")
+            ok(tip[0] and tip[1] == 2, "Particulars: two lines, and the whole narration on hover (%s)" % tip)
         pg.screenshot(path=OUT + "/bank-smart-%d.png" % w); pg.close()
 
     pg, n = open_page(br, {"width": 1440, "height": 900})
@@ -254,6 +264,151 @@ with sync_playwright() as pw:
     pg.click('#app [data-chip="UPI"]'); pg.wait_for_timeout(400)
     ok(pg.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0, "and with a chip on")
     pg.screenshot(path=OUT + "/bank-smart-390.png"); pg.close()
+    ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
+
+    # ---- 8. the owner's first real use (25-Oct-2026) ----
+    ICICI = open(os.path.join(HERE, "fixtures", "bank-smart", "icici83.js")).read()
+    LAYOUT = """() => {
+      const t = document.querySelector('#app table.bk-table'), ths = [...t.querySelectorAll('thead th')];
+      // the app's own table text: a list table drawn by the shared styles (Purchase and Sales are ListTable's table.lt)
+      const probe = document.createElement('table'); probe.className = 'lt lt'; probe.innerHTML = '<thead><tr><th>h</th></tr></thead><tbody><tr><td>x</td></tr></tbody>';
+      (document.querySelector('#app main') || document.querySelector('#app')).appendChild(probe);
+      const app = [getComputedStyle(probe.querySelector('td')).fontSize, getComputedStyle(probe.querySelector('th')).fontSize]; probe.remove();
+      const cells = [...t.querySelectorAll('thead th, tbody td')].filter(c => c.offsetParent);
+      const spill = cells.filter(c => c.scrollWidth > c.clientWidth + 1).slice(0, 6).map(c => (c.className || c.tagName) + ' ' + c.innerText.slice(0, 16) + ' ' + c.scrollWidth + '>' + c.clientWidth);
+      const boxes = ths.map(th => th.getBoundingClientRect()), lap = [];
+      boxes.forEach((b, i) => { if (i && boxes[i - 1].right > b.left + 0.5) lap.push(ths[i - 1].innerText + '|' + ths[i].innerText); });
+      // a heading's words are not cut ("Type", "Withdrawal" whole), and its funnel is inside its own cell
+      const cut = ths.filter(th => { const s = th.querySelector('.lt-sort > span, .gfl'); return s && s.scrollWidth > s.clientWidth + 1; }).map(th => th.innerText);
+      const fun = ths.filter(th => { const f = th.querySelector('.colf'); if (!f) return false; const a = f.getBoundingClientRect(), b = th.getBoundingClientRect(); return a.left < b.left - 0.5 || a.right > b.right + 0.5; }).map(th => th.innerText);
+      const pt = t.querySelector('tbody td.pt'), rows = [...t.querySelectorAll('tbody tr[data-rid]')].slice(0, 40).map(r => r.getBoundingClientRect().height).sort((a, b) => a - b);
+      const vt = [...t.querySelectorAll('tbody select.bs-vt')].slice(0, 20).map(s => s.getBoundingClientRect().width);
+      return {app, td: getComputedStyle(pt).fontSize, th: getComputedStyle(ths[2]).fontSize, spill, lap, cut, fun, median: rows[Math.floor(rows.length / 2)] || 0, vtMin: Math.min(...vt),
+        page: document.documentElement.scrollWidth - innerWidth, inner: (() => { const w = document.querySelector('#app .bk-tablewrap'); return w ? w.scrollWidth - w.clientWidth : 0; })()};
+    }"""
+    for (w, h) in [(1366, 768), (1440, 900), (1920, 1080)]:
+        for fx in ("300", "icici"):
+            pg, n = open_page(br, {"width": w, "height": h})
+            if fx == "icici": pg.evaluate(ICICI, "books"); pg.wait_for_timeout(1500)
+            m = pg.evaluate(LAYOUT)
+            tag = "%d %s" % (w, fx)
+            ok(m["td"] == m["app"][0] and m["th"] == m["app"][1], "%s: the app's own table text (cells %s, headings %s; the app's list tables %s)" % (tag, m["td"], m["th"], m["app"]))
+            ok(36 <= m["median"] <= 46, "%s: a line of about 40 px (%d)" % (tag, m["median"]))
+            ok(not m["spill"], "%s: no cell or heading runs over its column %s" % (tag, m["spill"]))
+            ok(not m["lap"] and not m["cut"] and not m["fun"], "%s: the headings do not overlap, none is cut, each funnel inside its heading (%s %s %s)" % (tag, m["lap"], m["cut"], m["fun"]))
+            ok(m["vtMin"] >= 84, "%s: the voucher type box holds “Payment” (%d px)" % (tag, m["vtMin"]))
+            ok(m["page"] <= 0 and m["inner"] <= 1, "%s: no sideways scroll (%d, %d)" % (tag, m["page"], m["inner"]))
+            if w == 1366 and fx == "icici":
+                pg.evaluate(TO_TABLE); pg.wait_for_timeout(400); mm = pg.evaluate(MEASURE)
+                ok(mm["rows"] >= 12, "1366x768, the ICICI statement: %d lines in view while working (>= 12)" % mm["rows"])
+                pg.screenshot(path=OUT + "/bank-icici-1366.png")
+            pg.close()
+
+    # the ICICI statement, its ledgers only in the client's books (the masters XML uploaded on Books -> From Tally), as
+    # Testing AAD's were on staging: no "Bring in the Tally ledger list", the list is the books' and suggestions use it
+    pg, n = open_page(br, {"width": 1440, "height": 900})
+    pg.evaluate(ICICI, "books"); pg.wait_for_timeout(1800)
+    body = pg.inner_text("#app")
+    ok("Bring in the Tally ledger list" not in body and "Import the ledger list" not in body, "masters uploaded on Books: the bank page does not ask for the ledger list again")
+    ok(pg.evaluate("Ledgers.list(B().cid).length") == 12 and pg.evaluate("hasLedgerList()") and pg.evaluate("exactLedger('kumkum raghav')") == "Kumkum Raghav", "and the ledger boxes use the books' 12 ledgers")
+    k = pg.evaluate("B().rows.find(r => /KumkumRagh/.test(r.narr))")
+    ok(k["dec"]["mode"] == "IMPS" and k["dec"]["name"] == "KumkumRagh" and k["dec"]["utr"] == "528114093821", "ICICI MMT/IMPS: the party is the bank's “KumkumRagh”, mode IMPS, reference 528114093821 (%s)" % k["dec"])
+    ok(k["state"] == "suggested" and k["ledger"] == "Kumkum Raghav", "and it is suggested as Kumkum Raghav, matched by name (%s, %s)" % (k["state"], k["ledger"]))
+    inf = pg.evaluate("B().rows.find(r => /^INF\\/NEFT/.test(r.narr))")
+    ok(inf["dec"]["mode"] == "NEFT" and inf["dec"]["name"] == "", "ICICI INF/NEFT: mode NEFT, no party (the bank's own transfer) (%s)" % inf["dec"])
+    cell = pg.evaluate("(id) => { const td = document.querySelector('#app tr[data-rid=\"' + id + '\"] td.pt'); return [td.querySelector('.pn').innerText, td.querySelector('.l2').innerText, getComputedStyle(td.querySelector('.pn')).fontWeight, getComputedStyle(td.querySelector('.l2')).fontSize, td.querySelector('[title]').title]; }", k["id"])
+    ok(cell[0] == "KumkumRagh" and int(cell[2]) >= 600, "Particulars line 1: the party, in bold (%s)" % cell[:3])
+    ok(cell[1].startswith("IMPS · 528114093821 · MMT/IMPS/528114093821") and cell[3] == "12px", "line 2, small: mode · reference · narration, with spaces between them (%s)" % cell[1])
+    ok(cell[4] == k["narr"], "the whole narration on hover")
+    upi = pg.evaluate("() => { const r = B().rows.find(x => /^UPI\\/110860578274/.test(x.narr)); const td = document.querySelector('#app tr[data-rid=\"' + r.id + '\"] td.pt'); return td.innerText; }")
+    ok(upi.split("\n")[0] == "UPIPay" and "UPI · 110860578274 · UPI/110860578274" in upi, "the owner's UPI line reads “UPIPay” / “UPI · 110860578274 · UPI/…” (%s)" % upi.replace("\n", " | "))
+    # a ledger box on every open line, the voucher type by Dr / Cr
+    lb = pg.evaluate("() => [...document.querySelectorAll('#app table.bk-table tbody tr[data-rid]')].map(tr => { const r = bankRow(tr.dataset.rid), i = tr.querySelector('input[data-bled]'), s = tr.querySelector('select.bs-vt'); const b = i && i.getBoundingClientRect(); return [r.state, !!i && b.width >= 120 && b.height >= 24 && getComputedStyle(i).visibility === 'visible', i ? i.placeholder : '', s ? s.value : '', r.debit > 0]; })")
+    open_ = [x for x in lb if x[0] in ("attention", "suggested", "ready")]
+    ok(len(open_) > 20 and all(x[1] for x in open_), "a ledger box (type to search) shows on each of the %d open lines" % len(open_))
+    ok(all(x[2] == "Choose ledger" for x in open_ if x[0] == "attention"), "a line with no ledger says “Choose ledger” in its box")
+    ok(all(x[3] == ("Payment" if x[4] else "Receipt") for x in open_), "Type: Payment for a withdrawal, Receipt for a deposit")
+    pg.click('#app tr[data-rid="%s"] button[data-accept]' % k["id"]); pg.wait_for_timeout(400)
+    ok(pg.evaluate("bankRow('%s').state" % k["id"]) == "ready", "the suggestion is accepted in one click")
+    # the filters in the column headings, as before, with the chips
+    heads = pg.evaluate("() => [...document.querySelectorAll('#app table.bk-table thead th')].filter(th => th.querySelector('.colf')).map(th => th.innerText.trim())")
+    ok(heads == ["Date", "Particulars", "Withdrawal", "Deposit", "Balance", "Status", "Ledger", "Type"], "a filter in each column's heading: %s" % heads)
+    count_text = lambda: pg.inner_text("#app [data-f-count]").replace("\n", " ")
+    pg.evaluate("bankTabGo('all')"); pg.wait_for_timeout(300)
+    pg.click('#app th .colf[data-colf="narr"]'); pg.wait_for_timeout(300)
+    pg.fill('#colpop input[data-pf="narr"]', "MMT"); pg.wait_for_timeout(600); pg.click('#colpop [data-cpapply]' if pg.locator('#colpop [data-cpapply]').count() else '#colpop [data-cpclose]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => /mmt/i.test(r.narr)).length")
+    ok(want > 0 and len(shown()) == want and re.search(r"\b%d of 83\b" % want, count_text()), "Particulars has “MMT” (its heading's filter): %d lines (%s)" % (want, count_text()))
+    ok(pg.locator('#app [data-fchip="narr"]').count() == 1, "and its chip shows over the table, with ✕")
+    pg.click('#app th .colf[data-hf="vt"]'); pg.wait_for_timeout(300)
+    pg.check('#app [data-hf-pop="vt"] input[data-hf-v="Receipt"]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => /mmt/i.test(r.narr) && (r.vtype || (r.debit ? 'Payment' : 'Receipt')) === 'Receipt').length")
+    ok(want > 0 and len(shown()) == want and pg.evaluate("(ids) => ids.every(id => bankRow(id).credit > 0)", shown()), "and Type is Receipt: %d deposits (%s)" % (want, count_text()))
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    # the heading's filter off, the UPI chip on: the chip and Type = Receipt together
+    pg.click('#app [data-fchip="narr"] .bs-fx'); pg.wait_for_timeout(400)
+    pg.click('#app [data-chip="UPI"]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => /\\bUPI\\b/.test(r.narr) && (r.vtype || (r.debit ? 'Payment' : 'Receipt')) === 'Receipt').length")
+    ok(want > 0 and len(shown()) == want and re.search(r"\b%d of 83\b" % want, count_text()), "the UPI chip with Type = Receipt: the %d UPI deposits (%s)" % (want, count_text()))
+    pg.click('#app [data-chip="UPI"]'); pg.wait_for_timeout(300)
+    pg.click('#app [data-fchip="vt"] .bs-fx'); pg.wait_for_timeout(300)
+    pg.click('#app th .colf[data-colf="narr"]'); pg.wait_for_timeout(300)
+    pg.fill('#colpop input[data-pf="narr"]', "MMT"); pg.wait_for_timeout(600); pg.click('#colpop [data-cpapply]' if pg.locator('#colpop [data-cpapply]').count() else '#colpop [data-cpclose]'); pg.wait_for_timeout(400)
+    pg.click('#app th .colf[data-hf="st"]'); pg.wait_for_timeout(300)
+    pg.check('#app [data-hf-pop="st"] input[data-hf-v="suggested"]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => /mmt/i.test(r.narr) && r.state === 'suggested').length")
+    ok(want > 0 and len(shown()) == want and pg.evaluate("(ids) => ids.every(id => bankRow(id).state === 'suggested')", shown()), "Status is Suggested: %d lines (%s)" % (want, count_text()))
+    pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+    # nothing matches: the headings (and their filters) stay, to change them
+    pg.evaluate("() => { const b = B(); b.f = Object.assign({}, b.f, {sts: ['ignored']}); render(); }"); pg.wait_for_timeout(400)
+    ok(len(shown()) == 0 and pg.locator('#app table.bk-table thead th .colf').count() == 8 and pg.locator('#app [data-list-empty]').count() == 1, "nothing matches: the headings and their filters stay")
+    pg.evaluate("() => { const b = B(); b.f = Object.assign({}, b.f, {sts: ['suggested']}); render(); }"); pg.wait_for_timeout(300)
+    pg.click('#app [data-fchip="st"] .bs-fx'); pg.click('#app [data-fchip="narr"] .bs-fx'); pg.wait_for_timeout(400)
+    pg.click('#app th .colf[data-hf="bal"]'); pg.wait_for_timeout(300)
+    pg.fill('#app [data-hf-pop="bal"] input[data-hf-min]', "1000000"); pg.click('#app [data-hf-pop="bal"] [data-hf-apply]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => r.balance >= 1000000).length")
+    ok(want > 0 and len(shown()) == want and re.search(r"\b%d of 83\b" % want, count_text()), "Balance from 10,00,000: %d lines (%s)" % (want, count_text()))
+    pg.keyboard.press("Escape")
+    pg.click('#app th .colf[data-colf="led"]'); pg.wait_for_timeout(300)
+    pg.check('#colpop input[data-pf="led"][value="set"]'); pg.wait_for_timeout(600); pg.click('#colpop [data-cpapply]' if pg.locator('#colpop [data-cpapply]').count() else '#colpop [data-cpclose]'); pg.wait_for_timeout(400)
+    want = pg.evaluate("B().rows.filter(r => r.balance >= 1000000 && r.ledger).length")
+    ok(len(shown()) == want and pg.locator('#app [data-fchip="led"]').count() == 1, "and Ledger chosen: %d lines (%s)" % (want, count_text()))
+    pg.click('#app [data-f-clear]'); pg.wait_for_timeout(400)
+    ok(re.search(r"\b83 of 83\b", count_text()) and not pg.locator('#app [data-fchip]').count(), "Clear filters clears the headings' filters too (%s)" % count_text())
+    pg.screenshot(path=OUT + "/bank-icici-1440.png"); pg.close()
+
+    # ---- 9. the party read from HDFC's and ICICI's own layouts (the owner, 25-Oct-2026: "NETBANK, MUM", the channel and the
+    # city, was read as the party of an HDFC NEFT line) ----
+    PARTY = [
+        ("NEFT DR-ICIC0001234-SITA-NETBANK, MUM-N123456789012-NA", "NEFT", "SITA"),
+        ("NEFT DR-SBIN0004321-AB-NETBANK, MUM-N298765432101-RENT OCT", "NEFT", "AB"),
+        ("NEFT DR-UTIB0000456-VIKAS TRADERS-NETBANK, MUM-N123456789012-INV 431", "NEFT", "VIKAS TRADERS"),
+        ("NEFT CR-HDFC0000001-ACME INDUSTRIES LTD-SMART TRADERS-HDFCN52026102512345", "NEFT", "ACME INDUSTRIES LTD"),
+        ("RTGS DR-PUNB0123400-ORBIT LOGISTICS-NETBANK, MUM-HDFCR52026102512345-INV 77", "RTGS", "ORBIT LOGISTICS"),
+        ("RTGS CR-KKBK0005678-MEHTA BROS-SMART TRADERS-KKBKR52026102500012", "RTGS", "MEHTA BROS"),
+        ("IMPS-528114093821-MOHAN-SBIN-XXXXXXXX1234-NETBANK", "IMPS", "MOHAN"),
+        ("IMPS-528114093821-XXXXXXXX1234-SBIN-NA", "IMPS", ""),
+        ("UPI-RAJ TEA STALL-rajtea@paytm-PYTM0123456-412345678901-TEA", "UPI", "RAJ TEA STALL"),
+        ("UPI-BLINKIT-blinkit.payu@hdfcbank-HDFC0MERUPI-512345678901-UPI", "UPI", "BLINKIT"),
+        ("MMT/IMPS/528114093821/BULD80088625/KumkumRagh/SBIN0004321", "IMPS", "KumkumRagh"),
+        ("INF/NEFT/IN12345678/ICIC00NOBCL/80088625", "NEFT", ""),
+        ("UPI/110860578274/UPIPay/XXshar @axl//ICId214d4900a", "UPI", "UPIPay"),
+    ]
+    pg, n = open_page(br, {"width": 1366, "height": 768})
+    for narr, mode, name in PARTY:
+        d = pg.evaluate("(n) => decodeNarr(n, 'SMART TRADERS')", narr)
+        ok(d["mode"] == mode and d["name"] == name, "%s → %s, party “%s” (%s, “%s”)" % (narr[:46], mode, name, d["mode"], d["name"]))
+    junk = pg.evaluate("() => B().rows.map(r => r.dec.name).filter(n => /NETBANK|^(MUM|DEL)$|BULD|^[A-Z]{4}0[A-Z0-9]{6}$|\\d{6}|^(SBIN|HDFC|UTIB|ICIC|KKBK|PUNB)$/i.test(n || ''))")
+    ok(not junk, "the 300-line HDFC statement: no party is a channel, city, bank code, IFSC or account number (%s)" % junk[:3])
+    pg.close()
+
+    # the ledgers in FinCom's cloud copy: no banner either; and with none anywhere the banner is still there
+    for src, want in (("cloud", False), ("none", True)):
+        pg, n = open_page(br, {"width": 1440, "height": 900})
+        pg.evaluate(ICICI, src); pg.wait_for_timeout(1800)
+        has = "Bring in the Tally ledger list" in pg.inner_text("#app")
+        ok(has == want, "ledgers %s: “Bring in the Tally ledger list” %s" % ({"cloud": "in FinCom's cloud copy", "none": "nowhere"}[src], "shown" if want else "not shown"))
+        pg.close()
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 srv.shutdown()

@@ -13,7 +13,8 @@ import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
 import { useRef, useEffect, useState } from "react";
 import SmartBar from "../parts/bank/SmartBar.jsx";
-import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear } from "../parts/bank/smart.js";
+import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear, ledgersFromBooks } from "../parts/bank/smart.js";
+import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import "../parts/bank/bankSmart.css";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
@@ -66,10 +67,11 @@ function RowLedger({ r }) {
       {held && <> <button className="linkbtn" onClick={() => bankRowAct("notintally", r.id)}>I checked — it is not in Tally</button></>}</span>}
     <div className="bs-led">
       <LedgerBox className={"lgbox" + (r.state === "suggested" ? " sugg" : r.state === "ready" ? " done" : "")} value={r.ledger || ""}
-        fk={"bled:" + r.id} data-bled={r.id} placeholder="Select ledger" aria-label={"Ledger for " + (r.dec.name || r.narr.slice(0, 30))}
+        fk={"bled:" + r.id} data-bled={r.id} placeholder="Choose ledger" aria-label={"Ledger for " + (r.dec.name || r.narr.slice(0, 30))}
         title={said + (tip ? " · " + [].concat(tip).join(" ") : "")} onCommit={(v) => bankSetLedger(r.id, v)} />
-      {/* a suggestion is accepted in one click, beside it (the old Confirm, moved from the buttons) */}
-      {r.state === "suggested" && <button className="btn small primary bs-ok" data-accept={r.id} title={"Accept: " + said} onClick={() => bankRowAct("accept", r.id)}>Confirm</button>}
+      {/* a suggestion is accepted in one click, beside it (the old Confirm, moved from the buttons; ✓ since 25-Oct-2026, so the
+          ledger's name has the room) */}
+      {r.state === "suggested" && <button className="btn small primary bs-ok" data-accept={r.id} title={"Confirm " + (r.ledger || "") + " (" + said + ")"} aria-label={"Confirm " + (r.ledger || "")} onClick={() => bankRowAct("accept", r.id)}>✓</button>}
     </div>
     <span className={"src" + (r.state === "ready" ? " ok" : r.state === "attention" ? " muted" : "")} title={tip}>{said}{r.state === "ready" && r.billRef ? " · Bill " + r.billRef : ""}</span>
     {/* the rule's name opens it in the old rule editor */}
@@ -104,20 +106,24 @@ function bankCols(b, rows, nSel) {
     // the head's tick: every line the filters show (not only the ones drawn)
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => selectAll(pickable, ev.target.checked)} />,
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
     // the whole narration, two lines at most (all of it on hover), the party read from it first and the mode and reference
     // in small letters (24-Oct-2026: one line of 60 letters and a second of the narration cut short, 69 px a row)
-    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel hideIdle t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
+    // 25-Oct-2026 (the owner: "size has become too short"; party, mode, reference and narration ran together): the party in
+    // bold on its own line; under it, small and grey, the mode and reference, then the narration, with separators
+    { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
       const party = bankParty(r), sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
-      return <div className="bs-narr" title={r.narr}>{party && <b className="pn">{party}</b>}{sub && <span className="md">{sub}</span>}<span className="nr">{r.narr}</span></div>; } },
-    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel hideIdle t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
-    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel hideIdle t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
-    { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
+      return <div className="bs-narr" title={r.narr}>
+        <div className="pn">{party || r.narr}</div>
+        <div className="l2">{sub && <span className="md">{sub}</span>}{sub && party && <span className="sep" aria-hidden="true"> · </span>}{party && <span className="nr">{r.narr}</span>}</div></div>; } },
+    { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
+    { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
+    { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, filter: <HeadFilter k="bal" label="Balance" />, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
       cell: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? "" : INR.format(r2(num(r.balance)))) },
-    { k: "st", role: "status", label: "Status", v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
-    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel hideIdle t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
+    { k: "st", role: "status", label: "Status", filter: <HeadFilter k="st" label="Status" />, v: (r) => (BST[r.state] || ["", r.state])[1], cell: (r) => { const w = BST[r.state] || ["no", r.state]; return <span className={"tag " + w[0]}>{w[1]}</span>; } },
+    { k: "led", label: "Ledger", cls: "lg", filter: <ColFunnel t="bank" k="led" label="Ledger" />, v: (r) => r.ledger || "", cell: (r) => <RowLedger r={r} /> },
     // the voucher type the line goes to Tally as (set by the ledger: Contra for a bank or cash ledger); changeable while open
-    { k: "vt", label: "Type", cls: "vt", v: (r) => vtypeOf(r), cell: (r) => ["attention", "suggested", "ready"].includes(r.state)
+    { k: "vt", label: "Type", cls: "vt", filter: <HeadFilter k="vt" label="Type" />, v: (r) => vtypeOf(r), cell: (r) => ["attention", "suggested", "ready"].includes(r.state)
       ? <select className="bs-vt" data-vt={r.id} aria-label="Voucher type" value={vtypeOf(r)} onChange={(ev) => setVtype(r.id, ev.target.value)}>{VTYPES.map((t) => <option key={t}>{t}</option>)}</select>
       : <span className="muted">{vtypeOf(r)}</span> },
     { k: "ac", role: "act", cls: "ac", cell: (r) => <RowActions r={r} /> },
@@ -165,7 +171,7 @@ function Table({ tab, all }) {
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
-    <ListTable name="bank" className="bk-table gf-off" cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+    <ListTable name="bank" className="bk-table gf-off" keepHead cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : ""), "data-rid": r.id })}
       empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />
@@ -237,6 +243,8 @@ function LastFail({ f }) {
 function LedgerSetup({ co }) {
   // one row each (round 3, 05-Oct-2026), the how-to on hover and behind How
   if (hasLedgerList()) return null;
+  // the ledger masters uploaded on Books are the client's list too (parts/bank/smart.js, 25-Oct-2026)
+  if (ledgersFromBooks(co.id) === "loading") return <NoticeLine sev="info" text={"Loading ledgers from the books of " + co.name + "…"} />;
   if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <NoticeLine sev="info" text={"Loading ledgers from FinCom’s cloud copy of the books of " + ((TCloud.book(co.id) || {}).company || co.name) + "…"} />;
   if (bridgeLive(co)) return <NoticeLine sev="info" text={"Loading ledgers from Tally (" + Bridge.openFor(co).name + " is open)…"} />;
   if (live()) return <NoticeLine text={"Open " + Bridge.tallyName(co) + " in TallyPrime: its ledgers load by themselves."} how="Or import the ledger list from a file."><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></NoticeLine>;
