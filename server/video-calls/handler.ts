@@ -15,6 +15,16 @@
 //     someone switched on (never the speaker's own) translates it, names, amounts and tax terms kept (rules.termsKept).
 //     Groq's 429: the words as said, "translation paused". Kept (call_captions) only while the call is recorded and the
 //     speaker stayed after the notice; one usage row per piece (feature "call_subs", counts only, never words).
+//   the waiting room everywhere (next-calls-lobby, 25-Oct-2026; the owner's guest asked while he was elsewhere in FinCom
+//     on his iPhone and he "did not get any request"): `lobby` (FinCom open anywhere, every R.LOBBY.watchSecs and on a
+//     realtime ping) lists who is waiting in the rooms the person hosts, or, while the host is not online, in any room
+//     of the firm for an owner or staff member (R.mayAdmit; admit and deny follow the same rule). Someone asking pings the
+//     firm's lobby channel (a name from a server secret, the room's id only, never a name) through Realtime's broadcast
+//     endpoint, and the call's own channel. `beat` keeps a guest's row fresh; a row not heard from for R.LOBBY.staleSecs
+//     is marked left (left_why 'stale') on the next join, admit, leave, people list or lobby, and comes back by itself
+//     on the person's next request (a phone's JS paused in the background). A member whose row was left (by their own
+//     other device: one row a person) is told so in words (kind "left"), never a bare "not in this call". Before
+//     migration 106 (seen_at, left_why, call_watch) all of it falls back to what was there.
 // Media: Cloudflare Realtime (SFU) when platform_secrets cf_realtime_app_id and cf_realtime_token are set (read here only,
 // never sent to a browser; the browser's session calls come through `cf`); otherwise peer to peer with Cloudflare's free
 // STUN and at most 4 people. TURN (cf_turn_key_id, cf_turn_key_token) is added to the ICE servers when set.
@@ -139,10 +149,76 @@ export function handler(deps: Deps) {
   const meIn = async (r: any, who: Member | Guest) => who.kind === "guest" ? who.participant
     : await one("/rest/v1/call_participants?select=*&room_id=eq." + q(r.id) + "&user_id=eq." + q(who.user));
   const admittedIn = async (r: any, who: Member | Guest) => {
-    const p = await meIn(r, who);
+    let p = await meIn(r, who);
+    if (p && p.state === "left") p = await comeBack(r, p);
+    // a member's own other device left (one row a person; the owner's Mac and iPhone, 25-Oct): said so, and Rejoin works
+    if (p && p.state === "left" && who.kind === "member" && r.status !== "ended") fail(403, "You left this meeting on another device (or were away too long). Rejoin to come back in.", "left");
     if (!p || p.state !== "admitted") fail(403, p && p.state === "removed" ? "The host removed you from this call." : "You are not in this call.", "notin");
     if (r.status === "ended") fail(410, "This call has ended.", "ended");
     return p;
+  };
+  // ---------------------------------------------------------------- the waiting room (next-calls-lobby)
+  const iso = () => new Date(now()).toISOString();
+  // migration 106's columns there? (asked once; a missing column is 42703 / PGRST204, anything else asks again later)
+  let lobbyCols: boolean | null = null;
+  const hasLobby = async () => {
+    if (lobbyCols !== null) return lobbyCols;
+    try { await svc("/rest/v1/call_participants?select=seen_at,left_why&limit=1"); lobbyCols = true; }
+    catch (e) { if ([400, 404].includes(Number((e as any).status)) || /42703|PGRST204|column/i.test(String((e as any).code || "") + (e as Error).message)) lobbyCols = false; else return false; }
+    return lobbyCols;
+  };
+  const seenNow = async (): Promise<Record<string, unknown>> => (await hasLobby()) ? { seen_at: iso() } : {};
+  // the person's row heard from now (at most every 15 s a write)
+  const touch = async (p: any, force = false) => {
+    if (!p || !(await hasLobby()) || (!force && now() - R.lastSeen(p) < 15000)) return;
+    await patch("call_participants", "id=eq." + p.id, { seen_at: iso() }).catch(() => null);
+    p.seen_at = iso();
+  };
+  // rows of a room not heard from for R.LOBBY.staleSecs: left (stale)
+  const sweep = async (roomId: string) => {
+    if (!(await hasLobby())) return 0;
+    const rows = (await svc("/rest/v1/call_participants?select=id,state,seen_at,admitted_at,joined_at&room_id=eq." + q(roomId) + "&state=in.(waiting,admitted)")) as any[] || [];
+    const t = now(), gone = rows.filter((p) => R.isStale(p, t)).map((p) => p.id);
+    if (gone.length) await patch("call_participants", "id=in.(" + gone.join(",") + ")&state=in.(waiting,admitted)", { state: "left", left_at: iso(), left_why: "stale" });
+    return gone.length;
+  };
+  // a row left only for being quiet comes back when its person is heard from: waiting again (the host pinged), or in the
+  // call again while the call is open
+  const comeBack = async (r: any, p: any) => {
+    if (!p || p.state !== "left" || p.left_why !== "stale" || r.status === "ended") return p;
+    const state = p.admitted_at ? "admitted" : "waiting";
+    if (state === "admitted" && r.status !== "open") return p;
+    const [x] = await patch("call_participants", "id=eq." + p.id + "&state=eq.left&left_why=eq.stale", { state, left_at: null, left_why: null, seen_at: iso() });
+    if (x && state === "waiting") await ping(r);
+    return x || p;
+  };
+  // the firm's lobby channel: a name only the function can make (from its guests' secret); members get it from `lobby`
+  const lobbyTopic = async (firm: string) => "lobby:" + (await R.sha256Hex((await guestSecret()) + ":lobby:" + firm)).slice(0, 40);
+  // "someone is waiting / was answered in room X": to the firm's lobby channel and the call's own (the room's id only)
+  const ping = async (r: any) => {
+    try {
+      const msgs = [{ topic: await lobbyTopic(r.firm_id), event: "knock", payload: { room_id: r.id }, private: false }];
+      if (r.chan_key) msgs.push({ topic: await R.topicFor(r.chan_key, r.chan_epoch), event: "knock", payload: { room_id: r.id }, private: false });
+      const res = await doFetch(URL_ + "/realtime/v1/api/broadcast", { method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" }, body: JSON.stringify({ messages: msgs }) });
+      await res.body?.cancel();
+    } catch { /* the lists are asked for every few seconds anyway */ }
+  };
+  // FinCom open: one row a person, when they last asked (migration 106; without it nobody counts as online elsewhere)
+  const watched = async (users: string[]) => {
+    const out = new Map<string, number>();
+    const ids = [...new Set(users.filter((u) => R.isUuid(u)))];
+    if (!ids.length) return out;
+    try { for (const w of ((await svc("/rest/v1/call_watch?select=user_id,seen_at&user_id=in.(" + ids.join(",") + ")")) as any[] || [])) out.set(w.user_id, Date.parse(w.seen_at) || 0); } catch { /* none */ }
+    return out;
+  };
+  // the room's host online: in the call (fresh) or FinCom open within R.LOBBY.onlineSecs
+  const hostOnline = async (r: any, seen?: Map<string, number>) => {
+    if (!r.host_user) return false;
+    const t = now();
+    const hp = await one("/rest/v1/call_participants?select=*&room_id=eq." + q(r.id) + "&user_id=eq." + q(r.host_user));
+    if (hp && hp.state === "admitted" && !((await hasLobby()) && R.isStale(hp, t))) return true;
+    const at = (seen || await watched([r.host_user])).get(r.host_user) || 0;
+    return t - at <= R.LOBBY.onlineSecs * 1000;
   };
   const isHost = (r: any, who: Member | Guest) => who.kind === "member" && (r.host_user === who.user || (who.role === "owner" && r.firm_id === who.firm));
   const clientReadable = async (jwt: string, client: string | null) => {
@@ -151,6 +227,7 @@ export function handler(deps: Deps) {
     return !!(c && c.length && !c[0].deleted);
   };
   const clientSetting = async (firm: string, client: string | null) => client ? (await one("/rest/v1/call_client_settings?select=*&firm_id=eq." + firm + "&client_id=eq." + q(client))) || { client } : null;
+  const mayAdmitIn = async (r: any, m: Member) => isHost(r, m) || (R.canHost(r.kind, m.role) && !(await hostOnline(r)));
   const inCall = async (roomId: string) => ((await svc("/rest/v1/call_participants?select=id&state=eq.admitted&room_id=eq." + q(roomId))) as any[] || []).length;
   const folder = (r: any) => r.kind === "class" ? r.firm_id + "/class/" + r.batch_id + "/" + r.id + "/" : r.firm_id + "/" + r.kind + "/" + r.id + "/";
   const activeRec = async (roomId: string) => await one("/rest/v1/call_recordings?select=id,started_at&room_id=eq." + q(roomId) + "&ended_at=is.null&deleted_at=is.null&order=started_at.desc&limit=1");
@@ -347,10 +424,13 @@ export function handler(deps: Deps) {
     },
     async roster(m, b) {
       const r = await room(b.room_id, m.firm);
-      await admittedIn(r, m);
+      const me = await admittedIn(r, m);
+      // the people list is the members' heartbeat and the room's check for quiet rows
+      await touch(me, true);
+      await sweep(r.id);
       const ps = (await svc("/rest/v1/call_participants?select=id,user_id,name,email,role,state,verified,joined_at&room_id=eq." + q(r.id) + "&state=in.(waiting,admitted)&order=joined_at")) as any[];
-      const host = isHost(r, m);
-      return { ok: true, people: ps.filter((p) => host || p.state === "admitted").map((p) => ({ ...p, email: host ? p.email : "" })), host, recording: await activeRec(r.id), cowork_on: r.cowork_on, status: r.status, mode: r.media_mode, max: R.maxPeople(r.media_mode) };
+      const host = isHost(r, m), admit = host || (ps.some((p) => p.state === "waiting") && await mayAdmitIn(r, m));
+      return { ok: true, people: ps.filter((p) => admit || p.state === "admitted").map((p) => ({ ...p, email: admit ? p.email : "" })), host, admit, recording: await activeRec(r.id), cowork_on: r.cowork_on, status: r.status, mode: r.media_mode, max: R.maxPeople(r.media_mode) };
     },
     async admit(m, b) { return hostSet(m, b, "admitted"); },
     async deny(m, b) { return hostSet(m, b, "denied"); },
@@ -502,6 +582,31 @@ export function handler(deps: Deps) {
       }
       return { ok: true, setting: (await clientSetting(m.firm, client)) || { allow_recording: false, retention_days: 90 }, owner: m.role === "owner" };
     },
+    // FinCom open anywhere (app/src/calls/knock.jsx): who is waiting where this person may let them in; the firm's lobby
+    // channel's name; this person counted as online
+    async lobby(m) {
+      const t = now();
+      await svc("/rest/v1/call_watch?on_conflict=user_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ user_id: m.user, firm_id: m.firm, seen_at: iso() }) }).catch(() => null);
+      const cols = await hasLobby();
+      let ws = (await svc("/rest/v1/call_participants?select=*&firm_id=eq." + m.firm + "&state=eq.waiting&order=joined_at.desc&limit=50")) as any[] || [];
+      if (cols) {
+        const gone = ws.filter((p) => R.isStale(p, t)).map((p) => p.id);
+        if (gone.length) await patch("call_participants", "id=in.(" + gone.join(",") + ")&state=eq.waiting", { state: "left", left_at: iso(), left_why: "stale" }).catch(() => null);
+        ws = ws.filter((p) => !R.isStale(p, t));
+      } else ws = ws.filter((p) => t - (Date.parse(p.joined_at) || 0) < 15 * 60000);
+      const ids = [...new Set(ws.map((p) => String(p.room_id)))].filter((x) => R.isUuid(x));
+      const rooms = ids.length ? (await svc("/rest/v1/call_rooms?select=id,title,code,kind,host_user,status,firm_id&firm_id=eq." + m.firm + "&id=in.(" + ids.join(",") + ")")) as any[] || [] : [];
+      const seen = await watched(rooms.map((r) => r.host_user));
+      const knocks: any[] = [];
+      for (const r of rooms) {
+        if (r.status === "ended") continue;
+        const mine = r.host_user === m.user, online = mine || await hostOnline(r, seen);
+        if (!(mine || R.mayAdmit({ host: false, role: m.role, kind: r.kind, hostOnline: online }))) continue;
+        for (const p of ws.filter((x) => x.room_id === r.id)) knocks.push({ id: p.id, room_id: r.id, title: r.title, code: r.code || null, name: p.name, email: p.email, verified: !!p.verified, joined_at: p.joined_at, mine, host_online: online });
+      }
+      knocks.sort((a, b) => String(a.joined_at).localeCompare(String(b.joined_at)));
+      return { ok: true, topic: await lobbyTopic(m.firm), knocks, every: R.LOBBY.watchSecs };
+    },
     async batch_list(m) {
       const bs = (await svc("/rest/v1/call_batches?select=id,name,retention_days,archived&firm_id=eq." + m.firm + "&archived=is.false&order=created_at")) as any[];
       const ms = (await svc("/rest/v1/call_batch_members?select=batch_id,email,name&firm_id=eq." + m.firm)) as any[];
@@ -532,20 +637,27 @@ export function handler(deps: Deps) {
   async function joinAs(r: any, m: Member, role: string) {
     let p = await one("/rest/v1/call_participants?select=*&room_id=eq." + q(r.id) + "&user_id=eq." + q(m.user));
     if (p && p.state === "removed") fail(403, "The host removed you from this call.", "removed");
+    await sweep(r.id);
+    if (p && p.state === "admitted") p = await one("/rest/v1/call_participants?select=*&id=eq." + p.id);
     if (!(p && p.state === "admitted") && R.roomFull(r.media_mode, await inCall(r.id))) fail(409, "The call is full (" + R.maxPeople(r.media_mode) + " people" + (r.media_mode === "p2p" ? " until the call service is set up" : "") + ").", "full");
-    const row = { name: m.name, email: m.email, role, state: "admitted", admitted_at: new Date(now()).toISOString(), left_at: null };
+    const row = { name: m.name, email: m.email, role, state: "admitted", admitted_at: new Date(now()).toISOString(), left_at: null, ...(await seenNow()), ...((await hasLobby()) ? { left_why: null } : {}) };
     if (p) [p] = await patch("call_participants", "id=eq." + p.id, row);
     else p = await insert("call_participants", { room_id: r.id, firm_id: r.firm_id, user_id: m.user, verified: true, ...row });
     return p;
   }
   async function hostSet(m: Member, b: any, state: string) {
     const r = await room(b.room_id, m.firm);
-    if (!isHost(r, m)) fail(403, "Only the host can do that.", "host");
+    // admit and deny: the host, or (the host not online) an owner or staff member; remove: the host only
+    if (!(state === "removed" ? isHost(r, m) : await mayAdmitIn(r, m))) fail(403, "Only the host can do that.", "host");
     const p = await one("/rest/v1/call_participants?select=*&id=eq." + q(String(b.participant_id || "")) + "&room_id=eq." + q(r.id));
     if (!p) fail(404, "That person is not in this call.");
     if (p.user_id === r.host_user) fail(400, "The host cannot remove themselves; end the call instead.");
+    // an answer from a pop-up after someone else answered, or the guest gave up
+    if (state !== "removed" && !(p.state === "waiting" || (p.state === "left" && p.left_why === "stale" && !p.admitted_at))) fail(409, p.state === "admitted" ? "They are already in the meeting." : "They are no longer waiting.", "gone");
+    await sweep(r.id);
     if (state === "admitted" && R.roomFull(r.media_mode, await inCall(r.id))) fail(409, "The call is full.", "full");
-    await patch("call_participants", "id=eq." + p.id, { state, ...(state === "admitted" ? { admitted_at: new Date(now()).toISOString() } : { left_at: new Date(now()).toISOString() }) });
+    await patch("call_participants", "id=eq." + p.id, { state, ...(state === "admitted" ? { admitted_at: new Date(now()).toISOString(), left_at: null, ...(await seenNow()), ...((await hasLobby()) ? { left_why: null } : {}) } : { left_at: new Date(now()).toISOString() }) });
+    if (state !== "removed") await ping(r);
     // someone removed: the channel's name moves on, so they hear nothing more; the others ask for the new name
     if (state === "removed") {
       const [x] = await patch("call_rooms", "id=eq." + r.id, { chan_epoch: Number(r.chan_epoch) + 1, cowork_epoch: Number(r.cowork_epoch || 1) + 1 });
@@ -589,6 +701,8 @@ export function handler(deps: Deps) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
       const p = await meIn(r, w);
       if (p && (p.state === "admitted" || p.state === "waiting")) await patch("call_participants", "id=eq." + p.id, { state: "left", left_at: new Date(now()).toISOString() });
+      if (p && p.state === "waiting") await ping(r);
+      await sweep(r.id);
       // the last one out closes the room; a meeting (its code may be used again, as Meet's) waits for the next one, for
       // 30 days from when it was made or until a day after its time, whichever is later; the host's "End for everyone"
       // ends it for good
@@ -598,6 +712,15 @@ export function handler(deps: Deps) {
         else await endRoom(r);
       }
       return { ok: true };
+    },
+    // a guest in the call (or waiting) says it is there (every R.LOBBY.beatSecs); a quiet row comes back by it
+    async beat(w, b) {
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      let p = await meIn(r, w);
+      if (!p) fail(403, "You are not in this call.", "notin");
+      if (p.state === "left") p = await comeBack(r, p);
+      if (p.state === "admitted" || p.state === "waiting") await touch(p, true);
+      return { ok: true, state: p.state, status: r.status };
     },
     async chat(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
@@ -813,6 +936,16 @@ export function handler(deps: Deps) {
     if (!r || r.status === "ended") fail(410, "This call has ended.", "ended");
     return { inv, r };
   };
+  // what a waiting guest is told: the host's name and whether they are online (kept a few seconds a room)
+  const waitCache = new Map<string, { at: number, v: any }>();
+  const waitInfo = async (r: any) => {
+    const c = waitCache.get(r.id);
+    if (c && now() - c.at < 5000) return c.v;
+    const hm = r.host_user ? await one("/rest/v1/members?select=name&firm_id=eq." + r.firm_id + "&user_id=eq." + q(r.host_user)).catch(() => null) : null;
+    const v = { host_name: String((hm && hm.name) || "the host"), host_online: await hostOnline(r) };
+    waitCache.set(r.id, { at: now(), v });
+    return v;
+  };
   const guest: Record<string, (b: any, ctx: Ctx) => Promise<unknown>> = {
     async guest_hello(b, ctx) {
       const { r } = await entryOf(b, ctx.ip);
@@ -828,10 +961,13 @@ export function handler(deps: Deps) {
         await patch("call_invites", "id=eq." + inv.id, { uses: inv.uses + 1 });
       } else if (!(await hit("room:" + r.id, R.CODE_TRIES.roomSecs, R.CODE_TRIES.roomMax))) fail(429, "Too many people asked to join this meeting in the last hour. Ask the host to let you in another way.", "tries");
       const code = R.otpCode(), mail = !!(await mailKey()), salt = inv ? inv.id : r.id;
-      const p = await insert("call_participants", { room_id: r.id, firm_id: r.firm_id, name, email, role: "guest", state: "waiting", invite_id: inv ? inv.id : null,
+      const p = await insert("call_participants", { room_id: r.id, firm_id: r.firm_id, name, email, role: "guest", state: "waiting", invite_id: inv ? inv.id : null, ...(await seenNow()),
         otp_hash: mail ? await R.sha256Hex(code + ":" + salt) : null, otp_until: mail ? new Date(now() + R.OTP_MINUTES * 60000).toISOString() : null });
       const sent = mail ? await sendMail([email], "Your FinCom call code: " + code, "Your code to join \"" + r.title + "\" is " + code + ". It works for " + R.OTP_MINUTES + " minutes.\nIf you did not ask for it, ignore this email.") : false;
       const gt = await R.signGuest(await guestSecret(), r.id, p.id, Math.floor(now() / 1000));
+      // the host (wherever FinCom is open) and the call itself hear of it at once
+      await sweep(r.id);
+      await ping(r);
       return { ok: true, gt, code_sent: sent, mail };
     },
     async guest_verify(b) {
@@ -855,8 +991,15 @@ export function handler(deps: Deps) {
       const g = await asGuest(String(b.gt || ""));
       const r = await one("/rest/v1/call_rooms?select=*&id=eq." + q(g.room));
       if (!r || r.status === "ended") return { ok: true, state: "ended" };
-      const p = g.participant;
+      let p = g.participant;
+      if (p.state === "left") p = await comeBack(r, p);
+      if (p.state === "waiting") {
+        await touch(p);
+        if (b.knock) await ping(r);
+        return { ok: true, state: p.state, verified: p.verified, ...(await waitInfo(r)) };
+      }
       if (p.state !== "admitted") return { ok: true, state: p.state, verified: p.verified };
+      await touch(p);
       return { ...(await session(r, p)), state: "admitted" };
     },
   };

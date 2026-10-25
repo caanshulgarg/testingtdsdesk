@@ -32,6 +32,27 @@ export function directEntry(kind, who) {
 // the room is full: the host sees "the call is full" before admitting more
 export const roomFull = (mode, inCall) => inCall >= maxPeople(mode);
 
+// ---------------------------------------------------------------- the waiting room (next-calls-lobby, 25-Oct-2026)
+// The owner, 25-Oct: a guest asked to join while he was elsewhere in FinCom on his iPhone and he "did not get any
+// request". Someone asking reaches the host wherever FinCom is open (a pop-up, a sound, the bell); a row whose browser
+// stopped saying it is there (no heartbeat for staleSecs) is marked left, so an old "admitted" row neither keeps a room
+// open nor counts as someone in it.
+//   staleSecs   a waiting or admitted row not heard from for this long is left (a phone's JS is paused in the background:
+//               its next request brings it back, handler.ts)
+//   beatSecs    a guest in the call says it is there this often (members' people list does it for them)
+//   pollSecs    the waiting list inside the call, besides the realtime ping
+//   watchSecs   FinCom open anywhere asks for people waiting this often (besides the realtime ping)
+//   onlineSecs  a member whose FinCom asked within this time is online (the host away: owner or staff are asked)
+//   waitMinutes the guest's "Asking to join…" gives up after this, with Ask again
+export const LOBBY = { staleSecs: 60, beatSecs: 20, pollSecs: 5, watchSecs: 30, onlineSecs: 90, waitMinutes: 10 };
+export const lastSeen = (p) => Date.parse((p && (p.seen_at || p.admitted_at || p.joined_at)) || "") || 0;
+export const isStale = (p, now, secs = LOBBY.staleSecs) => !!p && (p.state === "waiting" || p.state === "admitted") && now - lastSeen(p) > secs * 1000;
+// who may let someone in: the room's host (or the firm's owner, the server's isHost); while the host is not online, any
+// owner or staff member (a look-only member never)
+export function mayAdmit({ host, role, kind, hostOnline }) { return !!host || (!hostOnline && canHost(kind, role)); }
+export const knockText = (name, title) => (String(name || "").trim() || "Someone") + " is asking to join " + (String(title || "").trim() || "the meeting");
+export const waitText = (w) => (w && w.host_online ? "Waiting for " + (String(w.host_name || "").trim() || "the host") + " to let you in" : "The host isn't in the meeting yet — they've been notified");
+
 // ---------------------------------------------------------------- recording and consent
 // recording: off for a client's call unless the firm's owner turned it on for that client; a class is recorded when the
 // host asks (the batch is told when it joins); a help call or a meeting without a client likewise

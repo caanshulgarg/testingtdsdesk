@@ -106,5 +106,20 @@ ok(!R.termsKept("Pay 1,25,000 today", "आज भुगतान करें", 
 ok(R.termsKept("Please send the bills", "कृपया बिल भेजें", []), "an ordinary capital at the start is no term");
 ok(R.subPrompt("hi", ["Sharma Traders"]).includes("Sharma Traders") && R.subPrompt("hi").includes("194J") && R.subPrompt("hinglish").includes("Latin"), "the translation keeps names, amounts and tax terms");
 
+console.log("== the waiting room (next-calls-lobby)");
+const T0 = Date.parse("2026-10-25T17:25:54Z");
+ok(R.LOBBY.staleSecs === 60 && R.LOBBY.beatSecs < R.LOBBY.staleSecs / 2 && R.LOBBY.pollSecs <= 5 && R.LOBBY.waitMinutes === 10 && R.LOBBY.watchSecs < R.LOBBY.onlineSecs, "stale after 60 s, a beat well inside it, the waiting list every 5 s, the guest waits 10 min");
+ok(R.lastSeen({ seen_at: "2026-10-25T17:25:00Z", joined_at: "2026-10-25T17:00:00Z" }) === Date.parse("2026-10-25T17:25:00Z") && R.lastSeen({ admitted_at: "2026-10-25T17:04:30Z", joined_at: "2026-10-25T17:04:21Z" }) === Date.parse("2026-10-25T17:04:30Z")
+   && R.lastSeen({ joined_at: "2026-10-25T17:04:21Z" }) === Date.parse("2026-10-25T17:04:21Z") && R.lastSeen(null) === 0, "last seen: the heartbeat, else when let in, else when they came");
+// the owner's room of 25-Oct: the guest's admitted row of 17:04 never closed; the new request of 17:25 fresh
+ok(R.isStale({ state: "admitted", seen_at: null, admitted_at: "2026-10-25T17:04:30Z", joined_at: "2026-10-25T17:04:21Z" }, T0), "an admitted row with no heartbeat for 20 minutes is stale");
+ok(!R.isStale({ state: "waiting", joined_at: "2026-10-25T17:25:54Z" }, T0 + 30000) && R.isStale({ state: "waiting", joined_at: "2026-10-25T17:25:54Z" }, T0 + 61000), "a waiting guest: fresh for 60 s, stale after");
+ok(!R.isStale({ state: "left", joined_at: "2026-10-25T17:00:00Z" }, T0) && !R.isStale({ state: "denied", joined_at: "2026-10-25T17:00:00Z" }, T0), "only waiting and admitted rows go stale");
+ok(R.mayAdmit({ host: true, role: "staff", kind: "meeting", hostOnline: true }) && !R.mayAdmit({ host: false, role: "staff", kind: "meeting", hostOnline: true }), "the host admits; staff not while the host is online");
+ok(R.mayAdmit({ host: false, role: "staff", kind: "meeting", hostOnline: false }) && R.mayAdmit({ host: false, role: "owner", kind: "client", hostOnline: false }) && !R.mayAdmit({ host: false, role: "readonly", kind: "meeting", hostOnline: false }), "the host away: owner or staff admit, a look-only member never");
+ok(R.knockText("Dr. Anu Tyagi Garg", "Meeting with Anu") === "Dr. Anu Tyagi Garg is asking to join Meeting with Anu" && R.knockText("", "") === "Someone is asking to join the meeting", "the pop-up's words");
+ok(R.waitText({ host_name: "Anshul garg", host_online: true }) === "Waiting for Anshul garg to let you in" && R.waitText({ host_name: "Anshul garg", host_online: false }) === "The host isn't in the meeting yet — they've been notified"
+   && R.waitText({}) === "The host isn't in the meeting yet — they've been notified" && R.waitText({ host_online: true }) === "Waiting for the host to let you in", "the guest's waiting words");
+
 console.log("\n" + (fails ? fails + " FAILED" : "all passed"));
 process.exit(fails ? 1 : 0);

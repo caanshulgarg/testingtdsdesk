@@ -22,6 +22,7 @@ import { channel } from "./realtime.js";
 import { createMedia } from "./media.js";
 import { makeEffects, loadChoice, saveChoice, effectsOn, BACKGROUNDS, lightDevice, shrinkImage } from "./effects.js";
 import { compositeRecorder, micPieces, uploadQueue } from "./recorder.js";
+import { LOBBY, waitText, codeFrom } from "./rules.js";
 import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText, SUB_LANGS, SUB_PIECE, defaultSubLang, subLangOk, subLangName, subTargets, subsNeeded, subLine, emailOk, nameOk } from "./rules.js";
 import { startCowork } from "./cowork.js";
 import { MeetCard } from "./MeetCard.jsx";
@@ -52,16 +53,24 @@ function loadSubs(who) {
 const saveSubs = (who, s) => { try { localStorage.setItem(SUBS_KEY(who), JSON.stringify(s)); } catch (e) { /* this call only */ } };
 
 let root = null, host = null;
-// opts: {start: {kind, client_id, batch_id, title}} | {join: room_id} | {code} (a member with a code) |
-//       {guest: {code | token, hello}} (the guest's page)
+// opts: {start: {kind, client_id, batch_id, title}} | {join: room_id, auto} (auto: straight in, no lobby: the pop-up's
+//       "Open the meeting") | {code} (a member with a code) | {guest: {code | token, hello}} (the guest's page)
+// next-calls-lobby (25-Oct-2026): a call screen already open is only brought back when it is the same meeting and still in
+// it; otherwise (another meeting, or this device's place was left: the owner's iPhone, still showing the 17:10 call when
+// he opened the invite link at 17:25) it is closed and the link joins afresh.
 export function openCall(opts) {
-  if (host) { host.setAttribute("data-call-min", "false"); return; }
+  if (host) {
+    const room = host.getAttribute("data-room") || "", code = host.getAttribute("data-code") || "", phase = host.getAttribute("data-phase") || "";
+    const same = (opts.join && opts.join === room) || (opts.code && codeFrom(opts.code) === code) || (!opts.join && !opts.code && !opts.guest);
+    if (same && phase === "in") { host.setAttribute("data-call-min", "false"); return; }
+    closeCall(true);
+  }
   host = document.createElement("div"); host.id = "fincom-call"; host.setAttribute("data-call-min", "false");
   document.body.appendChild(host);
   root = createRoot(host);
   root.render(<Call opts={opts} onClose={closeCall} />);
 }
-export function closeCall() { try { root && root.unmount(); } catch (e) { /* */ } if (host) host.remove(); root = null; host = null; try { window.dispatchEvent(new Event("fincom-meetings-changed")); } catch (e) { /* */ } }
+export function closeCall(quiet) { try { root && root.unmount(); } catch (e) { /* */ } if (host) host.remove(); root = null; host = null; if (!quiet) try { window.dispatchEvent(new Event("fincom-meetings-changed")); } catch (e) { /* */ } }
 export const callOpen = () => !!host;
 
 function useForce() { const [, set] = useState(0); return () => set((x) => x + 1); }
@@ -111,6 +120,10 @@ function Call({ opts, onClose }) {
   const [remote, setRemote] = useState(null);             // remote help: {phase, id, peerId, rid, reason}
   const [after, setAfter] = useState(null);               // after the call
   const [needTap, setNeedTap] = useState(false);          // the browser held the others' sound until a tap
+  const [gone, setGone] = useState("");                   // this device's place was left (its other device left, or away too long)
+  const [admitOk, setAdmitOk] = useState(false);          // the server lets me answer the waiting room (the host away: owner or staff)
+  const [wait, setWait] = useState(null);                 // a guest asking: {host_name, host_online}
+  const [timedOut, setTimedOut] = useState(false);        // a guest asked for LOBBY.waitMinutes: Ask again
   const [ready, setReady] = useState(false);              // "Your meeting's ready"
   const [speaking, setSpeaking] = useState({});           // pid -> true
   const [clock, setClock] = useState(nowIst());
@@ -128,6 +141,7 @@ function Call({ opts, onClose }) {
   // may also admit and remove people (the server's rule)
   const amHost = !!(sess && !guest && sess.me.role === "host");
   const isHost = !!(sess && !guest && (amHost || role === "owner"));
+  const canAdmit = isHost || (!!sess && !guest && admitOk);
   const canStaff = !guest && (role === "owner" || role === "staff");
 
   // ---------------------------------------------------------------- the camera and microphone (lobby preview too)
@@ -166,6 +180,8 @@ function Call({ opts, onClose }) {
       await applyFx(fx);
       listDevices();
       force();
+      // the pop-up's "Open the meeting": straight in
+      if (opts.auto && opts.join && !opts.guest) join();
     })();
     return () => { live = false; };
   }, []);
@@ -211,7 +227,7 @@ function Call({ opts, onClose }) {
   function openChannel(topic) {
     if (R.ch) R.ch.close();
     const ch = channel({ url: base(), key: publicKey(), topic, presenceKey: R.sess ? R.sess.me.id : "x", onStatus: (s) => setStatus(s === "joined" ? "" : s) });
-    for (const ev of ["rtc", "sfu", "sfu-ask", "chat", "hand", "react", "rec", "kick", "rekey", "end", "mute-all", "cowork", "cap", "remote", "rdid", "sub"]) ch.on(ev, (p) => (R.sigHandlers[ev] || []).forEach((f) => f(p)));
+    for (const ev of ["rtc", "sfu", "sfu-ask", "chat", "hand", "react", "rec", "kick", "rekey", "end", "mute-all", "cowork", "cap", "remote", "rdid", "sub", "knock"]) ch.on(ev, (p) => (R.sigHandlers[ev] || []).forEach((f) => f(p)));
     ch.onPresence((list) => { setPresence(list); if (R.media) list.forEach((p) => p.pid && R.media.meet(p.pid)); });
     R.ch = ch; trackMe();
   }
@@ -246,6 +262,14 @@ function Call({ opts, onClose }) {
       setErr(e.message); setPhase("lobby");
     }
   }
+  // the link's page: "Sign in with FinCom" (the owner, 25-Oct: whoever has the link can sign in from it): FinCom opens, and
+  // once signed in the same meeting is joined as that member (launch.js reads fincom.join-after)
+  const signinCode = guest && !member ? (codeFrom((hello && hello.code) || guest.code || "") || "") : "";
+  function signIn(code) {
+    try { localStorage.setItem("fincom.join-after", JSON.stringify({ code, at: Date.now() })); } catch (e) { /* */ }
+    [R.raw].forEach((s) => s && s.getTracks().forEach((t) => t.stop()));
+    location.href = location.pathname + location.search;
+  }
   // a guest: name and email, then (with FinCom's email set up) the code sent to it, then waiting for the host
   async function askToJoin() {
     setErr("");
@@ -264,12 +288,17 @@ function Call({ opts, onClose }) {
     try { await api.call("guest_verify", { code: otp.trim() }); setPhase("asking"); } catch (e) { setErr(e.message); }
   }
   useEffect(() => {
-    if (phase !== "asking") return;
-    let stop = false;
+    if (phase !== "asking" || timedOut) return;
+    let stop = false, first = true;
+    const t0 = Date.now();
     const tick = async () => {
       if (stop) return;
+      // nobody let them in for LOBBY.waitMinutes: stop asking, offer Ask again
+      if (Date.now() - t0 > LOBBY.waitMinutes * 60000) { setTimedOut(true); return; }
       try {
-        const j = await api.call("guest_poll", {});
+        const j = await api.call("guest_poll", first && R.knockAgain ? { knock: true } : {});
+        first = false; R.knockAgain = false;
+        if (j.state === "waiting" && "host_online" in j) setWait({ host_name: j.host_name, host_online: j.host_online });
         if (j.state === "admitted") { enter(j); return; }
         if (j.state === "denied") { setPhase("denied"); return; }
         if (j.state === "removed") { setPhase("denied"); setErr("The host removed you from this call."); return; }
@@ -279,13 +308,14 @@ function Call({ opts, onClose }) {
     };
     tick();
     return () => { stop = true; };
-  }, [phase]);
+  }, [phase, timedOut]);
+  const askAgain = () => { R.knockAgain = true; setTimedOut(false); };
 
   useEffect(() => {
     if (phase !== "in" || !sess) return;
     openChannel(sess.topic);
     const local = new MediaStream([...(R.raw ? R.raw.getAudioTracks() : []), ...(outVideo() && cam ? [outVideo()] : [])]);
-    R.media = createMedia(sess.mode, { signal: sig, me: sess.me.id, ice: sess.ice, api,
+    R.media = createMedia(sess.mode, { signal: sig, me: sess.me.id, ice: sess.ice, api, room: sess.room.id,
       onRemote: (pid, s) => { if (!s) R.remotes.delete(pid); else R.remotes.set(pid, Object.assign(R.remotes.get(pid) || {}, s)); force(); },
       onLevel: (l) => { setLevel(l); if (l === "audio") { setAudioOnly(true); say("The line is weak: audio only for now."); } } });
     R.media.start(local).catch((e) => setErr("The call could not connect: " + e.message));
@@ -304,23 +334,43 @@ function Call({ opts, onClose }) {
       sig.on("remote", (m) => onRemote(m)),
       sig.on("rdid", (m) => setRemote((r) => r && r.id ? Object.assign({}, r, { rid: m.id, peerName: m.name }) : r)),
     ];
-    // members: the people list every 3 s (the host also the waiting room, with a sound for each new person asking)
-    let poll = null;
+    // members: the people list every LOBBY.pollSecs and at once when someone asks (the call's channel is pinged by the
+    // server); the host (or, the host away, owner or staff) also the waiting room, with a sound for each new person asking.
+    // A refusal is said, never retried in silence (the owner's iPhone, 25-Oct: 403 every 3 s, nothing on the screen)
+    let poll = null, beat = null;
     if (!guest) {
-      const load = () => api.call("roster", { room_id: sess.room.id }).then((j) => {
+      let stopped = false;
+      const load = () => stopped ? null : api.call("roster", { room_id: sess.room.id }).then((j) => {
         const ps = j.people || [];
         setRoster(ps);
+        const may = !!(j.admit || j.host);
+        setAdmitOk(may);
         const waiting = ps.filter((p) => p.state === "waiting");
         const fresh = waiting.filter((p) => !R.seen.has(p.id));
         fresh.forEach((p) => R.seen.add(p.id));
-        if (fresh.length && j.host) { chime(); }
+        if (fresh.length && may) { chime(); }
         setKnocks((k) => waiting.filter((p) => k.some((x) => x.id === p.id) || fresh.some((x) => x.id === p.id)));
         if (j.status === "ended") leave(false, "The call has ended.");
-      }).catch(() => {});
-      load(); poll = setInterval(load, 3000);
+      }).catch((e) => {
+        if (e && (e.kind === "left" || e.kind === "notin" || e.kind === "removed")) { stopped = true; clearInterval(poll); setGone(e.message || "You are no longer in this meeting."); }
+        else if (e && e.kind === "ended") { stopped = true; clearInterval(poll); leave(false, "The call has ended."); }
+        else if (e && (e.kind === "auth" || e.kind === "mfa" || e.kind === "firm")) { stopped = true; clearInterval(poll); setGone(e.message); }
+      });
+      load(); poll = setInterval(load, LOBBY.pollSecs * 1000);
+      offs.push(sig.on("knock", () => load()));
+      const back = () => { if (!document.hidden) load(); };
+      document.addEventListener("visibilitychange", back);
+      offs.push(() => document.removeEventListener("visibilitychange", back));
+    } else {
+      // a guest in the call says it is there (a member's people list does it for them)
+      const b = () => api.call("beat", {}).then((j) => { if (j.state === "removed") leave(false, "The host removed you from the call."); }).catch(() => {});
+      beat = setInterval(b, LOBBY.beatSecs * 1000);
+      const back = () => { if (!document.hidden) b(); };
+      document.addEventListener("visibilitychange", back);
+      offs.push(() => document.removeEventListener("visibilitychange", back));
     }
     if (sess.room.cowork_on && !guest) joinCowork();
-    return () => { offs.forEach((f) => f()); clearInterval(poll); };
+    return () => { offs.forEach((f) => f()); clearInterval(poll); clearInterval(beat); };
   }, [phase, sess && sess.room.id]);
 
   // ---------------------------------------------------------------- who is speaking (each voice's level, a few times a second)
@@ -540,8 +590,21 @@ function Call({ opts, onClose }) {
     setAfter({ why: why || (endAll ? "You ended the call for everyone." : "You left the call."), room: sess && sess.room });
     setPhase("ended"); setMin(false);
   }
+  // this device's place was left: Rejoin opens the meeting again here, straight in
+  function rejoin() {
+    const id = sess && sess.room.id;
+    stopCowork(); stopMic();
+    if (R.subMic) { R.subMic.stop(); R.subMic = null; }
+    try { R.media && R.media.stop(); } catch (e) { /* */ }
+    try { R.ch && R.ch.close(); } catch (e) { /* */ }
+    [R.raw, R.screen].forEach((s) => s && s.getTracks().forEach((t) => t.stop()));
+    if (R.fxp) { R.fxp.stop(); R.fxp = null; }
+    closeCall(true);
+    if (id) setTimeout(() => openCall({ join: id, auto: true }), 0);
+  }
   function cancelLobby() { [R.raw].forEach((s) => s && s.getTracks().forEach((t) => t.stop())); if (R.fxp) R.fxp.stop(); if (phase === "asking" || phase === "code") api.call("leave", {}).catch(() => {}); onClose(); }
   useEffect(() => { if (host) host.setAttribute("data-call-min", min ? "true" : "false"); }, [min]);
+  useEffect(() => { if (!host) return; host.setAttribute("data-phase", gone ? "gone" : phase); host.setAttribute("data-room", (sess && sess.room.id) || opts.join || ""); host.setAttribute("data-code", (sess && sess.room.code) || codeFrom(opts.code || "") || ""); }, [phase, sess, gone]);
   // a menu of the bar closes on a click elsewhere or Esc
   useEffect(() => {
     if (!menu) return;
@@ -580,6 +643,11 @@ function Call({ opts, onClose }) {
           <h2 data-lobby-title="">{phase === "asking" ? "Asking to join…" : phase === "denied" ? "You can't join this call" : title}</h2>
           {sub && phase !== "asking" && <p className="lobby-sub">{sub}</p>}
           {!guest && phase !== "denied" && <p className="lobby-sub">Joining as <b>{accountName}</b></p>}
+          {guest && (phase === "lobby" || phase === "joining") && signinCode && <div className="lobby-choice" data-member-choice="">
+            <button type="button" className="btn" onClick={() => signIn(signinCode)} data-member-signin="">Sign in with FinCom</button>
+            <small>Part of the firm (or the host)? Sign in and you join as yourself, straight in.</small>
+          </div>}
+          {guest && (phase === "lobby" || phase === "joining") && signinCode && <p className="lobby-or" data-guest-or="">Or join as a guest</p>}
           {guest && (phase === "lobby" || phase === "joining") && <form className="lobby-form" onSubmit={(e) => { e.preventDefault(); askToJoin(); }}>
             <label className="f"><span>Your name</span><input value={gname} onChange={(e) => setGname(e.target.value)} required minLength={2} maxLength={60} autoComplete="name" data-guest-name="" /></label>
             <label className="f"><span>Your email</span><input type="email" value={gemail} onChange={(e) => setGemail(e.target.value)} required autoComplete="email" data-guest-email="" /></label>
@@ -589,7 +657,11 @@ function Call({ opts, onClose }) {
             <label className="f"><span>The 6-figure code sent to {gemail}</span><input inputMode="numeric" pattern="[0-9]{6}" value={otp} onChange={(e) => setOtp(e.target.value)} required autoComplete="one-time-code" data-guest-code="" /></label>
             <button type="submit" className="btn primary" data-guest-verify="">Check the code</button>
           </form>}
-          {phase === "asking" && <p className="lobby-wait" role="status" data-guest-waiting=""><span className="lobby-spin" aria-hidden="true" />You'll join the call when someone lets you in.</p>}
+          {phase === "asking" && !timedOut && <p className="lobby-wait" role="status" data-guest-waiting="" data-host-online={wait ? String(!!wait.host_online) : undefined}><span className="lobby-spin" aria-hidden="true" />{wait ? waitText(wait) : "You'll join the call when someone lets you in."}</p>}
+          {phase === "asking" && !timedOut && wait && !wait.host_online && <p className="lobby-note" data-guest-keep="">Keep this page open: you join as soon as they let you in.</p>}
+          {phase === "asking" && timedOut && <div role="status" data-guest-timeout=""><p className="lobby-wait">No one has let you in yet.</p>
+            <p className="lobby-note">The host may be busy. Ask again, or contact them another way.</p>
+            <button type="button" className="btn primary" onClick={askAgain} data-guest-retry="">Ask again</button></div>}
           {phase === "denied" && <p data-guest-denied="">{err || "Someone in the call denied your request to join."}</p>}
           {(phase === "lobby" || phase === "joining") && <div className="lobby-subs">
             <label><span>My language</span><select value={subs.lang} onChange={(e) => setMySubs({ lang: e.target.value })} data-subs-lang="">{SUB_LANGS.map((l) => <option key={l.id} value={l.id}>{l.name}{l.native ? " · " + l.native : ""}</option>)}</select></label>
@@ -619,7 +691,7 @@ function Call({ opts, onClose }) {
   const info = { room_id: sess.room.id, code: sess.room.code, title: sess.room.title, at: sess.room.scheduled_at, minutes: sess.room.minutes };
   const shownSubs = subs.on ? subLines.map((l) => ({ l, v: subLine(l, subs.lang) })) : [];
   const toggle = (p) => setPanel(panel === p ? "" : p);
-  return <div className={"call-shell call-in" + (min ? " min" : "") + (panel ? " has-side" : "")} data-call="in" data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"} data-mode={sess.mode}>
+  return <div className={"call-shell call-in" + (min ? " min" : "") + (panel ? " has-side" : "")} data-call="in" data-room={sess.room.id} data-fx={R.fxp ? (R.fxp.segmenting ? "seg" : "on") : "off"} data-mode={sess.mode}>
     <header className="call-top">
       <span className="call-when" data-call-clock="">{clock}{sess.room.code ? <> <span aria-hidden="true">|</span> <span data-call-code="">{sess.room.code}</span></> : null}</span>
       <b className="call-title">{sess.room.title}</b>
@@ -647,7 +719,10 @@ function Call({ opts, onClose }) {
       <div><h3>{CONSENT_TEXT}</h3><p>The host is recording this call (picture, voices and the words said, for a transcript). Your microphone and camera stay off until you choose.</p>
         <button type="button" className="call-primary" onClick={accept} data-consent-stay="">Stay in the call</button> <button type="button" className="call-btn" onClick={declineRec} data-consent-leave="">Leave</button></div></div>}
     {/* someone asks to join: seen over the call whatever is open, with a sound */}
-    {isHost && knocks.length > 0 && <div className="call-knock" role="alert" data-knock="">
+    {gone && <div className="call-gone" role="alertdialog" aria-modal="true" data-call-gone="">
+      <div><h3>You're no longer in this meeting</h3><p data-call-gone-text="">{gone}</p>
+        <button type="button" className="call-primary" onClick={rejoin} data-call-rejoin="">Rejoin</button> <button type="button" className="call-btn" onClick={() => leave(false, "You left the call.")} data-call-gone-close="">Close</button></div></div>}
+    {canAdmit && knocks.length > 0 && <div className="call-knock" role="alert" data-knock="">
       {knocks.length === 1 ? <><span><b>{knocks[0].name}</b> wants to join this call{knocks[0].email ? <small> · {knocks[0].email}{knocks[0].verified ? " · email checked" : ""}</small> : null}</span>
         <button type="button" className="call-primary" onClick={() => answer(knocks[0], true)} data-knock-admit="">Admit</button>
         <button type="button" className="call-btn" onClick={() => answer(knocks[0], false)} data-knock-deny="">Deny</button>
@@ -676,7 +751,7 @@ function Call({ opts, onClose }) {
       {panel === "people" && <aside className="call-side" data-call-people="">
         <div className="call-side-head"><h3>People</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div>
         {isHost && <button type="button" className="call-btn wide" onClick={() => setPanel("details")} data-people-add="">Add people (link, code, email)</button>}
-        {isHost && waiting.length > 0 && <><h4>Waiting to join ({waiting.length})</h4>{waiting.map((p) => <div key={p.id} className="call-person" data-waiting={p.name}><span>{p.name} <small>{p.email}{p.verified ? " · email checked" : " · email not checked"}</small></span>
+        {canAdmit && waiting.length > 0 && <><h4>Waiting to join ({waiting.length})</h4>{waiting.map((p) => <div key={p.id} className="call-person" data-waiting={p.name}><span>{p.name} <small>{p.email}{p.verified ? " · email checked" : " · email not checked"}</small></span>
           <button type="button" className="call-btn small" onClick={() => answer(p, true)} data-admit="">Admit</button>
           <button type="button" className="call-btn small" onClick={() => answer(p, false)} data-deny="">Deny</button></div>)}</>}
         <h4>In the call ({pres.length + 1})</h4>
@@ -742,8 +817,8 @@ function Call({ opts, onClose }) {
       </div>
       <div className="call-bar-right">
         <button type="button" className={"flat" + (panel === "details" ? " on" : "")} aria-label="Meeting details" title="Meeting details" onClick={() => toggle("details")} data-call-details-btn=""><Info width={20} height={20} /></button>
-        <button type="button" className={"flat" + (panel === "people" ? " on" : "")} aria-label={"People" + (isHost && waiting.length ? ", " + waiting.length + " waiting" : "")} title="People" onClick={() => toggle("people")} data-call-people-btn=""><Users width={20} height={20} />
-          <span className="flat-n">{pres.length + 1}</span>{isHost && waiting.length > 0 && <span className="badge" data-waiting-count="">{waiting.length}</span>}</button>
+        <button type="button" className={"flat" + (panel === "people" ? " on" : "")} aria-label={"People" + (canAdmit && waiting.length ? ", " + waiting.length + " waiting" : "")} title="People" onClick={() => toggle("people")} data-call-people-btn=""><Users width={20} height={20} />
+          <span className="flat-n">{pres.length + 1}</span>{canAdmit && waiting.length > 0 && <span className="badge" data-waiting-count="">{waiting.length}</span>}</button>
         <button type="button" className={"flat" + (panel === "chat" ? " on" : "")} aria-label={"Chat" + (unread && panel !== "chat" ? ", " + unread + " new" : "")} title="Chat with everyone" onClick={() => { toggle("chat"); setUnread(0); }} data-call-chat-btn=""><MessageSquare width={20} height={20} />{unread > 0 && panel !== "chat" && <span className="badge" data-chat-unread="">{unread}</span>}</button>
       </div>
     </footer>

@@ -89,6 +89,13 @@ class Hub:
             for t in list(me["topics"]): leave(t)
         ws.on_message(on_message)
         ws.on_close(on_close)
+    def server_send(self, topic, event, payload):
+        # Realtime's broadcast endpoint (the function's ping): to everyone on the topic
+        full = "realtime:" + topic
+        self.frames.setdefault(full, []).append({"server": True, "event": event, "payload": payload})
+        for x in list(self.members.get(full, {}).values()):
+            try: x["ws"].send(json.dumps({"topic": full, "event": "broadcast", "payload": {"type": "broadcast", "event": event, "payload": payload}}))
+            except Exception: pass
     def topics_of(self, pred):
         return [t for t in self.frames if pred(t)]
 
@@ -106,6 +113,20 @@ class Fn:
         self.captions = []
         self.rooms, self.people, self.invites, self.msgs, self.recs, self.pieces, self.uploads, self.tasks, self.remote, self.calls = {}, {}, {}, [], {}, [], [], [], [], []
         self.codes = {}
+        self.hub = None              # the Hub: the function's realtime pings (next-calls-lobby)
+        self.watch = {}              # user id -> when their FinCom last asked `lobby`
+        self.pings = []
+    def ping(self, r):
+        self.pings.append(r["id"])
+        if self.hub:
+            self.hub.server_send("lobby:f1", "knock", {"room_id": r["id"]})
+            self.hub.server_send("call:%s-e%d" % (r["id"][:8], r["epoch"]), "knock", {"room_id": r["id"]})
+    def host_online(self, r):
+        h = r["host_user"]
+        if any(x["room"] == r["id"] and x.get("user") == h and x["state"] == "admitted" for x in self.people.values()): return True
+        return time.time() - self.watch.get(h, 0) <= 90
+    def may_admit(self, r, u):
+        return bool(u) and (r["host_user"] == u["id"] or u["role"] == "owner" or (u["role"] == "staff" and not self.host_online(r)))
     def session(self, r, p):
         rec = next((x for x in self.recs.values() if x["room"] == r["id"] and not x.get("ended")), None)
         return {"ok": True, "room": dict({k: r[k] for k in ("id", "kind", "title", "client_id", "batch_id", "status", "host_user", "cowork_on", "started_at")}, code=r.get("code"), scheduled_at=r.get("scheduled_at"), minutes=r.get("minutes")),
@@ -138,16 +159,22 @@ class Fn:
             pid = "99999999-0000-4000-8000-%012d" % (len(self.people) + 1)
             self.people[pid] = {"id": pid, "room": rid, "role": "guest", "name": body["name"], "email": body["email"], "state": "waiting", "verified": False}
             self.codes[pid] = "424242"
+            self.ping(self.rooms[rid])
             return 200, {"ok": True, "gt": "gt-" + pid, "code_sent": self.mail, "mail": self.mail}
         if body.get("gt"):
             if not gp: return err(401, "pass", "guest")
-            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave", "caption"): return err(403, "A guest cannot do that.", "guest")
+            if a not in ("guest_verify", "guest_poll", "topic", "chat", "history_chat", "upload", "download", "consent", "piece", "cf", "leave", "caption", "beat"): return err(403, "A guest cannot do that.", "guest")
+            if a == "beat": return 200, {"ok": True, "state": gp["state"], "status": self.rooms[gp["room"]]["status"]}
             if a == "guest_verify":
                 if body.get("code") != self.codes.get(gp["id"]): return err(400, "That code is not right.", "otp")
                 gp["verified"] = True; return 200, {"ok": True, "verified": True}
             if a == "guest_poll":
                 r = self.rooms[gp["room"]]
                 if r["status"] == "ended": return 200, {"ok": True, "state": "ended"}
+                if body.get("knock"): self.ping(r)
+                if gp["state"] == "waiting":
+                    host = next((x for x in USERS.values() if x["id"] == r["host_user"]), {})
+                    return 200, {"ok": True, "state": "waiting", "verified": gp["verified"], "host_name": host.get("name", "the host"), "host_online": self.host_online(r)}
                 if gp["state"] != "admitted": return 200, {"ok": True, "state": gp["state"], "verified": gp["verified"]}
                 return 200, dict(self.session(r, gp), state="admitted")
         elif not u: return err(401, "Sign in to the firm account first.", "auth")
@@ -187,14 +214,28 @@ class Fn:
             if a == "rec_part": rec["parts"] += 1; rec["bytes"] += body.get("bytes", 0)
             else: rec["ended"] = True
             return 200, {"ok": True}
+        if a == "lobby":
+            self.watch[u["id"]] = time.time()
+            knocks = []
+            for x in self.people.values():
+                r = self.rooms.get(x["room"])
+                if x["state"] != "waiting" or not r or r["status"] == "ended": continue
+                mine = r["host_user"] == u["id"]; online = mine or self.host_online(r)
+                if mine or (u["role"] in ("owner", "staff") and not online):
+                    knocks.append({"id": x["id"], "room_id": r["id"], "title": r["title"], "code": r.get("code"), "name": x["name"], "email": x.get("email", ""), "verified": x.get("verified", False), "joined_at": "2026-10-25T17:25:54Z", "mine": mine, "host_online": online})
+            return 200, {"ok": True, "topic": "lobby:f1", "knocks": knocks, "every": 30}
         if a == "history": return 200, {"ok": True, "rooms": [{k: r[k] for k in ("id", "kind", "title", "status", "client_id", "batch_id", "started_at")} for r in self.rooms.values() if r["client_id"] == body.get("client_id")]}
         r = room_of()
         if not r: return err(404, "no room", "room")
         p = me_in(r)
         host = bool(u) and (r["host_user"] == u["id"] or u["role"] == "owner")
         if a == "roster":
-            return 200, {"ok": True, "people": [dict(id=x["id"], user_id=x.get("user"), name=x["name"], email=x.get("email", "") if host else "", role=x["role"], state=x["state"], verified=x.get("verified", True))
-                         for x in self.people.values() if x["room"] == r["id"] and x["state"] in ("waiting", "admitted") and (host or x["state"] == "admitted")], "host": host, "status": r["status"], "cowork_on": r["cowork_on"]}
+            if not p or p["state"] != "admitted":
+                if p and p["state"] == "left": return err(403, "You left this meeting on another device (or were away too long). Rejoin to come back in.", "left")
+                return err(403, "You are not in this call.", "notin")
+            admit = host or self.may_admit(r, u)
+            return 200, {"ok": True, "admit": admit, "people": [dict(id=x["id"], user_id=x.get("user"), name=x["name"], email=x.get("email", "") if host else "", role=x["role"], state=x["state"], verified=x.get("verified", True))
+                         for x in self.people.values() if x["room"] == r["id"] and x["state"] in ("waiting", "admitted") and (admit or x["state"] == "admitted")], "host": host, "status": r["status"], "cowork_on": r["cowork_on"]}
         if a == "invite":
             t = secrets.token_urlsafe(32)[:43].ljust(43, "x"); self.invites[t] = r["id"]
             url = body.get("base", "").split("#")[0].split("?")[0] + "#/join/" + r["code"]
@@ -202,10 +243,12 @@ class Fn:
             self.invited = getattr(self, "invited", []) + emails
             return 200, {"ok": True, "token": t, "code": r["code"], "url": url, "link": body.get("base", "").split("#")[0] + "#join=" + t, "text": "Join: " + url, "emailed": bool(self.mail and emails), "mail": self.mail}
         if a in ("admit", "deny", "remove"):
-            if not host: return err(403, "Only the host can do that.", "host")
+            if not (host if a == "remove" else self.may_admit(r, u)): return err(403, "Only the host can do that.", "host")
             x = self.people.get(body.get("participant_id"))
             if not x: return err(404, "not in call")
+            if a != "remove" and x["state"] != "waiting": return err(409, "They are no longer waiting.", "gone")
             x["state"] = {"admit": "admitted", "deny": "denied", "remove": "removed"}[a]
+            if a != "remove": self.ping(r)
             if a == "remove": r["epoch"] += 1; return 200, {"ok": True, "rekey": True, "topic": "call:%s-e%d" % (r["id"][:8], r["epoch"])}
             return 200, {"ok": True}
         if a == "topic":
@@ -353,6 +396,7 @@ def guest_page(br, port, link, hub, fn, rest, checks, viewport=(390, 844)):
     return ctx, pg, seen
 
 def wire(pg, hub, fn, rest):
+    fn.hub = hub
     pg.route_web_socket("**/realtime/v1/websocket**", hub.handler)
     pg.route("**/functions/v1/fincom-call", fn.route)
     pg.route("**/storage/v1/object/**", fn.storage)
