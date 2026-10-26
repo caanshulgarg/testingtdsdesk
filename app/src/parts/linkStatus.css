@@ -1,0 +1,16 @@
+/* A client's one Tally status line (parts/LinkStatus.jsx): in the client's title bar (#cobar) and on the page (#app). The
+   theme's tokens only (light and dark). */
+.link-status { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; max-width: 100%; font-size: 13px; font-weight: 400; color: var(--text-muted); overflow-wrap: anywhere; }
+.link-status.bad .link-status-words { color: var(--st-attention, var(--warning)); }
+.link-status .linkbtn { white-space: nowrap; font-size: 13px; }
+.link-status-how { flex: 1 0 100%; display: block; color: var(--text); }
+/* the title bar: beside the chip, at most two short lines (the whole line is its tip); the steps open in a small box
+   under it, over the page, never pushing the bar's buttons */
+#cobar [data-link-status-at="title"] { position: relative; flex: 0 1 auto; flex-wrap: nowrap; align-items: center; margin-left: 8px; }
+#cobar [data-link-status-at="title"] .link-status-words { min-width: 0; max-width: 34ch; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+#cobar [data-link-status-at="title"] .link-status-how { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(520px, calc(100vw - 32px)); padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface, var(--bg)); box-shadow: 0 6px 20px rgba(0, 0, 0, .12); white-space: normal; }
+/* a phone: the title keeps its room; the chip says the word (its button stays), the Tally page the line */
+@media (max-width: 600px) { #cobar [data-link-status-at="title"] .link-status-words { display: none; } }
+#cobar .link-status-warn { display: block; margin-bottom: 4px; font-weight: 600; }
+#app [data-link-status-at="row"] { display: flex; margin-top: 2px; }

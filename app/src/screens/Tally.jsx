@@ -13,6 +13,7 @@ import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry } from "../lib/tallyState.js";
+import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
 import CompaniesInTally, { companyRows } from "../parts/TallyCompanies.jsx";
 import ConnectThisComputer, { LocalTally } from "../parts/TallyFirstLink.jsx";
 import { useState, useEffect } from "react";
@@ -32,8 +33,19 @@ function ReadTest() {
   </div>;
 }
 
+// the TallyPrime 7.2 proof (26-Oct-2026): bridge 2.4.7's diagnosis skips Tallys on ports outside 9000-9999 and says "not
+// accepting connections on port N" of a Tally the bridge itself connects to (4125). While the bridge here reaches its
+// Tally, that finding is left out and the table says the port it connects on
+const FALSE_NOT_ACCEPTING = /is running but is not accepting connections on port \d+ yet/i;
+function bridgeReach() {
+  const b = (typeof Bridge === "object" && Bridge.st) || {};
+  const s = [].concat(b.sessions || []).find((x) => x && x.mine === true && x.ok);
+  return s ? Number(s.port) || true : b.tallyUp || b.tallyState === "open" || b.tallyState === "busy" ? true : false;
+}
 function Diagnosis() {
-  const d = Bridge.diag;
+  const d0 = Bridge.diag, reach = d0 && !d0.error ? bridgeReach() : false;
+  const d = reach && d0 ? Object.assign({}, d0, { findings: (d0.findings || []).filter((f) => !(f && f.level !== "ok" && FALSE_NOT_ACCEPTING.test(String(f.text || "")))),
+    tallies: (d0.tallies || []).map((t) => (t && t.mine && !(t.ports || []).length && typeof reach === "number" ? Object.assign({}, t, { ports: [reach] }) : t)) }) : d0;
   const head = <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Check my Tally</h3><Act act="bridgeDiag">{d ? "Check again" : "Check now"}</Act></div>;
   if (!d) return <div className="bdiag">{head}<p className="note" style={{ margin: "6px 0 0" }}>Finds your TallyPrime on this server and explains anything that stops the connection.</p><ReadTest /></div>;
   if (d.error) return <div className="bdiag">{head}<p className="bk-warn"><Msg text={d.error} /></p></div>;
@@ -578,17 +590,14 @@ function ReadingView({ cards }) {
 const GUIDE_KEYS = ["install", "port", "open", "add"], STEP_OF = ["install", "open", "add"], GUIDE_REFRESH_MS = 20000;
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
-// the ports FinCom never proposes: TallyPrime's own default (a new user's Tally starts there) and ports other programs
-// commonly take (9001, 9009, 9042, 9050/9051, 9060, 9080, 9090 to 9095, 9099)
-const PORT_AVOID = [9000, 9001, 9009, 9030, 9042, 9043, 9050, 9051, 9060, 9080, 9090, 9091, 9092, 9093, 9094, 9095, 9099];
 // Tally's port for this Windows user (me: this browser's own bridge, else the member's bridge, else the guide's computer),
 // from what the bridges already say: each bridge's tallyPort (info.bridges), the computer's beat ports (ok: answering;
 // skipped: another Windows user's Tally) and, when this browser's bridge answers, its /status sessions ("Your session",
 // "Another user — not used") and its /diagnose (each Tally's owner, ports and tally.ini port; every program on 9000-9999).
 //   {state: wait | offline | done | clash | set, port (his Tally's), who (the other user), set (his tally.ini port, not
 //    answering), free (the one port proposed), used (every port seen on that computer), pc, user}
-// free: the first of 9000-9099 not seen in use on that computer by anyone and not in PORT_AVOID, counted from a start
-// that depends on the Windows user's name (two users setting up at once are not offered the same number)
+// free: lib/tallyPort.js freePort (9000-9099, not seen in use, not in PORT_AVOID, from a start by the Windows user's name).
+// A Tally on any port the bridge reaches is done (the TallyPrime 7.2 proof: 2.4.7 connects on 4125)
 function portState(rows, me) {
   const mine = me ? lc(me.user) : "";
   const L = typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.st && Bridge.st.state === "ok" && (!me || !Bridge.st.user || lc(Bridge.st.user) === mine) ? Bridge.st : null;
@@ -620,11 +629,7 @@ function portState(rows, me) {
   }
   if (my) seen.add(my);
   const used = [...seen].filter((p) => p > 0).sort((a, b) => a - b);
-  const cands = [];
-  for (let p = 9000; p <= 9099; p++) if (!seen.has(p) && !PORT_AVOID.includes(p)) cands.push(p);
-  let h = 0;
-  for (const ch of mine) h = (h * 31 + ch.charCodeAt(0)) % 9973;
-  const free = cands.find((p) => p >= 9000 + (h % 100)) || cands[0] || 0;
+  const free = freePort(seen, mine);
   const base = { pc, user, free, used, port: my, set };
   if (my && other.has(my)) return Object.assign(base, { state: "clash", who: other.get(my) });
   if (!my && set && (other.has(set) || held)) return Object.assign(base, { state: "clash", port: set, who: other.has(set) ? other.get(set) : null, program: held ? String(held.program || "") : "" });
@@ -680,7 +685,8 @@ function PortStep({ ps, installed }) {
   // 26-Oct-2026, the owner on the first draft: "too lengthy, make it small and clear": the port, the menu in one line, Check
   return <div data-port-state={ps.state} data-port-free={free}>
     <div className="tc3-port"><span>Use port</span><b data-port-free-big="">{free}</b><span className="note">(free for you)</span><button className="btn small" data-port-copy="" onClick={copy}>Copy</button></div>
-    <p className="tc3-p" data-port-how="">{"In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → Acts as Both, Port " + free + ", ODBC Yes → Ctrl+A → restart Tally."}</p>
+    {ps.state === "clash" && <p className="tc3-p bk-warn" data-port-warn={ps.state}>{portWarnWords(free) + "."}</p>}
+    <p className="tc3-p" data-port-how="">{portHowWords(free)}</p>
     {ps.state === "clash" && <p className="tc3-p bk-warn" data-port-clash={ps.port}>{"Your Tally is on " + ps.port + ", same as " + (ps.program ? "another program (" + ps.program + ")" : "another user") + ". Change it to " + free + " as above."}
       {!ps.program && " If their port changes too, you share one TallyPrime folder: ask whoever set up " + ps.pc + " to give each user their own."}</p>}
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button className="btn small primary" data-port-check="" disabled={ck.busy} onClick={check}>{ck.busy ? "Checking…" : "Check"}</button>

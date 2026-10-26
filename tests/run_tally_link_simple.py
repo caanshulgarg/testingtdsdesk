@@ -34,7 +34,8 @@ SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
 PORT = 8629
 GSTIN = "09AANFG3202D1ZR"
 # ui-tidy (13-Oct-2026): the same short words on every chip and card ("Not linked → Link" says what to do)
-WORDS = ["Not linked", "Disconnected", "Connected", "Needs you"]   # next-tally-suvit: the pill's words (lib/tallyState.js)
+# next-link-record (26-Oct-2026, the owner's step 2): one word per client everywhere, from lib/linkStatus.js linkWord
+WORDS = ["Not linked", "Waiting for Tally", "Linked", "Needs you"]
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []
@@ -179,17 +180,17 @@ def main():
 
         # ---- 3. Disconnected: linked, the computer has Tally closed (FRONTDESK keeps it; no other computer has it open)
         scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
-        line = one_line("Disconnected", "3. waiting")
-        ok("— not open in Tally on FRONTDESK (last seen" in line and line.endswith("Open in Tally page"), "3. the line: Disconnected — not open in Tally on FRONTDESK (%s)" % line)
+        line = one_line("Waiting for Tally", "3. waiting")
+        ok("— Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and line.endswith("Open in Tally page"), "3. the line: Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK (%s)" % line)
         to_row()
-        ok(txt(R("GARG SHEKHAR") + " [data-tco-fix]") == "Open GARG SHEKHAR in TallyPrime on FRONTDESK." and pg.locator(R("GARG SHEKHAR") + " [data-tco-sync-now]").count() == 1 and E("(c) => !!document.querySelector('#app [data-tco-row][data-focus][data-tco-linked=\"' + c + '\"]')", cid),
-           "3. its row (marked): open it in TallyPrime on FRONTDESK; Sync now (%s)" % txt(R("GARG SHEKHAR") + " [data-tco-fix]"))
+        ok(re.sub(r"\s+", " ", txt(R("GARG SHEKHAR") + " .tco-pill")) == "Waiting for Tally Open GARG SHEKHAR in TallyPrime on FRONTDESK" and pg.locator(R("GARG SHEKHAR") + " [data-tco-sync-now]").count() == 1 and E("(c) => !!document.querySelector('#app [data-tco-row][data-focus][data-tco-linked=\"' + c + '\"]')", cid),
+           "3. its row (marked): Waiting for Tally, open it in TallyPrime on FRONTDESK; Sync now (%s)" % txt(R("GARG SHEKHAR") + " .tco-pill"))
         shot(pg, "card-2-waiting-desktop-light")
 
         # ---- 4. Connected
         scene(LINKED(D1))
-        line = one_line("Connected", "4. reading")
-        ok(line == "Tally: GARG SHEKHAR ● Connected · Open in Tally page", "4. Connected: the company, Open in Tally page (%s)" % line)
+        line = one_line("Linked", "4. reading")
+        ok(line == "Tally: GARG SHEKHAR ● Linked · Open in Tally page", "4. Linked: the company, Open in Tally page (%s)" % line)
         no_port("4. Client setup → Tally")
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no name box, no 'Posting allowed to' card")
         to_row()
@@ -233,21 +234,21 @@ def main():
         ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "GARG SHEKHAR", "p_client": None}]], "6. Unlink -> tally_company_link with no client (%s)" % calls("tally_company_link")[n0:])
         ok(txt(R("GARG SHEKHAR") + " [data-tco-pill]").startswith("Not a client") and E("(c) => S.companies[c].tallyName", cid) == "", "6. it stays listed (Not a client); the client's Tally name is cleared")
 
-        # ---- 7. a held entry or a stop: the status words stay the one pill's (Connected), the same everywhere
+        # ---- 7. a held entry or a stop: Needs you (the owner's step 2, 26-Oct-2026), the same everywhere
         scene(LINKED(D1), lines=HELD)
         E("() => { Rec.act.at = 0; if (Rec.actLoad) Rec.actLoad(); AlertHub.refresh(true); }"); pg.wait_for_timeout(2000); E("() => render()"); pg.wait_for_timeout(500)
-        one_line("Connected", "7. a held entry")
+        one_line("Needs you", "7. a held entry")
         shot(pg, "card-4-needs-you-desktop-light")
 
         # ---- 8. the chip and the top bar say the same words
         scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
         sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? [b.getAttribute('data-tally-link-sign'), b.title] : null; }")
         words = re.sub(r"\s+", " ", txt(one))
-        ok(sign and sign[0] in ("waiting", "needs") and "Disconnected — not open in Tally on FRONTDESK" in sign[1] and "not open in Tally on FRONTDESK" in words,
-           "8. the top bar's sign says the line's words: 'Disconnected — not open in Tally on FRONTDESK' (%s)" % (sign,))
+        ok(sign and sign[0] in ("waiting", "needs") and "Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK" in sign[1] and "Open GARG SHEKHAR in TallyPrime on FRONTDESK" in words,
+           "8. the top bar's sign says the line's words: 'Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK' (%s)" % (sign,))
         E("() => navHome('clients')"); pg.wait_for_timeout(900)
         chip = E("(c) => { const r = [...document.querySelectorAll('#app [data-tally-link-chip]')].map(e => e.innerText.trim()); return r; }", cid)
-        ok(any(c.endswith("Disconnected") for c in chip) and all(any(c.endswith(w) for w in WORDS) for c in chip), "8. the Clients chip: the same words (%s)" % chip)
+        ok(any(c.endswith("Waiting for Tally") for c in chip) and all(any(c.endswith(w) for w in WORDS) for c in chip), "8. the Clients chip: the same words (%s)" % chip)
 
         # ---- 9. the Tally page: Companies in Tally, each company with its client or Add as client; a client not linked: the
         # list for it with "Link to <client>"; a computer's card names no client; no port outside Details

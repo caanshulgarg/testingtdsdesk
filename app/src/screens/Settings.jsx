@@ -20,6 +20,7 @@ import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import BooksSource from "../parts/BooksSource.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";

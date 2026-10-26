@@ -67,6 +67,40 @@ try:
     F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ PERSON", "client_id": S2["id"], "last_seen": "2026-10-01T00:00:00Z", "linked_at": "2026-10-01T00:00:00Z", "linked_by": "u-1"})
     c, r = call({"kind": "companies", "companies": [{"name": "ZZ PERSON", "gstin": ""}]})
     ok(row("ZZ PERSON").get("client_id") == S2["id"] and r.get("links", {}).get("ZZ PERSON") is True, "6. a person's link is kept")
+    # 7. migration 110 (next-link-record): a company renamed in Tally (a linked company's GUID under a new name) is asked of
+    # tally_link_follow (the SQL: run_migration110.py), which moves the link and its book; here the stand-in moves it
+    asked = []
+    def follow(fn_, a, _orig=F.rpc):
+        if fn_ != "tally_link_follow": return _orig(fn_, a)
+        asked.append(dict(a))
+        if a.get("p_guid") == "GUID-ZZ" and a.get("p_company") == "ZZ PERSON RENAMED":
+            r0 = row("ZZ PERSON"); F.T["tally_companies"].append({"firm_id": FIRM, "company": "ZZ PERSON RENAMED", "client_id": r0["client_id"], "book_id": "b-zz", "last_seen": "2026-10-26T00:00:00Z", "linked_at": r0["linked_at"]})
+            r0["client_id"] = None
+            return r0 and S2["id"]
+        return None
+    F.rpc = follow
+    c, r = call({"kind": "companies", "companies": [{"name": "ZZ PERSON RENAMED", "gstin": "", "guid": "GUID-ZZ"}, {"name": "NO GUID CO", "gstin": ""}, {"name": "ALPHA TRADERS LLP (2024-25)", "gstin": "", "guid": "GUID-AL"}]})
+    ok(c == 200 and r.get("links", {}).get("ZZ PERSON RENAMED") is True and row("ZZ PERSON RENAMED").get("client_id") == S2["id"],
+       "7. the renamed company keeps its client: tally_link_follow moved the link (%s %s)" % (c, r))
+    ok([(x.get("p_company"), x.get("p_guid")) for x in asked] == [("ZZ PERSON RENAMED", "GUID-ZZ")] and all(x.get("p_firm") == FIRM for x in asked),
+       "7. asked only for a company with a GUID and no link here (not for one without a GUID, nor for a linked one) (%s)" % asked)
+    ok(all(x.get("p_device") == "d-1" and "p_bridge" in x for x in asked), "7. the follow names the computer and bridge that reported it (its data location)")
+    # 8. migration 110: data from a second data location of a linked company is not applied (tally_link_place_check)
+    places = []
+    def place(fn_, a, _orig=F.rpc):
+        if fn_ != "tally_link_place_check": return _orig(fn_, a)
+        places.append(dict(a)); return PLACE[0]
+    PLACE = [False]; F.rpc = place
+    n0 = len(F.DAYS)
+    c, r = call({"kind": "days", "company": "ZZ PERSON RENAMED", "days": [{"day": "20261001", "gz": ""}]})
+    ok(c == 409 and r.get("otherPlace") is True and len(F.DAYS) == n0 and places and places[-1].get("p_book") == "b-zz" and places[-1].get("p_device") == "d-1",
+       "8. days from a place FinCom does not read: 409 otherPlace, nothing applied (%s %s)" % (c, r))
+    c, r = call({"kind": "recorder_lines", "company": "ZZ PERSON RENAMED", "lines": []})
+    ok(c == 409 and r.get("otherPlace") is True, "8. the add-on's lines from there too (%s)" % c)
+    PLACE[0] = None   # a cloud without 110 (the function missing answers an error): as before
+    F.NO_FN.add("tally_link_place_check")
+    c, r = call({"kind": "days", "company": "ZZ PERSON RENAMED", "days": [{"day": "20261001", "gz": ""}]})
+    ok(not r.get("otherPlace") and c != 409, "8. a cloud without migration 110: as before, not refused (%s %s)" % (c, str(r)[:120]))
 finally:
     fn.terminate()
     errs = [l for l in log if "error" in l.lower() or "uncaught" in l.lower()]

@@ -48,7 +48,8 @@ export function hereOpen(k) {
 export function tallyCoState(company) {
   const k = coKey(company), devs = tallyDevs(), rows = coRows(company);
   const seen = rows.map((r) => String(r.last_seen || "")).sort().pop() || "";
-  const has = (d) => openOn(d).some((n) => coKey(n) === k) && (typeof devState !== "function" || devState(d).tally !== "closed");
+  // (next-link-record: or its other name, a company renamed in Tally: the link record's LinkRec.same)
+  const has = (d) => openOn(d).some((n) => coKey(n) === k || (globalThis.LinkRec && LinkRec.same(n, company))) && (typeof devState !== "function" || devState(d).tally !== "closed");
   const o = (state, text, d) => ({ state, level: state === "connected" ? "ok" : "bad", word: state === "connected" ? "Connected" : "Disconnected", text, computer: d ? pcOf(d) : "", seen });
   const on = devs.find((d) => pcLive(d) && has(d));
   if (on) return o("connected", "Connected", on);
@@ -63,6 +64,8 @@ export function tallyCoState(company) {
 // a client's: its linked company's state; "Not linked" when it has none (the bridge on this computer counts when FinCom's
 // cloud is not in use)
 export function clientTallyState(co) {
+  // next-link-record: one word everywhere (Linked / Waiting for Tally / Needs you), lib/linkStatus.js once loaded
+  const w = globalThis.LinkWord && LinkWord(co); if (w) return w;
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
   if (!k || k.state === "unlinked") return { state: "unlinked", level: "warn", word: "Not linked", text: "Not linked to its company in Tally yet", computer: "", seen: "", company: "" };
   const cloud = typeof TCloud === "object" && TCloud.on();

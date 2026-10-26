@@ -129,8 +129,9 @@ def main():
         ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not a client · open in Tally on NWS144", "1. VMS EVENTS open on NWS144, not linked: Not a client · open in Tally (%s)" % row(VMS)["pill"])
         ok(row(SAL)["pill"] == "Not a client · not open in Tally now", "1. Salesify, not linked, not open (%s)" % row(SAL)["pill"])
         scene(cos(sal="GS", old="GS")); tally_page()
-        ok(row(SAL)["pill"] == "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)", "1. linked: 'Disconnected — not open in Tally on NWS144 (last seen 20-Oct)' (%s)" % row(SAL)["pill"])
-        ok(re.match(r"^Disconnected — computer offline since \d\d:\d\d$", row(OLD)["pill"] or "") is not None and row(OLD)["st"] == "offline", "1. its computer off: 'Disconnected — computer offline since 12:02' (%s)" % row(OLD)["pill"])
+        # next-link-record (the owner's step 2, 26-Oct-2026): one word per client, Waiting for Tally with its one plain line
+        ok(row(SAL)["pill"] == "Waiting for Tally Open " + SAL + " in TallyPrime on NWS144", "1. linked, not open: 'Waiting for Tally · Open ... in TallyPrime on NWS144' (%s)" % row(SAL)["pill"])
+        ok(row(OLD)["pill"] == "Waiting for Tally Open " + OLD + " in TallyPrime on LAPTOP" and row(OLD)["st"] == "offline", "1. its computer off: 'Waiting for Tally · Open MASTER CAD INFRA in TallyPrime on LAPTOP' (%s)" % row(OLD)["pill"])
         scene(cos()); tally_page()
         ok("NWS144" in row(VMS)["text"] and "LAPTOP" in row(OLD)["text"] and "last seen 20-Oct" in row(SAL)["text"], "1. each row names its computer and when it was last seen")
         ok(row(VMS)["act"] == "Add as client" and row(SAL)["act"] == "Add as client", "1. not linked: 'Add as client' (%s, %s)" % (row(VMS)["act"], row(SAL)["act"]))
@@ -202,7 +203,7 @@ def main():
            "4. days of this year missing: ⋯ Upload older entries (Day Book)")
         # the Disconnected rows, for the pictures
         r = row(SAL)
-        ok(r and r["pill"].startswith("Disconnected — not open in Tally on NWS144") and "Garg Shekhar & Company" in r["text"], "4. a linked company not open: Disconnected, with its client (%s)" % (r and r["text"]))
+        ok(r and r["pill"].startswith("Waiting for Tally Open ") and "Garg Shekhar & Company" in r["text"], "4. a linked company not open: Waiting for Tally, with its client (%s)" % (r and r["text"]))
         E("() => { document.querySelectorAll('#app details[open]').forEach(d => d.open = false); }")
         shot("disconnected-rows-desktop-light")
 
@@ -232,15 +233,15 @@ def main():
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", gs); pg.wait_for_timeout(1200)
         # next-tally-one-page: Client setup has ONE line (no card); Sync now is on the Tally page's row
         line = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
-        ok(line.startswith("Tally: " + SAL + " ○ Disconnected") and "not open in Tally on NWS144 (last seen 20-Oct)" in line and line.endswith("Open in Tally page"),
+        ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page"),
            "6. the client's one line: the same pill words, Open in Tally page (%s)" % line)
         sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? b.getAttribute('title') : ''; }")
-        ok("Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" in sign, "6. the top bar's sign says the same words (%s)" % sign)
+        ok("Waiting for Tally — Open " + SAL + " in TallyPrime on NWS144" in sign, "6. the top bar's sign says the same words (%s)" % sign)
         shot("client-card-linked-desktop-light", full=False)
         # Clients list chip
         E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(900)
         chip = E("(c) => { const r = [...document.querySelectorAll('#app [data-tally-chip-at=clients]')]; return r.map(b => [b.getAttribute('data-tally-pill'), b.innerText.trim(), b.getAttribute('title')]); }", gs)
-        ok(any(c[0] == "notopen" and c[1].endswith("Disconnected") and "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" in (c[2] or "") for c in chip), "6. Clients list: the chip says Disconnected, its tip the same words (%s)" % chip)
+        ok(any(c[0] == "notopen" and c[1].endswith("Waiting for Tally") and "Waiting for Tally — Open " + SAL + " in TallyPrime on NWS144" in (c[2] or "") for c in chip), "6. Clients list: the chip says Waiting for Tally, its tip the same words (%s)" % chip)
         # a client not linked: its line points to the Tally page's list, every company with "Link to <client>"
         E("() => { const c = newCompany({name: 'Salesify Marketing LLP'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
         scene(cos())

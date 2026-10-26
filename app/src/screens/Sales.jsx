@@ -23,6 +23,7 @@ import DateBox from "../parts/DateBox.jsx";
 // EINV (src/js/55-einvoice.js) comes with this screen's file, not in legacy.js (build.py lazy_files)
 import "../../../src/js/55-einvoice.js";
 import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 
 const live = () => Bridge.on() && Bridge.up();

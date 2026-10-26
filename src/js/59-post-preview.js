@@ -962,7 +962,7 @@ async function postAllToTally(only){
   try {
     if (typeof postToFromLink === "function") await postToFromLink(co);
     if (!co.postTo && typeof autoPostTo === "function") await autoPostTo(co);
-    if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
+    if (postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
     if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
     const b = postBills(co.id) || {ready: [], attention: []};
     let list = b.ready;

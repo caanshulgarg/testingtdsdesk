@@ -10,7 +10,9 @@ function postLineFor(co){
   const cloud = typeof TCloud === "object" && TCloud.on();
   if (cloud && !TCloud.pane.at && !TCloud.pane.busy && Date.now() - (PostPage.paneAt || 0) > 5 * 60000){ PostPage.paneAt = Date.now(); setTimeout(() => { try { TCloud.refreshPane(); } catch (e){} }, 0); }
   let bk = null; try { bk = cloud ? TCloud.book(co.id) : null; } catch (e){}
-  let company = co.postTo || (bk && bk.company) || "";
+  // next-link-record: the company of the client's link record that allows posting (98-link-record.js), when read
+  const lp = typeof linkPostOf === "function" ? linkPostOf(co) : null;
+  let company = (lp && lp.pick && LinkRec.nameOf(lp.pick)) || (lp && lp.linked[0]) || co.postTo || (bk && bk.company) || "";
   if (!company){ try { company = tallyCoName(co); } catch (e){ company = co.tallyName || co.name; } }
   let bridge = "", state = "Ready", action = "", go = "", computer = "", tally = "";
   let heard = []; try { heard = cloud ? TCloud.bridgesHeard() : []; } catch (e){}
@@ -25,7 +27,8 @@ function postLineFor(co){
     if (!bridgeLive(co)){ state = ""; action = Bridge.st.tallyUp ? "Open " + company + " in Tally" : "Tally not open on " + (Bridge.st.computer || "this computer"); }
   } else if (Bridge.on()){ bridge = "FinCom Bridge"; state = ""; action = "FinCom Bridge is not answering on this computer"; go = "tally"; }
   else { state = ""; action = "Install FinCom Bridge"; go = "tally"; }
-  if (!co.postTo){ state = ""; action = "Choose the Tally company"; go = "cotally"; }
+  if (lp){ if (!lp.linked.length){ state = ""; action = "Link to Tally"; go = "tally"; } else if (!lp.allowed.length){ state = ""; action = "Allow posting"; go = "cotally"; } }
+  else if (!co.postTo){ state = ""; action = "Choose the Tally company"; go = "cotally"; }
   else if (typeof choiceState === "function" && choiceState(co, "postTo") !== "confirmed"){ state = ""; action = "Confirm the Tally company"; go = "cotally"; }
   return {company, bridge, state, action, go, computer, tally};
 }
@@ -42,14 +45,19 @@ function postStatusFor(co){
   // ready only once that held a minute. Only the words: posting itself checks the bridge and the cloud at the moment it
   // posts (canPostTally, the posting's own checks), never this
   const sg = typeof tallySign === "function" ? tallySign(co) : null;
-  if (sg && sg.on){ out.where = "Tally ready"; out.on = sg.many ? sg.many.length + " computers" : sg.pc || ""; if (l){ out.read = l.read; out.reading = !!l.reading; } }
+  // next-link-record: the client's one word, as every place says it (lib/linkStatus.js, globalThis.LinkWord)
+  const w = typeof LinkWord === "function" ? LinkWord(co) : null;
+  if (w) out.word = w.word;
+  // (the owner, 26-Oct-2026: the same word in every place, at once, as the title chip and the Clients list say it)
+  if (sg && sg.on){ out.where = w ? w.word : "Tally ready"; out.on = sg.many ? sg.many.length + " computers" : sg.pc || ""; if (l){ out.read = l.read; out.reading = !!l.reading; } }
   const p = (text, button, go, kind) => ({text, button: button || "", go: go || null, kind: kind || ""});
   let st = S.postStop && S.postStop.cid === co.id ? S.postStop : null;
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
   if (st && /^Confirm the Tally company/.test(st.msg) && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed"){ S.postStop = null; st = null; }
   if (st && /^Posting waits/.test(st.msg)){ const b0 = postBills(co.id); if (b0 && !b0.ready.some(e => billGuessedWhy(e, co))){ S.postStop = null; st = null; } }
   // no company confirmed and the client linked: the linked company asked about here, one click (postToOffer)
-  const offer = typeof postToOffer !== "function" || (choiceState(co, "postTo") === "confirmed" && co.postTo) ? null : postToOffer(co);
+  const lp = typeof linkPostOf === "function" ? linkPostOf(co) : null;
+  const offer = typeof postToOffer !== "function" || (lp ? lp.allowed.length > 0 : choiceState(co, "postTo") === "confirmed" && co.postTo) ? null : postToOffer(co);
   const ask = (lead, kind) => { const o = p(lead + offer.ask, offer.companies.length === 1 ? "Allow posting" : "", offer.companies.length === 1 ? () => postToAllow(co, offer.companies[0]) : null, kind);
     if (offer.companies.length > 1) o.offer = offer.companies.map(c => ({company: c, go: () => postToAllow(co, c)}));
     return o; };
@@ -68,7 +76,12 @@ function postStatusFor(co){
     out.problem.dismiss = () => { S.postStop = null; render(); };
     return out;
   }
+  if (pl.go === "tally" && lp && !lp.linked.length) { out.problem = p("Posting waits: link " + co.name + " to its company in Tally.", "Open the Tally page", goTallyPage, "company"); return out; }
   if (pl.go === "cotally") { out.problem = p(pl.action === "Confirm the Tally company" ? "Posting waits: confirm the Tally company (" + pl.company + " was found by FinCom, not chosen by a person)." : "Posting waits: choose the Tally company this client posts to.", pl.action, goChooseTallyCompany, "company"); return out; }
+  // the one word not Linked: its one line and button (the same as the title chip's)
+  // (reading stopped, paused or not answering: the lines below, with their own buttons)
+  const reading = l && ["stopped", "paused", "notanswering"].includes(l.state);
+  if (w && (w.kind === "waiting" || (w.kind === "needs" && !reading))){ out.where = w.word; out.problem = p(w.line + ".", w.port ? "Open the Tally page" : w.button ? w.button.label : "", w.button && w.button.act ? w.button.act : w.port ? goTallyPage : null, w.kind); return out; }
   // not ready (confirmed): the sign's reason and what to do, with Check again
   if (sg && !sg.on && (sg.computer || l)){ out.problem = p(sg.reason + " " + sg.fix, "Check again", () => tallyCheckNow(), sg.code); return out; }
   // ready: what is about this client's company on that computer (Tally not answering, reading paused, FinCom's Stop)
@@ -90,6 +103,7 @@ function postStatusFor(co){
 // the client's: that one, saved (it syncs), with postToBy "auto". For existing clients too, when one is opened.
 const AutoPostTo = {at: {}};
 async function autoPostTo(co, force){
+  if (typeof linkPostOf === "function" && linkPostOf(co)) return false;
   // only an empty slot is filled, and as a guess to confirm; never over a confirmed choice (src/js/60), even "stop posting"
   if (!co || co.postTo || co.deleted || (typeof choiceGet === "function" && (choiceGet(co, "postTo") || {}).state === "confirmed")) return false;
   const mine = gstinKeyOf(co.gstin);
@@ -127,6 +141,8 @@ async function autoPostTo(co, force){
 // the companies linked to the client in FinCom's cloud, as last read (TLight, else the Tally page); null: not read yet
 function postToLinked(co){
   if (!co) return null;
+  const lp = typeof linkPostOf === "function" ? linkPostOf(co) : null;
+  if (lp) return lp.linked;
   const st = (typeof TLight === "object" && TLight.st) || {}, pane = (typeof TCloud === "object" && TCloud.pane) || {};
   const rows = st.cos && st.cos.length ? st.cos : Array.isArray(pane.companies) ? pane.companies : st.loaded ? [] : null;
   if (!rows) return null;
@@ -138,7 +154,15 @@ function postToMayWrite(){ const me = S.account && S.account.me; return !me || !
 const PostToLink = {at: {}};
 // fills the slot from the one linked company; returns the company confirmed now, or ""
 async function postToFromLink(co){
-  if (!co || co.deleted || !postToMayWrite() || typeof TCloud !== "object" || !TCloud.on()) return "";
+  if (!co || co.deleted || typeof TCloud !== "object" || !TCloud.on()) return "";
+  // next-link-record: the record decides (read first when it is not yet); clients.data postTo is only written from it
+  if (typeof LinkRec === "object" && LinkRec.on()){
+    if (!LinkRec.ready()) await LinkRec.load();
+    const lp = linkPostOf(co);
+    // (not linked at all: nothing to post into, and nothing written)
+    if (lp){ if (!lp.linked.length || (typeof ZohoB === "object" && ZohoB.isZoho && ZohoB.isZoho(co))) return ""; return postToMirror(co, lp.pick ? LinkRec.nameOf(lp.pick) : ""); }
+  }
+  if (!postToMayWrite()) return "";
   const done = () => { const c = choiceGet(co, "postTo"); return !!(c && c.state === "confirmed"); };
   if (done()) return "";
   if (typeof ZohoB === "object" && ZohoB.isZoho && ZohoB.isZoho(co)) return "";
@@ -162,8 +186,26 @@ async function postToFromLink(co){
   } catch (e){}
   return cos[0];
 }
-// a person's Link: the company linked now, unless another one is confirmed (a confirmed "Stop posting" gives way to it)
+// the old field (clients.data postTo, its choice) written from the record, for the code paths that still read it: the
+// company posted into, or "" when posting is stopped or not linked. Only by a member who may write; returns the company
+async function postToMirror(co, want){
+  const c = choiceGet(co, "postTo"), same = c && c.state === "confirmed" && ledNm(c.value || "").toLowerCase() === ledNm(want || "").toLowerCase();
+  if (same || !postToMayWrite()) return want;
+  choiceConfirm(co, "postTo", want, {why: want ? "from the Tally link record" : "posting stopped in the Tally link record"});
+  postToCleared(co);
+  render();
+  try {
+    if (typeof cloudPushNow === "function" && Cloud.on()){
+      for (let i = 0; i < 20 && typeof cloudBusy !== "undefined" && cloudBusy; i++) await new Promise(r => setTimeout(r, 250));
+      await cloudPushNow();
+    }
+  } catch (e){}
+  return want;
+}
+// a person's Link: the company linked now, unless another one is confirmed (a confirmed "Stop posting" gives way to it).
+// With the record: the link allowed posting in the cloud (tally_link_set); the old field follows once it is read again
 function postToOnLink(co, company){
+  if (typeof LinkRec === "object" && LinkRec.ready()){ LinkRec.load(true).then(() => postToFromLink(co)).catch(() => {}); return true; }
   if (!co || !company || !postToMayWrite()) return false;
   const c = choiceGet(co, "postTo");
   if (c && c.state === "confirmed" && c.value) return false;
@@ -186,6 +228,8 @@ function postToOffer(co){
 }
 function postToAllow(co, company){
   if (!co || !company) return;
+  const rec = typeof LinkRec === "object" && LinkRec.ready() ? LinkRec.forClient(co.id).find(r => LinkRec.isName(r, company)) : null;
+  if (rec){ linkPostingSet(co, rec, true); return; }
   choiceConfirm(co, "postTo", company, {why: "allowed from the posting"});
   postToCleared(co);
   toast("Posting allowed into " + company + ".");
@@ -193,5 +237,5 @@ function postToAllow(co, company){
 }
 // the client open when this file loads (the screen that loaded it): filled now; later openings by src/js/27
 setTimeout(() => { try { const co = typeof CO === "function" ? CO() : null; if (co) postToFromLink(co).catch(() => {}); } catch (e){} }, 0);
-if (typeof globalThis === "object") Object.assign(globalThis, {postLineFor, PostPage, postStatusFor, AutoPostTo, autoPostTo, postToLinked, postToMayWrite, PostToLink, postToFromLink, postToOnLink, postToCleared, postToOffer, postToAllow});
+if (typeof globalThis === "object") Object.assign(globalThis, {postLineFor, PostPage, postStatusFor, AutoPostTo, autoPostTo, postToLinked, postToMayWrite, PostToLink, postToFromLink, postToMirror, postToOnLink, postToCleared, postToOffer, postToAllow});
 /* @react-lazy: end */

@@ -65,16 +65,17 @@ with sync_playwright() as p:
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     pline = lambda: line("#app [data-post-line]")
     # the steady sign (11-Oct-2026): the connection in the sign's words
-    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Tally ready · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
+    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Linked · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
     ok(pg.locator("#app [data-post-line] [data-update-now]").count() == 1, "Post page: in it, one button: Update now")
     pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(400)
     ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
     # 2. Tally closed
     E(STATE, {"beat": {"tallyState": "closed", "tally": False}}); pg.wait_for_timeout(300)
-    ok(line().startswith("TallyPrime is closed on Office computer (NWS144). Open TallyPrime on Office computer (NWS144)"), "Tally closed (the sign's reason and fix; first sight): %r" % line())
+    # next-link-record (the owner's step 2): Waiting for Tally, one plain line
+    ok(line() == "Open ZZ TEST in TallyPrime on NWS144.", "Tally closed (first sight): Waiting for Tally's one line: %r" % line())
     # 3. the computer offline (three heartbeats missed)
     E(STATE, {"ageMin": 10}); pg.wait_for_timeout(300)
-    ok(line().startswith("FinCom Bridge on Office computer (NWS144) is not running or cannot reach FinCom"), "the computer offline (the sign's words): %r" % line())
+    ok(line() == "Open ZZ TEST in TallyPrime on NWS144.", "the computer offline: Waiting for Tally's one line: %r" % line())
     # 4. Tally not answering (requirement 12)
     E(STATE, {"beat": {"tallyState": "busy", "notAnsweringSince": "2026-10-02T12:28:00"}}); pg.wait_for_timeout(300)
     l4 = line()
