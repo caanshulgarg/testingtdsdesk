@@ -5,10 +5,13 @@
 # Nothing here signs anything or publishes anything.
 name: FinCom Bridge on Windows
 
-# Every push to tax-accuracy; on any other branch, a push that changes the bridge (bridge-go/, assets-test/bridge-go/) or
-# this file, as before. (A push filter cannot say "this branch always, others by path", so the `changes` job decides.)
+# A push that changes the bridge (bridge-go/, assets-test/bridge-go/) or this file, on any branch; otherwise by hand
+# (workflow_dispatch). The repository is private since 26-Oct-2026 and Actions minutes are counted, so a push that
+# touches nothing of the bridge starts no runner at all (the path filter), not even the `changes` job, which still
+# decides within a matching push.
 on:
   push:
+    paths: ['bridge-go/**', 'assets-test/bridge-go/**', '.github/workflows/bridge-windows.yml']
   workflow_dispatch:
 
 permissions:
