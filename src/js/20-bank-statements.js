@@ -87,7 +87,7 @@ async function openStatement(sid){
   const b = B(); if (!b) return;
   b.cur = sid; b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
   const st0 = b.stmts.find(s => s.id === sid);
-  if (!b.rows.length && st0 && st0.n && await bankHeal(b.cid, b.stmts, null, 1)) b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
+  if (st0 && st0.n > b.rows.length && await bankHeal(b.cid, b.stmts, null, 1)) b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
   // rows still undecided pick up whatever was learnt since this statement was last open
   if (b.rows.some(r => r.state === "attention" || (r.state === "suggested" && r.source !== "history"))) suggestAll(b.rows, true); b.limit = 100; b.pendingRule = null; b.sel.clear(); b.sticky.clear(); b.undo = null;
   const n = b.rows.filter(r => r.state === "attention").length;
@@ -123,7 +123,9 @@ async function bankHeal(cid, stmts, keys, force){
   if (list.length > n0){ await BankDB.set("stmts:" + cid, list); wrote++; }
   for (const sid of Object.keys(parts)){
     const k = "stmt:" + cid + ":" + sid;
-    if (list.some(s => s.id === sid) && !((await BankDB.get(k)) || []).length){ await BankDB.set(k, [].concat(...parts[sid].filter(Boolean))); wrote++; }
+    const st = list.find(s => s.id === sid), ps = parts[sid], all = [];
+    for (let p = 0; ps[p]; p++) all.push(...ps[p]);         // the parts in order, up to the first one missing
+    if (st && all.length > ((await BankDB.get(k)) || []).length){ await BankDB.set(k, all); wrote++; }
   }
   if (meta){
     const kk = (await BankDB.get("keys:" + cid)) || {};

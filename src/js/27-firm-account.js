@@ -151,7 +151,7 @@ function cloudSnapshot(){
     // a browser holding nothing of this client's bank (its storage lost) never sends its empty copy over the server's
     if (b.stmts.length || b.rules.length || b.newLed.length || Object.keys(b.keys).length) add("bank_meta", b.cid, b.cid, {rules: b.rules, newLed: b.newLed, keys: b.keys, hist: b.hist});
     b.stmts.forEach(st => add("bank_stmt", b.cid + ":" + st.id, b.cid, st));
-    if (b.cur && b.rows.length){
+    if (bankWhole(b)){
       for (let i = 0; i * CLOUD_CHUNK < b.rows.length; i++) add("bank_rows", b.cid + ":" + b.cur + ":" + i, b.cid, {rows: b.rows.slice(i * CLOUD_CHUNK, (i + 1) * CLOUD_CHUNK)});
     }
   }
@@ -162,6 +162,8 @@ function cloudSnapshot(){
   }
   return out;
 }
+// the open statement's lines, all of them here: a statement held only in part (its parts still coming) sends no rows
+function bankWhole(b){ const st = b.cur && b.rows.length && b.stmts.find(s => s.id === b.cur); return !!st && !(st.n > b.rows.length); }
 function cloudKey(r){ return r.kind + "|" + (r.client_id || "") + "|" + r.id; }
 // The last copy of each record this computer and the server agreed on (sent from here, or taken from the server), kept
 // in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
@@ -191,7 +193,7 @@ function cloudChanges(){
   });
   // the open statement now has fewer rows than before: its chunks past the end are sent empty, not deleted
   const b = S.bank && !S.bank.loading ? S.bank : null;
-  if (b && b.cur && b.rows.length) Object.keys(marks).forEach(k => {
+  if (b && bankWhole(b)) Object.keys(marks).forEach(k => {
     const [kind, cid, ...rest] = k.split("|"), id = rest.join("|");
     if (kind !== "bank_rows" || cid !== b.cid || k in seen || marks[k] === "gone" || id.split(":")[1] !== b.cur) return;
     const h = fpHash(JSON.stringify({rows: []}));
@@ -267,6 +269,23 @@ function merge3(base, mine, theirs){
   }
   return mine;
 }
+// A choice the server holds that this copy never had stays, with the bank account it names and that account's ledger
+// (26-Oct-2026: a copy here older than the base, from another tab or an old object saved, removed the account's
+// confirmed ledger). Only a choice removed here after it was made (choicesGone, src/js/60) is removed.
+function clientKeepChoices(data, mine, theirs){
+  const tc = (theirs && theirs.choices) || {}, mc = (mine && mine.choices) || {}, gone = (mine && mine.choicesGone) || {};
+  if (!plainObj(data)) return data;
+  data = clone(data);
+  Object.keys(tc).forEach(k => { if (!mc[k] && !(String(gone[k] || "") >= String(tc[k] && tc[k].at || "~")) && !(data.choices || {})[k]) data.choices = Object.assign({}, data.choices, {[k]: tc[k]}); });
+  ((theirs && theirs.bankAccounts) || []).forEach(a => {
+    const c = a && data.choices && data.choices["bank:" + a.id];
+    if (!c) return;
+    let x = (data.bankAccounts || []).find(y => y && y.id === a.id);
+    if (!x) data.bankAccounts = (data.bankAccounts || []).concat([x = clone(a)]);
+    if (!x.ledger && c.value) x.ledger = c.value;
+  });
+  return data;
+}
 const ClientBase = {
   async get(id){ try { const v = await BankDB.get("cbase:" + id); return v === undefined || v === null ? NOBASE : v; } catch (e){ return NOBASE; } },
   async set(id, data){ this.seeded.add(id); try { await BankDB.set("cbase:" + id, clone(data)); } catch (e){} },
@@ -301,7 +320,7 @@ async function cloudPushClient(r, sendBatch){
       return "gone";
     }
     const theirs = plainObj(cur.data) ? cur.data : {};
-    const data = Object.keys(theirs).length ? merge3(await ClientBase.get(r.id), r.data, theirs) : r.data;
+    const data = Object.keys(theirs).length ? clientKeepChoices(merge3(await ClientBase.get(r.id), r.data, theirs), r.data, theirs) : r.data;
     if (sameVal(data, theirs)){ await ClientBase.set(r.id, theirs); return sameVal(data, r.data) ? r.hash : takeClientHere(r.id, theirs); }
     const out = await Cloud.api(q + "&updated_at=eq." + encodeURIComponent(cur.updated_at), {method: "PATCH", headers: {Prefer: "return=representation"}, body: row(data)});
     if (!out || !out.length) continue;                            // changed on the server in between: read and merge again
@@ -355,9 +374,15 @@ function cleanIds(v, depth){
   return v;
 }
 function cloudRowOk(r){ return r && SAFE_ID.test(String(r.id || "")) && (!r.client_id || SAFE_ID.test(String(r.client_id))); }
-async function cloudApply(rows){
-  const was = Live.applying; Live.applying = true;          // what comes from the server is not sent back
-  try { return await cloudApplyNow(rows); } finally { Live.applying = was; }
+// One at a time (26-Oct-2026): Realtime hands each row over as it comes, and two applies at once each read the sync marks
+// and a statement's rows, then wrote back their own copy over the other's (a part of the lines lost, sent back short)
+function cloudApply(rows){
+  const run = (cloudApply.q || Promise.resolve()).then(async () => {
+    const was = Live.applying; Live.applying = true;          // what comes from the server is not sent back
+    try { return await cloudApplyNow(rows); } finally { Live.applying = was; }
+  });
+  cloudApply.q = run.catch(() => {});
+  return run;
 }
 async function cloudApplyNow(rows){
   const marks = Cloud.marks();
@@ -415,7 +440,7 @@ async function cloudApplyNow(rows){
         // a change made here and not yet sent is kept, laid over the server's copy (merge3); it is sent at the next save
         const here0 = S.companies[r.id], here = here0 && typeof cloudClientView === "function" ? cloudClientView(here0) : here0;
         const pending = here && markWas && markWas !== "gone" && markWas !== fpHash(JSON.stringify(here));
-        const data = pending && plainObj(r.data) ? merge3(await ClientBase.get(r.id), here, r.data) : r.data;
+        const data = pending && plainObj(r.data) ? clientKeepChoices(merge3(await ClientBase.get(r.id), here, r.data), here, r.data) : r.data;
         S.companies[r.id] = fixCompany(clone(data));
         // this computer's own counts (STATS_HERE) stay as they were here
         const st0 = here0 && here0.stats, st1 = S.companies[r.id].stats;
@@ -494,14 +519,18 @@ async function cloudApplyBankPart(r){
     await BankDB.set("stmts:" + cid, list);
     return;
   }
-  const part = Number(bits[2] || 0);
-  const key = "stmt:" + cid + ":" + sid;
-  const rows = (await BankDB.get(key)) || [];
-  if (r.deleted){ return; }
-  const incoming = (r.data && r.data.rows) || [];
-  const merged = rows.slice();
-  for (let i = 0; i < incoming.length; i++) merged[part * CLOUD_CHUNK + i] = incoming[i];
-  await BankDB.set(key, merged.filter(Boolean));
+  if (r.deleted) return;
+  // each part laid at its own place, and only once the lines before it are here: a part kept aside until then, never
+  // packed into the places of a part not here yet (26-Oct-2026: ':1' before ':0' moved 141 lines to the front)
+  const key = "stmt:" + cid + ":" + sid, pk = "parts:" + cid + ":" + sid;
+  const rows = ((await BankDB.get(key)) || []).slice(), parts = (await BankDB.get(pk)) || {};
+  parts[Number(bits[2] || 0)] = (r.data && r.data.rows) || [];
+  Object.keys(parts).map(Number).sort((a, b) => a - b).forEach(p => {
+    if (p * CLOUD_CHUNK > rows.length) return;
+    parts[p].forEach((x, i) => { rows[p * CLOUD_CHUNK + i] = x; }); delete parts[p];
+  });
+  await BankDB.set(key, rows);
+  await (Object.keys(parts).length ? BankDB.set(pk, parts) : BankDB.del(pk));
 }
 async function cloudApplySales(r){
   const bits = String(r.id).split(":");
