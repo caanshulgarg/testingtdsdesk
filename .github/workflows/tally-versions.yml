@@ -82,10 +82,16 @@ jobs:
             # TallyPrime 7.2 (added 26-Oct-2026): asked here first (Linux, the first KB) so a release the download centre does not
             # have never takes a Windows job; resolvev.ps1 asks again on Windows and downloads it
             if echo ",$vs," | grep -q ',7.2,'; then
+              ua='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+              hd() { curl -s -o /dev/null -r 0-1023 -A "$ua" -w '%{http_code} %header{content-range}' --max-time 60 --max-filesize 5000000 "$1" || true; }
               u72="https://tallymirror.tallysolutions.com/download_centre/Rel.7.2_gold/TP/Full/setup.exe"
-              c72=$(curl -s -o /dev/null -r 0-1023 -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' -w '%{http_code} %{size_download} %header{content-range}' --max-time 60 --max-filesize 5000000 "$u72" || true)
-              echo "TallyPrime 7.2 at $u72: $c72"
-              case "$c72" in 200*|206*) echo "::notice::TallyPrime 7.2 setup reachable: $c72" ;; *) echo "::error::TallyPrime 7.2 not on Tally's download centre ($u72: $c72): 7.2 dropped from this run"; vs=$(echo ",$vs," | sed 's/,7\.2,/,/g; s/^,//; s/,$//') ;; esac
+              u71="https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe"
+              c72=$(hd "$u72"); c71=$(hd "$u71")
+              # Tally's own download page's list of setups (the folders differ by release)
+              lst=$(curl -s -A "$ua" --max-time 60 https://tallysolutions.com/utility/js/DownloadUtility-india.js | grep -oE 'download_centre\\?/[^"\\/]+' | sed -E 's#.*/##' | sort -u | tr '\n' ' ' || true)
+              echo "TallyPrime 7.2 at $u72: $c72; control 7.1 at $u71: $c71; the download page lists: $lst"
+              echo "::notice::7.2 check: Rel.7.2_gold $c72; Rel.7.1_gold (control) $c71; Tally's download page lists: $lst"
+              case "$c72" in 200*|206*) ;; *) case "$c71" in 200*|206*) echo "::error::TallyPrime 7.2 not on Tally's download centre ($u72: $c72, while 7.1 answers $c71): 7.2 dropped from this run"; vs=$(echo ",$vs," | sed 's/,7\.2,/,/g; s/^,//; s/,$//') ;; *) echo "::warning::the download centre refused this Linux runner for 7.1 too ($c71): 7.2 kept, the Windows job decides" ;; esac ;; esac
             fi
             for r in $(echo "$vs" | tr ',' ' '); do inc="$inc{\"version\":\"$r\",\"mode\":\"$x\",\"tmo\":$t,\"ctmo\":$c},"; all="$all\"$r\","; done
           done
