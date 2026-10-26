@@ -76,8 +76,9 @@ function choiceValue(co, key){ const c = choiceGet(co, key); return c ? c.value 
 function choiceUsable(co, key){ const c = choiceGet(co, key); return c && c.state === "confirmed" && c.value ? c.value : ""; }
 function choiceWho(){ return typeof whoAmI === "function" ? whoAmI() : "this computer"; }
 function choiceWrite(co, key, rec){
-  if (rec){ co.choices = co.choices || {}; co.choices[key] = rec; }
-  else if (co.choices){ delete co.choices[key]; }
+  // a choice removed is noted with when (choicesGone), so a save from a copy that never had it does not remove it elsewhere
+  if (rec){ co.choices = co.choices || {}; co.choices[key] = rec; if (co.choicesGone) delete co.choicesGone[key]; }
+  else if (co.choices && co.choices[key]){ delete co.choices[key]; (co.choicesGone = co.choicesGone || {})[key] = new Date().toISOString(); }
   choiceLegacySet(co, key, rec);
 }
 // auto-matching: fills an empty or guessed slot only, never a confirmed one; true when something changed (not saved)

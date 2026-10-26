@@ -7,7 +7,7 @@ const {load} = require("./harness");
 const src = f => fs.readFileSync(path.join(__dirname, "..", "src", "js", f), "utf8");
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cm-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + src("01-documents-in-the-firm-account.js") + "\n" + src("26-sales-from-a-marketplace.js") + "\n" + src("27-firm-account.js") + "\n</script>");
-const {ctx, x} = load(html, ["clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "ClientBase", "takeClientHere",
+const {ctx, x} = load(html, ["clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "clientKeepChoices", "ClientBase", "takeClientHere",
   "cloudPushClient", "SAFE_ID", "ID_KEYS", "cleanIds", "cloudRowOk", "cloudApply", "cloudApplyNow", "cloudSnapshot"]);
 let fails = 0;
 const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };

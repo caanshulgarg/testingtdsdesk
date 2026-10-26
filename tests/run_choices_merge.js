@@ -11,7 +11,7 @@ const {load} = require("./harness");
 const src = f => fs.readFileSync(path.join(__dirname, "..", "src", "js", f), "utf8");
 const html = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "cc-")), "index.html");
 fs.writeFileSync(html, '<script id="app-main">\n' + ["00-core.js", "01-documents-in-the-firm-account.js", "26-sales-from-a-marketplace.js", "27-firm-account.js", "60-choices.js"].map(src).join("\n") + "\n</script>");
-const {ctx, x} = load(html, ["GST_DEFAULTS", "TDS_LEDGER_DEFAULTS", "EXPENSE_DEFAULTS", "fixCompany", "clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "ClientBase",
+const {ctx, x} = load(html, ["GST_DEFAULTS", "TDS_LEDGER_DEFAULTS", "EXPENSE_DEFAULTS", "fixCompany", "clone", "fpHash", "stableStr", "cloudKey", "NOBASE", "plainObj", "sameVal", "merge3", "clientKeepChoices", "ClientBase",
   "takeClientHere", "cloudPushClient", "SAFE_ID", "ID_KEYS", "cleanIds", "cloudRowOk", "cloudApply", "cloudApplyNow", "STATS_HERE", "cloudClientView", "cloudSnapshot",
   "CHOICE_LABEL", "choiceSplit", "choiceAcc", "choiceLegacy", "choiceLegacySet", "choiceDerive", "choiceRec", "choiceGet", "choiceState", "choiceValue", "choiceUsable", "choiceWho",
   "choiceWrite", "choiceGuess", "choiceConfirm", "choiceForget", "choicePick", "choiceMigrate", "partyChoice", "partyChoiceSet", "partyKeepChoice",
