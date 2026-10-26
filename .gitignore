@@ -6,3 +6,6 @@ tests/data/
 __pycache__/
 *.whl
 connector/FinComConnector.exe
+
+# what Cloudflare serves, made by cloudflare/build-site.sh at deploy time
+cf-site/
