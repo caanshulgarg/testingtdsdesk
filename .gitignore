@@ -22,3 +22,6 @@ bridge-go/bridge.exe
 
 # the Go tests' whole output, kept by CI for upload (.github/workflows/ci.yml): never committed
 bridge-go/go-test.log
+
+# what Cloudflare serves, made by cloudflare/build-site.sh at deploy time (docs/CLOUDFLARE.md)
+cf-site/

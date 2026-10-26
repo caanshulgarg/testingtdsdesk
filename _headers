@@ -1,13 +1,99 @@
-# Security headers for hosts that read a _headers file (Cloudflare Pages, Netlify).
-# GitHub Pages ignores this file; there the page carries the same policy as a <meta> tag (added by build.py),
-# except frame-ancestors, which only works as a header.
+# Response headers on Cloudflare (Workers static assets, as Pages; docs/CLOUDFLARE.md). GitHub Pages ignores this file.
+# How Pages reads it: every rule whose path matches applies, in this order; a header set by two rules is joined with a
+# comma, so a narrower rule first removes it ("! Name") and then sets its own. At most 100 rules, 2,000 characters a line.
+# Checked locally with tests/cf_pages.py (it applies these rules the same way) before it goes to main.
+
+# Every page and file
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
-  Referrer-Policy: no-referrer
-  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Referrer-Policy: strict-origin-when-cross-origin
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(self), microphone=(self), display-capture=(self), fullscreen=(self), autoplay=(self), clipboard-write=(self), picture-in-picture=(self), geolocation=(), payment=(), usb=(), serial=(), hid=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), screen-wake-lock=(), xr-spatial-tracking=(), idle-detection=(), local-fonts=(), window-management=(), encrypted-media=(), publickey-credentials-get=(), otp-credentials=(), browsing-topics=()
   Content-Security-Policy: frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
-/assets/*
+
+# The app (staging.fincom.live/review/): the same policy as the <meta> the build writes into
+# index.html (app/vite.config.js, csp()), plus what only a header can say (frame-ancestors, report-uri). The browser
+# enforces both, so the page gets whichever is narrower: the <meta> allows the one inline script by its hash, which
+# changes with every build, so here inline scripts are allowed and the <meta> narrows it. Violations go to Sentry.
+/review/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/security/?sentry_key=7f2432ad2a6406244d931f4856c30933
+
+# Caching. Pages' own default for every file is "public, max-age=0, must-revalidate" (asked again each time, 304 when
+# unchanged). The build's files with a content hash in their names never change: kept for a year.
+/review/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ...except the files under review/assets whose names stay the same from build to build: a day
+/review/assets/mediapipe/*
+  ! Cache-Control
   Cache-Control: public, max-age=86400
+/review/assets/call-bg/*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/exceljs.min.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/docx.iife.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/xlsx.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/pdf.*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/tess-*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/sample-*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review/assets/*.txt
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+
+# ...and what must never be stale: the bridges' update notes and downloads, read by FinCom Bridge itself
+/review/assets/bridge-go/*
+  ! Cache-Control
+  Cache-Control: no-cache
+/review/assets/connector/*
+  ! Cache-Control
+  Cache-Control: no-cache
+/review/assets/bridge-setup*
+  ! Cache-Control
+  Cache-Control: no-cache
+
+# The pages, the service worker and the build's id: always asked again, so a new build shows at once
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/review/
+  Cache-Control: no-cache
+/review/index.html
+  Cache-Control: no-cache
+/review/sw.js
+  Cache-Control: no-cache
+/review/build.json
+  Cache-Control: no-cache
+/review/legacy.js
+  Cache-Control: no-cache
+/review/guard.js
+  Cache-Control: no-cache
+/review/oldcheck.js
+  Cache-Control: no-cache
+/status/status.json
+  Cache-Control: no-cache
+/status/
+  Cache-Control: no-cache
+
+# The older bridges (1.x) read their update notes here, under the site's own /assets/
+/assets/connector/*
+  Cache-Control: no-cache
+/assets/bridge-setup*
+  Cache-Control: no-cache
+/react/assets/connector/*
+  Cache-Control: no-cache
