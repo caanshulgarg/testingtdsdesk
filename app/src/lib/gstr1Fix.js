@@ -559,3 +559,7 @@ export function undo(ym, reg) {
 export const R1Fix = { IT, FL, TABLES, UQC, NIL_TY, RATES, isAmend, linesOf, overlay, curOf, names, delta3b, now, excelData, totalsOf, preview, apply, undo, info, fieldWord, check };
 if (typeof window !== "undefined") window.R1Fix = R1Fix;
 else if (typeof globalThis === "object") globalThis.R1Fix = R1Fix;
+// Large saves sent compressed (lib/gzUpload.js, loaded with the first one: Cloud.api in src/js/27-firm-account.js asks
+// window.loadGzUpload). Its loader is set here, in a file fetched with every open, as the first file and legacy.js are
+// at their size budgets; until it is set every save goes as before
+if (typeof window === "object") window.loadGzUpload = () => import("./gzUpload.js");

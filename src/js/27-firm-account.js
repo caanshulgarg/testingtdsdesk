@@ -91,7 +91,11 @@ const Cloud = {
     const held = LocalOwner.guard(opts.method || "GET", s);
     if (held) throw new Error(held);
     const headers = Object.assign({apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, opts.headers || {});
-    const r = await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body: opts.body ? JSON.stringify(opts.body) : undefined});
+    const body = opts.body ? JSON.stringify(opts.body) : undefined;
+    // a save over 32 KB goes gzipped (app/src/lib/gzUpload.js: the same request, through records-upload); else, and on
+    // any failure there, as before
+    const r = (body && body.length > 32768 && typeof loadGzUpload == "function" && await loadGzUpload().then(m => m.send(path, opts, body, headers, c.url)).catch(() => null))
+      || await fetch(c.url.replace(/\/+$/, "") + "/rest/v1/" + path, {method: opts.method || "GET", headers, body});
     if (r.status === 401 && !retry){ await this.refreshToken(s.access_token); return this.api(path, opts, true); }
     const text = await r.text();
     let j = null;

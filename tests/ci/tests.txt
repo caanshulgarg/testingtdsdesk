@@ -508,3 +508,6 @@ run_books_reopen_freeze.py            300  TDSDESK_SITE=../app/dist-test
 run_bank_heal.py                      240  TDSDESK_SITE=../app/dist-test
 run_bank_live_parts.py                240  TDSDESK_SITE=../app/dist-test
 run_postto_link.py                    240  TDSDESK_SITE=../app/dist-test
+# next-gzip-uploads (26-Oct-2026): large saves sent gzipped through records-upload; plain when it is missing or fails
+run_gz_upload.py                      240  TDSDESK_SITE=../app/dist-test
+run_records_upload_server.py          120
