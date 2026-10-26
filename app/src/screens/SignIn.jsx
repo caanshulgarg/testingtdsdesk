@@ -3,7 +3,7 @@
 // doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, oauthGoogle, oauthAzure, useOffline) and mfaAction (src/js/43); the boxes keep
 // their data-cloud and id, which those read, and the buttons their data-act (the old tests press them by it); and what is typed is kept in S.cloudForm (cloudForm).
 import Msg from "../parts/Msg.jsx";
-import { useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { staleReload } from "../staleChunk.js";
 
 const Act = ({ act, className = "btn primary", children, disabled }) => <button className={className} data-act={act} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -14,6 +14,10 @@ const Field = ({ label, k, type = "text", fk, auto, first }) => {
   return <label className="f" style={first ? undefined : { marginTop: 8 }}><span>{label}</span><input ref={ref} type={type} data-cloud={k} data-fk={fk} aria-label={label} autoComplete={auto}
     defaultValue={f[k] || (k === "email" ? c.email || "" : "")} onChange={(ev) => cloudForm(k, ev.target.value)} /></label>;
 };
+// the bot check (lib/bot.jsx, Cloudflare Turnstile): only in a build with a site key (vite.config.js); without one, not
+// in the build at all and the forms are as before
+const Bot = __TURNSTILE_KEY__ ? lazy(() => import("../lib/bot.jsx")) : null;
+export const BotBox = ({ action }) => Bot ? <Suspense fallback={null}><Bot action={action} /></Suspense> : null;
 const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={Cloud.st.error} /></p> : null;
 // "Keep me signed in" (section D, 03-Oct-2026): ticked, the session is kept on this computer (localStorage) until you sign
 // out; unticked, in this tab only (sessionStorage), gone when the browser closes. Read by Cloud.signIn (src/js/43).
@@ -46,6 +50,7 @@ function SignUp() {
     <OAuth />
     <Field label="Your name" k="name" fk="suname" auto="name" first /><Field label="Firm name" k="firm" fk="sufirm" auto="organization" /><Field label="Email" k="email" type="email" fk="cloudemail" auto="username" />
     <Field label="Password (10 characters or more, letters and digits)" k="password" type="password" fk="cloudpw" auto="new-password" />
+    <BotBox action="signup" />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignUp" disabled={!!st.busy}>{st.busy ? "Sending…" : "Create the account"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Already have an account? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
 }
@@ -91,6 +96,7 @@ export default function SignIn() {
     <OAuth />
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
     <KeepBox />
+    <BotBox action="login" />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>

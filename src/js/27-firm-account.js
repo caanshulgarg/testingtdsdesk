@@ -29,15 +29,16 @@ const Cloud = {
   },
   // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
   // straight at Supabase Auth where that function is not deployed (the lock is then kept by the token hook alone)
+  // the bot check's token (app/src/lib/bot.jsx), when the build has one: passed on to Supabase Auth
   async signInCall(email, password){
-    const c = this.cfg();
+    const c = this.cfg(), captcha_token = window.fincomBot ? await window.fincomBot() : undefined, direct = () => this.authCall("token?grant_type=password", {email, password, gotrue_meta_security: captcha_token && {captcha_token}});
     let r;
-    try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password})}); }
+    try { r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signin", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify({email, password, captcha_token})}); }
     catch (e){ r = null; }
-    if (!r || r.status === 404) return this.authCall("token?grant_type=password", {email, password});
+    if (!r || r.status === 404) return direct();
     const j = await r.json().catch(() => null);
     // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
-    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return this.authCall("token?grant_type=password", {email, password});
+    if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return direct();
     if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
     return j;
   },

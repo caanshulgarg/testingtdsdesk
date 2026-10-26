@@ -36,7 +36,7 @@ export async function startOAuth(provider) {
 export async function signUp(d) {
   const v = secret(), ch = await challenge(v);
   try { localStorage.setItem(SIGNUP(), v); } catch (e) { /* storage blocked: the link then says "Email confirmed — now sign in" */ }
-  const r = await fetch(base() + "/functions/v1/signup", { method: "POST", headers: { apikey: Cloud.cfg().key, "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, d, { redirect: page() + "#confirmed", challenge: ch })) });
+  const r = await fetch(base() + "/functions/v1/signup", { method: "POST", headers: { apikey: Cloud.cfg().key, "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({}, d, { redirect: page() + "#confirmed", challenge: ch, captcha_token: window.fincomBot ? await window.fincomBot() : undefined })) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw new Error(j.error || "The account could not be made.");
   return j;

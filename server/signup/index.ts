@@ -1,4 +1,6 @@
-// signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (handler.ts; security review M1).
+// signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (handler.ts; security review M1),
+// the bot-check token, limits shared across running copies (migration 112), throwaway domains refused. Secrets:
+// CAPTCHA_REQUIRED=1 once Supabase Auth's bot protection is on; DISPOSABLE_DOMAINS (optional, comma-separated).
 // signup v12 (26-Oct-2026): self-service sign-up with the email confirmed first, and the person's own firm with
 // ₹10,000 made on their first sign-in (provision); invites and the administrator's path as in v11. The rules are in
 // handler.ts (Deno tests: handler_test.ts). Deployed as uploaded files (index.ts, handler.ts), verify_jwt off: the
@@ -37,7 +39,7 @@ async function invitePending(email: string): Promise<boolean> {
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
-async function sendSetPasswordLink(email: string): Promise<void> {
+async function sendSetPasswordLink(email: string, captcha = ""): Promise<void> {
   if (RESEND) {
     const { data, error } = await admin.auth.admin.generateLink({ type: "recovery", email, options: { redirectTo: APP } });
     if (error) return;
@@ -50,7 +52,8 @@ async function sendSetPasswordLink(email: string): Promise<void> {
     return;
   }
   const anon = createClient(URL, ANON, { auth: { persistSession: false } });
-  await anon.auth.resetPasswordForEmail(email, { redirectTo: APP });
+  // Supabase's mailer: Auth's /recover, which checks the page's bot-check token once its bot protection is on
+  await anon.auth.resetPasswordForEmail(email, { redirectTo: APP, ...(captcha ? { captchaToken: captcha } : {}) });
 }
 
 async function findUser(mail: string) {
@@ -111,7 +114,8 @@ async function authSignUp(f: SignUpForm): Promise<void> {
   const pkce = f.challenge ? { code_challenge: f.challenge, code_challenge_method: "s256" } : {};
   const r = await fetch(URL + "/auth/v1/signup?redirect_to=" + encodeURIComponent(f.redirect || APP), {
     method: "POST", headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ email: f.email, password: f.password, data: { name: f.name, firm: f.firm }, ...pkce }),
+    body: JSON.stringify({ email: f.email, password: f.password, data: { name: f.name, firm: f.firm }, ...pkce,
+      ...(f.captcha ? { gotrue_meta_security: { captcha_token: f.captcha } } : {}) }),
   });
   await r.body?.cancel();
 }
@@ -197,6 +201,14 @@ const handler = makeHandler({
     link: new RateLimiter(1, 15 * 60_000),     // at most one set-password email per email per 15 minutes
     provision: new RateLimiter(30, 10 * 60_000),   // 30 provision calls per address per 10 minutes
   },
+  // 26-Oct-2026: the bot check, the limits shared by every running copy (migration 112), more throwaway domains
+  captchaRequired: Deno.env.get("CAPTCHA_REQUIRED") === "1",
+  rateHit: async (bucket, key, max, windowS) => {
+    const { data, error } = await admin.rpc("auth_rate_hit", { p_bucket: bucket, p_key: key, p_max: max, p_window_s: windowS });
+    if (error) throw new Error(error.message);
+    return data === true;
+  },
+  extraDisposable: (Deno.env.get("DISPOSABLE_DOMAINS") || "").split(","),
 });
 
 Deno.serve(handler);

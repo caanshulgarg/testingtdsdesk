@@ -52,7 +52,7 @@ const people: Record<string, AuthUser> = {
 
 function fake(over: Partial<Deps> = {}) {
   let clock = 1_000_000;
-  const log = { created: [] as any[], links: [] as string[], signups: [] as any[], slept: 0, bg: [] as Promise<unknown>[] };
+  const log = { created: [] as any[], links: [] as string[], linkCaptchas: [] as string[], signups: [] as any[], slept: 0, bg: [] as Promise<unknown>[] };
   const mem = memDb(() => clock);
   // INVITED has an active member row in firm-x whose login (u-inv) was never used
   mem.t.firms.set("firm-x", { id: "firm-x", name: "X & Co", balance: 0, note: "", createdAt: 0 });
@@ -61,7 +61,7 @@ function fake(over: Partial<Deps> = {}) {
     platformAdmin: async (jwt) => (jwt === ADMIN_JWT ? { userId: "admin-1" } : null),
     // EXISTING has a login that has been used; INVITED was invited and never signed in
     invitePending: async (email) => email === INVITED,
-    sendSetPasswordLink: async (email) => { log.links.push(email); },
+    sendSetPasswordLink: async (email, captcha) => { log.links.push(email); log.linkCaptchas.push(captcha || ""); },
     createFirm: async (_by, f) => { log.created.push(f); return { status: 200, body: { ok: true, firm_id: "f1", email: f.email } }; },
     authSignUp: async (f) => { log.signups.push(f); },
     authUser: async (jwt) => people[jwt] ? { ...people[jwt], signupFirm: mem.t.marks.get(people[jwt].id) ?? null } : null,
@@ -99,7 +99,7 @@ Deno.test("a new email gets 'check your email'; Supabase is asked to sign it up 
   const r = await read(await handler(post({ ...form(" Nobody@Example.test "), redirect: "https://staging.fincom.live/review/" })));
   eq(r, OK);
   await Promise.all(log.bg);
-  eq(log.signups, [{ email: "nobody@example.test", password: "a-long-password-1", name: "A Person", firm: "Some Firm", redirect: "https://staging.fincom.live/review/", challenge: "" }]);
+  eq(log.signups, [{ email: "nobody@example.test", password: "a-long-password-1", name: "A Person", firm: "Some Firm", redirect: "https://staging.fincom.live/review/", challenge: "", captcha: "" }]);
   eq(firmCount(t), 0, "no firm"); eq(t.credits.length, 0, "no credit"); eq(log.created.length, 0); eq(log.links.length, 0);
 });
 
@@ -361,4 +361,64 @@ Deno.test("the firm's id comes from the login: the same each time, a uuid, diffe
   const a = await ownFirmId("u-new"), b = await ownFirmId("u-new"), c = await ownFirmId("u-g");
   eq(a, b); assert(a !== c);
   assert(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(a), a);
+});
+
+// ---------- 26-Oct-2026 (the owner: "Security of sign in and sign up page should be better") ----------
+// the bot check (Cloudflare Turnstile): the page's token goes on to Supabase Auth's sign-up or recover, which check it
+// once Auth's bot protection is on; with CAPTCHA_REQUIRED=1 a form without one is refused here first
+Deno.test("the bot-check token goes with the sign-up, and with an invite's set-password link", async () => {
+  const { handler, log } = fake();
+  eq(await read(await handler(post({ ...form("a@example.test"), captcha_token: "TS.token-1" }))), OK);
+  eq(await read(await handler(post({ ...form(INVITED), captcha_token: "TS.token-2" }))), OK);
+  await Promise.all(log.bg);
+  eq(log.signups.map((s: any) => s.captcha), ["TS.token-1"]); eq(log.linkCaptchas, ["TS.token-2"]);
+});
+
+Deno.test("bot check required: a form without a token is refused (said plainly), nothing sent; with one, as before", async () => {
+  const { handler, log } = fake({ captchaRequired: true });
+  const r = await read(await handler(post(form("a@example.test"))));
+  eq(r.status, 400); eq(r.body.reason, "captcha"); assert(/not a robot/.test(r.body.error));
+  await Promise.all(log.bg); eq(log.signups.length, 0); eq(log.links.length, 0);
+  eq(await read(await handler(post({ ...form("a@example.test"), captcha_token: "tok" }))), OK);
+  await Promise.all(log.bg); eq(log.signups.length, 1);
+});
+
+// limits shared by every running copy (public.auth_rate_hits, migration 112), on top of each copy's own
+function sharedRate() {
+  const rows: { bucket: string; key: string }[] = [];
+  return { rows, hit: async (bucket: string, key: string, max: number, _w: number) => {
+    if (rows.filter((r) => r.bucket === bucket && r.key === key).length >= max) return false;
+    rows.push({ bucket, key }); return true;
+  } };
+}
+Deno.test("per address: two running copies share the count (10 per 10 minutes), the in-memory limit not reached in either", async () => {
+  const shared = sharedRate();
+  const a = fake({ rateHit: shared.hit }), b = fake({ rateHit: shared.hit });
+  for (let i = 0; i < 10; i++) eq((await (i % 2 ? a : b).handler(post(form(`p${i}@example.test`)))).status, 200);
+  eq((await a.handler(post(form("p10@example.test")))).status, 429, "the 11th from that address, on either copy");
+  eq((await b.handler(post(form("p11@example.test")))).status, 429);
+  eq((await a.handler(post(form("p12@example.test"), { ip: "198.51.100.1" }))).status, 200, "another address");
+  assert(shared.rows.every((r) => /^[0-9a-f]{64}$/.test(r.key)), "addresses and emails kept only as a SHA-256");
+});
+
+Deno.test("per email: two running copies share the count (5 per hour) across addresses", async () => {
+  const shared = sharedRate();
+  const a = fake({ rateHit: shared.hit }), b = fake({ rateHit: shared.hit });
+  for (let i = 0; i < 5; i++) eq((await (i % 2 ? a : b).handler(post(form("same@example.test"), { ip: `192.0.2.${i}` }))).status, 200);
+  eq((await a.handler(post(form("same@example.test"), { ip: "192.0.2.77" }))).status, 429);
+});
+
+Deno.test("the shared table not there yet (migration 112 not run): the form works as before", async () => {
+  const { handler } = fake({ rateHit: async () => { throw new Error("relation does not exist"); } });
+  eq(await read(await handler(post(form("a@example.test")))), OK);
+});
+
+// throwaway email domains: the same neutral answer, nothing sent
+Deno.test("a throwaway email domain gets the same answer and nothing is sent (the fixed list, and the extra list)", async () => {
+  const { handler, log } = fake({ extraDisposable: ["junkbox.test"] });
+  const outs = [];
+  for (const e of ["bot@mailinator.com", "x@Guerrillamail.com", "y@sub.yopmail.com", "z@junkbox.test", "real@example.test"]) outs.push(await read(await handler(post(form(e)))));
+  outs.forEach((o, i) => eq(o, OK, "answer " + i));
+  await Promise.all(log.bg);
+  eq(log.signups.map((s: any) => s.email), ["real@example.test"]);
 });
