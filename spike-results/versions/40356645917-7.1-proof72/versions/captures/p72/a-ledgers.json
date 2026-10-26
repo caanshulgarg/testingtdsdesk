@@ -1,0 +1,236 @@
+{
+  "company": "FinCom Spike Co",
+  "groups": [
+    {
+      "name": "Bank Accounts",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Bank OD A/c",
+      "parent": "Loans (Liability)"
+    },
+    {
+      "name": "Branch / Divisions",
+      "parent": "Primary"
+    },
+    {
+      "name": "Capital Account",
+      "parent": "Primary"
+    },
+    {
+      "name": "Cash-in-Hand",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Current Assets",
+      "parent": "Primary"
+    },
+    {
+      "name": "Current Liabilities",
+      "parent": "Primary"
+    },
+    {
+      "name": "Deposits (Asset)",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Direct Expenses",
+      "parent": "Primary"
+    },
+    {
+      "name": "Direct Incomes",
+      "parent": "Primary"
+    },
+    {
+      "name": "Duties & Taxes",
+      "parent": "Current Liabilities"
+    },
+    {
+      "name": "Fixed Assets",
+      "parent": "Primary"
+    },
+    {
+      "name": "Indirect Expenses",
+      "parent": "Primary"
+    },
+    {
+      "name": "Indirect Incomes",
+      "parent": "Primary"
+    },
+    {
+      "name": "Investments",
+      "parent": "Primary"
+    },
+    {
+      "name": "Loans & Advances (Asset)",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Loans (Liability)",
+      "parent": "Primary"
+    },
+    {
+      "name": "Misc. Expenses (ASSET)",
+      "parent": "Primary"
+    },
+    {
+      "name": "Provisions",
+      "parent": "Current Liabilities"
+    },
+    {
+      "name": "Purchase Accounts",
+      "parent": "Primary"
+    },
+    {
+      "name": "Reserves & Surplus",
+      "parent": "Capital Account"
+    },
+    {
+      "name": "Sales Accounts",
+      "parent": "Primary"
+    },
+    {
+      "name": "Secured Loans",
+      "parent": "Loans (Liability)"
+    },
+    {
+      "name": "Stock-in-Hand",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Sundry Creditors",
+      "parent": "Current Liabilities"
+    },
+    {
+      "name": "Sundry Debtors",
+      "parent": "Current Assets"
+    },
+    {
+      "name": "Suspense A/c",
+      "parent": "Primary"
+    },
+    {
+      "name": "Unsecured Loans",
+      "parent": "Loans (Liability)"
+    }
+  ],
+  "ledgers": [
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "32",
+      "billwise": "No",
+      "dutyHead": "",
+      "email": "",
+      "group": "Cash-in-Hand",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-0000001f",
+      "ifsc": "",
+      "mobile": "",
+      "name": "Cash",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    },
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "31",
+      "billwise": "No",
+      "dutyHead": "",
+      "email": "",
+      "group": "Primary",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-0000001e",
+      "ifsc": "",
+      "mobile": "",
+      "name": "Profit & Loss A/c",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    },
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "211",
+      "billwise": "No",
+      "dutyHead": "",
+      "email": "",
+      "group": "Indirect Incomes",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-000000d1",
+      "ifsc": "",
+      "mobile": "",
+      "name": "Spike Income",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    },
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "208",
+      "billwise": "Yes",
+      "dutyHead": "",
+      "email": "",
+      "group": "Sundry Debtors",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-000000ce",
+      "ifsc": "",
+      "mobile": "",
+      "name": "Spike Party",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    },
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "209",
+      "billwise": "Yes",
+      "dutyHead": "",
+      "email": "",
+      "group": "Sundry Debtors",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-000000cf",
+      "ifsc": "",
+      "mobile": "",
+      "name": "Spike Party 2",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    },
+    {
+      "acNo": "",
+      "address": [],
+      "alterId": "210",
+      "billwise": "Yes",
+      "dutyHead": "",
+      "email": "",
+      "group": "Sundry Debtors",
+      "gstin": "",
+      "guid": "21d961b5-8b6f-459c-a57f-79623a4f0fdd-000000d0",
+      "ifsc": "",
+      "mobile": "",
+      "name": "UI Party",
+      "pan": "",
+      "phone": "",
+      "rate": "0",
+      "taxType": "Others",
+      "tdsNature": ""
+    }
+  ],
+  "ok": true,
+  "port": 9000,
+  "skipped": []
+}

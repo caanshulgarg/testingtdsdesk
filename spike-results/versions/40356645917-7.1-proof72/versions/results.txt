@@ -1,0 +1,39 @@
+INFO TallyPrime 7.1, mode proof72, runner GitHub Actions 1000013483, 2026-10-26T16:27:08
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-26, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-26, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1526 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 9 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe SHA-256 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799; bridge source: 915592c421e61957fb0166c3242c0bb6cbbb59fc Bridge 2.4.7 built: setup SHA-256 69aa6b74…8799 (program a6ea2ec5…b546), release log row, notes and test sheet fingerprint (25-Oct-2026 02:23 IST); not published
+INFO bridge on 127.0.0.1:9100, version 2.4.7, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, tagcheck, vchheads
+INFO proof72: window probe running True (beats 19), Tally pid 6364
+PASS p1 bridge 2.4.7 installed and connected: finds Tally, the company list, the ledger list: bridge 2.4.7 (setup setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe SHA-256 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799); /status?fresh=1 169 ms: tally '{"since":"","state":"open"}', sessions {"companies":[{"from":"20260401","gstin":"","guid":"21d961b5-8b6f-459c-a57f-79623a4f0fdd","name":"FinCom Spike Co","pan":"","to":"20260401"}],"error":"","mine":true,"ok":true,"port":9000,"program":"tally","session":2,"skipped":false,"tallyState":"open","user":"runneradmin"}; /companies 2 ms: 'FinCom Spike Co' listed True (FinCom Spike Co port 9000 from 20260401); /ledgers 329 ms: 6 ledgers; cloud calls at the stub: beat x2, make_main x1
+PASS p2 a save on the screen reaches FinCom through the add-on: Receipt by keys (2-10-2026, Cash, Spike Income 700): line after 5.1 s; stub 16:29:16 recorder line event=created guid=21d961b5-8b6f-459c-a57f-79623a4f0fdd-00000002 mid=2 aid=2 vch=Receipt/1/20261002 body=yes(1451 chars)
+PASS p3 a Payment posted by the bridge: CREATED and LASTVCHID: /import of one Payment (1-9-2026, Spike Party 500 / Cash, narration 'TDSDesk:P72V1022DAD | ...') 343 ms: ok True, created 1, altered 0, errors 0, exceptions 0, LASTVCHID 3, message '', byReply True
+MEASURE d V2 (REMOTEID="FinCom-P72V2-022DAD") posted by the bridge's /import 342 ms: ok True, created 1, altered 0, LASTVCHID 4, message ''
+HARNESS p4 tally.ini keys TallyPrime writes from its own port screen (port, acts as, ODBC): no result: the harness stopped or timed out (checks step: failure)
+HARNESS p5 a port written into tally.ini with Tally closed is used at the next start: no result: the harness stopped or timed out (checks step: failure)
+HARNESS p6 two Tallys on one computer (the same install twice; a copy of the install on another port): no result: the harness stopped or timed out (checks step: failure)
+HARNESS p7 company GUID after a rename and after a copy of the data folder: no result: the harness stopped or timed out (checks step: failure)
+HARNESS p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID): no result: the harness stopped or timed out (checks step: failure)
+HARNESS p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company: no result: the harness stopped or timed out (checks step: failure)
+HARNESS p10 a batch of 3 with one missing ledger: Tally's exact reply: no result: the harness stopped or timed out (checks step: failure)
+HARNESS p11 Tally's window and requests during the run (window probe, the bridge's requests at the proxy): no result: the harness stopped or timed out (checks step: failure)
+HARNESS p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say: no result: the harness stopped or timed out (checks step: failure)
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 2 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1

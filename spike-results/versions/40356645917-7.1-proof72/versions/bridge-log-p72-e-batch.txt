@@ -1,0 +1,9 @@
+2026-10-26 16:29:20      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>3</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-26 16:29:20    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 3)
+2026-10-26 16:29:20  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-26 16:29:21      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+2026-10-26 16:29:21    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4)
+2026-10-26 16:29:21  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+2026-10-26 16:29:21      Tally replied: <RESPONSE> <LINEERROR>Ledger &apos;P72 Missing Ledger&apos; does not exist!</LINEERROR> <CREATED>2</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>1</EXCEPTIONS> </RESPONSE> 
+2026-10-26 16:29:21    request 1 of 1: 3 voucher in 0.2 s (created 2, altered 0, exceptions 1, ignored 0, last Tally id 6)
+2026-10-26 16:29:21  Import into 'FinCom Spike Co': 0 of 3 posted by Tally's reply

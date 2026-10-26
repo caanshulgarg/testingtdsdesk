@@ -1,0 +1,82 @@
+{
+  "company": "FinCom Spike Co",
+  "ok": true,
+  "port": 9000,
+  "results": [
+    {
+      "accepted": true,
+      "altered": 0,
+      "batchEnd": "6",
+      "batchN": 3,
+      "company": "FinCom Spike Co",
+      "created": 2,
+      "errors": 0,
+      "exceptions": 1,
+      "id": "P72E1022DAD",
+      "ignored": 0,
+      "kind": "voucher",
+      "lastVchId": "6",
+      "lineError": [
+        "Ledger 'P72 Missing Ledger' does not exist!"
+      ],
+      "message": "Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!",
+      "needsReview": true,
+      "ok": false,
+      "port": 9000,
+      "secondsReq": 0.179,
+      "sentAt": "2026-10-26T16:29:21Z",
+      "vchDate": "20260831",
+      "vchType": "Journal"
+    },
+    {
+      "accepted": true,
+      "altered": 0,
+      "batchEnd": "6",
+      "batchN": 3,
+      "company": "FinCom Spike Co",
+      "created": 2,
+      "errors": 0,
+      "exceptions": 1,
+      "id": "P72E2022DAD",
+      "ignored": 0,
+      "kind": "voucher",
+      "lastVchId": "6",
+      "lineError": [
+        "Ledger 'P72 Missing Ledger' does not exist!"
+      ],
+      "message": "Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!",
+      "needsReview": true,
+      "ok": false,
+      "port": 9000,
+      "secondsReq": 0.179,
+      "sentAt": "2026-10-26T16:29:21Z",
+      "vchDate": "20260831",
+      "vchType": "Journal"
+    },
+    {
+      "accepted": true,
+      "altered": 0,
+      "batchEnd": "6",
+      "batchN": 3,
+      "company": "FinCom Spike Co",
+      "created": 2,
+      "errors": 0,
+      "exceptions": 1,
+      "id": "P72E3022DAD",
+      "ignored": 0,
+      "kind": "voucher",
+      "lastVchId": "6",
+      "lineError": [
+        "Ledger 'P72 Missing Ledger' does not exist!"
+      ],
+      "message": "Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!",
+      "needsReview": true,
+      "ok": false,
+      "port": 9000,
+      "secondsReq": 0.179,
+      "sentAt": "2026-10-26T16:29:21Z",
+      "vchDate": "20260831",
+      "vchType": "Journal"
+    }
+  ]
+}
