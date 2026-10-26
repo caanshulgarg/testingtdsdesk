@@ -1,0 +1,12 @@
+{
+  "companies": [
+    {
+      "from": "20260401",
+      "mine": true,
+      "name": "FinCom Spike Co R72",
+      "port": 9000,
+      "to": "20261002"
+    }
+  ],
+  "ok": true
+}

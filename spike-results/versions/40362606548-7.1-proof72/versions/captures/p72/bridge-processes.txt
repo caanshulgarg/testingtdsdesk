@@ -1,0 +1,3 @@
+3916 C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe :: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" user --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"
+2304 C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe :: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" worker --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json" --home "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge" --parent 3916
+8064 C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe :: "C:\Users\runneradmin\AppData\Local\FinCom Bridge\FinComBridge.exe" tray --quiet --config "C:\Users\runneradmin\AppData\Local\TDS Desk Bridge\tds-bridge.config.json"

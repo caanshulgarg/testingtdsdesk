@@ -1,0 +1,30 @@
+{
+  "company": "FinCom Spike Co",
+  "ok": true,
+  "port": 9000,
+  "results": [
+    {
+      "altered": 0,
+      "batchEnd": "3",
+      "batchN": 1,
+      "byReply": true,
+      "company": "FinCom Spike Co",
+      "created": 1,
+      "errors": 0,
+      "exceptions": 0,
+      "id": "P72V14D73B8",
+      "ignored": 0,
+      "kind": "voucher",
+      "lastVchId": "3",
+      "message": "",
+      "ok": true,
+      "port": 9000,
+      "secondsReq": 0.18,
+      "sentAt": "2026-10-26T17:04:21Z",
+      "vchDate": "20260901",
+      "vchId": "3",
+      "vchType": "Payment",
+      "verified": false
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "fix": "In TallyPrime: F1 Help > Settings > Connectivity > \"TallyPrime acts as\" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).",
+      "level": "bad",
+      "text": "Your TallyPrime is running but is not accepting connections on port 4125 yet."
+    }
+  ],
+  "freePort": 9001,
+  "listeners": [
+    {
+      "pid": 6296,
+      "port": 9100,
+      "program": "FinComBridge",
+      "session": 2,
+      "user": "runneradmin"
+    }
+  ],
+  "mySession": 2,
+  "ok": true,
+  "seeProcesses": true,
+  "tallies": [
+    {
+      "ini": {
+        "data": "D:\\a\\_temp\\TallyData",
+        "found": true,
+        "mode": "Both",
+        "path": "C:\\Program Files\\TallyPrime\\tally.ini",
+        "port": 4125
+      },
+      "mine": true,
+      "pid": 2272,
+      "ports": [],
+      "program": "tally",
+      "session": 2,
+      "user": "runneradmin"
+    }
+  ],
+  "user": "runneradmin",
+  "version": "2.4.7"
+}

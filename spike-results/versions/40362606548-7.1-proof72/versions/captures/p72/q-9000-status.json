@@ -1,0 +1,55 @@
+{
+  "allowImport": true,
+  "beat": {
+    "every": 30,
+    "last": "2026-10-26T17:18:25",
+    "missedSince": "",
+    "on": true
+  },
+  "computer": "runnervmdaln5",
+  "impl": "go",
+  "jobs": [],
+  "mode": "config",
+  "mySession": 2,
+  "ok": true,
+  "onlyMySession": true,
+  "paused": false,
+  "posting": "",
+  "readOnly": "",
+  "sessions": [
+    {
+      "companies": [
+        {
+          "from": "20260401",
+          "gstin": "",
+          "guid": "8a738ac8-0ff6-4d32-9b2d-83ba93061008",
+          "name": "FinCom Spike Co",
+          "pan": "",
+          "to": "20261031"
+        }
+      ],
+      "error": "",
+      "mine": true,
+      "ok": true,
+      "port": 4125,
+      "program": "tally",
+      "session": 2,
+      "skipped": false,
+      "tallyState": "open",
+      "user": "runneradmin"
+    }
+  ],
+  "tally": {
+    "since": "",
+    "state": "open"
+  },
+  "tallyStuck": null,
+  "testMode": false,
+  "time": "2026-10-26T17:18:28",
+  "user": "runnervmdaln5\\runneradmin",
+  "version": "2.4.7",
+  "wake": {
+    "joined": false,
+    "on": false
+  }
+}

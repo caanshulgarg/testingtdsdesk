@@ -1,0 +1,413 @@
+[17:02:07] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-26, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 12 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 15 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-26, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 12.2 s after start, GET 2044 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 12 ms, 'FinCom Spike Co' in it: True
+[17:02:42] ---- the stub cloud and the bridge
+[ledger Spike Income] 22 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe SHA-256 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799; bridge source: 915592c421e61957fb0166c3242c0bb6cbbb59fc Bridge 2.4.7 built: setup SHA-256 69aa6b74…8799 (program a6ea2ec5…b546), release log row, notes and test sheet fingerprint (25-Oct-2026 02:23 IST); not published
+[17:02:48] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1244)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.4.7, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-26 17:03:29  FinCom Bridge 2.4.7: started just for runnervmdaln5\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-26 17:03:29  FinCom Bridge 2.4.7, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-10-26 17:03:30  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-10-26 17:03:30  FinCom Bridge 2.4.7 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmdaln5\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-26 17:03:30  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-26 17:03:30  Recorder: re-scan of the add-on's files for 2.4.7: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-26 17:03:30  Check:  - 
+  bridge log: 2026-10-26 17:03:33  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-26 17:03:33  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-26 17:03:33  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-26 17:03:33  Company FinCom Spike Co: its Tally GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008 is held from now on
+  bridge log: 2026-10-26 17:03:33  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=211 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-26 17:03:33  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=211
+  bridge log: 2026-10-26 17:03:33  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=211)
+  bridge log: 2026-10-26 17:03:33  Bank dates: FinCom Spike Co: following Tally's voucher counter from ALTVCHID=1 (a move the add-on's lines do not explain is a bank date set, or another change Tally makes without a voucher form)
+  bridge log: 2026-10-26 17:03:34  Employees of FinCom Spike Co: Tally's master counter 211: the payroll list read (2 request(s), 0 row(s)); unchanged, nothing sent
+  INFO add-on: recorder files after start: none
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, tagcheck, vchheads
+  INFO proof72: window probe running True (beats 20), Tally pid 3272
+[17:04:18] ---- proof72 a: the published bridge 2.4.7, unchanged, on this release
+######## PASS p1 bridge 2.4.7 installed and connected: finds Tally, the company list, the ledger list: bridge 2.4.7 (setup setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe SHA-256 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799); /status?fresh=1 173 ms: tally '{"since":"","state":"open"}', sessions {"companies":[{"from":"20260401","gstin":"","guid":"8a738ac8-0ff6-4d32-9b2d-83ba93061008","name":"FinCom Spike Co","pan":"","to":"20260401"}],"error":"","mine":true,"ok":true,"port":9000,"program":"tally","session":2,"skipped":false,"tallyState":"open","user":"runneradmin"}; /companies 2 ms: 'FinCom Spike Co' listed True (FinCom Spike Co port 9000 from 20260401); /ledgers 329 ms: 6 ledgers; cloud calls at the stub: beat x2, make_main x1
+[shot] tds-001-gw0 (1024x768)
+[17:04:21] [tds] screen tds-001-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, I-Apr-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co (Schedule Backup) upr-26 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Company ion 4+72- ning rrela bde5f ng...
+[keys] 'v' -> Tally 'TallyPrime:9000'
+[shot] v-p72-a-vouchers (1024x768)
+[keys] '{F6}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-10-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Cash{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] 'Spike Income{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-a-particular (1024x768)
+[keys] '700{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-p72-a-saved (1024x768)
+  bridge log: 2026-10-26 17:04:50  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line ee48cd7d…): asking Tally by MasterID
+  bridge log: 2026-10-26 17:04:51  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+  bridge log: 2026-10-26 17:04:51  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line ee48cd7d…): taken: Tally's GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008-00000002, AlterID 2
+  bridge log: 2026-10-26 17:04:51  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+######## PASS p2 a save on the screen reaches FinCom through the add-on: Receipt by keys (2-10-2026, Cash, Spike Income 700): line after 5.1 s; stub 17:04:51 recorder line event=created guid=8a738ac8-0ff6-4d32-9b2d-83ba93061008-00000002 mid=2 aid=2 vch=Receipt/1/20261002 body=yes(1451 chars)
+######## PASS p3 a Payment posted by the bridge: CREATED and LASTVCHID: /import of one Payment (1-9-2026, P72 Office Expenses 500 / Cash, narration 'TDSDesk:P72V18D2B1B | ...') 345 ms: ok True, created 1, altered 0, errors 0, exceptions 0, LASTVCHID 3, message '', byReply True
+MEASURE d V2 (REMOTEID="FinCom-P72V2-8D2B1B") posted by the bridge's /import 344 ms: ok True, created 1, altered 0, LASTVCHID 4, message ''
+[17:04:56] ---- proof72 e: a batch of 3 with one missing ledger (the bridge)
+  bridge log: 2026-10-26 17:04:55      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-26 17:04:55    request 1 of 1: 1 master in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 0)
+  bridge log: 2026-10-26 17:04:55  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+  bridge log: 2026-10-26 17:04:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>3</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-26 17:04:56    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 3)
+  bridge log: 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+  bridge log: 2026-10-26 17:04:56      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>4</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-26 17:04:56    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4)
+  bridge log: 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+  bridge log: 2026-10-26 17:04:56      Tally replied: <RESPONSE> <LINEERROR>Ledger &apos;P72 Missing Ledger&apos; does not exist!</LINEERROR> <CREATED>2</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>6</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>1</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-26 17:04:56    request 1 of 1: 3 voucher in 0.2 s (created 2, altered 0, exceptions 1, ignored 0, last Tally id 6)
+  bridge log: 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 0 of 3 posted by Tally's reply
+[17:04:59] ---- proof72 d: V1 and V2 altered on the screen
+[shot] tds-002-gw0 (1024x768)
+[17:05:01] [tds] screen tds-002-gw0 : Find details entered in masters and transactions. EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Quit Q (Alt+F) O: Import Z: Exchange A Accept Search E: Export M: Share inCom Spike Co p: print 2-Oct-26 Friday Amount Fl: Help Date 3aaa6— 63fa7 Company .338. D: Delete x: Cancel Vch Contra F5: payment F6: Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. Fl 2: Configure ion 4+72- ning rrela bde5f ng jo " , "so bf990 ion ...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-003-gw1 (1024x768)
+[17:05:04] [tds] screen tds-003-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Creati Recei t No. 2 Account Cument balance: Particulars Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike Co O: Import E: Export M: Share p: print 2-Oct-26 Friday Amount Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = Vch No. Fl 2: Configure 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-004-gw2 (1024x768)
+[17:05:08] [tds] screen tds-004-gw2 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Friday, 2-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Company...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '1-9-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-at-amount (1024x768)
+[keys] '777{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-after-lines (1024x768)
+[shot] tds-005-p72-d-v1-narration (1024x768)
+[17:05:51] [tds] screen tds-005-p72-d-v1-narration : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 1 Account Cash Cument balance: 677.00 Cr Particulars P72 Office Expenses CurBal: 1,377.00 Dr Narration: Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print I-Sep-26 Tuesday Amount 777.00 777.00 Fl: Help Date 3aaa6— 63fa7 Company .338. ' ÜDSDeskP72V18D2BIB I proof72 payment VI bN Unity Quit D: Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: Stat ¯ Adjustment...
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] ' edited on screen' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-narr-typed (1024x768)
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v1-saved (1024x768)
+[shot] tds-006-p72-d-v1-after (1024x768)
+[17:06:01] [tds] screen tds-006-p72-d-v1-after : Find details entered in masters and transactions. EDU {I' Prime (Alt+F) O: Import K: Company Y: Data Particulars P72 Office Expenses Z: Exchange A Add Vch Search E: Export M: Share p: print For I-Sep-26 Fl: Help Date 3aaa6— 63fa7 Day Book Day Book Date ILSep-26 Quit inCom Spike Vch Type Payment Company .338. Vch No. Unity Enter: Alter Delete 1 x: Debit Amount Inwards Q 777.00 Cancel Vch Credit Amount Outwards Qt U: Restore Line F4: Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details F 12: Configu...
+[shot] tds-007-gw0 (1024x768)
+[17:06:02] [tds] screen tds-007-gw0 : Find details entered in masters and transactions. EDU {I' Prime (Alt+F) O: Import K: Company Y: Data Particulars P72 Office Expenses Z: Exchange A Add Vch Search E: Export M: Share p: print For I-Sep-26 Fl: Help Date 3aaa6— 63fa7 Day Book Day Book Date ILSep-26 Quit inCom Spike Vch Type Payment Company .338. Vch No. Unity Enter: Alter Delete 1 x: Debit Amount Inwards Q 777.00 Cancel Vch Credit Amount Outwards Qt U: Restore Line F4: Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details F 12: Configu...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-008-gw1 (1024x768)
+[17:06:06] [tds] screen tds-008-gw1 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Tuesday, I-Sep-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Compan...
+[shot] tds-009-gw0 (1024x768)
+[17:06:07] [tds] screen tds-009-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Tuesday, I-Sep-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Compan...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-9-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-at-amount (1024x768)
+[keys] '888{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-after-lines (1024x768)
+[shot] tds-010-p72-d-v2-narration (1024x768)
+[17:06:50] [tds] screen tds-010-p72-d-v2-narration : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 2 Account Cash Cument balance: 965.00 Cr Particulars P72 Office Expenses CurBal: 1,665.00 Dr Narration: Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print 2-Sep-26 Wednesday Amount 888.00 888.00 Fl: Help Date 3aaa6— 63fa7 Company .338. ' ÜDSDeskP72V28D2BIB I proof72 payment V2 with REMOTED bN Unity Quit x: Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports L: Optional post -Dated J: St...
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] ' edited on screen' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-narr-typed (1024x768)
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2-saved (1024x768)
+[shot] tds-011-p72-d-v2-after (1024x768)
+[17:07:01] [tds] screen tds-011-p72-d-v2-after : Find details entered in masters and transactions. EDU {I' Prime Day Book (Alt+F) O: Import K: Company Y: Data Particulars P72 Office Expenses Z: Exchange A Add Vch Search E: Export M: Share P: Print Fl: Help Date 3aaa6— 63fa7 Day Book Date 2-Sep-26 Quit inCom Spike Vch Type Payment For 2-Sep-26 Credit Amount Outwards Qt U: Restore Line Company .338. Vch No. Unity Enter: Alter Delete 2 x: Debit Amount Inwards Q 888.00 Cancel Vch F4: Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details F 12: Configu...
+[shot] tds-012-gw0 (1024x768)
+[17:07:02] [tds] screen tds-012-gw0 : Find details entered in masters and transactions. EDU {I' Prime Day Book (Alt+F) O: Import K: Company Y: Data Particulars P72 Office Expenses Z: Exchange A Add Vch Search E: Export M: Share P: Print Fl: Help Date 3aaa6— 63fa7 Day Book Date 2-Sep-26 Quit inCom Spike Vch Type Payment For 2-Sep-26 Credit Amount Outwards Qt U: Restore Line Company .338. Vch No. Unity Enter: Alter Delete 2 x: Debit Amount Inwards Q 888.00 Cancel Vch F4: Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details F 12: Configu...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-013-gw1 (1024x768)
+[17:07:05] [tds] screen tds-013-gw1 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Sep-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Comp...
+[shot] tds-014-gw0 (1024x768)
+[17:07:06] [tds] screen tds-014-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Sep-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Comp...
+[keys] '%g' -> Tally 'TallyPrime:9000'
+[keys] 'Day Book' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[keys] '2-9-2026{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-daybook (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-open (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-at-amount (1024x768)
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-after-lines (1024x768)
+[keys] '{END}' -> Tally 'TallyPrime:9000'
+[keys] '{BACKSPACE 250}' -> Tally 'TallyPrime:9000'
+[keys] 'narration rewritten by the accountant' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-narr-typed (1024x768)
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-saved (1024x768)
+[shot] tds-015-p72-d-v2b-after (1024x768)
+[17:08:08] [tds] screen tds-015-p72-d-v2b-after : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 2 Account Cash Cument balance: 965.00 Cr Particulars P72 Office Expenses CurBal: 1,665.00 Dr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print Wednesday Amount 888.00 Fl: Help Date 3aaa6— 63fa7 Company .338. Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. ion 4+72- ning rrela bde5f ng jo • " , "so bf...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] v-p72-d-v2b-yes (1024x768)
+[shot] tds-016-gw0 (1024x768)
+[17:08:13] [tds] screen tds-016-gw0 : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 2 Account Cash Cument balance: 965.00 Cr Particulars P72 Office Expenses CurBal: 1,665.00 Dr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print Wednesday Amount 888.00 Fl: Help Date 3aaa6— 63fa7 Company .338. Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. ion 4+72- ning rrela bde5f ng jo • " , "so bf...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-017-gw1 (1024x768)
+[17:08:17] [tds] screen tds-017-gw1 : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 2 Account Cash Cument balance: 965.00 Cr Particulars P72 Office Expenses CurBal: 1,665.00 Dr Narration: Unity Quit Q Find details entered in masters and transactions. Z: Exchange inCom Spike (Alt+F) O: Import E: Export M: Share p: print Wednesday Amount 888.00 Fl: Help Date 3aaa6— 63fa7 Company .338. Contra F5: Payment Receipt Journal Purchase FIO: E: Autofill Change Mode More Details O: Related = Reports Optional post -Dated J: Stat ¯ Adjustment Unused ¯ Vch No. ion 4+72- ning rrela bde5f ng jo • " , "so bf...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-018-gw2 (1024x768)
+[17:08:20] [tds] screen tds-018-gw2 : EDU {I' Prime K: Company Y: Data Accounting Voucher Alteration (Secondary) Pa ment No. 2 Account Cash Cument balance: 965.00 Cr Particulars P72 Office Expenses CurBal: 1,665.00 Dr Narration: Unity Q: Quit Q Find details entered In masters and transactions Z: Exchange inCom Spike O: Import E: Export M: Share p: print Wednesday Amount 888.00 888.00 Quit o Yes or No Fl: Help F2: Date F3: Company F4: Contra F5: Payment F6: Receipt F7: Journal F8: Sales F9: Purchase Flo: E: Autofill H: Change = Mode l: More = Details O: Related = Reports L: Optional T: post = -Dated J: Stat ¯ Adjustment • Unused = ...
+[keys] 'y' -> Tally 'TallyPrime:9000'
+[shot] tds-019-gw3 (1024x768)
+[17:08:24] [tds] screen tds-019-gw3 : Find details entered in masters and transactions. EDU {I' Prime Day Book (Alt+F) O: Import K: Company Y: Data Particulars P72 Office Expenses Z: Exchange A Add Vch Search E: Export M: Share P: Print Fl: Help Date 3aaa6— 63fa7 Day Book Date 2-Sep-26 Quit inCom Spike Vch Type Payment For 2-Sep-26 Credit Amount Outwards Qt U: Restore Line Company .338. Vch No. Unity Enter: Alter Delete 2 x: Debit Amount Inwards Q 888.00 Cancel Vch F4: Voucher Type F 7: Show profit F8: Columnar FIO Basis of B: Values Change ¯ View Exception J: Reports Save View L: Apply F: — Filter • Filter = Details F 12: Configu...
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[shot] tds-020-gw4 (1024x768)
+[17:08:28] [tds] screen tds-020-gw4 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Wednesday, 2-Sep-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 2-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Comp...
+[17:09:28] ---- proof72 c: rename (the bridge still running: its answer kept)
+[17:09:32] ---- proof72: the bridge stopped (the harness's own measurements follow, one request at a time)
+[p72] d-v1-object: 7.1 ms, in time True, overrun False, hung False, window held 0 ms, 53400 chars 
+[p72] d-v2-object: 6.4 ms, in time True, overrun False, hung False, window held 0 ms, 53445 chars 
+######## PASS p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID): V1 (tag only) after amount 777 and narration added: narration 'TDSDesk:P72V18D2B1B | proof72 payment V1 edited on screen', AlterID 7, amounts -777.00,777.00, GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008-00000003, REMOTEID attr '': tag kept True. V2 (REMOTEID="FinCom-P72V2-8D2B1B" posted): GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008-00000004, REMOTEID attr '' after the edits (amount 888, then the narration retyped entirely): narration 'TDSDesk:P72V28D2B1B | proof72 payment V2 with REMOTEID edited on screen', tag kept True, AlterID 8, amounts -888.00,888.00. the add-on's lines: V1 altered 'TDSDesk:P72V18D2B1B | proof72 payment V1 edited on screen'; V2 altered 'TDSDesk:P72V28D2B1B | proof72 payment V2 with REMOTEID edited on screen'; V2 retyped '(no line)'
+  INFO proof72 c: renamed back to 'FinCom Spike Co': True (companies now:  ; FinCom Spike Co 8a738ac8-0ff6-4d32-9b2d-83ba93061008)
+[p72] e-direct-batch: 46.6 ms, in time True, overrun False, hung False, window held 0 ms, 348 chars 
+######## PASS p10 a batch of 3 with one missing ledger: Tally's exact reply: bridge /import of 3 Journals in one request 351 ms; per entry: P72E18D2B1B: ok False, accepted True, needsReview True, created 2, errors 0, lastVchId 6, message 'Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!', lineError 'Ledger 'P72 Missing Ledger' does not exist!'; P72E28D2B1B: ok False, accepted True, needsReview True, created 2, errors 0, lastVchId 6, message 'Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!', lineError 'Ledger 'P72 Missing Ledger' does not exist!'; P72E38D2B1B: ok False, accepted True, needsReview True, created 2, errors 0, lastVchId 6, message 'Tally's reply: created 2 of 3, exceptions 1: Ledger 'P72 Missing Ledger' does not exist!', lineError 'Ledger 'P72 Missing Ledger' does not exist!'; bridge log: 2026-10-26 17:04:55    request 1 of 1: 1 master in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 0) / 2026-10-26 17:04:55  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply / 2026-10-26 17:04:56    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 3) / 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply / 2026-10-26 17:04:56    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 4) / 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply / 2026-10-26 17:04:56    request 1 of 1: 3 voucher in 0.2 s (created 2, altered 0, exceptions 1, ignored 0, last Tally id 6) / 2026-10-26 17:04:56  Import into 'FinCom Spike Co': 0 of 3 posted by Tally's reply. Directly (46.6 ms): Tally's raw reply: <RESPONSE><LINEERROR>Ledger &apos;P72 Missing Ledger&apos; does not exist!</LINEERROR><CREATED>2</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>9</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>1</EXCEPTIONS></RESPONSE>
+[17:09:37] ---- proof72 lookups (small company)
+[p72] small-V1-tag-1: 34 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V1-object-1: 9.7 ms, in time True, overrun False, hung False, window held 0 ms, 53402 chars 
+[p72] small-V1-bymaster-1: 29.1 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-day-1: 32.8 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-all-1: 32 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-object-guid-1: 2.4 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] small-V1-tag-2: 31.6 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V1-object-2: 9.6 ms, in time True, overrun False, hung False, window held 0 ms, 53402 chars 
+[p72] small-V1-bymaster-2: 37.1 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-day-2: 55.7 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-all-2: 41.6 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-object-guid-2: 2.4 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] small-V1-tag-3: 40.2 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V1-object-3: 22.8 ms, in time True, overrun False, hung False, window held 0 ms, 53402 chars 
+[p72] small-V1-bymaster-3: 38.5 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-day-3: 31.2 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-guid-all-3: 31.3 ms, in time True, overrun False, hung False, window held 0 ms, 2923 chars 
+[p72] small-V1-PROBE-object-guid-3: 3 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] small-V2-tag-1: 34 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V2-object-1: 20.9 ms, in time True, overrun False, hung False, window held 0 ms, 53447 chars 
+[p72] small-V2-bymaster-1: 34.8 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-day-1: 31.7 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-all-1: 29.8 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-object-guid-1: 11.4 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] small-V2-tag-2: 33.3 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V2-object-2: 9.9 ms, in time True, overrun False, hung False, window held 0 ms, 53447 chars 
+[p72] small-V2-bymaster-2: 24.2 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-day-2: 24.3 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-all-2: 29.5 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-object-guid-2: 21.7 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] small-V2-tag-3: 28.4 ms, in time True, overrun False, hung False, window held 0 ms, 13978 chars 
+[p72] small-V2-object-3: 8.7 ms, in time True, overrun False, hung False, window held 0 ms, 53447 chars 
+[p72] small-V2-bymaster-3: 23.4 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-day-3: 28.8 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-guid-all-3: 25 ms, in time True, overrun False, hung False, window held 0 ms, 2937 chars 
+[p72] small-V2-PROBE-object-guid-3: 2.3 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+MEASURE lookups on the small company (9 entries): V1, FinComByMaster (one date, $MasterID): found 3/3, worst 38.5 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, FinComTag (one date, tag found in the narration): found 3/3, worst 40.2 ms (all in 2 s: True), window held 0 ms worst, rows 9; V1, FinComVoucherObject (by MasterID): found 3/3, worst 22.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, no date: found 3/3, worst 41.6 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, one date: found 3/3, worst 55.7 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE object export by GUID: found 0/3, worst 3 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComByMaster (one date, $MasterID): found 3/3, worst 34.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComTag (one date, tag found in the narration): found 3/3, worst 34 ms (all in 2 s: True), window held 0 ms worst, rows 9; V2, FinComVoucherObject (by MasterID): found 3/3, worst 20.9 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, no date: found 3/3, worst 29.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, one date: found 3/3, worst 31.7 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE object export by GUID: found 0/3, worst 21.7 ms (all in 2 s: True), window held 0 ms worst, rows 1
+[p72] raw-company-list: 1.9 ms, in time True, overrun False, hung False, window held 0 ms, 1659 chars 
+[p72] raw-company-check: 2 ms, in time True, overrun False, hung False, window held 0 ms, 1750 chars 
+[p72] raw-ledger-list: 9.7 ms, in time True, overrun False, hung False, window held 0 ms, 8476 chars 
+[p72] raw-receipt-object: 5.9 ms, in time True, overrun False, hung False, window held 0 ms, 53297 chars 
+[17:09:44] ---- proof72 b: TallyPrime's own port screen
+[17:09:46] db: Tally (pid 3272) closed
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-p72-b-keys-started (1024x768)
+[shot] tds-021-gw0 (1024x768)
+[17:10:21] [tds] screen tds-021-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Com...
+[shot] tds-022-gw0 (1024x768)
+[17:10:22] [tds] screen tds-022-gw0 : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Com...
+[keys] '{F1}' -> Tally 'TallyPrime:9000'
+[shot] tds-023-p72-b-Fnamestyped-1 (1024x768)
+[17:10:27] [tds] screen tds-023-p72-b-Fnamestyped-1 : EDU {I' Prime • Gateway of Tally Unity K: Company Y: Data Find details entered in masters and transactions. Z: Exchange (Alt+F) O: Import E: Export M: Share TallyHelp What's New Upgrade TallyShop p: print Fl: Help Ctrl+F1 TRoubleshooting Settings TDLs & Addons Profile ABout EXPLORE SUBSCRIPTIONS SubsCriptions & Serices EXPLORE MORE PRODUCTS TAIIyPrime Cloud Access 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Q Search Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] 'Settings{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-024-p72-b-Fnamestyped-2 (1024x768)
+[17:10:32] [tds] screen tds-024-p72-b-Fnamestyped-2 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Spelling Error 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] 'Connectivity{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-025-p72-b-Fnamestyped-3 (1024x768)
+[17:10:37] [tds] screen tds-025-p72-b-Fnamestyped-3 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Spelling Error 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] 'Client/Server{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-026-p72-b-Fnamestyped-4 (1024x768)
+[17:10:42] [tds] screen tds-026-p72-b-Fnamestyped-4 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Nothing selected 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[shot] tds-027-p72-b-form (1024x768)
+[17:10:43] [tds] screen tds-027-p72-b-form : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Nothing selected 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[shot] tds-028-p72-b-form (1024x768)
+[17:10:44] [tds] screen tds-028-p72-b-form : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Nothing selected 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] 'Both{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-029-p72-b-f1 (1024x768)
+[17:10:47] [tds] screen tds-029-p72-b-f1 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Nothing selected 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] 'Yes{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-030-p72-b-f2 (1024x768)
+[17:10:51] [tds] screen tds-030-p72-b-f2 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Spelling Error 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[shot] tds-031-p72-b-f3pre (1024x768)
+[17:10:52] [tds] screen tds-031-p72-b-f3pre : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Spelling Error 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] '9100{ENTER}' -> Tally 'TallyPrime:9000'
+[shot] tds-032-p72-b-f3 (1024x768)
+[17:10:56] [tds] screen tds-032-p72-b-f3 : EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Configurations Client/Server configuration Proxy Server configuration Connectivity and timeout configuration A: Accept Q Search Show More <Value exists> None <Value exists> Error Oops! Nothing selected 3aaa6— 63fa7 .338. ion 4+72- ning rrela bde5f ng jo • " , "so bf990 ion 02-8b ion 02-8b : "n/a" ' : "832 Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:10 PM 10/26/2026
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] tds-033-p72-b-accepted (1024x768)
+[17:11:02] [tds] screen tds-033-p72-b-accepted : EDU {I' Prime K: Company Y: Data Gatewayof Tally Find details entered in masters and transactions. Z: Exchange CURRENT OATE Saturday, 31-Oct-2026 OATE OF LAST ENTRY (Alt+F) O: Import E: Export M: Share p: print Fl: Help Date 3aaa6— 63fa7 CURRENT PERIOD I-Apr-26 to 31-Mar-27 NAME OF COMPANY FinCom Spike Co * (e) Data exceptions exist (e) (Schedule Backup) 31-OctQ6 Gateway of Tally MASTERS Create Alter CHart of Accounts TRANSACTIONS Vouchers Day 800K UTILITIES BaNking REPORTS Balance Sheet Profit & Loss A/c Stock Summary Ratio Analysis Display More Reports DashbOard Quit Unity Q Search .338. Com...
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-p72-b-9100-started (1024x768)
+######## HARNESS p4 tally.ini keys TallyPrime writes from its own port screen (port, acts as, ODBC): tally.ini before (harness): [Client Server = Server | ServerPort = 9000 | Enable ODBC Server = No]; reached the screen: True (F1, names typed); tally.ini changed by TallyPrime's screen: removed [] added []; keys after: [Client Server = Server | ServerPort = 9000 | Enable ODBC Server = No]; after Tally closed: [Client Server = Server | ServerPort = 9000 | Enable ODBC Server = No]; port 9100 listening right after the save: False (); restarted on that file: 9100 answers 'no answer on 9100: No connection could be made because the target machine actively refused it. (127.0.0.1:9100)', 9000 open True; tried: F1, names typed: 'EDU {I' Prime K: Company Y: Data Find details entered In masters and transactions Z: Exchange ConnectivitySettings O: Import E: Export M: Share p: print Fl:Help • Settings Unity Q: Quit List of Config'
+[17:14:01] ---- proof72 b: a port written into tally.ini with Tally closed
+[keys] 'a' -> Tally 'TallyPrime:9102'
+[keys] 't' -> Tally 'TallyPrime:9102'
+[shot] v-p72-b-9102-started (1024x768)
+[keys] 'a' -> Tally 'TallyPrime'
+[keys] 't' -> Tally 'TallyPrime'
+[shot] v-p72-b-none-started (1024x768)
+######## PASS p5 a port written into tally.ini with Tally closed is used at the next start: written with Tally closed: Client Server = Both, ServerPort = 9102, Enable ODBC Server = Yes; at start 9102 answered ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008', 9000 open False; the file unchanged by Tally while it ran: True, after it closed: True. With Client Server = None (port 9103): port open True, ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008'
+[17:15:21] ---- proof72 b: two Tallys on one computer
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-p72-b-twoA-started (1024x768)
+[shot] tds-034-p72-b-same-install-twice (1024x768)
+[17:16:21] [tds] screen tds-034-p72-b-same-install-twice : EDU Prime Startup Report K: Company Y: Data -i Find details entered In masters and transactions Z: Exchange O: Import E: Export M: Share p: print Application Startup TallyPrime will start with the following settings. Click Configure to change these settings Country Accounting terminology Company Data path C Configure A Accept Q Search India Others Accept Fl:Help x 5:16 PM 10/26/2026
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-p72-b-copyA-started (1024x768)
+[keys] 'a' -> Tally 'TallyPrime:9001'
+[keys] 't' -> Tally 'TallyPrime:9001'
+[shot] v-p72-b-copyB-started (1024x768)
+######## PASS p6 two Tallys on one computer (the same install twice; a copy of the install on another port): the second start of the same install (pid 6060): alive after 25 s True, window 'TallyPrime:9000', exit code -; port 9000 listener(s): :: pid 1124, 0.0.0.0 pid 1124 (first Tally pid 1124); 9000 answers ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008'; screen: 'EDU Prime Startup Report K: Company Y: Data -i Find details entered In masters and transactions Z: Exchange O: Import E: Export M: Share p: print Application Startup TallyPrime will start with the fol'. Copy of the install on 9001: started True, answers ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008'; the first on 9000 ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008'
+######## PASS p7 company GUID after a rename and after a copy of the data folder: rename by XML import (COMPANY ACTION="Alter" with a new NAME): 'FinCom Spike Co' GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008 -> 'FinCom Spike Co R72' GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008 (same GUID: True); the bridge after the rename: /companies [FinCom Spike Co R72]; /import to 'FinCom Spike Co R72': ok True, created 1, message ''; a copy of the data folder (D:\a\_temp\TallyData2\100000) opened by a second Tally (a copy of the install, port 9001) beside the first (9000): 9000 ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008', 9001 ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008'; same GUID: True
+[17:17:34] ---- proof72 q: Tally on port 4125, the published bridge 2.4.7 with TallyPorts auto / 9000 / 4125
+[keys] 'a' -> Tally 'TallyPrime:4125'
+[keys] 't' -> Tally 'TallyPrime:4125'
+[shot] v-p72-q-4125-started (1024x768)
+######## PASS p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say: Tally on 4125 (tally.ini [Client Server = Both | ServerPort = 4125 | Enable ODBC Server = Yes]): 4125 answers ' GUID ; FinCom Spike Co GUID 8a738ac8-0ff6-4d32-9b2d-83ba93061008' (listener :: pid 1172, 0.0.0.0 pid 1172); TallyPorts auto: bridge up True; port plan 'auto'; /companies [FinCom Spike Co port 4125]; Test connection (/tray/check): tally ok True, ports [4125], companies [FinCom Spike Co], error ''; diagnosis: [bad] Your TallyPrime is running but is not accepting connections on port 4125 yet. FIX: In TallyPrime: F1 Help > Settings > Connectivity > "TallyPrime acts as" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).; Tally seen by Windows: pid 1172 ports [] ini port 4125 mode Both || TallyPorts 9000: bridge up True; port plan 'config'; /companies [FinCom Spike Co port 4125]; Test connection (/tray/check): tally ok True, ports [4125], companies [FinCom Spike Co], error ''; diagnosis: [bad] Your TallyPrime is running but is not accepting connections on port 4125 yet. FIX: In TallyPrime: F1 Help > Settings > Connectivity > "TallyPrime acts as" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).; Tally seen by Windows: pid 1172 ports [] ini port 4125 mode Both || TallyPorts 4125: bridge up True; port plan 'config'; /companies [FinCom Spike Co port 4125]; Test connection (/tray/check): tally ok True, ports [4125], companies [FinCom Spike Co], error ''; diagnosis: [bad] Your TallyPrime is running but is not accepting connections on port 4125 yet. FIX: In TallyPrime: F1 Help > Settings > Connectivity > "TallyPrime acts as" = Both, then close and reopen TallyPrime (the setting takes effect after a restart).; Tally seen by Windows: pid 1172 ports [] ini port 4125 mode Both
+[17:18:42] ---- proof72: ZZ BIG TEST (~30,000 entries) and the lookups again
+[17:18:44] db: Tally (pid 1172) closed
+[17:18:44] db: Tally started (pid 6576), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-big-started (1024x768)
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 16.1 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 5105.3 ms
+[db] dbm-vouchers-01.xml: created 500, altered 0, errors 0, 6821.3 ms
+[db] dbm-vouchers-02.xml: created 500, altered 0, errors 0, 7072.5 ms
+[db] dbm-vouchers-03.xml: created 500, altered 0, errors 0, 7278.9 ms
+[db] dbm-vouchers-04.xml: created 500, altered 0, errors 0, 7217.4 ms
+[db] dbm-vouchers-05.xml: created 500, altered 0, errors 0, 7515.4 ms
+[db] dbm-vouchers-06.xml: created 500, altered 0, errors 0, 7651.9 ms
+[db] dbm-vouchers-07.xml: created 500, altered 0, errors 0, 7580 ms
+[db] dbm-vouchers-08.xml: created 500, altered 0, errors 0, 7563.7 ms
+[db] dbm-vouchers-09.xml: created 500, altered 0, errors 0, 7720.3 ms
+[db] dbm-vouchers-10.xml: created 500, altered 0, errors 0, 7668.9 ms
+[db] dbm-vouchers-11.xml: created 500, altered 0, errors 0, 7799.7 ms
+[db] dbm-vouchers-12.xml: created 500, altered 0, errors 0, 7640.4 ms
+[db] dbm-vouchers-13.xml: created 500, altered 0, errors 0, 7798.2 ms
+[db] dbm-vouchers-14.xml: created 500, altered 0, errors 0, 7863.3 ms
+[db] dbm-vouchers-15.xml: created 500, altered 0, errors 0, 7837.7 ms
+[db] dbm-vouchers-16.xml: created 500, altered 0, errors 0, 8165.6 ms
+[db] dbm-vouchers-17.xml: created 500, altered 0, errors 0, 7842.8 ms
+[db] dbm-vouchers-18.xml: created 500, altered 0, errors 0, 7737.6 ms
+[db] dbm-vouchers-19.xml: created 500, altered 0, errors 0, 8222.4 ms
+[db] dbm-vouchers-20.xml: created 500, altered 0, errors 0, 8330.7 ms
+[db] dbm-vouchers-21.xml: created 500, altered 0, errors 0, 8463.8 ms
+[db] dbm-vouchers-22.xml: created 500, altered 0, errors 0, 8353.8 ms
+[db] dbm-vouchers-23.xml: created 500, altered 0, errors 0, 8086.2 ms
+[db] dbm-vouchers-24.xml: created 500, altered 0, errors 0, 8023.1 ms
+[db] dbm-vouchers-25.xml: created 500, altered 0, errors 0, 8046.7 ms
+[db] dbm-vouchers-26.xml: created 500, altered 0, errors 0, 8293.7 ms
+[db] dbm-vouchers-27.xml: created 500, altered 0, errors 0, 8143.8 ms
+[db] dbm-vouchers-28.xml: created 500, altered 0, errors 0, 8463.5 ms
+[db] dbm-vouchers-29.xml: created 500, altered 0, errors 0, 8330.4 ms
+[db] dbm-vouchers-30.xml: created 500, altered 0, errors 0, 8591.3 ms
+[db] dbm-vouchers-31.xml: created 500, altered 0, errors 0, 8173.1 ms
+[db] dbm-vouchers-32.xml: created 500, altered 0, errors 0, 8112.4 ms
+[db] dbm-vouchers-33.xml: created 500, altered 0, errors 0, 8187.8 ms
+[db] dbm-vouchers-34.xml: created 500, altered 0, errors 0, 8424 ms
+[db] dbm-vouchers-35.xml: created 500, altered 0, errors 0, 8142.1 ms
+[db] dbm-vouchers-36.xml: created 500, altered 0, errors 0, 8280.2 ms
+[db] dbm-vouchers-37.xml: created 500, altered 0, errors 0, 8393.3 ms
+[db] dbm-vouchers-38.xml: created 500, altered 0, errors 0, 8287.3 ms
+[db] dbm-vouchers-39.xml: created 500, altered 0, errors 0, 8203.6 ms
+[db] dbm-vouchers-40.xml: created 500, altered 0, errors 0, 8299.3 ms
+[db] dbm-vouchers-41.xml: created 500, altered 0, errors 0, 8486.8 ms
+[db] dbm-vouchers-42.xml: created 500, altered 0, errors 0, 8293.8 ms
+[db] dbm-vouchers-43.xml: created 500, altered 0, errors 0, 8516.4 ms
+[db] dbm-vouchers-44.xml: created 500, altered 0, errors 0, 8259.9 ms
+[db] dbm-vouchers-45.xml: created 500, altered 0, errors 0, 8377.8 ms
+[db] dbm-vouchers-46.xml: created 500, altered 0, errors 0, 8384.6 ms
+[db] dbm-vouchers-47.xml: created 500, altered 0, errors 0, 8379.7 ms
+[db] dbm-vouchers-48.xml: created 500, altered 0, errors 0, 8425.8 ms
+[db] dbm-vouchers-49.xml: created 500, altered 0, errors 0, 8495.9 ms
+[db] dbm-vouchers-50.xml: created 500, altered 0, errors 0, 8793.6 ms
+[db] dbm-vouchers-51.xml: created 500, altered 0, errors 0, 8514 ms
+[db] dbm-vouchers-52.xml: created 500, altered 0, errors 0, 8332.9 ms
+[db] dbm-vouchers-53.xml: created 500, altered 0, errors 0, 8336.1 ms
+[db] dbm-vouchers-54.xml: created 500, altered 0, errors 0, 8353.7 ms
+[db] dbm-vouchers-55.xml: created 500, altered 0, errors 0, 8538.4 ms
+[db] dbm-vouchers-56.xml: created 500, altered 0, errors 0, 8539.7 ms
+[db] dbm-vouchers-57.xml: created 500, altered 0, errors 0, 8599.3 ms
+[db] dbm-vouchers-58.xml: created 500, altered 0, errors 0, 8863.7 ms
+[db] dbm-vouchers-59.xml: created 500, altered 0, errors 0, 8880.8 ms
+[db] dbm-vouchers-60.xml: created 500, altered 0, errors 0, 8615.8 ms
+[db] dbm-vouchers-61.xml: created 8, altered 0, errors 0, 200.6 ms
+  INFO proof72 big: masters created 1114 (errors 0); entries created 30008 (errors 0)
+[p72] big-V1-tag-1: 5711.6 ms, in time False, overrun True, hung False, window held 5586 ms, 42462196 chars 
+[p72] big-V1-object-1: 7.1 ms, in time True, overrun False, hung False, window held 0 ms, 53426 chars 
+[p72] big-V1-bymaster-1: 2709.6 ms, in time False, overrun True, hung False, window held 2423 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-day-1: 2806 ms, in time False, overrun True, hung False, window held 2409 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-all-1: 2842.3 ms, in time False, overrun True, hung False, window held 2779 ms, 2947 chars 
+[p72] big-V1-PROBE-object-guid-1: 1.6 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] big-V1-tag-2: 5007.8 ms, in time False, overrun True, hung False, window held 4552 ms, 42462196 chars 
+[p72] big-V1-object-2: 6.7 ms, in time True, overrun False, hung False, window held 0 ms, 53426 chars 
+[p72] big-V1-bymaster-2: 2959.4 ms, in time False, overrun True, hung False, window held 2790 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-day-2: 2952 ms, in time False, overrun True, hung False, window held 2774 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-all-2: 2998.8 ms, in time False, overrun True, hung False, window held 2795 ms, 2947 chars 
+[p72] big-V1-PROBE-object-guid-2: 1.7 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] big-V1-tag-3: 5133.4 ms, in time False, overrun True, hung False, window held 5046 ms, 42462196 chars 
+[p72] big-V1-object-3: 6.7 ms, in time True, overrun False, hung False, window held 0 ms, 53426 chars 
+[p72] big-V1-bymaster-3: 3082 ms, in time False, overrun True, hung False, window held 2772 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-day-3: 3083.8 ms, in time False, overrun True, hung False, window held 2768 ms, 2947 chars 
+[p72] big-V1-PROBE-guid-all-3: 3137.4 ms, in time False, overrun True, hung False, window held 2790 ms, 2947 chars 
+[p72] big-V1-PROBE-object-guid-3: 1.8 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] big-V2-tag-1: 5289.2 ms, in time False, overrun True, hung False, window held 5157 ms, 42462196 chars 
+[p72] big-V2-object-1: 6.7 ms, in time True, overrun False, hung False, window held 0 ms, 53471 chars 
+[p72] big-V2-bymaster-1: 3185.1 ms, in time False, overrun True, hung False, window held 2804 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-day-1: 3235.5 ms, in time False, overrun True, hung False, window held 3167 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-all-1: 3230.7 ms, in time False, overrun True, hung False, window held 3140 ms, 2961 chars 
+[p72] big-V2-PROBE-object-guid-1: 1.7 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] big-V2-tag-2: 5403.8 ms, in time False, overrun True, hung False, window held 5352 ms, 42462196 chars 
+[p72] big-V2-object-2: 7.5 ms, in time True, overrun False, hung False, window held 0 ms, 53471 chars 
+[p72] big-V2-bymaster-2: 3359.3 ms, in time False, overrun True, hung False, window held 3168 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-day-2: 3336.5 ms, in time False, overrun True, hung False, window held 3155 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-all-2: 3311 ms, in time False, overrun True, hung False, window held 3121 ms, 2961 chars 
+[p72] big-V2-PROBE-object-guid-2: 1.7 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+[p72] big-V2-tag-3: 5504.1 ms, in time False, overrun True, hung False, window held 5282 ms, 42462196 chars 
+[p72] big-V2-object-3: 7.1 ms, in time True, overrun False, hung False, window held 0 ms, 53471 chars 
+[p72] big-V2-bymaster-3: 3339.7 ms, in time False, overrun True, hung False, window held 3135 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-day-3: 3348.2 ms, in time False, overrun True, hung False, window held 3140 ms, 2961 chars 
+[p72] big-V2-PROBE-guid-all-3: 3415.6 ms, in time False, overrun True, hung False, window held 3152 ms, 2961 chars 
+[p72] big-V2-PROBE-object-guid-3: 1.7 ms, in time True, overrun False, hung False, window held 0 ms, 92 chars 
+MEASURE lookups on ZZ BIG TEST (30017 entries in the company; masters created 1114 (errors 0); entries created 30008 (errors 0)): V1, FinComByMaster (one date, $MasterID): found 3/3, worst 3082 ms (all in 2 s: False), window held 2790 ms worst, rows 1; V1, FinComTag (one date, tag found in the narration): found 3/3, worst 5711.6 ms (all in 2 s: False), window held 5586 ms worst, rows 30017; V1, FinComVoucherObject (by MasterID): found 3/3, worst 7.1 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, no date: found 3/3, worst 3137.4 ms (all in 2 s: False), window held 2795 ms worst, rows 1; V1, PROBE by GUID, one date: found 3/3, worst 3083.8 ms (all in 2 s: False), window held 2774 ms worst, rows 1; V1, PROBE object export by GUID: found 0/3, worst 1.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComByMaster (one date, $MasterID): found 3/3, worst 3359.3 ms (all in 2 s: False), window held 3168 ms worst, rows 1; V2, FinComTag (one date, tag found in the narration): found 3/3, worst 5504.1 ms (all in 2 s: False), window held 5352 ms worst, rows 30017; V2, FinComVoucherObject (by MasterID): found 3/3, worst 7.5 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, no date: found 3/3, worst 3415.6 ms (all in 2 s: False), window held 3152 ms worst, rows 1; V2, PROBE by GUID, one date: found 3/3, worst 3348.2 ms (all in 2 s: False), window held 3167 ms worst, rows 1; V2, PROBE object export by GUID: found 0/3, worst 1.7 ms (all in 2 s: True), window held 0 ms worst, rows 1
+######## FAIL p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company: small company (9 entries): V1, FinComByMaster (one date, $MasterID): found 3/3, worst 38.5 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, FinComTag (one date, tag found in the narration): found 3/3, worst 40.2 ms (all in 2 s: True), window held 0 ms worst, rows 9; V1, FinComVoucherObject (by MasterID): found 3/3, worst 22.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, no date: found 3/3, worst 41.6 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, one date: found 3/3, worst 55.7 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE object export by GUID: found 0/3, worst 3 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComByMaster (one date, $MasterID): found 3/3, worst 34.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComTag (one date, tag found in the narration): found 3/3, worst 34 ms (all in 2 s: True), window held 0 ms worst, rows 9; V2, FinComVoucherObject (by MasterID): found 3/3, worst 20.9 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, no date: found 3/3, worst 29.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, one date: found 3/3, worst 31.7 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE object export by GUID: found 0/3, worst 21.7 ms (all in 2 s: True), window held 0 ms worst, rows 1 || ZZ BIG TEST (30017 entries): V1, FinComByMaster (one date, $MasterID): found 3/3, worst 3082 ms (all in 2 s: False), window held 2790 ms worst, rows 1; V1, FinComTag (one date, tag found in the narration): found 3/3, worst 5711.6 ms (all in 2 s: False), window held 5586 ms worst, rows 30017; V1, FinComVoucherObject (by MasterID): found 3/3, worst 7.1 ms (all in 2 s: True), window held 0 ms worst, rows 1; V1, PROBE by GUID, no date: found 3/3, worst 3137.4 ms (all in 2 s: False), window held 2795 ms worst, rows 1; V1, PROBE by GUID, one date: found 3/3, worst 3083.8 ms (all in 2 s: False), window held 2774 ms worst, rows 1; V1, PROBE object export by GUID: found 0/3, worst 1.8 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, FinComByMaster (one date, $MasterID): found 3/3, worst 3359.3 ms (all in 2 s: False), window held 3168 ms worst, rows 1; V2, FinComTag (one date, tag found in the narration): found 3/3, worst 5504.1 ms (all in 2 s: False), window held 5352 ms worst, rows 30017; V2, FinComVoucherObject (by MasterID): found 3/3, worst 7.5 ms (all in 2 s: True), window held 0 ms worst, rows 1; V2, PROBE by GUID, no date: found 3/3, worst 3415.6 ms (all in 2 s: False), window held 3152 ms worst, rows 1; V2, PROBE by GUID, one date: found 3/3, worst 3348.2 ms (all in 2 s: False), window held 3167 ms worst, rows 1; V2, PROBE object export by GUID: found 0/3, worst 1.7 ms (all in 2 s: True), window held 0 ms worst, rows 1
+######## FAIL p11 Tally's window and requests during the run (window probe, the bridge's requests at the proxy): window probe 13675 beats; holds of 1 s or more: 17:10:28 1983 ms during b-port-screen; 17:27:40 5692 ms during big-V1-tag-1; 17:27:46 2679 ms during big-V1-bymaster-1; 17:27:49 2756 ms during big-V1-PROBE-guid-day-1; 17:27:52 2880 ms during big-V1-PROBE-guid-all-1; 17:27:55 4885 ms during big-V1-tag-2; 17:28:00 2891 ms during big-V1-bymaster-2; 17:28:04 2876 ms during big-V1-PROBE-guid-day-2; 17:28:07 2946 ms during big-V1-PROBE-guid-all-2; 17:28:10 5151 ms during big-V1-tag-3; 17:28:16 2988 ms during big-V1-bymaster-3; 17:28:19 3024 ms during big-V1-PROBE-guid-day-3; 17:28:22 3075 ms during big-V1-PROBE-guid-all-3; 17:28:25 5268 ms during big-V2-tag-1; 17:28:31 3165 ms during big-V2-bymaster-1; 17:28:35 3278 ms during big-V2-PROBE-guid-day-1; 17:28:38 3247 ms during big-V2-PROBE-guid-all-1; 17:28:42 5453 ms during big-V2-tag-2; 17:28:48 3303 ms during big-V2-bymaster-2; 17:28:51 3290 ms during big-V2-PROBE-guid-day-2; 17:28:55 3249 ms during big-V2-PROBE-guid-all-2; 17:28:58 5410 ms during big-V2-tag-3; 17:29:04 3319 ms during big-V2-bymaster-3; 17:29:08 3312 ms during big-V2-PROBE-guid-day-3; 17:29:11 3369 ms during big-V2-PROBE-guid-all-3; longest hold 5586 ms (during big-V1-tag-1); the bridge's requests at the proxy: 29 in all, over 2 s: 0 (longest Import 34 ms), two at Tally at once: 0; by id: FinComCompany x6 (max 3 ms), FinComEmployees x2 (max 3 ms), FinComVoucherObject x3 (max 8 ms), Import x5 (max 34 ms), TDSDeskCompanies x9 (max 3 ms), TDSDeskCompanyInfo x2 (max 2 ms), TDSDeskGroups x1 (max 6 ms), TDSDeskLedgers x1 (max 10 ms); the harness's measured requests over 2 s: big-V1-tag-1 5711.6 ms, big-V1-bymaster-1 2709.6 ms, big-V1-PROBE-guid-day-1 2806 ms, big-V1-PROBE-guid-all-1 2842.3 ms, big-V1-tag-2 5007.8 ms, big-V1-bymaster-2 2959.4 ms, big-V1-PROBE-guid-day-2 2952 ms, big-V1-PROBE-guid-all-2 2998.8 ms, big-V1-tag-3 5133.4 ms, big-V1-bymaster-3 3082 ms, big-V1-PROBE-guid-day-3 3083.8 ms, big-V1-PROBE-guid-all-3 3137.4 ms, big-V2-tag-1 5289.2 ms, big-V2-bymaster-1 3185.1 ms, big-V2-PROBE-guid-day-1 3235.5 ms, big-V2-PROBE-guid-all-1 3230.7 ms, big-V2-tag-2 5403.8 ms, big-V2-bymaster-2 3359.3 ms, big-V2-PROBE-guid-day-2 3336.5 ms, big-V2-PROBE-guid-all-2 3311 ms, big-V2-tag-3 5504.1 ms, big-V2-bymaster-3 3339.7 ms, big-V2-PROBE-guid-day-3 3348.2 ms, big-V2-PROBE-guid-all-3 3415.6 ms

@@ -1,0 +1,362 @@
+[
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 24.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 6.4,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 21.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "PROBE by GUID, one date",
+    "ms": 23.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "PROBE by GUID, no date",
+    "ms": 23.5,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 1,
+    "form": "PROBE object export by GUID",
+    "ms": 1.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 22.5,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 6.5,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 28.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "PROBE by GUID, one date",
+    "ms": 22.0,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "PROBE by GUID, no date",
+    "ms": 86.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 2,
+    "form": "PROBE object export by GUID",
+    "ms": 3.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 30.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 40.5,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 31.0,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "PROBE by GUID, one date",
+    "ms": 33.6,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "PROBE by GUID, no date",
+    "ms": 78.6,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V1",
+    "k": 3,
+    "form": "PROBE object export by GUID",
+    "ms": 2.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 33.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 14.5,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 25.1,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "PROBE by GUID, one date",
+    "ms": 33.1,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "PROBE by GUID, no date",
+    "ms": 172.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 1,
+    "form": "PROBE object export by GUID",
+    "ms": 19.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 40.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 14.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 23.9,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "PROBE by GUID, one date",
+    "ms": 36.8,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "PROBE by GUID, no date",
+    "ms": 25.6,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 2,
+    "form": "PROBE object export by GUID",
+    "ms": 4.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "FinComTag (one date, tag found in the narration)",
+    "ms": 22.6,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 9
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "FinComVoucherObject (by MasterID)",
+    "ms": 8.2,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "FinComByMaster (one date, $MasterID)",
+    "ms": 21.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "PROBE by GUID, one date",
+    "ms": 21.4,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "PROBE by GUID, no date",
+    "ms": 22.0,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": true,
+    "rows": 1
+  },
+  {
+    "v": "V2",
+    "k": 3,
+    "form": "PROBE object export by GUID",
+    "ms": 1.7,
+    "inTime": true,
+    "blocked": 0.0,
+    "found": false,
+    "rows": 1
+  }
+]

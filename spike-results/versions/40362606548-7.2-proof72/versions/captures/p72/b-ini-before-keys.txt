@@ -1,0 +1,12 @@
+[Tally]
+Data = D:\a\_temp\TallyData
+Config = C:\Program Files\TallyPrime
+LangPath = C:\Program Files\TallyPrime\lang
+Client Server = Server
+ServerPort = 9000
+Enable ODBC Server = No
+Ignore TCP Timeout = Yes
+User TDL = Yes
+Default Companies = Yes
+Load = 100000
+TDL = C:\fcspike\FinComRecorder.tdl

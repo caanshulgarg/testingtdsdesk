@@ -1,0 +1,67 @@
+{
+  "allowImport": true,
+  "beat": {
+    "every": 30,
+    "last": "2026-10-26T17:18:02",
+    "missedSince": "",
+    "on": true
+  },
+  "computer": "runnervmdaln5",
+  "impl": "go",
+  "jobs": [],
+  "mode": "config",
+  "mySession": 2,
+  "ok": true,
+  "onlyMySession": true,
+  "paused": false,
+  "posting": "",
+  "readOnly": "",
+  "sessions": [
+    {
+      "companies": [],
+      "error": "Tally is not open (nothing listens on this port)",
+      "mine": null,
+      "ok": false,
+      "port": 9000,
+      "program": "",
+      "session": null,
+      "skipped": false,
+      "tallyState": "closed",
+      "user": null
+    },
+    {
+      "companies": [
+        {
+          "from": "20260401",
+          "gstin": "",
+          "guid": "8b9f933c-b780-4d9f-92cf-84df676f7b60",
+          "name": "FinCom Spike Co",
+          "pan": "",
+          "to": "20261031"
+        }
+      ],
+      "error": "",
+      "mine": true,
+      "ok": true,
+      "port": 4125,
+      "program": "tally",
+      "session": 2,
+      "skipped": false,
+      "tallyState": "open",
+      "user": "runneradmin"
+    }
+  ],
+  "tally": {
+    "since": "",
+    "state": "open"
+  },
+  "tallyStuck": null,
+  "testMode": false,
+  "time": "2026-10-26T17:18:06",
+  "user": "runnervmdaln5\\runneradmin",
+  "version": "2.4.7",
+  "wake": {
+    "joined": false,
+    "on": false
+  }
+}

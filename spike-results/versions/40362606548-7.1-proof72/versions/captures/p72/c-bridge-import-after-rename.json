@@ -1,0 +1,30 @@
+{
+  "company": "FinCom Spike Co R72",
+  "ok": true,
+  "port": 9000,
+  "results": [
+    {
+      "altered": 0,
+      "batchEnd": "7",
+      "batchN": 1,
+      "byReply": true,
+      "company": "FinCom Spike Co R72",
+      "created": 1,
+      "errors": 0,
+      "exceptions": 0,
+      "id": "P72R8D2B1B",
+      "ignored": 0,
+      "kind": "voucher",
+      "lastVchId": "7",
+      "message": "",
+      "ok": true,
+      "port": 9000,
+      "secondsReq": 0.171,
+      "sentAt": "2026-10-26T17:09:32Z",
+      "vchDate": "20261001",
+      "vchId": "7",
+      "vchType": "Journal",
+      "verified": false
+    }
+  ]
+}

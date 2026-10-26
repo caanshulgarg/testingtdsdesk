@@ -1,0 +1,4 @@
+2026-10-26 17:04:15  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c067def8…): asking Tally by MasterID
+2026-10-26 17:04:16  Recorder: entry fetch of FinCom Spike Co: answered in 9 ms
+2026-10-26 17:04:16  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 2, line c067def8…): taken: Tally's GUID 8b9f933c-b780-4d9f-92cf-84df676f7b60-00000002, AlterID 2
+2026-10-26 17:04:16  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it

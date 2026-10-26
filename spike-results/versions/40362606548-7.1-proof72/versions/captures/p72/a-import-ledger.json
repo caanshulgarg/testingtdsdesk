@@ -1,0 +1,28 @@
+{
+  "company": "FinCom Spike Co",
+  "ok": true,
+  "port": 9000,
+  "results": [
+    {
+      "altered": 0,
+      "batchEnd": "0",
+      "batchN": 1,
+      "byReply": true,
+      "company": "FinCom Spike Co",
+      "created": 1,
+      "errors": 0,
+      "exceptions": 0,
+      "id": "P72L8D2B1B",
+      "ignored": 0,
+      "kind": "master",
+      "lastVchId": "0",
+      "message": "",
+      "ok": true,
+      "port": 9000,
+      "secondsReq": 0.174,
+      "sentAt": "2026-10-26T17:04:55Z",
+      "vchId": "0",
+      "verified": false
+    }
+  ]
+}

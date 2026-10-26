@@ -1,0 +1,20 @@
+{
+  "cloud": {
+    "code": 200,
+    "error": "",
+    "firm": "Spike",
+    "key": true,
+    "url": true
+  },
+  "ok": true,
+  "tally": {
+    "companies": [
+      "FinCom Spike Co"
+    ],
+    "error": "",
+    "ok": true,
+    "ports": [
+      "4125"
+    ]
+  }
+}
