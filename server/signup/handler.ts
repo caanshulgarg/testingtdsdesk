@@ -1,3 +1,6 @@
+// signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (security review M1); the bot-check
+// token (Turnstile) passed to Auth's sign-up / recover; limits shared by every running copy (migration 112); throwaway
+// email domains get the neutral answer and nothing is sent.
 // signup v12 (26-Oct-2026): self-service sign-up again, with the email confirmed before anything is made. Plain module
 // with no imports, so the Deno tests (handler_test.ts) run it with fake services; index.ts wires the real ones.
 //
@@ -55,7 +58,11 @@ export async function ownFirmId(userId: string): Promise<string> {
 
 export type AdminCaller = { userId: string };
 export type CreateFirm = { email: string; password: string; firm: string; name: string; credit: number; plan: string };
-export type SignUpForm = { email: string; password: string; name: string; firm: string; redirect: string };
+// challenge: the app's PKCE code_challenge (S256, 43 characters of base64url; "" when absent or malformed), passed to
+// Supabase's sign-up so the email's link signs in only the browser that registered (security review of 26-Oct-2026, M1)
+// captcha: the page's bot-check token (Cloudflare Turnstile; "" without one), checked by Supabase Auth once its bot protection is on
+export type SignUpForm = { email: string; password: string; name: string; firm: string; redirect: string; challenge: string; captcha: string };
+export const validChallenge = (s: unknown) => typeof s === "string" && /^[A-Za-z0-9_-]{43}$/.test(s);
 // the signed-in person, as Supabase Auth has them now. firm: the firm name typed on the form (user_metadata; empty for
 // Google/Microsoft); signupFirm: the firm a provision already made for this login (app_metadata, only the server writes it)
 export type AuthUser = { id: string; email: string; confirmed: boolean; name: string; firm: string; provider: string; signupFirm: string | null };
@@ -77,8 +84,8 @@ export interface Deps {
   platformAdmin(jwt: string): Promise<AdminCaller | null>;
   // the email has an active member row whose login was never used (an invite not yet taken up)
   invitePending(email: string): Promise<boolean>;
-  // emails a link to set the password (the same link as "forgot password")
-  sendSetPasswordLink(email: string): Promise<void>;
+  // emails a link to set the password (the same link as "forgot password"); captcha: the page's bot-check token
+  sendSetPasswordLink(email: string, captcha?: string): Promise<void>;
   // the administrator's path: firm, owner login and member row; detailed answer (the caller is the administrator)
   createFirm(by: AdminCaller, f: CreateFirm): Promise<{ status: number; body: Record<string, unknown> }>;
   // Supabase Auth's own sign-up ("Confirm email" on): an unconfirmed login and the confirmation email, or nothing
@@ -92,7 +99,32 @@ export interface Deps {
   now(): number;
   random(): number;
   limits: { ip: RateLimiter; email: RateLimiter; link: RateLimiter; provision: RateLimiter };
+  // 26-Oct-2026: CAPTCHA_REQUIRED=1 (Supabase Auth's bot protection on): a form without a bot-check token is refused here
+  captchaRequired?: boolean;
+  // the counts shared by every running copy (public.auth_rate_hits, migration 112): true = allowed (and counted). The key
+  // is a SHA-256. May throw (the migration not run yet): the form then goes on with the in-memory limits alone
+  rateHit?(bucket: string, key: string, max: number, windowS: number): Promise<boolean>;
+  // more throwaway email domains (the DISPOSABLE_DOMAINS secret, comma-separated), on top of DISPOSABLE
+  extraDisposable?: string[];
 }
+
+// throwaway email domains (a short fixed list of the commonest; the secret DISPOSABLE_DOMAINS adds more): the same
+// "check your email" answer, and nothing is sent. A subdomain of one counts as it
+export const DISPOSABLE = ["mailinator.com", "guerrillamail.com", "guerrillamail.net", "sharklasers.com", "grr.la", "10minutemail.com",
+  "temp-mail.org", "tempmail.com", "tempmail.dev", "tempmailo.com", "throwawaymail.com", "yopmail.com", "yopmail.net", "trashmail.com",
+  "getnada.com", "nada.email", "dispostable.com", "maildrop.cc", "mailnesia.com", "mintemail.com", "fakeinbox.com", "emailondeck.com",
+  "mohmal.com", "moakt.com", "mail.tm", "mail.gw", "spamgourmet.com", "burnermail.io", "inboxkitten.com", "tmpmail.org", "tmail.ws"];
+export function disposable(email: string, extra: string[] = []): boolean {
+  const dom = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+  return [...DISPOSABLE, ...extra.map((x) => x.trim().toLowerCase()).filter(Boolean)].some((d) => dom === d || dom.endsWith("." + d));
+}
+export const BOT_MISSING = "Complete the check that you are not a robot, then try again.";
+export async function sha256hex(s: string): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)));
+  return [...h].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+// the shared limits (migration 112): signup-ip 10 per 10 minutes, signup-email 5 per hour, as the in-memory ones
+export const SHARED = { ip: { max: 10, windowS: 600 }, email: { max: 5, windowS: 3600 } };
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -214,17 +246,29 @@ export function makeHandler(d: Deps) {
       email, password: String(body.password || ""), name: String(body.name || "").trim().slice(0, 120),
       firm: String(body.firm || "").trim().slice(0, 160),
       redirect: /^https?:\/\/[^\s"'<>]{1,300}$/.test(String(body.redirect || "")) ? String(body.redirect) : "",
+      challenge: validChallenge(body.challenge) ? String(body.challenge) : "",
+      captcha: typeof body.captcha_token === "string" ? body.captcha_token.trim().slice(0, 4096) : "",
     };
     if (!validEmail(email)) return bad("That email address does not look right.");
     if (!validPassword(form.password)) return bad("Use a password of 10 characters or more, with letters and digits.");
     if (form.firm.length < 2) return bad("Enter the name of your firm.");
     if (!d.limits.email.hit(email)) return tooMany();
+    if (d.captchaRequired && !form.captcha) return floor(400, { ok: false, reason: "captcha", error: BOT_MISSING });
+    // across every running copy (a bot spread over them, or waiting for a fresh one, is counted all the same)
+    if (d.rateHit) {
+      try {
+        if (!(await d.rateHit("signup-ip", await sha256hex("signup-ip:" + clientIp(req)), SHARED.ip.max, SHARED.ip.windowS))) return tooMany();
+        if (!(await d.rateHit("signup-email", await sha256hex("signup-email:" + email), SHARED.email.max, SHARED.email.windowS))) return tooMany();
+      } catch { /* migration 112 not run yet: the in-memory limits above still hold */ }
+    }
+    // a throwaway address: the same answer, nothing sent
+    if (disposable(email, d.extraDisposable || [])) return neutral();
 
     // after the answer: an invite gets a fresh set-password link (at most one per email per window), anyone else goes
     // to Supabase Auth's sign-up (its confirmation email; nothing for a confirmed email)
     let pending = false;
     try { pending = await d.invitePending(email); } catch { pending = false; }
-    if (pending) { if (d.limits.link.hit(email)) d.background(d.sendSetPasswordLink(email).catch(() => {})); }
+    if (pending) { if (d.limits.link.hit(email)) d.background(d.sendSetPasswordLink(email, form.captcha).catch(() => {})); }
     else d.background(d.authSignUp(form).catch(() => {}));
     return neutral();
   };

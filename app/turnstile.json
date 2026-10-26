@@ -1,0 +1,5 @@
+{
+  "//": "Cloudflare Turnstile site keys (public) for the bot check on the sign-in page (src/lib/bot.jsx); empty = no check. test: the testing site (staging), live: the live site",
+  "test": "",
+  "live": ""
+}

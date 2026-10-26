@@ -23,10 +23,18 @@ const alias = [
 const SENTRY_INGEST = "https://o4512221111320576.ingest.us.sentry.io";
 const sentryOn = (mode) => mode === "test" && process.env.FINCOM_SENTRY !== "off";
 // stability batch 2: no font from Google (the IBM Plex link was never used), so neither its host is allowed
-const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + hashes + " 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+// the bot check on the sign-in page (src/lib/bot.jsx, 26-Oct-2026): Cloudflare Turnstile's public site key, from
+// FINCOM_TURNSTILE_SITE_KEY or app/turnstile.json ({"test": "<key>", "live": "<key>"}). Empty: no widget, nothing of it in
+// the build, and Cloudflare's address stays out of the CSP (the page as before)
+const turnstileKey = (mode) => {
+  if (process.env.FINCOM_TURNSTILE_SITE_KEY !== undefined) return process.env.FINCOM_TURNSTILE_SITE_KEY.trim();
+  try { return String(JSON.parse(fs.readFileSync(new URL("./turnstile.json", import.meta.url), "utf8"))[mode === "test" ? "test" : "live"] || "").trim(); } catch (e) { return ""; }
+};
+const TURNSTILE = "https://challenges.cloudflare.com";
+const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + hashes + (turnstileKey(mode) ? " " + TURNSTILE : "") + " 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
   "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
-  "worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'";
+  "worker-src 'self' blob:; frame-src 'self' blob:" + (turnstileKey(mode) ? " " + TURNSTILE : "") + "; object-src 'none'; base-uri 'self'; form-action 'self'";
 
 // 17-Oct-2026 (Mac Safari stuck on "Opening FinCom"): the code is written down to what Safari 14 and Chrome 87 read
 // (esbuild rewrites newer syntax); newer helpers come from public/guard.js. public/oldcheck.js tells older browsers
@@ -171,7 +179,7 @@ function serviceWorker(mode) {
 export default defineConfig(({ mode }) => ({
   base: "./",
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
-    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
+    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __TURNSTILE_KEY__: JSON.stringify(turnstileKey(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
   plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true, target: TARGET },

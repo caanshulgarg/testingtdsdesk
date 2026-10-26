@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react";
 import Msg from "../parts/Msg.jsx";
 
-import { KeepBox } from "./SignIn.jsx";
+import { BotBox, KeepBox } from "./SignIn.jsx";
 import ListTable from "../parts/ListTable.jsx";
 
 const Act = ({ act, className = "btn small", children, disabled, title }) => <button className={className} disabled={disabled} title={title} onClick={() => doAct(act)}>{children}</button>;
@@ -56,6 +56,7 @@ export function FirmAccount() {
     <div className="grid"><label className="f"><span>Email</span><input type="email" data-cloud="email" data-fk="cloudemail" aria-label="Email" defaultValue={form.email || c.email || ""} autoComplete="username" onChange={(ev) => cloudForm("email", ev.target.value)} /></label>
       <label className="f"><span>Password</span><input type="password" data-cloud="password" data-fk="cloudpw" aria-label="Password" defaultValue={form.password || ""} autoComplete="current-password" onChange={(ev) => cloudForm("password", ev.target.value)} /></label></div>
     <KeepBox />
+    <BotBox action="login" />
     <div className="row" style={{ marginTop: 10 }}><Act act="cloudSignIn" className="btn small primary">Sign in</Act></div>
     {st.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={st.error} /></p>}</div>;
   const pending = st.pending, aal2 = Cloud.aal() === "aal2", mi = st.mfaInfo || {}, a = S.account, owner = !!(a && ((a.me || {}).role === "owner" || a.superadmin === true));

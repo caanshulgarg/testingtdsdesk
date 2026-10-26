@@ -8,8 +8,10 @@ The firm account is stood in for by a small HTTP server (Supabase Auth, the sign
      person's token), once, and then FinCom opens with that firm
   4. "Continue with Google / Microsoft": shown only for the providers switched on in Supabase Auth (/auth/v1/settings
      external.google / external.azure), on both pages; none, Google only, and both
-  5. Google: the button goes to Supabase's /auth/v1/authorize (provider=google, back to this page); coming back with the
-     tokens signs the person in and their first sign-in sets up their firm; the confirmation link (type=signup) does the same
+  5. Google: the button goes to Supabase's /auth/v1/authorize (provider=google, back to this page, with a PKCE
+     code_challenge); coming back with ?code= signs the person in and their first sign-in sets up their firm. An old-style
+     confirmation link (#access_token=…&type=signup) no longer signs in: "Email confirmed — now sign in" (security review of
+     26-Oct-2026, M1; the PKCE rules themselves: run_signin_pkce.py)
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_signup_ui.py"""
 import os, json, time, base64, threading, functools, http.server
 from urllib.parse import urlparse, parse_qs
@@ -63,6 +65,8 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self.out(200, {"ok": True, "reason": "check_email", "message": CHECK})
         if p == "/auth/v1/token":
             b = self.body()
+            if q.get("grant_type") == ["pkce"]:
+                return self.out(200, {"access_token": jwt("u-g", "ravi@gmail.test"), "refresh_token": "RG", "expires_in": 3600, "user": {"id": "u-g", "email": "ravi@gmail.test"}})
             if q.get("grant_type") == ["password"]:
                 return self.out(200, {"access_token": jwt("u-pw", b.get("email", "")), "refresh_token": "R1", "expires_in": 3600, "user": {"id": "u-pw", "email": b.get("email", "")}})
             return self.out(200, {"access_token": jwt("u-pw", "x@y.test"), "refresh_token": "R2", "expires_in": 3600})
@@ -142,8 +146,8 @@ with sync_playwright() as pw:
     A.fill('[data-cloud="password"]', "a-long-password-1")
     A.click('[data-act="cloudSignUp"]'); A.wait_for_timeout(1000)
     s = ST["signups"][-1] if ST["signups"] else {}
-    ok(len(ST["signups"]) == 1 and [s.get(k) for k in ("name", "firm", "email", "password")] == ["Asha Rao", "Rao & Co", "asha@new.test", "a-long-password-1"] and s.get("redirect") == PAGE,
-       "the form goes to the signup function with name, firm, email, password and this page as the link's way back: " + json.dumps({k: v for k, v in s.items() if k != "password"}))
+    ok(len(ST["signups"]) == 1 and [s.get(k) for k in ("name", "firm", "email", "password")] == ["Asha Rao", "Rao & Co", "asha@new.test", "a-long-password-1"] and s.get("redirect") == PAGE + "#confirmed" and len(s.get("challenge") or "") == 43,
+       "the form goes to the signup function with name, firm, email, password, this page (#confirmed) as the link's way back and a PKCE challenge: " + json.dumps({k: v for k, v in s.items() if k != "password"}))
     ok(A.locator("[data-signup-sent]").count() == 1 and CHECK in A.inner_text("#app") and A.locator('[data-act="cloudSignUp"]').count() == 0, "then one line: " + CHECK)
     ok(ST["provisions"] == [] and not A.evaluate("Cloud.on()"), "nothing else: not signed in, no firm asked for")
     # 3. the first sign-in of the confirmed person: the firm is set up, once, and FinCom opens
@@ -178,19 +182,19 @@ with sync_playwright() as pw:
     L = layout(D, "name")
     ok(L["order"] == WANT and L["lastAct"] == "showSignIn" and L["full"] and L["logos"], "register: the same order, full width with logos, the switch link last (%s)" % L)
 
-    # 5. Google there and back: Supabase's authorize sends the person back with the tokens in the address
+    # 5. Google there and back: Supabase's authorize sends the person back with a code (PKCE)
     asked = []
     ctx5 = context()
     def authorize(route):
         asked.append(route.request.url)
         back = parse_qs(urlparse(route.request.url).query).get("redirect_to", [PAGE])[0]
-        route.fulfill(status=302, headers={"Location": back + "#access_token=" + jwt("u-g", "ravi@gmail.test") + "&expires_in=3600&refresh_token=RG&token_type=bearer&provider_token=x"})
+        route.fulfill(status=302, headers={"Location": back + "?code=G1"})
     ctx5.route("https://*.supabase.co/auth/v1/authorize*", authorize)
     E = page(ctx5)
     E.click('[data-act="oauthGoogle"]'); E.wait_for_timeout(3500)
     q = parse_qs(urlparse(asked[0]).query) if asked else {}
-    ok(q.get("provider") == ["google"] and q.get("redirect_to") == [PAGE], "Continue with Google goes to Supabase's authorize: provider=google, back to this page (%s)" % (asked[:1]))
-    ok("access_token" not in E.evaluate("location.hash"), "back on the page, the tokens are taken out of the address")
+    ok(q.get("provider") == ["google"] and q.get("redirect_to") == [PAGE] and q.get("code_challenge_method") == ["s256"], "Continue with Google goes to Supabase's authorize: provider=google, back to this page, PKCE (%s)" % (asked[:1]))
+    ok("code=" not in E.evaluate("location.href"), "back on the page, the code is taken out of the address")
     ok(E.evaluate("Cloud.on()") and E.evaluate("Cloud.sess().user_id") == "u-g" and E.evaluate("Cloud.sess().email") == "ravi@gmail.test", "the person is signed in as their Google login")
     ok(ST["provisions"][-1:] == ["u-g"] and ST["provisions"].count("u-g") == 1 and not signin_page(E) and E.evaluate("Cloud.st.firm") == "F-u-g", "their first sign-in sets up their firm, once, and FinCom opens (%s)" % ST["provisions"])
     # Microsoft asks Supabase for the email scope
@@ -199,10 +203,10 @@ with sync_playwright() as pw:
     F.click('[data-act="oauthAzure"]'); F.wait_for_timeout(1500)
     q = parse_qs(urlparse(asked[0]).query) if asked else {}
     ok(q.get("provider") == ["azure"] and q.get("scopes") == ["email"], "Continue with Microsoft: provider=azure with the email scope (%s)" % q)
-    # the email's confirmation link: signed in at once, the firm set up on that first sign-in
+    # an old-style confirmation link (the session in the address): the email is confirmed, nobody is signed in by it
     G = page(context(), PAGE + "#access_token=" + jwt("u-link", "new@link.test") + "&expires_in=3600&refresh_token=RL&token_type=bearer&type=signup")
-    ok(G.evaluate("Cloud.on()") and not signin_page(G) and G.evaluate("Cloud.st.firm") == "F-u-link" and ST["provisions"].count("u-link") == 1 and G.locator("#spw1").count() == 0,
-       "the confirmation link (type=signup): signed in, no 'choose your password', the firm set up once")
+    ok(not G.evaluate("Cloud.on()") and signin_page(G) and "Email confirmed \u2014 now sign in" in G.inner_text("#app") and ST["provisions"].count("u-link") == 0 and G.locator("#spw1").count() == 0,
+       "an old-style confirmation link (#access_token=…&type=signup): not signed in, \u201cEmail confirmed \u2014 now sign in\u201d, no firm")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); raise SystemExit(1 if fails else 0)
