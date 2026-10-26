@@ -30,6 +30,7 @@ import { loadAP } from "../lib/autopostBoot.js";
 // the lines a posting of this computer already put in Tally, marked posted (kept out of legacy.js: build.py react_parts)
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/97-postto-link.js";
+import "../../../src/js/98-post-register.js";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
@@ -46,17 +47,20 @@ function RowLedger({ r }) {
     const noLed = !bankLedgerReady(CO(), accountFor(curStmt() || {}));
     // round 15 (B1): bridge 2.1.8 said Tally's voucher id (or the batch's last id) when the line went: that, with the
     // company, the time in IST and who pressed Post; an older line as before
-    const mark = r.state === "sent" && !r.goneFromTally && typeof postMarkOf === "function" ? postMarkOf(r) : null, words = mark ? postMarkWords(mark) : "";
+    // migration 111: FinCom's posting register says whether the line is in Tally (src/js/98); without it, the mark kept on the line
+    const rg = typeof postRegMark === "function" && !r.goneFromTally ? postRegMark(b.cid, r.id) : undefined, regLine = typeof postRegLine === "function" ? postRegLine(b.cid, r.id) : "";
+    const mark = rg !== undefined ? rg : r.state === "sent" && !r.goneFromTally && typeof postMarkOf === "function" ? postMarkOf(r) : null, words = mark ? postMarkWords(mark) : "";
     const matched = r.state === "sent" && typeof postMatched === "function" ? postMatched(r.id, b.cid) : null;
     const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
       : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
       : words ? words + (r.checking ? " · checking in Tally…" : "")
+      : regLine ? regLine
       // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back) and no id came with it: posted, not "not found"
       : r.state === "sent" && r.postByReply === true && !bankMatched(r) ? "Posted to Tally (Tally's reply) · " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "")
       : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
       : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
       : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
-    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
+    return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-reg={rg ? rg.register : regLine ? "line" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
       {matched && <> <span className="tag ok" data-matched="">Matched with Tally</span></>}
       {canUndo && !isAuto(r) && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span>
       {isAuto(r) && <div><AutoChip x={r} /></div>}</>;

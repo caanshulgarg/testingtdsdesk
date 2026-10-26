@@ -3,4 +3,5 @@
 import "../../../src/js/90-autopost.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/97-postto-link.js";
+import "../../../src/js/98-post-register.js";
 export const AutoPost = globalThis.AutoPost;

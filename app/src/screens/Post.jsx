@@ -23,6 +23,7 @@ import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import AutoRuns from "../parts/AutoPostRuns.jsx";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/97-postto-link.js";
+import "../../../src/js/98-post-register.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -296,6 +297,12 @@ function RowActs({ co, x, canPost }) {
     if (bill && !job && canPost && !held(e.id, co.id) && st.check === "notfound") out.push(<button key="pa" className="btn small" data-post-again="" onClick={() => PostCheck.repost(co, e)}>It is not in Tally: post again</button>);
     if (bill && !job && st.check !== "checking") out.push(<button key="cn" className="btn small" data-check-now="" onClick={() => PostCheck.run(co, e, true)}>Check now</button>);
     if (bill && job && !settle) out.push(<span key="o" className="note" data-owner-settles="">A member of the firm who may post settles this here.</span>);
+    // migration 111: a bank line or another entry needing review, settled by its FinCom id in the register (the same two actions)
+    if (!bill && x.reg && x.reg.state === "needs_review" && settle) {
+      out.push(<button key="rm" className="btn small" data-mark-posted="" data-reg-action="mark" onClick={() => PostReg.markPosted(co.id, x)}>It is in Tally: mark posted (Tally id)</button>);
+      if (!st.check && !st.notSeen) out.push(<button key="rr" className="btn small" data-release-owner="" data-reg-action="release" onClick={() => PostReg.release(co.id, x)}>Not in Tally – post again</button>);
+      if (job && st.notSeen) out.push(<button key="rc" className="btn small" data-confirm-notseen="" onClick={() => PostOwner.confirmNotSeen(co.id, { id: x.id, x: {} }, job)}>I looked in Tally: not there – post again</button>);
+    }
     // a released id (the bridge or an owner said it is not in Tally): Post again is back
     if (bill && job && x.ids && (!x.ids.live || x.ids.released_at) && !st.accepted && !st.checking && canPost && !e.exportedAt) out.push(<button key="pa2" className="btn small" data-post-again="" onClick={() => postAllToTally({ kind: "bill", id: e.id })}>Post again</button>);
   }
@@ -331,7 +338,7 @@ function EntryRow({ co, x, tab, canPost, flags, picked, pick, view }) {
   const released = x.st.released || (x.ids && x.ids.released_at);
   const kind = st.action && st.action.kind === "ledger" ? "ledger" : KIND[st.code];
   return <li className="pe-row" data-entry-row="" data-row-key={x.key} data-status={st.code} data-job={job ? job.id : undefined} data-entries={job ? x.id : undefined}
-    data-posted-entry={tab === "posted" ? x.id : undefined} data-attn-kind={kind} data-post-released={released ? "" : undefined} data-batch-n={st.id && st.id.batchN || undefined}>
+    data-posted-entry={tab === "posted" ? x.id : undefined} data-reg={x.reg ? x.reg.state : undefined} data-attn-kind={kind} data-post-released={released ? "" : undefined} data-batch-n={st.id && st.id.batchN || undefined}>
     {flags && view !== "removed" && <input type="checkbox" className="pe-tick" data-row-tick="" aria-label={"Select " + (d.no || x.id)} checked={!!picked} onChange={(ev) => pick(x.key, ev.target.checked)} />}
     <div className="pe-main" data-bill-row={x.kind === "bill" && tab !== "topost" ? x.id : undefined} data-queue-row={tab === "topost" ? x.id : undefined} data-attn-kind={kind} data-attn-state={st.reason ? st.reason.id : undefined}>
       <div className="pe-l1" data-pe-line1="">
@@ -475,6 +482,8 @@ export function PostStep() {
     // round 17a: what a finished posting of FinCom's cloud put in Tally is marked here when the client's page is opened
     if (typeof postReconcile === "function") postReconcile(co.id);
     if (typeof PostIds === "object") PostIds.load(co.id);
+    // migration 111: the posting register (src/js/98): the tabs, counts and stamps read it once it is here
+    if (typeof PostReg === "object") PostReg.load(co.id);
     TallyProof.check(co.id).catch(() => {});
     if (!co.postTo || choiceState(co, "postTo") !== "confirmed") (typeof postToFromLink === "function" ? postToFromLink(co) : Promise.resolve("")).then((v) => { if (!v && !co.postTo) return autoPostTo(co); }).catch(() => {});
     bills.attention.filter((e) => (e.exportedAt || e.postUnconfirmed) && PostCheck.due(e)).forEach((e) => PostCheck.run(co, e).catch(() => {}));

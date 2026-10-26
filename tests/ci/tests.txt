@@ -515,3 +515,7 @@ run_records_upload_server.py          120
 run_timings_unit.mjs                  60
 run_migration108.py                   180
 run_timings_ui.py                     240  TDSDESK_SITE=../app/dist-test
+# next-post-register (26-Oct-2026, build stabilisation step 3): the cloud posting register (migration 111); tally-ingest writes and settles it; the Post page, stamps and postReconcile read it
+run_migration111.py                   180
+run_post_register_server.py           120
+run_post_register_ui.py               240  TDSDESK_SITE=../app/dist-test
