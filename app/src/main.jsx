@@ -90,6 +90,9 @@ const firstPage = new Promise((ok) => {
 const afterFirstPage = (f, t) => firstPage.then(() => idle(f, t));
 
 function start() {
+  // next-timings: the time each kind of request to the cloud takes from here, and each opening of a client's books
+  // (lib/timings.js, its own file: it watches the books at once and starts the rest a few seconds after the first page)
+  import("./lib/timings.js").then((m) => m.boot(), () => {});
   // error reports to Sentry: in a test build only (never in a live build: the import is dropped), and src/sentry.js
   // starts only on staging.fincom.live (docs/sentry.md)
   // stability batch 2: loaded once the page is drawn and the computer is idle (it was 35 KB on the way of the first open);

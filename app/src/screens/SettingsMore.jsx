@@ -45,6 +45,8 @@ function GoogleHelp() {
   return <div className="bdiag" style={{ marginTop: 10 }}><b>How to fix this</b><ol style={{ margin: "8px 0 0 18px", lineHeight: 1.55 }}>{steps.map((x, i) => <li key={i}>{x}</li>)}</ol></div>;
 }
 
+// next-timings: the report for support carries how long each kind of request to the cloud took from here (lib/timings.js)
+const timingsReport = () => { try { return window.__fincomTimings ? window.__fincomTimings.report() : "Connection timings: not measured yet"; } catch (e) { return ""; } };
 function SelfTest() {
   const e = envInfo(), sum = selfTestSummary(), r = (S.selfTest && S.selfTest.results) || {};
   const Line = ({ label, res }) => <tr><td><b>{label}</b></td><td>{!res ? (sum.state === "busy" ? <Tag c="no">Testing…</Tag> : <Tag c="no">Not run</Tag>) : res.ok ? <Tag c="ok">Pass</Tag> : <Tag c="bad">Fail</Tag>}</td><td className="note">{res ? res.msg : ""}</td></tr>;
@@ -61,7 +63,7 @@ function SelfTest() {
       <Yn label="PDF reader loaded" v={e.pdf} fix="Reload the page. If it stays No, download the standalone file again." />
       <Yn label="Built-in OCR inside the file" v={e.ocrBuiltIn} fix="This copy is incomplete. Download the standalone file again." /></tbody></table></div>
     <h3 style={{ marginTop: 16 }}>Diagnostic report</h3><p className="note" style={{ margin: "0 0 6px" }}>If something is still not working, copy this and send it to me.</p>
-    <textarea id="diagBox" rows={9} readOnly value={diagnosticReport()} aria-label="Diagnostic report" />
+    <textarea id="diagBox" rows={9} readOnly value={diagnosticReport() + "\n" + timingsReport()} aria-label="Diagnostic report" />
     <div className="row" style={{ marginTop: 6 }}><Act act="copyDiag">Copy report</Act></div></div>;
 }
 
