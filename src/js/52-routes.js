@@ -133,6 +133,7 @@ const Route = {
     S.detail = null;
     const p = String(h || "").replace(/^#\/?/, "").split("/").map(x => { try { return decodeURIComponent(x); } catch (e){ return x; } });
     if (!p[0]) return false;
+    if (p[0] === "register" || p[0] === "signin") return false;   // the sign-in and register pages (applyEntryHash, src/js/27)
     this.applying = true;
     try {
       if (p[0] === "c" && p[1]){

@@ -1,8 +1,10 @@
-// signup v11 (26-Oct-2026, audit H3): by invitation only; the rules are in handler.ts (Deno tests: handler_test.ts).
-// Deployed as uploaded files (index.ts, handler.ts), verify_jwt off: the public answer needs no sign-in, and the
-// administrator's path checks the token itself. Rollback: v10 (its source is v10-deployed.ts.txt here).
+// signup v12 (26-Oct-2026): self-service sign-up with the email confirmed first, and the person's own firm with
+// ₹10,000 made on their first sign-in (provision); invites and the administrator's path as in v11. The rules are in
+// handler.ts (Deno tests: handler_test.ts). Deployed as uploaded files (index.ts, handler.ts), verify_jwt off: the
+// public answer needs no sign-in, and provision and the administrator's path check the token themselves.
+// Rollback: v11 (commit 209c0219b, invite only); before it v10 (its source is v10-deployed.ts.txt here).
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { type AdminCaller, type CreateFirm, makeHandler, RateLimiter } from "./handler.ts";
+import { type AdminCaller, type AuthUser, type CreateFirm, type Db, makeHandler, RateLimiter, type SignUpForm } from "./handler.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -98,8 +100,86 @@ async function createFirm(by: AdminCaller, f: CreateFirm) {
   return { status: 200, body: password && !f.password ? { ok: true, firm_id: firm.id, email: f.email, password } : { ok: true, firm_id: firm.id, email: f.email } };
 }
 
+// ---------- v12: sign-up through Supabase Auth, and the firm made on the first sign-in ----------
+const noSession = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
+async function authSignUp(f: SignUpForm): Promise<void> {
+  // "Confirm email" is on: a new email gets an unconfirmed login and Supabase's confirmation email; an email with a
+  // confirmed login gets nothing (Supabase answers with a stand-in user); an unconfirmed one gets the link again
+  const anon = createClient(URL, ANON, { auth: noSession });
+  await anon.auth.signUp({ email: f.email, password: f.password, options: { emailRedirectTo: f.redirect || APP, data: { name: f.name, firm: f.firm } } });
+}
+
+async function authUser(jwt: string): Promise<AuthUser | null> {
+  const { data, error } = await admin.auth.getUser(jwt);
+  const u: any = data?.user;
+  if (error || !u?.id) return null;
+  const um = u.user_metadata || {}, am = u.app_metadata || {};
+  return {
+    id: u.id, email: String(u.email || "").trim().toLowerCase(), confirmed: !!u.email_confirmed_at,
+    name: String(um.name || um.full_name || "").trim(), firm: String(um.firm || "").trim(), provider: String(am.provider || "email"),
+    signupFirm: typeof am.signup_firm === "string" ? am.signup_firm : null,
+  };
+}
+
+const dup = (e: any) => !!e && e.code === "23505";
+const must = (e: any) => { if (e) throw new Error(e.message || String(e)); };
+const likeExact = (s: string) => s.replace(/[\\%_]/g, (c) => "\\" + c);
+async function signupPlan() {
+  const { data: setting } = await admin.from("app_settings").select("value").eq("name", "signup").maybeSingle();
+  const { data: plan } = await admin.from("plans").select("id, includes").eq("name", setting?.value?.plan || "Pay as you go").maybeSingle();
+  return plan as { id: string; includes: any } | null;
+}
+const db: Db = {
+  async memberOf(uid) {
+    const { data, error } = await admin.from("members").select("firm_id").eq("user_id", uid).maybeSingle(); must(error);
+    return data?.firm_id ?? null;
+  },
+  async memberEmailElsewhere(email, uid) {
+    const { data, error } = await admin.from("members").select("user_id").ilike("email", likeExact(email)).neq("user_id", uid).limit(1); must(error);
+    return (data || []).length > 0;
+  },
+  async isPlatformAdmin(uid) {
+    const { data, error } = await admin.from("platform_admins").select("user_id").eq("user_id", uid).maybeSingle(); must(error);
+    return !!data;
+  },
+  async firm(id) {
+    const { data, error } = await admin.from("firms").select("created_at").eq("id", id).maybeSingle(); must(error);
+    return data ? { createdAt: Date.parse(data.created_at) } : null;
+  },
+  async insertFirm(row) {
+    const plan = await signupPlan();
+    const { error } = await admin.from("firms").insert({ ...row, plan_id: plan?.id || null });
+    if (dup(error)) return false;
+    must(error); return true;
+  },
+  async deleteFirm(id) { const { error } = await admin.from("firms").delete().eq("id", id); must(error); },
+  async insertMember(row) {
+    const { error } = await admin.from("members").insert(row);
+    if (dup(error)) return false;
+    must(error); return true;
+  },
+  async hasOpeningCredit(firmId) {
+    const { data, error } = await admin.from("wallet_entries").select("id").eq("firm_id", firmId).eq("kind", "credit").eq("ref", "signup").limit(1); must(error);
+    return (data || []).length > 0;
+  },
+  async insertOpeningCredit(firmId, amount, byUser) {
+    const { error } = await admin.from("wallet_entries").insert({ firm_id: firmId, kind: "credit", code: "wallet", qty: 1, amount, balance_after: amount, note: "Credit to start with", ref: "signup", by_user: byUser });
+    must(error);
+  },
+  async afterCreate(firmId, userId, detail) {
+    const plan = await signupPlan();
+    const perClient = plan?.includes?.clients_price;
+    if (perClient) await admin.from("firm_modules").upsert({ firm_id: firmId, code: "clients", enabled: true, price: perClient }, { onConflict: "firm_id,code", ignoreDuplicates: true });
+    await admin.from("activity").insert({ firm_id: firmId, user_id: userId, client_id: "", what: "signup.firm", detail }).then(() => {}, () => {});
+  },
+  async markUser(u, firmId) {
+    // app_metadata is written only by the server; Supabase merges the key into what is there
+    const { error } = await admin.auth.admin.updateUserById(u.id, { app_metadata: { signup_firm: firmId } }); must(error);
+  },
+};
+
 const handler = makeHandler({
-  platformAdmin, invitePending, sendSetPasswordLink, createFirm,
+  platformAdmin, invitePending, sendSetPasswordLink, createFirm, authSignUp, authUser, db,
   background: (p) => { try { (globalThis as any).EdgeRuntime?.waitUntil(p); } catch { /* the promise still runs */ } },
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   now: () => Date.now(),
@@ -108,6 +188,7 @@ const handler = makeHandler({
     ip: new RateLimiter(10, 10 * 60_000),      // 10 tries per address per 10 minutes
     email: new RateLimiter(5, 60 * 60_000),    // 5 tries per email per hour
     link: new RateLimiter(1, 15 * 60_000),     // at most one set-password email per email per 15 minutes
+    provision: new RateLimiter(30, 10 * 60_000),   // 30 provision calls per address per 10 minutes
   },
 });
 
