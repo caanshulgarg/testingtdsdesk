@@ -251,8 +251,8 @@ const Bridge = {
       try { j = await this.call("/jobs", Object.assign({jobId}, payload), 20000); }
       catch (e){ if (a >= 5 || e.code === "bridge_key" || (e.code === "bridge" && !/in time|not running/.test(e.message))) { this.posting = null; throw e; } tell(null, {message: "Handing the entries to the bridge\u2026 (try " + (a + 2) + ")"}); await sleep(1500 * (a + 1)); }
     }
-    let quietSince = 0, resumed = 0;
-    while (!["done", "failed"].includes(j.status)){
+    let quietSince = 0, resumed = 0, lost = 0;
+    while (!["done", "failed", "cancelled"].includes(j.status)){
       if (j.status === "interrupted"){
         if (resumed++ >= 3) break;
         tell(j, {message: "The posting stopped part-way; resuming it (nothing already in Tally is sent again)\u2026"});
@@ -261,9 +261,14 @@ const Bridge = {
       }
       tell(j);
       await sleep(quietSince ? 3000 : 700);
-      try { j = await this.call("/jobs?id=" + encodeURIComponent(jobId), null, 15000); quietSince = 0; }
+      try { j = await this.call("/jobs?id=" + encodeURIComponent(jobId), null, 15000); quietSince = 0; lost = 0; }
       catch (e){
-        if (e.code === "bridge" && /No such job/.test(e.message)){ j = {status: "failed", message: "The bridge lost this posting. Press Post again: entries already in Tally are recognised and not sent twice.", results: j.results || []}; break; }
+        // 26-Oct-2026 (ITSEasy, job 3cca4219): "No such job" can be one read of progress.json while the bridge rewrites it
+        // between two requests; taken as lost only when it says so for ~20 s, so the last batch's answer is not dropped
+        if (e.code === "bridge" && /No such job/.test(e.message)){
+          if (++lost < 8){ await sleep(2500); continue; }
+          j = {status: "failed", message: "The bridge lost this posting. Press Post again: entries already in Tally are recognised and not sent twice.", results: j.results || []}; break;
+        }
         quietSince = quietSince || Date.now();
         const s = Math.round((Date.now() - quietSince) / 1000);
         tell(j, {message: "The bridge is not answering (" + s + "s); the posting carries on there. Waiting\u2026"});
@@ -273,7 +278,8 @@ const Bridge = {
     this.posting = null;
     // every item gets a result: the ones the job did not reach are refused with the job's reason
     const why = j.status === "done" ? "Not posted." : (j.message || "The posting stopped.");
-    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(r => [r.id, r])); return ids.map(id => got.get(id) || {id, ok: false, message: why}); };
+    // an entry the job's answer does not name carries the job, so its record on the bridge can settle it later (bankSentHeal)
+    const resultsOf = jj => { const got = new Map([].concat(jj.results || []).map(r => [r.id, r])); return ids.map(id => got.get(id) || {id, ok: false, message: why, jobId, notAnswered: true}); };
     const results = resultsOf(j);
     if (j.checking){
       // the entries are in Tally; the bridge now reads them back once. FinCom carries on and is told when that is done.
@@ -412,6 +418,14 @@ async function bridgeLeftover(){
     lsDel("tdsdesk:bridgejob");
     const ok = [].concat(j.results || []).filter(r => r.ok).length;
     toast("The earlier posting to " + (j.company || "Tally") + " finished: " + ok + " of " + (j.total || 0) + " in Tally. Press Post again for any left; entries already in Tally are not sent twice.");
+    // its bank lines are marked from the job's answers (bankSentHeal): the lines carry the job (r.postJob) once sent
+    const b = B();
+    if (b && !b.loading && b.rows.length && typeof bankSentHeal === "function"){
+      const ids = new Set([].concat(j.results || []).map(r => r && r.id).filter(Boolean));
+      const rows = b.rows.filter(r => r.state === "ready" && ids.has(r.id));
+      rows.forEach(r => { if (!bankJobOf(r)) r.postJob = m.id; });
+      if (rows.length){ const h = await bankSentHeal(b.cid, rows); if (h.n){ b.postReport = {at: Date.now(), posted: 0, skipped: 0, movedBack: 0, failed: [], already: h.n, alreadyLine: bankAlreadyLine(h), dismiss: "bankReportOk"}; render(); } }
+    }
   } catch (e){ if (Date.now() - (m.at || 0) > 7 * 86400000) lsDel("tdsdesk:bridgejob"); }
 }
 async function bridgeTick(first){
@@ -440,6 +454,8 @@ async function bridgeTick(first){
         toast((first ? "" : "Tally switched company. ") + "Showing " + clients[0].name + ", the company open in Tally.");
       }
     }
+    // 26-Oct-2026: the open statement's lines a posting of this computer already put in Tally show as posted (bankHealOpen)
+    if (typeof bankHealOpen === "function" && Bridge.up() && S.view === "company" && S.tab === "bank" && B() && !B().loading) bankHealOpen().catch(() => {});
     if (before !== Bridge.st.state || changed){
       if (S.view === "company" && S.tab === "bank" && B() && bridgeLive()) bankAutoSync(false);
       if (S.view === "company" && S.tab === "sales" && SL() && !SL().loading && bridgeLive()) salesAutoSync(false);
@@ -891,7 +907,7 @@ async function removeTallyDuplicates(which){
 function bankPosted(cid, r, x, tname, now, o){
   o = o || {};
   const b = B(), who = o.by || (Cloud.st && Cloud.st.email) || "";
-  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
+  r.state = "sent"; r.sentAt = now; r.postedVia = "bridge"; r.postError = ""; delete r.postJob; r.postedOptional = !!x.optional; r.postVerified = x.verified === true; r.checking = !!x.pendingCheck;
   r.postByReply = x.verified !== true && x.byReply === true;
   if (b && b.cid === cid){ b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = now; }
   if (!o.quiet) logPosting({what: "bank", id: r.id, action: "posted", co: cid, ref: String(r.narr || "").slice(0, 40), party: r.ledger, amount: num(r.debit || r.credit), tally: {guid: x.guid || "", masterId: x.masterId || "", vchType: x.vchType || "", vchDate: x.vchDate || "", company: tname}, by: who});
@@ -899,6 +915,8 @@ function bankPosted(cid, r, x, tname, now, o){
   // round 15 (B1): Tally's voucher id, or the batch's last id, from bridge 2.1.8
   const mk = typeof postTallyMark === "function" ? postTallyMark(x, {company: tname, at: now, by: o.by || postMyName()}) : null;
   if (mk) Object.assign(r.tally, mk);
+  if (mk && x.vchGuess) Object.assign(r.tally, {vchGuess: String(x.vchGuess), inferred: true});
+  if (mk && x.jobId) r.tally.job = String(x.jobId);
   if (r.billId && D(cid).entries[r.billId]){ const e = D(cid).entries[r.billId]; e.paidBy = r.id; Store.saveEntry(cid, e); }
   markSalesReceived(r);
 }
@@ -1065,6 +1083,12 @@ async function postBankToTally(ids){
   if (!tname) return;
   // round 17a: a line a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
   if (typeof postReconcile === "function") postReconcile(b.cid);
+  // 26-Oct-2026: and a line a posting from this computer already put in Tally (its job's record on the bridge)
+  if (typeof bankSentHeal === "function") try { const h = await bankSentHeal(b.cid, b.rows, tname, ids ? new Set(ids) : null); if (h.n){
+    b.postReport = {at: Date.now(), posted: 0, skipped: 0, movedBack: 0, failed: [], already: h.n, alreadyLine: bankAlreadyLine(h), dismiss: "bankReportOk"};
+    if (!b.rows.some(r => r.state === "ready" && (!ids || ids.includes(r.id)))){ toast(bankAlreadyLine(h)); render(); return; }
+    render();
+  } } catch (e){}
   if (Bridge.st.allowImport === false){ toast("Posting is switched off in the bridge settings (AllowImport)."); return; }
   const acc = (co.bankAccounts || []).find(a => a.id === st.acctId);
   const heavy = b.checkBeforePost === true;
@@ -1164,6 +1188,8 @@ async function postBankToTally(ids){
   let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
   const failed = [];
   rows = rows.filter(r => {
+    // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)
+    if (isOwnBank(r, r.ledger)){ dropOwnBank(r); failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: OWN_BANK}); return false; }
     const need = [r.ledger].concat(r.tdsAtPay ? [r.tdsLedger || bankLedgers(co).tds] : []);
     const miss = need.find(n => !exactLedger(n));
     if (miss !== undefined){
@@ -1202,11 +1228,27 @@ async function postBankToTally(ids){
     const now = new Date().toISOString();
     masters.forEach(l => { const x = byId.get("led:" + l.name); if (x && x.ok){ l.sent = true; l.sentAt = now; if (!x.existed) logPosting({what: "ledger", id: "led:" + l.name, action: postAltered(x) ? "altered" : "created", co: b.cid, ref: l.name, party: l.group || "", amount: 0, tally: {company: tname}, by: (Cloud.st && Cloud.st.email) || ""}); } else if (x) failed.push({what: "New ledger " + l.name, msg: x.message}); });
     let ok = 0, optionalN = 0;
-    const posted = [];
+    const posted = [], held = [];
+    // 26-Oct-2026: each line of a batch Tally took whole gets its id inferred (kept apart, marked so), and the job
+    const guesses = typeof bankBatchGuesses === "function" ? bankBatchGuesses(j.results) : new Map(), jobId = (j.job && j.job.id) || "";
+    // a request Tally took all but the lines its errors name: those say why, the others are posted (src/js/96)
+    const split = typeof bankPartialSplit === "function" ? bankPartialSplit(j.results, new Map(rows.map(r => [String(r.id), r]))) : new Map();
     rows.forEach(r => {
+      const sp = split.get(String(r.id));
+      if (sp && sp.refused){ r.postError = sp.refused; failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: sp.refused}); return; }
+      if (sp && sp.taken){ ok++; bankPosted(b.cid, r, Object.assign({}, sp.taken, {vchGuess: sp.guess, jobId}), tname, now); posted.push(r); return; }
       // bridge 2.1.4: the same voucher found in Tally just before posting: in Tally (with that voucher), not failed. A
       // check that could not be made leaves the line ready, with the bridge's one line (below, as any refusal)
-      const x0 = byId.get(r.id), x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
+      const x1 = byId.get(r.id), x0 = x1 && postTaken(x1) ? Object.assign({}, x1, {vchGuess: guesses.get(String(r.id)) || "", jobId}) : x1;
+      const x = postAlready(x0) ? Object.assign({}, x0, {ok: true, verified: true, vchNumber: x0.vchNumber || x0.vchNo || ""}) : x0;
+      // the resend guard held it back ("already sent from this computer … job X"), or the job's answer for it never came
+      // here: settled below from that job's record on the bridge, never sent again
+      if (x && !x.ok && (x.alreadySent === true || (x.notAnswered === true && x.jobId))){
+        const jb = x.notAnswered ? x.jobId : x.sentJob;
+        if (jb && /^[A-Za-z0-9-]{8,64}$/.test(String(jb))) r.postJob = String(jb);
+        r.postError = plainMsg(x.message) || "Tally did not confirm this entry.";
+        held.push(r); return;
+      }
       // round 17a: Tally's reply (bridge 2.1.8, byReply) is posted, not "not yet read back" (postTaken, src/js/59)
       if (x && x.ok && !postTaken(x) && !x.pendingCheck){
         b.postedTags = b.postedTags || {}; b.postedTags[fpHash(r.fp || r.id)] = "unconfirmed:" + now;
@@ -1221,9 +1263,29 @@ async function postBankToTally(ids){
       }
     });
     learnRows(posted, "sent");
+    // the page reloaded the statement while Tally worked (a sync from FinCom's cloud): the answers go onto the lines shown
+    const nb = B();
+    if (nb && nb !== b && nb.cid === b.cid && nb.cur === st.id && Array.isArray(nb.rows)){
+      const was = new Map(rows.map(r => [r.id, r]));
+      nb.rows.forEach(q => { const r = was.get(q.id); if (r && q.state === "ready") ["state", "sentAt", "postedVia", "postError", "postedOptional", "postVerified", "postByReply", "checking", "tally", "postJob"].forEach(f => { if (r[f] !== undefined) q[f] = r[f]; }); });
+      nb.postedTags = Object.assign({}, b.postedTags || {}, nb.postedTags || {});
+    }
     saveBank({rows: true, newLed: true, posted: true});
-    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking, checkNote};
-    toast(ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
+    // held back by the resend guard, or not answered here: that job's record on the bridge says whether Tally took them
+    let already = null;
+    if (held.length){
+      const live = B() && B().cid === b.cid && B().cur === st.id ? B() : b, heldIds = new Set(held.map(r => r.id));
+      already = typeof bankSentHeal === "function" ? await bankSentHeal(b.cid, live.rows, tname, heldIds) : {n: 0, rows: []};
+      const done = new Set(already.rows.map(r => r.id));
+      live.rows.filter(r => heldIds.has(r.id) && !done.has(r.id)).forEach(r => failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError}));
+      if (live !== b) held.forEach(r => { if (!done.has(r.id) && r.postError) { const q = live.rows.find(z => z.id === r.id); if (q && q.state === "ready" && !q.postError) q.postError = r.postError; } });
+      saveBank({rows: true, posted: true});
+    }
+    const aN = already ? already.n : 0;
+    b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking, checkNote,
+      already: aN, alreadyLine: aN ? bankAlreadyLine(already) : ""};
+    if (B() && B() !== b && B().cid === b.cid) B().postReport = b.postReport;
+    toast(aN && !ok && !failed.length ? bankAlreadyLine(already) : ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (aN ? ", " + aN + " already in Tally (marked as posted)" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";
     b.afterPost = !j.checking && !j.viaCloud;
     b.tallyLook = null;          // Tally has changed: the next posting looks again

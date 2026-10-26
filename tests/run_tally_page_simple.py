@@ -173,9 +173,9 @@ def main():
         scene([], [], fold=False)
         g = "#app [data-connect-guide]"
         # 23-Oct-2026 (next-tally-suvit, Suvit's flow): three steps; linking, the ledgers and the entries are Companies in Tally's rows
-        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 3, "guide: three steps while nothing is connected")
+        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 4, "guide: four steps while nothing is connected (26-Oct-2026: Set Tally's port)")
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
-        ok([s[0] for s in steps] == ["install", "open", "add"], "guide: Install -> Open your company in TallyPrime -> Add as client (%s)" % [s[0] for s in steps])
+        ok([s[0] for s in steps] == ["install", "port", "open", "add"], "guide: Install -> Set Tally's port -> Open your company in TallyPrime -> Add as client (%s)" % [s[0] for s in steps])
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
         # 24-Oct-2026 (next-tally-firstlink, fd7efe4e4): step 1's download is in Connect this computer under the steps
         # (Download, Open it, Type its code), as run_tally_page_clean and run_tally_suvit read it
@@ -195,7 +195,7 @@ def main():
         # ---- 2. a bridge heard from, Tally open, no company linked: three ticked, Link to do
         scene([OK_DEV], UNLINKED, fold=False)
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(steps == [["install", True], ["open", True], ["add", False]], "guide: Install and the company ticked, Add as client not (%s)" % steps)
+        ok(steps == [["install", True], ["port", True], ["open", True], ["add", False]], "guide: Install, the port and the company ticked, Add as client not (%s)" % steps)
         ok(pg.locator("#app [data-tco-list=firm] [data-tco-act]").count() >= 1, "guide: the companies' rows carry the one button (Add as client, or Link to <client>)")
         shot("guide-link")
         # a company linked: Link ticks once no client is left unlinked (5c: each client to a company of its own)
@@ -311,7 +311,7 @@ def main():
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
         ok(pg.locator('#app [data-connect-guide="done"]').count() == 1 and pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to one green line with 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
-        ok(pg.locator("#app [data-connect-step]").count() == 3 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
+        ok(pg.locator("#app [data-connect-step]").count() == 4 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
         # the Day Book upload; no "waiting" box
         scene(DEVS, LINKED)

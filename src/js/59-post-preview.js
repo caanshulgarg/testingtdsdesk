@@ -654,10 +654,13 @@ function fmtIST(t){
 function postMarkWords(m){
   if (!m || (m.vch == null && m.batchEnd == null)) return "";
   const head = m.vch != null ? "Posted to Tally: voucher id " + m.vch : "Posted to Tally, batch ending Tally id " + m.batchEnd;
-  return head + (m.company ? " · " + m.company : "") + (m.at ? " · " + fmtIST(m.at) : "") + (m.by ? " · by " + m.by : "");
+  // 26-Oct-2026 (a bank line of a batch Tally took whole): the batch's ids and this line's, inferred and said so; the job
+  const n = num(m.batchN), end = /^\d+$/.test(String(m.batchEnd || "")) ? +m.batchEnd : 0;
+  const range = m.vch == null && m.vchGuess && end && n > 1 ? " (Tally ids " + (end - n + 1) + "\u2013" + end + "; this line " + m.vchGuess + ", inferred)" : "";
+  return head + range + (m.company ? " · " + m.company : "") + (m.at ? " · " + fmtIST(m.at) : "") + (m.by ? " · by " + m.by : "") + (m.job ? " · job " + String(m.job).slice(0, 8) : "");
 }
 // the mark kept on an entry or a bank line (e.tally: set with exportedAt / sentAt when the result arrived here)
-function postMarkOf(e){ const t = e && e.tally; return t && (t.vch != null || t.batchEnd != null) ? {vch: t.vch, batchEnd: t.batchEnd, batchN: t.batchN, company: t.company, at: t.at, by: t.by} : null; }
+function postMarkOf(e){ const t = e && e.tally; return t && (t.vch != null || t.batchEnd != null) ? {vch: t.vch, batchEnd: t.batchEnd, batchN: t.batchN, company: t.company, at: t.at, by: t.by, vchGuess: t.vchGuess, inferred: t.inferred, job: t.job} : null; }
 // the mark from a posting of the cloud (seen from any computer): the entry's result, the job's company, when, and the
 // person who pressed Post (created_by); else the ids the cloud kept in tally_post_ids
 function postMarkFromJob(j, id){
@@ -964,7 +967,7 @@ function postRows(co){
 // the voucher XML of a row, exactly as it would go now
 function postRowXml(co, row){
   if (row.kind === "bill") return voucherXml(row.e, co);
-  if (row.kind === "bank"){ const st = curStmt(), acc = st && (co.bankAccounts || []).find(a => a.id === st.acctId); return acc ? bankVoucherXml(row.e, acc, co) : ""; }
+  if (row.kind === "bank"){ const st = curStmt(), acc = st && (co.bankAccounts || []).find(a => a.id === st.acctId); try { return acc ? bankVoucherXml(row.e, acc, co) : ""; } catch (e){ return ""; } }
   if (row.kind === "sale") return typeof salesVoucherXml === "function" ? salesVoucherXml(row.e, co) : "";
   return "";
 }

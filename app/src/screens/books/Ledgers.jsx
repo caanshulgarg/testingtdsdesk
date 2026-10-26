@@ -21,6 +21,9 @@
 import CommitBox from "../../parts/CommitBox.jsx";
 import NeedAction from "../../parts/NeedAction.jsx";
 import { UnknownBody, unknownGroup } from "../../parts/UnknownLedgers.jsx";
+import { lazy, Suspense } from "react";
+// 26-Oct-2026: the ledgers' one bar, loaded with the Tally screen's own code (the app's first file stays within budget)
+const LedgerBar = lazy(() => import("../../parts/TallyCompanies.jsx").then((m) => ({ default: m.LedgerBar })));
 const plural = (k, one, many) => k + " " + (k === 1 ? one : many);
 
 // migration 39: a ledger renamed in Tally whose saved choices were carried (tally_ledgers.needs_confirm): one line until
@@ -154,6 +157,7 @@ export function Status({ b }) {
       {x.label}{"Ledgers from Tally: "}<b>{Number(x.n || 0).toLocaleString("en-IN")}</b>{x.at ? " · updated " + LedPage.ago(x.at) : ""}{x.file ? " (from the ledger masters file)" : ""}
     </div>) : <div className="led-status-line" data-led-status-line="none">No ledgers from Tally yet</div>}
     {again}
+    {cloud && <Suspense fallback={null}><LedgerBar cid={cid} where="ledgers" /></Suspense>}
     {!live && !cloud && <div className="led-upload" data-led-upload="">
       <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then bring the file in here.</span>
       <button className="btn small" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Bring in from Tally</button></div>}

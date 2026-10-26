@@ -333,6 +333,17 @@ function runRules(rows, opts){
   return hit;
 }
 
+// 26-Oct-2026 (ITSEasy, "Mob alrt Chg Sep-25+GST" posted as a Contra to and from ICICI Bank A/c): a line's ledger is
+// never its own bank account's Tally ledger (it nets to nothing in Tally); not suggested, learnt, set or posted
+const OWN_BANK = "This is the bank account itself \u2014 choose the expense or party ledger";
+function bankOwnLedger(r){
+  const b = B(); if (!b) return "";
+  const st = (b.stmts || []).find(s => s.id === String((r && r.id) || "").split("-")[0]) || curStmt(), co = CO(b.cid);
+  const acc = st ? accountFor(st) : null;
+  return acc ? String(((typeof choiceGet === "function" && acc.id && choiceGet(co, "bank:" + acc.id)) || {}).value || acc.ledger || "").trim() : "";
+}
+function isOwnBank(r, l){ const o = bankOwnLedger(r); return !!o && !!l && ledNm(l).toLowerCase() === ledNm(o).toLowerCase(); }
+function dropOwnBank(r){ r.ledger = ""; r.userSet = false; r.state = "attention"; r.why = [OWN_BANK + "."]; r.source = ""; r.level = "none"; r.srcLabel = ""; r.vtype = r.debit ? "Payment" : "Receipt"; }
 function suggestAll(rows, onlyOpen){
   const b = B(), co = CO(b.cid);
   const ledgerList = Array.from(knownLedgers().values()).filter(l => !l.pending);
@@ -348,9 +359,9 @@ function suggestAll(rows, onlyOpen){
   const accNow = stNow ? (co.bankAccounts || []).find(a => a.id === stNow.acctId) : null;
   rows.forEach(r => {
     if (onlyOpen && !["attention", "suggested"].includes(r.state)) return;
-    if (r.userSet && exactLedger(r.ledger)) return;
+    if (r.userSet && exactLedger(r.ledger) && !isOwnBank(r, r.ledger)) return;
     const rule = matchRule(r, co, accNow);          // a written rule beats every guess
-    if (rule){ applyRule(rule, r, co, accNow); return; }
+    if (rule){ applyRule(rule, r, co, accNow); if (isOwnBank(r, r.ledger)) dropOwnBank(r); return; }
     r.ruleId = null; r.ruleNarr = "";
     const s = suggestRow(r, ctx);
     r.userSet = false;
@@ -358,6 +369,7 @@ function suggestAll(rows, onlyOpen){
     r.billId = s.billId || null; r.billRef = s.billRef || ""; r.tdsAtPay = s.tdsAtPay || 0; r.tdsLedger = s.tdsLedger || ""; r.salesIds = s.salesIds || null;
     r.vtype = s.ledger ? vtypeFor(r, s.ledger) : (r.debit ? "Payment" : "Receipt");
     r.state = s.level === "auto" && co.bankAuto !== false ? "ready" : s.level === "none" ? "attention" : "suggested";
+    if (isOwnBank(r, r.ledger)) dropOwnBank(r);
   });
   countRuleUse(rows);
 }
@@ -642,6 +654,7 @@ function rowSnapshot(r){ return {id: r.id, ledger: r.ledger, state: r.state, use
 function setLedgerFor(rows, ledger, how){
   const b = B(), co = CO(b.cid);
   ledger = String(ledger || "").trim();
+  rows = rows.filter(r => !isOwnBank(r, ledger));
   if (!ledger || !rows.length) return 0;
   const auto = co.bankAutoApply !== false;
   const touched = new Map();
@@ -658,7 +671,7 @@ function setLedgerFor(rows, ledger, how){
   if (auto){
     const open = b.rows.filter(r => ["attention", "suggested", "ready"].includes(r.state) && !touched.has(r.id) && !(r.userSet && r.ledger && r.ledger !== ledger && r.state === "ready"));
     rows.forEach(src => {
-      open.forEach(r => { if (!touched.has(r.id) && sameParty(src, r)){ put(r, "same party as a row you set"); others++; } });
+      open.forEach(r => { if (!touched.has(r.id) && sameParty(src, r) && !isOwnBank(r, ledger)){ put(r, "same party as a row you set"); others++; } });
       [src.dec.key, partyKey(src.dec)].filter(Boolean).forEach(k => { if (!ruleKeys.includes(k)) ruleKeys.push(k); });
     });
     const oldRules = b.rules.filter(x => ruleKeys.includes(x.key));
@@ -733,6 +746,7 @@ async function applyToVisible(ledger){
   const b = B(), rows = bankVisibleRows().filter(r => r.state !== "sent" && r.state !== "intally");
   const exact = exactLedger(ledger);
   if (!exact){ toast("\u201c" + ledger + "\u201d is not a ledger in Tally. Choose one from the list, or create it."); return; }
+  if (rows.some(r => isOwnBank(r, exact))){ toast(OWN_BANK + "."); return; }
   if (!rows.length){ toast("No entries are showing."); return; }
   // no question first (the owner's spec K9, round 2: confirmations only for what cannot be undone): Undo in the bar
   const before = rows.map(r => ({id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet}));
@@ -861,6 +875,7 @@ function createLedger(name, group, pan, gstin, acNo, ifsc){
 }
 /* ---------- Tally XML ---------- */
 function bankVoucherXml(row, acc, co){
+  if (acc && acc.ledger && ledNm(row.ledger).toLowerCase() === ledNm(acc.ledger).toLowerCase()) throw new Error(fmtDate(row.date) + ": " + OWN_BANK);
   const vt = row.vtype || (row.debit ? "Payment" : "Receipt");
   const d = toTallyDate(row.date), amt2 = n => r2(n).toFixed(2);
   const amount = row.debit || row.credit, out = !!row.debit;
@@ -918,6 +933,7 @@ function bankExportProblems(rows){
     if (!toTallyDate(r.date)) probs.push((r.dec && r.dec.name || "A line") + ": no valid date");
     else if (!r.ledger) probs.push(fmtDate(r.date) + ": no ledger");
     else if (!exactLedger(r.ledger)) probs.push(fmtDate(r.date) + ": \u201c" + r.ledger + "\u201d is not a Tally ledger");
+    else if (isOwnBank(r, r.ledger)) probs.push(fmtDate(r.date) + ": " + OWN_BANK);
   });
   return probs;
 }

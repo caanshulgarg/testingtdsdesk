@@ -6,7 +6,9 @@ computer's card Details, says so in plain words:
   - a line added, or already there, says nothing;
   - a beat without tallyIni (an older bridge): nothing, no error.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_ini_ui.py
-RED (before the change): no [data-tally-ini] line on the page."""
+RED (before the change): no [data-tally-ini] line on the page.
+26-Oct-2026: the "Reading older entries" switch, its office hours and the old-days test line are gone (older entries come
+only from an uploaded Day Book)."""
 import os, re, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -53,40 +55,13 @@ with sync_playwright() as p:
     ok(len(lines()) == 1, "staff see the same line")
     scene(None)
     ok(lines() == [] and pg.locator('#app [data-computer="%s"] [data-status-line]' % D1).count() == 1, "an older bridge's beat: nothing, the card as before")
-    # ROUND 103 (1c): reading older entries per computer: off by default; the owner switches it; staff see the state only
-    pfl = lambda: E("() => { const e = document.querySelector('#app [data-computer] [data-card-more] [data-period-fetch]'); return e ? [e.getAttribute('data-period-fetch'), e.innerText.trim(), !!e.querySelector('[data-period-fetch-switch]')] : null; }")
-    scene([], pf=False)
-    v = pfl()
-    ok(v and v[0] == "off" and v[1].startswith("Reading older entries on this computer: off") and v[2], "the owner: off, with Switch on (%s)" % v)
-    pg.click('#app [data-period-fetch-switch]'); pg.wait_for_timeout(500)
-    ok(E("window.__ctl") == [["tally_device_period_fetch", {"p_device": D1, "p_on": True}]], "Switch on: tally_device_period_fetch(p_on true) (%s)" % E("window.__ctl"))
-    scene([], role="member", pf=True)
-    v = pfl()
-    ok(v and v[0] == "on" and not v[2], "staff: the state only, no button (%s)" % v)
-    # ROUND 103 (the owner's decision of 21-Oct-2026, evening): the office hours, outside which the period is read faster
-    nl = lambda: E("() => { const e = document.querySelector('#app [data-computer] [data-card-more] [data-period-night]'); return e ? [e.innerText.trim(), !!e.querySelector('[data-period-night-edit]')] : null; }")
-    scene([], pf=True, night={"period_night_from": 20, "period_night_to": 8, "period_night_sunday": True})
-    v = nl()
-    ok(v and v[0].startswith("Faster reading of older entries outside office hours: 20:00 to 08:00 and all Sunday (India time)") and v[1], "the owner: the hours, with Change (%s)" % v)
-    pg.click('#app [data-period-night-edit]'); pg.wait_for_timeout(300)
-    pg.select_option('#app [data-period-night-from]', "21"); pg.select_option('#app [data-period-night-to]', "7"); pg.uncheck('#app [data-period-night-sunday]')
-    pg.click('#app [data-period-night-save]'); pg.wait_for_timeout(600)
-    ok(E("window.__ctl")[-1:] == [["tally_device_period_night", {"p_device": D1, "p_from": 21, "p_to": 7, "p_sunday": False}]], "Save: tally_device_period_night (%s)" % E("window.__ctl"))
-    v = nl()
-    ok(v and v[0].startswith("Faster reading of older entries outside office hours: 21:00 to 07:00 (India time)"), "the new hours shown (%s)" % v)
-    scene([], pf=True)
-    ok((nl() or [""])[0].startswith("Faster reading of older entries outside office hours: 20:00 to 08:00 and all Sunday"), "none kept yet: the defaults (%s)" % nl())
-    scene([], role="member", pf=True, night={"period_night_from": 22, "period_night_to": 6, "period_night_sunday": False})
-    v = nl()
-    ok(v and "22:00 to 06:00" in v[0] and not v[1], "staff: the hours only, no Change (%s)" % v)
-    scene([], pf=False)
-    ok(nl() is None, "reading older entries off on the computer: no hours line")
-    scene([], missing=True)
-    ok(pfl() is None and nl() is None, "a cloud without the column: nothing of the switch")
-    # ROUND 103 (1d): the tray's old-days test as the beat says it
-    scene([], odt={"company": "ZZ TEST", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze", "state": "done"})
-    o = E("() => { const e = document.querySelector('#app [data-card-more] [data-old-days-test]'); return e ? [e.getAttribute('data-old-days-test'), e.innerText.trim()] : null; }")
-    ok(o and o[0] == "ok" and o[1].startswith("Old-days test on ") and "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze (ZZ TEST)" in o[1], "the old-days test line (%s)" % o)
+    # 26-Oct-2026 (the owner: older entries come ONLY by uploading Tally's Day Book file, never fetched automatically): the
+    # per-computer switch, its office hours and the old-days test line are gone; the cloud is not even asked for them
+    scene([], pf=True, night={"period_night_from": 20, "period_night_to": 8, "period_night_sunday": True},
+          odt={"company": "ZZ TEST", "line": "0.21 s / 0.34 s / 0.18 s \u00b7 no freeze", "state": "done"})
+    gone = [s for s in ["[data-period-fetch]", "[data-period-fetch-switch]", "[data-period-night]", "[data-old-days-test]"] if pg.locator("#app " + s).count()]
+    words = [w for w in ["Reading older entries", "office hours", "Old-days test"] if w in pg.inner_text("#app")]
+    ok(not gone and not words and E("window.__ctl") == [], "no older-entries switch, hours or old-days test on the page; no control call (%s %s %s)" % (gone, words, E("window.__ctl")))
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()
 srv.shutdown()

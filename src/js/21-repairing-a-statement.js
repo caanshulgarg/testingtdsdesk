@@ -459,7 +459,7 @@ function learnRows(rows, src){
   rows.forEach(r => {
     if (!r || !r.fp) return;
     if (!(r.fp in prev)) prev[r.fp] = b.hist.rows[r.fp] || null;
-    if (r.ledger && (r.state === "ready" || r.state === "sent" || r.state === "intally")) b.hist.rows[r.fp] = histEntry(r, r.ledger, src);
+    if (r.ledger && (r.state === "ready" || r.state === "sent" || r.state === "intally") && !(typeof isOwnBank === "function" && isOwnBank(r, r.ledger))) b.hist.rows[r.fp] = histEntry(r, r.ledger, src);
   });
   b.histVer++;
   saveBank({hist: true});
