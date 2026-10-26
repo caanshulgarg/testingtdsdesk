@@ -71,6 +71,7 @@ async function loadBank(cid){
     BankDB.get("stmts:" + cid), BankDB.get("rules:" + cid), BankDB.get("ledgers:" + cid), BankDB.get("newled:" + cid), BankDB.get("keys:" + cid), BankDB.get("wrules:" + cid), BankDB.get("books:" + cid), BankDB.get("hist:" + cid), BankDB.get("sales:" + cid), BankDB.get("posted:" + cid)]);
   if (S.bank && S.bank.cid === cid) S.bank.salesRef = salesRef || [];
   if (!S.bank || S.bank.cid !== cid) return;
+  if (await bankHeal(cid, stmts, keys)) return loadBank(cid);
   // the ledger list kept in this browser is only a copy: the client's one list (Ledgers) is what the bank uses, and a
   // shorter copy here never replaces it (review of 02-Oct-2026)
   Object.assign(S.bank, {postedTags: postedTags || {}, stmts: stmts || [], rules: rules || [], wrules: wrules || [], ledgers: Ledgers.fromBrowser(cid, ledgers), newLed: newLed || [], keys: keys || {}, books: books || {}, hist: hist && hist.rows ? hist : {rows: {}}, loading: false});
@@ -85,6 +86,8 @@ async function loadBank(cid){
 async function openStatement(sid){
   const b = B(); if (!b) return;
   b.cur = sid; b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
+  const st0 = b.stmts.find(s => s.id === sid);
+  if (!b.rows.length && st0 && st0.n && await bankHeal(b.cid, b.stmts, null, 1)) b.rows = (await BankDB.get("stmt:" + b.cid + ":" + sid)) || [];
   // rows still undecided pick up whatever was learnt since this statement was last open
   if (b.rows.some(r => r.state === "attention" || (r.state === "suggested" && r.source !== "history"))) suggestAll(b.rows, true); b.limit = 100; b.pendingRule = null; b.sel.clear(); b.sticky.clear(); b.undo = null;
   const n = b.rows.filter(r => r.state === "attention").length;
@@ -93,6 +96,49 @@ async function openStatement(sid){
   if (bridgeLive()) bankAutoSync(false);
 }
 function curStmt(){ const b = B(); return b && b.stmts.find(s => s.id === b.cur); }
+// Self-heal (owner, 26-Oct-2026): this browser lost a client's statements (Safari clearing its storage, a cleared site)
+// while its sync marks still say it has them, so the sync never fetches them again. When a statement the cloud holds
+// (a sync mark, or a row fingerprint pointing at it) is missing here, or its rows are (force), this client's bank records
+// are read in one query, sync marks aside, and what is missing is written here. Nothing is deleted; a deleted statement
+// stays deleted. Once per client per page load (a failed read is tried again).
+async function bankHeal(cid, stmts, keys, force){
+  const done = bankHeal.done = bankHeal.done || {};
+  if (done[cid] || typeof Cloud !== "object" || !Cloud.on() || !Cloud.st.firm) return false;
+  const have = new Set((stmts || []).map(s => s.id)), m = Cloud.marks();
+  const lost = force || Object.values(keys || {}).some(s => !have.has(s)) ||
+    Object.keys(m).some(k => { const p = k.split("|"); return p[0] === "bank_stmt" && p[1] === cid && m[k] !== "gone" && !have.has(String(p[2]).split(":")[1]); });
+  if (!lost) return false;
+  let recs;
+  try { recs = await Cloud.api("records?select=kind,id,data,deleted&client_id=eq." + encodeURIComponent(cid) + "&kind=in.(bank_stmt,bank_rows,bank_meta)"); } catch (e){ return false; }
+  done[cid] = 1;
+  const list = ((await BankDB.get("stmts:" + cid)) || []).slice(), n0 = list.length, parts = {};
+  let meta = null, wrote = 0;
+  for (const r of recs || []){
+    if (r.deleted || !r.data) continue;
+    const sid = String(r.id).split(":")[1];
+    if (r.kind === "bank_meta") meta = r.data;
+    else if (r.kind === "bank_stmt"){ if (!list.some(s => s.id === sid)) list.push(r.data); }
+    else (parts[sid] = parts[sid] || [])[+String(r.id).split(":")[2] || 0] = r.data.rows || [];
+  }
+  if (list.length > n0){ await BankDB.set("stmts:" + cid, list); wrote++; }
+  for (const sid of Object.keys(parts)){
+    const k = "stmt:" + cid + ":" + sid;
+    if (list.some(s => s.id === sid) && !((await BankDB.get(k)) || []).length){ await BankDB.set(k, [].concat(...parts[sid].filter(Boolean))); wrote++; }
+  }
+  if (meta){
+    const kk = (await BankDB.get("keys:" + cid)) || {};
+    Object.entries(meta.keys || {}).forEach(([k, s]) => { if (!(k in kk) && list.some(x => x.id === s)) kk[k] = s; });
+    await BankDB.set("keys:" + cid, kk);
+    for (const [k, v] of [["rules", meta.rules], ["newled", meta.newLed], ["hist", meta.hist]]){ const x = await BankDB.get(k + ":" + cid); if (v && !(x && (x.length || (x.rows && Object.keys(x.rows).length)))) await BankDB.set(k + ":" + cid, v); }
+  }
+  return wrote > 0;
+}
+// a statement of this client already here, opened (on another client's page: that client is opened)
+async function bankOpenHeld(cid, sid, name){
+  if (!B() || B().cid !== cid){ await openCompany(cid); S.tab = "bank"; await loadBank(cid); }
+  await openStatement(sid);
+  toast("This statement is already in FinCom" + (name ? ", under " + name : "") + " — opened it.");
+}
 let bankSaveTimer = null;
 function saveBank(what){
   const b = B(); if (!b) return;

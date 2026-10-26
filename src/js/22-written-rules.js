@@ -366,15 +366,17 @@ function isBankFile(f){ return /\.(xlsx|xls|xlsm|csv|txt|pdf|jpe?g|png|webp|heic
 async function uploadStatements(files, force){
   const b = B(); if (!b) return;
   const co = CO(b.cid);
+  // statements this browser lost come back first (bankHeal), so a file already here is opened, never read again
+  if (await bankHeal(b.cid, b.stmts, b.keys)){ const [s1, k1] = await Promise.all([BankDB.get("stmts:" + b.cid), BankDB.get("keys:" + b.cid)]); b.stmts = s1 || b.stmts; b.keys = k1 || b.keys; }
   for (const file of files){
     b.lastFile = file;
     b.busy = "Reading " + file.name + "…"; render();
     try {
       const hash = await fileHash(file);
-      if (b.stmts.some(s => s.hash === hash)){ toast(file.name + " was already uploaded."); continue; }
+      const held = b.stmts.find(s => s.hash === hash);
+      if (held){ b.busy = ""; await bankOpenHeld(b.cid, held.id); continue; }
       const parsed = await readStatement(file, msg => { b.busy = file.name + ": " + msg; render(); }, force);
       if (!parsed.rows.length) throw {code: "bank_no_rows", diag: parsed.diag};
-      if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))){ b.busy = ""; render(); return; }
       const meta = parsed.meta;
       const chk = checkBalances(parsed.rows, meta);
       // which bank account of this client
@@ -392,6 +394,7 @@ async function uploadStatements(files, force){
         const owners = Object.values(S.companies).filter(c => c.id !== co.id && (c.bankAccounts || []).some(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc)));
         if (owners.length === 1){
           const moved = await fileStatementFor(owners[0], file, hash, parsed, chk, meta, last4);
+          if (moved === null){ b.busy = ""; render(); return; }
           if (moved) b.moved = {cid: owners[0].id, name: owners[0].name, file: file.name, last4};
           continue;
         }
@@ -408,15 +411,11 @@ async function uploadStatements(files, force){
       }
       const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
       const sid = uid("st");
-      let dupRows = 0;
-      const rows = [];
-      parsed.rows.forEach((r, i) => {
-        const fp = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|");
-        if (b.keys[fp]){ dupRows++; return; }
-        b.keys[fp] = sid;
-        rows.push(Object.assign(r, {id: sid + "-" + i, fp, dec: decodeNarr(r.narr, co.name), state: "attention", ledger: "", userSet: false}));
-        if (r.repaired) r.fixedDir = false;
-      });
+      const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, b.keys, b.stmts, sid, co.name);
+      // every line is already here, in a statement here: that statement is opened, nothing is charged or added
+      if (!rows.length && top){ b.busy = ""; await bankOpenHeld(b.cid, top); continue; }
+      if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
+      Object.assign(b.keys, nk);
       const from = rows.length ? rows[0].date : meta.from, to = rows.length ? rows[rows.length - 1].date : meta.to;
       const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || from, to: meta.to || to,
         opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
@@ -439,22 +438,34 @@ async function uploadStatements(files, force){
   b.busy = ""; render();
   if (bridgeLive() && curStmt()) bankAutoSync(true);
 }
+// The lines of a statement not yet here. A line counts as here only when the statement holding it is here: a fingerprint
+// left by a statement this browser lost no longer hides the line (26-Oct-2026). top: the statement holding most of the rest.
+function bankNewRows(list, acc, keys, stmts, sid, name){
+  const live = new Set(stmts.map(s => s.id)), nk = {}, by = {}, rows = [];
+  let dupRows = 0;
+  list.forEach((r, i) => {
+    const fp = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|"), was = keys[fp];
+    if (nk[fp] || live.has(was)){ dupRows++; if (was) by[was] = (by[was] || 0) + 1; return; }
+    nk[fp] = sid;
+    rows.push(Object.assign(r, {id: sid + "-" + i, fp, dec: decodeNarr(r.narr, name), state: "attention", ledger: "", userSet: false}));
+    if (r.repaired) r.fixedDir = false;
+  });
+  return {rows, dupRows, nk, top: Object.keys(by).sort((x, y) => by[y] - by[x])[0]};
+}
 // Keep a statement under the client that owns the bank account (it is matched when that client is opened)
 async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
   const cid = owner.id;
   const acc = (owner.bankAccounts || []).find(a => a.last4 === last4 && (!meta.ifsc || !a.ifsc || a.ifsc === meta.ifsc));
-  const [stmts0, keys0] = await Promise.all([BankDB.get("stmts:" + cid), BankDB.get("keys:" + cid)]);
+  const get = () => Promise.all([BankDB.get("stmts:" + cid), BankDB.get("keys:" + cid)]);
+  let [stmts0, keys0] = await get();
+  if (await bankHeal(cid, stmts0, keys0)) [stmts0, keys0] = await get();
   const stmts = stmts0 || [], keys = keys0 || {};
-  if (stmts.some(x => x.hash === hash)){ toast(file.name + " belongs to " + owner.name + " and is already there."); return false; }
-  const sid = uid("st");
-  let dupRows = 0;
-  const rows = [];
-  parsed.rows.forEach((r, i) => {
-    const fp = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|");
-    if (keys[fp]){ dupRows++; return; }
-    keys[fp] = sid;
-    rows.push(Object.assign(r, {id: sid + "-" + i, fp, dec: decodeNarr(r.narr, owner.name), state: "attention", ledger: "", userSet: false}));
-  });
+  // already there (26-Oct-2026: it was read and charged, then refused, and this client's empty page stayed): opened there
+  const held = stmts.find(x => x.hash === hash), sid = uid("st");
+  const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, keys, stmts, sid, owner.name);
+  if (held || (!rows.length && top)){ await bankOpenHeld(cid, held ? held.id : top, owner.name); return false; }
+  if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))) return null;
+  Object.assign(keys, nk);
   const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || (rows[0] || {}).date, to: meta.to || (rows[rows.length - 1] || {}).date,
     opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
     totDr: chk.totDr, totCr: chk.totCr, source: parsed.source, method: parsed.method || "", uploadedAt: new Date().toISOString(), counts: {attention: rows.length}};
