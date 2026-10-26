@@ -96,5 +96,6 @@
  "88-fin-statements.js",
  "90-autopost.js",
  "95-first-open.js",
- "96-bank-sent-heal.js"
+ "96-bank-sent-heal.js",
+ "97-postto-link.js"
 ]

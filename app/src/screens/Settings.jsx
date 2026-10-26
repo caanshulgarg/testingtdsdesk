@@ -19,6 +19,8 @@ import AutoPostSettings from "../parts/AutoPostSettings.jsx";
 import { AssistantSettings } from "../parts/AssistantSettings.jsx";
 import { CloudBooks } from "./Tally.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
+import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/97-postto-link.js";
 import BooksSource from "../parts/BooksSource.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";

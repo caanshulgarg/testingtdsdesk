@@ -2,4 +2,5 @@
 // budget), loaded when a client has it on or a page shows it (lib/autopostBoot.js loadAP)
 import "../../../src/js/90-autopost.js";
 import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/97-postto-link.js";
 export const AutoPost = globalThis.AutoPost;

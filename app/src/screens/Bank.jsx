@@ -29,6 +29,7 @@ import { AutoChip, AutoWhy, AutoUndo, AutoFilter, apRows, apView, isAuto } from 
 import { loadAP } from "../lib/autopostBoot.js";
 // the lines a posting of this computer already put in Tally, marked posted (kept out of legacy.js: build.py react_parts)
 import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/97-postto-link.js";
 
 const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)

@@ -21,6 +21,8 @@ import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import AutoRuns from "../parts/AutoPostRuns.jsx";
+import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/97-postto-link.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
@@ -474,7 +476,7 @@ export function PostStep() {
     if (typeof postReconcile === "function") postReconcile(co.id);
     if (typeof PostIds === "object") PostIds.load(co.id);
     TallyProof.check(co.id).catch(() => {});
-    if (!co.postTo || choiceState(co, "postTo") !== "confirmed") postToFromLink(co).then((v) => { if (!v && !co.postTo) return autoPostTo(co); }).catch(() => {});
+    if (!co.postTo || choiceState(co, "postTo") !== "confirmed") (typeof postToFromLink === "function" ? postToFromLink(co) : Promise.resolve("")).then((v) => { if (!v && !co.postTo) return autoPostTo(co); }).catch(() => {});
     bills.attention.filter((e) => (e.exportedAt || e.postUnconfirmed) && PostCheck.due(e)).forEach((e) => PostCheck.run(co, e).catch(() => {}));
   }, 0);
   const waiting = bills.ready, unsent = v.filter((e) => e.status === "approved" && !e.exportedAt).length, sent = v.filter(billInTally).length, undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;

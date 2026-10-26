@@ -24,6 +24,8 @@
 import { useState, useEffect } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
+import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/97-postto-link.js";
 
 const SEARCH_AT = 10, POLL_MS = 10000, STUCK_MS = 3 * 60000, PEND_MS = 10 * 60000;
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
