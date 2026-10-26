@@ -170,6 +170,9 @@ function openBooks(cid){
 async function openBooksNow(cid){
   const opening = S.books = {cid, loading: true};
   render();
+  // prefetch-books: these books being brought in behind the page (src/js/98) are finished first, at once, and opened from
+  // this browser's store: nothing fetched twice
+  if (typeof Prefetch === "object" && Prefetch.cur === cid) await Prefetch.rush(cid);
   const t0 = Date.now(), saved = await Books.load(cid);
   // another client was opened meanwhile, or these books were put in meanwhile (an import, the cloud's copy; since
   // 25-Oct-2026 Ledgers.watch opens a client's books with the client, so this opening can still be reading this browser's

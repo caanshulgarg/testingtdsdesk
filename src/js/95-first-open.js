@@ -100,6 +100,7 @@ const FirstOpen = {
   // than the day itself)
   tell(st, text){
     st.text = text;
+    if (st.quiet) return;
     try { document.querySelectorAll("[data-first-open]").forEach(el => { el.textContent = text; }); } catch (e){}
   },
   // the latest year shown: its months, the ledgers and their groups put into the books as TCloud.load puts them; nothing
@@ -123,8 +124,10 @@ const FirstOpen = {
     say("");
   },
   // {res: {ym: the month read}, copy, led}, for TCloud.load to put into the books
+  // prefetch-books (o.p: src/js/98, a client not open, brought in behind the page): one request at a time, each after
+  // o.p.gate(); nothing shown or said; the client's PAN checked against o.co
   async run(o){
-    const {b, bk, byMonth, todo, say} = o, book = bk.book, meta = b.meta = b.meta || {};
+    const {b, bk, byMonth, todo, say, p, co} = o, book = bk.book, meta = b.meta = b.meta || {}, g = () => p && p.gate();
     meta.fo = book;
     const months = todo.slice().sort().reverse();
     const all = [].concat(...months.map(ym => byMonth[ym]));
@@ -132,26 +135,27 @@ const FirstOpen = {
     const fy = this.fyStart(String(lastIn).replace(/-/g, "")), recent = months.filter(ym => ym >= fy + "04"), older = months.filter(ym => ym < fy + "04");
     const oldFy = older.length ? this.fyStart(older[older.length - 1] + "01") : fy;
     const oldLabel = oldFy === fy - 1 ? this.fyLabel(fy - 1) : this.fyLabel(oldFy) + " to " + this.fyLabel(fy - 1);
-    const st = b.firstOpen = {book, fy: this.fyLabel(fy), older: oldLabel, ready: false, text: "Books: coming in from FinCom's cloud…", at: Date.now()};
+    const st = b.firstOpen = {book, fy: this.fyLabel(fy), older: oldLabel, ready: false, text: "Books: coming in from FinCom's cloud…", at: Date.now(), quiet: !!p};
     // the newest days first; within a month, its days in any order (a month is read once all of them are in)
     const want = [].concat(...months.map(ym => byMonth[ym].slice().sort((x, y) => x.day < y.day ? 1 : -1)));
     const nRecent = [].concat(...recent.map(ym => byMonth[ym])).length;
-    const ledP = this.ledgers(bk);
+    const led0 = p ? (await g(), await this.ledgers(bk)) : null, thin0 = p ? (await g(), await this.thin(bk).catch(e => { if (p.stop) throw e; return null; })) : null;
+    const ledP = p ? Promise.resolve(led0) : this.ledgers(bk);
     ledP.catch(() => {});
-    const thinP = this.thin(bk).catch(() => null);
+    const thinP = p ? Promise.resolve(thin0) : this.thin(bk).catch(() => null);
     const kept = await this.keptKeys(book);
     const z = {}, res = {}, left = {}, fin = {}, ready = {};
     months.forEach(ym => { left[ym] = byMonth[ym].length; ready[ym] = new Promise((ok, no) => { fin[ym] = [ok, no]; }); ready[ym].catch(() => {}); });
     let chain = Promise.resolve(), failed = null, writes = [], wq = Promise.resolve(), got = 0, next = 0;
-    const flush = () => { if (!writes.length) return; const w = writes; writes = []; wq = wq.then(() => IDBStore.write(w)).catch(() => {}); };
+    const flush = () => { if (!writes.length || (p && p.stop)) return; const w = writes; writes = []; wq = wq.then(() => IDBStore.write(w)).catch(() => {}); };
     const readMonth = ym => {
       chain = chain.then(async () => {
         if (failed) return;
         const parts = await Promise.all(byMonth[ym].map(x => { const v = z[x.day]; return typeof v === "string" ? v : v ? TCloud.unzip(v) : ""; }));
         byMonth[ym].forEach(x => { delete z[x.day]; });
         const r = await Books.importDayBook(new Blob(["<ENVELOPE>" + parts.join("") + "</ENVELOPE>"], {type: "text/xml"}));
-        const bad = notThisClient((r.meta || {}).gstins);
-        if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
+        const bad = notThisClient((r.meta || {}).gstins, co);
+        if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad, co));
         res[ym] = r; fin[ym][0]();
       }).catch(e => { failed = failed || e; months.forEach(m => fin[m][1](e)); });
     };
@@ -170,7 +174,7 @@ const FirstOpen = {
     const oneDay = async (x) => {
       const k = "tcday:" + book + ":" + x.day;
       if (kept.has(k)){ try { const w = await IDBStore.get(k); if (w && w.at === x.at) return take(x, w.gz || w.text || "", false); } catch (e){} }
-      take(x, await this.fetchDay(book, x.day), true);
+      await g(); take(x, await this.fetchDay(book, x.day), true);
     };
     const one = async () => { while (next < want.length && !failed) await oneDay(want[next++]); };
     // a month in one answer from FinCom's server (tally-ingest month_days, server/tally-cloud/monthpack.js): a day whose
@@ -180,13 +184,14 @@ const FirstOpen = {
       while (mnext < months.length && !failed){
         const ym = months[mnext++];
         let pack = null;
+        if (!(mnext === 1 && first)) await g();
         try { pack = mnext === 1 && first ? first : await this.fetchMonth(book, ym); } catch (e){ pack = null; }
         const by = new Map((pack || []).map(p => [p.day, p]));
         await Promise.all(byMonth[ym].map(x => { const p = by.get(x.day); return p && p.at === x.at && !kept.has("tcday:" + book + ":" + x.day) ? take(x, p.gz || "", true) : oneDay(x); }));
       }
     };
     // the latest year shown once its months are read (when there is an older one to wait for)
-    const shown = older.length && recent.length ? Promise.all(recent.map(ym => ready[ym])).then(async () => {
+    const shown = older.length && recent.length && !p ? Promise.all(recent.map(ym => ready[ym])).then(async () => {
       const led = await ledP;
       if (!failed) await this.preview(o, st, led, recent.map(ym => [ym, res[ym]]));
       this.tell(st, "Books: " + st.fy + " ready · loading " + st.older + "…");
@@ -197,16 +202,17 @@ const FirstOpen = {
       // the newest month asked of FinCom's server in one answer: when it answers, every month so; else (a server without
       // month_days) the days one by one, sixteen at a time
       let first = null;
-      if (!this.noPack && months.length) try { first = await this.fetchMonth(book, months[0]); } catch (e){ this.noPack = true; }
+      if (!this.noPack && months.length){ await g(); try { first = await this.fetchMonth(book, months[0]); } catch (e){ this.noPack = true; } }
       try {
-        if (first) await Promise.all(Array.from({length: Math.min(this.MONTHS, months.length)}, (_, i) => oneMonth(i === 0 ? first : null)));
-        else await Promise.all(Array.from({length: Math.min(this.WORKERS, want.length)}, one));
+        if (first) await Promise.all(Array.from({length: Math.min(p ? 1 : this.MONTHS, months.length)}, (_, i) => oneMonth(i === 0 ? first : null)));
+        else await Promise.all(Array.from({length: Math.min(p ? 1 : this.WORKERS, want.length)}, one));
       } catch (e){ failed = failed || e; }
       flush();
       await chain;
       if (failed) throw failed;
       await shown;
       if (st.ready) this.tell(st, "Books: " + st.fy + " ready · putting " + st.older + " in…");
+      await g();
       const [led, copy] = await Promise.all([ledP, this.copyFor(b, bk, res, months, thinP)]);
       // the ledgers' kinds as they were before the latest year was shown, unless someone changed one meanwhile (the
       // books then work them out from every entry, as always)

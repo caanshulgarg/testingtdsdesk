@@ -97,5 +97,6 @@
  "90-autopost.js",
  "95-first-open.js",
  "96-bank-sent-heal.js",
- "97-postto-link.js"
+ "97-postto-link.js",
+ "98-prefetch-books.js"
 ]

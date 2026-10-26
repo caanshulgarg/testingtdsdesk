@@ -515,3 +515,5 @@ run_records_upload_server.py          120
 run_timings_unit.mjs                  60
 run_migration108.py                   180
 run_timings_ui.py                     240  TDSDESK_SITE=../app/dist-test
+# prefetch-books (26-Oct-2026): the clients' books brought into a new browser right after sign-in, behind the page
+run_prefetch_books.py                 300  TDSDESK_SITE=../app/dist-test
