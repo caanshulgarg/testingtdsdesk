@@ -53,7 +53,7 @@ const CAPTION_B64_MAX = 600_000;      // about 450 KB of audio: 6 s of speech is
 const TRANSCRIBE_BATCH = 4;
 
 export const SUMMARY_SYSTEM = "You summarise a call held by an Indian chartered accountant's firm (with a client, staff or a class). " +
-  "Answer with JSON only, no other words: {\"summary\": \"five to eight plain sentences\", \"decisions\": [\"...\"], \"actions\": [{\"title\": \"...\", \"who\": \"name or empty\", \"due\": \"YYYY-MM-DD or empty\"}]}. " +
+  "Answer with JSON only, no other words: {\"summary\": \"five to eight plain sentences\", \"points\": [\"a key point\"], \"decisions\": [\"...\"], \"actions\": [{\"title\": \"...\", \"who\": \"name or empty\", \"due\": \"YYYY-MM-DD or empty\"}]}. " +
   "Use only what was said in the transcript; never invent amounts, dates or names; keep numbers exactly as said. An action is a task someone agreed to do.";
 
 class Fail extends Error { constructor(public code: number, message: string, public kind = "other") { super(message); } }
@@ -230,7 +230,7 @@ export function handler(deps: Deps) {
   const mayAdmitIn = async (r: any, m: Member) => isHost(r, m) || (R.canHost(r.kind, m.role) && !(await hostOnline(r)));
   const inCall = async (roomId: string) => ((await svc("/rest/v1/call_participants?select=id&state=eq.admitted&room_id=eq." + q(roomId))) as any[] || []).length;
   const folder = (r: any) => r.kind === "class" ? r.firm_id + "/class/" + r.batch_id + "/" + r.id + "/" : r.firm_id + "/" + r.kind + "/" + r.id + "/";
-  const activeRec = async (roomId: string) => await one("/rest/v1/call_recordings?select=id,started_at&room_id=eq." + q(roomId) + "&ended_at=is.null&deleted_at=is.null&order=started_at.desc&limit=1");
+  const activeRec = async (roomId: string) => await one("/rest/v1/call_recordings?select=id,started_at,mime&room_id=eq." + q(roomId) + "&ended_at=is.null&deleted_at=is.null&order=started_at.desc&limit=1");
   const session = async (r: any, p: any, extra: Record<string, unknown> = {}) => {
     const mode = r.media_mode;
     const rec = await activeRec(r.id);
@@ -238,7 +238,7 @@ export function handler(deps: Deps) {
       ok: true, room: { id: r.id, kind: r.kind, title: r.title, client_id: r.client_id, batch_id: r.batch_id, status: r.status, host_user: r.host_user, cowork_on: r.cowork_on, started_at: r.started_at,
         code: r.code || null, scheduled_at: r.scheduled_at || null, minutes: r.minutes || null },
       me: { id: p.id, role: p.role, name: p.name, state: p.state }, topic: await R.topicFor(r.chan_key, r.chan_epoch), ice: await iceServers(), mode, max: R.maxPeople(mode),
-      recording: rec ? { id: rec.id, started_at: rec.started_at, notice: R.CONSENT_TEXT } : null, ...extra,
+      recording: rec ? { id: rec.id, started_at: rec.started_at, notes: rec.mime === R.NOTES_MIME, notice: rec.mime === R.NOTES_MIME ? R.NOTES_TEXT : R.CONSENT_TEXT } : null, ...extra,
     };
   };
   const newLink = async (r: any, by: string | null, email = "", days = R.GUEST_LINK_DAYS, max = 10) => {
@@ -371,9 +371,11 @@ export function handler(deps: Deps) {
       const past = (await rest("/rest/v1/call_rooms?select=" + cols + "&started_at=not.is.null&order=started_at.desc&limit=25", m.jwt)) as any[] || [];
       const recent = past.filter((r) => r.status !== "open");
       const ids = recent.map((r) => r.id).join(",");
-      const recs = ids ? (await rest("/rest/v1/call_recordings?select=room_id&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
-      const trs = ids ? (await rest("/rest/v1/call_transcripts?select=room_id&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
-      return { ok: true, upcoming, recent: recent.map((r) => ({ ...r, recording: (recs || []).some((x) => x.room_id === r.id), transcript: (trs || []).some((x) => x.room_id === r.id) })), me: m.user, email: m.email };
+      const recs = ids ? (await rest("/rest/v1/call_recordings?select=room_id,mime&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
+      const trs = ids ? (await rest("/rest/v1/call_transcripts?select=room_id,summary&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
+      const caps = ids ? (await rest("/rest/v1/call_captions?select=room_id&limit=1000&room_id=in.(" + ids + ")", m.jwt).catch(() => [])) as any[] : [];
+      return { ok: true, upcoming, recent: recent.map((r) => ({ ...r, recording: (recs || []).some((x) => x.room_id === r.id && x.mime !== R.NOTES_MIME), transcript: (trs || []).some((x) => x.room_id === r.id),
+        notes: (trs || []).some((x) => x.room_id === r.id && x.summary) || (caps || []).some((x) => x.room_id === r.id) })), me: m.user, email: m.email };
     },
     async join(m, b) {
       const r = await room(b.room_id, m.firm);
@@ -463,12 +465,16 @@ export function handler(deps: Deps) {
       await admittedIn(r, m);
       const cs = await clientSetting(m.firm, r.client_id);
       if (!R.recordingAllowed(r.kind, cs)) fail(403, "Recording is off for this client. The firm's owner can turn it on in the client's call settings.", "recoff");
-      const live = await activeRec(r.id);
-      if (live) return { ok: true, recording_id: live.id, notice: R.CONSENT_TEXT };
+      // next-calls-complete: "Take notes" (b.notes) is kept as a recording of words only (mime text/notes: no picture, no
+      // sound), so the same notice, consent and keeping rules apply; a recording asked while notes run takes their place
+      const notes = b.notes === true;
+      let live = await activeRec(r.id);
+      if (live && !notes && live.mime === R.NOTES_MIME) { await patch("call_recordings", "id=eq." + live.id, { ended_at: iso() }); live = null; }
+      if (live) return { ok: true, recording_id: live.id, notes: live.mime === R.NOTES_MIME, notice: live.mime === R.NOTES_MIME ? R.NOTES_TEXT : R.CONSENT_TEXT };
       const batch = r.kind === "class" ? await one("/rest/v1/call_batches?select=retention_days&id=eq." + q(r.batch_id)) : null;
       const rec = await insert("call_recordings", { room_id: r.id, firm_id: r.firm_id, batch_id: r.batch_id, started_by: m.user, prefix: folder(r) + "rec/",
-        mime: String(b.mime || "video/webm").slice(0, 80), retain_until: R.retainUntil(r.kind, batch || cs, now()) });
-      return { ok: true, recording_id: rec.id, notice: R.CONSENT_TEXT };
+        mime: notes ? R.NOTES_MIME : String(b.mime || "video/webm").slice(0, 80), retain_until: R.retainUntil(r.kind, batch || cs, now()) });
+      return { ok: true, recording_id: rec.id, notes, notice: notes ? R.NOTES_TEXT : R.CONSENT_TEXT };
     },
     async rec_part(m, b) {
       const rec = await one("/rest/v1/call_recordings?select=*&id=eq." + q(String(b.recording_id || "")) + "&firm_id=eq." + m.firm);
@@ -511,37 +517,48 @@ export function handler(deps: Deps) {
       const t = await one("/rest/v1/call_transcripts?select=*&room_id=eq." + q(r.id));
       const lines = (t && t.lines) || [];
       if (!lines.length) fail(409, "There is no transcript yet.", "notranscript");
-      const set = await one("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + m.firm).catch(() => null);
-      if (set && set.enabled === false) fail(403, "AI help is switched off for your firm.", "off");
-      const key = await secret("claude_api_key");
-      if (!key) fail(503, "AI help is not set up on this server.", "nokey");
-      const cap = await rpc("asst_cap_take", { p_firm: m.firm, p_n: 1 }).catch(() => null);
-      if (!cap?.ok) fail(429, "The firm's AI limit for this month is reached.", "cap");
-      const pl = plan("book", "low", true);
-      // in the language the person asked for (default English); names, amounts and tax terms as said
-      const lang = R.subLangOk(b.lang) ? String(b.lang) : "en";
-      const sumLang = lang === "en" ? "" : " Write the summary, the decisions and the action items' titles in " + (lang === "hinglish" ? "Hinglish (Hindi in English letters)" : R.subLangName(lang) + " (its own script)") +
-        "; keep names, numbers, amounts and tax terms (GST, TDS, GSTR-3B, 194J) exactly as said; the JSON keys stay in English.";
-      const text = R.transcriptText(lines).slice(-60000);
-      const t0 = now();
-      let msg: any = null, okCall = false;
-      try {
-        const res = await doFetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({ model: pl.model, max_tokens: 2000, system: SUMMARY_SYSTEM + sumLang, messages: [{ role: "user", content: "Call: " + r.title + "\n\nTranscript:\n" + text }] }) });
-        msg = await res.json().catch(() => null); okCall = res.ok && !!msg;
-      } catch { okCall = false; }
-      const u = (msg && msg.usage) || {};
-      const added = await rpc("asst_cost_add", { p_firm: m.firm, p_feature: "call_summary", p_cost_usd: costUsd(pl.model, u), p_in: u.input_tokens || 0, p_out: u.output_tokens || 0,
-        p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }).catch(() => null);
-      await rpc("asst_log_add", { p_firm: m.firm, p_user: m.user, p_client: r.client_id, p_question: "", p_tools: [okCall ? "ok" : "error"], p_in: u.input_tokens || 0, p_out: u.output_tokens || 0,
-        p_calls: 1, p_ms: now() - t0, p_feature: "call_summary", p_route: r.kind, p_models: [pl.model], p_cache_read: 0, p_cache_write: 0, p_cost_inr: Number(added?.inr || 0), p_fell_through: false }).catch(() => null);
-      if (!okCall) fail(502, "The summary could not be made just now; try again.", "ai");
-      const out = String((msg.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("")).trim().replace(/^```(json)?\s*|\s*```$/g, "");
-      let j: any = null; try { j = JSON.parse(out); } catch { j = null; }
-      if (!R.summaryOk(j)) fail(502, "The summary did not come back in the expected shape; try again.", "ai");
-      const summary = { summary: j.summary, decisions: j.decisions, actions: j.actions.map((a: any) => ({ title: a.title, who: a.who || "", due: a.due || "" })), model: pl.model, lang, at: new Date(now()).toISOString() };
+      const summary = await aiNotes(m, r, lines, b.lang, []);
       await patch("call_transcripts", "room_id=eq." + r.id, { summary, updated_at: new Date(now()).toISOString() });
       return { ok: true, summary };
+    },
+    // ---------------------------------------------------------------- meeting notes (next-calls-complete)
+    // the notes of a meeting: the words as said (the transcript when one was made, else the subtitles kept while notes or
+    // the recording ran, each person's only after they chose to stay) and the summary; for the firm's members who can see
+    // the meeting (a class's only its batch and the owner; a client's only those who can open the client)
+    async notes_get(m, b) {
+      const r = await notesRoom(m, b.room_id);
+      const { t, lines, source } = await notesLines(r);
+      const people = ((await svc("/rest/v1/call_participants?select=name,role,admitted_at&room_id=eq." + q(r.id) + "&admitted_at=not.is.null&order=admitted_at")) as any[] || []).map((p) => String(p.name || "")).filter(Boolean);
+      const live = await activeRec(r.id);
+      return { ok: true, room: { id: r.id, title: r.title, status: r.status, kind: r.kind, client_id: r.client_id, started_at: r.started_at, ended_at: r.ended_at }, lines: lines.slice(-3000), source,
+        notes: (t && t.summary) || null, people: [...new Set(people)], taking: !!(live && live.mime === R.NOTES_MIME), recording: !!(live && live.mime !== R.NOTES_MIME),
+        can_edit: isHost(r, m), can_make: isHost(r, m) || m.role === "owner" || m.role === "staff" };
+    },
+    // the summary made (or made again) from those words: the title, the people's names and the words only, through the
+    // model FinCom Assistant uses, within the firm's AI switch and monthly cap; notes the host edited are replaced only
+    // when asked (replace)
+    async notes_make(m, b) {
+      const r = await notesRoom(m, b.room_id);
+      if (!(isHost(r, m) || m.role === "owner" || m.role === "staff")) fail(403, "Only the host, the owner or staff can make the notes.", "role");
+      const { t, lines, source } = await notesLines(r);
+      if (!lines.length) fail(409, "Nothing was kept to make notes from. Notes come from what is said while \"Take notes\" (or the recording) is on, from those who chose to stay.", "nolines");
+      if (t && t.summary && t.summary.edited_at && b.replace !== true) fail(409, "The host has edited these notes. Make them again only if the edit may be replaced.", "edited");
+      const people = ((await svc("/rest/v1/call_participants?select=name&room_id=eq." + q(r.id) + "&admitted_at=not.is.null")) as any[] || []).map((p) => String(p.name || "")).filter(Boolean);
+      const summary = { ...(await aiNotes(m, r, lines, b.lang, [...new Set(people)])), source, made_by: m.user };
+      await keepNotes(r, summary);
+      return { ok: true, notes: summary };
+    },
+    // the host's own edit of the notes (the summary, key points, decisions, action items)
+    async notes_save(m, b) {
+      const r = await notesRoom(m, b.room_id);
+      if (!isHost(r, m)) fail(403, "Only the host can change the notes.", "host");
+      const clean = R.notesClean(b.notes);
+      if (!clean) fail(400, "The notes are empty or not in the expected shape.", "shape");
+      const t = await one("/rest/v1/call_transcripts?select=summary&room_id=eq." + q(r.id));
+      const old = (t && t.summary) || {};
+      const notes = { ...clean, model: old.model || "", lang: old.lang || "en", at: old.at || iso(), source: old.source || "", edited_by: m.user, edited_name: m.name, edited_at: iso() };
+      await keepNotes(r, notes);
+      return { ok: true, notes };
     },
     // action items to the client's due list, as the person (their own rights: a look-only member is refused there)
     async tasks(m, b) {
@@ -690,6 +707,59 @@ export function handler(deps: Deps) {
     return { lines, done: row.pieces_done, all: row.pieces_all, left: ps.filter((p) => p.status === "new").length };
   }
 
+  // ---------------------------------------------------------------- meeting notes: who may see, the words, the AI, keeping
+  async function notesRoom(m: Member, id: unknown) {
+    const r = await room(String(id || ""), m.firm);
+    // read as the person: the database's own rule (a class's room only for its batch and the owner)
+    const seen = (await rest("/rest/v1/call_rooms?select=id&id=eq." + q(r.id), m.jwt).catch(() => [])) as any[];
+    if (!seen || !seen.length) fail(404, "This meeting is not one you can see.", "room");
+    if (r.client_id && !(await clientReadable(m.jwt, r.client_id))) fail(403, "This client is not one of your firm's.", "client");
+    return r;
+  }
+  async function notesLines(r: any) {
+    const t = await one("/rest/v1/call_transcripts?select=*&room_id=eq." + q(r.id));
+    if (t && Array.isArray(t.lines) && t.lines.length) return { t, lines: t.lines, source: "transcript" };
+    const caps = ((await svc("/rest/v1/call_captions?select=who,start_ms,text,lang&room_id=eq." + q(r.id) + "&order=start_ms&limit=5000").catch(() => [])) as any[]) || [];
+    const lines = R.mergeTranscript(caps.map((c) => ({ who: String(c.who || "Someone"), start_ms: Number(c.start_ms) || 0, text: String(c.text || ""), ...(c.lang ? { lang: c.lang } : {}) })));
+    return { t, lines, source: lines.length ? "captions" : "" };
+  }
+  async function keepNotes(r: any, summary: unknown) {
+    await svc("/rest/v1/call_transcripts?on_conflict=room_id", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({ room_id: r.id, firm_id: r.firm_id, batch_id: r.batch_id, summary, updated_at: iso() }) });
+  }
+  // one call to the model: the meeting's title, the people's names and the words said; nothing else of FinCom
+  async function aiNotes(m: Member, r: any, lines: any[], langIn: unknown, people: string[]) {
+    const set = await one("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + m.firm).catch(() => null);
+    if (set && set.enabled === false) fail(403, "AI help is switched off for your firm.", "off");
+    const key = await secret("claude_api_key");
+    if (!key) fail(503, "AI help is not set up on this server.", "nokey");
+    const cap = await rpc("asst_cap_take", { p_firm: m.firm, p_n: 1 }).catch(() => null);
+    if (!cap?.ok) fail(429, "The firm's AI limit for this month is reached.", "cap");
+    const pl = plan("book", "low", true);
+    // in the language the person asked for (default English); names, amounts and tax terms as said
+    const lang = R.subLangOk(langIn) ? String(langIn) : "en";
+    const sumLang = lang === "en" ? "" : " Write the summary, the key points, the decisions and the action items' titles in " + (lang === "hinglish" ? "Hinglish (Hindi in English letters)" : R.subLangName(lang) + " (its own script)") +
+      "; keep names, numbers, amounts and tax terms (GST, TDS, GSTR-3B, 194J) exactly as said; the JSON keys stay in English.";
+    const text = R.transcriptText(lines).slice(-60000);
+    const t0 = now();
+    let msg: any = null, okCall = false;
+    try {
+      const res = await doFetch(ANTHROPIC_URL, { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: pl.model, max_tokens: 2000, system: SUMMARY_SYSTEM + sumLang, messages: [{ role: "user", content: "Call: " + r.title + (people.length ? "\nPeople: " + people.join(", ") : "") + "\n\nTranscript:\n" + text }] }) });
+      msg = await res.json().catch(() => null); okCall = res.ok && !!msg;
+    } catch { okCall = false; }
+    const u = (msg && msg.usage) || {};
+    const added = await rpc("asst_cost_add", { p_firm: m.firm, p_feature: "call_summary", p_cost_usd: costUsd(pl.model, u), p_in: u.input_tokens || 0, p_out: u.output_tokens || 0,
+      p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }).catch(() => null);
+    await rpc("asst_log_add", { p_firm: m.firm, p_user: m.user, p_client: r.client_id, p_question: "", p_tools: [okCall ? "ok" : "error"], p_in: u.input_tokens || 0, p_out: u.output_tokens || 0,
+      p_calls: 1, p_ms: now() - t0, p_feature: "call_summary", p_route: r.kind, p_models: [pl.model], p_cache_read: 0, p_cache_write: 0, p_cost_inr: Number(added?.inr || 0), p_fell_through: false }).catch(() => null);
+    if (!okCall) fail(502, "The summary could not be made just now; try again.", "ai");
+    const out = String((msg.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text).join("")).trim().replace(/^```(json)?\s*|\s*```$/g, "");
+    let j: any = null; try { j = JSON.parse(out); } catch { j = null; }
+    if (!R.summaryOk(j)) fail(502, "The summary did not come back in the expected shape; try again.", "ai");
+    return { summary: j.summary, points: Array.isArray(j.points) ? j.points : [], decisions: j.decisions, actions: j.actions.map((a: any) => ({ title: a.title, who: a.who || "", due: a.due || "" })), model: pl.model, lang, at: new Date(now()).toISOString() };
+  }
+
   // actions open to anyone in the call, member or guest
   const shared: Record<string, (w: Member | Guest, b: any, ctx: Ctx) => Promise<unknown>> = {
     async topic(w, b) {
@@ -832,7 +902,9 @@ export function handler(deps: Deps) {
       if (res!.status === 429) { await res!.body?.cancel(); await usage(["limit"], [model], 1); fail(429, "Subtitles are paused: the free listening limit is reached for now.", "limit"); }
       const j: any = await res!.json().catch(() => null);
       if (!res!.ok || !j || typeof j.text !== "string") { await usage(["error"], [model], 1); fail(502, "Subtitles did not answer.", "error"); }
-      const text = String(j.text).replace(/\s+/g, " ").trim().slice(0, 2000);
+      // next-calls-complete: what Whisper finds no speech in (a quiet room, an iPhone's piece cut by time alone) is dropped
+      // rather than shown ("Thank you.", "you" are what it says over silence)
+      const text = R.spokenText(j).slice(0, 2000);
       const lang = R.whisperLang(j.language) || "";
       if (!text) { await usage(["empty"], [model], 1); return { ok: true, text: "", lang, tr: {}, paused: false }; }
       // one translation per language asked for, never into the piece's own
@@ -843,7 +915,8 @@ export function handler(deps: Deps) {
       // Hinglish (as fincom-transcribe's latin=1, next-fix-urdu): Hindi taken for Urdu (Whisper's guess; they sound alike)
       // is heard once more as Hindi, then written in English letters; Hindi in Devanagari is written in English letters
       // without a translation call. A genuine Urdu speaker read in Urdu keeps Urdu (same language: no change).
-      if (targets.includes("hinglish") && lang !== "hinglish") {
+      // the same for a Hindi reader (next-calls-complete): Hindi taken for Urdu is given to them as heard in Hindi
+      if ((targets.includes("hinglish") || (targets.includes("hi") && lang === "ur")) && lang !== "hinglish") {
         let deva = devanagariShare(text) > 0.5 ? text : "";
         if (!deva && arabicShare(text) > 0.5) {
           calls++;
@@ -852,7 +925,8 @@ export function handler(deps: Deps) {
           const t2 = j2 && typeof j2.text === "string" ? j2.text.replace(/\s+/g, " ").trim() : "";
           if (t2 && devanagariShare(t2) > 0.5) { deva = t2; notes.push("urdu:hi"); } else notes.push("urdu:kept");
         }
-        if (deva) tr.hinglish = toLatin(deva);
+        if (deva && targets.includes("hinglish")) tr.hinglish = toLatin(deva);
+        if (deva && lang === "ur" && targets.includes("hi")) tr.hi = deva;
       }
       for (const target of targets) {
         if (target === lang || target in tr) continue;
@@ -877,6 +951,15 @@ export function handler(deps: Deps) {
       }
       await usage(["ok", "tr:" + Object.values(tr).filter(Boolean).length, ...notes, ...(paused ? ["paused"] : [])], models, calls);
       return { ok: true, text, lang, tr, paused, ms: now() - t0 };
+    },
+    // remote help (next-calls-complete): the person asked says no, or stops it, at any time; the open log row of this call
+    // gets its end (the host's own End does the same through remote)
+    async remote_stop(w, b) {
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const p = await meIn(r, w);
+      if (!p) fail(403, "You are not in this call.", "notin");
+      const rows = await patch("call_remote_sessions", "room_id=eq." + r.id + "&ended_at=is.null", { ended_at: iso() });
+      return { ok: true, ended: (rows || []).length };
     },
     // Cloudflare Realtime, the person's own session only; the app's keys never leave here
     async cf(w, b) {

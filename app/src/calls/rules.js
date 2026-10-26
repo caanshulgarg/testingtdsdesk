@@ -181,8 +181,40 @@ export function summaryOk(j) {
   if (typeof j.summary !== "string" || !j.summary.trim() || j.summary.length > 4000) return false;
   if (!Array.isArray(j.decisions) || !Array.isArray(j.actions) || j.decisions.length > 30 || j.actions.length > 30) return false;
   if (!j.decisions.every((d) => typeof d === "string" && d.length <= 500)) return false;
+  if (j.points != null && !(Array.isArray(j.points) && j.points.length <= 30 && j.points.every((d) => typeof d === "string" && d.length <= 500))) return false;
   return j.actions.every((a) => a && typeof a.title === "string" && a.title.trim() && a.title.length <= 300
     && (a.who == null || typeof a.who === "string") && (a.due == null || a.due === "" || /^\d{4}-\d{2}-\d{2}$/.test(a.due)));
+}
+
+// ---------------------------------------------------------------- meeting notes (next-calls-complete, 25-Oct-2026)
+// The owner: "please notes of the meeting as well". The host turns on "Take notes": everyone is told, as for a recording
+// ("This meeting's notes are being taken"), and each person's words are kept (call_captions) only after they chose to
+// stay; nothing of the picture or the sound is kept. The notes: the words as said, in order, and the AI's summary (key
+// points, decisions, action items with who and by when), seen by the firm's members who can see the meeting, edited by
+// the host, copied or downloaded (Word, or printed to PDF).
+export const NOTES_MIME = "text/notes";
+export const NOTES_TEXT = "This meeting's notes are being taken";
+const str = (x, n) => String(x == null ? "" : x).replace(/\s+/g, " ").trim().slice(0, n);
+// the host's edit, kept only in this shape: {summary, points[], decisions[], actions[{title, who, due}]}; null when wrong
+export function notesClean(j) {
+  if (!j || typeof j !== "object") return null;
+  const list = (a, n) => (Array.isArray(a) ? a : []).map((x) => str(x, 500)).filter(Boolean).slice(0, n);
+  const summary = String(j.summary == null ? "" : j.summary).replace(/\r/g, "").trim().slice(0, 4000);
+  const actions = (Array.isArray(j.actions) ? j.actions : []).map((a) => a && ({ title: str(a.title, 300), who: str(a.who, 120), due: /^\d{4}-\d{2}-\d{2}$/.test(String(a.due || "")) ? String(a.due) : "" })).filter((a) => a && a.title).slice(0, 30);
+  const out = { summary, points: list(j.points, 30), decisions: list(j.decisions, 30), actions };
+  return out.summary || out.points.length || out.decisions.length || out.actions.length ? out : null;
+}
+// the notes as plain text (Copy), with the words as said after them when asked
+export function notesText(o) {
+  const n = o.notes || {}, out = [o.title || "Meeting notes"];
+  if (o.when) out.push(o.when);
+  if (o.people && o.people.length) out.push("People: " + o.people.join(", "));
+  if (n.summary) out.push("", "Summary", n.summary);
+  if (n.points && n.points.length) out.push("", "Key points", ...n.points.map((x) => "- " + x));
+  if (n.decisions && n.decisions.length) out.push("", "Decisions", ...n.decisions.map((x) => "- " + x));
+  if (n.actions && n.actions.length) out.push("", "Action items", ...n.actions.map((a) => "- " + a.title + (a.who ? " (" + a.who + ")" : "") + (a.due ? ", by " + a.due : "")));
+  if (o.lines && o.lines.length) out.push("", "What was said", transcriptText(o.lines));
+  return out.join("\n");
 }
 
 // ---------------------------------------------------------------- the calendar invite
@@ -350,6 +382,18 @@ export function subPrompt(target, names) {
     "Keep every name of a person, company, client or ledger exactly as written; keep every number, date and amount exactly (₹, lakh, crore stay as they are); " +
     "keep the terms GST, TDS, TCS, GSTR-1, GSTR-3B, ITR, PAN, TAN, Tally, invoice and section numbers (194J, 194C, 80C) unchanged. " +
     "Reply with the translation only, nothing else, no quotes, no notes." + (names && names.length ? "\nNames that may be said: " + names.slice(0, 40).join(", ") : "");
+}
+// the words of a Whisper answer (verbose_json) that were spoken: segments Whisper itself finds silent (no_speech_prob over
+// 0.6 with a low log probability) are left out, and the few words it says over silence ("Thank you.", "you") are dropped
+// when that is all there is and Whisper was not sure there was speech (or gave no segments to say)
+const OVER_SILENCE = /^(thank you\.?|thanks for watching[.!]?|you\.?|\.+|subtitles by .*|शुक्रिया\.?|धन्यवाद\.?)$/i;
+export function spokenText(j) {
+  if (!j) return "";
+  const segs = Array.isArray(j.segments) ? j.segments : null;
+  let t = segs && segs.length ? segs.filter((s) => !(Number(s.no_speech_prob) > 0.6 && Number(s.avg_logprob) < -0.7)).map((s) => String(s.text || "")).join(" ") : String(j.text || "");
+  t = t.replace(/\s+/g, " ").trim();
+  const unsure = !segs || !segs.length || segs.some((s) => Number(s.no_speech_prob) > 0.2);
+  return unsure && OVER_SILENCE.test(t) ? "" : t;
 }
 export const SUB_PIECE = { minMs: 3500, maxMs: 6000, pauseMs: 600, minSpeechMs: 400 };
 // a translation is taken only when it kept what must not change: every number and amount (1,25,000 = 125000), every word

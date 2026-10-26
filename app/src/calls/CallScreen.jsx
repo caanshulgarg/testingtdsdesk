@@ -20,11 +20,12 @@ import { Mic, MicOff, Video, VideoOff, MonitorUp, Hand, Smile, Captions, Ellipsi
 import { makeApi, base, publicKey } from "./api.js";
 import { channel } from "./realtime.js";
 import { createMedia } from "./media.js";
-import { makeEffects, loadChoice, saveChoice, effectsOn, BACKGROUNDS, lightDevice, shrinkImage } from "./effects.js";
+import { makeEffects, loadChoice, saveChoice, effectsOn, effectsSupport, BACKGROUNDS, shrinkImage } from "./effects.js";
 import { compositeRecorder, micPieces, uploadQueue } from "./recorder.js";
 import { LOBBY, waitText, codeFrom } from "./rules.js";
-import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText, SUB_LANGS, SUB_PIECE, defaultSubLang, subLangOk, subLangName, subTargets, subsNeeded, subLine, emailOk, nameOk } from "./rules.js";
+import { chatParts, CONSENT_TEXT, mayPublish, FILE_MAX, rustdeskUri, rustdeskIdOk, rustdeskId, transcriptText, SUB_LANGS, SUB_PIECE, defaultSubLang, subLangOk, subLangName, subTargets, subsNeeded, subLine, emailOk, nameOk, NOTES_TEXT } from "./rules.js";
 import { startCowork } from "./cowork.js";
+import { NotesView } from "./Notes.jsx";
 import { MeetCard } from "./MeetCard.jsx";
 import NoDeviceNote from "../parts/NoDeviceNote.jsx";
 import { noDeviceError, devicesMissing } from "../parts/noDevice.js";
@@ -195,19 +196,25 @@ function Call({ opts, onClose }) {
     if (old) old.getTracks().forEach((t) => t.stop());
     R.raw = await openDevices(want);
     await applyFx(fx);
-    if (R.media) R.media.setVideoTrack(cam ? outVideo() : null);
     force();
   }
-  const outVideo = () => (R.fxp ? R.fxp.track : (R.raw && R.raw.getVideoTracks()[0]) || null);
+  const outVideo = () => (R.fxp && !R.fxp.fellBack ? R.fxp.track : (R.raw && R.raw.getVideoTracks()[0]) || null);
+  // what the others get: the picture (through the effects, if any) while the camera is on and nothing holds it (the
+  // recording notice); always read from R.now (the latest state), as an effect that fails tells us later
+  R.now = { cam, rec, acked };
+  const sendVideo = () => { const n = R.now; if (R.media) R.media.setVideoTrack(n.cam && mayPublish(!!n.rec, n.acked || !!R.recording) ? outVideo() : null); };
   async function applyFx(next) {
     const on = effectsOn(next);
     if (on && R.raw && R.raw.getVideoTracks().length) {
       try {
-        if (!R.fxp) R.fxp = await makeEffects(R.raw, next, (n) => setFxNote(n));
+        // the effects cannot run here after all (frames black, the worker stopped): the camera untouched, said so
+        const onFail = () => { const f = R.fxp; R.fxp = null; sendVideo(); force(); setTimeout(() => { try { f && f.stop(); } catch (e) { /* */ } }, 200); };
+        if (!R.fxp) R.fxp = await makeEffects(R.raw, next, (n) => setFxNote(n), { onFail });
         else await R.fxp.set(next);
+        if (R.fxp && R.fxp.fellBack) { R.fxp.stop(); R.fxp = null; }
       } catch (e) { setFxNote(e.message); R.fxp = null; }
     } else if (R.fxp) { R.fxp.stop(); R.fxp = null; }
-    if (R.media) R.media.setVideoTrack(cam ? outVideo() : null);
+    sendVideo();
     force();
   }
   const changeFx = (p) => { const next = Object.assign({}, fx, p); setFx(next); saveChoice(who, next); applyFx(next); };
@@ -217,7 +224,7 @@ function Call({ opts, onClose }) {
   const selfStream = useMemo(() => (selfTrack ? new MediaStream([selfTrack]) : null), [selfTrack]);
   useEffect(() => { if (preview.current && preview.current.srcObject !== selfStream) preview.current.srcObject = selfStream; });
   useEffect(() => { if (R.raw) R.raw.getAudioTracks().forEach((t) => { t.enabled = mic && mayPublish(!!rec, acked || !!R.recording); }); trackMe(); }, [mic, rec, acked]);
-  useEffect(() => { if (R.media) R.media.setVideoTrack(cam && mayPublish(!!rec, acked || !!R.recording) ? outVideo() : null); trackMe(); }, [cam, rec, acked]);
+  useEffect(() => { sendVideo(); trackMe(); }, [cam, rec, acked]);
 
   // ---------------------------------------------------------------- the signal channel (switched when the host removes someone)
   const sig = useMemo(() => ({
@@ -239,7 +246,7 @@ function Call({ opts, onClose }) {
   function enter(s) {
     R.sess = s; setSess(s);
     R.t0 = s.room.started_at ? Date.parse(s.room.started_at) : Date.now();
-    if (s.recording) setRec({ id: s.recording.id });
+    if (s.recording) setRec({ id: s.recording.id, notes: !!s.recording.notes });
     // the host who has just opened a meeting: the link and the code to share
     if (!guest && s.me.role === "host" && (opts.start || opts.code)) setReady(true);
     setPhase("in");
@@ -323,7 +330,7 @@ function Call({ opts, onClose }) {
     const offs = [
       sig.on("chat", (m) => { setChat((c) => c.some((x) => x.id === m.message.id) ? c : c.concat([m.message])); setUnread((u) => u + 1); }),
       sig.on("react", (m) => { setReacts((r) => Object.assign({}, r, { [m.pid]: { e: m.e, at: Date.now() } })); setTimeout(() => setReacts((r) => { const x = Object.assign({}, r); if (x[m.pid] && Date.now() - x[m.pid].at > 2900) delete x[m.pid]; return x; }), 3000); }),
-      sig.on("rec", (m) => { if (m.on) { setRec({ id: m.id }); } else { setRec(null); setAcked(false); stopMic(); } }),
+      sig.on("rec", (m) => { if (m.on) { setRec((r) => (r && r.id === m.id ? r : { id: m.id, notes: !!m.notes })); } else { setRec(null); setAcked(false); stopMic(); } }),
       sig.on("kick", (m) => { if (m.pid === sess.me.id) { leave(false, "The host removed you from the call."); } else R.media && R.media.forget(m.pid); }),
       sig.on("rekey", async () => { try { const t = await api.call("topic", { room_id: sess.room.id }); openChannel(t.topic); } catch (e) { /* removed: the kick says so */ } }),
       sig.on("end", () => leave(false, "The host ended the call.")),
@@ -379,6 +386,9 @@ function Call({ opts, onClose }) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     let ac; try { ac = new AC(); } catch (e) { return; }
+    // Safari: an audio context made outside a tap stays suspended (and hears nothing) until one
+    const wake = () => { try { if (ac.state !== "running") ac.resume().catch(() => {}); } catch (e) { /* */ } };
+    wake(); document.addEventListener("pointerdown", wake, { passive: true });
     const meters = new Map();      // pid -> {track, an, buf}
     const meter = (pid, track) => {
       const m = meters.get(pid);
@@ -397,7 +407,7 @@ function Call({ opts, onClose }) {
       }
       setSpeaking((old) => { const a = Object.keys(old).sort().join(","), b = Object.keys(on).sort().join(","); return a === b ? old : on; });
     }, 250);
-    return () => { clearInterval(t); try { ac.close(); } catch (e) { /* */ } };
+    return () => { clearInterval(t); document.removeEventListener("pointerdown", wake); try { ac.close(); } catch (e) { /* */ } };
   }, [phase, sess && sess.room.id, mic]);
 
   // ---------------------------------------------------------------- live subtitles
@@ -407,7 +417,10 @@ function Call({ opts, onClose }) {
   }
   useEffect(() => { if (!subLines.length) return; const t = setTimeout(() => setSubLines((l) => l.filter((x) => Date.now() - x.at < 7000)), 7200); return () => clearTimeout(t); }, [subLines]);
   // my microphone in short pieces, only while someone in the call (me too) reads subtitles; never while held by the notice
-  const anyoneSubs = phase === "in" && subsNeeded(presence.length ? presence : [{ subs: subs.on }], false);
+  // notes being taken (after this person chose to stay): their words go as subtitle pieces, kept by fincom-call
+  const keeping = !!(rec && rec.notes && (acked || R.recording));
+  R.keeping = keeping;
+  const anyoneSubs = phase === "in" && subsNeeded(presence.length ? presence : [{ subs: subs.on }], keeping);
   const held0 = rec && !acked && !R.recording;
   useEffect(() => {
     const want = anyoneSubs && mic && !held0 && R.raw && R.raw.getAudioTracks().length && window.MediaRecorder && sess;
@@ -423,7 +436,7 @@ function Call({ opts, onClose }) {
     if (!R.sess || R.subBusy >= 2 || Date.now() < R.subPauseUntil) return;      // a backlog is dropped: subtitles must be quick
     const people = presenceRef.current.length ? presenceRef.current : [{ subs: subsRef.current.on, lang: subsRef.current.lang }];
     const targets = subTargets(people, "");
-    if (!subsNeeded(people, false)) return;
+    if (!subsNeeded(people, !!R.keeping)) return;
     R.subBusy++;
     try {
       const j = await api.call("caption", { room_id: R.sess.room.id, audio: await b64(blob), mime: blob.type, secs: Math.round(dur / 100) / 10, start_ms: start, targets });
@@ -435,17 +448,26 @@ function Call({ opts, onClose }) {
     } catch (e) {
       if (e.kind === "limit") { R.subPauseUntil = Date.now() + 30000; setSubNote("Subtitles paused for a moment (the free limit)."); }
       else if (e.kind === "nokey") { R.subPauseUntil = Date.now() + 3600000; setSubNote("Translated subtitles are not set up yet; the browser's own captions are used."); if (!caps) toggleCaps(); }
+      else {
+        // anything else (the line, the function): said after two in a row, a short pause, then tried again
+        R.subFails = (R.subFails || 0) + 1;
+        if (R.subFails >= 2) { R.subPauseUntil = Date.now() + 10000; setSubNote("Subtitles could not be reached just now; trying again in a moment."); }
+      }
+      R.subBusy--; return;
     }
+    R.subFails = 0;
     R.subBusy--;
   }
 
   // the recording notice: someone in the call while it records sees it and decides
   useEffect(() => {
     if (!rec || !sess) return;
-    if (R.recording) { setAcked(true); startMic(); return; }
+    if (R.recording) { setAcked(true); if (!rec.notes) startMic(); return; }
+    // a new recording (notes, then a recording): asked again
+    setAcked(false);
     api.call("consent", { room_id: sess.room.id, recording_id: rec.id, event: "shown" }).catch(() => {});
   }, [rec && rec.id]);
-  function accept() { setAcked(true); api.call("consent", { room_id: sess.room.id, recording_id: rec.id, event: "accepted" }).catch(() => {}); startMic(); }
+  function accept() { setAcked(true); api.call("consent", { room_id: sess.room.id, recording_id: rec.id, event: "accepted" }).catch(() => {}); if (!rec.notes) startMic(); }
   function declineRec() { api.call("consent", { room_id: sess.room.id, recording_id: rec.id, event: "left" }).catch(() => {}); leave(false, "You left the call because it is being recorded."); }
 
   // my own microphone, in pieces, for the transcript (only while recording, after the notice)
@@ -458,7 +480,7 @@ function Call({ opts, onClose }) {
 
   // ---------------------------------------------------------------- the host's recording
   async function toggleRec() {
-    if (rec && R.recorder) {
+    if (rec && !rec.notes && R.recorder) {
       const r = rec; setRec(null); R.recording = false; setAcked(false);
       await R.recorder.stop(); R.recorder = null; stopMic();
       await (R.recQueue && R.recQueue.drain());
@@ -469,7 +491,7 @@ function Call({ opts, onClose }) {
     }
     try {
       const j = await api.call("rec_start", { room_id: sess.room.id, mime: "video/webm" });
-      R.recording = true;
+      R.recording = true; R.notesOn = false;
       setRec({ id: j.recording_id });
       R.recQueue = uploadQueue(async (job) => { await api.upload("rec", job.blob, { room_id: sess.room.id, recording_id: j.recording_id, seq: job.seq }); await api.call("rec_part", { recording_id: j.recording_id, seq: job.seq, bytes: job.blob.size }); });
       R.recorder = compositeRecorder({
@@ -479,6 +501,25 @@ function Call({ opts, onClose }) {
         onPart: (blob, seq) => R.recQueue.add({ blob, seq }),
       });
       sig.send("rec", { on: true, id: j.recording_id });
+    } catch (e) { say(e.message); }
+  }
+
+  // ---------------------------------------------------------------- Take notes (the host): everyone told, as for a recording
+  async function toggleNotes() {
+    if (rec && rec.notes) {
+      const r = rec; setRec(null); R.recording = false; R.notesOn = false; setAcked(false);
+      await api.call("rec_stop", { recording_id: r.id }).catch(() => {});
+      sig.send("rec", { on: false });
+      say("Notes stopped. They are in Notes (here, and on Meetings › Recent).");
+      return;
+    }
+    if (rec) { say("The call is being recorded: its words are kept already."); return; }
+    try {
+      const j = await api.call("rec_start", { room_id: sess.room.id, notes: true });
+      R.recording = true; R.notesOn = true;
+      setRec({ id: j.recording_id, notes: true });
+      sig.send("rec", { on: true, id: j.recording_id, notes: true });
+      setPanel("notes");
     } catch (e) { say(e.message); }
   }
 
@@ -556,7 +597,18 @@ function Call({ opts, onClose }) {
     // the card only for the person the host chose; the banner for everyone in the call
     if (m.state === "card" && m.to === sess.me.id) setRemote({ phase: "card", server: m.server || {}, from: m.from });
     if (m.state === "started") setRemote((r) => Object.assign({}, r || { from: m.from }, { phase: "started", target: m.to }));
-    if (m.state === "ended") setRemote(m.close && m.to === sess.me.id ? { phase: "ended" } : null);
+    // next-calls-complete: the other side says which device it is on (an iPhone cannot be controlled), or stops it
+    if (m.state === "device") setRemote((r) => (r && r.id ? Object.assign({}, r, { dev: m.dev }) : r));
+    if (m.state === "declined") { setRemote((r) => (r && r.id ? Object.assign({}, r, { phase: "asked", declined: true, rid: "" }) : r)); }
+    if (m.state === "ended") { setRemote(m.close && m.to === sess.me.id ? { phase: "ended" } : null); if (m.byPeer) say(nameOf(m.from) + " stopped the remote control."); }
+  }
+  // the person asked: no, or stop (any time); fincom-call logs the end
+  function peerStop(declined) {
+    const r = remote;
+    if (declined && r && r.phase === "card") sig.send("remote", { state: "declined", from: sess.me.id, to: r.from });
+    else sig.send("remote", { state: "ended", byPeer: true, from: sess.me.id });
+    api.call("remote_stop", { room_id: sess.room.id }).catch(() => {});
+    setRemote(declined ? null : { phase: "ended" });
   }
   function markRemote(state) {
     if (state === "started") { setRemote((r) => Object.assign({}, r, { phase: "started" })); sig.send("remote", { state: "started", from: sess.me.id, to: remote && remote.to }); }
@@ -577,6 +629,7 @@ function Call({ opts, onClose }) {
     if (phase === "ended") return;
     stopCowork();
     if (R.recorder) { await toggleRec().catch(() => {}); }
+    if (R.notesOn && rec) { R.notesOn = false; await api.call("rec_stop", { recording_id: rec.id }).catch(() => {}); sig.send("rec", { on: false }); }
     stopMic();
     if (R.subMic) { R.subMic.stop(); R.subMic = null; }
     if (R.queue) await Promise.race([R.queue.drain(), new Promise((ok) => setTimeout(ok, 15000))]);
@@ -695,7 +748,7 @@ function Call({ opts, onClose }) {
     <header className="call-top">
       <span className="call-when" data-call-clock="">{clock}{sess.room.code ? <> <span aria-hidden="true">|</span> <span data-call-code="">{sess.room.code}</span></> : null}</span>
       <b className="call-title">{sess.room.title}</b>
-      {rec && <span className="call-rec" data-call-recording="" role="status">● {CONSENT_TEXT}</span>}
+      {rec && <span className="call-rec" data-call-recording={rec.notes ? undefined : ""} data-call-notes-on={rec.notes ? "" : undefined} role="status">● {rec.notes ? NOTES_TEXT : CONSENT_TEXT}</span>}
       {status === "reconnecting" && <span className="call-warn" data-call-reconnecting="">Reconnecting…</span>}
       {level !== "high" && <span className="call-warn" data-call-level={level}>{level === "audio" || audioOnly ? "Weak line: audio only" : "Weak line: picture made smaller"}</span>}
       {sess.mode === "p2p" && <span className="call-note" title="Until the call service is set up, calls run directly between computers">Up to {sess.max} people</span>}
@@ -703,11 +756,16 @@ function Call({ opts, onClose }) {
       {needTap && <button type="button" className="call-primary" onClick={() => { document.querySelectorAll("#fincom-call video[data-cam]:not(.mirror)").forEach((x) => { x.muted = false; x.play().catch(() => {}); }); setNeedTap(false); }} data-call-sound="">Turn on sound</button>}
       <button type="button" className="call-btn small" onClick={() => setMin(!min)} data-call-min-btn="">{min ? "Open the call" : "Make small"}</button>
     </header>
-    {remote && remote.phase === "started" && <div className="call-banner" data-remote-banner="" role="status">Remote control in progress{remote.id ? "" : remote.target === sess.me.id ? ": " + nameOf(remote.from) + " is controlling your computer through RustDesk." : ""}{remote.id && <button type="button" className="call-btn small" onClick={() => markRemote("ended")} data-remote-end="">End</button>}</div>}
-    {remote && !remote.id && remote.phase === "card" && <RemoteCard remote={remote} share={(id) => { sig.send("rdid", { id: rustdeskId(id), name: myName }); setRemote(Object.assign({}, remote, { shared: true })); }} />}
+    {remote && remote.phase === "started" && <div className="call-banner" data-remote-banner="" role="status">Remote control in progress{remote.id ? "" : remote.target === sess.me.id ? ": " + nameOf(remote.from) + " is controlling your computer through RustDesk." : ""}{remote.id && <button type="button" className="call-btn small" onClick={() => markRemote("ended")} data-remote-end="">End</button>}
+      {!remote.id && remote.target === sess.me.id && <button type="button" className="call-btn small danger" onClick={() => peerStop(false)} data-remote-stop="">Stop the control</button>}</div>}
+    {remote && !remote.id && remote.phase === "card" && <RemoteCard remote={remote} share={(id) => { sig.send("rdid", { id: rustdeskId(id), name: myName }); setRemote(Object.assign({}, remote, { shared: true })); }}
+      device={(dev) => sig.send("remote", { state: "device", dev, from: sess.me.id, to: remote.from })} no={() => peerStop(true)} />}
     {remote && !remote.id && remote.phase === "ended" && <div className="call-banner" data-remote-ended="">Remote control has ended. Close RustDesk now (or press Disconnect in RustDesk). <button type="button" className="call-btn small" onClick={() => setRemote(null)}>OK</button></div>}
     {remote && remote.id && remote.phase === "asked" && <div className="call-card" data-remote-host="">
       <b>Remote help</b> · reason: {remote.reason}
+      {remote.dev === "ios" && <p data-remote-dev="ios">They are on an iPhone or iPad: Apple does not let any app control it, and its browser cannot share its screen. Ask them to join from a computer (Windows or Mac), or to read out what they see.</p>}
+      {remote.dev === "android" && <p className="call-note" data-remote-dev="android">They are on an Android phone: RustDesk's Android app shares its screen, and lets you control it once they allow "Input control" (Accessibility) on the phone.</p>}
+      {remote.declined && <p className="call-note" data-remote-declined="">They said no. Nothing was opened on their device.</p>}
       {remote.rid ? <p>Their RustDesk ID: <b data-remote-id="">{remote.rid}</b>. <a className="call-primary" href={rustdeskUri(remote.rid)} data-remote-connect="">Connect in RustDesk</a>{" "}
         <button type="button" className="call-btn small" onClick={() => { try { navigator.clipboard.writeText(remote.rid); } catch (e) { /* */ } }}>Copy ID</button>
         {" "}<button type="button" className="call-btn small" onClick={() => markRemote("started")} data-remote-started="">They accepted: mark started</button></p>
@@ -716,7 +774,7 @@ function Call({ opts, onClose }) {
     </div>}
     {noDev.mic && !min && <div className="call-banner call-listen" data-call-listen-only="" role="status"><NoDeviceNote text={"Listening only: no microphone" + (noDev.cam ? " or camera" : "") + " reached this browser, so the others cannot hear you (chat works)."} /></div>}
     {held && <div className="call-modal" role="dialog" aria-modal="true" data-consent="">
-      <div><h3>{CONSENT_TEXT}</h3><p>The host is recording this call (picture, voices and the words said, for a transcript). Your microphone and camera stay off until you choose.</p>
+      <div><h3>{rec.notes ? NOTES_TEXT : CONSENT_TEXT}</h3><p>{rec.notes ? "The host is taking notes of this meeting: the words you say are kept as text (no picture, no sound) and summarised for the firm. Your microphone and camera stay off until you choose." : "The host is recording this call (picture, voices and the words said, for a transcript). Your microphone and camera stay off until you choose."}</p>
         <button type="button" className="call-primary" onClick={accept} data-consent-stay="">Stay in the call</button> <button type="button" className="call-btn" onClick={declineRec} data-consent-leave="">Leave</button></div></div>}
     {/* someone asks to join: seen over the call whatever is open, with a sound */}
     {gone && <div className="call-gone" role="alertdialog" aria-modal="true" data-call-gone="">
@@ -777,6 +835,11 @@ function Call({ opts, onClose }) {
           <input ref={fileIn} type="file" hidden onChange={(e) => { sendFile(e.target.files[0]); e.target.value = ""; }} data-chat-fileinput="" />
         </form>
       </aside>}
+      {panel === "notes" && !guest && <aside className="call-side call-side-notes" data-call-notes="">
+        <div className="call-side-head"><h3>Notes</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div>
+        {amHost && <button type="button" className={"call-btn wide" + (rec && rec.notes ? " on" : "")} onClick={toggleNotes} data-notes-toggle="">{rec && rec.notes ? "Stop taking notes" : "Take notes (everyone is told)"}</button>}
+        <NotesView api={api} roomId={sess.room.id} live lang={subs.lang} />
+      </aside>}
       {panel === "effects" && <aside className="call-side"><div className="call-side-head"><h3>Background and look</h3><button type="button" className="call-x" aria-label="Close" onClick={() => setPanel("")}><X width={18} height={18} /></button></div><Effects fx={fx} change={changeFx} note={fxNote} /></aside>}
     </div>
     <footer className="call-bar" role="toolbar" aria-label="Call controls">
@@ -805,7 +868,9 @@ function Call({ opts, onClose }) {
             <button type="button" role="menuitem" onClick={() => { setMenu(""); toggle("effects"); }} data-call-effects="">Background and effects</button>
             <button type="button" role="menuitem" aria-pressed={audioOnly} onClick={() => { const a = !audioOnly; setAudioOnly(a); R.media && R.media.setAudioOnly(a); setMenu(""); }} data-call-audioonly="">{audioOnly ? "Picture back on (audio only now)" : "Audio only (a weak line)"}</button>
             <button type="button" role="menuitem" aria-pressed={caps} onClick={() => { toggleCaps(); setMenu(""); }} data-call-browser-caps="">{caps ? "Stop the browser's captions" : "The browser's own captions (English)"}</button>
-            {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleRec(); }} data-call-record="">{rec ? "Stop recording" : "Record the call"}</button>}
+            {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleRec(); }} data-call-record="">{rec && !rec.notes ? "Stop recording" : "Record the call"}</button>}
+            {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleNotes(); }} data-call-take-notes="">{rec && rec.notes ? "Stop taking notes" : "Take notes"}</button>}
+            {!guest && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggle("notes"); }} data-call-notes-btn="">Notes</button>}
             {amHost && sess.room.kind !== "class" && <button type="button" role="menuitem" onClick={() => { setMenu(""); toggleCowork(); }} data-call-cowork="">{cowork ? "Stop working together" : "Work together (FinCom side by side)"}</button>}
             {cowork && !amHost && <button type="button" role="menuitem" onClick={() => { R.cw && R.cw.setFollow(!cowork.follow); setMenu(""); }} data-call-follow="">{cowork.follow ? "Stop following" : "Follow the host"}</button>}
             {amHost && <button type="button" role="menuitem" onClick={() => { setMenu(""); sig.send("mute-all", { from: sess.me.id }); say("Everyone else is muted."); }} data-call-muteall="">Mute everyone else</button>}
@@ -847,40 +912,56 @@ function Tile({ name, stream, camOn, micOn, hand, react, me, state, speaking }) 
 }
 
 function Effects({ fx, change, note }) {
-  const light = lightDevice(), own = useRef(null);
+  // only what this browser can do (an iPhone before iOS 16.4: no background; no WebGL or canvas capture: nothing, the
+  // camera as it is)
+  const sup = useMemo(() => effectsSupport(), []), light = sup.light, own = useRef(null);
   const bgImage = (f) => change({ bg: "image", image: (window.TDS_ASSETS || "assets/") + f });
-  return <div className="call-fx" data-fx-panel="">
-    <h4>Background</h4>
-    {light && <p className="call-note" data-fx-light="">This device is light: blur only is suggested (the others may make your picture stutter).</p>}
-    <div className="call-row wrap">
-      <button type="button" className={"call-btn small" + (fx.bg === "none" ? " on" : "")} onClick={() => change({ bg: "none" })} data-fx-bg="none">None</button>
-      <button type="button" className={"call-btn small" + (fx.bg === "blur" ? " on" : "")} onClick={() => change({ bg: "blur" })} data-fx-bg="blur">Blur</button>
-      {BACKGROUNDS.map((b) => <button key={b.id} type="button" className={"call-btn small" + (fx.bg === "image" && fx.image.endsWith(b.file) ? " on" : "")} onClick={() => bgImage(b.file)} data-fx-bg={b.id}>{b.name}</button>)}
-      <button type="button" className={"call-btn small" + (fx.bg === "image" && fx.image.startsWith("data:") ? " on" : "")} onClick={() => own.current && own.current.click()} data-fx-bg="own">Your own image</button>
-      <input ref={own} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files[0]; if (f) shrinkImage(f).then((u) => change({ bg: "image", image: u }), (er) => alert(er.message)); e.target.value = ""; }} />
-    </div>
-    <label className="call-check"><input type="checkbox" checked={fx.light} onChange={(e) => change({ light: e.target.checked })} data-fx-light-toggle="" /> Lighting fix (brightness and contrast){light ? " · may be slow here" : ""}</label>
-    <label className="call-check">Touch-up <input type="range" min="0" max="1" step="0.25" value={fx.touch} onChange={(e) => change({ touch: Number(e.target.value) })} aria-label="Touch-up" data-fx-touch="" />{light ? " · may be slow here" : ""}</label>
-    {note && <p className="call-err">{note}</p>}
-    <p className="call-note">All off by default; remembered for you on this device. Nothing of your picture leaves this computer except the call itself.</p>
+  return <div className="call-fx" data-fx-panel="" data-fx-bg-ok={sup.bg ? "" : undefined}>
+    {sup.note && <p className="call-note" data-fx-support="">{sup.note}</p>}
+    {sup.bg && <><h4>Background</h4>
+      {light && <p className="call-note" data-fx-light="">This device is light: blur is the lightest choice.</p>}
+      <div className="call-row wrap">
+        <button type="button" className={"call-btn small" + (fx.bg === "none" ? " on" : "")} onClick={() => change({ bg: "none" })} data-fx-bg="none">None</button>
+        <button type="button" className={"call-btn small" + (fx.bg === "blur" ? " on" : "")} onClick={() => change({ bg: "blur" })} data-fx-bg="blur">Blur</button>
+        {BACKGROUNDS.map((b) => <button key={b.id} type="button" className={"call-btn small" + (fx.bg === "image" && fx.image.endsWith(b.file) ? " on" : "")} onClick={() => bgImage(b.file)} data-fx-bg={b.id}>{b.name}</button>)}
+        <button type="button" className={"call-btn small" + (fx.bg === "image" && fx.image.startsWith("data:") ? " on" : "")} onClick={() => own.current && own.current.click()} data-fx-bg="own">Your own image</button>
+        <input ref={own} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files[0]; if (f) shrinkImage(f).then((u) => change({ bg: "image", image: u }), (er) => alert(er.message)); e.target.value = ""; }} />
+      </div></>}
+    {sup.look && <><label className="call-check"><input type="checkbox" checked={fx.light} onChange={(e) => change({ light: e.target.checked })} data-fx-light-toggle="" /> Lighting fix (brightness and contrast)</label>
+      <label className="call-check">Touch-up <input type="range" min="0" max="1" step="0.25" value={fx.touch} onChange={(e) => change({ touch: Number(e.target.value) })} aria-label="Touch-up" data-fx-touch="" /></label></>}
+    {note && <p className="call-err" data-fx-note="">{note}</p>}
+    <p className="call-note">All off by default; remembered for you on this device. Your picture is worked on here, on this device; only the call itself leaves it.</p>
   </div>;
 }
 
 // the card the other person sees for remote help: RustDesk's own download, their ID, plain steps; RustDesk's own accept
 // window on their side is the consent; FinCom never asks for a password and never sets up unattended access
-function RemoteCard({ remote, share }) {
+function RemoteCard({ remote, share, device, no }) {
   const [id, setId] = useState("");
   const srv = remote.server || {};
-  return <div className="call-card" data-remote-card="">
-    <b>Remote help: the host asks to control your computer</b>
+  // the device this card is on: the steps for it (next-calls-complete; the owner: "the other person's computer or mobile")
+  const ua = navigator.userAgent || "", dev = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "ios" : /Android/.test(ua) ? "android" : "desktop";
+  useEffect(() => { device && device(dev); }, []);
+  if (dev === "ios") return <div className="call-card" data-remote-card="" data-remote-card-dev="ios">
+    <b>Remote help: the host asks to see and control your screen</b>
+    <p>On an iPhone or iPad this is not possible: Apple does not let any app control it, and Safari cannot share the screen. Nothing has been opened on this phone.</p>
+    <p>To get help: join this meeting from a computer (Windows or Mac) and accept there, or read out what you see.</p>
+    <button type="button" className="call-btn" onClick={no} data-remote-no="">OK</button>
+  </div>;
+  return <div className="call-card" data-remote-card="" data-remote-card-dev={dev}>
+    <b>Remote help: the host asks to control your {dev === "android" ? "phone" : "computer"}</b>
     <ol>
-      <li>Install or open <b>RustDesk</b>: <a href="https://rustdesk.com/download" target="_blank" rel="noopener noreferrer">rustdesk.com/download</a> (Windows or Mac, free).</li>
+      {dev === "android" ? <>
+        <li>Install or open <b>RustDesk</b> from the Play Store (or <a href="https://rustdesk.com/download" target="_blank" rel="noopener noreferrer">rustdesk.com/download</a>).</li>
+        <li>In RustDesk, Share screen › Start service, and allow the screen to be shared. To let the host also tap and type, turn on <b>Input control</b> (Android asks for Accessibility for RustDesk). Leave it off to let them only see.</li>
+      </> : <li>Install or open <b>RustDesk</b>: <a href="https://rustdesk.com/download" target="_blank" rel="noopener noreferrer">rustdesk.com/download</a> (Windows or Mac, free).</li>}
       {(srv.id_server || srv.relay) && <li>In RustDesk, Settings › Network › ID/Relay server: ID server <code>{srv.id_server}</code>{srv.relay ? <>, relay <code>{srv.relay}</code></> : null}{srv.key ? <>, key <code>{srv.key}</code></> : null}.</li>}
-      <li>Type the <b>ID</b> RustDesk shows under "Your Desktop" here and press Share. Never share its password.</li>
-      <li>When RustDesk asks you to accept, accept only if you expected this. You can stop at any time in RustDesk.</li>
+      <li>Type the <b>ID</b> RustDesk shows {dev === "android" ? "" : 'under "Your Desktop" '}here and press Share. Never share its password.</li>
+      <li>When RustDesk asks you to accept, accept only if you expected this. You can stop at any time, in RustDesk or with Stop here.</li>
     </ol>
     <input value={id} onChange={(e) => setId(e.target.value)} placeholder="RustDesk ID, e.g. 123 456 789" aria-label="Your RustDesk ID" data-remote-idinput="" />
     <button type="button" className="call-primary" disabled={!rustdeskIdOk(id)} onClick={() => share(id)} data-remote-share="">Share my RustDesk ID</button>
+    {" "}<button type="button" className="call-btn" onClick={no} data-remote-no="">No, thanks</button>
     {remote.shared && <small> · shared; wait for RustDesk's request</small>}
     <p className="call-note"><a href="./remote-help.html" target="_blank" rel="noopener">How remote help works (English / हिन्दी)</a></p>
   </div>;
@@ -929,6 +1010,7 @@ function AfterCall({ api, after, canStaff, onClose, guest, lang }) {
       </div>}
     </>}
     {msg && <p className="call-note" role="status" data-after-msg="">{msg}</p>}
+    {!guest && room && <div className="call-after-notes"><h3>Notes</h3><NotesView api={api} roomId={room.id} lang={lang} /></div>}
     <button type="button" className="call-primary" onClick={onClose} data-call-close="">Close</button>
   </div>;
 }

@@ -9,7 +9,11 @@ never opened.
      Copy ID; marks it started when the other side accepted in RustDesk
   4. the banner "Remote control in progress" on both sides (and for the others in the call)
   5. End: the other side is told to close RustDesk; the log row has who, which client, start, end and the reason
-  6. the client help page (English and Hindi, Windows and Mac, the safety note) is served beside the app
+  6. the client help page (English and Hindi, Windows and Mac, Android, iPhone, the safety note) is served beside the app
+  7. (next-calls-complete) the person asked says No, thanks, or stops it while it runs (Stop the control): the host's
+     side ends at once and the log row gets its end
+  8. an iPhone: the card says plainly that Apple allows no control and its browser cannot share the screen; nothing to
+     type or install; the host is told it is an iPhone
 Run on app/dist-test, under the lock: flock /tmp/fincom-app.lock python3 tests/run_remote_help_ui.py"""
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -66,6 +70,42 @@ with sync_playwright() as p:
     ok(wait_for(A, "!document.querySelector('[data-remote-banner]')") and wait_for(B, "!document.querySelector('[data-remote-banner]')"), "the banner goes")
     row = fn.remote[0]
     ok(row["end"] and row["by"] == "Riya Staff" and row["client"] == CLIENT and row["peer"] == "Ram Kumar", "the log row: who, which client, the person, start and end (%s)" % row)
+
+    print("7. the person asked stops it themselves, at any time (next-calls-complete)")
+    A.once("dialog", lambda d: d.accept("Check the GST upload"))
+    A.locator("[data-person^='Ram Kumar'] [data-remote-start]").evaluate("b => b.click()")
+    ok(wait_for(G, "!!document.querySelector('[data-remote-card]')", 10000) and G.locator("[data-remote-no]").count() == 1, "the card has No, thanks")
+    G.fill("[data-remote-idinput]", "987654321"); press(G, "[data-remote-share]")
+    wait_for(A, "!!document.querySelector('[data-remote-started]')", 10000); press(A, "[data-remote-started]")
+    ok(wait_for(G, "!!document.querySelector('[data-remote-stop]')", 10000), "while it runs, the guest has Stop the control")
+    press(G, "[data-remote-stop]")
+    ok(wait_for(A, "!document.querySelector('[data-remote-banner]') && !document.querySelector('[data-remote-host]')", 10000), "the host's side ends at once")
+    ok(fn.remote[-1]["end"] and fn.remote[-1].get("stopped_by") == "Ram Kumar", "the log row ended by the guest (%s)" % fn.remote[-1])
+    A.once("dialog", lambda d: d.accept("Look at the bank file"))
+    A.locator("[data-person^='Ram Kumar'] [data-remote-start]").evaluate("b => b.click()")
+    wait_for(G, "!!document.querySelector('[data-remote-no]')", 10000); press(G, "[data-remote-no]")
+    ok(wait_for(A, "!!document.querySelector('[data-remote-declined]')", 10000) and not G.locator("[data-remote-card]").count(), "No, thanks: the host is told, nothing opened")
+    ok(fn.remote[-1]["end"], "and the log row ended")
+    A.locator("[data-remote-host] button:has-text('Cancel')").evaluate("b => b.click()")
+
+    print("8. an iPhone: said plainly, nothing to install")
+    ictx = br.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True, permissions=["camera", "microphone"],
+                          user_agent="Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
+    ictx.add_init_script(FAKE_SCREEN)
+    I = ictx.new_page(); I.set_default_timeout(60000); wire(I, hub, fn, rest)
+    I.goto("http://localhost:%d/" % PORT); I.wait_for_timeout(2500)
+    if I.locator('button[data-act="useOffline"]').count(): I.click('button[data-act="useOffline"]'); I.wait_for_timeout(1200)
+    I.evaluate(setup_js("tok-owner")); I.wait_for_timeout(600)
+    I.evaluate("(r) => FinComCall.join(r)", rid); wait_for(I, "!!document.querySelector('[data-call-join]')"); press(I, "[data-call-join]")
+    wait_for(I, "!!document.querySelector('#fincom-call [data-call=in]')", 20000)
+    ok(wait_for(A, "document.querySelectorAll('[data-person] [data-remote-start]').length === 3", 20000), "the iPhone member listed with Remote help")
+    A.once("dialog", lambda d: d.accept("See the GST portal error"))
+    A.locator("[data-person^='Anshul Owner'] [data-remote-start]").evaluate("b => b.click()")
+    ok(wait_for(I, "!!document.querySelector('[data-remote-card-dev=ios]')", 10000) and "not possible" in I.inner_text("[data-remote-card]") and I.locator("[data-remote-idinput]").count() == 0, "the iPhone's card: not possible (Apple), nothing to type or install")
+    ok(wait_for(A, "!!document.querySelector('[data-remote-dev=ios]')", 10000), "the host is told it is an iPhone, and what to do instead")
+    shot(I, "15-remote-iphone")
+    press(I, "[data-remote-no]")
+    ictx.close()
 
     print("6. the client help page")
     H = actx.new_page(); H.goto("http://localhost:%d/remote-help.html" % PORT)

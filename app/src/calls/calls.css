@@ -300,3 +300,13 @@
 .lobby-choice .btn { min-height: 44px; }
 .lobby-choice small { color: var(--muted, #475569); }
 .lobby-or { font-size: 13px; color: var(--muted, #475569); margin: 10px 0 0; text-align: left; font-weight: 600; }
+/* meeting notes (next-calls-complete): the call's Notes panel, the last screen, Meetings › Recent */
+.call-notes { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.call-notes h4 { margin: 8px 0 2px; }
+.call-notes ul { margin: 0; padding-left: 20px; }
+.call-notes-p { white-space: pre-wrap; margin: 0; }
+.call-notes-edit textarea, .call-notes-edit input { width: 100%; box-sizing: border-box; font: inherit; }
+.call-notes-edit .call-row input { flex: 1 1 120px; min-width: 0; }
+.call-notes .call-transcript { max-height: 32vh; background: rgba(127, 127, 127, .12); color: inherit; }
+.call-side-notes { overflow: auto; }
+.call-after-notes { margin-top: 18px; }

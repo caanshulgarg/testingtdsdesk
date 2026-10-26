@@ -3,3 +3,4 @@ playwright          # the screen and bridge tests (run_*_ui.py, run_*_e2e.py)
 reportlab           # run_gstvault_ui.py makes portal-like PDFs with it
 openpyxl            # run_reports_dcf.py recalculates the DCF Excel independently (tests/reports_recalc.py)
 python-docx         # run_reports_pack_ui.py opens the Word files of the reports pack
+pillow              # run_call_effects.py makes its camera (a .y4m) with it
