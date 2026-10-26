@@ -88,6 +88,23 @@ def ok(c, w):
 def signin_page(pg): return pg.locator('[data-act="cloudSignIn"]').count() > 0
 def register_page(pg): return pg.locator('[data-act="cloudSignUp"]').count() > 0 or pg.locator("[data-signup-sent]").count() > 0
 def oauth(pg): return [n for n, a in (("google", "oauthGoogle"), ("azure", "oauthAzure")) if pg.locator('[data-act="%s"]' % a).count()]
+# the layout (owner, 26-Oct-2026, as Claude's): the provider buttons at the top, full width with their logos, then a thin
+# "or" line, then the email form, then the switch link last; with no provider, the form alone (no buttons, no "or")
+LAYOUT_JS = """(first) => {
+  const box = document.querySelector('.signin-box'), q = (s) => box.querySelector(s);
+  const parts = [['google', q('[data-act="oauthGoogle"]')], ['azure', q('[data-act="oauthAzure"]')], ['or', q('[data-oauth-or]')],
+    ['form', q('[data-cloud="' + first + '"]')], ['submit', q('[data-act="cloudSignIn"],[data-act="cloudSignUp"]')],
+    ['switch', q('[data-act="showSignUp"],[data-act="showSignIn"]')]].filter(([, e]) => e);
+  parts.sort((a, b) => a[1].compareDocumentPosition(b[1]) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  const acts = [...box.querySelectorAll('[data-act]')], last = acts[acts.length - 1];
+  const w = (e) => e ? Math.round(e.getBoundingClientRect().width) : 0, inp = q('[data-cloud="' + first + '"]');
+  const or = q('[data-oauth-or]');
+  return {order: parts.map(([k]) => k), lastAct: last && last.dataset.act,
+    full: ['oauthGoogle', 'oauthAzure'].filter((a) => q('[data-act="' + a + '"]')).every((a) => Math.abs(w(q('[data-act="' + a + '"]')) - w(inp)) <= 2),
+    logos: ['oauthGoogle', 'oauthAzure'].filter((a) => q('[data-act="' + a + '"]')).every((a) => q('[data-act="' + a + '"] svg')),
+    orText: or ? or.textContent.trim() : null};
+}"""
+def layout(pg, first): return pg.evaluate(LAYOUT_JS, first)
 
 with sync_playwright() as pw:
     br = pw.chromium.launch()
@@ -106,10 +123,14 @@ with sync_playwright() as pw:
     ok(signin_page(A) and not register_page(A) and A.locator('[data-cloud="firm"]').count() == 0, "the sign-in page is sign-in only (no firm-name box)")
     ok("New to FinCom?" in t and A.locator('[data-act="showSignUp"]').count() == 1, "it links to the register page: New to FinCom? Create an account")
     ok(oauth(A) == [] and ST["settings_calls"] >= 1, "no provider switched on: no Google or Microsoft button (settings asked %d)" % ST["settings_calls"])
+    L = layout(A, "email")
+    ok(L["order"] == ["form", "submit", "switch"] and L["lastAct"] == "showSignUp", "no provider: the form stands alone (no 'or' line), the switch link last (%s)" % L)
     A.click('[data-act="showSignUp"]'); A.wait_for_timeout(500)
     ok(register_page(A) and not signin_page(A) and A.evaluate("location.hash") == "#/register", "Create an account opens the register page at #/register (%s)" % A.evaluate("location.hash"))
     ok([A.locator('[data-cloud="%s"]' % k).count() for k in ("name", "firm", "email", "password")] == [1, 1, 1, 1], "the form: your name, firm name, email, password")
     ok(oauth(A) == [], "and no provider buttons there either")
+    L = layout(A, "name")
+    ok(L["order"] == ["form", "submit", "switch"] and L["lastAct"] == "showSignIn", "register, no provider: the form alone, the switch link last (%s)" % L)
     A.click('[data-act="showSignIn"]'); A.wait_for_timeout(500)
     ok(signin_page(A) and A.evaluate("location.hash") == "#/signin", "Already have an account? Sign in: back to the sign-in page (#/signin)")
     A.go_back(); A.wait_for_timeout(600)
@@ -148,8 +169,14 @@ with sync_playwright() as pw:
     ST["ext"] = {"google": True, "azure": True}
     D = page(context())
     ok(oauth(D) == ["google", "azure"] and D.locator('[data-act="oauthAzure"]').inner_text().strip() == "Continue with Microsoft", "both switched on: Google and Microsoft on the sign-in page")
+    WANT = ["google", "azure", "or", "form", "submit", "switch"]
+    L = layout(D, "email")
+    ok(L["order"] == WANT and L["lastAct"] == "showSignUp" and L["orText"] == "or", "sign-in: Google, Microsoft at the top, then 'or', then the form, the switch link last (%s)" % L)
+    ok(L["full"] and L["logos"], "the provider buttons are full width, with their logos (%s)" % L)
     D.click('[data-act="showSignUp"]'); D.wait_for_timeout(500)
     ok(oauth(D) == ["google", "azure"], "and on the register page")
+    L = layout(D, "name")
+    ok(L["order"] == WANT and L["lastAct"] == "showSignIn" and L["full"] and L["logos"], "register: the same order, full width with logos, the switch link last (%s)" % L)
 
     # 5. Google there and back: Supabase's authorize sends the person back with the tokens in the address
     asked = []
