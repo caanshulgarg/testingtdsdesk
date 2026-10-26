@@ -499,3 +499,12 @@ on the server under a lock per client) and the trigger sync_guard_autopost on cl
 owner switches it on or loosens it; anyone else's attempt keeps the old setting and is logged and written to sync_refused). Grants
 explicit. Deploy order: 101, then the app build (until 101 runs, a signed-in browser posts nothing by itself: the claim is refused and
 the setting says why). Tested on pg_stand: `tests/run_migration101.py` (two browsers claiming at once included).
+
+API grants nobody should hold (26-Oct-2026, OWASP review, branch next-sec-owasp; NOT run on staging): `server/security/migration-114-revoke-api-grants.sql`
+(number 114 as assigned by the coordinator: 107-113 are taken or assigned to other branches). Runs after 98 and 97 in either order, or
+on a database without those tables (each statement checks the table exists). Revokes and grants only, one transaction, `lock_timeout`
+10 s, safe twice: anon and authenticated lose every privilege on tally_period_pulls, tally_period_days and tally_ledger_progress (98
+meant "no grant to authenticated or anon"; Supabase's default privileges had given both full DML; the tables have no policy) and on
+platform_secrets (SELECT, with no SELECT policy); anon loses SELECT on platform_admins and authenticated keeps SELECT only (its
+policy admins_read). service_role's grants are written out again. Nobody is affected: every read and write of these goes through
+the service role or a security definer function. Deploy order: any time. Tested on pg_stand: `tests/run_migration114.py`.

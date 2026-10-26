@@ -56,3 +56,29 @@ export function replyStatus(kind: string, upstream: number): number {
   const st = Number(upstream) || 0;
   return st >= 400 && st < 600 && st !== 401 && st !== 403 ? st : 502;
 }
+
+// OWASP review of 26-Oct-2026 (A04, business logic): what a call is charged. The caller names qty (1-20), but Google bills
+// each image once per feature asked, and up to 16 images go in one call: 16 images with qty 1 cost the firm one read and
+// the platform sixteen. Vision is charged at least one unit per image and feature sent; asking to pay more is kept.
+// Claude: qty as sent (the app sends 1 per bill; a charge by tokens used is the owner's pricing decision).
+export function chargeQty(code: string, qty: number, payload: any): number {
+  const q = Math.max(1, Math.floor(Number(qty) || 1));
+  if (code !== "vision") return q;
+  const rq = Array.isArray(payload && payload.requests) ? payload.requests : [];
+  let units = 0;
+  for (const r of rq) units += Math.max(1, Array.isArray(r && r.features) ? r.features.length : 0);
+  return Math.max(q, units);
+}
+
+// Vision requests are passed on only with the picture inside (image.content, as the app sends it): an image Google would
+// fetch itself (image.source.imageUri / gcsImageUri) makes the platform's key fetch any address the caller names, or
+// read Cloud Storage the key can see. "" when every request is fine, else the reason.
+export function visionRefusal(requests: any[]): string {
+  for (const r of requests || []) {
+    if (!r || typeof r !== "object" || Array.isArray(r)) return "Each request must be an object.";
+    const im = r.image;
+    if (!im || typeof im !== "object" || typeof im.content !== "string" || !im.content) return "Only images sent inside the request are read.";
+    if (im.source !== undefined) return "Only images sent inside the request are read.";
+  }
+  return "";
+}

@@ -22,3 +22,14 @@ bridge-go/bridge.exe
 
 # the Go tests' whole output, kept by CI for upload (.github/workflows/ci.yml): never committed
 bridge-go/go-test.log
+
+# secrets are never committed (OWASP review 26-Oct-2026, the owner's ".env should not leak"): environment files, keys and
+# certificates, Supabase/Wrangler local secrets. An .env.example with names and no values may be committed.
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+*.p12
+*.pfx

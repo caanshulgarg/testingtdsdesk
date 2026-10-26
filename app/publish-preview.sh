@@ -19,6 +19,10 @@ git fetch -q origin main
 git worktree add -q "$tmp" origin/main
 find "$tmp/$folder" -mindepth 1 ! -name README.txt -delete 2>/dev/null || mkdir -p "$tmp/$folder"
 cp -r dist-test/. "$tmp/$folder/"
+# OWASP review 26-Oct-2026: the source maps (the whole program's source) stay in app/dist-test and never go to main.
+# Cloudflare's build (cloudflare/build-site.sh) already leaves them off the site, so Sentry could not fetch them from
+# there either; uploading them to Sentry (sentry-cli sourcemaps upload) is the way to keep readable stack traces.
+find "$tmp/$folder" -name '*.map' -type f -delete
 cd "$tmp"
 git add -A "$folder"
 if git diff --cached --quiet; then echo "Preview already up to date."; else

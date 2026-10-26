@@ -515,3 +515,6 @@ run_records_upload_server.py          120
 run_timings_unit.mjs                  60
 run_migration108.py                   180
 run_timings_ui.py                     240  TDSDESK_SITE=../app/dist-test
+# OWASP review 26-Oct-2026 (branch next-sec-owasp): gateway charge per image, superadmin needs aal2, .gitignore, no maps on main; migration 114
+run_owasp_checks.js                   120
+run_migration114.py                   180

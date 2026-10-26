@@ -63,8 +63,12 @@ Deno.serve(async (req) => {
   if (mfaOk !== true) return reply(403, { ok: false, reason: "mfa", error: "Finish the two-step sign-in first." });
 
   const { data: me } = await admin.from("members").select("firm_id, role, active").eq("user_id", user.id).maybeSingle();
-  const { data: isAdminRow } = await admin.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  const superadmin = !!isAdminRow;
+  // OWASP review 26-Oct-2026 (A01/A07): the administrator's powers (any firm's people, passwords, two-step entries; new
+  // firms with credit) only after the two-step sign-in, as the database's own rule: is_superadmin() is a platform_admins
+  // row AND an aal2 token. mfa_ok() above is true for anyone with no second factor, so a platform_admins row alone was
+  // enough here, with only the password.
+  const { data: isSuper } = await asUser.rpc("is_superadmin");
+  const superadmin = isSuper === true;
   const owner = !!me && me.active && me.role === "owner";
   if (!superadmin && !owner) return reply(403, { ok: false, error: "Only a firm owner or the administrator may do this." });
 

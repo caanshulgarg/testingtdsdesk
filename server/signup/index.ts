@@ -21,10 +21,10 @@ async function platformAdmin(jwt: string): Promise<AdminCaller | null> {
   const { data: who } = await asUser.auth.getUser();
   const user = who?.user;
   if (!user) return null;
-  const { data: row } = await admin.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
-  if (!row) return null;
-  const { data: mfaOk } = await asUser.rpc("mfa_ok");
-  return mfaOk === true ? { userId: user.id } : null;
+  // OWASP review 26-Oct-2026: is_superadmin() is a platform_admins row AND an aal2 token (the database's rule); mfa_ok()
+  // is true for anyone with no second factor, so it let the administrator's path run on the password alone
+  const { data: isSuper } = await asUser.rpc("is_superadmin");
+  return isSuper === true ? { userId: user.id } : null;
 }
 
 async function invitePending(email: string): Promise<boolean> {

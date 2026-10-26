@@ -5,7 +5,7 @@
 // `kind` (classify.ts), answered as {ok:false, kind, error, status, file?}, refunded, and logged as one line.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
-import { classify, declined, errorText, replyStatus } from "./classify.ts";
+import { chargeQty, classify, declined, errorText, replyStatus, visionRefusal } from "./classify.ts";
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -84,12 +84,15 @@ Deno.serve(async (req) => {
   } else {
     const rq = (body.payload || {}).requests;
     if (!Array.isArray(rq) || !rq.length || rq.length > 16) return fail(400, "other", "Bad request");
+    const no = visionRefusal(rq);
+    if (no) return fail(400, "other", no);
     payload = { requests: rq };
   }
 
-  // plan and balance decide before anything is sent to the provider
+  // plan and balance decide before anything is sent to the provider. OWASP review 26-Oct-2026: Vision is charged per
+  // image and feature sent (chargeQty), never less than that whatever qty the caller names
   const { data: charge, error: chargeErr } = await admin.rpc("charge_for", {
-    p_firm: member.firm_id, p_user: user.id, p_code: code, p_qty: qty, p_ref: ref, p_note: String(body.note || "").slice(0, 200),
+    p_firm: member.firm_id, p_user: user.id, p_code: code, p_qty: chargeQty(code, qty, payload), p_ref: ref, p_note: String(body.note || "").slice(0, 200),
   });
   if (chargeErr) return fail(500, "other", "The charge could not be made.");
   if (!charge?.ok) {
