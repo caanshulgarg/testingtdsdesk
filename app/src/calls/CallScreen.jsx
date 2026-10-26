@@ -209,7 +209,7 @@ function Call({ opts, onClose }) {
       try {
         // the effects cannot run here after all (frames black, the worker stopped): the camera untouched, said so
         const onFail = () => { const f = R.fxp; R.fxp = null; sendVideo(); force(); setTimeout(() => { try { f && f.stop(); } catch (e) { /* */ } }, 200); };
-        if (!R.fxp) R.fxp = await makeEffects(R.raw, next, (n) => setFxNote(n), { onFail });
+        if (!R.fxp) R.fxp = await makeEffects(R.raw, next, (n) => setFxNote(n), { onFail, onSeg: force });
         else await R.fxp.set(next);
         if (R.fxp && R.fxp.fellBack) { R.fxp.stop(); R.fxp = null; }
       } catch (e) { setFxNote(e.message); R.fxp = null; }

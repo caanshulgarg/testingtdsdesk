@@ -58,6 +58,15 @@ CHALLANS = """() => {
 CHALLANS_SNAP = CHALLANS.replace("if (!by[k]) by[k] = r;", "if (!by[k] || TDS.ymd(r.date) >= TDS.ymd(by[k].date)) by[k] = r;")
 assert CHALLANS_SNAP != CHALLANS
 
+# next-tds-validate-short (26-Oct-2026, staging-next 3ffef91d3): an empty required deductor detail now blocks the file
+# (TDSF25.deductorRequired), and the fixture company had only its TAN, so no TDS file was made. The snapshot gives the
+# deductor's details (the PAN that of its GSTIN, as tdsval_case.FILL gives the rest); tdsgst-before.json was taken again
+# with these on the build before the change (30e025c19) and compared with the build after
+DEDUCTOR = """() => { const co = CO(); co.pan = co.pan || 'AAGCL4827M';
+  co.tds26q = Object.assign({}, co.tds26q || {}, {flat: '12 First Floor', town: 'New Delhi', state: '07', pin: '110005', email: 'a@b.in',
+    phone: '9811111111', person: 'Ravi Kumar', personDesignation: 'Partner', personPan: 'ABCPK1234K', personFlat: '12 First Floor', personTown: 'New Delhi'});
+  render(); }"""
+
 # the day tests/fixtures/tdsgst-before.json was made (14-Oct-2026). The pages show figures worked out to today (the 234E
 # late fee is 200 a day to the date), so the browser's clock is fixed at that day; a real clock made the comparison fail a
 # day later (15-Oct-2026: 24Q Q1 2026-27, 15,000.00 became 15,200.00)
@@ -81,7 +90,9 @@ def snapshot(site, port=8290, shots=None):
         pg.clock.set_fixed_time(SNAPSHOT_DAY)
         pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-        pg.evaluate(CHALLANS_SNAP); pg.wait_for_timeout(300)
+        pg.evaluate(DEDUCTOR); pg.evaluate(CHALLANS_SNAP); pg.wait_for_timeout(300)
+        left = pg.evaluate("typeof TDSF25 === 'object' && TDSF25.deductorRequired ? TDSF25.deductorRequired(TDS26Q.firmDetails()).map(x => x.k) : []")
+        if left: errors.append("the deductor's required details not all given: %s" % left)
         # the files the buttons make: saveFile kept; the ledgers counted as confirmed (the fixture's are not, which sends a
         # download to the ledgers page instead)
         pg.evaluate("""() => { window.__files = []; window.ledgersReady = () => true;

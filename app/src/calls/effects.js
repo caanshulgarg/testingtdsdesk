@@ -536,7 +536,7 @@ async function makeFrameEffects(camera, choice, onNote, o) {
     const m = e.data || {};
     if (m.type === "first") first(true);
     if (m.type === "stats") stats = m;
-    if (m.type === "mask") haveMask = true;
+    if (m.type === "mask" && !haveMask) { haveMask = true; seen(o); }
     if (m.type === "slow" && !smaller) {
       // a smaller picture asked of the camera (two thirds), so every frame still gets its effects
       smaller = true;
@@ -602,6 +602,9 @@ async function makeFrameEffects(camera, choice, onNote, o) {
 // const fx = await makeEffects(cameraStream, choice, onNote, {onFail}); fx.track (what to send); await fx.set(choice);
 // fx.stop(); fx.stats(); fx.segmenting (the background is being drawn); fx.fellBack (the camera must be sent instead).
 // Chrome and Edge: the frame worker; Safari (and if the frame worker cannot start): the canvas (WebGL)
+// opts.onSeg(): the first mask of a background has come (fx.segmenting is now true; it comes in later, from the worker, so
+// the screen showing it is told: the lobby has nothing else that draws it again)
+const seen = (o) => { try { o.onSeg && o.onSeg(); } catch (e) { /* */ } };
 export async function makeEffects(camera, choice, onNote, opts) {
   const o = opts || {};
   if (o.pipe !== "canvas" && framePipeOk()) {
@@ -683,7 +686,7 @@ async function makeCanvasEffects(camera, choice, onNote, opts) {
     else for (let i = 0; i < n; i++) { const a = maskBuf[i], b = m.data[i], d = b > a ? b - a : a - b; maskBuf[i] = d > 90 ? b : a * 0.45 + b * 0.55; }
     K.bind(1, T.mask); gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, maskW, maskH, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, maskBuf);
-    haveMask = true;
+    if (!haveMask) { haveMask = true; seen(o); }
   }
   async function segment(now) {
     if (busy || !segmenter || now - lastSeg < segEvery()) return;

@@ -30,6 +30,11 @@ year on (2026-27, the forms of the Income-tax Act, 2025):
     yet" (e.g. 192 · June 2025 · ₹10,414.00 due) where a later challan of the same year can pay it: rule f suggests it now
     (a challan of the same financial year, on or after the deduction, then an advance one, then the next year's): those
     amounts taken out.
+    next-tds-validate-short (26-Oct-2026, 3ffef91d3): an empty required deductor detail blocks the file, and the fixture
+    company had only its TAN, so no 26Q / Form 140 file was made. The snapshot gives the deductor's details
+    (tdsgst_snapshot.DEDUCTOR); taken again on the build before (30e025c19): only the eight 26Q / Form 140 files changed,
+    and in each only the batch header (BH), which carries those details (2025-26 +87 bytes, 2026-27 +115); their hashes
+    replaced, no other file or figure changed.
 Runs on the React build: app/dist-test (cd app && npm run legacy && npm run build:test), or TDSDESK_SITE."""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
