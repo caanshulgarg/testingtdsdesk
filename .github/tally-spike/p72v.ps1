@@ -43,6 +43,11 @@ $P10 = 'p10 a batch of 3 with one missing ledger: Tally''s exact reply'
 $P12 = 'p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say'
 $P11 = 'p11 Tally''s window and requests during the run (window probe, the bridge''s requests at the proxy)'
 $probeFile = Join-Path $p72 'probes.txt'
+function SectFail([string]$name, $e) {
+  $m = "proof72 section '$name' stopped: $($e.Exception.Message) (line $($e.InvocationInfo.ScriptLineNumber): $(("$($e.InvocationInfo.Line)").Trim()))"
+  Write-Host "::warning::$m"; Add-Content -Path $resultsFile -Value "INFO $m" -Encoding UTF8
+  $script:dbBusy = $false
+}
 function ProbeNote([string]$name, [string]$why, [string]$x) { Add-Content -Path $probeFile -Encoding UTF8 -Value "== PROBE $name ($why)`r`n$x`r`n" }
 
 # ---- f: the window probe, all along (a thread: WM_NULL with a 250 ms limit every 100 ms; a hold of 1 s or more kept)
@@ -106,6 +111,7 @@ function TWSave([string]$x, [string]$label) { $r = TW $x $label; PSave "$label.x
 function NoInfo([string]$b) { return [regex]::Replace($b, '(?s)<CMPINFO>.*?</CMPINFO>', '') }
 function CoList {
   $r = TStop $script:dbListCo 2000 20000
+  if ($r.hung) { $null = DbRestart 'colist-hung'; $r = TStop $script:dbListCo 2000 20000; if ($r.hung) { $null = DbRestart 'colist-hung2' } }
   $l = @(); foreach ($m in [regex]::Matches($r.body, '(?s)<COMPANY[ >].*?</COMPANY>')) {
     $l += [pscustomobject]@{ name = [regex]::Match($m.Value, 'NAME="([^"]*)"').Groups[1].Value; nm = [regex]::Match($m.Value, '<NAME[^>]*>([^<]*)<').Groups[1].Value; guid = [regex]::Match($m.Value, '<GUID[^>]*>([^<]*)<').Groups[1].Value } }
   return , $l
@@ -135,6 +141,8 @@ function ObjRead([string]$mid, [string]$label) {
 function Ok2([object]$r) { return [bool]($r.ok -and $r.inTime) }
 
 # ===================================================================== a: the published bridge on this release
+$script:sect = 'a'
+try {
 Say '---- proof72 a: the published bridge 2.4.7, unchanged, on this release'
 FrzH 'a-bridge'
 $stA = Bridge GET '/status?fresh=1'; $msS = $script:lastMs; PJson 'a-status.json' $stA
@@ -167,23 +175,29 @@ $sfx = [guid]::NewGuid().ToString('N').Substring(0, 6).ToUpper()
 $tag1 = "TDSDesk:P72V1$sfx"; $tag2 = "TDSDesk:P72V2$sfx"; $rid2 = "FinCom-P72V2-$sfx"
 function PayXml([string]$date, [string]$narr, [string]$amt, [string]$head = '<VOUCHER VCHTYPE="Payment" ACTION="Create">') {
   $head + '<DATE>' + $date + '</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>' + (LE $narr) + '</NARRATION>' +
-  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Party</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST>' +
+  '<ALLLEDGERENTRIES.LIST><LEDGERNAME>P72 Office Expenses</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST>' +
   '<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
 }
 $v1x = PayXml '20260901' "$tag1 | proof72 payment V1" '500.00'
 $v2x = PayXml '20260902' "$tag2 | proof72 payment V2 with REMOTEID" '600.00' ('<VOUCHER REMOTEID="' + $rid2 + '" VCHTYPE="Payment" ACTION="Create">')
 FrzH 'a-bridge-posting'
+# the expense ledger the Payments use (no bill-wise screen on an edit), as a master through the bridge
+$im = Bridge POST '/import' @{ company = $co1; masters = @(@{ id = "P72L$sfx"; xml = '<LEDGER NAME="P72 Office Expenses" ACTION="Create"><NAME.LIST><NAME>P72 Office Expenses</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT></LEDGER>' }) } 120
+PJson 'a-import-ledger.json' $im
 $i1 = Bridge POST '/import' @{ company = $co1; vouchers = @(@{ id = "P72V1$sfx"; xml = $v1x }) } 120; $ms1 = $script:lastMs
 PJson 'a-import-v1.json' $i1
 $r1 = @($i1.results)[0]
 $v1mid = "$($r1.lastVchId)"
-PRes $P3 $(if ($r1.ok -eq $true -and [int]$r1.created -eq 1 -and $v1mid -match '^\d+$') { 'PASS' } else { 'FAIL' }) ("/import of one Payment (1-9-2026, Spike Party 500 / Cash, narration '$tag1 | ...') {0} ms: ok {1}, created {2}, altered {3}, errors {4}, exceptions {5}, LASTVCHID {6}, message '{7}', byReply {8}" -f $ms1, $r1.ok, $r1.created, $r1.altered, $r1.errors, $r1.exceptions, $r1.lastVchId, $r1.message, $r1.byReply)
+PRes $P3 $(if ($r1.ok -eq $true -and [int]$r1.created -eq 1 -and $v1mid -match '^\d+$') { 'PASS' } else { 'FAIL' }) ("/import of one Payment (1-9-2026, P72 Office Expenses 500 / Cash, narration '$tag1 | ...') {0} ms: ok {1}, created {2}, altered {3}, errors {4}, exceptions {5}, LASTVCHID {6}, message '{7}', byReply {8}" -f $ms1, $r1.ok, $r1.created, $r1.altered, $r1.errors, $r1.exceptions, $r1.lastVchId, $r1.message, $r1.byReply)
 $i2 = Bridge POST '/import' @{ company = $co1; vouchers = @(@{ id = "P72V2$sfx"; xml = $v2x }) } 120; $ms2 = $script:lastMs
 PJson 'a-import-v2.json' $i2
 $r2 = @($i2.results)[0]; $v2mid = "$($r2.lastVchId)"
 MLine ("d V2 (REMOTEID=""$rid2"") posted by the bridge's /import {0} ms: ok {1}, created {2}, altered {3}, LASTVCHID {4}, message '{5}'" -f $ms2, $r2.ok, $r2.created, $r2.altered, $r2.lastVchId, $r2.message)
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== e: a batch of 3, one names a missing ledger
+$script:sect = 'e'
+try {
 Say '---- proof72 e: a batch of 3 with one missing ledger (the bridge)'
 function JrnXml([string]$date, [string]$narr, [string]$cr, [string]$amt) {
   '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>' + (LE $narr) + '</NARRATION>' +
@@ -201,7 +215,10 @@ $bLog = @(Get-Content (Join-Path $out 'bridge-log-p72-e-batch.txt') -ErrorAction
 $bItems = (@($ib.results) | ForEach-Object { "{0}: ok {1}, accepted {2}, needsReview {3}, created {4}, errors {5}, lastVchId {6}, message '{7}', lineError '{8}'" -f $_.id, $_.ok, $_.accepted, $_.needsReview, $_.created, $_.errors, $_.lastVchId, $_.message, ((@($_.lineError)) -join ' | ') }) -join '; '
 $batchBridge = "bridge /import of 3 Journals in one request {0} ms; per entry: {1}; bridge log: {2}" -f $msB, $bItems, $bLog
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== d: the FinCom ID through an edit on the screen
+$script:sect = 'd'
+try {
 Say '---- proof72 d: V1 and V2 altered on the screen'
 function DayBookOn([string]$d, [string]$n) { $null = TdsGateway "db-$n"; KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 4; KeysTo '{F2}' 3; KeysTo "$d{ENTER}" 4 "p72-$n-daybook" }
 # amount 777 / 888 and " edited on screen" added at the end of the narration (as c4b: three ENTERs reach the amount)
@@ -215,6 +232,7 @@ function AlterAmtNarr([string]$d, [string]$amt, [string]$n) {
   KeysTo '^a' 0; Start-Sleep 5; Shot "p72-$n-saved"
   $t2 = TdsScreen "p72-$n-after"
   if ($t2 -match 'Yes or No|Accept') { KeysTo 'y' 3 "p72-$n-yes" }
+  $null = TdsGateway "after-$n"
   return $m
 }
 function RetypeNarr([string]$d, [string]$text, [string]$n) {
@@ -225,6 +243,7 @@ function RetypeNarr([string]$d, [string]$text, [string]$n) {
   KeysTo '^a' 0; Start-Sleep 5; Shot "p72-$n-saved"
   $t2 = TdsScreen "p72-$n-after"
   if ($t2 -match 'Yes or No|Accept') { KeysTo 'y' 3 "p72-$n-yes" }
+  $null = TdsGateway "after-$n"
   return $m
 }
 FrzH 'd-alter-keys'
@@ -239,7 +258,10 @@ foreach ($p in @(@('d-line-v1-alter', $lA1), @('d-line-v2-alter', $lA2), @('d-li
 function LineNarr($l) { $l = @($l)[-1]; if (-not $l) { return '(no line)' }; return [Net.WebUtility]::HtmlDecode([regex]::Match("$($l.xml)", '(?s)<NARRATION[^>]*>(.*?)</NARRATION>').Groups[1].Value) }
 $addonTxt = "the add-on's lines: V1 altered '{0}'; V2 altered '{1}'; V2 retyped '{2}'" -f (LineNarr $lA1), (LineNarr $lA2), (LineNarr $lA3)
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== c: the company GUID through a rename
+$script:sect = 'c'
+try {
 Say '---- proof72 c: rename (the bridge still running: its answer kept)'
 FrzH 'c-rename'
 $g0 = CoList; PJson 'c-companies-before.json' $g0
@@ -249,7 +271,7 @@ function RenXml([string]$from, [string]$to) { '<ENVELOPE><HEADER><TALLYREQUEST>I
 ProbeNote 'rename-company-xml' 'test data: the harness renames its own company' (RenXml $coOrig $coNew)
 # the company renamed: by XML first, else by keys (Alt+K, Alter, the company, the name typed over, Ctrl+A); its list after
 function RenameTo([string]$from, [string]$to, [string]$tag) {
-  $rr = TStop (RenXml $from $to) 30000 30000; PSave "c-rename-$tag-xml-reply.xml" $rr.body
+  $rr = TStop (RenXml $from $to) 30000 30000; if ($rr.hung) { $null = DbRestart 'rename-hung' }; PSave "c-rename-$tag-xml-reply.xml" $rr.body
   Start-Sleep 3; $g = CoList; $script:renHow = 'XML import (COMPANY ACTION="Alter" with a new NAME)'
   if (-not @($g | Where-Object { $_.name -eq $to -or $_.nm -eq $to }).Count) {
     $script:renHow = 'keys (Alt+K, Alter, the name typed over, Ctrl+A)'
@@ -278,7 +300,10 @@ if ($renamed) {
   $bridgeRen = "the bridge after the rename: /companies [{0}]; /import to '{1}': ok {2}, created {3}, message '{4}'{5}" -f ((@($cb.companies | ForEach-Object { $_.name })) -join ', '), $coNew, $jr.ok, $jr.created, $jr.message, $(if (-not $ji) { ' (no answer: see the bridge log)' } else { '' })
 }
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== the bridge stopped: from here only the harness asks
+$script:sect = 'the bridge stopped'
+try {
 Say '---- proof72: the bridge stopped (the harness''s own measurements follow, one request at a time)'
 Snap 'p72-before-stop'
 Copy-Item $blog (Join-Path $p72 'bridge-full.log') -ErrorAction SilentlyContinue
@@ -325,7 +350,10 @@ if ($rawOne.Length -gt 1500) { $rawOne = $rawOne.Substring(0, 1500) + '...' }
 $e2 = [regex]::Match($rbx.body, '(?s)<CREATED>(\d+)</CREATED>.*?<ERRORS>(\d+)</ERRORS>')
 PRes $P10 $(if ($ib -and $rbx.ok) { 'PASS' } else { 'FAIL' }) ("{0}. Directly ({1} ms): Tally's raw reply: {2}" -f $batchBridge, $rbx.ms, $rawOne)
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== d': lookups on the small company
+$script:sect = 'd'''
+try {
 Say '---- proof72 lookups (small company)'
 $tagReq = { param([string]$d) WithDay $script:RQ['tagcheck'] $d }
 $byMasterReq = { param([string]$d, [string]$mid) (WithDay $script:RQ['bymaster'] $d).Replace('$MasterID = 99999', "`$MasterID = $mid") }
@@ -377,7 +405,10 @@ $null = TWSave (WithDay $script:RQ['company-check'] '20991231') 'raw-company-che
 $null = TWSave (WithRange $script:RQ['ledlist-tail'] 0 0) 'raw-ledger-list'
 if ($recMid) { $null = TWSave (ObjReq $recMid) 'raw-receipt-object' }
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== b: the port, tally.ini, two Tallys
+$script:sect = 'b'
+try {
 Say '---- proof72 b: TallyPrime''s own port screen'
 $num = $folder.Name
 function IniStd([string]$cs = 'Both', [int]$port = 9000, [string]$odbc = 'Yes', [string]$data = $data1, [string]$cfg = $dir) {
@@ -486,7 +517,10 @@ PRes $P7 $(if ($cRen -and $gA) { 'PASS' } else { 'HARNESS' }) ("{0}; {1}; {2}" -
 Stop-Process -Id $sB.p.Id -Force -ErrorAction SilentlyContinue
 Stop-Process -Id $sA.p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep 3
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== q: Tally on port 4125 (the owner's report, 26-Oct)
+$script:sect = 'q'
+try {
 Say '---- proof72 q: Tally on port 4125, the published bridge 2.4.7 with TallyPorts auto / 9000 / 4125'
 IniStd 'Both' 4125 'Yes'; $iniQ = IniText; PSave 'q-tally-ini.txt' $iniQ
 $sQ = StartTallyOn 4125 'q-4125'; $script:tpid = $sQ.p.Id
@@ -521,7 +555,10 @@ $qConn = @($qRows | Where-Object { $_ -match 'port 4125' })
 PRes $P12 $(if (-not $sQ.up) { 'HARNESS' } elseif (@($qRows | Select-Object -First 1)[0] -match '/companies \[[^\]]*port 4125') { 'PASS' } else { 'FAIL' }) ("Tally on 4125 (tally.ini [{0}]): 4125 answers '{1}' (listener {2}); {3}" -f (IniKeys $iniQ), $qAns, $qOwner, ($qRows -join ' || '))
 foreach ($t in @(Get-Process tally -ErrorAction SilentlyContinue)) { Stop-Process -Id $t.Id -Force -ErrorAction SilentlyContinue }; Start-Sleep 3
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== d' on ZZ BIG TEST (~30,000 entries)
+$script:sect = 'd'' on ZZ BIG TEST (~30,000 entries)'
+try {
 Say '---- proof72: ZZ BIG TEST (~30,000 entries) and the lookups again'
 IniStd 'Both' 9000 'Yes'
 $up = DbRestart 'big'
@@ -537,7 +574,10 @@ $slow = @($allowedRows | Where-Object { -not $_.inTime })
 PRes $P9 $(if ($lkBig.Count -and $nBig -ge 25000 -and $slow.Count -eq 0 -and @($allowedRows | Where-Object { $_.form -like 'FinComVoucherObject*' -and -not $_.found }).Count -eq 0) { 'PASS' } elseif (-not $lkBig.Count -or $nBig -lt 25000) { 'HARNESS' } else { 'FAIL' }) `
   ("small company ({0} entries): {1} || ZZ BIG TEST ({2} entries): {3}" -f $vchSmall, (LookSum $lkSmall), $nBig, (LookSum $lkBig))
 
+} catch { SectFail $script:sect $_ }
 # ===================================================================== f: the window and the bridge's requests
+$script:sect = 'f'
+try {
 $script:frz.stop = $true; Start-Sleep 1
 $spans = @($script:frz.spans)
 $reqOver = @($script:reqRows | Where-Object { $_.overrun -or $_.hung })
@@ -548,3 +588,4 @@ PRes $P11 $(if (-not $script:frzOk) { 'HARNESS' } elseif ($spans.Count -eq 0 -an
     $(if ($reqOver.Count) { ($reqOver | ForEach-Object { "$($_.label) $($_.ms) ms" }) -join ', ' } else { 'none' }))
 Copy-Item (Join-Path $dir 'tally.ini') (Join-Path $p72 'tally-ini-end.txt') -ErrorAction SilentlyContinue
 if ($script:tdsLog) { $script:tdsLog | Set-Content (Join-Path $p72 'screens-ocr.txt') -Encoding UTF8 }
+} catch { SectFail $script:sect $_ }
