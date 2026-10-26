@@ -25,12 +25,11 @@ import { useState, useEffect } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
 
-const SEARCH_AT = 10, POLL_MS = 10000, WAIT_MS = 10 * 60000, PEND_MS = 10 * 60000;
+const SEARCH_AT = 10, POLL_MS = 10000, STUCK_MS = 3 * 60000, PEND_MS = 10 * 60000;
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const live = () => Object.values(S.companies || {}).filter((c) => c && !c.deleted);
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
-const mmss = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 const yearKey = (n) => (typeof tallyYearKey === "function" ? tallyYearKey(n) : coKey(n));
@@ -288,7 +287,7 @@ async function ledgerNow(cid) {
 }
 const sameLp = (a, b) => !!a && !!b && a.round === b.round && String(a.at) === String(b.at) && Number(a.read) === Number(b.read) && !!a.done === !!b.done;
 export async function firstSync(cid, company) {
-  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "" };
+  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "", moveAt: 0, samples: [] };
   render();
   // what is there before this read (so an earlier read never counts as this one's)
   try { await TCloud.status(cid, true); } catch (e) { /* the time check below then */ }
@@ -320,7 +319,12 @@ export async function syncPoll(cid) {
     const since = x.at - 60000, la = String((ledBook(cid) || {}).ledgersAt || "");
     // this read's progress: not the one there before the click (or, with no snapshot, one from since the click)
     const fresh = lp && (x.snap ? !sameLp(lp, x.ledger0) : Date.parse(lp.at) >= since);
-    if (fresh) x.prog = lp;
+    if (fresh) {
+      // 26-Oct-2026: each new count the bridge reports is a sample (the time left comes from the rate between them)
+      const rd = Number(lp.read) || 0, last = x.samples[x.samples.length - 1];
+      if (!last || rd !== last.read) { x.samples.push({ t: Date.now(), read: rd }); x.moveAt = Date.now(); }
+      x.prog = lp;
+    }
     const laNew = !!la && (x.snap ? la !== x.la0 : Date.parse(la) >= since);
     if (!x.ledAt && ((x.prog && x.prog.done) || laNew)) {
       x.ledAt = (x.prog && x.prog.done && Date.parse(x.prog.at)) || Date.parse(la) || Date.now();
@@ -329,8 +333,10 @@ export async function syncPoll(cid) {
     if (n != null && n > 0 && x.ledAt && !(x.led > 0)) x.led = n;
     if (x.ledAt) x.end = Date.now();
     else {
-      x.why = Date.now() - x.at > 30000 && !(x.prog && Number(x.prog.read) > 0) ? stallWhy(cid, x.company) : "";
-      if (Date.now() - x.at > WAIT_MS) x.late = true;
+      // the beat's plain reason after 30 seconds without a count (the read goes on by itself once it is fixed); no progress
+      // for 3 minutes: stuck, with Try again (never a bar that runs for ever)
+      x.why = Date.now() - x.at > 30000 && Date.now() - (x.moveAt || x.at) > 30000 ? stallWhy(cid, x.company) : "";
+      if (Date.now() - (x.moveAt || x.at) > STUCK_MS) x.late = true;
     }
   } finally { polling[cid] = false; render(); }
 }
@@ -345,46 +351,106 @@ export function stallWhy(cid, company) {
   if (b.readStopped) return "Reading is stopped on " + pc + (b.readStopped.reason ? " (" + b.readStopped.reason + ")" : "") + ": an owner can resume it on the Tally page.";
   if (b.paused) return "Reading is paused on " + pc + ": right-click the FinCom icon near the clock → Resume background reading.";
   if (!(b.tally === true || b.tallyState === "open" || b.tallyState === "busy")) return "Tally is not open on " + pc + ": open TallyPrime there with " + name + ".";
+  if (b.tallyState === "busy") return "Tally is busy on " + pc + ": FinCom carries on when it is free.";
   if (!openOn(d).some((o) => coKey(o) === coKey(name))) return name + " is not open in Tally on " + pc + ": open it in TallyPrime; the ledgers come within a minute.";
   return "";
 }
-const hmIST = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : ""; return t ? (/IST$/.test(t) ? t : t + " IST") : ""; };
 
-// ---------- the progress and the confirmation (a row of the list, and the client's Tally card)
+// ---------- the ledgers' ONE bar (26-Oct-2026; the owner: "ledgers stay automatic through the bridge, but the progress
+// must be a clear, smart bar"), on the company's row (Companies in Tally), Books › From Tally and the Ledgers page:
+//   reading   "Reading ledgers from Tally: 312 of 1,240 (25%) · about 1 min left" (a filled bar; the time left from the rate
+//             between the bridge's counts, once two are seen); the total not known yet: "Reading ledgers from Tally… 312
+//             so far", the bar moving;
+//   done      "1,240 ledgers from Tally ✓ · 10:42", green, one line;
+//   stuck     no count for 3 minutes, or the computer's beat says why (Tally closed, the company not open, the computer
+//             offline, Tally busy, reading paused or stopped): that reason in one line with Try again (the ledgers-only
+//             wake, firstSync); no bar;
+//   later     "3 new or changed ledgers and 1 rename from Tally today" (tally_ledger_rounds of today that sent only the
+//             changed ledgers, tally_ledgers.renamed_at), only when there are some.
+// The masters XML stays as a fallback line under a bar that is reading or stuck.
 function Masters({ cid }) {
   const [busy, setBusy] = useState(false), [res, setRes] = useState(null);
   const up = async (ev) => { const f = (ev.target.files || [])[0]; ev.target.value = ""; if (!f) return;
     setBusy(true); const r = await Ledgers.fromMasters(cid, f); setBusy(false); setRes(r);
-    if (r.ok) { LED_N.set(cid, { n: r.n, at: Date.now(), book: (ledBook(cid) || {}).book || "" }); const x = SYNC()[cid]; if (x) { x.led = r.n; if (x.late) x.at = Date.now(); x.late = false; x.err = ""; x.ledAt = x.end = Date.now(); } render(); } };
-  return <><label className="btn small" data-tco-masters="" title="TallyPrime: Gateway → Display More Reports → List of Accounts → Alt+E → XML (Masters)">{busy ? "Reading the file…" : "Or upload the masters file"}
+    if (r.ok) { LED_N.set(cid, { n: r.n, at: Date.now(), book: (ledBook(cid) || {}).book || "" }); const x = SYNC()[cid]; if (x) { x.led = r.n; if (x.late) x.at = Date.now(); x.late = false; x.err = ""; x.why = ""; x.ledAt = x.end = Date.now(); } render(); } };
+  return <span className="note tco-masters" data-tco-masters-line=""><label className="linkbtn" data-tco-masters="" title="TallyPrime: Gateway → Display More Reports → List of Accounts → Alt+E → XML (Masters)">{busy ? "Reading the file…" : "Or upload the masters XML (List of Accounts → Alt+E → XML)"}
     <input type="file" accept=".xml" hidden onChange={up} /></label>
-    {res && !res.ok && <span className="bk-warn" data-tco-masters-err="">{res.err}</span>}</>;
+    {res && !res.ok && <span className="bk-warn" data-tco-masters-err="">{" " + res.err}</span>}</span>;
 }
-export function SyncLine({ cid, compact = false }) {
+// "about 2 min left" from the counts seen so far (at least two), "" until then
+function timeLeft(x, of) {
+  const sm = (x && x.samples) || [];
+  if (sm.length < 2 || !(of > 0)) return "";
+  const a = sm[0], z = sm[sm.length - 1], rate = (z.read - a.read) / Math.max(1, z.t - a.t);
+  if (!(rate > 0)) return "";
+  const ms = (of - z.read) / rate;
+  return ms < 60000 ? "less than a minute left" : "about " + Math.ceil(ms / 60000) + " min left";
+}
+// today's later changes of a client's ledgers (read at most every 5 minutes): {changed, renamed}
+const IST_DAY = () => { const t = new Date(Date.now() + 5.5 * 3600e3); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - 5.5 * 3600e3).toISOString(); };
+const CHG = {};
+function ledgerChanges(cid) {
+  const bk = ledBook(cid), k = cid + "|" + ((bk && bk.book) || ""), c = CHG[k];
+  if (!bk || !bk.book || typeof Cloud !== "object" || !Cloud.api) return null;
+  if (!c || (!c.busy && Date.now() - c.at > 5 * 60000)) {
+    const day = encodeURIComponent(IST_DAY()), b = encodeURIComponent(bk.book), was = c ? c.v : null;
+    CHG[k] = { at: Date.now(), busy: true, v: was };
+    Promise.all([
+      Cloud.api("tally_ledger_rounds?select=rows_received,rows_read,complete&book_id=eq." + b + "&started_at=gte." + day + "&complete=is.true").catch(() => []),
+      Cloud.api("tally_ledgers?select=name&book_id=eq." + b + "&renamed_at=gte." + day + "&limit=1000").catch(() => []),
+    ]).then(([rounds, ren]) => {
+      const renamed = [].concat(ren || []).length;
+      // a round that sent only some of the ledgers (the changed ones); a full first read is not a change
+      const sent = [].concat(rounds || []).filter((r) => r && r.rows_read != null && Number(r.rows_received) < Number(r.rows_read)).reduce((t, r) => t + (Number(r.rows_received) || 0), 0);
+      CHG[k] = { at: Date.now(), busy: false, v: { changed: Math.max(0, sent - renamed), renamed } }; render();
+    });
+  }
+  return (CHG[k] || {}).v || null;
+}
+function LaterLine({ cid }) {
+  const v = ledgerChanges(cid);
+  if (!v || !(v.changed > 0 || v.renamed > 0)) return null;
+  const bits = [v.changed > 0 ? nOf(v.changed, "new or changed ledger", "new or changed ledgers") : "", v.renamed > 0 ? nOf(v.renamed, "rename", "renames") : ""].filter(Boolean);
+  return <p className="note tco-later" data-tco-later="">{bits.join(" and ") + " from Tally today"}</p>;
+}
+// the bar itself. where: "row" (Companies in Tally), "books" (Books › From Tally), "ledgers" (the Ledgers page). With no
+// read going on: on Books, what FinCom holds ("1,240 ledgers from Tally ✓ · 10:42") and today's changes; on the row, null
+// (its own line says what FinCom holds); on the Ledgers page, only today's changes
+export function LedgerBar({ cid, where = "row", company = "" }) {
   const [, tick] = useState(0);
   const x = (S.tcoSync || {})[cid], running = !!(x && !x.end && !x.err && !x.late);
   useEffect(() => { if (!running) return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t); }, [running]);
   useEffect(() => { if (!running) return; const t = setInterval(() => syncPoll(cid), POLL_MS); return () => clearInterval(t); }, [running, x && x.at]);
-  const co = S.companies && S.companies[cid], bk = cloudBook(cid), n = Math.max(ledgersOf(cid), (x && x.led) || 0), days = daybookHeld(cid);
-  // the ledgers: their count when FinCom has it, else ✓ alone when the book says they came (tally_books.ledgers_at)
-  const ledIn = n > 0 || (x ? x.led === -1 : !!(ledBook(cid) || {}).ledgersAt);
-  const led = ledIn ? "Ledgers " + (n > 0 ? Number(n).toLocaleString("en-IN") + " " : "") + "✓" : "", ent = days ? "Entries " + (entriesWords(bk) || "this year") + " ✓" : "";
-  if (x && x.end) { const ln = x.led > 0 ? x.led : n;
-    return <p className="tco-sync ok" data-tco-sync="done" role="status">{(ln > 0 ? nOf(ln, "ledger", "ledgers") : "Ledgers") + " imported ✓" + (x.ledAt ? " at " + hmIST(x.ledAt) : "")}
-      {" · " + (ent || "this year’s entries come in by themselves")}<span className="note">{" · took " + mmss(Math.max(1000, (x.ledAt || x.end) - x.at))}</span></p>; }
-  if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.max(2, Math.round(100 * rd / of)) : 0;
-    return <div className="tco-sync" data-tco-sync="running" role="status">
-    <div className="tco-bar" role="progressbar" aria-label={"Reading " + ((co && co.name) || "the company") + "’s ledgers from Tally"} aria-busy="true"
-      {...(of > 0 ? { "aria-valuemin": 0, "aria-valuemax": of, "aria-valuenow": rd, "data-tco-pct": pct } : {})}><i className={of > 0 ? "det" : ""} style={of > 0 ? { width: pct + "%" } : undefined} /></div>
-    <span><b>Reading ledgers from Tally…</b>{of > 0 ? " " + rd.toLocaleString("en-IN") + " of " + nOf(of, "ledger", "ledgers") : ""}
-      {" "}<b className="tco-clock">{mmss(Date.now() - x.at)}</b><span className="note">{x.via === "cloud" && !x.why && !of ? " · the Tally computer picks it up within a minute" : ""}</span>
-      {x.why && <span className="tco-why" data-tco-sync-why="">{" " + x.why}</span>}</span></div>; }
-  if (x && (x.err || x.late)) return <div className="tco-sync bad" data-tco-sync={x.err ? "error" : "late"} role="status">
-    <span>{x.err || ("Ledgers not received in 10 minutes: " + (stallWhy(cid, x.company) || "keep " + (x.company || "the company") + " open in TallyPrime on its computer, with reading not paused."))}</span>
-    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, x.company)}>Try again</button>{!led && <Masters cid={cid} />}</span></div>;
+  const co = S.companies && S.companies[cid], n = Math.max(ledgersOf(cid), (x && x.led) || 0), led = ledgersHeld(cid);
+  const name = (x && x.company) || company || (typeof TCloud === "object" && TCloud.companyOf ? TCloud.companyOf(cid) : "") || (co && (co.tallyName || co.name)) || "";
+  const done = (ln, at) => <p className="tco-sync ok" data-tco-sync="done" data-tco-where={where} role="status">{(ln > 0 ? nOf(ln, "ledger", "ledgers") : "Ledgers") + " from Tally ✓" + (at ? " · " + hm(at) : "")}</p>;
+  if (x && x.end) return <>{done(x.led > 0 ? x.led : n, x.ledAt)}{where !== "row" && <LaterLine cid={cid} />}</>;
+  const stuck = x && (x.err || x.late || (running && x.why));
+  if (stuck) return <div className="tco-sync bad" data-tco-sync="stuck" data-tco-stuck={x.err ? "error" : x.late && !x.why ? "late" : "why"} data-tco-where={where} role="status">
+    <span data-tco-sync-why="">{x.err || x.why || stallWhy(cid, name) || "No progress from Tally in 3 minutes: keep " + (name || "the company") + " open in TallyPrime on its computer."}</span>
+    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name)}>Try again</button></span>
+    {!led && <Masters cid={cid} />}</div>;
+  if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.round(100 * rd / of) : 0;
+    const left = timeLeft(x, of);
+    return <div className="tco-sync" data-tco-sync="running" data-tco-where={where} role="status">
+      <div className="tco-bar" role="progressbar" aria-label={"Reading " + ((co && co.name) || "the company") + "’s ledgers from Tally"} aria-busy="true"
+        {...(of > 0 ? { "aria-valuemin": 0, "aria-valuemax": of, "aria-valuenow": rd, "data-tco-pct": pct } : {})}><i className={of > 0 ? "det" : ""} style={of > 0 ? { width: Math.max(2, pct) + "%" } : undefined} /></div>
+      <span data-tco-sync-words="">{of > 0 ? "Reading ledgers from Tally: " + rd.toLocaleString("en-IN") + " of " + of.toLocaleString("en-IN") + " (" + pct + "%)" + (left ? " · " + left : "")
+        : "Reading ledgers from Tally…" + (rd > 0 ? " " + rd.toLocaleString("en-IN") + " so far" : "")}
+        {x.via === "cloud" && !of && !rd ? <span className="note">{" · the Tally computer picks it up within a minute"}</span> : null}</span>
+      {!led && <Masters cid={cid} />}</div>; }
+  if (where === "books" && led) { const bk = ledBook(cid) || {}; return <>{done(n, bk.ledgersAt ? Date.parse(bk.ledgersAt) : 0)}<LaterLine cid={cid} /></>; }
+  if (where === "ledgers") return <LaterLine cid={cid} />;
+  return null;
+}
+const hm = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : ""; return String(t || "").replace(/\s*IST$/, ""); };
+export function SyncLine({ cid, compact = false }) {
+  const x = (S.tcoSync || {})[cid], bk = cloudBook(cid), n = ledgersOf(cid), days = daybookHeld(cid);
+  if (x) return <LedgerBar cid={cid} where="row" />;
+  const led = ledgersHeld(cid), ent = days ? "Entries " + (entriesWords(bk) || "this year") : "";
   // no first sync here now: what FinCom holds, when known
   if (compact || !(TCloud.st && TCloud.st[cid] && TCloud.st[cid].at)) return null;
-  return <p className="note tco-sync" data-tco-sync="held">{[led ? (n > 0 ? "Ledgers " + Number(n).toLocaleString("en-IN") : "Ledgers in FinCom") : "Ledgers not in FinCom yet", ent ? ent.replace(" ✓", "") : "this year’s entries not in FinCom yet"].join(" · ")}</p>;
+  return <p className="note tco-sync" data-tco-sync="held">{[led ? (n > 0 ? "Ledgers " + Number(n).toLocaleString("en-IN") : "Ledgers in FinCom") : "Ledgers not in FinCom yet", ent || "this year’s entries not in FinCom yet"].join(" · ")}</p>;
 }
 
 
