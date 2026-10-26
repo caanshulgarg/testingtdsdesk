@@ -19,13 +19,13 @@ const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10
 // Nothing signs you out by itself either way.
 export const KeepBox = () => <label className="chk keep-box" style={{ marginTop: 10 }}><input type="checkbox" data-cloud="keep" defaultChecked /><span>Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></span></label>;
 
+// Sign-up is by invitation (26-Oct-2026, audit H3): the signup function makes no firm for anyone who asks, and answers
+// everyone with the same line, so this page (still reached by #register) shows that line instead of a form.
+export const INVITE_ONLY = "Sign-up is by invitation. Ask your firm’s owner to invite you.";
 function SignUp() {
-  const st = Cloud.st;
-  return <Box><h1>Create an account</h1><p className="note" style={{ margin: "8px 0 14px" }}>Your firm gets its own space. Nobody else can see your data.</p>
-    <Field label="Firm name" k="firm" fk="sufirm" first /><Field label="Your name" k="name" fk="suname" /><Field label="Email" k="email" type="email" fk="cloudemail" auto="username" />
-    <Field label="Password (10 characters or more, letters and digits)" k="password" type="password" fk="cloudpw" auto="new-password" />
-    <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignUp" disabled={!!st.busy}>{st.busy ? "Making the account…" : "Create the account"}</Act></div><Err />
-    <p className="note" style={{ marginTop: 14 }}>Already have one? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
+  return <Box><h1>Create an account</h1><p className="note" style={{ margin: "8px 0 14px" }} data-invite-only="">{INVITE_ONLY}</p>
+    <p className="note">Invited already? Open the link in the invitation email to choose your password.</p>
+    <p className="note" style={{ marginTop: 14 }}>Already have an account? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
 }
 
 function TwoStep() {
@@ -61,9 +61,7 @@ function SetPassword() {
 
 export default function SignIn() {
   const st = Cloud.st;
-  // whether new firms may sign up (the "Create an account" line): asked when this page shows (stability batch 2)
-  // (each drawing: it asks once, and again once the line is back if it could not)
-  useEffect(() => { if (typeof loadSignupInfo === "function") loadSignupInfo(); });
+  // (the "Create an account" line no longer asks signup_info: sign-up is by invitation, whatever the setting says)
   if (S.setPassword) return <SetPassword />;
   if (Cloud.on() && st.mfa) return <TwoStep />;
   if (S.signUpOpen) return <SignUp />;
@@ -79,5 +77,5 @@ export default function SignIn() {
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>
-    {S.signupInfo && S.signupInfo.open !== false && <p className="note" style={{ marginTop: 6 }}>New here? <Act act="showSignUp" className="linkbtn">Create an account</Act>{num(S.signupInfo.trial_credit) ? " · starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : ""}</p>}</Box>;
+    <p className="note" style={{ marginTop: 6 }} data-invite-only="">New here? {INVITE_ONLY}</p></Box>;
 }
