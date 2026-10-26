@@ -9,6 +9,13 @@ import "./parts/dismiss.js";
 import App from "./App.jsx";
 import { adopt } from "./store.js";
 import { createElement, useSyncExternalStore } from "react";
+import * as ReactAll from "react";
+// next-fix-books-crash (the owner, 25-Oct-2026: TDS, GST, MIS "crashing", then "took too long"): whether React is drawing
+// a component at this moment (its hooks are live only then). A render React schedules itself (a screen's file arriving, a
+// component's own state) does not go through drawReact's memoScope; perRender and Books.lines (src/js/01, 04) ask this to
+// keep the figures for that drawing too (reactScope), not work out the TDS rows from every entry for each part asking
+const reactInternals = ReactAll.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
+window.__fincomReactRendering = () => { const h = reactInternals && reactInternals.H; return !!h && h.useState !== h.useEffect; };
 import Guard from "./Guard.jsx";
 import { subscribe, snapshot } from "./store.js";
 import { flushSync } from "react-dom";
