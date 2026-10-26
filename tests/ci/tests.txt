@@ -172,6 +172,7 @@ run_seed.py                           420
 run_server_reports.py                 120
 run_session.py                        120
 run_signin_session.py                 300
+run_signup_ui.py                      120
 run_setup_bat.py                      120
 run_shadow_server.py                  120
 run_staging_ui.py                     120

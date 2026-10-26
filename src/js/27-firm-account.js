@@ -116,8 +116,18 @@ const Cloud = {
     this.st.members = rows || [];
     if (me){ this.st.role = me.role; this.st.firm = me.firm_id; }
     this.st.email = (this.sess() || {}).email || "";
+    // no firm yet: a confirmed new account (or Google / Microsoft) gets its own on its first sign-in (at most one try in 30 s)
+    if (!me && !(Date.now() - num(this._provAt) < 30000)){
+      this._provAt = Date.now();
+      const p = await this.provision().catch(e => ({ok: false, error: e.message}));
+      if (p && p.ok && p.firm_id){
+        if (p.created) toast("Welcome. Your firm is ready, with \u20b910,000 of credit to start with.");
+        return this.whoAmI();
+      }
+      this._provErr = (p && p.error) || "";
+    }
     this.st.state = me ? "ok" : "nofirm";
-    if (!me) this.st.error = "This account is not linked to a firm yet.";
+    if (!me) this.st.error = this._provErr || "This account is not linked to a firm yet.";
     return me;
   }
 };
@@ -649,13 +659,27 @@ async function loadAdminOverview(quiet){
 function appUrl(){ return location.origin + location.pathname; }
 // An invite or reset link lands here with the session in the address (#access_token=…&type=invite|recovery):
 // the person is signed in and asked to choose their password before anything else (review item 21)
+// signup v12 (26-Oct-2026): also the link that confirms a new account's email (type=signup) and the way back from
+// "Continue with Google / Microsoft" (no type): that person is signed in at once, and their first sign-in sets up their
+// firm (Cloud.whoAmI → Cloud.provision). Invite and reset links still ask for the password first.
 function takeAuthLink(){
   const h = String(location.hash || "");
-  if (!/access_token=/.test(h) || !/type=(invite|recovery|signup|magiclink)/.test(h)) return false;
-  const q = new URLSearchParams(h.replace(/^#/, ""));
+  if (/[#&]error_description=/.test(h) && !/access_token=/.test(h)){
+    const q = new URLSearchParams(h.replace(/^#/, ""));
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+    Cloud.st.error = "Sign-in did not finish: " + String(q.get("error_description") || q.get("error") || "").slice(0, 200);
+    return false;
+  }
+  if (!/access_token=/.test(h)) return false;
+  const q = new URLSearchParams(h.replace(/^#/, "")), type = q.get("type") || "";
+  if (type && !/^(invite|recovery|signup|magiclink)$/.test(type)) return false;
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
-  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: "", user_id: ""});
-  S.setPassword = {type: q.get("type")};
+  const back = !type || type === "signup";
+  let who = {};
+  if (back){ try { who = JSON.parse(decodeURIComponent(escape(atob(String(q.get("access_token")).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))))) || {}; } catch (e){ who = {}; } }
+  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: back ? String(who.email || "") : "", user_id: back ? String(who.sub || "") : ""});
+  if (back){ if (who.email) Cloud.setCfg({email: String(who.email)}); S.authReturn = type || "oauth"; return true; }
+  S.setPassword = {type};
   return true;
 }
 async function setPasswordGo(){
@@ -685,12 +709,38 @@ function signInNeeded(){
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
+// signup v12: the form's answer is always "check your email" (the account is made once the email's link is clicked)
 Cloud.signUp = async function(d){
   const c = this.cfg();
   const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signup", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(d)});
   const j = await r.json().catch(() => ({}));
   if (!r.ok || j.ok === false) throw new Error(j.error || "The account could not be made.");
   return j;
+};
+// the first sign-in of a confirmed person with no firm: their own firm, with its starting credit (the signup function's
+// provision; it makes nothing for an unconfirmed email, an invited member, or anyone who has a firm already)
+Cloud.provision = async function(){
+  await this.fresh().catch(() => {});
+  const c = this.cfg(), s = this.sess();
+  if (!s) throw new Error("Signed out");
+  const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signup", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify({action: "provision"})});
+  return await r.json().catch(() => ({ok: false}));
+};
+// "Continue with Google / Microsoft" (Supabase Auth's providers 'google' and 'azure'): shown only for the providers switched
+// on in the project, as its public /auth/v1/settings says (external.google, external.azure)
+function loadAuthProviders(){
+  const c = Cloud.cfg();
+  if (S.authProviders || S.authProvidersAsked || !c.url || navigator.onLine === false) return;
+  S.authProvidersAsked = true;
+  fetch(c.url.replace(/\/+$/, "") + "/auth/v1/settings", {headers: {apikey: c.key}})
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+    .then(j => { const e = (j && j.external) || {}; S.authProviders = {google: e.google === true, azure: e.azure === true}; render(); }, () => { S.authProvidersAsked = false; });
+}
+Cloud.oauth = function(provider){
+  const c = this.cfg(), box = document.querySelector('[data-cloud="keep"]');
+  if (box) lsSet("tdsdesk:keep", box.checked ? "1" : "0");
+  const back = location.origin + location.pathname;     // this page (/review/ on staging), where takeAuthLink picks the sign-in up
+  location.assign(c.url.replace(/\/+$/, "") + "/auth/v1/authorize?provider=" + encodeURIComponent(provider) + "&redirect_to=" + encodeURIComponent(back) + (provider === "azure" ? "&scopes=email" : ""));
 };
 
 
@@ -1484,15 +1534,19 @@ function doAct(act, t){
       });
       break;
     }
-    case "showSignUp": S.signUpOpen = true; Cloud.st.error = ""; render(); break;
-    case "showSignIn": S.signUpOpen = false; Cloud.st.error = ""; render(); break;
+    // the register page has its own address (#/register), the sign-in page #/signin (applyEntryHash)
+    case "showSignUp": S.signUpOpen = true; S.signUpSent = false; Cloud.st.error = ""; if (location.hash !== "#/register") location.hash = "#/register"; render(); break;
+    case "showSignIn": S.signUpOpen = false; S.signUpSent = false; Cloud.st.error = ""; if (/^#\/register$/i.test(location.hash)) location.hash = "#/signin"; render(); break;
+    case "oauthGoogle": Cloud.oauth("google"); break;
+    case "oauthAzure": Cloud.oauth("azure"); break;
+    // signup v12: nothing is made until the email's link is clicked; the firm comes on the first sign-in (Cloud.whoAmI)
     case "cloudSignUp": {
-      const f = S.cloudForm || {};
-      if (!f.firm || !f.email || !(f.password || "").trim()){ toast("Fill in the firm name, email and password."); break; }
-      Cloud.st.busy = "Making the account\u2026"; Cloud.st.error = ""; render();
-      Cloud.signUp({firm: f.firm, name: f.name || "", email: f.email, password: f.password})
-        .then(() => Cloud.signIn(f.email, f.password))
-        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpOpen = false; if (!S.firm.firmName){ S.firm.firmName = f.firm; Store.saveFirm(); } toast("Welcome. Your firm is ready."); startCloudSync(); loadAccount(true).then(() => render()); render(); },
+      const f = S.cloudForm || {}, pw = String(f.password || "");
+      if (!(f.name || "").trim() || !(f.firm || "").trim() || !(f.email || "").trim() || !pw){ toast("Fill in your name, the firm name, email and password."); break; }
+      if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)){ Cloud.st.error = "Use a password of 10 characters or more, with letters and digits."; render(); break; }
+      Cloud.st.busy = "Sending\u2026"; Cloud.st.error = ""; render();
+      Cloud.signUp({name: f.name.trim(), firm: f.firm.trim(), email: f.email.trim(), password: pw, redirect: location.origin + location.pathname})
+        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpSent = true; render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }
@@ -2318,13 +2372,16 @@ document.addEventListener("keydown", ev => {
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 // the landing page links here with #register or #signin: show that screen (unless already signed in)
+// signup v12: #/register and #/signin are the two pages' own addresses (kept in the address bar, so Back works);
+// the landing page's older #register and #signin still lead to them
 function applyEntryHash(){
-  const h = String(location.hash || "").toLowerCase();
-  if (h !== "#register" && h !== "#signin") return;
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
+  const h = String(location.hash || "").toLowerCase(), page = h === "#/register" || h === "#/signin";
+  if (h !== "#register" && h !== "#signin" && !page) return;
+  if (!page){ try { history.replaceState(null, "", location.pathname + location.search); } catch (e){} }
   if (Cloud.on() || window.claude) return;
   Cloud.setCfg({gate: true});                  // someone who chose "without an account" earlier still sees the screen asked for
-  S.signUpOpen = h === "#register"; Cloud.st.error = "";
+  S.signUpOpen = h === "#register" || h === "#/register"; Cloud.st.error = "";
+  if (!S.signUpOpen) S.signUpSent = false;
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
@@ -2358,7 +2415,7 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   stage("drawn");
   await pause();
   // a page link (#/…) opens that page; otherwise the client open last time
-  if (/^#\//.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
+  if (/^#\//.test(location.hash) && !/^#\/(register|signin)$/i.test(location.hash) && typeof Route === "object" && signInNeeded()) Route.pending = location.hash;
   const linked = /^#\//.test(location.hash) && typeof Route === "object" && !signInNeeded() ? await Route.apply(location.hash) : false;
   const last = lsGet("tdsdesk:last") || recentIds()[0];
   // smart moves round 1 (7): the client's page last shown, not only its dashboard (Settings → Move on by itself)
@@ -2379,6 +2436,14 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   try { const last = JSON.parse(lsGet("tdsdesk:selftest") || "null"); if (last && last.results) S.selfTest = {busy: false, results: last.results, finished: last.finished, remembered: true}; } catch (e){}
   if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
+  // back from an email's confirmation link or from Google / Microsoft (takeAuthLink): signed in now; the code first if
+  // the account has two-step sign-in, then the firm (set up here on the first sign-in, Cloud.whoAmI)
+  if (S.authReturn && Cloud.on()){
+    S.authReturn = "";
+    try { if (!(await Cloud.checkMfa())){ S.signInOpening = Date.now(); setTimeout(render, 15000); await Cloud.whoAmI(); loadAccount(true).then(() => render(), () => render()); } }
+    catch (e){ Cloud.st.error = e.message; }
+    setTimeout(() => auditEvent("signin", navigator.userAgent.slice(0, 160)), 3000);
+  }
   startCloudSync();
   // opened again after signing in as another person (LocalOwner.switchTo): what the sign-in does next, done here
   if (LocalOwner.after && Cloud.on()){

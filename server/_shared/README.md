@@ -11,6 +11,13 @@ failed on staging.)
 
 ## What each deploy must include
 
+**26-Oct-2026 (audit M1): functions are deployed as uploaded files from one commit, never as a
+`raw.githubusercontent.com` import**, which stops working once the repository is private. tally-ingest, fincom-call,
+gst-2b-match, fincom-assistant, tds-challan-match, fincom-transcribe, mis-run, zoho-books and gst-taxpro have their commit
+and files in `tools/fn-files.json`, and `node tools/fn-files.js list|payload|deploy|verify <fn>` takes them from git
+(see `tools/deploy-fn-files.md`). For these functions, `_shared` files go up under their repository path
+(`server/_shared/cors.ts`) beside a top-level `index.ts` wrapper, not as `../_shared/cors.ts`.
+
 Supabase deploys each function's files on their own. Send `server/_shared/cors.ts` with every one, named
 `../_shared/cors.ts` (with the Supabase CLI: copy it to `supabase/functions/_shared/cors.ts`; the CLI bundles it).
 
@@ -32,7 +39,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 
 The `*` functions take only the header list from here: each call carries a sign-in token or a device key (no cookies),
 and tally-ingest and gst-taxpro are also called by the Tally bridge and the database's timer.
-`signup` is called by the app but its source is not in this repository; fyn-relay is a Node server called only by
+`signup` (by invitation only since 26-Oct-2026, audit H3) is in `server/signup/` (index.ts, handler.ts; v10's source kept as v10-deployed.ts.txt); fyn-relay is a Node server called only by
 gst-api, not by a browser.
 
 ## Check after deploy (staging)

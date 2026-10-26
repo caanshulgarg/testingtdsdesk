@@ -1,0 +1,70 @@
+// Sign up: email, password and a firm name. No email verification; the account works at once.
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const URL = Deno.env.get("SUPABASE_URL")!;
+const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+const reply = (code: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
+
+  const admin = createClient(URL, SERVICE);
+  let body: any = {};
+  try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
+
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  const firmName = String(body.firm || "").trim();
+  const person = String(body.name || "").trim();
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, { ok: false, error: "That email address does not look right." });
+  if (password.length < 8) return reply(400, { ok: false, error: "Use a password of at least 8 characters." });
+  if (firmName.length < 2) return reply(400, { ok: false, error: "Enter the name of your firm." });
+
+  const { data: setting } = await admin.from("app_settings").select("value").eq("name", "signup").maybeSingle();
+  const rules = setting?.value || { open: false, trial_credit: 0, plan: "Pay as you go" };
+  if (!rules.open) return reply(403, { ok: false, error: "New accounts are closed at the moment. Ask the administrator." });
+
+  // already registered?
+  const { data: list } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+  const existing = (list?.users || []).find((u: any) => (u.email || "").toLowerCase() === email);
+  if (existing) return reply(409, { ok: false, error: "This email already has an account. Sign in instead, or ask for a new password." });
+
+  const { data: plan } = await admin.from("plans").select("id, includes").eq("name", rules.plan || "Pay as you go").maybeSingle();
+  const credit = Number(rules.trial_credit || 0);
+
+  const { data: firm, error: fErr } = await admin.from("firms")
+    .insert({ name: firmName, plan_id: plan?.id || null, balance: credit, note: "Signed up" })
+    .select("id").single();
+  if (fErr) return reply(400, { ok: false, error: fErr.message });
+
+  const { data: made, error: uErr } = await admin.auth.admin.createUser({
+    email, password, email_confirm: true, user_metadata: { name: person },
+  });
+  if (uErr) {
+    await admin.from("firms").delete().eq("id", firm.id);
+    return reply(400, { ok: false, error: uErr.message });
+  }
+
+  await admin.from("members").insert({ user_id: made.user.id, firm_id: firm.id, name: person, email, role: "owner", active: true });
+
+  if (credit > 0) {
+    await admin.from("wallet_entries").insert({
+      firm_id: firm.id, kind: "credit", code: "wallet", qty: 1, amount: credit,
+      balance_after: credit, note: "Credit to start with",
+    });
+  }
+  // a per-client plan sets its own price
+  const perClient = plan?.includes?.clients_price;
+  if (perClient) await admin.from("firm_modules").insert({ firm_id: firm.id, code: "clients", enabled: true, price: perClient });
+
+  return reply(200, { ok: true, firm_id: firm.id, email, credit });
+});

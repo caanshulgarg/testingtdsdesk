@@ -1,6 +1,6 @@
 // The sign-in page, before anything of the firm is shown: sign in, create an account, or two-step sign-in (a code from
 // an authenticator app). Was viewSignIn (src/js/27), viewSignUp (src/js/27) and viewTwoStep (src/js/43). Buttons are
-// doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, useOffline) and mfaAction (src/js/43); the boxes keep
+// doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, oauthGoogle, oauthAzure, useOffline) and mfaAction (src/js/43); the boxes keep
 // their data-cloud and id, which those read, and the buttons their data-act (the old tests press them by it); and what is typed is kept in S.cloudForm (cloudForm).
 import Msg from "../parts/Msg.jsx";
 import { useEffect, useRef } from "react";
@@ -19,13 +19,29 @@ const Err = () => Cloud.st.error ? <p className="bk-warn" style={{ marginTop: 10
 // Nothing signs you out by itself either way.
 export const KeepBox = () => <label className="chk keep-box" style={{ marginTop: 10 }}><input type="checkbox" data-cloud="keep" defaultChecked /><span>Keep me signed in on this computer <span className="note">(untick on a shared computer: the sign-in ends when the browser is closed)</span></span></label>;
 
+// signup v12 (26-Oct-2026): anyone may create an account again. The register page (#/register) sends the form to the
+// signup function, which answers every email the same way; the firm and its starting credit are made only after the
+// email's link is clicked, on the first sign-in (Cloud.whoAmI → Cloud.provision, src/js/27).
+export const CHECK_EMAIL = "Check your email and click the link to confirm, then sign in.";
+// "Continue with Google / Microsoft": only the providers switched on in Supabase Auth (loadAuthProviders, src/js/27)
+const OAuth = () => {
+  useEffect(() => { if (typeof loadAuthProviders === "function") loadAuthProviders(); });
+  const p = S.authProviders || {};
+  if (!p.google && !p.azure) return null;
+  return <div data-oauth="" style={{ display: "grid", gap: 8, marginTop: 12 }}>
+    {p.google && <Act act="oauthGoogle" className="btn">Continue with Google</Act>}
+    {p.azure && <Act act="oauthAzure" className="btn">Continue with Microsoft</Act>}</div>;
+};
 function SignUp() {
   const st = Cloud.st;
+  if (S.signUpSent) return <Box><h1>Create an account</h1><p className="note" style={{ margin: "8px 0 14px" }} data-signup-sent="">{CHECK_EMAIL}</p>
+    <p className="note" style={{ marginTop: 14 }}>Already have an account? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
   return <Box><h1>Create an account</h1><p className="note" style={{ margin: "8px 0 14px" }}>Your firm gets its own space. Nobody else can see your data.</p>
-    <Field label="Firm name" k="firm" fk="sufirm" first /><Field label="Your name" k="name" fk="suname" /><Field label="Email" k="email" type="email" fk="cloudemail" auto="username" />
+    <Field label="Your name" k="name" fk="suname" auto="name" first /><Field label="Firm name" k="firm" fk="sufirm" auto="organization" /><Field label="Email" k="email" type="email" fk="cloudemail" auto="username" />
     <Field label="Password (10 characters or more, letters and digits)" k="password" type="password" fk="cloudpw" auto="new-password" />
-    <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignUp" disabled={!!st.busy}>{st.busy ? "Making the account…" : "Create the account"}</Act></div><Err />
-    <p className="note" style={{ marginTop: 14 }}>Already have one? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
+    <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignUp" disabled={!!st.busy}>{st.busy ? "Sending…" : "Create the account"}</Act></div><Err />
+    <OAuth />
+    <p className="note" style={{ marginTop: 14 }}>Already have an account? <Act act="showSignIn" className="linkbtn">Sign in</Act></p></Box>;
 }
 
 function TwoStep() {
@@ -61,9 +77,6 @@ function SetPassword() {
 
 export default function SignIn() {
   const st = Cloud.st;
-  // whether new firms may sign up (the "Create an account" line): asked when this page shows (stability batch 2)
-  // (each drawing: it asks once, and again once the line is back if it could not)
-  useEffect(() => { if (typeof loadSignupInfo === "function") loadSignupInfo(); });
   if (S.setPassword) return <SetPassword />;
   if (Cloud.on() && st.mfa) return <TwoStep />;
   if (S.signUpOpen) return <SignUp />;
@@ -77,7 +90,8 @@ export default function SignIn() {
     <Field label="Email" k="email" type="email" fk="cloudemail" auto="username" first /><Field label="Password" k="password" type="password" fk="cloudpw" auto="current-password" />
     <KeepBox />
     <div className="row" style={{ marginTop: 12 }}><Act act="cloudSignIn" disabled={!!st.busy}>{st.busy ? "Signing in…" : "Sign in"}</Act></div><Err />
+    <OAuth />
     <p className="note" style={{ marginTop: 14 }}>Forgotten the password? Ask the person who runs your firm’s account to send you a reset link. After 5 wrong passwords the account is locked for 15 minutes.</p>
     <p className="note" style={{ marginTop: 10 }}>No internet on this computer? <Act act="useOffline" className="linkbtn">Use it here without an account</Act> — the work stays on this computer only.</p>
-    {S.signupInfo && S.signupInfo.open !== false && <p className="note" style={{ marginTop: 6 }}>New here? <Act act="showSignUp" className="linkbtn">Create an account</Act>{num(S.signupInfo.trial_credit) ? " · starts with " + INR.format(num(S.signupInfo.trial_credit)) + " of credit" : ""}</p>}</Box>;
+    <p className="note" style={{ marginTop: 6 }}>New to FinCom? <Act act="showSignUp" className="linkbtn">Create an account</Act></p></Box>;
 }
