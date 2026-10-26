@@ -2,8 +2,8 @@
 // linked, one line, at most one button). Beside the client's title chip (TallyChip, where="title": the chip says the word,
 // this the line and the button). Its own file, fetched with the Tally page's (the first file is at its size budget): it
 // puts the one function on globalThis.LinkWord (lib/tallyState.js clientTallyState hands every chip over to it: the
-// title, the Clients list, Client setup) and itself on globalThis.FinLinkStatus, which TallyChip draws when there.
-import { useState } from "react";
+// title, the Clients list, Client setup), whose answer carries this line (after), which TallyChip draws.
+import { useState, createElement } from "react";
 import "../../../src/js/98-link-record.js";
 import { linkWord } from "../lib/linkStatus.js";
 import { portHowWords, PORT_MIN, PORT_MAX } from "../lib/tallyPort.js";
@@ -25,4 +25,6 @@ export default function LinkStatus({ co, where = "title", company = "" }) {
     {s.port && how && <span className="link-status-how note" data-link-status-how="">{<b className="link-status-warn">{s.line + "."}</b>}{portHowWords(s.port.free)}</span>}
   </span>;
 }
-if (typeof globalThis === "object") { globalThis.FinLinkStatus = LinkStatus; globalThis.LinkWord = linkWord; }
+// the one function for every chip (lib/tallyState.js clientTallyState), with the line beside the title chip (TallyChip
+// draws p.after(where))
+if (typeof globalThis === "object") globalThis.LinkWord = (co, company) => { const w = linkWord(co, company); if (w) w.after = (where) => createElement(LinkStatus, { co, where }); return w; };

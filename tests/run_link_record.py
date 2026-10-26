@@ -157,7 +157,7 @@ def main():
             pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
             pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
             # the screens' files (with src/js/98-link-record.js) come once the first page is up
-            pg.wait_for_function("() => typeof LinkRec === 'object' && typeof FinLinkStatus === 'function'", timeout=30000)
+            pg.wait_for_function("() => typeof LinkRec === 'object' && typeof LinkWord === 'function'", timeout=30000)
             return pg
         def shot(pg, name, sel=None):
             if not SHOTS: return
