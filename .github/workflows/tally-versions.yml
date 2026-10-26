@@ -58,9 +58,13 @@ jobs:
       versions: ${{ steps.mode.outputs.versions }}
       matrix: ${{ steps.mode.outputs.matrix }}
     steps:
+      # the harness only (.github): the branch's whole tree (spike-results) no longer fits the Linux runner's disk (runs
+      # 40354492415 and 40355902391, 26-Oct-2026: "No space left on device" at this checkout)
       - uses: actions/checkout@v4
         with:
           path: harness
+          sparse-checkout: |
+            .github
       - id: mode
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
@@ -419,7 +423,11 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      # .github only (the whole tree no longer fits the runner's disk); the results are added with git add --sparse
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github
       - uses: actions/download-artifact@v4
         with:
           pattern: tally-*-${{ github.run_id }}
@@ -441,7 +449,7 @@ jobs:
           done > "spike-results/versions/${{ github.run_id }}-summary.txt" || true
           echo "PASS $(grep -c '\] PASS' spike-results/versions/${{ github.run_id }}-summary.txt) FAIL $(grep -c '\] FAIL' spike-results/versions/${{ github.run_id }}-summary.txt) HARNESS $(grep -c '\] HARNESS' spike-results/versions/${{ github.run_id }}-summary.txt)"
           git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
-          git add spike-results/versions; [ -d bridge-go/testdata ] && git add bridge-go/testdata
+          git add --sparse spike-results/versions; [ -d bridge-go/testdata ] && git add --sparse bridge-go/testdata
           git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} ${{ inputs.mode || needs.build.outputs.mode }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
           Claude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN" || exit 0
           for i in 1 2 3 4 5; do git pull -q --rebase origin tally-versions && git push -q origin HEAD:refs/heads/tally-versions && break; sleep 10; done
