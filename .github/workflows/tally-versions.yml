@@ -89,7 +89,7 @@ jobs:
               c72=$(hd "$u72"); c71=$(hd "$u71")
               # Tally's own download page's list of setups (the folders differ by release: 7.2 is listed as Rel7.2, run 40358857500)
               lst=$(curl -s -A "$ua" --max-time 60 https://tallysolutions.com/utility/js/DownloadUtility-india.js | grep -oE 'download_centre\\?/[^"\\/]+' | sed -E 's#.*/##' | sort -u | tr '\n' ' ' || true)
-              case "$c72" in 200*|206*) ;; *) for f in $lst; do case "$f" in Rel7.2|Rel.7.2|Rel7.2_gold|Rel.7.2_Gold|Rel7.2_Gold) u="https://tallymirror.tallysolutions.com/download_centre/$f/TP/Full/setup.exe"; c=$(hd "$u"); echo "TallyPrime 7.2 (listed folder $f) at $u: $c"; case "$c" in 200*|206*) c72="$c (folder $f)"; u72="$u"; break ;; esac ;; esac; done ;; esac
+              case "$c72" in 200*|206*) ;; *) for f in $lst; do case "$f" in Rel7.2|Rel.7.2|Rel7.2_gold|Rel.7.2_Gold|Rel7.2_Gold) uf="https://tallymirror.tallysolutions.com/download_centre/$f/TP/Full/setup.exe"; cf=$(hd "$uf"); echo "TallyPrime 7.2 (listed folder $f) at $uf: $cf"; case "$cf" in 200*|206*) c72="$cf (folder $f)"; u72="$uf"; break ;; esac ;; esac; done ;; esac
               echo "TallyPrime 7.2 at $u72: $c72; control 7.1 at $u71: $c71; the download page lists: $lst"
               echo "::notice::7.2 check: Rel.7.2_gold $c72; Rel.7.1_gold (control) $c71; Tally's download page lists: $lst"
               case "$c72" in 200*|206*) ;; *) case "$c71" in 200*|206*) echo "::error::TallyPrime 7.2 not on Tally's download centre ($u72: $c72, while 7.1 answers $c71): 7.2 dropped from this run"; vs=$(echo ",$vs," | sed 's/,7\.2,/,/g; s/^,//; s/,$//') ;; *) echo "::warning::the download centre refused this Linux runner for 7.1 too ($c71): 7.2 kept, the Windows job decides" ;; esac ;; esac
