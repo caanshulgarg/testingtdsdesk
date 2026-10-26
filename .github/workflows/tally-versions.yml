@@ -41,6 +41,9 @@ on:
         default: ''
       # 2.4.1's gate (09-Oct-2026): mode dsrc (one company in two data folders: dsrcv.ps1, stubds.py) and upg from the
       # published 2.4.0 (upg_from=2.4.0: its committed setup, SHA-256 00ab8042...16dc, and add-on from 3bf7b6d9)
+      p72_only:
+        description: 'proof72 only: the sections to run (comma list of section letters, e.g. b for the port screen); empty: all'
+        default: ''
       upg_from:
         description: 'upg: the published release installed first (2.3.3, 2.4.0 for 2.4.1''s gate, 2.4.1 for 2.4.2''s gate, 2.4.2 for 2.4.3''s gate, 2.4.3 for 2.4.4''s gate, 2.4.4 for 2.4.5''s gate, 2.4.5 for 2.4.6''s gate, 2.4.6 for 2.4.7''s gate)'
         default: '2.3.3'
@@ -320,6 +323,7 @@ jobs:
       VMODE: ${{ matrix.mode }}
       MH_TYPES: ${{ inputs.mhook_types }}
       UPG_FROM: ${{ inputs.upg_from || '2.3.3' }}
+      P72_ONLY: ${{ inputs.p72_only }}
       RES: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
       SHOTS: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}
       LOG: ${{ github.workspace }}\spike-results\versions\${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}\log.txt

@@ -143,6 +143,7 @@ function Ok2([object]$r) { return [bool]($r.ok -and $r.inTime) }
 # ===================================================================== a: the published bridge on this release
 $script:sect = 'a'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('a' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 a: the published bridge 2.4.7, unchanged, on this release'
 FrzH 'a-bridge'
 $stA = Bridge GET '/status?fresh=1'; $msS = $script:lastMs; PJson 'a-status.json' $stA
@@ -198,6 +199,7 @@ MLine ("d V2 (REMOTEID=""$rid2"") posted by the bridge's /import {0} ms: ok {1},
 # ===================================================================== e: a batch of 3, one names a missing ledger
 $script:sect = 'e'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('e' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 e: a batch of 3 with one missing ledger (the bridge)'
 function JrnXml([string]$date, [string]$narr, [string]$cr, [string]$amt) {
   '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>' + $date + '</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>' + (LE $narr) + '</NARRATION>' +
@@ -219,6 +221,7 @@ $batchBridge = "bridge /import of 3 Journals in one request {0} ms; per entry: {
 # ===================================================================== d: the FinCom ID through an edit on the screen
 $script:sect = 'd'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('d' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 d: V1 and V2 altered on the screen'
 function DayBookOn([string]$d, [string]$n) { $null = TdsGateway "db-$n"; KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 4; KeysTo '{F2}' 3; KeysTo "$d{ENTER}" 4 "p72-$n-daybook" }
 # amount 777 / 888 and " edited on screen" added at the end of the narration (as c4b: three ENTERs reach the amount)
@@ -262,6 +265,7 @@ $addonTxt = "the add-on's lines: V1 altered '{0}'; V2 altered '{1}'; V2 retyped 
 # ===================================================================== c: the company GUID through a rename
 $script:sect = 'c'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('c' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 c: rename (the bridge still running: its answer kept)'
 FrzH 'c-rename'
 $g0 = CoList; PJson 'c-companies-before.json' $g0
@@ -304,6 +308,7 @@ if ($renamed) {
 # ===================================================================== the bridge stopped: from here only the harness asks
 $script:sect = 'the bridge stopped'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('the bridge stopped' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72: the bridge stopped (the harness''s own measurements follow, one request at a time)'
 Snap 'p72-before-stop'
 Copy-Item $blog (Join-Path $p72 'bridge-full.log') -ErrorAction SilentlyContinue
@@ -354,6 +359,7 @@ PRes $P10 $(if ($ib -and $rbx.ok) { 'PASS' } else { 'FAIL' }) ("{0}. Directly ({
 # ===================================================================== d': lookups on the small company
 $script:sect = 'd'''
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch ",d',")) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 lookups (small company)'
 $tagReq = { param([string]$d) WithDay $script:RQ['tagcheck'] $d }
 $byMasterReq = { param([string]$d, [string]$mid) (WithDay $script:RQ['bymaster'] $d).Replace('$MasterID = 99999', "`$MasterID = $mid") }
@@ -409,6 +415,7 @@ if ($recMid) { $null = TWSave (ObjReq $recMid) 'raw-receipt-object' }
 # ===================================================================== b: the port, tally.ini, two Tallys
 $script:sect = 'b'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('b' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 b: TallyPrime''s own port screen'
 $num = $folder.Name
 function IniStd([string]$cs = 'Both', [int]$port = 9000, [string]$odbc = 'Yes', [string]$data = $data1, [string]$cfg = $dir) {
@@ -433,6 +440,9 @@ $null = TdsGateway 'b-port'
 # port field: the names typed (the menus' search), the first letters, Go To (Alt+G)
 $reached = $false; $tried = @()
 $ways = @(
+  # run 40362606548: 'F1, Settings, Connectivity' reached TallyPrime's "List of Configurations" (Client/Server configuration
+  # first); the name typed there found nothing ("Oops! Nothing selected"): Enter on the first item
+  @{ n = 'F1, Settings, Connectivity, Enter on Client/Server configuration'; k = @('{F1}', 'Settings{ENTER}', 'Connectivity{ENTER}', '{ENTER}') },
   @{ n = 'F1, names typed'; k = @('{F1}', 'Settings{ENTER}', 'Connectivity{ENTER}', 'Client/Server{ENTER}') },
   @{ n = 'F1, letters'; k = @('{F1}', 's', 'c', 'c') },
   @{ n = 'Go To, Client/Server configuration'; k = @('%g', 'Client/Server{ENTER}') },
@@ -521,6 +531,7 @@ Stop-Process -Id $sA.p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep 3
 # ===================================================================== q: Tally on port 4125 (the owner's report, 26-Oct)
 $script:sect = 'q'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('q' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72 q: Tally on port 4125, the published bridge 2.4.7 with TallyPorts auto / 9000 / 4125'
 IniStd 'Both' 4125 'Yes'; $iniQ = IniText; PSave 'q-tally-ini.txt' $iniQ
 $sQ = StartTallyOn 4125 'q-4125'; $script:tpid = $sQ.p.Id
@@ -559,6 +570,7 @@ foreach ($t in @(Get-Process tally -ErrorAction SilentlyContinue)) { Stop-Proces
 # ===================================================================== d' on ZZ BIG TEST (~30,000 entries)
 $script:sect = 'd'' on ZZ BIG TEST (~30,000 entries)'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch ",d',")) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 Say '---- proof72: ZZ BIG TEST (~30,000 entries) and the lookups again'
 IniStd 'Both' 9000 'Yes'
 $up = DbRestart 'big'
@@ -578,6 +590,7 @@ PRes $P9 $(if ($lkBig.Count -and $nBig -ge 25000 -and $slow.Count -eq 0 -and @($
 # ===================================================================== f: the window and the bridge's requests
 $script:sect = 'f'
 try {
+if ($env:P72_ONLY -and (",$env:P72_ONLY," -notmatch (',' + [regex]::Escape(('f' -split ' ')[0]) + ','))) { throw "skipped (P72_ONLY=$env:P72_ONLY)" }
 $script:frz.stop = $true; Start-Sleep 1
 $spans = @($script:frz.spans)
 $reqOver = @($script:reqRows | Where-Object { $_.overrun -or $_.hung })
