@@ -1,19 +1,48 @@
 # FinCom go-live checklist
 
-Written 10-Oct-2026 from the repository only. Nothing here has been run on live, and no tool has read the live database.
-"Live" means app.fincom.live and its Supabase project. Its id is never written here: a hook blocks it.
-"Staging" means staging.fincom.live and project `qbocskaiewaxqcvaunzc`. The plan has three parts: this checklist, then a rehearsal on a copy, then the go-live together. The owner opens the
-go-live window by lifting the hook himself, and closes it by putting the hook back.
+Refreshed 26-Oct-2026 (first written 10-Oct-2026). Written from the repository at staging-next `365bbb5f5` and from
+read-only SELECTs on staging (project `qbocskaiewaxqcvaunzc`) on 26-Oct-2026. Nothing here has been run on live, and no
+tool has read the live database. "Live" means app.fincom.live and its Supabase project; its id is never written here,
+because a hook blocks it. "Staging" means staging.fincom.live and project `qbocskaiewaxqcvaunzc`.
+
+The plan has three parts: this checklist, then **two clean rehearsals on a copy restored from live's backup**, then the
+go-live day together. The owner opens the go-live window by lifting the hook himself and closes it by putting the hook
+back. The plain-English version for the owner is `docs/GO-LIVE-SUMMARY.md`.
+
+Who: **O** = owner, **C** = Claude. Every time is an estimate until the rehearsal measures it.
 
 ## 1. What differs between staging and live
 
+### 1.0 What changed since 10-Oct
+
+- **Migrations:** the list grows from 67 files to 104 (101 to run). 72–106 have run on staging, and so has 76 (db-speed). 97 (explicit
+  grants) has not run on staging, because it changes nothing there. 91 is the exception: no record that it ran. Two
+  staging-only cron files, 75b (Zoho) and 95b (2B match), name staging's address. Live needs go-live copies of them, and
+  **those copies are not written yet** (1.1.1).
+- **Supabase's grant change on 30-Oct-2026:** after that date a new table gets no automatic privileges. Every file from 98
+  on carries its own GRANTs, and 97 runs last for the tables that existed on 20-Oct (1.1.4).
+- **Edge functions:** 14 to deploy, up from 7. New are fincom-assistant, gst-2b-match, tds-challan-match, fincom-transcribe,
+  mis-run and fincom-call, and zoho-books is optional. tally-ingest moves from v43 to v58 (`month_days`). Most functions
+  are now deployed as pinned imports of a repository commit (1.2).
+- **Secrets:** new platform keys `cf_realtime_app_id`, `cf_realtime_token` and `groq_api_key`. Optional ones are
+  `cf_turn_key_id` / `cf_turn_key_token` and `resend_api_key` / `resend_from`. New Vault items are `zoho_cron_key`, made by
+  75, and `gst_cron_key`, which mis-run and gst-2b-match now use too. There is a new `app_settings` row, `mis_run` (1.3).
+- **Bridge:** 2.4.7 replaces 2.4.1. Its setup SHA-256 is `69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799`.
+  2.4.7 pairs only with an app that has the SPAKE2 pairing (src/js/24-pair-spake.js), so the live app and the bridge go
+  out together (1.5).
+- **Meetings:** calls inside FinCom (migrations 102, 103 and 106, plus fincom-call) need Cloudflare Realtime keys. TURN is
+  optional (1.7).
+- **Hosting is open:** the owner says he "set up Cloudflare", and we don't yet know what that covers: DNS, Pages, or the
+  call keys. The checklist works with either GitHub Pages or Cloudflare Pages for app.fincom.live. The DNS and hosting
+  step is marked **"depends on owner's answer"** (1.4).
+
 ### 1.1 The database: what live has, and what it needs
 
-Live runs Build 199 (30-Sep-2026, bridge 1.14.6, the posting queue). That build came with these files, which live
-should already have: `security/migration-1-functions.sql` (03b45bc3…), `security/migration-2-mfa-audit.sql` (d387f6b8…),
-`books-sync/migration.sql` (ad7ed5c2…), `support/migration.sql` (5eabc7a5…), `tally-cloud/migration.sql` (06f4b44c…),
-`-2-hardening` (cd33c652…), `-3-lookup` (3d41eb87…), `-4-want` (e8036cae…) and `-5-post-queue` (58dc3b13…). Under
-them is the base schema: 14 dashboard migrations (`tds_desk_core` … `nightly_backup_schedule`).
+Live was last known to run Build 199 (30-Sep-2026, bridge 1.14.6, the posting queue). That build came with these files,
+which live should already have: `security/migration-1-functions.sql` (03b45bc3…), `security/migration-2-mfa-audit.sql`
+(d387f6b8…), `books-sync/migration.sql` (ad7ed5c2…), `support/migration.sql` (5eabc7a5…), `tally-cloud/migration.sql`
+(06f4b44c…), `-2-hardening` (cd33c652…), `-3-lookup` (3d41eb87…), `-4-want` (e8036cae…) and `-5-post-queue` (58dc3b13…).
+Under them sits the base schema: 14 dashboard migrations, `tds_desk_core` … `nightly_backup_schedule`.
 
 **Confirm this first.** The owner pastes this read-only query into live's SQL editor and sends back the result:
 
@@ -23,15 +52,33 @@ select extname, extversion from pg_extension order by 1;
 select jobname, schedule from cron.job order by 1;             -- fails if pg_cron is off: that is an answer too
 select table_name from information_schema.tables where table_schema = 'public' order by 1;
 select id from storage.buckets order by 1;
+select pubname, tablename from pg_publication_tables where schemaname = 'public' order by 1, 2;
 ```
 
-The list below starts after Build 199. It follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which
-`tests/run_migration_order.py` checks. Anything the inventory shows live already has is skipped. That gives **67 files to run (76 added 13-Oct-2026); 31 is listed but skipped (the owner's decision of 10-Oct-2026)**. Add `gst-taxpro/golive/schema-golive.sql` (the go-live copy of
-`gst-taxpro/schema.sql`, 1.1.1) if live has no `gst_sessions` table: its header says "apply the same on live before
-gst-taxpro goes there". Run it before step 13 (16 alters `gst_sessions`).
-Every md5 is `md5sum` of the file on tax-accuracy at the commit of this document; 61's is the same on tax-accuracy and on branch `perms-61`; 76's is the file on branch `db-speed` (commit 76c65c4b0).
-Folders are under `server/`. "GO-LIVE COPY" means the original names staging's web address in a pg_cron job, so live
-runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DATA": see the dry runs in 1.1.2.
+The list follows the fresh-database order in `docs/MIGRATION-ORDER.md`, which `tests/run_migration_order.py` checks.
+Anything the inventory shows live already has is skipped.
+
+- **Files to run:** 104 rows (steps 1–103, then 97 last), of which 101 run. Step 28 (31) is skipped by the owner's decision of 10-Oct-2026. Steps 72
+  (75b) and 93 (95b) are staging-only: live runs their go-live copies once they are written, or leaves them out (1.1.1).
+- **gst-taxpro schema:** add `gst-taxpro/golive/schema-golive.sql`, the go-live copy of `gst-taxpro/schema.sql` (1.1.1),
+  if live has no `gst_sessions` table. Run it before step 13, because 16 alters `gst_sessions`.
+- **The md5s:** each md5 is `md5sum` of the file at staging-next `365bbb5f5`.
+- **Migration 76:** step 73 is the exception. It is **not on staging-next**. Its file is on branch `origin/db-speed`,
+  commit `76c65c4b0`, and staging ran that exact text (md5 `20b9530e…`, in staging's piece store as `76-20b9530e`). Bring
+  it onto the go-live branch byte for byte before the rehearsal, or take it from that commit.
+- **Folders:** every path is under `server/`.
+- **The notes:** "GO-LIVE COPY" means live runs the copy in 1.1.1 instead of the original. "CHANGES DATA" points to the
+  dry runs in 1.1.2.
+
+How each file ran on staging, as found on 26-Oct:
+
+- **"tool, pieces"** means it is in staging's `fincom_migration_text` piece store and was applied md5-checked by Claude.
+- **"tool, apply"** means it is in `supabase_migrations.schema_migrations`.
+- **"owner, SQL editor"** comes from the run records in MIGRATION-ORDER/HANDOVER.
+- **"present"** means the objects are on staging and the function bodies' md5(prosrc) equal the file's, but the repository
+  does not record who ran it or how.
+- **Steps 1–67** are all present on staging, checked by object on 26-Oct. 31 is absent, as decided. They ran as the notes
+  say, otherwise by Claude's tool.
 
 | Step | No. | File | md5 | Note |
 |---|---|---|---|---|
@@ -102,32 +149,100 @@ runs the copy in 1.1.1 instead (nothing is edited by hand any more). "CHANGES DA
 | 65 | 64 | `tally-cloud/migration-64-pages-live.sql` | `0a91d37ab313331399dffdaf677de9e6` |  |
 | 66 | 65 | `tally-cloud/migration-65-selfchecks.sql` | `51a224cf8e00b7a46da42da4694e8993` |  |
 | 67 | 66 | `tally-cloud/migration-66-recorder-masters.sql` | `fea953435146ec8bdc3e77c5808e1714` |  |
-| 68 | 76 | `tally-cloud/migration-76-db-speed.sql` | `20b9530ee8d84c627ae2d905cb97ff8b` | from branch `db-speed` (commit 76c65c4b0; the md5 is that file's, the same text staging ran on 13-Oct-2026 18:18 UTC). Speed only: an index on each unindexed foreign key, the six policies of auth_rls_initplan made again with `(select auth.uid())` (otherwise identical), `id` primary keys on `tally_lines` / `tally_bills`. Drops nothing but those six policies, which it makes again in the same transaction. Needs the tables of steps up to 59 (68) only. If 72-75 join this list, run it after them, as on staging. Read back on live: the 16 indexes (18 where 75 has run), the six policies' text, the two primary keys; the performance advisor then shows 0 unindexed_foreign_keys and 0 auth_rls_initplan |
+| 68 | 72 | `tally-cloud/migration-72-gst-type.sql` | `885fc1ee46b8facb17173dfa560d9c4f` | Ran on staging 11-Oct by tool |
+| 69 | 73 | `tally-cloud/migration-73-tds-fields.sql` | `c05257c2f0b80444ad4325db1bfd42a8` | Ran on staging 12-Oct by tool; new table `tally_tds_natures` |
+| 70 | 74 | `tally-cloud/migration-74-payroll.sql` | `76dfd80eb3da740add5b30332511d046` | Ran on staging 12-Oct by tool; `tally_employees`, `tally_salary_pays` |
+| 71 | 75 | `zoho-books/migration-75-zoho-books.sql` | `8d97596410a732522de77bb8f75ce4a6` | tool, pieces (13-Oct). Add-only; makes Vault `zoho_cron_key`; needs pgcrypto |
+| 72 | 75b | `zoho-books/migration-75b-zoho-cron-staging.sql` | `9192cadeac2fdafed375421d2d499b57` | **STAGING ONLY**: names staging's address. Live needs a go-live copy (not written; 1.1.1), or leaves it out until Zoho is used on live |
+| 73 | 76 | `tally-cloud/migration-76-db-speed.sql` (**branch db-speed, 76c65c4b0**) | `20b9530ee8d84c627ae2d905cb97ff8b` | tool, pieces (13-Oct). Speed only: 16 (18 with 75) foreign-key indexes, six policies re-made with `(select auth.uid())`, `id` primary keys on `tally_lines` / `tally_bills`. **Locks and rewrites the two biggest tables**, so the rehearsal must time it. Read back: the indexes, the six policies, the two keys; the performance advisor shows 0 unindexed_foreign_keys and 0 auth_rls_initplan |
+| 74 | 77 | `assistant/migration-77-assistant.sql` | `f0a933e2493bc43e99f1d097564aee45` | tool, apply (13-Oct). 13 tables, 59 `asst_*` functions, bucket `assistant-files` |
+| 75 | 78 | `assistant/migration-78-audit.sql` | `5529b3af73415f20754dbdeac16371aa` | tool, apply (13-Oct) |
+| 76 | 79 | `assistant/migration-79-reports.sql` | `2c8aaa9f0b8a3a6d2afa7ec18fc76a4f` | tool, apply (13-Oct) |
+| 77 | 80 | `tally-cloud/migration-80-challan-register.sql` | `defa81a2b49dbd19b6ef43f5d42567d5` | tool (14-Oct, fetched by pg_net, md5-checked); `tds_challan_allocations` |
+| 78 | 81 | `assistant/migration-81-depreciation.sql` | `241e2857ca40568cc6b4f4028c1e1b76` | tool, pieces (14-Oct) |
+| 79 | 82 | `assistant/migration-82-assistant-default-on.sql` | `559a8ef3c9ca5a3155c4f00ad1bcd4fd` | tool, pieces (14-Oct). Assistant on by default; changes no stored row on a fresh `assistant_settings` |
+| 80 | 83 | `assistant/migration-83-certificates.sql` | `e24ea7e2589e67c052efb33b2baf6218` | tool, pieces (14-Oct). On staging the firm's certificate details were seeded afterwards; on live the owner fills them in Settings (nothing copied) |
+| 81 | 84 | `assistant/migration-84-assistant-uploads.sql` | `4a9e81187ba929cf9e47a0b6bea3369b` | tool, pieces (14-Oct) |
+| 82 | 85 | `assistant/migration-85-asst-span.sql` | `92ee1ce9a531156096118b9c602a68e6` | Ran on staging 14-Oct by tool; replaced by 86 straight after |
+| 83 | 86 | `assistant/migration-86-asst-span-books.sql` | `2dd7ae32c764811624c1a994d51fa818` | Ran on staging 14-Oct by tool; read back `asst_span` prosrc `4e92a33c…` (also on staging 26-Oct) |
+| 84 | 87 | `assistant/migration-87-rls-initplan.sql` | `991893ac65634ee4bc1c6dfabd5c0ad6` | Ran on staging 14-Oct by tool. Rewrites 10 read policies as `(select my_firm())` (the same rows) |
+| 85 | 88 | `assistant/migration-88-ledger-names.sql` | `5699d4f5aaa37bee6e4cd32258ba490f` | Ran on staging 14-Oct by tool |
+| 86 | 89 | `tally-cloud/migration-89-ledger-fetch.sql` | `1e5d9651425d79cade4469908921beed` | tool, pieces (15-Oct). Run 90 straight after it |
+| 87 | 90 | `tally-cloud/migration-90-ledger-fetch-speed.sql` | `2d04572cf02b50916a0395ac609cb691` | tool, pieces. MIGRATION-ORDER still says "not run", but staging holds 90's text, so that line is out of date |
+| 88 | 91 | `tally-cloud/migration-91-book-start.sql` | `369c8bc2bfee0b655aceb808c64e0cc0` | **CHANGES DATA**: sets `tally_books.from_date` / `open_as_on` for books with days held and no start. **No record that it ran on staging**: on 26-Oct, 2 of staging's 9 books would still be touched. Dry run: 1.1.2 |
+| 89 | 92 | `tally-cloud/migration-92-settle-unnamed-deletes.sql` | `48247898a2bb16c889a0ebcdf7ec2b90` | tool, pieces (16-Oct). Settles held GUID-less deletes once. On live 0 rows, since the recorder (44) is new in the window |
+| 90 | 93 | `gst-browser/migration-93-gst-portal-login.sql` | `7700714e59a4d8a58264d6e475bfd909` | tool, pieces. MIGRATION-ORDER still says "not run", but it is present |
+| 91 | 94 | `gst-taxpro/migration-94-gst-filing.sql` | `3b220883a4f98680111edbd9d2663340` | tool, pieces |
+| 92 | 95 | `gst-2b-match/migration-95-gst-2b-match.sql` | `5bd200e12467fe29f4d3cf8beaad6d8c` | tool, pieces. Then the gst-2b-match function |
+| 93 | 95b | `gst-2b-match/migration-95b-gst-2b-match-cron-staging.sql` | `54f3c46e47842413490f1e6af8943675` | **STAGING ONLY**: names staging's address. Live needs a go-live copy (not written; 1.1.1), or leaves it out at first (2B matching then runs only when asked from the app) |
+| 94 | 96 | `assistant/migration-96-assistant-monthly-cap.sql` | `9c08b441e7a5518e0b29f9e4ba9dc625` | tool, pieces. A firm's existing `assistant_caps` row gets `monthly_inr` 3000 |
+| 95 | 98 | `tally-cloud/migration-98-period-pull.sql` | `105ee6905da7a94e1d062fdde95e5343` | tool, pieces (22-Oct, 05:55 UTC). 18 functions, all md5(prosrc) equal to the file's on 26-Oct. `tally_devices.period_fetch` default false |
+| 96 | 99 | `zoho-books/migration-99-zoho-rolling-minute.sql` | `4a5191cd62fff7900876c4577a37bc22` | present (22-Oct; `zoho_api_take` a853b443…, the file's) |
+| 97 | 100 | `mis-run/migration-100-mis-schedules.sql` | `b5ba9a5f6ee7f76f4ffdadf8e51616b3` | present (6 of 6 functions equal). Cron `mis-run-due`, bucket `mis-reports`. It reads its address from `app_settings` `mis_run`: set that on live (1.3). MIGRATION-ORDER still says "not run", but it is present |
+| 98 | 101 | `security/migration-101-autopost.sql` | `f6176b57c76491a4f37e22e60627c979` | present: 7 functions; `sync_guard_autopost` matches the file with the whole-line comments left out, the other six exactly. Trigger on `clients` |
+| 99 | 102 | `video-calls/migration-102-video-calls.sql` | `578b11f5e822af1b392b64be274f8daf` | present (5 of 5 functions equal). 12 tables; buckets `call-recordings`, `call-files`; cron `call-retention` 21:17 |
+| 100 | 103 | `video-calls/migration-103-call-codes.sql` | `d45517beebe4fd486cacc4d93f17703e` | present (2 of 2 functions equal). Gives existing rooms a code: 0 on live (102 runs in the same window) |
+| 101 | 104 | `tally-cloud/migration-104-tally-connect-steps.sql` | `55810ae17deb15c3479fd02cccaf418e` | tool, apply (24-Oct) |
+| 102 | 105 | `tally-cloud/migration-105-gst-held-input.sql` | `71cd1ab8868f1d0d42f9cc725b166d92` | tool, apply (24-Oct). Replaces `tally_gst_summary` only |
+| 103 | 106 | `video-calls/migration-106-call-lobby.sql` | `fabb6054a6c38c13372cd87cf6d14af9` | tool, apply (25-Oct). The header says the owner would run it in the SQL editor, but staging's migration list shows the tool ran it |
+| **last** | 97 | `security/migration-97-explicit-grants.sql` | `336ff02ddf0a0330b50398a922acb09b` | **Runs after every other file** (1.1.4). Not run on staging, where it changes nothing |
 
-- **Migration 97 runs last** (`security/migration-97-explicit-grants.sql`, md5 `336ff02ddf0a0330b50398a922acb09b`; ROUND 101):
-after every other file in the list above, including any added later. From 30-Oct-2026 Supabase no longer gives anon /
-authenticated / service_role automatic privileges on new tables, so the tables the files above make on live would have
-none ("permission denied" for the app and the edge functions). 97 grants exactly what staging held on 20-Oct-2026 (GRANTs
-only, nothing taken away; a table live does not have is skipped with a notice). Check after it: the read-back query in its
-test (`tests/run_migration_grants.py`, step 3) on live gives the same privileges as `tests/fixtures/staging-grants-20261020.json`.
-- Some files contain the words "delete from". In 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the
-migration itself removes no rows. Only 23 deletes rows when it runs: it deletes `tally_ledger_day` rows and builds the
-same days again. In 31 the delete touches a temporary list only.
-- Live has real data in the cloud copy, and these files change it as they run: 13, 23, 27, 32 and 37. 1.1.2 has, for
-each, a read-only dry run that counts the rows it will change, and a check to run just before and just after it.
-- The SQL editor rule: 43, 44, 48, 50, 55 and 68 were run by the owner in the SQL editor on staging. On live, 48 and 50
-must be run that way, by the owner. The others may go in md5-checked pieces as on staging (`docs/HANDOVER.md`, "How to
-apply a migration").
-- **Extensions live needs** (staging has these): pg_cron 1.6.4, pg_net 0.20.4, pgmq 1.5.1, supabase_vault 0.3.1, pgcrypto
-and uuid-ossp. The owner switches on any that are missing (Database → Extensions) before step 4 below.
+Notes on the list:
 
-**pg_cron jobs after the migrations** (as on staging; `tds-desk-nightly-backup` should already be there; times UTC):
-`tally-work` every 30 s and `tally-post-requeue` every minute (13, go-live copy); `gst-taxpro-refresh` */20 and `gst-daily`
-01:30–05:30 hourly (schema.sql and 16, go-live copies); `tally-recorder-drain` every 30 s, `tally-alert-gaps` */10,
-`tally-alert-silent` */30 03–13 Mon–Sat, `tally-alert-summary` 13:30 (47); `tally-recorder-archive-trim` 21:17 (48).
-**pgmq queues:** `tally_work` (13) and `tally_recorder` (47). **Vault:** `tally_work_key` (made by 13) and `gst_cron_key`
-(made by schema.sql). **Buckets:** `support-files`, `tally-days` and `tally-support` (should be there already), and
-`tally-uploads` (47).
+- **"delete from":** in 6–11, 18, 19, 29, 37–44 and 48 the words are inside a function, so the file itself removes no
+  rows. Only 23 deletes rows when it runs: it deletes `tally_ledger_day` rows and builds the same days again. Of the newer
+  files, 93 and 101 have "delete from" only inside functions.
+- **Files that change live data as they run:** 13, 23, 27, 32, 37 and **91**. 1.1.2 gives each a read-only dry run and a
+  before/after check. 76 changes no values, but it rewrites `tally_lines` and `tally_bills` to add their `id` keys, so it
+  is timed in the rehearsal.
+- **The SQL-editor rule:** on staging the owner ran 43, 44, 48, 50, 55 and 68 in the SQL editor. On live, 48 and 50 must be
+  run that way, by the owner. The others may go in md5-checked pieces, as on staging (`docs/HANDOVER.md`, "How to apply a
+  migration"). Any file the tool times out on in the rehearsal joins the owner's list.
+- **Extensions live needs:** pg_cron 1.6.4, pg_net 0.20.4, pgmq 1.5.1, supabase_vault 0.3.1, pgcrypto 1.3 and uuid-ossp
+  1.1, as on staging (staging also has pg_stat_statements). The owner switches on any that are missing (Database →
+  Extensions) before the migrations.
+
+**What staging holds after all of this (26-Oct), which live must match after the window.** Times are UTC.
+
+- **pg_cron (15 jobs):**
+  - `tds-desk-nightly-backup` 19:30 (base)
+  - `tally-work` every 30 s and `tally-post-requeue` every minute (13, go-live copy)
+  - `gst-taxpro-refresh` */20 (schema.sql, go-live copy)
+  - `gst-daily` 01:30–05:30 hourly (16, go-live copy)
+  - `tally-recorder-drain` every 30 s, `tally-alert-gaps` */10, `tally-alert-silent` */30 03–13 Mon–Sat and
+    `tally-alert-summary` 13:30 (47)
+  - `tally-recorder-archive-trim` 21:17 (48)
+  - `zoho-books-sync` */5 (75b, staging only)
+  - `gst-2b-match-queue` */15 (95b, staging only)
+  - `mis-run-due` */15 (100)
+  - `call-retention` 21:17 (102)
+- **pgmq queues:** `tally_work` (13) and `tally_recorder` (47).
+- **Storage buckets (10, all private):**
+  - `client-docs` and `doc-inbox` (base)
+  - `support-files` (support)
+  - `tally-days` and `tally-support` (tally-cloud)
+  - `tally-uploads` (47)
+  - `assistant-files` (77)
+  - `mis-reports` (100)
+  - `call-recordings` and `call-files` (102)
+- **Realtime publication `supabase_realtime` (12 tables), each added by a migration:**
+  - `clients`, `records` and `client_book_items` (12)
+  - `tally_jobs` (13)
+  - `tally_books` (15)
+  - `tally_post_jobs` (26)
+  - `tally_recorder_lines` (45)
+  - `tally_alerts` (47)
+  - `tally_book_changes`, `tally_sync_cursor`, `tally_month_locks` and `tally_tieouts` (64)
+
+  Compare live's list after the window with the inventory query's last line.
+- **Vault (names):**
+  - `connector_signing_passphrase`, `gsp:taxpro:aspid` and `gsp:taxpro:password` (set by hand)
+  - `gst_cron_key` (schema.sql)
+  - `tally_work_key` (13)
+  - `zoho_cron_key` (75)
+  - on live and the rehearsal copy only, `fincom_project_url` (1.1.1)
+
+  Staging also holds per-client `gsp:sess:*` and `gstportal:*` items written by the app. They are not copied.
 
 #### 1.1.1 The go-live copies of 13, 16 and gst-taxpro/schema.sql (risk 1)
 
@@ -160,6 +275,15 @@ leaves nothing; with it set, each copy runs twice cleanly; the four jobs are the
 run, `tally-work` calls `<address>/functions/v1/tally-ingest` and the two GST jobs `<address>/functions/v1/gst-taxpro`, each
 with its key; a changed secret is followed at the next run; and the copies end with the same functions, columns, jobs and
 schedules as the originals (40 checks, all passed).
+
+
+**Added 26-Oct: the newer files that name staging's address, and the one that reads it from a setting.**
+
+| File | What it does on staging | On live |
+|---|---|---|
+| `zoho-books/migration-75b-zoho-cron-staging.sql` | cron `zoho-books-sync`, the address written in | **A go-live copy is needed** (same pattern as the three above: the address from `fincom_project_url`, refuse staging). **Not written yet** (C, before the first rehearsal, with its test in `tests/run_golive_cron.py` and the owner's approval of its md5). Or leave it out until a client uses Zoho on live |
+| `gst-2b-match/migration-95b-gst-2b-match-cron-staging.sql` | cron `gst-2b-match-queue`, the address written in | Same: **a go-live copy is needed, not written yet**. Or leave it out at first |
+| `mis-run/migration-100-mis-schedules.sql` | cron `mis-run-due` reads `app_settings` row `mis_run` (`{"url": ".../functions/v1/mis-run"}`) | No copy needed. After the window, set the row to live's own address (1.3). Until it is set, the job sends nothing |
 
 #### 1.1.2 Dry runs for the files that change data (risk 3)
 
@@ -315,6 +439,27 @@ select coalesce(to_jsonb(t)->>'origin', '(no origin column yet)') as origin, cou
 After 32: the `fincom` row's `entries` grows by the dry run's number. After 37: `with_fincom_id` grows by the dry run's
 number. Total entries the same. Plus the money check.
 
+**91** (book start, added 26-Oct): sets `from_date`, and `open_as_on` where it is empty, on books that hold days but
+have no start. The query comes from the file's own header. It is not yet covered by `tests/run_golive_dryrun.py`: C adds
+it there before the first rehearsal. On live as it is today (Build 199) the columns it reads may not all be there yet, so
+run it in the window, just before 91.
+
+```sql
+-- dry run 91 (from the file's header; run in the window)
+select b.book_id, b.company, b.open_as_on,
+       coalesce(u.first_from, d.first_day) as from_date_to_set,
+       coalesce(b.open_as_on, coalesce(u.first_from, d.first_day) - 1) as open_as_on_to_set, d.days
+  from public.tally_books b
+  join (select book_id, count(*) as days, min(day) as first_day from public.tally_days group by book_id) d on d.book_id = b.book_id
+  left join (select book_id, min(to_date(upload->>'from', 'YYYYMMDD')) as first_from
+               from public.tally_jobs where kind = 'upload' and sealed and coalesce(upload->>'from', '') ~ '^[0-9]{8}$'
+              group by book_id) u on u.book_id = b.book_id
+ where b.from_date is null
+ order by b.company;
+-- end
+```
+After 91: the same query returns no rows, and no other book's `from_date` changed. Keep the list it printed before.
+
 #### 1.1.3 Migrations 31 and 61, and live-members-fix.sql (owner's decisions of 10-Oct-2026)
 
 - **31 (`tally-cloud/migration-31-clean-names.sql`): SKIP.** It is a one-time rewrite of names already kept (entities,
@@ -355,189 +500,395 @@ number. Total entries the same. Plus the money check.
     `select a.at, a.firm_id, a.user_id, a.detail from public.activity a where a.what = 'person.update' order by a.at desc;`
     and check that each person's role on the People page is the one they should have.
 
-### 1.2 Edge functions (staging versions, read 10-Oct)
 
-Deploy each one with the files listed in `server/_shared/README.md`. Always include `../_shared/cors.ts`. Before deploying, the owner
-writes down live's current version of each function: that is the way back.
+#### 1.1.4 Grants: migration 97 and the 30-Oct-2026 change
 
-| Function | Staging | Source | Note |
-|---|---|---|---|
-| tally-ingest | v43 | server/tally-cloud (index.ts, parse.js, _shared/cors.ts, names.js, sentry.ts, sentry-scrub.js) | the index.ts deployed with comments stripped, SHA-256 82d4e873…18f7 (docs/bridge-2.4.1-notes.md); verify_jwt off. Accepts bridge 1.14.6 (risk 7) |
-| signin | v3 | server/security/functions/signin | new on live |
-| admin | v14 | server/security/functions/admin | invite links go to `APP_URL`, which **defaults to staging**: set it on live |
-| gateway | v13 | server/security/functions/gateway | bill reading (Claude, Google Vision) |
-| gst-taxpro | v19 | server/gst-taxpro | |
-| gst-api | v10 | server/gst-api | uses fyn-relay |
-| support-mail | v10 | server/support-mail | |
-| signup | v10 | **not in the repository** | leave live's own as it is |
+- From 30-Oct-2026, Supabase gives `anon` / `authenticated` / `service_role` no automatic privileges on new tables in
+  `public`. A table made without GRANTs answers "permission denied" to the app and to the edge functions, service_role
+  included.
+- **97 runs last, after every file, whatever the date.** It writes out exactly what staging held on 20-Oct-2026 for the
+  166 tables, views and sequences that existed then (`tests/fixtures/staging-grants-20261020.json`). It contains GRANTs
+  only, and a relation live does not have is skipped with a notice. Check afterwards: the read-back in
+  `tests/run_migration_grants.py` (step 3) gives on live the same privileges as the fixture.
+- **Tables made after 20-Oct carry their own GRANTs** (the rule in `docs/MIGRATION-ORDER.md`), checked on 26-Oct:
+  - 98 (`tally_period_pulls`, `tally_period_days` and a third table): 11 grant lines.
+  - 100 (`mis_schedules`, `mis_runs`).
+  - 101 (`autopost_claims`, `autopost_log`).
+  - 102 (12 `call_*` tables).
+  - 103 (`call_code_tries`, `call_captions`).
+  - 104 (`tally_connect_steps`).
+  - 106 (`call_watch`).
+- **One difference to expect.** On staging, 98's two period tables were made before 30-Oct, so they also got the default
+  `anon` / `authenticated` privileges. RLS has no policy there, so no rows reach those roles. On live they get only what
+  the file grants (service_role). The rehearsal checks that the app's period-fetch screens still work. They read through
+  functions, not the tables, but this is to be confirmed. The other new tables already have the narrow grants on staging,
+  the same as live will have.
+
+### 1.2 Edge functions (staging, read 26-Oct-2026)
+
+Before deploying, the owner notes live's current version of each function: that is the way back. Most functions are now
+deployed as a one-line `index.ts` that imports the repository file at a fixed commit (a "pinned import"). Supabase
+bundles it at deploy time. On live, deploy **the same pins as staging**: that is what was tested. The files-based ones
+are deployed with the files in `server/_shared/README.md`, always including `../_shared/cors.ts`.
+
+| Function | Staging | verify_jwt | Source on staging (pin) | Live |
+|---|---|---|---|---|
+| tally-ingest | v58 | off | `server/tally-cloud/index.ts` @ `21edcfd26` (month_days); rollback on staging v57 @ `70815040d` | deploy; **re-run the 1.14.6 test against 21edcfd26 first** (risk 7) |
+| gst-taxpro | v21 | off | `server/gst-taxpro/index.ts` @ `0823a1e23` | deploy (after 94/95) |
+| fincom-assistant | v17 | off | `server/assistant/index.ts` @ `1de642a6b` | deploy (after 77–96) |
+| gst-2b-match | v4 | off | `server/gst-2b-match/index.ts` @ `dfc79fbae` | deploy (after 95, before gst-taxpro uses it) |
+| tds-challan-match | v3 | off | `server/tds-challan-match/index.ts` @ `d1169d304` | deploy |
+| fincom-transcribe | v5 | off | `server/fincom-transcribe/index.ts` @ `fc9883ad3` | deploy (needs `groq_api_key`) |
+| mis-run | v2 | off | `server/mis-run/index.ts` @ `bee47d200` | deploy (after 100) |
+| fincom-call | v4 | off | `server/video-calls/index.ts` @ `365bbb5f5` | deploy (after 102/103/106) |
+| zoho-books | v1 | off | `server/zoho-books/index.ts` @ `5279ae45b` | **optional**: only if Zoho is offered on live (needs the ZOHO_* secrets) |
+| signin | v3 | off | `server/security/functions/signin` (files) | deploy (new on live) |
+| admin | v14 | off | `server/security/functions/admin` (files) | deploy; set `APP_URL` (it defaults to staging) |
+| gateway | v13 | off | `server/security/functions/gateway` (files) | deploy (bill reading: claude, google vision) |
+| gst-api | v10 | off | `server/gst-api` (files) | deploy (uses fyn-relay) |
+| support-mail | v10 | off | `server/support-mail` (files) | deploy |
+| signup | v10 | off | **not in the repository** | leave live's own as it is |
+| bank-scrub | v6 | **on** | ops tool, branch `ops-bankscrub` only | **not for live** |
+
+That makes 13 functions to deploy, or 14 with zoho-books. Each deploy is checked by its CORS preflight from
+app.fincom.live and by the version Supabase reports. tally-ingest is also checked by a bridge beat. The full ezbr SHA-256
+of every staging deploy is in the 26-Oct inventory (`list_edge_functions`). Write live's own down as each one goes out.
+
 ### 1.3 Secrets and settings (names only)
 
-- **Function secrets:** `APP_URL` = https://app.fincom.live/ (admin, support-mail); `INVITE_MAIL_FROM`,
-  `RESEND_API_KEY`, `SUPPORT_MAIL_FROM`, `SUPPORT_MAIL_TO`; `ALLOWED_ORIGINS` (optional); `FYN_BASE_URL`,
-  `FYN_CLIENT_ID`, `FYN_CLIENT_SECRET`, `FYN_RELAY_URL`, `FYN_RELAY_KEY`; `TAXPRO_ASP_ID`, `TAXPRO_ASP_PASSWORD`,
-  `TAXPRO_BASE_URL`, `TAXPRO_EINV_URL`, `TAXPRO_TRACK_PATH`, the `TAXPRO_EINV_TEST_*` set; `TALLY_UPLOAD_PIECE`,
-  `TALLY_UPLOAD_MAX_TAIL`, `TALLY_WORK_VT` (optional). Supabase fills the `SUPABASE_*` secrets itself.
-- **Vault:** `gsp:taxpro:aspid`, `gsp:taxpro:password` and `connector_signing_passphrase`, as on staging.
-- **Platform keys (FinCom admin):** `claude_api_key` and `google_vision_key`.
-- **Auth:** Site URL https://app.fincom.live/, with redirect `https://app.fincom.live/**`. Apply the settings in
-  docs/security/14-owner-actions.md item 4.
-- **Resend:** the domain fincom.live must be verified there.
+**Edge Function secrets.** These are the names the code reads. The values are live's own. Supabase fills the
+`SUPABASE_*` names itself.
 
-### 1.4 The app build that points at live
+- **Links and mail:** `APP_URL` = https://app.fincom.live/ (admin, support-mail); `RESEND_API_KEY`, `INVITE_MAIL_FROM`,
+  `SUPPORT_MAIL_FROM` and `SUPPORT_MAIL_TO`; `ALLOWED_ORIGINS` (optional; app.fincom.live and fincom.live are already in
+  `_shared/cors.ts`).
+- **GST:** `FYN_BASE_URL`, `FYN_CLIENT_ID`, `FYN_CLIENT_SECRET`, `FYN_RELAY_URL` and `FYN_RELAY_KEY`; then `TAXPRO_ASP_ID`,
+  `TAXPRO_ASP_PASSWORD`, `TAXPRO_BASE_URL`, `TAXPRO_EINV_URL`, `TAXPRO_TRACK_PATH`, `TAXPRO_EVC_PATH`,
+  `TAXPRO_LEDGER_PATH`, `TAXPRO_R1_PATH`, `TAXPRO_R3B_PATH`, `TAXPRO_STATUS_PATH`, `TAXPRO_STATUS_TRIES`,
+  `TAXPRO_STATUS_WAIT_MS` and `TAXPRO_FILE_LIVE`, plus the `TAXPRO_EINV_TEST_*` set.
+- **Tally:** `TALLY_UPLOAD_PIECE`, `TALLY_UPLOAD_MAX_TAIL` and `TALLY_WORK_VT` (optional).
+- **Zoho, only with zoho-books:** `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REDIRECT_URI` (live's address),
+  `ZOHO_ACCOUNTS_URL`, `ZOHO_API_URL`, `ZOHO_MIN_GAP_MS` and `ZOHO_RUN_SECS`.
+- **Assistant tuning (optional):** `ASSISTANT_CHAT_EFFORT`. `FINCOM_SENTRY` needs no setting on live, because Sentry is
+  on only for staging's host.
+- **Not determined:** which of these staging actually has set. The tools here cannot list function secrets, so the owner
+  checks staging's list (Edge Functions → Secrets) against this one before the rehearsal.
 
-- **How the database is chosen.** The source in `src/js` stays in its live form: `CLOUD_DEFAULT` names live's
-  database. `build.py` checks this. `python3 build.py --react` writes `app/legacy/live.js` (live) and `test.js`, and in
-  `test.js` only it swaps in staging's address and key (`to_test`). `npm run build` (in app/) makes `app/dist` with
-  live.js. `npm run build:test` makes `app/dist-test` with test.js.
-- **The guard.** `app/publish-preview.sh` builds only dist-test and refuses to push unless `legacy.js` names staging
-  and not live.
-- **The live publish script: `app/publish-live.sh`** (written 10-Oct, **not run**). It does nothing unless `LIVE_GO=1`;
-  with `DRY=1` as well it does everything except the push. It refuses a checkout with uncommitted changes (and, when
-  `LIVE_SOURCE_COMMIT` is set, any commit other than that one), builds `app/dist` (`build.py --react`, `npm run build`),
-  and stops unless dist's `legacy.js` names live's project id and nothing in dist names staging or carries Sentry. The
-  repository holds no live project id: the owner writes his settings in **`~/.fincom/live.env`** (or the path in
-  `LIVE_CONFIG`), outside the repository (the script refuses a settings file inside a git work tree that is not ignored
-  there, and one that tries to change the site, branch or keep folder):
+**Platform keys** (`public.platform_secrets`, set in FinCom's admin as the platform admin):
 
-  ```sh
-  LIVE_PROJECT_ID=<live's project id>          # 20 letters and digits; the build must name it
-  LIVE_SOURCE_COMMIT=601e57ad                  # optional: the commit staging shows
-  ```
-  Run: `cd app && npm ci && LIVE_GO=1 DRY=1 ./publish-live.sh`, read the list of files, then `LIVE_GO=1 ./publish-live.sh`.
-- **Hosting and the switch (owner's answers, 10-Oct-2026):** the live site is GitHub Pages of **`caanshulgarg/tds-desk`,
-  branch `main`**, at app.fincom.live; both are written into the script, not settings. **The new app replaces the old one
-  at the root at once**, at the end of the go-live (step 8). What the script does in a fresh clone of tds-desk:
-  1. **keeps the old app**, the first time only: copies the root `index.html` (Build 199 is that one page) to
-     **`retired/build-199/index.html`**; the files the old page loads stay at the root untouched;
-  2. copies the build on top of the root (`index.html`, `legacy.js`, `assets/…`), one commit, and pushes to main.
-  It never deletes a file. It refuses to push if a file would be deleted, if anything other than the build's files and
-  the kept page would change, or if the build would overwrite an existing file other than `index.html` / `legacy.js`
-  with different content (so `CNAME` and the bridge downloads under `assets/connector` cannot be touched).
-- **Putting the old app back (about a minute)**, in a clone of tds-desk on branch main:
+| Name | On staging (26-Oct) | Used by | Live |
+|---|---|---|---|
+| `claude_api_key` | yes | gateway, fincom-assistant, gst-2b-match, tds-challan-match, fincom-transcribe, fincom-call (notes) | needed |
+| `google_vision_key` | yes | gateway | needed |
+| `groq_api_key` | yes | fincom-transcribe, fincom-call (live subtitles) | needed for transcripts and subtitles |
+| `cf_realtime_app_id`, `cf_realtime_token` | yes | fincom-call (Cloudflare Realtime SFU) | needed for meetings of more than 4, or behind strict networks (1.7) |
+| `cf_turn_key_id`, `cf_turn_key_token` | **no** | fincom-call (TURN, added to the ICE servers when set) | optional |
+| `resend_api_key`, `resend_from` | **no** | mis-run (MIS by email), fincom-call (emailed invites) | optional; without them MIS is in-app only and the host copies the invite link |
+| `call_guest_secret` | yes | fincom-call | **not set by hand**: fincom-call makes it on first use |
+
+**Vault:**
+
+- set by the owner: `fincom_project_url` (live's own address, 1.1.1), `gsp:taxpro:aspid`, `gsp:taxpro:password` and
+  `connector_signing_passphrase`;
+- made by the migrations: `gst_cron_key` (schema-golive), `tally_work_key` (13) and `zoho_cron_key` (75).
+
+**`app_settings`:**
+
+- `signup`: live has its own.
+- `mis_run` = `{"url": "https://<live project id>.supabase.co/functions/v1/mis-run"}`: set after mis-run is deployed. The
+  owner types live's id himself.
+
+**Auth:** Site URL https://app.fincom.live/ with the redirect `https://app.fincom.live/**`. Apply
+docs/security/14-owner-actions.md item 4.
+
+**Resend:** the domain fincom.live must be verified there, both for invites (`RESEND_API_KEY`) and for MIS and call mail
+(`resend_api_key`).
+
+### 1.4 The app build that points at live, and where it is hosted
+
+- **How the database is chosen** (unchanged).
+  - The source in `src/js` stays in its live form, with `CLOUD_DEFAULT` naming live's database. `build.py` checks this.
+  - `python3 build.py --react` writes `app/legacy/live.js` (live) and `test.js`. Only in `test.js` does it swap in
+    staging's address and key.
+  - `npm run build` (in app/) makes `app/dist` with live.js, and `npm run build:test` makes `app/dist-test`.
+  - `app/publish-preview.sh` builds only dist-test.
+- **`app/publish-live.sh`** (written 10-Oct, **not run**, unchanged since; last commit 176dcfb68).
+  - It does nothing unless `LIVE_GO=1`. With `DRY=1` as well it does everything except the push.
+  - It refuses uncommitted changes, and any commit other than `LIVE_SOURCE_COMMIT` when that is set.
+  - It builds `app/dist`, then stops unless dist's `legacy.js` names live's project id and nothing in dist names staging
+    or carries Sentry.
+  - The owner's settings go in `~/.fincom/live.env`, outside the repository:
+
+    ```sh
+    LIVE_PROJECT_ID=<live's project id>          # 20 letters and digits; the build must name it
+    LIVE_SOURCE_COMMIT=<the staging-next commit the rehearsal passed with>
+    ```
+
+  - Run `cd app && npm ci && LIVE_GO=1 DRY=1 ./publish-live.sh`, read the list of files, then `LIVE_GO=1 ./publish-live.sh`.
+- **What the script does** in a fresh clone of `caanshulgarg/tds-desk`, branch `main`:
+  - The first time only, it keeps the old app by copying the root `index.html` to `retired/build-199/index.html`.
+  - It copies the build on top of the root in one commit and pushes.
+  - It never deletes a file, and never overwrites `CNAME` or `assets/connector/*`.
+- **Putting the old app back** takes about a minute, in a clone of tds-desk on main:
 
   ```sh
   cp retired/build-199/index.html index.html && git commit -am "Put back Build 199" && git push origin main
   ```
-  GitHub Pages shows Build 199 again at app.fincom.live within about a minute (a browser may need a reload). The new
-  build's other files stay on the site but are not used. (Or `git revert` the "Live: React FinCom" commit and push.)
-  Going forward again: run the script again, or `git revert` the put-back commit.
-- Tried on a throwaway local copy of a site (not tds-desk, which was not accessed): the DRY run, the publish, a second
-  publish (no second keep), the refusal to overwrite `assets/connector/latest.json`, and the put-back step, which
-  restored the old page. Also its refusals (no LIVE_GO, no settings file, staging's id, settings inside the repository or
-  changing the site, uncommitted changes). A full run needs live's id, which this session may not name.
-- **Changes the live build needs:** vite.config.js ships `assets/bridge-go` only for a test build with
-  `FINCOM_SHIP_BRIDGE=1`, and build.py's live form still hands out the old PowerShell setup (`bridge-setup`). For live
-  users to get 2.4.1, both need a small reviewed change. (A live build has no Sentry; that is intended.)
+  Or `git revert` the "Live: React FinCom" commit and push.
+- **The live build must be the 2.4.7-pairing app.** It must be built from staging-next at or after the 2.4.7 publish
+  (`ed38661ee`); `365bbb5f5` qualifies. An older app cannot pair a 2.4.7 bridge.
 
-### 1.5 The bridge for live users
+**Hosting and DNS for app.fincom.live: depends on the owner's answer.** On 10-Oct the owner said the live site is GitHub
+Pages of `caanshulgarg/tds-desk`, branch `main`. He now says he "set up Cloudflare", and we don't know what that covers.
+Both ways keep `publish-live.sh`, which pushes to tds-desk main:
 
-- Give them **2.4.1, setup SHA-256 79e95ba3bf701ed2222b769d207f5cc885980a51f1443ded74fbd0ce7a5ae06a** (program
-  f59866e0…6eab). These are the same files as `assets-test/bridge-go/`.
-- A bridge whose `CloudUrl` is not staging takes https://app.fincom.live/ as its FinCom address (bridge-go/mode.go). It
-  looks for updates at **https://app.fincom.live/assets/bridge-go/latest.json** and `latest.json.sig`.
-  So live needs a `latest.json` whose two URLs point there; as on staging it has no `.sig`, so each computer is
-  installed by hand.
-- Live's computers run PowerShell bridge 1.14.x. The Go bridge adopts a 1.15.0 key (`adoptCloudKey`), so a 1.14
-  computer is paired again with a connect code.
+| | A. GitHub Pages (as decided 10-Oct) | B. Cloudflare Pages |
+|---|---|---|
+| Serves | tds-desk main, root, via GitHub Pages | the same tds-desk main, connected to a Cloudflare Pages project (no build command; output = repository root) |
+| DNS | `app` CNAME → `caanshulgarg.github.io`. If the zone is on Cloudflare, set the record to **DNS only** (grey cloud) so GitHub can issue the certificate | Cloudflare adds the `app` record itself when app.fincom.live is added as a custom domain of the Pages project. Then remove the custom domain from tds-desk's GitHub Pages settings, so two hosts do not claim it |
+| Headers | GitHub ignores `_headers`; the CSP is in the page's meta tag (build.py) | Cloudflare applies `_headers`. **Today's `_headers` says `microphone=()`, which blocks the microphone in meetings.** It must change to `microphone=(self)` (and stay `camera=(self)`) before B is used, and the build must carry that `_headers` at the root (not checked: does dist include it?) |
+| Way back | the put-back commit above | the same commit (Cloudflare rebuilds from main), or Cloudflare's "Rollback" on the previous deployment |
+| Unknown | whether tds-desk's Pages and DNS are as on 10-Oct | whether a Pages project exists, which account holds fincom.live's DNS, and whether "Cloudflare" meant only the meeting keys |
 
-### 1.6 Sentry
+Whichever is chosen, lower the `app` record's TTL to 300 s a day before, so a change or put-back takes effect quickly.
 
-There are three projects in the organisation garg-shekhar-company: app …4724864, cloud …5118080 and bridge …5642368.
-The owner's condition of 08-Oct allows staging only, and the code enforces it (`sentry.ts` and `crash.go` are on
-only for staging's host; a live build carries no Sentry code). Live goes without Sentry unless the owner widens the condition, which would need a code change and a new
-review.
+### 1.5 The bridge for live users: 2.4.7
 
-## 2. The go-live, in order
+- **The files.** Give live users **2.4.7**: setup `FinComBridge-Setup-2.4.7.exe`, SHA-256
+  `69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799`; program `FinComBridge-2.4.7.exe`, SHA-256
+  `a6ea2ec52f45d2fcd4bbd8731b814f3f0b95f46680f6a83f69e3cab6c6e8b546`. They are the same files as
+  `assets-test/bridge-go/` (published to staging review on 25-Oct, docs/bridge-2.4.7-notes.md).
+- **Where it looks.** A bridge whose `CloudUrl` is not staging takes https://app.fincom.live/ as its FinCom address, and
+  looks for updates at **https://app.fincom.live/assets/bridge-go/latest.json**. Live therefore needs its own
+  `latest.json`, with the same two SHA-256s and URLs under `https://app.fincom.live/assets/bridge-go/`. Staging's file
+  points at `staging.fincom.live/review/…`. As on staging, there is no `.sig` (`requireSignature: false`), so each
+  computer is installed by hand once.
+- **Still open from 10-Oct: the live build does not ship the Go bridge.**
+  - `app/vite.config.js` emits `assets/bridge-go` only for a test build with `FINCOM_SHIP_BRIDGE=1`.
+  - `build.py`'s live form still hands out the old PowerShell setup (`bridge-setup`).
+  - Live users get 2.4.7 only after a small reviewed change to both (C, before the rehearsal; the owner approves). Or C
+    places the four files and a live `latest.json` in tds-desk under `assets/bridge-go/` by a separate reviewed commit.
+- **Pairing.** 2.4.7 pairs only with the SPAKE2 app (1.4). Live's computers run PowerShell 1.14.x. The Go bridge adopts a
+  1.15.0 key, so a 1.14 computer is paired again with a connect code, and its PowerShell bridge stops posting once 2.4.7
+  is its main bridge.
+- **Releases.** On staging, `tally_bridge_releases` has 4 rows, none approved and not withdrawn, and runs "any computer,
+  no pilot". Live's table is empty. The owner decides whether live needs release rows before 2.4.7 is allowed.
 
-Who: O = owner, C = Claude. The times are estimates; the rehearsal replaces them with measured ones.
+### 1.6 Sentry (decision unchanged)
+
+The organisation garg-shekhar-company has three projects: app …4724864, cloud …5118080 and bridge …5642368. The owner's
+condition of 08-Oct allows staging only, and the code enforces it:
+
+- `_shared/sentry.ts` is on only when `SUPABASE_URL` is staging's;
+- the bridge's `crash.go` is on only for staging's host;
+- a live app build carries no Sentry code, and `publish-live.sh` refuses one that does.
+
+**Live goes without Sentry** unless the owner widens the condition, which needs a code change and a new review. The owner
+confirms "no Sentry on live" as part of saying go.
+
+### 1.7 Meetings (calls inside FinCom)
+
+- **What it needs on live:**
+  - migrations 102, 103 and 106;
+  - fincom-call v4 and fincom-transcribe v5;
+  - the buckets `call-recordings` / `call-files` and the cron `call-retention`;
+  - the platform keys in 1.3.
+- **Cloudflare Realtime (SFU).** Without `cf_realtime_app_id` / `cf_realtime_token`, calls fall back to peer-to-peer with
+  STUN, and at most 4 people. The owner makes a Realtime app for live in Cloudflare (1.4 does not depend on this) and
+  pastes its App ID and token as platform keys. A separate app from staging's is recommended, so usage and keys are kept
+  apart.
+- **TURN (optional).** `cf_turn_key_id` / `cf_turn_key_token` add Cloudflare TURN to the ICE servers, for people behind
+  strict office firewalls. Staging has none set.
+- **Links.** Invite and join links are made from the page the host is on. If that page is not one of FinCom's own sites,
+  fincom-call falls back to staging's address (`server/video-calls/handler.ts`, `siteBase`), and zoho-books does the same
+  in `backTo`. app.fincom.live is in the allowed list, so this only matters if the site moves to another name.
+- **Smoke check:** a two-person test call with subtitles on (step 13).
+
+## 2. The go-live day, in order
+
+**Before the day:**
+
+- two clean rehearsals (section 3);
+- the owner's written "go";
+- the open items closed:
+  - the go-live copies of 75b/95b, or a decision to leave them out;
+  - 76 on the go-live branch;
+  - the bridge-shipping change;
+  - the 1.14.6 test re-run against tally-ingest @ 21edcfd26;
+  - the hosting answer;
+  - `_headers` if Cloudflare Pages;
+- PITR on for at least a day;
+- the `app` DNS TTL lowered.
 
 | # | Step | Who | Time | Check | Way back |
 |---|---|---|---|---|---|
 | 1 | Tell staff: no FinCom work and no posting during the window | O | 5 m | — | — |
-| 2 | **Full backup of live:** Dashboard → Database → Backups (note the newest), switch on PITR if possible, download a full dump (`supabase db dump` or the dashboard's download), and download every storage bucket's files (a database backup holds no files) | O | 30–45 m | the dump file opens; bucket file counts noted | — |
-| 3 | Run the inventory query (1.1); write down live's function versions and the Build number on screen | O | 10 m | C compares it with the list in 1.1 | — |
-| 4 | **Lift the hook** for this session; switch on the missing extensions | O | 5 m | C reads one harmless `select 1` | put the hook back |
-| 5 | O sets the Vault secret `fincom_project_url` (1.1.1); O runs the dry runs again (1.1.2). Migrations in the order of 1.1 (13, 16 and schema.sql as go-live copies), each md5-checked; 48 and 50 by O in the SQL editor; functions read back by md5(prosrc) as on staging; **migration 97 (explicit grants) last of all** | C (+O) | 2½–3½ h | each file: md5 equal, functions matched; the checks of 1.1.2 before and after 13/23/27/32/37 agree with the dry runs | stop; restore from step 2 (or PITR to before step 5) |
-| 6 | Vault and settings: `gst_cron_key` (made by schema.sql), the GSP items, Auth URLs, platform keys | O | 15 m | cron jobs listed; `tally-work` runs without an error in `cron.job_run_details` | — |
-| 7 | Function secrets (1.3), then deploy the 7 functions; tally-ingest checked byte for byte | C | 30 m | CORS check from `server/_shared/README.md` against live; versions noted | redeploy the versions noted in step 3 |
-| 8 | Build and publish the live app with `app/publish-live.sh` (1.4: DRY first; it checks legacy.js names live) | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | put the old app back (1.4: `cp retired/build-199/index.html index.html`, commit, push; about a minute) |
-| 9 | Put the 2.4.1 files and latest.json on live; pair the first computer | C, O | 20 m | the setup's SHA-256 matches; the Tally page shows 2.4.1 | the old setup is still in tds-desk's history |
-| 10 | Smoke checks: sign in (owner and one staff), open a client, upload a bill, Look up, **Post to Tally into a test company**, bridge beat within 1 minute, `tally-recorder-drain` cron runs | O, C | 30 m | each one passes | step 8's way back; the data stays |
-| 11 | **Put the hook back**; tell staff to start | O | 5 m | C cannot reach live | — |
+| 2 | **Full backup of live** (section 4 A):<br>• note the newest scheduled backup<br>• check PITR is on<br>• download a full dump<br>• download every storage bucket's files (a database backup holds no files) | O | 45–60 m | the dump opens; per-bucket file counts noted | — |
+| 3 | Run the inventory query (1.1). Write down live's function versions, the Build number on screen and the platform key names | O | 10 m | C compares with 1.1 / 1.2 | — |
+| 4 | **Lift the hook** for this session (section 4 D); switch on any missing extensions | O | 5 m | C reads one harmless `select 1` | put the hook back |
+| 5 | Set Vault `fincom_project_url` to live's own address (1.1.1) | O | 5 m | the go-live copies' own check passes | — |
+| 6 | Run the live-members-fix check (1.1.3) and the dry runs (1.1.2) again | O, C | 15 m | the numbers equal the ones sent before go, or the difference is explained | — |
+| 7 | **Migrations 1–103 in the order of 1.1:**<br>• 13, 16 and schema.sql as go-live copies; 75b/95b as copies or left out<br>• each file md5-checked, its functions read back by md5(prosrc)<br>• 48 and 50 by O in the SQL editor<br>• the dry runs again just before 13, 23, 27, 32, 37 and 91, with their checks after<br>• **97 last of all** | C (+O) | 4–5½ h | each file: md5 equal, functions matched; 1.1.2's checks agree; 97's read-back equals the fixture; cron / buckets / queues / publication match 1.1 | stop; restore from step 2 (PITR to before step 7, or the dump) |
+| 8 | Vault and settings:<br>• check `gst_cron_key`, `tally_work_key` and `zoho_cron_key` were made<br>• the GSP items and `connector_signing_passphrase`<br>• Auth URLs<br>• platform keys (1.3) | O | 20 m | `select jobname, status from cron.job_run_details order by start_time desc limit 20` shows `tally-work` succeeding | — |
+| 9 | Function secrets (1.3), then deploy the functions of 1.2 with staging's pins. Then set `app_settings` `mis_run` | C (O sets values) | 45 m | CORS preflight from app.fincom.live; versions noted; one bridge 1.14 beat answered | redeploy the versions noted in step 3 (new ones: delete) |
+| 10 | **Hosting / DNS: depends on owner's answer** (1.4 A or B). Nothing to do if GitHub Pages already serves app.fincom.live and stays | O | 0–30 m | https://app.fincom.live/ answers with a valid certificate | the DNS record as it was (TTL 300 s) |
+| 11 | Build and publish the live app with `publish-live.sh` (DRY first) | C | 30 m | app.fincom.live shows the new build stamp; sign-in works | put the old app back (1.4; about a minute) |
+| 12 | Put bridge 2.4.7 and live's `latest.json` on the site; pair the first computer with a connect code | C, O | 20 m | the setup's SHA-256 matches; the Tally page shows 2.4.7; a beat within 1 minute | the computer keeps 1.14 until paired; the old setup is in tds-desk's history |
+| 13 | Smoke checks:<br>• sign in (owner and one staff)<br>• open a client, upload a bill, Look up<br>• **Post to Tally into a test company**<br>• the `tally-recorder-drain` cron runs<br>• Ask FinCom answers<br>• a 2-person **test meeting** with subtitles<br>• one MIS run by hand | O, C | 45 m | each one passes | step 11's way back; the data stays |
+| 14 | **Put the hook back**; tell staff to start | O | 5 m | C cannot reach live | — |
 
-**Total: about 5½–7 hours**, so plan for a whole quiet day (a Sunday). Installing 2.4.1 on the rest of the computers
-(about 15 minutes each) can follow over the next days.
+**Total: about 8–10 hours**, so plan a whole quiet day (a Sunday) and start early. The rehearsal replaces these times
+with measured ones. Installing 2.4.7 on the rest of the computers (about 15 minutes each) can follow over the next days.
 
-**Point of no return.** Once staff save work in the new app (after step 11), a restore loses that work. Until then,
-the backup from step 2 is a full way back.
+**Point of no return.** Once staff save work in the new app (after step 14), a restore loses that work. Until then the
+backup from step 2 is a full way back. If any step fails, stop, decide together, and if needed restore (PITR to the
+moment before step 7) and put the old app back.
 
-## 3. Rehearsal
+## 3. Rehearsal (twice, before the real day)
 
-1. **The copy.** The owner makes it and gives Claude its id: best, a new throwaway project restored from live's backup
-   (Dashboard → Backups → Restore to a new project). A Supabase branch is made from live's dashboard and starts empty,
-   so it rehearses less. Claude checks the id is not live's before any call; the hook would also stop it.
-2. **Treat it as live data.** The copy holds real clients. Claude reads only counts and totals from it. The owner
-   deletes the project after the rehearsal.
-3. **Run steps 3, 5, 6, 7 and 10 exactly as in section 2, timing each.** Set `fincom_project_url` on the copy to the copy's
-   own address (never staging's: the go-live copies refuse it anyway). Point a local live build (1.4), or a bridge's `CloudUrl`,
-   at the copy. Post into a test company only.
-4. **Record** for each file: the minutes it took, whether it ran in pieces or in the SQL editor, and any lock wait.
-   Run the dry runs and checks of 1.1.2 before and after 13, 23, 27, 32 and 37, and record them.
-5. **Done when** every step passes twice, from two separate restores, and section 2's times are replaced with the
-   measured ones.
+1. **The copy.** The owner restores live's newest backup to a **new throwaway project** (section 4 C) and gives Claude
+   its id. A Supabase branch starts empty, so it rehearses less. The hook stays on throughout. The copy has its own id,
+   so the hook does not block it, and if the id given were live's, the hook would refuse every call.
+2. **Treat it as live data.** The copy holds real clients. Claude reads only counts and totals from it. The owner deletes
+   the project after each rehearsal.
+3. **Run steps 3 and 5–13 exactly as in section 2, timing each.**
+   - Set `fincom_project_url` and `app_settings` `mis_run` to the copy's own address, never staging's (the go-live
+     copies refuse staging anyway).
+   - Point a local live build (1.4, with the copy's id in a separate settings file), or a bridge's `CloudUrl`, at the
+     copy.
+   - Post into a test company only.
+   - Use live's meeting keys, or none: a 2-person call works without the SFU.
+   - A restore copies no storage files, so test uploads only.
+4. **Record** for each file:
+   - the minutes it took;
+   - whether it ran in pieces or in the SQL editor;
+   - any lock wait, especially 23, 32, 37, 45 and **76**;
+   - the dry runs and checks of 1.1.2 before and after 13, 23, 27, 32, 37 and 91.
+5. **Done when** every step passes **twice, from two separate restores**, and section 2's times are replaced with the
+   measured ones. A failure means a fix, then two new clean passes.
 
-## 4. What only the owner can do
+## 4. What only the owner can do (with the clicks)
 
-- Take the full backup of live (and of the storage files), and keep it off Supabase.
-- Lift the block-production hook for the go-live window, and put it back the same day.
-- Say "go", in writing, after the rehearsal has passed.
-- Run 48 and 50 (and any piece the tool times out on) in live's SQL editor.
-- Paste the inventory query and send back what it shows.
-- Set `fincom_project_url` in live's Vault (the go-live copies' md5s: approved 10-Oct-2026).
-- Run the live-members-fix check (1.1.3) and act on its answer.
-- Run the dry runs of 1.1.2 in live's SQL editor before go and send the numbers.
-- Fill in `~/.fincom/live.env` for `app/publish-live.sh` (1.4).
-- Set the secret values: function secrets, vault, platform keys, Resend domain, Auth settings.
-- Install bridge 2.4.1 on each live user's computer (NWS144 steps as in docs/bridge-2.4.1-test-sheet.txt), and pair
-  each one with a connect code.
-- Decide whether Sentry stays off on live, and which computers get the bridge.
+Menu names are as of Oct-2026 and may have moved a little in the dashboards.
+
+- **A. Backup of live, including the files.**
+  1. Supabase → live project → **Database → Backups → Scheduled backups**: note the newest, and **Download** it.
+  2. A dump of your own on your computer. Get the connection string from **Project Settings → Database → Connection
+     string** (URI). Then run `supabase db dump --db-url "<uri>" -f live-schema.sql`, the same with `--data-only -f
+     live-data.sql`, and with `--role-only -f live-roles.sql`.
+  3. Storage files. Count them with the read-only `select bucket_id, count(*), sum((metadata->>'size')::bigint) from
+     storage.objects group by 1;`, then download each bucket: **Storage → bucket → select all → Download**. For many files,
+     use the Supabase CLI's storage copy. Compare the counts.
+  4. Keep the copies off Supabase: your laptop plus a Drive folder.
+- **B. PITR.** Go to **Project Settings → Add-ons → Point in time recovery**, choose 7 days and confirm. It is a paid
+  add-on and needs a Small compute or larger. Switch it on at least a day before. To use it: **Database → Backups → Point
+  in time → choose the minute → Restore**.
+- **C. Restore to a new project (for each rehearsal).**
+  1. Go to **Database → Backups**, pick the newest backup and choose **Restore to a new project**. Use the name
+     `fincom-rehearsal-1` (then `-2`) and the same region, then wait until it is ready.
+  2. Send Claude the new project's id.
+  3. If the dashboard does not offer this, create a new project and Claude writes the commands to load your dump into it.
+  4. Afterwards: **Project Settings → General → Delete project**.
+- **D. Lifting and restoring the hook (go-live day only).**
+  1. In the working copy this session runs from, disable the `PreToolUse` entry that runs
+     `.claude/hooks/block-production.sh` in `.claude/settings.json`. Change it locally only: never commit or push it.
+     Claude never edits it.
+  2. To put it back: `git checkout -- .claude/settings.json .claude/hooks/block-production.sh`. Claude then tries one
+     call naming live, and it must be refused.
+  3. The rehearsals never need the hook lifted.
+- **E. Vault secrets.** Go to **Database → Vault → Add new secret**, or use the SQL in 1.1.1. Add `fincom_project_url`
+  (live's own `https://<id>.supabase.co`), `gsp:taxpro:aspid`, `gsp:taxpro:password` and
+  `connector_signing_passphrase`.
+- **F. Function secrets.** Go to **Edge Functions → Secrets → Add** and add each name in 1.3 with live's values. Also
+  compare staging's list with 1.3 before the rehearsal.
+- **G. Platform keys.** In FinCom as the platform admin, open the admin's keys and set `claude_api_key`,
+  `google_vision_key`, `groq_api_key`, `cf_realtime_app_id` and `cf_realtime_token`. Optionally also set
+  `cf_turn_key_id` / `cf_turn_key_token` and `resend_api_key` / `resend_from`.
+- **H. Resend domain.**
+  1. resend.com → **Domains → Add domain** → `fincom.live`.
+  2. Add the DNS records it shows (an MX and an SPF TXT on its sending subdomain, and the DKIM TXT
+     `resend._domainkey`) wherever fincom.live's DNS is (Cloudflare, if that is what was set up). Then **Verify**.
+  3. **API Keys → Create**, with sending access for fincom.live. Paste it as the function secret `RESEND_API_KEY` and the
+     platform key `resend_api_key`.
+- **I. Auth URLs.** Go to **Authentication → URL Configuration**. Set the Site URL to `https://app.fincom.live/` and add
+  the Redirect URL `https://app.fincom.live/**`, then Save. Then do docs/security/14-owner-actions.md item 4.
+- **J. Hosting / DNS: depends on your answer** (1.4).
+  - **A, GitHub Pages:**
+    1. tds-desk → **Settings → Pages**: Source "Deploy from a branch", `main`, `/ (root)`.
+    2. Custom domain `app.fincom.live` → Save → **Enforce HTTPS**.
+    3. DNS: `app` CNAME `caanshulgarg.github.io`. On Cloudflare, set it to **DNS only**.
+  - **B, Cloudflare Pages:**
+    1. dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git** → `caanshulgarg/tds-desk`.
+    2. Production branch `main`, framework None, no build command, output = repository root → **Save and Deploy**.
+    3. In the project: **Custom domains → Set up a custom domain** → `app.fincom.live`.
+    4. Then remove the custom domain from tds-desk's GitHub Pages.
+    5. Only after Claude's `_headers` change (microphone).
+- **K. Meeting keys.**
+  1. dash.cloudflare.com → **Realtime → Serverless SFU → Create application** ("FinCom live"). Copy the App ID and the
+     App token into G.
+  2. Optional: **Realtime → TURN Server → Create**. Copy the Turn token ID and the API token into G.
+- **L.** Say **"go" in writing** after two clean rehearsals, and confirm "no Sentry on live".
+- **M.** Run 48 and 50 (and any piece the tool times out on) in live's SQL editor.
+- **N.** Paste the inventory query, the live-members-fix check and the dry runs before go, and send the results.
+- **O.** Fill in `~/.fincom/live.env` (1.4).
+- **P.** Install bridge 2.4.7 on each live user's computer (docs/bridge-2.4.7-test-sheet.txt) and pair each one with a
+  connect code.
+- **Q. Decide:**
+  - Zoho on live (zoho-books, 75b copy);
+  - the automatic 2B cron (95b copy);
+  - bridge release rows;
+  - which computers get 2.4.7 first;
+  - **what "set up Cloudflare" covered**.
 
 ## 5. Risks and open questions
 
-1. **Staging's address is written into 13, 16 and gst-taxpro/schema.sql.** Run as they are, live's timers would call
-   staging every 30 seconds. **Addressed:** live runs the go-live copies (1.1.1), which read the address from live's
-   Vault and refuse staging's; tested. Left: the owner approves their md5s and sets the secret.
-2. **Live's starting point is not known.** This list assumes live has exactly Build 199's files. The inventory query
-   decides; if live is ahead or behind, the list changes before anything runs.
-3. **Data that migrations transform:** 23 renames names and rebuilds `tally_ledger_day` days; 27 sets clients'
-   `postTo`; 32 and 37 re-mark voucher origins; 13 gives every device a new wake token. None of these is undone by a later migration. Only the backup undoes them. **Addressed:** a dry run and a
-   before/after check for each (1.1.2), tested; the owner runs the dry runs before go.
-4. **31 never ran on staging** (`tally_ledgers.raw_name` is missing there), yet it is in the numbered chain. The tested
-   order goes from 30 to 32 without it. **Decided: skip** (owner, 10-Oct; 1.1.3).
-5. **61** is now on tax-accuracy (same md5 as perms-61) and runs as step 61 (owner, 10-Oct). It narrows what `authenticated` may write on clients, records
-   and activity. Old Build 199 tabs left open would then fail their writes. `live-members-fix.sql` (perms-61, md5
-   fd84f633…): the owner does not know if it was run; 1.1.3 has the check and what to do.
-6. **Staff accounts:** 61 closes members self-promotion; invites need `APP_URL` and Resend; the platform admin's
-   second step (admin function) is not switched on. Check that every live staff member can still sign in during step 10.
-7. **Bridges 1.14 during and after the window.** **Tested 10-Oct:** tally-ingest as in the repository (staging's v43)
-   accepts bridge 1.14.6. `tests/run_bridge_1146_server.py` (new; the real index.ts under Deno against the stand-in for
-   Supabase) sends every call 1.14.6 makes, with its exact bodies (bridge/cloud.ps1 at f447539fe): hello, companies,
-   ledgers, days (gz), state, beat, posts_take, posts_update; each is answered 200 with the fields 1.14.6 reads (links,
-   done, updateNow, posts, the job with its payload), and a queued posting goes waiting → taken → running → done (14
-   checks, all passed). `run_main_bridge_server.py` (133 checks) and `run_bridge_control_server.py` (61) also pass. What
-   this does not cover: the database functions are stand-ins there (their SQL is tested by the migration tests); a
-   posting made by the new app is not tried through 1.14.6's own PowerShell; and once a 2.x bridge is made a computer's
-   main bridge, 1.14/1.15 on that computer is refused postings by design. During the window (before step 7) live still
-   runs its own tally-ingest; 1.14 computers keep syncing, so the dry runs are repeated just before each file.
-8. **The bridge release table.** On live, `tally_bridge_releases` and the allow-list are empty. Staging runs with "any
-   computer, no pilot". The owner should check whether live needs the same release rows before 2.4.1 is allowed.
-9. **The live build ships no Go bridge** (1.4). `app/publish-live.sh` now exists (not run) and publishes to the root,
-   keeping the old app. The bridge files still need a small reviewed change before the go-live.
-10. **signup's source is not in the repository.** Live keeps its own copy, untested against the new schema.
-11. **What cannot be undone without a restore:** the data changes in item 3, the privileges revoked by 4, 58, 61 and
-    70, and pg_cron jobs that have already called out.
-12. **The window's length depends on live's data size.** 23, 32, 37 and the RESTRICT swaps in 45 lock tables. The
-    rehearsal measures how long.
-13. **Owner's answers (10-Oct-2026):** live site = GitHub Pages of `caanshulgarg/tds-desk`, branch main; go-live copies
-    approved; 31 skipped, 61 run; live-members-fix unknown, so the check in 1.1.3. the new app replaces the old one at
-    the root at once, the old one kept in `retired/build-199/` (1.4).
+1. **Staging's address in cron files.**
+   - 13, 16 and gst-taxpro/schema.sql: **addressed** by the go-live copies (1.1.1), which were tested and approved on
+     10-Oct.
+   - **75b and 95b: open.** Their go-live copies are not written yet. Until they are, leave both out on live.
+2. **Live's starting point is not known.** The list assumes live has exactly Build 199. The inventory query decides; if
+   live is ahead or behind, the list changes before anything runs.
+3. **Data that migrations transform:** 13 (wake tokens), 23 (names, day totals rebuilt), 27 (`postTo`), 32 and 37
+   (voucher origins), and **91** (book start dates). Only the backup undoes them. Each has a dry run and a check (1.1.2).
+   91's dry run is not yet in `tests/run_golive_dryrun.py`, and **91 has no record of running on staging**.
+4. **31 is skipped** (owner, 10-Oct). **61 runs**; old Build 199 tabs fail their writes afterwards, so everyone reloads.
+   The live-members-fix status is unknown, so the check in 1.1.3 decides.
+5. **76 is not on staging-next.** It lives on `origin/db-speed` (76c65c4b0), and staging ran that exact text. It must be
+   brought over byte for byte. It also rewrites `tally_lines` / `tally_bills` to add their keys, so on live's data it may
+   be the longest lock of the day. The rehearsal times it.
+6. **Staff accounts:** invites need `APP_URL` and Resend, and every staff member must still sign in during step 13.
+7. **Bridges 1.14 during and after the window.**
+   - On 10-Oct `tests/run_bridge_1146_server.py` proved that tally-ingest **v43** accepts PowerShell 1.14.6.
+   - Staging now runs **v58 (21edcfd26)**. **Re-run that test, plus `run_main_bridge_server.py` and
+     `run_bridge_control_server.py`, against 21edcfd26 before the first rehearsal.**
+   - Once 2.4.7 is a computer's main bridge, 1.14 on that computer is refused postings by design.
+8. **The live build ships no Go bridge yet** (1.5): a small reviewed change is still needed. 2.4.7 needs the SPAKE2 app,
+   so the app and the bridge go out together.
+9. **Grants after 30-Oct** (1.1.4). 97 runs last, and the newer files carry their own GRANTs. 98's tables will be
+   narrower on live than on staging, and the rehearsal confirms the period-fetch screens.
+10. **Hosting unknown** (1.4). Cloudflare Pages would apply `_headers`, whose `microphone=()` breaks meetings until
+    changed. Two hosts must not both claim app.fincom.live.
+11. **Edge functions are pinned imports** of `caanshulgarg/testingtdsdesk` commits. A deploy fetches from GitHub at
+    deploy time, so the repository must be reachable then. Running functions do not need it.
+12. **signup's source is not in the repository.** Live keeps its own, untested against the new schema.
+13. **What cannot be undone without a restore:**
+    - the data changes in item 3;
+    - the privileges revoked by 4, 58, 61 and 70;
+    - pg_cron jobs that have already called out;
+    - mail already sent (MIS, invites).
+14. **The window's length** depends on live's data size, now with 37 more files. 23, 32, 37, 45 and 76 lock tables, and
+    the rehearsal measures how long.
+15. **Storage files** are in no database backup, and a restore to a new project copies none. The owner's download in
+    step 2 is the only copy.
+16. **Meetings' running costs:** Cloudflare Realtime, Groq and Claude. Recordings live in `call-recordings` until
+    `call-retention` clears them. The owner confirms the budget before turning meetings on for staff.
+17. **Stale lines in docs/MIGRATION-ORDER.md.** 90, 93, 100, 101, 102 and 103 still say "not run on staging", but all
+    are present on 26-Oct. This checklist reflects what staging holds; MIGRATION-ORDER should be corrected in a separate
+    change.
+18. **Not determined from here:**
+    - which Edge Function secrets staging has set (no tool lists them);
+    - how 99–103 were applied on staging (they are not in the tool's migration list or the piece store; the bodies match
+      the files);
+    - whether 91 ran on staging;
+    - live's current state (never read);
+    - what the owner's Cloudflare set-up covers.
