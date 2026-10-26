@@ -687,49 +687,14 @@ async function loadAdminOverview(quiet){
 
 // where a link in an email should bring the person back: this page, without its #…
 function appUrl(){ return location.origin + location.pathname; }
-// An invite or reset link lands here with the session in the address (#access_token=…&type=invite|recovery):
-// the person is signed in and asked to choose their password before anything else (review item 21)
-// signup v12 (26-Oct-2026): also the link that confirms a new account's email (type=signup) and the way back from
-// "Continue with Google / Microsoft" (no type): that person is signed in at once, and their first sign-in sets up their
-// firm (Cloud.whoAmI → Cloud.provision). Invite and reset links still ask for the password first.
+// FinCom opened from a sign-in link: the way back from Google / Microsoft or the email's confirmation link (?code=, the
+// PKCE flow: signed in only in the browser that started it), an invite or reset link (#access_token=…&type=invite|
+// recovery: the password first), or an error. lib/authLink.jsx (the React app's own file) takes it, before start()
+// decides whose copy to open (security review of 26-Oct-2026, M1: a link with someone's tokens no longer signs in)
 function takeAuthLink(){
-  const h = String(location.hash || "");
-  if (/[#&]error_description=/.test(h) && !/access_token=/.test(h)){
-    const q = new URLSearchParams(h.replace(/^#/, ""));
-    try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
-    Cloud.st.error = "Sign-in did not finish: " + String(q.get("error_description") || q.get("error") || "").slice(0, 200);
-    return false;
-  }
-  if (!/access_token=/.test(h)) return false;
-  const q = new URLSearchParams(h.replace(/^#/, "")), type = q.get("type") || "";
-  if (type && !/^(invite|recovery|signup|magiclink)$/.test(type)) return false;
-  try { history.replaceState(null, "", location.pathname + location.search); } catch (e){}
-  const back = !type || type === "signup";
-  let who = {};
-  if (back){ try { who = JSON.parse(decodeURIComponent(escape(atob(String(q.get("access_token")).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))))) || {}; } catch (e){ who = {}; } }
-  Cloud.setSess({access_token: q.get("access_token"), refresh_token: q.get("refresh_token"), at: Date.now(), expires_in: num(q.get("expires_in")) || 3600, email: back ? String(who.email || "") : "", user_id: back ? String(who.sub || "") : ""});
-  if (back){ if (who.email) Cloud.setCfg({email: String(who.email)}); S.authReturn = type || "oauth"; return true; }
-  S.setPassword = {type};
-  return true;
-}
-async function setPasswordGo(){
-  const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
-  const f = S.setPassword || (S.setPassword = {});
-  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)){ f.error = "Use 10 characters or more, with letters and digits."; render(); return; }
-  if (a !== b){ f.error = "The two passwords are not the same."; render(); return; }
-  const c = Cloud.cfg(), s = Cloud.sess();
-  Cloud.st.busy = "saving"; render();
-  try {
-    const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/user", {method: "PUT", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"}, body: JSON.stringify({password: a})});
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.msg || j.error_description || j.message || "The password could not be saved.");
-    Cloud.setSess(Object.assign({}, s, {email: j.email || "", user_id: j.id || ""}));
-    Cloud.setCfg({email: j.email || ""});
-    S.setPassword = null; Cloud.st.busy = "";
-    auditEvent("password_set", f.type || "");
-    if (!(await Cloud.checkMfa())) await Cloud.whoAmI();
-    render();
-  } catch (e){ Cloud.st.busy = ""; f.error = e.message; render(); }
+  if (!/[?&#](code|access_token|error_description)=/.test(location.search + location.hash)) return;
+  let n = 0;
+  return new Promise(done => { const go = () => window.loadAuthLink ? window.loadAuthLink().then(m => m.takeReturn()).catch(e => { Cloud.st.error = "Sign-in did not finish: " + e.message; }).then(done) : ++n > 500 ? done() : setTimeout(go, 20); go(); });
 }
 
 /* ---------- nothing is shown until someone signs in: the page is React (app/src/screens/SignIn.jsx) ---------- */
@@ -739,14 +704,9 @@ function signInNeeded(){
   if (Cloud.on()) return !!Cloud.st.mfa;           // signed in (works offline once signed in), unless the code is still due
   return Cloud.cfg().gate !== false;
 }
-// signup v12: the form's answer is always "check your email" (the account is made once the email's link is clicked)
-Cloud.signUp = async function(d){
-  const c = this.cfg();
-  const r = await fetch(c.url.replace(/\/+$/, "") + "/functions/v1/signup", {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(d)});
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j.ok === false) throw new Error(j.error || "The account could not be made.");
-  return j;
-};
+// signup v12: the form's answer is always "check your email" (the account is made once the email's link is clicked);
+// the form goes with this browser's PKCE challenge (lib/authLink.jsx)
+Cloud.signUp = d => window.loadAuthLink().then(m => m.signUp(d));
 // the first sign-in of a confirmed person with no firm: their own firm, with its starting credit (the signup function's
 // provision; it makes nothing for an unconfirmed email, an invited member, or anyone who has a firm already)
 Cloud.provision = async function(){
@@ -767,10 +727,9 @@ function loadAuthProviders(){
     .then(j => { const e = (j && j.external) || {}; S.authProviders = {google: e.google === true, azure: e.azure === true}; render(); }, () => { S.authProvidersAsked = false; });
 }
 Cloud.oauth = function(provider){
-  const c = this.cfg(), box = document.querySelector('[data-cloud="keep"]');
+  const box = document.querySelector('[data-cloud="keep"]');
   if (box) lsSet("tdsdesk:keep", box.checked ? "1" : "0");
-  const back = location.origin + location.pathname;     // this page (/review/ on staging), where takeAuthLink picks the sign-in up
-  location.assign(c.url.replace(/\/+$/, "") + "/auth/v1/authorize?provider=" + encodeURIComponent(provider) + "&redirect_to=" + encodeURIComponent(back) + (provider === "azure" ? "&scopes=email" : ""));
+  window.loadAuthLink().then(m => m.startOAuth(provider)).catch(e => { Cloud.st.error = e.message; render(); });
 };
 
 
@@ -1511,7 +1470,6 @@ function doAct(act, t){
       else { if (box){ box.focus(); box.select(); } toast("Select the report and copy it (Ctrl+C)."); }
       break;
     }
-    case "setPasswordGo": setPasswordGo(); break;
     case "cloudSignIn": {
       const em = document.querySelector('[data-cloud="email"]'), pw = document.querySelector('[data-cloud="password"]');
       const email = em ? em.value.trim() : "", pass = pw ? pw.value : "";
@@ -1576,7 +1534,7 @@ function doAct(act, t){
       if (!(f.name || "").trim() || !(f.firm || "").trim() || !(f.email || "").trim() || !pw){ toast("Fill in your name, the firm name, email and password."); break; }
       if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)){ Cloud.st.error = "Use a password of 10 characters or more, with letters and digits."; render(); break; }
       Cloud.st.busy = "Sending\u2026"; Cloud.st.error = ""; render();
-      Cloud.signUp({name: f.name.trim(), firm: f.firm.trim(), email: f.email.trim(), password: pw, redirect: location.origin + location.pathname})
+      Cloud.signUp({name: f.name.trim(), firm: f.firm.trim(), email: f.email.trim(), password: pw})
         .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpSent = true; render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
@@ -2416,7 +2374,7 @@ function applyEntryHash(){
 }
 window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
 (async function start(){
-  takeAuthLink();
+  await takeAuthLink();
   applyEntryHash();
   S.splitPdf = lsGet("tdsdesk:splitPdf") === "1";
   S.freeFirst = lsGet("tdsdesk:freeFirst") !== "0";
@@ -2467,7 +2425,7 @@ window.addEventListener("hashchange", () => { applyEntryHash(); render(); });
   try { const last = JSON.parse(lsGet("tdsdesk:selftest") || "null"); if (last && last.results) S.selfTest = {busy: false, results: last.results, finished: last.finished, remembered: true}; } catch (e){}
   if (wipeStoredKeys()){ pickEngine(); setTimeout(() => toast("For safety, API keys saved in this browser were removed. Sign in to the firm account to use Claude and Google OCR."), 1500); }
   startBridgePolling();
-  // back from an email's confirmation link or from Google / Microsoft (takeAuthLink): signed in now; the code first if
+  // back from an email's confirmation link or from Google / Microsoft (takeAuthLink, PKCE): signed in now; the code first if
   // the account has two-step sign-in, then the firm (set up here on the first sign-in, Cloud.whoAmI)
   if (S.authReturn && Cloud.on()){
     S.authReturn = "";

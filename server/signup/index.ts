@@ -1,3 +1,4 @@
+// signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (handler.ts; security review M1).
 // signup v12 (26-Oct-2026): self-service sign-up with the email confirmed first, and the person's own firm with
 // ₹10,000 made on their first sign-in (provision); invites and the administrator's path as in v11. The rules are in
 // handler.ts (Deno tests: handler_test.ts). Deployed as uploaded files (index.ts, handler.ts), verify_jwt off: the
@@ -101,12 +102,18 @@ async function createFirm(by: AdminCaller, f: CreateFirm) {
 }
 
 // ---------- v12: sign-up through Supabase Auth, and the firm made on the first sign-in ----------
-const noSession = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
 async function authSignUp(f: SignUpForm): Promise<void> {
   // "Confirm email" is on: a new email gets an unconfirmed login and Supabase's confirmation email; an email with a
   // confirmed login gets nothing (Supabase answers with a stand-in user); an unconfirmed one gets the link again
-  const anon = createClient(URL, ANON, { auth: noSession });
-  await anon.auth.signUp({ email: f.email, password: f.password, options: { emailRedirectTo: f.redirect || APP, data: { name: f.name, firm: f.firm } } });
+  // v13: straight at Auth's /signup (as supabase-js does), so the app's PKCE challenge can go with it: the email's link
+  // then comes back with ?code=, which only the browser that registered can trade for a sign-in. Without one (an older
+  // app): the implicit link as before (the app now only says "Email confirmed — now sign in" for it)
+  const pkce = f.challenge ? { code_challenge: f.challenge, code_challenge_method: "s256" } : {};
+  const r = await fetch(URL + "/auth/v1/signup?redirect_to=" + encodeURIComponent(f.redirect || APP), {
+    method: "POST", headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: f.email, password: f.password, data: { name: f.name, firm: f.firm }, ...pkce }),
+  });
+  await r.body?.cancel();
 }
 
 async function authUser(jwt: string): Promise<AuthUser | null> {

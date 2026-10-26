@@ -1,3 +1,4 @@
+// signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (security review M1).
 // signup v12 (26-Oct-2026): self-service sign-up again, with the email confirmed before anything is made. Plain module
 // with no imports, so the Deno tests (handler_test.ts) run it with fake services; index.ts wires the real ones.
 //
@@ -55,7 +56,10 @@ export async function ownFirmId(userId: string): Promise<string> {
 
 export type AdminCaller = { userId: string };
 export type CreateFirm = { email: string; password: string; firm: string; name: string; credit: number; plan: string };
-export type SignUpForm = { email: string; password: string; name: string; firm: string; redirect: string };
+// challenge: the app's PKCE code_challenge (S256, 43 characters of base64url; "" when absent or malformed), passed to
+// Supabase's sign-up so the email's link signs in only the browser that registered (security review of 26-Oct-2026, M1)
+export type SignUpForm = { email: string; password: string; name: string; firm: string; redirect: string; challenge: string };
+export const validChallenge = (s: unknown) => typeof s === "string" && /^[A-Za-z0-9_-]{43}$/.test(s);
 // the signed-in person, as Supabase Auth has them now. firm: the firm name typed on the form (user_metadata; empty for
 // Google/Microsoft); signupFirm: the firm a provision already made for this login (app_metadata, only the server writes it)
 export type AuthUser = { id: string; email: string; confirmed: boolean; name: string; firm: string; provider: string; signupFirm: string | null };
@@ -214,6 +218,7 @@ export function makeHandler(d: Deps) {
       email, password: String(body.password || ""), name: String(body.name || "").trim().slice(0, 120),
       firm: String(body.firm || "").trim().slice(0, 160),
       redirect: /^https?:\/\/[^\s"'<>]{1,300}$/.test(String(body.redirect || "")) ? String(body.redirect) : "",
+      challenge: validChallenge(body.challenge) ? String(body.challenge) : "",
     };
     if (!validEmail(email)) return bad("That email address does not look right.");
     if (!validPassword(form.password)) return bad("Use a password of 10 characters or more, with letters and digits.");

@@ -99,8 +99,22 @@ Deno.test("a new email gets 'check your email'; Supabase is asked to sign it up 
   const r = await read(await handler(post({ ...form(" Nobody@Example.test "), redirect: "https://staging.fincom.live/review/" })));
   eq(r, OK);
   await Promise.all(log.bg);
-  eq(log.signups, [{ email: "nobody@example.test", password: "a-long-password-1", name: "A Person", firm: "Some Firm", redirect: "https://staging.fincom.live/review/" }]);
+  eq(log.signups, [{ email: "nobody@example.test", password: "a-long-password-1", name: "A Person", firm: "Some Firm", redirect: "https://staging.fincom.live/review/", challenge: "" }]);
   eq(firmCount(t), 0, "no firm"); eq(t.credits.length, 0, "no credit"); eq(log.created.length, 0); eq(log.links.length, 0);
+});
+
+// PKCE (security review of 26-Oct-2026, M1): the app sends the hash of a secret it keeps (code_challenge, S256: 43
+// characters of base64url); it goes to Supabase's sign-up, so the email's link signs in only the browser that registered
+Deno.test("the form's PKCE challenge goes to Supabase's sign-up; a malformed one is dropped (the same answer)", async () => {
+  const CH = "OuddVTA1NIOdoix9lemhkzoLQ6GHGOfcZHnYuakDdMM";
+  const { handler, log } = fake();
+  eq(await read(await handler(post({ ...form("a@example.test"), redirect: "https://staging.fincom.live/review/#confirmed", challenge: CH }))), OK);
+  for (const bad of ["short", CH + "x", CH.slice(0, 42) + "=", "<script>alert(1)</script>" + CH.slice(25), 12345]) {
+    eq(await read(await handler(post({ ...form("b" + log.signups.length + "@example.test"), challenge: bad }))), OK, "malformed " + bad);
+  }
+  await Promise.all(log.bg);
+  eq(log.signups[0].challenge, CH); eq(log.signups[0].redirect, "https://staging.fincom.live/review/#confirmed");
+  eq(log.signups.slice(1).map((s: any) => s.challenge), ["", "", "", "", ""]);
 });
 
 Deno.test("existing, invited and new emails get byte-identical answers (no account enumeration, no 409)", async () => {

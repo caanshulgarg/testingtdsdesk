@@ -1,9 +1,10 @@
 // The sign-in page, before anything of the firm is shown: sign in, create an account, or two-step sign-in (a code from
-// an authenticator app). Was viewSignIn (src/js/27), viewSignUp (src/js/27) and viewTwoStep (src/js/43). Buttons are
+// an authenticator app); "choose your password" is lib/authLink.jsx's. Was viewSignIn (src/js/27), viewSignUp (src/js/27) and viewTwoStep (src/js/43). Buttons are
 // doAct cases (cloudSignIn, cloudSignUp, showSignUp, showSignIn, oauthGoogle, oauthAzure, useOffline) and mfaAction (src/js/43); the boxes keep
 // their data-cloud and id, which those read, and the buttons their data-act (the old tests press them by it); and what is typed is kept in S.cloudForm (cloudForm).
 import Msg from "../parts/Msg.jsx";
 import { useEffect, useRef } from "react";
+import { staleReload } from "../staleChunk.js";
 
 const Act = ({ act, className = "btn primary", children, disabled }) => <button className={className} data-act={act} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 const Box = ({ children }) => <div className="signin"><div className="signin-box">{children}</div></div>;
@@ -69,20 +70,15 @@ function TwoStep() {
     <p className="note" style={{ marginTop: 14 }}>{!(m.required || (m.need === "code" && !m.forAdmin)) && <><button className="linkbtn" data-act="mfaCancel" onClick={() => mfaAction("mfaCancel")}>Not now</button> · </>}Lost your phone? Ask the platform administrator to reset your two-step sign-in. <button className="linkbtn" data-act="mfaSignOut" onClick={() => mfaAction("mfaSignOut")}>Sign out</button></p></Box>;
 }
 
-// arrived from an invite or a reset link (review item 21): the person chooses their password first (setPasswordGo, src/js/27)
-function SetPassword() {
-  const f = S.setPassword || {}, busy = Cloud.st.busy;
-  return <Box><h1>{f.type === "recovery" ? "Choose a new password" : "Welcome to FinCom"}</h1>
-    <p className="note" style={{ margin: "8px 0 14px" }}>{f.type === "recovery" ? "Choose the password you will sign in with from now on." : "You have been added to your firm’s account. Choose the password you will sign in with."}</p>
-    <label className="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" aria-label="New password" autoComplete="new-password" autoFocus /></label>
-    <label className="f" style={{ marginTop: 8 }}><span>Repeat it</span><input type="password" id="spw2" aria-label="Repeat the new password" autoComplete="new-password" onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); setPasswordGo(); } }} /></label>
-    <div className="row" style={{ marginTop: 12 }}><button className="btn primary" data-act="setPasswordGo" disabled={!!busy} onClick={() => setPasswordGo()}>{busy ? "Saving…" : "Save and continue"}</button></div>
-    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={f.error} /></p>}</Box>;
-}
+// sign-in links (lib/authLink.jsx, its own file: the PKCE flow, the way back from Google / Microsoft and the email's
+// links, "choose your password"): loaded when FinCom opens from such a link (src/js/27 start()), for "Continue with
+// Google / Microsoft" (Cloud.oauth) and for the register form (Cloud.signUp)
+let link = null;
+window.loadAuthLink = () => import("../lib/authLink.jsx").then((m) => (link = m), (e) => { staleReload(e, true); throw e; });
 
 export default function SignIn() {
   const st = Cloud.st;
-  if (S.setPassword) return <SetPassword />;
+  if (S.setPassword) return link ? <link.SetPassword /> : null;
   if (Cloud.on() && st.mfa) return <TwoStep />;
   if (S.signUpOpen) return <SignUp />;
   return <Box><h1>FinCom</h1>
