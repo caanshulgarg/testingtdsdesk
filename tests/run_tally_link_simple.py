@@ -162,7 +162,10 @@ def main():
         ok(lk == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}]], "2. Link -> tally_company_link once, for this client (%s)" % lk)
         ok(E("(c) => S.companies[c].tallyName", cid) == "ABC LTD", "2. Link sets the client's Tally name hint (%s)" % E("(c) => S.companies[c].tallyName", cid))
         ok(E("(c) => tallyLinkOf(S.companies[c]).state", cid) != "unlinked", "2. the client is linked at once (%s)" % E("(c) => tallyLinkOf(S.companies[c]).state", cid))
-        ok(E("(c) => choiceState(S.companies[c], 'postTo')", cid) != "confirmed" and not E("(c) => S.companies[c].postTo || ''", cid), "2. linking does not allow posting")
+        # owner decision of 26-Oct-2026: linking a client to its Tally company also allows posting to it
+        ok(E("(c) => [S.companies[c].postTo, choiceState(S.companies[c], 'postTo'), choiceGet(S.companies[c], 'postTo').why]", cid) == ["ABC LTD", "confirmed", "confirmed when linked to Tally"],
+           "2. linking allows posting into the linked company (%s)" % E("(c) => choiceGet(S.companies[c], 'postTo')", cid))
+        E("(c) => { const co = S.companies[c]; delete co.choices.postTo; co.postTo = ''; }", cid)
 
         # ---- 2b. not linked, nothing seen yet: Companies in Tally reads the cloud again by itself
         E("(c) => { S.companies[c].tallyName = 'NEW CO'; }", cid)
@@ -194,10 +197,18 @@ def main():
         ok(re.search(r"NWS144 · last entry (today|yesterday) \d\d:\d\d", rt) is not None and "Sync now" in rt, "4. the row: computer and last entry, Sync now (%s)" % rt)
         shot(pg, "card-3-reading-desktop-light")
 
-        # ---- 5. posting: off until "Post entries here" is confirmed (the row's ⋯)
-        ok(E("(c) => postToProblem ? !!postToProblem(S.companies[c]) : true", cid), "5. posting is refused while not chosen (postToProblem)")
+        # ---- 5. posting: the one linked company is confirmed from the link by itself (26-Oct-2026); Stop posting here and
+        # Post entries here (the row's ⋯) change it, asked first
+        ok(E("(c) => choiceState(S.companies[c], 'postTo')", cid) != "confirmed", "5. linked, the client not opened since: nothing confirmed yet")
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(1500); to_row()
+        c5 = E("(c) => [S.companies[c].postTo, choiceState(S.companies[c], 'postTo'), (choiceGet(S.companies[c], 'postTo') || {}).why]", cid)
+        ok(c5 == ["GARG SHEKHAR", "confirmed", "confirmed from the Tally link"] and not E("(c) => postToProblem(S.companies[c])", cid), "5. linked before, none confirmed: confirmed from the Tally link on opening (%s)" % c5)
+        menu_open("GARG SHEKHAR"); pg.click(R("GARG SHEKHAR") + " [data-tco-post-stop]"); confirm(True)
+        ok(E("(c) => postToProblem ? !!postToProblem(S.companies[c]) : true", cid), "5. Stop posting here: posting is refused (postToProblem)")
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", cid); pg.wait_for_timeout(1500); to_row()
+        ok(E("(c) => S.companies[c].postTo || ''", cid) == "", "5. a person's stop is not undone by opening the client")
         menu_open("GARG SHEKHAR"); pg.click(R("GARG SHEKHAR") + " [data-tco-post-here]"); confirm(False)
-        ok(E("(c) => choiceState(S.companies[c], 'postTo')", cid) != "confirmed", "5. Post entries here, then No: still off")
+        ok(E("(c) => !!postToProblem(S.companies[c]) && !S.companies[c].postTo", cid), "5. Post entries here, then No: still off")
         menu_open("GARG SHEKHAR"); pg.click(R("GARG SHEKHAR") + " [data-tco-post-here]"); pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000)
         ok("Post Link Co\u2019s entries into GARG SHEKHAR?" in (txt("#confirmBox") or ""), "5. it asks first: \u201cPost Link Co's entries into GARG SHEKHAR?\u201d (%s)" % txt("#confirmBox")[:80])
         confirm(True)

@@ -2287,6 +2287,9 @@ async function tallyLinkClient(company, cid, opts){
   mark(TCloud.pane.companies);
   [cid].concat(was).filter(Boolean).forEach(x => { if (TCloud.st[x]) TCloud.st[x].at = 0; });
   if (co && co.tallyName !== company && !opts.keep){ co.tallyName = company; Store.saveCompany(co); }
+  // owner, 26-Oct-2026: linking a client to its Tally company also allows posting to it (by the person who linked); a
+  // different company a person confirmed before stays
+  if (co && typeof postToOnLink === "function") postToOnLink(co, company);
   // unlinked (or moved away): the client it left keeps no Tally name that names it
   was.filter(x => x !== String(cid || "")).forEach(x => { const k = CO(x); if (k && k.tallyName && !all.some(r => r.company !== company && String(r.client_id || "") === x)){ k.tallyName = ""; Store.saveCompany(k); } });
   render();

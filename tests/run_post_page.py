@@ -66,23 +66,21 @@ with sync_playwright() as p:
     line = lambda: pg.inner_text("#app [data-post-line]").replace("\n", " ").strip() if pg.locator("#app [data-post-line]").count() else ""
     # second pass of 02-Oct-2026: what to do is a second line, only when something is wrong
     prob = lambda: pg.inner_text("#app [data-post-problem]").replace("\n", " ").strip() if pg.locator("#app [data-post-problem]").count() else ""
-    # B14: the company set by itself on opening the client (one Tally company linked, same GSTIN)
-    co = E("(() => { const c = CO(); return {postTo: c.postTo, by: c.postToBy, at: !!c.postToAt}; })()")
-    ok(co == {"postTo": GARG, "by": "auto", "at": True} and any(x.get("postTo") == GARG for x in E("window.__saved")),
-       "B14. opening the client: postTo set to GARG SHEKHAR & COMPANY by itself (auto) and saved (%s)" % co)
-    # review 20-21 (02-Oct-2026): the company found by itself is a guess: posting waits until a person confirms it
-    ok(E("choiceState(CO(), 'postTo')") == "guessed" and "confirm the Tally company" in prob() and prob().endswith("Confirm the Tally company"), "review 20. the company found by itself is a guess to confirm: '%s'" % prob())
-    ok(E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')").startswith("Confirm the Tally company"), "review 21c. and posting is refused until it is confirmed")
+    # B14: the company set by itself on opening the client (one Tally company linked). Owner decision of 26-Oct-2026: the
+    # client's link allows posting to that company, so it is confirmed from the link (was: a guess to confirm, review 20-21)
+    co = E("(() => { const c = CO(), r = choiceGet(c, 'postTo') || {}; return {postTo: c.postTo, state: r.state, why: r.why, at: !!c.postToAt}; })()")
+    ok(co == {"postTo": GARG, "state": "confirmed", "why": "confirmed from the Tally link", "at": True} and any(x.get("postTo") == GARG for x in E("window.__saved")),
+       "B14. opening the client: postTo set to GARG SHEKHAR & COMPANY, confirmed from the Tally link, and saved (%s)" % co)
+    ok(prob() == "" and not E("postToProblem(CO(), 'GARG SHEKHAR & COMPANY')"), "review 20-21. posting into it is allowed: nothing to confirm ('%s')" % prob())
+    E("() => { choiceConfirm(CO(), 'postTo', ''); render(); }"); pg.wait_for_timeout(300)
+    ok(prob() == "Allow posting to GARG SHEKHAR & COMPANY? Allow posting", "posting stopped by a person, one company linked: 'Allow posting to GARG SHEKHAR & COMPANY?', one button ('%s')" % prob())
     # #11 (the owner's rule of 05-Oct-2026): any member who may write confirms the posting company (who and when kept);
     # round 39: the tick on the client's Link to Tally card, "Post this client's entries into X"
     # 24-Oct-2026 (next-tally-one-page): "Post entries here" on the client's row of the Tally page (its ⋯), asked first
+    # 26-Oct-2026: the gate's button on a client linked to one company allows posting to it in that one click
     E("() => { window.__acct = S.account; S.account = Object.assign({}, S.account || {}, {me: Object.assign({}, (S.account || {}).me || {}, {role: 'staff'})}); S.postStop = null; goChooseTallyCompany(); }"); pg.wait_for_timeout(1200)
-    rsel = '#app [data-tco-list=firm] [data-tco-row="%s"]' % GARG
-    ok(E("S.homeTab") == "tally" and pg.locator(rsel + " [data-tco-post-here]").count() == 1 and pg.locator(rsel + " [data-tco-post-stop]").count() == 0,
-       "#11. staff: Choose the Tally company opens its row on the Tally page; the found company is not chosen, and can be (⋯ Post entries here)")
-    pg.click(rsel + " [data-tco-more] summary"); pg.wait_for_timeout(250); pg.click(rsel + " [data-tco-post-here]"); pg.wait_for_timeout(300); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(400)
-    pc = E("(() => { const r = choiceGet(CO(), 'postTo'); return {state: r && r.state, by: !!(r && r.by), at: !!(r && r.at)}; })()")
-    ok(pc == {"state": "confirmed", "by": True, "at": True}, "#11. staff's Confirm: confirmed, with who and when kept (%s)" % pc)
+    pc = E("(() => { const r = choiceGet(CO(), 'postTo'); return {value: r && r.value, state: r && r.state, by: !!(r && r.by), at: !!(r && r.at)}; })()")
+    ok(pc == {"value": GARG, "state": "confirmed", "by": True, "at": True} and E("S.homeTab") != "tally", "#11. staff: the gate's one click confirms the linked company, with who and when kept (%s)" % pc)
     E("() => { S.account = window.__acct; S.view = 'company'; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
@@ -116,7 +114,7 @@ with sync_playwright() as p:
     ok(line() == "Posting into GARG SHEKHAR & COMPANY" and prob().startswith("TallyPrime is closed on NWS144. Open TallyPrime on NWS144") and prob().endswith("Check again"), "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
     E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'open'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'open', tally: true, open: ['GARG SHEKHAR & COMPANY']}); render(); }")
     E("() => { const c = CO(); window.__keep = c.postTo; c.postTo = ''; AutoPostTo.at[c.id] = Date.now(); render(); }"); pg.wait_for_timeout(300)
-    ok(prob().endswith("Choose the Tally company") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen: 'Choose the Tally company' (%s)" % prob())
+    ok(prob().endswith("Allow posting") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen, one linked: 'Allow posting' (%s)" % prob())
     E("() => { const c = CO(); c.postTo = window.__keep; TCloud.pane.devices = []; TCloud.on = () => false; TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
     ok(prob().startswith("Install FinCom Bridge"), "C15. no bridge anywhere: 'Install FinCom Bridge' (%s)" % prob())
     E("() => { TCloud.on = () => TCloud.__on !== false; TCloud.pane.devices = [{id: 'd-1', name: 'NWS144', main_bridge: 'go-1', revoked: false, info: {computer: 'NWS144', bridges: {'go-1': {computer: 'NWS144', version: '2.1.1', mode: 'main', at: new Date().toISOString(), tallyState: 'open'}}}}]; render(); }")

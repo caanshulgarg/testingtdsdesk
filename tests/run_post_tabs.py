@@ -278,7 +278,9 @@ with sync_playwright() as p:
     enq = [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"]
     ok(len(enq) == 1 and enq[0]["ids"] == ["n4"] and pg.locator('#app [data-attn-kind="post-refused"]').count() == 0, "the next press posts, and the error row goes (%s)" % enq)
     # 3. a gate's refusal is a row too, never silence: the Tally company this client may post to is not confirmed
+    # (26-Oct-2026: one linked company is confirmed from the link by itself; with two linked, a person picks)
     E("""() => { const co = CO(); co.choices = Object.assign({}, co.choices || {}); window.__pt = co.choices.postTo; co.choices.postTo = Object.assign({}, co.choices.postTo || {}, {state: "guess"});
+      window.__cos0 = TLight.st.cos; TLight.st.cos = TLight.st.cos.concat([{company: "GARG SHEKHAR & COMPANY 2025-26", client_id: co.id, device_id: "d-1"}]);
       const mk = (id, n, no, amt) => { const e = newEntry("Manual entry"); e.id = id; Object.assign(e.x, {vendorName: n, vendorGstin: "", invoiceNo: no, invoiceDate: "2026-07-01", taxable: amt, total: amt});
         e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[S.coId].entries[e.id] = e; approve(e); e.approvedAt = window.__t(400); return e; };
       mk("n5", "New Bill Co", "N/5", 1000); refreshStats(S.coId); window.__rpc = []; render(); }""")
@@ -287,7 +289,7 @@ with sync_playwright() as p:
     why = txt("#app [data-post-why]")
     ok(pg.locator("#app [data-post-main]").count() == 1 and pg.locator("#app [data-post-main]").is_disabled() and "Confirm the Tally company" in why and not [a for f, a in E("window.__rpc") if f == "tally_post_enqueue"],
        "a gate's refusal (the Tally company not confirmed) is said beside the disabled Post button, nothing queued (%s)" % why[:120])
-    E("() => { CO().choices.postTo = window.__pt; S.postStop = null; render(); }")
+    E("() => { CO().choices.postTo = window.__pt; TLight.st.cos = window.__cos0; S.postStop = null; render(); }")
     # 4. an entry Tally took but the bridge could not confirm: "Posted, not yet confirmed — checking whether it reached Tally", no Retry or Post again
     E("""() => { window.__jobs.unshift({id: "jK", client_id: S.coId, company: "GARG SHEKHAR & COMPANY", status: "failed", done: 0, n: 1, message: "1 entry sent to Tally; could not confirm it", created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
       entry_ids: ["n5"], results: [{id: "n5", ok: false, outcomeUnknown: true, message: "Tally took it; not read back"}], items: [{id: "n5", state: "unknown", reason: "Tally took it; not read back"}]}); CloudJobs.changed(); }""")

@@ -369,6 +369,17 @@ function postStatusFor(co){
   // a stop that no longer holds goes by itself: the company confirmed since, or no bill waits on a guessed ledger now
   if (st && /^Confirm the Tally company/.test(st.msg) && typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed"){ S.postStop = null; st = null; }
   if (st && /^Posting waits/.test(st.msg)){ const b0 = postBills(co.id); if (b0 && !b0.ready.some(e => billGuessedWhy(e, co))){ S.postStop = null; st = null; } }
+  // no company confirmed and the client linked: the linked company asked about here, one click (postToOffer)
+  const offer = typeof choiceState === "function" && choiceState(co, "postTo") === "confirmed" && co.postTo ? null : postToOffer(co);
+  const ask = (lead, kind) => { const o = p(lead + offer.ask, offer.companies.length === 1 ? "Allow posting" : "", offer.companies.length === 1 ? () => postToAllow(co, offer.companies[0]) : null, kind);
+    if (offer.companies.length > 1) o.offer = offer.companies.map(c => ({company: c, go: () => postToAllow(co, c)}));
+    return o; };
+  if (st && offer && offer.companies.length && !/^Posting waits/.test(st.msg)){
+    out.problem = ask("Not sent to Tally. ", "stop");
+    out.problem.dismiss = () => { S.postStop = null; render(); };
+    return out;
+  }
+  if (pl.go === "cotally" && offer && offer.companies.length){ out.problem = ask("", "company"); return out; }
   if (st){
     const guess = /^Confirm the Tally company/.test(st.msg), led = /^Posting waits/.test(st.msg);
     out.problem = p("Not sent to Tally: " + (guess ? "confirm the Tally company. " : led ? "a ledger is not confirmed. " : "choose the Tally company. ") + (guess || led ? st.msg + " " : "") + "The bills are still waiting here.",
@@ -905,7 +916,11 @@ const PostOwner = {
 function postNote(cid, text, level){ S.postNote = {cid, text, level: level || "", at: Date.now()}; }
 
 // 24-Oct-2026 (next-tally-one-page): the posting company is chosen on the Tally page (its row's ⋯ Post entries here)
-function goChooseTallyCompany(){ Smart.setReturn(); const co = CO(); S.step = null; S.arm = null; if (co && tallyLinkOf(co).state !== "unlinked"){ S.tallyGuide = {}; openTallyFor(co.id); } else openConnectTally(4, co ? co.id : ""); window.scrollTo(0, 0); }
+function goChooseTallyCompany(){
+  // 26-Oct-2026: a client linked to one Tally company: that company, allowed in this one click
+  const c0 = CO(), offer = c0 && !(choiceState(c0, "postTo") === "confirmed" && c0.postTo) ? postToOffer(c0) : null;
+  if (offer && offer.companies.length === 1){ postToAllow(c0, offer.companies[0]); return; }
+  Smart.setReturn(); const co = CO(); S.step = null; S.arm = null; if (co && tallyLinkOf(co).state !== "unlinked"){ S.tallyGuide = {}; openTallyFor(co.id); } else openConnectTally(4, co ? co.id : ""); window.scrollTo(0, 0); }
 function goTallyPage(){ closeSwitcher(); S.view = "home"; S.homeTab = "tally"; S.arm = null; render(); window.scrollTo(0, 0); }
 // the role of a bill's ledger line, as the table groups them
 const PV_ROLE = {party: "party", expense: "expense", gst: "gst", "rcm-in": "gst", "rcm-out": "gst", tds: "tds"};
@@ -1023,6 +1038,7 @@ async function postAllToTally(only){
   const said = [], t0 = toast, from = typeof Smart === "object" ? Smart.here() : "";
   window.toast = (m, o) => { said.push(String(m)); return t0(m, o); };
   try {
+    await postToFromLink(co);
     if (!co.postTo) await autoPostTo(co);
     if (!co.postTo || postToProblem(co, "")){ postStopped(postToProblem(co, ""), co.id); render(); return; }
     if (!S.bank || S.bank.cid !== co.id) await loadBank(co.id);
@@ -1120,4 +1136,81 @@ async function autoPostTo(co, force){
   toast(co.name + ": " + one.name + " is the one Tally company linked (same GSTIN " + mine + "). Confirm it on the Tally page (its row: Post entries here) before posting.");
   render();
   return true;
+}
+// ---------- the company a client posts to, from its Tally link (owner decision, 26-Oct-2026: "yes", linking a client to
+// its Tally company also allows posting to that same company). Staging, 26-Oct-2026: ITSEasy Solutions Pvt Ltd, linked
+// on 24-Oct, had no confirmed company; its bank posting said "choose the Tally company" and the button only opened the
+// Tally page, where the confirmation was in the row's ⋯ (Post entries here) and linking again confirmed nothing.
+//   - Link (tallyLinkClient): the linked company is confirmed, by the person who linked, unless the client has another
+//     company a person confirmed (kept; nothing new said);
+//   - a client linked to exactly one company with none confirmed (linked before this): confirmed on opening the client
+//     or on posting, "confirmed from the Tally link", by the signed-in person; a person's "Stop posting" stays;
+//   - two or more linked: nothing picked; the gate asks which, one button each (postToOffer); posting still goes only
+//     into the confirmed company (postToProblem), and it is changed on the Tally page as before.
+// the companies linked to the client in FinCom's cloud, as last read (TLight, else the Tally page); null: not read yet
+function postToLinked(co){
+  if (!co) return null;
+  const st = (typeof TLight === "object" && TLight.st) || {}, pane = (typeof TCloud === "object" && TCloud.pane) || {};
+  const rows = st.cos && st.cos.length ? st.cos : Array.isArray(pane.companies) ? pane.companies : st.loaded ? [] : null;
+  if (!rows) return null;
+  const out = new Map();
+  rows.forEach(r => { if (r && r.company && String(r.client_id || "") === String(co.id)){ const k = ledNm(r.company).toLowerCase(); if (!out.has(k)) out.set(k, ledNm(r.company)); } });
+  return Array.from(out.values());
+}
+function postToMayWrite(){ const me = S.account && S.account.me; return !me || !me.role || ["owner", "staff"].includes(me.role); }
+const PostToLink = {at: {}};
+// fills the slot from the one linked company; returns the company confirmed now, or ""
+async function postToFromLink(co){
+  if (!co || co.deleted || !postToMayWrite() || typeof TCloud !== "object" || !TCloud.on()) return "";
+  const done = () => { const c = choiceGet(co, "postTo"); return !!(c && c.state === "confirmed"); };
+  if (done()) return "";
+  if (typeof ZohoB === "object" && ZohoB.isZoho && ZohoB.isZoho(co)) return "";
+  let cos = postToLinked(co);
+  if (!cos || !cos.length){
+    if (Date.now() - (PostToLink.at[co.id] || 0) < 30000) return "";
+    PostToLink.at[co.id] = Date.now();
+    try { cos = Array.from(new Set(((await Cloud.api("tally_companies?select=company,client_id&client_id=eq." + encodeURIComponent(co.id))) || []).filter(r => r && r.company && String(r.client_id || "") === String(co.id)).map(r => ledNm(r.company)))); }
+    catch (e){ return ""; }
+  }
+  if (!cos || cos.length !== 1 || done() || co.deleted) return "";
+  choiceConfirm(co, "postTo", cos[0], {why: "confirmed from the Tally link"});
+  postToCleared(co);
+  render();
+  // the cloud checks a posting against the client's saved copy (tally_post_enqueue): sent before the posting goes
+  try {
+    if (typeof cloudPushNow === "function" && Cloud.on()){
+      for (let i = 0; i < 20 && typeof cloudBusy !== "undefined" && cloudBusy; i++) await new Promise(r => setTimeout(r, 250));
+      await cloudPushNow();
+    }
+  } catch (e){}
+  return cos[0];
+}
+// a person's Link: the company linked now, unless another one is confirmed (a confirmed "Stop posting" gives way to it)
+function postToOnLink(co, company){
+  if (!co || !company || !postToMayWrite()) return false;
+  const c = choiceGet(co, "postTo");
+  if (c && c.state === "confirmed" && c.value) return false;
+  choiceConfirm(co, "postTo", ledNm(company), {why: "confirmed when linked to Tally"});
+  postToCleared(co);
+  return true;
+}
+// a refusal said for this client (Post to Tally, the bank statement's report) goes once a company is confirmed
+function postToCleared(co){
+  if (S.postStop && S.postStop.cid === co.id) S.postStop = null;
+  if (S.bank && S.bank.cid === co.id && S.bank.postReport && S.bank.postReport.notAllowed) S.bank.postReport = null;
+  if (S.coId === co.id && S.billPost && S.billPost.notAllowed) delete S.billPost.notAllowed;
+}
+// what the gate offers for a client without a confirmed company: the companies linked to it, each one click
+// ({ask, companies}; companies empty: not linked, the Tally page links it)
+function postToOffer(co){
+  const cos = postToLinked(co) || [];
+  if (!co || !cos.length || !postToMayWrite()) return {ask: "", companies: []};
+  return {ask: cos.length === 1 ? "Allow posting to " + cos[0] + "?" : "Post to which Tally company?", companies: cos};
+}
+function postToAllow(co, company){
+  if (!co || !company) return;
+  choiceConfirm(co, "postTo", company, {why: "allowed from the posting"});
+  postToCleared(co);
+  toast("Posting allowed into " + company + ".");
+  render();
 }

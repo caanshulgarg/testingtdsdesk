@@ -203,6 +203,7 @@ const Bridge = {
     if (typeof ZohoB === "object" && coP && ZohoB.on() && !ZohoB.st.data) { try { await ZohoB.load(); } catch (e){} }
     const viaZoho = typeof ZohoB === "object" && ZohoB.isZoho(coP);
     // 02-Oct-2026: only into the Tally company chosen for this client (Client setup → Tally); the cloud refuses the same
+    if (!viaZoho && coP && typeof postToFromLink === "function") await postToFromLink(coP);
     const notAllowed = viaZoho ? "" : postToProblem(coP, payload.company);
     if (notAllowed) return {ok: true, company: payload.company, notAllowed: true, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, notAllowed: true, message: notAllowed})).concat(refused)};
     // review of 02-Oct-2026 (B9): a ledger Tally already has is never sent as a master; a new one is asked about first,

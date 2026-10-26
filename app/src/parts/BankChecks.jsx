@@ -169,6 +169,10 @@ export function FixBanner() {
 export function PostReport({ rep }) {
   if (!rep) return null;
   // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
+  // 26-Oct-2026: the client linked and no company confirmed: the linked company asked about here, one click each
+  const co = rep.notAllowed && typeof CO === "function" ? CO() : null, offer = co && !(choiceState(co, "postTo") === "confirmed" && co.postTo) ? postToOffer(co) : null;
+  if (offer && offer.companies.length) return <div className="bk-alert bad" data-not-allowed=""><b>{"Not sent to Tally. " + offer.ask}</b>{" "}
+    {offer.companies.map((c) => <Button key={c} className="btn small" data-post-allow={c} onClick={() => postToAllow(co, c)}>{offer.companies.length === 1 ? "Allow posting" : c}</Button>)}{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
     <Button className="btn small" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);

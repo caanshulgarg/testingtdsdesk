@@ -101,6 +101,7 @@ function choiceConfirm(co, key, value, opts){
   value = String(value == null ? "" : value).trim();
   const was = opts.was || choiceGet(co, key), now = new Date().toISOString();
   const rec = {value, state: "confirmed", by: opts.by || choiceWho(), at: now};
+  if (opts.why) rec.why = String(opts.why);
   if (was && (was.value !== value || was.state !== "confirmed")) rec.prev = {value: was.value || "", state: was.state, by: was.by || "", at: was.at || ""};
   Drafts.direct(() => { choiceWrite(co, key, rec); if (!opts.nosave) Store.saveCompany(co); }, {bypass: true});
   return rec;

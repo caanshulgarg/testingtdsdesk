@@ -824,7 +824,8 @@ async function openCompany(cid){
     else if (typeof CloudJobs.load === "function") Promise.resolve(CloudJobs.load()).then(() => render(), () => {});
   } catch (e){} }, 0);
   // 02-Oct-2026: the Tally company this client may post to, set by itself when it is clear (one linked, same GSTIN)
-  setTimeout(() => { try { if (typeof autoPostTo === "function") autoPostTo(S.companies[cid]).catch(() => {}); } catch (e){} }, 0);
+  // 26-Oct-2026: a client linked to one Tally company and with none confirmed: that company, confirmed from the link
+  setTimeout(() => { try { if (typeof postToFromLink === "function") postToFromLink(S.companies[cid]).then(v => { if (!v && typeof autoPostTo === "function") return autoPostTo(S.companies[cid]); }).catch(() => {}); } catch (e){} }, 0);
   // the client's ledger list, read on opening the client (from the cloud copy when linked, else the bridge); then the
   // Client setup ledgers of the wrong tax head or section, or not in Tally, are set to the ones that fit (and saved)
   if (typeof Ledgers === "object") Ledgers.load(cid).then(() => { if (S.coId === cid && Ledgers.cid() === cid && autoMapCompanyLedgers(CO(cid)).length) render(); }, () => {});

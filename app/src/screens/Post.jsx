@@ -38,6 +38,7 @@ function StatusLine({ co, noProblem }) {
     {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
       <span>{p.msg ? <><b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(p.msg)} The bills are still waiting here.</> : p.text}</span>
       {p.button && p.go && <button className="btn small" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
+      {(p.offer || []).map((o) => <button key={o.company} className="btn small" data-post-allow={o.company} onClick={o.go}>{o.company}</button>)}
     </div>}
   </>;
 }
@@ -473,7 +474,7 @@ export function PostStep() {
     if (typeof postReconcile === "function") postReconcile(co.id);
     if (typeof PostIds === "object") PostIds.load(co.id);
     TallyProof.check(co.id).catch(() => {});
-    if (!co.postTo) autoPostTo(co).catch(() => {});
+    if (!co.postTo || choiceState(co, "postTo") !== "confirmed") postToFromLink(co).then((v) => { if (!v && !co.postTo) return autoPostTo(co); }).catch(() => {});
     bills.attention.filter((e) => (e.exportedAt || e.postUnconfirmed) && PostCheck.due(e)).forEach((e) => PostCheck.run(co, e).catch(() => {}));
   }, 0);
   const waiting = bills.ready, unsent = v.filter((e) => e.status === "approved" && !e.exportedAt).length, sent = v.filter(billInTally).length, undoable = v.filter((e) => e.exportedAt && e.tally && e.tally.guid).length;
