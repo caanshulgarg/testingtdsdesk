@@ -446,12 +446,6 @@ function beatOf(r, k) {
   const info = (r.device && r.device.info) || {}, b = (info.bridges || {})[r.id] || {}, bt = info.beat || {};
   return b[k] !== undefined ? b[k] : (r.main || !r.go) ? bt[k] : undefined;
 }
-// the port his Tally should answer on: the first port the bridge checked in his own Windows session (session 0's are
-// skipped), else the bridge's Tally port, else Tally's own default
-function tallyPortOf(r) {
-  const ports = [].concat(beatOf(r, "ports") || []).filter((x) => x && !x.skipped && x.port);
-  return (ports[0] && ports[0].port) || r.tallyPort || 9002;
-}
 // "10-Oct 10:28" (IST)
 const shortWhen = (at) => { const s = at ? fmtDateTime(Date.parse(String(at))) : ""; const m = /^(\d\d-[A-Za-z]{3})-\d{4}(?: (\d\d:\d\d))?/.exec(s); return m ? m[1] + (m[2] ? " " + m[2] : "") : ""; };
 // the state of one computer, from its beat only (beat.tally, tallyState, ports, open, paused, readStopped, companies)
@@ -569,17 +563,76 @@ function ReadingView({ cards }) {
 // Subscribe; the first sync runs by itself. FinCom, each step ticked by itself from what the computers' beats and the
 // links already say (nothing new is asked of the bridge or Tally):
 //   1. Install FinCom Bridge on the Tally computer   the one Download             done: a bridge heard this week
-//   2. Open your company in TallyPrime               what stops it, if anything   done: a company open on a computer heard now
-//   3. Add as client (or Link) in the list           Companies in Tally           done: a company linked to a client
+//   2. Set Tally's port (26-Oct-2026)                 one free port, the menu      done: his Tally answers on a port no other user's has
+//   3. Open your company in TallyPrime               what stops it, if anything   done: a company open on a computer heard now
+//   4. Add as client (or Link) in the list           Companies in Tally           done: a company linked to a client
 // The older six steps are gone: linking a client (step 4) is the row's Add as client / Link; the ledgers and this year's
 // entries (steps 5, 6) are the row's first sync with its progress and confirmation; the Day Book is the row's ⋯ "Upload
 // older entries (Day Book)" while days are missing. All three done: one green line under the list.
 // openConnectTally(step, cid) (src/js/52) still lands here: steps 1 to 3 the guide's step, 4 and over the list (with the
 // client the pointer named: its rows say "Link to <client>").
 // ---------------------------------------------------------------------------------------------------------------------
-const GUIDE_KEYS = ["install", "open", "add"], GUIDE_REFRESH_MS = 20000;
+// 26-Oct-2026 (next-tally-port; the owner: "we still need to set the port.. FinCom needs a step: this port is free, and do
+// this step in Tally. Everything should be clearly spoken"): step 2, Set Tally's port, between Install and Open. GUIDE_KEYS
+// are the steps in order; openConnectTally(1..3) still names Install, Open and the list (STEP_OF)
+const GUIDE_KEYS = ["install", "port", "open", "add"], STEP_OF = ["install", "open", "add"], GUIDE_REFRESH_MS = 20000;
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
+// the ports FinCom never proposes: TallyPrime's own default (a new user's Tally starts there) and ports other programs
+// commonly take (9001, 9009, 9042, 9050/9051, 9060, 9080, 9090 to 9095, 9099)
+const PORT_AVOID = [9000, 9001, 9009, 9030, 9042, 9043, 9050, 9051, 9060, 9080, 9090, 9091, 9092, 9093, 9094, 9095, 9099];
+// Tally's port for this Windows user (me: this browser's own bridge, else the member's bridge, else the guide's computer),
+// from what the bridges already say: each bridge's tallyPort (info.bridges), the computer's beat ports (ok: answering;
+// skipped: another Windows user's Tally) and, when this browser's bridge answers, its /status sessions ("Your session",
+// "Another user — not used") and its /diagnose (each Tally's owner, ports and tally.ini port; every program on 9000-9999).
+//   {state: wait | offline | done | clash | set, port (his Tally's), who (the other user), set (his tally.ini port, not
+//    answering), free (the one port proposed), used (every port seen on that computer), pc, user}
+// free: the first of 9000-9099 not seen in use on that computer by anyone and not in PORT_AVOID, counted from a start
+// that depends on the Windows user's name (two users setting up at once are not offered the same number)
+function portState(rows, me) {
+  const mine = me ? lc(me.user) : "";
+  const L = typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.st && Bridge.st.state === "ok" && (!me || !Bridge.st.user || lc(Bridge.st.user) === mine) ? Bridge.st : null;
+  const pc = me ? me.computer : (L && L.computer) || "this computer", user = me ? me.user || "" : (L && L.user) || "";
+  if (!me && !L) return { state: "wait", pc, user };
+  if (me && !me.online && !L) return { state: "offline", pc, user };
+  const seen = new Set(), other = new Map(), add = (p, who) => { p = Number(p) || 0; if (p <= 0) return; seen.add(p); if (who != null && !other.has(p)) other.set(p, who); };
+  let my = 0, set = 0, held = null;
+  // this browser's own bridge first: it says now which Tally is whose
+  if (L) {
+    (L.sessions || []).forEach((se) => { if (se.skipped) add(se.port, ""); else if (se.mine === true && se.ok) { my = my || Number(se.port) || 0; seen.add(Number(se.port)); } else add(se.port); });
+    const d = typeof Bridge === "object" && Bridge.diag && !Bridge.diag.error ? Bridge.diag : null;
+    if (d) {
+      (d.tallies || []).forEach((t) => { if (t.mine) { if (t.ports.length) my = my || Number(t.ports[0]); else if (t.ini && t.ini.found) set = Number(t.ini.port) || 9000; }
+        else t.ports.forEach((p) => add(p, t.user || "")); });
+      (d.listeners || []).forEach((l) => { add(l.port); if (Number(l.port) === set && !/tally/i.test(String(l.program || ""))) held = l; });
+    }
+  }
+  if (me) {
+    const dev = me.device || {}, info = dev.info || {}, beat = info.beat || {}, br = Object.values(info.bridges || {});
+    const answering = me.tally === "open" || me.tally === "busy";
+    const beatUser = beat.windowsUser || (br.length === 1 ? br[0].user || "" : ""), beatMine = beatUser ? lc(beatUser) === mine : !!me.main;
+    if (!my && answering && me.tallyPort) my = Number(me.tallyPort) || 0;
+    [].concat(beat.ports || []).forEach((x) => { if (!x || !x.port) return;
+      if (beatMine) { if (x.skipped) add(x.port, ""); else if (x.ok) { my = my || (answering ? Number(x.port) : 0); seen.add(Number(x.port)); } else add(x.port); }
+      else if (x.ok && !x.skipped) add(x.port, beatUser); else if (Number(x.port) !== my) add(x.port, x.skipped ? "" : null); });
+    // every other Windows user's bridge heard this week on that computer: its Tally's port
+    rows.filter((x) => x !== me && x.device && x.device.id === dev.id && x.go && !x.old && heardThisWeek(x) && lc(x.user) !== mine).forEach((x) => add(x.tallyPort, x.user || ""));
+  }
+  if (my) seen.add(my);
+  const used = [...seen].filter((p) => p > 0).sort((a, b) => a - b);
+  const cands = [];
+  for (let p = 9000; p <= 9099; p++) if (!seen.has(p) && !PORT_AVOID.includes(p)) cands.push(p);
+  let h = 0;
+  for (const ch of mine) h = (h * 31 + ch.charCodeAt(0)) % 9973;
+  const free = cands.find((p) => p >= 9000 + (h % 100)) || cands[0] || 0;
+  const base = { pc, user, free, used, port: my, set };
+  if (my && other.has(my)) return Object.assign(base, { state: "clash", who: other.get(my) });
+  if (!my && set && (other.has(set) || held)) return Object.assign(base, { state: "clash", port: set, who: other.has(set) ? other.get(set) : null, program: held ? String(held.program || "") : "" });
+  if (my) return Object.assign(base, { state: "done" });
+  // an older bridge that does not say the port: his Tally answers it, so it has one of its own
+  if (me && (me.tally === "open" || me.tally === "busy")) return Object.assign(base, { state: "done" });
+  return Object.assign(base, { state: "set" });
+}
 function guideState(rows, latest) {
   const p = TCloud.pane, live = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const st = live.map((r) => [r, pcState(r, latest)]);
@@ -590,9 +643,13 @@ function guideState(rows, latest) {
   tally.forEach(([rr, ss]) => ss.open.forEach((name) => { if (!openNow.some((o) => lc(o.company) === lc(name))) openNow.push({ company: name, computer: pcName(rr) }); }));
   const pcs = Array.from(new Set(openNow.map((o) => o.computer)));
   const linkedN = new Set([].concat(p.companies || [], (typeof TLight === "object" && TLight.st.cos) || []).filter((c) => c && c.client_id && !(S.companies && S.companies[c.client_id] && S.companies[c.client_id].deleted)).map((c) => lc(c.company))).size;
-  const done = { install: live.length > 0, open: reading.length > 0, add: linkedN > 0 };
   const [r, s] = open[0] || tally[0] || on[0] || st[0] || [null, null];
-  return { done, r, s, live, on, tally, openNow, pcs, linkedN, fine: (st.find(([, x]) => x.fine) || open[0] || null) };
+  // step 2 is this Windows user's: this browser's own bridge, else the member's bridge, else the guide's computer
+  const loc = TCloud.localRow ? TCloud.localRow() : null, mb = TCloud.myBridge ? TCloud.myBridge() : "";
+  const me = (loc && live.find((x) => x.id === loc.id)) || (mb && live.find((x) => x.id === mb)) || r;
+  const port = portState(rows, me);
+  const done = { install: live.length > 0, port: port.state === "done", open: reading.length > 0, add: linkedN > 0 };
+  return { done, r, s, live, on, tally, openNow, pcs, linkedN, port, fine: (st.find(([, x]) => x.fine) || open[0] || null) };
 }
 // "3 companies open in Tally on NWS144" / "12 companies open in Tally on 2 computers": a count, never the names
 function openWords(x) {
@@ -605,6 +662,32 @@ function Step({ k, n, title, done, now, children }) {
   return <li data-connect-step={k} data-done={done ? "" : undefined} className={"tc3-step " + (done ? "done" : now ? "now" : "")}>
     <span className="tc3-mark" aria-hidden="true">{done ? TICK : n}</span>
     <div className="tc3-body"><b>{title}</b><div className="tc3-say">{children}</div></div></li>;
+}
+// step 2's words: the one free port, large, with Copy; TallyPrime's own menu in one line (TallyPrime 3.0 to 7.1:
+// F1 Help → Settings → Connectivity → Client/Server configuration; tally.ini's "Client Server = Both", "Enable ODBC Server
+// = Yes", "ServerPort", as .github/tally-spike writes them); Check (the wake and a fresh read; this browser's own bridge
+// asked again), and the guide's 20-second read ticks it by itself when the bridge sees his Tally on a port of its own
+function PortStep({ ps, installed }) {
+  const [ck, setCk] = useState({ busy: false, at: 0 }), [all, setAll] = useState(false);
+  if (!installed || ps.state === "wait") return <span className="note" data-port-state="wait">Finish step 1 first.</span>;
+  if (ps.state === "offline") return <span className="note" data-port-state="offline">{"Finish step 1 first: FinCom Bridge on " + ps.pc + " is offline."}</span>;
+  if (ps.state === "done") return <span className="note" data-port-state="done" data-port={ps.port || undefined}>{ps.port ? "Your Tally uses port " + ps.port + " ✓" : "Your Tally answers FinCom Bridge ✓"}</span>;
+  const free = ps.free;
+  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(String(free)) : Promise.reject()).then(() => toast("Port " + free + " copied."), () => toast("Could not copy; type " + free + "."));
+  const check = () => { setCk({ busy: true, at: 0 });
+    const local = typeof Bridge === "object" && Bridge.on && Bridge.on() ? Promise.resolve(Bridge.refresh(true)).then(() => Bridge.diagnose()) : null;
+    Promise.all([checkAgain(), local]).then(() => setCk({ busy: false, at: Date.now() }), () => setCk({ busy: false, at: Date.now() })).then(() => render()); };
+  // 26-Oct-2026, the owner on the first draft: "too lengthy, make it small and clear": the port, the menu in one line, Check
+  return <div data-port-state={ps.state} data-port-free={free}>
+    <div className="tc3-port"><span>Use port</span><b data-port-free-big="">{free}</b><span className="note">(free for you)</span><button className="btn small" data-port-copy="" onClick={copy}>Copy</button></div>
+    <p className="tc3-p" data-port-how="">{"In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → Acts as Both, Port " + free + ", ODBC Yes → Ctrl+A → restart Tally."}</p>
+    {ps.state === "clash" && <p className="tc3-p bk-warn" data-port-clash={ps.port}>{"Your Tally is on " + ps.port + ", same as " + (ps.program ? "another program (" + ps.program + ")" : "another user") + ". Change it to " + free + " as above."}
+      {!ps.program && " If their port changes too, you share one TallyPrime folder: ask whoever set up " + ps.pc + " to give each user their own."}</p>}
+    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button className="btn small primary" data-port-check="" disabled={ck.busy} onClick={check}>{ck.busy ? "Checking…" : "Check"}</button>
+      {ps.used.length > 0 && <button className="linkbtn" data-port-used-toggle="" aria-expanded={all} onClick={() => setAll(!all)}>{"Ports in use (" + ps.used.length + ")"}</button>}
+      {ck.at > 0 && <span className="note" data-port-not-yet="">{"Not yet: restart TallyPrime, then Check."}</span>}</div>
+    {all && <p className="tc3-p note" data-port-used="">{"In use on " + ps.pc + ": " + ps.used.join(", ") + "."}</p>}
+  </div>;
 }
 // the client a pointer named (openConnectTally(4, cid) from a client, Settings, the Clients list), while it is not linked
 function guideFor(g) {
@@ -626,7 +709,7 @@ function useGuideRefresh() {
 function GuideRefresh() { useGuideRefresh(); return null; }
 function ConnectGuide({ x, m, connectStep }) {
   const p = TCloud.pane, g = S.tallyGuide || {}, d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
-  useEffect(() => { if (!g.at) return; const t = setTimeout(() => { const k = GUIDE_KEYS[(g.step || 0) - 1];
+  useEffect(() => { if (!g.at) return; const t = setTimeout(() => { const k = STEP_OF[(g.step || 0) - 1];
     const e = (k && !d[k] && document.querySelector('#app [data-connect-step="' + k + '"]')) || ((g.step || 0) >= 3 ? document.querySelector("#app [data-tco-list=firm]") : null) || document.querySelector("#app [data-connect-guide]");
     if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 80); return () => clearTimeout(t); }, [g.at]);
   if (p.devices == null && !p.err) return null;
@@ -637,7 +720,7 @@ function ConnectGuide({ x, m, connectStep }) {
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll(), stop = s && s.stopped ? ((TCloud.stopFor && TCloud.stopFor(r.device.id)) || {}) : null;
   const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
   return <section className="pane tguide tconnect tc3" data-connect-guide={now || "open"}>
-    <div className="tc3-top"><h3>Connect Tally</h3><span className="note tg-count" data-guide-count={doneN}>{doneN + " of 3 done"}</span>
+    <div className="tc3-top"><h3>Connect Tally</h3><span className="note tg-count" data-guide-count={doneN}>{doneN + " of " + GUIDE_KEYS.length + " done"}</span>
       {all && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
     <ol className="tc3-steps">
       <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
@@ -646,18 +729,21 @@ function ConnectGuide({ x, m, connectStep }) {
           : <><span className="note">Download it, open it, then type the code it shows: below, step by step. FinCom finds it on this computer by itself.</span>
             {connectStep && <div data-guide-connect-slot="">{connectStep}</div>}</>}
       </Step>
-      <Step k="open" n={2} title="Open your company in TallyPrime" done={d.open} now={now === "open"}>
+      <Step k="port" n={2} title="Set Tally’s port" done={d.port} now={now === "port"}>
+        <PortStep ps={x.port} installed={d.install} />
+      </Step>
+      <Step k="open" n={3} title="Open your company in TallyPrime" done={d.open} now={now === "open"}>
         {d.open ? <span className="note" data-guide-open-count={x.openNow.length}>{openWords(x)}</span>
           : !d.install ? <span className="note">After step 1.</span>
           : r && !r.online && !(Bridge.on() && Bridge.up()) ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
           : <><LocalTally />{s && s.stopped && <p className="tc3-p" data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
               {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</p>}
             {s && s.paused && <p className="tc3-p" data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}</p>}
-            {s && !s.tallyOk ? <p className="tc3-p note">{"Open TallyPrime on " + pc + ", signed in as " + user + ", and open your company. If it does not show below within a minute: in TallyPrime press F1 (Help) → Settings → Connectivity, set “TallyPrime acts as” to Both and choose any free port from 9000 to 9999 (" + (r ? tallyPortOf(r) : 9002) + " is usual). Each Windows user on the same computer who runs Tally at the same time needs a different number. FinCom finds the port by itself."}</p>
+            {s && !s.tallyOk ? <p className="tc3-p note">{"Open TallyPrime on " + pc + " and open your company."}</p>
               : !(s && (s.paused || s.stopped)) ? <p className="tc3-p note">{"Open your company in TallyPrime on " + pc + ": it shows in the list below within a minute."}</p>
               : x.openNow.length ? <p className="tc3-p note" data-guide-open-count={x.openNow.length}>{openWords(x)}</p> : null}</>}
       </Step>
-      <Step k="add" n={3} title="Click “Add as client” (or “Link”) in the list below" done={d.add} now={now === "add"}>
+      <Step k="add" n={4} title="Click “Add as client” (or “Link”) in the list below" done={d.add} now={now === "add"}>
         {d.add ? <span className="note" data-guide-added={x.linkedN}>{nOf(x.linkedN, "company is", "companies are") + " clients in FinCom. Their first sync runs by itself."}</span>
           : <span className="note">One click: FinCom adds the client with the company’s name and GSTIN, links it and brings its ledgers and entries by itself.</span>}
       </Step>
@@ -740,54 +826,9 @@ function TallyIniLines({ r }) {
   const l = [].concat((((r.device || {}).info || {}).beat || {}).tallyIni || []).filter((x) => x && INI_WORDS[x.state]);
   return l.map((x, i) => <div key={i} className="row" style={ROW}><span className="note" data-tally-ini={x.state}>{"tally.ini " + (x.path || "") + " " + INI_WORDS[x.state]}</span></div>);
 }
-// ROUND 103 (1c, 1d): reading older entries per computer, off by default (tally_devices.period_fetch, migration 98): an
-// owner switches it on or off (tally_device_period_fetch); staff see the state only. The tray's old-days test (read only)
-// as the bridge's heartbeat last said it: "Old-days test on <PC>: 0.21 s / 0.34 s / 0.18 s · no freeze". A cloud without
-// the column shows nothing of the switch
-// the computer's office hours as the cloud keeps them (none kept: 20:00 to 08:00 and all Sunday)
-const hh = (h) => String(h).padStart(2, "0") + ":00";
-function nightOf(x) {
-  const n = (v, dflt) => { const k = Number(v); return v !== null && v !== undefined && Number.isInteger(k) && k >= 0 && k <= 23 ? k : dflt; };
-  return { from: n(x.period_night_from, 20), to: n(x.period_night_to, 8), sunday: x.period_night_sunday === undefined || x.period_night_sunday === null ? true : x.period_night_sunday === true };
-}
-function nightWords(t) {
-  const h = t.from === t.to ? "" : hh(t.from) + " to " + hh(t.to);
-  return h && t.sunday ? h + " and all Sunday" : h || (t.sunday ? "all Sunday" : "never");
-}
-function OldDaysLines({ r, owner }) {
-  const d = r.device || {}, t = ((d.info || {}).beat || {}).oldDaysTest;
-  const [pf, setPf] = useState(null), [n, setN] = useState(0), [nt, setNt] = useState(null), [ed, setEd] = useState(null);
-  useEffect(() => {
-    if (typeof Cloud !== "object" || !Cloud.api) return;
-    let live = true;
-    Cloud.api("tally_devices?select=id,period_fetch,period_night_from,period_night_to,period_night_sunday&id=eq." + encodeURIComponent(d.id || "")).then((rows) => { const x = [].concat(rows || []).find((y) => y && y.id === d.id); if (live) { setPf(x ? x.period_fetch === true : null); setNt(x ? nightOf(x) : null); } },
-      () => { if (live) { setPf(null); setNt(null); } });    // a cloud without the column (42703): nothing of the switch
-    return () => { live = false; };
-  }, [d.id, n]);
-  const known = pf !== null, on = pf === true;
-  const flip = () => { if (typeof TCloud !== "object" || !TCloud.control) return;
-    Promise.resolve(TCloud.control("tally_device_period_fetch", { p_device: d.id, p_on: !on }, "Reading older entries " + (on ? "off" : "on") + " for " + (d.name || "the computer") + "; the bridge takes it at its next heartbeat."))
-      .then(() => setN((x) => x + 1)); };
-  const saveNight = () => { if (typeof TCloud !== "object" || !TCloud.control || !ed) return;
-    Promise.resolve(TCloud.control("tally_device_period_night", { p_device: d.id, p_from: ed.from, p_to: ed.to, p_sunday: ed.sunday }, "Office hours for " + (d.name || "the computer") + " saved; FinCom uses them from its next heartbeat."))
-      .then(() => { setEd(null); setN((x) => x + 1); }); };
-  const hours = Array.from({ length: 24 }, (_, i) => i);
-  return <>
-    {known && <div className="row" style={ROW}><span className="note" data-period-fetch={on ? "on" : "off"}>{"Reading older entries on this computer: " + (on ? "on" : "off")}
-      {owner && <> <button className="btn small" data-period-fetch-switch="" onClick={flip}>{on ? "Switch off" : "Switch on"}</button></>}</span></div>}
-    {/* ROUND 103 (the owner's decision of 21-Oct-2026, evening): outside office hours (India time) the period is read day
-        after day while Tally is idle; 20:00 to 08:00 and all Sunday unless the owner changes them (tally_device_period_night) */}
-    {known && on && nt && <div className="row" style={ROW}><span className="note" data-period-night="">{"Faster reading of older entries outside office hours: " + nightWords(nt) + " (India time)"}
-      {owner && !ed && <> <button className="btn small" data-period-night-edit="" onClick={() => setEd(nt)}>Change</button></>}
-      {owner && ed && <span className="row" style={{ gap: 6, flexWrap: "wrap", alignItems: "center", marginTop: 4 }}>
-        <label>From <select data-period-night-from="" value={ed.from} onChange={(e) => setEd({ ...ed, from: Number(e.target.value) })}>{hours.map((h) => <option key={h} value={h}>{hh(h)}</option>)}</select></label>
-        <label>to <select data-period-night-to="" value={ed.to} onChange={(e) => setEd({ ...ed, to: Number(e.target.value) })}>{hours.map((h) => <option key={h} value={h}>{hh(h)}</option>)}</select></label>
-        <label><input type="checkbox" data-period-night-sunday="" checked={ed.sunday} onChange={(e) => setEd({ ...ed, sunday: e.target.checked })} /> all Sunday</label>
-        <button className="btn small primary" data-period-night-save="" onClick={saveNight}>Save</button>
-        <button className="btn small" data-period-night-cancel="" onClick={() => setEd(null)}>Cancel</button></span>}</span></div>}
-    {t && t.line && <div className="row" style={ROW}><span className="note" data-old-days-test={t.stopped ? "stopped" : "ok"}>{"Old-days test on " + pcName(r) + ": " + t.line + (t.company ? " (" + t.company + ")" : "")}</span></div>}
-  </>;
-}
+// 26-Oct-2026 (the owner: older entries come ONLY by uploading Tally's Day Book file, never fetched automatically): the
+// per-computer "Reading older entries" switch, its office hours and the old-days test line are gone from the page (no
+// call to tally_device_period_fetch / tally_device_period_night is left in the app)
 function ComputerCard({ r, latest, m, focus }) {
   const owner = isOwner(), p = TCloud.pane, allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const rd = r.read || { state: r.online ? "reading" : "offline", text: "" }, live = r.go && !r.old, k = cardKey(r), open = moreOpen(k);
@@ -825,7 +866,6 @@ function ComputerCard({ r, latest, m, focus }) {
       <Baselines r={r} owner={owner} />
       <SelfChecks r={r} />
       <TallyIniLines r={r} />
-      <OldDaysLines r={r} owner={owner} />
       <div className="tcard-sub" data-card-settings="">{owner ? "Settings" : "Settings (an owner of the firm changes these)"}</div>
       {owner && !allStopped && <div className="row" style={ROW}>{stopped ? n && n.act === "resume" ? null : <button className="btn small" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button>
         : <button className="btn small" data-read-stop={r.device.id} onClick={() => TCloud.readStop(r)}>Stop reading on this computer</button>}</div>}

@@ -141,10 +141,10 @@ def main():
 
         # ---- 5. the three steps
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", True], ["open", True], ["add", False]], "5. three steps: install and open ticked from the beats, Add as client next (%s)" % g)
+        ok(g == [["install", True], ["port", True], ["open", True], ["add", False]], "5. four steps (26-Oct-2026: Set Tally's port): install, port and open ticked from the beats, Add as client next (%s)" % g)
         ok(pg.locator("#app [data-strip-step], #app [data-connect-step=link], #app [data-connect-step=ledgers], #app [data-connect-step=daybook], #app [data-guide-picker]").count() == 0, "5. no six-step strip, no Link / Ledgers / Day Book steps")
         gtxt = txt("#app [data-connect-guide]")
-        ok("Install FinCom Bridge on the Tally computer" in gtxt and "Open your company in TallyPrime" in gtxt and "Add as client" in gtxt and "2 of 3 done" in gtxt, "5. the three steps' words, 2 of 3 done (%s)" % gtxt[:160])
+        ok("Install FinCom Bridge on the Tally computer" in gtxt and "Open your company in TallyPrime" in gtxt and "Add as client" in gtxt and "Set Tally’s port" in gtxt and "3 of 4 done" in gtxt, "5. the four steps' words, 3 of 4 done (%s)" % gtxt[:160])
         shot("guide-3-steps-desktop-light")
 
         # ---- 2. Add as client: one click
@@ -163,13 +163,13 @@ def main():
         ok(r and r["linked"] == cid and "VMS EVENTS PRIVATE LIMITED" in r["text"] and pg.locator('#app [data-tco-row="%s"] [data-tco-sync=running]' % VMS).count() == 1,
            "2. the row: the client, and the first sync's progress (%s)" % (r and r["text"]))
         pr = txt('#app [data-tco-row="%s"] [data-tco-sync]' % VMS)
-        ok("Reading ledgers from Tally" in pr and re.search(r"\d:\d\d", pr), "2. progress: 'Reading ledgers from Tally… 0:02' (%s)" % pr)
+        ok(pr.startswith("Reading ledgers from Tally"), "2. progress: 'Reading ledgers from Tally…' (%s)" % pr)
         shot("after-add-progress-desktop-light")
         # the cloud gets the books: the confirmation
         E("(c) => { window.__books[c] = %s.map(b => Object.assign(b, {ledgersAt: new Date().toISOString()})); window.__ledn['bk-VMS'] = 1240; }" % json.dumps(BOOK("VMS")), cid)   # (the read just ended: the book's ledger time now)
         pg.wait_for_selector('#app [data-tco-row="%s"] [data-tco-sync=done]' % VMS, timeout=25000)
         dn = txt('#app [data-tco-row="%s"] [data-tco-sync=done]' % VMS)
-        ok(re.match(r"^1,240 ledgers imported ✓ at \d\d:\d\d IST · Entries Apr–Oct 2026 ✓", dn) is not None, "2. then the confirmation: '1,240 ledgers imported ✓ at 16:20 IST · Entries Apr–Oct 2026 ✓' (next-tally-firstlink) (%s)" % dn)
+        ok(re.match(r"^1,240 ledgers from Tally ✓ · \d\d:\d\d$", dn) is not None, "2. then the confirmation: '1,240 ledgers from Tally ✓ · 16:20' (26-Oct-2026: the ledgers' one bar) (%s)" % dn)
         ok(len(wakes()) == 1, "2. still one wake (%d)" % len(wakes()))
         shot("after-add-confirmed-desktop-light")
 
@@ -210,10 +210,10 @@ def main():
         scene(cos(), devs=[])
         tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", False], ["open", False], ["add", False]] and pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
+        ok(g == [["install", False], ["port", False], ["open", False], ["add", False]] and pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
         scene(cos(), devs=[dev(opened=(), tally="closed")]); tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.hasAttribute('data-done'))")
-        ok(g == [True, False, False] and "Open TallyPrime on NWS144" in txt("#app [data-connect-step=open]"), "5. bridge on, Tally closed: step 2 says open TallyPrime on NWS144 (%s)" % txt("#app [data-connect-step=open]"))
+        ok(g == [True, False, False, False] and "Open TallyPrime on NWS144" in txt("#app [data-connect-step=open]"), "5. bridge on, Tally closed: step 3 says open TallyPrime on NWS144 (%s)" % txt("#app [data-connect-step=open]"))
         scene(cos(vms="GS"), devs=[dev()]); tally_page()
         ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-connected-line]").count() == 1 and "Connected computers: NWS144 ● online" in txt("#app [data-pc-lines]"),
            "5. a company linked: no steps, one line 'Connected computers: NWS144 ● online' (%s)" % txt("#app [data-pc-lines]"))

@@ -29,8 +29,8 @@
 #app .tco-relink { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-top: 4px; }
 #app .tco-relink select { max-width: 100%; }
 #app .tco-for { margin: 0 0 8px; }
-/* the three steps (Connect Tally) */
-#app .tc3 ol.tc3-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+/* the four steps (Connect Tally; step 2, Tally's port, 26-Oct-2026) */
+#app .tc3 ol.tc3-steps { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 #app .tc3-step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-panel, 10px); background: var(--surface); min-width: 0; }
 #app .tc3-step.done { background: var(--st-done-soft, var(--surface-muted)); border-color: transparent; }
 #app .tc3-mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-muted); color: var(--text); font-weight: 700; font-size: 13px; }
@@ -41,6 +41,9 @@
 #app .tc3-p { margin: 0 0 4px; }
 #app .tc3-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 #app .tc3-top h3 { margin: 0; }
+#app .tc3-port { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 2px 0 6px; }
+#app .tc3-port > b { font-size: 30px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+@media (max-width: 1180px) { #app .tc3 ol.tc3-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
   #app .tco-row { grid-template-columns: minmax(0, 1fr); }
   #app .tco-act { justify-content: flex-start; flex-wrap: wrap; }

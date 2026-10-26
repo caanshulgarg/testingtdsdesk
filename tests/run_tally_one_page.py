@@ -330,7 +330,7 @@ def main():
         scene(cos(sal=None, gsc=None))
         tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.getAttribute('data-connect-step'))")
-        ok(g == ["install", "open", "add"] and pg.locator("#app [data-connected-line]").count() == 0, "7. nothing linked yet: the three steps (%s)" % g)
+        ok(g == ["install", "port", "open", "add"] and pg.locator("#app [data-connected-line]").count() == 0, "7. nothing linked yet: the four steps (%s)" % g)
         shot("tally-page-steps-desktop-light")
 
         # ---- 8. phone 390, light and dark: no sideways scroll; pictures

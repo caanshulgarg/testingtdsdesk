@@ -15,8 +15,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { JobsNote } from "../../parts/Notes.jsx";
 import DateBox from "../../parts/DateBox.jsx";
-// 2.4.5 (ROUND 102): "Bring older entries from Tally" for a period the person chooses; its own lazy chunk
-const OlderEntries = lazy(() => import("../../parts/OlderEntries.jsx"));
+// 26-Oct-2026: the ledgers' one bar (reading / done / stuck / today's changes), as on the Tally page's row; loaded with
+// the Tally screen's own code, so the app's first file stays within its budget
+const LedgerBar = lazy(() => import("../../parts/TallyCompanies.jsx").then((m) => ({ default: m.LedgerBar })));
+const hasLedBook = (cid) => { const s = typeof TCloud === "object" && TCloud.st ? TCloud.st[cid] : null; return !!(s && Array.isArray(s.books) && s.books.some((x) => x && x.book)); };
 const d = (x) => fmtDate(tallyDate(x));
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
@@ -122,6 +124,9 @@ function Upload({ b }) {
   const opening = S.upFocus === "opening" && !(b.tb && Object.keys(b.tb.led || {}).length);
   return <section className="dash-card" data-up-card="" style={{ marginBottom: 12 }}><h3>Bring in from Tally</h3>
     {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update now reads them by itself.</p>}
+    {/* 26-Oct-2026 (the owner): older entries come ONLY from Tally's Day Book file, never fetched automatically (the
+        "Bring older entries from Tally" card is gone); the upload is the one way, said in one line */}
+    <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, choose the period (F2), Alt+E → Export as XML, then drop the file here.</p>
     <Drop />
     {lim && <p className="note" data-up-limit="" style={{ margin: "8px 0 0" }}>{"Only " + fmtDate(lim[0]) + (lim[1] !== lim[0] ? " to " + fmtDate(lim[1]) : "") + " is taken from the next Day Book. "}
       <button className="linkbtn" onClick={() => { S.dbFrom = ""; S.dbTo = ""; render(); }}>Take the file’s own dates</button></p>}
@@ -224,9 +229,9 @@ export default function FromTally({ b }) {
     {/* 24-Oct-2026 (next-tally-one-page): only the upload of Tally's files here; the link and its status are the Tally
         page's (the client's title chip opens its row) */}
     <Status b={b} days={days} />
+    {typeof TCloud === "object" && TCloud.on() && (hasLedBook(S.coId) || (S.tcoSync || {})[S.coId]) && <div data-up-ledgers="" style={{ margin: "-4px 0 12px" }}><Suspense fallback={null}><LedgerBar cid={S.coId} where="books" /></Suspense></div>}
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     <Upload b={b} />
-    {typeof TCloud === "object" && TCloud.on() && TCloud.book(S.coId) && <Suspense fallback={null}><OlderEntries cid={S.coId} where="books" /></Suspense>}
     <Days days={days} />
     <HowTo />
     <Tieout b={b} />

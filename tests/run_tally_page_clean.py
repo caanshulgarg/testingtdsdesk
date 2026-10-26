@@ -24,6 +24,7 @@ very simple connection guide").
      companies open, never their names; step 4 is the client worked on, every company open offered (one of another
      client "will move", asked first); 100 companies and 100 clients stay compact with type-to-search; a port change
      (9002 -> 9500) keeps the client linked everywhere.
+  8. 26-Oct-2026 (next-tally-port): step 2 is Set Tally's port (run_tally_port_step.py), between Install and Open.
   7. 23-Oct-2026 (next-tally-suvit, Suvit's flow; the owner: "don't need extra steps in connection"): the guide is three
      steps (Install FinCom Bridge, Open your company in TallyPrime, Add as client / Link), ticked from the beats and the
      links; linking, the ledgers and this year's entries live on Companies in Tally's rows (Add as client / Link to
@@ -246,13 +247,13 @@ def main():
         def guide_scene(d, cos=None):
             scene([d], cos if cos is not None else companies(linked=(), d=d["id"])); return d["id"]
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
-        ok(steps() == [["install", True], ["open", False], ["add", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]"),
+        ok(steps() == [["install", True], ["port", False], ["open", False], ["add", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]"),
            "offline: installed, the rest not; step 2 says it is offline (%s)" % steps())
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))
-        ok(steps() == [["install", True], ["open", False], ["add", False]] and "Reading is paused" not in page() and "Open your company in TallyPrime on NWS144" in txt("#app [data-connect-guide]"),
-           "Tally answering, no company: one ticked, open your company (%s)" % steps())
+        ok(steps() == [["install", True], ["port", True], ["open", False], ["add", False]] and "Reading is paused" not in page() and "Open your company in TallyPrime on NWS144" in txt("#app [data-connect-guide]"),
+           "Tally answering, no company: install and port ticked, open your company (%s)" % steps())
         d = guide_scene(dev(4, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"paused": True}))
-        ok(steps()[1] == ["open", False] and "Reading is paused on NWS144." in txt("#app [data-connect-guide]"), "a company open, reading paused: step 2 not done, how to resume (%s)" % steps())
+        ok(steps()[2] == ["open", False] and "Reading is paused on NWS144." in txt("#app [data-connect-guide]"), "a company open, reading paused: step 2 not done, how to resume (%s)" % steps())
         d = guide_scene(dev(5, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"readStopped": {"by": "fincom", "reason": "Tally hangs", "at": "ago:4"}}))
         sp = '#app [data-connect-step="open"]'
         ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: step 2 with the owner's Resume (%s)" % txt(sp))
@@ -260,8 +261,8 @@ def main():
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume"], "Resume calls tally_read_resume")
         D6 = "d0000000-0000-4000-8000-000000000006"
         d = guide_scene(dev(6, "NWS144", "anshul", tally="open", opened=("VMS EVENTS", "GARG SHEKHAR", "GB TEXCOAT")), companies(linked=(), seen=("VMS EVENTS",), d=D6))
-        ok(steps() == [["install", True], ["open", True], ["add", False]] and txt("#app [data-guide-open-count]") == "3 companies open in Tally on NWS144." and "VMS EVENTS" not in txt('#app [data-connect-step="open"]'),
-           "three companies open: two ticked; step 2 says the number open, never their names (%s / %s)" % (steps(), txt("#app [data-guide-open-count]")))
+        ok(steps() == [["install", True], ["port", True], ["open", True], ["add", False]] and txt("#app [data-guide-open-count]") == "3 companies open in Tally on NWS144." and "VMS EVENTS" not in txt('#app [data-connect-step="open"]'),
+           "three companies open: three ticked (port too); step 2 says the number open, never their names (%s / %s)" % (steps(), txt("#app [data-guide-open-count]")))
         rs = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-tco-state'), (r.querySelector('[data-tco-act]') || {}).innerText])")
         ok(sorted(r[0] for r in rs) == ["GARG SHEKHAR", "GB TEXCOAT", "VMS EVENTS"] and all(r[1] == "connected" for r in rs) and dict((r[0], r[2]) for r in rs)["GB TEXCOAT"] == "Link to GB TEXCOAT",
            "Companies in Tally: every company open, Connected; GB TEXCOAT, a client already: 'Link to GB TEXCOAT' (%s)" % rs)
@@ -287,7 +288,7 @@ def main():
         held_l = txt('#app [data-tco-row="GB TEXCOAT"] [data-tco-sync=held]')
         ok(re.match(r"Ledgers [\d,]+ \u00b7 Entries Apr\u2013\w{3} 2026$", held_l) or held_l.startswith("Ledgers"), "a linked company's row: what FinCom holds (%s)" % held_l)
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(700)
-        ok(n("#app [data-connect-step]") == 3 and n("#app [data-guide-hide]") == 1, "Connect another computer: the three steps again, with Hide the steps")
+        ok(n("#app [data-connect-step]") == 4 and n("#app [data-guide-hide]") == 1, "Connect another computer: the four steps again, with Hide the steps")
         pg.click("#app [data-guide-hide]"); pg.wait_for_timeout(500)
         ok(n("#app [data-connect-step]") == 0 and n('#app [data-connect-guide="done"]') == 1, "Hide the steps: the green line again")
         # ---- 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option.. include this automatically
@@ -321,22 +322,22 @@ def main():
         pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1500)
         wk = [w for w in E("window.__wakes") if w.get("kind") == "wake"]
         ok(wk == [{"kind": "wake", "what": "ledgers", "client": T}], "Link: the ledgers-only wake, one call (%s)" % wk)
-        ok(n(row5 + " [data-tco-sync=running] .tco-bar") == 1 and re.search(r"Reading ledgers from Tally\u2026 0:0\d", txt(row5 + " [data-tco-sync]")), "while reading: the moving bar and the time (%s)" % txt(row5 + " [data-tco-sync]"))
+        ok(n(row5 + " [data-tco-sync=running] .tco-bar") == 1 and txt(row5 + " [data-tco-sync-words]").startswith("Reading ledgers from Tally\u2026"), "while reading: the moving bar (26-Oct-2026: the ledgers' one bar) (%s)" % txt(row5 + " [data-tco-sync]"))
         ok(not [c for c in E("window.__calls") if c[0] in ("tally_update_now", "tally_want_update")], "not the full Update now")
         shot("row-first-sync-reading")
         E("""(t) => { window.__books[t] = [Object.assign(window.__books[t][0], {ledgersAt: new Date().toISOString(), days: 190, to: new Date().toISOString().slice(0, 10), entries: 4000})];
             window.__ledgers['bk-GB TEXCOAT'] = Array.from({length: 1240}, (_, i) => ({name: 'Ledger ' + (i + 1), parent: 'Sundry Creditors'})); }""", T)
         pg.wait_for_selector(row5 + " [data-tco-sync=done]", timeout=25000)
-        ok(re.match(r"^1,240 ledgers imported \u2713 at \d\d:\d\d IST \u00b7 Entries Apr\u2013", txt(row5 + " [data-tco-sync=done]")) is not None and "took 0:" in txt(row5 + " [data-tco-sync=done]"),
-           "the books arrive: '1,240 ledgers imported \u2713 at 16:20 IST \u00b7 Entries Apr\u2013\u2026 \u2713', with the time (next-tally-firstlink) (%s)" % txt(row5 + " [data-tco-sync]"))
+        ok(re.match(r"^1,240 ledgers from Tally \u2713 \u00b7 \d\d:\d\d$", txt(row5 + " [data-tco-sync=done]")) is not None,
+           "the ledgers arrive: '1,240 ledgers from Tally \u2713 \u00b7 16:20', one line (26-Oct-2026) (%s)" % txt(row5 + " [data-tco-sync]"))
         shot("row-first-sync-done")
-        # nothing in 10 minutes
+        # no progress for 3 minutes (26-Oct-2026; was 10 minutes)
         ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
         pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1000)
         E("(t) => { S.tcoSync[t].at = Date.now() - 11 * 60000; }", T); pg.wait_for_timeout(11500)
-        lt = txt(row5 + " [data-tco-sync=late]")
-        ok(lt.startswith("Ledgers not received in 10 minutes: keep GB TEXCOAT open in TallyPrime") and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1 and n(row5 + " [data-tco-masters]") == 1,
-           "at 10 minutes the bar stops: keep it open in TallyPrime, Try again, the masters file (%s)" % lt)
+        lt = txt(row5 + " [data-tco-sync=stuck]")
+        ok(lt.startswith("No progress from Tally in 3 minutes: keep GB TEXCOAT open in TallyPrime") and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1 and n(row5 + " [data-tco-masters]") == 1,
+           "no progress for 3 minutes: the bar stops: keep it open in TallyPrime, Try again, the masters file (%s)" % lt)
         E("() => { window.__wakes = []; }"); pg.click(row5 + " [data-tco-sync-again]"); pg.wait_for_timeout(800)
         ok(len([w for w in E("window.__wakes") if w.get("what") == "ledgers"]) == 1, "Try again: the wake once more")
         # the masters file
@@ -349,7 +350,7 @@ def main():
         ok(len(up) == 1 and up[0]["complete"] is True and up[0]["count"] == 3 and up[0]["from"] == "20260401" and up[0]["openAsOn"] == "20260331"
            and [l[0] for l in up[0]["ledgers"]] == ["Cash", "Rent", "VMS EVENTS"] and all(l[2] == "0" for l in up[0]["ledgers"]),
            "the cloud: upload_ledgers declared complete with its count, the book's own dates, no opening from the file (%s)" % [(k, v) for k, v in (up[0] if up else {}).items() if k != "groups"])
-        ok("3 ledgers imported \u2713" in txt(row5), "the row: '3 ledgers imported \u2713' from the file (next-tally-firstlink) (%s)" % txt(row5 + " [data-tco-sync]"))
+        ok(txt(row5 + " [data-tco-sync]").startswith("3 ledgers from Tally \u2713"), "the row: '3 ledgers from Tally \u2713' from the file (26-Oct-2026: the ledgers' one bar) (%s)" % txt(row5 + " [data-tco-sync]"))
         # the reply that nobody was asked: stopped at once with the reason
         for ans, why, words in (({"ok": True, "woken": 0, "debounced": 0, "asked": 0}, "woken 0", "No computer with Tally was asked"),
                                 (None, "not started", "FinCom Bridge did not read GB TEXCOAT\u2019s ledgers: background reading is paused in the tray")):
@@ -357,7 +358,7 @@ def main():
             if ans: E("(a) => { window.__wakeAns = a; }", ans)
             else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update now still reads the ledger list)'}}); }")
             pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1500)
-            st = txt(row5 + " [data-tco-sync=error]")
+            st = txt(row5 + ' [data-tco-sync=stuck][data-tco-stuck="error"]')
             ok(st.startswith(words) and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1, "the reply '%s': stopped at once with the reason, Try again (%s)" % (why, st))
             if why == "woken 0": shot("row-first-sync-nobody")
         E("() => { if (window.__askT) Ledgers.askTally = window.__askT; }")
@@ -451,7 +452,7 @@ def main():
         ok(rows and rows[0][1] == "stopped" and "Stopped: a request to Tally (TDSDeskCompanies) took 21.2 s" in rows[0][2], "Stopped by the bridge itself (2.3.0): its reason (%s)" % rows)
         # nothing installed: step 1 with the one download
         scene([], [])
-        ok(steps() == [["install", False], ["open", False], ["add", False]] and n('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') == 1
+        ok(steps() == [["install", False], ["port", False], ["open", False], ["add", False]] and n('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') == 1
            and "2.4.4" in txt('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: step 1 with the download (%s)" % steps())
 
         # ---- 5. every former entry point lands on the one place to link a client: its own Tally card (the companies in Tally
