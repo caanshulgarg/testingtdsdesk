@@ -498,3 +498,11 @@ on the server under a lock per client) and the trigger sync_guard_autopost on cl
 owner switches it on or loosens it; anyone else's attempt keeps the old setting and is logged and written to sync_refused). Grants
 explicit. Deploy order: 101, then the app build (until 101 runs, a signed-in browser posts nothing by itself: the claim is refused and
 the setting says why). Tested on pg_stand: `tests/run_migration101.py` (two browsers claiming at once included).
+
+Faster reports (26-Oct-2026, branch next-fast-reports; NOT run on staging): `server/assistant/migration-107-fast-reports.sql` runs after 106
+(it needs 77's asst_led / asst_pl_head and 87; any order after them is fine). Add-only, one transaction, `lock_timeout` 10 s, safe twice:
+two indexes on client_book_items by client ((client_id, key, item) and (client_id, seq); 11,400 rows, built in under a second inside the
+transaction, so not CONCURRENTLY); the policies of records, clients and tally_bills with my_firm() / can_write() / is_superadmin() worked
+out once a statement (as 87 did for the book tables); asst_pl_head and asst_led replaced with the same signatures, results and grants
+(the P&L head once a ledger, and only where it can be one): every Assistant book tool about 1 s faster on a 4,000-ledger book. No app
+change. Tested on pg_stand: `tests/run_migration107.py` (answers of asst_led and 25 tools, before and after, identical; timings printed).
