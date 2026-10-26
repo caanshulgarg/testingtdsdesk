@@ -511,3 +511,7 @@ run_postto_link.py                    240  TDSDESK_SITE=../app/dist-test
 # next-gzip-uploads (26-Oct-2026): large saves sent gzipped through records-upload; plain when it is missing or fails
 run_gz_upload.py                      240  TDSDESK_SITE=../app/dist-test
 run_records_upload_server.py          120
+# next-timings (26-Oct-2026): how long each kind of request takes from here, summarised to client_timings (migration 108)
+run_timings_unit.mjs                  60
+run_migration108.py                   180
+run_timings_ui.py                     240  TDSDESK_SITE=../app/dist-test
