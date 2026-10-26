@@ -158,7 +158,8 @@ function cloudSnapshot(){
   Object.values(S.inbox || {}).forEach(i => add("unsorted", i.id, "", i));
   const b = S.bank;
   if (b && b.cid && !b.loading){
-    add("bank_meta", b.cid, b.cid, {rules: b.rules, newLed: b.newLed, keys: b.keys, hist: b.hist});
+    // a browser holding nothing of this client's bank (its storage lost) never sends its empty copy over the server's
+    if (b.stmts.length || b.rules.length || b.newLed.length || Object.keys(b.keys).length) add("bank_meta", b.cid, b.cid, {rules: b.rules, newLed: b.newLed, keys: b.keys, hist: b.hist});
     b.stmts.forEach(st => add("bank_stmt", b.cid + ":" + st.id, b.cid, st));
     if (b.cur && b.rows.length){
       for (let i = 0; i * CLOUD_CHUNK < b.rows.length; i++) add("bank_rows", b.cid + ":" + b.cur + ":" + i, b.cid, {rows: b.rows.slice(i * CLOUD_CHUNK, (i + 1) * CLOUD_CHUNK)});
