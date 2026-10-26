@@ -94,6 +94,8 @@ async function openStatement(sid){
   b.filter = n || b.rows.some(r => r.state === "suggested") ? "review" : "ready";
   render();
   if (bridgeLive()) bankAutoSync(false);
+  // 26-Oct-2026: its lines a posting of this computer already put in Tally show as posted (src/js/24 bankHealOpen)
+  if (typeof bankHealOpen === "function") bankHealOpen().catch(() => {});
 }
 function curStmt(){ const b = B(); return b && b.stmts.find(s => s.id === b.cur); }
 // Self-heal (owner, 26-Oct-2026): this browser lost a client's statements (Safari clearing its storage, a cleared site)

@@ -171,8 +171,12 @@ export function PostReport({ rep }) {
   // one clear word for each (review of 02-Oct-2026): In Tally (verified) / In Tally, not yet read back / Failed
   if (rep.notAllowed) return <div className="bk-alert bad" data-not-allowed=""><b>Not sent to Tally: choose the Tally company.</b>{" " + notAllowedRest(rep.notAllowed) + " "}
     <Button className="btn small" onClick={() => goChooseTallyCompany()}>Choose the Tally company</Button>{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
+  // 26-Oct-2026: lines the resend guard held back that a posting of this computer already put in Tally (bankSentHeal):
+  // one quiet line, nothing red, nothing to post again
+  if (rep.alreadyLine && !(rep.posted || 0) && !(rep.failed || []).length) return <div className="bk-alert" data-already-posted="">{rep.alreadyLine}{" "}<Btn act={rep.dismiss} className="linkbtn">Dismiss</Btn></div>;
   const verified = rep.checking ? 0 : (rep.posted || 0) - (rep.unread || 0);
   const bits = [rep.checking ? (rep.posted || 0) + " in Tally" + (rep.company ? " (" + rep.company + ")" : "") + ", not yet read back: FinCom reads them back by itself…" : verified + " in Tally (verified)" + (rep.company ? " · " + rep.company : "")];
+  if (rep.alreadyLine) bits.push(rep.alreadyLine.replace(/\.$/, ""));
   if (rep.checkNote) bits.push(rep.checkNote);
   if (rep.unread) bits.push(rep.unread + " in Tally, not yet read back (Tally did not answer the check; use ‘Mark lines already in Tally’ later)");
   if (rep.optional) bits.push(rep.optional + " as Optional vouchers (Tally: Display More Reports → Exception Reports → Optional Vouchers)");

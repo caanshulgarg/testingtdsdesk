@@ -674,6 +674,8 @@ function bankSetLedger(id, v){
   if (!v){ if (r.ledger){ setRowLedger(r, ""); saveBank({rows: true}); render(); } return true; }
   const l = exactLedger(v);
   if (!l){ toast("\u201c" + v + "\u201d is not a Tally ledger. Choose one from the list, or create it."); return false; }
+  // 26-Oct-2026: never the bank account's own ledger; the line stays without a ledger
+  if (isOwnBank(r, l)){ toast(OWN_BANK + "."); if (r.ledger){ setRowLedger(r, ""); saveBank({rows: true}); render(); } return false; }
   if (b.sel.has(r.id) && b.sel.size > 1){ acClose(); bulkAction("ledger", l); return true; }
   if (l !== r.ledger || r.state !== "ready"){ setRowLedger(r, l); saveBank({rows: true}); render(); }
   return true;
