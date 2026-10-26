@@ -506,3 +506,4 @@ run_stuck.js                          120
 # next-fix-books-crash (25-Oct-2026): FinCom opened again on a client's TDS page never holds the page for seconds
 run_books_reopen_freeze.py            300  TDSDESK_SITE=../app/dist-test
 run_bank_heal.py                      240  TDSDESK_SITE=../app/dist-test
+run_bank_live_parts.py                240  TDSDESK_SITE=../app/dist-test
