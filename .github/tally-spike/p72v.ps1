@@ -40,6 +40,7 @@ $P7 = 'p7 company GUID after a rename and after a copy of the data folder'
 $P8 = 'p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID)'
 $P9 = 'p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company'
 $P10 = 'p10 a batch of 3 with one missing ledger: Tally''s exact reply'
+$P12 = 'p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say'
 $P11 = 'p11 Tally''s window and requests during the run (window probe, the bridge''s requests at the proxy)'
 $probeFile = Join-Path $p72 'probes.txt'
 function ProbeNote([string]$name, [string]$why, [string]$x) { Add-Content -Path $probeFile -Encoding UTF8 -Value "== PROBE $name ($why)`r`n$x`r`n" }
@@ -281,6 +282,9 @@ if ($renamed) {
 Say '---- proof72: the bridge stopped (the harness''s own measurements follow, one request at a time)'
 Snap 'p72-before-stop'
 Copy-Item $blog (Join-Path $p72 'bridge-full.log') -ErrorAction SilentlyContinue
+# the bridge's program and command line, to start it again for q (port 4125)
+$bProcs = @(Get-CimInstance Win32_Process -Filter "Name='FinComBridge.exe'" -ErrorAction SilentlyContinue)
+PSave 'bridge-processes.txt' (($bProcs | ForEach-Object { "$($_.ProcessId) $($_.ExecutablePath) :: $($_.CommandLine)" }) -join "`r`n")
 Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
 Stop-S235Proxy
 $px = @(); if (Test-Path $proxyLog) { $px = @(Get-Content $proxyLog -Encoding UTF8 | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } | Where-Object { $_.t0 }) }
@@ -481,6 +485,41 @@ PRes $P6 $(if ($sB.up -and $ansB -match 'GUID') { 'PASS' } else { 'FAIL' }) ("{0
 PRes $P7 $(if ($cRen -and $gA) { 'PASS' } else { 'HARNESS' }) ("{0}; {1}; {2}" -f $renTxt, $bridgeRen, $copyTxt)
 Stop-Process -Id $sB.p.Id -Force -ErrorAction SilentlyContinue
 Stop-Process -Id $sA.p.Id -Force -ErrorAction SilentlyContinue; Start-Sleep 3
+
+# ===================================================================== q: Tally on port 4125 (the owner's report, 26-Oct)
+Say '---- proof72 q: Tally on port 4125, the published bridge 2.4.7 with TallyPorts auto / 9000 / 4125'
+IniStd 'Both' 4125 'Yes'; $iniQ = IniText; PSave 'q-tally-ini.txt' $iniQ
+$sQ = StartTallyOn 4125 'q-4125'; $script:tpid = $sQ.p.Id
+$qAns = CoListAt 4125; $qOwner = PortOwner 4125
+$cfgPath = "$h1\tds-bridge.config.json"
+$bMain = @($bProcs | Where-Object { $_.CommandLine -notmatch '(?i)\btray\b' } | Select-Object -First 1)[0]; if (-not $bMain) { $bMain = @($bProcs)[0] }
+function BridgeStart {
+  if (-not $bMain) { return $false }
+  $cl = "$($bMain.CommandLine)"; $exeQ = "$($bMain.ExecutablePath)"
+  $argsQ = if ($cl.StartsWith('"')) { $cl.Substring($cl.IndexOf('"', 1) + 1).Trim() } else { ($cl -split '\s+', 2)[1] }
+  if ($argsQ) { Start-Process -FilePath $exeQ -ArgumentList $argsQ -WorkingDirectory (Split-Path $exeQ) | Out-Null } else { Start-Process -FilePath $exeQ -WorkingDirectory (Split-Path $exeQ) | Out-Null }
+  for ($i = 0; $i -lt 30; $i++) { Start-Sleep 2; if (Bridge GET '/status' $null 10) { return $true } }
+  return $false
+}
+$qRows = @()
+foreach ($qc in @(@{ n = 'auto'; v = 'auto' }, @{ n = '9000'; v = @(9000) }, @{ n = '4125'; v = @(4125) })) {
+  Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force; Start-Sleep 3
+  try { $cj = Get-Content $cfgPath -Raw | ConvertFrom-Json; $cj | Add-Member -NotePropertyName TallyPorts -NotePropertyValue $qc.v -Force; $null = $cj.PSObject.Properties.Remove('TallyHost')
+    [IO.File]::WriteAllText($cfgPath, ($cj | ConvertTo-Json -Depth 8 -Compress), [Text.UTF8Encoding]::new($false)) } catch { Info "q: settings not written: $_" }
+  $upQ = BridgeStart
+  Start-Sleep 5
+  $qs = Bridge GET '/status?fresh=1' $null 60; $qco = Bridge GET '/companies' $null 60; $qk = Bridge POST '/tray/check' @{} 90; $qd = Bridge GET '/diagnose' $null 60
+  PJson "q-$($qc.n)-status.json" $qs; PJson "q-$($qc.n)-companies.json" $qco; PJson "q-$($qc.n)-traycheck.json" $qk; PJson "q-$($qc.n)-diagnose.json" $qd
+  $qt = $qk.tally
+  $qRows += ("TallyPorts {0}: bridge up {1}; port plan '{2}'; /companies [{3}]; Test connection (/tray/check): tally ok {4}, ports [{5}], companies [{6}], error '{7}'; diagnosis: {8}; Tally seen by Windows: {9}" -f `
+    $qc.n, $upQ, $qs.mode, ((@($qco.companies | ForEach-Object { "$($_.name) port $($_.port)" })) -join '; '), $qt.ok, ((@($qt.ports)) -join ','), ((@($qt.companies)) -join ','), $qt.error,
+    ((@($qd.findings | ForEach-Object { "[$($_.level)] $($_.text) FIX: $($_.fix)" })) -join ' / '), ((@($qd.tallies | ForEach-Object { "pid $($_.pid) ports [$((@($_.ports)) -join ',')] ini port $($_.ini.port) mode $($_.ini.mode)" })) -join '; '))
+}
+Copy-Item $blog (Join-Path $p72 'bridge-q.log') -ErrorAction SilentlyContinue
+Get-Process FinComBridge -ErrorAction SilentlyContinue | Stop-Process -Force
+$qConn = @($qRows | Where-Object { $_ -match 'port 4125' })
+PRes $P12 $(if (-not $sQ.up) { 'HARNESS' } elseif (@($qRows | Select-Object -First 1)[0] -match '/companies \[[^\]]*port 4125') { 'PASS' } else { 'FAIL' }) ("Tally on 4125 (tally.ini [{0}]): 4125 answers '{1}' (listener {2}); {3}" -f (IniKeys $iniQ), $qAns, $qOwner, ($qRows -join ' || '))
+foreach ($t in @(Get-Process tally -ErrorAction SilentlyContinue)) { Stop-Process -Id $t.Id -Force -ErrorAction SilentlyContinue }; Start-Sleep 3
 
 # ===================================================================== d' on ZZ BIG TEST (~30,000 entries)
 Say '---- proof72: ZZ BIG TEST (~30,000 entries) and the lookups again'
