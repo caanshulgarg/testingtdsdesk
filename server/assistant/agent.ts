@@ -314,7 +314,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     }
     return msg;
   };
-  const capError = (cap: Cap) => emit({ t: "error", kind: "cap", message: cap.why === "calls" ? capWords("calls", cap.cap_inr || 0, cap.cap)
+  const capError = (cap: Cap) => emit({ t: "error", kind: "cap", message: cap.why === "calls" || cap.why === "balance" || cap.why === "off" ? capWords(cap.why, cap.cap_inr || 0, cap.cap)
     : capWords("inr", cap.cap_inr || 0, cap.cap) + " Answers from FinCom's own tools and the checks before filing keep working.",
     used: cap.used, cap: cap.cap, spent: cap.spent_inr, cap_inr: cap.cap_inr });
 

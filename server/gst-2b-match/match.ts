@@ -13,7 +13,7 @@
 // Whatever happens to the AI (off, over the cap, no key, failed, refused, unreadable) the rules' result stands, and
 // ai.say says so in the run line.
 import { m2bAiApply, m2bAiInput, m2bAiParse, m2bAiPrompt, m2bLine, m2bRules, M2B_SCHEMA, M2B_SYSTEM } from "../_shared/match2b.js";
-import { costUsd, SONNET, Usage } from "../assistant/models.ts";
+import { aiStopWords, costUsd, SONNET, Usage } from "../assistant/models.ts";
 
 export { SONNET };
 type Stream = { [Symbol.asyncIterator](): AsyncIterator<any>, finalMessage(): Promise<any> };
@@ -51,7 +51,7 @@ export async function matchRun(twob: any[], books: any[], decisions: Record<stri
   let cap: { ok: boolean, why?: string };
   try { cap = await deps.capTake(); } catch { cap = { ok: false, why: "error" }; }
   // the rupees are the month's (migration 96); the count of calls the day's
-  if (!cap.ok) { ai.state = "cap"; ai.say = (cap.why === "calls" ? "The firm's AI calls for today are used up: " : "The firm's AI budget for this month is used up: ") + STANDS; return done([]); }
+  if (!cap.ok) { ai.state = "cap"; ai.say = aiStopWords(cap.why) + STANDS; return done([]); }
   let msg: any = null;
   try {
     const stream = deps.client.beta.messages.stream({

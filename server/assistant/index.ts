@@ -126,7 +126,7 @@ export function handler(deps: Deps) {
         }, body.ledgers, body.parties);
         try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: "ledger guess: " + r.asked + " asked, " + r.cached + " cached", p_tools: [], p_in: r.usage.input_tokens || 0, p_out: r.usage.output_tokens || 0,
           p_calls: r.asked ? 1 : 0, p_ms: Date.now() - t0, p_feature: "ledger_guess", p_route: r.asked ? "haiku" : "cache", p_models: r.asked ? [HAIKU] : [], p_cache_read: r.usage.cache_read_input_tokens || 0, p_cache_write: r.usage.cache_creation_input_tokens || 0, p_cost_inr: 0, p_fell_through: false }, SERVICE); } catch { /* the guesses still stand */ }
-        if ((r as any).capped) return reply(429, { ok: false, kind: "cap", error: ((r as any).capped === "calls" ? "Your firm has used today's AI calls. The rules' guesses are shown; AI guesses start again at midnight (India time)."
+        if ((r as any).capped) return reply(429, { ok: false, kind: "cap", error: ((r as any).capped === "balance" || (r as any).capped === "off" ? capWords((r as any).capped, 0, 0) + " The rules' guesses are shown." : (r as any).capped === "calls" ? "Your firm has used today's AI calls. The rules' guesses are shown; AI guesses start again at midnight (India time)."
           : "Your firm has used this month's limit for AI. The rules' guesses are shown; AI guesses start again on the 1st of next month (India time)."), guesses: r.guesses, cached: r.cached });
         return reply(200, { ok: true, guesses: r.guesses, cached: r.cached, asked: r.asked, usd: Math.round(r.usd * 1e6) / 1e6, model: HAIKU });
       } catch (e) {

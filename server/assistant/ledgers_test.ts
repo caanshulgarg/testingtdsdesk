@@ -3,7 +3,7 @@
 // answer cached (a second ask costs nothing), the firm's cap taken first (no call over it), only the names asked kept,
 // and the cost of 100 ledgers worked out from the size of the batch.
 import { cleanIn, guessLedgers, LEDGER_GUESS_V, parseGuesses, SYSTEM_LEDGERS } from "./ledgers.ts";
-import { capWords, costUsd, HAIKU } from "./models.ts";
+import { aiStopWords, capWords, costUsd, HAIKU } from "./models.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -83,6 +83,14 @@ Deno.test("the cap's words: the rupee limit is the month's (migration 96); the c
   assert(d.includes("today's 500 AI calls") && d.includes("midnight"), d);
   assert(capWords("", 3000, 500) === m, "no reason given: the rupee limit");
   assert(capWords("inr", 1234567, 0).includes("₹12,34,567"), "Indian grouping: " + capWords("inr", 1234567, 0));
+});
+
+Deno.test("migration 109: the wallet's words; the owner is no longer told to raise the limit", () => {
+  const b = capWords("balance", 3000, 500), o = capWords("off", 3000, 500), m = capWords("inr", 3000, 500);
+  assert(b.includes("credit has run out") && b.includes("add credit") && !b.includes("₹3,000"), b);
+  assert(o.includes("switched off"), o);
+  assert(!/owner can raise/.test(m) && m.includes("ask FinCom"), m);
+  assert(aiStopWords("balance").includes("credit") && aiStopWords("calls").includes("today") && aiStopWords("inr").includes("month"), "the match functions' words");
 });
 
 Deno.test("only the names asked, a kind not known is low not_tax, at most 100 a batch, no ledger twice", () => {

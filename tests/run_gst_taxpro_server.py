@@ -22,7 +22,8 @@ def per(n):  # MMYYYY n months back, India time
     t = time.gmtime(time.time() + 5.5 * 3600); y, m = t.tm_year, t.tm_mon - n
     while m < 1: m += 12; y -= 1
     return "%02d%d" % (m, y)
-FILED = {per(1), per(2)}          # GSTR-1 and 3B filed for the last two months, not the third
+FILED = {per(1), per(2)}
+NOW_IST = lambda: time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time() + 5.5 * 3600))   # the IRP's AckDt (IST): an IRN made now (cancellable for 24 hours)          # GSTR-1 and 3B filed for the last two months, not the third
 class TPH(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def out(self, code, obj):
@@ -64,10 +65,10 @@ class TPH(http.server.BaseHTTPRequestHandler):
             no = body["DocDtls"]["No"]
             if no in TP["irn_made"]: return self.out(200, {"Status": 0, "ErrorDetails": [{"ErrorCode": "2150", "ErrorMessage": "Duplicate IRN"}]})
             TP["irn_made"][no] = "IRN-" + no
-            return self.out(200, {"Status": 1, "Data": json.dumps({"AckNo": 112010000000001, "AckDt": "2026-10-01 12:00:00", "Irn": "IRN-" + no, "SignedQRCode": "QR-" + no, "SignedInvoice": "SI"})})
+            return self.out(200, {"Status": 1, "Data": json.dumps({"AckNo": 112010000000001, "AckDt": NOW_IST(), "Irn": "IRN-" + no, "SignedQRCode": "QR-" + no, "SignedInvoice": "SI"})})
         if p == "/eicore/dec/v1.03/Invoice/irnbydocdetails":
             irn = TP["irn_made"].get(q.get("docnum"))
-            return self.out(200, {"Status": 1, "Data": {"AckNo": 112010000000001, "AckDt": "2026-10-01 12:00:00", "Irn": irn, "SignedQRCode": "QR-again"}} if irn else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "not found"}]})
+            return self.out(200, {"Status": 1, "Data": {"AckNo": 112010000000001, "AckDt": NOW_IST(), "Irn": irn, "SignedQRCode": "QR-again"}} if irn else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "not found"}]})
         if p == "/eicore/dec/v1.03/Invoice/Cancel": return self.out(200, {"Status": 1, "Data": {"Irn": body["Irn"], "CancelDate": "2026-10-01 13:00:00"}})
         if p == "/eiewb/dec/v1.03/ewaybill":
             return self.out(200, {"Status": 1, "Data": {"EwbNo": 331000000001, "EwbDt": "2026-10-01 12:30:00", "EwbValidTill": "2026-10-02 23:59:00"}} if body.get("Irn") and body.get("Distance") else {"Status": 0, "ErrorDetails": [{"ErrorMessage": "Distance is required"}]})
@@ -80,6 +81,9 @@ tps = http.server.ThreadingHTTPServer(("127.0.0.1", 9310), TPH); threading.Threa
 FIRM, USER, JWT = "f-1", "u-1", "user-jwt-1"
 F.USERS[JWT] = {"id": USER, "email": "a@b.c"}
 F.T["members"].append({"user_id": USER, "firm_id": FIRM, "active": True, "role": "owner"})
+# the audit of 26-Oct-2026 (M2): a read-only member, and a staff member whose session has no two-step
+F.USERS["ro-jwt"] = {"id": "u-ro", "email": "ro@b.c"}; F.USERS["aal1-jwt"] = {"id": "u-aal1", "email": "s@b.c"}; F.AAL1.add("aal1-jwt")
+F.T["members"] += [{"user_id": "u-ro", "firm_id": FIRM, "active": True, "role": "readonly"}, {"user_id": "u-aal1", "firm_id": FIRM, "active": True, "role": "staff"}]
 F.SECRETS["gsp:taxpro:aspid"] = "ASP-FROM-VAULT"; F.SECRETS["gsp:taxpro:password"] = "ASP-PASS-FROM-VAULT"
 F.start()
 env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SERVICE_ROLE_KEY=F.SERVICE, SUPABASE_ANON_KEY="anon-key",
@@ -87,10 +91,10 @@ env = dict(os.environ, SUPABASE_URL="http://127.0.0.1:%d" % F.PORT, SUPABASE_SER
 fn = subprocess.Popen([DENO, "run", "--allow-net", "--allow-env", "--allow-read", os.path.join(HERE, "..", "server", "gst-taxpro", "index.ts")], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 log = []
 threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
-def call(body, cron=False):
+def call(body, cron=False, jwt=JWT):
     h = {"Content-Type": "application/json"}
     if cron: h["x-cron-key"] = F.CRON_KEY
-    else: h["Authorization"] = "Bearer " + JWT
+    else: h["Authorization"] = "Bearer " + jwt
     rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers=h)
     try: r = urllib.request.urlopen(rq, timeout=120); return json.loads(r.read())
     except urllib.error.HTTPError as e: return json.loads(e.read() or b"{}")
@@ -186,6 +190,26 @@ try:
     ok(r.get("ok") and e.get("irn_status") == "cancelled" and e.get("irn") == "IRN-SI/26/001", "IRN cancelled within 24 hours; the record stays, marked cancelled")
     lst = call({"action": "einvoices", "gstin": G})
     ok(lst.get("ok") and len(lst["einvoices"]) == 1 and lst["einvoices"][0]["irn_status"] == "cancelled" and "request" not in lst["einvoices"][0], "the firm's e-invoices listed")
+    # the audit of 26-Oct-2026 (M2, L4): the two-step and the role on every action; the selftest needs the timer's key
+    n0 = len(TP["calls"])
+    RO_W = "Read-only members cannot use the GST portal"
+    acts = [{"action": a, "gstin": G, "username": "user1", "otp": "575757", "period": per(1), "form": "R1", "docKey": "sv-1", "inv": inv, "password": "irp-pass", "trans": {"distance": 5}, "reason": "2"}
+            for a in ("otp", "auth", "2b", "fetch", "return", "einv-login", "irn", "irn-cancel", "ewb", "save", "summary", "confirm", "proceed", "file")] + [{"action": "returns", "gstins": [G]}]
+    res = {a["action"]: call(a, jwt="ro-jwt") for a in acts}
+    ok(all(r.get("ok") is False and RO_W in r.get("error", "") for r in res.values()) and len(TP["calls"]) == n0 and F.SECRETS.get("gsp:einv:%s:%s:pass" % (FIRM, G)) == "irp-pass",
+       "ATTACK: a read-only member's OTP, sign-in, 2B, fetch, kept returns, e-invoice login, IRN, its cancelling, e-way bill and filing are refused; TaxPro not called, nothing changed (%s)" % {k: (v.get("error") or "")[:30] for k, v in res.items() if RO_W not in (v.get("error") or "")})
+    st = call({"action": "status", "gstins": [G]}, jwt="ro-jwt"); ei_ = call({"action": "einvoices", "gstin": G}, jwt="ro-jwt"); fl = call({"action": "filing", "gstin": G, "form": "R1", "period": per(1)}, jwt="ro-jwt")
+    ok(st.get("ok") and ei_.get("ok") and fl.get("ok"), "normal use: a read-only member still sees the sessions, the e-invoices and a filing's status")
+    r = call({"action": "returns", "gstins": [G]}, jwt="aal1-jwt"); r2 = call({"action": "irn", "gstin": G, "docKey": "sv-9", "inv": inv}, jwt="aal1-jwt")
+    ok("two-step" in r.get("error", "") and "two-step" in r2.get("error", "") and len(TP["calls"]) == n0, "ATTACK: staff with only a password (no two-step) refused, for reading and for an IRN")
+    ok(call({"action": "returns", "gstins": [G]}).get("ok"), "normal use: the owner with the two-step as before")
+    def get(path, key=None):
+        rq = urllib.request.Request("http://127.0.0.1:8000/" + path, headers={"x-cron-key": key} if key else {})
+        try: r = urllib.request.urlopen(rq, timeout=120); return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e: return e.code, json.loads(e.read() or b"{}")
+    c, _ = get("?selftest=1")
+    ok(c == 403 and len(TP["calls"]) == n0, "ATTACK: the selftest without the timer's key: 403, TaxPro not called")
+    # (with the key it calls TaxPro's real sandbox, so it is not run here)
     # never the keys
     ok(not any("ASP-PASS-FROM-VAULT" in l or "TOK1" in l or "irp-pass" in l for l in log), "the function's log never has a key, token or password")
 finally:

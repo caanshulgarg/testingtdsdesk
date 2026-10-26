@@ -20,6 +20,7 @@ BCAST = []            # the Realtime broadcasts sent (POST /realtime/v1/api/broa
 ARGS = {}             # function -> the arguments of each call (the names sent to the ingest functions, migration-23)
 SECRETS = {}          # Vault: name -> value (gsp_secret_put / gsp_secret_get, migration-16)
 CRON_KEY = "cron-key-" + "d" * 32
+AAL1 = set()          # bearer tokens of a session without the two-step: mfa_ok() answers false for them (migration 109's tests)
 # round 21 (docs/reviews/migration-47-48-review.md): hooks for the upload worker's failure cases
 LOCK = threading.Lock()   # a PATCH and tally_upload_advance are atomic, as one SQL statement / transaction is
 HEAD_DELAY = [0.0]        # seconds a Range bytes=0-0 GET waits before answering (two upload_done calls then overlap)
@@ -181,6 +182,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if path == "/auth/v1/user":
             w = self.who(); return self.send(200, w) if isinstance(w, dict) else self.send(401, {"msg": "bad token"})
         if path.startswith("/rest/v1/rpc/"):
+            if path.rsplit("/", 1)[1] == "mfa_ok" and (self.headers.get("Authorization") or "").replace("Bearer ", "") in AAL1:
+                ARGS.setdefault("mfa_ok", []).append({}); return self.send(200, False)
             if path.rsplit("/", 1)[1] in NO_FN:
                 return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % path.rsplit("/", 1)[1], "details": None, "hint": None})
             try: return self.send(200, rpc(path.rsplit("/", 1)[1], json.loads(raw or b"{}")))

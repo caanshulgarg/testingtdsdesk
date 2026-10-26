@@ -508,3 +508,6 @@ run_books_reopen_freeze.py            300  TDSDESK_SITE=../app/dist-test
 run_bank_heal.py                      240  TDSDESK_SITE=../app/dist-test
 run_bank_live_parts.py                240  TDSDESK_SITE=../app/dist-test
 run_postto_link.py                    240  TDSDESK_SITE=../app/dist-test
+run_migration109.py                   180
+run_readonly_server.py                180
+run_gst_taxpro_server.py              180

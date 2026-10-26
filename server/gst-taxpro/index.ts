@@ -16,9 +16,13 @@
 // Hosts: TAXPRO_BASE_URL (GST returns; default production https://gstapi.charteredinfo.com),
 //        TAXPRO_EINV_URL (e-invoice and e-way bill; default the SANDBOX until set: an IRN is a legal document).
 //
-// GET ?selftest=1 : always on the sandbox (free): OTP → sign-in → refresh → 2B, GSTR-1 and 3B summaries for GSTN's test
-//   taxpayer, the API version that answers for each, Vault, and the e-invoice sign-in for TaxPro's test GSTIN.
-// POST, a signed-in firm member:
+// GET ?selftest=1 with the database timer's key (x-cron-key; the audit of 26-Oct-2026, L4): always on the sandbox (free):
+//   OTP → sign-in → refresh → 2B, GSTR-1 and 3B summaries for GSTN's test taxpayer, the API version that answers for each,
+//   Vault, and the e-invoice sign-in for TaxPro's test GSTIN. Without the key: 403, nothing called.
+// POST, a signed-in firm member with the two-step done (mfa_ok, as every other function; the audit of 26-Oct-2026, M2).
+// A read-only member may only look at the sessions, the e-invoice accounts and e-invoices, and a filing's status
+// (READ_ONLY_OK); every other action (OTP, sign-in, 2B, fetch, the kept returns, e-invoice login, IRN, its cancelling,
+// e-way bill, filing) needs an owner or staff member:
 //   {action:"status", gstins}                       sessions: until, access period, ended, error (never the token)
 //   {action:"otp" | "auth", gstin, username, otp?, days?}
 //   {action:"2b", gstin, username, period}          2B now (kept on the server too)
@@ -589,11 +593,17 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
   }
 }
 
+// what a read-only member may do (look only); everything else is the owner's or staff's
+const READ_ONLY_OK = new Set(["status", "einv-status", "einvoices", "filing"]);
+const READONLY_WORDS = "Read-only members cannot use the GST portal, e-invoices or e-way bills, or read the GST returns. Ask the firm's owner or staff.";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const u = new globalThis.URL(req.url);
 
   if (req.method === "GET" && u.searchParams.get("selftest")) {
+    const { data: good } = await admin.rpc("gst_cron_ok", { k: req.headers.get("x-cron-key") || "" });
+    if (good !== true) return reply(403, { ok: false });
     // GSTN's published sandbox test taxpayer (sandbox OTP 575757); production is not touched, it costs credit
     const t = { gstin: "33AANCS2882A1ZG", username: "TN_NT2.2265" }, h = hdr(t.gstin, t.username);
     const steps: Record<string, string> = {};
@@ -644,8 +654,11 @@ Deno.serve(async (req) => {
   const asUser = createClient(SB_URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
   const { data: who } = await asUser.auth.getUser();
   if (!who?.user) return reply(401, { ok: false, error: "Sign in again." });
+  const { data: mfaOk } = await asUser.rpc("mfa_ok");
+  if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
   const { data: member } = await admin.from("members").select("firm_id, active, role").eq("user_id", who.user.id).maybeSingle();
   if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
+  if (!READ_ONLY_OK.has(action) && member.role !== "owner" && member.role !== "staff") return reply(403, { ok: false, error: READONLY_WORDS });
   const firm = member.firm_id as string, me = who.user.id;
   const list = (v: unknown) => (Array.isArray(v) ? v : []).map((g: unknown) => String(g).toUpperCase()).filter((g: string) => GSTIN.test(g)).slice(0, 500);
 

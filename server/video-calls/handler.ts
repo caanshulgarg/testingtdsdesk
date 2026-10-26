@@ -35,7 +35,7 @@
 // FinCom Assistant routes a short book answer to, within the firm's AI switch and monthly cap.
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import * as R from "../../app/src/calls/rules.js";
-import { costUsd, plan } from "../assistant/models.ts";
+import { capWords, costUsd, plan } from "../assistant/models.ts";
 import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
 import { arabicShare, devanagariShare, toLatin } from "../fincom-transcribe/names.ts";
 
@@ -734,7 +734,7 @@ export function handler(deps: Deps) {
     const key = await secret("claude_api_key");
     if (!key) fail(503, "AI help is not set up on this server.", "nokey");
     const cap = await rpc("asst_cap_take", { p_firm: m.firm, p_n: 1 }).catch(() => null);
-    if (!cap?.ok) fail(429, "The firm's AI limit for this month is reached.", "cap");
+    if (!cap?.ok) fail(429, cap?.why === "balance" || cap?.why === "off" ? capWords(cap.why, 0, 0) : "The firm's AI limit for this month is reached.", "cap");
     const pl = plan("book", "low", true);
     // in the language the person asked for (default English); names, amounts and tax terms as said
     const lang = R.subLangOk(langIn) ? String(langIn) : "en";

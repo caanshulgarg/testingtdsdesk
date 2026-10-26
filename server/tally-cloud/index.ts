@@ -3217,6 +3217,7 @@ async function monthDays(firm: string, body: any) {
   return new Response(packMonth(out), { status: 200, headers: { ...cors, "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
 }
 
+const READONLY_WORDS = "Read-only members cannot upload or change the books. Ask the firm's owner or staff.";
 async function userUpload(req: Request, auth: string) {
   const asUser = createClient(URL, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
   const { data: who } = await asUser.auth.getUser();
@@ -3224,7 +3225,7 @@ async function userUpload(req: Request, auth: string) {
   if (!user) return reply(401, { ok: false, error: "Sign in to FinCom again." });
   const { data: mfaOk } = await asUser.rpc("mfa_ok");
   if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
-  const { data: m } = await db.from("members").select("firm_id, active").eq("user_id", user.id).maybeSingle();
+  const { data: m } = await db.from("members").select("firm_id, active, role").eq("user_id", user.id).maybeSingle();
   if (!m || !m.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
   const firm = m.firm_id as string;
   let body: any;
@@ -3246,6 +3247,9 @@ async function userUpload(req: Request, auth: string) {
   // fast-firstopen (25-Oct-2026): a month of a book's day files in one answer (read only; before anything below, which
   // may link a company)
   if (body.kind === "month_days") return await monthDays(firm, body);
+  // migration 109 / the audit of 26-Oct-2026 (M4): everything below writes the books (a company linked to a client, days,
+  // ledgers, an upload, a reading again): owners and staff only, as can_write(); a read-only member may look and wake
+  if (m.role !== "owner" && m.role !== "staff") return reply(403, { ok: false, error: READONLY_WORDS });
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });

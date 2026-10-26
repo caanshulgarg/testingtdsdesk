@@ -80,7 +80,6 @@ run_cloud_post_ui.py           in progress (2026-10-02): entries not queued in t
 run_reports_ui.py              in progress (2026-10-02): closed-period posting prompt changed (2 checks, with dist-test)
 run_led_ui.py                  in progress (2026-10-02): "masters read: what Tally says about each ledger is kept" (with dist-test)
 run_gst134_ui.py               in progress (2026-10-02): FINDING 6 3B for Mar-2026 reverse charge (test being edited)
-run_gst_taxpro_server.py       in progress (2026-10-02): IRN cancelled within 24 hours; e-invoices list (2 checks)
 run_gobridge.py                in progress (2026-10-02): Go bridge 2.1.4 shadow check and compare differ; ran past 10 minutes
 run_gobridge_beat.py           in progress (2026-10-02): /status busy/open, log repeats; HTTP 502 from the stand-in
 run_gobridge_diff.py           in progress (2026-10-02): Go and PowerShell bridges answer differently (.ledgers[0].rate, .dailyAt)

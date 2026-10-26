@@ -14,7 +14,7 @@
 // Whatever happens to the AI (off, over the cap, no key, failed, refused, unreadable) the rules' suggestions stand, and
 // ai.say says so in one line.
 import { tmAiCheck, tmAiInput, tmAiParse, tmAiPrompt, TM_SCHEMA, TM_SYSTEM } from "../_shared/tdsmatch.js";
-import { costUsd, SONNET, Usage } from "../assistant/models.ts";
+import { aiStopWords, costUsd, SONNET, Usage } from "../assistant/models.ts";
 
 export { SONNET };
 type Stream = { [Symbol.asyncIterator](): AsyncIterator<any>, finalMessage(): Promise<any> };
@@ -43,7 +43,7 @@ export async function matchRun(rows: any[], chs: any[], opt: { fy: string, q: st
   ai.sent = inp.d.length + inp.c.length; ai.notSent = inp.notSent;
   let cap: { ok: boolean, why?: string };
   try { cap = await deps.capTake(); } catch { cap = { ok: false, why: "error" }; }
-  if (!cap.ok) { ai.state = "cap"; ai.say = (cap.why === "calls" ? "The firm's AI calls for today are used up: " : "The firm's AI budget for this month is used up: ") + STANDS; return { ai, ...none }; }
+  if (!cap.ok) { ai.state = "cap"; ai.say = aiStopWords(cap.why) + STANDS; return { ai, ...none }; }
   let msg: any = null;
   try {
     const stream = deps.client.beta.messages.stream({

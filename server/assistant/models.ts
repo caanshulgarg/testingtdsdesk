@@ -84,7 +84,18 @@ export const rupees = (v: number): string => {
   const s = String(Math.round(Math.abs(Number(v) || 0))), last = s.slice(-3), rest = s.slice(0, -3);
   return "₹" + (Number(v) < 0 ? "-" : "") + (rest ? rest.replace(/\B(?=(\d{2})+$)/g, ",") + "," : "") + last;
 };
+// Migration 109 (the owner's approval of 26-Oct-2026): AI use is charged to the firm's wallet; "balance" is a wallet below
+// the platform's minimum, "off" the AI module switched off for the firm by FinCom. The owner may only lower the limit.
+export const AI_NO_CREDIT = "The firm's credit has run out, so new AI answers are paused. Ask the administrator to add credit; everything already in FinCom still works.";
+export const AI_OFF = "AI help is switched off for your firm's account. Ask FinCom to switch it on.";
 export function capWords(why: string | undefined, capInr: number, calls: number): string {
+  if (why === "balance") return AI_NO_CREDIT;
+  if (why === "off") return AI_OFF;
   return why === "calls" ? "Your firm has used today's " + (Number(calls) || 0) + " AI calls. It starts again at midnight (India time)."
-    : "Your firm has used this month's " + rupees(capInr) + " for AI answers. New AI answers start again on the 1st of next month (India time); the firm's owner can raise the limit in Settings › AI help.";
+    : "Your firm has used this month's " + rupees(capInr) + " for AI answers. New AI answers start again on the 1st of next month (India time). To raise the limit, ask FinCom.";
+}
+// the words for a match (2B, TDS challans) or a call summary stopped before its AI step
+export function aiStopWords(why: string | undefined): string {
+  return why === "balance" ? "The firm's credit has run out, so the AI step is paused: " : why === "off" ? "AI help is switched off for the firm: "
+    : why === "calls" ? "The firm's AI calls for today are used up: " : "The firm's AI budget for this month is used up: ";
 }
