@@ -11,6 +11,8 @@ import ctypes, gzip, json, os, re, sys, threading, time, http.client
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(sys.argv[1]); LOG = sys.argv[2]; CTL = sys.argv[3] if len(sys.argv) > 3 else ''
 LOCK = threading.Lock()
+DUMP = os.environ.get('P72_DUMP', ''); DUMPN = 0
+if DUMP: os.makedirs(DUMP, exist_ok=True)
 CTL_LOCK = threading.Lock()
 
 def logj(o):
@@ -129,6 +131,20 @@ class H(BaseHTTPRequestHandler):
         self.close_connection = True
         o = {'t0': round(t0 * 1000), 't1': round(t1 * 1000), 'ms': round((t1 - t0) * 1000), 'method': method, 'id': i, 'req': tr, 'mid': mid,
              'suspended': bool(sus), 'in': len(body), 'out': len(data), 'status': st, 'err': err}
+        # proof72: with P72_DUMP set (a folder), each request and Tally's answer kept as files (the first 600 requests,
+        # answers cut at 2 MB) so the replies of two releases can be compared
+        if DUMP:
+            try:
+                with LOCK:
+                    global DUMPN
+                    DUMPN += 1; k = DUMPN
+                if k <= 600:
+                    nm = '%04d-%s' % (k, re.sub(r'[^A-Za-z0-9_.-]', '_', i or 'none')[:40])
+                    with open(os.path.join(DUMP, nm + '-req.xml'), 'wb') as f: f.write(body)
+                    with open(os.path.join(DUMP, nm + '-ans.xml'), 'wb') as f: f.write(data[:2000000])
+                    o['dump'] = nm
+            except Exception as e:
+                o['dumpErr'] = str(e)
         if i == 'FinComVoucherByNumber':
             try: o.update(bynum(body, data))
             except Exception as e: o['bynumErr'] = str(e)
