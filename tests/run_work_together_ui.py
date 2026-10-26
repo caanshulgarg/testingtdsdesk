@@ -53,6 +53,15 @@ with sync_playwright() as p:
     A.focus("#cwtest")
     ok(wait_for(B, "!!document.querySelector('[data-cowork-focus=\"Riya Staff\"]') && document.querySelector('[data-cowork-focus=\"Riya Staff\"]').textContent.includes('is editing')", 8000), "the field the host edits is outlined on the member's screen: Riya Staff is editing")
     shot(B, "11-cowork-follower")
+    # security review 26-Oct-2026 (L5): a person's name is theirs to type; a ' in it must not end the overlay's attribute
+    cwt = [t for t in hub.frames if t.startswith("realtime:cowork:")][0]
+    last_focus = [f for f in hub.frames[cwt] if f.get("event") == "broadcast" and (f["payload"] or {}).get("event") == "focus" and f["payload"]["payload"].get("path")][-1]["payload"]["payload"]
+    evil = "Eve' data-pwn='1' style='outline:9px solid red"
+    for x in [x for x in list(hub.members.get(cwt, {}).values()) if x.get("meta") and not x["meta"].get("host")]:   # the followers only
+        x["ws"].send(json.dumps({"topic": cwt, "event": "broadcast", "payload": {"type": "broadcast", "event": "focus", "payload": dict(last_focus, **{"from": "p-evil", "name": evil})}}))
+    ok(wait_for(B, "[...document.querySelectorAll('.cw-focus span')].some(s => s.textContent.startsWith(\"Eve'\"))", 8000), "a hostile name's outline is drawn")
+    ok(B.evaluate("document.querySelectorAll('.cw-layer [data-pwn]').length === 0 && [...document.querySelectorAll('.cw-focus')].some(d => d.dataset.coworkFocus === %s)" % json.dumps(evil)),
+       "a ' in a person's name stays text in the overlay: no attribute made from it (L5)")
 
     print("4. only the route, pointers and focus travel")
     cw = [t for t in hub.frames if t.startswith("realtime:cowork:")]

@@ -238,6 +238,10 @@ Deno.test("guests: link, name and email, a code by email, the waiting room, admi
   eq((await s.call({ action: "upload", gt, what: "chat", name: "big.pdf", size: R.FILE_MAX + 1 })).status, 413, "a file over 20 MB refused");
   const up = await s.call({ action: "upload", gt, what: "chat", name: "bill (1).pdf", size: 1000 });
   assert(up.j.path.startsWith(FIRM + "/client/" + rid + "/chat/") && up.j.url.startsWith("https://stand.test/storage/v1/object/upload/sign/call-files/"), "a signed address in the firm's folder: " + up.j.path);
+  // security review 26-Oct-2026: a chat file's type is the sender's (an .html, an .svg): it is fetched as an attachment,
+  // never opened as a page on the storage address
+  const dl = await s.call({ action: "download", gt, path: up.j.path });
+  assert(dl.status === 200 && /[?&]download(=|&|$)/.test(dl.j.url), "a chat file downloads as an attachment: " + dl.j.url);
   eq((await s.call({ action: "chat", gt, file: { path: FIRM + "/client/other-room/chat/x.pdf", name: "x", size: 10 } })).status, 400, "a file of another call refused");
   eq((await s.call({ action: "upload", gt, what: "rec", recording_id: "x", size: 10 })).status, 403, "a guest never uploads the recording");
   const rm = await s.call({ action: "remove", room_id: rid, participant_id: guestRow.id }, "tok-staff");

@@ -551,7 +551,7 @@ function salesRowAct(a, id, force){
     const v = inv(id); if (!v) return true;
     if (a === "reread"){ rereadSales(v, force); return true; }
     if (a === "print"){ printInvoiceHtml(invoiceHtml(v.x, CO(s.cid), s.cfg), v.x.number); return true; }
-    if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = URL.createObjectURL(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
+    if (a === "file"){ const f = S.files["sv:" + v.id]; if (f){ const u = blobUrl(f); window.open(u, "_blank"); setTimeout(() => URL.revokeObjectURL(u), 60000); } return true; }
     if (a === "edit"){ s.openId = null; startDraft(v.id); return true; }
     const before = [salesSnapshot(v)];
     if (a === "confirm"){

@@ -11,7 +11,7 @@ import { subscribe } from "../store.js";
 
 const COLORS = ["#4F46E5", "#059669", "#D97706", "#E11D48", "#0284C7", "#7C3AED"];
 const colorOf = (id) => COLORS[Math.abs([...String(id)].reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) % COLORS.length];
-const esc = (s) => String(s || "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // a field's place on the page, from #app down (the same page on both sides gives the same path)
 export function pathOf(el) {

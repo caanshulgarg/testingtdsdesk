@@ -110,7 +110,7 @@ function txnCsv(){
   const head = ["S. no.", "Date", "Uploaded", "Voucher", tab === "bank" ? "Reference" : "Invoice no.", tab === "sales" ? "Customer" : "Party",
     tab === "bank" ? "Withdrawal" : "Taxable", tab === "bank" ? "Deposit" : "GST", tab === "bank" ? "Amount" : "Invoice value", "In Tally", "Document"];
   const body = rows.map((r, i) => [i + 1, r.date, r.up, r.vch, r.no, r.party, tab === "bank" ? r.dr : r.taxable, tab === "bank" ? r.cr : r.gst, r.total, r.label, r.file]);
-  const csv = [head].concat(body).map(line => line.map(v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"').join(",")).join("\r\n");
+  const csv = [head].concat(body).map(line => line.map(v => '"' + csvTxt(v).replace(/"/g, '""') + '"').join(",")).join("\r\n");
   saveFile(co.name.replace(/[^A-Za-z0-9]+/g, "-") + "-" + tab + "-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob(["\ufeff" + csv], {type: "text/csv"}));
 }
 

@@ -19,7 +19,7 @@ export default function BillDoc({ e }) {
     FileStore.get(cid, e.id, e.docPath || "", e.fileName || "").then((f) => {
       if (gone) return;
       if (!f) { setState("none"); return; }
-      url = URL.createObjectURL(f);
+      url = blobUrl(f);   // never as a page of FinCom's origin (blobUrl, src/js/01)
       setDoc({ url, pdf: /pdf/i.test(f.type) || /\.pdf$/i.test(f.name || e.fileName || "") });
       setState("");
     }).catch(() => { if (!gone) setState("none"); });
