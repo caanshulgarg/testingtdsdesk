@@ -194,7 +194,7 @@ function cloud() {
 // the page's open and a client's books opening are always something new; a request only within 2 minutes of the
 // person's last key or click (an open tab polling all night sends no row)
 function both(kind, ms, x) {
-  x = Object.assign({}, x, { bg: !/^(open|books)\//.test(kind) && Date.now() - T.input > T.active });
+  x = Object.assign({}, x, { bg: !/^(open|books|prefetch)\//.test(kind) && Date.now() - T.input > T.active });
   add(T.win, kind, ms, x); add(T.page, kind, ms, x);
 }
 const keyOf = (url) => { try { const u = new URL(url, location.href); return u.pathname + u.search; } catch (e) { return ""; } };
@@ -383,6 +383,12 @@ export function watchBooks() {
   const au = (ms) => { const o = active(); if (o) o.audit += ms; };
   if (typeof Audit === "object" && Audit) timed(Audit, "maybeRun", au);
   if (typeof MIS === "object" && MIS) timed(MIS, "maybeRun", au);
+}
+
+// prefetch-books: a step of the clients' books brought in after sign-in (Prefetch, src/js/98): prefetch/start (sign-in to
+// the first read), prefetch/items, prefetch/books, prefetch/client, prefetch/all, prefetch/paused, prefetch/stop-<why>
+export function mark(kind, ms, x) {
+  try { if (!/^prefetch\/[a-z-]+$/.test(kind)) return; T.win = T.win || newAcc(); T.page = T.page || newAcc(); both(kind, ms, x || {}); } catch (e) { /* never in the way */ }
 }
 
 // from main.jsx's start(), as the app starts (this file is fetched then; main.jsx has only the import, its first file is

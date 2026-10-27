@@ -603,7 +603,8 @@ function startCloudSync(){
 }
 function startCloudSync2(){
   loadAccount(true);
-  cloudSync(false).then(() => { try { Live.start(); } catch (e){} });
+  // prefetch-books (src/js/98): the client list known, the clients' books brought into this browser behind the page
+  cloudSync(false).then(() => { try { Live.start(); } catch (e){} if (window.loadFirstOpen) loadFirstOpen().then(m => m.Prefetch.start(), () => {}); });
   cloudTimer = setInterval(() => { if (document.visibilityState === "visible" && Cloud.cfg().auto !== false) cloudSync(false); }, 45000);
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Cloud.on() && Cloud.cfg().auto !== false) cloudSync(false); });

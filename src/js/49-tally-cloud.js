@@ -289,26 +289,30 @@ const TCloud = {
   // look does); a job of the server finished (jobRow) and a client new to this browser are still checked in full
   FULL_EVERY: 6 * 3600000,
   checkedLately(c, bk){ return !!(c && bk && c.book === bk.book && c.fullAt && Date.now() - Date.parse(c.fullAt) < this.FULL_EVERY); },
-  async load(force, opening){
-    const co = CO(), b = S.books;
+  // prefetch-books (the owner, 26-Oct-2026: "can we have it just after login"): p = {b, co, gate} brings a client that is
+  // not open into this browser's store the same way (src/js/98, Prefetch): nothing drawn or said, saved with fromCloud (never
+  // sent), gate() awaited before each read; what only the open books can work out waits for the first opening (meta.pre)
+  async load(force, opening, p){
+    const co = p ? p.co : CO(), b = p ? p.b : S.books, g = () => p && p.gate(), draw = () => { if (!p) render(); };
     if (!co || !b || b.cid !== co.id || !this.on()) return false;
     const books = await this.status(co.id, force) || [];
     const bk = books.find(x => x.from);
     if (!bk) return false;
-    const f = LK.fr();
+    const f = p ? {} : LK.fr();
     if (bk.entries > this.BIG){
       // answered from the cloud's totals, not loaded here; only the ledgers and their groups, for choosing and grouping
       const m0 = b.meta = b.meta || {};
       if (!(m0.cloud && m0.cloud.book === bk.book && m0.cloud.big && m0.cloud.ledgersAt === bk.ledgersAt)){
         const led = await this.restAll("tally_ledgers?select=name,parent,open&merged_into=is.null&order=name&book_id=eq." + bk.book);
         b.vouchers = []; TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, this.d8(bk.from), Audit.today()); b.tb.src = "copy";
-        await this.groupsInto(b, bk.book);
+        await g(); await this.groupsInto(b, bk.book);
         m0.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, big: true, at: new Date().toISOString()};
-        LK.cache = {}; render();
+        if (!p) LK.cache = {}; draw();
       }
       return "big";
     }
     const from = this.d8(bk.from), to = Audit.today();
+    await g();
     const list = await this.rpcAll("tally_days_list", {p_book: bk.book, p_from: bk.from, p_to: this.iso(to)});
     const meta = b.meta = b.meta || {};
     const same = meta.cloud && meta.cloud.book === bk.book;
@@ -325,12 +329,15 @@ const TCloud = {
     // round 44: the entries the bridge sent by itself (the cloud copy), with the Day Book's (BookSrc, src/js/67)
     let copy = null;
     const lately = same && opening && this.checkedLately(meta.copy, bk);
-    try { copy = fo ? null : await this.copyHeads(b, bk, (force && !lately) || !same); } catch (e){ copy = null; }
+    try { copy = fo ? null : (await g(), await this.copyHeads(b, bk, (force && !lately) || !same)); } catch (e){ if (p && p.stop) throw e; copy = null; }
     if (copy && !copy.changes && same) meta.copy = {book: bk.book, seen: copy.seen || "", at: new Date().toISOString(), daysAt: copy.daysAt || "", fullAt: this.fullAtOf(copy, meta.copy, bk)};
     if (!todo.length && !ledNew && !(copy && (copy.changes || !same))){
       // next-24q-load: nothing new, but the payroll here is missing or not right: read it (next-24q-ready: PayLoad.ensure,
       // app/src/lib/payLoad.js, the one read the 24Q pages share; it checks the copy kept here)
+      if (p) return true;
       if (window.PayLoad) await PayLoad.ensure(b, bk.book);
+      // books prefetched (meta.pre): what only the open books work out, now that they are open (as below)
+      if (meta.pre){ delete meta.pre; try { TDSTally.sync(b); } catch (e){} try { Payroll.carry(b); } catch (e){} TallyRead.after(b, "after changes came from the cloud copy"); LK.cache = {}; await saveBooks(); return "new"; }
       return true;
     }
     // server-books: the progress shows on every Books screen (TDS, GST, MIS, Reports...), not only on Look up.
@@ -338,7 +345,7 @@ const TCloud = {
     // brought up to date behind the page (b.catchUp, never a wait on the page); the progress shows only while a client
     // has no entries here yet
     const quiet = (b.vouchers || []).length > 0;
-    const say = t => { if (quiet){ b.catchUp = t; return; } f.busy = b.busy = t; render(); };
+    const say = t => { if (p) return; if (quiet){ b.catchUp = t; return; } f.busy = b.busy = t; render(); };
     say(todo.length ? "Bringing in " + (todo.length === 1 ? FC.monthLabel(todo[0]) : todo.length + " months") + " from the copy in FinCom's cloud…" : "Bringing in the entries the bridge sent…");
     let changed = false, kept = false;
     try {
@@ -346,23 +353,24 @@ const TCloud = {
       // many at once over one connection)
       const days = {}, want = [].concat(...todo.map(ym => byMonth[ym])), text = {}, seen = {};
       let got = 0, next = 0;
-      const one = async () => { while (next < want.length){ const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at, seen); days[x.day] = x.at; got++;
+      const one = async () => { while (next < want.length){ await g(); const x = want[next++]; text[x.day] = await this.day(bk.book, x.day, x.at, seen); days[x.day] = x.at; got++;
         if (got % 10 === 0 || got === want.length) say("Bringing in the books from FinCom's cloud: " + got + " of " + want.length + " days…"); } };
-      const pre = fo && await fo.run({b, bk, byMonth, todo, from, to, say});
+      const pre = fo && await fo.run({b, bk, byMonth, todo, from, to, say, p, co});
       if (pre){ want.forEach(x => { days[x.day] = x.at; }); copy = pre.copy; }
-      else await Promise.all(Array.from({length: Math.min(16, want.length)}, one));
+      else await Promise.all(Array.from({length: Math.min(p ? 1 : 16, want.length)}, one));
       // next-fast-open: a month whose every day is the file read into the books before (a Day Book uploaded again with
       // the same entries) is not read again; when nothing else changed, only the days' new times are kept
       const redo = todo.filter(ym => !byMonth[ym].every(x => seen[x.day] && known[x.day]));
       if (same && !redo.length && !ledNew && !(copy && copy.changes)){
         meta.cloud = Object.assign({}, meta.cloud, {days: Object.assign({}, known, days)});
-        await saveBooks({fromCloud: true}); kept = true;
+        await saveBooks({fromCloud: true}, b); kept = true;
       } else {
         // next-fast-open: everything is read first (the ledgers, each month's entries, the bridge's lines), then put into
         // the books in one go, so a page drawn meanwhile (the books are not covered by a wait any more) never shows them
         // half changed
         let led = pre ? pre.led : null;
         if (ledNew && !led){
+          await g();
           // round 44: with each ledger's PAN and GSTIN as the bridge sent them (migration 27), for the returns of an entry
           // the bridge sent; a cloud without them is read as before
           // bridge 2.4.3 (migration 73): with each ledger's TDS settings (nature of payment, special rate, certificates) first
@@ -376,8 +384,8 @@ const TCloud = {
         const read = [];
         for (const ym of redo){
           const res = pre ? pre.res[ym] : await Books.importDayBook(new Blob(["<ENVELOPE>" + byMonth[ym].map(x => text[x.day] || "").join("") + "</ENVELOPE>"], {type: "text/xml"}));
-          const bad = notThisClient((res.meta || {}).gstins);
-          if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad));
+          const bad = notThisClient((res.meta || {}).gstins, co);
+          if (bad.length) throw new Error(panRefusal("The company in the cloud copy", bad, co));
           read.push([ym, res]);
         }
         let rows = null;
@@ -385,9 +393,9 @@ const TCloud = {
           const redoSet = new Set(redo), held = new Map();
           if (same) (b.vouchers || []).forEach(v => { if (v && v.id && (v.src === "bridge" || !redoSet.has(String(v.date || "").slice(0, 6)))) held.set(v.id, v); });
           read.forEach(([, res]) => (res.vouchers || []).forEach(v => { if (v && v.id) held.set(v.id, v); }));
-          rows = await this.copyRows(b, bk, copy, held);
+          await g(); rows = await this.copyRows(b, bk, copy, held);
         }
-        if (ledNew){ await this.groupsInto(b, bk.book); await this.naturesInto(b, bk.book); }
+        if (ledNew){ await g(); await this.groupsInto(b, bk.book); await g(); await this.naturesInto(b, bk.book); }
         if (!same){ b.vouchers = []; b.tb = null; }
         const fromBridge = BookSrc.stash(b);
         if (led){ TallyRead.balances(b, {ledgers: led.map(l => ({name: l.name, parent: l.parent, open: String(l.open), close: ""}))}, from, to); b.tb.src = "copy"; BookSrc.ledgersInto(b, led, bk.ledgersAt); }
@@ -400,16 +408,16 @@ const TCloud = {
         if (b.tb && String(b.tb.to) < to) b.tb.to = to;
         b.map = Books.mapLedgers(b.vouchers || [], b.map); try { LedMaster.refresh(b); } catch (e){}
         try { TDSTally.sync(b); } catch (e){}      // bridge 2.4.3: challans, tags, certificates and sections from Tally (src/js/72)
-        try { await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){}      // bridge 2.4.4: the payroll (src/js/73)
+        try { await g(); await Payroll.into(b, bk.book); Payroll.autoTag(b); Payroll.carry(b); } catch (e){ if (p && p.stop) throw e; }      // bridge 2.4.4: the payroll (src/js/73)
         meta.cloud = {book: bk.book, company: bk.company, ledgersAt: bk.ledgersAt, days: Object.assign({}, known, days), at: new Date().toISOString()};
-        meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; delete meta.fo; b.firstOpen = null;
-        TallyRead.after(b, "after changes came from the cloud copy");
-        LK.cache = {}; changed = true; await saveBooks();
+        meta.at = meta.cloud.at; meta.keep = true; meta.file = "the copy in FinCom's cloud"; meta.from = meta.from && meta.from < from ? meta.from : from; delete meta.fo; delete meta.pre; b.firstOpen = null;
+        if (p){ meta.pre = meta.at; changed = true; await g(); await saveBooks({fromCloud: true}, b); }
+        else { TallyRead.after(b, "after changes came from the cloud copy"); LK.cache = {}; changed = true; await saveBooks(); }
       }
-    } catch (e){ toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
+    } catch (e){ if (p) throw e; toast("Could not bring in the cloud copy: " + ((e && e.message) || e)); }
     b.catchUp = "";
-    if (!quiet || changed){ f.busy = b.busy = ""; render(); }
-    if (kept && window.PayLoad) await PayLoad.ensure(b, bk.book);
+    if (!quiet || changed){ f.busy = b.busy = ""; draw(); }
+    if (kept && !p && window.PayLoad) await PayLoad.ensure(b, bk.book);
     return changed ? "new" : true;
   },
   // ---------- round 44: the entries the bridge sent by itself, from the cloud copy (tally_vouchers / tally_lines / tally_bills,
@@ -505,7 +513,9 @@ const TCloud = {
   // (this browser keeps a copy of each day, so only the days that changed are fetched). Then MIS and the audit are
   // worked out again from what came in.
   // o.full: every entry checked again (a job of the server finished), not only what the bridge's lines say changed
-  async openLoad(cid, o){
+  opens: 0,
+  async openLoad(cid, o){ this.opens++; try { return await this.openLoad1(cid, o); } finally { this.opens--; } },
+  async openLoad1(cid, o){
     if (!this.on() || S.coId !== cid) return false;
     const f = LK.fr();
     if (f.busy) return false;

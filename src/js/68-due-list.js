@@ -150,10 +150,12 @@ const DueList = {
     this.synced = true;
     const on = typeof BookItems === "object" && BookItems.on() ? BookItems : typeof BookSync === "object" && BookSync.on() ? BookSync : null;
     if (!on) return false;
+    this.busy = 1;      // (the prefetch of the books gives way meanwhile: src/js/98)
     for (const co of Object.values(S.companies || {}).filter(c => c && !c.deleted)){
       if (S.books && S.books.cid === co.id) continue;
       try { await on.pull(co.id); } catch (e){}
     }
+    this.busy = 0;
     return true;
   },
   // one click into the client's return (or the challans of the quarter)
