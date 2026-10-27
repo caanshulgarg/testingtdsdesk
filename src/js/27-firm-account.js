@@ -81,8 +81,10 @@ const Cloud = {
     if (Date.now() > until - 120000) await this.refreshToken();
   },
   // stability batch 4: and the files the service worker kept after the first open (only app code is ever kept there,
-  // never the firm's data; cleared all the same, so nothing of this sign-in stays behind)
-  signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith("fincom-files:")).forEach(k => caches.delete(k))).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  // never the firm's data; cleared all the same, so nothing of this sign-in stays behind). Only this address's own
+  // (fincom-files:/review/ or /next/, the worker's RUNTIME): the trial build never clears the live one's; the other tab
+  // is signed out too (the shared sign-in) and clears its own
+  signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.delete("fincom-files:" + new URL("./", location.href).pathname).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
   // speed round 2 (27-Oct-2026, client_timings: about 20 reads sent at the same moment as the page opened, each 150-280 ms
   // alone but up to 1.3 s together, and 5 s for alert_dismissals_list, tally_post_jobs and tally_post_row_flags): the
   // reads of things the first page does not show (alerts and their dismissals, posting flags and payloads, ledgers Tally

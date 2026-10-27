@@ -92,6 +92,9 @@ function legacy(mode) {
       // a named preview (publish-preview.sh review "REVIEW BUILD – Phase 1"): its own words on the strip and under the logo
       const banner = test && String(process.env.FINCOM_BANNER || "").replace(/["\\<>]/g, "");
       if (banner) html = html.replace("</head>", '<style>body.is-test::after{content:"' + banner + ' · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"' + banner + '";color:#C9A8F0}</style>\n</head>');
+      // the trial address (docs/RELEASE-FLOW.md): the same files at staging.fincom.live/next/ say TRIAL (index.html marks
+      // a page served from /next/ with data-trial), so promote-next.sh can copy them to review/ unchanged
+      if (test) html = html.replace("</head>", '<style>html[data-trial] body.is-test::after{content:"TRIAL' + (banner ? " · " + banner : "") + ' · a new build on trial · staging database · not for real client work";background:#B42318}html[data-trial] .is-test .side-brand::after{content:"TRIAL";color:#F97066}html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>\n</head>');
       return html;
     },
   };
