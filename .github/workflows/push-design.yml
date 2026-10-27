@@ -65,6 +65,7 @@ jobs:
           name: bridge-dist
           path: bridge-go/dist/
           if-no-files-found: error
+          retention-days: 3
 
   tally:
     needs: build
@@ -130,6 +131,7 @@ jobs:
         with:
           name: push-${{ matrix.version }}-${{ github.run_id }}
           path: spike-results/push-design/${{ github.run_id }}-${{ matrix.version }}/
+          retention-days: 3
 
   collect:
     needs: [build, tally]

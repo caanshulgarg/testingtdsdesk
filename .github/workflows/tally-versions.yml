@@ -309,6 +309,7 @@ jobs:
           name: bridge-dist
           path: bridge-go/dist/
           if-no-files-found: error
+          retention-days: 3
 
   tally:
     needs: build
@@ -427,6 +428,7 @@ jobs:
         with:
           name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
           path: spike-results/versions/${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}/
+          retention-days: 3
 
   # one commit for all five releases (five jobs pushing at once lost four of them in run 37417702347)
   collect:
