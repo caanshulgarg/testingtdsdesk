@@ -80,5 +80,7 @@ Live.joinSignals = async function(){
 };
 Live.signal = function(){
   clearTimeout(this.sigT);
-  this.sigT = setTimeout(() => { FirmGate.load(); loadAccount(true).then(() => render()); if (typeof window.loadFlags === "function") window.loadFlags(); if (typeof window.loadAiState === "function") window.loadAiState(); }, 300);
+  // the firm's status and companies (here), its plan and credit (my_account), the feature flags (app/src/lib/flags.js) and
+  // the announcements (parts/Announce.jsx, which listens for fincom:signal); the AI switches are the server's at each call
+  this.sigT = setTimeout(() => { FirmGate.load(); loadAccount(true).then(() => render()); if (window.FinComFlags) window.FinComFlags.load(true); window.dispatchEvent(new Event("fincom:signal")); }, 300);
 };

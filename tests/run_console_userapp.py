@@ -203,8 +203,9 @@ with sync_playwright() as p:
     pg.evaluate("() => FirmGate.row({id: window.__B, status: 'deactivated', status_reason: 'again'})"); pg.wait_for_timeout(300)
     ok(pg.evaluate("sortedCompanies().length") == 1, "and off again")
     # the console's signal (firm_signals, when the database has it): the firm read again within a second
-    pg.evaluate("() => { window.__fs = {status: 'closed', reason: 'closed by the owner'}; Live.signal(); }"); pg.wait_for_timeout(1200)
+    pg.evaluate("() => { window.__fs = {status: 'closed', reason: 'closed by the owner'}; window.__sig = 0; window.addEventListener('fincom:signal', () => window.__sig++); window.__calls = []; Live.signal(); }"); pg.wait_for_timeout(1200)
     ok(pg.evaluate("FirmGate.paused()") is True, "a signal from the console: read again at once")
+    ok(TAG == "before" or (pg.evaluate("window.__sig") == 1 and any(c[1] == "rpc/flags_for_me" for c in pg.evaluate("window.__calls"))), "and the flags and announcements asked again (%s)" % [c[1] for c in (pg.evaluate("window.__calls") or [])])
     ok(pg.evaluate("typeof Live.joinSignals") == "function", "the signal's listener is there, joined when firm_signals exists")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     ctx.close(); br.close()
