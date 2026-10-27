@@ -43,7 +43,7 @@ NEEDS = """() => [...document.querySelectorAll('#app [data-sync-needs] [data-nee
 srv = http.server.ThreadingHTTPServer(("localhost", 8357), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1366, "height": 800}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8357/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8357/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     def scene(devs, role="owner"):
         cid = E(SETUP, [{"devs": devs, "alerts": [], "gap": None}, role])

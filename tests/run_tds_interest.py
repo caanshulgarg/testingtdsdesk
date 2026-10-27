@@ -47,7 +47,7 @@ try:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
         J = lambda e, a=None: pg.evaluate(e, a)
         money = lambda v: J(MONEY, v)
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         J(LOAD, books); pg.wait_for_timeout(1000); J("S.books = window.__bk; render();"); pg.wait_for_timeout(500); J(CHALLANS); pg.wait_for_timeout(300)
         add = J("() => TDSAdd.save({party: 'ZZ Late Vendor Ltd', section: '194C', credit: '2026-04-05', date: '2026-06-10', paid: 100000, tds: 2000})")
         ok(add.get("ok"), "a deduction made late added (%s)" % add)

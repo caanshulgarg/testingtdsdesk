@@ -211,7 +211,7 @@ with sync_playwright() as p:
     navs = []
     pg.on("framenavigated", lambda f: navs.append(f.url) if f == pg.main_frame else None)
     ctx.route(STAGE + "/**", route); ctx.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     setup(pg)
     ok(pg.evaluate("Live.st") == "live", "signed in to the stand-in cloud, live sync on")
     last_beat = [time.time()]

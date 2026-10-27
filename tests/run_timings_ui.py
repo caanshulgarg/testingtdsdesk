@@ -78,7 +78,7 @@ with sync_playwright() as p:
     ctx.add_init_script("(() => { window.__fincomTimingsEvery = 4000; const f = window.fetch.bind(window); window.fetch = (u, o) => f(typeof u === 'string' ? u.replace(/^https:\\/\\/[a-z]+\\.supabase\\.co/, '%s') : u, o); })()" % FAKE)
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:%d/" % PAGE_PORT); pg.wait_for_timeout(2500)
-    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]')
+    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]')
     pg.wait_for_function("() => window.__fincomTimings && Cloud.on()", timeout=30000)
     ok(True, "signed in; the timings started a few seconds after the first page")
 

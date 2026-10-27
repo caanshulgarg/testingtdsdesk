@@ -28,7 +28,7 @@ with sync_playwright() as p:
     br = p.chromium.launch()
     for theme in ("light", "dark"):
         pg = br.new_page(viewport={"width": 1440, "height": 900}, color_scheme=theme)
-        pg.goto("http://localhost:8231/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.goto("http://localhost:8231/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         pg.evaluate(gstfix.SETUP, list(gstfix.load())); pg.wait_for_timeout(1500)
         pg.evaluate("(t) => { document.documentElement.setAttribute('data-theme', t); }", theme)
         pg.evaluate(BILLS)

@@ -61,7 +61,7 @@ def serve(site, port):
 
 def real_figs(p, site, port, books):
     srv = serve(site, port); br = p.chromium.launch(); pg = br.new_page()
-    pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(REAL_OPEN, books); pg.wait_for_timeout(300)
     if pg.evaluate("typeof LedPage === 'object'"):
         pg.evaluate("async () => { LedPage.ensure(S.books); await saveBooks(); }"); pg.wait_for_timeout(300)

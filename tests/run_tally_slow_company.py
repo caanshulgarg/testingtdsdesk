@@ -41,7 +41,7 @@ OLD = {CO2: {"off": True, "seconds": 3.4, "at": "2026-10-05T12:14:00", "why": "T
 srv = http.server.ThreadingHTTPServer(("localhost", 8367), functools.partial(Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8367/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8367/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
     # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold: opened first

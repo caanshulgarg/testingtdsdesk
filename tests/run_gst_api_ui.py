@@ -37,7 +37,7 @@ def fake(route):
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("**/functions/v1/gst-taxpro", fake)
-    pg.goto("http://localhost:8174/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8174/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     pg.evaluate("""(g) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://example.supabase.co', key: 'anon'}); Cloud.sess = () => ({access_token: 't'}); Cloud.fresh = async () => {};
       S.account = {email: 'a@b.c'}; S.gstReg = '09'; S.gstYm = '202608'; S.books = {twoBs: {}, filed: {}}; window.saveBooks = () => {};
       GSTR.gstins = () => [g]; GSTAPI.gstinOf = () => g; GSTAPI.user = () => 'u09'; GSTRev.fyMonths = () => ['202606', '202607', '202608'];

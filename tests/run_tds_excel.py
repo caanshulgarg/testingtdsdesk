@@ -77,7 +77,7 @@ with sync_playwright() as p:
     ctx = br.new_context(viewport={"width": 1440, "height": 950}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     E, W = pg.evaluate, pg.wait_for_timeout
-    pg.goto("http://localhost:%d/" % PORT); W(2500); pg.click('button[data-act="useOffline"]'); W(2000)
+    pg.goto("http://localhost:%d/" % PORT); W(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); W(2000)
     E("window.__dueToday = '2026-10-24'")
     E(LOAD, books); W(1000); E("S.books = window.__bk; render();"); W(500); E(CHALLANS); W(300); E(DEDUCTOR)
     cid = E("S.coId")

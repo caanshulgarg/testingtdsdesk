@@ -19,7 +19,7 @@ last = max(v["date"] for v in books["vouchers"] if not v.get("cancel"))
 grouped = any(x.get("parent") for x in books.get("tb", {}).get("led", {}).values())
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8166/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:8166/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     # the books as the cloud copy gives them: kept in step with Tally to 30-Sep-2026, the last entry earlier
     pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (Testing AAD)", gstin: ""}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.meta = Object.assign({}, bk.meta, {to: "20260930", at: "2026-09-30T22:28:04"});

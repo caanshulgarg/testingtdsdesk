@@ -12,7 +12,7 @@ def ok(c, w):
     if not c: fails.append(w)
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1300, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate("S.view = 'home'; S.homeTab = 'clients'; render()"); pg.wait_for_timeout(500)
     app = lambda: pg.inner_text("#app")
     ok("No clients yet" in app(), "Clients, empty: says so")

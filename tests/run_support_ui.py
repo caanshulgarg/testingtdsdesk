@@ -69,7 +69,7 @@ SIGN = """(tok) => { Cloud.on = () => true; Cloud.cfg = () => ({url: 'https://ex
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("https://example.supabase.co/**", handle)
-    pg.goto("http://localhost:8150/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:8150/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     # the guide, without the firm account
     ok(pg.locator('#side .side-link:has-text("Help")').count() == 1, "Help is in the side bar")
     pg.click('#side .side-link:has-text("Help")'); pg.wait_for_timeout(800)

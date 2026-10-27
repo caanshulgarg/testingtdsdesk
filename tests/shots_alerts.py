@@ -12,7 +12,7 @@ H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE); H.l
 srv = http.server.ThreadingHTTPServer(("localhost", 8353), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1366, "height": 768})
-    pg.goto("http://localhost:8353/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8353/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     cid = pg.evaluate(SETUP, [{"devs": [dev(recording=False)], "alerts": ALERTS, "gap": GAP}, "owner"])
     for name, js in [("client-dashboard", "(c) => { S.view = 'company'; S.coId = c; S.loadingCo = false; goClient('dash'); }"),
                      ("client-purchase", "(c) => { goClient('bills'); }"), ("client-books-reports", "(c) => { goClient('books:reports'); }"),

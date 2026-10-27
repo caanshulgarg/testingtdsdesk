@@ -42,7 +42,7 @@ try:
         br = p.chromium.launch()
         for w, h in [(1280, 800), (1440, 900), (390, 844)]:
             pg = br.new_page(viewport={"width": w, "height": h}); pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
-            pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+            pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
             pg.evaluate(SEED, CLIENTS); pg.wait_for_timeout(1200)
             cells = pg.evaluate(FIT)
             bad = [c for c in cells if c["over"] > 1 or c["chipOut"] > 1]

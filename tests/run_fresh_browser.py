@@ -73,7 +73,7 @@ with sync_playwright() as p:
     br = p.chromium.launch()
     # ---------- the first computer: the books already here
     c1 = br.new_context(viewport={"width": 1400, "height": 1000}); pg1 = c1.new_page(); pg1.on("pageerror", lambda e: errors.append("1: " + str(e)))
-    pg1.goto("http://localhost:8167/"); pg1.wait_for_timeout(2500); pg1.click('button[data-act="useOffline"]'); pg1.wait_for_timeout(1200)
+    pg1.goto("http://localhost:8167/"); pg1.wait_for_timeout(2500); pg1.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg1.wait_for_timeout(1200)
     client(pg1)
     pg1.evaluate("""(bk) => { S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: S.coId});
       TallyRead.balances(S.books, {ledgers: Object.entries(bk.tb.led).map(([name, x]) => ({name, parent: x.parent, open: String(x.open), close: ""}))}, "20250401", "20260331");
@@ -85,7 +85,7 @@ with sync_playwright() as p:
     pg2.route(STAGE + "/**", route)
     pg2.goto("http://localhost:8167/"); pg2.wait_for_timeout(2500)
     ok(pg2.evaluate("async () => { const k = await IDBStore.prefix(''); return k.length; }") == 0 and pg2.evaluate("localStorage.length") <= 3, "the second browser starts with nothing kept")
-    pg2.click('button[data-act="useOffline"]'); pg2.wait_for_timeout(1200)
+    pg2.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg2.wait_for_timeout(1200)
     pg2.evaluate("""() => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600}); Cloud.st.firm = "efe13a47-f0fa-43be-a18c-bf32caa448ca"; Cloud.st.state = "on"; }""")
     client(pg2)
     pg2.evaluate("() => { S.books = null; S.booksTab = 'tds'; render(); }")

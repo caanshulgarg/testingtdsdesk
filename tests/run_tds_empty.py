@@ -104,7 +104,7 @@ def txt_(pg, sel): return pg.inner_text(sel)
 def fresh(br):
     ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route(STAGE + "/**", route_any); pg.goto("http://localhost:8479/"); pg.wait_for_timeout(2000)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(DIRECT, [CO, GSTIN])
     return ctx, pg
 with sync_playwright() as p:

@@ -233,7 +233,7 @@ STORES = r"""async () => { const out = {}, books = %s;
   return out; }""" % json.dumps(CID_OF)
 def sign_in(pg, email):
     pg.wait_for_selector('[data-act="cloudSignIn"]', timeout=20000)
-    pg.fill('[data-cloud="email"]', email); pg.fill('[data-cloud="password"]', "pw12345678")
+    pg.fill('[data-cloud="email"]', email); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678")
     t = time.time(); pg.click('[data-act="cloudSignIn"]')
     return t
 def until(pg, js, t=60, every=0.1):

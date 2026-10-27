@@ -138,7 +138,7 @@ with sync_playwright() as p:
     asked = []
     pg.on("request", lambda r: asked.append(r.url))
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
 
     print("\nLoaded when asked for, from this site")
     ok(pg.evaluate("typeof window.loadFinExport === 'function' && typeof FinXlsx.download === 'function' && typeof FinPdf.open === 'function'"), "FinXlsx.download and FinPdf.open are there from the start (they load the module)")

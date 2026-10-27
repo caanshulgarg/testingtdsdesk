@@ -64,7 +64,7 @@ if __name__ == "__main__":
     only = sys.argv[2:]
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1366, "height": 768})
-        pg.goto("http://localhost:8241/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        pg.goto("http://localhost:8241/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
         pg.evaluate(SEED, books()); pg.wait_for_timeout(1500)
         for name, js in PAGES:
             if only and name not in only: continue

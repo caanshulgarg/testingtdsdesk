@@ -35,7 +35,7 @@ RELOAD = """async () => { try { Object.keys(localStorage).filter(k => /^fincom:a
   AlertClear.reset(); AlertClear.rowsNow(); await AlertClear.load(); return AlertClear.st.rows.length; }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8419/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8419/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     E = pg.evaluate
     # ---------- a) a long fingerprint
     E(CLOUD)
@@ -84,14 +84,14 @@ with sync_playwright() as p:
     ok(w2 and w2["cleared"], "b) ownwait: cleared, the same wait still there: stays cleared")
     # device B (another browser of the same person): the cloud's rows, its own empty localStorage
     ctxB = br.new_context(); pgB = ctxB.new_page(); pgB.on("pageerror", lambda e: errors.append("B: " + str(e)))
-    pgB.goto("http://localhost:8419/"); pgB.wait_for_timeout(2500); pgB.click('button[data-act="useOffline"]'); pgB.wait_for_timeout(1000)
+    pgB.goto("http://localhost:8419/"); pgB.wait_for_timeout(2500); pgB.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pgB.wait_for_timeout(1000)
     pgB.evaluate(CLOUD); pgB.evaluate("(db) => { window.__db = db; }", db); pgB.evaluate(RELOAD)
     wb = pgB.evaluate(DEV, ["2026-10-09T04:30:00Z", True])
     ok(wb and wb["fp"] == w1["fp"] and wb["cleared"], "b) ownwait: cleared on device A, stays cleared on device B (%s)" % (wb and wb["fp"]))
     ctxB.close()
     # the same browser reloaded, the same wait: stays cleared
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E("() => { Cloud.on = () => true; Cloud.st.firm = 'f-1'; Cloud.st.email = 'me@zz.test'; Cloud.sess = () => ({user_id: 'u-1'}); return true; }")
     E("""(db) => { window.__db = db; window.__calls = []; AlertClear.rpc = async (fn, a) => { window.__calls.push([fn, a]);
       if (fn === "alert_dismissals_list") return window.__db.map(r => Object.assign({}, r)); return {ok: true}; }; AlertClear.reset(); return true; }""", db)
@@ -101,7 +101,7 @@ with sync_playwright() as p:
     # gone, then back while this browser was closed (it never saw the wait end; its own copy remembers the old one): the
     # bridge's new start, a new notice that shows
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E("() => { Cloud.on = () => true; Cloud.st.firm = 'f-1'; Cloud.st.email = 'me@zz.test'; Cloud.sess = () => ({user_id: 'u-1'}); return true; }")
     E("""(db) => { window.__db = db; window.__calls = []; AlertClear.rpc = async (fn, a) => { window.__calls.push([fn, a]);
       if (fn === "alert_dismissals_list") return window.__db.map(r => Object.assign({}, r)); return {ok: true}; }; AlertClear.reset(); return true; }""", db)

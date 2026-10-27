@@ -43,14 +43,15 @@ with sync_playwright() as p:
     pg = br.new_page(viewport={"width": 1366, "height": 768})
     pg.on("pageerror", lambda e: errs.append(str(e)))
     start(pg)
-    # 6. sign in: the tick box
+    # 6. sign in: the tick box (on the password step since 27-Oct-2026: the email, Continue, then the password)
+    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(400)
     box = pg.locator('input[data-cloud="keep"]')
     if box.count():
         b = box.bounding_box(); lab = pg.locator('label:has(input[data-cloud="keep"])').bounding_box()
         ok(b and b["width"] <= 24 and b["height"] <= 24, "Sign in: the Keep me signed in box is a small tick box (%s)" % b)
         ok(b and lab and abs((b["y"] + b["height"] / 2) - (lab["y"] + 12)) < 14, "Sign in: the box sits beside its words, on the first line")
     else: ok(False, "Sign in: the Keep me signed in box is on the page")
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     pg.evaluate(U.SEED, None); pg.wait_for_timeout(1000)
 
     # 1. back to the client from each firm page
@@ -98,7 +99,7 @@ with sync_playwright() as p:
 
     # 1 (phone). back to the client from the firm's pages on a phone
     ph = br.new_page(viewport={"width": 390, "height": 844}); start(ph)
-    ph.click('button[data-act="useOffline"]'); ph.wait_for_timeout(1000); ph.evaluate(U.SEED, None); ph.wait_for_timeout(800)
+    ph.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); ph.wait_for_timeout(1000); ph.evaluate(U.SEED, None); ph.wait_for_timeout(800)
     ph.evaluate("() => navHome('clients')"); ph.wait_for_timeout(600)
     ph.click("#side .side-more"); ph.wait_for_timeout(500)
     ok(ph.locator(PHONE_BACK).count() == 1 and ph.locator(PHONE_BACK).is_visible(), "phone, Clients: Back to Testing AAD is in the bottom menu's More")

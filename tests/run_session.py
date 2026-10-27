@@ -33,7 +33,7 @@ FAKE = """(expired) => {
   return true; }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     # 1. the token ran out while the page sat idle: five requests at once (opening a bill while the sync runs)
     pg.evaluate(FAKE, True)
     r = pg.evaluate("""async () => { const out = await Promise.all([Cloud.api('records?a'), Cloud.api('records?b'), Cloud.rpc('my_account'), Cloud.fn('admin', {action: 'x'}).catch(e => 'fn:' + e.message), CloudDocs.fetchFile('f/c/x-a.pdf', 'a.pdf').then(() => 'doc', e => 'doc:' + (e.message || e.code))]);

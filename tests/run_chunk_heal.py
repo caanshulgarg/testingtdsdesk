@@ -87,7 +87,7 @@ def ready(pg, t=60):
 def open_app(pg, first=True):
     if first: pg.goto(URL)
     pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     ready(pg)
 def books(pg):
     try: pg.evaluate(GO_BOOKS)

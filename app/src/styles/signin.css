@@ -1,0 +1,73 @@
+/* The pages before sign-in (the owner, 27-Oct-2026: "make it professional over login page and signup page"): sign in,
+   create your account, choose your password and two-step sign-in share one frame (screens/SignIn.jsx Box). A centred
+   card with the FinCom mark and name on top, one heading, the boxes and the button full width, errors under the box
+   they are about, the switch to the other page, and under the card © FinCom · Privacy · Terms. Arc's tokens only, so
+   light and dark follow the computer; nothing wider than the screen at 390 px (tests/run_signin_clean.py). */
+.signin { flex-direction: column; align-items: center; justify-content: flex-start; gap: 18px; min-height: 0; padding: max(24px, 8vh) 0 40px; background: transparent; }
+.signin-box { width: min(400px, 100%); box-sizing: border-box; padding: 32px 32px 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-surface); box-shadow: var(--shadow-raised); color: var(--foreground); }
+@media (max-width: 480px) { .signin { padding-top: 20px; } .signin-box { padding: 24px 20px 22px; } }
+.signin-brand { display: flex; align-items: center; gap: 10px; margin: 0 0 22px; font-family: var(--font-display); font-size: 17px; font-weight: 650; letter-spacing: -.02em; color: var(--foreground); }
+.signin-brand .side-mark { flex: none; }
+.signin-box h1 { margin: 0 0 20px; font-family: var(--font-display); font-size: 22px; font-weight: 600; letter-spacing: -.01em; line-height: 1.25; color: var(--foreground); }
+.signin-box h1::before { content: none; }
+.signin-sub { margin: -12px 0 20px; font-size: 14px; line-height: 1.45; color: var(--text-secondary); overflow-wrap: anywhere; }
+.signin-sub b { font-weight: 600; color: var(--foreground); }
+.signin-notice { margin: 0 0 16px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); font-size: 13.5px; line-height: 1.45; color: var(--foreground); }
+
+/* the form: label, box, then its hint or its error */
+.signin-form { display: grid; gap: 14px; margin: 0; }
+.signin-field { display: grid; gap: 6px; min-width: 0; }
+.signin-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.signin-label-row > label { font-size: 13.5px; font-weight: 500; color: var(--foreground); }
+.signin-box .signin-field input { width: 100%; height: var(--control-height-lg); box-sizing: border-box; margin: 0; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--foreground); font: inherit; font-size: 15px; box-shadow: none; }
+.signin-box .signin-field input { transition: border-color .15s ease, box-shadow .15s ease; }
+.signin-box .signin-field input[aria-invalid="true"] { border-color: var(--danger); }
+/* the password: the show / hide eye inside the box, on the right */
+.signin-pw { position: relative; }
+.signin-box .signin-pw input { padding-right: 44px; }
+.signin-box .signin-eye { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.signin-box .signin-eye:hover { color: var(--foreground); background: var(--surface-muted); }
+/* the email chosen on the first step: one line, with Edit */
+.signin-email-line { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-muted); font-size: 14px; }
+.signin-email { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); }
+.signin-email-line .linkbtn { flex: none; font-size: 13px; font-weight: 500; }
+.signin-box input.signin-user { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.signin-step { display: grid; gap: 14px; min-width: 0; }
+.signin-hint, .signin-field-err { font-size: 12.5px; line-height: 1.4; }
+.signin-hint { color: var(--text-muted); }
+.signin-field-err { color: var(--danger); }
+.signin-box .signin-forgot { padding: 0; font-size: 13px; font-weight: 500; }
+.signin-forgot-note { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
+.signin-forgot-note[hidden] { display: none; }
+.signin-box .keep-box { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; font-size: 14px; color: var(--foreground); }
+.signin-box .keep-box input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.signin-box .signin-submit { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: var(--control-height-lg); margin: 4px 0 0; font-size: 15px; }
+.signin-error { padding: 9px 12px; border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--border)); border-radius: var(--radius-control); background: color-mix(in oklab, var(--danger) 9%, var(--surface)); color: var(--danger); font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.signin-switch { margin-top: 20px; text-align: center; font-size: 14px; color: var(--text-secondary); }
+.signin-switch + .signin-switch { margin-top: 8px; }
+.signin-switch .linkbtn { font-weight: 500; }
+.signin-box .oauth-btn { height: var(--control-height-lg); }
+.signin-box .signin-or { margin: 16px 0; }
+
+/* under the card */
+.signin-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--text-muted); }
+.signin-foot a { color: inherit; text-decoration: none; }
+.signin-foot a:hover { color: var(--foreground); text-decoration: underline; }
+
+/* waiting: a small spinner in the button, its words kept */
+.signin-spin { width: 14px; height: 14px; flex: none; box-sizing: border-box; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: signin-spin .7s linear infinite; }
+@keyframes signin-spin { to { transform: rotate(360deg); } }
+/* each step and each error comes in with a short fade (about 180 ms) */
+.signin-step { animation: signin-in .18s ease-out both; }
+.signin-field-err, .signin-error, .signin-forgot-note:not([hidden]) { animation: signin-fade .15s ease-out both; }
+@keyframes signin-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes signin-fade { from { opacity: 0; } to { opacity: 1; } }
+/* less motion asked for: nothing in the frame moves (the button's and links' own transitions from Arc too) */
+@media (prefers-reduced-motion: reduce) {
+  .signin, .signin * { animation: none !important; transition: none !important; }
+}
+
+/* the keyboard: one ring for every box, button and link of the frame */
+.signin :is(input, button, a):focus-visible { outline: 2px solid var(--focus-outline); outline-offset: 2px; }
+/* the box being typed in: a soft ring in the brand colour */
+.signin-box .signin-field input:focus-visible, .signin-box .signin-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent); }

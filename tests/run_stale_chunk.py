@@ -76,7 +76,7 @@ def ev(pg, expr, dflt=None):
 
 def open_app(pg):
     pg.goto(URL); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     for _ in range(60):
         if pg.evaluate("typeof S === 'object' && !!S.firm && !!document.querySelector('#app .react-host')"): break
         pg.wait_for_timeout(250)
@@ -104,7 +104,7 @@ with sync_playwright() as p:
     for _ in range(80):
         if ev(pg, "typeof S === 'object' && !!S.firm && !!document.querySelector('#app .react-host')"): break
         pg.wait_for_timeout(250)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("() => { if (!(S.view === 'home' && S.homeTab === 'rules')) navHome('rules'); }")
     for _ in range(40):
         if pg.evaluate("!!document.querySelector('#app .react-host') && !document.querySelector('#app [data-lazy-failed]')") and any(n.startswith("Settings-") and n.endswith("-p2.js") and c == 200 for n, c in ST["served"]): break
@@ -129,7 +129,7 @@ with sync_playwright() as p:
     for _ in range(40):
         pg.wait_for_timeout(250)
         if pg.evaluate("!!document.querySelector('#app [data-lazy-failed]')"): break
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("() => { if (typeof navHome === 'function' && !(S.view === 'home' && S.homeTab === 'rules')) navHome('rules'); }")
     pg.wait_for_timeout(6000)
     ok(len(loads) == 2, "files gone for good: the first open and ONE reload, no more (%d loads)" % len(loads))

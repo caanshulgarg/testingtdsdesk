@@ -40,7 +40,7 @@ def nodev_member(br, tok, viewport=(1440, 900), script=True, perms=True):
     pg = ctx.new_page(); pg.set_default_timeout(60000); pg.on("pageerror", lambda e: C.errors.append(tok + ": " + str(e)))
     wire(pg, hub, fn, rest)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(setup_js(tok)); pg.wait_for_timeout(600)
     return ctx, pg
 
@@ -94,7 +94,7 @@ with sync_playwright() as p:
     ectx.add_init_script("navigator.mediaDevices.getUserMedia = async () => { throw Object.assign(new Error('Permission denied'), {name: 'NotAllowedError'}); };")
     E = ectx.new_page(); E.set_default_timeout(60000); wire(E, hub, fn, rest)
     E.goto("http://localhost:%d/" % PORT); E.wait_for_timeout(2500)
-    if E.locator('button[data-act="useOffline"]').count(): E.click('button[data-act="useOffline"]'); E.wait_for_timeout(1200)
+    if E.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): E.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); E.wait_for_timeout(1200)
     E.evaluate(setup_js("tok-staff")); E.wait_for_timeout(600)
     E.evaluate("FinComCall.start({kind: 'meeting', title: 'Refused'})")
     ok(wait_for(E, "!!document.querySelector('#fincom-call [data-call=lobby] [data-no-device]')", 20000), "refused (NotAllowedError): the same message")
@@ -115,7 +115,7 @@ with sync_playwright() as p:
         route.fulfill(status=200, content_type="application/json", headers=V.CORS, body=json.dumps({"ok": True, "text": "Whisper heard it", "ms": 100}))
     pg.route("**/functions/v1/fincom-transcribe**", tr)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(V.SETUP); pg.wait_for_timeout(500); pg.evaluate("ASST.open()"); pg.wait_for_timeout(900)
     pg.evaluate("window.__gumError = 'NotReadableError'")
     pg.click("[data-asst-mic]"); pg.wait_for_timeout(600)

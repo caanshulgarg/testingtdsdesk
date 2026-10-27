@@ -64,7 +64,7 @@ try:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000})
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:8145/"); pg.wait_for_timeout(2000)
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         pg.evaluate("""([k, name]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
           const c = newCompany({name, gstin: "07AADCV3366N1ZU"}); c.tallyName = name; S.companies[c.id] = c; S.coId = c.id; S.view = "company";
           S.data[c.id] = {parties: {}, entries: {}, loaded: true};

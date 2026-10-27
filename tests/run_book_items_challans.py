@@ -47,7 +47,7 @@ CH = lambda n, pre: [{"id": "%s%02d" % (pre, i), "bsr": "0510308", "date": "2026
 with sync_playwright() as p:
     br = p.chromium.launch()
     pg = br.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(STUB)
     # ---------- 3. the shapes round-trip (nothing else changes for the other keys)
     rt = pg.evaluate("""() => { const shapes = {e: [], ids: [{id: 'a', v: 1}, {id: 'b', v: 2}], plain: ['x', 'y'], noid: [{v: 1}], obj: {k: 1}, eo: {}, val: 5, s: 'w'};

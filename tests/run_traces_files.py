@@ -96,7 +96,7 @@ def after(pg, k):
 try:
     with sync_playwright() as p:
         br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}, accept_downloads=True); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500); pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
         pg.evaluate("() => { S.books.pans = Object.assign({}, S.books.pans, {'Juniper Legal Associates': 'AAJFJ1234K', 'Nightjar Sound & Light Co': 'ABCPN5555N'}); }")
         ok(pg.evaluate("['f16a', 'tracesJr', 'tracesConso'].every(k => BOOKS_KEYS.includes(k))"), "the certificates' records, the defaults and the consolidated file are kept with the books (BOOKS_KEYS)")

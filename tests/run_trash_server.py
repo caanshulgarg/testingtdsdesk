@@ -68,7 +68,7 @@ def computer(br, who):
     ctx = br.new_context(viewport={"width": 1440, "height": 950})
     ctx.expose_function("srv", lambda path, opts: server(path, opts, who))
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(who + ": " + str(e)))
-    pg.goto("http://localhost:8191/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8191/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     pg.evaluate(SETUP, CID); pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
     return pg
 

@@ -97,7 +97,7 @@ with sync_playwright() as p:
     br = p.chromium.launch()
     ctx = br.new_context(viewport={"width": 1440, "height": 950})
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8293/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8293/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     cid = E(SETUP); E(BRIDGE); pg.wait_for_timeout(500)
     app = lambda: pg.inner_text("#app")
@@ -191,7 +191,7 @@ with sync_playwright() as p:
     pg3 = ctx.new_page(); pg3.on("pageerror", lambda e: errors.append("tab 3: " + str(e)))
     for q in (pg2, pg3):
         q.goto("http://localhost:8293/"); q.wait_for_timeout(2500)
-        if q.locator('button[data-act="useOffline"]').count(): q.click('button[data-act="useOffline"]'); q.wait_for_timeout(800)
+        if q.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): q.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); q.wait_for_timeout(800)
         q.evaluate(SETUP, {"id": "c-race"}); q.evaluate(BRIDGE)
         q.evaluate("(() => { const co = CO(); co.choices.autopost = {value: {on: true, bank: true, bills: true, bankAmounts: 'within', perEntry: 50000, holdMin: 0}, state: 'confirmed'}; B().rows.forEach(r => { r.fp = 'race|' + r.id; }); })()")
     outs = [None, None]

@@ -63,7 +63,7 @@ TB_GROSS = sum(close(l) for l in FA if l not in ACC); TB_ACC = -sum(close(l) for
 def page(br, kind):
     ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(LOAD, [B, kind]); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; S.booksTab = 'fs'; S.fsTab = 'dep'; S.fsFy = '2025'; render();"); pg.wait_for_timeout(2000)
     pg.wait_for_selector("[data-far-row]", timeout=30000)
     pg.evaluate("() => { window.__saved = []; window.saveFile = (n, blob) => { const r = new FileReader(); r.onload = () => window.__saved.push([n, r.result.split(',')[1]]); r.readAsDataURL(blob); }; }")

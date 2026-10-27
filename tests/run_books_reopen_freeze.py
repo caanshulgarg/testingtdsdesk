@@ -52,7 +52,7 @@ async def main():
                 await asyncio.sleep(0.1)
             return None
         async def signin():
-            if await pg.locator('button[data-act="useOffline"]').count(): await pg.click('button[data-act="useOffline"]'); await pg.wait_for_timeout(300)
+            if await pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): await pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); await pg.wait_for_timeout(300)
             await until("typeof Store === 'object' && S.storeKind && S.storeKind !== 'memory'", 30)
             await pg.evaluate("""([a, firm]) => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: "u1"}); Cloud.st.firm = firm; Cloud.st.state = "ok";
               let c = S.companies[a]; if (!c){ c = newCompany({name: "ZZ Leads-like Brokers Pvt Ltd", gstin: ""}); c.id = a; c.tan = "DELZ01234Z"; c.pan = "AAACZ1234Z"; S.companies[c.id] = c; Store.saveCompany(c); }

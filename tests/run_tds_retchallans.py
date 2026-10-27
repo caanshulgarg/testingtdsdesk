@@ -45,7 +45,7 @@ with sync_playwright() as p:
     br = p.chromium.launch()
     pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     J = lambda e, a=None: pg.evaluate(e, a)
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     J(BOOKS_JS); pg.wait_for_timeout(600); J("() => { TDSMatch.online = () => false; }"); J(CHALLANS); pg.wait_for_timeout(300)
     # April's 194C on chA (used)
     J("() => { const ids = TDS.rows().filter(r => TDS.sec(r.section) === '194C' && TDS.ymd(r.date).slice(0, 6) === '202604').map(r => r.id); TDSCH.tag(ids, 'chA'); TDSReg.forget(); render(); }")

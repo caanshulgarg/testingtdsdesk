@@ -126,7 +126,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route(STAGE + "/**", route)
     pg.goto("http://localhost:8146/"); pg.wait_for_timeout(2000)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("""([name, gstin]) => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600}); Cloud.st.firm = "f1"; Cloud.st.state = "on";
       const c = newCompany({name, gstin}); c.id = "c_vms"; c.tallyName = name; S.companies[c.id] = c; S.coId = c.id; S.view = "company";
       S.data[c.id] = {parties: {}, entries: {}, loaded: true};

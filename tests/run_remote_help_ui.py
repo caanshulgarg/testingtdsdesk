@@ -94,7 +94,7 @@ with sync_playwright() as p:
     ictx.add_init_script(FAKE_SCREEN)
     I = ictx.new_page(); I.set_default_timeout(60000); wire(I, hub, fn, rest)
     I.goto("http://localhost:%d/" % PORT); I.wait_for_timeout(2500)
-    if I.locator('button[data-act="useOffline"]').count(): I.click('button[data-act="useOffline"]'); I.wait_for_timeout(1200)
+    if I.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): I.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); I.wait_for_timeout(1200)
     I.evaluate(setup_js("tok-owner")); I.wait_for_timeout(600)
     I.evaluate("(r) => FinComCall.join(r)", rid); wait_for(I, "!!document.querySelector('[data-call-join]')"); press(I, "[data-call-join]")
     wait_for(I, "!!document.querySelector('#fincom-call [data-call=in]')", 20000)

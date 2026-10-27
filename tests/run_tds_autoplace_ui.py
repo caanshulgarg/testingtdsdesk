@@ -42,7 +42,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1440, "height": 900}); pg = ctx.new_page()
         pg.on("pageerror", lambda e: errors.append(str(e))); cons = []; pg.on("console", lambda m: cons.append(m.text[:400]) if m.type == "error" else None)
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         J = lambda expr, arg=None: pg.evaluate(expr, arg)
         J(BOOKS_JS); pg.wait_for_timeout(800)
         J(ADD, ["chA", "0240020", "20260507", "00101", 8640, "194C"])
@@ -149,7 +149,7 @@ try:
         # ---------------- phone, 390 wide: the same step and editor
         ph = br.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True); pp = ph.new_page()
         pp.on("pageerror", lambda e: errors.append(str(e)))
-        pp.goto("http://localhost:%d/" % PORT); pp.wait_for_timeout(2500); pp.click('button[data-act="useOffline"]'); pp.wait_for_timeout(1200)
+        pp.goto("http://localhost:%d/" % PORT); pp.wait_for_timeout(2500); pp.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pp.wait_for_timeout(1200)
         pp.evaluate(BOOKS_JS); pp.wait_for_timeout(600)
         for a in [["chA", "0240020", "20260507", "00101", 8640, "194C"], ["chJ", "0240020", "20260507", "00102", 12345, "194J"], ["chM", "0240020", "20260607", "00103", 7500, "194C"],
                   ["chT", "0240020", "20260606", "00104", 10000, "194J", {"fromVoucher": "pay194jMay"}], ["chJ2", "0240020", "20260607", "00105", 1500, "194J"]]:

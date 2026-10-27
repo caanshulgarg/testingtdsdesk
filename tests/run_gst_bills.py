@@ -49,7 +49,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
         E, W = pg.evaluate, pg.wait_for_timeout
-        pg.goto("http://localhost:%d/" % PORT); W(2500); pg.click('button[data-act="useOffline"]'); W(2000)
+        pg.goto("http://localhost:%d/" % PORT); W(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); W(2000)
         E(LOAD, books); W(1500); E("S.books = window.__bk; render();"); W(800)
         cid = E("S.coId")
         go = lambda h: (E("(h) => { location.hash = h; }", "#/c/%s/books/gst/07/202603/%s" % (cid, h)), W(1500))

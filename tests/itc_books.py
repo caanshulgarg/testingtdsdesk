@@ -38,7 +38,7 @@ MAKE = """async ([cid, cmp, reg, vs, twoBs]) => {
   await Books.save(cid, b); }"""
 def setup(pg, port):
     pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     if pg.locator("button:has-text('Later')").count(): pg.click("button:has-text('Later')"); pg.wait_for_timeout(300)
     pg.evaluate(MAKE, [CID, CMP, REG, VS, TWOB])
 def open_part(pg, part, ym="202604"):

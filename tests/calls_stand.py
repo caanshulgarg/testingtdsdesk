@@ -417,7 +417,7 @@ def member_page(br, port, tok, hub, fn, rest, checks, viewport=(1280, 860)):
     pg = ctx.new_page(); pg.set_default_timeout(60000); pg.on("pageerror", lambda e: checks.errors.append(tok + ": " + str(e)))
     wire(pg, hub, fn, rest)
     pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(setup_js(tok)); pg.wait_for_timeout(600)
     return ctx, pg
 

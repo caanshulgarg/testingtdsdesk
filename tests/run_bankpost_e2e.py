@@ -64,7 +64,7 @@ try:
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("dialog", lambda d: d.accept())
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
         BV = re.search(r"\$BridgeVersion = '([^']+)'", open(_os.path.join(BRUN, "TDSBridge.ps1"), encoding="utf-8-sig").read()).group(1)   # the bridge in the repo
         ok(pg.evaluate("Bridge.st.version") == BV, "bridge %s running against the stand-in Tally" % BV)

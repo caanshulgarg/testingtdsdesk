@@ -42,7 +42,7 @@ with sync_playwright() as p:
     pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
         body=json.dumps({"setup": {"version": "2.1.1", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.1.1.exe", "sha256": "ab" * 32}})))
     pg.goto("http://localhost:8203/"); pg.wait_for_timeout(2500)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     # 1. nothing heard from yet: one card, one button
     E(SETUP, []); pg.wait_for_timeout(1500)
@@ -101,7 +101,7 @@ with sync_playwright() as p:
     ok(all(x in h for x in ("Windows protected your PC", "More info", "Run anyway", "install.log")), "the help when Windows blocks the download or the setup, under the card")
     # 3. the hidden fallback
     pg.goto("http://localhost:8203/#/tally/bridge-1.15"); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E("() => Route.apply('#/tally/bridge-1.15')"); pg.wait_for_timeout(800)
     ob = pg.inner_text("#app [data-old-bridge]") if pg.locator("#app [data-old-bridge]").count() else ""
     ok("Bridge 1.15.0 (fallback)" in ob and "Download the bridge 1.15.0 setup" in ob and E("location.hash") == "#/tally/bridge-1.15", "3. #/tally/bridge-1.15 shows bridge 1.15.0's setup (%s)" % ob[:80].replace("\n", " "))

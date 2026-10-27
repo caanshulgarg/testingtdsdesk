@@ -13,7 +13,7 @@ def ok(c, w):
 BILLS = [("Alpha Consultants", "AAAPA1234A", "A/1", "2026-09-02", 100000), ("Gamma Rentals", "AAAFG5678B", "G/3", "2026-09-08", 60000), ("Kappa Labs", "AAAPK1111K", "K/9", "2026-09-09", 20000)]
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 950}, accept_downloads=True); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8156/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:8156/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     cid = pg.evaluate("""(bills) => { const c = newCompany({name: "ZZ Zeta Exports", gstin: "09AANFG3202D1ZR"}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; S.coId = c.id;
       bills.forEach(([n, pan, no, d, amt]) => { const e = newEntry("Manual entry"); Object.assign(e.x, {vendorName: n, vendorPan: pan, invoiceNo: no, invoiceDate: d, taxable: amt, total: amt});
         e.natureId = "professional"; e.partyLedger = n; e.expenseLedger = "Professional Charges"; S.data[c.id].entries[e.id] = e; });

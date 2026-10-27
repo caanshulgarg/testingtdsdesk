@@ -25,7 +25,7 @@ WANT = {"CGST 9 %": ("gst", "output", "CGST"), "SGST 9 %": ("gst", "output", "SG
 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8197/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8197/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     cid = pg.evaluate(gstfix.SETUP, [books, gst]); pg.wait_for_timeout(1500)
     E = lambda js, *a: pg.evaluate(js, *a)
     # the masters as read from Tally; the request's ledgers as not yet confirmed (as on a new client)

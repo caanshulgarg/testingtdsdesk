@@ -76,7 +76,7 @@ with sync_playwright() as p:
     br = p.chromium.launch()
     ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     E = lambda js, *a: pg.evaluate(js, *a)
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     cid = E(SETUP); pg.wait_for_timeout(1000)
     run(pg, E)
     pg.locator("#app [data-deductor]").scroll_into_view_if_needed()
@@ -86,7 +86,7 @@ with sync_playwright() as p:
     keep = E("JSON.stringify(Object.values(S.companies))")
     for scheme in ("light", "dark"):
         c2 = br.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme); p2 = c2.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))
-        p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.click('button[data-act="useOffline"]'); p2.wait_for_timeout(800)
+        p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); p2.wait_for_timeout(800)
         p2.evaluate("""async (cs) => { JSON.parse(cs).forEach(c => { S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; Store.saveCompany(c); });
           const id = JSON.parse(cs).slice(-1)[0].id; await openCompany(id); S.tab = "cotds"; render(); }""", keep); p2.wait_for_timeout(1200)
         ok(p2.locator("#app [data-deductor]").count() == 1 and p2.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone (%s): the card, no sideways scroll" % scheme)

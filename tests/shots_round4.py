@@ -97,7 +97,7 @@ if __name__ == "__main__":
                 if not only or "sign-in" in only:
                     f = os.path.join(OUT, "%s-%s-sign-in.png" % (wn, role)); pg.screenshot(path=f)
                     report["%s-%s-sign-in" % (wn, role)] = walk(pg, "sign-in", "() => {}", errs)[0]
-                pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+                pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
                 pg.evaluate(U.SEED, U.books()); pg.wait_for_timeout(1200)
                 pg.evaluate("(r) => { S.account = Object.assign(S.account || {}, {me: {role: r, user_id: 'u-' + r, name: r === 'owner' ? 'Anshul' : 'Ravi'}}); render(); }", role)
                 for name, js in U.PAGES + EXTRA:

@@ -53,7 +53,7 @@ def shot(pg, name, full=False):
     p = os.path.join(OUT, name + ".png"); pg.screenshot(path=p, full_page=full); return p
 def start(pg, items=None):
     pg.goto("http://localhost:%d/" % PORT[0]); W(pg, 2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); W(pg, 1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); W(pg, 1200)
     cid = pg.evaluate(SETUP, {"books": BOOKS, "master": MASTER, "items": items or []}); W(pg, 600)
     return cid
 def mymis(pg):

@@ -107,7 +107,7 @@ with sync_playwright() as p:
     # show the books' TDS (not "TDS is worked out from the day book ... once either is in")
     ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route(STAGE + "/**", route); pg.goto("http://localhost:8477/" + os.environ.get("TDSDESK_PATH", "")); pg.wait_for_timeout(2000)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(DIRECT, [CO, GSTIN])
     wait_for(pg, "S.books && S.books.cid === 'c_gb' && (S.books.vouchers || []).length > 0 && !S.books.busy", 90); pg.wait_for_timeout(2500)
     body = pg.inner_text("#app")
@@ -121,7 +121,7 @@ with sync_playwright() as p:
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.route(STAGE + "/**", route)
         pg.goto("http://localhost:8477/" + os.environ.get("TDSDESK_PATH", "")); pg.wait_for_timeout(2000)
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         tag = "stale browser" if stale else "empty browser"
         pg.evaluate(OPEN, [CO, GSTIN, stale])
         came = wait_for(pg, "S.books && S.books.cid === 'c_gb' && (S.books.vouchers || []).length > 0 && !S.books.busy", 90)

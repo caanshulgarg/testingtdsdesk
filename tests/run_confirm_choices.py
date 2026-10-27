@@ -67,7 +67,7 @@ with sync_playwright() as p:
     # ---------------------------------------------------------------- (a) browser A: choose, confirm, reload, upload
     ctxA = br.new_context(viewport={"width": 1440, "height": 950}); pg = ctxA.new_page(); pg.on("pageerror", lambda e: errors.append("A: " + str(e)))
     E = lambda js, *a: pg.evaluate(js, *a)
-    pg.goto("http://localhost:8261/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8261/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     cid = E(SETUP, LEDGERS); pg.wait_for_timeout(800)
     app = lambda: pg.inner_text("#app")
     sel = '#app select[aria-label="Tally ledger for this bank account"]'
@@ -88,7 +88,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-bank-noledger]").count() == 0 and E("CO().bankAccounts[0].ledger") == "HDFC BANK", "posting no longer waits; the account's old field kept in step")
     # reload: the line, never “Choose a Tally ledger”, also while the ledger list is not loaded yet
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E("() => { Ledgers.st = {}; }"); E(OPEN_BANK, cid); pg.wait_for_timeout(800)
     E("() => { Ledgers.st = {}; Ledgers.busy[S.coId] = Promise.resolve(); B().ledgers = {list: [], importedAt: ''}; render(); }"); pg.wait_for_timeout(300)
     ok(pg.locator(sel).count() == 0 and pg.inner_text("#app [data-bank-ledger]").startswith("Tally ledger: HDFC BANK") and "Choose a Tally ledger" not in app(),
@@ -139,7 +139,7 @@ with sync_playwright() as p:
 
     # ---------------------------------------------------------------- (a) browser B: signed in elsewhere, data only from the cloud
     ctxB = br.new_context(viewport={"width": 1440, "height": 950}); pb = ctxB.new_page(); pb.on("pageerror", lambda e: errors.append("B: " + str(e)))
-    pb.goto("http://localhost:8261/"); pb.wait_for_timeout(2500); pb.click('button[data-act="useOffline"]'); pb.wait_for_timeout(800)
+    pb.goto("http://localhost:8261/"); pb.wait_for_timeout(2500); pb.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pb.wait_for_timeout(800)
     EB = lambda js, *a: pb.evaluate(js, *a)
     ok(EB("Object.keys(S.companies).length") == 0, "browser B starts with nothing of the firm")
     EB(SERVER, srv_rows); EB("(recs) => { window.__recs = recs; }", recs)
@@ -206,7 +206,7 @@ with sync_playwright() as p:
     import gstfix
     books, gst = gstfix.load()
     ctxC = br.new_context(viewport={"width": 1440, "height": 950}); pc = ctxC.new_page(); pc.on("pageerror", lambda e: errors.append("C: " + str(e)))
-    pc.goto("http://localhost:8261/"); pc.wait_for_timeout(2500); pc.click('button[data-act="useOffline"]'); pc.wait_for_timeout(800)
+    pc.goto("http://localhost:8261/"); pc.wait_for_timeout(2500); pc.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pc.wait_for_timeout(800)
     EC = lambda js, *a: pc.evaluate(js, *a)
     foot = lambda: pc.locator("#app [data-confirm-foot]")
     EC("navHome('rules')"); pc.wait_for_timeout(400)

@@ -144,7 +144,7 @@ MORE = [
 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1366, "height": 768}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8249/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8249/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     cid = pg.evaluate(U.SEED, U.books()); pg.wait_for_timeout(1200)
     ids = pg.evaluate("(cid) => [cid].concat(Object.keys(S.data[cid].entries).filter(k => k.length > 6))", cid)
     pg.evaluate("(cid) => { const e = newEntry('raw-id.pdf'); e.x.vendorName = 'ZZ RAW ID CHECK'; e.x.invoiceNo = 'R-1'; e.x.invoiceDate = '2026-09-20'; e.x.total = 1180; S.data[cid].entries[e.id] = e; refreshStats(cid); }", cid)
@@ -233,7 +233,7 @@ with sync_playwright() as p:
     ok("pkey" not in tt and "duplicate key" not in tt and "details" in tt.lower(), "a toast with a raw error: plain words and a details link (%s)" % tt.replace("\n", " / "))
     # ---- round 2: times in IST (K5) on a computer whose clock is not on Indian time ----
     ny = br.new_context(viewport={"width": 1366, "height": 768}, timezone_id="America/New_York"); q = ny.new_page(); q.on("pageerror", lambda e: errors.append(str(e)))
-    q.goto("http://localhost:8249/"); q.wait_for_timeout(2500); q.click('button[data-act="useOffline"]'); q.wait_for_timeout(1000)
+    q.goto("http://localhost:8249/"); q.wait_for_timeout(2500); q.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); q.wait_for_timeout(1000)
     cid2 = q.evaluate(U.SEED, None); q.wait_for_timeout(800)
     f = q.evaluate("() => [fmtDateTime(Date.UTC(2026, 9, 4, 8, 35)), fmtTime(Date.UTC(2026, 9, 4, 8, 35)), fmtDateTime('2026-10-04T08:35:00Z'), fmtDateTime('2026-10-04 14:05:00'), fmtDateTime('2026-10-04'), fmtDateTime(new Date(Date.UTC(2026, 9, 3, 20, 0))), fmtDateTime(null)]")
     ok(f == ["04-Oct-2026 14:05 IST", "14:05 IST", "04-Oct-2026 14:05 IST", "04-Oct-2026 14:05 IST", "04-Oct-2026", "04-Oct-2026 01:30 IST", "—"],
