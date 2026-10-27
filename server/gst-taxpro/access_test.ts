@@ -2,7 +2,7 @@
 // (security review F3, F4, F11), against a stubbed Supabase (auth, mfa_ok, members, Vault, tables) and a stubbed TaxPro.
 // Nothing leaves the process: every fetch is answered here.
 //   1. two-step sign-in is checked exactly as the gateway does (rpc mfa_ok must be true): refused when it is not
-//   2. a look-only member may read (status, returns, return, einv-status, einvoices) and nothing else
+//   2. a look-only member may read (status, returns, return, einv-status, einvoices, filing) and nothing else
 //   3. the owner and staff may do the rest
 //   4. the self-test needs a signed-in member
 //   5. error replies are plain; the raw detail goes to the log only
@@ -82,12 +82,14 @@ const WRITES: Row[] = [
   { action: "auth", gstin: G, username: "user1", otp: "575757" },
   { action: "2b", gstin: G, username: "user1", period: "092026" },
   { action: "fetch", gstin: G, form: "2B", period: "092026" },
-  ...["filing", "save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].map((a) => ({ action: a, gstin: G, form: "R1", period: "092026" })),
+  // filing: everything that saves, reads the portal, confirms, submits or files (only "filing" itself, where the return stands, is a read)
+  ...["save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].map((a) => ({ action: a, gstin: G, form: "R1", period: "092026" })),
   { action: "no-such-action", gstin: G },
 ];
 const READS: Row[] = [
   { action: "status", gstins: [G] }, { action: "returns", gstins: [G] }, { action: "return", gstin: G, form: "R1", period: "092026" },
   { action: "einv-status", gstins: [G] }, { action: "einvoices", gstin: G },
+  { action: "filing", gstin: G, form: "R1", period: "092026" },   // where the return stands, and its log
 ];
 
 Deno.test("F4: a token without the two-step sign-in (mfa_ok not true) is refused, as the gateway refuses it", T, async () => {

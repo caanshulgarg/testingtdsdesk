@@ -19,7 +19,7 @@
 // GET ?selftest=1 (a signed-in firm member, as below) : always on the sandbox (free): OTP → sign-in → refresh → 2B, GSTR-1 and 3B summaries for GSTN's test
 //   taxpayer, the API version that answers for each, Vault, and the e-invoice sign-in for TaxPro's test GSTIN.
 // POST, a signed-in firm member (two-step sign-in checked as the gateway checks it: rpc mfa_ok). A look-only member
-// (any role but owner or staff) may only read: status, returns, return, einv-status, einvoices. Error replies are plain;
+// (any role but owner or staff) may only read: status, returns, return, einv-status, einvoices, filing. Error replies are plain;
 // the raw detail is in the function's log only.
 //   {action:"status", gstins}                       sessions: until, access period, ended, error (never the token)
 //   {action:"otp" | "auth", gstin, username, otp?, days?}
@@ -619,9 +619,10 @@ async function signedIn(req: Request): Promise<Member | Response> {
   if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
   return { me: who.user.id, firm: member.firm_id as string, role: String(member.role || "") };
 }
-// what a look-only member (any role but owner or staff) may do: read what is kept. Everything else writes, keeps a
-// password or session, sends an OTP or spends a TaxPro call (security review F3)
-const LOOK_OK = new Set(["status", "returns", "return", "einv-status", "einvoices"]);
+// what a look-only member (any role but owner or staff) may do: read what is kept, and where a return's filing stands
+// ("filing": the kept row and its log, no TaxPro call). Everything else writes, keeps a password or session, sends an OTP,
+// spends a TaxPro call, or saves, submits or files a return (security review F3)
+const LOOK_OK = new Set(["status", "returns", "return", "einv-status", "einvoices", "filing"]);
 const canWrite = (role: string) => role === "owner" || role === "staff";
 
 Deno.serve(async (req) => {
