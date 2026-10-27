@@ -12,8 +12,8 @@ const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === J
 const FIRM = "11111111-1111-4111-8111-111111111111", ME = "aaaaaaaa-0000-4000-8000-000000000001";
 const PRICE = 10;   // rupees a unit, as price_of would say
 
-function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, balance?: number, member?: any, firm?: any } = {}) {
-  const charges: any[] = [], refunds: any[] = [], sent: any[] = [];
+function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, balance?: number, member?: any, firm?: any, ai?: (args: any) => any } = {}) {
+  const charges: any[] = [], refunds: any[] = [], sent: any[] = [], asked: any[] = [];
   let balance = o.balance ?? 1000;
   const client = (_url: string, key: string, opts?: any) => {
     const tok = String(opts?.global?.headers?.Authorization || "").replace(/^Bearer\s+/, "");
@@ -29,6 +29,8 @@ function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, b
           balance -= amount; return { data: { ok: true, amount, balance } };
         }
         if (fn === "refund_charge") { refunds.push(args); balance += Number(args.p_amount); return { data: { ok: true } }; }
+        // the AI control centre's switch (migration 121): on, as today, unless the test says otherwise
+        if (fn === "ai_allowed") { asked.push(args); return { data: o.ai ? o.ai(args) : { ok: true, reason: "on", model: null } }; }
         throw new Error("rpc " + fn);
       },
       from: (t: string) => {
@@ -52,7 +54,7 @@ function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, b
     return json({ error: "not in the stand" }, 404);
   }) as typeof fetch;
   const h = handler({ env: (k) => ({ SUPABASE_URL: "https://stand.test", SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, client });
-  return { h, charges, refunds, sent, bal: () => balance };
+  return { h, charges, refunds, sent, asked, bal: () => balance };
 }
 const IMG = { type: "image", source: { type: "base64", media_type: "image/jpeg", data: "QUJD" } };
 const TEXT = { type: "text", text: "Read this bill. Reply with only the JSON object, no other text." };
@@ -203,4 +205,32 @@ Deno.test("console phase 1b: a paused firm reads nothing and is charged nothing;
   eq((await call(a.h, claude(read()))).status, 200, "active: read");
   const b = stand();
   eq((await call(b.h, claude(read()))).status, 200, "before migration 118 (no status column): read as before");
+});
+
+Deno.test("AI control centre: a feature switched off by FinCom is refused in plain words, before any charge or call", async () => {
+  const off = (a: any) => ({ ok: false, reason: "feature_off", feature: a.p_feature, message: a.p_feature === "bill_read" ? "AI for Bill reading is switched off by FinCom." : "AI for Page OCR is switched off by FinCom." });
+  const s = stand({ ai: off });
+  const r = await call(s.h, claude(read()));
+  const j = await r.json();
+  eq([r.status, j.ok, j.kind, j.error, j.reason], [403, false, "ai_off", "AI for Bill reading is switched off by FinCom.", "feature_off"], "bill reading refused");
+  eq([s.charges.length, s.sent.length], [0, 0], "nothing charged or sent");
+  eq(s.asked[0], { p_firm: FIRM, p_feature: "bill_read" }, "asked for the firm and bill_read");
+  const v = await call(s.h, { what: "vision", qty: 1, ref: "ocr", payload: { requests: [{}] } });
+  const vj = await v.json();
+  eq([v.status, vj.kind, vj.error], [403, "ai_off", "AI for Page OCR is switched off by FinCom."], "OCR refused");
+  eq([s.charges.length, s.sent.length], [0, 0], "still nothing charged or sent");
+  // a used-up allowance whose rule is stop: 429; the settings unreadable: refused, not skipped
+  const a = stand({ ai: () => ({ ok: false, reason: "allowance", message: "Your firm's AI allowance for this month (₹500.00) is used up. AI starts again on the 1st." }) });
+  const ar = await call(a.h, claude(read()));
+  eq([ar.status, (await ar.json()).kind, a.sent.length], [429, "ai_off", 0], "allowance used up: 429");
+  const u = stand({ ai: () => { throw new Error("connection reset"); } });
+  const ur = await call(u.h, claude(read()));
+  eq([ur.status, (await ur.json()).kind, u.sent.length], [503, "ai_off", 0], "settings unreadable: 503, nothing sent");
+  // before migration 121 (no ai_allowed): allowed as before
+  const m = stand({ ai: () => { throw Object.assign(new Error("Could not find the function public.ai_allowed"), { code: "PGRST202" }); } });
+  eq((await call(m.h, claude(read()))).status, 200, "no policy yet: read as before");
+  // a model set in the console replaces the app's; the answer is kept 15 s (asked once for two reads)
+  const c = stand({ ai: () => ({ ok: true, reason: "on", model: "claude-opus-5" }) });
+  await call(c.h, claude(read("claude-sonnet-5"))); await call(c.h, claude(read("claude-sonnet-5")));
+  eq([c.sent[0].body.model, c.sent[1].body.model, c.asked.length], ["claude-opus-5", "claude-opus-5", 1], "console model used, asked once");
 });

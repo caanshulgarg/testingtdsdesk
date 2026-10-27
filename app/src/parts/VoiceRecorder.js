@@ -146,7 +146,7 @@ export const whisperLang = (code) => (code === "hi-IN" ? "hi" : code === "en-IN"
 export const whisperLatin = (code) => code === "hinglish";
 
 // the pieces to fincom-transcribe, in order, the words joined.
-// -> {ok: true, text, changes: [{from, to}] (the names corrected)} | {ok: false, kind: nokey|limit|offline|error|auth}
+// -> {ok: true, text, changes: [{from, to}] (the names corrected)} | {ok: false, kind: nokey|limit|offline|error|auth|ai_off (+ message)}
 export async function transcribe(clips, { lang = "auto", client = null, latin = false } = {}) {
   if (!clips || !clips.length) return { ok: false, kind: "empty" };
   if (typeof navigator === "object" && navigator.onLine === false) return { ok: false, kind: "offline" };
@@ -163,6 +163,8 @@ export async function transcribe(clips, { lang = "auto", client = null, latin = 
     try { r = await fetch(url + "?" + qs, { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": String(clip.type || "audio/webm").split(";")[0] }, body: clip.blob }); }
     catch (e) { return { ok: false, kind: typeof navigator === "object" && navigator.onLine === false ? "offline" : "error" }; }
     const j = await r.json().catch(() => ({}));
+    // switched off by FinCom (the console's AI control centre), or this month's AI allowance used up: FinCom's own words
+    if (j.kind === "ai_off") return { ok: false, kind: "ai_off", message: String(j.error || "AI for Voice typing is switched off by FinCom.") };
     if (r.status === 429 || j.kind === "limit") return { ok: false, kind: "limit" };
     if (j.kind === "nokey") return { ok: false, kind: "nokey" };
     if (!r.ok || !j.ok) return { ok: false, kind: "error" };
@@ -173,6 +175,7 @@ export async function transcribe(clips, { lang = "auto", client = null, latin = 
 }
 
 // the one quiet line when the browser's words are kept
+export const keptLine = (r) => (r && r.kind === "ai_off" ? "Your browser's words are kept (" + String(r.message || "").replace(/\.$/, "") + ")." : KEPT[r && r.kind] || KEPT.error);
 export const KEPT = {
   nokey: "Your browser's words are kept (clearer listening is not set up yet).",
   limit: "Your browser's words are kept (clearer listening has reached today's limit).",

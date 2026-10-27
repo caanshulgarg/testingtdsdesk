@@ -9,6 +9,7 @@ import { module as audit } from "./audit/index.jsx";
 import { module as admins } from "./admins/index.jsx";
 import { module as settings } from "./settings/index.jsx";
 import { module as coupons } from "./coupons/index.jsx";
+import { module as ai } from "./ai/index.jsx";
 
 export const MODULES = [
   dashboard,
@@ -18,5 +19,6 @@ export const MODULES = [
   coupons,
   audit,
   admins,
+  ai,
   settings,
 ];

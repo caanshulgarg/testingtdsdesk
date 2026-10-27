@@ -91,3 +91,4 @@ run_cloud_e2e.py               flaky timing: 1 check ("an entry changed in Tally
 run_live_sync.py               flaky timing: two browsers in step; 4 checks waited the full 99 s
 run_console_ui.py   the console's screens (Playwright + Deno stand): needs console/node_modules (React 19, Vite), which CI does not install yet; run it with CONSOLE_DIST set to a built console
 run_console_coupons_ui.py   the console's Coupons screens (Playwright + Deno stand): as run_console_ui.py, needs console/node_modules; run it with CONSOLE_DIST set to a built console
+run_console_ai_ui.py   the console's AI control centre screens (Playwright + Deno stand): as run_console_ui.py, needs a built console (CONSOLE_DIST)

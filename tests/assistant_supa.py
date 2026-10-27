@@ -71,6 +71,9 @@ class H(http.server.BaseHTTPRequestHandler):
                 args = json.loads(self.body() or b"{}")
                 if fn == "mfa_ok": return self.send(200, STATE["mfa"])
                 if not w: return self.send(401, {"message": "no token"})
+                # a function the database does not have: PostgREST's 404 (e.g. ai_allowed before migration 121)
+                if run("select count(*) from pg_proc where proname = %s and pronamespace = 'public'::regnamespace;" % q(fn)) == "0":
+                    return self.send(404, {"code": "PGRST202", "message": "Could not find the function public.%s in the schema cache" % fn})
                 out = run(rpc_sql(fn, args), None if w == "service" else w)
                 return self.send(200, raw=(out or "null").encode())
             if path.startswith("/rest/v1/"):

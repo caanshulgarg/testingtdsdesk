@@ -8,10 +8,14 @@
 // The AI: only when the app says AI help is on for TDS (ai: true) AND the firm's switch (assistant_settings, as Ask FinCom)
 // is on. Claude's key is the platform's (platform_secrets claude_api_key), read with the service role. The firm's rupee cap
 // (asst_cap_take), the cost (asst_cost_add, feature "tds_match") and one log line (asst_log_add) as every Ask FinCom call.
+// The AI control centre (console phase 4, 27-Oct-2026): before the AI, the console's switches for "tds_match" are asked
+// (ai_allowed through ../_shared/ai_policy.ts); off -> the rules' suggestions only, and ai.say gives FinCom's words ("AI
+// for TDS challan match is switched off by FinCom: the rules' suggestions stand."). A model set there replaces Sonnet.
 import { corsFor } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { tmMask } from "../_shared/tdsmatch.js";
 import { AiClient, matchRun, SONNET } from "./match.ts";
+import { aiPolicy } from "../_shared/ai_policy.ts";
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, anthropic: (key: string) => AiClient };
 
@@ -46,6 +50,7 @@ export function handler(deps: Deps) {
     const s = await rest("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + q(firm), SERVICE).catch(() => null) as any[] | null;
     return s !== null && (s[0] || { enabled: true }).enabled !== false;       // on unless the owner switched it off
   };
+  const policy = aiPolicy((fn, args) => rpc(fn, args));
   const keyOf = async () => {
     try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; return (k && k[0] && k[0].value) || ""; } catch { return ""; }
   };
@@ -85,14 +90,17 @@ export function handler(deps: Deps) {
     { const gate = await gateP; if (gate) return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); }
     try {
       const rows = cleanRows(body.rows), chs = cleanChallans(body.challans);
-      const allowed = body.ai === true && await firmAiOn(firm);
+      // FinCom's switches and the firm's own, asked together (one wave)
+      const [pol, on] = body.ai === true ? await Promise.all([policy.aiAllowed(firm, "tds_match"), firmAiOn(firm)]) : [null, false];
+      const allowed = body.ai === true && !!pol?.ok && on;
       const key = allowed ? await keyP : "";
+      const model = (pol && pol.ok && pol.model) || SONNET;
       const out = await matchRun(rows, chs, { fy, q: qq }, {
-        client: key ? deps.anthropic(key) : null, aiAllowed: allowed,
+        client: key ? deps.anthropic(key) : null, aiAllowed: allowed, offSay: pol && !pol.ok ? pol.message : undefined, model,
         capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }); return { ok: !!r?.ok, why: String(r?.why || "") }; },
         costAdd: (usd, u) => rpc("asst_cost_add", { p_firm: firm, p_feature: "tds_match", p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }),
         log: (x) => rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: x.question, p_tools: [], p_in: x.input, p_out: x.output, p_calls: x.calls, p_ms: x.ms,
-          p_feature: "tds_match", p_route: x.route, p_models: [SONNET], p_cache_read: x.cacheRead, p_cache_write: x.cacheWrite, p_cost_inr: x.inr, p_fell_through: false }),
+          p_feature: "tds_match", p_route: x.route, p_models: [model], p_cache_read: x.cacheRead, p_cache_write: x.cacheWrite, p_cost_inr: x.inr, p_fell_through: false }),
       });
       return reply(200, { ok: true, ...out });
     } catch (e) {

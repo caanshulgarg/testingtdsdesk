@@ -33,8 +33,13 @@
 // The transcript: each person's own microphone pieces (≤ 55 s) are sent, a few per call, to fincom-transcribe with the
 // caller's own token (its Whisper, the client's ledger names and its usage row); the summary is one call to the model
 // FinCom Assistant routes a short book answer to, within the firm's AI switch and monthly cap.
+// The AI control centre (console phase 4, 27-Oct-2026): the summary ("call_summary") and live subtitles
+// ("call_captions") first ask the console's switches (ai_allowed through ../_shared/ai_policy.ts); off -> kind "ai_off"
+// with "AI for <feature> is switched off by FinCom", before any key is read or any provider called. A model set there
+// replaces the summary's.
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
+import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
 import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
@@ -76,6 +81,13 @@ export function handler(deps: Deps) {
   const insert = async (table: string, row: unknown) => ((await svc("/rest/v1/" + table, { method: "POST", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[])[0];
   const patch = async (table: string, filter: string, row: unknown) => (await svc("/rest/v1/" + table + "?" + filter, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(row) })) as any[];
   const rpc = (fn: string, args: Record<string, unknown>, token = SERVICE) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
+  const policy = aiPolicy((fn, args) => rpc(fn, args));
+  // FinCom's switch for an AI feature of a call: refused (thrown) in plain words, else the console's model (or null)
+  const aiGate = async (firm: string, feature: string) => {
+    const p = await policy.aiAllowed(firm, feature);
+    if (!p.ok) fail(refusal(p).status, p.message, "ai_off");
+    return p.model;
+  };
   const secretCache: Record<string, string> = {};
   const secret = async (name: string) => {
     if (name in secretCache) return secretCache[name];
@@ -753,13 +765,14 @@ export function handler(deps: Deps) {
   }
   // one call to the model: the meeting's title, the people's names and the words said; nothing else of FinCom
   async function aiNotes(m: Member, r: any, lines: any[], langIn: unknown, people: string[]) {
+    const chosen = await aiGate(m.firm, "call_summary");
     const set = await one("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + m.firm).catch(() => null);
     if (set && set.enabled === false) fail(403, "AI help is switched off for your firm.", "off");
     const key = await secret("claude_api_key");
     if (!key) fail(503, "AI help is not set up on this server.", "nokey");
     const cap = await rpc("asst_cap_take", { p_firm: m.firm, p_n: 1 }).catch(() => null);
     if (!cap?.ok) fail(429, "The firm's AI limit for this month is reached.", "cap");
-    const pl = plan("book", "low", true);
+    const pl0 = plan("book", "low", true), pl = { ...pl0, model: chosen || pl0.model };
     // in the language the person asked for (default English); names, amounts and tax terms as said
     const lang = R.subLangOk(langIn) ? String(langIn) : "en";
     const sumLang = lang === "en" ? "" : " Write the summary, the key points, the decisions and the action items' titles in " + (lang === "hinglish" ? "Hinglish (Hindi in English letters)" : R.subLangName(lang) + " (its own script)") +
@@ -900,6 +913,7 @@ export function handler(deps: Deps) {
     async caption(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
+      await aiGate(r.firm_id, "call_captions");
       const t0 = now();
       const b64 = String(b.audio || "");
       if (!b64 || b64.length > CAPTION_B64_MAX || !/^[A-Za-z0-9+/=]+$/.test(b64)) fail(413, "A subtitle piece must be a short clip.", "size");

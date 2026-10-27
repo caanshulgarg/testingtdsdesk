@@ -13,9 +13,9 @@ function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); 
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
 const FIRM = "f-1", OWNER = "u-1", VIEWER = "u-2", SERVICE = "service-key";
 type Row = Record<string, any>;
-function fakeSupabase(opt: { cap?: boolean } = {}) {
+function fakeSupabase(opt: { cap?: boolean, ai?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = { members: [{ user_id: OWNER, firm_id: FIRM, role: "owner", active: true }, { user_id: VIEWER, firm_id: FIRM, role: "viewer", active: true }],
-    clients: [{ id: "c-1", firm: FIRM, deleted: false }, { id: "c-x", firm: "f-2", deleted: false }], assistant_settings: [], platform_secrets: [{ name: "claude_api_key", value: "sk-test" }], log: [], cost: [] };
+    clients: [{ id: "c-1", firm: FIRM, deleted: false }, { id: "c-x", firm: "f-2", deleted: false }], assistant_settings: [], platform_secrets: [{ name: "claude_api_key", value: "sk-test" }], log: [], cost: [], asked: [] };
   const users: Record<string, string> = { "jwt-owner": OWNER, "jwt-viewer": VIEWER };
   const fetch = async (input: string | URL | Request, init: RequestInit = {}) => {
     const u = new URL(String(input)), auth = String((init.headers as any)?.Authorization || "").replace("Bearer ", "");
@@ -28,6 +28,8 @@ function fakeSupabase(opt: { cap?: boolean } = {}) {
       if (fn === "asst_cap_take") return out(200, opt.cap ? { ok: false, why: "cap" } : { ok: true });
       if (fn === "asst_cost_add") { T.cost.push(body); return out(200, { inr: Math.round(body.p_cost_usd * 85 * 10000) / 10000 }); }
       if (fn === "asst_log_add") { T.log.push(body); return out(200, null); }
+      // the AI control centre's switch (migration 121), asked with the service role
+      if (fn === "ai_allowed") { assert(auth === SERVICE, "the switch with the service role"); T.asked.push(body); return out(200, opt.ai ? opt.ai(body) : { ok: true, reason: "on", model: null }); }
       return out(404, { message: "no function " + fn });
     }
     const table = u.pathname.replace("/rest/v1/", ""), want = (r: Row) => [...u.searchParams].every(([k, v]) => k === "select" || String(r[k]) === v.replace(/^eq\./, ""));
@@ -59,7 +61,7 @@ const ROWS = [{ id: "v1|TDS 194J", sec: "194JA", date: "20260610", tds: 3000, pa
   { id: "v3|TDS 194C", sec: "194C", date: "20260615", tds: 9000, party: "Epsilon", pan: "ABCPE1234E", fy: "2026-27", q: "Q1" }];
 const CHS = [{ id: "chJB", sec: "194JB", date: "20260707", minor: "200", bal: 5000, fy: "2026-27", bsr: "0240020", serial: "00011", narr: "TDS June professional fees" },
   { id: "chC", sec: "194C", date: "20260707", minor: "200", bal: 1000, fy: "2026-27", bsr: "0240020", serial: "00012", narr: "" }];
-function setup(opt: { cap?: boolean } = {}) {
+function setup(opt: { cap?: boolean, ai?: (a: any) => any } = {}) {
   const sb = fakeSupabase(opt), ai = new FakeClaude();
   const h = handler({ env: (k) => ({ SUPABASE_URL: "http://sb", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as Record<string, string>)[k], fetch: sb.fetch, anthropic: () => ai });
   const call = async (body: unknown, token = "jwt-owner") => {
@@ -143,4 +145,16 @@ Deno.test("6. an unexpected failure (security review F11): a plain message; the 
   const j = await r.json();
   eq([r.status, j], [500, { ok: false, kind: "other", error: "The matching could not be finished; try again in a moment." }], "a plain message only");
   assert(errs.some((e) => e.includes("tds_challan_match_error") && e.includes("asst_log_secret_idx")), "the detail in the log: " + errs.join(" | "));
+});
+
+Deno.test("7. AI control centre: TDS challan match switched off by FinCom: no call, the rules stand, FinCom's words; a console model is used", async () => {
+  const { sb, ai, call } = setup({ ai: (a) => ({ ok: false, reason: "feature_off", feature: a.p_feature, message: "AI for TDS challan match is switched off by FinCom." }) });
+  const r = await call(ASK());
+  eq([r.status, r.j.ok, ai.calls.length, r.j.ai.state], [200, true, 0, "off"], "no AI call, the rules' answer");
+  eq(r.j.ai.say, "AI for TDS challan match is switched off by FinCom: the rules' suggestions stand.", "FinCom's words");
+  eq(sb.T.asked, [{ p_firm: FIRM, p_feature: "tds_match" }], "asked for the firm and tds_match");
+  eq(sb.T.cost.length + sb.T.log.length, 0, "no cost, no log");
+  const m = setup({ ai: () => ({ ok: true, reason: "on", model: "claude-opus-5-5" }) });
+  const r2 = await m.call(ASK());
+  eq([m.ai.calls.length, m.ai.calls[0].model, m.sb.T.log[0].p_models], [1, "claude-opus-5-5", ["claude-opus-5-5"]], "the console's model used and logged");
 });
