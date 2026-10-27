@@ -23,6 +23,7 @@ import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import BooksSource from "../parts/BooksSource.jsx";
+import { Legal } from "./SignIn.jsx";
 import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import { BankSetup } from "../parts/BankSettings.jsx";
@@ -179,7 +180,8 @@ export function FirmSettings() {
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
   return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>
-    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
+    <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p>
+    <p className="note legal-links" data-legal=""><Legal to="privacy">Privacy policy</Legal><span aria-hidden="true"> · </span><Legal to="terms">Terms of service</Legal></p></>;
 }
 
 /* ---------------------------------------------------------------- for one client */

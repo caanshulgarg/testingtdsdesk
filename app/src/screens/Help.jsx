@@ -7,6 +7,7 @@
 // State: S.sup (tab, list, filter, q, gq: guide search, art: the article open, open/detail: a ticket, newOpen, draft,
 // files, rtext, rfiles, rint, dstat, dpri, dfirm, dq, busy).
 import Loading from "../parts/Loading.jsx";
+import { Legal } from "./SignIn.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import { Calls } from "../calls/launch.js";
 
@@ -191,5 +192,7 @@ export default function Help() {
   return <div className="pane" style={{ marginTop: 0 }}><div className="sp-head"><div><p className="note" style={{ margin: "2px 0 0" }}>Search the guide; if it does not answer it, raise a ticket to FinCom support.</p></div>
     {SUP.on() && <Sup a="new" className="btn primary">+ New ticket</Sup>}</div>
     <nav className="sbar" aria-label="Help">{tabs.map(([id, l, c]) => <button key={id} aria-selected={s.tab === id} onClick={() => supTab(id)}>{l}{c ? <> <span className="sbar-n">{c}</span></> : null}</button>)}</nav>
-    {body}</div>;
+    {body}
+    {/* the website's privacy policy and terms, in a new tab (27-Oct-2026) */}
+    <p className="note legal-links" data-legal=""><Legal to="privacy">Privacy policy</Legal><span aria-hidden="true"> · </span><Legal to="terms">Terms of service</Legal></p></div>;
 }

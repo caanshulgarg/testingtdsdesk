@@ -1,4 +1,11 @@
 <!doctype html>
+<!--
+  DRAFT FOR LEGAL REVIEW (27-Oct-2026). Written for FinCom's owner to give to a lawyer before it is relied on.
+  Every fact FinCom must supply is a visible [PLACEHOLDER] (class "todo"); none was invented. Our other welcome pages
+  (footer, refund.html, dpa.html, contact.html) name Yuvnav Services Private Limited, Noida, and the old terms named
+  Noida / Gautam Buddh Nagar for arbitration and courts: the owner to confirm the entity, city and seat.
+  The data practices and the sub-processor list were checked against the code on staging-next (263f3f6e1).
+-->
 <html lang="en-IN">
 <head>
 <meta charset="utf-8">
@@ -6,7 +13,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-bq+4nuaAd9d9S583L2sJ9gZeB6INsvkzY+3BkE1efIY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <title>Privacy policy: FinCom</title>
-<meta name="description" content="How FinCom and Yuvnav Services Private Limited handle personal data under the DPDP Act 2023.">
+<meta name="description" content="How FinCom collects, uses, shares and protects personal data, under India's DPDP Act 2023, the IT Act 2000 and the SPDI Rules 2011.">
 <meta name="theme-color" content="#0f3d33">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9h11M11 9v14M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -447,6 +454,29 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
 .grid-p>*:nth-child(4n+2) h3 .ic,.cbox:nth-child(4n+2) .ic{--c1:#a78bfa;--c2:#7c3aed}
 .grid-p>*:nth-child(4n+3) h3 .ic,.cbox:nth-child(4n+3) .ic{--c1:#38bdf8;--c2:#2563eb}
 .grid-p>*:nth-child(4n+4) h3 .ic,.cbox:nth-child(4n+4) .ic{--c1:#fbbf24;--c2:#ea580c}
+/* legal pages (27-Oct-2026): the short version, sub-heads, the sub-processor table, a TOC that scrolls on its own */
+.summary{margin:8px 0 28px;padding:20px 24px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line)}
+.summary h2{margin:0 0 6px!important;font-size:18px!important}
+.summary ul{margin:0}
+.prose h3{font:600 17px/1.35 "Plex Sans",sans-serif;margin:20px 0 4px;color:var(--ink)}
+.prose .box{margin:12px 0}
+.prose .tablewrap{margin:16px 0}
+table.subp{font-size:14.5px}
+.subp td:first-child{font-weight:600;color:var(--ink)}
+.todo{overflow-wrap:anywhere}
+.doc-toc{max-height:calc(100vh - 120px);overflow:auto;overscroll-behavior:contain}
+@media (max-width:1023px){.doc-toc{max-height:none;overflow:visible}}
+@media (max-width:767px){
+  .summary{padding:16px 18px}
+  .prose .tablewrap{overflow:visible;border:0;background:none;border-radius:0}
+  table.subp,.subp tbody,.subp tr,.subp td{display:block;width:100%}
+  .subp thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .subp tr{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+  .units.subp tbody tr+tr td{border-top:0}
+  .units.subp td{padding:3px 0}
+  .subp td:not(:first-child)::before{content:attr(data-l) ": ";color:var(--ink-3);font-weight:500}
+}
+@media print{.top,.site-foot,.doc-toc,.skip{display:none}.doc-grid{display:block}.summary{border:1px solid #999}}
 </style>
 </head>
 <body>
@@ -463,20 +493,176 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
 </header>
 <main id="main" class="doc">
   <div class="wrap doc-grid">
-    <aside class="doc-toc" aria-label="On this page"><p>On this page</p><a href="#s1">Two kinds of data, two roles</a><a href="#s2">What we collect</a><a href="#s3">Why we use it</a><a href="#s4">Cookies and browser storage</a><a href="#s5">Who we share it with</a><a href="#s6">Data outside India</a><a href="#s7">How long we keep it</a><a href="#s8">How we protect it</a><a href="#s9">Your rights</a><a href="#s10">Children</a><a href="#s11">Grievance Officer</a><a href="#s12">Changes to this policy</a></aside>
+    <nav class="doc-toc" aria-label="On this page"><p>On this page</p><a href="#who">1. Who we are</a><a href="#collect">2. Data we collect</a><a href="#use">3. How we use it</a><a href="#basis">4. Legal basis and consent</a><a href="#ai">5. AI processing</a><a href="#sharing">6. Sharing and sub-processors</a><a href="#transfer">7. Transfers outside India</a><a href="#retention">8. How long we keep it</a><a href="#security">9. Security</a><a href="#rights">10. Your rights</a><a href="#children">11. Children</a><a href="#cookies">12. Cookies and browser storage</a><a href="#changes">13. Changes to this policy</a><a href="#grievance">14. Grievance Officer</a><a href="#contact">15. Contact us</a></nav>
     <article class="prose">
       <h1>Privacy policy</h1>
-      <p class="meta">Last updated 28 September 2026</p>
-      <p class="lead">This policy explains what personal data FinCom handles, why, and the choices you have. FinCom is operated by <b>Yuvnav Services Private Limited</b> ("Yuvnav", "we", "us"), <span class="todo" title="To be filled in">[registered office address, Noida, Uttar Pradesh, PIN]</span>. It is written for the Digital Personal Data Protection Act, 2023 and its Rules, and the Information Technology Act, 2000.</p>
-      <section id="s1" class="doc-s"><h2>1. Two kinds of data, two roles</h2><p><b>Your account.</b> When you register, we collect the details needed to run your account. For this data we are the Data Fiduciary.</p>
-<p><b>Your clients' and your business's records.</b> Bills, bank statements, Tally books and similar records that you upload or connect are processed by us <b>on your behalf</b>. For these, you (the firm or business) are the Data Fiduciary and we are your Data Processor, under our <a href="dpa.html">data processing terms</a>. We use them only to provide FinCom to you.</p></section><section id="s2" class="doc-s"><h2>2. What we collect</h2><ul><li><b>Account details:</b> name, email, phone number (if given), firm name, role, and your password (stored only as a one-way hash by our sign-in provider).</li>
-<li><b>Records you process:</b> documents and data you upload or read from Tally, such as supplier and customer names, GSTIN, PAN, invoice details, bank transactions and salary figures.</li>
-<li><b>Usage and security records:</b> sign-in times, the browser and device used, IP addresses in our server logs, and the actions recorded in the audit trail.</li>
-<li><b>Payments:</b> amounts, dates and invoice details. We do not collect or store card numbers.</li>
-<li><b>Support:</b> what you write to us and any files you attach to a ticket.</li></ul></section><section id="s3" class="doc-s"><h2>3. Why we use it</h2><ul><li>To provide FinCom: read documents, work out tax, prepare returns and reports, and post to Tally at your instruction.</li>
-<li>To keep accounts secure, detect misuse and investigate incidents.</li><li>To bill you and meet tax and accounting law.</li>
-<li>To answer your questions and tell you about changes to the service. We do not send marketing without your consent.</li></ul>
-<p>We process account data on the basis of your consent given when you register and for the legitimate uses the law allows, such as meeting legal obligations. You may withdraw consent at any time; the service then stops for that account.</p></section><section id="s4" class="doc-s"><h2>4. Cookies and browser storage</h2><p>FinCom does not use advertising or tracking cookies, and the website has no third-party analytics. The app keeps a working copy of your firm's data in your browser's own storage so that work continues if the internet drops; you can remove it at sign-out on a shared computer. This storage is needed for the service and is never read by anyone else.</p></section><section id="s5" class="doc-s"><h2>5. Who we share it with</h2><p>We do not sell personal data. We share it only with service providers who process it for us under contract, listed on our <a href="security.html">security page</a>: data hosting in India, and, only when your firm chooses AI reading, Anthropic or Google to read a bill image. We may also disclose data when required by law, a court or a government authority.</p></section><section id="s6" class="doc-s"><h2>6. Data outside India</h2><p>Account and firm data are stored in India. When AI reading is chosen, the bill image is processed by the provider, which may be outside India, and is not kept by them for training. Transfers are made only to countries not restricted under the DPDP Act.</p></section><section id="s7" class="doc-s"><h2>7. How long we keep it</h2><p>We keep data while your account is active. When an account is closed, firm data is deleted within 90 days, and backups age out within a further 14 days. Our own billing records are kept for the period tax law requires (currently eight years). Audit trail entries are kept for at least 180 days as CERT-In requires.</p></section><section id="s8" class="doc-s"><h2>8. How we protect it</h2><p>Firm data is isolated by the database, encrypted in storage and in transit, and changes are recorded in an audit trail that cannot be edited. Details are on our <a href="security.html">security page</a>. If a breach affects your data, we tell your firm without delay and report to CERT-In and the Data Protection Board as the law requires.</p></section><section id="s9" class="doc-s"><h2>9. Your rights</h2><p>You may ask to see, correct or erase your personal data, withdraw consent, and nominate a person to act for you. For records processed on behalf of a firm, please ask the firm first; we help them respond. Write to <span class="todo" title="To be filled in">[privacy email]</span>. We reply within 30 days. If you are not satisfied, you may complain to the Data Protection Board of India.</p></section><section id="s10" class="doc-s"><h2>10. Children</h2><p>FinCom is for businesses and professionals. It is not meant for anyone under 18, and we do not knowingly collect their data.</p></section><section id="s11" class="doc-s"><h2>11. Grievance Officer</h2><p><span class="todo" title="To be filled in">[name of the Grievance Officer]</span>, Grievance Officer, Yuvnav Services Private Limited, <span class="todo" title="To be filled in">[registered office address, Noida, Uttar Pradesh, PIN]</span>. Email <span class="todo" title="To be filled in">[privacy email]</span>. We acknowledge complaints within 48 hours and aim to resolve them within 30 days.</p></section><section id="s12" class="doc-s"><h2>12. Changes to this policy</h2><p>If we change this policy in a way that matters, we tell account owners by email or in the app at least 15 days before the change takes effect.</p></section>
+      <p class="meta" data-dates="">Last updated 27 October 2026 <span aria-hidden="true">·</span> Effective from <span class="todo">[EFFECTIVE DATE]</span></p>
+      <p class="lead">This policy explains what personal data FinCom handles, why, who helps us handle it, how long we keep it, and the rights you have. FinCom is provided by <span class="todo">[LEGAL ENTITY NAME]</span> ("FinCom", "we", "us"), <span class="todo">[REGISTERED ADDRESS]</span>, CIN <span class="todo">[CIN]</span>. It is written for the Digital Personal Data Protection Act, 2023 (the "DPDP Act") and its Rules, and for the Information Technology Act, 2000 with the Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011 (the "SPDI Rules").</p>
+
+      <aside class="summary" aria-labelledby="summary-h">
+        <h2 id="summary-h">The short version</h2>
+        <ul>
+          <li><b>Two roles.</b> For your own account we decide how your data is used. For your clients' books, bills and returns, your firm decides and we process them only on its behalf.</li>
+          <li><b>We do not sell personal data</b>, show advertising, or use tracking or analytics cookies.</li>
+          <li><b>We do not train AI models on your data.</b> When you use an AI feature, only what that feature needs is sent to the AI provider, and PAN, GSTIN and similar identifiers are masked before a question goes to the assistant.</li>
+          <li><b>Stored in India.</b> Your firm's data is held in Mumbai. A few providers, such as the AI and email services, are outside India; they are listed in <a href="#sharing">section 6</a>.</li>
+          <li><b>Tally stays on your computer.</b> The FinCom Bridge reads Tally on your computer and sends FinCom only the companies you connect.</li>
+          <li><b>You stay in control.</b> You can see, correct, export and erase your data, and complain to our Grievance Officer or the Data Protection Board of India.</li>
+        </ul>
+      </aside>
+
+      <section id="who" class="doc-s"><h2>1. Who we are and our role</h2>
+        <p>FinCom is online software for chartered accountant firms, tax professionals and businesses in India. It reads bills and bank statements, keeps a copy of Tally books in step, works out TDS and GST, prepares returns and reports, and posts entries back to Tally at your instruction.</p>
+        <p><b>Your account (we are the Data Fiduciary).</b> When you or your firm's people register and use FinCom, we decide why and how that account data is processed. For this data we are the Data Fiduciary under the DPDP Act and the body corporate under the SPDI Rules.</p>
+        <p><b>Your clients' data (your firm is the Data Fiduciary; we are its Data Processor).</b> The books, bills, bank statements, returns, payroll and other records your firm uploads or connects contain personal data of your clients and of their customers, suppliers and employees. Your firm decides why that data is processed. We process it only on your firm's behalf and on its instructions, under our <a href="dpa.html">data processing terms</a>. If you are a client of a firm that uses FinCom, please contact that firm first about your data; we will help it respond.</p>
+      </section>
+
+      <section id="collect" class="doc-s"><h2>2. Data we collect</h2>
+        <h3>Data you give us</h3>
+        <ul>
+          <li><b>Account details:</b> your name, email address, firm name, role in the firm (owner, staff or view-only), and phone number if you give one. Your password is stored only as a one-way hash by our sign-in provider. If you sign in with Google or Microsoft, we receive your name and email address from them.</li>
+          <li><b>Two-step sign-in:</b> if you turn it on, a secret shared with your authenticator app, held by our sign-in provider.</li>
+          <li><b>Support tickets:</b> what you write to us and any files you attach.</li>
+          <li><b>Payments:</b> the amounts you add to your credit, dates, GST invoice details and your firm's GSTIN. We do not collect card or bank login details; payments are made by transfer to our bank account.</li>
+        </ul>
+        <h3>Data your firm processes in FinCom (on your firm's behalf)</h3>
+        <ul>
+          <li><b>Books from Tally:</b> through the FinCom Bridge or a Day Book file you upload: companies, ledgers, vouchers, parties with their GSTIN, PAN and addresses, balances, and earlier versions of entries that changed.</li>
+          <li><b>Bills and bank statements:</b> the files you upload and the details read from them, such as invoice numbers, amounts, party names, GSTIN, PAN and bank transactions.</li>
+          <li><b>GST and TDS data:</b> returns, GSTR-2B and other data fetched from the GST portal at your request, challans, deductees and their PAN, certificates and notices. If you choose to save a client's GST portal or e-invoice login, the password is kept encrypted in a secrets vault and is never shown again.</li>
+          <li><b>Payroll:</b> for the Tally companies that use payroll, each employee's name, PAN, designation, dates of joining and leaving, and salary paid. Employees' bank account numbers, IFSC codes and bank names are removed before anything is stored. FinCom does not read employees' date of birth or Aadhaar from Tally.</li>
+          <li><b>Zoho Books:</b> only if your firm connects a client's Zoho Books organisation, the same kinds of records from Zoho.</li>
+          <li><b>Calls, captions and voice typing:</b> if you use calls inside FinCom, the call's participants (members, and guests by name and email), chat messages and files shared in the call. A recording, its transcript and summary are made only when recording is allowed for that client (it is off unless the firm's owner turns it on) and after every participant has been shown the recording notice. Live captions and voice typing send short audio clips for speech-to-text; captions are kept only while the call is being recorded.</li>
+          <li><b>Questions to the FinCom Assistant:</b> the question, the files you attach, and a log of each question (its text, the tools used, tokens and cost). Answers may be cached so the same question on the same books is not sent to the AI again.</li>
+        </ul>
+        <h3>Data collected automatically</h3>
+        <ul>
+          <li><b>Usage and security records:</b> sign-in times, the audit trail of actions such as posting to Tally, deleting entries and changes to people and credit, and counts of AI and reading use for billing.</li>
+          <li><b>Device and network:</b> your IP address and browser details in our providers' server logs. For limits against abuse we keep only a hash of the IP address, not the address itself.</li>
+          <li><b>The FinCom Bridge:</b> its version, the connection steps it reports, and the Tally companies it is linked to. Crash reports are sent only if you turn them on in the Bridge's settings.</li>
+          <li><b>Error reports:</b> on our test site only, error reports with personal details scrubbed out (see <a href="#sharing">Sentry</a>).</li>
+        </ul>
+      </section>
+
+      <section id="use" class="doc-s"><h2>3. How we use it</h2>
+        <ul>
+          <li>To provide FinCom: read documents, keep your books in step, work out tax, prepare returns, reports and letters, fetch data from government portals at your request, post entries to Tally, and run calls and the assistant.</li>
+          <li>To keep accounts secure: check sign-ins, prevent abuse and bots, investigate incidents, and keep an audit trail.</li>
+          <li>To bill you: work out monthly fees and per-use charges and issue GST invoices.</li>
+          <li>To support you: answer tickets and tell you about changes to the service or these terms.</li>
+          <li>To keep FinCom working well: find and fix faults, using scrubbed error reports and usage counts.</li>
+          <li>To meet legal obligations, such as tax, company law and CERT-In reporting, and lawful requests from authorities.</li>
+        </ul>
+        <p>We do not sell personal data, use it for advertising, or build profiles of your clients. We do not send marketing messages without your consent.</p>
+      </section>
+
+      <section id="basis" class="doc-s"><h2>4. Legal basis and consent</h2>
+        <p><b>Account data.</b> We process it on the basis of the consent you give when you register, through this notice, and for the legitimate uses the DPDP Act allows, such as meeting a legal obligation or responding to a medical emergency or legal process. You may withdraw consent at any time by writing to the Grievance Officer; we then stop processing, except where the law requires us to keep data, and the account closes.</p>
+        <p><b>Client data.</b> Your firm, as Data Fiduciary, is responsible for having a lawful basis, including any notice and consent its clients and their employees need, before uploading or connecting their data. Our <a href="terms.html#firm-data">terms of service</a> say more.</p>
+        <p><b>Sensitive personal data.</b> Under the SPDI Rules, passwords and financial information such as bank statements are sensitive personal data or information. We collect them only for the purposes above, with your consent, and protect them as described in <a href="#security">section 9</a>.</p>
+      </section>
+
+      <section id="ai" class="doc-s"><h2>5. AI processing</h2>
+        <p>Some FinCom features use artificial intelligence. The firm's owner can switch the assistant off for the whole firm, and can keep chosen clients away from AI help in Settings.</p>
+        <ul>
+          <li><b>Reading bills.</b> Bills are first read by free text recognition. A bill image is sent to Anthropic's Claude or to Google Cloud Vision only when your firm's reading settings use them.</li>
+          <li><b>The FinCom Assistant and AI help.</b> Questions about a client's books, suggestions for ledgers the rules could not settle, pairing GST invoices, drafting replies to notices, and call summaries are handled by Anthropic's Claude. Before a question goes to Claude, PAN, GSTIN, TAN, Aadhaar and phone numbers, and the names of the client's parties, are replaced by tokens, and put back only inside FinCom. A notice you attach is sent as it is. The assistant may search the web and read public court and tax department pages to check the cases it cites.</li>
+          <li><b>Speech.</b> Voice typing and live captions send short audio clips to Groq's speech-to-text service. Captions you ask to see in another language are translated by Groq.</li>
+        </ul>
+        <p><b>No training on your data.</b> FinCom does not use your data or your clients' data to train AI models. Our AI providers process it through their business APIs, whose terms say that data sent through them is not used to train their models. <span class="todo">[OWNER TO CONFIRM: each AI provider's current API terms on training and retention, including Groq on the plan FinCom uses]</span></p>
+        <p><b>AI can be wrong.</b> AI output in FinCom is a suggestion for a professional to check. It is not a decision about you, and nothing is filed, paid or posted to Tally by AI alone.</p>
+      </section>
+
+      <section id="sharing" class="doc-s"><h2>6. Sharing and sub-processors</h2>
+        <p>We share personal data only with the service providers below, who process it for us under contract and only for the service they provide, and when the law requires it. Within your firm, the firm's owner decides who has access and what each person can do.</p>
+        <div class="tablewrap"><table class="units subp">
+          <thead><tr><th scope="col">Provider</th><th scope="col">What for</th><th scope="col">Data it handles</th><th scope="col">Where</th></tr></thead>
+          <tbody>
+            <tr><td data-l="Provider">Supabase Inc.</td><td data-l="What for">Database, sign-in, file storage and server functions</td><td data-l="Data">All account and firm data</td><td data-l="Where">India (AWS Mumbai region)</td></tr>
+            <tr><td data-l="Provider">Cloudflare, Inc.</td><td data-l="What for">Serving the website and app, security checks, and audio and video for calls</td><td data-l="Data">IP address and browser details; call audio and video in transit</td><td data-l="Where">Global network</td></tr>
+            <tr><td data-l="Provider">Anthropic PBC</td><td data-l="What for">AI: reading bills, the assistant, AI help and call summaries</td><td data-l="Data">The bill, question or text sent, with identifiers masked as in section 5</td><td data-l="Where">United States</td></tr>
+            <tr><td data-l="Provider">Google LLC (Cloud Vision)</td><td data-l="What for">Text recognition of bill pages, when your settings use it</td><td data-l="Data">Page images</td><td data-l="Where">Global</td></tr>
+            <tr><td data-l="Provider">Groq, Inc.</td><td data-l="What for">Speech-to-text for voice typing and captions, and caption translation</td><td data-l="Data">Short audio clips and the words heard</td><td data-l="Where">United States</td></tr>
+            <tr><td data-l="Provider">Resend</td><td data-l="What for">Sending email: support tickets, scheduled reports and meeting invitations</td><td data-l="Data">Names, email addresses and the message</td><td data-l="Where">United States</td></tr>
+            <tr><td data-l="Provider">Functional Software, Inc. (Sentry)</td><td data-l="What for">Error reports from our test site, and from the Bridge if you turn them on</td><td data-l="Data">The error and where it happened, with personal details scrubbed out</td><td data-l="Where">United States</td></tr>
+            <tr><td data-l="Provider">TaxPro GSP and FYN (Fynamics), GST Suvidha Providers</td><td data-l="What for">Connecting to the GST portal, e-invoice and e-way bill systems at your request</td><td data-l="Data">GSTIN, the taxpayer's portal session and the returns fetched or filed</td><td data-l="Where">India</td></tr>
+            <tr><td data-l="Provider">Zoho Corporation</td><td data-l="What for">Only if your firm connects a client's Zoho Books</td><td data-l="Data">That organisation's books</td><td data-l="Where">India (Zoho's India data centre)</td></tr>
+            <tr><td data-l="Provider">GitHub, Inc. (Microsoft)</td><td data-l="What for">Hosting FinCom's code and some of its web files</td><td data-l="Data">No customer data</td><td data-l="Where">Global</td></tr>
+          </tbody>
+        </table></div>
+        <p>Signing in with Google or Microsoft is governed by those companies' own privacy policies. If you start a remote-help session, the remote-desktop software it uses connects your computer to our support person; FinCom records who started it, for which client, and when. <span class="todo">[OWNER TO CONFIRM: the remote-help relay server and its location, and the host of the FYN relay server]</span></p>
+        <p>We tell account owners at least 15 days before adding or replacing a sub-processor that handles client data. We may also disclose data when a law, court order or government authority requires it, or to protect the rights and safety of our users or the public. If FinCom is merged or sold, data would pass to the new owner only under this policy.</p>
+      </section>
+
+      <section id="transfer" class="doc-s"><h2>7. Transfers outside India</h2>
+        <p>Your firm's data is stored in India. Some providers in <a href="#sharing">section 6</a> process data outside India, mainly in the United States: the AI, speech, email and error-report services, and Cloudflare's global network. We send them only what the feature you use needs. Under section 16 of the DPDP Act, we do not transfer personal data to any country the Government of India restricts by notification, and we require each provider to protect the data with security at least as strong as this policy.</p>
+      </section>
+
+      <section id="retention" class="doc-s"><h2>8. How long we keep it</h2>
+        <ul>
+          <li><b>While your account is open,</b> we keep your firm's data so that FinCom can work. Items you delete go to "Deleted", from where they can be restored; earlier versions of Tally entries that changed are kept with the books so that the history is complete.</li>
+          <li><b>Backups:</b> a nightly copy of each firm's data, keeping the latest 14, and our database provider's daily backups.</li>
+          <li><b>Call recordings and transcripts:</b> 90 days for a client's call and one year for a class, unless the firm's owner sets a different period (between 7 days and 10 years). After that the recording is marked deleted and is no longer available in FinCom. <span class="todo">[OWNER TO CONFIRM: when marked recordings are removed from storage]</span></li>
+          <li><b>Audit trail:</b> at least 180 days, as the CERT-In Directions of 2022 require, and longer while the account is open.</li>
+          <li><b>Billing records:</b> for the period tax and company law require, currently eight years.</li>
+          <li><b>After you close your account:</b> you can export your data for 30 days. We then delete it within <span class="todo">[RETENTION PERIOD AFTER CLOSURE, e.g. 90 days]</span>, and from backups as they age out, unless the law requires us to keep it.</li>
+          <li><b>Assistant logs and support tickets:</b> <span class="todo">[RETENTION PERIOD FOR ASSISTANT LOGS AND TICKETS]</span>.</li>
+        </ul>
+      </section>
+
+      <section id="security" class="doc-s"><h2>9. Security</h2>
+        <ul>
+          <li><b>Each firm walled off.</b> Row-level security in the database refuses any request for another firm's rows, whatever the screen asks for.</li>
+          <li><b>Encryption.</b> Data is encrypted in transit (TLS) and at rest. Portal passwords and API keys are kept in an encrypted vault and are never sent to your browser.</li>
+          <li><b>Sign-in.</b> Passwords of at least 10 characters, checked against known leaks; limits on repeated attempts; optional two-step sign-in with an authenticator app; automatic sign-out after a period without use.</li>
+          <li><b>Roles.</b> The firm's owner adds and removes people and decides who may change data and who may only look.</li>
+          <li><b>The FinCom Bridge.</b> It listens only on your own computer, answers only FinCom with a paired key, and never opens Tally to the internet.</li>
+          <li><b>Audit trail.</b> Sign-ins, posting to or deleting from Tally, and changes to people and credit are recorded in a trail that cannot be edited.</li>
+          <li><b>Standards.</b> We follow reasonable security practices under the SPDI Rules and are working toward ISO/IEC 27001 certification; we are not yet certified. See our <a href="security.html">security page</a>.</li>
+        </ul>
+        <p><b>If something goes wrong.</b> If a personal data breach affects your data, we will tell the affected firm without delay, report to the Data Protection Board of India and to CERT-In within the times the law sets, and tell affected people as the DPDP Rules require.</p>
+      </section>
+
+      <section id="rights" class="doc-s"><h2>10. Your rights</h2>
+        <p>Under the DPDP Act and the SPDI Rules you have the right to:</p>
+        <ul>
+          <li><b>Access:</b> a summary of the personal data we process about you and how we process it, and who we have shared it with;</li>
+          <li><b>Correction and completion:</b> have inaccurate or incomplete data corrected or completed, and data updated;</li>
+          <li><b>Erasure:</b> have data erased when it is no longer needed for the purpose, unless the law requires us to keep it;</li>
+          <li><b>Withdraw consent</b> at any time, as easily as you gave it; this does not affect processing before withdrawal;</li>
+          <li><b>Grievance redressal:</b> complain to our Grievance Officer, and if you are not satisfied, to the Data Protection Board of India;</li>
+          <li><b>Nominate</b> another person to exercise these rights for you in the event of your death or incapacity.</li>
+        </ul>
+        <p>Much of this you can do yourself: people and firm details in Settings, and exports from each page. Otherwise write to <span class="todo">[CONTACT EMAIL FOR PRIVACY REQUESTS]</span>. We may need to confirm who you are before acting. For data in a firm's books, please ask that firm first; we help it respond. When you exercise these rights, please also meet your duties under section 15 of the DPDP Act, such as not filing false or frivolous complaints.</p>
+      </section>
+
+      <section id="children" class="doc-s"><h2>11. Children</h2>
+        <p>FinCom is for firms, professionals and businesses. You must be 18 or older to have an account, and we do not knowingly collect personal data of children for our own purposes. A firm's records may include data of a minor, for example a minor's income clubbed with a parent's; the firm is responsible for the verifiable consent of the parent or guardian that the DPDP Act requires.</p>
+      </section>
+
+      <section id="cookies" class="doc-s"><h2>12. Cookies and browser storage</h2>
+        <p>FinCom does not use advertising, tracking or analytics cookies, and the website has no third-party analytics. FinCom itself sets no cookies; Cloudflare may set a strictly necessary cookie for its security checks.</p>
+        <p>The app uses your browser's own storage (local storage and IndexedDB) to keep you signed in, to remember settings such as your choices on screen, and to keep a working copy of your firm's data so that work continues when the internet drops. This storage stays in your browser and is not read by anyone else. On a shared computer, sign out and clear the browser's data for FinCom.</p>
+      </section>
+
+      <section id="changes" class="doc-s"><h2>13. Changes to this policy</h2>
+        <p>We will update this policy when our practices or the law change. If a change matters, we will tell account owners by email or in the app at least 15 days before it takes effect and, where the law requires, ask for consent again. The date at the top shows the latest version.</p>
+      </section>
+
+      <section id="grievance" class="doc-s"><h2>14. Grievance Officer</h2>
+        <p>Under the DPDP Act, the IT Act and the SPDI Rules, our Grievance Officer is:</p>
+        <div class="box">
+          <p><b><span class="todo">[GRIEVANCE OFFICER NAME]</span></b>, Grievance Officer</p>
+          <p><span class="todo">[LEGAL ENTITY NAME]</span>, <span class="todo">[REGISTERED ADDRESS]</span></p>
+          <p>Email <span class="todo">[GRIEVANCE OFFICER EMAIL]</span> <span aria-hidden="true">·</span> Phone <span class="todo">[GRIEVANCE OFFICER PHONE]</span></p>
+          <p>Monday to Saturday, <span class="todo">[WORKING HOURS]</span> India time, except public holidays.</p>
+        </div>
+        <p>We acknowledge a complaint within 48 hours and resolve it within 30 days, within the one month the SPDI Rules allow and the periods set by the DPDP Rules. If you are not satisfied with our answer, you may complain to the Data Protection Board of India.</p>
+      </section>
+
+      <section id="contact" class="doc-s"><h2>15. Contact us</h2>
+        <p>For anything else about this policy, use Help inside FinCom or write to <span class="todo">[CONTACT EMAIL]</span>. Postal address: <span class="todo">[LEGAL ENTITY NAME]</span>, <span class="todo">[REGISTERED ADDRESS]</span>. See also our <a href="terms.html">terms of service</a>, <a href="dpa.html">data processing terms</a> and <a href="security.html">security page</a>.</p>
+      </section>
     </article>
   </div>
 </main>
@@ -489,7 +675,7 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
     </div>
     <div><h3>Product</h3><a href="index.html#insight">MIS and audit</a><a href="index.html#what">Features</a><a href="pricing.html">Pricing</a><a href="../#signin">Sign in</a><a href="../#register">Register</a></div>
     <div><h3>Trust</h3><a href="security.html">Security and certification</a><a href="security.html#disclose">Report a security issue</a><a href="dpa.html">Data processing terms</a></div>
-    <div><h3>Legal</h3><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a><a href="refund.html">Refunds and cancellation</a><a href="contact.html">Contact and grievances</a></div>
+    <div><h3>Legal</h3><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of service</a><a href="refund.html">Refunds and cancellation</a><a href="contact.html">Contact and grievances</a></div>
   </div>
   <div class="wrap legal-line"><p>&copy; 2026 Yuvnav Services Private Limited. All rights reserved. CIN <span class="todo" title="To be filled in">[CIN]</span>. Tally and TallyPrime are trademarks of Tally Solutions Private Limited; FinCom is not connected with Tally Solutions.</p></div>
 </footer>

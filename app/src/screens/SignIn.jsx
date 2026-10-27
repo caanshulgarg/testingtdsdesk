@@ -12,10 +12,14 @@ import { staleReload } from "../staleChunk.js";
 // the frame of every page before sign-in (sign in, create your account, choose your password, two-step sign-in; the owner,
 // 27-Oct-2026: "make it professional"): a centred card with the FinCom mark and name on top, one heading, the form, the
 // switch to the other page; under the card © FinCom · Privacy · Terms (the website's pages, welcome/). No other words.
+// The pages are at the site's root (cloudflare/build-site.sh copies welcome/ there) and the app one folder down
+// (/review/, /next/; at the root on live, where ../ stays at the root): hence ../welcome/, opened in a new tab so a
+// half-filled form is kept (27-Oct-2026, the owner: "Create privacy and terms page in user panel").
+export const Legal = ({ to, children }) => <a href={"../welcome/" + to + ".html"} target="_blank" rel="noopener">{children}</a>;
 export const Box = ({ children }) => <div className="signin"><div className="signin-box">
   <div className="signin-brand"><span className="side-mark" aria-hidden="true">F</span><span className="signin-brand-name">FinCom</span></div>
   {children}</div>
-  <footer className="signin-foot"><span>© FinCom</span><span aria-hidden="true">·</span><a href="welcome/privacy.html">Privacy</a><span aria-hidden="true">·</span><a href="welcome/terms.html">Terms</a></footer></div>;
+  <footer className="signin-foot"><span>© FinCom</span><span aria-hidden="true">·</span><Legal to="privacy">Privacy</Legal><span aria-hidden="true">·</span><Legal to="terms">Terms</Legal></footer></div>;
 // errors under the box they are about (S.signinErr: {email: "Enter your email.", ...}), set by the page before anything
 // is sent; what the server answers (a wrong password, a locked account) is said under the form (Err)
 const clearErr = (k) => { const e = S.signinErr; if (e && e[k]) { S.signinErr = Object.assign({}, e, { [k]: "" }); render(); } };
@@ -120,7 +124,8 @@ function SignUp() {
         : <><EmailLine /><Field label="Your name" k="name" fk="suname" auto="name" /><Field label="Firm name" k="firm" fk="sufirm" auto="organization" />
           <Field label="Password" k="password" type="password" fk="cloudpw" auto="new-password" hint="10 characters or more, with letters and digits." /></>}</Step>
       <BotBox action="signup" />
-      <Submit act="cloudSignUp" busy={st.busy}>{more ? "Create account" : "Continue"}</Submit><Err /></form>
+      <Submit act="cloudSignUp" busy={st.busy}>{more ? "Create account" : "Continue"}</Submit><Err />
+      <p className="signin-agree" data-agree="">By creating an account you agree to the <Legal to="terms">Terms of service</Legal> and <Legal to="privacy">Privacy policy</Legal>.</p></form>
     <div className="signin-switch">Already have an account? <Switch act="showSignIn">Sign in</Switch></div></Box>;
 }
 

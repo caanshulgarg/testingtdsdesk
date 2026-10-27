@@ -1395,6 +1395,8 @@ ol.post-import li{display:list-item;margin:3px 0;overflow-wrap:anywhere}
 :root[data-theme="dark"] .toast .toast-act{background:rgb(0 0 0 / .08);border-color:rgb(0 0 0 / .25)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .toast .toast-act{background:rgb(0 0 0 / .08);border-color:rgb(0 0 0 / .25)}}
 .about-line{margin:24px 0 0;font-size:11.5px;color:var(--muted);text-align:right}
+.legal-links{margin:8px 0 0;font-size:12px;color:var(--muted);text-align:right}
+.about-line+.legal-links{margin-top:4px}
 .msg-details{display:inline}.msg-details summary{display:inline;cursor:pointer;color:var(--brand);text-decoration:underline;font-size:12.5px}.msg-details[open] span{display:block;font-size:12px;color:var(--muted);word-break:break-word}
 /* round 2 of the UI pass (04-Oct-2026), K6: the one list table (app/src/parts/ListTable.jsx). The box scrolls and the
    header stays in view; a header sorts on a click and the arrow shows which; the foot holds the count and totals */

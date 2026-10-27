@@ -107,7 +107,7 @@ with sync_playwright() as pw:
     ok(c["inputW"] > 250 and abs(c["btnW"] - c["inputW"]) <= 1, "the box and the button full width (%d, %d)" % (c["inputW"], c["btnW"]))
     ok(not c["paras"], "no paragraphs on the card (%s)" % c["paras"])
     ok(A.evaluate(ACTIVE) == "email", "the email box has the focus")
-    ok(dict(c["foot"]) == {"Privacy": "welcome/privacy.html", "Terms": "welcome/terms.html"} and "© FinCom" in c["footText"], "the footer: © FinCom · Privacy · Terms (%s)" % c["foot"])
+    ok(dict(c["foot"]) == {"Privacy": "../welcome/privacy.html", "Terms": "../welcome/terms.html"} and "© FinCom" in c["footText"], "the footer: © FinCom · Privacy · Terms (%s)" % c["foot"])
 
     print("2. Continue, Edit, Enter")
     A.click(BTN); A.wait_for_timeout(300)
@@ -209,7 +209,7 @@ with sync_playwright() as pw:
     ok(not left, "none of the removed sentences on the sign-up page (%s)" % left)
     ok(c["h1"] == ["Create your FinCom account"] and c["brand"] == "FinCom", "one heading: Create your FinCom account, under the FinCom mark (%s)" % c["h1"])
     ok(c["boxes"] == ["email"] and c["btnText"] == "Continue", "first the email and Continue (%s)" % c["boxes"])
-    ok(B.locator('#app [data-act="showSignIn"]').count() == 1 and dict(c["foot"]).get("Privacy") == "welcome/privacy.html", "a link to sign in, and the same footer")
+    ok(B.locator('#app [data-act="showSignIn"]').count() == 1 and dict(c["foot"]).get("Privacy") == "../welcome/privacy.html", "a link to sign in, and the same footer")
     B.fill('#app input[data-cloud="email"]', "asha@new"); B.press('#app input[data-cloud="email"]', "Enter"); B.wait_for_timeout(300)
     ok("valid email" in B.evaluate(FIELD_ERR, "email")["text"], "a bad email format: said under the box")
     B.fill('#app input[data-cloud="email"]', "asha@new.test"); B.press('#app input[data-cloud="email"]', "Enter"); B.wait_for_timeout(400)

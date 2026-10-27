@@ -1,12 +1,19 @@
 <!doctype html>
+<!--
+  DRAFT FOR LEGAL REVIEW (27-Oct-2026). Written for FinCom's owner to give to a lawyer before it is relied on.
+  Every fact FinCom must supply is a visible [PLACEHOLDER] (class "todo"); none was invented. Our other welcome pages
+  (footer, refund.html, dpa.html, contact.html) name Yuvnav Services Private Limited, Noida, and the old terms named
+  Noida / Gautam Buddh Nagar for arbitration and courts: the owner to confirm the entity, city and seat.
+  The data practices and the sub-processor list were checked against the code on staging-next (263f3f6e1).
+-->
 <html lang="en-IN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'sha256-bq+4nuaAd9d9S583L2sJ9gZeB6INsvkzY+3BkE1efIY='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>Terms of use: FinCom</title>
-<meta name="description" content="The terms for using FinCom, operated by Yuvnav Services Private Limited, Noida.">
+<title>Terms of service: FinCom</title>
+<meta name="description" content="The terms for using FinCom, software for chartered accountant firms and businesses in India.">
 <meta name="theme-color" content="#0f3d33">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9h11M11 9v14M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preload" href="fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -447,6 +454,29 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
 .grid-p>*:nth-child(4n+2) h3 .ic,.cbox:nth-child(4n+2) .ic{--c1:#a78bfa;--c2:#7c3aed}
 .grid-p>*:nth-child(4n+3) h3 .ic,.cbox:nth-child(4n+3) .ic{--c1:#38bdf8;--c2:#2563eb}
 .grid-p>*:nth-child(4n+4) h3 .ic,.cbox:nth-child(4n+4) .ic{--c1:#fbbf24;--c2:#ea580c}
+/* legal pages (27-Oct-2026): the short version, sub-heads, the sub-processor table, a TOC that scrolls on its own */
+.summary{margin:8px 0 28px;padding:20px 24px;border-radius:20px;background:var(--surface-2);border:1px solid var(--line)}
+.summary h2{margin:0 0 6px!important;font-size:18px!important}
+.summary ul{margin:0}
+.prose h3{font:600 17px/1.35 "Plex Sans",sans-serif;margin:20px 0 4px;color:var(--ink)}
+.prose .box{margin:12px 0}
+.prose .tablewrap{margin:16px 0}
+table.subp{font-size:14.5px}
+.subp td:first-child{font-weight:600;color:var(--ink)}
+.todo{overflow-wrap:anywhere}
+.doc-toc{max-height:calc(100vh - 120px);overflow:auto;overscroll-behavior:contain}
+@media (max-width:1023px){.doc-toc{max-height:none;overflow:visible}}
+@media (max-width:767px){
+  .summary{padding:16px 18px}
+  .prose .tablewrap{overflow:visible;border:0;background:none;border-radius:0}
+  table.subp,.subp tbody,.subp tr,.subp td{display:block;width:100%}
+  .subp thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .subp tr{margin:0 0 12px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+  .units.subp tbody tr+tr td{border-top:0}
+  .units.subp td{padding:3px 0}
+  .subp td:not(:first-child)::before{content:attr(data-l) ": ";color:var(--ink-3);font-weight:500}
+}
+@media print{.top,.site-foot,.doc-toc,.skip{display:none}.doc-grid{display:block}.summary{border:1px solid #999}}
 </style>
 </head>
 <body>
@@ -463,12 +493,173 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
 </header>
 <main id="main" class="doc">
   <div class="wrap doc-grid">
-    <aside class="doc-toc" aria-label="On this page"><p>On this page</p><a href="#s1">The service</a><a href="#s2">Your account</a><a href="#s3">Professional responsibility</a><a href="#s4">Your data</a><a href="#s5">Fees and payment</a><a href="#s6">Acceptable use</a><a href="#s7">Third-party services</a><a href="#s8">Availability and support</a><a href="#s9">Our intellectual property</a><a href="#s10">Suspension and ending</a><a href="#s11">Limits of liability</a><a href="#s12">Indemnity</a><a href="#s13">Confidentiality</a><a href="#s14">Law and disputes</a><a href="#s15">Changes to these terms</a><a href="#s16">Contact</a></aside>
+    <nav class="doc-toc" aria-label="On this page"><p>On this page</p><a href="#acceptance">1. Accepting these terms</a><a href="#eligibility">2. Who can use FinCom</a><a href="#accounts">3. Accounts and security</a><a href="#firm-data">4. Your data and your clients' consent</a><a href="#billing">5. Plans, credit and billing</a><a href="#acceptable-use">6. Acceptable use</a><a href="#ai">7. AI features and outputs</a><a href="#third-party">8. Government portals and other services</a><a href="#bridge">9. The FinCom Bridge</a><a href="#ip">10. Intellectual property</a><a href="#feedback">11. Feedback</a><a href="#confidentiality">12. Confidentiality</a><a href="#termination">13. Suspension and termination</a><a href="#export">14. Your data when you leave</a><a href="#disclaimers">15. Disclaimers</a><a href="#liability">16. Limitation of liability</a><a href="#indemnity">17. Indemnity</a><a href="#law">18. Governing law and jurisdiction</a><a href="#disputes">19. Dispute resolution</a><a href="#changes">20. Changes to these terms</a><a href="#general">21. General</a><a href="#contact">22. Contact us</a></nav>
     <article class="prose">
-      <h1>Terms of use</h1>
-      <p class="meta">Last updated 28 September 2026</p>
-      <p class="lead">These terms are an agreement between you and <b>Yuvnav Services Private Limited</b>, <span class="todo" title="To be filled in">[registered office address, Noida, Uttar Pradesh, PIN]</span> ("Yuvnav", "we"), for the use of FinCom. By registering or using FinCom you accept them on behalf of yourself and the firm or business you represent.</p>
-      <section id="s1" class="doc-s"><h2>1. The service</h2><p>FinCom is software that reads financial documents, works out TDS and GST, prepares returns and reports, reviews books and posts entries to TallyPrime at your instruction. Features may change as the service improves; we will not remove a paid feature during a period you have already paid for without giving a pro-rata credit.</p></section><section id="s2" class="doc-s"><h2>2. Your account</h2><p>You must be 18 or over and able to contract. Keep passwords private and use one login per person. You are responsible for what is done under your firm's account and for the people you give access to. Tell us at once if you suspect misuse.</p></section><section id="s3" class="doc-s"><h2>3. Professional responsibility</h2><p><b>FinCom helps you work; it does not replace your professional judgement.</b> Figures, tax sections, rates, returns, audit findings and Tally entries it proposes must be checked by you or your chartered accountant before they are filed, paid or relied on. FinCom is not tax, legal or audit advice. You remain responsible for your filings, payments, books and statutory compliance.</p></section><section id="s4" class="doc-s"><h2>4. Your data</h2><p>You own the data you upload or read into FinCom. You give us permission to process it only to provide the service, as set out in the <a href="privacy.html">privacy policy</a> and the <a href="dpa.html">data processing terms</a>. You confirm you have the right to give us that data, including any consent your clients or staff need to give.</p></section><section id="s5" class="doc-s"><h2>5. Fees and payment</h2><p>Fees are as shown on the <a href="pricing.html">pricing page</a> or agreed in writing, and exclude GST. They are paid in advance from a prepaid credit balance. We may change prices by giving at least 30 days' notice; the change applies from the next month. Refunds are covered by the <a href="refund.html">refunds and cancellation policy</a>.</p></section><section id="s6" class="doc-s"><h2>6. Acceptable use</h2><p>Do not use FinCom to break the law or anyone's rights; to upload malware; to try to reach another firm's data or our systems beyond your account; to overload or reverse engineer the service; or to resell it without our written agreement. Security research is welcome within the rules on our <a href="security.html#disclose">security page</a>.</p></section><section id="s7" class="doc-s"><h2>7. Third-party services</h2><p>FinCom works with services we do not control, such as TallyPrime, the GST portal and AI reading providers. Their availability and results are not guaranteed by us, and your use of them is also governed by their own terms. Tally and TallyPrime are trademarks of Tally Solutions Private Limited, which is not connected with FinCom.</p></section><section id="s8" class="doc-s"><h2>8. Availability and support</h2><p>We aim to keep FinCom available at all times and to announce planned maintenance in advance, but we do not promise uninterrupted service. Support is given through Help inside the app and by email on working days.</p></section><section id="s9" class="doc-s"><h2>9. Our intellectual property</h2><p>FinCom, its software, design and content belong to Yuvnav. You get a limited, non-transferable right to use it for your firm or business while your account is in good standing.</p></section><section id="s10" class="doc-s"><h2>10. Suspension and ending</h2><p>You may stop using FinCom and close your account at any time. We may suspend an account that breaks these terms or leaves fees unpaid, after notice unless the risk is urgent. After closing, you can export your data for 30 days; after that it is deleted as described in the privacy policy.</p></section><section id="s11" class="doc-s"><h2>11. Limits of liability</h2><p>To the extent the law allows, FinCom is provided as is, and we are not liable for indirect or consequential loss, lost profits, penalties or interest arising from filings, or loss caused by your failure to check the output. Our total liability for any claim is limited to the fees you paid us in the 12 months before the claim.</p></section><section id="s12" class="doc-s"><h2>12. Indemnity</h2><p>You will compensate us for claims by third parties arising from data you had no right to upload or from your breach of these terms.</p></section><section id="s13" class="doc-s"><h2>13. Confidentiality</h2><p>Each of us keeps the other's confidential information private and uses it only for this agreement. Our staff and service providers are bound by confidentiality obligations.</p></section><section id="s14" class="doc-s"><h2>14. Law and disputes</h2><p>These terms are governed by the laws of India. Both sides will first try to settle a dispute by discussion for 30 days. If that fails, it will be settled by a sole arbitrator under the Arbitration and Conciliation Act, 1996, seated at Noida, in English. Subject to that, the courts at Gautam Buddh Nagar, Uttar Pradesh have jurisdiction.</p></section><section id="s15" class="doc-s"><h2>15. Changes to these terms</h2><p>We may update these terms. Material changes are told to account owners at least 15 days in advance; continuing to use FinCom after that means you accept them.</p></section><section id="s16" class="doc-s"><h2>16. Contact</h2><p>Yuvnav Services Private Limited, <span class="todo" title="To be filled in">[registered office address, Noida, Uttar Pradesh, PIN]</span>. Email <span class="todo" title="To be filled in">[support email]</span>. Phone <span class="todo" title="To be filled in">[phone]</span>. GSTIN <span class="todo" title="To be filled in">[GSTIN]</span>.</p></section>
+      <h1>Terms of service</h1>
+      <p class="meta" data-dates="">Last updated 27 October 2026 <span aria-hidden="true">·</span> Effective from <span class="todo">[EFFECTIVE DATE]</span></p>
+      <p class="lead">These terms are an agreement between you and <span class="todo">[LEGAL ENTITY NAME]</span> ("FinCom", "we", "us"), <span class="todo">[REGISTERED ADDRESS]</span>, CIN <span class="todo">[CIN]</span>, for the use of FinCom: the website, the web app, the FinCom Bridge and the services we provide with them. Please read them with our <a href="privacy.html">privacy policy</a>, <a href="dpa.html">data processing terms</a> and <a href="refund.html">refunds and cancellation policy</a>, which form part of them.</p>
+
+      <aside class="summary" aria-labelledby="summary-h">
+        <h2 id="summary-h">The short version</h2>
+        <ul>
+          <li><b>FinCom is a tool for professionals.</b> It helps your firm do the work; it does not replace your professional judgement. You check the figures and you remain responsible for every return, payment and entry.</li>
+          <li><b>Your data stays yours.</b> We use it only to provide FinCom to you. You make sure you are allowed to put your clients' data into FinCom.</li>
+          <li><b>Prepaid and simple.</b> You add credit; the monthly fee and per-use charges are taken from it; GST is added.</li>
+          <li><b>Some things are outside our control,</b> such as the GST portal, TRACES, Tally and other services. We are not responsible when they are down or change.</li>
+          <li><b>You can leave at any time</b> and take your data with you.</li>
+          <li><b>Indian law applies,</b> and disputes go to arbitration in India.</li>
+        </ul>
+      </aside>
+
+      <section id="acceptance" class="doc-s"><h2>1. Accepting these terms</h2>
+        <p>By creating an account, signing in or using FinCom, you accept these terms. If you use FinCom for a firm, company or other business, you accept them on its behalf and confirm that you have the authority to do so; "you" then means both you and that business. If you do not accept these terms, do not use FinCom.</p>
+      </section>
+
+      <section id="eligibility" class="doc-s"><h2>2. Who can use FinCom</h2>
+        <p>FinCom is for chartered accountant firms, tax and accounting professionals, and businesses in India, for their professional work. You must be at least 18 years old and able to enter into a contract under the Indian Contract Act, 1872. FinCom is not meant for personal, household or consumer use.</p>
+      </section>
+
+      <section id="accounts" class="doc-s"><h2>3. Accounts and security</h2>
+        <ul>
+          <li>Give true and complete details when you register, and keep them up to date.</li>
+          <li>One login per person. Keep your password private, and turn on two-step sign-in; we may require it for some features.</li>
+          <li><b>The firm's owner controls access.</b> The person who creates the firm's account is its owner. The owner adds and removes staff, decides what each person may do, and is responsible for what is done under the firm's account, including by people the owner lets in.</li>
+          <li>Tell us at once at <span class="todo">[SUPPORT EMAIL]</span> if you think someone has used your account without permission.</li>
+        </ul>
+      </section>
+
+      <section id="firm-data" class="doc-s"><h2>4. Your data and your clients' consent</h2>
+        <p><b>You own your data.</b> You keep all rights in the data you upload or connect to FinCom ("Your Data"). You give us permission to host, copy, process and show Your Data only as needed to provide, secure and support FinCom for you, as described in the <a href="privacy.html">privacy policy</a> and the <a href="dpa.html">data processing terms</a>.</p>
+        <p><b>Your responsibility for client data.</b> For your clients' records you are the Data Fiduciary under the Digital Personal Data Protection Act, 2023, and we are your Data Processor. You confirm that:</p>
+        <ul>
+          <li>you have the right to upload or connect each client's data, and you have given any notice and obtained any consent the law or your professional duties require, including from your clients' employees, customers and suppliers whose data appears in the books;</li>
+          <li>you upload only what you need for the work, and you respect your duty of confidentiality to your clients under the Chartered Accountants Act, 1949 and its Code of Ethics, where it applies to you;</li>
+          <li>you will act on your clients' requests about their data, and we will help you do so as the data processing terms say.</li>
+        </ul>
+        <p>You are responsible for the accuracy of Your Data and for keeping your own copies of records the law requires you to keep. FinCom's copy of Tally books is a working copy, not a backup of Tally.</p>
+      </section>
+
+      <section id="billing" class="doc-s"><h2>5. Plans, credit and billing</h2>
+        <ul>
+          <li><b>Prepaid credit.</b> FinCom is paid from a prepaid credit balance in your firm's account. You add credit by payment to our bank account; it is added once the payment is received.</li>
+          <li><b>Monthly fee and use.</b> Your plan's monthly fee is taken from the balance on the first day of each month. Charges for use, such as bills read, bank lines, AI readings and AI questions, are taken as the service is used, at the prices on our <a href="pricing.html">pricing page</a> or agreed with you in writing. If an AI or text-recognition reading fails, its charge goes back to your credit.</li>
+          <li><b>When credit runs out,</b> work that needs credit pauses until you add more. Everything already in FinCom stays available to view and export.</li>
+          <li><b>Taxes.</b> Prices are in Indian rupees and exclude GST, which is added at the applicable rate. We issue a GST tax invoice for every payment. Give us your GSTIN to claim input tax credit.</li>
+          <li><b>Price changes.</b> We may change prices with at least 30 days' notice to account owners; the change applies from the next month after the notice ends.</li>
+          <li><b>Free or promotional credit</b> has no cash value, cannot be transferred, and may end as the offer says.</li>
+          <li><b>Refunds</b> are covered by our <a href="refund.html">refunds and cancellation policy</a>. <span class="todo">[REFUND POLICY: confirm refund.html]</span></li>
+        </ul>
+      </section>
+
+      <section id="acceptable-use" class="doc-s"><h2>6. Acceptable use</h2>
+        <p>You must not, and must not let anyone else:</p>
+        <ul>
+          <li>use FinCom for anything unlawful, fraudulent or misleading, such as preparing false returns, invoices or books, or evading tax;</li>
+          <li>upload data you have no right to use, or malicious code;</li>
+          <li>try to reach another firm's data, test or get around our security, or use another person's account, except security research within the rules on our <a href="security.html#disclose">security page</a>;</li>
+          <li>overload FinCom, or use automated means to reach it other than the features and Bridge we provide;</li>
+          <li>copy, reverse engineer or resell FinCom, or use it to build a competing product, except as the law allows;</li>
+          <li>use government portals through FinCom in breach of their terms, or for a taxpayer without that taxpayer's authority;</li>
+          <li>record a call, or share another person's data in a call, without the consent the law requires.</li>
+        </ul>
+      </section>
+
+      <section id="ai" class="doc-s"><h2>7. AI features and outputs</h2>
+        <p>FinCom uses AI to read documents, suggest ledgers and tax sections, pair invoices, draft replies to notices, answer questions about books, transcribe speech and summarise calls.</p>
+        <ul>
+          <li><b>Assistive, not advice.</b> AI output is a suggestion. It is not tax, legal, accounting or audit advice, and it may be incomplete, out of date or wrong, including cases or circulars it cites.</li>
+          <li><b>You remain responsible.</b> You, as the professional, must check figures, sections, rates, cited law and drafts before you rely on them, file a return, pay tax, sign a report, send a letter or post to Tally. You remain fully responsible for your filings and professional work.</li>
+          <li><b>Your control.</b> The firm's owner can switch the assistant off, keep chosen clients away from AI help, and set a monthly limit on its cost.</li>
+          <li><b>Your rights in outputs.</b> As between you and us, outputs generated for you belong to you, subject to these terms.</li>
+        </ul>
+      </section>
+
+      <section id="third-party" class="doc-s"><h2>8. Government portals and other services</h2>
+        <p>FinCom works with services we do not control, including the GST portal (GSTN), the e-invoice and e-way bill systems, TRACES and Protean (NSDL) for TDS, the income tax portal, GST Suvidha Providers such as TaxPro and FYN, TallyPrime, Zoho Books, and AI providers. We are not responsible for their availability, outages, delays, errors, changes to their formats or rules, or the data they return. Your use of them is also governed by their own terms. Due dates do not move because a portal is down, so please file in good time.</p>
+        <p>Tally and TallyPrime are trademarks of Tally Solutions Private Limited. Zoho is a trademark of Zoho Corporation. FinCom is not connected with or endorsed by them or by any government body.</p>
+      </section>
+
+      <section id="bridge" class="doc-s"><h2>9. The FinCom Bridge</h2>
+        <p>The FinCom Bridge is software you install on the Windows computer where Tally runs. It reads the Tally companies you connect and keeps FinCom's copy in step, and it posts entries to Tally only when you or your firm's settings instruct it.</p>
+        <ul>
+          <li>We grant you a limited, non-exclusive, non-transferable licence to install and use the Bridge with FinCom while your account is in good standing.</li>
+          <li>It listens only on your own computer and updates itself with versions we sign. Keep it up to date, and install it only on computers you control.</li>
+          <li>You are responsible for your computer, your Tally licence and your Tally backups. Take a Tally backup before posting many entries at once.</li>
+        </ul>
+      </section>
+
+      <section id="ip" class="doc-s"><h2>10. Intellectual property</h2>
+        <p>FinCom, its software, the Bridge, its design, content and trademarks belong to us or our licensors. Apart from the right to use FinCom under these terms, we give you no rights in them. Open-source parts are licensed under their own licences.</p>
+      </section>
+
+      <section id="feedback" class="doc-s"><h2>11. Feedback</h2>
+        <p>If you send us ideas or suggestions, we may use them to improve FinCom without any obligation to you. We will not name you or your firm publicly without your permission.</p>
+      </section>
+
+      <section id="confidentiality" class="doc-s"><h2>12. Confidentiality</h2>
+        <p>Each of us will keep the other's confidential information private, use it only for this agreement, and protect it with reasonable care. Your Data is your confidential information. Our staff and service providers who may see it are bound by confidentiality, and our access to it is recorded.</p>
+      </section>
+
+      <section id="termination" class="doc-s"><h2>13. Suspension and termination</h2>
+        <ul>
+          <li><b>By you.</b> You can stop using FinCom and close your firm's account at any time from Help or by writing to us.</li>
+          <li><b>By us.</b> We may suspend or close an account that breaks these terms, is used unlawfully, puts other users or FinCom at risk, or has fees unpaid. We will give notice and a chance to put things right first, unless the risk is urgent or the law prevents it.</li>
+          <li>We may stop offering FinCom altogether with at least 90 days' notice and a refund of unused credit.</li>
+          <li>Sections that by their nature should continue, such as fees owed, confidentiality, disclaimers, limitation of liability, indemnity and disputes, continue after the account closes.</li>
+        </ul>
+      </section>
+
+      <section id="export" class="doc-s"><h2>14. Your data when you leave</h2>
+        <p>You can export your data at any time, from the export on each page. After your account closes, you can still export it for 30 days. We then delete it as the <a href="privacy.html#retention">privacy policy</a> says, unless the law requires us to keep it.</p>
+      </section>
+
+      <section id="disclaimers" class="doc-s"><h2>15. Disclaimers</h2>
+        <p>We work to keep FinCom accurate, secure and available, and to announce planned maintenance in advance. But, to the extent the law allows, FinCom is provided "as is" and "as available". We do not promise that it will be uninterrupted or error-free, that tax rates, sections, due dates or forms in it are always current, or that it will meet every requirement of your practice.</p>
+      </section>
+
+      <section id="liability" class="doc-s"><h2>16. Limitation of liability</h2>
+        <p>To the extent the law allows:</p>
+        <ul>
+          <li>we are not liable for indirect, incidental, special or consequential loss, loss of profits, goodwill or data, or for penalties, interest or late fees arising from filings, payments or entries you made, including those based on FinCom's output that you did not check;</li>
+          <li>our total liability for all claims arising out of or relating to FinCom or these terms is limited to the fees you paid us in the 12 months before the event that gave rise to the claim. <span class="todo">[LIABILITY CAP: confirm]</span></li>
+        </ul>
+        <p>Nothing in these terms limits liability that cannot be limited by law, such as liability for fraud.</p>
+      </section>
+
+      <section id="indemnity" class="doc-s"><h2>17. Indemnity</h2>
+        <p>You will defend and compensate us against claims by third parties, including your clients and authorities, arising from Your Data that you had no right to upload, from your breach of these terms or the law, or from your filings and professional work. We will tell you promptly of such a claim and let you take part in its defence.</p>
+      </section>
+
+      <section id="law" class="doc-s"><h2>18. Governing law and jurisdiction</h2>
+        <p>These terms are governed by the laws of India. Subject to <a href="#disputes">section 19</a>, the courts at <span class="todo">[CITY FOR JURISDICTION]</span> have exclusive jurisdiction.</p>
+      </section>
+
+      <section id="disputes" class="doc-s"><h2>19. Dispute resolution</h2>
+        <p>If a dispute arises, please first write to us; both sides will try to settle it in good faith within 30 days. If that fails, the dispute will be finally settled by arbitration by a sole arbitrator appointed by mutual agreement, under the Arbitration and Conciliation Act, 1996. The seat and venue of arbitration will be <span class="todo">[SEAT OF ARBITRATION]</span>, and the proceedings will be in English. Either side may seek urgent interim relief from a competent court.</p>
+      </section>
+
+      <section id="changes" class="doc-s"><h2>20. Changes to these terms</h2>
+        <p>We may update these terms as FinCom or the law changes. For a material change, we will tell account owners by email or in the app at least 15 days before it takes effect. If you continue to use FinCom after that, you accept the new terms; if you do not accept them, you may close your account before they take effect and ask for a refund of unused credit.</p>
+      </section>
+
+      <section id="general" class="doc-s"><h2>21. General</h2>
+        <ul>
+          <li><b>Whole agreement.</b> These terms, with the documents they refer to and any written order you sign with us, are the whole agreement between us about FinCom.</li>
+          <li><b>Transfer.</b> You may not transfer your account without our written consent. We may transfer these terms to a company that takes over FinCom, and will tell you.</li>
+          <li><b>Events outside our control.</b> Neither of us is liable for delay caused by events beyond reasonable control, such as outages of the internet, cloud providers or government portals, or natural disasters.</li>
+          <li><b>If a part is invalid,</b> the rest of these terms still applies. If we do not enforce a term at once, we do not give up the right to enforce it later.</li>
+          <li><b>Notices.</b> We send notices to the account owner's email address or in the app; you send them to the address in section 22.</li>
+        </ul>
+      </section>
+
+      <section id="contact" class="doc-s"><h2>22. Contact us</h2>
+        <div class="box">
+          <p><b><span class="todo">[LEGAL ENTITY NAME]</span></b>, <span class="todo">[REGISTERED ADDRESS]</span></p>
+          <p>CIN <span class="todo">[CIN]</span> <span aria-hidden="true">·</span> GSTIN <span class="todo">[GSTIN]</span></p>
+          <p>Email <span class="todo">[CONTACT EMAIL]</span> <span aria-hidden="true">·</span> Phone <span class="todo">[PHONE]</span></p>
+        </div>
+        <p>For a complaint about personal data, write to our Grievance Officer, named in the <a href="privacy.html#grievance">privacy policy</a>.</p>
+      </section>
     </article>
   </div>
 </main>
@@ -481,7 +672,7 @@ table.units{width:100%;border-collapse:collapse;font-size:15.5px}
     </div>
     <div><h3>Product</h3><a href="index.html#insight">MIS and audit</a><a href="index.html#what">Features</a><a href="pricing.html">Pricing</a><a href="../#signin">Sign in</a><a href="../#register">Register</a></div>
     <div><h3>Trust</h3><a href="security.html">Security and certification</a><a href="security.html#disclose">Report a security issue</a><a href="dpa.html">Data processing terms</a></div>
-    <div><h3>Legal</h3><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of use</a><a href="refund.html">Refunds and cancellation</a><a href="contact.html">Contact and grievances</a></div>
+    <div><h3>Legal</h3><a href="privacy.html">Privacy policy</a><a href="terms.html">Terms of service</a><a href="refund.html">Refunds and cancellation</a><a href="contact.html">Contact and grievances</a></div>
   </div>
   <div class="wrap legal-line"><p>&copy; 2026 Yuvnav Services Private Limited. All rights reserved. CIN <span class="todo" title="To be filled in">[CIN]</span>. Tally and TallyPrime are trademarks of Tally Solutions Private Limited; FinCom is not connected with Tally Solutions.</p></div>
 </footer>
