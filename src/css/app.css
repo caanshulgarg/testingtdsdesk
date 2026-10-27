@@ -529,7 +529,7 @@ th.n .colh{flex-direction:row-reverse}
 .tdetail .why{color:var(--st-failed);font-weight:600}
 .tsave{font-size:12.5px;font-weight:600;white-space:nowrap;color:var(--st-waiting)}
 /* integ-link (27-Oct-2026): one line, shortened, the whole of it in its tip (it wrapped one word a line beside the title's status line) */
-.tsave.bad{color:var(--st-failed);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto;max-width:300px;border:0;background:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-align:left}
+.tsave.bad{color:var(--st-failed);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto;max-width:180px;border:0;background:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-align:left}
 .treview{border:0;background:none;padding:0;font:inherit;font-size:13px;font-weight:600;color:var(--st-attention);text-decoration:underline;cursor:pointer;white-space:nowrap}
 /* a disabled button says why beside it, in plain sight (spec K3; added by app/src/parts/WhyNotes.jsx from its title) */
 .why-note{font-size:12px;color:var(--muted);margin:0 6px;white-space:normal}

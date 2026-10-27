@@ -208,8 +208,10 @@ function TallySign() {
   // integ-link (27-Oct-2026): no bridge in this browser is no problem of a client that is Linked or Waiting for Tally (its
   // books come through another computer): the sign then says it of this computer, never "Tally not on this computer"
   // beside the client's "Linked"
-  if (h.code === "none" && k && k.state !== "unlinked" && (k.pill.kind ? ["linked", "waiting"].includes(k.pill.kind) : k.pill.state !== "unlinked"))
-    h = Object.assign({}, h, { label: "This PC: no bridge (not needed)", short: "This PC: no bridge" });
+  // ("not needed" only while it is Linked: while it waits for Tally, the bridge here could be the way)
+  const ckind = k && k.state !== "unlinked" ? (k.pill.kind || (k.pill.state === "connected" ? "linked" : k.pill.state !== "unlinked" ? "waiting" : "")) : "";
+  if (h.code === "none" && (ckind === "linked" || ckind === "waiting"))
+    h = Object.assign({}, h, { label: "This PC: no bridge" + (ckind === "linked" ? " (not needed)" : ""), short: "No bridge here" });
   const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
   // next-tally-firstlink (the owner: "it should be above, on the Tally icon"): a badge with the companies open in Tally
   // that are no client's; a click then opens the panel, which starts with their link (TallyOffer). Only for who may link

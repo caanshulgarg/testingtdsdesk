@@ -135,7 +135,9 @@ with sync_playwright() as p:
     pg.evaluate("TallySteady.reset()")
     put(None, [dev("d2", "NWS144 · NW144\\Ranjeet", "NWS144", "NW144\\Ranjeet")])
     s = watch("none")
-    ok(s["code"] == "none" and s["text"] == "Tally not on this computer" and s["level"] == "idle", "no bridge here: grey “Tally not on this computer” (%s)" % (s,))
+    # integ-link (27-Oct-2026): the client is Linked through NWS144: the sign speaks of this computer, never "Tally not on this
+    # computer" beside the client's "Linked" (run_link_record.py)
+    ok(s["code"] == "none" and s["text"] == "This PC: no bridge (not needed)" and s["level"] == "idle", "no bridge here, the client Linked: grey “This PC: no bridge (not needed)” (%s)" % (s,))
     ok("NWS144" not in s["text"] and not re.search(r"\b(via|through)\b", s["text"]), "the sign never names another computer (%s)" % s["text"])
     c = card()
     ok(c and c["other"] == "Posting goes through NWS144 (Ranjeet).", "the hover's quiet second line: “Posting goes through NWS144 (Ranjeet).” (%s)" % ((c or {}).get("other"),))
@@ -228,7 +230,7 @@ with sync_playwright() as p:
     pg.set_viewport_size({"width": 390, "height": 800}); pg.evaluate("TallySteady.reset()"); put(local()); pg.wait_for_timeout(300)
     s = sign(); ok(s and s["text"] == "Tally ready", "a phone: “Tally ready” (%s)" % (s,))
     pg.evaluate("TallySteady.reset()"); put(None, []); pg.wait_for_timeout(200)
-    s = sign(); ok(s and s["text"] == "Not on this PC", "a phone, no bridge here: “Not on this PC” (%s)" % (s,))
+    s = sign(); ok(s and s["text"] == "No bridge here", "a phone, no bridge here (the client waiting for Tally): “No bridge here” (%s)" % (s,))
     pg.set_viewport_size({"width": 1366, "height": 768})
 
     # never "via", "through", "Reconnecting" in the top bar, whatever happened above

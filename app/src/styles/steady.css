@@ -14,6 +14,14 @@
 header.top .topright { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; margin-left: auto; }
 header.top .topright > .tb-page { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 10px; min-width: 0; }
 header.top .topright > .tb-page:empty { display: none; }
+/* integ-link (27-Oct-2026): "Not saved: …" (one line, cut with …, src/css/app.css .tsave.bad) keeps its place on the right; the
+   title's part gives way (a client's status line beside the title is cut to its two short lines, the whole line in its
+   tip) instead of the right side running over it */
+@media (min-width: 761px) {
+  header.top .headrow:has(.tsave.bad) > .topright { min-width: max-content; }
+  header.top .headrow:has(.tsave.bad) > .tbar { flex-shrink: 1; }
+}
+@media (max-width: 760px) { header.top .tsave.bad { max-width: min(180px, 38vw); } }
 header.top .topright > .tb-global { display: flex; flex: none; align-items: center; gap: 10px; }
 .tb-slot { display: flex; flex: none; align-items: center; justify-content: flex-end; min-width: 0; }
 .tb-slot.tb-bell { width: var(--slot-bell); justify-content: center; }

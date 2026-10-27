@@ -180,7 +180,7 @@ def main():
         here = lambda pg: pg.evaluate("() => { const b = document.querySelector('[data-tally-here]'); return b ? {code: b.getAttribute('data-tally-here'), long: b.querySelector('.tsign-long').textContent, short: b.querySelector('.tsign-short').textContent, title: b.title} : null; }")
         def here_ok(pg, word):
             h = here(pg)
-            ok(h is None or h["code"] != "none" or (h["long"] == "This PC: no bridge (not needed)" and h["short"] == "This PC: no bridge" and "Tally not on this computer" not in h["title"]),
+            ok(h is None or h["code"] != "none" or (h["long"] == "This PC: no bridge" + (" (not needed)" if word == "Linked" else "") and h["short"] == "No bridge here" and "Tally not on this computer" not in h["title"]),
                "%s: the top bar's sign speaks of this computer, not the client (%s)" % (word, h))
         # integ-link: "Not saved: ..." stays one line (shortened, the whole of it in its tip) at 1366 and 1440 wide, beside the
         # title row's status line
@@ -188,8 +188,11 @@ def main():
             for w in (1366, 1440):
                 pg.set_viewport_size({"width": w, "height": 900})
                 pg.evaluate("() => { Live.sv = Object.assign({}, Live.sv, {state: 'error', err: 'records: 500 the server did not take the change (made-up)'}); render(); }"); pg.wait_for_timeout(400)
-                m = pg.evaluate("() => { const e = document.querySelector('.tsave.bad'); if (!e) return null; const r = e.getBoundingClientRect(), lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.3; return {h: r.height, w: r.width, lh, title: e.title, text: e.textContent, sw: document.documentElement.scrollWidth, iw: innerWidth}; }")
-                ok(m and m["h"] <= m["lh"] * 1.5 and m["w"] >= 150 and m["text"].startswith("Not saved: ") and "the server did not take the change" in m["title"] and "500" in m["title"] and m["sw"] <= m["iw"] + 1,
+                m = pg.evaluate("() => { const e = document.querySelector('.tsave.bad'); if (!e) return null; const r = e.getBoundingClientRect(), lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.3;"
+                                " const st = document.querySelector('#cobar [data-link-status-at=title]'), tb = document.querySelector('header.top .headrow > .tbar'), f = document.querySelector('header.top .tb-page').firstElementChild.getBoundingClientRect();"
+                                " return {h: r.height, w: r.width, lh, title: e.title, text: e.textContent, sw: document.documentElement.scrollWidth, iw: innerWidth, statusW: st ? st.getBoundingClientRect().width : -1, titleRight: tb.getBoundingClientRect().right, pageLeft: f.left}; }")
+                ok(m and m["h"] <= m["lh"] * 1.5 and m["w"] >= 150 and m["text"].startswith("Not saved: ") and "the server did not take the change" in m["title"] and "500" in m["title"] and m["sw"] <= m["iw"] + 1
+                   and m["titleRight"] <= m["pageLeft"] + 0.5 and m["statusW"] >= 60,
                    "%d wide: 'Not saved: ...' on one line, at least 150 px, the whole of it in its tip (%s)" % (w, m))
 
         print("== 1. Link -> the record")
