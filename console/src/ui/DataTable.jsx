@@ -10,7 +10,8 @@
 //   params={{ firm_id }}            extra fixed params sent with every call
 //   columns={[{ key, label, type: "text"|"select"|"date"|"number"|"bool", options?: [{value,label}] | ["a","b"],
 //               render?: (row) => node, sortable?: true, filter?: true, phone?: true (shown on phones), align?: "end",
-//               list?: true (false: a filter only, not a column of the table) }]}
+//               list?: true (false: a filter only, not a column of the table)
+//               or hidden?: true (not a table column: a filter and a CSV column only) }]}
 //   presets={[{ label: "Active", filters: { status: { op: "in", values: ["active"] } } }, { label: "All", filters: {} }]}
 //   defaultPreset={0}               the preset applied when the hash has no filters for this table
 //   me={me}                         the signed-in admin (saved views are kept per admin)
@@ -115,7 +116,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
     const dir = sort?.col === c.key && sort.dir === "asc" ? "desc" : "asc";
     update({ s: `${c.key}:${dir}` });
   };
-  const shown = columns.filter((c) => c.list !== false);
+  const shown = columns.filter((c) => c.list !== false && !c.hidden);
   const keyOf = (r) => (typeof rowKey === "function" ? rowKey(r) : r[rowKey]);
   const from = st.total ? page * size + 1 : 0, to = Math.min(st.total, page * size + size);
 

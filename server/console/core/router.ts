@@ -34,6 +34,15 @@ const SQL_WORDS: Record<string, [number, string]> = {
   no_company: [404, "That company was not found."],
   same_status: [409, "It is already in that state."],
   bad_status: [400, "That status is not one of the choices."],
+  bad_key: [400, "That is not a key the console knows."],
+  bad_value: [400, "That value is not valid. Check it and try again."],
+  same_value: [409, "That is already the saved value. Nothing was changed."],
+  no_store: [409, "The place this key is kept is not set up on this database."],
+  no_ticket: [404, "That ticket was not found."],
+  no_announcement: [404, "That announcement was not found."],
+  no_flag: [404, "That feature flag was not found."],
+  no_rule: [404, "That rule was not found."],
+  no_plan: [404, "That plan was not found."],
 };
 export function sqlError(e: unknown): ConsoleError {
   const m = String((e as any)?.message || e || "");

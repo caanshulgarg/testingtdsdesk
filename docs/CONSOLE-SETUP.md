@@ -123,6 +123,39 @@ Every write needs a reason and goes into the change history with before and afte
   hiding switched-off companies from the firm's client lists with a "Show inactive" filter, refusing new uploads for them,
   and leaving them out of the per-client fee (the billing module's monthly run).
 
+## Phase 5 "Operations" (branch `next-console-ops`)
+
+**Database** (after 118; each one transaction, safe twice, add-only; NOT run by the builder):
+1. `server/console/migration-122-console-ops.sql` (md5 `f3670fd0682e70f5bd06b6da56e3a6d8`): `console_secret_meta` (a key's rotations and tests,
+   never its value), `console_view_log` (append-only), and the keys, health, support desk, "see as this firm" and export
+   functions (service role only). It reads what is there (platform_secrets, Vault's gsp_secret_*, support_*, tally_*,
+   wallet_entries, pgmq, pg_cron) and leaves out what is not.
+2. `server/console/migration-123-notices-flags.sql` (md5 `55c7b424ebdd1da8853f0be3e48d7bf7`): `announcements`, `announcement_dismissals`,
+   `feature_flags`, `feature_flag_rules`; for the user app `announcements_active()`, `announcement_dismiss(id)`,
+   `flags_for_me()` (signed-in people); the console's functions (service role only).
+
+**Function**: deploy `console-admin` again (Step B). No new secret is needed. Optional: `SENTRY_API_TOKEN` and
+`SENTRY_ORG` (a read-only Sentry token) as function secrets, or set them on the Keys page (`sentry_api_token`,
+`sentry_org`); without them the Sentry panel is hidden. `RESEND_API_KEY` and `SUPPORT_MAIL_FROM` (already used by
+support-mail) let a console reply be emailed to the firm.
+
+**User app**: one lazy chunk (`app/src/parts/Announce.jsx` + `app/src/lib/flags.js`, about 2.6 KB), loaded after the
+page: the live announcements as one dismissible bar, and the flags read once (`window.FinComFlags.on(key)`). Before 123
+runs it shows nothing. The "FinCom support viewed your account" notice uses the bell's own table (tally_alerts, kind
+summary), so the bell needs no change.
+
+| Screen | Who | What |
+|---|---|---|
+| Keys | Owner | every platform key: where it is kept, what it powers, set or not and its last 4 (12+ characters), last used (where known), last Test, rotate-by (180 days). **Replace** (write-only; platform_secrets or Vault), **Test** (one free call to the provider), **Record rotation** for Supabase function secrets (the console cannot write those: `supabase secrets set`) |
+| Announcements | all see; Owner and Support write | title, text, severity, audience (all, plans, firms), start, end, dismissible; draft, publish, end; a preview of the bar |
+| Feature flags | all see; Owner writes | default, a plan's or a firm's own value with an end date; one firm's flags with why |
+| Support | all see (Viewer: emails hidden); Owner and Support write | every firm's tickets, SLA, assignee, replies (emailed to the firm), internal notes, status |
+| Firm views | Owner and Support | "See as this firm": a read-only summary made on the server (counts only for clients); the reason goes to the firm's bell; every view logged |
+| System health | all (Sentry: Owner and Support) | bridges online / idle / offline, waiting / stuck / failed jobs, queues, scheduled jobs, Sentry's top issues |
+| Exports | Owner and Billing (ledger); Owner (Export everything) | the all-firms ledger; one .zip of firms, users, ledger and change history (at most 5 a day) |
+
+`admin_set_secret` is not reused: it checks `is_superadmin()` with the caller's own session and writes no audit row.
+
 ## Phase 1b and later (not in this branch)
 - Cloudflare Access check inside `console-admin` (the plan's 5.1 steps 2-3: a Worker `/api` proxy forwarding the Access
   token, and a Worker secret). Until then Access protects the page, and the function relies on sign-in + aal2 + roles.

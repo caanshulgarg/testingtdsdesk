@@ -9,6 +9,7 @@ import { type Deps } from "../server/console/core/types.ts";
 import { MODULES } from "../server/console/registry.ts";
 import { couponsFake } from "./console_coupons_fake.ts";
 import { aiRpc } from "./console_stand_ai.ts";
+import { ENV, NOPE, OPS, opsFake, opsHttp } from "./console_ops_fake.ts";
 
 const port = Number(Deno.args[0] || 8172);
 const pageOrigin = Deno.args[1] || "http://localhost:8171";
@@ -66,7 +67,13 @@ const memberRow = (m: typeof members[0]) => {
            mfa: l.factors.some((x) => x.status === "verified"), switched_off: m.off, firm_status: f.status };
 };
 
+// phase 5 (keys, announcements, flags, support, health, exports, see as this firm): tests/console_ops_fake.ts
+const ops = opsFake({ audit: (r) => audit.push({ id: audit.length + 1, at: now(), ...r, user_agent: null }), auditRows: () => audit, roleOf: (id) => roleOf(id) || undefined,
+  emailOf: (id) => emailOf(id), firms: firms.map((f) => ({ id: f.id, name: f.name, plan_id: f.plan === "Monthly, all included" ? OPS.P2 : OPS.P1, balance: f.balance })) });
+const outbound: { url: string }[] = [];
 async function rpc(fn: string, a: any): Promise<any> {
+  const o = await ops.rpc(fn, a);
+  if (o !== NOPE) return o;
   switch (fn) {
     case "console_audit_add":
       audit.push({ id: audit.length + 1, at: now(), who: a.p_who, role: a.p_role, action: a.p_action, target_type: a.p_target_type, target_id: a.p_target_id, before: a.p_before, after: a.p_after, reason: a.p_reason, ip: a.p_ip, user_agent: a.p_ua });
@@ -168,6 +175,8 @@ const deps: Deps = {
   rateHit: async () => true,
   origins: [pageOrigin],
   log: (m, e) => console.error("stand:", m, e instanceof Error ? e.message : e ?? ""),
+  http: opsHttp(outbound),
+  env: (k) => ENV[k],
 };
 const fn = makeHandler(deps, MODULES);
 const CORS = { "Access-Control-Allow-Origin": pageOrigin, "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
@@ -177,6 +186,7 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log("stand rea
   const u = new URL(req.url);
   if (u.pathname === "/functions/v1/console-admin") return await fn(req);
   if (u.pathname === "/__audit") return json(200, audit);
+  if (u.pathname === "/__ops") return json(200, { bell: ops.bell, views: ops.views, meta: ops.meta, outbound: outbound.map((x) => x.url), tickets: ops.tickets.map((t) => ({ id: t.id, status: t.status, assignee: t.assignee, n: t.thread.length })) });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const who = tokens.get(bearer);

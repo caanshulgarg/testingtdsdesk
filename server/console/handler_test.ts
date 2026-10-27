@@ -4,6 +4,7 @@ import { claims, makeHandler, sqlError } from "./core/router.ts";
 import { type Deps, type Role } from "./core/types.ts";
 import { MODULES } from "./registry.ts";
 import { COUPON_IDS, couponsFake } from "../../tests/console_coupons_fake.ts";
+import { ENV, NOPE, OPS, opsFake, opsHttp } from "../../tests/console_ops_fake.ts";
 
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
 function eq(a: unknown, b: unknown, msg = "") { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${msg} ${x} !== ${y}`); }
@@ -33,6 +34,14 @@ const EXPECT: Record<string, Role[]> = {
   "coupons.list": ALL, "coupon.get": ALL, "coupon.redemptions": ALL, "coupons.report": ALL, "coupon.plans": ALL,
   "coupon.create": ["owner", "billing"], "coupon.update": ["owner", "billing"], "coupon.pause": ["owner", "billing"], "coupon.resume": ["owner", "billing"],
   "coupon.end": ["owner", "billing"],
+  // phase 5 (next-console-ops): keys, announcements, flags, support, health, exports, see as this firm
+  "keys.list": ["owner"], "key.get": ["owner"], "keys.set": ["owner"], "keys.rotated": ["owner"], "keys.test": ["owner"],
+  "announcements.list": ALL, "announcement.get": ALL, "announcements.choices": ["owner", "support"], "announcements.save": ["owner", "support"], "announcements.end": ["owner", "support"],
+  "flags.list": ALL, "flag.get": ALL, "flags.rules": ALL, "flags.for_firm": ALL, "flags.save": ["owner"], "flags.rule_set": ["owner"], "flags.rule_remove": ["owner"],
+  "support.list": ALL, "support.get": ALL, "support.assignees": ["owner", "support"], "support.reply": ["owner", "support"], "support.set": ["owner", "support"],
+  "health.summary": ALL, "health.bridges": ALL, "health.jobs": ALL, "health.queues": ALL, "health.cron": ALL, "health.sentry": ["owner", "support"],
+  "exports.ledger": ["owner", "billing"], "exports.all": ["owner"],
+  "seeas.open": ["owner", "support"], "seeas.views": ["owner", "support"],
 };
 const R = "a good reason";
 const PARAMS: Record<string, Record<string, unknown>> = {
@@ -48,9 +57,18 @@ const PARAMS: Record<string, Record<string, unknown>> = {
   "coupon.update": { coupon_id: COUPON_IDS.welcome, code: "WELCOME10", kind: "percent", percent: 15, months: 3, reason: R },
   "coupon.pause": { coupon_id: COUPON_IDS.welcome, reason: R }, "coupon.resume": { coupon_id: COUPON_IDS.paused, reason: R },
   "coupon.end": { coupon_id: COUPON_IDS.welcome, reason: R },
+  "key.get": { name: "claude_api_key" }, "keys.set": { name: "claude_api_key", value: "sk-ant-api03-NEWVALUE-wxyz", reason: R },
+  "keys.rotated": { name: "RESEND_API_KEY", reason: R }, "keys.test": { name: "claude_api_key" },
+  "announcements.save": { title: "Hello firms", body: "x", severity: "info", audience: "all", reason: R }, "announcements.end": { id: OPS.A1, reason: R }, "announcement.get": { id: OPS.A1 },
+  "flag.get": { key: "zoho_books" }, "flags.rules": { key: "zoho_books" }, "flags.for_firm": { firm_id: FIRM },
+  "flags.save": { key: "calls_recording", description: "Recording", default_on: false, reason: R },
+  "flags.rule_set": { key: "zoho_books", scope: "firm", target_id: FIRM, value: true, reason: R },
+  "flags.rule_remove": { rule_id: 1, reason: R },
+  "support.get": { ticket_id: OPS.T1 }, "support.reply": { ticket_id: OPS.T1, body: "We are on it" }, "support.set": { ticket_id: OPS.T1, status: "open" },
+  "exports.all": { reason: R }, "seeas.open": { firm_id: FIRM, reason: R },
 };
 
-function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } = {}) {
+function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ruleFirst?: boolean; env?: Record<string, string> } = {}) {
   const admins = new Map<string, { role: string; active: boolean }>([
     [ID.owner, { role: "owner", active: true }], [ID.billing, { role: "billing", active: true }],
     [ID.support, { role: "support", active: true }], [ID.viewer, { role: "viewer", active: true }],
@@ -63,6 +81,10 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
   const coStatus: Record<string, string> = { c1: "active", c2: "deactivated" };
   let factors = [{ id: "f1", factor_type: "totp", status: "verified" }];
   const err = (code: string) => { throw new Error("console: " + code); };
+  const ops = opsFake({ audit: (r) => audit.push(r), auditRows: () => audit, roleOf: (id) => (admins.get(id)?.active ? admins.get(id)!.role : undefined),
+    emailOf: (id) => emails[id] || id + "@fincom.live", firms: [{ id: FIRM, name: "ABC Associates", plan_id: OPS.P1 }, { id: U(102), name: "Garg Shekhar & Co", plan_id: OPS.P2 }] });
+  if (opts.ruleFirst) ops.rules.push({ id: 1, flag_key: "zoho_books", scope: "firm", target_id: FIRM, value: true, until: null, note: "", updated_by: ID.owner });
+  const http: { url: string; init?: RequestInit }[] = [];
   const addAudit = (a: any, action: string, target_type: string, target_id: string, before: unknown, after: unknown) =>
     audit.push({ who: a.p_by, role: admins.get(a.p_by)?.role, action, target_type, target_id, before, after, reason: a.p_reason, ip: a.p_ip });
   const ownerCheck = (by: string) => { const r = admins.get(by); if (!r?.active || r.role !== "owner") err("not_owner"); };
@@ -122,6 +144,8 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
     }
     const c = coupons.rpc(fn, a);
     if (c !== undefined) return c;
+    const o = await ops.rpc(fn, a);
+    if (o !== NOPE) return o;
     throw new Error("fake: no rpc " + fn);
   };
   const users = new Map(Object.entries(ID).map(([, v]) => [tok(v), { id: v, email: emails[v] || v + "@fincom.live" }]));
@@ -136,6 +160,8 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
     rateHit: async () => !opts.rate,
     origins: [ORIGIN],
     log: () => {},
+    http: opsHttp(http),
+    env: (k) => (opts.env || ENV)[k],
   };
   const h = makeHandler(deps, MODULES);
   const call = async (who: string, action: string, params: Record<string, unknown> = {}, o: { aal?: string; origin?: string; jwt?: string } = {}) => {
@@ -145,7 +171,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
     }));
     return { status: r.status, body: await r.json() };
   };
-  return { call, audit, admins, banned, calls, firmStatus, coStatus, get factors() { return factors; } };
+  return { call, audit, admins, banned, calls, firmStatus, coStatus, ops, http, get factors() { return factors; } };
 }
 
 Deno.test("every action is in the expected matrix, and the matrix covers every action", () => {
@@ -156,7 +182,7 @@ Deno.test("every action is in the expected matrix, and the matrix covers every a
 Deno.test("every role against every action: allowed ones run (and are audited), the others are refused (and the refusal is audited)", async () => {
   for (const [action, roles] of Object.entries(EXPECT)) {
     for (const role of ALL) {
-      const f = fake();
+      const f = fake({ ruleFirst: true });
       const n0 = f.audit.length;
       const r = await f.call(ID[role], action, PARAMS[action] || {});
       if (roles.includes(role)) {
