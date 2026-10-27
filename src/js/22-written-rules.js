@@ -876,7 +876,7 @@ function createLedger(name, group, pan, gstin, acNo, ifsc){
 /* ---------- Tally XML ---------- */
 function bankVoucherXml(row, acc, co){
   if (acc && acc.ledger && ledNm(row.ledger).toLowerCase() === ledNm(acc.ledger).toLowerCase()) throw new Error(fmtDate(row.date) + ": " + OWN_BANK);
-  const vt = row.vtype || (row.debit ? "Payment" : "Receipt");
+  const vt = xesc(row.vtype || (row.debit ? "Payment" : "Receipt"));
   const d = toTallyDate(row.date), amt2 = n => r2(n).toFixed(2);
   const amount = row.debit || row.credit, out = !!row.debit;
   const tds = out && row.tdsAtPay ? r2(row.tdsAtPay) : 0;

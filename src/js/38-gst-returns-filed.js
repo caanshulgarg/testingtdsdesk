@@ -214,7 +214,7 @@ async function gstvFile(rec){ return FileStore.get((CO() || {}).id, rec.id, rec.
 // the Returns filed page: React (app/src/screens/gst/ReturnsFiled.jsx)
 // what the Returns filed page does (app/src/screens/gst/ReturnsFiled.jsx)
 const gstvFind = id => GSTV.all().find(x => x.id === id);
-async function gstvOpen(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(URL.createObjectURL(f), "_blank"); }
+async function gstvOpen(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF is not on this computer and could not be fetched from the firm’s cloud documents."); return; } window.open(blobUrl(f), "_blank"); }
 async function gstvDownload(id){ const x = gstvFind(id), f = x && await gstvFile(x); if (!f){ toast("This PDF could not be found."); return; } saveFile(GSTV.fileName(x), f); }
 // a PDF that could not be read for sure: its GSTIN, return or period said by the user, then filed in its place
 function gstvSetSort(id, key, val){ const x = gstvFind(id); if (x){ x[key] = String(val).trim(); saveBooks(); if (key !== "per") render(); } }

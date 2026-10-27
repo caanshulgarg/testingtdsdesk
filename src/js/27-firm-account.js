@@ -1110,7 +1110,7 @@ function txnGo(kind, id){
 function txnOpenDoc(key, path, name){
   toast("Opening the document…");
   FileStore.get(S.coId, key, path || "", name || "").then(f => {
-    if (f) window.open(URL.createObjectURL(f), "_blank");
+    if (f) window.open(blobUrl(f), "_blank");
     else toast("That document could not be found on this computer or in the firm account.");
   });
 }

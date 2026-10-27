@@ -744,7 +744,7 @@ function postLogCsv(){
   const log = (S.firm.postLog || []).slice().reverse();
   const rows = [["When", "What", "Action", "Client", "Reference", "Party", "Amount", "Voucher type", "Tally id", "Company", "By"]].concat(
     log.map(r => [r.at, r.what || "", r.action || "", (CO(r.co) || {}).name || "", r.ref || "", r.party || "", r.amount || "", (r.tally || {}).vchType || "", (r.tally || {}).masterId || "", (r.tally || {}).company || "", r.by || ""]));
-  saveFile("posted-to-tally-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob([rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(",")).join("\n")], {type: "text/csv"}));
+  saveFile("posted-to-tally-" + new Date().toISOString().slice(0, 10) + ".csv", new Blob([rows.map(r => r.map(c => '"' + csvTxt(c).replace(/"/g, '""') + '"').join(",")).join("\n")], {type: "text/csv"}));
 }
 // the TDS rates and limits for all clients (the firm's name is in Settings → Firm details)
 // Settings for the firm: React (app/src/screens/Settings.jsx)

@@ -844,7 +844,8 @@ export function handler(deps: Deps) {
       if (!path.startsWith(folder(r) + "chat/") || path.includes("..")) fail(403, "That file is not this call's.");
       const j: any = await svc("/storage/v1/object/sign/call-files/" + path.split("/").map(q).join("/"), { method: "POST", body: JSON.stringify({ expiresIn: 600 }) });
       const url = String((j && (j.signedURL || j.signedUrl)) || "");
-      return { ok: true, url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) };
+      // security review 26-Oct-2026: the sender chose the file's type; Storage sends it as an attachment, never as a page
+      return { ok: true, url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) + (url.includes("?") ? "&" : "?") + "download" };
     },
     async consent(w, b) {
       const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);

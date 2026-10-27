@@ -357,6 +357,11 @@ const Store = {
 function clone(o){ return JSON.parse(JSON.stringify(o === undefined ? null : o)); }
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function xesc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#34;","'":"&#39;"}[c])); }
+// security review 26-Oct-2026: a stored file's type is its uploader's; a blob: address is FinCom's own origin, so only a
+// PDF or an image keeps its type (anything else opens as a PDF, by its name, or downloads; never as a page)
+function blobUrl(f){ return URL.createObjectURL(/^(application\/pdf|image\/(png|jpe?g|gif|webp))$/i.test(f.type || "") ? f : new Blob([f], {type: /\.pdf$/i.test(f.name || "") ? "application/pdf" : "application/octet-stream"})); }
+// a CSV cell's text: one that Excel would take for a formula (= + - @, not a number) is kept as text
+function csvTxt(v){ const s = String(v == null ? "" : v); return typeof v === "string" && /^[=+\-@\t\r]/.test(s) && !/^-?[\d,.]+$/.test(s) ? "'" + s : s; }
 function num(v){ if (typeof v === "number") return isFinite(v) ? v : 0; const n = parseFloat(String(v == null ? "" : v).replace(/[^0-9.\-]/g, "")); return isFinite(n) ? n : 0; }
 function r2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
 const INR = new Intl.NumberFormat("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -4261,7 +4266,7 @@ function envelope(list, co){
     list.map(e => '<TALLYMESSAGE xmlns:UDF="TallySchema">\n' + voucherXml(e, co) + "</TALLYMESSAGE>\n").join("") +
     "</REQUESTDATA>\n</IMPORTDATA>\n</BODY>\n</ENVELOPE>\n";
 }
-function csvCell(v){ const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function csvCell(v){ const s = csvTxt(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
 function registerCsv(list, co){
   const head = ["Client","Invoice date","Invoice no","Deductee","PAN","GSTIN","Payment type","Section (2025 Act)","Old section","Taxable value","Invoice total","TDS base","Rate %","TDS booked","TDS that applies","Reason TDS not booked","Reverse charge","RCM tax","GST credit","Party ledger","Expense ledger","Approved on","Sent to Tally"];
   const rows = list.map(e => { const s = e.snapshot || {}; return [co.name, e.x.invoiceDate, e.x.invoiceNo, e.x.vendorName, s.pan, e.x.vendorGstin, s.label, s.ref, s.old, s.base, s.total, s.applicable ? s.tdsBase : 0, s.rate, s.tds, s.tdsWould != null ? s.tdsWould : s.tds, s.skip ? skipText(s.skip) : "", s.rcm ? catLabel(RCM_CATS, s.rcm.cat) + " @ " + s.rcm.rate + "%" : "No", s.rcm ? s.rcm.tax : 0, s.blocked ? "Blocked: " + catLabel(BLOCK_CATS, s.blocked) : s.noItc ? (s.noItc === "unregistered" ? "No credit: client not registered" : "No credit: billed to another GSTIN") : "Claimed", e.partyLedger, e.expenseLedger, (e.approvedAt || "").slice(0, 10), e.exportedAt ? e.exportedAt.slice(0, 10) : "No"]; });
