@@ -166,8 +166,10 @@ with sync_playwright() as p:
     pg.evaluate("() => { Cloud.st.mfa = null; render(); }"); pg.wait_for_timeout(300)
     pg.fill("#npEmail", "c@b.in"); pg.fill("#npName", "Chetan"); pg.click('button:text-is("Invite by email")'); pg.wait_for_timeout(300)
     ok(any(c[0] == "admin" and c[1].get("action") == "invite_person" and c[1].get("email") == "c@b.in" and c[1].get("name") == "Chetan" and c[1].get("role") == "staff" for c in calls()), "a person invited by email from the boxes")
-    pg.fill("#npEmail", "d@b.in"); pg.fill("#npName", "Divya"); pg.click('button:text-is("or make a password instead")'); pg.wait_for_timeout(300)
-    ok(["admin", {"action": "add_person", "email": "d@b.in", "name": "Divya", "role": "staff"}] in calls(), "or added with a made-up password")
+    # security fix batch 1 (27-Oct-2026): no "make a password instead"; the owner never sets a password for someone else
+    ok(pg.locator('button:text-is("or make a password instead")').count() == 0 and "We'll email them a link to set their password." in pg.inner_text("#app")
+       and pg.locator('#npEmail').locator('xpath=ancestor::div[contains(@class,"bk-form")]').locator('input[type="password"]').count() == 0,
+       "Add person: no password box or 'make a password' choice; it says they get a link to set their password")
     pg.evaluate("""() => { S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, people: 2, modules: [{code: 'read', price: 2, enabled: true}]}],
       plans: [{id: 'p1', name: 'Starter', includes: {}}, {id: 'p2', name: 'Pro', includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}]}; render(); }"""); pg.wait_for_timeout(300)
     pg.select_option('select[aria-label="Plan of Firm A"]', "p2"); pg.wait_for_timeout(300)

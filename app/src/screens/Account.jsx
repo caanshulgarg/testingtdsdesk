@@ -100,8 +100,7 @@ function People({ canManage }) {
       ]} />
     {canManage && <><div className="bk-form three" style={{ marginTop: 8 }}><label><span>Name</span><input type="text" id="npName" aria-label="Name" /></label><label><span>Email</span><input type="email" id="npEmail" aria-label="Email of the person" /></label>
       <label><span>Can do</span><select id="npRole" aria-label="Can do"><option value="staff">Everything except billing</option><option value="readonly">Look only</option><option value="owner">Everything, including people</option></select></label></div>
-      <div className="row" style={{ marginTop: 6 }}><Act act="invitePerson" className="btn small primary">Invite by email</Act><span className="note">They get an email with a link to choose their own password.</span>
-        <Act act="addPerson" className="linkbtn">or make a password instead</Act></div>
+      <div className="row" style={{ marginTop: 6 }}><Act act="invitePerson" className="btn small primary">Invite by email</Act><span className="note">We'll email them a link to set their password.</span></div>
 </>}
     {S.newPerson && <p className="bk-alert" style={{ marginTop: 8 }}><b>{S.newPerson.email}</b> can sign in with the password <b>{S.newPerson.password}</b>. Write it down: it is shown only now.</p>}
   </>;
