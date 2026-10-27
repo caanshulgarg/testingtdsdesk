@@ -44,7 +44,8 @@ export const roomFull = (mode, inCall) => inCall >= maxPeople(mode);
 //   watchSecs   FinCom open anywhere asks for people waiting this often (besides the realtime ping)
 //   onlineSecs  a member whose FinCom asked within this time is online (the host away: owner or staff are asked)
 //   waitMinutes the guest's "Asking to join…" gives up after this, with Ask again
-export const LOBBY = { staleSecs: 60, beatSecs: 20, pollSecs: 5, watchSecs: 30, onlineSecs: 90, waitMinutes: 10 };
+//   idleSecs    the same, after 5 minutes with no key or click on the page (within onlineSecs; speed round, 27-Oct-2026)
+export const LOBBY = { staleSecs: 60, beatSecs: 20, pollSecs: 5, watchSecs: 30, idleSecs: 75, onlineSecs: 90, waitMinutes: 10 };
 export const lastSeen = (p) => Date.parse((p && (p.seen_at || p.admitted_at || p.joined_at)) || "") || 0;
 export const isStale = (p, now, secs = LOBBY.staleSecs) => !!p && (p.state === "waiting" || p.state === "admitted") && now - lastSeen(p) > secs * 1000;
 // who may let someone in: the room's host (or the firm's owner, the server's isHost); while the host is not online, any

@@ -95,11 +95,14 @@ export function watchFresh() {
     const u = new URL(location.href);
     if (typeof __BUILD_ID__ !== "undefined" && u.searchParams.get("v") === __BUILD_ID__) { u.searchParams.delete("v"); history.replaceState(history.state, "", u.toString()); }
   } catch (e) { /* the address stays as it is */ }
-  lastCheck = Date.now(); checkFresh(true);
+  // speed round: the page's own check (index.html, before the big files) already asked build.json on this open; asked
+  // again here only when there was none
+  lastCheck = Date.now(); if (!window.__fincomBootCheck) checkFresh(true);
   document.addEventListener("visibilitychange", whenHidden);
   // a new build's service worker took over this page: say so (the page still runs the build it opened with)
   try { navigator.serviceWorker.addEventListener("controllerchange", () => checkFresh(false)); } catch (e) { /* no workers here */ }
-  setInterval(() => { lastCheck = Date.now(); checkFresh(false); }, 60000);
+  // speed round (27-Oct-2026): not while the tab is hidden (it looks at once when shown again, below)
+  setInterval(() => { if (document.visibilityState === "hidden") return; lastCheck = Date.now(); checkFresh(false); }, 60000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkSoon(); });
   window.addEventListener("focus", checkSoon);
 }

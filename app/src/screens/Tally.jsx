@@ -88,10 +88,9 @@ function BridgeDownload({ m, again }) {
 }
 
 // the bridges heard from are read again after a minute (another computer may have started)
-function paneFresh() {
-  const p = TCloud.pane;
-  if (TCloud.on() && !p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
-}
+// speed round (27-Oct-2026): the computers' beats every 30 s (TLight, laid over this page's list: TCloud.paneDevs); the
+// page's own lines every 5 minutes while it is seen (TCloud.paneTick); a person's Refresh reads all of it at once
+function paneFresh() { if (TCloud.on() && !TCloud.pane.err) TCloud.paneTick(); }
 // one line a computer (02-Oct-2026): the computer, the Windows user, the version, and the state with what to do
 const vnum = (v) => String(v || "0").split(".").map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
 function lineState(r, latest, owner) {
@@ -587,7 +586,7 @@ function ReadingView({ cards }) {
 // 26-Oct-2026 (next-tally-port; the owner: "we still need to set the port.. FinCom needs a step: this port is free, and do
 // this step in Tally. Everything should be clearly spoken"): step 2, Set Tally's port, between Install and Open. GUIDE_KEYS
 // are the steps in order; openConnectTally(1..3) still names Install, Open and the list (STEP_OF)
-const GUIDE_KEYS = ["install", "port", "open", "add"], STEP_OF = ["install", "open", "add"], GUIDE_REFRESH_MS = 20000;
+const GUIDE_KEYS = ["install", "port", "open", "add"], STEP_OF = ["install", "open", "add"], GUIDE_REFRESH_MS = 30000;
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
 // Tally's port for this Windows user (me: this browser's own bridge, else the member's bridge, else the guide's computer),
@@ -704,12 +703,13 @@ function useGuideRefresh() {
   // while the page is open, the computers and companies are read again every 20 seconds, so a step ticks and a company
   // opened in Tally shows in the list without a click (24-Oct-2026: always, not only while a step is not done: "if there
   // is a company open in Tally, it should show always")
-  useEffect(() => { const t = setInterval(() => {
+  // speed round (27-Oct-2026): the computers' beats (what a step and the open companies come from) every 30 s, and nothing
+  // while the tab is hidden; the rest of the page every 5 minutes, and once each time the page is opened (paneOpen)
+  useEffect(() => { TCloud.paneOpen(); const t = setInterval(() => {
     if (!document.querySelector("#app [data-tco-list]") || !TCloud.on() || TCloud.pane.busy) return;
     const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
     if (typing) return;
-    if (typeof TLight === "object") TLight.st.at = 0;
-    Promise.resolve(TCloud.refreshPane()).then(() => (typeof TLight === "object" ? TLight.refresh() : null)).then(() => render(), () => render());
+    TCloud.paneTick();
   }, GUIDE_REFRESH_MS); return () => clearInterval(t); }, []);
 }
 function GuideRefresh() { useGuideRefresh(); return null; }
@@ -1128,7 +1128,7 @@ export function CloudBooks() {
   const p = TCloud.pane;
   if (!TCloud.on()) return <div className="pane"><p className="note">Sign in to the firm account to keep the books in FinCom’s cloud.</p></div>;
   // read again when opened after a minute, so a link made elsewhere (another computer, the auto-link) shows
-  if (!p.busy && !p.err && (p.devices === null || Date.now() - (p.at || 0) > 60000)) { p.at = Date.now(); setTimeout(() => TCloud.refreshPane(), 0); }
+  if (!p.err) TCloud.paneTick();
   const cos = Object.values(S.companies || {}).filter((c) => !c.deleted).sort((a, c) => a.name.localeCompare(c.name));
   const dv = (p.devices || []).filter((d) => !d.revoked), cl = p.companies || [];
   return <>

@@ -172,7 +172,7 @@ const Rec = {
   actOf(){
     const a = this.act, cid = S.syncClient || "";
     if (!a.rows && !("at" in a)) Object.assign(a, {rows: null, at: 0, busy: false, no44: false, err: "", cid: ""});
-    if (typeof TCloud === "object" && TCloud.on() && !a.busy && (a.cid !== cid || !a.at || Date.now() - a.at > 60000)){ a.at = Date.now(); a.cid = cid; setTimeout(() => this.actLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !a.busy && (a.cid !== cid || !a.at || (Date.now() - a.at > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()))){ a.at = Date.now(); a.cid = cid; setTimeout(() => this.actLoad(), 0); }
     return a;
   },
   async actLoad(){
@@ -432,7 +432,7 @@ const Rec = {
   unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
   unkOf(books){
     const key = this.unkKey(books), u = this.unk[key] || (this.unk[key] = {rows: null, known: {}, at: 0, busy: false, none: false, err: ""});
-    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || Date.now() - u.at > 60000)){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !u.busy && (!u.at || (Date.now() - u.at > 60000 && pollOk()))){ u.at = Date.now(); setTimeout(() => this.unkLoad(books), 0); }
     return u;
   },
   async unkLoad(books){
@@ -612,7 +612,8 @@ const Rec = {
   gaps: {},                // {byClient: {cid: [{book, company, gap}]}, at, busy, no44}
   gapsOf(){
     const g = this.gaps;
-    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > 60000){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
+    // speed round (27-Oct-2026): every 5 minutes while seen (a gap's change comes at once through CopyLive)
+    if (typeof TCloud === "object" && TCloud.on() && !g.busy && !g.no44 && Date.now() - (g.at || 0) > SLOW_MS && pollOk()){ g.at = Date.now(); setTimeout(() => this.gapsLoad(), 0); }
     return g;
   },
   async gapsLoad(){
@@ -624,10 +625,15 @@ const Rec = {
       const by = {};
       cur.forEach(c => { const b = books.find(x => x.book_id === c.book_id); if (b && b.client_id) (by[b.client_id] = by[b.client_id] || []).push({book: c.book_id, company: b.company || "", gap: c.gap, gapAt: c.gap_at}); });
       g.byClient = by; g.no44 = false;
+      // each book's gap as read (CopyLive passes over a change of the copy that leaves it as it was: gapSame)
+      g.sig = {}; cur.forEach(c => { g.sig[c.book_id] = JSON.stringify(c.gap); });
     } catch (e){ g.byClient = {}; if (this.missing(e)) g.no44 = true; }
     // quiet refresh (14-Oct-2026): read again each minute; the page is drawn only when what was read changed
     g.busy = false; g.at = Date.now(); quietChanged("rec:gaps", [g.byClient, !!g.no44]);
   },
+  // speed round: the bridge writes tally_sync_cursor at its every send (14 a minute on staging, each read the gaps and the
+  // books again); only a change of the gap itself is news
+  gapSame(r){ const g = this.gaps; return !!(g && g.sig && r && r.book_id && "gap" in r) && (g.sig[r.book_id] || "null") === JSON.stringify(r.gap == null ? null : r.gap); },
   gapFor(cid){ const g = this.gapsOf(); return ((g.byClient || {})[cid] || []); },
   // Upload the Day Book for these days: Books -> From Tally with the Day Book's dates from gap.since to today
   async uploadDays(cid, gap){
@@ -640,7 +646,7 @@ const Rec = {
   silent: {},              // {rows, at, busy, none}
   silentOf(){
     const s = this.silent;
-    if (typeof TCloud === "object" && TCloud.on() && !s.busy && !s.none && Date.now() - (s.at || 0) > 5 * 60000){ s.at = Date.now(); setTimeout(() => this.silentLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !s.busy && !s.none && Date.now() - (s.at || 0) > 5 * 60000 && pollOk()){ s.at = Date.now(); setTimeout(() => this.silentLoad(), 0); }
     return [].concat(s.rows || []);
   },
   async silentLoad(){
@@ -658,7 +664,7 @@ const Rec = {
   alerts: {},              // {rows, at, busy, none, msg}
   alertsOf(){
     const a = this.alerts;
-    if (typeof TCloud === "object" && TCloud.on() && !a.busy && !a.none && Date.now() - (a.at || 0) > 60000){ a.at = Date.now(); setTimeout(() => this.alertsLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !a.busy && !a.none && Date.now() - (a.at || 0) > (Live.copyLive ? SLOW_MS : 60000) && pollOk()){ a.at = Date.now(); setTimeout(() => this.alertsLoad(), 0); }
     if (a.none) return [];
     return [].concat(a.rows || []).sort((x, y) => (!!x.read_at - !!y.read_at) || String(y.at || "").localeCompare(String(x.at || "")) || num(y.id) - num(x.id));
   },

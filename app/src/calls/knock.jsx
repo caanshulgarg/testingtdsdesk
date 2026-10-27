@@ -47,10 +47,22 @@ function listen(topic) {
   st.ch = channel({ url: base(), key: publicKey(), topic, presenceKey: "", onStatus: () => {} });
   st.ch.on("knock", () => { clearTimeout(t); t = setTimeout(refresh, 250); });
 }
+// speed round (27-Oct-2026, staging: fincom-call asked 407 times in 45 minutes by one browser): the firm's lobby channel
+// rings at once when someone asks (the server pings it), so the regular ask is only a safety net and keeps this person
+// counted online (call_watch, LOBBY.onlineSecs 90): every watchSecs (30 s) while the page is seen and used, every
+// idleSecs (75 s, still within 90) after 5 minutes with no key or click, 30 s while the channel is not joined; nothing
+// while the tab is hidden (the channel still rings, and the page asks once when shown again)
+const hidden = () => document.hidden || document.visibilityState === "hidden";
+let used = Date.now();
+const touch = () => { used = Date.now(); };
+function every() {
+  if (!(st.ch && st.ch.joined)) return LOBBY.watchSecs;
+  return Date.now() - used > 300000 ? LOBBY.idleSecs : LOBBY.watchSecs;
+}
 function schedule() {
   clearTimeout(st.timer);
-  if (!st.on) return;
-  st.timer = setTimeout(refresh, (st.ch && st.ch.joined ? LOBBY.watchSecs : 10) * 1000);
+  if (!st.on || hidden()) return;
+  st.timer = setTimeout(refresh, every() * 1000);
 }
 export async function refresh() {
   if (!st.on) return;
@@ -77,7 +89,9 @@ function draw() {
   const ids = st.list.map((k) => k.id).join(",");
   if (ids !== st.ids) { st.ids = ids; try { if (typeof window.render === "function") window.render(); } catch (e) { /* the bell catches up */ } }
 }
-const front = () => { if (!document.hidden) refresh(); };
+// shown again, focused, back on line: asked at once, not more than every 15 s (a window focused again and again asked each time)
+let frontAt = 0;
+const front = () => { if (hidden()) { clearTimeout(st.timer); return; } if (Date.now() - frontAt < 15000) { schedule(); return; } frontAt = Date.now(); refresh(); };
 
 export function startKnocks() {
   if (st.on) return;
@@ -87,6 +101,7 @@ export function startKnocks() {
     createRoot(el).render(<Knocks />);
   }
   document.addEventListener("visibilitychange", front);
+  ["keydown", "pointerdown"].forEach((e) => window.addEventListener(e, touch, { passive: true, capture: true }));
   window.addEventListener("focus", front); window.addEventListener("online", front); window.addEventListener("pageshow", front);
   window.FinComKnocks = () => st.list.map((k) => ({ key: "knock:" + k.id, sev: "warn", text: knockText(k.name, k.title), fix: k.mine ? "" : "The host isn't online, so you are asked.",
     act: { label: "Answer", run: () => { st.hidden.delete(k.id); draw(); } } }));
@@ -97,6 +112,7 @@ export function stopKnocks() {
   if (st.ch) { st.ch.close(); st.ch = null; st.topic = ""; }
   st.list = []; draw();
   document.removeEventListener("visibilitychange", front);
+  ["keydown", "pointerdown"].forEach((e) => window.removeEventListener(e, touch, { capture: true }));
   window.removeEventListener("focus", front); window.removeEventListener("online", front); window.removeEventListener("pageshow", front);
 }
 

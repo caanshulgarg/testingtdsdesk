@@ -139,7 +139,14 @@ const FirstOpen = {
     // the newest days first; within a month, its days in any order (a month is read once all of them are in)
     const want = [].concat(...months.map(ym => byMonth[ym].slice().sort((x, y) => x.day < y.day ? 1 : -1)));
     const nRecent = [].concat(...recent.map(ym => byMonth[ym])).length;
-    const led0 = p ? (await g(), await this.ledgers(bk)) : null, thin0 = p ? (await g(), await this.thin(bk).catch(e => { if (p.stop) throw e; return null; })) : null;
+    // speed round (27-Oct-2026): where a prefetch's time goes (the timings' prefetch/ledgers, prefetch/thin, prefetch/months,
+    // prefetch/copy; p.mark from src/js/98)
+    const tm = (k, t0, x) => { try { if (p && p.mark) p.mark("prefetch/" + k, performance.now() - t0, x || {}); } catch (e){} };
+    let t0 = performance.now();
+    const led0 = p ? (await g(), await this.ledgers(bk)) : null;
+    if (p){ tm("ledgers", t0); t0 = performance.now(); }
+    const thin0 = p ? (await g(), await this.thin(bk).catch(e => { if (p.stop) throw e; return null; })) : null;
+    if (p) tm("thin", t0);
     const ledP = p ? Promise.resolve(led0) : this.ledgers(bk);
     ledP.catch(() => {});
     const thinP = p ? Promise.resolve(thin0) : this.thin(bk).catch(() => null);
@@ -201,19 +208,23 @@ const FirstOpen = {
     try {
       // the newest month asked of FinCom's server in one answer: when it answers, every month so; else (a server without
       // month_days) the days one by one, sixteen at a time
-      let first = null;
+      let first = null; const tM = performance.now();
       if (!this.noPack && months.length){ await g(); try { first = await this.fetchMonth(book, months[0]); } catch (e){ this.noPack = true; } }
       try {
-        if (first) await Promise.all(Array.from({length: Math.min(p ? 1 : this.MONTHS, months.length)}, (_, i) => oneMonth(i === 0 ? first : null)));
-        else await Promise.all(Array.from({length: Math.min(p ? 1 : this.WORKERS, want.length)}, one));
+        // speed round: a prefetch two at a time (p.par; each request still waits for the person: p.gate)
+        if (first) await Promise.all(Array.from({length: Math.min(p ? p.par || 1 : this.MONTHS, months.length)}, (_, i) => oneMonth(i === 0 ? first : null)));
+        else await Promise.all(Array.from({length: Math.min(p ? p.par || 1 : this.WORKERS, want.length)}, one));
       } catch (e){ failed = failed || e; }
+      tm("months", tM, {q: months.length});
       flush();
       await chain;
       if (failed) throw failed;
       await shown;
       if (st.ready) this.tell(st, "Books: " + st.fy + " ready · putting " + st.older + " in…");
       await g();
+      const tC = performance.now();
       const [led, copy] = await Promise.all([ledP, this.copyFor(b, bk, res, months, thinP)]);
+      tm("copy", tC);
       // the ledgers' kinds as they were before the latest year was shown, unless someone changed one meanwhile (the
       // books then work them out from every entry, as always)
       if (st.mapShown && JSON.stringify(b.map) === st.mapShown) b.map = JSON.parse(st.mapBefore);

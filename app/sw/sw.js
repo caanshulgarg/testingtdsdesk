@@ -24,17 +24,22 @@ const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
 // 24-Oct-2026 (Safari, right after a publish): each file kept on its own, and only a real answer (keepable); one file
 // that does not come (a publish half way across GitHub's servers) no longer fails the whole install and leaves the older
 // worker in charge. A file not kept now is fetched and kept when it is first used
+// speed round (27-Oct-2026): the browser looks for a new worker at every open, so right after a publish the new worker was
+// installed WHILE the page was still downloading the same files, and fetched them all a second time beside it (legacy.js,
+// 600 KB, twice at once on the first open after each release; the owner: "it's too slow" on office Wi-Fi). Now the
+// install takes only what the browser already holds (only-if-cached: never the line), and the page itself (5 KB); the rest
+// of the first page's files is kept by keepRest below once the page is up and idle, or when first used
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => {
-    const q = ask(f);
-    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(q, r) : null).catch(() => null);
+    const q = f === "./" ? ask(f) : new Request(f, { cache: "only-if-cached", mode: "same-origin" });
+    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(new Request(f), r) : null).catch(() => null);
   }))).then(() => self.skipWaiting()));
 });
 // the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
 let keeping = null;
 function keepRest() {
   return keeping || (keeping = caches.open(SHELL).then(async (c) => {
-    for (const f of REST) {
+    for (const f of FILES.filter((x) => x !== "./").concat(REST)) {
       // round 90: a real script / style / font answer only (keepable, below); a broken kept copy is replaced
       try { const h = await caches.match(f, { ignoreVary: true }); if (!h || !good(h)) { const q = ask(f), r = await fetch(q); if (keepable(r)) await c.put(q, r); } } catch (e) { /* kept when it is first used */ }
     }

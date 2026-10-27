@@ -9,6 +9,11 @@
 //     the cloud's ready totals and come back in a moment, fit for a phone;
 //   - the computer with Tally connects itself (TCloud.auto); Settings, Books in the cloud: the computers that send (remove one) and which Tally company is
 //     which client.
+// speed round (27-Oct-2026, staging: one browser left on the Tally page overnight made about 7,000 requests an hour, with
+// nothing changing): what a page reads again by itself is read only while the tab is seen (pollOk), and what changes only
+// by a person's action every 5 minutes at most (SLOW_MS); the person's own action reads at once
+const pollOk = () => typeof document !== "object" || document.visibilityState !== "hidden";
+const SLOW_MS = 300000;
 const TCloud = {
   BIG: 60000,
   st: {},                 // cid -> {books, at, err}
@@ -63,7 +68,7 @@ const TCloud = {
   async status(cid, force){
     const s = this.st[cid] = this.st[cid] || {};
     if (!this.on()) return null;
-    if (!force && s.books && Date.now() - s.at < 30000) return s.books;
+    if (!force && s.books && (Date.now() - s.at < 30000 || !pollOk())) return s.books;   // (speed round: none while hidden)
     try { s.books = await this.rpc("tally_status", {p_client: cid}) || []; s.err = ""; }
     catch (e){ s.books = s.books || []; s.err = (e && e.message) || String(e); if (/tally_status|does not exist|schema cache/i.test(s.err)) s.books = []; }
     s.at = Date.now();
@@ -540,8 +545,28 @@ const TCloud = {
     } catch (e){}
   },
   // ---------- Settings: computers and companies
-  async refreshPane(){
+  // speed round: the page's reads in three paces. o.auto (the page by itself, every 5 minutes while seen): the computers,
+  // companies, stops, alerts and books' states; the releases, the rollback, the prefs, the member links, the self-checks
+  // and the computers' apart columns once a page open (paneOpen) and on demand. No o (a person's Refresh, Check again, or
+  // after an action here): all of it. Between, the computers' beats come from TLight's 30-second read (paneDevs) and the
+  // beat channel
+  paneOpen(){ const p = this.pane; p.onceAt = 0; if (!p.busy){ p.at = 0; this.paneTick(); } },
+  paneTick(){
+    if (!this.on() || !pollOk()) return;
+    if (typeof TLight === "object") TLight.refresh();
+    const p = this.pane;
+    if (!p.busy && (p.devices === null || Date.now() - (p.at || 0) >= SLOW_MS)){ p.at = Date.now(); setTimeout(() => this.refreshPane({auto: true}), 0); }
+  },
+  paneDevs(devs){
+    const p = this.pane;
+    if (!Array.isArray(p.devices) || !Array.isArray(devs)) return;
+    const by = new Map(p.devices.map(d => [d.id, d]));
+    devs.forEach(d => { const x = d && by.get(d.id); if (x) ["name", "last_seen", "info", "revoked"].forEach(k => { if (k in d) x[k] = d[k]; }); else if (d && !d.revoked) p.at = 0; });
+  },
+  paneShown(){ const p = this.pane; if (p.devices && !p.busy && Date.now() - (p.at || 0) >= SLOW_MS && document.querySelector("#app [data-tco-list], #app [data-pc-line]")){ p.at = Date.now(); this.refreshPane({auto: true}); } },
+  async refreshPane(o){
     const p = this.pane; p.busy = "Loading…"; render();
+    const once = !(o && o.auto) || !p.onceAt;
     try {
       // main_bridge from migration-22 on; without it, the list as before
       // created_by: the member whose page made the computer key (the owner's rule of 05-Oct-2026: their own bridge)
@@ -550,6 +575,7 @@ const TCloud = {
       // post_batch_bank, post_settings_at, post_settings_by); without the columns the page says they are not available
       const PS = ",post_only,post_batch_bills,post_batch_bank,post_settings_at,post_settings_by", noPS = m => /post_only|post_batch|post_settings/.test(m);
       const read = extra => Cloud.api("tally_devices?select=" + cols + extra + "&order=created_at.desc");
+      const was = new Map((p.devices || []).map(d => [d.id, d]));
       p.devices = await read(",main_bridge" + PS).then(r => { p.noPostSettings = false; return r; }).catch(e => {
         const m = String(e && e.message);
         if (noPS(m)){ p.noPostSettings = true; return read(",main_bridge").catch(e2 => { if (/main_bridge/.test(String(e2 && e2.message))){ p.noMain = true; return read(""); } throw e2; }); }
@@ -557,21 +583,24 @@ const TCloud = {
         throw e; });
       // round 19: "Trial tools on this computer" (migration 46: tally_devices.trial_tools), read apart so a cloud without
       // the column (42703) keeps the rest of the page; the line then says it is not available yet
-      try {
+      // (speed round: these two, and the prefs, links, releases, rollback and self-checks below, once a page open; between,
+      // as read last time)
+      if (!once) (p.devices || []).forEach(d => { const w = was.get(d.id); if (w) ["trial_tools", "recorder_source"].forEach(k => { if (k in w) d[k] = w[k]; }); });
+      if (once) try {
         const tt = [].concat(await Cloud.api("tally_devices?select=id,trial_tools") || []), by = new Map(tt.map(x => [x.id, x.trial_tools]));
         (p.devices || []).forEach(d => { if (by.has(d.id)) d.trial_tools = by.get(d.id) === true; });
         p.noTrialTools = false;
       } catch (e){ p.noTrialTools = /trial_tools|42703/.test(String(e && e.message)); }
       // round 20 (d.3): where a computer's changes come from (migration 47: tally_devices.recorder_source, addon |
       // alterid | both, default addon), read apart: without the column nothing is shown
-      try {
+      if (once) try {
         const rs = [].concat(await Cloud.api("tally_devices?select=id,recorder_source") || []), by = new Map(rs.map(x => [x.id, x.recorder_source]));
         (p.devices || []).forEach(d => { if (by.has(d.id)) d.recorder_source = by.get(d.id) || "addon"; });
         p.noRecorderSource = false;
       } catch (e){ p.noRecorderSource = true; }
       // FinCom Bridge 2.3.0 (migration 54): "Changes only" per bridge, and the bridge each member posts through; without
       // the tables (an older cloud) neither is shown and postings go as before
-      try {
+      if (once) try {
         p.prefs = [].concat(await Cloud.api("tally_bridge_prefs?select=device_id,bridge_id,changes_only") || []);
         p.links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
         p.noTarget = false;
@@ -585,6 +614,7 @@ const TCloud = {
         const all = [].concat(await Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by,cleared_at,cleared_by&order=id.desc&limit=300") || []);
         p.stops = all.filter(x => x.action !== "resume" && !x.cleared_at); p.resumes = resumeRows(all); p.noControl = false;
       } catch (e){ p.stops = []; p.resumes = {}; p.noControl = true; }
+      if (once){
       const relCols = "version,pilot_device,pilot_started_at,pilot_by,pilot_seen_at,pilot_self_stop,approved_at,approved_by";
       // migration 54: held_* (an owner's hold of a version) and the rollback standing (tally_bridge_rollbacks); without them
       // (an older cloud) the page offers neither
@@ -597,6 +627,7 @@ const TCloud = {
       } }
       try { p.rollback = ([].concat(await Cloud.api("tally_bridge_rollbacks?select=version,why,set_by,set_at&cleared_at=is.null&order=set_at.desc&limit=1") || []))[0] || null; p.noRollback = false; }
       catch (e){ p.rollback = null; p.noRollback = true; }
+      }
       // migration-37 (item 10): each book's reading state (needs_baseline: since when, why; cleared by whom, with the note)
       // and the books, to list them under their computer. Not readable (an older cloud, no select for members): nothing shown
       try { p.cursors = [].concat(await Cloud.api("tally_sync_cursor?select=book_id,state,state_why,state_at,cleared_at,cleared_by,cleared_note") || []); p.noBaselineClear = false; }
@@ -607,9 +638,9 @@ const TCloud = {
       try { p.books = p.cursors && p.cursors.length ? [].concat(await this.restAll("tally_books?select=book_id,client_id,company&order=company.asc") || []) : []; } catch (e){ p.books = []; }
       // next release (item e, migration 65): the nightly self-check of each company, the firm's latest 300 (tally_selfchecks,
       // as row security gives them); a cloud without the table: none, and nothing said
-      try { p.selfchecks = [].concat(await Cloud.api("tally_selfchecks?select=id,book_id,device_id,bridge,company,ran_at,night,result,words,still_missing,fetched,copy_ok&order=ran_at.desc&limit=300") || []); p.noSelfChecks = false; }
+      if (once) try { p.selfchecks = [].concat(await Cloud.api("tally_selfchecks?select=id,book_id,device_id,bridge,company,ran_at,night,result,words,still_missing,fetched,copy_ok&order=ran_at.desc&limit=300") || []); p.noSelfChecks = false; }
       catch (e){ p.selfchecks = []; p.noSelfChecks = true; }
-      p.err = ""; p.at = Date.now();
+      p.err = ""; p.at = Date.now(); if (once) p.onceAt = p.at;
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
     p.busy = ""; render();
@@ -1539,13 +1570,20 @@ const TLight = {
   st: {at: 0, busy: false, by: {}},
   refresh(){
     // every 30 s (a small database call; nothing is asked of Tally): a beat comes every 30 s, and "offline" is three missed
-    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 30000) return this.st.p || Promise.resolve();
+    // speed round (27-Oct-2026: one browser left on the Tally page overnight made 7,000 requests an hour, nothing changing):
+    // nothing while the tab is hidden (it reads once when shown again); the computers every 30 s, the companies and the
+    // stops from FinCom every 5 minutes (they change by a person's action, after which st.at = 0 reads them all again)
+    // (25 s: with the 5-second tick, a beat is on the page within 30 s at most)
+    if (!TCloud.on() || this.st.busy || Date.now() - this.st.at < 25000 || !pollOk()) return this.st.p || Promise.resolve();
     this.st.busy = true;
+    const slow = !this.st.loaded || !this.st.at || Date.now() - (this.st.slowAt || 0) >= SLOW_MS;
     // round 4, item 25: the stops from FinCom still standing, with who and when (null when they cannot be read: before
     // migration-35; then the computer's info.readStop alone says it)
-    return this.st.p = Promise.all([TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at,linked_by&order=company.asc"), Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
-        Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by&action=eq.stop&cleared_at=is.null&order=id.desc").then(r => [].concat(r || []), () => null)])
+    return this.st.p = Promise.all([slow ? TCloud.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at,linked_by&order=company.asc") : this.st.cos, Cloud.api("tally_devices?select=id,name,last_seen,info,revoked"),
+        slow ? Cloud.api("tally_read_stops?select=id,device_id,action,reason,stopped_at,stopped_by&action=eq.stop&cleared_at=is.null&order=id.desc").then(r => [].concat(r || []), () => null) : this.st.stops])
       .then(([cos, devs, stops]) => {
+        if (slow) this.st.slowAt = Date.now();
+        TCloud.paneDevs(devs);
         this.st.devs = (devs || []).filter(d => !d.revoked); this.st.cos = cos || []; this.st.stops = stops; this.st.loaded = true;
         TallyClock.see(this.st.devs, Date.now());
         this.st.by = this.work((cos || []).filter(c => c.client_id), devs || [], Date.now());
@@ -1718,7 +1756,8 @@ Object.assign(TLight, {
     // quiet refresh (14-Oct-2026): a beat comes every 30 s from each bridge (every 10 s with three); the page is drawn
     // only when the beat changed something it shows (a new last read, a read going on, Tally's state), never for its time alone
     if (hit){ const now = this.sigNow(); if (now !== was){ this.sig = now; quietRender(); } }
-    else { this.st.at = 0; this.refresh(); }
+    // a computer not in the list (new, or one revoked that still beats): read once, not at its every beat (speed round)
+    else { const u = this.st.unknown = this.st.unknown || {}; if (Date.now() - (u[m.device] || 0) > SLOW_MS){ u[m.device] = Date.now(); this.st.at = 0; this.refresh(); } }
     return hit;
   },
   // the Post page and the Tally panel look again every 30 s while they are open (a read may have come in), and every
@@ -1728,11 +1767,16 @@ Object.assign(TLight, {
     // only on a client's pages (on Home it kept the last answer it had until something else drew the page)
     if (typeof document !== "object" || document.visibilityState !== "visible" || !TCloud.on()) return;
     const cid = S.view === "company" ? S.coId : null, ask = cid ? TallyAsk[cid] : null;
-    if (ask && Date.now() - ask.at < 180000 && Date.now() - this.st.at > 5000) this.st.at = 0;
+    if (ask && Date.now() - ask.at < 180000 && Date.now() - this.st.at > 5000) this.st.at = 1;   // the computers only (st.at = 0 reads all)
     this.refresh();
   }
 });
 if (typeof setInterval === "function") setInterval(() => { try { TLight.tick(); } catch (e){} }, 5000);
+// speed round (27-Oct-2026): a tab shown again reads once at once (the computers; the Tally page its own lines too)
+if (typeof document === "object" && document.addEventListener) document.addEventListener("visibilitychange", () => {
+  if (!pollOk()) return;
+  try { if (TCloud.on()){ TLight.st.at = 0; TLight.refresh(); TCloud.paneShown(); } } catch (e){}
+});
 // when the client's books were last read from Tally ("Books as of 15:34"): the bridge's last read of its company, else
 // when FinCom's copy was last brought in. Never shown as "now": entries made in Tally since then come at the next event
 // the time "Books as of" gives, in plain words: FinCom Bridge's last read of the company from Tally (its readAt, the

@@ -27,6 +27,9 @@
 //   - measured: the timings' kinds prefetch/<step> (app/src/lib/timings.js; Prefetch.mark set by app/src/lib/firstOpen.js).
 const Prefetch = {
   MAX_ALL: 15, MOST: 10, HIDDEN_MS: 60000, FULL: 0.7, INPUT_MS: 1000, WAIT: 200,
+  // speed round (27-Oct-2026, staging: 37-59 s a client, most of it twelve month packs one after another, 2.7 s each at
+  // the server): two requests at a time while the person is not in the way (each waits at the gate as before)
+  PAR: 2,
   running: false, cur: "", curP: null, rushing: "", stopped: "", who: "", firm: "", p: null, input: 0, hiddenAt: 0, paused: 0, n: 0,
   mark(){},
   slow(){ const c = typeof navigator === "object" && navigator.connection; return !!(c && (c.saveData || /(^|-)2g$/.test(String(c.effectiveType || "")))); },
@@ -131,7 +134,7 @@ const Prefetch = {
     await TCloud.status(cid, true);
     if (!TCloud.has(cid) || (S.books && S.books.cid === cid && this.rushing !== cid)) return false;
     const saved = await Books.load(cid), b = saved && saved.cid === cid ? clone(saved) : {cid};
-    this.p = {b, co, gate: () => this.gate(), stop: false};
+    this.p = {b, co, gate: () => this.gate(), stop: false, par: this.PAR, mark: (k, ms, x) => this.mark(k, ms, x)};
     const r = await TCloud.load(false, false, this.p);
     if (r === "big"){ await this.gate(); await saveBooks({fromCloud: true}, b); }
     this.mark("prefetch/books", performance.now() - t, {q: (b.vouchers || []).length});

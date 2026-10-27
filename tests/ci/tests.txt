@@ -526,3 +526,6 @@ run_post_register_server.py           120
 run_post_register_ui.py               240  TDSDESK_SITE=../app/dist-test
 # prefetch-books (26-Oct-2026): the clients' books brought into a new browser right after sign-in, behind the page
 run_prefetch_books.py                 300  TDSDESK_SITE=../app/dist-test
+run_tally_poll.py                     240  TDSDESK_SITE=../app/dist-test
+run_open_line.py                      400  TDSDESK_SITE=../app/dist-test
+run_open_speed.py                     300  TDSDESK_SITE=../app/dist-test

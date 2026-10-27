@@ -24,7 +24,7 @@ export default function Meetings() {
   };
   useEffect(() => {
     load();
-    const t = setInterval(load, 60000);
+    const t = setInterval(() => { if (!document.hidden) load(); }, 60000);   // speed round: not while the tab is hidden
     // FinCom opened from a meeting's link: its lobby, over this page
     const c = pendingJoin(); if (c) Calls.joinCode(c);
     const back = () => load();

@@ -67,4 +67,21 @@ export function lazyModule(load) {
   };
 }
 // every screen's file, fetched once the first page is drawn (the network is free by then: the program has loaded)
-export function preloadScreens() { loaders.forEach((g) => { g().catch(() => {}); }); }
+// speed round (27-Oct-2026, staging: 50 script files and 9 styles, 1 MB, all at once right after the first page, on the
+// same line as the person's first clicks and the firm's data): two at a time, and none ahead on a slow line or one that
+// saves data (lineSlow): there a screen's file comes when its page is opened
+export function lineSlow() {
+  try {
+    const c = navigator.connection;
+    if (c && (c.saveData || /(^|-)2g|3g/.test(String(c.effectiveType || "")) || (c.downlink > 0 && c.downlink < 1.5))) return true;
+    // what this open measured: the program (legacy.js, about 600 KB) came at under 150 KB a second
+    const e = performance.getEntriesByType("resource").find((x) => /\/legacy[^/]*\.js(\?|$)/.test(x.name) && x.encodedBodySize > 100000);
+    return !!(e && e.responseEnd - e.responseStart > 0 && e.encodedBodySize / ((e.responseEnd - e.responseStart) / 1000) < 150000);
+  } catch (e) { return false; }
+}
+export function preloadScreens() {
+  if (lineSlow()) return;
+  const q = loaders.slice();
+  const next = () => { const g = q.shift(); if (g) g().catch(() => {}).then(next); };
+  next(); next();
+}

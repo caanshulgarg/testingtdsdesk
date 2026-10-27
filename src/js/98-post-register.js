@@ -20,7 +20,8 @@ const PostReg = {
     if (!cid || typeof TCloud !== "object" || !TCloud.on() || this.busy[cid]) return;
     if (this.readable === false && Date.now() - this.missingAt < 600000 && !force) return;
     const s = this.by[cid], key = this.key(cid);
-    if (!force && s && s.key === key && Date.now() - s.at < 30000) return;
+    // speed round (27-Oct-2026): a posting's change (CloudJobs, live) reads it at once; else every 5 minutes while seen
+    if (!force && s && s.key === key && (Date.now() - s.at < SLOW_MS || !pollOk())) return;
     this.busy[cid] = true;
     try {
       const rows = [].concat(await TCloud.restAll("tally_post_register?select=" + this.COLS + "&client_id=eq." + encodeURIComponent(cid) + "&order=changed_at.desc") || []);

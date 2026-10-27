@@ -462,7 +462,8 @@ const CopyLive = {
       const k = String(r.client_id), had = this.books.get(k) || new Set();
       [].concat(r.tables || []).forEach(t => had.add(String(t)));
       this.books.set(k, had);
-    } else this.sync.add(String(table));
+    } else if (table === "tally_sync_cursor" && typeof Rec === "object" && Rec.gapSame(r)) return;   // speed round: the gap as it was
+    else this.sync.add(String(table));
     this.soon();
   },
   soon(){

@@ -209,6 +209,7 @@ function take(e) {
     let idle = false;
     if (kind.startsWith("fn/")) { const last = T.lastFn[kind]; idle = !last || e.startTime - last > IDLE_GAP; T.lastFn[kind] = e.startTime + e.duration; }
     both(kind, e.duration, { rx: e.encodedBodySize, wire: e.transferSize, up: seen && seen.up, cached: e.transferSize === 0 && e.decodedBodySize > 0, status: e.responseStatus, idle });
+    if (kind.startsWith("site/")) siteParts(kind, e);
   } catch (x) { /* never in the way */ }
 }
 
@@ -263,10 +264,19 @@ function watchLive() {
   Live.__timed = true;
 }
 
+// speed round (27-Oct-2026: on office Wi-Fi legacy.js took 11.7 s and build.json, 91 bytes, 5 s at the median): where a
+// site file's time goes, waiting for its first byte ("<kind> ttfb", from the request's start: queueing, the connection,
+// the server) or coming down ("<kind> dl"), and over which protocol (proto/h2, proto/h3, proto/http/1.1: an office proxy
+// or antivirus that inspects HTTPS often turns HTTP/2 into 1.1 and holds a script until it has read it all)
+function siteParts(kind, e) {
+  if (e.responseStart > 0) { both(kind + " ttfb", e.responseStart - e.startTime); both(kind + " dl", Math.max(0, e.responseEnd - e.responseStart)); }
+  if (e.nextHopProtocol) both("proto/" + e.nextHopProtocol, 0);
+}
 function openTimes() {
   try {
     const n = performance.getEntriesByType("navigation")[0];
     if (n) {
+      siteParts("open/page", n);
       if (n.responseStart > 0) both("open/first-byte", n.responseStart);
       if (n.domContentLoadedEventEnd > 0) both("open/dom", n.domContentLoadedEventEnd);
       if (n.loadEventEnd > 0) both("open/load", n.loadEventEnd);
@@ -286,6 +296,9 @@ function row() {
 // one summary row, when something new happened and someone is signed in. hidden: the page is going away (keepalive)
 export async function send(hidden) {
   const C = cloud();
+  // the requests that ended a moment ago, not yet handed to the observer, go with this row (speed round: a request that
+  // ended just before the page was hidden came in after its row, and made a second one when the page went away)
+  try { if (T.obs) T.obs.takeRecords().forEach(take); } catch (e) { /* the observer hands them over later */ }
   if (!T.started || !C || !T.win.fresh || T.fails >= 3) return false;
   const body = row(), was = T.win;
   T.win = newAcc();
@@ -420,7 +433,7 @@ export function start() {
   watchFetch(); watchLive();
   openTimes();
   try { performance.getEntriesByType("resource").forEach(take); } catch (e) { /* not in this browser */ }
-  try { new PerformanceObserver((l) => l.getEntries().forEach(take)).observe({ type: "resource" }); } catch (e) { /* the entries read above only */ }
+  try { T.obs = new PerformanceObserver((l) => l.getEntries().forEach(take)); T.obs.observe({ type: "resource" }); } catch (e) { /* the entries read above only */ }
   // Live may start after this (the firm's sign-in): looked for again
   const live = setInterval(() => { watchLive(); if (typeof Live === "object" && Live && Live.__timed) clearInterval(live); }, 5000);
   const every = Number(window.__fincomTimingsEvery) >= 1000 ? Number(window.__fincomTimingsEvery) : EVERY;
@@ -428,7 +441,8 @@ export function start() {
   const used = () => { T.input = Date.now(); };
   document.addEventListener("pointerdown", used, { capture: true, passive: true });
   document.addEventListener("keydown", used, { capture: true, passive: true });
-  setInterval(() => { send(false); }, every);
+  // (speed round: not from a hidden tab; its row went when it was hidden, the rest goes when it is seen again or leaves)
+  setInterval(() => { if (document.visibilityState !== "hidden") send(false); }, every);
   const away = () => { if (document.visibilityState === "hidden") send(true); };
   document.addEventListener("visibilitychange", away);
   window.addEventListener("pagehide", () => send(true));

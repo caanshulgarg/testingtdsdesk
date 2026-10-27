@@ -8,8 +8,8 @@ with the same reads and the same functions an opening uses, so the opening later
 A fake firm account (sign-in, clients, the cloud copy of the books of eight clients, their TDS/GST work as items, row-level
 security for a staff member) that logs every request with its start, end and client:
   1. a fresh browser, signed in, no click: every client's books are in this browser's stores within PREFETCH_S seconds, the
-     first read soon after the client list came, in order of the books' last change, one client at a time and one request
-     at a time; nothing is written to the cloud;
+     first read soon after the client list came, in order of the books' last change, one client at a time and at most two requests
+     at a time (speed round, 27-Oct-2026: one before); nothing is written to the cloud;
   2. a prefetched client opened: no full read (no day file, no month of day files, no ledger list, no entries' heads or
      their GUID list, no work items from the start), only the change checks, and its entries on screen with no wait;
   3. a client opened while it is being prefetched: nothing is fetched twice, and its books are whole;
@@ -309,10 +309,12 @@ with sync_playwright() as pw:
     ok(book_order == ORDER, "the clients in order of their books' last change (%s; expected %s)" % (book_order, ORDER))
     spans = [(c, min(r["t0"] for r in rs if r["cid"] == c), max(r["t1"] or 0 for r in rs if r["cid"] == c)) for c in ORDER if any(r["cid"] == c for r in rs)]
     over = [(a[0], b[0]) for a, b in zip(spans, spans[1:]) if b[1] < a[2]]
+    print("     each client's prefetch (first read to last): %s s" % ", ".join("%.1f" % (e - b) for _, b, e in spans))
     ok(not over, "one client at a time: each client's reads end before the next client's begin (%s)" % over)
     mo = max_overlap(rs)
     both = [(a["kind"], a["cid"], b["kind"], b["cid"]) for a in rs for b in rs if a is not b and a["t0"] < b["t0"] < (a["t1"] or 1e12)]
-    ok(mo == 1, "one request at a time (at most %d at once%s)" % (mo, (": " + str(both[:3])) if both else ""))
+    # speed round (27-Oct-2026): the months of a client two at a time while the person is not in the way
+    ok(mo <= 2, "at most two requests at a time (at most %d at once%s)" % (mo, (": " + str(both[:3])) if both else ""))
     last = pg.evaluate("() => typeof Prefetch === 'object' && Prefetch.last || ''")
     ok(not last, "no client failed to come in (%s)" % last)
     wr = [(r["kind"], r["cid"]) for r in since(t0) if r.get("write") and (r["cid"] or r["kind"] == "rpc/save_book_items")]

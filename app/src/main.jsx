@@ -21,7 +21,7 @@ import { subscribe, snapshot } from "./store.js";
 import { flushSync } from "react-dom";
 import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
-import { preloadScreens } from "./screens/lazy.js";
+import { preloadScreens, lineSlow } from "./screens/lazy.js";
 import "./nav.js";
 // calls (stage 1, 23-Oct-2026): the way in only; the call screen is its own file, fetched when a call is opened
 import { guestLink, startGuest, joinHash, memberHere, takeJoin } from "./calls/launch.js";
@@ -76,7 +76,8 @@ function registerWorker() {
     navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
     // round 73 B: the worker keeps only what the first page needs when it is installed; the rest of this build's files
     // once it is ready and the computer is idle again (sw/sw.js, "fincom:keep-rest")
-    navigator.serviceWorker.ready.then((r) => idle(() => { try { if (r.active) r.active.postMessage("fincom:keep-rest"); } catch (e) { /* kept when first used */ } }, 10000)).catch(() => {});
+    // speed round: not on a slow line (lineSlow, screens/lazy.js): there each file is kept when it is first used
+    navigator.serviceWorker.ready.then((r) => idle(() => { try { if (r.active && !lineSlow()) r.active.postMessage("fincom:keep-rest"); } catch (e) { /* kept when first used */ } }, 10000)).catch(() => {});
   } catch (e) { /* never in the way of the page */ }
 }
 const idle = (f, t) => (typeof requestIdleCallback === "function" ? requestIdleCallback(f, { timeout: t }) : setTimeout(f, Math.min(t, 1500)));

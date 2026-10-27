@@ -30,7 +30,7 @@ const AlertHub = {
   },
   heldOf(){
     const h = this.held;
-    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > 60000){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
+    if (typeof TCloud === "object" && TCloud.on() && !h.busy && !h.none && Date.now() - (h.at || 0) > (Live.recorderLive ? SLOW_MS : 60000) && pollOk()){ h.at = Date.now(); setTimeout(() => this.heldLoad(), 0); }
     return [].concat(h.rows || []);
   },
   async heldLoad(){

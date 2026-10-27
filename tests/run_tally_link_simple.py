@@ -175,8 +175,9 @@ def main():
         ok("No company seen in Tally yet" in txt("#app [data-tco-list=firm]"), "2b. nothing seen: open your company in TallyPrime (%s)" % txt("#app [data-tco-list=firm]"))
         E("""() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()});
             const d = window.__devs.find(x => x.id === '%s'); d.info.beat.open.push('NEW CO'); Object.values(d.info.bridges).forEach(b => b.open.push('NEW CO')); }""" % (D1, D1))
-        pg.wait_for_timeout(22500)
-        ok(pg.locator('#app [data-tco-list=firm] [data-tco-row="NEW CO"]').count() == 1, "2b. a company opened in Tally shows by itself (no click)")
+        # speed round (27-Oct-2026): the computers' beats are read every 30 s (they were, with the whole page, every 20 s)
+        pg.wait_for_timeout(32000)
+        ok(pg.locator('#app [data-tco-list=firm] [data-tco-row="NEW CO"]').count() == 1, "2b. a company opened in Tally shows by itself within 30 s (no click)")
 
         # ---- 3. Disconnected: linked, the computer has Tally closed (FRONTDESK keeps it; no other computer has it open)
         scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
