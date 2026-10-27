@@ -103,6 +103,27 @@ Deno.test("3. over the month's rupee cap: no call, said so", async () => {
   assert(/budget for this month is used up/.test(r.j.ai.say), r.j.ai.say);
 });
 
+// next-tds-match-fast (27-Oct-2026: 7 to 11 s a call on staging): the checks before the AI go in waves, not one by one
+Deno.test("5. the checks before the AI in at most 4 waves (were 7 one after another); 9 round trips in all became 6", async () => {
+  const { sb } = setup();
+  let inflight = 0, waves = 0, most = 0, aiAt = -1;
+  const slow = sb.fetch;
+  const h = handler({ env: (k) => ({ SUPABASE_URL: "http://sb", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as Record<string, string>)[k],
+    fetch: (async (i: any, o: any) => { if (!inflight) waves++; inflight++; most = Math.max(most, inflight); await new Promise((r) => setTimeout(r, 15)); try { return await slow(i, o); } finally { inflight--; } }) as typeof fetch,
+    anthropic: () => { const f = new FakeClaude(); const s = f.beta.messages.stream; f.beta.messages.stream = (p: any) => { aiAt = waves; return s(p); }; return f; } });
+  const r = await h(new Request("http://fn/", { method: "POST", headers: { Authorization: "Bearer jwt-owner" }, body: JSON.stringify(ASK()) }));
+  const j = await r.json();
+  assert(j.ok && j.ai.state === "used", JSON.stringify(j).slice(0, 300));
+  assert(aiAt >= 1 && aiAt <= 4, "the checks and the cap before the AI in at most 4 waves (were 7): " + aiAt);
+  assert(waves <= 6 && most >= 3, "waves " + waves + ", most at once " + most);
+  // the refusals are as before
+  const s2 = setup();
+  eq((await s2.call(ASK(), "jwt-viewer")).status, 403, "look-only still refused");
+  eq((await s2.call(ASK({ action: "x" }))).status, 400, "unknown request");
+  eq((await s2.call(ASK({ fy: "26" }))).status, 400, "no year");
+  eq(s2.ai.calls.length, 0, "no AI call on a refusal");
+});
+
 Deno.test("4. a look-only member, another firm's client, no sign-in: refused", async () => {
   const { ai, call } = setup();
   eq((await call(ASK(), "jwt-viewer")).status, 403, "look-only");

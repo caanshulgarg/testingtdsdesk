@@ -58,25 +58,31 @@ export function handler(deps: Deps) {
     try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
     const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
     if (!jwt || jwt === ANON || jwt === SERVICE) return reply(401, { ok: false, kind: "auth", error: "Sign in to the firm account first." });
-    let user: any;
-    try { user = await rest("/auth/v1/user", jwt); } catch { return reply(401, { ok: false, kind: "auth", error: "Sign in again." }); }
+    // next-tds-match-fast (27-Oct-2026): the checks before the AI were seven round trips one after another (1.1 s on
+    // staging, once 6 s); now three waves: the sign-in and the two-step together; then the member, the client and the
+    // key together; then the firm's switch. The answers are still read in the same order, with the same refusals.
+    const userP = rest("/auth/v1/user", jwt).then((u) => u, () => null), mfaP = rpc("mfa_ok", {}, jwt).then((v) => v === true, () => false);
+    const user: any = await userP;
     if (!user?.id) return reply(401, { ok: false, kind: "auth", error: "Sign in again." });
-    try { if ((await rpc("mfa_ok", {}, jwt)) !== true) return reply(403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." }); }
-    catch { return reply(403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." }); }
-    const mem = (await rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + q(user.id), SERVICE).catch(() => [])) as any[];
+    if (!(await mfaP)) return reply(403, { ok: false, kind: "mfa", error: "Finish the two-step sign-in first." });
+    const clientId = String(body?.client_id || "").slice(0, 120), fy = String(body?.fy || ""), qq = String(body?.q || ""), form = String(body?.form || "");
+    const asked = String(body?.action || "") === "suggest" && !!clientId && FY.test(fy) && Q.test(qq) && FORMS.includes(form);
+    const memP = rest("/rest/v1/members?select=firm_id,role,active&user_id=eq." + q(user.id), SERVICE).catch(() => []) as Promise<any[]>;
+    const cliP = asked ? rest("/rest/v1/clients?select=id,deleted&id=eq." + q(clientId), jwt).catch(() => []) as Promise<any[]> : Promise.resolve([]);
+    const keyP = asked && body.ai === true ? keyOf() : Promise.resolve("");
+    const mem = await memP;
     const member = (mem || []).find((m) => m.active);
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });
     if (member.role !== "owner" && member.role !== "staff") return reply(403, { ok: false, kind: "role", error: "Only the owner or staff can ask AI to match challans." });
     const firm = String(member.firm_id);
     if (String(body?.action || "") !== "suggest") return reply(400, { ok: false, error: "Unknown request" });
-    const clientId = String(body.client_id || "").slice(0, 120), fy = String(body.fy || ""), qq = String(body.q || ""), form = String(body.form || "");
-    if (!clientId || !FY.test(fy) || !Q.test(qq) || !FORMS.includes(form)) return reply(400, { ok: false, error: "Say the client, the form, the year (2026-27) and the quarter." });
-    const c = (await rest("/rest/v1/clients?select=id,deleted&id=eq." + q(clientId), jwt).catch(() => [])) as any[];
+    if (!asked) return reply(400, { ok: false, error: "Say the client, the form, the year (2026-27) and the quarter." });
+    const c = await cliP;
     if (!c || !c.length || c[0].deleted) return reply(403, { ok: false, kind: "client", error: "This client is not one of your firm's." });
     try {
       const rows = cleanRows(body.rows), chs = cleanChallans(body.challans);
       const allowed = body.ai === true && await firmAiOn(firm);
-      const key = allowed ? await keyOf() : "";
+      const key = allowed ? await keyP : "";
       const out = await matchRun(rows, chs, { fy, q: qq }, {
         client: key ? deps.anthropic(key) : null, aiAllowed: allowed,
         capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }); return { ok: !!r?.ok, why: String(r?.why || "") }; },

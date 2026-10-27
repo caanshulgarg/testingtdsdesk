@@ -360,5 +360,77 @@ ok(/salary sheet/.test(x.TDS24Q_FILE.build("2026-27", "Q1", FIRM).error || ""), 
   ok(beta && beta.party === "Beta" && !beta.partyFrom, "N. Tally's party, where it has one, as before");
 }
 
-console.log(fails.length ? "\nFAILED: " + fails.length : "\nall passed");
-process.exit(fails.length ? 1 : 0);
+// ---------------------------------------------------------------- K. the AI's answer kept per return (next-tds-match-fast,
+// 27-Oct-2026: the owner's Safari waited 7 to 11 s on tds-challan-match, asked again on every open of a return). The answer
+// is kept in this browser with the hash of what the rules left; a return opened again shows it at once and asks nothing;
+// only a change of its deductions or challans asks again, in the background, the page usable meanwhile; the suggestions
+// shown from the kept answer are those of the answer itself
+async function kept(){
+  const LS = {}, calls = [], tick = (ms) => new Promise((res) => setTimeout(res, ms || 5));
+  ctx.lsGet = (k) => (Object.prototype.hasOwnProperty.call(LS, k) ? LS[k] : null); ctx.lsSet = (k, v) => { LS[k] = String(v); }; ctx.lsDel = (k) => { delete LS[k]; };
+  ctx.setTimeout = setTimeout; ctx.Cloud = {on: () => false, fresh: async () => {}, cfg: () => ({url: "https://sb.example", key: "anon"}), sess: () => ({access_token: "jwt"})};
+  const M = x.TDSMatch; M.online = () => true; M.aiAllowed = () => true; M.ai = {};
+  let gate = null, fail = false;
+  ctx.fetch = async (url, init) => {
+    const body = JSON.parse(init.body); calls.push({url, body});
+    if (gate) await gate;
+    if (fail) throw new Error("network down");
+    const ids = body.rows.filter((r) => r.sec === "194J").map((r) => r.id);
+    return {status: 200, json: async () => ({ok: true, ai: {state: "used", say: "AI looked at the deductions the rules left: " + ids.length + " suggested · cost ₹0.55"},
+      pairs: ids.length ? [{chId: "chH", ids, reason: "the challan says 194H but paid May's 194J", confidence: "high"}] : [], splits: [], interest: []})};
+  };
+  // May's 194J ₹10,000 has no 194J challan: the challan marked 194H of 7 June paid it (the AI's to find)
+  books([V("k1", "20260410", "Alpha Ltd", 100000, 2000, "TDS 194C"), V("k2", "20260512", "Gamma", 100000, 10000, "TDS 194J")],
+    [CH("chA", "20260507", 2000, "194C"), CH("chH", "20260607", 12000, "194H")]);
+  const T = ["26Q", "2026-27", "Q1"], key = M.LS + M.aiKey(...T), left = M.leftovers(...T);
+  ok(left.rows.length === 1 && left.rows[0].id === "k2|TDS 194J", "K. the rules leave May's 194J (" + J(left.rows.map((r) => r.id)) + ")");
+  const rulesOnly = J(M.suggestNow(...T));
+  // first open: nothing kept, asked once in the background
+  M.view(...T); await tick(20);
+  ok(calls.length === 1 && J(calls[0].body.rows.map((r) => r.id)) === J(["k2|TDS 194J"]) && /tds-challan-match$/.test(calls[0].url), "K. first open: one ask, only what the rules left (" + calls.length + ")");
+  const live = M.suggestNow(...T), liveJ = J(live);
+  ok(live.some((s) => s.rule === "g" && s.chId === "chH") && liveJ !== rulesOnly, "K. the AI's pairing shown with the rules' (" + live.map((s) => s.rule + ":" + s.chId).join(", ") + ")");
+  ok(LS[key] && JSON.parse(LS[key]).state === "used" && JSON.parse(LS[key]).hash === M.leftHash(...T) && JSON.parse(LS[key]).hash.length < 24, "K. the answer kept for the return, with the hash of what was sent (" + (LS[key] || "").slice(0, 80) + ")");
+  // the page opened again (its memory gone): the kept answer shown at once, no ask
+  for (let i = 0; i < 3; i++){
+    M.ai = {};
+    const t0 = Date.now(), a = M.view(...T), sh = J(M.suggestNow(...T)), ms = Date.now() - t0;
+    await tick(20);
+    ok(a && a.state === "used" && /AI looked at/.test(a.say) && !a.busy && sh === liveJ && calls.length === 1 && ms < 200, "K. open " + (i + 2) + ": no tds-challan-match call, the kept answer at once (" + ms + " ms), the suggestions the same as when it was asked");
+  }
+  // Validate & file's AI row reads the kept answer too
+  M.ai = {};
+  ok((M.aiState(...T) || {}).state === "used", "K. Validate's AI row: the kept answer's words");
+  // a person confirming a rule's suggestion leaves the leftovers as they were: no ask
+  const sA = M.suggestNow(...T).find((s) => s.chId === "chA");
+  ok(sA && M.confirm(sA.key, ...T).ok, "K. a rule's suggestion confirmed");
+  M.view(...T); await tick(20);
+  ok(calls.length === 1, "K. the leftovers unchanged by it: no ask (" + calls.length + ")");
+  // a challan's balance changes (a new deduction): asked again, in the background; the page usable while it runs
+  ctx.S.books.vouchers.push(V("k3", "20260515", "Beta", 20000, 400, "TDS 194J"));
+  let open; gate = new Promise((res) => { open = res; });
+  const t1 = Date.now(), a1 = M.view(...T), mid = M.suggestNow(...T), ms1 = Date.now() - t1;
+  await tick(20);
+  const st = M.aiState(...T);
+  ok(calls.length === 2 && st.busy && ms1 < 200, "K. deductions changed: asked again in the background (" + calls.length + " calls), the page drawn meanwhile (" + ms1 + " ms)");
+  ok(mid.some((s) => s.chId === "chA") === false && mid.every((s) => s.rule !== "g") && !M.suggestNow(...T).some((s) => s.rule === "g"), "K. while it runs: the rules' suggestions, the old AI answer (for other leftovers) not shown");
+  const r1 = M.confirmAll(...T);
+  ok(r1 && r1.ok !== undefined, "K. while it runs a person can still act (Confirm all: " + J({n: r1.n}) + ")");
+  open(); gate = null; await tick(20);
+  ok(!M.aiState(...T).busy && JSON.parse(LS[key]).hash === M.leftHash(...T) && M.suggestNow(...T).some((s) => s.rule === "g" && s.ids.length === 2), "K. the answer came: the page drawn again with it, kept for the new hash");
+  M.view(...T); await tick(20);
+  ok(calls.length === 2, "K. then opened again: no ask");
+  // an answer the AI could not give is not kept: the next open asks again
+  fail = true; await M.askAi(...T, true);
+  ok(M.aiState(...T).state === "failed" && !LS[key], "K. AI not reached: said, nothing kept");
+  fail = false;
+  // AI off: never asked
+  M.ai = {}; M.aiAllowed = () => false; const n0 = calls.length; ctx.S.books.vouchers.push(V("k4", "20260516", "Beta", 20000, 300, "TDS 194J"));
+  M.view(...T); await tick(20);
+  ok(calls.length === n0 && M.aiState(...T).state === "off", "K. AI off: no call, the rules stand");
+}
+
+kept().catch((e) => ok(false, "K. " + (e && e.stack || e))).then(() => {
+  console.log(fails.length ? "\nFAILED: " + fails.length : "\nall passed");
+  process.exit(fails.length ? 1 : 0);
+});
