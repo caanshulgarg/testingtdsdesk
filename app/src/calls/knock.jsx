@@ -55,9 +55,13 @@ function listen(topic) {
 const hidden = () => document.hidden || document.visibilityState === "hidden";
 let used = Date.now();
 const touch = () => { used = Date.now(); };
+// speed round 2 (27-Oct-2026, client_timings: fincom-call asked 561 times in 6 hours, up to 11 s each, on every page,
+// meeting or not): with the channel joined (it rings at once when someone asks), the ask is only there to keep this
+// person counted online, so every idleSecs (75 s, within onlineSecs 90) whatever the page; watchSecs only while the
+// channel is not joined
 function every() {
   if (!(st.ch && st.ch.joined)) return LOBBY.watchSecs;
-  return Date.now() - used > 300000 ? LOBBY.idleSecs : LOBBY.watchSecs;
+  return LOBBY.idleSecs;
 }
 function schedule() {
   clearTimeout(st.timer);

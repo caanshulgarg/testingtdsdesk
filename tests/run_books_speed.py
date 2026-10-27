@@ -11,7 +11,9 @@ of work) on an office line (150 ms, 9 Mbit/s) with the CPU 4x slower (a Mac on a
      server answering a month of day files at once (tally-ingest month_days, after its deploy: 19 requests, not 560) and
      without it (today: the day files, sixteen at a time). 1z: the books end exactly as the load before fast-firstopen
      makes them (every kept part of the books, the TDS rows, GSTR-3B of every month, the trial balances);
-  2. reopening after a reload: the TDS page usable from the copy here within REOPEN_MAX_MS (1,500 ms); no day file, no
+  2. reopening after a reload: the TDS page usable from the copy here within REOPEN_MAX_MS (1,500 ms), and within
+     PREFETCHED_MAX_MS (1,000 ms, speed round 2) with at most BEFORE_PAINT_MAX (2) cloud answers before it, the server's
+     changes not among them (asked once the page is on screen, beside the cloud copy's check); no day file, no
      work fetched from the start, the cloud copy's entries never read in full;
   3. switching pages (TDS, GST, MIS, Reports, Bank, back to TDS): the books are never opened or read again, nothing is
      fetched from the cloud copy for it, each page drawn within SWITCH_MAX_MS (2,500 ms at 4x: MIS and Reports work out the year when first shown);
@@ -37,6 +39,8 @@ SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test
 PORT = int(os.environ.get("BOOKS_SPEED_PORT") or 8473)
 CPU = float(os.environ.get("CPU_SLOWDOWN") or 4)
 REOPEN = int(os.environ.get("REOPEN_MAX_MS") or 1500)
+PREFETCHED = int(os.environ.get("PREFETCHED_MAX_MS") or 1000)
+BEFORE_PAINT = int(os.environ.get("BEFORE_PAINT_MAX") or 2)
 SWITCH = int(os.environ.get("SWITCH_MAX_MS") or 2500)
 FIRST_USABLE = int(os.environ.get("FIRST_USABLE_MS") or 5000)
 FIRST_FY = int(os.environ.get("FIRST_FY_MS") or 15000)
@@ -185,14 +189,19 @@ async def main():
         # ---------- 2. reopen after a reload
         print("== 2. the client opened again after a reload (nothing changed in the cloud)")
         # timings: the better of two tries (the stand-in shares one machine with the browser at 4x)
-        u2s = []
+        u2s, before = [], []
         for k in range(2):
             await pg.reload(); await boot(); await quiet(1.5); t0 = time.time(); a = await m()
-            u2s.append(await open_client(L.CID, "reopening (try %d):" % (k + 1), n=len(L.VOUCHERS), fresh=True))
+            u = await open_client(L.CID, "reopening (try %d):" % (k + 1), n=len(L.VOUCHERS), fresh=True); u2s.append(u)
+            if u is not None: before.append(L.cat(t0, t0 + u))
             await quiet(); c2 = L.cat(t0); b = await m()
         u2 = min([x for x in u2s if x is not None] or [None])
         print("     %s; %s" % (json.dumps(c2), json.dumps(delta(a, b))))
         ok(u2 is not None and u2 * 1000 <= REOPEN, "the TDS page usable from the copy here in %s ms (<= %d)" % (int(u2 * 1000) if u2 else "-", REOPEN))
+        # speed round 2 (the owner, 27-Oct-2026: "under 1 s"): the books kept here drawn at once; the server's changes and
+        # the cloud copy's check asked only once they are on screen, side by side
+        ok(u2 is not None and u2 * 1000 <= PREFETCHED, "a client whose books are kept here is usable in %s ms (<= %d)" % (int(u2 * 1000) if u2 else "-", PREFETCHED))
+        ok(before and all(x["calls"] <= BEFORE_PAINT and x["items_calls"] == 0 for x in before), "at most %d requests to the cloud answered before the page is usable, the server's changes not among them (%s)" % (BEFORE_PAINT, [(x["calls"], x["items_calls"]) for x in before]))
         ok(c2["dayfiles"] == 0 and c2["months"] == 0 and c2["items_from0"] == 0, "no day file and no work fetched from the start (%d, %d, %d)" % (c2["dayfiles"], c2["months"], c2["items_from0"]))
         ok(c2["heads_kb"] < 64, "the cloud copy's entries are not read in full on a reopening (%d KB of entry heads)" % c2["heads_kb"])
         # ---------- 2b. the stale-copy guard: a colleague changed an item while this browser was closed

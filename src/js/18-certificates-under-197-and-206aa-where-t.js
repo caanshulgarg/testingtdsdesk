@@ -189,12 +189,14 @@ async function openBooksNow(cid){
   let painted; const drawn = new Promise(ok => { painted = ok; }); setTimeout(() => painted(), 3000);
   if (typeof BookSync === "object" && BookSync.on()){
     let taken; const first = new Promise(ok => { taken = ok; });
-    const pull = BookSync.pull(cid, {taken, after: drawn}).catch(() => {});
+    // speed round 2 (27-Oct-2026, the owner: "it is getting late to open", under 1 s wanted): books kept here are drawn
+    // at once, and the server's changes since this computer last looked are asked for only once they are on screen
+    // (beside the cloud copy's check, below, not before it); books not kept here still wait for them (6 s at most)
+    const pull = (held ? drawn.then(() => BookSync.pull(cid, {taken, after: drawn})) : BookSync.pull(cid, {taken, after: drawn})).catch(() => {});
     pull.then(taken);
-    // books-speed (24-Oct-2026): books kept here are shown after 250 ms at most (1.5 s before: on the owner's office line
-    // each reopening waited for the round trip); the server's changes since this computer last looked come in behind
-    // them, item by item, as before (BookItems.take: a change made here and not sent yet is never overwritten)
-    const late = await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), held ? 250 : 6000))]);
+    // books-speed (24-Oct-2026): the server's changes come in behind the books kept here, item by item, as before
+    // (BookItems.take: a change made here and not sent yet is never overwritten)
+    const late = held ? true : await Promise.race([first.then(() => false), new Promise(ok => setTimeout(() => ok(true), 6000))]);
     if (!S.books || S.books.cid !== cid) return;
     // (item by item, BookItems draws the page itself when something came in: not drawn again for nothing)
     if (late && held && Live.sv.state !== "offline") first.then(() => { if (S.books && S.books.cid === cid && !(typeof BookItems === "object" && BookItems.on())) render(); });

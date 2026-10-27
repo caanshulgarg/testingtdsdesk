@@ -142,7 +142,9 @@ export function bookSamples(o, entries, long) {
   if (o.days && o.days.n) out.push(["books/days", o.days.b - o.days.a, { q: o.days.n, hit: o.days.hit, rx: days[0] }]);
   for (const k of ["parse", "merge", "save", "audit"]) if (o[k] > 0) out.push(["books/" + (k === "audit" ? "audit-mis" : k), o[k], {}]);
   if (long) out.push(["books/busy", long.reduce((a, [s, d]) => a + Math.max(0, Math.min(s + d, o.t1) - Math.max(s, o.t0)), 0), {}]);
-  out.push(["books/total", o.t1 - o.t0, { rx: all[0], q: all[1] }]);
+  // speed round 2: to the end of the last step measured (the cloud check, the server's changes, the books shown), not to
+  // the moment the opening was closed (2 s after the cloud check, to catch the audit: books/total read 2 s too long)
+  out.push(["books/total", (o.end > o.t0 ? Math.min(o.end, o.t1) : o.t1) - o.t0, { rx: all[0], q: all[1] }]);
   return out;
 }
 
@@ -365,7 +367,7 @@ export function watchBooks() {
   timed(window, "openBooksNow", (ms, a) => {
     const o = forCid(a[0]);
     if (!o) return;
-    o.shownMs = ms;
+    o.shownMs = ms; o.end = Math.max(o.end || 0, performance.now());
     // the cloud copy's check starts once the page is drawn; without it (no Tally copy) the audit and MIS follow within 4 s
     closeIn(o, typeof TCloud === "object" && TCloud && TCloud.on && TCloud.on() ? 120000 : 4000);
   }, (cid) => {
@@ -380,9 +382,9 @@ export function watchBooks() {
     o.local = mem ? "memory" : v && v.cid === a[0] ? ((v.vouchers || []).length ? "kept" : "kept-empty") : "empty";
   }, (cid) => !!(Books.mem && Books.mem.has && Books.mem.has(cid)));
   if (typeof Books === "object" && Books) timed(Books, "importDayBook", (ms) => { const o = active(); if (o) o.parse += ms; });
-  if (typeof BookSync === "object" && BookSync) timed(BookSync, "pull", (ms, a) => { const o = forCid(a[0]); if (o && o.pullMs == null) o.pullMs = ms; });
+  if (typeof BookSync === "object" && BookSync) timed(BookSync, "pull", (ms, a) => { const o = forCid(a[0]); if (o && o.pullMs == null) { o.pullMs = ms; o.end = Math.max(o.end || 0, performance.now()); } });
   if (typeof TCloud === "object" && TCloud) {
-    timed(TCloud, "openLoad", (ms, a) => { const o = forCid(a[0]); if (!o || o.checkMs != null) return; o.checkMs = ms; closeIn(o, 2000); });
+    timed(TCloud, "openLoad", (ms, a) => { const o = forCid(a[0]); if (!o || o.checkMs != null) return; o.checkMs = ms; o.end = Math.max(o.end || 0, performance.now()); closeIn(o, 2000); });
     timed(TCloud, "day", (ms, a, v, t) => {
       const o = active(); if (!o) return;
       const d = String(a[1] || ""), got = T.dayGot.has(d); T.dayGot.delete(d);
