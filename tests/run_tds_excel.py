@@ -3,7 +3,7 @@
 delete or modify the details"; "add challan, add deduction, add deductee within this smart excel.. it should be dynamic";
 "challan balance should also be there"). On the React build (app/dist-test or TDSDESK_SITE) with the fixture books a year
 on (tdsgst_snapshot.LOAD, CHALLANS):
-  1. 26Q Q4 2025-26: the return's ⋯ has Download Excel and Upload Excel (nothing else on the page changed); the workbook:
+  1. 26Q Q4 2025-26: the return's tab row has Download Excel and Upload Excel (next-excel-buttons; was ⋯) (nothing else on the page changed); the workbook:
      Deductor, Challans, Deductions, Deductees, Summary, Checks (Excel Tables, hidden keys, dropdowns, formulas)
   2. in openpyxl, as a person in Excel: a deduction's rate to nil with remark T, another's section and rate, one deleted;
      a new challan, a new deductee and a new deduction on both (only in the Excel); the deductee's PAN; the deductor's phone.
@@ -87,7 +87,7 @@ with sync_playwright() as p:
         pg.click("#app [data-return-card] details.more > summary"); W(250)
         return E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)")
     def download(path):
-        E(CATCH); menu(); pg.click("#app [data-return-card] [data-tdsx=down]"); W(2500)
+        E(CATCH); pg.click("#app [data-ret-tabrow] [data-tdsx-btn=down]"); W(2500)
         f = E("window.__files[window.__files.length - 1] || null")
         if not f: return None
         open(path, "wb").write(base64.b64decode(f["b64"])); return f["name"]
@@ -103,11 +103,13 @@ with sync_playwright() as p:
     print("1. 26Q Q4 2025-26: Download Excel")
     FY, Q = "2025-26", "Q4"
     go("%s/%s/26Q/deductions" % (FY, Q))
+    # next-excel-buttons (27-Oct-2026): Download Excel and Upload Excel at the right end of the steps' tab row, not in ⋯
     items = menu()
-    ok("Download Excel" in items and "Upload Excel" in items and not any(i.startswith("Excel to correct") or i.startswith("Import corrected") for i in items), "the return's ⋯: Download Excel and Upload Excel, in place of the old two (%s)" % items)
+    xl = E("[...document.querySelectorAll('#app [data-ret-tabrow] [data-xl-tools] [data-xl]')].map(b => b.textContent.trim())")
+    ok(xl == ["Download Excel", "Upload Excel"] and not any("Excel" in i and not i.startswith("Undo") for i in items), "the return's tab row: Download Excel and Upload Excel; none in ⋯ (%s; ⋯ %s)" % (xl, items))
     shot("1-return-menu-desktop")
     pg.keyboard.press("Escape"); W(200)
-    pg.set_viewport_size({"width": 390, "height": 844}); W(500); menu(); shot("1-return-menu-phone"); pg.keyboard.press("Escape"); pg.set_viewport_size({"width": 1440, "height": 950}); W(500)
+    pg.set_viewport_size({"width": 390, "height": 844}); W(500); shot("1-return-menu-phone"); pg.set_viewport_size({"width": 1440, "height": 950}); W(500)
     R0 = rows("26Q", FY, Q)
     f0 = os.path.join(WORK, "26Q-down.xlsx"); name = download(f0)
     ok(name and name.endswith(".xlsx"), "downloaded: %s" % name)

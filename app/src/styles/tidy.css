@@ -324,3 +324,16 @@
 .call-in .no-device-note { background: transparent; color: inherit; padding: 0; }
 .asst-voice .no-device-note.asst-nodev { display: block; flex-basis: 100%; margin-top: 6px; }
 .asst-voice-msg .no-device-note { margin-top: 6px; }
+
+/* next-excel-buttons (27-Oct-2026; the owner: "download and upload excel button should be proper in TDS and GST"): a page's
+   Excel (parts/ExcelTools.jsx) at the right end of its toolbar row, Download Excel then Upload Excel, each a 32 px button
+   with its icon; Download Excel ▾ lists the workbooks where a page has several */
+#app .xl-tools { display: inline-flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 8px; margin-left: auto; }
+#app .xl-tools .xl-btn, #app .xl-tools details.more > summary.more-btn, #app .fbar .fb-end .xl-tools .btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-height: 32px;
+  padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; box-sizing: border-box; }
+#app .fbar .fb-end .xl-tools details.more > summary.more-btn { height: 32px; min-height: 32px; }
+#app .xl-tools .xl-ic { flex: 0 0 auto; }
+#app .xl-tools .more-caret { margin-left: 2px; }
+@media (max-width: 600px) { #app .xl-tools { flex-wrap: wrap; } }
+#app .r1x-undo { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+#app .fbar .fb-end .xl-tools { margin-left: 0; }

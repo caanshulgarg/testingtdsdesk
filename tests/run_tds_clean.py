@@ -95,7 +95,8 @@ try:
                        "%s: no summary strip (TDS · On challans · Left) (%s)" % (at, st))
                     if step == "deductions" and form == "26Q": pg.screenshot(path=os.path.join(SHOTS, "deductions-%d.png" % w))
             go("26Q", "deductees")
-            sel = J("""() => { const n = document.querySelector('#app [data-return-tabs]'); return n ? getComputedStyle(n).position : ''; }""")
+            # (next-excel-buttons: the tabs and the return's Excel are one row, data-ret-tabrow; the row is what stays in view)
+            sel = J("""() => { const n = document.querySelector('#app [data-ret-tabrow]') || document.querySelector('#app [data-return-tabs]'); return n ? getComputedStyle(n).position : ''; }""")
             ok(sel == "sticky", "%d: the tab row stays in view as the page scrolls (position %s)" % (w, sel))
         pg.set_viewport_size({"width": 1440, "height": 900})
         # All challans of the year: under ⋯

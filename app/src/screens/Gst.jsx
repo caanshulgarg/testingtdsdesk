@@ -26,6 +26,7 @@ import { LedgerBanner } from "../parts/Notes.jsx";
 import TaxLedgers from "./books/TaxLedgers.jsx";
 import HelpButton from "../parts/HelpButton.jsx";
 import More from "../parts/More.jsx";
+import ExcelTools from "../parts/ExcelTools.jsx";
 import { Gstr1, Gstr3b } from "./gst/Returns.jsx";
 import InputRegister from "./gst/InputRegister.jsx";
 import TwoB from "./gst/TwoB.jsx";
@@ -68,7 +69,9 @@ function periodLabel(ym, reg) {
   return GSTR.label(ym);
 }
 
-// the bar: financial year, period, GSTIN; the filing type, GST settings and the Excel download under More beside them
+// the month's GSTR-1 and 3B working (one workbook; Download Excel on the GST pages, next-excel-buttons)
+const workXl = () => ["GSTR-1 and 3B working, " + GSTR.label(S.gstYm || ""), () => doAct("gstExcel"), { "data-xl-item": "gstExcel" }];
+// the bar: financial year, period, GSTIN; the filing type, GST settings and Download Excel (the month's working) beside them
 function Bar({ months, regs, gNow, ftype, noDownload, inCard }) {
   const fys = Array.from(new Set(months.map((m) => GSTF.fyOf(m)))).sort().reverse(), fy = GSTF.fyOf(S.gstYm || "");
   const inFy = months.filter((m) => GSTF.fyOf(m) === fy);
@@ -84,7 +87,8 @@ function Bar({ months, regs, gNow, ftype, noDownload, inCard }) {
     client={regs.length > 1 ? <Field label="GSTIN"><select aria-label="GSTIN" value={S.gstReg} onChange={(ev) => gstSetReg(ev.target.value)}>{regs.map((g) => <option key={g} value={g.slice(0, 2)}>{g}</option>)}</select></Field> : null}
     count={inCard ? "" : gNow ? (regs.length > 1 ? "" : gNow + " · ") + GSTSet.typeLabel(ftype) + (GSTSet.peek(S.gstReg).portalUser ? " · portal user " + GSTSet.peek(S.gstReg).portalUser : "") : ""}
     tools={inCard ? null : <><button className="linkbtn" onClick={() => goGstSettings()}>GST settings</button>
-      <More items={[!noDownload && ["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")]]} /></>} />;
+      {/* next-excel-buttons: the month's GSTR-1 and 3B working at the right end of the bar (it was under More) */}
+      {!noDownload && <ExcelTools down={[workXl()]} />}</>} />;
 }
 
 // one cell of the grid
@@ -165,7 +169,6 @@ function OptionalNote() {
   return <p className="note" style={{ margin: "0 0 10px" }} data-optional-note="">{n} Optional entr{n === 1 ? "y" : "ies"} with GST in {fy} {n === 1 ? "is" : "are"} in no return. <button className="linkbtn" onClick={() => { S.reconTab = "optional"; gstPartGo("recon"); }}>See the list</button></p>;
 }
 
-const r1xClick = (k) => { const b = document.querySelector('[data-r1x-bar] [data-r1x="' + k + '"]'); if (b) b.click(); };
 // a GSTR-1 or 3B open: its summary card (round 46) — the return and period, its status as the year's grid says it, the
 // one download, and More
 function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledger, retPick, oneGstin }) {
@@ -189,10 +192,8 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
       {ctx}
       <div className="ret-acts">
         {prefile && <span data-prefile-bar="">{prefile}</span>}
-        {part === "r1" && !noReturn && <span className="r1x-bar" data-r1x-bar="">{<R1ExcelBar ym={ym} reg={reg} />}</span>}
-        <More items={[["Download GSTR-1 and 3B (Excel)", () => doAct("gstExcel")], ["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]].concat(
-          // next-gstr1-excel: under 1400 px the card has no room beside its actions: the GSTR-1 Excel's two are here (the bar stays, hidden)
-          part === "r1" && !noReturn && typeof window !== "undefined" && window.innerWidth < 1400 ? [["Download Excel (to change)", () => r1xClick("down")], ["Upload Excel", () => r1xClick("up")]] : [])}>
+        {/* next-excel-buttons: the return's Excel is at the right end of its tab row (ReturnXl), not in the header or More */}
+        <More items={[["Files and filing", () => gstSubGo("file")], ["GST settings", () => goGstSettings()]]}>
           <p>Check the JSON in the portal’s offline tool before filing.</p></More>
         {primary && <button className="btn small primary" data-card-primary="" onClick={primary[1]}>{primary[0]}</button>}
       </div>
@@ -205,11 +206,10 @@ function GstCard({ part, months, gNow, ftype, noReturn, sub, prefile, ctx, ledge
   </section>;
 }
 
-// round 4: GSTR-1's Details: find and Export at the right of the return's tabs (the part is the Customer header's ▾)
+// round 4: GSTR-1's Details: find and Print at the right of the return's tabs (next-excel-buttons: its Excels are Download Excel's) (the part is the Customer header's ▾)
 function R1Tools() {
   // round 72: Portal tables (the portal's own tables, the default) · By bill · By customer
   const f = S.r1F || {}, title = CO().name + " GSTR-1 " + GSTR.label(S.gstYm || ""), v1 = S.r1View === "customer" ? "customer" : S.r1View === "bill" ? "bill" : "portal";
-  const g = GSTR.one(S.gstYm || "", S.gstReg || ""), rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
   const view = (v) => { S.r1View = v; render(); };
   const printId = v1 === "customer" ? "r1Table" : v1 === "bill" ? "r1Bills" : "";
   return <>
@@ -219,10 +219,20 @@ function R1Tools() {
       <button aria-selected={v1 === "customer"} data-r1-switch="customer" onClick={() => view("customer")}>By customer</button></nav>
     <Filters className="revfilter tg-tools" label={"Filter " + title}
     search={<Search value={f.q} placeholder="Find invoice, customer" label="Find an invoice, customer or GSTIN" data-fk="r1Fq" onChange={(v) => setFilter("r1F", "q", v, true)} />}
-    tools={<More label="Export" data-fb-out="" items={[printId ? ["Print or save as PDF", () => printTable(printId, title)] : ["Print or save as PDF", () => window.print()],
-      ["Excel: the portal's tables, with totals", () => r1PortalExcel(S.gstYm || "", S.gstReg || "", title).then(() => toast("Downloaded."))],
-      ["Excel: these bills, with totals", () => { const L = r1Lists(rows); return r1BillsExcel(L.shown, L.b2cs, title).then(() => toast("Downloaded.")); }],
-      ["Excel: GSTR-1 and 3B working", () => doAct("gstExcel")]]} />} /></>;
+    tools={<button type="button" className="btn small" data-fb-out="" title="Print or save as PDF" onClick={() => (printId ? printTable(printId, title) : window.print())}>Print</button>} /></>;
+}
+
+// next-excel-buttons (27-Oct-2026): a GSTR-1 or 3B open: its Excel at the right end of the return's tab row, on every tab:
+// GSTR-1 to change and bring back (with Upload Excel and its preview, R1ExcelBar), on Details the portal's tables and the
+// bills shown (they were Export's), and the month's GSTR-1 and 3B working (it was the header's More and the Files tab's)
+function ReturnXl({ part, sub, noReturn }) {
+  const ym = S.gstYm || "", reg = S.gstReg || "";
+  if (part !== "r1") return <ExcelTools down={[workXl()]} />;
+  const title = CO().name + " GSTR-1 " + GSTR.label(ym);
+  const g = GSTR.one(ym, reg), rows = g.b2b.concat(g.b2cl).concat(g.b2c).concat(g.cdnr).concat(g.exp).concat(g.nil);
+  const more = (sub === "details" ? [["The portal's tables, with totals", () => r1PortalExcel(ym, reg, title).then(() => toast("Downloaded.")), { "data-xl-item": "r1Portal" }],
+    ["These bills, with totals", () => { const L = r1Lists(rows); return r1BillsExcel(L.shown, L.b2cs, title).then(() => toast("Downloaded.")); }, { "data-xl-item": "r1Bills" }]] : []).concat([workXl()]);
+  return noReturn ? <ExcelTools down={more} /> : <R1ExcelBar ym={ym} reg={reg} more={more} />;
 }
 
 // t70: the ledgers still to confirm, as a pill in the return card's first row (the full sentence was a banner above)
@@ -277,7 +287,7 @@ export default function Gst() {
   // t70 (the owner: "too much information above.. more professional"): a GSTR-1 or 3B open has one card: its first row the
   // year, month and GSTIN and the ledgers to confirm; the return's tabs and the parts one row under it
   const cardOn = sec !== "ledgers" && S.gstView === "return" && !!subs;
-  const bar = <Bar months={months} regs={regs} gNow={gNow} ftype={ftype} noDownload={noDownload && part !== "qtr"} inCard={cardOn} />;
+  const bar = <Bar months={months} regs={regs} gNow={gNow} ftype={ftype} noDownload={(noDownload && part !== "qtr") || (S.gstView === "return" && (part === "g9" || part === "g9c"))} inCard={cardOn} />;
   const partNav = (subParts.length > 1 || sec === "returns") ? <nav className="sbar subnav rp-tabs" aria-label="GST">
       {sec === "returns" && !noBooks && <button data-part="year" aria-selected={S.gstView === "year"} onClick={() => gstViewGo("year")}>Year</button>}
       {subParts.map(([id, l]) => <button key={id} data-part={id} aria-selected={S.gstView === "return" && part === id} onClick={() => gstPartGo(id)}>{l}</button>)}</nav> : null;
@@ -302,14 +312,13 @@ export default function Gst() {
     {!subs && part === "r1" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button></div>}
     {!subs && part === "r3b" && !noReturn && <div className="revfilter"><button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button></div>}
     {subs && <div className="tg-tabrow"><nav className="sbar rp-tabs" aria-label="Return">{subs.map(([k, l]) => <button key={k} data-sub={k} aria-selected={S.gstSub === k} onClick={() => gstSubGo(k)}>{l}</button>)}</nav>
-      <div className="tg-tabside">{part === "r1" && sub === "details" && <R1Tools />}</div></div>}
+      <div className="tg-tabside">{part === "r1" && sub === "details" && <R1Tools />}<ReturnXl part={part} sub={sub} noReturn={noReturn} /></div></div>}
     {!noBooks && (part === "r1" || part === "r3b" || part === "qtr") && <OptionalNote />}
     {noBooks && <p className="note" style={{ margin: "0 0 10px" }}>No Tally day book here yet. 2B and the returns filed work without it; GSTR-1, 3B, the input register and the other workings need the day book, brought in under “From Tally”.</p>}
     {sub === "file" && <section className="dash-card" style={{ marginBottom: 12 }} data-file={part}><h3>{part === "r1" ? "GSTR-1" : "GSTR-3B"} for {periodLabel(S.gstYm || "", S.gstReg || "")}</h3>
       {iffNow ? <p className="note" data-iff-files="">A quarterly (QRMP) client: this month files the <b>IFF</b> (optional, by the 13th) with the invoices and notes to registered customers, so they get the credit now. The quarter’s GSTR-1 is made at its last month.</p>
         : noReturn && <p className="note">This month has no {part === "r1" ? "GSTR-1" : "GSTR-3B"} of its own: the quarter’s is made at its last month.</p>}
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-        <button className="btn small" onClick={() => doAct("gstExcel")}>Download GSTR-1 and 3B</button>
         {part === "r1" && !noReturn && <button className="btn small primary" onClick={() => doAct("gstJson")}>Download GSTR-1 JSON{forWhat}</button>}
         {iffNow && <button className="btn small primary" data-iff-json="" onClick={() => gqIffJson()}>Download IFF JSON</button>}
         {part === "r3b" && !noReturn && <button className="btn small primary" onClick={() => doAct("gst3bJson")}>Download GSTR-3B JSON{forWhat}</button>}

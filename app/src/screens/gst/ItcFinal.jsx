@@ -59,7 +59,7 @@ export default function ItcFinal({ b }) {
   return <div data-itc-final={M}>
     <section className="dash-card" style={{ marginBottom: 12 }}>
       <div className="if-head"><h3>Final credit for GSTR-3B · {GSTR.label(M)}</h3>
-        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}><ExcelBar reg={reg} M={M} /><button type="button" className="btn small" data-if-3b="" onClick={() => gstPartGo("r3b")}>Open GSTR-3B</button></div></div>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}><button type="button" className="btn small" data-if-3b="" onClick={() => gstPartGo("r3b")}>Open GSTR-3B</button><ExcelBar reg={reg} M={M} /></div></div>
       <p className="note" style={{ margin: "2px 0 10px" }}>The credit that goes into table 4, from the decisions in <button type="button" className="linkbtn" onClick={() => gstPartGo("r2b")}>2B reconciliation</button> and the adjustments below. GSTR-3B uses exactly these figures. Click a figure to see the lines behind it.</p>
       <div className="bk-tablewrap"><table className="bk-table gf-off if-table" data-statement="" data-if-table="">
         <thead><tr><th>Table 4</th><th className="n">IGST</th><th className="n">CGST</th><th className="n">SGST</th><th className="n">Cess</th><th className="n">Total</th></tr></thead>

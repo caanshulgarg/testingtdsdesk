@@ -85,6 +85,9 @@ try:
         ok(pg.locator("#app [data-ledger-banner]").count() == 1, "the ledgers to confirm: one line")
         pg.click("#app [data-tds-bar] details.more > summary"); W(200)
         more = E("[...document.querySelectorAll('#app [data-tds-bar] .more-item')].map(b => b.textContent)")
+        # next-excel-buttons: the year's downloads are Download Excel ▾ at the bar's right end (they were in More): its items are
+        # counted with More's here
+        ok(E("[...document.querySelectorAll('#app [data-tds-bar] details[data-xl=down] .more-item')].length") == 3, "the year's three downloads under Download Excel ▾")
         ok("Every year" in more and "Download the whole year" in more and any(m.startswith("Download the year, Form 140") for m in more) and "The challan register" in more, "More: Every year, the register and the year's downloads (%s)" % more)
         pg.click("#app [data-tds-more='years']"); W(400)
         ok(E("S.tdsView") == "years" and "Every year" in text(), "More › Every year")
@@ -118,8 +121,8 @@ try:
         ok(vis("#app .btn.primary") == 1 and prim.count() == 1 and prim.inner_text().startswith("Next: "), "a return not filed: one main button, in the header, naming the next step (%d; %s)" % (vis("#app .btn.primary"), prim.inner_text() if prim.count() else ""))
         E("() => { S.tdsTab = 'file'; render(); }"); W(400)
         ok(vis("#app .btn.primary") == 1 and pg.locator("#app [data-return-card] [data-card-primary]").count() == 0 and pg.locator("#app [data-make-fvu].primary").count() == 1, "Validate & file: Make FVU file is then the one main button")
-        pg.click("#app [data-return-card] details.more > summary"); W(200)
-        ok("Download Excel" in E("[...document.querySelectorAll('#app [data-return-card] .more-item')].map(b => b.textContent)"), "the card's More: the return's Excel (Download Excel)")
+        # next-excel-buttons (27-Oct-2026): the return's Excel at the right end of the steps' tab row (it was in the card's More)
+        ok(E("[...document.querySelectorAll('#app [data-ret-tabrow] [data-xl-tools] [data-xl]')].map(b => b.textContent.trim())") == ["Download Excel", "Upload Excel"], "the tab row: the return's Excel (Download Excel, Upload Excel)")
         for t in ["deductor", "deductees", "challans", "deductions", "file"]:
             pg.click('#app [data-ret-tab="%s"]' % t); W(300)
         ok(not errors, "every tab of the return draws")

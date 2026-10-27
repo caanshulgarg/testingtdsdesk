@@ -9,24 +9,24 @@
 .rt-prob { border: 0; border-radius: 999px; padding: 2px 9px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; background: var(--warn-soft); color: var(--warn); }
 .rt-prob.bad { background: var(--bad-soft); color: var(--bad); }
 .rt-head .more-btn { min-width: 32px; justify-content: center; }
-/* next-tds-excel2: the return's Download Excel / Upload Excel beside ⋯; on a narrow screen in ⋯ only */
-.rt-xl { display: inline-flex; gap: 6px; }
-@media (max-width: 760px) { .rt-xl { display: none; } }
 /* round 94: the steps as one row of underlined tabs (Arc's tab look, arc-clean.css §1, the same as other pages' tab rows),
    kept in view under the header as the page scrolls; the count muted after the label; a dot for a step with an error
    (red) or a warning (amber) */
-#app .rt > nav.rt-tabs { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: nowrap; align-items: stretch; gap: 2px; margin: 0 0 12px; padding: 0;
-  border-bottom: 1px solid var(--border, var(--rule)); background: var(--background, var(--paper)); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
-#app .rt > nav.rt-tabs::-webkit-scrollbar { display: none; }
-#app .rt > nav.rt-tabs > .rt-tab { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 40px; margin: 0 0 -1px; padding: 0 14px;
+/* next-excel-buttons: the tab row is the return's toolbar row: the tabs, then Download Excel and Upload Excel at its right end */
+#app .rt > .rt-tabrow { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin: 0 0 12px; padding: 0;
+  border-bottom: 1px solid var(--border, var(--rule)); background: var(--background, var(--paper)); }
+#app .rt-tabrow > nav.rt-tabs { display: flex; flex: 1 1 auto; flex-wrap: nowrap; align-items: stretch; gap: 2px; align-self: stretch; min-width: 0; margin: 0 0 -1px; padding: 0;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+#app .rt-tabrow > nav.rt-tabs::-webkit-scrollbar { display: none; }
+#app .rt-tabrow > nav.rt-tabs > .rt-tab { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; min-height: 40px; margin: 0; padding: 0 14px;
   border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; box-shadow: none; color: var(--text-secondary, var(--muted));
   font: inherit; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer;
   transition: color var(--duration-fast, .12s) var(--ease-standard, ease), border-color var(--duration-fast, .12s) var(--ease-standard, ease); }
-#app .rt > nav.rt-tabs > .rt-tab:hover { color: var(--foreground, var(--ink)); }
-#app .rt > nav.rt-tabs > .rt-tab[aria-selected="true"] { color: var(--accent, var(--brand)); border-bottom-color: var(--accent, var(--brand)); font-weight: 600; }
-#app .rt > nav.rt-tabs > .rt-tab:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -2px; }
-#app .rt > nav.rt-tabs > .rt-tab:disabled { color: var(--text-muted, var(--muted)); cursor: default; opacity: .7; }
-@media (prefers-reduced-motion: reduce) { #app .rt > nav.rt-tabs > .rt-tab { transition: none; } }
+#app .rt-tabrow > nav.rt-tabs > .rt-tab:hover { color: var(--foreground, var(--ink)); }
+#app .rt-tabrow > nav.rt-tabs > .rt-tab[aria-selected="true"] { color: var(--accent, var(--brand)); border-bottom-color: var(--accent, var(--brand)); font-weight: 600; }
+#app .rt-tabrow > nav.rt-tabs > .rt-tab:focus-visible { outline: 2px solid var(--accent, var(--brand)); outline-offset: -2px; }
+#app .rt-tabrow > nav.rt-tabs > .rt-tab:disabled { color: var(--text-muted, var(--muted)); cursor: default; opacity: .7; }
+@media (prefers-reduced-motion: reduce) { #app .rt-tabrow > nav.rt-tabs > .rt-tab { transition: none; } }
 .rt-tc { font-size: 13px; line-height: 1; font-weight: 500; color: var(--text-secondary, var(--muted)); font-variant-numeric: tabular-nums; }
 .rt-dot2 { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: 0 0 auto; }
 .rt-dot2.bad { background: var(--bad); }
@@ -127,7 +127,8 @@ table.rt-rows .rt-name { text-align: left; }
   .cm .cm-two { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  #app .rt > nav.rt-tabs { display: none; }
+  #app .rt-tabrow > nav.rt-tabs { display: none; }
+  #app .rt > .rt-tabrow { position: static; border-bottom: 0; margin: 0 0 8px; justify-content: flex-end; }
   .rt-railsel { display: block; margin: 0 0 10px; }
   .rt-railsel select { width: 100%; }
   .vf-orow { grid-template-columns: minmax(0, 1fr) auto; }

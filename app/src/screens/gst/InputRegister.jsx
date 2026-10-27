@@ -1,4 +1,5 @@
 import ListTable from "../../parts/ListTable.jsx";
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import SrcTag from "../../parts/SrcTag.jsx";
 // The input register: every document in Tally that takes input tax for the GSTIN, for the month or the whole year,
 // with what 2B says about each, the input-tax ledger it is booked to, eligible or not (section 17(5)), and how it ties
@@ -115,7 +116,8 @@ export default function InputRegister({ b }) {
           <option value={TWICE}>{TWICE}</option>
         </select>
         <input type="search" aria-label="Find in the register" data-fk="inregq" placeholder="Supplier, GSTIN, bill no." value={S.inregQ || ""} style={{ minWidth: 200 }} onChange={(ev) => setAndShow("inregQ", ev.target.value, true)} />
-        <button className="btn small primary" onClick={() => doAct("inregExcel")}>Excel</button>
+        {/* next-excel-buttons: Download Excel at the right end of the register's filter row (it was a primary "Excel") */}
+        <ExcelTools down={() => doAct("inregExcel")} downTitle="The input register as shown (period and filter), as an Excel" downProps={{ "data-xl-item": "inregExcel" }} />
       </div>
       <div className="gf-chips">
         {KINDS.map((k) => { const x = kindOf(k); return <Chip key={k} label={k} x={x.n} amt={money(tax4(x))} filt={k} />; })}

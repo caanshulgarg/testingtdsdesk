@@ -2,6 +2,7 @@
 //   Pop        a window in the middle of the page (Arc's dialog through PanelDialog: ✕, Esc, a click outside and Back close it)
 //   LinesTable the lines behind a figure, in a Pop
 //   ExcelBar   Download Excel · Upload Excel, and the preview of what an Excel brought back would change, then Apply
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import { useRef, useState } from "react";
 import { PanelDialog } from "../../parts/DetailDrawer.jsx";
 import "./itc.css";
@@ -50,8 +51,9 @@ export function ExcelBar({ reg, M }) {
   const p = pv && pv.p, n = p ? p.changes.length + p.notes.length + (p.eligs || []).length + p.adj.add.length + p.adj.edit.length + p.adj.del.length : 0;
   const now = p ? ITCF.table4(reg, M).lines : [];
   return <>
-    <button type="button" className="btn small" data-itc-excel="down" disabled={!!busy} onClick={down}>{busy === "down" ? "Making…" : "Download Excel"}</button>
-    <button type="button" className="btn small" data-itc-excel="up" disabled={!!busy} onClick={() => file.current && file.current.click()}>{busy === "up" ? "Reading…" : "Upload Excel"}</button>
+    {/* next-excel-buttons: the one pattern of the TDS and GST pages (parts/ExcelTools.jsx) */}
+    <ExcelTools busy={busy} down={down} up={() => file.current && file.current.click()} downTitle={"2B and ITC of " + GSTR.label(M) + ": decisions, notes and adjustments, to change and bring back"}
+      downProps={{ "data-itc-excel": "down" }} upProps={{ "data-itc-excel": "up" }} />
     <input ref={file} type="file" hidden accept=".xlsx" aria-label="Upload the 2B and ITC Excel" data-itc-upload="" onChange={(ev) => { const f = ev.target.files && ev.target.files[0]; ev.target.value = ""; up(f); }} />
     <Pop open={!!pv} onClose={() => setPv(null)} id="itc-import" title={"Excel brought back · " + GSTR.label(M)} description={n ? n + " change" + (n === 1 ? "" : "s") + " to apply" : "Nothing to change"}>
       {p && <div data-itc-preview="">

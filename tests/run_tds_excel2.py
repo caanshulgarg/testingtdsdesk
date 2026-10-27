@@ -1,11 +1,12 @@
 """python3 run_tds_excel2.py - every Excel of a TDS return is the smart workbook, and the workbook is "dynamic"
 (next-tds-excel2, 24-Oct-2026; the owner: "TDS return Excel download is very basic.. it should be very dynamic"). On the
 React build (app/dist-test or TDSDESK_SITE) with the fixture books a year on (tdsgst_snapshot.LOAD, CHALLANS):
-  1. the return's header: Download Excel and Upload Excel beside ⋯ at 1440 (and still in ⋯); at 390 in ⋯ only
-  2. every Excel / export of every step of 26Q Q4 2025-26 (the header's button, the steps' ⋯ and buttons: Deductees,
-     Deductions by challan and as one table, Validate & file) downloads the return's workbook (About, Deductor, the
-     upload's sheets), opened on the step's sheet; no "working" or "Excel to correct" left on the return's pages
-  3. 24Q Q1 2026-27 (the salary sheet): the Employees' ⋯ and Validate & file's Download Excel give the same workbook
+  1. the return's tab row: Download Excel and Upload Excel at its right end (next-excel-buttons, 27-Oct-2026), not in the
+     header or ⋯; at 390 still on screen
+  2. every step of 26Q Q4 2025-26 (Deductees, Deductions by challan and as one table, Validate & file, …): the one
+     Download Excel gives the return's workbook (About, Deductor, the upload's sheets), opened on the step's sheet; no
+     second Excel in a step, no "working" or "Excel to correct" left
+  3. 24Q Q1 2026-27 (the salary sheet): the same workbook, on Deductions and on Validate & file's Checks
   4. the workbook: frozen headers (and first columns), an Excel Table or a filter on every list, Summary's lines and
      Checks' rows link to their rows, red and amber conditional formatting, columns as wide as their data, "How to use"
      on top of About; LibreOffice works it out (Summary's Checks count) and renders Deductions, Challans, Summary, Checks
@@ -101,65 +102,54 @@ with sync_playwright() as p:
     def words():
         return E("() => [...document.querySelectorAll('#app .rt button, #app .rt .more-item')].map(b => b.textContent)")
 
-    print("1. the return's header: Download Excel and Upload Excel")
+    # next-excel-buttons (27-Oct-2026; the owner: "download and upload excel button should be proper"): the return's one
+    # Download Excel and Upload Excel are at the right end of the steps' tab row, on every step and width; the header, ⋯
+    # and the steps' own ⋯ and buttons no longer repeat them
+    TAB = "#app [data-ret-tabrow] [data-tdsx-btn=%s]"
+    print("1. the return's tab row: Download Excel and Upload Excel")
     FY, Q = "2025-26", "Q4"
     go("%s/%s/26Q/deductions" % (FY, Q))
-    vis = E("() => ['down', 'up'].map(k => { const b = document.querySelector('#app [data-return-card] [data-tdsx-btn=' + k + ']'); return b ? [b.textContent, !!b.offsetParent] : null; })")
-    ok(vis == [["Download Excel", True], ["Upload Excel", True]], "1440: Download Excel and Upload Excel in the header (%s)" % vis)
-    order = E("() => { const h = document.querySelector('#app [data-return-card]'); const kids = [...h.querySelectorAll('[data-tdsx-btns], details.more')]; return kids.map(k => k.matches('details') ? 'more' : 'excel'); }")
-    ok(order == ["excel", "more"], "beside ⋯, before it (%s)" % order)
+    vis = E("() => ['down', 'up'].map(k => { const b = document.querySelector('#app [data-ret-tabrow] [data-tdsx-btn=' + k + ']'); return b ? [b.textContent, !!b.offsetParent] : null; })")
+    ok(vis == [["Download Excel", True], ["Upload Excel", True]], "1440: Download Excel and Upload Excel in the tab row (%s)" % vis)
+    ok(E("document.querySelectorAll('#app [data-return-card] [data-tdsx-btn]').length") == 0, "not in the header")
     it = menu_items()
-    ok("Download Excel" in it and "Upload Excel" in it and not any("working" in x for x in it), "and still in ⋯; no plain 'working' Excel (%s)" % it)
+    ok("Download Excel" not in it and "Upload Excel" not in it and not any("working" in x for x in it), "not in ⋯; no plain 'working' Excel (%s)" % it)
     E("() => document.activeElement && document.activeElement.blur()"); pg.mouse.move(5, 900); W(200)
     pg.locator("#app [data-return-card]").screenshot(path=os.path.join(SHOTS, "1-return-header-1440.png"))
     pg.screenshot(path=os.path.join(SHOTS, "1-return-page-1440.png"))
     pg.set_viewport_size({"width": 390, "height": 844}); W(600)
-    vis = E("() => ['down', 'up'].map(k => { const b = document.querySelector('#app [data-return-card] [data-tdsx-btn=' + k + ']'); return b ? !!b.offsetParent : null; })")
-    it = menu_items()
-    ok(vis == [False, False] and "Download Excel" in it and "Upload Excel" in it, "390: not in the header, in ⋯ (%s, %s)" % (vis, it))
+    vis = E("() => ['down', 'up'].map(k => { const b = document.querySelector('#app [data-ret-tabrow] [data-tdsx-btn=' + k + ']'); if (!b || !b.offsetParent) return false; const r = b.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 1; })")
+    ok(vis == [True, True], "390: still on screen (%s)" % vis)
     sw = E("document.documentElement.scrollWidth")
     ok(sw <= 391, "390: no sideways scroll (%s)" % sw)
     pg.screenshot(path=os.path.join(SHOTS, "1-return-header-390.png"))
     pg.set_viewport_size({"width": 1440, "height": 950}); W(500)
-    path, wb = caught(lambda: pg.click("#app [data-return-card] [data-tdsx-btn=down]"))
-    ok(smart(wb) and wb.active.title == "Deductions", "the header's Download Excel on Deductions: the workbook, opened on Deductions (%s)" % (wb and wb.active.title))
+    path, wb = caught(lambda: pg.click(TAB % "down"))
+    ok(smart(wb) and wb.active.title == "Deductions", "Download Excel on Deductions: the workbook, opened on Deductions (%s)" % (wb and wb.active.title))
     WB26 = path
 
-    print("2. every Excel of every step of 26Q Q4 2025-26")
+    print("2. every step of 26Q Q4 2025-26: the one Download Excel, opened on the step's sheet")
     WANT = {"deductor": "Deductor", "deductees": "Deductees", "challans": "Challans", "deductions": "Deductions", "file": "Checks"}
-    seen = {}
     for step, sheet in WANT.items():
         views = [("", "")] if step != "deductions" else [("by challan", ""), ("one table", "table")]
         for vname, view in views:
             go("%s/%s/26Q/%s" % (FY, Q, step)); E("(v) => { S.tdsDedView = v; render(); }", view); W(600)
-            _, wb = caught(lambda: pg.click("#app [data-return-card] [data-tdsx-btn=down]"))
-            ok(smart(wb) and wb.active.title == sheet, "%s%s: the header's Download Excel opens on %s (%s)" % (step, " (" + vname + ")" if vname else "", sheet, wb and wb.active.title))
-            _, wb = caught(lambda: (pg.click("#app [data-return-card] details.more > summary"), W(200), pg.click("#app [data-return-card] [data-tdsx=down]")))
-            ok(smart(wb) and wb.active.title == sheet, "%s: ⋯ › Download Excel opens on %s too" % (step, sheet))
+            _, wb = caught(lambda: pg.click(TAB % "down"))
+            ok(smart(wb) and wb.active.title == sheet, "%s%s: Download Excel opens on %s (%s)" % (step, " (" + vname + ")" if vname else "", sheet, wb and wb.active.title))
             ex = step_exports()
-            seen[step + vname] = [x[2] for x in ex]
-            for kind, i, text in ex:
-                _, wb = caught(click_export(kind, i, text))
-                ok(smart(wb) and wb.active.title == sheet, "%s%s: the step's %s %r gives the workbook on %s (%s)" % (step, " (" + vname + ")" if vname else "", kind, text, sheet, wb and (wb.active.title if smart(wb) else wb.sheetnames)))
-                E("document.querySelectorAll('#app details.more[open]').forEach(d => d.open = false)")
+            ok(not ex, "%s%s: no second Excel in the step (%s)" % (step, " (" + vname + ")" if vname else "", ex))
             w = [x for x in words() if "working" in x.lower() or "Excel to correct" in x or x.strip() == "Excel"]
             ok(not w, "%s%s: no plain Excel left (%s)" % (step, " (" + vname + ")" if vname else "", w))
-    ok(seen.get("deductees") and seen.get("deductionsby challan") and seen.get("deductionsone table") and seen.get("file"), "the steps' own Excel buttons were found and tried (%s)" % seen)
 
     print("3. 24Q Q1 2026-27 (the salary sheet)")
     go("2026-27/Q1/24Q/deductions"); E("() => { S.tdsDedView = 'table'; render(); }"); W(700)
-    ex = step_exports()
-    ok(any(t == "Download Excel" for _, _, t in ex), "the Employees' ⋯ has Download Excel (%s)" % ex)
-    for kind, i, text in ex:
-        _, wb = caught(click_export(kind, i, text))
-        ok(smart(wb) and wb.active.title == "Deductions" and any(wb["About"]["A%d" % r].value == "Form" and wb["About"]["B%d" % r].value == "24Q" for r in range(1, 30)), "24Q Employees' %r: the workbook on Deductions" % text)
-        E("document.querySelectorAll('#app details.more[open]').forEach(d => d.open = false)")
+    ok(not step_exports(), "the Employees' step: no second Excel (%s)" % step_exports())
+    _, wb = caught(lambda: pg.click(TAB % "down"))
+    ok(smart(wb) and wb.active.title == "Deductions" and any(wb["About"]["A%d" % r].value == "Form" and wb["About"]["B%d" % r].value == "24Q" for r in range(1, 30)), "24Q Employees: Download Excel, the workbook on Deductions")
     go("2026-27/Q1/24Q/file"); W(400)
-    b = pg.locator("#app .rt-main [data-file-excel]")
-    ok(b.count() == 1 and b.inner_text() == "Download Excel", "24Q Validate & file: Download Excel")
-    if b.count():
-        _, wb = caught(lambda: b.click())
-        ok(smart(wb) and wb.active.title == "Checks", "and it opens on Checks (%s)" % (wb and wb.active.title))
+    ok(pg.locator("#app .rt-main [data-file-excel]").count() == 0, "24Q Validate & file: no second Download Excel")
+    _, wb = caught(lambda: pg.click(TAB % "down"))
+    ok(smart(wb) and wb.active.title == "Checks", "and the tab row's opens on Checks (%s)" % (wb and wb.active.title))
     ok(not [x for x in words() if "working" in x.lower()], "24Q: no 'working' Excel left")
 
     print("4. the workbook itself")
@@ -216,7 +206,7 @@ with sync_playwright() as p:
     go("%s/%s/26Q/challans" % (FY, Q))
     over = E("() => { const c = TDS.challans().find(c => Object.keys(TDSReg.ctx().uses[c.id] || {}).length); if (!c) return null; const b = S.books.challans.find(z => z.id === c.id); b.tax = 1; TDSReg.forget(); render(); return c.id; }")
     pg.click("#app [data-return-card] details.more > summary"); W(200); pg.click("#app [data-return-card] [data-ret-allch]"); W(1200)
-    ok(pg.locator("#app [data-allch-excel]").count() == 1, "All challans: its Excel button, as it was")
+    ok(pg.locator("#app [data-allch-excel]").count() == 1, "All challans: its Excel button (Download Excel at the filter row's end)")
     page = E("""() => ({rows: [...document.querySelectorAll('#app [data-allch-row]')].map(r => ({id: r.dataset.allchRow, kind: r.dataset.allchKind, left: r.querySelector('[data-allch-left]') ? +r.querySelector('[data-allch-left]').dataset.allchLeft : null,
       used: r.querySelector('[data-allch-used]') ? +r.querySelector('[data-allch-used]').dataset.allchUsed : null})), tax: document.querySelector('#app [data-allch-total=tax]').textContent, used: document.querySelector('#app [data-allch-total=used]').textContent})""")
     pg.screenshot(path=os.path.join(SHOTS, "5-all-challans-page-1440.png"))

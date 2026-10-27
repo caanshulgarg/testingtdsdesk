@@ -9,6 +9,7 @@
 // the foot's totals; Excel. A challan's click opens it in its return's Challans step (the "On this challan" / "Deductions
 // to add" panel; the return it was opened from first), or its drawer in the register when no return has it.
 // Every figure is TDSReg's (src/js/79); nothing is worked out here.
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import { useState } from "react";
 import "../../lib/tdsGlobals.js";
 import "./clear.css";
@@ -105,7 +106,6 @@ export default function AllChallans({ fys }) {
       <label className="ac-f"><span>{TDS.yearWord(fy)}</span><select aria-label="Year" data-allch-year="" value={fy} onChange={(ev) => { S.tdsFy = ev.target.value; S.allchFl = {}; render(); }}>
         {(fys || [fy]).map((y) => <option key={y} value={y}>{y}</option>)}</select></label>
       <span className="rt-sp" />
-      <button type="button" className="btn small" data-allch-excel="" onClick={() => toExcel(rows, fy, from).then(() => toast("Downloaded."), (e) => toast("Could not make the Excel: " + ((e && e.message) || e)))}>Excel</button>
       <button type="button" className="btn small" data-allch-register="" onClick={() => tdsNav("register")}>Add or upload challans</button>
     </div>
     <p className="ac-sum" data-allch-sum="">{all.length - nBsr} challan{all.length - nBsr === 1 ? "" : "s"} · every form and quarter of {fy}{nBsr ? <> · <b className="ac-red">{nBsr} TDS payment{nBsr === 1 ? "" : "s"} in Tally without a BSR code</b></> : null}</p>
@@ -116,6 +116,9 @@ export default function AllChallans({ fys }) {
       {sel("st", "Status", [["", "Every status"]].concat(Object.keys(STATUS_WORDS).map((k) => [k, STATUS_WORDS[k][0]])))}
       <label className="ac-f ac-find"><span>Find</span><input type="search" aria-label="Find a challan" data-allch-find="" placeholder="BSR, serial, amount" value={f.q || ""} onChange={(ev) => setF("q", ev.target.value)} /></label>
       {active && <button type="button" className="linkbtn" data-allch-clear="" onClick={() => { S.allchFl = {}; render(); }}>Clear filters</button>}
+      {/* next-excel-buttons: the rows shown, as an Excel, at the right end of the filter row (it was "Excel" by the title) */}
+      <ExcelTools down={() => toExcel(rows, fy, from).then(() => toast("Downloaded."), (e) => toast("Could not make the Excel: " + ((e && e.message) || e)))}
+        downTitle="These challans (the filters here) as an Excel" downProps={{ "data-allch-excel": "" }} />
     </div>
     <div className="bk-tablewrap"><table className="bk-table ac-table gf-off" id="tdsAllChTable" data-statement="">
       <thead><tr><th className="dt">Date</th><th>BSR</th><th>Serial / CIN</th><th>Section</th><th>Form / quarter</th><th className="n">Tax</th><th className="n">Interest</th><th className="n">Others</th>
