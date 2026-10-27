@@ -21,6 +21,8 @@ export type AiClient = { beta: { messages: { stream: (p: Record<string, unknown>
 export type MatchDeps = {
   client: AiClient | null,
   aiAllowed: boolean,
+  offSay?: string,          // FinCom's own refusal (the console's AI switches, ai_policy.ts), said instead of the firm's
+  model?: string,           // the model set in the console (ai_allowed), else Sonnet
   capTake: () => Promise<{ ok: boolean, why?: string }>,
   costAdd: (usd: number, u: Usage) => Promise<{ inr?: number } | null>,
   log: (x: { question: string, input: number, output: number, calls: number, ms: number, inr: number, route: string, cacheRead: number, cacheWrite: number }) => Promise<unknown>,
@@ -35,7 +37,8 @@ const inrStr = (v: number) => "₹" + (Math.round(v * 100) / 100).toFixed(2);
 export async function matchRun(twob: any[], books: any[], decisions: Record<string, string>, deps: MatchDeps) {
   const t0 = Date.now();
   const rules = m2bRules(twob, books);
-  const ai: AiInfo = { state: "nothing", say: "", model: SONNET, usd: 0, inr: 0, input: 0, output: 0, sent: 0, notSent: 0, bad: 0, pairs: [] };
+  const MODEL = deps.model || SONNET;
+  const ai: AiInfo = { state: "nothing", say: "", model: MODEL, usd: 0, inr: 0, input: 0, output: 0, sent: 0, notSent: 0, bad: 0, pairs: [] };
   // what a person accepted before is settled first (free); the AI sees only what is left after it
   const settled = m2bAiApply(twob, books, rules, [], decisions);
   const left = { pairs: rules.pairs, left2b: settled.left2b, leftBooks: settled.leftBooks };
@@ -44,7 +47,7 @@ export async function matchRun(twob: any[], books: any[], decisions: Record<stri
     return { result: { ...res, line: m2bLine(res.counts) }, ai };
   };
   if (!left.left2b.length || !left.leftBooks.length) { ai.say = "Nothing left for AI to look at."; return done([]); }
-  if (!deps.aiAllowed) { ai.state = "off"; ai.say = "AI is off for this firm or client (Settings, AI help): " + STANDS; return done([]); }
+  if (!deps.aiAllowed) { ai.state = "off"; ai.say = (deps.offSay ? deps.offSay.replace(/[.\s]+$/, "") + ": " : "AI is off for this firm or client (Settings, AI help): ") + STANDS; return done([]); }
   if (!deps.client) { ai.state = "failed"; ai.say = "AI is not set up on the platform yet: " + STANDS; return done([]); }
   const inp = m2bAiInput(twob, books, left.left2b, left.leftBooks);
   ai.sent = inp.g.length + inp.b.length; ai.notSent = inp.notSent;
@@ -55,7 +58,7 @@ export async function matchRun(twob: any[], books: any[], decisions: Record<stri
   let msg: any = null;
   try {
     const stream = deps.client.beta.messages.stream({
-      model: SONNET, max_tokens: 16000, thinking: { type: "adaptive" },
+      model: MODEL, max_tokens: 16000, thinking: { type: "adaptive" },
       output_config: { effort: "low", format: { type: "json_schema", schema: M2B_SCHEMA } },
       system: [{ type: "text", text: M2B_SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: m2bAiPrompt(inp) }],
@@ -69,7 +72,7 @@ export async function matchRun(twob: any[], books: any[], decisions: Record<stri
     return done([]);
   }
   const u: Usage = msg?.usage || {};
-  ai.usd = costUsd(SONNET, u); ai.input = u.input_tokens || 0; ai.output = u.output_tokens || 0;
+  ai.usd = costUsd(MODEL, u); ai.input = u.input_tokens || 0; ai.output = u.output_tokens || 0;
   const added = await deps.costAdd(ai.usd, u).catch(() => null);
   ai.inr = Number(added?.inr || 0);
   const text = ((msg?.content || []) as any[]).filter((b) => b?.type === "text").map((b) => b.text).join("");

@@ -28,6 +28,9 @@
 // logged: one usage row only (assistant_log: feature "voice", route the language, ms the audio's length, tools ["ok"] or
 // why not, with "names:<count of names corrected>" and "ai:<count>" or "ai:refused" (counts only, never the words), the
 // models used, question empty).
+// The AI control centre (console phase 4, 27-Oct-2026): before a clip is read, the console's switches for "voice" are
+// asked (ai_allowed through ../_shared/ai_policy.ts); off -> 403 kind "ai_off" with "AI for Voice typing is switched off
+// by FinCom" (the app keeps the browser's words and says so). The usage request is not an AI call and is not asked.
 // Per-firm daily cap (security review 27-Oct-2026, F9: one firm could use up the platform's shared Groq allowance and
 // stop voice typing and subtitles for every firm): before Groq is called, the firm's seconds today (India's day) are
 // summed from assistant_log, voice typing ("voice") and call subtitles ("call_subs") together, rows where Groq was
@@ -35,6 +38,7 @@
 // Groq's own 429). The seconds logged are Groq's own measure of the clip (verbose_json "duration"), never less than the
 // secs the app sent, so a wrong secs cannot hide a long clip.
 import { corsFor } from "../_shared/cors.ts";
+import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
 import { ID_PATTERNS } from "../assistant/mask.ts";
@@ -127,6 +131,7 @@ export function handler(deps: Deps & { now?: () => number }) {
   const rpc = (fn: string, args: Record<string, unknown>, token: string) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
   const secret = async (name: string) => { try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq." + name, SERVICE)) as any[]; return String((k && k[0] && k[0].value) || ""); } catch { return ""; } };
   const groqKey = () => secret("groq_api_key");
+  const policy = aiPolicy((fn, args) => rpc(fn, args, SERVICE));
   // one Groq call; -> the Response, or null when Groq could not be reached
   const groq = async (key: string, model: string, audio: BlobPart, ext: string, type: string, lang: string, prompt: string, verbose = false) => {
     const form = new FormData();
@@ -179,6 +184,10 @@ export function handler(deps: Deps & { now?: () => number }) {
         return reply(200, { ok: true, firm_secs: sum(mine), all_secs: all, key: !!(await groqKey()) });
       } catch { return reply(503, { ok: false, kind: "other", error: "The minutes used could not be read." }); }
     }
+
+    // the console's switches (FinCom's), before the clip is read or anything is sent
+    const allowed = await policy.aiAllowed(firm, "voice");
+    if (!allowed.ok) { await drop(); const no = refusal(allowed); return reply(no.status, no.body); }
 
     // the clip
     const ext = TYPES[type];

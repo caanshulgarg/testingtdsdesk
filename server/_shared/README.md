@@ -23,7 +23,7 @@ Supabase deploys each function's files on their own. Send `server/_shared/cors.t
 
 | Function (deployed name) | Source folder | Files to deploy | Origin |
 |---|---|---|---|
-| gateway | server/security/functions/gateway | index.ts, cors.ts, classify.ts, ../_shared/cors.ts | the list |
+| gateway | server/security/functions/gateway | index.ts, handler.ts, policy.ts, cors.ts, classify.ts, ../_shared/cors.ts, ../_shared/ai_policy.ts | the list |
 | admin | server/security/functions/admin | index.ts, cors.ts, ../_shared/cors.ts | the list |
 | signin | server/security/functions/signin | index.ts, cors.ts, ../_shared/cors.ts | the list |
 | fincom-assistant | server/assistant | a one-line index.ts importing server/assistant/index.ts from GitHub at a pinned commit and calling main() (its own imports: ./agent.ts, ./tools.ts, ./tools/*, ./checks.ts, ./files.ts, ./mask.ts, ./models.ts, ./router.ts, ./citations.ts, ./notices.ts, ./entries.ts, ./mis.ts, ../_shared/misdef.js (My MIS's definition, shared with the app), ../_shared/cors.ts, ../_shared/sentry.ts, ../_shared/sentry-scrub.js); verify_jwt off (it checks the user's token itself) | the list |
@@ -63,6 +63,15 @@ curl -s -o /dev/null -D - -X OPTIONS "$F/tally-ingest" -H "Origin: https://stagi
 ```
 
 Locally: `node tests/run_cors_preflight.js`.
+
+## ai_policy.ts: FinCom's AI switches, asked before every model call
+
+`ai_policy.ts` (the AI control centre, console phase 4, 27-Oct-2026; docs/CONSOLE-AI.md) asks the database's
+`ai_allowed(firm, feature)` (migration 121) and keeps each answer 15 s: the registry's switch, the global kill switch,
+FinCom's switches for the firm and the firm's AI allowance. Plain TypeScript, no Deno API. Imported by the gateway,
+fincom-assistant, fincom-transcribe, gst-2b-match, tds-challan-match and fincom-call (video-calls), so each of them is
+deployed with `../_shared/ai_policy.ts` (`tools/fn-files.js` follows the import by itself). Before migration 121 the
+function is missing and every feature is allowed as before.
 
 ## names.js: one rule for Tally names
 

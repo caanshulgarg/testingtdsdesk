@@ -22,6 +22,8 @@ export type AiClient = { beta: { messages: { stream: (p: Record<string, unknown>
 export type MatchDeps = {
   client: AiClient | null,
   aiAllowed: boolean,
+  offSay?: string,          // FinCom's own refusal (the console's AI switches, ai_policy.ts), said instead of the firm's
+  model?: string,           // the model set in the console (ai_allowed), else Sonnet
   capTake: () => Promise<{ ok: boolean, why?: string }>,
   costAdd: (usd: number, u: Usage) => Promise<{ inr?: number } | null>,
   log: (x: { question: string, input: number, output: number, calls: number, ms: number, inr: number, route: string, cacheRead: number, cacheWrite: number }) => Promise<unknown>,
@@ -34,10 +36,11 @@ const inrStr = (v: number) => "₹" + (Math.round(v * 100) / 100).toFixed(2);
 // rows / chs: as the app sends them (handler.ts keeps only the agreed fields); opt: {fy, q}
 export async function matchRun(rows: any[], chs: any[], opt: { fy: string, q: string }, deps: MatchDeps) {
   const t0 = Date.now();
-  const ai: AiInfo = { state: "nothing", say: "", model: SONNET, usd: 0, inr: 0, input: 0, output: 0, sent: 0, notSent: 0, bad: 0, dropped: 0 };
+  const MODEL = deps.model || SONNET;
+  const ai: AiInfo = { state: "nothing", say: "", model: MODEL, usd: 0, inr: 0, input: 0, output: 0, sent: 0, notSent: 0, bad: 0, dropped: 0 };
   const none = { pairs: [] as any[], splits: [] as any[], interest: [] as any[] };
   if (!rows.length || !chs.length) { ai.say = "Nothing left for AI to look at."; return { ai, ...none }; }
-  if (!deps.aiAllowed) { ai.state = "off"; ai.say = "AI is off for this firm or client (Settings, AI help): " + STANDS; return { ai, ...none }; }
+  if (!deps.aiAllowed) { ai.state = "off"; ai.say = (deps.offSay ? deps.offSay.replace(/[.\s]+$/, "") + ": " : "AI is off for this firm or client (Settings, AI help): ") + STANDS; return { ai, ...none }; }
   if (!deps.client) { ai.state = "failed"; ai.say = "AI is not set up on the platform yet: " + STANDS; return { ai, ...none }; }
   const inp = tmAiInput(rows, chs);
   ai.sent = inp.d.length + inp.c.length; ai.notSent = inp.notSent;
@@ -47,7 +50,7 @@ export async function matchRun(rows: any[], chs: any[], opt: { fy: string, q: st
   let msg: any = null;
   try {
     const stream = deps.client.beta.messages.stream({
-      model: SONNET, max_tokens: 16000, thinking: { type: "adaptive" },
+      model: MODEL, max_tokens: 16000, thinking: { type: "adaptive" },
       output_config: { effort: "low", format: { type: "json_schema", schema: TM_SCHEMA } },
       system: [{ type: "text", text: TM_SYSTEM, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: tmAiPrompt(inp) }],
@@ -61,7 +64,7 @@ export async function matchRun(rows: any[], chs: any[], opt: { fy: string, q: st
     return { ai, ...none };
   }
   const u: Usage = msg?.usage || {};
-  ai.usd = costUsd(SONNET, u); ai.input = u.input_tokens || 0; ai.output = u.output_tokens || 0;
+  ai.usd = costUsd(MODEL, u); ai.input = u.input_tokens || 0; ai.output = u.output_tokens || 0;
   const added = await deps.costAdd(ai.usd, u).catch(() => null);
   ai.inr = Number(added?.inr || 0);
   const text = ((msg?.content || []) as any[]).filter((b) => b?.type === "text").map((b) => b.text).join("");

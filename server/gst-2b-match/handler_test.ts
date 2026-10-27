@@ -15,7 +15,7 @@ const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === J
 
 const FIRM = "f-1", OWNER = "u-1", VIEWER = "u-2", SERVICE = "service-key", G = "09AANFG3202D1ZR", S1 = "09AAACB1234C1Z5";
 type Row = Record<string, any>;
-function fakeSupabase() {
+function fakeSupabase(opt: { ai?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = { members: [{ user_id: OWNER, firm_id: FIRM, role: "owner", active: true }, { user_id: VIEWER, firm_id: FIRM, role: "viewer", active: true }],
     clients: [{ id: "c-1", firm: FIRM, deleted: false }, { id: "c-x", firm: "f-2", deleted: false }], assistant_settings: [], platform_secrets: [{ name: "claude_api_key", value: "sk-test" }],
     gst_returns: [], gst_2b_inputs: [], gst_2b_runs: [], gst_2b_decisions: [] };
@@ -45,6 +45,8 @@ function fakeSupabase() {
       if (fn === "asst_cap_take") return out(200, { ok: true, cap_inr: 3000, spent_inr: 0, period: "month" });
       if (fn === "asst_cost_add") return out(200, { inr: Math.round(body.p_cost_usd * 85 * 10000) / 10000 });
       if (fn === "asst_log_add") { (T.assistant_log = T.assistant_log || []).push(body); return out(200, null); }
+      // the AI control centre's switch (migration 121), asked with the service role
+      if (fn === "ai_allowed") { assert(auth === SERVICE, "the switch with the service role"); (T.asked = T.asked || []).push(body); return out(200, opt.ai ? opt.ai(body) : { ok: true, reason: "on", model: null }); }
       if (fn === "gst2b_take") { const rs = T.gst_2b_runs.filter((r) => r.status === "queued").slice(0, body.p_n); rs.forEach((r) => { r.status = "running"; }); return out(200, rs); }
       return out(404, { message: "no function " + fn });
     }
@@ -91,8 +93,8 @@ const ent = (id: string, no: string, date: string, taxable: number, igst: number
 const BOOKS = [ent("v1", "INV-1", "20260905", 10000, 1800), ent("v2", "77", "20260911", 7000, 1260), ent("v3", "95", "20260915", 2500, 450), ent("v4", "OCT-5", "20261005", 4000, 720)];
 const TWOB = [{ period: "092026", rows: [doc("092026|b2b|k1", "INV/0001", "20260906", 10000, 1800), doc("092026|b2b|k2", "SB/2026/77", "20260910", 7000, 1260), doc("092026|b2b|k3", "INV-95", "20260915", 3000, 540)] }];
 
-function setup() {
-  const sb = fakeSupabase(), ai = new FakeClaude();
+function setup(opt: { ai?: (a: any) => any } = {}) {
+  const sb = fakeSupabase(opt), ai = new FakeClaude();
   const h = handler({ env: (k) => ({ SUPABASE_URL: "http://sb", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as Record<string, string>)[k], fetch: sb.fetch, anthropic: () => ai });
   const call = async (body: unknown, token = "jwt-owner", headers: Record<string, string> = {}) => {
     const r = await h(new Request("http://fn/", { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }));
@@ -166,4 +168,15 @@ Deno.test("5. a client of another firm is refused", async () => {
   const { call } = setup();
   const r = await call(RUN({ client_id: "c-x" }));
   eq(r.status, 403, "refused");
+});
+
+Deno.test("6. AI control centre: 2B match switched off by FinCom: rules only, FinCom's words; a console model is used", async () => {
+  const { sb, ai, call } = setup({ ai: (a) => ({ ok: false, reason: "killed", feature: a.p_feature, message: "AI for 2B match is switched off by FinCom." }) });
+  const r = await call(RUN());
+  eq([r.status, ai.calls.length, r.j.run.ai.state, r.j.run.counts.byRules], [200, 0, "off", 1], "no AI call, the rules' result");
+  eq(r.j.run.ai.say, "AI for 2B match is switched off by FinCom: the rules' result stands.", "FinCom's words");
+  eq(sb.T.asked, [{ p_firm: FIRM, p_feature: "2b_match" }], "asked for the firm and 2b_match");
+  const m = setup({ ai: () => ({ ok: true, reason: "on", model: "claude-haiku-5-5" }) });
+  await m.call(RUN());
+  eq([m.ai.calls.length, m.ai.calls[0].model, m.sb.T.assistant_log[0].p_models], [1, "claude-haiku-5-5", ["claude-haiku-5-5"]], "the console's model used and logged");
 });

@@ -19,8 +19,8 @@ type Call = { url: string, method: string, auth: string, body: Uint8Array | stri
 
 // the stand: users by token, the firm's members, its client and book, the ledgers, the key, the log
 function stand(o: { key?: string | null, groq?: (form: Record<string, string>) => Response, superadmin?: boolean, aal2?: boolean, assistantOff?: boolean,
-  claudeKey?: string, claude?: (body: any) => Response, capOk?: boolean, today?: any[], now?: () => number } = {}) {
-  const calls: Call[] = [], logRows: any[] = [], rpcs: [string, any][] = [];
+  claudeKey?: string, claude?: (body: any) => Response, capOk?: boolean, today?: any[], now?: () => number, ai?: (args: any) => any } = {}) {
+  const calls: Call[] = [], logRows: any[] = [], rpcs: [string, any][] = [], asked: any[] = [];
   // the rows already logged today (the per-firm cap): {firm_id, feature, ms, calls, at}; the rows this stand logs join them
   const dayRows: any[] = o.today ? [...o.today] : [];
   const ledgers = [
@@ -61,6 +61,8 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
     if (p === "/rest/v1/rpc/mfa_ok") return json(o.aal2 !== false);
     if (p === "/rest/v1/rpc/is_superadmin") return json(!!o.superadmin);
     if (p === "/rest/v1/rpc/asst_cap_take") { assert(auth === "service-key", "the cap taken with the service role"); rpcs.push(["asst_cap_take", JSON.parse(String(body))]); return json({ ok: o.capOk !== false, why: o.capOk === false ? "inr" : "" }); }
+    // the AI control centre (migration 121): the switch is asked with the service role; on unless the test says otherwise
+    if (p === "/rest/v1/rpc/ai_allowed") { assert(auth === "service-key", "the switch asked with the service role"); const a = JSON.parse(String(body)); asked.push(a); return json(o.ai ? o.ai(a) : { ok: true, reason: "on", model: null }); }
     if (p === "/rest/v1/rpc/asst_cost_add") { rpcs.push(["asst_cost_add", JSON.parse(String(body))]); return json({ inr: 0.03 }); }
     if (p === "/rest/v1/members") return json(q.get("user_id") === "eq." + ME ? [{ firm_id: FIRM, role: "owner", active: true }] : []);
     if (p === "/rest/v1/assistant_settings") return json(o.assistantOff ? [{ enabled: false }] : []);
@@ -102,7 +104,7 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
     return json({ message: "not in the stand: " + method + " " + p }, 404);
   }) as typeof fetch;
   const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, now: o.now });
-  return { h, calls, logRows, rpcs };
+  return { h, calls, logRows, rpcs, asked };
 }
 
 const AUDIO = new Uint8Array(48_000).map((_, i) => (i * 31 + 7) & 255);     // a made-up clip; its bytes are looked for later
@@ -371,4 +373,17 @@ Deno.test("the per-firm daily cap (F9): 429 with the plain words once the firm's
   // the usage answer is unchanged
   const u = await s.h(new Request("http://x/", { method: "POST", headers: { Authorization: "Bearer tok-me", "Content-Type": "application/json" }, body: JSON.stringify({ action: "usage" }) }));
   eq(u.status, 200, "usage still answers");
+});
+
+Deno.test("AI control centre: voice typing switched off by FinCom is refused in plain words; Groq never called, nothing logged", async () => {
+  const s = stand({ key: "gsk_test", ai: (a) => ({ ok: false, reason: "killed", feature: a.p_feature, message: "AI for Voice typing is switched off by FinCom." }) });
+  const r = await send(s.h);
+  const j = await r.json();
+  eq([r.status, j.ok, j.kind, j.error], [403, false, "ai_off", "AI for Voice typing is switched off by FinCom."], "refused with the words");
+  eq(s.asked[0], { p_firm: FIRM, p_feature: "voice" }, "asked for the firm and voice");
+  assert(!s.calls.some((x) => x.url.startsWith("https://api.groq.com/") || x.url.startsWith("https://api.anthropic.com/")), "no provider called");
+  eq(s.logRows.length, 0, "nothing logged");
+  // on: as before
+  const on = stand({ key: "gsk_test" });
+  eq((await send(on.h)).status, 200, "on: the clip is read");
 });

@@ -23,7 +23,7 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean } = {}) {
+  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, fincom?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
@@ -46,7 +46,7 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
     call_pieces: () => ({ id: T.call_pieces.length + 1, status: "new", tries: 0, text: "" }), call_batches: () => ({ id: uuid(), retention_days: 365, archived: false, created_at: new Date().toISOString() }),
     call_remote_sessions: () => ({ id: uuid(), ended_at: null }), call_transcripts: () => ({ tasks_added: [], summary: null }),
   };
-  const log = { broadcast: [] as any[], mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[], stt: [] as any[], chat: [] as any[] };
+  const log = { broadcast: [] as any[], mails: [] as any[], transcribe: [] as any[], ai: [] as any[], cf: [] as any[], rpc: [] as string[], userWrites: [] as any[], stt: [] as any[], chat: [] as any[], asked: [] as any[] };
   const match = (row: Row, k: string, v: string) => {
     const [op, ...rest] = v.split("."); const val = rest.join(".");
     const x = row[k];
@@ -77,6 +77,8 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         const fn = p.slice(13); log.rpc.push(fn);
         if (fn === "mfa_ok") return J(!!USERS[tok]);
         if (fn === "asst_cap_take") return J({ ok: true });
+        // the AI control centre's switch (migration 121), asked with the service role
+        if (fn === "ai_allowed") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); log.asked.push(body); return J(o.fincom ? o.fincom(body) : { ok: true, reason: "on", model: null }); }
         if (fn === "asst_cost_add") return J({ inr: 1.5 });
         if (fn === "asst_log_add") return J(null);
         if (fn === "call_code_hit") { if (tok !== "service-key") return J({ message: "permission denied" }, 403); const add = body.p_add === 0 ? 0 : 1; tries[body.p_key] = (tries[body.p_key] || 0) + add; return J(tries[body.p_key] <= body.p_max - (add ? 0 : 1)); }
@@ -876,4 +878,22 @@ Deno.test("an unexpected failure (F11): a plain message; the detail only in the 
   eq(r.status, 500, "500");
   eq(r.j, { ok: false, kind: "other", error: "Something went wrong on our side; try again in a moment." }, "a plain message only");
   assert(errs.some((e) => e.includes("fincom_call_error") && e.includes("roster")), "the detail logged: " + errs.join(" | "));
+});
+
+Deno.test("AI control centre: the summary and subtitles switched off by FinCom are refused in plain words; no provider called; a console model is used", async () => {
+  const off = (a: any) => ({ ok: false, reason: "feature_off", feature: a.p_feature, message: a.p_feature === "call_summary" ? "AI for Call summary is switched off by FinCom." : "AI for Call captions is switched off by FinCom." });
+  const s = stand({ fincom: off });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  s.T.call_transcripts.push({ room_id: a.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
+  const sm = await s.call({ action: "summarise", room_id: a.j.room.id }, "tok-staff");
+  eq([sm.status, sm.j.ok, sm.j.kind, sm.j.error], [403, false, "ai_off", "AI for Call summary is switched off by FinCom."], "the summary refused");
+  const cp = await s.call({ action: "caption", room_id: a.j.room.id, audio: AUDIO, mime: "audio/webm", secs: 5, targets: ["hi"] }, "tok-staff");
+  eq([cp.status, cp.j.kind, cp.j.error], [403, "ai_off", "AI for Call captions is switched off by FinCom."], "subtitles refused");
+  eq([s.log.ai.length, s.log.stt.length, s.log.chat.length], [0, 0, 0], "no provider called");
+  eq(s.log.asked.map((x: any) => x.p_feature), ["call_summary", "call_captions"], "asked for each feature");
+  const m = stand({ fincom: () => ({ ok: true, reason: "on", model: "claude-opus-5-5" }) });
+  const b = await m.call({ action: "start", kind: "help" }, "tok-staff");
+  m.T.call_transcripts.push({ room_id: b.j.room.id, firm_id: FIRM, lines: [{ who: "A", start_ms: 0, text: "hi" }] });
+  const ok = await m.call({ action: "summarise", room_id: b.j.room.id }, "tok-staff");
+  eq([ok.status, ok.j.summary.model], [200, "claude-opus-5-5"], "the console's model made the summary");
 });

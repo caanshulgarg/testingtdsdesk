@@ -9,6 +9,7 @@ import { module as users } from "./modules/users.ts";
 import { module as audit } from "./modules/audit.ts";
 import { module as admins } from "./modules/admins.ts";
 import { module as settings } from "./modules/settings.ts";
+import { module as ai } from "./modules/ai.ts";
 
 export const MODULES: Module[] = [
   me,
@@ -19,4 +20,5 @@ export const MODULES: Module[] = [
   audit,
   admins,
   settings,
+  ai,
 ];
