@@ -63,26 +63,33 @@ with sync_playwright() as p:
     ok(len(E("window.__wake")) == 1, "opened again within five minutes: no second wake")
     # 1. Tally open, with the last read
     line = lambda sel="#app [data-post-problem]": pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
-    pline = lambda: line("#app [data-post-line]")
+    # next-tally-icon (27-Oct-2026): no status line on the page; its words are postStatusFor's, read here as the line was;
+    # Update now is in the header's Tally icon's popover; what stops a posting is said once Post was pressed, plainly
+    PL = """() => { const s = postStatusFor(CO()); return 'Posting into ' + s.company + (s.on ? ' on ' + s.on : '') + (s.where ? ' · ' + s.where : '') +
+      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update now' : ''); }"""
+    pline = lambda: E(PL)
     # the steady sign (11-Oct-2026): the connection in the sign's words
-    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Linked · read 15:34 IST · Update now" and line() == "", "Post page: one line: %r" % pline())
-    ok(pg.locator("#app [data-post-line] [data-update-now]").count() == 1, "Post page: in it, one button: Update now")
-    pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(400)
+    ok(pline() == "Posting into ZZ TEST on NWS144 (anshul) · Linked · read 15:34 IST · Update now" and line() == "" and pg.locator("#app [data-post-line]").count() == 0, "Post page: the line's words, not on the page: %r" % pline())
+    pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-act=update]", timeout=15000)
+    ok(pg.locator("header.top [data-tally-pop-act=update]").count() == 1, "the header's Tally icon: one button, Update now")
+    pg.click("header.top [data-tally-pop-act=update]"); pg.wait_for_timeout(400); pg.keyboard.press("Escape")
     ok(["tally_want_update", {"p_client": cid}] in E("window.__rpc"), "Update now sends the event (tally_want_update for the client)")
     # 2. Tally closed
     E(STATE, {"beat": {"tallyState": "closed", "tally": False}}); pg.wait_for_timeout(300)
-    # next-link-record (the owner's step 2): Waiting for Tally, one plain line
-    ok(line() == "Open ZZ TEST in TallyPrime on NWS144.", "Tally closed (first sight): Waiting for Tally's one line: %r" % line())
+    ok(line() == "", "Tally closed, before Post is pressed: nothing on the page (%r)" % line())
+    E("() => { S.postTried = S.coId; render(); }"); pg.wait_for_timeout(300)
+    # next-link-record (the owner's step 2): Waiting for Tally, one plain line (next-tally-icon: no computer named)
+    ok(line() == "Not sent to Tally. Open ZZ TEST in Tally.", "Tally closed (first sight): Waiting for Tally's one line: %r" % line())
     # 3. the computer offline (three heartbeats missed)
     E(STATE, {"ageMin": 10}); pg.wait_for_timeout(300)
-    ok(line() == "Open ZZ TEST in TallyPrime on NWS144.", "the computer offline: Waiting for Tally's one line: %r" % line())
+    ok(line() == "Not sent to Tally. Open ZZ TEST in Tally.", "the computer offline: Waiting for Tally's one line: %r" % line())
     # 4. Tally not answering (requirement 12)
     E(STATE, {"beat": {"tallyState": "busy", "notAnsweringSince": "2026-10-02T12:28:00"}}); pg.wait_for_timeout(300)
     l4 = line()
-    ok(l4.startswith("Tally is not answering on NWS144 since ") and "12:28" in l4, "Tally not answering: %r" % l4)
+    ok(l4 == "Not sent to Tally. Tally is not answering.", "Tally not answering: %r" % l4)
     # 5. background reading paused in the tray
     E(STATE, {"beat": {"paused": True}}); pg.wait_for_timeout(300)
-    ok(line().startswith("Reading paused on NWS144: resume it") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update now", "paused: %r" % line())
+    ok(line().startswith("Not sent to Tally. Reading from Tally is paused.") and pg.locator("#app [data-post-problem] [data-post-action]").inner_text() == "Update now", "paused: %r" % line())
     E(STATE, {}); pg.wait_for_timeout(300)
     # the Tally panel of the top bar says the same line
     E("() => doAct('tallyPanel')"); pg.wait_for_timeout(400)

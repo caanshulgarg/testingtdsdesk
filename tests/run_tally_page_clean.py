@@ -413,13 +413,14 @@ def main():
         T = ids["GB TEXCOAT"]
         def linked_everywhere(label):
             E("(c) => { S.tallyGuide = {}; openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", T); pg.wait_for_timeout(1200)
-            sign = E("() => (document.querySelector('[data-tally-link-sign]') || {getAttribute: () => ''}).getAttribute('data-tally-link-sign')")
+            # next-tally-icon: the header's one Tally icon says the client's word
+            sign = E("() => (document.querySelector('header.top [data-tally-icon]') || {getAttribute: () => ''}).getAttribute('data-tally-icon')")
             E("() => navHome('clients')"); pg.wait_for_timeout(1000)
             chip = E("(c) => { const r = [...document.querySelectorAll('#app table[data-list=\"clients\"] tr')].find(t => t.innerText.startsWith('GB TEXCOAT')); const ch = r && r.querySelector('[data-tally-chip]'); return ch ? [ch.getAttribute('data-tally-chip'), ch.getAttribute('data-tally-pill')] : ''; }", T)
             E("() => { S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1200)
             rw = E("() => { const r = document.querySelector('#app [data-tco-row=\"GB TEXCOAT\"]'); return r ? [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.querySelectorAll('[data-tco-act]').length] : null; }")
             t2 = E("""() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced], details, [data-connect-guide]').forEach(e => e.remove()); return a.innerText; }""")
-            ok(sign == "reading" and chip == ["connected", "connected"] and rw == ["connected", T, 0] and not re.search(r"\bport\b|9500|9002", t2, re.I),
+            ok(sign == "linked" and chip == ["connected", "connected"] and rw == ["connected", T, 0] and not re.search(r"\bport\b|9500|9002", t2, re.I),
                "%s: still linked and Connected: the top bar (%s), the Clients chip (%s), its row (%s); no re-link asked, no port words" % (label, sign, chip, rw))
         linked_everywhere("port 9002")
         E("""() => { window.__devs.forEach(d => { d.info.beat.ports = [{port: 9500, ok: true, skipped: false, n: 1, error: '', state: 'open'}]; d.info.beat.tallyPort = 9500;
@@ -475,20 +476,19 @@ def main():
         at_client(); pg.wait_for_timeout(600)
         ok(n("#app [data-tally-link]") == 0 and n("#app [data-tally-one]") == 1 and n("#app " + LINKERS.replace(", ", ", #app ")) == 0, "Client setup → Tally: one line, nothing to link with (%s)" % txt("#app [data-tally-one]")[:120])
         pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1200); card("Client setup's Tally line")
-        # the client's chip on its title line, and the top bar's sign
+        # next-tally-icon (27-Oct-2026): no chip on the title line; the header's one Tally icon. Its popover's "Open Tally page"
+        # lands on Companies in Tally for the client
         at_client("dash")
-        chip = '#app [data-tally-chip], #cobar [data-tally-chip]'
-        if n(chip):
-            pg.click(chip.split(", ")[0] if n(chip.split(", ")[0]) else chip.split(", ")[1]); pg.wait_for_timeout(1200); card("the client's Tally chip")
-        else:
-            ok(False, "the client's Tally chip is on its page")
+        ok(n("#cobar [data-tally-chip]") == 0 and n("header.top [data-tally-icon]") == 1, "no Tally chip on the title line; the header's one Tally icon")
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-page]", timeout=15000)
+        pg.click("header.top [data-tally-pop-page]"); pg.wait_for_timeout(1200); card("the Tally icon's Open Tally page")
         at_client("dash")
         # next-tally-firstlink (the owner: "it should be above, on the Tally icon"): VMS EVENTS is open in Tally and no
-        # client's, so the sign carries the badge and opens its panel, starting with [Link to Garg Shekhar & Company]
-        pg.click('[data-tally-sign]'); pg.wait_for_timeout(1200)
-        ok(n('[data-overlay="tallypanel"] [data-tally-offer="VMS EVENTS"] [data-tally-offer-link-to="%s"]' % G) == 1 and n("[data-tally-badge]") == 1,
-           "the top bar's Tally sign (a company open, not linked: its badge): the panel offers Link to this client (%s)" % E("[S.view, S.homeTab, !!S.tallyPanel]"))
-        E("() => doAct('tallyPanelClose')"); pg.wait_for_timeout(500)
+        # client's, so the icon carries the badge; next-tally-icon: its popover links it in place ([Link], VMS EVENTS listed)
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(400)
+        ok(n('header.top [data-tally-pop] [data-tally-pop-pick] option[value="VMS EVENTS"]') == 1 and n("header.top [data-tally-pop-act=link]") == 1 and n("[data-tally-badge]") == 1 and not E("!!S.tallyPanel"),
+           "the header's Tally icon (a company open, not linked: its badge): the popover offers Link, VMS EVENTS in its list, no side panel (%s)" % E("[S.view, S.homeTab, !!S.tallyPanel]"))
+        pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
         # Getting ready's Link to Tally step
         at_client("dash")
         gr = '#app [data-onb-step="link"] button'

@@ -15,8 +15,8 @@ answers the link functions as migration 110 does (run_migration110.py tests the 
   5. One word per client (the owner's step 2): Linked (reading · posting allowed · last entry HH:MM) / Waiting for Tally
      (one plain line "Open <company> in TallyPrime on <PC>": Tally closed, the company not open, the computer offline) /
      Needs you (one line, one button: posting stopped, the bridge cannot reach Tally on its port) / Not linked (Link); a
-     Tally on port 4125 the bridge reaches is fine; the same word on the title chip, the Clients list, the Tally page's
-     row and Post to Tally.
+     Tally on port 4125 the bridge reaches is fine; the same word on the header's Tally icon, the Clients list, the Tally
+     page's row and Post to Tally. (next-tally-icon: the icon's popover says it in plain words, run_tally_icon.py)
   7. The same company in two places (a copied data folder keeps the GUID): Needs you, Choose; the Tally page's card
      (① the place FinCom reads, ② the other, nothing of it applied); an owner's Use ② asks the cloud; staff see no choice.
   8. Check my Tally: the bridge's false "not accepting connections on port N" is left out while the bridge reaches Tally.
@@ -172,16 +172,28 @@ def main():
             pg.evaluate("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1500)
         def client_page(pg, cid):
             pg.evaluate("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid); pg.wait_for_timeout(1500)
-        status = lambda pg, at="title": pg.evaluate("(a) => { const e = document.querySelector('#app [data-link-status-at=' + a + '], #cobar [data-link-status-at=' + a + '], [data-link-status-at=' + a + ']'); return e ? {state: e.getAttribute('data-link-status'), words: (e.querySelector('[data-link-status-words]') || {innerText: ''}).innerText.trim(), buttons: [...e.querySelectorAll('button')].map(b => b.innerText.trim()), title: e.getAttribute('title')} : null; }", at)
-        chip = lambda pg: pg.evaluate("() => { const b = document.querySelector('[data-tally-chip-at=title]'); return b ? b.getAttribute('data-tally-pill') : null; }")
+        # next-tally-icon: the client's one word is the header's Tally icon; its popover says the line and the action
+        KIND = {"Linked": "linked", "Waiting for Tally": "waiting", "Needs you": "needs", "Not linked": "unlinked"}
+        def status(pg, keep=False):
+            if not pg.locator("header.top [data-tally-icon]").count(): return None
+            if not pg.locator("header.top [data-tally-pop]").count(): pg.click("header.top [data-tally-icon]")
+            pg.wait_for_selector("header.top [data-tally-pop] [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(300)
+            r = pg.evaluate("() => { const e = document.querySelector('header.top [data-tally-pop]'), i = document.querySelector('header.top [data-tally-icon]'); return {word: e.querySelector('[data-tally-pop-word]').innerText.trim(),"
+                            " words: (e.querySelector('[data-tally-pop-line]') || {innerText: ''}).innerText.trim(), buttons: [...e.querySelectorAll('[data-tally-pop-act]')].map(b => b.getAttribute('data-tally-pop-act')), title: i.getAttribute('aria-label'), text: e.innerText}; }")
+            r["state"] = KIND.get(r["word"], r["word"])
+            if not keep: pg.keyboard.press("Escape"); pg.wait_for_timeout(200)
+            return r
+        chip = lambda pg: pg.evaluate("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? b.getAttribute('data-tally-pill') : null; }")
+        word = lambda pg: re.sub(r"^Tally: ([^—]+?)( — .*)?$", r"\1", pg.get_attribute("header.top [data-tally-icon]", "aria-label") or "")
+        # the client's line as lib/linkStatus.js says it (the Tally page's row; the icon says it in plain words)
+        lw = lambda pg, cid: pg.evaluate("(c) => LinkWord(S.companies[c]).text", cid)
         rpc = lambda pg, fn: [r for r in pg.evaluate("window.__rpc") if r[0] == fn]
         # integ-link (27-Oct-2026): the top bar's Tally sign is about THIS computer; with no bridge here it never reads like a
         # problem of a client that is Linked or Waiting for Tally ("Tally not on this computer" beside "Linked")
-        here = lambda pg: pg.evaluate("() => { const b = document.querySelector('[data-tally-here]'); return b ? {code: b.getAttribute('data-tally-here'), long: b.querySelector('.tsign-long').textContent, short: b.querySelector('.tsign-short').textContent, title: b.title} : null; }")
-        def here_ok(pg, word):
-            h = here(pg)
-            ok(h is None or h["code"] != "none" or (h["long"] == "This PC: no bridge" + (" (not needed)" if word == "Linked" else "") and h["short"] == "No bridge here" and "Tally not on this computer" not in h["title"]),
-               "%s: the top bar's sign speaks of this computer, not the client (%s)" % (word, h))
+        # (next-tally-icon: no words on the header at all; the icon says the client's word on hover and in its popover)
+        def here_ok(pg, w):
+            t = pg.inner_text("header.top")
+            ok("This PC" not in t and "Tally not on this computer" not in t and w not in t, "%s: no Tally words in the header, the icon says it" % w)
         # integ-link: "Not saved: ..." stays one line (shortened, the whole of it in its tip) at 1366 and 1440 wide, beside the
         # title row's status line
         def save_one_line(pg):
@@ -189,10 +201,10 @@ def main():
                 pg.set_viewport_size({"width": w, "height": 900})
                 pg.evaluate("() => { Live.sv = Object.assign({}, Live.sv, {state: 'error', err: 'records: 500 the server did not take the change (made-up)'}); render(); }"); pg.wait_for_timeout(400)
                 m = pg.evaluate("() => { const e = document.querySelector('.tsave.bad'); if (!e) return null; const r = e.getBoundingClientRect(), lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.3;"
-                                " const st = document.querySelector('#cobar [data-link-status-at=title]'), tb = document.querySelector('header.top .headrow > .tbar'), f = document.querySelector('header.top .tb-page').firstElementChild.getBoundingClientRect();"
-                                " return {h: r.height, w: r.width, lh, title: e.title, text: e.textContent, sw: document.documentElement.scrollWidth, iw: innerWidth, statusW: st ? st.getBoundingClientRect().width : -1, titleRight: tb.getBoundingClientRect().right, pageLeft: f.left}; }")
+                                " const tb = document.querySelector('header.top .headrow > .tbar'), f = document.querySelector('header.top .tb-page').firstElementChild.getBoundingClientRect();"
+                                " return {h: r.height, w: r.width, lh, title: e.title, text: e.textContent, sw: document.documentElement.scrollWidth, iw: innerWidth, titleRight: tb.getBoundingClientRect().right, pageLeft: f.left}; }")
                 ok(m and m["h"] <= m["lh"] * 1.5 and m["w"] >= 150 and m["text"].startswith("Not saved: ") and "the server did not take the change" in m["title"] and "500" in m["title"] and m["sw"] <= m["iw"] + 1
-                   and m["titleRight"] <= m["pageLeft"] + 0.5 and m["statusW"] >= 60,
+                   and m["titleRight"] <= m["pageLeft"] + 0.5,
                    "%d wide: 'Not saved: ...' on one line, at least 150 px, the whole of it in its tip (%s)" % (w, m))
 
         print("== 1. Link -> the record")
@@ -214,10 +226,10 @@ def main():
         ok("posting_allowed" not in snap and GA not in snap and "company_guid" not in snap, "the record is no part of the client's saved copy")
         client_page(pg, CA)
         st = status(pg)
-        ok(chip(pg) == "connected" and T(pg, "[data-tally-chip-at=title]").endswith("Linked") and st and st["state"] == "linked" and st["words"].startswith("reading · posting allowed · last entry "),
-           "the client's title: Linked, and its line '%s'" % (st or {}).get("words"))
+        ok(chip(pg) == "connected" and word(pg) == "Linked" and st and st["state"] == "linked" and st["words"].startswith("Connected to Tally · last entry "),
+           "the client's Tally icon: Linked, and its line '%s'" % (st or {}).get("words"))
         here_ok(pg, "Linked")
-        shot(pg, "1-linked-title", "#cobar")
+        shot(pg, "1-linked-title", "header.top")
         # the same company (its GUID) linked to another client: refused on its row
         tally_page(pg)
         pg.click(R(ITS2) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
@@ -248,7 +260,7 @@ def main():
         shot(pg, "2-renamed-row", R(ALPHA))
         client_page(pg, CA)
         st = status(pg)
-        ok(chip(pg) == "connected" and st and st["state"] == "linked", "the client's title: Linked (%s, %s)" % (chip(pg), st))
+        ok(chip(pg) == "connected" and st and st["state"] == "linked", "the client's Tally icon: Linked (%s, %s)" % (chip(pg), st))
         saved = E(STORE)
         pg.close()
 
@@ -312,44 +324,42 @@ def main():
             E(SETUP, [s5, "owner", ME, CLIENTS]); client_page(pg, CA)
             return status(pg)
         st = scene([dev(OPEN, BEAT)])
-        ok(st["state"] == "linked" and re.fullmatch(r"reading · posting allowed · last entry \d\d:\d\d", st["words"]) and not st["buttons"], "Linked · %s (no button)" % st["words"])
-        ok(st["title"] == "Linked — " + st["words"], "its whole line: %r" % st["title"])
+        ok(st["state"] == "linked" and re.fullmatch(r"Connected to Tally · last entry \d{1,2}:\d\d [ap]m", st["words"]) and st["buttons"] == ["update"], "Linked · %s (Update now)" % st["words"])
+        ok(st["title"].startswith("Tally: Linked — " + st["words"]), "its whole line on hover: %r" % st["title"])
+        ok(re.fullmatch(r"Linked — reading · posting allowed · last entry \d\d:\d\d", lw(pg, CA)), "the record's words (the Tally page): %r" % lw(pg, CA))
         OPENW = "Open %s in TallyPrime on NWS144" % ALPHA
         for label, devs in [("Tally closed", [dev([], BEAT, tally="closed")]), ("the company not open", [dev([ITS], BEAT)]), ("the computer offline", [dev(OPEN, BEAT, at="ago:30")])]:
             st = scene(devs)
-            ok(st["state"] == "waiting" and st["words"] == OPENW and not st["buttons"] and T(pg, "[data-tally-chip-at=title]").endswith("Waiting for Tally"),
-               "%s: Waiting for Tally, one plain line %r (%s)" % (label, OPENW, st))
+            ok(st["state"] == "waiting" and st["words"] == "Open %s in Tally" % ALPHA and st["buttons"] == ["check"] and word(pg) == "Waiting for Tally" and lw(pg, CA) == "Waiting for Tally — " + OPENW,
+               "%s: Waiting for Tally, one plain line 'Open %s in Tally', Check again (%s)" % (label, ALPHA, st))
             if label == "Tally closed":
                 here_ok(pg, "Waiting for Tally")
                 save_one_line(pg)
-                shot(pg, "5-waiting-title", "#cobar")
+                shot(pg, "5-waiting-title", "header.top")
                 pg.evaluate("() => { Live.sv = Object.assign({}, Live.sv, {state: '', err: ''}); render(); }")
         st = scene([dev(OPEN, BEAT)], [rec(ALPHA, "b-alpha", CA, GA, allowed=False), rec(ITS, "b-its", CE, GE)])
-        ok(st["state"] == "needs" and st["words"] == "Posting into Tally is stopped for Alpha Traders Ltd" and st["buttons"] == ["Allow posting"], "posting stopped: Needs you, one line, Allow posting (%s)" % st)
-        pg.click("[data-link-status-at=title] [data-link-status-go]"); pg.wait_for_timeout(1500)
+        ok(st["state"] == "needs" and st["words"] == "Posting to Tally is stopped for Alpha Traders Ltd." and st["buttons"] == ["allow"], "posting stopped: Needs you, one line, Allow posting (%s)" % st)
+        status(pg, keep=True); pg.click("header.top [data-tally-pop-act=allow]"); pg.wait_for_timeout(1500)
         ok(E("(b) => window.__links.find(l => l.book_id === b).posting_allowed", "b-alpha") is True, "its button allows posting in the record")
         # a Tally on a port outside 9000-9999 that the bridge reaches: fine (the TallyPrime 7.2 proof: 2.4.7 connects on 4125)
         st = scene([dev(OPEN, BEAT, port=4125)])
         ok(st["state"] == "linked", "Tally on port 4125, the bridge connected: Linked, no port warning (%s)" % st["words"])
         # the bridge itself reports it cannot reach Tally on its port
         st = scene([dev([], BEAT, tally="closed", port=9005, ports=[{"port": 9005, "ok": False, "skipped": False, "n": 0, "error": "connection refused", "state": "closed"}])])
-        m = re.fullmatch(r"FinCom Bridge cannot reach Tally on port 9005\. Use a port between 9000 and 9999 — (90\d\d) is free", st["title"].replace("Needs you — ", "", 1) if st["title"] else "")
-        ok(st["state"] == "needs" and m and st["buttons"] == ["Show the steps"] and st["words"] == "Port 9005: use 9000–9999, %s is free" % (m.group(1) if m else "?"), "the bridge cannot reach Tally on 9005: Needs you (%r, %r)" % (st["words"], st["title"]))
-        pg.click("[data-link-status-at=title] [data-link-status-go]"); pg.wait_for_timeout(300)
-        how = T(pg, "[data-link-status-at=title] [data-link-status-how]")
-        ok(m and how.endswith("In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → Acts as Both, Port %s, ODBC Yes → Ctrl+A → restart Tally." % m.group(1)), "Show the steps: the Set Tally's port step's one line (%s)" % how)
-        shot(pg, "5-port-unreachable", "#cobar")
+        m = re.fullmatch(r"FinCom Bridge cannot reach Tally on port 9005\. Use a port between 9000 and 9999 — (90\d\d) is free", lw(pg, CA).replace("Needs you — ", "", 1))
+        ok(st["state"] == "needs" and m and st["buttons"] == ["check"] and "port" not in st["text"].lower() and "9005" not in st["text"], "the bridge cannot reach Tally on 9005: Needs you; the port only on the Tally page (%r, %r)" % (st["words"], lw(pg, CA)))
+        shot(pg, "5-port-unreachable", "header.top")
         ravi = {"go-2": {"at": "ago:5", "version": "2.4.7", "computer": "NWS144", "user": "ravi", "mode": "main", "tallyState": "open", "open": ["RAVI CO"], "tallyPort": 9005}}
         st = scene([dev([], BEAT, tally="closed", port=9005, bridges=ravi, ports=[{"port": 9005, "ok": False, "skipped": False, "n": 0, "error": "taken", "state": "closed"}, {"port": 9005, "ok": False, "skipped": True, "n": 0, "error": "", "state": ""}])])
-        ok(st["state"] == "needs" and "FinCom Bridge cannot reach Tally on port 9005 (ravi's Tally is on it)" in (st["title"] or ""), "a clash with ravi's Tally: said (%s)" % st["title"])
+        ok(st["state"] == "needs" and "FinCom Bridge cannot reach Tally on port 9005 (ravi's Tally is on it)" in lw(pg, CA), "a clash with ravi's Tally: said on the Tally page's words (%s)" % lw(pg, CA))
         E(SETUP, [store(), "owner", ME, CLIENTS]); client_page(pg, CU)
         st = status(pg)
-        ok(st["state"] == "unlinked" and st["buttons"] == ["Link"] and chip(pg) == "unlinked" and T(pg, "[data-tally-chip-at=title]").endswith("Not linked"), "not linked: the chip says it, one button Link (%s)" % st)
-        pg.click("[data-link-status-at=title] [data-link-status-go]"); pg.wait_for_timeout(1200)
-        ok(E("() => S.homeTab") == "tally" and E("() => (S.tallyGuide || {}).cid") == CU, "Link opens the Tally page's list for Beta Works")
-        # the same word in every place: the title chip, the Clients list, the Tally page's row, Post to Tally
+        ok(st["state"] == "unlinked" and st["buttons"] == ["link"] and chip(pg) == "unlinked" and word(pg) == "Not linked", "not linked: the icon says it, one button Link (%s)" % st)
+        status(pg, keep=True); pg.click("header.top [data-tally-pop-page]"); pg.wait_for_timeout(1200)
+        ok(E("() => S.homeTab") == "tally" and E("() => (S.tallyGuide || {}).cid") == CU, "Open Tally page opens the Tally page's list for Beta Works")
+        # the same word in every place: the header's Tally icon, the Clients list, the Tally page's row, Post to Tally
         def everywhere():
-            client_page(pg, CA); t = T(pg, "[data-tally-chip-at=title]")[2:]
+            client_page(pg, CA); t = word(pg)
             E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(1000)
             c = E("(id) => { const b = [...document.querySelectorAll('#app [data-tally-chip-at=clients]')].find(x => (x.closest('tr') || {innerText: ''}).innerText.includes('Alpha Traders')); return b ? b.innerText.slice(2).trim() : null; }", CA)
             tally_page(pg); rw = T(pg, R(ALPHA) + " .tco-pill .tag")
@@ -365,7 +375,7 @@ def main():
         # phone: the title and its line fit
         pg.set_viewport_size({"width": 390, "height": 844}); scene([dev([], BEAT, tally="closed")]); pg.wait_for_timeout(400)
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone 390: no sideways scroll with the status line (%s)" % E("() => [document.documentElement.scrollWidth, window.innerWidth]"))
-        shot(pg, "5-phone-waiting", "#cobar")
+        shot(pg, "5-phone-waiting", "header.top")
         pg.close()
 
         print("== 7. the same company in two places (a copied data folder keeps the GUID)")
@@ -377,8 +387,8 @@ def main():
                         {"book_id": "b-alpha", "data_loc": "f-lap", "data_folder": "D:\\Copy\\Data", "computer": "LAPTOP", "windows_user": "ravi", "tally_port": 9001, "state": "waiting", "last_seen": "ago:2"}]
         E(SETUP, [s7, "owner", ME, CLIENTS]); client_page(pg, CA)
         st = status(pg)
-        ok(st["state"] == "needs" and st["words"] == ALPHA + " is open in two places with different data: choose which is the books" and st["buttons"] == ["Choose"], "Needs you: the same company in two places, one button Choose (%s)" % st)
-        pg.click("[data-link-status-at=title] [data-link-status-go]"); pg.wait_for_timeout(1500)
+        ok(st["state"] == "needs" and st["words"] == ALPHA + " is open in two places with different data. Choose which one is the books." and st["buttons"] == ["place1", "place2"], "Needs you: the same company in two places, Use ① / Use ② (%s)" % st)
+        status(pg, keep=True); pg.click("header.top [data-tally-pop-page]"); pg.wait_for_timeout(1500)
         card = T(pg, "#app [data-tco-two-places]")
         ok(E("() => S.homeTab") == "tally" and card.startswith(ALPHA + " is open in two places with different data:") and "① NWS144 · anshul · C:\\Users\\anshul\\TallyPrime\\Data (FinCom reads this one)" in card
            and "② LAPTOP · ravi · D:\\Copy\\Data" in card and "nothing from the other is applied" in card, "Choose opens the Tally page's card: ① the place FinCom reads, ② the other (%s)" % card[:300])

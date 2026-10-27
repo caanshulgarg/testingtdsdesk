@@ -3,7 +3,7 @@
      "Books: last entry … Opened in 0.3 s, every entry in 7.5 s" (TDS, MIS, Reports)
   2. saved: the top bar's save chip says "Saved 08:07", the rest in its tooltip
   3. the Tally chip's panel: "Books up to … · read …" with Update now; the timing only under Details (for support)
-  4. books over 2 days old, or reading stopped: one small amber line on the page, which opens the panel; none otherwise
+  4. books over 2 days old, or reading stopped: no line on the page (next-tally-icon); the header's Tally icon's popover says it
 Runs on the React build: app/dist-test, or TDSDESK_SITE."""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -77,18 +77,20 @@ try:
             ok("Opened in 0.3 s" in dt and "every entry in 7.5 s" in dt, "Details: the timing, for support (%r)" % dt[:160])
         J("() => { S.tallyPanel = false; render(); }"); W(500)
 
-        print("4. stale books, reading stopped: one amber line")
+        print("4. stale books, reading stopped: no line on the page; the header's Tally icon's popover says it")
+        # next-tally-icon (27-Oct-2026; the owner: "don't need everywhere tally status"): how fresh the books are from Tally
+        # left the page; it is said in the header's Tally icon's popover
         J("() => { window.__asof = new Date(Date.now() - 3 * 86400e3).toISOString(); render(); }"); W(500)
         for tab, sub in [("tds", "year"), ("mis", None)]:
             page(tab, sub)
-            st = pg.locator("#app [data-books-stale]")
-            ok(st.count() == 1 and "3 days" in st.inner_text(), "%s: books 3 days old: one amber line (%s)" % (tab, st.inner_text() if st.count() else "none"))
-        pg.locator("#app [data-books-stale] button").first.click(); W(700)
-        ok(J("!!S.tallyPanel"), "its link opens the Tally panel")
+            ok(pg.locator("#app [data-books-stale]").count() == 0, "%s: books 3 days old: no amber line on the page" % tab)
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop] [data-tally-pop-word]", timeout=15000); W(300)
+        st = pg.locator("header.top [data-tally-pop] [data-books-stale]")
+        ok(st.count() == 1 and "3 days" in st.inner_text() and not J("!!S.tallyPanel"), "the icon's popover: the books are 3 days old; no side panel (%s)" % (st.inner_text() if st.count() else "none"))
+        pg.keyboard.press("Escape"); W(300)
         J("() => { S.tallyPanel = false; window.__asof = new Date(Date.now() - 3600e3).toISOString(); window.__tl = window.tallyLine; window.tallyLine = () => ({state: 'stopped', level: 'bad', text: 'Reading stopped by Anshul at 10:02: Tally slow'}); render(); }"); W(500)
         page("tds", "year")
-        st = pg.locator("#app [data-books-stale]")
-        ok(st.count() == 1 and "stopped" in st.inner_text(), "reading stopped: the amber line says so (%s)" % (st.inner_text() if st.count() else "none"))
+        ok(pg.locator("#app [data-books-stale]").count() == 0, "reading stopped: no line on the page either")
         J("() => { window.tallyLine = window.__tl; render(); }"); W(300)
         ok(pg.locator("#app [data-books-stale]").count() == 0, "fresh again: no line")
         ok(not [e for e in errors if "supabase" not in e.lower()], "no page errors (%s)" % errors[:3])

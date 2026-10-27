@@ -63,7 +63,10 @@ with sync_playwright() as p:
     pg.goto("http://localhost:8232/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
     cid = pg.evaluate(SETUP); pg.wait_for_timeout(1200)
     E = lambda js, *a: pg.evaluate(js, *a)
-    line = lambda: pg.inner_text("#app [data-post-line]").replace("\n", " ").strip() if pg.locator("#app [data-post-line]").count() else ""
+    # next-tally-icon (27-Oct-2026): no status line; where it posts is a small label at the Post button; Tally's state is the
+    # header's icon, and said on the page only once Post was pressed (S.postTried), in plain words
+    line = lambda: pg.inner_text("#app [data-post-into]").replace("\n", " ").strip() if pg.locator("#app [data-post-into]").count() else ""
+    word = lambda: E("() => { const s = postStatusFor(CO()); return [s.where, s.on || '']; }")
     # second pass of 02-Oct-2026: what to do is a second line, only when something is wrong
     prob = lambda: pg.inner_text("#app [data-post-problem]").replace("\n", " ").strip() if pg.locator("#app [data-post-problem]").count() else ""
     # B14: the company set by itself on opening the client (one Tally company linked). Owner decision of 26-Oct-2026: the
@@ -84,7 +87,7 @@ with sync_playwright() as p:
     E("() => { S.account = window.__acct; S.view = 'company'; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
-    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY on NWS144 (anshul) · Linked · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
+    ok(pg.locator("#app [data-post-line]").count() == 0 and line() == "into GARG SHEKHAR & COMPANY" and prob() == "" and word() == ["Linked", "NWS144 (anshul)"], "C15. no status line; 'into GARG SHEKHAR & COMPANY' at the Post button, nothing else: '%s' (%s)" % (line(), word()))
     E("document.querySelector(\"#app details[data-more='post']\").open = true")
     ok(pg.inner_text("#app [data-post-bridge]") == "FinCom Bridge 2.1.1 · Ready", "C15. the bridge's version and Ready under More")
     E("document.querySelector(\"#app details[data-more='post']\").open = false")
@@ -112,12 +115,14 @@ with sync_playwright() as p:
     # the steady sign (11-Oct-2026): the sign's reason and fix (TallySteady.reset: first sight, no minute's wait here)
     E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'closed'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'closed', tally: false, open: []}); TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
     # next-link-record (the owner's step 2): Waiting for Tally, one plain line
-    ok(line() == "Posting into GARG SHEKHAR & COMPANY · Waiting for Tally · Update now" and prob() == "Open GARG SHEKHAR & COMPANY in TallyPrime on NWS144.", "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
+    ok(word()[0] == "Waiting for Tally" and prob() == "", "C15. Tally closed there: Waiting for Tally (the header's icon), nothing on the page before Post ('%s')" % prob())
+    E("() => { S.postTried = S.coId; render(); }"); pg.wait_for_timeout(300)
+    ok(prob() == "Not sent to Tally. Open GARG SHEKHAR & COMPANY in Tally.", "C15. once Post was pressed: one plain line ('%s')" % prob())
     E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'open'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'open', tally: true, open: ['GARG SHEKHAR & COMPANY']}); render(); }")
     E("() => { const c = CO(); window.__keep = c.postTo; c.postTo = ''; AutoPostTo.at[c.id] = Date.now(); render(); }"); pg.wait_for_timeout(300)
     ok(prob().endswith("Allow posting") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen, one linked: 'Allow posting' (%s)" % prob())
     E("() => { const c = CO(); c.postTo = window.__keep; TCloud.pane.devices = []; TCloud.on = () => false; TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
-    ok(prob().startswith("Install FinCom Bridge"), "C15. no bridge anywhere: 'Install FinCom Bridge' (%s)" % prob())
+    ok(prob().startswith("Not sent to Tally. ") and "NWS144" not in prob() and "Bridge" not in prob(), "C15. no bridge anywhere: one plain line (%s)" % prob())
     E("() => { TCloud.on = () => TCloud.__on !== false; TCloud.pane.devices = [{id: 'd-1', name: 'NWS144', main_bridge: 'go-1', revoked: false, info: {computer: 'NWS144', bridges: {'go-1': {computer: 'NWS144', version: '2.1.1', mode: 'main', at: new Date().toISOString(), tallyState: 'open'}}}}]; render(); }")
     pg.wait_for_timeout(300)
     # B14: the cloud's notAllowed: not Tally's reason, a button to Client setup → Tally, the bills stay waiting

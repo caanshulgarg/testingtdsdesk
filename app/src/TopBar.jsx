@@ -1,4 +1,4 @@
-// The top bar: the page title (client header with its status tabs, or the home screen's name), the Tally chip, the
+// The top bar: the page title (client header with its status tabs, or the home screen's name), the one Tally icon, the
 // firm account chip and the firm button, with the Tally panel and firm menu they open.
 // Was renderTop, clientHeader, topRight, tallyPanelHtml, firmMenuHtml (src/js/02 and 18); actions are doAct(...).
 // calls (stage 1): the one button on a client's page (calls/CallButton.jsx; the call screen loads only when used)
@@ -23,8 +23,9 @@ import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { StateBar } from "./parts/StateBar.jsx";
 import { useDismiss } from "./parts/dismiss.js";
-import TallyChip, { goTallyCard } from "./parts/TallyChip.jsx";
-import { clientTallyState, unlinkedOpen, mayLink } from "./lib/tallyState.js";
+import { clientTallyState, mayLink } from "./lib/tallyState.js";
+// next-tally-icon (27-Oct-2026): the header's ONE Tally sign, an icon with a status dot (its words on hover and in its popover)
+import TallyIcon from "./parts/TallyIcon.jsx";
 
 const HOME_TITLES = { clients: "Clients", today: "Today", compliance: "Compliance", inbox: "Inbox", tally: "Tally", integrations: "Integrations", rules: "Settings", help: "Help", meetings: "Meetings" };
 // one name for one thing (spec K1; clean-up batch 1): each page is called what the sidebar calls it. From Tally keeps
@@ -34,11 +35,10 @@ const BOOKS_TITLES = { tds: "TDS", gst: "GST", import: "From Tally", ledgers: "F
 const DOC_NAMES = { bills: "Purchase", bank: "Bank", sales: "Sales" };
 
 // Arc's page header: the breadcrumb (Clients › <client>, or Firm › <firm>) over the title, then the page's actions
-function Title({ title, sub, crumb, children, after }) {
-  // after: beside the page's name on its line (a client's Tally chip), so the breadcrumb above keeps its width
+function Title({ title, sub, crumb, children }) {
   return (
     <div className="tbar" data-crumb={crumb}>
-      <div className="tbar-title">{after ? <div className="tbar-h"><h2>{title}</h2>{after}</div> : <h2>{title}</h2>}{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
+      <div className="tbar-title"><h2>{title}</h2>{typeof sub === "string" || sub == null ? <span className="note" title={sub || undefined}>{sub}</span> : sub}</div>
       {children}
     </div>
   );
@@ -101,8 +101,9 @@ function ClientHeader() {
     <button type="button" className="linkbtn crumb-co" data-client-switch="" title="Switch client (F3 or Ctrl+K)" aria-label={"Client " + co.name + ": switch client"} onClick={() => openSwitcher()}>{co.name} <span aria-hidden="true">▾</span></button>
     <span aria-hidden="true">›</span><span data-crumb-page="">{title}</span></nav>;
   const head = (
-    // the client's one Tally chip ("Not linked → Link") beside the page's name (it was in the client's row of pages, gone)
-    <Title title={title} sub={crumbs} crumb="client-nav" after={!S.loadingCo ? <TallyChip co={co} where="title" /> : null}>
+    // next-tally-icon (the owner, 27-Oct-2026: "header is too noisy of tally remarks"): no Tally chip and no status line
+    // beside the page's name; the client's Tally is the one icon at the right of the top bar (parts/TallyIcon.jsx)
+    <Title title={title} sub={crumbs} crumb="client-nav">
       <div className="tbar-actions">
         {S.tab === "dash" && !S.loadingCo && <CallButton co={co} />}
         {inbox > 0 && !setup && S.tab !== "clientInbox" && <Button className="btn small" onClick={() => goStep("collect")}>{"\u{1F4E5} " + inbox + " in inbox"}</Button>}
@@ -180,7 +181,8 @@ export function TallyDetail({ s, link = null }) {
     {!s.on && <><dt>Why</dt><dd className="why">{s.reason}</dd><dt>What to do</dt><dd>{s.fix}</dd></>}
   </dl>;
 }
-// the top bar's sign (the owner, 11-Oct-2026): THIS computer only, a dot and a short word, steady (tallyHere, src/js/49):
+// the Tally panel's card of THIS computer (the owner, 11-Oct-2026: steady, tallyHere, src/js/49; it was the top bar's chip
+// until next-tally-icon, which made the top bar's sign an icon, parts/TallyIcon.jsx):
 // green "Tally ready"; amber "Tally closed", "Tally busy", "Company not open", "Company not linked", "No internet"; red
 // "Bridge stopped"; grey "Tally not on this computer" (no bridge here: not an alarm). The hover card: the company, the
 // Windows user, when last confirmed, the next step as a button, and the firm's other computers in one quiet line
@@ -200,35 +202,6 @@ export function HereCard({ h, link = null }) {
       className={"btn small" + (i === 0 && h.level !== "ok" && n.act !== "tallyCheck" ? " primary" : "")} onClick={(ev) => { ev.stopPropagation(); doAct(n.act); }}>{n.label}</button>)}</div>}
   </div>;
 }
-function TallySign() {
-  const co = S.view === "company" ? CO() : null, t = tallyStatus(co), lk = co ? tallyLinkOf(co) : null;
-  let h = tallyHere(co);
-  // next-tally-suvit: the client's company in the one pill's words (lib/tallyState.js), as its card and chip say them
-  const k = lk ? Object.assign({}, lk, { pill: clientTallyState(co) }) : null;
-  // integ-link (27-Oct-2026): no bridge in this browser is no problem of a client that is Linked or Waiting for Tally (its
-  // books come through another computer): the sign then says it of this computer, never "Tally not on this computer"
-  // beside the client's "Linked"
-  // ("not needed" only while it is Linked: while it waits for Tally, the bridge here could be the way)
-  const ckind = k && k.state !== "unlinked" ? (k.pill.kind || (k.pill.state === "connected" ? "linked" : k.pill.state !== "unlinked" ? "waiting" : "")) : "";
-  if (h.code === "none" && (ckind === "linked" || ckind === "waiting"))
-    h = Object.assign({}, h, { label: "This PC: no bridge" + (ckind === "linked" ? " (not needed)" : ""), short: "No bridge here" });
-  const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
-  // next-tally-firstlink (the owner: "it should be above, on the Tally icon"): a badge with the companies open in Tally
-  // that are no client's; a click then opens the panel, which starts with their link (TallyOffer). Only for who may link
-  const nOpen = mayLink() ? unlinkedOpen().length : 0, offer = nOpen ? " — " + nOpen + (nOpen === 1 ? " company open in Tally is" : " companies open in Tally are") + " not linked: click to link" : "";
-  return <span className="tsign-wrap">
-    <button className={"tsign tallychip " + tone} data-tally-sign={h.level === "ok" ? "on" : "off"} data-tally-here={h.code} data-tally-level={h.level} data-tally={t.state} data-tally-link-sign={k ? k.state : undefined}
-      aria-haspopup="dialog" aria-label={"Tally: " + h.label + offer} title={tallyHereWords(h) + (k ? " — " + (k.state === "unlinked" ? k.word : k.pill.text) : "") + offer}
-      // ui-tidy; 15-Oct-2026: while the client is not linked, the sign points to the Tally page's Connect Tally, step 4 with this
-      // client (goTallyCard, parts/TallyChip.jsx), as every Tally chip does
-      onClick={() => (co && k && k.state === "unlinked" && !nOpen ? goTallyCard(co.id) : doAct("tallyPanel"))}>
-      <span className="tsign-dot" aria-hidden="true" /><span className="tsign-long">{h.label}</span><span className="tsign-short">{h.short}</span>
-    </button>
-    {nOpen > 0 && <span className="bell-n tsign-n" data-tally-badge={nOpen} aria-hidden="true">{nOpen}</span>}
-    {!S.tallyPanel && <span className="tsign-pop" role="group" aria-label="Tally on this computer"><HereCard h={h} link={k} /></span>}
-  </span>;
-}
-
 // t70 (16-Oct-2026; the owner: the sidebar's Inbox and From Tally out): the Inbox as a tray beside the bell, with what is
 // waiting (the open client's, or every client's on the firm's pages); it opens what the sidebar's Inbox opened
 function InboxBtn() {
@@ -268,7 +241,7 @@ function TopRight() {
       <span className="tb-global">
       <span className="tb-slot tb-inbox"><InboxBtn /></span>
       <span className="tb-slot tb-bell"><Bell /></span>
-      <span className="tb-slot tb-tally"><TallySign /></span>
+      <span className="tb-slot tb-tally"><TallyIcon /></span>
       <span className="tb-slot tb-firm">
       <Menu.Root open={!!S.firmMenu && !signInNeeded()} onOpenChange={(o) => { if (o !== !!S.firmMenu) doAct(o ? "firmMenu" : "firmMenuClose"); }} modal={false}>
         <Menu.Trigger asChild><button className="firmbtn" title={(S.firm.firmName || "Firm") + (plan ? " · plan " + plan : "") + (bal != null ? " · credit " + money(bal) : "")}>

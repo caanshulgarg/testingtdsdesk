@@ -8,6 +8,8 @@ panel's "The firm's Tally computers" and the hover's second line, "connected" no
     "connected" alone;
   - two states: a green dot (connected), a red dot (not connected); connected only when FinCom Bridge
     on a computer of the firm is online (its heartbeat recent) AND Tally is open there with THIS client's company;
+  - (next-tally-icon, 27-Oct-2026: the header's sign is one Tally icon, the client's word, run_tally_icon.py; the firm's
+    computers' detail below is the Tally panel's, opened here directly)
   - the detail on hover and on a click: which computer, which company, the last contact (dd-Mon-yyyy HH:MM IST), and
     when disconnected the reason and the fix, one for each: the bridge not running, Tally closed, no company open, a
     different company open, no internet on that computer;
@@ -52,7 +54,7 @@ with sync_playwright() as p:
     st, txt, title = top()
     ok(s["on"] is True and st == "on" and txt == "Tally ready on OFFICE-PC", "connected: the bridge's heartbeat 5 s ago, Tally open with TESTING AAD, through which computer: “%s”" % txt)
     ok("OFFICE-PC" in title and "TESTING AAD" in title and IST.search(title), "hover: computer, company and the last contact in IST (%s)" % title[:140])
-    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
     d = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
     ok("OFFICE-PC" in d and "TESTING AAD" in d and IST.search(d), "a click shows the same detail in plain words (%s)" % d.replace("\n", " / ")[:160])
     pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
@@ -75,7 +77,7 @@ with sync_playwright() as p:
         ok(why.lower() in (s.get("reason") or "").lower() and fix.lower() in (s.get("fix") or "").lower(), "%s: the reason says “%s” and the fix “%s” (%s | %s)" % (code, why, fix, s.get("reason"), s.get("fix")))
         ok(why.lower() in title.lower() and fix.lower() in title.lower(), "%s: reason and fix on hover (%s)" % (code, title[-160:]))
         ok("OFFICE-PC" in s.get("computer", "") and (code == "bridge" or IST.search(s.get("at", "") or "") or code == "internet"), "%s: which computer (%s), last contact %s" % (code, s.get("computer"), s.get("at")))
-    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
     d = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
     ok("internet" in d.lower() and "OFFICE-PC" in d, "a click: the reason and the fix in the panel (%s)" % d.replace("\n", " / ")[:160])
     pg.evaluate("() => { S.tallyPanel = false; render(); }")
@@ -107,7 +109,7 @@ with sync_playwright() as p:
     s = pg.evaluate(two, [cid, [d("d1", "Office computer", "NWS144"), d("d2", "Accounts desk", "NWS210")], None]); pg.wait_for_timeout(300)
     st, txt, title = top()
     ok(txt == "Tally ready on 2 computers", "two computers: “Tally ready on 2 computers” (%s)" % txt)
-    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
     dd = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
     ok("Office computer (NWS144)" in dd and "Accounts desk (NWS210)" in dd and "TESTING AAD" in dd and IST.search(dd), "a click: both computers, the company and the last contact (%s)" % dd.replace("\n", " / ")[:200])
     pg.evaluate("() => { S.tallyPanel = false; render(); }")
@@ -115,7 +117,7 @@ with sync_playwright() as p:
     s = pg.evaluate(two, [cid, [dict(d("d1", "Office computer", "NWS144", at=iso(900)), last_seen=iso(900))], None]); pg.wait_for_timeout(300)
     st, txt, title = top()
     ok(re.match(r"Tally not connected\. Last seen on Office computer \(NWS144\) at \d{2}-[A-Z][a-z]{2}-\d{4} \d{2}:\d{2} IST$", txt), "none: “Tally not connected. Last seen on Office computer (NWS144) at <time IST>” (%s)" % txt)
-    pg.click("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+    pg.evaluate("() => { if (!S.tallyPanel) doAct('tallyPanel'); }"); pg.wait_for_timeout(300)
     dd = pg.inner_text("[data-tally-firm] [data-tally-detail]") if pg.locator("[data-tally-firm] [data-tally-detail]").count() else ""
     ok("not running" in dd and "start FinCom Bridge" in dd, "a click: the reason and the fix (%s)" % dd.replace("\n", " / ")[:200])
     pg.evaluate("() => { S.tallyPanel = false; render(); }")

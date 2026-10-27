@@ -1,8 +1,8 @@
 """python3 run_tally_msgs_placement.py - Tally messages only where they are needed (round 63, 16-Oct-2026; the owner: "Tally
 messages only where needed, not on every page").
   Removed when all is well (the books read within 3 days, the client linked and reading), shown when not:
-    - Reports, Look up and Letters (FreshBar): no Tally line with fresh books; with books read 5 days ago the one amber
-      line ("Books last read from Tally 5 days ago");
+    - Reports, Look up and Letters (FreshBar): no Tally line with fresh books; with books read 5 days ago none either
+      (next-tally-icon): the header's Tally icon's popover says "Books last read from Tally 5 days ago";
     - the Books tabs (MIS here): fresh books, one quiet "Books up to <date>" line, no Tally words; stale, the amber line;
     - the Overview's Tally line: not while linked and reading; shown for a client not linked;
     - Today's "N clients not linked": kept, as one quiet line (not a warning).
@@ -68,20 +68,26 @@ def main():
                     ok(not got, "fresh books: %s shows no Tally line (%s)" % (label, got))
                     if t == "mis": ok(re.match(r"Books up to \d\d-[A-Z][a-z]{2}-\d{4}$", txt("#app [data-books-upto]")), "fresh books: %s: one quiet 'Books up to <date>' (%s)" % (label, txt("#app [data-books-upto]")))
                 else:
-                    ok(n("#app [data-books-stale]") == 1 and "5 days ago" in txt("#app [data-books-stale]"), "books read 5 days ago: %s shows the one amber line (%s)" % (label, got))
+                    # next-tally-icon (27-Oct-2026; the owner: "don't need everywhere tally status"): no line on the page;
+                    # the header's Tally icon's popover says it
+                    ok(n("#app [data-books-stale]") == 0, "books read 5 days ago: %s shows no Tally line on the page (%s)" % (label, got))
+                    if t == "reports":
+                        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(300)
+                        ok("5 days ago" in txt("header.top [data-tally-pop] [data-books-stale]"), "books read 5 days ago: the Tally icon's popover says so (%s)" % txt("header.top [data-tally-pop]"))
+                        pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
                     if t == "mis": ok(n("#app [data-books-upto]") == 0, "stale books: %s: no quiet line in its place" % label)
                 if t == "reports": shot("placement-reports-" + state)
             # the Overview: linked and reading, no Tally line (the top bar's dot says it)
             E("(c) => { S.view = 'company'; S.coId = c; S.tab = 'dash'; S.companies[c].onbHide = true; render(); }", cid); pg.wait_for_timeout(1200)
             ok(n("#app [data-tally-link-line]") == 0, "%s: the Overview has no Tally line while linked and reading (%s)" % (state, lines()))
-            ok(n("[data-tally-sign]") == 1, "%s: kept: the top bar's Tally dot" % state)
+            ok(n("header.top [data-tally-icon]") == 1, "%s: kept: the header's one Tally icon" % state)
             if state == "fresh": shot("placement-overview-fresh")
         # the Overview of a client not linked: its line is shown; Today: the quiet not-linked line; Clients: the chip
         nl = E("""() => { const c = newCompany({name: 'NOT LINKED CO', gstin: ''}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; c.onbHide = true; return c.id; }""")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", nl); pg.wait_for_timeout(1500)
         # 24-Oct-2026 (next-tally-one-page): no Tally line on the Overview; the title's chip says Not linked and opens the list
-        ok(n("#app [data-tally-link-line]") == 0 and E("() => (document.querySelector('[data-tally-chip-at=title]') || {getAttribute: () => ''}).getAttribute('data-tally-pill')") == "unlinked",
-           "a client not linked: no Tally line on the Overview; the title's chip says Not linked (%s)" % lines())
+        ok(n("#app [data-tally-link-line]") == 0 and E("() => (document.querySelector('header.top [data-tally-icon]') || {getAttribute: () => ''}).getAttribute('data-tally-pill')") == "unlinked",
+           "a client not linked: no Tally line on the Overview; the header's Tally icon says Not linked (%s)" % lines())
         E("() => navHome('today')"); pg.wait_for_timeout(1200)
         tl = "#app [data-not-linked-line]"
         ok(n(tl) == 1 and n(tl + " .warn-text") == 0 and "client not linked to Tally" in txt(tl) and n(tl + " [data-not-linked-go]") == 1, "Today: one quiet chip (%s)" % txt(tl))
@@ -92,7 +98,9 @@ def main():
         E(BOOKS, [cid, 10]); pg.wait_for_timeout(800); tab("import")
         ok(n("#app [data-tally-link-line]") == 0 and n("#app [data-up-drop]") == 1, "Books > From Tally: the upload only, no Tally line (the Tally page is the one place)")
         E("(c) => { S.view = 'company'; S.coId = c; S.tab = 'post'; render(); }", cid); pg.wait_for_timeout(1200)
-        ok(n("#app [data-post-line]") >= 1 or n("#app [data-post-problem]") >= 1, "Post to Tally: kept, the posting company and its state (%s)" % txt("#app [data-post-line]"))
+        # next-tally-icon (27-Oct-2026; the owner: "don't need everywhere tally status"): no status line; where it posts is a
+        # label at the Post button (when there is something to post), Tally's state the header's one icon
+        ok(n("#app [data-post-line]") == 0 and n("header.top [data-tally-icon]") == 1, "Post to Tally: no Tally status line; the header's one Tally icon")
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); pg.wait_for_timeout(1500)
         ok(n("#app [data-connect-guide]") == 1 and n("#app [data-tco-list=firm]") == 1, "the Tally page: kept, its guide (or the computers' line) and Companies in Tally")
         ok(not errors, "no page errors %s" % errors[:2])

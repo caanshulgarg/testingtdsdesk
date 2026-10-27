@@ -235,8 +235,9 @@ def main():
         line = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
         ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page"),
            "6. the client's one line: the same pill words, Open in Tally page (%s)" % line)
-        sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? b.getAttribute('title') : ''; }")
-        ok("Waiting for Tally — Open " + SAL + " in TallyPrime on NWS144" in sign, "6. the top bar's sign says the same words (%s)" % sign)
+        # next-tally-icon (27-Oct-2026): the header's one Tally icon says the same word, in plain words (no computer)
+        sign = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? b.getAttribute('aria-label') : ''; }")
+        ok(sign.startswith("Tally: Waiting for Tally — Open " + SAL + " in Tally") and "NWS144" not in sign, "6. the header's Tally icon says the same word, plainly (%s)" % sign)
         shot("client-card-linked-desktop-light", full=False)
         # Clients list chip
         E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(900)

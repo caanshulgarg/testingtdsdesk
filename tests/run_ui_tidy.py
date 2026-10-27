@@ -202,8 +202,9 @@ try:
         ok(all(x in side for x in ["Overview", "Purchase", "Bank", "TDS", "GST", "MIS", "Client setup"]), "  … every one of them is in the sidebar (%s)" % side)
         pg.click('#side .side-link[data-side="GST"]'); W(1000)
         ok(E("booksTab()") == "gst", "  … and opens from there (GST)")
-        chip = E("() => { const c = document.querySelector('#cobar [data-tally-chip]'), h = document.querySelector('#cobar .tbar-title h2'); if (!c || !h) return null; const a = c.getBoundingClientRect(), t = h.getBoundingClientRect(); return {top: Math.round(a.top), bottom: Math.round(a.bottom), ttop: Math.round(t.top), tbottom: Math.round(t.bottom)}; }")
-        ok(chip and chip["top"] < chip["tbottom"] + 30 and chip["bottom"] > chip["ttop"] - 30, "the Tally chip on the title line (%s)" % chip)
+        # next-tally-icon (27-Oct-2026; the owner: "header is too noisy of tally remarks"): no Tally chip on the title line;
+        # the header's one Tally icon at the right
+        ok(pg.locator("#cobar [data-tally-chip]").count() == 0 and pg.locator("#cobar [data-tally-icon]").count() == 1, "no Tally chip on the title line; the header's one Tally icon")
         cw = E("() => { const c = document.querySelector('#cobar [data-crumbs]'); return [...c.querySelectorAll('.linkbtn, [data-crumb-page]')].map(e => e.scrollWidth - e.clientWidth).concat([c.scrollWidth - c.clientWidth]); }")
         ok(max(cw) <= 1 and E("document.querySelector('#cobar [data-crumb-page]').innerText") == "GST", "  … and the breadcrumb is whole beside it, nothing cut (%s)" % cw)
         # Ctrl+K: by name, GSTIN and PAN
@@ -245,7 +246,8 @@ try:
         scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(1200)
         # 24-Oct-2026 (next-tally-one-page): every pointer of a client not linked opens the Tally page's list for it
-        tl.click('#cobar [data-tally-chip]'); W2(900); on_list("the title line's chip")
+        # next-tally-icon: the header's Tally icon's popover, "Open Tally page"
+        tl.click('#cobar [data-tally-icon]'); tl.wait_for_selector('#cobar [data-tally-pop-page]', timeout=15000); tl.click('#cobar [data-tally-pop-page]'); W2(900); on_list("the Tally icon's Open Tally page")
         E2("navHome('clients')"); W2(900)
         tl.click('#app table[data-list="clients"] tr:has-text("Link Co") [data-tally-chip]'); W2(900); on_list("the Clients list's chip")
         E2("navHome('today')"); W2(900)
@@ -257,16 +259,18 @@ try:
         # 24-Oct-2026 (next-tally-firstlink, 66da97db7; the owner: "it should be above, on the Tally icon"): GARG SHEKHAR and
         # ABC LTD are open in Tally and no client's, so the sign carries their badge and opens its panel, which offers each
         # one's link, starting with Link to Link Co (this client, not linked); not the Tally page (as run_tally_page_clean)
-        tl.click('#cobar [data-tally-sign]'); W2(1200)
-        offers = E2("() => [...document.querySelectorAll('[data-overlay=\"tallypanel\"] [data-tally-offer]')].map(e => e.getAttribute('data-tally-offer'))")
-        ok(tl.locator('[data-overlay="tallypanel"] [data-tally-offer] [data-tally-offer-link-to="%s"]' % lcid).count() == len(offers) == 2
-           and E2("(document.querySelector('#cobar [data-tally-badge]') || {}).textContent") == "2" and E2("[S.view, S.coId]") == ["company", lcid],
-           "the top bar's Tally sign (not linked, 2 companies open in Tally not linked: its badge 2) → its panel, each company with Link to Link Co (%s %s)" % (offers, E2("[S.view, S.coId, !!S.tallyPanel]")))
-        E2("() => doAct('tallyPanelClose')"); W2(500)
-        # with no company open in Tally that is no client's: no badge, and the sign opens the Tally page's list for this client
+        # next-tally-icon (27-Oct-2026; "take action there only"): the icon's popover links in place: both open companies in
+        # its list, [Link]; no side panel
+        tl.click('#cobar [data-tally-icon]'); tl.wait_for_selector('#cobar [data-tally-pop-word]', timeout=15000); W2(500)
+        offers = E2("() => [...document.querySelectorAll('#cobar [data-tally-pop-pick] option')].map(e => e.value)")
+        ok(len(offers) >= 2 and tl.locator('#cobar [data-tally-pop-act=link]').count() == 1
+           and E2("(document.querySelector('#cobar [data-tally-badge]') || {}).textContent") == "2" and E2("[S.view, S.coId, !!S.tallyPanel]") == ["company", lcid, False],
+           "the header's Tally icon (not linked, 2 companies open in Tally not linked: its badge 2) → its popover, the companies with Link, no side panel (%s %s)" % (offers, E2("[S.view, S.coId, !!S.tallyPanel]")))
+        tl.keyboard.press("Escape"); W2(400)
+        # with no company open in Tally that is no client's: no badge; the popover's Open Tally page opens the list for this client
         scene(TL.SEEN, [TL.dev(1, "NWS144", "anshul", opened=())]); E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)
-        ok(tl.locator("#cobar [data-tally-badge]").count() == 0, "nothing open in Tally to link: no badge on the sign")
-        tl.click('#cobar [data-tally-sign]'); W2(900); on_list("the top bar's Tally sign (not linked, nothing open to link)")
+        ok(tl.locator("#cobar [data-tally-badge]").count() == 0, "nothing open in Tally to link: no badge on the icon")
+        tl.click('#cobar [data-tally-icon]'); tl.wait_for_selector('#cobar [data-tally-pop-page]', timeout=15000); tl.click('#cobar [data-tally-pop-page]'); W2(900); on_list("the Tally icon's Open Tally page (not linked, nothing open to link)")
         scene(TL.SEEN, TL.DEVS)
         E2("(c) => openCompany(c).then(() => { S.tab = 'cotally'; render(); })", lcid); W2(900)
         tl.click("#app [data-tally-one-go]"); W2(900); on_list("Client setup's Tally line")

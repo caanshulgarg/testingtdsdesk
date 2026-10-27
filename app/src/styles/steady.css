@@ -8,7 +8,7 @@
      the top of the page itself, kept in view under the header while the page scrolls (--head-h, TopBar.jsx);
    - the sidebar's date line stays at the foot of the sidebar;
    - a page's shape while its data comes (PageSkeleton.jsx), the same as the frame index.html draws before the program loads. */
-:root { --slot-bell: 34px; --slot-inbox: 34px; --slot-tally: 232px; --slot-firm: 196px; }
+:root { --slot-bell: 34px; --slot-inbox: 34px; --slot-tally: 34px; --slot-firm: 196px; }
 
 /* ---------- the top bar's places ---------- */
 header.top .topright { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; margin-left: auto; }
@@ -28,11 +28,34 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 .tb-slot.tb-inbox { width: var(--slot-inbox); justify-content: center; }
 .tb-inbox-btn[aria-current="page"] { color: var(--accent); border-color: color-mix(in oklab, var(--accent) 40%, var(--border)); }
 .tallypanel .tp-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; }
-.tb-slot.tb-tally { width: var(--slot-tally); justify-content: flex-start; }
+.tb-slot.tb-tally { width: var(--slot-tally); justify-content: center; }
 .tb-slot.tb-firm { width: var(--slot-firm); }
 .tb-slot.tb-tally .tsign-wrap { display: inline-flex; max-width: 100%; min-width: 0; }
 .tb-slot.tb-tally .tsign { max-width: 100%; min-width: 0; overflow: hidden; }
-.tb-slot.tb-tally .tsign .tsign-long, .tb-slot.tb-tally .tsign .tsign-short { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* next-tally-icon (27-Oct-2026): the header's one Tally sign is an icon, a Tally glyph with a status dot at its corner:
+   green Linked, amber Waiting for Tally, red Needs you, grey Not linked or no bridge (parts/TallyIcon.jsx); its words on
+   hover and in the popover a click opens */
+header.top .tsign.tallyicon { position: relative; width: 34px; height: 34px; padding: 0; gap: 0; justify-content: center; overflow: visible;
+  border-radius: 50%; border: 1px solid var(--border, var(--rule)); background: var(--surface, var(--sheet)); color: var(--text, var(--ink)); }
+header.top .tsign.tallyicon:hover { background: var(--surface-raised, var(--sheet)); }
+header.top .tsign.tallyicon .tsign-dot { position: absolute; right: 3px; bottom: 3px; width: 10px; height: 10px; border: 2px solid var(--surface, var(--sheet)); box-sizing: content-box; }
+header.top .tsign.tallyicon.on .tsign-dot { background: var(--st-done); }
+header.top .tsign.tallyicon.warn .tsign-dot { background: var(--st-attention); }
+header.top .tsign.tallyicon.off .tsign-dot { background: var(--st-failed); }
+header.top .tsign.tallyicon.idle .tsign-dot { background: var(--st-waiting); }
+.tally-icon-wrap .tsign-n { position: absolute; top: -4px; right: -6px; }
+.tally-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; width: min(340px, calc(100vw - 32px)); padding: 10px 12px; text-align: left;
+  white-space: normal; font-size: 13px; color: var(--text, var(--ink)); background: var(--surface-raised, var(--sheet)); border: 1px solid var(--border, var(--rule));
+  border-radius: var(--radius-panel, 10px); box-shadow: var(--shadow-floating, 0 12px 32px rgba(0, 0, 0, .18)); }
+.tally-pop p { margin: 0 0 6px; }
+.tally-pop .tally-pop-head { display: flex; align-items: center; gap: 8px; }
+.tally-pop .tsign-dot.on { background: var(--st-done); } .tally-pop .tsign-dot.warn { background: var(--st-attention); }
+.tally-pop .tsign-dot.off { background: var(--st-failed); } .tally-pop .tsign-dot.idle { background: var(--st-waiting); }
+.tally-pop .link-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 6px; color: var(--text, var(--ink)); }
+.tally-pop .link-status .linkbtn { font-weight: 600; }
+.tally-pop .tally-pop-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0; }
+/* a phone: the same single icon; its popover keeps inside the screen */
+@media (max-width: 600px) { .tally-pop { position: fixed; top: calc(var(--head-h, 96px) + 4px); left: 16px; right: 16px; width: auto; } }
 .tb-slot.tb-firm .firmbtn { max-width: 100%; min-width: 0; align-items: stretch; overflow: hidden; }
 .tb-slot.tb-firm .firmbtn b, .tb-slot.tb-firm .firmbtn small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .tb-slot .boot-pill { width: 100%; }
@@ -51,9 +74,9 @@ header.top .topright > .tb-global { display: flex; flex: none; align-items: cent
 /* a phone or a narrow window: two lines of the same height on every page: the title with the page's own buttons beside
    it, then the bell, the Tally sign and the firm */
 @media (max-width: 760px) {
-  :root { --slot-tally: 150px; --slot-firm: 132px; }
+  :root { --slot-firm: 132px; }
   /* (t70: the Inbox tray beside the bell; the Tally sign a little narrower so the line fits a 390 px phone) */
-  @media (max-width: 420px) { :root { --slot-tally: 118px; --slot-firm: 120px; } header.top .topright > .tb-global { gap: 8px; } }
+  @media (max-width: 420px) { :root { --slot-firm: 120px; } header.top .topright > .tb-global { gap: 8px; } }
   header.top .headrow, header.top .headrow:not(:has(> .sbar)) { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "t p" "g g"; align-items: center; gap: 8px 12px; }
   header.top .headrow > .tbar { grid-area: t; min-width: 0; }
   header.top .headrow > .topright { display: contents; }

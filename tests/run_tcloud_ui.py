@@ -138,8 +138,12 @@ with sync_playwright() as p:
     raw = sum(len(re.findall(r"<VOUCHER\b", by_day[d])) for d in DAYS)
     ok(got == own and own > 0 and (own == raw if books_data.FIXTURE else got > 1000), "every March entry, as FinCom reads them: %d of %d" % (got, own) + " (%d in the day files)" % raw)
     ok(len(calls["storage"]) == 31, "each day fetched once: %d" % len(calls["storage"]))
-    bar = pg.inner_text(".lk-fresh")
-    ok("Books" in bar and "cloud" not in bar.lower() and "OFFICE-PC" not in bar and "1 day not read from Tally yet (18-Mar-2026)" in bar, "the page says how up to date the books are (no talk of the cloud), and a day not read yet: " + bar[:180].replace("\n", " "))
+    # next-tally-icon (27-Oct-2026): how up to date the books are left the page; the header's Tally icon's popover says it
+    # (staleWords), without talk of the cloud or a computer
+    bar = pg.evaluate("() => { const e = document.querySelector('#app .lk-fresh'); return e ? e.innerText : ''; }")
+    sw = pg.evaluate("(c) => { const o = document.querySelector('header.top [data-tally-icon]'); if (o) o.click(); return new Promise(r => setTimeout(() => { const e = document.querySelector('header.top [data-tally-pop] [data-books-stale]'); r(e ? e.innerText : ''); }, 1500)); }")
+    ok("not read" not in bar and "cloud" not in sw.lower() and "OFFICE-PC" not in sw and "1 day not read from Tally yet (18-Mar-2026)" in sw, "the page says nothing of Tally; the Tally icon's popover says a day is not read yet: " + sw[:180])
+    pg.keyboard.press("Escape")
     # ---------- a day changed: only that day is fetched again
     AT["20260310"] = "2026-09-28T11:00:00+00:00"; n0 = len(calls["storage"])
     pg.evaluate("TCloud.st = {}; LK.fr().cat = 0; LK.autoFresh(true)"); wait_for(pg, "!S.lkFr.busy && S.books.meta.cloud.days['20260310'] === '2026-09-28T11:00:00+00:00'", 60)
