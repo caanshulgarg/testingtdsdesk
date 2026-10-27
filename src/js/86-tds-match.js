@@ -370,7 +370,7 @@ const TDSMatch = {
       if (!S.books) return [];
       const cx = TDSReg.ctx(), rows = this.open(form, fy, q, cx).concat(TDS.formRows(form).filter(r => r.fy === fy && r.q === q && !r.challan && !(r.tds > 0.005)).map(r => { const m = form === "24Q" ? {} : TDS26Q.remark(r, form) || {}; return {id: r.id, sec: this.sec(r), date: TDS.ymd(r.date), tds: 0, party: r.party, remark: m.remark === "A" ? "A" : "", cert: m.certFull || m.certNo || ""}; }));
       let today = ""; try { today = istToday(); } catch (e){}
-      return tmReasons(rows, this.chs(cx, "any"), this.suggestNow(form, fy, q).filter(s => s.ids.length), {fy, q, today, pct: form === "27EQ" ? 1 : 1.5, tally: this.tallyPays(fy, q)});
+      return tmReasons(rows, this.chs(cx, "any"), this.suggest(form, fy, q).filter(s => s.ids.length), {fy, q, today, pct: form === "27EQ" ? 1 : 1.5, tally: this.tallyPays(fy, q)});
     };
     return typeof perRender === "function" ? perRender(this, k, f) : f();
   },
@@ -387,7 +387,7 @@ const TDSMatch = {
   // "N of M matched automatically · K need you": M the deductions with tax; N those on a challan or in a suggestion the
   // AI is not unsure of; K the rest (a reason and a next step each)
   metric(form, fy, q){
-    const rows = TDS.formRows(form).filter(r => r.fy === fy && r.q === q && r.tds > 0.005), sg = this.suggestNow(form, fy, q);
+    const rows = TDS.formRows(form).filter(r => r.fy === fy && r.q === q && r.tds > 0.005), sg = this.suggest(form, fy, q);
     const sure = new Set([].concat(...sg.filter(s => s.confidence !== "low").map(s => s.ids))), low = new Set([].concat(...sg.filter(s => s.confidence === "low").map(s => s.ids)));
     const on = rows.filter(r => r.challan).length, sugg = rows.filter(r => !r.challan && sure.has(r.id)).length;
     return {m: rows.length, n: on + sugg, on, sugg, k: rows.length - on - sugg, low: rows.filter(r => low.has(r.id)).length};
@@ -598,10 +598,23 @@ const TDSMatch = {
     return out;
   },
   // ---------------- g. the AI, for what the rules leave (the tds-challan-match function; one Claude call)
-  ai: {},                              // form|fy|q -> {hash, busy, state, say, raw, at}
+  // next-tds-match-fast (27-Oct-2026: the owner's Safari waited 7 to 11 s on tds-challan-match, asked again on every open
+  // of a return because the answer was kept only in this page's memory). The answer is now KEPT per return in this
+  // browser (localStorage "tdsdesk:tdsai:<client>|<form>|<fy>|<q>", a firm's key) with the hash of what was sent; a return
+  // opened again shows it at once and asks nothing until its deductions or challans change (or "Ask AI again"). The ask
+  // runs in the background: the page is drawn and used meanwhile, and is drawn again when the answer comes. An answer
+  // the AI could not give ("failed") is not kept: the next open asks again.
+  ai: {},                              // client|form|fy|q -> {hash, busy, state, say, raw, at}
   aiKey(form, fy, q){ return (this.books().cid || "") + "|" + form + "|" + fy + "|" + q; },
-  aiOf(form, fy, q){ const a = this.ai[this.aiKey(form, fy, q)]; return a && a.hash === this.leftHash(form, fy, q) ? a : (a && !a.raw ? a : null); },
-  aiState(form, fy, q){ return this.ai[this.aiKey(form, fy, q)] || null; },
+  LS: "tdsdesk:tdsai:",
+  // the entry of a return: this page's, else the one kept in this browser
+  slot(k){
+    if (!this.ai[k]){ let s = null; try { s = JSON.parse(lsGet(this.LS + k) || "null"); } catch (e){} if (s && s.hash) this.ai[k] = {hash: s.hash, state: s.state || "", say: s.say || "", raw: s.raw || null, at: s.at || 0, kept: true}; }
+    return this.ai[k] || null;
+  },
+  keep(k, a){ try { if (a.state === "failed") lsDel(this.LS + k); else lsSet(this.LS + k, JSON.stringify({hash: a.hash, state: a.state, say: a.say, raw: a.raw, at: a.at})); } catch (e){} },
+  aiOf(form, fy, q){ const a = this.slot(this.aiKey(form, fy, q)); return a && a.hash === this.leftHash(form, fy, q) ? a : (a && !a.raw ? a : null); },
+  aiState(form, fy, q){ return this.slot(this.aiKey(form, fy, q)); },
   // on unless the firm's AI help is off, its TDS part off, or the client left out of AI help (Settings, AI help)
   aiAllowed(){ if (typeof AIH !== "object") return false; const f = (S.firm || {}).ai || {}, c = AIH.cfg(), co = CO(); return f.on !== false && c.tdsMatch !== false && !(co && co.aiOff); },
   online(){ return typeof Cloud === "object" && Cloud.on && Cloud.on() && Cloud.sess && Cloud.sess(); },
@@ -617,19 +630,31 @@ const TDSMatch = {
     rules.forEach(s => { (s.parts || [{chId: s.chId, paise: s.total}]).forEach(p => { use[p.chId] = (use[p.chId] || 0) + p.paise; }); });
     return {rows: rows.filter(r => !taken.has(r.id)), chs: chs.map(c => Object.assign({}, c, {bal: r2((tmP(c.bal) - (use[c.id] || 0)) / 100)})).filter(c => c.bal > 0.005)};
   },
+  // the hash of what the rules leave (each deduction's id and tax, each challan's id and balance), short enough to keep
   leftHash(form, fy, q){
-    try { const l = this.leftovers(form, fy, q); return JSON.stringify([l.rows.map(r => [r.id, r.tds]), l.chs.map(c => [c.id, c.bal])]); } catch (e){ return ""; }
+    const f = () => { try { const l = this.leftovers(form, fy, q); return this.digest(JSON.stringify([l.rows.map(r => [r.id, r.tds]), l.chs.map(c => [c.id, c.bal])])); } catch (e){ return ""; } };
+    return typeof perRender === "function" ? perRender(this, "lh" + form + fy + q, f) : f();
+  },
+  // a 53-bit string hash (cyrb53), as text
+  digest(s){
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < s.length; i++){ const ch = s.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36) + "." + s.length.toString(36);
   },
   // ask once for these leftovers (again only when they change, or "Ask AI again"); whatever happens the rules stand
   async askAi(form, fy, q, force){
-    const k = this.aiKey(form, fy, q), h = this.leftHash(form, fy, q), a = this.ai[k] = this.ai[k] || {};
+    const k = this.aiKey(form, fy, q), h = this.leftHash(form, fy, q), a = this.ai[k] = this.slot(k) || {};
     if (a.busy || (!force && a.hash === h)) return a;
     const l = this.leftovers(form, fy, q);
+    // asked again for the same leftovers ("Ask AI again"): the answer shown stays until the new one comes
+    const old = a.hash === h ? a.raw : null;
     a.hash = h; a.raw = null;
     if (!l.rows.length || !l.chs.length){ a.state = "nothing"; a.say = ""; return a; }
     if (!this.aiAllowed()){ a.state = "off"; a.say = "AI is off for this firm or client (Settings, AI help): the rules' suggestions stand."; return a; }
     if (!this.online()){ a.state = "offline"; a.say = "AI needs the firm account (signed in): the rules' suggestions stand."; return a; }
-    a.busy = true; render();
+    a.busy = true; a.raw = old; render();
     try {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess();
@@ -642,16 +667,17 @@ const TDSMatch = {
       a.raw = j.ai && j.ai.state === "used" ? {pairs: j.pairs || [], splits: j.splits || [], interest: j.interest || []} : null;
       a.state = (j.ai && j.ai.state) || "failed"; a.say = (j.ai && j.ai.say) || "";
     } catch (e){
-      a.state = "failed"; a.say = "AI could not be reached just now (" + String(e.message || e).slice(0, 120) + "): the rules' suggestions stand.";
+      a.raw = null; a.state = "failed"; a.say = "AI could not be reached just now (" + String(e.message || e).slice(0, 120) + "): the rules' suggestions stand.";
     }
-    a.busy = false; a.at = Date.now(); render();
+    a.busy = false; a.at = Date.now(); a.kept = false; this.keep(k, a); render();
     return a;
   },
-  // called when a return's Challans tab is drawn: asks once for the leftovers, when they changed
+  // called as a return's pages are drawn: shows what is kept at once; asks (in the background, once) only when what the
+  // rules leave is not what the kept answer was for
   view(form, fy, q){
     try {
-      const k = this.aiKey(form, fy, q), a = this.ai[k];
-      if (!S.books || TDSReg.locked(fy, q, form)) return a || null;
+      const k = this.aiKey(form, fy, q), a = this.slot(k);
+      if (!S.books || S.books.loading || TDSReg.locked(fy, q, form)) return a || null;
       if (!a || (!a.busy && a.hash !== this.leftHash(form, fy, q))) setTimeout(() => this.askAi(form, fy, q), 0);
       return a || null;
     } catch (e){ return null; }
