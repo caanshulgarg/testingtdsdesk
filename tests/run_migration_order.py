@@ -32,6 +32,11 @@ for _k, _o in ORDERS.items():
     _o.append((89, "migration-89-ledger-fetch.sql"))   # 15-Oct-2026 (next-ledger-fetch): the ledgers' automatic fetch and renames as in Tally, after 59 and 41
     _o.append((90, "migration-90-ledger-fetch-speed.sql"))   # 15-Oct-2026: 89's tally_ledger_fetch_plan made set-based (5 s -> ~20 ms), after 89
     _o.append((91, "migration-91-book-start.sql"))   # 16-Oct-2026 (round 64): a book of Day Book uploads only gets its start and openings date (one-off, add-only)
+    # 27-Oct-2026 (next-sec-fix-sql): 116 (server/security) replaces 110's posting guard, 5's cancel, 49's remove / restore and the lock hook,
+    # and narrows 115's tally_bridge_switches grant: so 110 and 115 run before it here
+    _o.append((110, "migration-110-tally-link-record.sql"))
+    _o.append((115, "migration-115-bridge-follows-login.sql"))
+    _o.append((116, os.path.join("..", "security", "migration-116-write-checks.sql")))
 READERS = ["tally_tb", "tally_period", "tally_mis", "tally_gst_summary", "tally_ledger", "tally_balances_on", "tally_ledger_hold_reason", "tally_ledgers_a_guard", "tally_ledger_round_seen", "tally_ledger_rename", "tally_ledger_carry", "tally_post_ids_sync", "tally_ingest_day", "tally_ledger_carry_choices", "tally_ledger_rename_confirm", "tally_post_result_taken", "tally_post_result_confirmed", "tally_post_job_accepted", "tally_post_result_accepted", "tally_post_job_settle", "tally_post_id_accept_reply", "tally_device_post_settings", "tally_post_id_accept",
            "tally_ingest_entries", "tally_ingest_delete", "tally_ledger_day_rebuild", "tally_month_locked", "tally_voucher_version_lines", "tally_recorder_line", "tally_recorder_apply", "tally_month_lock", "tally_month_unlock", "tally_recorder_release_held", "tally_tieout_save", "tally_start_point", "tally_fincom_id", "tally_control_kept", "tally_ledger_marks_frozen",
            "tally_recorder_gap_check", "tally_post_window_save", "tally_post_xml_for", "tally_post_live_for", "tally_recorder_short_held", "tally_recorder_short_retry", "tally_device_trial_tools",
@@ -93,6 +98,14 @@ def run_order(label, ORDER):
     try:
         db.sql(SCHEMA33); db.sql(SCHEMA35); db.sql(BILLS); db.sql(SCHEMA37); db.sql(SCHEMA47)
         db.sql("insert into firms values (%s, 'Firm') on conflict do nothing; insert into members values (%s, %s, 'Me', 'owner', true);" % (q(F), q(U), q(F)))
+        # what 110 and 116 lean on, as on Supabase / staging: the roles, clients, tally_companies (migration.sql), auth.users
+        db.sql("""do $$ begin if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role; end if;
+                                if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then create role supabase_auth_admin; end if; end $$;
+          create table if not exists clients (id text, firm_id uuid, name text, data jsonb, deleted boolean default false, tally_name text, gstin text, updated_at timestamptz default now(), primary key (firm_id, id));
+          create table if not exists public.tally_companies (firm_id uuid not null references public.firms(id) on delete cascade, company text not null, client_id text, gstin text,
+            device_id uuid, first_seen timestamptz not null default now(), last_seen timestamptz, linked_at timestamptz, linked_by uuid,
+            book_id uuid not null default gen_random_uuid() unique, primary key (firm_id, company));
+          create table if not exists auth.users (id uuid primary key, email text);""")
         db.sql("insert into tally_books (book_id, firm_id, client_id, company, from_date, open_as_on) values (%s, %s, 'c1', 'ZZ CO', '2026-04-01', '2026-03-31');" % (q(B), q(F)))
         db.sql("insert into tally_devices (id, firm_id, name, key_hash, version) values (%s, %s, 'NWS144', 'h1', '2.1.5');" % (q(DEV), q(F)))
         db.sql("""insert into tally_ledgers (book_id, firm_id, name, parent, open) values (%s, %s, 'Cash', 'Cash-in-Hand', -100), (%s, %s, 'Sales', 'Sales Accounts', 100);
@@ -242,6 +255,8 @@ def run_order(label, ORDER):
             for fn in sorted(set(re.findall(r"function\s+public\.(\w+)\s*\(", open(os.path.normpath(os.path.join(SQLDIR, f))).read()))):
                 for row in db.rows("select prosecdef, coalesce(array_to_string(proconfig, ','), '') as conf from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn)):
                     if row["prosecdef"] != "t": continue       # plain trigger functions touch no table
+                    # 116 keeps migration 5's tally_post_cancel byte for byte but its write check (the owner's rule for 116): search_path = public
+                    if fn == "tally_post_cancel" and "116" in f and row["conf"].replace(" ", "") == "search_path=public": continue
                     n += 1
                     # migration 54's tally_device_create (migration.sql's, without the limit of 50 keys) needs pgcrypto, in extensions on Supabase
                     want = "search_path=public,extensions,pg_temp" if fn == "tally_device_create" else "search_path=public,pg_temp"

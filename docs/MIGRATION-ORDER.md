@@ -524,3 +524,12 @@ functions tally_bridge_whose / tally_bridge_follow_ask (members who may write) a
 tally-ingest's own_key with an old key of another firm; the old firm's binding released and its key revoked when no other
 bridge uses it; data kept). Grants explicit. Deploy order: 115, then tally-ingest, then the app build. No bridge change
 (2.4.7). Tested on pg_stand: `tests/run_migration115.py`; the page: `tests/run_bridge_follows_login.py`.
+
+Write checks after the security review of 27-Oct-2026, run 2 (branch next-sec-fix-sql; NOT run on staging; file md5
+07df3c5aae9a0427953cb2d936cc8515): `server/security/migration-116-write-checks.sql` runs after 110 and 115 (and security migration-3-phase2).
+create or replace only, one transaction, `lock_timeout` 10 s, safe twice, grants restated. A look-only member is refused
+(42501) by tally_post_enqueue_to / tally_post_enqueue_core (Retry, queue again) and tally_post_cancel, and by
+tally_post_row_remove / tally_post_row_restore; lockout_access_token_hook refuses a locked account for a password sign-in
+only (refresh, OAuth, two-step code pass); members no longer read tally_bridge_switches.from_firm / from_device. No app or
+function change needed. Tested on pg_stand: `tests/run_migration116.py` (RED_WITHOUT_116=1 shows the checks fail without
+it) and `tests/run_migration_order.py`.
