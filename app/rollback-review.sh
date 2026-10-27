@@ -2,7 +2,8 @@
 # Puts the previous build back at staging.fincom.live/review/, in one command (docs/RELEASE-FLOW.md). review/last-good.json
 # (written by every publish to review/ and every promote) names the build review/ held before and the commit of main that
 # holds it; review/ is restored exactly as it is in that commit, last-good.json included, so a second rollback goes one
-# build further back. Only review/ changes on main; next/ is left as it is.
+# build further back. review-prev/ (the build the page's own healer opens, docs/NEVER-BLANK.md) is put back as in that
+# same commit too, so the pointer and the folder agree. Only review/ and review-prev/ change on main; next/ is left as it is.
 #   ./rollback-review.sh               the build named by review/last-good.json
 #   ./rollback-review.sh <commit>      review/ as it is in that commit of main (when there is no last-good.json)
 #   DRY=1 ./rollback-review.sh         commit locally, show what would change, push nothing
@@ -26,7 +27,8 @@ got=$(git show "$to:review/build.json" | python3 -c 'import json,sys; print(json
 [ -z "$want" ] || [ "$got" = "$want" ] || die "review/last-good.json names build $want, but commit $to holds $got: stopped."
 cur=$(build_of review/build.json)
 [ "$got" != "$cur" ] || die "review/ already holds build $got: nothing to roll back."
-git rm -rq --ignore-unmatch review
+git rm -rq --ignore-unmatch review review-prev
 git checkout "$to" -- review
-finish review "Rollback review/ to build $got ($(git show "$to:review/build.json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("stamp") or "")')) as at $(git rev-parse --short "$to") (was ${cur:-none})" \
+! git cat-file -e "$to:review-prev" 2>/dev/null || git checkout "$to" -- review-prev
+finish "review review-prev" "Rollback review/ to build $got ($(git show "$to:review/build.json" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("stamp") or "")')) as at $(git rev-parse --short "$to") (was ${cur:-none})" \
   "Rolled back; staging.fincom.live/review/ shows build $got in about a minute."

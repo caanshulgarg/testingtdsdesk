@@ -82,7 +82,10 @@ The script **refuses** in these cases:
 - `next/` holds the build `review/` already has;
 - `next/` holds an **older** build than `review/`, by the time in the build id in `build.json`.
 
-It writes `review/last-good.json`, naming the build that was live until now and the `main` commit that holds it. People
+It writes `review/last-good.json`, naming the build that was live until now and the `main` commit that holds it, and
+keeps that build's files at `review-prev/` (served at staging.fincom.live/review-prev/). The pointer carries
+`"path": "../review-prev/"`, which is what the page's own healer opens when a new build cannot draw
+(docs/NEVER-BLANK.md). So a promote changes `review/` and `review-prev/` on `main`, nothing else. People
 with `/review/` open get the new build like any publish: the page loads it by itself, or says "A new version of FinCom
 is ready · Reload".
 
@@ -96,6 +99,8 @@ cd app
 ```
 
 This puts `review/` back exactly as it was in the commit named by `review/last-good.json`, which is the build before.
+`review-prev/` is put back as in that same commit too (removed when that commit had none), so the pointer and the
+folder always agree.
 Since that older `review/` has its own `last-good.json`, running it again goes one more build back. `next/` is not
 touched.
 
@@ -109,9 +114,9 @@ touched.
 `cloudflare/build-site.sh` on `main` already serves every top-level folder that holds a build (`legacy.js` and
 `guard.js`), so it serves `next/` with no change. Like `review/`, its source maps are left out.
 
-`_headers` on `main` needs a `/next/` twin of every `/review/` rule: the same CSP, the same cache rules, and `no-cache`
+`_headers` on `main` needs a `/next/` twin and a `/review-prev/` twin of every `/review/` rule: the same CSP, the same cache rules, and `no-cache`
 on the page, `sw.js` and `build.json`. `cloudflare/_headers.main` in this repository is main's `_headers` with those
-rules added, 50 rules where Cloudflare allows 100. It goes to `main`'s root by hand: copy it over `_headers` there.
+rules added, 71 rules where Cloudflare allows 100. It goes to `main`'s root by hand: copy it over `_headers` there.
 
 ## Tests
 
@@ -121,6 +126,7 @@ rules added, 50 rules where Cloudflare allows 100. It goes to `main`'s root by h
   - promote makes `review/` exactly what was tried;
   - promoting again or promoting an older build is refused;
   - rollback restores the previous `review/`, twice in a row;
+  - `last-good.json` has the fields the healer reads (`build`, `path`), and `review-prev/` holds that build;
   - `DRY=1` pushes nothing.
 - `flock /tmp/fincom-app.lock python3 tests/run_trial_address.py` serves `app/dist-test` at `/review/` and at `/next/`,
   with `cloudflare/_headers.main` applied (`tests/cf_pages.py`). It checks:

@@ -138,6 +138,15 @@ async def main():
                 S.data[c.id] = S.data[c.id] || {parties: {}, entries: {}, loaded: true}; }); }""", [L.CID, L.CID_B, L.FIRM])
             await pg.evaluate(WRAP)
         async def m(): return await pg.evaluate("() => Object.assign({lt: Math.round(window.__lt)}, window.__m)")
+        async def settled(sec=2.0, t=20):
+            """speed round 2: an opening's own work after the page is drawn (the server's changes, the cloud copy's check,
+            the audit, and their writes of the books) is over: no cloud copy check running and no write for sec seconds"""
+            s, last, at = time.time(), None, time.time()
+            while time.time() - s < t:
+                cur = await pg.evaluate("() => [(window.__m || {}).booksSave, typeof TCloud === 'object' ? TCloud.opens : 0]")
+                if cur != last: last, at = cur, time.time()
+                elif not cur[1] and time.time() - at >= sec: return
+                await asyncio.sleep(0.2)
         def delta(a, b): return {k: round(b[k] - a[k]) for k in b if isinstance(b[k], (int, float))}
         async def open_client(cid, label, sel="[data-tds-page]", n=1, fresh=False):
             # fresh: the books not in this page yet (as when the client is opened in a new page), else a switch of client
@@ -216,14 +225,20 @@ async def main():
         ok(got is not None and c2b["items_from0"] == 0, "the change comes in behind the page shown from the copy, fetched since this computer last looked (%s s, %s)" % (round(got, 1) if got else "-", json.dumps(c2b)))
         # ---------- 2c. the entries are still checked in full now and then (FULL_EVERY, 6 hours)
         print("== 2c. the last full check of the entries 7 hours ago")
+        await settled()   # 2b's own check (after its page was drawn) over first: it would write a fresh fullAt over this one
         await pg.evaluate("() => { const c = S.books.meta.copy; c.fullAt = new Date(Date.now() - 7 * 3600000).toISOString(); return saveBooks({fromCloud: true}); }")
-        await quiet(1.5); await pg.reload(); await boot(); await quiet(1.5); t0 = time.time()
+        # speed round 2: the cloud copy's check runs once the page is drawn, so it can be over before the test opens the
+        # client (FinCom reopening the last client by itself after the reload) or still running after it: counted from
+        # the reload, and waited for (20 s at most), so it neither goes uncounted nor spills into the page switches below
+        await quiet(1.5); t_r = time.time(); await pg.reload(); await boot(); await quiet(1.5)
         await open_client(L.CID, "reopening:", n=len(L.VOUCHERS), fresh=True)
-        await quiet(); c2c = L.cat(t0)
+        await until("S.books && S.books.meta && S.books.meta.copy && Date.now() - Date.parse(S.books.meta.copy.fullAt || 0) < 120000", 20)
+        await quiet(); c2c = L.cat(t_r)
         fresh_at = await pg.evaluate("() => Date.now() - Date.parse(S.books.meta.copy.fullAt || 0)")
         ok(c2c["heads_kb"] > 0 and fresh_at < 120000, "the entries are checked in full again after 6 hours (%d KB, checked %d s ago)" % (c2c["heads_kb"], fresh_at // 1000))
         # ---------- 3. switching pages
         print("== 3. switching pages in the open client")
+        await settled()
         a = await m(); t0 = time.time(); slow = []
         for label, js, sel in (("GST", "S.tab = 'books'; S.booksTab = 'gst'; S.gstView = '';", ".page, main, section"),
                                ("MIS", "S.tab = 'books'; S.booksTab = 'mis';", ".page, main, section"),
@@ -292,7 +307,7 @@ async def main():
         await pg.reload(); await boot()
         # ---------- 7. a change coming in live
         print("== 7. changes coming in live (Realtime)")
-        await open_client(L.CID, "open:", n=len(L.VOUCHERS), fresh=True); await quiet(1.5)
+        await open_client(L.CID, "open:", n=len(L.VOUCHERS), fresh=True); await quiet(1.5); await settled()
         a = await m(); t0 = time.time()
         await pg.evaluate("""([cid]) => { const at = new Date().toISOString();
           Live.change({table: 'client_book_items', record: {client_id: cid, key: 'map', item: '.ZZ Party 001', ord: null, data: {kind: 'other', ok: true, what: ''}, deleted: false, seq: 999001, updated_at: at, updated_by: 'u-other'}});

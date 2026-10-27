@@ -117,6 +117,11 @@ def main():
             devs, cos, lines = SCENES[sc]()
             E("() => { S.listSort = {}; if (TCloud.pane) { TCloud.pane.gs = {}; TCloud.pane.rp = {}; TCloud.pane.ctl = {}; } S.tallyPanel = false; }")
             ids.update(E(C.SETUP, [devs, cos, list(lines), role, C.CLIENTS, True])); E(SPY); pg.wait_for_timeout(1000)
+            # the owner's rule of 26-Oct-2026 (src/js/97-postto-link.js): a client linked to exactly one Tally company posts
+            # into it, confirmed from the link as soon as the client is opened or posts. Settled here, before the controls
+            # are listed, so a row's ⋯ is not listed with "Post entries here" and then found with "Stop posting here"
+            E("async () => { for (const co of Object.values(S.companies || {})) { if (co && !co.deleted && typeof postToFromLink === 'function') { try { await postToFromLink(co); } catch (e) {} } } render(); }")
+            pg.wait_for_timeout(300)
         # the places: how to get there from a fresh scene, and the part of the page whose controls are clicked
         G = lambda: ids["garg shekhar & company"]; T = lambda: ids["GB TEXCOAT"]
         def at_tally(): pass
@@ -133,7 +138,10 @@ def main():
         # next-tally-icon (27-Oct-2026): the header's one Tally icon opens its popover (no hover card, no side panel)
         def at_pop(cid):
             def go():
-                at_client(cid, "dash")(); pg.click("#cobar [data-tally-icon]"); pg.wait_for_selector("#cobar [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(300)
+                at_client(cid, "dash")()
+                # the icon toggles its popover, and the header (its state) stays across a fresh scene: opened only when closed
+                if pg.get_attribute("#cobar [data-tally-icon]", "aria-expanded") != "true": pg.click("#cobar [data-tally-icon]")
+                pg.wait_for_selector("#cobar [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(300)
             return go
         def at_tcloud(): E("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"); pg.wait_for_timeout(1500)
         def at_tab(t): return lambda: (E("(t) => { S.tallyTab = t; Rec.act.at = 0; render(); }", t), pg.wait_for_timeout(1200))

@@ -10,7 +10,8 @@
 #   ./publish-preview.sh review "REVIEW BUILD – Phase 1"   staging.fincom.live/review/ straight away, with that banner
 #                                                          (no trial: for an urgent fix only)
 #   DRY=1 ./publish-preview.sh review …                    build and commit locally, show what would change, push nothing
-# A publish to review/ writes review/last-good.json (the build it replaced), for ./rollback-review.sh.
+# A publish to review/ writes review/last-good.json (the build it replaced), for ./rollback-review.sh, and keeps that build
+# at review-prev/ for the page's own healer (docs/NEVER-BLANK.md).
 # FINCOM_SKIP_BUILD=1: app/dist-test as it is, no new build (the release flow's own test, tests/run_release_flow.py).
 set -e
 cd "$(dirname "$0")"
@@ -35,4 +36,5 @@ cd "$tmp"
 [ "$folder" != review ] || last_good_save "$new" "publish"
 replace_folder "$dist" "$folder"
 [ "$folder" != review ] || last_good_put
-finish "$folder" "Preview: React FinCom from branch $branch ($sha) at $folder/ (build $new)" "Published; staging.fincom.live/$folder/ shows it in about a minute."
+folders="$folder"; [ "$folder" != review ] || folders="review review-prev"
+finish "$folders" "Preview: React FinCom from branch $branch ($sha) at $folder/ (build $new)" "Published; staging.fincom.live/$folder/ shows it in about a minute."

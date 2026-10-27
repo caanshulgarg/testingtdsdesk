@@ -18,7 +18,8 @@ show in the dropdown always"; "check the Suvit rules as well". Website only (the
      first, "Link to <client>", and one linked to another client: "Linked to X · Move here" (asked once).
   6. Suvit's rules: Sync now = Sync master + Sync vouchers (both under ⋯); Disconnected only for a linked company, with the
      fix in words; Remove company (not linked, not open) hides it, Show hidden puts it back; a name with extra spaces says
-     so; Post entries here under ⋯ (the confirmed postTo).
+     so; posting under ⋯: a client a person linked posts into that company (the owner, 26-Oct-2026: linking also allows
+     posting, src/js/97-postto-link.js), so ⋯ says Stop posting here, and Post entries here once stopped.
   7. The three steps until the first link, then "Connected computers: NWS144 ● online".
   8. No sideways scroll at 1440 and 390, light and dark; --shots DIR saves the pictures.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_one_page.py [--shots DIR]"""
@@ -279,7 +280,9 @@ def main():
 
         # ---- 5./6. the actions: Add as client, Link to a client…, the ⋯ of a linked row, Sync now, Post entries here
         it = [x for x in menu(GSC) if not x.startswith("Upload older entries")]
-        ok(it == ["Sync master", "Sync vouchers", "Post entries here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
+        # Move here was a person's link: it allowed posting into that company too (the owner, 26-Oct-2026)
+        ok(it == ["Sync master", "Sync vouchers", "Stop posting here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
+        ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. linked by a person: it posts into that company (confirmed from the link)")
         pg.click(R(GSC) + " [data-tco-more] summary"); pg.wait_for_timeout(250); shot("menu-linked-desktop-light", full=False); E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
         E("() => { window.__calls = []; S.coId = null; }")
         pg.click(R(GSC) + " [data-tco-sync-now]"); pg.wait_for_timeout(800)
@@ -291,6 +294,8 @@ def main():
         E("() => { window.__calls = []; }")
         more(GSC, "[data-tco-sync-vouchers]")
         ok(calls("tally_want_update") == [["tally_want_update", {"p_client": gs}]] and not calls("post"), "6. Sync vouchers alone: Update now")
+        more(GSC, "[data-tco-post-stop]"); confirm()
+        ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == ["", "confirmed"] and "Post entries here" in menu(GSC), "6. Stop posting here: asked, then stopped (a person's stop is kept); ⋯ says Post entries here")
         more(GSC, "[data-tco-post-here]"); confirm()
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. Post entries here: the client's confirmed posting company")
         ok("Stop posting here" in menu(GSC), "6. then ⋯ says Stop posting here")

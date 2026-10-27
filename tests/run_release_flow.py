@@ -8,6 +8,9 @@ is what the scripts do with main, not the app (tests/run_trial_address.py opens 
   3. rollback: review/ exactly as in the commit last-good.json names, twice in a row (one build further back each time);
      without last-good.json it asks for a commit, and takes one;
   4. DRY=1 pushes nothing; a publish straight to review/ writes last-good.json too, and the same build again keeps it.
+  Never blank (docs/NEVER-BLANK.md, the page's own healer in app/index.html): the build replaced is kept, served, at
+  review-prev/ and last-good.json names it as the healer reads it, {"build", "path": "../review-prev/"}; a rollback puts
+  review-prev/ back as in the same commit, so the pointer and the folder always agree.
   python3 tests/run_release_flow.py"""
 import os, sys, json, time, shutil, tempfile, subprocess
 
@@ -70,6 +73,16 @@ def build_at(rev, path):
     r = sh(["git", "show", "%s:%s/build.json" % (rev, path)], MAIN, check=False)
     return json.loads(r.stdout)["build"] if r.returncode == 0 else None
 def changed(a, b): return set(git_main("diff", "--name-only", a, b).split())
+# the healer (app/index.html, fincom-heal) opens the pointer's build only with both fields, and never the page's own build
+HEAL = open(os.path.join(APP, "index.html")).read()
+def heal_takes(lg, cur):
+    return bool(lg and lg.get("build") and lg.get("path") and lg.get("build") != cur)
+def prev_ok(rev, want):
+    """review-prev/ at rev holds build want, as the pointer of review/ says, and no pointer of its own (one step only)"""
+    lg = last_good(rev) or {}
+    return (heal_takes(lg, build_at(rev, "review")) and lg.get("path") == "../review-prev/" and lg.get("build") == want
+            and build_at(rev, "review-prev") == want and "last-good.json" not in ls_tree(rev, "review-prev"))
+def only_review(a, b): return bool(changed(a, b)) and all(f.startswith(("review/", "review-prev/")) for f in changed(a, b))
 def last_good(rev="HEAD"):
     r = sh(["git", "show", rev + ":review/last-good.json"], MAIN, check=False)
     return json.loads(r.stdout) if r.returncode == 0 else None
@@ -110,7 +123,11 @@ try:
     ok(rev.get("README.txt") and git_main("show", c_P + ":review/README.txt") == "kept by hand", "review/README.txt (kept by hand) stays")
     lg = last_good(c_P) or {}
     ok(lg.get("build") == A and lg.get("commit") == c_B and lg.get("replacedBy") == B and lg.get("how") == "promote", "review/last-good.json names A and the commit holding it (%s)" % {k: lg.get(k) for k in ("build", "commit", "replacedBy", "how")})
-    ok(all(f.startswith("review/") for f in changed(c_B, c_P)), "only review/ changed on main")
+    ok(only_review(c_B, c_P), "only review/ and review-prev/ changed on main (%s)" % sorted(changed(c_B, c_P)))
+    ok("j.build&&j.path" in HEAL, "the page's healer reads last-good.json's build and path (app/index.html)")
+    ok(prev_ok(c_P, A), "the build replaced (A) kept at review-prev/, last-good.json's path names it: the healer can open it (%s)" % {k: lg.get(k) for k in ("build", "path")})
+    prv = {f: b for f, b in ls_tree(c_P, "review-prev").items() if f != "README.txt"}
+    ok(prv == {f: b for f, b in ls_tree(c_B, "review").items() if f not in ("last-good.json", "README.txt")}, "review-prev/ is review/ as it was, byte for byte")
     r = run("promote-next.sh")
     ok(r.returncode != 0 and "already holds" in r.stderr and head() == c_P, "promoting again: refused, main unchanged (%s)" % r.stderr.strip()[:90])
     old, _ = publish("next", "OLD", 30); c_O = head()
@@ -123,15 +140,18 @@ try:
     ok(r.returncode == 0 and "DRY: nothing pushed" in r.stdout and head() == c_D, "DRY promote: main unchanged")
     r = run("promote-next.sh"); c_P2 = head()
     ok(r.returncode == 0 and build_at(c_P2, "review") == D and (last_good(c_P2) or {}).get("build") == B and (last_good(c_P2) or {}).get("commit") == c_D, "promote D: review/ = D, last-good.json names B at %s" % c_D[:9])
+    ok(prev_ok(c_P2, B), "review-prev/ = B, as the pointer says")
 
     print("4. rollback: the previous review/, exactly")
     r = run("rollback-review.sh"); c_R1 = head()
     ok(r.returncode == 0 and build_at(c_R1, "review") == B, "review/ = B again (%s) %s" % (build_at(c_R1, "review"), r.stderr.strip()[:200]))
     ok(tree(c_R1, "review") == tree(c_D, "review"), "review/ the same tree as in that commit (last-good.json included)")
     ok(build_at(c_R1, "next") == D, "next/ left as it was (D)")
-    ok(all(f.startswith("review/") for f in changed(c_P2, c_R1)), "only review/ changed on main")
+    ok(only_review(c_P2, c_R1), "only review/ and review-prev/ changed on main")
+    ok(prev_ok(c_R1, A) and tree(c_R1, "review-prev") == tree(c_D, "review-prev"), "review-prev/ back as in that commit (A): the pointer and the folder agree")
     r = run("rollback-review.sh"); c_R2 = head()
-    ok(r.returncode == 0 and build_at(c_R2, "review") == A and tree(c_R2, "review") == tree(c_A, "review"), "a second rollback: review/ = A, as at the start (%s)" % build_at(c_R2, "review"))
+    ok(r.returncode == 0 and build_at(c_R2, "review") == A and tree(c_R2, "review") == tree(c_A, "review"), "a second rollback: review/ = A, as at the start (%s) %s" % (build_at(c_R2, "review"), r.stderr.strip()[-300:]))
+    ok(build_at(c_R2, "review-prev") is None and last_good(c_R2) is None, "that commit had no review-prev/: none now either (no pointer to it)")
     r = run("rollback-review.sh")
     ok(r.returncode != 0 and "rollback-review.sh <commit>" in r.stderr and head() == c_R2, "no last-good.json: it asks for a commit, main unchanged")
     r = run("rollback-review.sh", c_P2); c_R3 = head()
@@ -143,6 +163,7 @@ try:
     E, r = publish("review", "E", 0.5, "URGENT FIX"); c_E = head()
     lg = last_good(c_E) or {}
     ok(build_at(c_E, "review") == E and lg.get("build") == D and lg.get("commit") == c_R3 and lg.get("how") == "publish", "review/ = E, last-good.json names D at %s (%s)" % (c_R3[:9], lg.get("build")))
+    ok(prev_ok(c_E, D), "a publish to review/ keeps D at review-prev/ too")
     sh(["./publish-preview.sh", "review", "URGENT FIX"], os.path.join(SRC, "app"), {"FINCOM_SKIP_BUILD": "1"})
     ok(head() == c_E, "the same build again: nothing changes, last-good.json kept")
     r = run("rollback-review.sh"); c_R4 = head()

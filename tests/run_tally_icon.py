@@ -212,16 +212,22 @@ def main():
         pg = page(); E = lambda js, *a: pg.evaluate(js, *a)
         D2 = "d0000000-0000-4000-8000-000000000002"
         gone = dict(dev([], []), id=D2, name="NWS144", revoked=True); gone["info"] = dict(gone["info"], movedAway={"bridge": "go-9", "at": "ago:5", "revoked": True})
+        # migration 115 on a computer key two bridges share: one bridge moved away, the key left (revoked false), the
+        # other bridge still sends its companies with it: those companies are not "from a removed computer"
+        D3 = "d0000000-0000-4000-8000-000000000003"
+        shared = dict(dev([], []), id=D3, name="SHARED PC"); shared["info"] = dict(shared["info"], movedAway={"bridge": "go-8", "at": "ago:5", "revoked": False})
         s5 = store(links=[rec(ALPHA, "b-alpha", CA, GA), rec(ITS, "b-its", CE, GE), dict(rec("OLD CO", "b-old", CE, "0ld00001-0000-0000-0000-000000000001"), device_id=D2)],
-                   devs=[dev(OPEN, BEAT), gone])
+                   devs=[dev(OPEN, BEAT), gone, shared])
         s5["cos"][0]["client_id"] = CA
-        s5["cos"] += [dict(row("IX DESIGNS", "b-ix"), device_id=D2), dict(row("OLD CO", "b-old", CE), device_id=D2)]
+        s5["cos"] += [dict(row("IX DESIGNS", "b-ix"), device_id=D2), dict(row("OLD CO", "b-old", CE), device_id=D2), dict(row("SHARED CO", "b-sh"), device_id=D3)]
         E(SETUP, [s5, "owner", ME, CLIENTS])
         E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1800)
         RW = lambda c: '#app [data-tco-list=firm] [data-tco-row="%s"]' % c
         ok(pg.locator(RW("IX DESIGNS")).count() == 0 and pg.locator("#app [data-tco-show-gone]").inner_text() == "From a removed computer (1)",
            "IX DESIGNS (not a client, its computer removed): not listed; 'From a removed computer (1)' (%s)" % pg.locator("#app [data-tco-show-gone]").all_inner_texts())
         ok(pg.locator(RW("OLD CO")).count() == 1 and pg.locator(RW("OLD CO") + " [data-tco-moved]").inner_text() == "computer moved", "OLD CO (linked) stays, marked 'computer moved'")
+        ok(pg.locator(RW("SHARED CO")).count() == 1 and pg.locator(RW("SHARED CO") + " [data-tco-gone], " + RW("SHARED CO") + " [data-tco-moved]").count() == 0,
+           "SHARED CO: its computer key still in use (one bridge moved away, key not revoked): listed as usual")
         shot(pg, "tally-page-removed-computer-closed", "#app [data-tco-list=firm]")
         pg.click("#app [data-tco-show-gone]"); pg.wait_for_timeout(500)
         ok(pg.locator(RW("IX DESIGNS")).count() == 1 and pg.locator(RW("IX DESIGNS") + " [data-tco-gone]").count() == 1, "opened: IX DESIGNS is listed, marked 'from a removed computer'")

@@ -32,11 +32,14 @@ Then it:
 
 1. reports it to Sentry by its own beacon ("FinCom healed itself: <reason>"), on the testing site;
 2. unregisters FinCom's service worker for this folder and deletes its caches;
-3. opens the previous good build named by `last-good.json` in the same folder, `{"build": "<id>", "path": "../review-prev/"}`,
+3. opens the previous good build named by `last-good.json` in the same folder, `{"build": "<id>", "path": "../review-prev/", …}`
+   (written by `app/promote-next.sh` and by `./publish-preview.sh review`, which keep that build at `review-prev/`:
+   docs/RELEASE-FLOW.md; the other fields, `commit`, `stamp`, `how`, are for `app/rollback-review.sh`),
    and says "FinCom updated; opened the last working version". Without that file, or when it names this same build, it
    reloads once from the network.
 
 It does this once per build in a tab. If the page still cannot open, the "FinCom did not open" note comes, with its
-"Reload FinCom" button. Writing `last-good.json` and keeping the previous build belong to the publishing step. Test:
+"Reload FinCom" button. Writing `last-good.json` and keeping the previous build belong to the publishing step
+(`app/release-lib.sh`; checked by `tests/run_release_flow.py`). Test:
 `tests/run_self_heal.py` (the upgrade path old worker -> new build -> reload twice, rolling back, a broken build, a page
 held up in its head, and no pointer).

@@ -120,7 +120,9 @@ const hidden = () => new Set([].concat((S.firm && S.firm.tallyHidden) || []));
 export function deviceGone(id) {
   if (!id) return false;
   const all = [].concat((typeof TLight === "object" && TLight.st.devs) || [], (TCloud.pane || {}).devices || []).filter((d) => d && d.id === id);
-  if (all.some((d) => d.revoked || (d.info && d.info.movedAway))) return true;
+  // movedAway.revoked false (tally_bridge_follow_move): the key was left, another bridge still sends with it, so its
+  // companies are not from a removed computer
+  if (all.some((d) => d.revoked || (d.info && d.info.movedAway && d.info.movedAway.revoked !== false))) return true;
   return !all.length && typeof TLight === "object" && !!TLight.st.loaded && (TLight.st.devs || []).length > 0;
 }
 // opts.hidden: the companies removed from the list too; opts.gone: a company no client has whose computer was removed or

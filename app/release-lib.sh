@@ -28,23 +28,32 @@ main_checkout() {
 # review/last-good.json: before review/ is replaced, the build it holds now (the one people have been using) and the
 # commit of main that holds it, which rollback-review.sh restores. Called in $tmp before review/ is emptied, with the
 # new build's id and how it came (publish / promote); last_good_put writes it once the new files are in place.
+# Never blank (docs/NEVER-BLANK.md): that build's files are kept, served, at review-prev/ and the pointer names them as
+# the page's own healer reads it (app/index.html, fincom-heal: "build" and "path", relative to review/): a new build
+# that cannot draw opens "../review-prev/". review-prev/ holds no pointer of its own (one step back, never a chain).
 last_good_save() {
-  lg=$(mktemp)
+  lg=$(mktemp); prev=""
   local cur; cur=$(build_of review/build.json)
   if [ -z "$cur" ]; then rm -f "$lg"; lg=""; return 0; fi
   # the same build put there again: the pointer stays as it was
   if [ "$cur" = "$1" ]; then if [ -f review/last-good.json ]; then cp review/last-good.json "$lg"; else rm -f "$lg"; lg=""; fi; return 0; fi
+  prev=$(mktemp -d)
+  tar -C review --exclude=./README.txt --exclude=./last-good.json -cf - . | tar -C "$prev" -xf -
   python3 - review/build.json "$(git rev-parse HEAD)" "$1" "$2" > "$lg" <<'EOF'
 import json, sys, datetime
 b = json.load(open(sys.argv[1]))
 print(json.dumps({
-    "build": b.get("build", ""), "stamp": b.get("stamp", ""), "commit": sys.argv[2],
+    "build": b.get("build", ""), "path": "../review-prev/", "stamp": b.get("stamp", ""), "commit": sys.argv[2],
     "replacedBy": sys.argv[3], "how": sys.argv[4],
     "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"}, indent=1))
 EOF
 }
-last_good_put() { if [ -n "${lg:-}" ]; then cp "$lg" review/last-good.json; rm -f "$lg"; fi; return 0; }
+last_good_put() {
+  if [ -n "${lg:-}" ]; then cp "$lg" review/last-good.json; rm -f "$lg"; fi
+  if [ -n "${prev:-}" ]; then replace_folder "$prev" review-prev; rm -f review-prev/last-good.json; rm -rf "$prev"; fi
+  return 0
+}
 
 # a folder's files replaced by another's (README.txt, a note kept by hand on main, stays)
 replace_folder() {  # $1 from (a directory), $2 the folder of main
@@ -53,14 +62,14 @@ replace_folder() {  # $1 from (a directory), $2 the folder of main
   tar -C "$1" --exclude=./README.txt -cf - . | tar -C "$2" -xf -
 }
 
-# commit $1/ only, refuse anything outside it, push main (or not, DRY=1)
-finish() {  # $1 folder, $2 commit message, $3 what to say once pushed
-  git add -A "$1"
+# commit $1/ only (or the folders $1 names, "review review-prev"), refuse anything outside, push main (or not, DRY=1)
+finish() {  # $1 folder(s), $2 commit message, $3 what to say once pushed
+  local f re=""; for f in $1; do [ ! -e "$f" ] || git add -A "$f"; re="$re|$f/"; done; re="^(${re#|})"   # a folder gone (git rm) is staged already
   if git diff --cached --quiet; then echo "Nothing to change: $1/ on main already is this."; return 0; fi
   git commit -qm "$2"
   git diff --stat=120 origin/main HEAD
-  local outside; outside=$(git diff --name-only origin/main HEAD | grep -v "^$1/" || true)
-  if [ -n "$outside" ]; then echo "Files outside $1/ would change: stopped."; echo "$outside"; return 1
+  local outside; outside=$(git diff --name-only origin/main HEAD | grep -vE "$re" || true)
+  if [ -n "$outside" ]; then echo "Files outside $1 would change: stopped."; echo "$outside"; return 1
   elif [ -n "${DRY:-}" ]; then echo "DRY: nothing pushed."
   else git push -q origin HEAD:main; echo "$3"; fi
 }

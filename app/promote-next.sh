@@ -4,7 +4,8 @@
 # goes live. Nothing needs rewriting: the build asks for its files by ./ addresses (Vite's base "./"), and its service
 # worker takes its scope and its cache names (fincom-shell:/review/:<build>, fincom-files:/review/) from the address it
 # is served at; only the TRIAL strip depends on the address, and index.html decides that when the page opens.
-# Writes review/last-good.json (the build review/ held until now, for ./rollback-review.sh). Only review/ changes on main.
+# Writes review/last-good.json (the build review/ held until now, for ./rollback-review.sh) and keeps that build at
+# review-prev/ (the page's own healer opens it: docs/NEVER-BLANK.md). Only review/ and review-prev/ change on main.
 # Refuses when next/ holds no complete build, when it is review/'s build already, or when it is older than review/'s.
 #   ./promote-next.sh            DRY=1 ./promote-next.sh   (commit locally, show what would change, push nothing)
 set -e
@@ -27,5 +28,5 @@ replace_folder next review
 last_good_put
 # what goes live is exactly what was tried
 diff -rq -x README.txt -x last-good.json next review >/dev/null || { diff -rq -x README.txt -x last-good.json next review | head; die "review/ is not an exact copy of next/: stopped."; }
-finish review "Promote: the build tried at next/ ($nb, $(stamp_of next/build.json)) to review/ (was ${rb:-none})" \
+finish "review review-prev" "Promote: the build tried at next/ ($nb, $(stamp_of next/build.json)) to review/ (was ${rb:-none})" \
   "Promoted; staging.fincom.live/review/ shows build $nb in about a minute. If it is wrong: ./rollback-review.sh"

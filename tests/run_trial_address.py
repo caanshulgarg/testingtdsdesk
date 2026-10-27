@@ -30,18 +30,31 @@ T = tempfile.mkdtemp(prefix="fincom-trial-")
 ROOT = os.path.join(T, "site"); os.makedirs(ROOT)
 shutil.copy(os.path.join(REPO, "cloudflare", "_headers.main"), os.path.join(ROOT, "_headers"))
 IDA = json.load(open(os.path.join(SITE, "build.json")))["build"]
-def boot_hash(html):
-    m = re.search(r'<script id="fincom-boot">([\s\S]*?)</script>', html)
-    return "'sha256-" + base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode() + "'"
+def script_hashes(html):
+    return ["'sha256-" + base64.b64encode(hashlib.sha256(m.group(1).encode()).digest()).decode() + "'"
+            for m in re.finditer(r'<script(?![^>]*\bsrc=)(?![^>]*type="module")[^>]*>([\s\S]*?)</script>', html)]
 def copy_as(dst, bid):
-    """the build with another id: hard links, but for the three files that name it (index.html keeps its CSP hash right)"""
+    """the build with another id, as a real build of its own: every file that names the id (index.html with its inline
+    scripts' CSP hashes made right, build.json, sw.js, and the app's first file, whose __BUILD_ID__ asks the worker of
+    ITS build to take over: speed2, app/src/main.jsx), and the hashed files renamed so that /next/ B and C never share
+    an immutable address. Hard links for the rest"""
     shutil.copytree(SITE, dst, copy_function=os.link, ignore=shutil.ignore_patterns("bridge-go"))
     if bid == IDA: return
-    for f in ("index.html", "build.json", "sw.js"):
-        p = os.path.join(dst, f); t = open(p, encoding="utf-8").read(); os.unlink(p)
-        u = t.replace(IDA, bid)
-        if f == "index.html": u = u.replace(boot_hash(t), boot_hash(u))
-        open(p, "w", encoding="utf-8").write(u)
+    tag = bid[-1].upper()
+    ad = os.path.join(dst, "assets")
+    ren = {f: re.sub(r"\.(js|css)$", tag + r".\1", f) for f in os.listdir(ad) if re.search(r"-[\w-]{8}\.(js|css)$", f)}
+    for f, g in ren.items(): os.rename(os.path.join(ad, f), os.path.join(ad, g))
+    names = sorted(ren, key=len, reverse=True)
+    for r, _x, fs in os.walk(dst):
+        for f in fs:
+            if not re.search(r"\.(html|js|json)$", f): continue
+            p = os.path.join(r, f); t = open(p, encoding="utf-8", errors="surrogateescape").read()
+            u = t.replace(IDA, bid)
+            for n in names:
+                if n in u: u = u.replace(n, ren[n])
+            if f == "index.html" and r == dst:
+                for h0, h1 in zip(script_hashes(t), script_hashes(u)): u = u.replace(h0, h1)
+            if u != t: os.unlink(p); open(p, "w", encoding="utf-8", errors="surrogateescape").write(u)
 def published(d):
     """a publish writes its files now: the test server (Python's) answers 304 to If-Modified-Since by the file's time, to
     the second, and B and C were written in the same second (Cloudflare answers by ETag, so this is the test's only)"""
@@ -156,6 +169,15 @@ try:
             ha, hb = hdr(a), hdr(b)
             ok(ha.get("cache-control") == hb.get("cache-control") and ha.get("content-security-policy") == hb.get("content-security-policy"),
                "%s: Cache-Control %r, the same CSP as %s" % (b, hb.get("cache-control"), a))
+        # never blank (docs/NEVER-BLANK.md): the build before is kept at /review-prev/ (app/release-lib.sh), where the
+        # page's own healer opens it; every /review/ rule has its /review-prev/ twin, so it is served as /review/ is
+        rules = cf_pages.parse(open(os.path.join(REPO, "cloudflare", "_headers.main")).read())
+        rv = [r["path"] for r in rules if r["path"].startswith("/review/")]
+        miss = [p for p in rv if p.replace("/review/", "/review-prev/", 1) not in [r["path"] for r in rules]]
+        ok(rv and not miss and len(rules) <= 100, "/review-prev/ has every /review/ rule's twin (%d rules of 100; missing %s)" % (len(rules), miss[:3]))
+        for a in ("/review/", "/review/index.html", "/review/sw.js", "/review/build.json", "/review/legacy.js", "/review/assets/" + asset):
+            b = a.replace("/review/", "/review-prev/", 1)
+            ok(sorted(cf_pages.headers_for(rules, a)) == sorted(cf_pages.headers_for(rules, b)), "%s: the same headers as %s" % (b, a))
         br.close()
     seen = sorted(set(cf_pages.MSGS))
     ok(not seen, "no CSP or Permissions-Policy message (%s)" % seen[:3])

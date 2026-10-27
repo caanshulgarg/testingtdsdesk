@@ -75,7 +75,9 @@ if OLD:
     OLDD = os.path.join(TMP, "old"); shutil.copytree(OLD, OLDD, ignore=skip); IDO = json.load(open(os.path.join(OLDD, "build.json")))["build"]
 else:
     OLDD, IDO = variant("old", "ooo")
-POINTER = json.dumps({"build": IDO, "path": "../review-prev/"})
+# as app/release-lib.sh writes it at a promote or a publish to review/ (docs/RELEASE-FLOW.md): the healer reads build and path
+POINTER = json.dumps({"build": IDO, "path": "../review-prev/", "stamp": "React · old", "commit": "0" * 40, "replacedBy": "new",
+                      "how": "promote", "at": "2026-10-27T12:00:00Z", "note": "the build review/ held before"}, indent=1)
 open(os.path.join(NEW, "last-good.json"), "w").write(POINTER)
 def broken(name, tag, pointer):
     """the new build broken as a release can be: its program empty, its app's first file missing"""

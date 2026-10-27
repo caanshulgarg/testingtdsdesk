@@ -23,12 +23,17 @@
 /next/*
   ! Content-Security-Policy
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/security/?sentry_key=7f2432ad2a6406244d931f4856c30933
+/review-prev/*
+  ! Content-Security-Policy
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; report-uri https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/security/?sentry_key=7f2432ad2a6406244d931f4856c30933
 
 # Caching. Pages' own default for every file is "public, max-age=0, must-revalidate" (asked again each time, 304 when
 # unchanged). The build's files with a content hash in their names never change: kept for a year.
 /review/assets/*
   Cache-Control: public, max-age=31536000, immutable
 /next/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/review-prev/assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 # ...except the files under review/assets whose names stay the same from build to build: a day
@@ -38,10 +43,16 @@
 /next/assets/mediapipe/*
   ! Cache-Control
   Cache-Control: public, max-age=86400
+/review-prev/assets/mediapipe/*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
 /review/assets/call-bg/*
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /next/assets/call-bg/*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review-prev/assets/call-bg/*
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /review/assets/exceljs.min.js
@@ -50,10 +61,16 @@
 /next/assets/exceljs.min.js
   ! Cache-Control
   Cache-Control: public, max-age=86400
+/review-prev/assets/exceljs.min.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
 /review/assets/docx.iife.js
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /next/assets/docx.iife.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review-prev/assets/docx.iife.js
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /review/assets/xlsx.js
@@ -62,10 +79,16 @@
 /next/assets/xlsx.js
   ! Cache-Control
   Cache-Control: public, max-age=86400
+/review-prev/assets/xlsx.js
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
 /review/assets/pdf.*
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /next/assets/pdf.*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review-prev/assets/pdf.*
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /review/assets/tess-*
@@ -74,16 +97,25 @@
 /next/assets/tess-*
   ! Cache-Control
   Cache-Control: public, max-age=86400
+/review-prev/assets/tess-*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
 /review/assets/sample-*
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /next/assets/sample-*
   ! Cache-Control
   Cache-Control: public, max-age=86400
+/review-prev/assets/sample-*
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
 /review/assets/*.txt
   ! Cache-Control
   Cache-Control: public, max-age=86400
 /next/assets/*.txt
+  ! Cache-Control
+  Cache-Control: public, max-age=86400
+/review-prev/assets/*.txt
   ! Cache-Control
   Cache-Control: public, max-age=86400
 
@@ -94,10 +126,16 @@
 /next/assets/bridge-go/*
   ! Cache-Control
   Cache-Control: no-cache
+/review-prev/assets/bridge-go/*
+  ! Cache-Control
+  Cache-Control: no-cache
 /review/assets/connector/*
   ! Cache-Control
   Cache-Control: no-cache
 /next/assets/connector/*
+  ! Cache-Control
+  Cache-Control: no-cache
+/review-prev/assets/connector/*
   ! Cache-Control
   Cache-Control: no-cache
 /review/assets/bridge-setup*
@@ -106,9 +144,13 @@
 /next/assets/bridge-setup*
   ! Cache-Control
   Cache-Control: no-cache
+/review-prev/assets/bridge-setup*
+  ! Cache-Control
+  Cache-Control: no-cache
 
 # The pages, the service worker and the build's id: always asked again, so a new build shows at once (review/ and
-# the trial address next/ alike: each /review/ rule here has its /next/ twin right after it)
+# the trial address next/ alike: each /review/ rule here has its /next/ twin right after it, and its /review-prev/ twin:
+# the build before, kept there for the page's own healer, docs/NEVER-BLANK.md)
 /
   Cache-Control: no-cache
 /index.html
@@ -117,17 +159,25 @@
   Cache-Control: no-cache
 /next/
   Cache-Control: no-cache
+/review-prev/
+  Cache-Control: no-cache
 /review/index.html
   Cache-Control: no-cache
 /next/index.html
+  Cache-Control: no-cache
+/review-prev/index.html
   Cache-Control: no-cache
 /review/sw.js
   Cache-Control: no-cache
 /next/sw.js
   Cache-Control: no-cache
+/review-prev/sw.js
+  Cache-Control: no-cache
 /review/build.json
   Cache-Control: no-cache
 /next/build.json
+  Cache-Control: no-cache
+/review-prev/build.json
   Cache-Control: no-cache
 # speed round (27-Oct-2026): the page always asks for legacy.js?v=<its build's hash> (index.html, sw.js), so each
 # build's copy never changes: kept by the browser, not asked again on every visit
@@ -135,13 +185,19 @@
   Cache-Control: public, max-age=31536000, immutable
 /next/legacy.js
   Cache-Control: public, max-age=31536000, immutable
+/review-prev/legacy.js
+  Cache-Control: public, max-age=31536000, immutable
 /review/guard.js
   Cache-Control: no-cache
 /next/guard.js
   Cache-Control: no-cache
+/review-prev/guard.js
+  Cache-Control: no-cache
 /review/oldcheck.js
   Cache-Control: no-cache
 /next/oldcheck.js
+  Cache-Control: no-cache
+/review-prev/oldcheck.js
   Cache-Control: no-cache
 /status/status.json
   Cache-Control: no-cache
