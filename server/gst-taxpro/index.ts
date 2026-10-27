@@ -16,9 +16,11 @@
 // Hosts: TAXPRO_BASE_URL (GST returns; default production https://gstapi.charteredinfo.com),
 //        TAXPRO_EINV_URL (e-invoice and e-way bill; default the SANDBOX until set: an IRN is a legal document).
 //
-// GET ?selftest=1 : always on the sandbox (free): OTP → sign-in → refresh → 2B, GSTR-1 and 3B summaries for GSTN's test
+// GET ?selftest=1 (a signed-in firm member, as below) : always on the sandbox (free): OTP → sign-in → refresh → 2B, GSTR-1 and 3B summaries for GSTN's test
 //   taxpayer, the API version that answers for each, Vault, and the e-invoice sign-in for TaxPro's test GSTIN.
-// POST, a signed-in firm member:
+// POST, a signed-in firm member (two-step sign-in checked as the gateway checks it: rpc mfa_ok). A look-only member
+// (any role but owner or staff) may only read: status, returns, return, einv-status, einvoices. Error replies are plain;
+// the raw detail is in the function's log only.
 //   {action:"status", gstins}                       sessions: until, access period, ended, error (never the token)
 //   {action:"otp" | "auth", gstin, username, otp?, days?}
 //   {action:"2b", gstin, username, period}          2B now (kept on the server too)
@@ -44,7 +46,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { after2b } from "./automatch.ts";
-import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText } from "./filing.ts";
+import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain } from "./filing.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -59,6 +61,19 @@ const cors = corsFor(null, { any: true, methods: "GET, POST, OPTIONS" });
 const reply = (code: number, body: unknown) =>
   new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 
+// what a person is told is plain: a Plain message as it is, anything else (database, network or code) one fixed sentence;
+// the raw detail goes to the function's log only (security review F11)
+const SORRY = "Something went wrong on FinCom's side. Try again in a moment.";
+function plain(e: unknown, where: string): string {
+  if (e instanceof Plain) return e.message;
+  console.error(JSON.stringify({ fn: "gst-taxpro", where, error: String((e as Error)?.message || e).slice(0, 500) }));
+  return SORRY;
+}
+function dbFail(where: string, error: { message?: string; code?: string }, say: string): never {
+  console.error(JSON.stringify({ fn: "gst-taxpro", where, code: error.code || null, error: String(error.message || "").slice(0, 500) }));
+  throw new Plain(say);
+}
+
 // ---------- Vault ----------
 const kv = new Map<string, { v: string; at: number }>();
 async function sget(name: string): Promise<string> {
@@ -71,14 +86,14 @@ async function sget(name: string): Promise<string> {
 }
 async function sput(name: string, value: string): Promise<string> {
   const { data, error } = await admin.rpc("gsp_secret_put", { p_name: name, p_value: value });
-  if (error) throw new Error("Could not keep it in Vault (" + error.message + "). Is migration-16 applied on this database?");
+  if (error) dbFail("vault", error, "It could not be kept safely. Try again in a moment.");
   kv.set(name, { v: value, at: Date.now() });
   return String(data);
 }
 async function asp() {
   const id = ((await sget("gsp:taxpro:aspid")) || Deno.env.get("TAXPRO_ASP_ID") || "").trim();
   const pw = (await sget("gsp:taxpro:password")) || Deno.env.get("TAXPRO_ASP_PASSWORD") || "";
-  if (!id || !pw) throw new Error("TaxPro's ASP id and password are not in Vault (gsp:taxpro:aspid, gsp:taxpro:password).");
+  if (!id || !pw) { console.error(JSON.stringify({ fn: "gst-taxpro", where: "asp", error: "TaxPro's ASP id and password are not in Vault (gsp:taxpro:aspid, gsp:taxpro:password)" })); throw new Plain("The GST service is not set up for FinCom yet."); }
   return { id, pw };
 }
 const sessName = (firm: string, gstin: string) => `gsp:sess:${firm}:${gstin}`;
@@ -98,7 +113,7 @@ async function tp(path: string, query: Record<string, string>, headers: Record<s
   return { http: r.status, j, text };
 }
 const tpErr = (x: { http: number; j: any; text: string }) =>
-  (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.message)) || ("HTTP " + x.http + ": " + x.text.slice(0, 200));
+  (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.message)) || ("The GST service answered HTTP " + x.http + ".");   // its text is in the log (tp)
 const ok = (x: { j: any }) => String(x.j?.status_cd) === "1";
 const tokenOf = (x: { j: any }) => x.j?.auth_token || x.j?.authtoken || x.j?.data?.auth_token || "";
 const minutesOf = (x: { j: any }) => Number(x.j?.expiry || x.j?.data?.expiry) || 120;
@@ -150,7 +165,7 @@ async function save(firm: string, gstin: string, username: string, token: string
     Object.assign(row, { connected_at: new Date().toISOString(), access_days: d, access_until: new Date(Date.now() + d * 86400000).toISOString(), reminded_at: null });
   } else row.refreshed_at = new Date().toISOString();
   const { error } = await admin.from("gst_sessions").upsert(row);
-  if (error) throw new Error("Could not keep the portal session: " + error.message);
+  if (error) dbFail("gst_sessions", error, "The portal session could not be kept. Try again in a moment.");
 }
 async function tokenOfRow(s: Sess) {
   if (s.token_secret) return await sget(sessName(s.firm_id, s.gstin));
@@ -163,7 +178,7 @@ async function refresh(s: Sess): Promise<string> {
   const t = tokenOf(x);
   if (!ok(x) || !t) {
     await admin.from("gst_sessions").update({ last_error: tpErr(x), ended_at: new Date().toISOString() }).eq("firm_id", s.firm_id).eq("gstin", s.gstin);
-    throw new Error("The portal session could not be renewed: " + tpErr(x) + ". Send an OTP again.");
+    throw new Plain("The portal session could not be renewed: " + tpErr(x) + ". Send an OTP again.");
   }
   await save(s.firm_id, s.gstin, s.username, t, minutesOf(x), false);
   return t;
@@ -171,10 +186,10 @@ async function refresh(s: Sess): Promise<string> {
 // a live token for this firm's GSTIN, renewed first when it has under 15 minutes left
 async function liveSession(firm: string, gstin: string): Promise<{ token: string; s: Sess }> {
   const { data: s } = await admin.from("gst_sessions").select("*").eq("firm_id", firm).eq("gstin", gstin).maybeSingle();
-  if (!s) throw new Error("Connect with the taxpayer's OTP first.");
-  if (s.ended_at) throw new Error("The portal session has ended. Send an OTP again.");
+  if (!s) throw new Plain("Connect with the taxpayer's OTP first.");
+  if (s.ended_at) throw new Plain("The portal session has ended. Send an OTP again.");
   const left = new Date(s.expires_at).getTime() - Date.now();
-  if (left <= 0) throw new Error("The portal session has ended. Send an OTP again.");
+  if (left <= 0) throw new Plain("The portal session has ended. Send an OTP again.");
   return { token: left < 15 * 60000 ? await refresh(s) : await tokenOfRow(s), s };
 }
 
@@ -185,7 +200,7 @@ async function get2b(h: Record<string, string>, gstin: string, username: string,
   const q = { action: "GET2B", gstin, username, ret_period: period, rtnprd: period };
   const open = (x: { http: number; j: any; text: string }) => {
     // 2B comes back as {chksum, data} with no status_cd; errors carry status_cd 0 and an error
-    if (!ok(x) && !(x.j?.data && !x.j.error)) throw new Error(tpErr(x));
+    if (!ok(x) && !(x.j?.data && !x.j.error)) throw new Plain(tpErr(x));
     return unwrap(x);
   };
   let out = open(await tp(R2B, q, h, base));
@@ -207,7 +222,7 @@ const R1_SECTIONS: [string, string][] = [["B2B", "b2b"], ["B2CL", "b2cl"], ["B2C
 async function getR1(h: Record<string, string>, gstin: string, username: string, period: string, base = BASE) {
   const q = { gstin, username, ret_period: period, rtnprd: period };
   const sum = await tpv("R1", R1_PATHS, { ...q, action: "RETSUM" }, h, base);
-  if (!ret(sum)) throw new Error(tpErr(sum));
+  if (!ret(sum)) throw new Plain(tpErr(sum));
   const out: any = { gstin, fp: period, summary: unwrap(sum), source: "api" };
   const bad: string[] = [];
   for (const [act, k] of R1_SECTIONS) {
@@ -221,12 +236,12 @@ async function getR1(h: Record<string, string>, gstin: string, username: string,
 }
 async function get3b(h: Record<string, string>, gstin: string, username: string, period: string, base = BASE) {
   const g = await tpv("R3B", R3B_PATHS, { gstin, username, ret_period: period, rtnprd: period, action: "RETSUM" }, h, base);
-  if (!ret(g)) throw new Error(tpErr(g));
+  if (!ret(g)) throw new Plain(tpErr(g));
   return { parts: 1, data: unwrap(g), path: g.path };
 }
 async function getTrack(h: Record<string, string>, gstin: string, username: string, fy: string, base = BASE) {
   const g = await tpv("TRACK", TRACK_PATHS, { gstin, username, action: "RETTRACK", fy }, h, base);
-  if (!ret(g)) throw new Error(tpErr(g));
+  if (!ret(g)) throw new Plain(tpErr(g));
   const d = unwrap(g) || {};
   const list = d.EFiledlist || d.efiledlist || d.EFiledList || (Array.isArray(d) ? d : []);
   return { parts: 1, data: { fy, EFiledlist: Array.isArray(list) ? list : [] }, path: g.path };
@@ -243,7 +258,7 @@ async function fetchStore(firm: string, gstin: string, form: string, period: str
       : form === "TRACK" ? await getTrack(h, gstin, s.username, period) : await get3b(h, gstin, s.username, period);
     Object.assign(row, { status: "ok", data: r.data, parts: r.parts, error: (r.data as any)?.partial ? "Some tables could not be read: " + (r.data as any).partial.join("; ") : null });
   } catch (e) {
-    const m = String((e as Error).message || e).slice(0, 500);
+    const m = plain(e, "fetch " + form).slice(0, 500);
     Object.assign(row, { status: isNone(m) ? "none" : "error", error: m });
     if (/Send an OTP again|Connect with the taxpayer/.test(m)) return { status: "error", error: m };   // nothing to keep
   }
@@ -254,7 +269,7 @@ async function fetchStore(firm: string, gstin: string, form: string, period: str
     return { status: "ok", error: row.error, kept: true };
   }
   const { error } = await admin.from("gst_returns").upsert(row);
-  if (error) throw new Error("Could not keep it: " + error.message);
+  if (error) dbFail("gst_returns", error, "The return could not be kept. Try again in a moment.");
   // a 2B fetched: matched against the books by itself (round 72b; automatch.ts, gst-2b-match), never holding up the fetch
   if (form === "2B" && row.status === "ok") {
     const p = after2b({
@@ -339,18 +354,18 @@ async function ei(method: string, path: string, q: Record<string, string>, body?
   const okk = String(j?.Status ?? j?.status) === "1";
   const errs = (j?.ErrorDetails || j?.errorDetails || []).map((e: any) => (e.ErrorMessage || e.errorMessage || "") + (e.ErrorCode ? " (" + e.ErrorCode + ")" : "")).filter(Boolean);
   if (!okk) console.log(JSON.stringify({ einv: path, http: r.status, head: text.slice(0, 300) }));
-  return { ok: okk, data, error: errs.join("; ") || (okk ? "" : (j?.message || "HTTP " + r.status + ": " + text.slice(0, 200))), info: j?.InfoDtls || j?.infoDtls };
+  return { ok: okk, data, error: errs.join("; ") || (okk ? "" : (j?.message || "The e-invoice service answered HTTP " + r.status + ".")), info: j?.InfoDtls || j?.infoDtls };
 }
 async function einvToken(firm: string, gstin: string, fresh = false) {
   const { data: a } = await admin.from("gst_einv_accounts").select("*").eq("firm_id", firm).eq("gstin", gstin).maybeSingle();
-  if (!a) throw new Error("Give the e-invoice API user for " + gstin + " first (GST settings → E-invoice and e-way bill).");
+  if (!a) throw new Plain("Give the e-invoice API user for " + gstin + " first (GST settings → E-invoice and e-way bill).");
   if (!fresh && a.token_until && Date.parse(a.token_until) - Date.now() > 10 * 60000) { const t = await sget(einvName(firm, gstin, "token")); if (t) return { token: t, user: a.username }; }
   const pass = await sget(einvName(firm, gstin, "pass"));
   const x = await ei("GET", "/eivital/dec/v1.04/auth", { Gstin: gstin, user_name: a.username, eInvPwd: pass });
   const t = x.data?.AuthToken || "";
   if (!x.ok || !t) {
     await admin.from("gst_einv_accounts").update({ last_error: x.error, updated_at: new Date().toISOString() }).eq("firm_id", firm).eq("gstin", gstin);
-    throw new Error("The e-invoice portal refused the sign-in: " + x.error);
+    throw new Plain("The e-invoice portal refused the sign-in: " + x.error);
   }
   await sput(einvName(firm, gstin, "token"), t);
   const until = x.data?.TokenExpiry ? new Date(String(x.data.TokenExpiry).replace(" ", "T") + "+05:30").toISOString() : new Date(Date.now() + 5 * 3600000).toISOString();
@@ -360,11 +375,11 @@ async function einvToken(firm: string, gstin: string, fresh = false) {
 const istTs = (s: unknown) => { const t = String(s || ""); if (!t) return null; const d = Date.parse(t.replace(" ", "T") + (/[zZ+]/.test(t.slice(10)) ? "" : "+05:30")); return isNaN(d) ? null : new Date(d).toISOString(); };
 async function keepEinv(firm: string, gstin: string, docKey: string, set: Record<string, unknown>) {
   const { error } = await admin.from("gst_einvoices").upsert({ firm_id: firm, gstin, doc_key: docKey, updated_at: new Date().toISOString(), ...set });
-  if (error) throw new Error("Could not keep it: " + error.message);
+  if (error) dbFail("gst_einvoices", error, "The e-invoice could not be kept. Try again in a moment.");
 }
 async function makeIrn(firm: string, gstin: string, docKey: string, clientId: string, inv: any, by: string) {
   const d = inv?.DocDtls || {};
-  if (inv?.SellerDtls?.Gstin !== gstin) throw new Error("The invoice's seller GSTIN is not " + gstin + ".");
+  if (inv?.SellerDtls?.Gstin !== gstin) throw new Plain("The invoice's seller GSTIN is not " + gstin + ".");
   const base = { client_id: clientId || null, doc_type: d.Typ || "INV", doc_no: d.No || "", doc_date: d.Dt ? d.Dt.split("/").reverse().join("-") : null, request: inv, created_by: by };
   let { token, user } = await einvToken(firm, gstin);
   let x = await ei("POST", "/eicore/dec/v1.03/Invoice", { Gstin: gstin, AuthToken: token, user_name: user }, inv);
@@ -409,7 +424,7 @@ async function filingRow(w: Who, r: Ret) {
 }
 async function putFiling(w: Who, r: Ret, set: Record<string, unknown>) {
   const { error } = await admin.from("gst_filings").upsert({ firm_id: w.firm, gstin: r.gstin, form: r.form, period: r.period, updated_at: new Date().toISOString(), ...set });
-  if (error) throw new Error("Could not keep the filing: " + error.message + ". Is migration-94 applied on this database?");
+  if (error) dbFail("gst_filings", error, "The filing could not be kept. Try again in a moment.");
 }
 // every call logged: who, when, GSTIN, period, form, action, result, ARN; never the OTP
 async function logFiling(w: Who, r: Ret, action: string, ok1: boolean, result: string, extra: { arn?: string; ref?: string; otp?: string } = {}) {
@@ -425,7 +440,7 @@ async function session(w: Who, r: Ret) {
 async function portalSummary(w: Who, r: Ret) {
   const f = FORMS[r.form], { h, username } = await session(w, r);
   const g = await tpv(f.kind, f.paths, { gstin: r.gstin, username, ret_period: r.period, rtnprd: r.period, action: "RETSUM" }, h);
-  if (!ret(g)) throw new Error("The portal's summary could not be read: " + tpErr(g));
+  if (!ret(g)) throw new Plain("The portal's summary could not be read: " + tpErr(g));
   return { raw: unwrap(g), h, username, path: g.path as string };
 }
 const statusOf = (x: { j: any }) => String(x.j?.status_cd ?? x.j?.data?.status_cd ?? "");
@@ -434,9 +449,9 @@ const sleep = (ms: number) => new Promise((ok1) => setTimeout(ok1, ms));
 // 3B: the liability lines (tx_pmt of the 3B summary) and the ledgers, set off as the law requires
 async function offsetPlan(r: Ret, sum: any, h: Record<string, string>, username: string) {
   const liab = sum?.tx_pmt?.tx_py || sum?.tx_pmt || [];
-  if (!Array.isArray(liab) || !liab.length) throw new Error("The portal's 3B has no liability lines (tx_pmt) yet. Save the 3B again and read the summary.");
+  if (!Array.isArray(liab) || !liab.length) throw new Plain("The portal's 3B has no liability lines (tx_pmt) yet. Save the 3B again and read the summary.");
   const b = await tpv("LEDGER", LEDGER_PATHS, { gstin: r.gstin, username, ret_period: r.period, action: "BAL" }, h);
-  if (!ret(b)) throw new Error("The ledger balances could not be read: " + tpErr(b));
+  if (!ret(b)) throw new Plain("The ledger balances could not be read: " + tpErr(b));
   const L = ledgersOf(b.j);
   return { ...setoff(liab, L.itc, L.cash), itc: L.itc, cash: L.cash };
 }
@@ -583,17 +598,39 @@ async function filingAction(w: Who, action: string, body: any, role: string) {
     }
     return { ok: false, error: "Unknown action." };
   } catch (e) {
-    const m = safeText(String((e as Error).message || e), String(body.otp || ""));
+    const m = safeText(plain(e, "filing " + action), String(body.otp || ""));
     await logFiling(w, r, action, false, m, { otp: String(body.otp || "") }).catch(() => {});
     return { ok: false, error: m };
   }
 }
+
+// who is asking: a signed-in, active member of a firm. Two-step sign-in is checked exactly as the gateway checks it
+// (server/security/functions/gateway/index.ts: rpc mfa_ok as the user, which decides when two-step is required)
+type Member = { me: string; firm: string; role: string };
+async function signedIn(req: Request): Promise<Member | Response> {
+  const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return reply(401, { ok: false, error: "Sign in to the firm account first." });
+  const asUser = createClient(SB_URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const { data: who } = await asUser.auth.getUser();
+  if (!who?.user) return reply(401, { ok: false, error: "Sign in again." });
+  const { data: mfaOk } = await asUser.rpc("mfa_ok");
+  if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
+  const { data: member } = await admin.from("members").select("firm_id, active, role").eq("user_id", who.user.id).maybeSingle();
+  if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
+  return { me: who.user.id, firm: member.firm_id as string, role: String(member.role || "") };
+}
+// what a look-only member (any role but owner or staff) may do: read what is kept. Everything else writes, keeps a
+// password or session, sends an OTP or spends a TaxPro call (security review F3)
+const LOOK_OK = new Set(["status", "returns", "return", "einv-status", "einvoices"]);
+const canWrite = (role: string) => role === "owner" || role === "staff";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const u = new globalThis.URL(req.url);
 
   if (req.method === "GET" && u.searchParams.get("selftest")) {
+    const who = await signedIn(req);
+    if (who instanceof Response) return who;
     // GSTN's published sandbox test taxpayer (sandbox OTP 575757); production is not touched, it costs credit
     const t = { gstin: "33AANCS2882A1ZG", username: "TN_NT2.2265" }, h = hdr(t.gstin, t.username);
     const steps: Record<string, string> = {};
@@ -607,7 +644,7 @@ Deno.serve(async (req) => {
         steps.refresh = ok(r) && tokenOf(r) ? "ok, new token for " + minutesOf(r) + " min" : tpErr(r);
         token = tokenOf(r) || token;
         const hh = { ...h, "auth-token": token, ret_period: "012021" };
-        try { await get2b(hh, t.gstin, t.username, "012021", SANDBOX_URL); steps.gstr2b = "ok"; } catch (e) { steps.gstr2b = String((e as Error).message); }
+        try { await get2b(hh, t.gstin, t.username, "012021", SANDBOX_URL); steps.gstr2b = "ok"; } catch (e) { steps.gstr2b = plain(e, "selftest 2b"); }
         const r1 = await tpv("R1", R1_PATHS, { gstin: t.gstin, username: t.username, ret_period: "012021", action: "RETSUM" }, hh, SANDBOX_URL);
         steps.gstr1 = (ret(r1) ? "ok" : tpErr(r1)) + " (" + (r1?.path || "") + ")";
         const r3 = await tpv("R3B", R3B_PATHS, { gstin: t.gstin, username: t.username, ret_period: "012021", action: "RETSUM" }, hh, SANDBOX_URL);
@@ -619,8 +656,8 @@ Deno.serve(async (req) => {
         const e = await ei("GET", "/eivital/dec/v1.04/auth", { Gstin: eg, user_name: eu, eInvPwd: ep }, undefined, SANDBOX_URL);
         steps.einvoice = e.ok && e.data?.AuthToken ? "ok" : e.error;
       } else steps.einvoice = "not tried: set TAXPRO_EINV_TEST_GSTIN, _USER and _PASS to TaxPro's e-invoice sandbox user";
-    } catch (e) { steps.error = String((e as Error).message || e); }
-    return reply(200, { ok: steps.auth === "ok", tested: SANDBOX_URL, inUse: BASE, einvoiceHost: EINV, steps });
+    } catch (e) { steps.error = plain(e, "selftest"); }
+    return reply(200, { ok: steps.auth === "ok", tested: "sandbox", inUse: BASE === SANDBOX_URL ? "sandbox" : "production", einvoiceHost: EINV === SANDBOX_URL ? "sandbox" : "production", steps });
   }
   if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
   let body: any = {};
@@ -631,7 +668,7 @@ Deno.serve(async (req) => {
   if (action === "refresh-all" || action === "daily") {
     const { data: good } = await admin.rpc("gst_cron_ok", { k: req.headers.get("x-cron-key") || "" });
     if (good !== true) return reply(403, { ok: false });
-    if (action === "daily") { try { return reply(200, { ok: true, ...(await daily()) }); } catch (e) { return reply(200, { ok: false, error: String((e as Error).message || e) }); } }
+    if (action === "daily") { try { return reply(200, { ok: true, ...(await daily()) }); } catch (e) { return reply(200, { ok: false, error: plain(e, "daily") }); } }
     const soon = new Date(Date.now() + 40 * 60000).toISOString(), now = new Date().toISOString();
     const { data: rows } = await admin.from("gst_sessions").select("*").lt("expires_at", soon).gt("expires_at", now).is("ended_at", null);
     let done = 0, failed = 0;
@@ -639,14 +676,10 @@ Deno.serve(async (req) => {
     return reply(200, { ok: true, renewed: done, failed });
   }
 
-  const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!jwt) return reply(401, { ok: false, error: "Sign in to the firm account first." });
-  const asUser = createClient(SB_URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
-  const { data: who } = await asUser.auth.getUser();
-  if (!who?.user) return reply(401, { ok: false, error: "Sign in again." });
-  const { data: member } = await admin.from("members").select("firm_id, active, role").eq("user_id", who.user.id).maybeSingle();
-  if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
-  const firm = member.firm_id as string, me = who.user.id;
+  const who = await signedIn(req);
+  if (who instanceof Response) return who;
+  if (!canWrite(who.role) && !LOOK_OK.has(action)) return reply(403, { ok: false, error: "Only the firm's owner or staff can do this." });
+  const { firm, me } = who;
   const list = (v: unknown) => (Array.isArray(v) ? v : []).map((g: unknown) => String(g).toUpperCase()).filter((g: string) => GSTIN.test(g)).slice(0, 500);
 
   try {
@@ -676,7 +709,7 @@ Deno.serve(async (req) => {
     const gstin = String(body.gstin || "").toUpperCase();
     if (!GSTIN.test(gstin)) return reply(400, { ok: false, error: "A GSTIN is needed." });
     if (["filing", "save", "summary", "confirm", "proceed", "evc_otp", "file", "track"].includes(action))
-      return reply(200, await filingAction({ firm, me }, action, body, String(member.role || "")));
+      return reply(200, await filingAction({ firm, me }, action, body, who.role));
 
     if (action === "return") {
       const { data } = await admin.from("gst_returns").select("*").eq("firm_id", firm).eq("gstin", gstin).eq("form", String(body.form || "")).eq("period", String(body.period || "")).maybeSingle();
@@ -695,7 +728,7 @@ Deno.serve(async (req) => {
       await sput(einvName(firm, gstin, "pass"), password);
       if (body.ewbPassword) await sput(ewbName(firm, gstin, "pass"), String(body.ewbPassword));
       const { error } = await admin.from("gst_einv_accounts").upsert({ firm_id: firm, gstin, username, token_until: null, last_error: null, updated_at: new Date().toISOString() });
-      if (error) throw new Error(error.message);
+      if (error) dbFail("gst_einv_accounts", error, "The e-invoice user could not be kept. Try again in a moment.");
       await einvToken(firm, gstin, true);
       return reply(200, { ok: true, host: EINV === SANDBOX_URL ? "sandbox" : "production" });
     }
@@ -761,6 +794,6 @@ Deno.serve(async (req) => {
     const { data: kept } = await admin.from("gst_returns").select("data, parts").eq("firm_id", firm).eq("gstin", gstin).eq("form", "2B").eq("period", period).maybeSingle();
     return reply(200, { ok: true, parts: kept?.parts || 1, data: kept?.data });
   } catch (e) {
-    return reply(200, { ok: false, error: String((e as Error).message || e) });
+    return reply(200, { ok: false, error: plain(e, action) });
   }
 });

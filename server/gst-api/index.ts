@@ -1,7 +1,10 @@
 // TDS Desk GST API: the firm's GST calls go through FYN Gateway (Fynamics, a GSP) from here, so the client key and
 // secret never leave the server. Secrets: FYN_CLIENT_ID, FYN_CLIENT_SECRET, FYN_BASE_URL (staging or production).
-// GET ?selftest=1 signs in to FYN and says only whether it worked. Everything else needs a signed-in firm member.
+// Every call needs a signed-in firm member, with two-step sign-in checked as the gateway checks it (rpc mfa_ok).
+// GET ?selftest=1 signs in to FYN and says only whether it worked (never FYN's or the relay's address).
 // POST {action: "otp" | "auth" | "2b"}: a taxpayer's OTP sign-in, then GSTR-2B for a period, decrypted here.
+// A look-only member (any role but owner or staff) may read (2b, a relayed GET), not send an OTP, sign in or relay a write.
+// Error replies are plain; the raw detail is in the function's log only.
 // The taxpayer's session (app_key, auth token, SEK) is kept only in the caller's browser, never stored here.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import aesjs from "npm:aes-js@3.1.2";
@@ -24,30 +27,41 @@ function toFyn(url: string, init: { method: string; headers: Record<string, stri
   return fetch(RELAY + "/fwd", { method: "POST", headers: { ...init.headers, "x-relay-key": RKEY, "x-target": url, "x-method": init.method }, body: init.method === "GET" ? undefined : init.body });
 }
 
-// "*": GET ?selftest=1 is opened directly; everything else needs a signed-in firm member
+// "*": every call needs a signed-in firm member
 const cors = corsFor(null, { any: true, methods: "GET, POST, OPTIONS" });
 const reply = (code: number, body: unknown) =>
   new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 
+// what a person is told is plain: a Plain message as it is, anything else (network, decryption, code) one fixed sentence;
+// the raw detail goes to the function's log only (security review F11)
+class Plain extends Error {}
+const SORRY = "Something went wrong on FinCom's side. Try again in a moment.";
+function plain(e: unknown, where: string): string {
+  if (e instanceof Plain) return e.message;
+  console.error(JSON.stringify({ fn: "gst-api", where, error: String((e as Error)?.message || e).slice(0, 500) }));
+  return SORRY;
+}
+const logged = (where: string, detail: string, say: string) => { console.error(JSON.stringify({ fn: "gst-api", where, error: detail.slice(0, 500) })); return say; };
+
 // FYN's own access token: kept and reused, taken again a few minutes before it runs out
 let tok: { token: string; exp: number } | null = null;
 async function fynToken(): Promise<{ ok: boolean; token?: string; expiresIn?: number; error?: string; http?: number }> {
-  if (!CID || !CSEC) return { ok: false, error: "FYN_CLIENT_ID and FYN_CLIENT_SECRET are not set in the project's Edge Function secrets." };
+  if (!CID || !CSEC) return { ok: false, error: logged("fyn sign-in", "FYN_CLIENT_ID and FYN_CLIENT_SECRET are not set in the project's Edge Function secrets.", "The GST service is not set up for FinCom yet.") };
   if (tok && tok.exp - Date.now() > 5 * 60 * 1000) return { ok: true, token: tok.token, expiresIn: Math.round((tok.exp - Date.now()) / 1000) };
   let r: Response;
   try { r = await toFyn(BASE + "/authenticate", { method: "POST", headers: { clientId: CID, clientSecret: CSEC, "Content-Type": "application/json" } }); }
-  catch (e) { return { ok: false, error: "Could not reach FYN Gateway at " + BASE + (RELAY ? " through the relay " + RELAY : "") + ": " + String((e as Error).message || e) }; }
+  catch (e) { return { ok: false, error: logged("fyn sign-in", "Could not reach FYN Gateway at " + BASE + (RELAY ? " through the relay " + RELAY : "") + ": " + String((e as Error).message || e), "The GST service could not be reached. Try again in a moment.") }; }
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
-  if (!j) return { ok: false, http: r.status, error: "FYN Gateway answered HTTP " + r.status + " without JSON: " + text.slice(0, 200) };
-  if (j.status !== 1 || !j.data?.accessToken) return { ok: false, http: r.status, error: j.errorMessage || j.message || ("FYN Gateway refused the sign-in (HTTP " + r.status + ")") };
+  if (!j) return { ok: false, http: r.status, error: logged("fyn sign-in", "FYN Gateway answered HTTP " + r.status + " without JSON: " + text.slice(0, 200), "The GST service answered HTTP " + r.status + ".") };
+  if (j.status !== 1 || !j.data?.accessToken) return { ok: false, http: r.status, error: logged("fyn sign-in", String(j.errorMessage || j.message || "refused") + " (HTTP " + r.status + ")", "The GST service refused FinCom's sign-in. Try again in a moment.") };
   const secs = Number(j.data.expiresIn) || 3600;
   tok = { token: j.data.accessToken, exp: Date.now() + secs * 1000 };
   return { ok: true, token: tok.token, expiresIn: secs };
 }
 async function fyn(method: string, path: string, headers: Record<string, string>, body?: unknown): Promise<{ http: number; j: any; text: string }> {
   const t = await fynToken();
-  if (!t.ok) throw new Error(t.error);
+  if (!t.ok) throw new Plain(t.error || SORRY);
   const r = await toFyn(BASE + "/" + path, { method, headers: { Authorization: "Bearer " + t.token, "Content-Type": "application/json", ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
@@ -58,30 +72,22 @@ async function fyn(method: string, path: string, headers: Record<string, string>
 }
 async function fynAt(url: string, headers: Record<string, string>): Promise<{ http: number; j: any; text: string }> {
   const t = await fynToken();
-  if (!t.ok) throw new Error(t.error);
+  if (!t.ok) throw new Plain(t.error || SORRY);
   const r = await toFyn(url, { method: "GET", headers: { Authorization: "Bearer " + t.token, "Content-Type": "application/json", ...headers } });
   const text = await r.text();
   let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
   return { http: r.status, j, text };
 }
-const gstErr = (x: { http: number; j: any; text: string }) => (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.errorMessage || x.j.message)) || ("HTTP " + x.http + ": " + x.text.slice(0, 200));
+const gstErr = (x: { http: number; j: any; text: string }) => (x.j && (x.j.error?.message ? x.j.error.message + (x.j.error.error_cd ? " (" + x.j.error.error_cd + ")" : "") : x.j.errorMessage || x.j.message)) || ("The GST service answered HTTP " + x.http + ".");   // its text is in the log (fyn)
 const GSTIN = /^\d{2}[A-Z0-9]{13}$/, PERIOD = /^(0[1-9]|1[0-2])20\d{2}$/;
 
 // only GST calls, and only these headers, are passed on by the plain relay
 const PATH_OK = /^gst\/[A-Za-z0-9_\-\/]+$/;
 const HEAD_OK = new Set(["gstin", "ret_period", "rtnprd", "fy", "state-cd", "username", "authtoken", "app_key", "sek", "txn", "action", "ctin", "from_time", "ref_id", "token", "otp", "action_required", "file_num"]);
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  const u = new globalThis.URL(req.url);
-  if (req.method === "GET" && u.searchParams.get("selftest")) {
-    const t = await fynToken();
-    return reply(t.ok ? 200 : 502, t.ok
-      ? { ok: true, fyn: BASE, via: RELAY ? "relay " + RELAY : "direct", signedIn: true, tokenValidForMinutes: Math.round((t.expiresIn || 0) / 60), note: "The key and secret work. The token itself is never shown." }
-      : { ok: false, fyn: BASE, via: RELAY ? "relay " + RELAY : "direct", signedIn: false, error: t.error, http: t.http });
-  }
-  if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
-
+// who is asking: a signed-in, active member of a firm. Two-step sign-in is checked exactly as the gateway checks it
+// (server/security/functions/gateway/index.ts: rpc mfa_ok as the user, which decides when two-step is required)
+async function signedIn(req: Request): Promise<{ user: string; firm: string; role: string } | Response> {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return reply(401, { ok: false, error: "Sign in to the firm account first." });
   const asUser = createClient(URL, ANON, { global: { headers: { Authorization: `Bearer ${jwt}` } } });
@@ -89,14 +95,39 @@ Deno.serve(async (req) => {
   const { data: who } = await asUser.auth.getUser();
   const user = who?.user;
   if (!user) return reply(401, { ok: false, error: "Sign in again." });
+  const { data: mfaOk } = await asUser.rpc("mfa_ok");
+  if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
   const { data: member } = await admin.from("members").select("firm_id, role, active").eq("user_id", user.id).maybeSingle();
   if (!member || !member.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
+  return { user: user.id, firm: String(member.firm_id), role: String(member.role || "") };
+}
+const canWrite = (role: string) => role === "owner" || role === "staff";
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  const u = new globalThis.URL(req.url);
+  if (req.method === "GET" && u.searchParams.get("selftest")) {
+    const me = await signedIn(req);
+    if (me instanceof Response) return me;
+    const t = await fynToken();
+    return reply(t.ok ? 200 : 502, t.ok
+      ? { ok: true, via: RELAY ? "relay" : "direct", signedIn: true, tokenValidForMinutes: Math.round((t.expiresIn || 0) / 60), note: "The key and secret work. The token itself is never shown." }
+      : { ok: false, via: RELAY ? "relay" : "direct", signedIn: false, error: t.error, http: t.http });
+  }
+  if (req.method !== "POST") return reply(405, { ok: false, error: "POST only" });
+
+  const me = await signedIn(req);
+  if (me instanceof Response) return me;
 
   let body: any = {};
   try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
   // the person's public address, as GSTN asks for it
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip") || "127.0.0.1";
   const action = String(body.action || "");
+  // a look-only member reads (2b, a relayed GET); an OTP, a taxpayer's sign-in or a relayed write is the owner's or staff's
+  // (security review F3)
+  const writes = action === "otp" || action === "auth" || (action !== "2b" && String(body.method || "GET").toUpperCase() !== "GET");
+  if (writes && !canWrite(me.role)) return reply(403, { ok: false, error: "Only the firm's owner or staff can do this." });
   const gstin = String(body.gstin || "").toUpperCase(), username = String(body.username || "").trim();
 
   try {
@@ -122,12 +153,12 @@ Deno.serve(async (req) => {
       const sess = { ...h, username, authtoken: String(body.auth_token || ""), app_key: String(body.app_key || ""), sek: String(body.sek || "") };
       if (!sess.authtoken) return reply(400, { ok: false, error: "Sign in with the taxpayer's OTP first." });
       const open = (x: { http: number; j: any; text: string }) => {
-        if (x.j?.status_cd != 1) throw Object.assign(new Error(gstErr(x)), { gst: true });
+        if (x.j?.status_cd != 1) throw new Plain(gstErr(x));
         const d = x.j.data;
         if (d && typeof d === "object") return d;                            // already plain
         if (typeof d === "string" && x.j.rek) return C.openData(d, x.j.rek, sess.sek, sess.app_key);
         if (typeof d === "string") { try { return JSON.parse(new TextDecoder().decode(C.b64dec(d))); } catch { /* fall through */ } }
-        throw new Error("2B came back in a form TDS Desk does not know.");
+        throw new Plain("2B came back in a form TDS Desk does not know.");
       };
       // FYN's path carries the file number: /1 first, then /2, /3 … when 2B comes in parts (fc)
       const path = "gst/returns/gstr2b/" + gstin + "/" + period;
@@ -161,6 +192,6 @@ Deno.serve(async (req) => {
     const x = await fyn(method, path + qs, h, method === "GET" ? undefined : (body.body ?? {}));
     return reply(x.http >= 200 && x.http < 300 ? 200 : x.http, { ok: x.http >= 200 && x.http < 300, http: x.http, data: x.j ?? x.text.slice(0, 2000) });
   } catch (e) {
-    return reply(200, { ok: false, error: String((e as Error).message || e) });
+    return reply(200, { ok: false, error: plain(e, action || "relay") });
   }
 });
