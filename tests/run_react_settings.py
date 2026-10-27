@@ -135,7 +135,7 @@ with sync_playwright() as p:
     # the platform page's prices (read from their boxes), a firm's plan
     pg.evaluate("""() => { window.__calls = []; Cloud.on = () => true; Cloud.aal = () => 'aal1'; window.__cc = {url: 'https://x.supabase.co', key: 'anon', auto: true}; Cloud.cfg = () => window.__cc; Cloud.setCfg = (o) => { window.__calls.push(['cfg', o]); Object.assign(window.__cc, o); }; window.startCloudSync = () => {};
       Cloud.fn = async (n, a) => { window.__calls.push([n, a]); return {email: a.email, password: 'Pw-1'}; }; Cloud.rpc = async (n, a) => { window.__calls.push([n, a]); return n === 'backup_data' ? {x: 1} : []; };
-      window.loadAccount = () => {}; window.loadAdminOverview = () => {}; window.saveFile = (n) => window.__calls.push(['save', n]);
+      window.loadAccount = () => {}; window.saveFile = (n) => window.__calls.push(['save', n]);
       Cloud.st = Object.assign(Cloud.st, {email: 'a@b.in', role: 'owner', mfa: null, mfaInfo: {}, members: []});
       S.account = {me: {role: 'owner'}, superadmin: true, firm: {id: 'f1', balance: 400, warn_at: 100, period_start: '2026-09-01'}, modules: [], people: [{name: 'Bina', email: 'b@b.in', role: 'staff', active: true}]};
       S.backups = [{id: 7, taken_at: '2026-09-29T20:00:00Z', clients: 3, records: 120, bytes: 20480}]; S.dropKeys = [{id: 3, label: 'Agent', hint: 'ab', created_at: '2026-01-01', active: true}];
@@ -170,12 +170,11 @@ with sync_playwright() as p:
     ok(pg.locator('button:text-is("or make a password instead")').count() == 0 and "We'll email them a link to set their password." in pg.inner_text("#app")
        and pg.locator('#npEmail').locator('xpath=ancestor::div[contains(@class,"bk-form")]').locator('input[type="password"]').count() == 0,
        "Add person: no password box or 'make a password' choice; it says they get a link to set their password")
-    pg.evaluate("""() => { S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [{id: 'f1', name: 'Firm A', active: true, plan_id: 'p1', balance: 40, people: 2, modules: [{code: 'read', price: 2, enabled: true}]}],
-      plans: [{id: 'p1', name: 'Starter', includes: {}}, {id: 'p2', name: 'Pro', includes: {}}], modules: [{code: 'read', title: 'Reading bills', price: 2, unit: 'per page', billing: 'unit'}]}; render(); }"""); pg.wait_for_timeout(300)
-    pg.select_option('select[aria-label="Plan of Firm A"]', "p2"); pg.wait_for_timeout(300)
-    ok(["admin_set_plan", {"p_firm": "f1", "p_plan": "p2"}] in calls(), "a firm's plan changed")
-    pg.click('button:text-is("Prices")'); pg.wait_for_timeout(300); pg.fill("#pr_read", "1.5"); pg.click('button:text-is("Save prices")'); pg.wait_for_timeout(400)
-    ok(["admin_set_module", {"p_firm": "f1", "p_code": "read", "p_enabled": True, "p_price": 1.5}] in calls(), "a firm's price saved from its box")
+    # console phase 1b (27-Oct-2026): the platform page (firms, plans, prices, credit, keys) is FinCom's console now; a
+    # platform administrator gets one link to it in Settings, nothing else
+    pg.evaluate("() => { S.settingsTab = 'platform'; render(); }"); pg.wait_for_timeout(300)
+    ok(pg.locator('select[aria-label^="Plan of"]').count() == 0 and pg.locator('button:text-is("Prices")').count() == 0 and "Platform" not in pg.inner_text("#app .setnav")
+       and pg.locator("[data-admin-console] a").count() == 1, "no platform page in Settings; the platform administrator's Admin console link instead")
     pg.evaluate("() => { Cloud.on = () => false; window.__cc.gate = false; S.account = null; render(); }")
     # TDS rates: a rate changed and kept; reading: the order's ticks; closed periods: the date, a warning, a TDS return filed
     pg.evaluate("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'rates'; S.firm.rules = {}; render(); }"); pg.wait_for_timeout(300)

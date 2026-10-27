@@ -10,6 +10,7 @@
 // the owner chose); a login that already exists joins a firm only by accepting the invite itself (accept_invite)
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
+import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -121,6 +122,13 @@ Deno.serve(async (req) => {
     return { target, theirs };
   };
 
+  // console phase 1b: a paused firm (FinCom's console) adds nobody, and switches nobody on or changes a role; resetting,
+  // unlocking and switching people off stay open (the service role skips can_write(), so it is asked here)
+  if (firmId && (action === "add_person" || action === "invite_person" || (action === "set_person" && (body.role !== undefined || body.active === true)))) {
+    const gate = await firmGate(viaClient(admin), String(firmId));
+    if (gate) return reply(gate.status, { ok: false, reason: gate.reason, error: gate.error });
+  }
+
   try {
     // "Add person" (add_person, and invite_person, its name in the app since review item 21): security fix batch 1 (27-Oct-2026,
     // verify-browser-known.md item 3). No login is ever made with a password the owner chose, and nobody's password is set:
@@ -227,6 +235,11 @@ Deno.serve(async (req) => {
       const patch: any = {};
       if (body.role !== undefined) { if (!ROLES.includes(String(body.role))) return reply(400, { ok: false, error: "Unknown role." }); patch.role = String(body.role); }
       if (body.active !== undefined) patch.active = !!body.active;
+      // a person FinCom switched off from its console (members.console_off_at, migration 118) is switched on there only
+      if (patch.active === true) {
+        const { data: off, error: offErr } = await admin.from("members").select("console_off_at").eq("user_id", r.target.id).maybeSingle();
+        if (!offErr && off && off.console_off_at) return reply(403, { ok: false, reason: "user_off", error: "FinCom switched this person off. Contact FinCom support to switch them on again." });
+      }
       if (body.name !== undefined) patch.name = String(body.name).slice(0, 120);
       const losesOwner = r.theirs?.role === "owner" && ((patch.role && patch.role !== "owner") || patch.active === false);
       if (losesOwner && await ownersLeft(r.theirs.firm_id, r.target.id) === 0) return reply(400, { ok: false, error: "A firm must keep at least one owner." });

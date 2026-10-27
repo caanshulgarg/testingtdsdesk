@@ -13,6 +13,7 @@
 //    minutes from one address, whatever the emails, and that address is refused for the rest of the window; on top of
 //    the per-email lockout. The address is kept only as a SHA-256.
 
+export const SWITCHED_OFF = "This account is switched off. Contact FinCom support.";
 export const MAX_IP_FAILS = 20, IP_WINDOW_S = 15 * 60;
 export const BOT_MISSING = "Complete the check that you are not a robot, then sign in again.";
 export const BOT_FAILED = "The check that you are not a robot did not pass. Try again.";
@@ -81,6 +82,8 @@ export function makeHandler(d: Deps) {
       if (f && f.locked_until) return reply(423, { ok: false, locked_until: f.locked_until, error: lockedMsg(f.locked_until) });
       return reply(400, { ok: false, error: "Wrong email or password." + (left <= 2 ? " " + left + " more tr" + (left === 1 ? "y" : "ies") + " before the account is locked for 15 minutes." : "") });
     }
+    // console phase 1b: a login FinCom switched off from its console (banned in Supabase Auth): said so, never counted
+    if (j.error_code === "user_banned" || /banned/i.test(said)) return reply(403, { ok: false, reason: "user_off", error: SWITCHED_OFF });
     return reply(r.status, { ok: false, error: j.error_description || j.msg || j.message || "Sign-in failed." });
   };
 }

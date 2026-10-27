@@ -9,8 +9,8 @@ answered by the test (page.route):
   3. a clip longer than the piece length (55 s; 0.4 s here) is sent in pieces, in order, and the words joined
   4. the level meter: quiet before speech never stops it; speech, then the pause (1 s here), stops it and sends the clip
   5. a blocked microphone is explained in plain words; Safari records mp4
-  6. Settings > Platform > Keys: the Groq key field beside the Claude key, for the platform's administrator only; never
-     shown back (only "set on <date>"); the voice minutes used today
+  6. the platform's keys (the Groq key beside the Claude key) and the voice minutes of all firms: FinCom's console now
+     (console phase 1b, 27-Oct-2026); no key field anywhere in the app, for the platform's administrator either
   7. names corrected (22-Oct-2026): the microphone asked for echo cancelling, noise suppression, gain, one channel; opus
      at about 40 kbps; Hinglish sent with latin=1; the corrected names under the box, underlined, the heard words on a
      tap, one tap to undo; the pause after speech 4 s by default
@@ -186,28 +186,13 @@ with sync_playwright() as p:
     ok(not errors, "no page error (%s)" % errors[:2])
     ctx.close()
 
-    print("6. the Groq key in Settings > Platform > Keys: the platform's administrator only")
+    print("6. the platform's keys: FinCom's console now, nowhere in the app")
     ctx, pg, cid = page(br)
     pg.evaluate("ASST.close()")
-    pg.evaluate("""() => { S.account.superadmin = false; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'platform'; render(); }"""); pg.wait_for_timeout(1500)
-    ok(pg.locator("#sec_groq_api_key").count() == 0, "a firm's owner who is not the platform's administrator: no Groq key field")
-    for tab in ("account", "ai"):
-        pg.evaluate("(t) => { S.settingsTab = t; render(); }", tab); pg.wait_for_timeout(700)
-        ok(pg.locator("#sec_groq_api_key").count() == 0, "not on the %s tab either" % tab)
-    pg.evaluate("""() => { S.account.superadmin = true; S.settingsTab = 'platform'; S.adminData = {month: 0, firms: [], plans: [], modules: [], signup: {},
-      secrets: [{name: 'claude_api_key', tail: 'x9', updated_at: '2026-09-01T00:00:00Z'}, {name: 'groq_api_key', tail: 'Q7zz', updated_at: '2026-10-22T05:00:00Z'}]}; render(); }""")
-    pg.wait_for_timeout(1500)
-    ok(pg.locator("#sec_groq_api_key").count() == 1 and pg.locator("#sec_claude_api_key").count() == 1, "the platform's administrator: the Groq key field beside the Claude key")
-    row = pg.inner_text("tr:has(#sec_groq_api_key)") if pg.locator("tr:has(#sec_groq_api_key)").count() else ""
-    ok("Groq" in row and "set on" in row and "Q7zz" not in row, "the key never shown back: only 'set on <date>' (%r)" % row)
-    ok(pg.get_attribute("#sec_groq_api_key", "type") == "password", "the new key typed hidden")
-    pg.wait_for_timeout(500)
-    use = pg.inner_text("[data-voice-usage]") if pg.locator("[data-voice-usage]").count() else ""
-    ok("Voice minutes used today" in use and "25" in use, "the voice minutes used today (all firms: 25) (%r)" % use)
-    if not pg.locator("#sec_groq_api_key").count(): raise SystemExit("\n%d failed" % len(fails))
-    pg.fill("#sec_groq_api_key", "gsk_new_key"); pg.evaluate("window.__rpc = []; Cloud.rpc = async (fn, a) => { window.__rpc.push([fn, a]); return {ok: true}; }")
-    pg.click("tr:has(#sec_groq_api_key) button"); pg.wait_for_timeout(500)
-    ok(["admin_set_secret", {"p_name": "groq_api_key", "p_value": "gsk_new_key"}] in pg.evaluate("__rpc") and pg.evaluate("(document.getElementById('sec_groq_api_key') || {value: ''}).value") == "", "Save: admin_set_secret as the Claude key (%s)" % pg.evaluate("__rpc"))
+    for sa in (False, True):
+        for tab in ("platform", "account", "ai"):
+            pg.evaluate("([sa, t]) => { S.account.superadmin = sa; S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = t; render(); }", [sa, tab]); pg.wait_for_timeout(700)
+            ok(pg.locator("#sec_groq_api_key").count() == 0 and pg.locator("#sec_claude_api_key").count() == 0, "no key field (%s, administrator %s)" % (tab, sa))
     ok(not errors, "no page error (%s)" % errors[:2])
     ctx.close()
     br.close()

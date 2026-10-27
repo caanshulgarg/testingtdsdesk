@@ -22,6 +22,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { corsFor } from "../_shared/cors.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { Ev, langOf, notEnglish, runTurn, TurnCtx, TurnTrace } from "./agent.ts";
 import { classify } from "./failure.ts";
 import { FREE_SOURCES } from "./citations.ts";
@@ -77,6 +78,9 @@ export function handler(deps: Deps) {
     const member = (mem || []).find((m) => m.active);
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });
     const firm = String(member.firm_id);
+    // console phase 1b: a paused firm (FinCom's console) is read-only; the assistant reads, writes and charges with the
+    // service role, which skips can_write(), so it is asked here
+    { const gate = await firmGate(viaRest(rest, SERVICE), firm); if (gate) return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); }
 
     // the firm's switch (assistant_settings). The owner's decision of 14-Oct-2026: ON for every firm unless its owner
     // switches it off (a firm with no row is on), and no clients'-consent tick (the app shows the notice on first use)

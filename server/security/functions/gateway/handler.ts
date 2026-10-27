@@ -12,6 +12,7 @@
 import { corsFor } from "./cors.ts";
 import { classify, declined, errorText, replyStatus } from "./classify.ts";
 import { buildClaude, MAX_BODY, MODELS, unitsFor } from "./policy.ts";
+import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 const TIMEOUT_MS = 120_000;
@@ -71,6 +72,9 @@ export function handler(deps: Deps) {
     const { data: member } = await admin.from("members").select("firm_id, role, active").eq("user_id", user.id).maybeSingle();
     if (!member || !member.active) return fail(403, "other", "This account is not part of a firm.");
     log.firm = member.firm_id;
+    // console phase 1b: a paused firm is read-only, so nothing is read or charged for it (the service role skips can_write())
+    const gate = await firmGate(viaClient(admin), member.firm_id);
+    if (gate) return fail(gate.status, "other", gate.error, { reason: gate.reason });
 
     let raw = "";
     try { raw = await req.text(); } catch { return fail(400, "other", "Bad request"); }

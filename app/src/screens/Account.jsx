@@ -1,11 +1,9 @@
-// The firm account, in Settings: plan and credit (with the credit history), signing in and the firm's sign-in settings,
-// people, documents kept in the account, the document inbox's drop keys, backups, and the platform page for FinCom's
-// administrators. Was viewAccount, walletHtml, viewCloudSettings, viewAccountPeopleOnly, viewPeople, viewBackups and
-// viewSuperadmin (src/js/27), viewDocsSettings and viewDropKeys (src/js/19). The work is Cloud and loadAccount; buttons go
-// through doAct (cloudSignIn, cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or
-// data-cloud as before, and acctPerson, acctBackup, acctDropOff, adminAct, adminPlan, cloudAuto, signOutAll, docsKeep,
-// docYearsSet (src/js/27, 19, 43).
-import { useEffect, useState } from "react";
+// The firm account, in Settings: plan and credit (with the credit history; read-only: FinCom's console sets them),
+// signing in and the firm's sign-in settings, people, documents kept in the account, the document inbox's drop keys and
+// backups. Was viewAccount, walletHtml, viewCloudSettings, viewAccountPeopleOnly, viewPeople, viewBackups (src/js/27),
+// viewDocsSettings and viewDropKeys (src/js/19). The work is Cloud and loadAccount; buttons go through doAct (cloudSignIn,
+// cloudSync, cloudPassword, addPerson, backupNow…), which read the boxes by their id or data-cloud as before, and
+// acctPerson, acctBackup, acctDropOff, cloudAuto, signOutAll, docsKeep, docYearsSet (src/js/27, 19, 43).
 import Msg from "../parts/Msg.jsx";
 
 import { BotBox, KeepBox } from "./SignIn.jsx";
@@ -47,6 +45,7 @@ export function PlanCredit() {
         return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + m.title}{!m.enabled && <> <span className="tag no">off</span></>}</td>
           <td>{m.billing === "free" ? "included" : inc ? <span className="tag ok">in the plan</span> : money(num(m.price)) + " " + m.unit}</td>
           <td className="n">{u ? num(u.qty) : 0}</td><td className="n">{u && num(u.spent) ? money(num(u.spent)) : "—"}</td></tr>; })}</tbody></table></div>
+    <p className="note" data-plan-readonly="" style={{ margin: "8px 0 0" }}>FinCom sets the plan, its prices and the credit. To change them, contact FinCom.</p>
     <div className="row" style={{ marginTop: 10 }}><Act act="acctRefresh">Refresh</Act><Act act="acctHistory">{(S.walletOpen ? "Hide" : "Show") + " credit history"}</Act></div>
     {S.walletOpen && <Wallet />}</div>;
 }
@@ -76,7 +75,6 @@ export function FirmAccount() {
       <label><span>Repeat it</span><input type="password" data-cloud="newpw2" data-fk="cloudnewpw2" aria-label="Repeat the new password" autoComplete="new-password" /></label></div>
     <div className="row" style={{ marginTop: 8 }}><Act act="cloudPassword">Change password</Act></div>
     <H3 top={14}>Two-step sign-in (optional)</H3><p className="note" style={{ margin: "0 0 6px" }}>{aal2 ? <><span className="tag ok">On</span> This sign-in used a code from your authenticator app.</> : mi.enrolled ? "On for this account." : <>Off. For extra safety you can add a code from an authenticator app on your phone. <button className="btn small" onClick={() => mfaAction("mfaOptIn")}>Turn it on</button></>}</p>
-    {mi.admin && !aal2 && <p className="bk-warn" style={{ margin: "6px 0" }}>Platform administration is locked until you give the code from your phone. <button className="btn small primary" onClick={() => mfaAction("mfaAdmin")}>Unlock administration</button></p>}
     {S.lastSignIn && <p className="note" style={{ margin: "0 0 6px" }}>{"Your last sign-in: " + fmtDateTime(S.lastSignIn.at) + ", " + S.lastSignIn.device + "."}</p>}
     {/* the people table with its actions (New password, Reset two-step, Switch off) is drawn below by PeopleEtc; this plain list only stands in until that loads */}
     {!S.account && (st.members || []).length > 0 && <><H3 top={14}>People in the firm</H3><table className="data" data-statement=""><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>
@@ -179,85 +177,7 @@ export function PeopleEtc() {
   return <div className="pane"><People canManage={(a.me || {}).role === "owner" || a.superadmin === true} /><DocsSettings /><DropKeys /><Backups /></div>;
 }
 
-// the voice minutes used today (fincom-transcribe, {action: "usage"}): all firms' against Groq's free allowance of about
-// 8 hours of audio a day on the platform's key
-function VoiceUsage() {
-  const [u, setU] = useState(null);
-  useEffect(() => {
-    let live = true;
-    if (!(typeof Cloud === "object" && Cloud.on && Cloud.on())) return undefined;
-    (async () => {
-      try { await Cloud.fresh(); } catch (e) { /* the token as it is */ }
-      const c = Cloud.cfg(), s = Cloud.sess() || {};
-      const r = await fetch(String(c.url || "").replace(/\/+$/, "") + "/functions/v1/fincom-transcribe", { method: "POST", headers: { apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json" }, body: JSON.stringify({ action: "usage" }) });
-      const j = await r.json();
-      if (live && j && j.ok) setU(j);
-    })().catch(() => {});
-    return () => { live = false; };
-  }, []);
-  if (!u) return null;
-  const mins = Math.round(Number(u.all_secs != null ? u.all_secs : u.firm_secs) / 60);
-  return <p className="note" data-voice-usage="" style={{ margin: "6px 0 0" }}>Voice minutes used today: {mins} of about 480 free a day{u.all_secs != null ? " (all firms)" : ""}.</p>;
-}
-const SECRETS = [["claude_api_key", "Claude API key"], ["google_vision_key", "Google Cloud Vision key"], ["groq_api_key", "Groq key (voice: clearer listening)"]];
-const Admin = ({ act, firm, name, plan, className = "btn small", children }) => <button className={className} onClick={() => adminAct(act, firm, { name, plan })}>{children}</button>;
-
-// the platform page (FinCom's administrators only): firms, prices, new firms, plans, new accounts, keys
-export function Platform() {
-  const a = S.account;
-  if (!a || !a.superadmin) return null;
-  const d = S.adminData;
-  if (!d) return <div className="pane"><h2>Platform (administrator only)</h2><p className="note">Reading… <Act act="adminRefresh">Refresh</Act></p></div>;
-  const firms = d.firms || [], plans = d.plans || [];
-  const pf = S.adminPrices && firms.find((x) => x.id === S.adminPrices);
-  const pe = S.planEdit && (plans.find((x) => x.id === S.planEdit) || { name: "", monthly_fee: 0, includes: {}, note: "" });
-  const su = d.signup || { open: false };
-  return <div className="pane"><h2>Platform (administrator only)</h2>
-    <div className="bk-figs" style={{ margin: "0 0 10px" }}><div><dt>Firms</dt><dd>{firms.length}</dd></div><div><dt>Credit held</dt><dd>{money(firms.reduce((s, f) => s + num(f.balance), 0))}</dd></div><div><dt>Charged this month</dt><dd>{money(num(d.month))}</dd></div></div>
-    <ListTable name="adminFirms" className="data" rows={firms} rowKey={(f) => f.id} unit={["firm", "firms"]}
-      cols={[
-        { k: "name", role: "party", label: "Firm", v: (f) => f.name, cell: (f) => <><b>{f.name}</b>{f.note && <div className="nr">{f.note}</div>}</> },
-        { k: "bal", role: "amount", label: "Credit", cls: "n", v: (f) => num(f.balance), td: (f) => ({ style: num(f.balance) <= 0 ? { color: "var(--stop)" } : undefined }), cell: (f) => money(num(f.balance)) },
-        { k: "st", role: "status", label: "State", v: (f) => (f.active ? "on" : "off"), cell: (f) => <span className={"tag " + (f.active ? "ok" : "no")}>{f.active ? "On" : "Off"}</span> },
-        { k: "plan", label: "Plan", cell: (f) => <select aria-label={"Plan of " + f.name} value={f.plan_id || ""} onChange={(ev) => adminPlan(f.id, ev.target.value)}>{plans.map((p) => <option key={p.id} value={p.id}>{p.name + (num(p.monthly_fee) ? " (" + money(num(p.monthly_fee)) + "/m)" : "")}</option>)}</select> },
-        { k: "used", label: "Used this period", cls: "n", v: (f) => num(f.used_this_period), sum: true, cell: (f) => money(num(f.used_this_period)) },
-        { k: "people", label: "People", cls: "n", v: (f) => num(f.people), sum: true, fmt: String, cell: (f) => f.people },
-        { k: "ac", role: "act", td: () => ({ style: { whiteSpace: "nowrap" } }), cell: (f) => <><Admin act="credit" firm={f.id} name={f.name}>Add credit</Admin>{" "}<Admin act="prices" firm={f.id} name={f.name} className="linkbtn">Prices</Admin>{" "}<Admin act={f.active ? "off" : "on"} firm={f.id} className="linkbtn">{f.active ? "Switch off" : "Switch on"}</Admin></> },
-      ]} />
-    {pf && <div className="bdiag" style={{ marginTop: 10 }}><b>{"Prices for " + pf.name}</b> — blank means the standard price.
-      <table className="data" style={{ marginTop: 6 }} data-statement=""><tbody>{(pf.modules || []).map((m) => { const std = (d.modules || []).find((x) => x.code === m.code) || {};
-        return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + (std.title || m.code)}<div className="nr">{(std.unit || "") + " · standard " + money(num(std.price))}</div></td>
-          <td style={{ width: 130 }}><input type="number" step="0.01" min="0" id={"pr_" + m.code} aria-label={"Price of " + (std.title || m.code)} defaultValue={num(m.price) === num(std.price) ? "" : num(m.price)} placeholder={num(std.price)} /></td>
-          <td><label className="chk"><input type="checkbox" id={"en_" + m.code} defaultChecked={!!m.enabled} /> on</label></td></tr>; })}</tbody></table>
-      <div className="row" style={{ marginTop: 8 }}><Admin act="savePrices" firm={pf.id} className="btn small primary">Save prices</Admin><Admin act="closePrices">Close</Admin></div></div>}
-    <H3>Add a firm</H3>
-    <div className="bk-form three"><label><span>Firm name</span><input type="text" id="nfName" aria-label="Firm name" /></label><label><span>Owner email</span><input type="email" id="nfEmail" aria-label="Owner email" /></label><label><span>Owner name</span><input type="text" id="nfOwner" aria-label="Owner name" /></label></div>
-    <div className="bk-form three" style={{ marginTop: 6 }}><label><span>Plan</span><select id="nfPlan" aria-label="Plan of the new firm">{plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-      <label><span>Opening credit</span><input type="number" id="nfCredit" aria-label="Opening credit" defaultValue={0} min="0" step="100" /></label></div>
-    <div className="row" style={{ marginTop: 6 }}><Admin act="createFirm" className="btn small primary">Create the firm</Admin></div>
-    {S.newFirm && <p className="bk-alert" style={{ marginTop: 8 }}>Firm made. <b>{S.newFirm.email}</b> signs in with the password <b>{S.newFirm.password}</b>. Shown only now.</p>}
-    <H3>Plans</H3><div className="tblwrap"><table className="data" data-statement=""><thead><tr><th>Plan</th><th className="n">Monthly</th><th>Included</th><th></th></tr></thead><tbody>
-      {plans.map((p) => <tr key={p.id}><td>{p.name}{p.note && <div className="nr">{p.note}</div>}</td><td className="n">{num(p.monthly_fee) ? money(num(p.monthly_fee)) : "—"}</td>
-        <td>{Object.keys(p.includes || {}).length ? Object.entries(p.includes).map(([k, v]) => k + (v && v.cap ? " (" + v.cap + ")" : "")).join(", ") : "nothing — pay per use"}</td>
-        <td><Admin act="editPlan" plan={p.id} className="linkbtn">Change</Admin></td></tr>)}</tbody></table></div>
-    {pe && <div className="bdiag" style={{ marginTop: 10 }} key={S.planEdit}><b>{pe.id ? "Change this plan" : "New plan"}</b>
-      <div className="bk-form two" style={{ marginTop: 6 }}><label><span>Name</span><input type="text" id="plName" aria-label="Plan name" defaultValue={pe.name} /></label><label><span>Monthly fee</span><input type="number" id="plFee" aria-label="Monthly fee" step="50" min="0" defaultValue={num(pe.monthly_fee)} /></label></div>
-      <div style={{ marginTop: 8 }}>Included, and how much of it:</div><table className="data" data-statement=""><tbody>
-        {(d.modules || []).filter((m) => m.billing !== "free").map((m) => { const inc = (pe.includes || {})[m.code];
-          return <tr key={m.code}><td>{(MODULE_ICON[m.code] || "") + " " + m.title}</td><td><label className="chk"><input type="checkbox" id={"inc_" + m.code} defaultChecked={!!inc} /> included</label></td>
-            <td style={{ width: 150 }}><input type="number" id={"cap_" + m.code} aria-label={"Limit of " + m.title} min="0" step="10" defaultValue={inc && inc.cap ? inc.cap : ""} placeholder="no limit" /></td></tr>; })}</tbody></table>
-      <label className="f" style={{ marginTop: 6 }}><span>Note</span><input type="text" id="plNote" aria-label="Plan note" defaultValue={pe.note || ""} /></label>
-      <div className="row" style={{ marginTop: 8 }}><Admin act="savePlan" plan={pe.id || ""} className="btn small primary">Save the plan</Admin><Admin act="closePlan">Close</Admin></div></div>}
-    <div className="row" style={{ marginTop: 6 }}><Admin act="newPlan">Add a plan</Admin><Admin act="runMonthly">Run this month's charges</Admin><Act act="adminRefresh">Refresh</Act></div>
-    <H3>New accounts</H3>
-    <div className="bk-form three"><label className="chk" style={{ alignSelf: "end" }}><input type="checkbox" id="suOpen" defaultChecked={!!su.open} /> Anyone may create an account</label>
-      <label><span>Credit to start with</span><input type="number" id="suCredit" aria-label="Credit to start with" defaultValue={num(su.trial_credit || 0)} step="50" min="0" /></label>
-      <label><span>Plan they start on</span><select id="suPlan" aria-label="Plan they start on" defaultValue={su.plan}>{plans.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}</select></label></div>
-    <div className="row" style={{ marginTop: 6 }}><Admin act="saveSignup">Save</Admin></div>
-    <H3>Keys (only you)</H3><p className="note" style={{ margin: "0 0 6px" }}>These stay on the server. Firms use Claude, Google and Groq through us and never see a key. A key cannot be read back here — only replaced.</p>
-    <div className="tblwrap"><table className="data" data-statement=""><tbody>{SECRETS.map(([k, label]) => { const s = (d.secrets || []).find((x) => x.name === k);
-      return <tr key={k}><td>{label}</td><td>{s ? <><span className="tag ok">set</span>{k === "groq_api_key" ? " on " + fmtDate(s.updated_at) : " …" + (s.tail || "") + " · " + fmtDate(s.updated_at)}</> : <span className="tag no">not set</span>}</td>
-        <td><input type="password" id={"sec_" + k} aria-label={"New " + label} placeholder="paste a new key" /></td><td><Admin act="saveSecret" name={k}>Save</Admin></td></tr>; })}</tbody></table></div>
-    <VoiceUsage />
-  </div>;
-}
+// The platform page (firms, credit, plans, prices, new firms, new accounts, keys, the voice minutes of all firms) and its
+// "Unlock administration" moved to FinCom's console (console.fincom.live, console phase 1b, 27-Oct-2026): FinCom's own
+// people get a link to it in Settings (screens/Settings.jsx AdminConsoleLink). A firm keeps its own plan and credit
+// (PlanCredit, read-only), its people and its AI help here.

@@ -12,7 +12,7 @@ const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === J
 const FIRM = "11111111-1111-4111-8111-111111111111", ME = "aaaaaaaa-0000-4000-8000-000000000001";
 const PRICE = 10;   // rupees a unit, as price_of would say
 
-function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, balance?: number, member?: any, ai?: (args: any) => any } = {}) {
+function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, balance?: number, member?: any, firm?: any, ai?: (args: any) => any } = {}) {
   const charges: any[] = [], refunds: any[] = [], sent: any[] = [], asked: any[] = [];
   let balance = o.balance ?? 1000;
   const client = (_url: string, key: string, opts?: any) => {
@@ -37,6 +37,7 @@ function stand(o: { mfa?: boolean, usage?: any, claude?: (b: any) => Response, b
         const f: Record<string, string> = {};
         const q = { select: () => q, eq: (k: string, v: string) => { f[k] = v; return q; }, maybeSingle: async () => {
           if (t === "members") return { data: f.user_id === ME ? (o.member ?? { firm_id: FIRM, role: "staff", active: true }) : null };
+          if (t === "firms") return o.firm ? { data: f.id === FIRM ? o.firm : null } : { data: null, error: { message: "column firms.status does not exist" } };
           if (t === "platform_secrets") return { data: f.name === "claude_api_key" ? { value: "sk-test" } : f.name === "google_vision_key" ? { value: "gv-test" } : null };
           throw new Error("table " + t);
         } };
@@ -191,6 +192,19 @@ Deno.test("policy: buildClaude rejects what it does not know", () => {
   eq(buildClaude(null).ok, false, "no payload");
   const b = buildClaude({ model: "claude-sonnet-5", messages: [{ role: "user", content: [TEXT] }] });
   assert(b.ok && b.payload.max_tokens === MAX_OUT, "a text read is built");
+});
+
+Deno.test("console phase 1b: a paused firm reads nothing and is charged nothing; an active one as before", async () => {
+  const s = stand({ firm: { status: "suspended", status_reason: "unpaid since September" } });
+  const r = await call(s.h, claude(read()));
+  const j = await r.json();
+  eq([r.status, j.reason], [403, "firm_paused"], "paused: refused");
+  assert(/paused: unpaid since September\. You can still view your work\. Contact FinCom\./.test(j.error), j.error);
+  eq([s.charges.length, s.sent.length], [0, 0], "nothing charged or sent");
+  const a = stand({ firm: { status: "active" } });
+  eq((await call(a.h, claude(read()))).status, 200, "active: read");
+  const b = stand();
+  eq((await call(b.h, claude(read()))).status, 200, "before migration 118 (no status column): read as before");
 });
 
 Deno.test("AI control centre: a feature switched off by FinCom is refused in plain words, before any charge or call", async () => {

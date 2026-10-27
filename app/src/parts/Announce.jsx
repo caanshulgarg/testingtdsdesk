@@ -21,7 +21,9 @@ export default function Announce() {
     };
     const first = setTimeout(() => { load(); loadFlags(); }, 3000);
     t = setInterval(load, EVERY);
-    return () => { live = false; clearTimeout(first); clearInterval(t); };
+    // the console's signal (src/js/99 Live.signal, firm_signals): a new announcement shows within seconds
+    window.addEventListener("fincom:signal", load);
+    return () => { live = false; clearTimeout(first); clearInterval(t); window.removeEventListener("fincom:signal", load); };
   }, []);
   const a = list.find((x) => !gone.has(x.id));
   if (!a) return null;

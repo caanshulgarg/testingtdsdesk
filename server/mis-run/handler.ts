@@ -13,6 +13,7 @@
 // Every run is logged (mis_runs: when, the period, the files, to whom, ok or failed and why). A run that fails is tried once
 // more; failing again it is logged as failed and the bell says why.
 import { corsFor } from "../_shared/cors.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { normalizeDef } from "../_shared/misdef.js";
 import { run as runEngine, periodOf } from "../../app/src/lib/misCustom.js";
 import { workbook } from "../../app/src/lib/misXlsx.js";
@@ -91,6 +92,9 @@ export function handler(deps: Deps) {
   }
   // a run, tried once more when it fails; failing again: logged as failed and the bell says why
   async function runOne(s: any, by: string) {
+    // console phase 1b: a paused firm's schedules (the timer's and a person's Run now) wait; nothing is run, sent or kept
+    const gate = await firmGate(viaRest(rest, SERVICE), String(s.firm_id || ""), s.client_id ? String(s.client_id) : null);
+    if (gate) return { ok: false, reason: gate.reason, error: gate.error };
     let last: any = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try { return { ok: true, run: await once(s, by, attempt) }; } catch (e) { last = e; }

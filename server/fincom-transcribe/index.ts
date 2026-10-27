@@ -38,6 +38,7 @@
 // Groq's own 429). The seconds logged are Groq's own measure of the clip (verbose_json "duration"), never less than the
 // secs the app sent, so a wrong secs cannot hide a long clip.
 import { corsFor } from "../_shared/cors.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
@@ -164,6 +165,8 @@ export function handler(deps: Deps & { now?: () => number }) {
     const member = (mem || []).find((m) => m.active);
     if (!member) { await drop(); return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." }); }
     const firm = String(member.firm_id);
+    // console phase 1b: a paused firm is read-only (its usage is kept with the service role, which skips can_write())
+    { const gate = await firmGate(viaRest(rest, SERVICE), firm); if (gate) { await drop(); return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); } }
     const setRows = await rest("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + firm, SERVICE).catch(() => null) as any[] | null;
     if (setRows === null) { await drop(); return reply(503, { ok: false, kind: "other", error: "The firm's setting could not be read; try again in a moment." }); }
     if ((setRows[0] || { enabled: true }).enabled === false) { await drop(); return reply(403, { ok: false, kind: "off", error: "AI help is switched off for your firm." }); }

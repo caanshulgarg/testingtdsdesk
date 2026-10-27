@@ -1,0 +1,5 @@
+{
+  "//": "FinCom's console (console phase 1b): the address the Settings link for FinCom's own people opens (app/vite.config.js). test: the testing site's (staging database), live: the live site's",
+  "test": "https://console-staging.fincom.live",
+  "live": "https://console.fincom.live"
+}

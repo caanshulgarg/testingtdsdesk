@@ -193,7 +193,7 @@ def scene_client():
         return go
     BILL = "() => { S.view = 'company'; S.step = null; S.tab = 'invoices'; S.reviewTable = false; S.filter = 'draft'; const c = S.companies[S.coId]; const e = Object.values((S.data[c.id] || {}).entries || {}).find(x => x.status === 'draft' && x.x.total > 100000) || Object.values((S.data[c.id] || {}).entries || {}).find(x => x.status === 'draft'); S.selected = e ? e.id : null; render(); }"
     # every section of Settings and of Client setup (the switches, choices and ticks live there)
-    SETS = [("settings: " + k, "() => { goSettings('%s'); }" % k) for k in ("firm", "plan", "rates", "reading", "ai", "autopost", "moves", "platform", "gstapi", "tcloud")]
+    SETS = [("settings: " + k, "() => { goSettings('%s'); }" % k) for k in ("firm", "plan", "rates", "reading", "ai", "autopost", "moves", "gstapi", "tcloud")]
     SETUP = [("client setup: " + k, "() => { S.view = 'company'; S.step = null; goTab('%s'); }" % k) for k in ("settings", "cotally", "cotds", "gstset", "bankset", "bankrules", "coclosed", "cosheets")]
     pages = [(n, at(js)) for n, js in U.PAGES + SETS + SETUP] + [("a draft bill (its GST: reverse charge, blocked credit)", at(BILL)),
         ("purchase-review, a filter that shows no bill", at("() => { S.view = 'company'; goClient('bills'); S.revQuery = 'zzzz no such bill'; render(); }"))]

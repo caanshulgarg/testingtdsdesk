@@ -175,6 +175,9 @@ const Bridge = {
   // rides out a bridge or network that stops answering for a while. An older bridge: the one long request as before.
   // Returns {results: [{id, ok, message, ...}]} for every item sent, whatever happened.
   async post(payload, onProgress, onChecked){
+    // console phase 1b: a paused firm or a company FinCom switched off posts nothing (src/js/99; the database refuses it too)
+    { const why = typeof FirmGate === "object" ? FirmGate.why(payload.client || (S.view === "company" ? S.coId : "")) : "";
+      if (why) return {ok: true, company: payload.company, results: [].concat(payload.masters || [], payload.vouchers || []).map(x => ({id: x.id, ok: false, held: true, message: why}))}; }
     // nothing without a proper date, or dated before the company's books begin, ever goes to Tally: it is answered here
     const refused = [];
     // entries dated in a closed period: the user is asked, and those held back are answered here

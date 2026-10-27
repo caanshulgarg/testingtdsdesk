@@ -1,5 +1,5 @@
 // deno test server/security/functions/signin/handler_test.ts   (no network, no Supabase: the services are fakes)
-import { BOT_FAILED, BOT_MISSING, type Deps, IP_BLOCKED, makeHandler, MAX_IP_FAILS } from "./handler.ts";
+import { BOT_FAILED, BOT_MISSING, type Deps, IP_BLOCKED, makeHandler, MAX_IP_FAILS, SWITCHED_OFF } from "./handler.ts";
 
 function eq(a: unknown, b: unknown, msg = "") { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${msg} ${x} !== ${y}`); }
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
@@ -103,4 +103,12 @@ Deno.test("bad requests", async () => {
   eq((await handler(new Request("http://x/signin", { method: "GET" }))).status, 405);
   eq((await handler(new Request("http://x/signin", { method: "POST", body: "{" }))).status, 400);
   eq((await handler(post({ email: "a@b.in" }))).status, 400);
+});
+
+Deno.test("console phase 1b: a login FinCom switched off (banned in Auth) is said so, never counted as a wrong password", async () => {
+  const { handler, log, store } = fake({ auth: () => ({ status: 400, body: { error_code: "user_banned", msg: "User is banned" } }) });
+  const r = await read(await handler(post({ email: "a@b.in", password: GOOD })));
+  eq(r.status, 403); eq(r.body.reason, "user_off"); eq(r.body.error, SWITCHED_OFF);
+  eq(SWITCHED_OFF, "This account is switched off. Contact FinCom support.");
+  eq(log.fails.length, 0, "no lockout failure"); eq(store.rows.length, 0, "no address failure");
 });
