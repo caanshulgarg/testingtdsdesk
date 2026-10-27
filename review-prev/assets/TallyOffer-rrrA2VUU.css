@@ -1,0 +1,1 @@
+.toffers{display:grid;gap:8px;margin:0 0 12px}.toffer{padding:10px 12px;border:1px solid var(--accent);border-radius:var(--radius-panel, 10px);background:var(--accent-subtle, var(--surface));min-width:0;overflow-wrap:anywhere}.toffer-say{margin:0 0 8px}.toffer-acts{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}.toffer-acts select{max-width:100%}

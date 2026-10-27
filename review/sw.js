@@ -3,16 +3,16 @@
 // Rules (the owner's, 11-Oct-2026):
 //  - never an outdated app after a release: the page itself (index.html) always comes from the network first (past
 //    every cache, with a short wait), and only from here when there is no line; every other file has its build's hash
-//    in its name or address, so a new build's files are new files. A new build's worker takes over at once (skipWaiting,
-//    clients.claim) and drops the old build's files; the open page says "A newer FinCom is out. Reload" (fresh.js);
+//    in its name or address, so a new build's files are new files. A new build's worker takes over once a page of its
+//    build has drawn FinCom (27-Oct-2026: never while a page is loading; install below) and drops the old build's files; the open page says "A newer FinCom is out. Reload" (fresh.js);
 //  - only FinCom's own code, styles and fonts are kept: nothing from Supabase (the firm's data), the bridge, Sentry or
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
-const VERSION = "mvqawz2x-f53f12";
+const VERSION = "mvqxr2ny-c9ff60";
 // round 73 B: FILES, kept at install, are what the first page needs; REST, the other files of this build, are kept once
 // the first page is up and the computer is idle (the page sends "fincom:keep-rest", main.jsx)
-const FILES = ["./","./legacy.js?v=4c98fdef19b4","./guard.js","./oldcheck.js","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/index-CyiEGQiW.css","./assets/index-DtoCXdLU.js"];
-const REST = ["./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/TallyOffer-rrrA2VUU.css","./assets/Books-CieW0vHE.css","./assets/Gst-BmwLksAm.css","./assets/Tally-CGtAHvyL.css","./assets/Bank-WpM_Omc2.css","./assets/returns-BiAmgzaN.css","./assets/Integrations-C1RPLvE9.css","./assets/TallyCompanies-fJwwCxkE.css","./assets/AssistantEntries-BiMrQpZd.css","./assets/MyMis-CEycmWma.css","./assets/Reports-Dci7HM2A.css","./assets/firstOpen-BsYbEYRc.js","./assets/registers-uJZDOZG8.js","./assets/timings-9hMfAO8m.js","./assets/sentry-DkngS9GZ.js","./assets/Assistant-B6f23gkO.js","./assets/MeetCard-9USJBGm7.js","./assets/knock-CkM7lS7P.js","./assets/realtime-DUYArwig.js","./assets/api-Bg8s4KSN.js","./assets/autopost-CgkeC2JS.js","./assets/TallyOffer-DLXSsc-s.js","./assets/Books-c1E3Wtia.js","./assets/88-fin-statements-zUVODDMw.js","./assets/chevron-down-BJnKbD2A.js","./assets/Gst-BOT44eNG.js","./assets/gstr1Fix-DC8Nf744.js","./assets/undo-2-pXo6q778.js","./assets/Settings-BkGWpE3-.js","./assets/AdvOptIn-BEBdrAR6.js","./assets/Tally-CmwuVXbd.js","./assets/NeedAction-Bn2_zejH.js","./assets/Bank-D_IBJXOH.js","./assets/BankSettings-xe99TUDS.js","./assets/Sales-BnfNsk1b.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-Bh1-F98l.js","./assets/Post-BIKxyP2m.js","./assets/BankChecks-C6sm7YeZ.js","./assets/Help-CmuL-mk0.js","./assets/Txn-B5Yf4c51.js","./assets/Parties-ncHfQ8HV.js","./assets/VendorRecon-CzDrINDu.js","./assets/42-vendor-recon-DUYmbB4a.js","./assets/Compliance-CD9fEZgS.js","./assets/Integrations-DWjNbtnj.js","./assets/Meetings-4idPvHWs.js","./assets/GstApiCard-DGxGVXeo.js","./assets/GstApiAll-ClBy-exw.js","./assets/FiledCompare-B1WIhA66.js","./assets/FileApi-DMaCIdAx.js","./assets/finExport-BhhvSwJj.js","./assets/AssistantVoice-BuloK0IK.js","./assets/plus-sSzfxf1N.js","./assets/NoDeviceNote-IlPFjXM4.js","./assets/97-postto-link-CdqwJM2A.js","./assets/98-post-register-DfJNp1Jj.js","./assets/TallyCompanies-nNvVWmwG.js","./assets/SheetPanel-Ba4aHK34.js","./assets/LedgerBox-DyMJdxc5.js","./assets/TwoStep-2Mjgkn1s.js","./assets/authLink-Df25-s_S.js","./assets/gzUpload-DVwRGgD4.js","./assets/AssistantUploads--GcO734u.js","./assets/AssistantEntries-DYdLpJoS.js","./assets/trash-BkFyI8Pi.js","./assets/AssistantMis-CGjpX3IK.js","./assets/misdef-Xh-mU6XF.js","./assets/VoiceRecorder-Bak0gTuG.js","./assets/MyMis-DZqeVfd8.js","./assets/Reports-CiRa0O4Y.js","./assets/reportsExport-COrL1KJI.js","./assets/tdsExcel-DRrP_g7y.js","./assets/r1Excel-JT_1J0vX.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DN6ANTCg.js","./assets/itcExcel-BvD8-Tm1.js","./assets/MisSchedule-D_KIMd-Y.js","./assets/misExport-DSAyY_N8.js"];
+const FILES = ["./","./legacy.js?v=5728d1a92640","./guard.js","./oldcheck.js","./assets/geist-latin-wght-normal-BgDaEnEv.woff2","./assets/inter-latin-wght-normal-Dx4kXJAl.woff2","./assets/index-C7LdjMWR.css","./assets/index-B-8rhsto.js"];
+const REST = ["./assets/geist-latin-ext-wght-normal-DC-KSUi6.woff2","./assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2","./assets/TallyOffer-rrrA2VUU.css","./assets/Books-DG3_wgOY.css","./assets/Gst-BmwLksAm.css","./assets/Tally-CGtAHvyL.css","./assets/Bank-WpM_Omc2.css","./assets/returns-C85MxT0v.css","./assets/Integrations-C1RPLvE9.css","./assets/TallyCompanies-BAkB1Vyb.css","./assets/AssistantEntries-BiMrQpZd.css","./assets/MyMis-CEycmWma.css","./assets/Reports-Dci7HM2A.css","./assets/firstOpen-BzUPfZtE.js","./assets/bridgeFollow-xeVndPO_.js","./assets/registers-uJZDOZG8.js","./assets/timings-Co8Gx-Cj.js","./assets/sentry-C6VfvJVu.js","./assets/Assistant-BjMIU49F.js","./assets/MeetCard-ChqLsFp6.js","./assets/knock-DdW_o1LS.js","./assets/realtime-DUYArwig.js","./assets/api-Bg8s4KSN.js","./assets/autopost-BDoxuUHw.js","./assets/TallyOffer-CegpDgVB.js","./assets/Books-CbiS0nEv.js","./assets/88-fin-statements-zUVODDMw.js","./assets/chevron-down-CsSE2RYI.js","./assets/Gst-Dv0qy8ex.js","./assets/gstr1Fix-CRt8bnxL.js","./assets/undo-2-DNm5Hz03.js","./assets/Settings-DpzmxCTq.js","./assets/AdvOptIn-ByMuZT3_.js","./assets/Tally-DteQM8qi.js","./assets/NeedAction-D4uqYG-b.js","./assets/Bank-73H8iWsJ.js","./assets/BankSettings-Cxe5esFm.js","./assets/Sales-CuczVX0D.js","./assets/55-einvoice-BdpnM8ZI.js","./assets/LedgerSelect-CsCeWBEj.js","./assets/Post-BAZfd-jj.js","./assets/BankChecks-BLhv2U8a.js","./assets/Help-CJNMkABD.js","./assets/Txn-B0WEcaaw.js","./assets/Parties-DWm6aT3t.js","./assets/VendorRecon-CHTJt0YE.js","./assets/42-vendor-recon-DUYmbB4a.js","./assets/Compliance-DKAqJnvs.js","./assets/Integrations-BZhOcdvS.js","./assets/Meetings-B05CtQSQ.js","./assets/GstApiCard-TK2J5BYa.js","./assets/GstApiAll-BjOGm56f.js","./assets/FiledCompare-BqkONtlY.js","./assets/finExport-BhhvSwJj.js","./assets/AssistantVoice-Byr4wlis.js","./assets/plus-WBrPE0JJ.js","./assets/NoDeviceNote-BKxd-AXw.js","./assets/97-postto-link-CuXKO6NI.js","./assets/98-post-register-BwhN5gnf.js","./assets/TallyCompanies-BaisW5pT.js","./assets/FileApi-jY7wU2C6.js","./assets/SheetPanel-Dkt-LVw0.js","./assets/LedgerBox-QfwBg-qy.js","./assets/TallyPop-Dz8sS2ZR.js","./assets/TwoStep-oDDvnGof.js","./assets/authLink-DpjzStBK.js","./assets/gzUpload-DVwRGgD4.js","./assets/AssistantUploads-UebFZLJZ.js","./assets/AssistantEntries-FRugvtbG.js","./assets/trash-BuRdHYvl.js","./assets/AssistantMis-s9JXB_gr.js","./assets/misdef-Xh-mU6XF.js","./assets/VoiceRecorder-D6A9LRgu.js","./assets/MyMis-Cy4_tgc-.js","./assets/Reports-C-JOlm5p.js","./assets/reportsExport-COrL1KJI.js","./assets/tdsExcel-DRrP_g7y.js","./assets/r1Excel-JT_1J0vX.js","./assets/80-assets-j0JE5bMz.js","./assets/78-reports-DN6ANTCg.js","./assets/itcExcel-BvD8-Tm1.js","./assets/MisSchedule-BRQ3TlLw.js","./assets/misExport-Q9_Xb_U0.js"];
 const SCOPE = new URL(self.registration.scope).pathname;
 const SHELL = "fincom-shell:" + SCOPE + ":" + VERSION, RUNTIME = "fincom-files:" + SCOPE;
 const CODE = /\.(js|mjs|css|woff2?|wasm)$/;
@@ -24,17 +24,30 @@ const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
 // 24-Oct-2026 (Safari, right after a publish): each file kept on its own, and only a real answer (keepable); one file
 // that does not come (a publish half way across GitHub's servers) no longer fails the whole install and leaves the older
 // worker in charge. A file not kept now is fetched and kept when it is first used
+// speed round (27-Oct-2026): the browser looks for a new worker at every open, so right after a publish the new worker was
+// installed WHILE the page was still downloading the same files, and fetched them all a second time beside it (legacy.js,
+// 600 KB, twice at once on the first open after each release; the owner: "it's too slow" on office Wi-Fi). Now the
+// install takes only what the browser already holds (only-if-cached: never the line), and the page itself (5 KB); the rest
+// of the first page's files is kept by keepRest below once the page is up and idle, or when first used
+// 27-Oct-2026 (the owner's BLANK page on Safari after the speed build): that install took nothing from the line, so it
+// was over in a few milliseconds, and skipWaiting() + clients.claim() put the new worker in charge WHILE the new build's
+// first page was still loading through the previous worker. Safari stops a worker that is replaced, and the requests it
+// was answering for the page (guard.js, the styles: they hold up the page's drawing and its scripts) never finished: a
+// white page, no script ran, so no watch and no report. Now a new build's worker never takes over by itself while a page
+// is open: it waits until a page of ITS build has drawn FinCom and asks ("fincom:take-over" with its build id,
+// src/main.jsx), or, as browsers do anyway, until no FinCom page is open. A worker installed with no page in its charge
+// (the first open here) still starts at once.
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => {
-    const q = ask(f);
-    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(q, r) : null).catch(() => null);
-  }))).then(() => self.skipWaiting()));
+    const q = f === "./" ? ask(f) : new Request(f, { cache: "only-if-cached", mode: "same-origin" });
+    return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(new Request(f), r) : null).catch(() => null);
+  }))).then(() => { if (!self.registration.active) return self.skipWaiting(); }));
 });
 // the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
 let keeping = null;
 function keepRest() {
   return keeping || (keeping = caches.open(SHELL).then(async (c) => {
-    for (const f of REST) {
+    for (const f of FILES.filter((x) => x !== "./").concat(REST)) {
       // round 90: a real script / style / font answer only (keepable, below); a broken kept copy is replaced
       try { const h = await caches.match(f, { ignoreVary: true }); if (!h || !good(h)) { const q = ask(f), r = await fetch(q); if (keepable(r)) await c.put(q, r); } } catch (e) { /* kept when it is first used */ }
     }
@@ -47,6 +60,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("message", (e) => {
   if (e.data === "fincom:signed-out") e.waitUntil(caches.delete(RUNTIME));
   if (e.data === "fincom:keep-rest") e.waitUntil(keepRest());
+  // a page of this build has drawn FinCom (its own requests are done): this worker may take over now (install, above)
+  if (e.data && e.data.type === "fincom:take-over" && e.data.build === VERSION) e.waitUntil(self.skipWaiting());
 });
 
 // the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
@@ -114,7 +129,8 @@ self.addEventListener("fetch", (e) => {
   if (u.searchParams.has("fincom-net")) return;
   const rest = u.pathname.slice(SCOPE.length);
   // the two little scripts without a hash in their name: the network first, this computer's copy without a line
-  if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
+  // 27-Oct-2026: they hold up the page: this computer's copy first (little, below)
+  if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(little(req, e)); return; }
   // kept here: only files whose name or address carries their build's hash (assets/…, legacy.js?v=…)
   if (!((rest.startsWith("assets/") && CODE.test(rest)) || (rest === "legacy.js" && u.search))) return;
   e.respondWith(asset(req));
@@ -128,6 +144,22 @@ self.addEventListener("fetch", (e) => {
 const KEEP = /(javascript|ecmascript|text\/css|font\/|application\/(x-)?font|woff|wasm)/i;
 const good = (r) => !!r && r.ok && r.type === "basic" && !r.redirected;
 const keepable = (r) => good(r) && KEEP.test(r.headers.get("Content-Type") || "");
+// guard.js and oldcheck.js, the two little scripts without a hash: they hold up the reading of the page (guard.js in its
+// head, oldcheck.js in its body), and asking the line for them first cost the owner's opens 3 s and 28 s on office Wi-Fi
+// (client_timings 27-Oct-2026: open/dom 9.8 s and 34.8 s, every other file from here, one script waiting on the line).
+// They change seldom and any build runs with either copy: this computer's copy at once, the line's asked meanwhile and
+// kept for the next open; without a copy, the line, and never more than 4 s of waiting when a copy turns up
+async function little(req, e) {
+  const c = await caches.open(SHELL);
+  const n = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()).catch(() => {}); return r; });
+  try { e.waitUntil(n.catch(() => {})); } catch (x) { /* kept when it comes, if the worker is still up */ }
+  const h = await caches.match(req, { ignoreSearch: true, ignoreVary: true }).catch(() => null);
+  if (h && h.ok) { n.catch(() => {}); return h; }
+  const r = await Promise.race([n.catch(() => null), wait(4000)]);
+  if (r) return r;
+  const h2 = await caches.match(req, { ignoreSearch: true, ignoreVary: true }).catch(() => null);
+  return h2 || n.catch(() => Response.error());
+}
 async function asset(req) {
   let hit = null;
   try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }

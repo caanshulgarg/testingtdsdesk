@@ -1,0 +1,10 @@
+{
+ "build": "mvqawz2x-f53f12",
+ "path": "../review-prev/",
+ "stamp": "React \u00b7 27-Oct-2026 11:55 \u00b7 d35ee2052",
+ "commit": "651d528136f32223dc34486e6e5ec49aafdbc95a",
+ "replacedBy": "mvqxr2ny-c9ff60",
+ "how": "promote",
+ "at": "2026-10-27T17:07:58Z",
+ "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"
+}
