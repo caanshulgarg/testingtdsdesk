@@ -835,6 +835,24 @@ async function changesOnly(dev: any, id: string) {
 }
 // a cloud without the table or column asked (an older migration): PostgREST's PGRST204/205, PostgreSQL's 42P01/42703
 const missingRel = (e: any) => ["PGRST204", "PGRST205", "42P01", "42703"].includes(String(e?.code || "")) || /does not exist|schema cache/i.test(String(e?.message || ""));
+// migration 111 (the posting register, next-post-register): tally_post_register_apply(job) after each posts_update, and
+// tally_post_register_settle_book(book) after recorder lines and day files (the recorder's TDSDesk tag and the Day Book's
+// fincom_id settle needs_review, sent and inferred lines). A cloud without 111: the functions are missing (PGRST202), nothing
+// is written and nothing fails; asked again 10 minutes later. Any other error is logged and reported, never thrown: the
+// posting, the lines and the days are kept as before whatever the register says
+let registerMissingAt = 0;
+async function registerCall(fn: string, args: Record<string, unknown>, where: string): Promise<any> {
+  if (registerMissingAt && Date.now() - registerMissingAt < 600000) return null;
+  try {
+    const { data, error } = await db.rpc(fn, args);
+    if (error) {
+      if (error.code === "PGRST202" || missingFn(String(error.message || ""))) { if (!registerMissingAt) console.log("tally-ingest " + where + ": no posting register in this cloud (migration 111)"); registerMissingAt = Date.now(); return null; }
+      fail(fn, error, where); console.error("tally-ingest " + where + ": " + fn, String(error.message || "").slice(0, 200)); return null;
+    }
+    registerMissingAt = 0;
+    return data;
+  } catch (e) { fail(fn, e, where); console.error("tally-ingest " + where + ": " + fn, (e as Error).message); return null; }
+}
 // review M-B (migration 54): a bridge refused postings (not the main one, changes only, test mode) never leaves a posting
 // waiting for ever: the computer's waiting postings that no bridge of it may take are moved to its bridge that may post,
 // else failed in plain words (tally_post_rescue; never to another computer key). Never fails the call; a cloud without
@@ -1948,6 +1966,10 @@ function cleanRecorderLine(x: any, me: { id: string }): { line?: Record<string, 
   const fid = /^[A-Za-z0-9._-]{1,80}$/.test(fidRaw) ? fidRaw : (lineFid ? "" : ((narr.match(/TDSDesk:([A-Za-z0-9._-]{1,80})/) || [])[1] || ""));
   if (lineFid) line.lineFid = lineFid;
   if (fid && !event.startsWith("ledger_")) { line.fid = fid; if (!xml) line.short = true; }
+  // migration 111: Tally's REMOTEGUID of the entry when a line carries it (kept as sent, in the payload): the posting register's
+  // second key besides the TDSDesk tag (the bridge of today sends none; nothing else reads it)
+  const rg = s(x?.remoteGuid ?? x?.remote_guid, 120);
+  if (/^[A-Za-z0-9._-]{1,120}$/.test(rg) && !event.startsWith("ledger_")) line.remoteGuid = rg;
   // bridge 2.2.2 (migration 51): the add-on's ids did not belong together (idsMismatch, the add-on's GUID as lineGuid, for
   // information only), and the bridge's plain reason when the line goes without the entry's body (heldWhy)
   if (x?.idsMismatch === true) line.idsMismatch = true;
@@ -2353,6 +2375,7 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
       send.forEach((l: any, k: number) => { results[at[k]] = { line_id: String(l.line_id ?? ""), state: "queued", why: null, ...(found.has(String(l.line_id ?? "")) ? { guid: found.get(String(l.line_id ?? "")) } : {}) }; });
       const failed = results.filter((r) => r?.state === "failed").length;
       console.log("tally-ingest recorder_lines queued", book, JSON.stringify({ n: send.length, full, failed, msg: data.msg ?? null, behind: data.behind ?? 0 }));
+      if (send.some((l: any) => l.fid || l.remoteGuid)) await registerCall("tally_post_register_settle_book", { p_book: book }, "recorder_lines");
       return reply(200, { ok: true, queued: send.length, failed, msg: data.msg ?? null, ...(data.behind ? { behind: data.behind } : {}), results });
     }
     ((data as any)?.results || []).forEach((r: any, k: number) => {
@@ -2363,6 +2386,8 @@ async function recorderLines(dev: any, firm: string, book: string, body: any) {
         ...(r?.already === true ? { already: true, was: String(r?.was || "") } : {}) };
     });
   }
+  // migration 111: a line carrying a FinCom id (the narration's TDSDesk:<id>) or a REMOTEGUID settles the register's lines of this book
+  if (send.some((l: any) => l.fid || l.remoteGuid)) await registerCall("tally_post_register_settle_book", { p_book: book }, "recorder_lines");
   const out: Record<string, unknown> = { ok: true, results };
   for (const k of ["applied", "held", "duplicate", "stale", "failed", "kept"]) out[k] = results.filter((r) => r?.state === k).length;
   out.already = results.filter((r: any) => r?.already === true).length;     // migration 63: of the duplicates, repeats of lines FinCom had
@@ -2588,7 +2613,7 @@ function lockedDay(dayAns: any, day: string, book: string, locked: LockedDay[], 
 async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promise<{ done: string[]; bad: { day: string; error: string; locked?: boolean }[]; locked: LockedDay[]; error?: string }> {
   const days = (Array.isArray(daysIn) ? daysIn : []).slice(0, 62);
   const done: string[] = [], locked: LockedDay[] = [];
-  let unzipped = 0;
+  let unzipped = 0, fidDays = false;
   const bad: { day: string; error: string; locked?: boolean }[] = [];
   for (const d of days as any[]) {
     if (!isDay(d?.day) || (typeof d?.gz !== "string" && typeof d?.b64 !== "string")) continue;
@@ -2635,7 +2660,10 @@ async function ingestDaysRaw(firm: string, book: string, daysIn: unknown): Promi
     // migration 38 (item 9): a short read (no entries, or fewer than the bridge counted) upserted what came and marked nothing; said in the log
     if ((dayAns as any)?.refused) console.log("tally-ingest day " + String((dayAns as any).refused) + ": nothing marked deleted", book, String((dayAns as any).day || ""));
     done.push(d.day);
+    if (!fidDays && (r.vouchers || []).some((v: any) => v && v.fid)) fidDays = true;
   }
+  // migration 111: a Day Book entry with a FinCom id (tally_vouchers.fincom_id) settles the register's lines of this book
+  if (fidDays) await registerCall("tally_post_register_settle_book", { p_book: book }, "days");
   return { done, bad, locked };
 }
 // the day books already kept in the bucket, read again with today's parser: one month a call (a year is 12 calls), so
@@ -3780,6 +3808,11 @@ Deno.serve(sentry.wrap(async (req) => {
           const { error: relErr } = await db.rpc("tally_post_id_release", { p_job: id, p_id: x.id, p_why: String(x.reason || x.state).slice(0, 500) });
           if (relErr && !/tally_post_id_release|schema cache|does not exist/i.test(relErr.message)) { fail("tally_post_id_release", relErr, "posts_update"); console.error("tally_post_id_release", relErr.message); }
         }
+        // migration 111: the posting register follows this update (Tally's reply by the proof's rule: one voucher CREATED 1 with
+        // LASTVCHID, or a batch with CREATED = sent and no exceptions -> in_tally; anything else -> needs_review for every voucher of
+        // that request); the answer keeps its shape, the register's states only logged
+        const regAns = await registerCall("tally_post_register_apply", { p_job: id }, "posts_update");
+        if (regAns && (regAns as any).changed) console.log("tally-ingest posts_update: posting register", id, JSON.stringify((regAns as any).states || {}));
         return reply(200, stale ? { ok: true, stale: true, status } : { ok: true });
       }
       case "companies": {

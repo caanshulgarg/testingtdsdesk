@@ -270,6 +270,7 @@ function postStatus(entry, job, ids, marks, ctx){
   const again = {kind: "postAgain", label: "Post again"};
   const backInReview = bill && !["approved", "deleted"].includes(e.status);
   if (job){
+    if (ctx.reg && typeof postRegStatus === "function"){ const z = postRegStatus(ctx.reg, e, job, mk, tid, ctx); if (z !== undefined) return z; }     // migration 111 (src/js/98)
     const live = ["waiting", "taken", "running"].includes(job.status) || !!job.checking;
     const ownerMark = !!((r && r.byOwner) || (it && it.byOwner));
     const releasedByOwner = !!((ids && ids.released_by === "owner" && ids.released_at) || (ownerMark && ((r && r.state === "notfound") || (it && it.state === "notfound"))));
@@ -484,7 +485,7 @@ function postEntryRows(cid){
     const e = d.entries[id] || null, bl = !e && b ? b.rows.find(q => String(q.id) === id) : null;
     // a posting that stopped (failed, cancelled) for an entry put in Tally since, by an older or later posting or another
     // way: the entry is where it went in, not under the stopped one
-    if (CloudJobs.stopped(j) && !CloudJobs.okIn(j).has(id)){
+    if (!js.reg && CloudJobs.stopped(j) && !CloudJobs.okIn(j).has(id)){
       const went = all.find(k => k !== j && CloudJobs.okIn(k).has(id));
       if (went) j = went;
       // in Tally another way, or marked as sent here after this posting (a Tally file, a bridge here): the bill's own state
@@ -496,7 +497,7 @@ function postEntryRows(cid){
     const ent = e || bl || {id};
     const held = typeof postIdReleased === "function" ? (postIdReleased(id, cid) === false ? true : postIdReleased(id, cid) === true ? false : null) : null;
     const missing = kind === "other" && !String(id).includes("-") && !(S.sales && (S.sales.list || []).some(v => String(v.id) === id));
-    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0, check: typeof PostChecks === "object" ? PostChecks.of(cid, j.id, id) : null};
+    const c0 = {id, me, held, missing, queue: waiting.findIndex(w => w.id === j.id) + 1 || 0, check: typeof PostChecks === "object" ? PostChecks.of(cid, j.id, id) : null, reg: js.reg};
     let st = postStatus(kind === "bank" ? Object.assign({}, bl, {x: undefined}) : ent, j, ids, marks, c0);
     // C6 "what differs": an entry that needs review is set beside what the posting sent (its payload, read on demand)
     if (st && st.code === 6 && kind === "bill"){
@@ -509,7 +510,7 @@ function postEntryRows(cid){
     const r = [].concat(j.results || []).find(x => x && String(x.id) === id) || null, it = [].concat(j.items || []).find(x => x && String(x.id) === id) || null;
     const det = postDetailsOf(cid, id, ent, kind, j, r);
     if (kind === "other" && !det.found) needPay.push(j.id);
-    out.push({key: j.id + ":" + id, id, kind, e: kind === "other" ? null : ent, job: j, r, it, ids, marks, st, d: det});
+    out.push({key: j.id + ":" + id, id, kind, e: kind === "other" ? null : ent, job: j, r, it, ids, marks, st, d: det, reg: js.reg});
   });
   Object.values(d.entries).forEach(e => {
     if (seen.has(String(e.id))) return;

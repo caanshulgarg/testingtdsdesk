@@ -303,6 +303,8 @@ function Slip({ e, c, ro, snap, miss }) {
 // exact voucher id; e.tally.batchEnd: the last id of a batch, never an id inferred for this bill) or from the cloud's
 // posting naming it; "Matched with Tally" only when tally_post_ids carries matched_at. An older posting: nothing extra
 function PostedLine({ e }) {
+  // migration 111: the stamp reads FinCom's posting register (src/js/98, fetched here: Bill is in the app's first file)
+  useEffect(() => { import("../../../src/js/98-post-register.js").then(() => PostReg.load(S.coId), () => 0); }, [e.id]);
   const m = typeof postMarkFor === "function" ? postMarkFor(S.coId, e.id, e) : null, words = m ? postMarkWords(m) : "";
   const mt = typeof postMatched === "function" ? postMatched(e.id, S.coId) : null;
   if (!words && !mt) return null;

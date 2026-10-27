@@ -501,3 +501,17 @@ on the server under a lock per client) and the trigger sync_guard_autopost on cl
 owner switches it on or loosens it; anyone else's attempt keeps the old setting and is logged and written to sync_refused). Grants
 explicit. Deploy order: 101, then the app build (until 101 runs, a signed-in browser posts nothing by itself: the claim is refused and
 the setting says why). Tested on pg_stand: `tests/run_migration101.py` (two browsers claiming at once included).
+
+The posting register (26-Oct-2026, branch next-post-register, build stabilisation step 3; NOT run on staging):
+`server/tally-cloud/migration-111-post-register.sql` runs after 55 (staging ... -> 108 -> 111; a fresh database the same; it needs
+32/36b/37/43's tally_post_ids and the acceptance helpers, 44's tally_recorder_lines, 54's resend_only and 55's checks and marks).
+Add-only, one transaction, `lock_timeout` 10 s, no "delete from", nothing dropped, safe twice: two new tables (tally_post_register:
+one record per FinCom id per firm with one state; tally_post_register_history: add-only), one index on tally_recorder_lines
+(book, payload fid), new functions and four new triggers (tally_post_ids after insert: the queue and the duplicate guard;
+tally_post_jobs after update: the judge; before update of status: a person's Retry of an entry needing review; tally_post_marks
+after insert: Mark posted / release); a backfill of every posting already there, and pg_cron `tally-post-register-settle` every 10
+minutes. Grants explicit: members read, nobody writes directly; apply / settle / confirm are the service role's. Deploy order: 111,
+then tally-ingest (it calls tally_post_register_apply after posts_update and tally_post_register_settle_book after recorder lines
+and day files; without 111 it skips them), then the app build (it reads the register; without it, as before). Tested on pg_stand:
+`tests/run_migration111.py` (its `--staging-sql` prints the read-only SELECT that counts the backfill on staging);
+`tests/run_post_register_server.py`, `tests/run_post_register_ui.py`.

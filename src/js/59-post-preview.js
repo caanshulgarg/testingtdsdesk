@@ -253,6 +253,8 @@ function postJobStates(cid){
       out.set(id, {st, job: j, reason, alreadySent: !!(r && r.alreadySent)});
     });
   });
+  // migration 111: an entry the register has is what the register says (src/js/98); one it has not, as above
+  const rg = typeof postRegStates === "function" && postRegStates(cid); if (rg) rg.forEach((v, k) => out.set(k, v));
   return out;
 }
 function postSending(cid){
@@ -265,6 +267,7 @@ function postLedgerList(cid){ return !!(cid === S.coId && S.bank && S.bank.cid =
 function postMissingLedgers(e){ return (e.snapshot ? e.snapshot.lines : []).filter(l => l.ledger && !exactLedger(l.ledger)); }
 function postBucket(e, ctx){
   if (!e || e.status !== "approved") return "";
+  const jr = ctx && ctx.jobs ? ctx.jobs.get(String(e.id)) : null, rb = jr && jr.reg && postRegBucket(e, jr); if (rb) return rb;
   if (billInTally(e)) return "intally";
   if (e.exportedAt) return "attention";
   if (e.postUnconfirmed) return e.postUnconfirmed.pending ? "sending" : "attention";
@@ -591,7 +594,7 @@ function postMarkFromJob(j, id){
   const s = typeof PostIds === "object" && PostIds.by[j.client_id], k = s && s.ids && s.ids.get(String(id));
   return k ? Object.assign({company: j.company || "", at: j.updated_at || j.created_at || "", by}, k) : null;
 }
-function postMarkFor(cid, id, e){ return postMarkOf(e) || postMarkFromJob(typeof postJobOf === "function" ? postJobOf(cid, id) : null, id); }
+function postMarkFor(cid, id, e){ const rg = typeof postRegMark === "function" ? postRegMark(cid, id) : undefined; if (rg !== undefined) return rg; return postMarkOf(e) || postMarkFromJob(typeof postJobOf === "function" ? postJobOf(cid, id) : null, id); }
 // round 17a (owner, 04-Oct-2026): a posting of FinCom's cloud that finished while this page was not waiting for it (on
 // another computer, the page closed or reloaded, a Live update) left its entries unmarked here, so they read as never
 // posted. Each result Tally took (postTaken: read back, Tally's reply, altered) in the newest posting naming the entry is
@@ -610,8 +613,8 @@ function postReconcile(cid, quiet){
   let bills = 0, lines = 0;
   postJobStates(cid).forEach((v, id) => {
     const j = v.job;
-    if (v.st !== "posted" || !j || !["done", "failed"].includes(j.status)) return;
-    const x = [].concat(j.results || []).find(r => r && String(r.id) === id);
+    if (v.st !== "posted" || !j || (!v.reg && !["done", "failed"].includes(j.status))) return;
+    const x = v.reg ? postRegResult(v.reg) : [].concat(j.results || []).find(r => r && String(r.id) === id);
     if (!postTaken(x) || released(id)) return;
     const at = x.sentAt || j.updated_at || j.created_at || new Date().toISOString(), by = j.created_by ? memberName(j.created_by) : "";
     const e = d && d.loaded && d.entries ? d.entries[id] : null;

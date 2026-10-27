@@ -48,7 +48,16 @@ async function bankSentHeal(cid, rows, tname, ids){
   if (!todo.length) return out;
   const memo = new Map(), co = CO(cid), rowOf = new Map(b.rows.map(q => [String(q.id), q]));
   tname = tname || co.tallyName || (TCloud.book(cid) || {}).company || co.name;
+  // migration 111: with the cloud's posting register, the register alone says whether a line is in Tally (never this page's
+  // reading of a job's answer): in_tally -> marked posted from the record; refused -> Tally's words; anything else stays
+  if (typeof PostReg === "object"){ await PostReg.load(cid, true); }
   for (const r of todo){
+    const rg = typeof postRegOf === "function" ? postRegOf(cid, r.id) : undefined;
+    if (rg){
+      if (rg.state === "in_tally"){ const x = postRegResult(rg); bankPosted(cid, r, Object.assign({}, x, {jobId: rg.job_id}), rg.company || tname, x.sentAt, {by: postMyName()}); out.n++; out.rows.push(r); if (!out.at || x.sentAt > out.at) out.at = x.sentAt; }
+      else if (rg.state === "refused"){ r.postError = "Not in Tally: Tally refused this line (" + (postReasonText(rg.tally_words) || "no words") + ")."; delete r.postJob; out.refused.push(r); }
+      continue;
+    }
     let job = bankJobOf(r), x = null, j = null;
     // the job named, or the earlier one its own record names (at most three steps back)
     for (let hop = 0; hop < 3 && job; hop++){
@@ -81,6 +90,9 @@ async function bankSentHeal(cid, rows, tname, ids){
 // Map id -> {taken: result, guess} | {refused: words}
 function bankPartialSplit(results, rowOf){
   const out = new Map(), groups = new Map();
+  // migration 111: with the cloud's posting register a partly made batch is needs_review for every line (the 7.2 proof: Tally's
+  // reply never says which voucher failed); the register, not this page, settles each line
+  if (typeof PostReg === "object" && PostReg.readable === true) return out;
   [].concat(results || []).forEach(x => { if (x && !x.ok && x.needsReview && x.accepted && /^\d+$/.test(String(x.batchEnd || ""))){ const k = x.batchEnd + "|" + (x.sentAt || ""); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); } });
   const nm = v => ledNm(v || "").toLowerCase();
   groups.forEach(g => {
