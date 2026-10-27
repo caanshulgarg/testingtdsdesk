@@ -152,6 +152,8 @@ const Cloud = {
       }
       this._provErr = (p && p.error) || "";
     }
+    // a coupon typed on the register form (SignIn.jsx), kept on this computer until the firm exists
+    if (me && me.role === "owner" && lsGet("fincom:signup-coupon")) this.signupCoupon();
     this.st.state = me ? "ok" : "nofirm";
     if (!me) this.st.error = this._provErr || "This account is not linked to a firm yet.";
     return me;
@@ -753,6 +755,16 @@ function loadAuthProviders(){
     .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
     .then(j => { const e = (j && j.external) || {}; S.authProviders = {google: e.google === true, azure: e.azure === true}; render(); }, () => { S.authProvidersAsked = false; });
 }
+// the register form's coupon (migration 120's coupon_redeem, source 'signup'): tried once, at the first sign-in with the
+// firm; what it says (applied, or why not) is told in a toast; not applied, it can be entered in Settings, Plan and credit
+Cloud.signupCoupon = function(){
+  const code = lsGet("fincom:signup-coupon"); lsDel("fincom:signup-coupon");
+  if (!code) return;
+  const again = " You can enter it in Settings, Plan and credit.";
+  this.rpc("coupon_redeem", {p_code: code, p_source: "signup"}).then(
+    r => { toast(r && r.ok ? "Coupon " + code + ": " + r.message : "Coupon " + code + ": " + ((r && r.error) || "not applied.") + again); if (r && r.ok) loadAccount(true); },
+    () => toast("The coupon " + code + " could not be applied just now." + again));
+};
 Cloud.oauth = function(provider){
   const box = document.querySelector('[data-cloud="keep"]');
   if (box) lsSet("tdsdesk:keep", box.checked ? "1" : "0");
@@ -1562,7 +1574,8 @@ function doAct(act, t){
       if (pw.length < 10 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)){ Cloud.st.error = "Use a password of 10 characters or more, with letters and digits."; render(); break; }
       Cloud.st.busy = "Sending\u2026"; Cloud.st.error = ""; render();
       Cloud.signUp({name: f.name.trim(), firm: f.firm.trim(), email: f.email.trim(), password: pw})
-        .then(() => { Cloud.st.busy = ""; S.cloudForm = null; S.signUpSent = true; render(); },
+        .then(() => { const cp = String(f.coupon || "").replace(/\s/g, "").toUpperCase().slice(0, 24); if (cp) lsSet("fincom:signup-coupon", cp); else lsDel("fincom:signup-coupon");
+                      Cloud.st.busy = ""; S.cloudForm = null; S.signUpSent = true; S.signupCouponOpen = false; render(); },
               err => { Cloud.st.busy = ""; Cloud.st.error = err.message; render(); });
       break;
     }

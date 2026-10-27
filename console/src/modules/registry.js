@@ -8,12 +8,14 @@ import { module as users } from "./users/index.jsx";
 import { module as audit } from "./audit/index.jsx";
 import { module as admins } from "./admins/index.jsx";
 import { module as settings } from "./settings/index.jsx";
+import { module as coupons } from "./coupons/index.jsx";
 
 export const MODULES = [
   dashboard,
   firms,
   companies,
   users,
+  coupons,
   audit,
   admins,
   settings,

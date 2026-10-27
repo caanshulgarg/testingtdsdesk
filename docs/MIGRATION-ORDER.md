@@ -553,8 +553,18 @@ left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.
 | # | Module (console-plan.md 4.3) |
 |---|---|
 | 119 | Settings / platform defaults (trial credit, low-credit warning, grace days, ...) and plans v2 + price list |
-| 120 | Subscriptions |
+| 120 | **Coupons**: `server/console/migration-120-coupons.sql` (taken by next-console-coupons; see below) |
 | 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
-| 122 | Coupons |
+| 122 | Subscriptions (free: coupons took 120) |
 | 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
 Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
+
+**120, coupons** (27-Oct-2026, branch `next-console-coupons`; **NOT run on staging**: the owner runs it;
+docs/CONSOLE-COUPONS.md): `server/console/migration-120-coupons.sql` runs after 118 (console_admins, console_audit_add,
+console_role_check, firms.status). Free-credit codes call `console_credit_post(uuid, bigint, text, text, text, uuid)`,
+which 119 (billing) makes; 120 does not make it, and until 119 is in, a free-credit code answers "This code cannot be
+used just now" and uses nothing up. Add-only, one transaction, `lock_timeout` 10 s, safe twice. Tables `coupons`,
+`coupon_redemptions`, `coupon_discounts` (billing's contract), `coupon_discount_months`, `coupon_attempts`, all with RLS
+(a firm reads its own redemptions and discounts; the rest service role only); `coupon_redeem(text, text)` for signed-in
+people; `coupon_discount_apply` and `console_coupon*` for the service role only. Tested on pg_stand:
+`tests/run_migration120.py` (RED_WITHOUT_120=1 fails).

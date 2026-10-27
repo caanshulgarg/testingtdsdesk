@@ -103,6 +103,11 @@ const OAuth = () => {
     {p.azure && <button type="button" className="btn oauth-btn" data-act="oauthAzure" onClick={() => doAct("oauthAzure")}><MicrosoftLogo /><span>Continue with Microsoft</span></button>}</div>
     <div className="signin-or" data-oauth-or="" role="separator"><span>or</span></div></>;
 };
+// "Have a coupon?" (migration 120): a link on the details step; the box is its own file (parts/CouponBox.jsx), fetched
+// only when the link is pressed
+const SignupCoupon = lazy(() => import("../parts/CouponBox.jsx").then((m) => ({ default: m.SignupCoupon }), (e) => { staleReload(e, true); throw e; }));
+const CouponAsk = () => S.signupCouponOpen || (S.cloudForm || {}).coupon ? <Suspense fallback={null}><SignupCoupon /></Suspense>
+  : <button type="button" className="linkbtn" data-coupon-ask="" onClick={() => { S.signupCouponOpen = true; render(); }}>Have a coupon?</button>;
 function SignUp() {
   const st = Cloud.st;
   if (S.signUpSent) return <Box><h1>Check your email</h1><div className="signin-sub" data-signup-sent="">{CHECK_EMAIL}</div>
@@ -118,7 +123,7 @@ function SignUp() {
     <form className="signin-form" noValidate onSubmit={submit("cloudSignUp", check, "name")}>
       <Step>{!more ? <Field label="Email" k="email" type="email" fk="cloudemail" auto="email" />
         : <><EmailLine /><Field label="Your name" k="name" fk="suname" auto="name" /><Field label="Firm name" k="firm" fk="sufirm" auto="organization" />
-          <Field label="Password" k="password" type="password" fk="cloudpw" auto="new-password" hint="10 characters or more, with letters and digits." /></>}</Step>
+          <Field label="Password" k="password" type="password" fk="cloudpw" auto="new-password" hint="10 characters or more, with letters and digits." /><CouponAsk /></>}</Step>
       <BotBox action="signup" />
       <Submit act="cloudSignUp" busy={st.busy}>{more ? "Create account" : "Continue"}</Submit><Err /></form>
     <div className="signin-switch">Already have an account? <Switch act="showSignIn">Sign in</Switch></div></Box>;
