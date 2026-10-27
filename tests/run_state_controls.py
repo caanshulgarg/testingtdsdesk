@@ -26,6 +26,11 @@ BASE_PORT = int(os.environ.get("STATE_PORT") or 8571)
 PART = int(sys.argv[sys.argv.index("--part") + 1]) if "--part" in sys.argv else -1
 ONLY = sys.argv[sys.argv.index("--page") + 1] if "--page" in sys.argv else ""
 fails, errors, skipped = [], [], []
+
+def go_offline(pg):
+    # the sign-in page no longer shows "use without an account" (owner, 27-Oct): tests reach offline mode directly
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })")
+
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w, flush=True)
     if not c: fails.append(w)
@@ -114,7 +119,7 @@ def goto(pg, port):
         try: pg.goto("http://localhost:%d/" % port); break
         except Exception: pg.wait_for_timeout(800)
     pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    go_offline(pg); pg.wait_for_timeout(1000)
 
 def serve(port):
     srv = http.server.ThreadingHTTPServer(("localhost", port), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start(); return srv
@@ -126,7 +131,7 @@ def scene_itc():
     def setup(pg, port): IB.setup(pg, port)
     def reopen(pg, port):
         goto(pg, port)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        go_offline(pg); pg.wait_for_timeout(1000)
         if pg.locator("button:has-text('Later')").count(): pg.click("button:has-text('Later')"); pg.wait_for_timeout(300)
     def part(p, sub=""):
         def go(pg):
@@ -152,7 +157,7 @@ def scene_tdsgst():
     class XP: TWOB_JS, TWO_B, PAGES = ns["TWOB_JS"], ns["TWO_B"], [(n, h, js) for n, h, js, *_ in xn["PAGES"]]
     st = {}
     def setup(pg, port):
-        pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+        pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); go_offline(pg); pg.wait_for_timeout(1500)
         pg.evaluate("window.__dueToday = '2026-10-11'")
         pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(500); pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
         pg.evaluate(XP.TWOB_JS, XP.TWO_B); pg.wait_for_timeout(400)
@@ -160,7 +165,7 @@ def scene_tdsgst():
         st["cid"] = pg.evaluate("async () => { Store.saveCompany(S.companies[S.coId]); await saveBooks(); return S.coId; }")
     def reopen(pg, port):
         goto(pg, port)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        go_offline(pg); pg.wait_for_timeout(1000)
     def at(h, js=None):
         def go(pg):
             pg.evaluate("(h) => { location.hash = h; }", "#/c/%s%s" % (st["cid"], h)); pg.wait_for_timeout(1300)
@@ -175,12 +180,12 @@ def scene_client():
     """the home pages and a client's pages of shots_ui_pass.py (Testing AAD, a few bills, no books)"""
     import shots_ui_pass as U
     def setup(pg, port):
-        pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); go_offline(pg); pg.wait_for_timeout(1000)
         pg.evaluate(U.SEED, None); pg.wait_for_timeout(1500)
         pg.evaluate("() => { const c = S.companies[S.coId]; Store.saveCompany(c); Object.values(S.data[c.id].entries).forEach(e => Store.saveEntry(c.id, e)); }"); pg.wait_for_timeout(400)
     def reopen(pg, port):
         goto(pg, port)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        go_offline(pg); pg.wait_for_timeout(1000)
     def at(js):
         def go(pg):
             pg.evaluate("() => { const c = Object.values(S.companies || {}).find(x => x && x.name === 'Testing AAD'); if (c) { S.coId = c.id; } }")
