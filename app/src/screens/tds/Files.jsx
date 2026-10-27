@@ -7,6 +7,8 @@
 //     tabs and its Deductions tab (tds-layout: TRACES files is no TDS tab any more; ReturnParts.jsx AfterFiling).
 // Nothing here changes a figure of the books or a return.
 import { useState } from "react";
+// TRF (src/js/70-traces-files.js) comes with the TDS screens' file, not in legacy.js (build.py lazy_files)
+import "../../../../src/js/70-traces-files.js";
 import ListTable from "../../parts/ListTable.jsx";
 import { Answer, Info } from "../../parts/Answer.jsx";
 

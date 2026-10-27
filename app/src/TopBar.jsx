@@ -13,7 +13,7 @@ const TallyOffer = lazy(() => import("./parts/TallyOffer.jsx"));
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 import { Inbox as InboxIcon } from "lucide-react";
-import { needDays } from "./screens/books/FromTally.jsx";
+import { needDays } from "./lib/needDays.js";
 // Arc UI (src/arc): the status tabs are Arc's Tabs, the Tally panel Arc's Drawer, the firm menu a dropdown menu in Arc's
 // style (Radix's menu, as Arc's DropdownMenu, whose trigger and items do not fit the firm button and its menu)
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
@@ -137,7 +137,8 @@ function saveWhy(err, fallback) { const p = typeof plainError === "function" ? p
 function SaveState() {
   if (!Cloud.on()) return null;
   const st = Cloud.st || {}, sv = Live.sv || {};
-  const bad = (kind, why, title) => <button className="tsave bad" data-save={kind} title={title || why} onClick={() => doAct("openSettings")}>{"Not saved: " + why}</button>;
+  // one line, shortened (src/css/app.css .tsave.bad): the whole sentence, and the server's own words, in its tip
+  const bad = (kind, why, title) => <button className="tsave bad" data-save={kind} title={"Not saved: " + why + (title && title !== why ? " (" + title + ")" : "")} onClick={() => doAct("openSettings")}>{"Not saved: " + why}</button>;
   if (st.state === "signedout") return bad("signedout", "you are signed out. Sign in again to save your work to the firm account.");
   if (sv.state === "offline") return bad("offline", "no internet on this computer. Your changes are kept here and saved when it is back.", sv.err || "");
   if (sv.state === "error") return bad("error", saveWhy(sv.err, "the server did not take the change. It is kept here and sent again on its own."), sv.err || "");
@@ -200,9 +201,15 @@ export function HereCard({ h, link = null }) {
   </div>;
 }
 function TallySign() {
-  const co = S.view === "company" ? CO() : null, h = tallyHere(co), t = tallyStatus(co), lk = co ? tallyLinkOf(co) : null;
+  const co = S.view === "company" ? CO() : null, t = tallyStatus(co), lk = co ? tallyLinkOf(co) : null;
+  let h = tallyHere(co);
   // next-tally-suvit: the client's company in the one pill's words (lib/tallyState.js), as its card and chip say them
   const k = lk ? Object.assign({}, lk, { pill: clientTallyState(co) }) : null;
+  // integ-link (27-Oct-2026): no bridge in this browser is no problem of a client that is Linked or Waiting for Tally (its
+  // books come through another computer): the sign then says it of this computer, never "Tally not on this computer"
+  // beside the client's "Linked"
+  if (h.code === "none" && k && k.state !== "unlinked" && (k.pill.kind ? ["linked", "waiting"].includes(k.pill.kind) : k.pill.state !== "unlinked"))
+    h = Object.assign({}, h, { label: "This PC: no bridge (not needed)", short: "This PC: no bridge" });
   const tone = { ok: "on", warn: "warn", bad: "off", idle: "idle" }[h.level] || "idle";
   // next-tally-firstlink (the owner: "it should be above, on the Tally icon"): a badge with the companies open in Tally
   // that are no client's; a click then opens the panel, which starts with their link (TallyOffer). Only for who may link

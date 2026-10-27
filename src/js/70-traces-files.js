@@ -1,3 +1,4 @@
+/* @react-lazy: begin 70-traces-files.js (the React app loads this file with its TDS screens: app/src/lib/tdsGlobals.js and app/src/screens/tds/Files.jsx; build.py react_parts; integ-link 27-Oct-2026, legacy.js's size budget) */
 /* ================================================================== */
 /* TRACES files by upload (TDS/GST round 2, item 3, T-S4): Form 16A,  */
 /* the justification report and the consolidated file                 */
@@ -333,3 +334,5 @@ const TRF = {
     });
   }
 };
+if (typeof globalThis === "object") Object.assign(globalThis, {TRF});
+/* @react-lazy: end */

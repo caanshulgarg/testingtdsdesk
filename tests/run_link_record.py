@@ -175,6 +175,22 @@ def main():
         status = lambda pg, at="title": pg.evaluate("(a) => { const e = document.querySelector('#app [data-link-status-at=' + a + '], #cobar [data-link-status-at=' + a + '], [data-link-status-at=' + a + ']'); return e ? {state: e.getAttribute('data-link-status'), words: (e.querySelector('[data-link-status-words]') || {innerText: ''}).innerText.trim(), buttons: [...e.querySelectorAll('button')].map(b => b.innerText.trim()), title: e.getAttribute('title')} : null; }", at)
         chip = lambda pg: pg.evaluate("() => { const b = document.querySelector('[data-tally-chip-at=title]'); return b ? b.getAttribute('data-tally-pill') : null; }")
         rpc = lambda pg, fn: [r for r in pg.evaluate("window.__rpc") if r[0] == fn]
+        # integ-link (27-Oct-2026): the top bar's Tally sign is about THIS computer; with no bridge here it never reads like a
+        # problem of a client that is Linked or Waiting for Tally ("Tally not on this computer" beside "Linked")
+        here = lambda pg: pg.evaluate("() => { const b = document.querySelector('[data-tally-here]'); return b ? {code: b.getAttribute('data-tally-here'), long: b.querySelector('.tsign-long').textContent, short: b.querySelector('.tsign-short').textContent, title: b.title} : null; }")
+        def here_ok(pg, word):
+            h = here(pg)
+            ok(h is None or h["code"] != "none" or (h["long"] == "This PC: no bridge (not needed)" and h["short"] == "This PC: no bridge" and "Tally not on this computer" not in h["title"]),
+               "%s: the top bar's sign speaks of this computer, not the client (%s)" % (word, h))
+        # integ-link: "Not saved: ..." stays one line (shortened, the whole of it in its tip) at 1366 and 1440 wide, beside the
+        # title row's status line
+        def save_one_line(pg):
+            for w in (1366, 1440):
+                pg.set_viewport_size({"width": w, "height": 900})
+                pg.evaluate("() => { Live.sv = Object.assign({}, Live.sv, {state: 'error', err: 'records: 500 the server did not take the change (made-up)'}); render(); }"); pg.wait_for_timeout(400)
+                m = pg.evaluate("() => { const e = document.querySelector('.tsave.bad'); if (!e) return null; const r = e.getBoundingClientRect(), lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.3; return {h: r.height, w: r.width, lh, title: e.title, text: e.textContent, sw: document.documentElement.scrollWidth, iw: innerWidth}; }")
+                ok(m and m["h"] <= m["lh"] * 1.5 and m["w"] >= 150 and m["text"].startswith("Not saved: ") and "the server did not take the change" in m["title"] and "500" in m["title"] and m["sw"] <= m["iw"] + 1,
+                   "%d wide: 'Not saved: ...' on one line, at least 150 px, the whole of it in its tip (%s)" % (w, m))
 
         print("== 1. Link -> the record")
         pg = page(); E = lambda js, *a: pg.evaluate(js, *a)
@@ -197,6 +213,7 @@ def main():
         st = status(pg)
         ok(chip(pg) == "connected" and T(pg, "[data-tally-chip-at=title]").endswith("Linked") and st and st["state"] == "linked" and st["words"].startswith("reading · posting allowed · last entry "),
            "the client's title: Linked, and its line '%s'" % (st or {}).get("words"))
+        here_ok(pg, "Linked")
         shot(pg, "1-linked-title", "#cobar")
         # the same company (its GUID) linked to another client: refused on its row
         tally_page(pg)
@@ -299,7 +316,11 @@ def main():
             st = scene(devs)
             ok(st["state"] == "waiting" and st["words"] == OPENW and not st["buttons"] and T(pg, "[data-tally-chip-at=title]").endswith("Waiting for Tally"),
                "%s: Waiting for Tally, one plain line %r (%s)" % (label, OPENW, st))
-            if label == "Tally closed": shot(pg, "5-waiting-title", "#cobar")
+            if label == "Tally closed":
+                here_ok(pg, "Waiting for Tally")
+                save_one_line(pg)
+                shot(pg, "5-waiting-title", "#cobar")
+                pg.evaluate("() => { Live.sv = Object.assign({}, Live.sv, {state: '', err: ''}); render(); }")
         st = scene([dev(OPEN, BEAT)], [rec(ALPHA, "b-alpha", CA, GA, allowed=False), rec(ITS, "b-its", CE, GE)])
         ok(st["state"] == "needs" and st["words"] == "Posting into Tally is stopped for Alpha Traders Ltd" and st["buttons"] == ["Allow posting"], "posting stopped: Needs you, one line, Allow posting (%s)" % st)
         pg.click("[data-link-status-at=title] [data-link-status-go]"); pg.wait_for_timeout(1500)

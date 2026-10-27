@@ -469,10 +469,11 @@ const TDSReg = {
   // challan status file (each challan's consumed amount across statements); a challan entered by hand that TRACES does not
   // know. Each: {src: conso | status | unknown, form, fy, q, key, label, challan, fincom, traces, diff, unknown, hint}
   traces(filter){
+    // TRF (src/js/70) comes with the TDS screens (@react-lazy): none read yet, no consolidated file to compare
     const byKey = {}, out = [], cx = this.ctx(), uses = cx.uses;
     TDS.challans().forEach(c => { byKey[TDSCH.chKey(c)] = c; });
     const k = (bsr, date, serial) => TDSCH.chKey({bsr, date, serial});
-    TRF.consos().forEach(cs => (cs.cd || []).forEach(cd => {
+    (typeof TRF === "object" ? TRF.consos() : []).forEach(cs => (cs.cd || []).forEach(cd => {
       const key = k(cd.bsr, cd.date, cd.serial), c = byKey[key], form = cs.form || "26Q";
       const fin = c ? num(((uses[c.id] || {})[this.key(form, cs.fy, cs.q)] || {}).tax) : 0;
       out.push({src: "conso", file: cs.file, form, fy: cs.fy, q: cs.q, key, label: cd.bsr + "/" + cd.serial + " · " + fmtDate(tallyDate(TDS.ymd(cd.date))), challan: c || null,
@@ -489,7 +490,7 @@ const TDSReg = {
     const near = (c, list) => { const m = list.find(t => [t.bsr === c.bsr, TDS.ymd(t.date) === TDS.ymd(c.date), String(t.serial).padStart(5, "0") === String(c.serial).padStart(5, "0")].filter(Boolean).length === 2);
       return m ? "TRACES has " + m.bsr + "/" + fmtDate(tallyDate(TDS.ymd(m.date))) + "/" + String(m.serial).padStart(5, "0") + ": check the " + (m.bsr !== c.bsr ? "BSR code" : TDS.ymd(m.date) !== TDS.ymd(c.date) ? "date of deposit" : "serial number") : ""; };
     const hand = TDS.challans().filter(c => this.srcOf(c) === "hand");
-    TRF.consos().forEach(cs => {
+    (typeof TRF === "object" ? TRF.consos() : []).forEach(cs => {
       const form = cs.form || "26Q", known = new Set((cs.cd || []).map(cd => k(cd.bsr, cd.date, cd.serial)));
       hand.filter(c => (uses[c.id] || {})[this.key(form, cs.fy, cs.q)] && !known.has(TDSCH.chKey(c))).forEach(c => out.push({src: "unknown", file: cs.file, form, fy: cs.fy, q: cs.q, key: TDSCH.chKey(c), label: TDSCH.label(c), challan: c,
         fincom: r2(num(((uses[c.id] || {})[this.key(form, cs.fy, cs.q)] || {}).tax)), traces: 0, diff: 0, unknown: true, hint: near(c, cs.cd || [])}));
