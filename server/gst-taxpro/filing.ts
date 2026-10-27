@@ -159,22 +159,24 @@ export function writeAllowed(base: string, live: string) {
 }
 const R1_KEYS = ["gstin", "fp", "gt", "cur_gt", ...PARTY, ...DOCS, ...ROWS, "nil", "hsn", "doc_issue", "supeco", "ecom", "ecoma"];
 export function cleanR1(j: any, gstin: string, period: string) {
-  if (!j || typeof j !== "object") throw new Error("The return is needed.");
-  if (String(j.gstin || "").toUpperCase() !== gstin) throw new Error("The return is for GSTIN " + j.gstin + ", not " + gstin + ".");
-  if (String(j.fp || "") !== period) throw new Error("The return is for the period " + j.fp + ", not " + period + ".");
+  if (!j || typeof j !== "object") throw new Plain("The return is needed.");
+  if (String(j.gstin || "").toUpperCase() !== gstin) throw new Plain("The return is for GSTIN " + j.gstin + ", not " + gstin + ".");
+  if (String(j.fp || "") !== period) throw new Plain("The return is for the period " + j.fp + ", not " + period + ".");
   const out: Record<string, unknown> = {};
   for (const k of R1_KEYS) if (j[k] !== undefined) out[k] = j[k];
   return out as any;
 }
 const R3B_KEYS = ["gstin", "ret_period", "sup_details", "inter_sup", "itc_elg", "inward_sup", "intr_ltfee", "eco_dtls"];
 export function cleanR3b(j: any, gstin: string, period: string) {
-  if (!j || typeof j !== "object") throw new Error("The return is needed.");
-  if (String(j.gstin || "").toUpperCase() !== gstin) throw new Error("The return is for GSTIN " + j.gstin + ", not " + gstin + ".");
-  if (String(j.ret_period || "") !== period) throw new Error("The return is for the period " + j.ret_period + ", not " + period + ".");
+  if (!j || typeof j !== "object") throw new Plain("The return is needed.");
+  if (String(j.gstin || "").toUpperCase() !== gstin) throw new Plain("The return is for GSTIN " + j.gstin + ", not " + gstin + ".");
+  if (String(j.ret_period || "") !== period) throw new Plain("The return is for the period " + j.ret_period + ", not " + period + ".");
   const out: Record<string, unknown> = {};
   for (const k of R3B_KEYS) if (j[k] !== undefined) out[k] = j[k];
   return out as any;
 }
+// a message meant for the person, said as it is (anything else thrown is logged and answered with a plain message)
+export class Plain extends Error {}
 // a text to keep or show: never the OTP (masked where it appears, and any PAN|OTP pair)
 export function safeText(t: unknown, otp: string) {
   let s = String(t == null ? "" : t);
