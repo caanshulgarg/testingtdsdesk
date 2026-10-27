@@ -1,0 +1,98 @@
+FINCOM BRIDGE 2.1.9 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.1.9.exe
+Fingerprint: SHA-256 73bd1aa52f7078da3187da850fc3c98f307a862d66d5355b519cbc7ce8be630a (FinComBridge-Setup-2.1.9.exe; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.1.9.exe
+(2.1.8 is installed on NWS144. Install 2.1.9 over it; the installer replaces the program and keeps the pairing, the
+ settings and the copy.)
+
+What is new in 2.1.9 (over 2.1.8) - the owner's rule of 04-Oct-2026: reading is PROSPECTIVE ONLY
+  - The bridge never reads earlier entries from Tally in normal running. Update now (from FinCom or the app) and the
+    nightly catch-up ask Tally only the tiny company check (FinComCompany: the company's
+    name, GUID and change numbers ALTVCHID / ALTMSTID) and the ledger list (masters, 2,000 at a time, as before). No
+    Day Book, no voucher list, no day is sent to FinCom's cloud. The log says, per company and run:
+      "Keeping ZZ TEST: Reading old entries is off (prospective only); FinComCompany ALTVCHID=... ALTMSTID=..."
+    (the old-day reading is still in the program behind the setting ReadDays, off; FinCom's cloud cannot switch it on).
+    A client opened in FinCom asks Tally nothing, as before.
+  - FY 2026-27's history (the entries already in Tally) comes from your Day Book upload in FinCom, not from the bridge.
+  - The starting point: the first time the bridge sees a company's change numbers it keeps them in
+    sync\start-point.json (once; never moved). A company that shows another GUID (a restored copy, or another company
+    of the same name) gets its own starting point beside the first; neither is ever moved.
+    The heartbeat carries the starting point and the latest numbers, so FinCom's cloud can see what changed since.
+  - A company seen open in Tally gets the company check once when it is first seen, then at most every 10 minutes
+    while it stays open (nothing else is read). The heartbeat also says whether the recorder add-on has written for
+    that company in the last 7 days (how FinCom spots a computer without the add-on).
+  - Posting is unchanged.
+  - Four tray items for the recorder trial: "Recorder trial: note change numbers", "Recorder trial: send results",
+    "Recorder trial: lock the holding file for 30 s" and "Recorder trial: time saving (ZZ TEST)" (the last two: see
+    PART 3C of the trial sheet).
+  - The install makes two folders: C:\ProgramData\FinCom\recorder (Users may add files there: Tally's add-on writes
+    its lines there; they cannot delete the folder) and C:\ProgramData\FinCom\addon (the trial add-on,
+    FinComRecorderTrial.tdl, is put there). Anything already at those places that is not a plain folder is moved
+    aside, and the install log says so.
+  - "Test reading from Tally" first asks a yes/no naming the company it will read.
+  - "Measure Tally (for FinCom support)" measures only its undated items while reading old entries is off; its report
+    says the dated items were not run.
+
+0. BEFORE THE INSTALL
+   TallyPrime open with ZZ TEST. Nothing to press in FinCom.
+
+1. DOWNLOAD AND INSTALL OVER 2.1.8
+   Do: open the Link, check the fingerprint if you can (PowerShell: Get-FileHash <file>). Double-click the setup;
+       "Windows protected your PC" > More info > Run anyway; "Just for me" (as 2.1.8); Next.
+   You should see: "FinCom Bridge 2.1.9 is installed and running", "Main bridge: reading and posting".
+   Check: the folders C:\ProgramData\FinCom\recorder and C:\ProgramData\FinCom\addon exist, and
+          C:\ProgramData\FinCom\addon holds FinComRecorderTrial.tdl.
+
+2. TEST READING FROM TALLY (once)
+   Do: right-click the FinCom icon near the clock > "Test reading from Tally". A box asks "Test reading from Tally
+       on the company <name>?": check it names ZZ TEST, then Yes (No: nothing is read). Wait for its message box (a
+       few minutes at most: about a dozen small requests, one at a time).
+   You should see: the company and a day (the anchor: the newest date among the entries Tally lists), then one line
+       per request: the Day Book with the dates in four forms (yyyymmdd; d-MMM-yyyy; each also with TYPE="Date"),
+       FinComTag, FinComCompany (change numbers), "Entries above the starting point (... no dates)", and FinComCompany
+       sent as UTF-16 and as UTF-8; then the line
+         "Dates on this Tally: <form> (the form that answered <day> with exactly its entries; nothing was changed)"
+       or "Dates on this Tally: none".
+   This test only reads and writes to the log. It changes nothing: no form is switched, nothing goes to FinCom.
+   Send: "Show log" > the lines starting "Test reading from Tally:" (or "Recorder trial: send results" in step 5,
+       which sends the last 500 log lines too).
+
+3. WHAT THE TALLY PAGE IN FINCOM SHOWS
+   The bridge 2.1.9. The heartbeat now carries each company's starting point, its latest change numbers and whether the
+   recorder has written for it in the last 7 days (shown once FinCom's cloud shows them). No new entries appear from the bridge's reading (it reads no old days);
+   entries come from your Day Book upload and from postings.
+
+4. UPDATE NOW (check that no old entries are read)
+   Do: FinCom > Tally page > Update now.
+   You should see in the log: "Keeping ZZ TEST: Reading old entries is off (prospective only); FinComCompany
+       ALTVCHID=... ALTMSTID=..." and the ledger list lines; no "day book" line.
+
+5. THE RECORDER TRIAL (item 99)
+   The steps in Tally (loading the add-on on ZZ TEST, the exact Tally menu words, the entries to make, delete and
+   cancel): see the trial sheet, docs/recorder-trial-sheet.txt. The add-on file is
+       C:\ProgramData\FinCom\addon\FinComRecorderTrial.tdl
+   Around the steps of the trial sheet:
+   a. Before a delete and before a cancel: tray > "Recorder trial: note change numbers". You should see a box with
+      "ZZ TEST: ALTVCHID=..., ALTMSTID=..., at <time>" (added to recorder-changenumbers.txt in the bridge's own sync
+      folder, which the box names; no longer in the recorder folder).
+   b. After the delete and after the cancel: press it again.
+   c. At the end: tray > "Recorder trial: send results". You should see "Sent to FinCom support: N lines in K files
+      (reference ...)". It sends the recorder folder's .txt files (at most 50, the last 4 MB of each), the change
+      numbers noted in a., Tally's tdlerror.log, tally.imp and tally.ini (read only, and only from Tally's folder under
+      Program Files), the last 500 lines of the bridge's log and a summary with this computer's name and the time the bridge saw
+      each write (to the millisecond). The log says "Recorder trial: N lines in K files sent".
+
+5b. CAN THE ADD-ON HANG OR SLOW TALLY
+   The three short tests of PART 3C of the trial sheet (time saving with and without the add-on, the file locked for
+   30 s while you save, the add-on unloaded without closing Tally).
+   ZZ TEST stays linked to its FinCom client. The 100 journals of "time saving" are test entries in ZZ TEST
+   (narration "FinCom bench <n>", no FinCom tag). FinCom reads no old entries, so they reach FinCom only if a ZZ TEST
+   Day Book is uploaded. Afterwards the ZZ TEST client may show "up to 100 changes not received": that is these
+   journals and is expected; nothing else is needed.
+
+6. A POSTING (unchanged)
+   Do: post one bill from FinCom to ZZ TEST as in 2.1.8.
+   You should see: posted by Tally's reply, as before.
+
+If anything is not as written: tray > "Send install log to FinCom", and note the step number.

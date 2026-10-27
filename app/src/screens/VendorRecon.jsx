@@ -24,14 +24,14 @@ function Form({ V0 }) {
         <input ref={file} type="file" hidden aria-label="Vendor’s ledger file" accept=".xlsx,.xls,.xlsm,.csv,.txt,.pdf,image/*" onChange={(ev) => vrFile(ev.target.files && ev.target.files[0])} /></label>
       <div style={{ alignSelf: "end" }}><button className="btn primary" disabled={!live || !!V0.busy} onClick={() => runVendorRecon()}>Reconcile</button></div>
     </div>
-    {!live && <p className="note">Connect the Tally Bridge and open the company in Tally to reconcile.</p>}
+    {!live && <p className="note">Connect FinCom Bridge and open the company in Tally to reconcile.</p>}
   </>;
 }
 
 // a list of entries under its heading, with a count; nothing when empty
 function Section({ title, rows, cols }) {
   if (!rows.length) return null;
-  return <div className="recon-sec"><h4>{title} <span className="cnt">{rows.length}</span></h4><div className="tblwrap"><table className="data">
+  return <div className="recon-sec"><h4>{title} <span className="cnt">{rows.length}</span></h4><div className="tblwrap"><table className="data" data-statement="">
     <thead><tr>{cols.map(([h, , n]) => <th key={h} className={n ? "n" : undefined}>{h}</th>)}</tr></thead>
     <tbody>{rows.slice(0, 500).map((r, i) => <tr key={i}>{cols.map(([h, f, n]) => <td key={h} className={n ? "n" : undefined}>{f(r)}</td>)}</tr>)}</tbody>
   </table></div></div>;
@@ -41,7 +41,7 @@ function Section({ title, rows, cols }) {
 function Statement({ R }) {
   const V = R.V, T = R.T;
   const line = (label, v, sign) => <tr key={label}><td>{label}</td><td className="n">{v ? sign + m(Math.abs(v)) : "—"}</td></tr>;
-  return <table className="data recon-stmt"><tbody>
+  return <table className="data recon-stmt" data-statement=""><tbody>
     <tr><td><b>Balance in Tally on {fmtDate(R.to)}</b></td><td className="n"><b>{m(R.tClose) + side(R.tClose)}</b></td></tr>
     {R.openDiff && Math.abs(R.openDiff) >= 0.01 ? line("Opening balance difference (vendor less Tally)", R.openDiff, R.openDiff > 0 ? "+ " : "− ") : null}
     {line("Add: bills in the vendor’s ledger, not in Tally", sum0(R.onlyV.map((i) => V[i]).filter((x) => x.eff > 0)), "+ ")}

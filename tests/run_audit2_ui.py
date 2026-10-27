@@ -2,9 +2,11 @@
 import json, os, sys, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from books_data import DATA, CACHE, FIXTURE, GSTIN, GSTIN09, COMPANY
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "site-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8132), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
-OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")); books = json.load(open(os.environ.get("TDSDESK_CACHE", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "books-cache.json")))); fails, errors = [], []
+OUT = os.environ.get("TDSDESK_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")); books = json.load(open(CACHE)); fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
@@ -12,21 +14,23 @@ with sync_playwright() as p:
     br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8132/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
-    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "07AADCV3366N1ZU"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
-      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""", books)
+    pg.evaluate("""(bk) => { const c = newCompany({name: "ZZ TEST (VMS books)", gstin: "@GSTIN@", tallyName: "@CO@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+      S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}}); S.books.map = Books.mapLedgers(bk.vouchers, {}); window.__bk = S.books; S.booksTab = "import"; render(); }""".replace("@GSTIN@", GSTIN).replace("@CO@", COMPANY), books)
     pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600)
-    pg.set_input_files("#mastersIn", os.path.join(os.environ.get("TDSDESK_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")), "Master.xml")); pg.wait_for_timeout(12000)
+    pg.set_input_files("#mastersIn", os.path.join(DATA, "Master.xml")); pg.wait_for_timeout(12000)
     pg.evaluate("S.booksTab = 'audit'; render();"); pg.wait_for_timeout(400)
+    # two people's loans the ledgers suggest, and a ledger typed (it must be in the books): the real client's, or the fixture's
+    P1, P2, P3 = ("Hemant Zaverchand (Loan)", "Nirmala Quereshi (Loan)", "Saltmarsh Software Pvt Ltd") if FIXTURE else ("Pradeep Sharma (Loan)", "KARISHMA GAUR (Loan)", "SUMIT LAL LOAN")
     pg.click('nav[aria-label="Audit"] button:text-is("Related parties")'); pg.wait_for_timeout(400)
     t = pg.inner_text("#app")
-    ok("Possibly related" in t and "Pradeep Sharma (Loan)" in t, "related parties: suggestions from the ledgers")
-    pg.click('tr[data-key="Pradeep Sharma (Loan)"] button:text-is("Add")'); pg.wait_for_timeout(300)
-    pg.click('tr[data-key="KARISHMA GAUR (Loan)"] button:text-is("Add")'); pg.wait_for_timeout(300)
-    pg.fill("#relq", "SUMIT LAL LOAN"); pg.click('.row:has(#relq) button:text-is("Add")'); pg.wait_for_timeout(300)
-    ok(pg.evaluate("S.books.auditRel.map(x => x.name).join('|')") == "Pradeep Sharma (Loan)|KARISHMA GAUR (Loan)|SUMIT LAL LOAN", "added from suggestions and by typing")
-    pg.select_option('select[aria-label="Relation of Pradeep Sharma (Loan)"]', "Director"); pg.wait_for_timeout(300)
-    pg.click('tr[data-key="SUMIT LAL LOAN"] button:text-is("remove")'); pg.wait_for_timeout(300)
-    ok(pg.evaluate("JSON.stringify(S.books.auditRel)") == '[{"name":"Pradeep Sharma (Loan)","relation":"Director"},{"name":"KARISHMA GAUR (Loan)","relation":""}]', "relation set, one removed")
+    ok("Possibly related" in t and P1 in t, "related parties: suggestions from the ledgers")
+    pg.click('tr[data-key="%s"] button:text-is("Add")' % P1); pg.wait_for_timeout(300)
+    pg.click('tr[data-key="%s"] button:text-is("Add")' % P2); pg.wait_for_timeout(300)
+    pg.fill("#relq", P3); pg.click('.row:has(#relq) button:text-is("Add")'); pg.wait_for_timeout(300)
+    ok(pg.evaluate("S.books.auditRel.map(x => x.name).join('|')") == "|".join([P1, P2, P3]), "added from suggestions and by typing")
+    pg.select_option('select[aria-label="Relation of %s"]' % P1, "Director"); pg.wait_for_timeout(300)
+    pg.click('tr[data-key="%s"] button:text-is("remove")' % P3); pg.wait_for_timeout(300)
+    ok(pg.evaluate("JSON.stringify(S.books.auditRel)") == json.dumps([{"name": P1, "relation": "Director"}, {"name": P2, "relation": ""}], separators=(",", ":")), "relation set, one removed")
     pg.click('nav[aria-label="Audit"] button:text-is("Findings")'); pg.wait_for_timeout(300)
     pg.click('button:text-is("Last year")') if pg.locator('button:text-is("Last year")').count() else None
     pg.fill('input[aria-label="Audit from"]', "2025-04-01"); pg.dispatch_event('input[aria-label="Audit from"]', "change"); pg.fill('input[aria-label="Audit to"]', "2026-03-31"); pg.dispatch_event('input[aria-label="Audit to"]', "change")

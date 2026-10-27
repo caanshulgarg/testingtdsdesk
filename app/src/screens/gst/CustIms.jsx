@@ -4,6 +4,7 @@
 //
 // State: S.custImsQ (the number being looked for).
 import CommitBox from "../../parts/CommitBox.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const day = (d) => fmtDate(tallyDate(d));
@@ -17,26 +18,34 @@ function MonthSel({ x, k, v }) {
 
 function Found({ hits, reg }) {
   if (!hits.length) return <p className="note">No invoice or note to a registered customer has that number.</p>;
-  return <div className="bk-tablewrap"><table className="bk-table compact"><thead><tr><th>Document</th><th>Number</th><th className="dt">Date</th><th>Customer</th><th className="n">Tax</th><th></th></tr></thead>
-    <tbody>{hits.map((r, i) => <tr key={r.id + ":" + i}>
-      <td>{r.kind === "CDNR" ? "Credit note" : r.kind === "DBNR" ? "Debit note" : "Invoice"}</td><td>{r.no}</td><td>{day(r.date)}</td><td>{r.party}<div className="nr">{r.gstin}</div></td><td className="n">{money(all4(r))}</td>
-      <td>{CustIMS.store(reg)[r.id] ? <span className="nr">already marked</span> : <button className="btn small" onClick={() => custImsAdd(r.id)}>Mark as rejected</button>}</td></tr>)}</tbody>
-  </table></div>;
+  // the one list table (spec K6): date, number, customer, tax (amount), then the rest
+  return <ListTable name="custImsFound" className="bk-table compact" rows={hits} rowKey={(r, i) => r.id + ":" + i} unit={["document", "documents"]}
+    cols={[
+      { k: "date", role: "date", label: "Date", cls: "dt", v: (r) => String(r.date || ""), cell: (r) => day(r.date) },
+      { k: "no", role: "number", label: "Number", v: (r) => r.no || "", cell: (r) => r.no },
+      { k: "party", role: "party", label: "Customer", v: (r) => r.party || "", cell: (r) => <>{r.party}<div className="nr">{r.gstin}</div></> },
+      { k: "tax", role: "amount", label: "Tax", cls: "n", v: (r) => all4(r), fmt: money, cell: (r) => money(all4(r)) },
+      { k: "doc", label: "Document", cell: (r) => (r.kind === "CDNR" ? "Credit note" : r.kind === "DBNR" ? "Debit note" : "Invoice") },
+      { k: "ac", role: "act", cell: (r) => (CustIMS.store(reg)[r.id] ? <span className="nr">already marked</span> : <button className="btn small" onClick={() => custImsAdd(r.id)}>Mark as rejected</button>) },
+    ]} />;
 }
 
 function Marked({ list }) {
-  return <div className="bk-tablewrap"><table className="bk-table compact">
-    <thead><tr><th>Document</th><th>Number</th><th className="dt">Date</th><th>Customer</th><th className="n">Tax</th><th>Rejected in</th><th>Added back in</th><th>What to do</th><th>Customer’s remark</th></tr></thead>
-    <tbody>{list.map((x, i) => <tr key={x.id + ":" + i}>
-      <td>{x.kind === "cn" ? "Credit note" : "Invoice"}{x.gone && <div className="bad">no longer in Tally</div>}</td><td>{x.no}</td><td>{day(x.date)}</td><td>{x.party}<div className="nr">{x.gstin}</div></td><td className="n">{money(x.tax)}</td>
-      <td><MonthSel x={x} k="rejYm" v={x.rejYm} /></td>
-      <td>{x.kind === "cn" ? <MonthSel x={x} k="addYm" v={x.addYm} /> : <span className="nr">tax stays</span>}</td>
-      <td><select aria-label="What to do" value={x.act} onChange={(ev) => custImsSet(x.id, "act", ev.target.value)}>{CustIMS.ACTS[x.kind].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+  // the one list table (spec K6): date, number, customer, tax (amount), what to do (status), then the rest
+  return <ListTable name="custImsMarked" className="bk-table compact" rows={list} rowKey={(x, i) => x.id + ":" + i} unit={["document", "documents"]}
+    cols={[
+      { k: "date", role: "date", label: "Date", cls: "dt", v: (x) => String(x.date || ""), cell: (x) => day(x.date) },
+      { k: "no", role: "number", label: "Number", v: (x) => x.no || "", cell: (x) => x.no },
+      { k: "party", role: "party", label: "Customer", v: (x) => x.party || "", cell: (x) => <>{x.party}<div className="nr">{x.gstin}</div></> },
+      { k: "tax", role: "amount", label: "Tax", cls: "n", v: (x) => num(x.tax), fmt: money, cell: (x) => money(x.tax) },
+      { k: "act", role: "status", label: "What to do", v: (x) => x.act || "", cell: (x) => <><select aria-label="What to do" value={x.act} onChange={(ev) => custImsSet(x.id, "act", ev.target.value)}>{CustIMS.ACTS[x.kind].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         {x.kind === "cn" && x.act === "accepted" && <div className="nr">accepted in <MonthSel x={x} k="doneYm" v={x.doneYm || x.addYm} /></div>}
-        <div><button className="linkbtn" onClick={() => custImsRemove(x.id)}>not rejected after all</button></div></td>
-      <td><CommitBox aria-label="Customer’s remark" data-fk={"custimsr-" + x.id} value={x.remark || ""} placeholder="remark" style={{ width: "100%" }} onCommit={(v) => custImsSet(x.id, "remark", v)} /></td>
-    </tr>)}</tbody>
-  </table></div>;
+        <div><button className="linkbtn" onClick={() => custImsRemove(x.id)}>not rejected after all</button></div></> },
+      { k: "doc", label: "Document", cell: (x) => <>{x.kind === "cn" ? "Credit note" : "Invoice"}{x.gone && <div className="bad">no longer in Tally</div>}</> },
+      { k: "rej", label: "Rejected in", cell: (x) => <MonthSel x={x} k="rejYm" v={x.rejYm} /> },
+      { k: "add", label: "Added back in", cell: (x) => (x.kind === "cn" ? <MonthSel x={x} k="addYm" v={x.addYm} /> : <span className="nr">tax stays</span>) },
+      { k: "rem", label: "Customer’s remark", cell: (x) => <CommitBox aria-label="Customer’s remark" data-fk={"custimsr-" + x.id} value={x.remark || ""} placeholder="remark" style={{ width: "100%" }} onCommit={(v) => custImsSet(x.id, "remark", v)} /> },
+    ]} />;
 }
 
 export default function CustIms() {

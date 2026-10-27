@@ -1,0 +1,170 @@
+FINCOM BRIDGE 2.3.1 - TEST SHEET (NWS144, staging)
+
+File:        FinComBridge-Setup-2.3.1.exe
+Fingerprint: SHA-256 7d4a37a93a52dbc55ab9992c7148c7d607485d567fd34e1bde7d607288a216be (FinComBridge-Setup-2.3.1.exe, built 06-Oct-2026 17:23 IST; compare with the .sha256 file next to the setup)
+Link:        https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.3.1.exe
+
+What 2.3.1 changes (the full notes: docs/bridge-2.3.1-notes.md): one thing. A Sales, Purchase, Credit Note or Debit
+Note entered WITH stock items (item invoice mode) now enters the books complete. Tally keeps the sales or purchase
+ledger of such an invoice under its items; 2.3.0 did not ask Tally for it, so FinCom held these entries ("the entry's
+details from Tally are incomplete (its lines do not add up ...)"). 2.3.1 also asks Tally for the ledger lines under the
+items, so the entry arrives with every line: the party, the sales or purchase ledger, CGST and SGST (or IGST).
+With it (part A) the whole entry comes: the items (name, quantity, unit, rate, taxable value, the HSN or SAC and GST
+rate Tally applied to that line, and the CGST / SGST / IGST / cess per line, worked out from the line's rate as Tally
+does: Tally keeps no tax amount per item line), bill-wise details, TDS details, cost centres, bank details (UTR,
+instrument date, bank date, transaction type), reference number and date, party GSTIN, place of supply, the e-invoice
+IRN and acknowledgement, the e-way bill number.
+FinCom's accuracy checks: an entry is held only when its lines do not total zero (held with plain words, nothing of it
+applied). Any other mismatch (items' taxable value plus tax against the ledger lines, e.g. GST on freight with no item
+line, round-off, a discount; bill-wise or cost centres against their line) enters the entry as Tally has it, and Sync
+activity says "Entered in the books; to check: ..." with the note in plain words.
+One entry per request, by Tally's own id (FinComVoucherByMaster) or by type and number (FinComVoucherByNumber);
+read only, inside the 2-second rule, after postings. One limit: a very large invoice (over about 1 MB of details,
+roughly 1,000 items or more) is held with plain words for a Day Book upload.
+With it (part B, masters) a ledger created or altered in Tally reaches FinCom within about 10 minutes, and a ledger an
+entry uses that FinCom does not have is fetched from Tally first, then the entry (FinComLedgerChanges,
+FinComLedgerByName; read only, inside the 2-second rule, after postings).
+Needs FinCom's cloud update of 2.3.1 and database migrations 56, 57, 58, 59 and 60 (in that order) on staging before you
+start.
+
+The app is not updated with this bridge. Keep the add-on loaded as it is
+(C:\ProgramData\FinCom\addon\FinComRecorder.tdl). 2.3.1 does not change the add-on.
+
+Before you start: you are signed in to FinCom as the owner, TallyPrime 7.1 is open with the add-on loaded, and
+GARG SHEKHAR is open in Tally. In every entry you make for this sheet, start the narration with TRIAL. Use stock items
+and ledgers that already exist in GARG SHEKHAR (any items; a sales ledger and a purchase ledger with GST; the CGST and
+SGST ledgers).
+
+Write down the time (IST) of each check you do; we need it if something fails.
+
+
+INSTALL (over 2.3.0, for your own Windows user)
+   New versions install by themselves on every computer. To install it at once: open the Link, double-click the setup;
+   if Windows warns: More info > Run anyway; "Just for me" (as before); Next.
+   You should see: "FinCom Bridge 2.3.1 is installed and running". Within a minute, FinCom's Tally page shows version
+   2.3.1 for your line ("NWS144 · <your Windows user>").
+   Every Windows user on NWS144 that runs a FinCom Bridge gets 2.3.1 the same way.
+
+
+CHECK 1 - A SALES INVOICE WITH TWO ITEMS AND GST
+   In Tally make a Sales entry in item invoice mode: a party, TWO stock items (for example 2 of one item and 3 of
+   another), the sales ledger with GST, and CGST and SGST on the invoice. Narration "TRIAL 231 sales". Save it. Note its
+   number, the invoice total, the taxable value and the CGST and SGST amounts Tally shows.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books (not held). Look up shows
+   every line: the party for the invoice total, the sales ledger for the taxable value (the two items together), CGST
+   and SGST for Tally's amounts. The lines add up to the total, as in Tally.
+   If not, send: its type and number, the time you saved it, a picture of the entry in Tally, what Sync activity shows
+   for it, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 2 - A PURCHASE INVOICE WITH ITEMS
+   In Tally make a Purchase entry in item invoice mode: a supplier, one or two stock items, the purchase ledger with
+   GST, CGST and SGST (input). Narration "TRIAL 231 purchase". Save it. Note its number and Tally's figures.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with every line: the
+   supplier for the total, the purchase ledger for the taxable value, CGST and SGST input for Tally's amounts.
+   If not, send: its type and number, the time, a picture of the entry in Tally, and the Show log lines starting
+   "Recorder:" that name it.
+
+CHECK 3 - A CREDIT NOTE WITH ITEMS
+   In Tally make a Credit Note in item invoice mode against the party of CHECK 1: one of the items returned, the sales
+   ledger, CGST and SGST. Narration "TRIAL 231 credit note". Save it. Note its number and Tally's figures.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with every line: the
+   party, the sales ledger, CGST and SGST, matching Tally.
+   If not, send: its type and number, the time, a picture of the entry in Tally, and the Show log lines starting
+   "Recorder:" that name it.
+
+CHECK 4 - ALTER THE SALES INVOICE
+   Open the Sales entry of CHECK 1 in Tally, change the quantity of one item, and save.
+   You should see: within a minute, Sync activity shows it as Altered, and the books show Tally's new figures for every
+   line (party, sales ledger, CGST, SGST).
+   If not, send: its type and number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 5 - ITEM INVOICES HELD UNDER 2.3.0 SETTLE BY THEMSELVES
+   Only if an item invoice was held under 2.3.0 with the words "the entry's details from Tally are incomplete (its
+   lines do not add up ...)". Wait up to 15 minutes after installing 2.3.1, with that company open in Tally.
+   This includes an item invoice 2.3.0 had already asked Tally for again (held a second time with the same words): it
+   is asked once more and settles the same way (needs FinCom's cloud update of 2.3.1).
+   You should see: the held entry is in the books with every line, once, and its held lines show as 'replaced'.
+   If not, send: its type, number and date, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 6 - A RECEIPT AGAINST A BILL
+   Make one Receipt of Rs 1 from the party of CHECK 1, against that sales invoice's bill (Agst Ref), narration
+   "TRIAL 231 receipt". Save it.
+   You should see: within a minute, Sync activity shows it as Created, and it is in the books with its bill-wise
+   detail (the bill's name, Agst Ref, Rs 1).
+   If not, send: its number, the time, and the Show log lines starting "Recorder:" that name it.
+
+CHECK 7 - THE SALES INVOICE'S ITEMS, E-INVOICE AND E-WAY BILL
+   Look at the Sales entry of CHECK 1 in FinCom.
+   You should see: each item with its quantity, unit, rate, taxable value, HSN and GST rate as on the invoice in Tally,
+   and CGST and SGST per item adding up to the invoice's CGST and SGST. If the invoice has an e-invoice IRN or an e-way
+   bill number in Tally, FinCom shows the same.
+   If not, send: a picture of the invoice in Tally (with its e-invoice details) and what FinCom shows.
+
+CHECK 8 - A BANK PAYMENT WITH A UTR
+   Make a Payment from a bank ledger of Rs 1, transaction type e-Fund Transfer (or NEFT), with a UTR / instrument number
+   and date, narration "TRIAL 231 bank". Save it.
+   You should see: within a minute, in the books with the UTR, the instrument date and the transaction type.
+   If not, send: its number, the time, a picture of its bank details in Tally, and the Show log lines.
+
+CHECK 9 - A PAYMENT WITH TDS
+   Make a Payment (or Journal) with TDS deducted on a party with a TDS nature of payment, narration "TRIAL 231 tds".
+   Save it.
+   You should see: within a minute, in the books with its TDS details: nature of payment, section, rate, amount, and
+   the party's deductee type (once the ledger list of 2.3.1 has come). Note what Tally shows as the section; if FinCom
+   shows the section blank, send a picture of the entry's TDS details in Tally (the section field is not yet seen from a
+   real Tally).
+   If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
+
+CHECK 10 - A JOURNAL WITH COST CENTRES
+   Make a Journal of Rs 2 split between two cost centres (Rs 1 each), narration "TRIAL 231 cost centres". Save it.
+   You should see: within a minute, in the books with its two cost centre allocations (category, centre, amount).
+   If not, send: its number, the time, a picture of the entry in Tally, and the Show log lines.
+
+CHECK 11 - A LEDGER CHANGED IN TALLY REACHES FINCOM (MASTERS)
+   In Tally, alter one party ledger: change its GSTIN (or its state, or its opening balance). Save it.
+   You should see: within about 10 minutes, FinCom's ledger list shows the new GSTIN (state, opening) for that ledger.
+   The log has a line "Ledger changes for <company>: ... 1 ledger(s) sent to FinCom".
+   If not, send: the ledger's name, the time, and the Show log lines starting "Ledger changes".
+
+CHECK 12 - A NEW PARTY USED AT ONCE: THE LEDGER FIRST, THEN THE ENTRY
+   Make a Sales entry of Rs 1, narration "TRIAL 231 new party". In the party field press Alt+C and create a new party
+   "TRIAL 231 PARTY" (Sundry Debtors). Save the entry.
+   You should see: for a moment Sync activity may show it held "waiting for the ledger 'TRIAL 231 PARTY' from Tally";
+   within a few minutes the party is in FinCom's ledger list and the entry is in the books, once.
+   The log has a line "Ledger TRIAL 231 PARTY of <company>: fetched from Tally before its entry".
+   If not, send: the entry's number, the time, and the Show log lines starting "Ledger" and "Recorder:".
+
+CHECK 13 - A LEDGER RENAMED IN TALLY, USED UNDER ITS NEW NAME
+   In Tally, rename one party ledger that FinCom already has (for example "TRIAL 231 PARTY" to "TRIAL 231 PARTY NEW").
+   At once, make a Sales entry of Rs 1 to it under the new name, narration "TRIAL 231 renamed". Save it. Then make a
+   second one the same way, narration "TRIAL 231 renamed 2".
+   You should see: within a few minutes both entries are in the books under FinCom's ledger "TRIAL 231 PARTY" (FinCom
+   keeps the old name in 2.3.1), once each; no second ledger with the new name; the second entry goes in without waiting.
+   If not, send: the entries' numbers, the time, and the Show log lines starting "Ledger" and "Recorder:".
+
+CHECK 14 - TALLY SLOW FOR A WHILE: NOTHING SWITCHED OFF, IT TRIES AGAIN BY ITSELF
+   In Tally on NWS144, open a large report (for example Display More Reports > Day Book for the whole year) so that
+   Tally is busy for a few minutes. Meanwhile make a Journal entry of Rs 1 in GARG SHEKHAR, narration "TRIAL 231
+   retry", from another Tally window if you have one, else right after the report finishes.
+   You should see: FinCom's Tally page shows for your line "Tally did not answer in time at <time>; trying again by
+   itself at <time>", with no Resume button; once Tally is free again (within 5 minutes) the line goes back to
+   "Reading" by itself and the entry is in the books. Nothing on the page says "switched off" or "Stopped by itself".
+   The log has one line per try ("did not answer in time ... trying again by itself at") and one line "answered in time
+   again".
+   The held Journal lines from 2.3.0 (GARG SHEKHAR, MasterIDs 25689 and up) come into the books within a few minutes
+   of 2.3.1 starting, without anyone pressing anything.
+   If not, send: the time, a photo of the Tally page line, and the Show log lines starting "Tally" and "Recorder:".
+
+How to send the log lines: right-click the FinCom icon near the clock > Show log. Each line starting "Recorder:" says
+what the bridge decided for one entry: asking Tally, taken, held (with the reason), or not asked (with the reason).
+On NWS144 each Windows user has their own FinCom icon and their own log: send the log of the Windows user named in the
+check.
+
+
+HOW TO ROLL BACK (go back to 2.3.0)
+   1. Right-click the FinCom icon near the clock > "Roll back to the previous version".
+   2. A question names the version it goes back to (2.3.0). Answer Yes.
+   3. The icon goes away for a few seconds and comes back.
+   You should see: within a minute, FinCom's Tally page shows version 2.3.0 for your line. The app does not change:
+   it trusts 2.3.0 as before. Item invoices are then held again as under 2.3.0 (uploading that day's Day Book settles
+   them). Automatic updates stay off on this computer until FinCom turns them on again.

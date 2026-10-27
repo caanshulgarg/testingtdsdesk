@@ -6,6 +6,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import aesjs from "npm:aes-js@3.1.2";
 import { makeGstCrypto } from "./gstcrypto.ts";
+import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 
 const C = makeGstCrypto(aesjs);
 const URL = Deno.env.get("SUPABASE_URL")!;
@@ -23,11 +24,8 @@ function toFyn(url: string, init: { method: string; headers: Record<string, stri
   return fetch(RELAY + "/fwd", { method: "POST", headers: { ...init.headers, "x-relay-key": RKEY, "x-target": url, "x-method": init.method }, body: init.method === "GET" ? undefined : init.body });
 }
 
-const cors = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+// "*": GET ?selftest=1 is opened directly; everything else needs a signed-in firm member
+const cors = corsFor(null, { any: true, methods: "GET, POST, OPTIONS" });
 const reply = (code: number, body: unknown) =>
   new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
 

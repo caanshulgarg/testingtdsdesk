@@ -1,16 +1,17 @@
 // node run_mis.js - MIS on the VMS books, 2025-26
-const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT} = require("./harness");
-const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim"];
+const fs = require("fs"), {load, openBlob} = require("./harness"), {HTML, DATA, CACHE, OUT, FIXTURE} = require("./harness");
+const NAMES = ["num", "r2", "xesc", "esc", "MONTHS", "fmtDate", "tallyDate", "STATE_CODES", "RULE_DEFAULTS", "Books", "LedMaster", "Audit", "MIS", "TDS", "Certs", "GSTR", "GSTAdv", "GSTRev", "GSTAmend", "GST2B", "INR", "NORM_CACHE", "normName", "normNameRaw", "nameSim", "Parties", "FS", "GSTSet", "GSTF", "GSTQ"];
 const {ctx, x} = load(HTML, NAMES);
 let fails = 0; const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fails++; };
 const M = v => x.INR.format(Math.round(v || 0));
 (async () => {
   const b = JSON.parse(fs.readFileSync(CACHE, "utf8"));
   const ms = await x.Books.importMasters(await openBlob(DATA + "/Master.xml"));
-  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});
-  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
+  Object.assign(b, {ledInfo: ms.info, under: ms.under, groups: ms.groups, groupInfo: ms.groupInfo, states: ms.states, gstins: ms.gstins, pans: ms.pans, challans: [], alloc: {}});   // as the masters upload keeps them
+  b.map = x.Books.mapLedgers(b.vouchers, {}); ctx.S.books = b; ctx.CO = () => ({name: FIXTURE ? "Larkspur Fixture Events Private Limited" : "VMS EVENTS PRIVATE LIMITED"}); ctx.S.coId = "t";
   x.LedMaster.refresh(b);
-  ok(Object.values(b.ledInfo).filter(i => i.msme).length === 17, "17 MSME suppliers read from the Udyam details in Tally");
+  const nMsme = FIXTURE ? 1 : 17;   // the fixture: Nightjar Sound & Light Co, a micro enterprise (tests/fixtures/books/EXPECTED.md)
+  ok(Object.values(b.ledInfo).filter(i => i.msme).length === nMsme, nMsme + " MSME supplier" + (nMsme === 1 ? "" : "s") + " read from the Udyam details in Tally");
   const t0 = Date.now(), r = x.MIS.run("20250401", "20260331", "test");
   console.log("ran in " + (Date.now() - t0) + " ms, code " + r.code);
   console.log("  sales " + M(r.sales.total) + ", customers " + r.sales.rows.length + ", top 5 share " + Math.round(r.sales.top5 / r.sales.total * 100) + "%");
@@ -23,6 +24,8 @@ const M = v => x.INR.format(Math.round(v || 0));
   // revenue agrees with GSTR-1 sales (taxable, less credit notes) for the year
   const gst = x.GSTR.months().reduce((s, m) => { const o = x.GSTR.outward(m, ""); return s + o.reduce((a, z) => a + (z.kind === "CDNR" ? -1 : 1) * z.taxable, 0); }, 0);
   ok(Math.abs(r.sales.total - gst) < 1, "sales in the MIS agree with GST outward for the year: " + M(r.sales.total) + " / " + M(gst));
+  if (FIXTURE) ok(r.sales.total === 1550000 && r.pl.pbt.t === 394550 && r.recv.sum.owe === 718200 && r.pay.sum.owe === 322400 && r.msme.reduce((s, z) => s + z.amt, 0) === 290000,
+    "fixture: sales 15,50,000, profit 3,94,550, owed to you 7,18,200, you owe 3,22,400, MSME past 45 days 2,90,000 (EXPECTED.md)");
   ok(Math.abs(r.pl.heads.rev.t - r.sales.total) / r.sales.total < 0.02, "revenue in the profit and loss is within 2% of sales invoices (" + M(r.pl.heads.rev.t) + ")");
   const monthsSum = r.pl.months.reduce((s, m) => s + r.pl.pbt.m[m], 0);
   ok(Math.abs(monthsSum - r.pl.pbt.t) < 1, "the months add up to the period");

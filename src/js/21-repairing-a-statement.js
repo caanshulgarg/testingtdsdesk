@@ -325,15 +325,14 @@ function decodeNarr(n, clientName){
 }
 /* ---------- suggestions ---------- */
 let knownLedgersCache = {key: "", map: null};
-// Only real Tally ledgers (the imported list) and ledgers created here that are waiting for Tally
+// Only real Tally ledgers (the client's one list, Ledgers in src/js/58) and ledgers created here that are waiting for Tally
 function knownLedgers(){
-  const b = B();
-  if (!b || !b.ledgers){ const m = new Map(); m.norm = new Map(); return m; }   // no client's ledger list is loaded yet
-  const ck = [b.cid, b.ledgers.importedAt, b.ledgers.list.length, b.newLed.length, b.newLed.map(l => l.name).join("|").length].join("#");
+  const b = B(), cid = Ledgers.cid(), list = Ledgers.list(cid), nl = b && b.cid === cid ? b.newLed || [] : [];
+  const ck = [cid, Ledgers.ver, list.length, list[0] ? list[0].name : "", b && b.ledgers ? b.ledgers.importedAt : "", nl.length, nl.map(l => l.name).join("|").length].join("#");
   if (knownLedgersCache.key === ck && knownLedgersCache.map) return knownLedgersCache.map;
   const set = new Map();
-  (b.ledgers.list || []).forEach(l => set.set(l.name.toLowerCase(), l));
-  b.newLed.forEach(l => { if (!set.has(l.name.toLowerCase())) set.set(l.name.toLowerCase(), Object.assign({pending: true}, l)); });
+  list.forEach(l => set.set(l.name.toLowerCase(), l));
+  nl.forEach(l => { if (!set.has(l.name.toLowerCase())) set.set(l.name.toLowerCase(), Object.assign({pending: true}, l)); });
   const norm = new Map();
   set.forEach(l => { const k = ledgerKey(l.name); if (k && !norm.has(k)) norm.set(k, l); });
   set.norm = norm;
@@ -341,7 +340,7 @@ function knownLedgers(){
   return set;
 }
 function ledgerKey(s){ return String(s || "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, ""); }
-function hasLedgerList(){ const b = B(); return !!(b && b.ledgers && b.ledgers.list && b.ledgers.list.length); }
+function hasLedgerList(){ return Ledgers.list().length > 0; }
 // The exact Tally spelling of a ledger, or null when Tally has no such ledger
 function exactLedger(name){
   if (!name) return null;

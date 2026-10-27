@@ -18,21 +18,41 @@ H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ
 srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 json.dump({"TallyTimeoutSec": 20}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
-br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN)
+# its own process group, so the bridge's workers (posting jobs, the keep copier) end with it (CI 37881218752 attempt 1: a
+# test after this one met a bridge answering 502, as if Tally were held by a process left from here)
+br_p = subprocess.Popen([os.environ.get("PWSH", "/opt/pwsh/pwsh"), "-NoProfile", "-File", _os.path.join(BRUN, "TDSBridge.ps1")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=BRUN, start_new_session=True)
+def stop_bridge():
+    """the bridge, its process group, and every worker it wrote down in its folder (keep.pid, a job's progress.json)"""
+    import glob, signal
+    try: os.killpg(br_p.pid, signal.SIGKILL)
+    except Exception: pass
+    br_p.kill()
+    pids = []
+    for f in glob.glob(_os.path.join(BRUN, "**", "keep.pid"), recursive=True):
+        try: pids.append(int(open(f).read().strip() or 0))
+        except Exception: pass
+    for f in glob.glob(_os.path.join(BRUN, "**", "progress.json"), recursive=True):
+        try: pids.append(int(json.load(open(f, encoding="utf-8-sig")).get("pid") or 0))
+        except Exception: pass
+    for pid in set(x for x in pids if x > 0 and x != os.getpid()):
+        try: os.kill(pid, 9)
+        except Exception: pass
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-BANK, PARTY = "HDFC BANK ACCOUNT", "2K Mart"
-SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k});
-  const c = newCompany({name: "VMS EVENTS PRIVATE LIMITED (2024-25)", gstin: "07AADCV3366N1ZU"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}];
+# the bank and a supplier in the stand-in Tally's books: the real client's, or the fixture's (tests/fixtures/books)
+BANK, PARTY = ("Kaveri Bank - CA 0815", "Juniper Legal Associates") if fake_tally._bd.FIXTURE else ("HDFC BANK ACCOUNT", "2K Mart")
+CO_NAME, CO_GSTIN = fake_tally.COMPANY, fake_tally._bd.GSTIN
+SETUP = """([k, bank, party]) => { Bridge.setCfg({url: "http://127.0.0.1:9100", key: k}); /* FinCom 2.3.0 sends nothing to a bridge that has not proved itself; the PowerShell bridge 1.15.0 run here cannot, so this end-to-end test of posting takes it as proved */ Bridge.ensureProven = async () => true; 
+  const c = newCompany({name: "@CO@", gstin: "@GSTIN@"}); c.bankAccounts = [{id: "a1", bank: "HDFC", acct: "123", ledger: bank}]; choiceConfirm(c, "bank:a1", bank); choiceConfirm(c, "postTo", c.name);   // posting uses a confirmed bank ledger and Tally company only (src/js/60)
   S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "bank";
   const rows = [["2025-06-02", 1000], ["2025-06-03", 2500], ["2025-06-04", 330], ["2025-06-05", 47000]].map(([d, amt], i) => ({id: "r" + i, fp: "fp-e2e-" + i, date: d, debit: amt, credit: 0,
     narr: "NEFT to supplier " + i, dec: {name: party, mode: "NEFT"}, ledger: party, state: "ready", balOk: true, ref: "UTR" + i}));
   S.bank = {cid: c.id, loading: false, stmts: [{id: "s1", acctId: "a1", bank: "HDFC", acct: "123", from: "2025-06-02", to: "2025-06-05"}], cur: "s1", rows, rules: [], wrules: [],
     ledgers: {list: [], importedAt: ""}, newLed: [], keys: {}, books: {}, filter: "ready", grouped: false, showSettings: false, q: "", limit: 100, pendingRule: null, busy: "",
     createFor: null, sel: new Set(), sticky: new Set(), undo: null, hist: {rows: {}}, histVer: 0, postedTags: {}, salesRef: []};
-  return c.id; }"""
+  return c.id; }""".replace("@CO@", CO_NAME).replace("@GSTIN@", CO_GSTIN)
 try:
     for i in range(60):
         time.sleep(1)
@@ -46,7 +66,8 @@ try:
         pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2000)
         pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
         pg.evaluate(SETUP, [key, BANK, PARTY]); pg.evaluate("Bridge.refresh()")
-        ok(pg.evaluate("Bridge.st.version") == "1.14.6", "bridge 1.14.6 running against the stand-in Tally")
+        BV = re.search(r"\$BridgeVersion = '([^']+)'", open(_os.path.join(BRUN, "TDSBridge.ps1"), encoding="utf-8-sig").read()).group(1)   # the bridge in the repo
+        ok(pg.evaluate("Bridge.st.version") == BV, "bridge %s running against the stand-in Tally" % BV)
         ok(pg.evaluate("syncLedgersFromTally(true)") and pg.evaluate("!!exactLedger('%s') && !!exactLedger('%s')" % (BANK, PARTY)), "ledgers read from Tally")
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); }")
         # the dates themselves
@@ -55,21 +76,23 @@ try:
         x = pg.evaluate("bankVoucherXml(B().rows[0], CO().bankAccounts[0], CO())")
         ok("<DATE>20250602</DATE>" in x and "<BANKERSDATE>20250602</BANKERSDATE>" in x, "a bank voucher carries its statement date (was empty: two functions named tallyDate)")
         # the statement's opening is Tally's balance the day before; its closing follows from its own lines
-        bj = pg.evaluate("async () => (await Bridge.call('/balances?company=' + encodeURIComponent('VMS EVENTS PRIVATE LIMITED (2024-25)') + '&from=20250602&to=20250605')).ledgers.find(l => l.name === '%s')" % BANK)
+        bj = pg.evaluate("async () => (await Bridge.call('/balances?company=' + encodeURIComponent(%s) + '&from=20250602&to=20250605')).ledgers.find(l => l.name === '%s')" % (json.dumps(CO_NAME), BANK))
         t_open = -float(bj["open"] or 0)
         pg.evaluate("(o) => { const st = curStmt(); st.opening = o; st.closing = r2(o - 1000 - 2500 - 330 - 47000); render(); }", t_open); pg.wait_for_timeout(500)
-        ok(pg.locator(".sbar").count() == 0 and pg.locator('.bk-tabs button:has-text("Ready to post")').count() == 1 and "2 · Ready to post" in pg.inner_text(".bk-tabs"), "one row of tabs on the bank page, numbered in the order of the work")
-        ok(pg.locator(".bk-actions [data-act='bankPick']").count() == 0 and pg.locator(".tbar [data-act='uploadHere']").count() == 1, "one Upload statement button")
+        ok(pg.locator(".sbar").count() == 0 and pg.locator('.bk-tabs button:has-text("Post to Tally")').count() == 1 and "Post to Tally" in pg.inner_text(".bk-tabs"), "one row of tabs on the bank page, numbered in the order of the work")
+        ok(pg.locator(".bk-actions [data-act='bankPick']").count() == 0 and pg.locator('button:text-is("Upload statement")').count() == 1, "one Upload statement button")
         # an entry an earlier build left in Tally under another date
         tag0 = pg.evaluate("fpHash('fp-e2e-0')")
         fake_tally.POSTED.append(("20260927", "old | TDSDesk:" + tag0, "501", re.sub(r"<DATE>[^<]*</DATE>", "<DATE></DATE>", x)))
+        # round 15: the payload's bank-line vouchers carry bank: true (bridge 2.1.8 batches them by its bank-lines-per-request setting)
+        pg.evaluate("() => { window.__bp0 = Bridge.post.bind(Bridge); Bridge.post = (p, ...a) => { window.__payloads = (window.__payloads || []).concat([JSON.parse(JSON.stringify(p))]); return window.__bp0(p, ...a); }; }")
         pg.evaluate("postBankToTally()"); pg.wait_for_timeout(500)
         d = pg.evaluate("S.dupFind && {w: S.dupFind.wrongDate.length, e: S.dupFind.extra.length, when: S.dupFind.wrongDate[0] && S.dupFind.wrongDate[0].date}")
         ok(d and d["w"] == 1 and d["when"] == "20260927" and len(fake_tally.POSTED) == 1, "Post first looks through Tally beyond the statement's dates: the wrong-date entry is found and nothing is posted (%s)" % d)
         ok("under the wrong date" in pg.inner_text("#app") and "Remove the 1 wrong-date entry" in pg.inner_text("#app"), "the wrong-date entry is shown with its right date and a button to remove it")
-        pg.click("[data-bfocus='dup-wrong']"); pg.wait_for_timeout(300)
+        pg.click('.bigwarn button.linkbtn:text-is("Show their statement lines")'); pg.wait_for_timeout(300)
         ok(pg.evaluate("bankVisibleRows().map(r => r.id)") == ["r0"] and "Showing 1 line: in Tally under the wrong date" in pg.inner_text(".bk-focus"), "'Show their statement lines' shows exactly the line concerned")
-        pg.click("[data-act='bankFocusOff']"); pg.wait_for_timeout(200)
+        pg.click('.bk-focus button:text-is("Show all lines")'); pg.wait_for_timeout(200)
         ok(pg.locator(".bk-focus").count() == 0 and len(pg.evaluate("bankVisibleRows()")) > 0, "'Show all lines' goes back to the tab")
         pg.evaluate("() => { B().rows[0].state = 'intally'; B().postedTags[fpHash('fp-e2e-0')] = 'tally:x'; }")
         pg.evaluate("() => { window._rm = removeTallyDuplicates('wrong'); }"); pg.wait_for_timeout(400)
@@ -81,7 +104,9 @@ try:
         fake_tally.CTRL["read_delay"] = 0
         fake_tally.CTRL["read_delay_after_import"] = 3; fake_tally.CTRL["_imported"] = False
         t0 = time.time(); pg.evaluate("postBankToTally()"); dt = time.time() - t0
-        ok(pg.evaluate("B().postReport.checking") is True and "checking them in Tally in the background" in pg.inner_text("#app"), "posting ends as soon as the entries are sent (%.1fs); the read-back runs in the background" % dt)
+        pl = pg.evaluate("window.__payloads || []")
+        ok(pl and all(v.get("bank") is True for p in pl for v in p.get("vouchers", [])) and sum(len(p.get("vouchers", [])) for p in pl) >= 1, "round 15: every bank-line voucher in the posting payload carries bank: true (%d payloads)" % len(pl))
+        ok(pg.evaluate("B().postReport.checking") is True and "not yet read back" in pg.inner_text("#app"), "posting ends as soon as the entries are sent (%.1fs); the read-back runs in the background" % dt)
         for i in range(60):
             if pg.evaluate("!B().rows.some(r => r.checking) && !B().balBusy && !!curStmt().tallyBal"): break
             pg.wait_for_timeout(500)
@@ -92,18 +117,25 @@ try:
         rep = pg.evaluate("B().postReport")
         ok(rep["posted"] == 4 and not rep["failed"], "the report: 4 posted, none failed")
         fake_tally.CTRL["read_delay_after_import"] = 0
-        heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances")}
-        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch") and fake_tally.REQS.get("TDSDeskOneLed") == 2, "posting and the balance check ask Tally for the bank ledger only: nothing company-wide (%s)" % dict(fake_tally.REQS))
+        heavy = {k: v for k, v in fake_tally.REQS.items() if k in ("DayBook", "TDSDeskVchHeads", "TDSDeskBalances", "TDSDeskOneLed")}
+        ok(not heavy and fake_tally.REQS.get("TDSDeskLedVch"), "posting asks Tally for the bank ledger's entries only, and no balance at all (%s)" % dict(fake_tally.REQS))
+        # 02-Oct-2026 (owner's decision; FinCom Bridge 2.1.4 asks Tally for no balance): the balance comes from FinCom's copy,
+        # and only once the entries posted are read back there too. Without the copy here: "Posted · balance not yet checked"
         tb = pg.evaluate("curStmt().tallyBal")
-        ok(tb and tb.get("diff") == 0 and "Tally agrees with the bank" in pg.inner_text(".bk-balbox"), "after posting, the balance is checked by itself: Tally agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
+        ok(tb and tb.get("pending") == 4 and "Posted \u00b7 balance not yet checked" in pg.inner_text(".bk-balbox"), "after posting: \"Posted \u00b7 balance not yet checked\" until the copy has read them back (%s)" % (tb and {k: tb.get(k) for k in ("pending", "diff", "error")}))
+        # FinCom's copy, stood in by Tally's own figure (read here through the stand-in bridge, as the copy would hold it), read after the posting
+        pg.evaluate("""() => { TCloud.on = () => true; TCloud.status = async () => []; window.booksAsOf = () => ({at: new Date(Date.now() + 60000).toISOString(), text: ""});
+          TCloud.ledgerAt = async (cid, led, to) => { const nx = isoToTally(addDays(to, 1)); const j = await Bridge.call('/ledgerbalance?company=' + encodeURIComponent(B().cid && CO(B().cid).name) + '&from=' + nx + '&to=' + nx + '&ledger=' + encodeURIComponent(led) + Bridge.pinQ(), null, 60000); return -r2(num(j.open)); }; }""")
+        tb = pg.evaluate("checkBankBalance()")
+        ok(tb and tb.get("diff") == 0 and tb.get("how") == "copy" and "The books agree with the bank" in pg.inner_text(".bk-balbox") and "Balance from FinCom's copy" in pg.inner_text(".bk-balbox"), "read back: the balance from FinCom's copy agrees with the statement's closing (%s)" % (tb and {k: tb.get(k) for k in ("tClose", "sClose", "diff", "error")}))
         # someone enters a payment in Tally by hand that is not on the statement
-        fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
+        fake_tally.POSTED.append(("20250604", "cash typed in Tally", "777", '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20250604</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><NARRATION>cash typed in Tally</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-999.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>999.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' % (PARTY, BANK)))
         tb = pg.evaluate("checkBankBalance()")
         ok(tb["diff"] == 999 and tb["extra"] is None and "Reconcile with Tally" in pg.inner_text(".bk-balbox"), "the balance check alone only reads the balance, and offers to find the reason")
         tb = pg.evaluate("checkBankBalance({explain: true})")
         ok(tb and tb["diff"] == 999 and len(tb["extra"]) == 1 and tb["extra"][0]["eff"] == -999 and tb["unexplained"] == 0, "a payment typed in Tally by hand: the balance is 999 apart, and that entry is named as the whole reason (%s)" % (tb and {k: tb.get(k) for k in ("diff", "extraEffect", "unexplained")}))
         t = pg.inner_text(".bk-balbox")
-        ok("Tally does not agree" in t and "2K Mart" in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
+        ok("The books do not agree" in t and PARTY in t and "make up the whole difference" in t, "and it says so on the page: " + t[:140].replace("\n", " "))
         pg.evaluate("() => { B().rows.forEach(r => { r.state = 'ready'; }); B().postedTags = {}; }")
         pg.evaluate("postBankToTally()")
         ok(len(fake_tally.POSTED) == 5, "posting the same lines again (this browser's memory wiped): Tally is checked, nothing goes in twice")
@@ -112,7 +144,7 @@ try:
         fake_tally.POSTED[:] = [x for x in fake_tally.POSTED if "TDSDesk:" not in x[1]]
         g = pg.evaluate("checkMarkedInTally()")
         ok(g and len(g["ids"]) == 4 and "4 lines are marked as posted, but are no longer in Tally" in pg.inner_text("#app"), "entries deleted in Tally are noticed: 4 lines marked as posted are no longer there, and it says so")
-        pg.click("[data-act='goneBack']"); pg.wait_for_timeout(300)
+        pg.click('button:has-text("back in Post to Tal")'); pg.wait_for_timeout(300)
         ok(pg.evaluate("B().rows.filter(r => r.state === 'ready').length") == 4 and pg.evaluate("B().filter") == "ready", "'Put them back in Ready to post': all 4 ready again")
         pg.evaluate("postBankToTally()")
         for i in range(60):
@@ -121,7 +153,7 @@ try:
         tags = [t for t in fake_tally.posted_tags()]
         ok(len(tags) == 4 and len(set(tags)) == 4 and pg.evaluate("B().rows.every(r => r.state === 'sent')"), "and Post sends them to Tally again, each once")
         pg.evaluate("checkMarkedInTally()")
-        ok(not pg.evaluate("B().gone") and pg.locator("[data-act='goneBack']").count() == 0, "checked again: all are in Tally, nothing offered")
+        ok(not pg.evaluate("B().gone") and pg.locator('button:has-text("back in Post to Tal")').count() == 0, "checked again: all are in Tally, nothing offered")
         # reconciliation: one line deleted in Tally, one posted twice, one with another amount, and one typed in Tally (the 999 above)
         tg = pg.evaluate("[0,1,2,3].map(i => fpHash('fp-e2e-' + i))")
         P = fake_tally.POSTED
@@ -134,7 +166,7 @@ try:
         t = pg.inner_text(".recon")
         ok("Balance in Tally on" in t and "Balance as per the bank statement" in t and "typed in Tally" in t and "second copy" in t, "the reconciliation statement and the lists are shown")
         ok(R["pick"] == 1, "the copy is ticked for deletion; the entry typed in Tally is not, until you tick it")
-        pg.click("[data-reconpick]:not(:checked)"); pg.wait_for_timeout(200)
+        pg.click('.recon input[type=checkbox][aria-label^="Delete "]:not(:checked)'); pg.wait_for_timeout(200)
         # a Tally that refuses to delete: nothing is claimed, and Tally's own words are shown
         fake_tally.CTRL["delete_mode"] = "refuse"; nd = len(fake_tally.DELETED)
         pg.evaluate("() => { window._rd = reconDelete('delete'); }"); pg.wait_for_timeout(300); pg.click('[data-cbx="yes"]'); pg.evaluate("window._rd")
@@ -158,16 +190,16 @@ try:
         ok(len(e3) == 1 and "47000.00" in e3[0][3], "'Replace them': the entry with the wrong amount is replaced by the statement's amount")
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, differ: R.differ.length, t: R.tClose, s: R.sClose})")
         ok(R and R["missing"] == R["extra"] == R["differ"] == 0 and abs(R["t"] - R["s"]) < 0.01 and "Reconciled" in pg.inner_text(".recon"), "reconciled: every line in Tally once, and the balances agree (%s)" % R)
-        with pg.expect_download() as dl: pg.click("[data-act='reconExcel']")
+        with pg.expect_download() as dl: pg.click('.recon button:text-is("Download Excel")')
         ok(dl.value.suggested_filename.endswith(".xlsx") and os.path.getsize(dl.value.path()) > 2000, "the bank reconciliation downloads as Excel (%s)" % dl.value.suggested_filename)
         # an entry dated long after the statement, in a Tally that gives its latest balance whatever date is asked
-        fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>2K Mart</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC BANK ACCOUNT</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'))
-        fake_tally.CTRL["ignore_balance_dates"] = True
+        fake_tally.POSTED.append(("20270331", "year end entry", "990", '<VOUCHER VCHTYPE="Receipt" ACTION="Create"><DATE>20270331</DATE><VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME><NARRATION>year end entry</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>5000.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>%s</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-5000.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' % (PARTY, BANK)))
+        # 02-Oct-2026: Tally is not asked for the balance at all (FinCom Bridge 2.1.4); FinCom's copy works it out on the
+        # statement's last day from the openings and the entries up to it (stood in here by Tally's balance on that day)
         R = pg.evaluate("reconcileBank().then(R => R && {missing: R.missing.length, extra: R.extra.length, t: R.tClose, s: R.sClose, how: R.how})")
         tb = pg.evaluate("checkBankBalance().then(t => ({diff: t.diff, how: t.how}))")
-        fake_tally.CTRL["ignore_balance_dates"] = False
-        ok(R and R["missing"] == R["extra"] == 0 and abs(R["t"] - R["s"]) < 0.01 and R["how"] == "worked back" and tb["diff"] == 0, "an entry of 31-03-2027 in a Tally that ignores the date asked: not counted in the statement's balance, still reconciled (%s, %s)" % (R, tb))
-        ok("worked back" in pg.inner_text(".bk-balbox"), "and the balance box says the balance was worked back")
+        ok(R and R["missing"] == R["extra"] == 0 and abs(R["t"] - R["s"]) < 0.01 and tb["how"] == "copy" and tb["diff"] == 0, "an entry of 31-03-2027: not counted in the statement's balance (FinCom's copy, on the statement's last day), still reconciled (%s, %s)" % (R, tb))
+        ok("Balance from FinCom's copy" in pg.inner_text(".bk-balbox"), "and the balance box says the balance is from FinCom's copy")
         pg.click(".bk-balbox .bk-x"); pg.wait_for_timeout(200)
         ok(pg.locator(".bk-balbox").count() == 0, "the balance box closes with its ×")
         pg.evaluate("checkBankBalance()"); pg.wait_for_timeout(200)
@@ -190,14 +222,14 @@ try:
         ok(R2 and R2["pairs"] == 4 and R2["missing"] == R2["extra"] == R2["differ"] == 0 and abs(R2["t"] - R2["s"]) < 0.01, "a Tally that refuses the one-ledger read: the Day Book is read instead, same answer (%s)" % R2)
         n_before = len(fake_tally.POSTED)
         # a voucher without a date never reaches Tally: stopped in FinCom ...
-        r = pg.evaluate("""async () => (await Bridge.post({company: "VMS EVENTS PRIVATE LIMITED (2024-25)", masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""")
+        r = pg.evaluate("""async () => (await Bridge.post({company: %s, masters: [], vouchers: [{id: "nodate", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>x TDSDesk:zz1</NARRATION></VOUCHER>'}, {id: "early", xml: '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20230101</DATE><NARRATION>x TDSDesk:zz2</NARRATION></VOUCHER>'}]})).results""" % json.dumps(CO_NAME))
         ok(len(fake_tally.POSTED) == n_before and {x["id"]: x["ok"] for x in r} == {"nodate": False, "early": False} and "no date" in r[0]["message"] and "before" in r[1]["message"], "no date, or a date before the books begin: refused by FinCom, nothing sent (%s)" % [x["message"][:40] for x in r])
         # ... and in the bridge, for anything that bypasses FinCom's own check
-        req = urllib.request.Request("http://127.0.0.1:9100/import", data=json.dumps({"company": "VMS EVENTS PRIVATE LIMITED (2024-25)", "masters": [], "vouchers": [{"id": "nd", "xml": '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>y</NARRATION></VOUCHER>'}]}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"})
+        req = urllib.request.Request("http://127.0.0.1:9100/import", data=json.dumps({"company": CO_NAME, "masters": [], "vouchers": [{"id": "nd", "xml": '<VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE></DATE><NARRATION>y</NARRATION></VOUCHER>'}]}).encode(), headers={"X-Bridge-Key": key, "Content-Type": "application/json"})
         jr = json.loads(urllib.request.urlopen(req, timeout=60).read())
         ok(len(fake_tally.POSTED) == n_before and not jr["results"][0]["ok"] and "no valid date" in jr["results"][0]["message"], "the bridge itself refuses a voucher with no date")
         br.close()
 finally:
-    br_p.kill()
+    stop_bridge()
 ok(not errors, "no page errors" + ("" if not errors else ": " + " | ".join(errors[:3])))
 print("\n" + (str(len(fails)) + " FAILED" if fails else "all passed"))

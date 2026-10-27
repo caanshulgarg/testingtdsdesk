@@ -4,46 +4,46 @@
 //
 // State: S.itctShow ("open" or "all"), S.itctCat (a kind of line, from the chips).
 import CommitBox from "../../parts/CommitBox.jsx";
+import ListTable from "../../parts/ListTable.jsx";
 
 const money = (v) => "₹" + INR.format(r2(v || 0));
 const dmy = (d) => GSTAmend.dmy(d);
-const WIDTHS = [11, 16, 12, 11, 8, 9, 8, 14, 11];
-const COLS = ["What", "Supplier · GSTIN", "Bill no. · date", "In Tally", "In 2B", "Tax", "Last date", "What to do", "Note"];
 const NR = ({ children }) => <div className="nr">{children}</div>;
 
-function Line({ x, today, soon }) {
-  const c = ITCT.CATS[x.cat], dlCls = x.deadline && (x.deadline < today || soon(x.deadline)) ? "bad" : "nr";
-  const tally = x.where === "2B" ? <span className="nr">{x.bookedAs || "not booked"}</span> : <>{dmy(x.booked || x.date)}<NR>{x.voucher || ""}</NR></>;
-  const twoB = x.where === "Tally" ? <span className={x.covered ? "bad" : "nr"}>{x.covered ? "not in 2B" : "no 2B yet"}</span>
-    : <>{GSTR.label(x.ym2b || x.ym)}{x.ims === "rejected" ? <div className="bad">rejected in IMS</div> : x.claimedIn ? <NR>taken then</NR> : x.reason ? <NR>{x.reason}</NR> : x.ims ? <NR>{"IMS: " + x.ims}</NR> : null}</>;
-  const acts = c.acts.length ? <select aria-label="What to do" value={x.act} onChange={(ev) => itctSetAct(x.key, ev.target.value)}>{c.acts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-    : x.cat === "confirm" ? <button className="linkbtn" onClick={() => gstPartGo("r2b")}>confirm under 2B</button> : <span className="nr">nothing to do</span>;
-  return <tr data-key={x.key}>
-    <td>{c.label}{x.issues && x.cat === "diff" && <div className="nr" title={x.issues.join("; ")}>{x.issues.filter((z) => !/^booked in|^value differs/.test(z)).join("; ")}</div>}</td>
-    <td>{x.supplier || ""}<NR>{x.gstin || "no GSTIN"}</NR></td>
-    <td>{x.no || ""}<NR>{dmy(x.date)}</NR></td>
-    <td>{tally}</td><td>{twoB}</td>
-    <td className="n">{money(x.tax)}{x.cat === "diff" && <NR>{"2B " + money(x.tax2b)}</NR>}</td>
-    <td><span className={dlCls}>{x.deadline ? dmy(x.deadline) : ""}</span></td>
-    <td>{acts}</td>
-    <td><CommitBox aria-label="Note" data-fk={"itctnote-" + x.key} value={x.note} placeholder="note" style={{ width: "100%" }} onCommit={(v) => itctSetNote(x.key, v)} /></td>
-  </tr>;
+// the follow-up list's columns (spec K6): the bill's date, bill no., supplier, tax (amount), what it is (status), then the rest
+function lineCols(today, soon) {
+  return [
+    { k: "date", role: "date", label: "Bill date", w: 8, v: (x) => String(x.date || ""), cell: (x) => dmy(x.date) },
+    { k: "no", role: "number", label: "Bill no.", w: 10, v: (x) => x.no || "", cell: (x) => x.no || "" },
+    { k: "party", role: "party", label: "Supplier · GSTIN", w: 15, v: (x) => x.supplier || "", cell: (x) => <>{x.supplier || ""}<NR>{x.gstin || "no GSTIN"}</NR></> },
+    { k: "tax", role: "amount", label: "Tax", cls: "n", w: 9, v: (x) => num(x.tax), fmt: money, cell: (x) => <>{money(x.tax)}{x.cat === "diff" && <NR>{"2B " + money(x.tax2b)}</NR>}</> },
+    { k: "what", role: "status", label: "What", w: 11, v: (x) => ITCT.CATS[x.cat].label, cell: (x) => <>{ITCT.CATS[x.cat].label}{x.issues && x.cat === "diff" && <div className="nr" title={x.issues.join("; ")}>{x.issues.filter((z) => !/^booked in|^value differs/.test(z)).join("; ")}</div>}</> },
+    { k: "tally", label: "In Tally", w: 10, cell: (x) => (x.where === "2B" ? <span className="nr">{x.bookedAs || "not booked"}</span> : <>{dmy(x.booked || x.date)}<NR>{x.voucher || ""}</NR></>) },
+    { k: "twoB", label: "In 2B", w: 8, cell: (x) => (x.where === "Tally" ? <span className={x.covered ? "bad" : "nr"}>{x.covered ? "not in 2B" : "no 2B yet"}</span>
+      : <>{GSTR.label(x.ym2b || x.ym)}{x.ims === "rejected" ? <div className="bad">rejected in IMS</div> : x.claimedIn ? <NR>taken then</NR> : x.reason ? <NR>{x.reason}</NR> : x.ims ? <NR>{"IMS: " + x.ims}</NR> : null}</>) },
+    { k: "dl", label: "Last date", w: 8, v: (x) => String(x.deadline || ""), cell: (x) => <span className={x.deadline && (x.deadline < today || soon(x.deadline)) ? "bad" : "nr"}>{x.deadline ? dmy(x.deadline) : ""}</span> },
+    { k: "act", label: "What to do", w: 12, cell: (x) => { const c = ITCT.CATS[x.cat];
+      return c.acts.length ? <select aria-label="What to do" value={x.act} onChange={(ev) => itctSetAct(x.key, ev.target.value)}>{c.acts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        : x.cat === "confirm" ? <button className="linkbtn" onClick={() => gstPartGo("r2b")}>confirm under 2B</button> : <span className="nr">nothing to do</span>; } },
+    { k: "note", label: "Note", w: 9, cell: (x) => <CommitBox aria-label="Note" data-fk={"itctnote-" + x.key} value={x.note} placeholder="note" style={{ width: "100%" }} onCommit={(v) => itctSetNote(x.key, v)} /> },
+  ];
 }
 
 function Suppliers({ sups, today }) {
   return <section className="dash-card" style={{ marginTop: 12 }}><h3>Suppliers to write to</h3>
     <p className="note">Every bill set to “follow up” or “ask the supplier to amend”, supplier by supplier, in one letter. Email and phone come from Tally, or from GST settings (<button className="linkbtn" onClick={() => goGstSettings()}>contacts</button>). Writing is logged, so the next month shows when each was last chased.</p>
-    {sups.length ? <div className="bk-tablewrap"><table className="bk-table compact fixed">
-      <colgroup>{[20, 7, 10, 10, 18, 12, 10, 13].map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
-      <thead><tr><th>Supplier · GSTIN</th><th className="n">Bills</th><th className="n">Tax waiting</th><th>Last date</th><th>Email</th><th>Phone</th><th>Last written</th><th>Write</th></tr></thead>
-      <tbody>{sups.map((s, i) => <tr key={s.key + ":" + i} data-key={s.key}>
-        <td>{s.party || ""}<NR>{s.gstin || "no GSTIN"}</NR></td><td className="n">{s.items.length}</td><td className="n">{money(s.tax)}</td>
-        <td><span className={s.deadline && s.deadline < today ? "bad" : "nr"}>{dmy(s.deadline)}</span></td>
-        <td>{s.email || <span className="nr">none</span>}</td><td>{s.phone || <span className="nr">none</span>}</td>
-        <td>{s.lastSent ? <>{dmy(s.lastSent)}{s.sent.length > 1 && <NR>{s.sent.length} times</NR>}</> : <span className="nr">not yet</span>}</td>
-        <td><button className="linkbtn" onClick={() => itctWrite("itctCopy", s.key)}>copy</button> · <button className="linkbtn" onClick={() => itctWrite("itctMail", s.key)}>email</button> · <button className="linkbtn" onClick={() => itctWrite("itctWa", s.key)}>WhatsApp</button></td>
-      </tr>)}</tbody>
-    </table></div> : <p className="note">No supplier to write to.</p>}
+    <ListTable name="itctSuppliers" className="bk-table compact fixed" rows={sups} rowKey={(s, i) => s.key + ":" + i} unit={["supplier", "suppliers"]} rowProps={(s) => ({ "data-key": s.key })}
+      empty="No supplier to write to. Set a bill above to “follow up” or “ask the supplier to amend” and its supplier comes here."
+      cols={[
+        { k: "last", role: "date", label: "Last written", w: 10, v: (s) => String(s.lastSent || ""), cell: (s) => (s.lastSent ? <>{dmy(s.lastSent)}{s.sent.length > 1 && <NR>{s.sent.length} times</NR>}</> : <span className="nr">not yet</span>) },
+        { k: "party", role: "party", label: "Supplier · GSTIN", w: 20, v: (s) => s.party || "", cell: (s) => <>{s.party || ""}<NR>{s.gstin || "no GSTIN"}</NR></> },
+        { k: "tax", role: "amount", label: "Tax waiting", cls: "n", w: 10, v: (s) => num(s.tax), fmt: money, cell: (s) => money(s.tax) },
+        { k: "n", label: "Bills", cls: "n", w: 7, v: (s) => s.items.length, sum: true, fmt: String, cell: (s) => s.items.length },
+        { k: "dl", label: "Last date", w: 10, v: (s) => String(s.deadline || ""), cell: (s) => <span className={s.deadline && s.deadline < today ? "bad" : "nr"}>{dmy(s.deadline)}</span> },
+        { k: "email", label: "Email", w: 18, cell: (s) => s.email || <span className="nr">none</span> },
+        { k: "phone", label: "Phone", w: 12, cell: (s) => s.phone || <span className="nr">none</span> },
+        { k: "ac", role: "act", label: "Write", w: 13, cell: (s) => <><button className="linkbtn" onClick={() => itctWrite("itctCopy", s.key)}>copy</button> · <button className="linkbtn" onClick={() => itctWrite("itctMail", s.key)}>email</button> · <button className="linkbtn" onClick={() => itctWrite("itctWa", s.key)}>WhatsApp</button></> },
+      ]} />
   </section>;
 }
 
@@ -67,14 +67,10 @@ export default function ItcFollow() {
       <div className="gf-chips">{Object.entries(ITCT.CATS).map(([k, c]) => { const l = base.filter((x) => x.cat === k); if (!l.length) return null;
         const t = l.reduce((a, x) => a + (x.cat === "diff" ? Math.abs(x.gap) : x.tax), 0);
         return <button key={k} className={"gf-chip" + (c.warn ? " warn" : "") + (cat === k ? " on" : "")} onClick={() => setAndShow("itctCat", cat === k ? "" : k)}>{c.label + " "}<b>{l.length}</b>{" · ₹" + money(t)}</button>; })}</div>
-      <details style={{ margin: "6px 0 10px" }}><summary className="linkbtn">How each kind is handled, and why</summary><div className="bk-tablewrap"><table className="bk-table gf-off"><tbody>
+      <details style={{ margin: "6px 0 10px" }}><summary className="linkbtn">How each kind is handled, and why</summary><div className="bk-tablewrap"><table className="bk-table gf-off" data-statement=""><tbody>
         {Object.values(ITCT.CATS).map((c) => <tr key={c.label}><td style={{ width: 220 }}><b>{c.label}</b></td><td>{c.law}</td></tr>)}</tbody></table></div></details>
-      <div className="bk-tablewrap"><table className="bk-table compact fixed">
-        <colgroup>{WIDTHS.map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
-        <thead><tr>{COLS.map((c, i) => <th key={c} className={i === 5 ? "n" : undefined}>{c}</th>)}</tr></thead>
-        <tbody>{list.slice(0, gfN(3000)).map((x, i) => <Line key={x.key + ":" + i} x={x} today={today} soon={soon} />)}
-          {!list.length && <tr><td colSpan={9} className="nr">Nothing {show === "open" ? "open" : "here"}.</td></tr>}</tbody>
-      </table></div>
+      <ListTable name="itct" className="bk-table compact fixed" rows={list} rowKey={(x, i) => x.key + ":" + i} unit={["bill", "bills"]} limit={gfN(3000)} rowProps={(x) => ({ "data-key": x.key })}
+        cols={lineCols(today, soon)} empty={"Nothing " + (show === "open" ? "open: every bill 2B and Tally disagreed on is settled. Choose “Everything, settled too” above to see them." : "here. Bring in the next 2B under 2B reconciliation.")} />
     </section>
     <Suppliers sups={ITCT.suppliers(reg, all)} today={today} />
   </>;

@@ -39,7 +39,8 @@ export function Working() {
 }
 
 const LABEL = { waiting: ["Waiting", "no"], checking: ["Checking", "no"], reading: ["Reading", "no"], done: ["Done", "ok"], held: ["Held: duplicate", "warn"],
-  duplicate: ["Not uploaded: duplicate", "warn"], failed: ["Could not read", "bad"], partial: ["Partly read", "warn"], unsorted: ["Unsorted", "warn"], typed: ["Typed in", "ok"] };
+  duplicate: ["Not uploaded: duplicate", "warn"], failed: ["Could not read", "bad"], partial: ["Partly read", "warn"], unsorted: ["Unsorted", "warn"], typed: ["Typed in", "ok"],
+  notread: ["Not read yet: in To review", "bad"] };
 
 // the files being read or read lately. which: "auto" (uploads for any client) or a client's id
 export function Jobs({ which }) {
@@ -60,7 +61,7 @@ export function Jobs({ which }) {
       <ul className="joblist">
         {jobs.slice().reverse().map((j) => {
           const [t, cls] = LABEL[j.status] || [j.status, "no"], again = j.status === "failed" || j.status === "partial";
-          const canOpen = (j.status === "duplicate" && j.dupRef && j.dupRef.cid) || (["held", "done", "typed"].includes(j.status) && j.entryId);
+          const canOpen = (j.status === "duplicate" && j.dupRef && j.dupRef.cid) || (["held", "done", "typed", "notread"].includes(j.status) && j.entryId);
           const act = (kind) => () => jobAction(kind, j.id);
           return (
             <li key={j.id}>

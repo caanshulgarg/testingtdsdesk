@@ -277,9 +277,10 @@ function applyGroup(key, ledger){
 async function openCreateLedger(name, rowId, targetFk, opts){
   opts = opts || {};
   const b = B();
-  const groups = Array.from(new Set((b.ledgers.groups || []).concat(TALLY_GROUPS))).filter(Boolean);
+  // one entry for each group whatever its capitals, in Tally's own spelling where Tally's list has it ("Cash-in-hand")
+  const seenG = new Set(), groups = (b.ledgers.groups || []).concat(TALLY_GROUPS).filter(g => g && !seenG.has(String(g).toLowerCase()) && seenG.add(String(g).toLowerCase()));
   const row = rowId ? bankRow(rowId) : null;
-  const guess = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors");
+  const guess0 = opts.group || (row ? (row.debit ? "Sundry Creditors" : "Sundry Debtors") : "Sundry Creditors"), guess = groups.find(g => g.toLowerCase() === guess0.toLowerCase()) || guess0;
   const acNo = row ? ((row.narr.match(/\b(\d{9,18})\b/) || [])[1] || "") : "";
   const ifsc = row ? ((row.narr.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/) || [])[1] || "") : "";
   const near = Array.from(knownLedgers().values()).map(l => ({l, s: nameSim(l.name, name)})).filter(x => x.s >= 0.7).sort((a, c) => c.s - a.s).slice(0, 3);
@@ -305,35 +306,38 @@ async function openCreateLedger(name, rowId, targetFk, opts){
 }
 /* ---------- ledger suggestions while typing (works the same in every browser) ---------- */
 const AC = {box: null, fk: null, items: [], idx: -1, q: ""};
-function acMatches(q){
-  const list = Array.from(knownLedgers().values());
+// the drop-down is a search box (review of 02-Oct-2026): case, dots, spaces and "&" / "and" do not matter ("kashi",
+// "kashi i.t" find "Kashi IT Solutions"); a party box lists Sundry Creditors and Debtors first; an expense box lists
+// expense, purchase and fixed-asset ledgers first and never an income ledger (Sales Accounts, Direct / Indirect Incomes)
+function acMatches(q, role){
+  const cid = Ledgers.cid();
+  const list = Array.from(knownLedgers().values()).filter(l => !role || Ledgers.allowed(role, l.pending ? "" : Ledgers.cls(cid, l.name)));
   const qq = q.trim().toLowerCase();
-  if (!qq) return list.slice().sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12).map(l => ({l, sc: 1}));
-  const words = qq.split(/\s+/).filter(Boolean);
+  const rank = l => role ? Ledgers.roleRank(role, l.pending ? "" : Ledgers.cls(cid, l.name)) : 0;
+  if (!qq) return list.map(l => ({l, sc: 1, r: rank(l)})).sort((a, b) => a.r - b.r || a.l.name.localeCompare(b.l.name)).slice(0, 12);
   return list.map(l => {
-    const n = l.name.toLowerCase();
-    let sc = 0;
-    if (n === qq) sc = 100;
-    else if (n.startsWith(qq)) sc = 90;
-    else if (words.every(w => n.includes(w))) sc = 70 + (n.split(/[\s\-\/&.,()]+/).some(t => t.startsWith(words[0])) ? 10 : 0);
-    else if (qq.length >= 3){
+    let sc = Ledgers.match(q, l.name);
+    if (!sc && qq.length >= 3){
       // spelling mistakes: compare with the whole name, each word, and each pair of words
-      const toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
+      const n = l.name.toLowerCase(), toks = n.split(/[\s\-\/&.,()]+/).filter(Boolean);
       let sim = nameSim(q, l.name);
       toks.forEach((t, i) => { sim = Math.max(sim, nameSim(qq, t), i + 1 < toks.length ? nameSim(qq, t + " " + toks[i + 1]) : 0); });
       if (sim >= 0.6) sc = sim * 60;
     }
-    return {l, sc};
-  }).filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
+    return {l, sc, r: rank(l)};
+  }).filter(x => x.sc > 0).sort((a, b) => (b.sc >= 60) - (a.sc >= 60) || a.r - b.r || b.sc - a.sc || a.l.name.length - b.l.name.length).slice(0, 12);
 }
 function acInput(){ return AC.fk ? document.querySelector('[data-fk="' + AC.fk.replace(/"/g, '\\"') + '"]') : null; }
 function acOpen(input){
-  if (!B()) return;
+  if (!B() && !knownLedgers().size) return;
   // just picked: the redraw that follows puts focus back in the box, which must not open the list again
   if (AC.picked && AC.picked.fk === input.dataset.fk && Date.now() - AC.picked.at < 800 && input.value === AC.picked.value) return;
+  // a bill's ledger chooser just opened (not each key typed): the list read again when older than the last posting
+  if (AC.fk !== input.dataset.fk && (input.dataset.e !== undefined || input.dataset.tl !== undefined) && typeof Ledgers === "object") Ledgers.staleAsk(Ledgers.cid()).catch(() => {});
   AC.fk = input.dataset.fk;
   AC.q = input.value;
-  const m = acMatches(input.value);
+  const role = input.dataset.acrole || "";
+  const m = acMatches(input.value, role);
   const exact = m.some(x => x.l.name.toLowerCase() === input.value.trim().toLowerCase());
   AC.items = m.map(x => ({name: x.l.name, group: x.l.group || "", pending: !!x.l.pending}));
   // ledgers used before for this party come first
@@ -347,7 +351,7 @@ function acOpen(input){
     AC.items = past.concat(AC.items.filter(it => !past.some(p => p.name.toLowerCase() === it.name.toLowerCase())));
   }
   // "create" comes first, where it is seen; Enter still takes the best existing match below it
-  if (input.value.trim() && !exact && hasLedgerList()) AC.items.unshift({name: input.value.trim(), create: true});
+  if (input.value.trim() && !exact && hasLedgerList() && !/^(gst|tds|rcm-in|rcm-out)$/.test(role)) AC.items.unshift({name: input.value.trim(), create: true});
   AC.idx = !input.value.trim() || !AC.items.length ? -1 : AC.items[0].create && AC.items.length > 1 ? 1 : 0;
   if (!AC.box){ AC.box = document.createElement("div"); AC.box.id = "acBox"; AC.box.setAttribute("role", "listbox"); document.body.appendChild(AC.box); }
   acDraw(input);
@@ -386,7 +390,7 @@ function acPick(i){
     if (input.dataset.e === "partyLedger" || input.dataset.e === "expenseLedger"){
     const k = input.dataset.e, e0 = curEntry();
     input.value = e0 ? e0[k] || "" : "";
-    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; Store.saveEntry(S.coId, e1); } render(); }});
+    openCreateLedger(it.name, null, null, {group: k === "partyLedger" ? "Sundry Creditors" : "Indirect Expenses", gstin: k === "partyLedger" && e0 ? fixGstin(e0.x.vendorGstin).value : "", onCreated: name => { const e1 = curEntry(); if (e1){ e1[k] = name; if (k === "partyLedger"){ e1.partyUserSet = true; e1.partyAuto = false; e1.partyFrom = ""; } else { e1.expenseUserSet = true; e1.expenseAuto = false; e1.expenseFrom = ""; } Store.saveEntry(S.coId, e1); } render(); }});
     return;
   }
   if (input.dataset.svcust || input.hasAttribute("data-sdcust") || input.hasAttribute("data-svbulk")){
@@ -411,7 +415,7 @@ function acPick(i){
   if (input.dataset.bled){ input.dispatchEvent(new Event("change", {bubbles: true})); AC.picked.at = Date.now(); setTimeout(() => { const el = acInput() || document.querySelector('[data-fk="' + AC.picked.fk.replace(/"/g, '\\"') + '"]'); if (el && document.activeElement === el) el.blur(); acClose(); }, 0); }
   else if (input.hasAttribute("data-bulkled")) bulkLedgerFrom(input);
   else if (input.dataset.svcust || input.hasAttribute("data-sdcust")) input.dispatchEvent(new Event("change", {bubbles: true}));
-  else if (input.dataset.e){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
+  else if (input.dataset.e || input.dataset.tl){ input.dispatchEvent(new Event("input", {bubbles: true})); input.dispatchEvent(new Event("change", {bubbles: true})); }
   else if (input.hasAttribute("data-svbulk")){ const l = exactLedger(input.value); if (l) salesBulk("ledger", l); }
 }
 function acAfterRender(){
@@ -439,6 +443,67 @@ document.addEventListener("mousedown", ev => {
 window.addEventListener("resize", () => { if (AC.fk) acDraw(acInput()); });
 document.addEventListener("scroll", () => { if (AC.fk) acDraw(acInput()); }, true);
 /* ---------- confirmation box (browser pop-ups can be blocked inside claude.ai) ---------- */
+// a removal goes ahead only when the client's name is typed (review of 01-Oct-2026), with a reason that is kept with it
+// (request of 02-Oct-2026); resolves {reason} or false
+function confirmTyped(o){
+  const name = String((CO() || {}).name || "").trim();
+  return askConfirm(Object.assign({danger: true}, o, {
+    body: o.body + '<label class="f" style="margin-top:12px"><span>Reason (kept with what is removed)</span><input type="text" id="cbxWhy" autocomplete="off" aria-label="Reason" placeholder="e.g. read again from Tally"></label>' +
+      '<label class="f" style="margin-top:10px"><span>To go ahead, type the client\u2019s name: <b>' + esc(name) + '</b></span><input type="text" id="cbxName" autocomplete="off" aria-label="Type the client\u2019s name"></label>',
+    read: () => ({name: ((document.getElementById("cbxName") || {}).value || "").trim(), reason: ((document.getElementById("cbxWhy") || {}).value || "").trim()}),
+    validate: v => v.name.toLowerCase().replace(/\s+/g, " ") === name.toLowerCase().replace(/\s+/g, " ") ? "" : "Type the client\u2019s name exactly as shown: " + name + "."
+  })).then(r => r ? {reason: (r.data && r.data.reason) || ""} : false);
+}
+// What is removed from a client, kept so it can be put back (every removal is a soft delete). Since 02-Oct-2026 it is
+// kept on the server (client_trash: who, when, why), so any computer of the firm can restore it; this browser keeps a
+// copy as an extra, and is the only copy while the server table is not there (or the firm works offline).
+const Trash = {
+  off: false,          // the database has no client_trash yet
+  missing(e){ return /client_trash|trash_put|trash_restore|PGRST202|PGRST205|schema cache|does not exist|404/i.test(String(e && e.message || e)); },
+  cloud(){ return typeof Cloud === "object" && Cloud.on && Cloud.on() && !this.off; },
+  // keeps a removal; resolves {id, server} where server says whether the server has it
+  async put(cid, kind, label, data, reason){
+    const at = new Date().toISOString(), rec = {cid, kind, label, reason: reason || "", at, by: whoAmI(), data};
+    let sid = null;
+    if (this.cloud()){
+      try { sid = await Cloud.api("rpc/trash_put", {method: "POST", body: {p_client: cid, p_kind: kind, p_label: label, p_reason: reason || "", p_data: data}}); }
+      catch (e){ if (this.missing(e)) this.off = true; else toast("Kept in this browser only: the server did not take it (" + ((e && e.message) || e) + ")."); }
+    }
+    const id = "trash:" + cid + ":" + Date.now();
+    try { await IDBStore.write([[id, Object.assign({id, sid}, rec)]]); } catch (e){ if (!sid) throw e; }
+    return {id: sid || id, server: !!sid};
+  },
+  // what can be put back for a client, newest first: the server's rows (from any computer) and this browser's own
+  // copies that the server does not have
+  async list(cid, kind){
+    let local = []; try { local = (await IDBStore.prefix("trash:" + cid + ":")).map(x => x[1]).filter(Boolean); } catch (e){}
+    let server = [];
+    if (this.cloud()){
+      try {
+        const rows = await Cloud.api("client_trash?select=id,kind,label,reason,deleted_at,deleted_by_email,restored_at&client_id=eq." + encodeURIComponent(cid) + "&restored_at=is.null&order=deleted_at.desc&limit=50") || [];
+        server = rows.map(r => ({id: r.id, sid: r.id, cid, kind: r.kind, label: r.label, reason: r.reason, at: r.deleted_at, by: r.deleted_by_email || "", server: true}));
+      } catch (e){ if (this.missing(e)) this.off = true; }
+    }
+    const onServer = new Set(server.map(x => x.sid));
+    const mine = local.filter(x => !x.restoredAt && !(x.sid && (onServer.has(x.sid) || this.cloud())));
+    return server.concat(mine).filter(x => !kind || x.kind === kind).sort((a, c) => String(c.at).localeCompare(String(a.at)));
+  },
+  // puts one back: from the server (marked restored there, with who and when) or from this browser; resolves its data
+  async take(x){
+    let data = x.data;
+    if (x.server){
+      const j = await Cloud.api("rpc/trash_restore", {method: "POST", body: {p_id: x.sid}});
+      data = j && j.data;
+    }
+    try {
+      const local = (await IDBStore.prefix("trash:" + x.cid + ":")).map(z => z[1]).filter(z => z && (z.id === x.id || (x.sid && z.sid === x.sid)));
+      for (const z of local){ if (data === undefined) data = z.data; z.restoredAt = new Date().toISOString(); z.restoredBy = whoAmI(); await IDBStore.write([[z.id, z]]); }
+    } catch (e){}
+    return data;
+  },
+  // the line under a Restore item: what, when, by whom, why
+  say(x){ return x.label + " \u00b7 removed " + fmtDateTime(x.at) + (x.by ? " by " + x.by : "") + (x.reason ? " \u00b7 " + x.reason : "") + (x.server ? "" : " \u00b7 kept in this browser only"); }
+};
 function askConfirm(o){
   return new Promise(done => {
     let box = document.getElementById("confirmBox");
@@ -469,18 +534,40 @@ async function deleteStatement(sid){
   const rows = sid === b.cur ? b.rows : ((await BankDB.get("stmt:" + b.cid + ":" + sid)) || []);
   const sent = rows.filter(r => r.state === "sent").length;
   const acc = (CO(b.cid).bankAccounts || []).find(a => a.id === st.acctId) || {};
-  const ans = await askConfirm({title: "Delete this statement?", danger: true, ok: "Delete statement",
+  const ans = await confirmTyped({title: "Delete this statement?", ok: "Delete statement",
     body: "<b>" + esc(acc.ledger || st.bank) + "</b>, " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + esc(st.fileName) + ", " + st.n + " rows).<br>" +
-      "All ledger choices made on its rows are removed. Saved rules and new ledgers stay. You can upload the file again afterwards." +
+      "It leaves the list with the ledger choices made on its rows; they are kept, and <b>More \u2192 Restore a deleted statement</b> puts it back. Saved rules and new ledgers stay." +
       (sent ? "<br><br><b>" + sent + " entries from it were already sent to Tally.</b> Tally is not changed: if you upload it again, those rows could be sent twice. Match with the Tally bank book first." : "")});
   if (!ans) return;
-  Object.keys(b.keys).forEach(k => { if (b.keys[k] === sid) delete b.keys[k]; });
+  // a soft delete: the statement leaves the list, its rows stay kept here, and a copy of the statement with its rows is
+  // kept on the server so any computer can put it back (More \u2192 Restore)
+  const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
+  await Trash.put(b.cid, "statement", (acc.ledger || st.bank) + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", {st, keys, rows}, ans.reason);
+  keys.forEach(k => { delete b.keys[k]; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
-  await BankDB.del("stmt:" + b.cid + ":" + sid);
+  if (typeof Cloud === "object") Cloud.delete("bank_stmt", b.cid, b.cid + ":" + sid, ans.reason || "statement deleted");
+  b.stmtsTrash = null;
   saveBank({stmts: true, keys: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
-  toast("Statement deleted.");
+  toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
+}
+// a deleted statement back in the list, as it was (from the server, so from any computer; or this browser's own copy)
+async function restoreStatement(i){
+  const b = B(), list = await Trash.list(b.cid, "statement");
+  // statements deleted before 02-Oct-2026 were kept only in this browser
+  const old = ((await BankDB.get("stmtsTrash:" + b.cid)) || []).map((x, j) => ({old: j, x}));
+  const pick = list[i || 0] || null;
+  let x = null;
+  if (pick) x = await Trash.take(pick);
+  else if (old.length){ const o = old[0]; x = o.x; const rest = (await BankDB.get("stmtsTrash:" + b.cid)) || []; rest.splice(o.old, 1); await BankDB.set("stmtsTrash:" + b.cid, rest); }
+  if (!x || !x.st) return toast("Nothing deleted here to restore.");
+  if (x.rows && x.rows.length && !(await BankDB.get("stmt:" + b.cid + ":" + x.st.id))) await BankDB.set("stmt:" + b.cid + ":" + x.st.id, x.rows);
+  if (!b.stmts.some(s => s.id === x.st.id)) b.stmts.push(x.st);
+  (x.keys || []).forEach(k => { if (!b.keys[k]) b.keys[k] = x.st.id; });
+  b.stmtsTrash = null;
+  saveBank({stmts: true, keys: true});
+  toast("Statement restored."); await openStatement(x.st.id);
 }
 async function clearStatement(){
   const b = B(), st = curStmt();
@@ -575,7 +662,7 @@ function bankRowAct(a, id){
     const row = bankRow(id);
     if (row) unpostFromTally("bank", row, B().cid).then(ok => {
       if (!ok) return;
-      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.tally = null;
+      row.state = row.ledger ? "ready" : "attention"; row.sentAt = ""; row.postVerified = false; row.postByReply = false; row.tally = null;
       if (B().postedTags) delete B().postedTags[fpHash(row.fp || row.id)];
       saveBank({rows: true, posted: true}); render();
     });
@@ -613,10 +700,8 @@ function bankSetLedger(id, v){
   return true;
 }
 // which Tally ledger a bank account is
-function bankSetAccLedger(accId, v){
-  const b = B(), co = CO(), a = (co.bankAccounts || []).find(x => x.id === accId);
-  if (a){ a.ledger = v; Store.saveCompany(co); suggestAll(b.rows, true); saveBank({rows: true}); render(); }
-}
+// (confirmed: the person picked it and pressed Confirm; kept in the client's choices, src/js/60)
+function bankSetAccLedger(accId, v){ return bankConfirmAccLedger(accId, v); }
 // tick a line; with Shift, every line between it and the one ticked before
 function bankToggleRow(id, on, shift){ bankToggle({dataset: {bsel: id}, checked: on}, shift); }
 function bankSelAll(on){ const b = B(); bankVisibleRows().filter(r => r.state !== "sent").forEach(r => { if (on) b.sel.add(r.id); else b.sel.delete(r.id); }); bankLightRefresh(); }
@@ -670,7 +755,7 @@ function bankClick(t){
     case "ledPick": document.getElementById("ledIn").click(); return true;
     case "bookPick": closeMenus(); document.getElementById("bookIn").click(); return true;
     case "bankSettings": b.showSettings = true; render(); return true;
-    case "bankSettingsClose": b.showSettings = false; render(); return true;
+    case "bankSettingsClose": Drafts.guard("bank:settings", () => { b.showSettings = false; render(); }); return true;
     case "bankMore": b.limit += 200; render(); return true;
     case "bankCsv": closeMenus(); exportBankCsv(); return true;
     case "bankDismissFail": b.lastFail = null; render(); return true;
@@ -808,6 +893,7 @@ function bankClick(t){
     case "bankBulkRestore": bulkAction("restore"); return true;
     case "bankBulkLedger": { const inp = document.querySelector("[data-bulkled]"); bulkLedgerFrom(inp); return true; }
     case "bankDelStmt": closeMenus(); if (b.cur) deleteStatement(b.cur); return true;
+    case "bankRestoreStmt": closeMenus(); restoreStatement(0); return true;
     case "bankClearStmt": closeMenus(); clearStatement(); return true;
     case "bankDelAll": deleteAllStatements(); return true;
     case "bankClearRules": clearRules(); return true;
@@ -863,18 +949,21 @@ function lmSet(name, key, val){
   if (key === "gstRate") m.gstRate = val ? num(val) : null;
   if (key === "section") m.section = String(val).toUpperCase().replace(/\s+/g, "");
   if (key === "rate") m.rate = val === "" ? null : num(val);
-  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString();
+  m.byHand = true; m.ok = true; m.okAt = new Date().toISOString(); m.okBy = whoAmI();
+  const it = ((b.ledCheck || {}).items || {})[name]; if (it) it.state = "confirmed";
   LedMaster.tplLearn(b, [name]); try { LedMaster.applyPosting(b, CO(), "empty"); } catch (e){}
   b.mapV = (b.mapV || 0) + 1; b.reco = null; saveBooks(); render();
 }
-function lmConfirmToggle(name){ const m = S.books.map[name]; if (m){ LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); } }
+// a confirm button is its own confirm step (review 18): saved at once, not kept as a draft (src/js/60 Drafts.direct)
+function lmConfirmToggle(name){ const m = S.books.map[name]; if (m) Drafts.direct(() => { LedMaster.confirm(S.books, [name], !m.ok); S.books.reco = null; saveBooks(); render(); }, {bypass: true}); }
 function lmViewGo(v){ S.lmView = v; S.booksTab = "ledgers"; render(); }
 function lmPost(k){ LedMaster.applyPosting(S.books, CO(), k); render(); }
 // the Audit tab (app/src/screens/books/Audit.jsx): the period, how often it runs by itself, and a finding's status
 // or note (kept with the books)
 // Accounts (app/src/screens/books/Accounts.jsx): the format, the year, stock, a manufacturer, shares, a ledger placed by
 // hand (the statements are worked out again) or given back to the rule
-function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v}); S.fsRun = null; saveBooks(); render(); }
+// a format chosen by hand stays chosen; otherwise it follows the client's entity type (FS.cfg)
+function fsKindSet(v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {kind: v, kindSet: true}); S.fsRun = null; saveBooks(); render(); }
 function fsFyGo(v){ S.fsFy = v; S.fsRun = null; render(); }
 function fsStockSet(which, v){ const b = S.books, c = FS.cfg(b); c.stock = Object.assign({}, c.stock, {[which]: v === "" ? "" : num(v)}); b.fs = c; saveBooks(); }
 function fsSet(key, v){ const b = S.books; b.fs = Object.assign({}, FS.cfg(b), {[key]: v}); saveBooks(); }
@@ -936,9 +1025,12 @@ async function companyGate(fc, b, co, fname, quiet){
   return r && r.ok ? {ok: true} : {ok: false, why: "not taken: it is from " + fc.name};
 }
 // build 195: a day book file for the client open (S.books): its company checked, then only the dates chosen replaced.
-// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown)
+// opts.quiet: from the upload for several clients (the mapping was confirmed there; the answer is returned, not shown).
+// opts.toast === false (2.4.0, the one Upload Tally data on From Tally): the questions are asked as always, but the
+// result is returned for the page to say instead of a toast
 async function bringDayBookFile(f, from0, to0, opts){
   opts = opts || {};
+  const loud = !opts.quiet && opts.toast !== false;
   const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
   const who = {client: S.coId, company: BridgeSeed.company()};           // fixed now: the background sends below keep to this client
   let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
@@ -946,11 +1038,18 @@ async function bringDayBookFile(f, from0, to0, opts){
   if (!gate.ok){ b.busy = ""; render(); return {refused: gate.why}; }
     return Books.importDayBook(f, m => { b.busy = m; softRender(); }).then(async res => {
       const bad = notThisClient((res.meta || {}).gstins);
-      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return; }
+      if (bad.length){ b.busy = ""; render(); if (opts.quiet) return {refused: panRefusal("The day book " + f.name, bad)}; askConfirm({title: "This day book is not this client\u2019s", ok: "Close", body: '<p class="note">' + esc(panRefusal("The day book " + f.name, bad)) + " Choose the day book exported from this client\u2019s company in Tally, or correct the client\u2019s GSTIN and PAN in Client setup.</p>"}); return {refused: panRefusal("The day book " + f.name, bad)}; }
       // a part: the dates chosen (or the file's own first and last date); only those dates are replaced, the rest stays
       const ds = res.vouchers.map(v => v.date).filter(Boolean).sort();
-      const from = from0 || ds[0], to = to0 || ds[ds.length - 1];
-      if (!from || !to){ b.busy = ""; render(); if (!opts.quiet) toast("There are no entries in " + f.name + "."); return {refused: "no entries in the file"}; }
+      if (!ds.length){ b.busy = ""; render(); if (loud) toast("There are no entries in " + f.name + "."); return {refused: "there are no entries in " + f.name}; }
+      // 2.4.0: dates asked for (a day that needs its Day Book, the month between two files) are met with the file's own
+      // first and last entry, so a day the file does not cover is never emptied (a file of the wrong period used to wipe
+      // every day asked for). A file whose entries run past both ends covers them all (days with no entries in Tally are
+      // then empty here too); a file with no entry inside them that does not run past them is refused, nothing changes
+      const from = from0 && from0 > ds[0] ? from0 : ds[0], to = to0 && to0 < ds[ds.length - 1] ? to0 : ds[ds.length - 1];
+      if (from > to){ b.busy = ""; render(); const asked = fmtDate(tallyDate(from0 || to0)) + (from0 && to0 && from0 !== to0 ? " to " + fmtDate(tallyDate(to0)) : "");
+        const why = "there are no entries for " + asked + " in " + f.name + " (it has " + fmtDate(tallyDate(ds[0])) + " to " + fmtDate(tallyDate(ds[ds.length - 1])) + "). Export the Day Book of " + asked + " from Tally";
+        if (loud) toast(why.charAt(0).toUpperCase() + why.slice(1) + "."); return {refused: why}; }
       const inside = res.vouchers.filter(v => v.date >= from && v.date <= to), outside = res.vouchers.length - inside.length;
       if (!(b.vouchers || []).length){ b.vouchers = inside; b.meta = Object.assign(res.meta, {from, to}); }
       else TallyRead.merge(b, {vouchers: inside, meta: res.meta}, from, to);
@@ -961,7 +1060,7 @@ async function bringDayBookFile(f, from0, to0, opts){
       TallyRead.after(b, "after the day book was read", {from: b.meta.from, to: b.meta.to});
       if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
       await saveBooks();
-      if (!opts.quiet) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
+      if (loud) toast(inside.length + " entries of " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + " brought in" + (outside ? " (" + outside + " outside those dates left out)" : "") + ". Choose the next part, or check the ledgers, then TDS and GST.");
       // the same file fills the bridge's copy for these dates (the bridge never reads them from Tally itself) and FinCom's
       // cloud (everyone in the firm sees the same books)
       (async () => {
@@ -981,9 +1080,10 @@ async function bringDayBookFile(f, from0, to0, opts){
           part.cloud = "going to the cloud…";
           try {
             // fast-sync: handed to FinCom's server, which reads it into the cloud copy even if this page is closed
-            const r = await TCloudUp.handOver(await f.text(), {from, to}, step, who, f.name);
+            // round 20: the file itself goes (through Storage, resumable); its text is read only for the old hand-over
+            const r = await TCloudUp.handOver(f, {from, to}, step, who, f.name);
             part.cloud = r && r.job ? "with FinCom’s server (" + r.days + " days), read in by the server" : r && r.days != null ? "in the cloud (" + r.days + " days)" : (r && r.skipped) || "";
-            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
+            if (r && r.days != null){ await TCloudUp.drop(wait); toast(r.storage ? f.name + " is in FinCom’s cloud; FinCom’s server reads its " + r.days + " days into the cloud copy now. You can close this page." : r.job ? f.name + ": all " + r.days + " days are with FinCom’s server, which reads them into the cloud copy now. You can close this page." : f.name + ": all " + r.days + " days, " + fmtDate(tallyDate(from)) + " to " + fmtDate(tallyDate(to)) + ", are in FinCom’s cloud."); }
           }
           catch (e){ part.cloud = "not sent: " + ((e && e.message) || e); toast("It could not go to FinCom’s cloud just now (" + ((e && e.message) || e) + "). It goes on its own the next time this client is opened."); }
           finally { window.removeEventListener("beforeunload", stay); TCloudUp.live.delete(wait); }
@@ -991,10 +1091,140 @@ async function bringDayBookFile(f, from0, to0, opts){
         b.busy = ""; await saveBooks(null, b); render();          // these books, even if another client is open by now
       })();
       render();
-      return {n: inside.length, from, to};
-    }, e => { b.busy = ""; if (!opts.quiet) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
+      return {n: inside.length, from, to, outside};
+    }, e => { b.busy = ""; if (loud) toast("Could not read that file: " + (e && e.message || e)); render(); return {refused: "could not read it: " + ((e && e.message) || e)}; });
 }
+// opening balances from a trial balance exported from Tally, as on `on` (yyyymmdd): its closing balances are the
+// opening balances of the next day. {text} or {refused}; opts.toast === false: said by the page, not a toast
+async function bringTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance (the day before the first date of the books) first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML.");
+  const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
+  const to = (b.meta || {}).to || next;
+  const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
+  TallyRead.balances(b, j, next, to);
+  b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
+  // the closing figures follow from the opening and the entries brought in
+  if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
+  TallyRead.after(b, "after the trial balance was read", {from: next, to});
+  await saveBooks(); render();
+  const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
+  const said = r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".";
+  if (loud) toast(said);
+  if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge’s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
+  if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
+  return {text: said, n: r.rows.length};
+}
+// the books checked against Tally's own trial balance as on `on` (TBCheck.run, src/js/24)
+async function checkTbFile(f, on, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  const no = why => { if (loud) toast(why); return {refused: why}; };
+  if (!/^\d{8}$/.test(on)) return no("Give the date of the trial balance first.");
+  let text; try { text = await f.text(); } catch (e){ return no("Could not read that file: " + ((e && e.message) || e)); }
+  const r = TBFile.read(text, b);
+  const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client’s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return {refused: odd}; }
+  if (!r.rows.length) return no(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ".");
+  b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
+  await saveBooks(); render();
+  const said = b.tbCheck.ok ? "Ready: every ledger agrees with Tally’s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally’s trial balance as on " + fmtDate(tallyDate(on)) + ".");
+  if (loud) toast(said);
+  return b.tbCheck.ok || !b.tbCheck.why ? {text: said} : {refused: said};
+}
+// the ledger masters (Display > List of Accounts, or All Masters, exported as XML): groups, PAN, GSTIN of each ledger
+async function bringMastersFile(f, opts){
+  opts = opts || {}; const loud = opts.toast !== false, b = S.books;
+  b.busy = "Opening " + f.name + "…"; render();
+  let fc = null; try { fc = await Books.fileCompany(f); } catch (e){}
+  const g = await companyGate(fc, b, CO(), f.name);
+  if (!g.ok){ b.busy = ""; render(); return {refused: g.why || "not taken"}; }
+  if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
+  let res;
+  try { res = await Books.importMasters(f, m => { b.busy = m; softRender(); }); }
+  catch (e){ b.busy = ""; const why = "Could not read that file: " + ((e && e.message) || e); if (loud) toast(why); render(); return {refused: why}; }
+  b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
+  b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
+  await saveBooks();
+  const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
+  if (loud) toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
+  render();
+  return {count: res.count, pans: Object.keys(res.pans).length, gstins: Object.keys(res.gstins || {}).length, withPan, deductions: rows.length};
+}
+// 2.4.0 (the owner, 08-Oct-2026: "change the data xml upload page.. it is too much crowded.. simplify it"): the one
+// Upload Tally data on Books -> From Tally (#tallyIn, the top bar's button and the drop area). Which file it is comes
+// from its content, never asked: a Day Book (vouchers), the ledger masters (groups and ledgers) or a trial balance
+// (Tally's report lines; its date is not in the file, so only that is asked, on the page). Refused, changing nothing:
+// an empty file, a file cut short (a Tally export ends with </ENVELOPE>), a file of no known kind.
+async function tallyFileKind(f){
+  if (!f || !f.size) return {kind: "", why: (f ? f.name : "The file") + " is empty. Export it again from Tally."};
+  const dec = await Books.decoder(f), wide = /utf-16/.test(dec.encoding);
+  const head = dec.decode(new Uint8Array(await f.slice(0, 262144).arrayBuffer()));
+  let at = Math.max(0, f.size - 4096); if (wide && at % 2) at++;
+  const tail = new TextDecoder(dec.encoding).decode(new Uint8Array(await f.slice(at).arrayBuffer()));
+  const kind = /<VOUCHER[\s>]/.test(head) ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
+  if (!kind) return {kind, why: f.name + " is not a Tally Day Book, ledger masters or trial balance XML. In Tally, export the report with Ctrl+E as XML."};
+  if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
+  return {kind};
+}
+const TALLY_KINDS = {daybook: "Day Book", masters: "ledger masters", tb: "trial balance"};
+// the files chosen or dropped: the masters first (the PANs and groups the day book's figures use), then the day books,
+// then a trial balance (asked its date on the page). S.tallyUp = {cid, at, busy, lines: [{kind, name, ok, text}]}
+async function tallyFiles(files){
+  const b = S.books, cid = S.coId;
+  if (!b || b.cid !== cid || !(files || []).length) return;
+  const u = S.tallyUp = {cid, at: Date.now(), busy: true, lines: []}; render();
+  const said = l => { u.lines.push(l); render(); };
+  const seen = [];
+  for (const f of files){ let k; try { k = await tallyFileKind(f); } catch (e){ k = {kind: "", why: "Could not read " + f.name + ": " + ((e && e.message) || e)}; } seen.push([f, k]); }
+  const order = {masters: 0, daybook: 1, tb: 2, "": 3};
+  seen.sort((x, y) => order[x[1].kind] - order[y[1].kind]);
+  const iso8 = v => String(v || "").replace(/-/g, "");
+  for (const [f, k] of seen){
+    if (!k.kind){ said({kind: "", name: f.name, ok: false, text: k.why}); continue; }
+    if (k.kind === "masters"){
+      const r = await bringMastersFile(f, {toast: false});
+      said(r.refused ? {kind: "masters", name: f.name, ok: false, text: "The ledger masters were not taken: " + r.refused}
+        : {kind: "masters", name: f.name, ok: true, text: "Read the ledger masters: " + r.count.toLocaleString("en-IN") + " ledgers (" + r.pans + " with PAN, " + r.gstins + " with GSTIN)" + (r.deductions ? "; " + r.withPan + " of " + r.deductions + " deductions now have a PAN" : "") + "."});
+      continue;
+    }
+    if (k.kind === "daybook"){
+      const lim = [iso8(S.dbFrom), iso8(S.dbTo)];
+      const r = await bringDayBookFile(f, lim[0], lim[1], {toast: false}) || {refused: "not taken"};
+      if (r.refused){ said({kind: "daybook", name: f.name, ok: false, text: "The Day Book was not taken: " + r.refused + "."}); continue; }
+      let days = 0; for (let d = r.from; d <= r.to; d = BridgeSeed.add(d, 1)) days++;
+      if (lim[0] || lim[1]){ S.dbFrom = ""; S.dbTo = ""; }
+      said({kind: "daybook", name: f.name, ok: true, text: "Read " + r.n.toLocaleString("en-IN") + (r.n === 1 ? " entry" : " entries") + " for " + fmtDate(tallyDate(r.from)) + " to " + fmtDate(tallyDate(r.to)) + "; " + days + (days === 1 ? " day" : " days") + " updated" + (r.outside ? " (" + r.outside + " outside those dates left out)" : "") + "."});
+      continue;
+    }
+    // a trial balance: its date is asked on the page (the books' last date for a check, the day before them for openings)
+    const m = b.meta || {}, open = !(b.tb && b.tb.source) && !!(b.vouchers || []).length;
+    S.tbAsk = {cid, f, name: f.name, on: open ? tbDefaultOn(b) : tallyDate(m.to || "") || tbDefaultOn(b)};
+    said({kind: "tb", name: f.name, ok: true, text: f.name + " is a trial balance. Tally does not write its date in the file: give it below."});
+  }
+  u.busy = false; render();
+}
+// the trial balance asked about on the page: as opening balances, or to check the books against
+async function tbAskUse(how){
+  const a = S.tbAsk; if (!a || a.cid !== S.coId) return;
+  const on = String(a.on || "").replace(/-/g, "");
+  const r = how === "open" ? await bringTbFile(a.f, on, {toast: false}) : await checkTbFile(a.f, on, {toast: false});
+  if (r.refused && /date/.test(r.refused) && !/^\d{8}$/.test(on)){ toast(r.refused); return; }
+  S.tbAsk = null;
+  S.tallyUp = {cid: S.coId, at: Date.now(), busy: false, lines: [{kind: "tb", name: a.name, ok: !r.refused, text: r.refused ? "The trial balance was not taken: " + r.refused : r.text}]};
+  render();
+}
+// a day (or the dates between two files) that needs its Day Book: the one file box, for those dates only (yyyy-mm-dd)
+function tallyPickFor(from, to){ S.dbFrom = from || ""; S.dbTo = to || from || ""; render(); const i = document.getElementById("tallyIn"); if (i){ i.value = ""; i.click(); } }
 function booksChange(t){
+  if (t.id === "tallyIn"){
+    const files = Array.from(t.files || []); t.value = "";
+    if (files.length) tallyFiles(files);
+    return true;
+  }
   if (t.id === "booksIn"){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
@@ -1004,61 +1234,18 @@ function booksChange(t){
   }
   if (t.id === "tbIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbOn || tbDefaultOn(b) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance (the day before the first date of the books) first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + ". Export the Trial Balance from Tally as XML."); return; }
-      const next = (t => t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"))(new Date(+on.slice(0, 4), +on.slice(4, 6) - 1, +on.slice(6, 8) + 1));
-      const to = (b.meta || {}).to || next;
-      const j = {from: next, to, ledgers: r.rows.map(x => ({name: x.name, parent: (b.under || {})[x.name] || "", open: String(x.open), close: ""}))};
-      TallyRead.balances(b, j, next, to);
-      b.tb.source = "the trial balance file " + f.name; b.tb.openAsOn = on;
-      // the closing figures follow from the opening and the entries brought in
-      if (typeof MIS === "object"){ const mv = MIS.moves(b.tb.from, b.tb.to); Object.entries(b.tb.led).forEach(([l, x]) => { x.close = r2(num(x.open) + ((mv[l] || {}).t || 0)); }); }
-      TallyRead.after(b, "after the trial balance was read", {from: next, to});
-      await saveBooks(); render();
-      const tot = r2(r.rows.reduce((s2, x) => s2 + num(x.open), 0));
-      toast(r.rows.length + " opening balances as on " + fmtDate(tallyDate(on)) + " brought in" + (Math.abs(tot) >= 1 ? "; they do not add up to nil (difference " + INR.format(tot) + "): check the trial balance was exported with every ledger" : "") + ".");
-      if (Bridge.on()) BridgeSeed.opening(on, b.tb.led).then(x => { b.tb.bridge = x && x.skipped ? "not taken: " + x.skipped : "taken"; saveBooks(); render(); if (x && x.skipped) toast("The bridge\u2019s copy was not given the balances: " + x.skipped); }, e => toast("The bridge could not take the balances: " + ((e && e.message) || e)));
-      if (TCloudUp.on()) TCloudUp.opening(next, on, b.tb.led).then(() => { b.tb.cloud = "in the cloud"; saveBooks(); render(); }, e => toast("The balances are here, but the cloud did not take them: " + ((e && e.message) || e)));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) bringTbFile(f, String(S.tbOn || tbDefaultOn(S.books) || "").replace(/-/g, ""));
     return true;
   }
   if (t.dataset && t.dataset.tbcheckon !== undefined){ S.tbCheckOn = t.value; render(); return true; }
   if (t.id === "tbCheckIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books, on = String(S.tbCheckOn || tallyDate((b.meta || {}).to) || "").replace(/-/g, "");
-    if (!/^\d{8}$/.test(on)){ toast("Give the date of the trial balance first."); return true; }
-    f.text().then(async text => {
-      const r = TBFile.read(text, b);
-      const odd = TBFile.foreign(r, b); if (odd){ askConfirm({title: "This trial balance does not look like this client\u2019s", ok: "Close", body: '<p class="note">' + esc(odd) + "</p>"}); return; }
-      if (!r.rows.length){ toast(r.groupsSeen ? "This trial balance shows only groups. In Tally, press Alt+F5 (detailed) so each ledger is shown, then export it again." : "No ledger balances found in " + f.name + "."); return; }
-      b.tbCheck = TBCheck.run(b, r.rows, on, f.name);
-      await saveBooks(); render();
-      toast(b.tbCheck.ok ? "Ready: every ledger agrees with Tally\u2019s trial balance as on " + fmtDate(tallyDate(on)) + "." : b.tbCheck.why || (b.tbCheck.n + " ledger" + (b.tbCheck.n === 1 ? " differs" : "s differ") + " from Tally\u2019s trial balance; they are listed under step 5."));
-    }, e => toast("Could not read that file: " + ((e && e.message) || e)));
+    if (f) checkTbFile(f, String(S.tbCheckOn || tallyDate((S.books.meta || {}).to) || "").replace(/-/g, ""));
     return true;
   }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (!f) return true;
-    const b = S.books; b.busy = "Opening " + f.name + "\u2026"; render();
-    (async () => { let fc = null; try { fc = await Books.fileCompany(f); } catch (e){} return companyGate(fc, b, CO(), f.name).then(g => ({g, fc})); })().then(({g, fc}) => {
-    if (!g.ok){ b.busy = ""; render(); return; }
-    if (fc && (fc.name || fc.guid) && !b.tallyCo) b.tallyCo = {name: fc.name, guid: fc.guid};
-    Books.importMasters(f, m => { b.busy = m; softRender(); }).then(async res => {
-      b.pans = res.pans; b.gstins = res.gstins; b.under = res.under; b.states = res.states; b.groups = res.groups; b.groupInfo = res.groupInfo; b.busy = ""; TallyRead.yearOpen(b);
-      b.ledInfo = res.info; b.ledInfoAt = new Date().toISOString(); LedMaster.refresh(b);
-      await saveBooks();
-      const rows = TDS.rows(), withPan = rows.filter(r => r.pan).length;
-      toast(res.count + " ledgers read. " + Object.keys(res.pans).length + " carry a PAN; " + withPan + " of " + rows.length + " deductions now have one.");
-      render();
-    }, e => { b.busy = ""; toast("Could not read that file: " + (e && e.message || e)); render(); });
-    });
+    if (f) bringMastersFile(f);
     return true;
   }
   if (t.id === "filedIn"){
@@ -1108,7 +1295,7 @@ document.addEventListener("keydown", ev => {
 });
 document.addEventListener("keydown", ev => {
   if (ev.key === "Escape" && S.view === "company" && S.tab === "bank" && B() && B().showSettings && !document.querySelector("#confirmBox[style*='flex']")){
-    ev.preventDefault(); ev.stopImmediatePropagation(); B().showSettings = false; render();
+    ev.preventDefault(); ev.stopImmediatePropagation(); Drafts.guard("bank:settings", () => { B().showSettings = false; render(); });     // unsaved changes: asked first (src/js/60)
   }
 }, true);
 function bankInput(t){
@@ -1179,8 +1366,9 @@ const MultiUp = {
     if (!todo.length){ toast("Choose the client for each file first."); return; }
     m.busy = true;
     const keepCo = S.coId, keepView = S.view;
+    m.done = 0; m.total = todo.length;
     for (const r of todo){
-      r.status = "reading…"; render();
+      r.status = "reading…"; m.at = r.f.name; render();
       try {
         S.coId = r.cid;
         if (!S.books || S.books.cid !== r.cid){ S.books = null; await openBooks(r.cid); }
@@ -1189,6 +1377,7 @@ const MultiUp = {
         r.ok = !!(res && !res.refused && res.n != null);
         r.status = !res ? "not taken" : res.refused ? "not taken: " + res.refused : "done: " + res.n + " entries, " + fmtDate(tallyDate(res.from)) + " to " + fmtDate(tallyDate(res.to));
       } catch (e){ r.status = "not taken: " + ((e && e.message) || e); }
+      m.done++;
       S.view = keepView; render();
     }
     S.coId = keepCo; S.view = keepView; m.busy = false; render();

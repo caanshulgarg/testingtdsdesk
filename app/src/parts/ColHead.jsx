@@ -9,3 +9,11 @@ export default function ColHead({ t, k, label, cls }) {
       </span></span></th>
   );
 }
+
+// the same filter button alone, for a column of the shared list table (ListTable.jsx: a column's `filter`)
+export function ColFunnel({ t, k, label }) {
+  const on = colActive(t, k), open = S.colPop && S.colPop.t === t && S.colPop.k === k;
+  return <span data-legacy="" style={{ display: "contents" }}>
+    <button className={"colf" + (on ? " on" : "") + (open ? " open" : "")} data-colf={k} data-colt={t} aria-label={"Filter " + label} title={"Filter " + label} dangerouslySetInnerHTML={{ __html: FUNNEL }} />
+  </span>;
+}

@@ -4,17 +4,28 @@ import { useState } from "react";
 import DropZone from "../parts/DropZone.jsx";
 import { MultiUpload } from "../parts/Notes.jsx";
 import { Jobs, ReadingCheck, UploadOptions } from "../parts/Reading.jsx";
+import ListTable from "../parts/ListTable.jsx";
 
 function AddClient() {
   const others = sortedCompanies();
-  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false });
+  const [v, setV] = useState({ name: "", gstin: "", tallyName: "", copyFrom: "", turnover10cr: false, tallyCompany: "", postOnly: true });
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === "checkbox" ? e.target.checked : e.target.value });
+  // the Tally companies the bridge here sees open, and the ones the firm's Tally computers reported (02-Oct-2026)
+  if (typeof TCloud === "object" && TCloud.on() && TCloud.pane.devices === null && !TCloud.pane.busy) setTimeout(() => TCloud.refreshPane(), 0);
+  const seen = tallyCompaniesSeen(), pick = (name) => { const x = seen.find((c) => c.name === name);
+    setV({ ...v, tallyCompany: name, tallyName: name || v.tallyName, name: v.name || name, gstin: v.gstin || (x && x.gstin) || "" }); };
   const save = () => saveNewCompany(v);
   return <>
     <h2>Add client</h2>
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
       <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
       <label className="f"><span>GSTIN</span><input type="text" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>
+      <label className="f wide"><span>Company in Tally</span>
+        <select aria-label="Company in Tally" data-add-tally="" value={v.tallyCompany} onChange={(e) => pick(e.target.value)}>
+          <option value="">{seen.length ? "Choose the company in Tally (optional)" : "No Tally company seen yet: open it in Tally on a connected computer"}</option>
+          {seen.map((c) => <option key={c.name} value={c.name} disabled={!!c.client}>{c.name + (c.client ? " — linked to " + ((CO(c.client) || {}).name || "another client") : " — " + (c.where || (c.open ? "open in Tally" : "seen")))}</option>)}
+        </select></label>
+      {v.tallyCompany && <label className="chk wide" data-add-postonly=""><input type="checkbox" checked={v.postOnly} onChange={set("postOnly")} /> Post this client’s entries only into <b>{v.tallyCompany}</b></label>}
       <label className="f"><span>Company name in Tally</span><input type="text" placeholder="Same as client name" value={v.tallyName} onChange={set("tallyName")} /></label>
       {others.length > 0 && <label className="f wide"><span>Copy ledger names from</span>
         <select value={v.copyFrom} onChange={set("copyFrom")}><option value="">Standard names</option>{others.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
@@ -41,7 +52,9 @@ function TallyLight({ cid }) {
   if (typeof TLight !== "object") return null;
   const co = CO(cid), t = tallyStatus(co), x = TLight.st.by[cid];
   // the one status (review item 5); the heartbeat's detail (updated when, Tally closed) stays in the tip
-  return <span className={"tag " + t.level} title={t.say + (x && t.state === "ok" ? "" : x ? " " + x.say : "")} data-tally={t.state}>{MARK[t.level] + t.label}</span>;
+  // 2.1.3: the client's one line ("Tally open on NWS144 · last read 15:34") leads the tip
+  const l = typeof tallyLine === "function" ? tallyLine(co) : null;
+  return <span className={"tag " + t.level} title={(l ? l.text + ". " : "") + t.say + (x && (t.state === "ok" || t.state === "held") ? "" : x ? " " + x.say : "")} data-tally={t.state} data-tally-line-tip={l ? l.state : ""}>{MARK[t.level] + t.label}</span>;
 }
 
 export default function Clients() {
@@ -68,37 +81,31 @@ export default function Clients() {
     <div style={{ marginTop: 8 }}><UploadOptions /></div>
     <Jobs which="auto" />
     <MultiUpload />
-    {!all.length ? <div className="pane"><p className="empty" style={{ padding: 0 }}>No clients yet. Add your first client with its GSTIN and Tally company name.</p></div> : <>
+    {!all.length ? <div className="pane"><p className="empty lt-empty" data-list-empty="" style={{ padding: 0 }}>No clients yet. Use <b>Add client</b> above to add the first one, with its GSTIN and Tally company name.</p></div> : <>
       <div className="row" style={{ margin: "18px 0 8px", justifyContent: "space-between" }}>
         <label className="f" style={{ minWidth: 260 }}><span>Find a client</span>
           <input type="text" value={q} placeholder="Name, GSTIN or Tally name" onChange={(e) => { setQ(e.target.value); S.homeQuery = e.target.value; }} />
         </label>
         <span className="note">About {INR0.format(used)} of {INR0.format(DB_LIMIT)} records used</span>
       </div>
-      <div className="tblwrap">
-        <table className="data">
-          <thead><tr><th>Client</th><th>GSTIN</th><th>Tally</th><th className="n">To review</th><th className="n">Need a check</th><th className="n">Waiting for Tally</th><th className="n">TDS {fy}</th><th className="n">Read free</th><th></th></tr></thead>
-          <tbody>
-            {!cos.length && <tr><td colSpan={9} className="note">No client matches “{q}”.</td></tr>}
-            {cos.map((c) => {
-              const st = c.stats || {}, inbox = docqCount(c.id);
-              return (
-                <tr key={c.id} className="rowlink" onClick={() => openCompany(c.id)}>
-                  <td><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
-                    {c.tallyName && c.tallyName !== c.name && <div className="note">Tally: {c.tallyName}</div>}</td>
-                  <td>{c.gstin || "—"}</td><td><TallyLight cid={c.id} /></td>
-                  <td className="n">{st.drafts || "—"}</td>
-                  <td className="n">{st.check ? <span className="tag warn">{st.check}</span> : "—"}</td>
-                  <td className="n">{st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"}</td>
-                  <td className="n">{st.fy === fy && st.tdsFy ? money0(st.tdsFy) : "—"}</td>
-                  <td className="n"><Free c={c} /></td>
-                  <td className="n"><button className="btn small" onClick={(e) => { e.stopPropagation(); openCompany(c.id); }}>Open</button></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* the one list table (spec K6): the client, its Tally sign (the status), then the counts; the foot adds them up */}
+      <ListTable name="clients" className="data" rows={cos} rowKey={(c) => c.id} unit={["client", "clients"]} of={all.length}
+        rowProps={(c) => ({ className: "rowlink", onClick: () => openCompany(c.id) })}
+        empty={<>No client matches “{q}”. Clear the search, or use <b>Add client</b> above.</>}
+        cols={[
+          { k: "name", role: "party", label: "Client", v: (c) => c.name, cell: (c) => { const inbox = docqCount(c.id);
+            return <><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
+              {c.tallyName && c.tallyName !== c.name && <div className="note">Tally: {c.tallyName}</div>}</>; } },
+          { k: "tally", role: "status", label: "Tally", v: (c) => tallyStatus(c).label, cell: (c) => <TallyLight cid={c.id} /> },
+          { k: "gstin", label: "GSTIN", v: (c) => c.gstin || "", cell: (c) => c.gstin || "—" },
+          { k: "drafts", label: "To review", cls: "n", v: (c) => (c.stats || {}).drafts || 0, sum: true, fmt: String, cell: (c) => (c.stats || {}).drafts || "—" },
+          { k: "check", label: "Need a check", cls: "n", v: (c) => (c.stats || {}).check || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.check ? <span className="tag warn">{st.check}</span> : "—"; } },
+          { k: "waiting", label: "Waiting for Tally", cls: "n", v: (c) => (c.stats || {}).waiting || 0, sum: true, fmt: String, cell: (c) => { const st = c.stats || {}; return st.waiting ? <span className="tag ok">{st.waiting}</span> : "—"; } },
+          { k: "tds", label: "TDS " + fy, cls: "n", v: (c) => { const st = c.stats || {}; return st.fy === fy && st.tdsFy ? num(st.tdsFy) : 0; }, sum: true, fmt: money0,
+            cell: (c) => { const st = c.stats || {}; return st.fy === fy && st.tdsFy ? money0(st.tdsFy) : "—"; } },
+          { k: "free", label: "Read free", cls: "n", cell: (c) => <Free c={c} /> },
+          { k: "ac", role: "act", cls: "n", cell: (c) => <button className="btn small" onClick={(e) => { e.stopPropagation(); openCompany(c.id); }}>Open</button> },
+        ]} />
     </>}
   </>;
 }

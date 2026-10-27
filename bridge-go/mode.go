@@ -5,6 +5,9 @@
 //     never kept), and NEVER posts to Tally: posting stays with bridge 1.15.0.
 //   - Sole mode (the default): the one bridge on this computer, on port 9100, with the copy, pairing and settings bridge
 //     1.15.0 left. It still refuses to post while bridge 1.15.0 is found on the computer: only one bridge may ever post.
+//     It is the "main" bridge for FinCom, which may still answer that another bridge is the main one (it then reads only).
+//   - A test bridge becomes the main one from its tray menu (Switch to main bridge) or from FinCom's Tally page: see
+//     identity.go.
 package main
 
 import (
@@ -15,10 +18,28 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
+const changesOnlyText = "This bridge is set to changes only in FinCom (Tally page): it reads Tally's changes and never posts."
+
 func testMode() bool { return strings.EqualFold(cfgS("Mode"), "test") }
+
+// How this program was started, for the tray and the log: "service" (a Windows service for all users, started by
+// Windows), "user" (installed just for one Windows user: started at sign-in, watched by its own supervisor, no
+// administrator needed) or "window" (started by hand, for support and the tests).
+var runMode = "window"
+
+// the main loop's last turn (Unix seconds): the per-user supervisor restarts a bridge whose loop has stopped turning
+var loopAt atomic.Int64
+
+func loopSec() int64 {
+	if t := loopAt.Load(); t > 0 {
+		return time.Now().Unix() - t
+	}
+	return 0
+}
 
 // bridge 1.15.0's folder, beside which this one runs in test mode
 func psHome() string {
@@ -57,13 +78,20 @@ func readOnlyWhy() string {
 	if testMode() {
 		return "This FinCom Bridge is the test install beside bridge 1.15.0: it reads Tally but never posts. Postings go through bridge 1.15.0."
 	}
+	// L2: set to changes only in FinCom (kept in the settings: a restart or FinCom out of reach never posts again)
+	if cfgB("ChangesOnly") {
+		return changesOnlyText
+	}
+	if why := notMainNow(); why != "" {
+		return why
+	}
 	oldMu.Lock()
 	defer oldMu.Unlock()
 	if time.Since(oldAt) > 30*time.Second {
 		oldAt, oldFound = time.Now(), oldBridgePresent()
 	}
 	if oldFound {
-		return "Bridge 1.15.0 (PowerShell) is still on this computer, so this bridge does not post: only one bridge may post. Run the FinCom Bridge setup again and choose \"Replace bridge 1.15.0\"."
+		return "An older bridge is still on this computer, so FinCom Bridge does not post: only one bridge may post. Run the FinCom Bridge setup again: it takes the older bridge off."
 	}
 	return ""
 }
@@ -106,9 +134,9 @@ func setPaused(on bool) {
 	setCfg("Paused", on)
 	saveConfig()
 	if on {
-		writeLog("Paused from the tray icon: Tally is not read and nothing is posted until Resume")
+		writeLog("Background reading paused from the tray icon: opening a client in FinCom and the nightly catch-up do not read Tally; postings and Update now still work")
 	} else {
-		writeLog("Resumed from the tray icon")
+		writeLog("Background reading resumed from the tray icon")
 	}
 }
 
@@ -150,10 +178,25 @@ func trayStatus() M {
 	online := cloud && !bOK.IsZero() && (!missed || time.Since(bFail) < time.Duration(3*beatEvery()+30)*time.Second)
 	reconnecting := missed && online
 	tstate, tsince := tallyOverall(openCompaniesCached())
-	return M{"ok": true, "version": BridgeVersion, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
+	return M{"ok": true, "version": BridgeVersion, "runMode": runMode, "testMode": testMode(), "readOnly": readOnlyWhy(), "paused": paused(), "tallyOpen": tallyOpen, "companies": cos,
+		"nightlyAt": keepDailyAt(), "lastRead": lastReadAt(), "notAnsweringSince": notAnsweringSince(), "tallyRequests": tallySent.Load(), "tallyLastRequest": unixText(tallySentAt.Load()),
 		"cloudConnected": cloud, "online": online, "reconnecting": reconnecting, "tallyState": tstate, "busySince": tsince, "needKey": cfgS("CloudUrl") != "" && cloudKey() == "", "lastBeat": fmtTime(bOK), "beatFailed": fmtTime(bFail), "wake": wakeStatus(), "updating": keepRunning(),
-		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName()}
+		"port": toInt(cfg("Port")), "fincomUrl": fincomURL(), "log": logFile(), "shadow": shadowStats, "update": updateInfo(), "owner": ownerName(),
+		"switching": switching.Load(), "bridgeId": "go-" + instanceID(), "posting": postingNow(), "readStopped": readStopAny(),
+		"trialTools": trialTools(), "cloudRefused": idRefused(), "nightStale": bankStaleList(nowFn())} // round 21: the owner's switch in FinCom (the tray shows the trial items only while on)
 }
+
+// the way it runs, in words for the log and the tray
+func runModeText() string {
+	switch runMode {
+	case "service":
+		return "as a Windows service for all users"
+	case "user":
+		return "just for this Windows user (starts at sign-in, no service)"
+	}
+	return "in a window"
+}
+
 func fmtTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -266,36 +309,59 @@ func showDiagnosis() {
 // runBridge runs until it is asked to stop; returns the exit code (non-zero: start me again)
 func runBridge(console bool) int {
 	loadConfig()
+	// 2.4.0: crash reports to Sentry, only when the settings say "CrashReports": true and the bridge is connected to the
+	// staging cloud (crash.go, docs/sentry.md). A panic of the bridge itself is reported, then goes on as before
+	if crashStart(bridgeDSN) {
+		writeLog("Crash reports to FinCom's error tracker are on (CrashReports in the settings; staging only)")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			crashReport("bridge", r)
+			crashStop()
+			panic(r)
+		}
+		crashStop()
+	}()
 	_ = os.MkdirAll(syncDir(), 0o755)
 	pausedB = cfgB("Paused")
 	if testMode() {
 		seedFromOldCopy()
 	}
-	var err error
-	for i := 0; ; i++ {
-		if _, err = serve(); err == nil {
-			break
+	// review M3 of 2.3.0: one bridge per settings (the service and a "Just for me" bridge of the same Windows user share
+	// them): a second one refuses to start, says so in its log and the tray's message, and is not started again
+	release, err := takeInstanceLock()
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
 		}
-		if console || i >= 60 {
-			fmt.Printf("Could not start on port %d: %s\n", toInt(cfg("Port")), err)
-			fmt.Println("Another program already uses this port. Usually a bridge is already running. Stop it, or change \"Port\" in the settings.")
-			writeLog(fmt.Sprintf("Could not start on port %d: %s", toInt(cfg("Port")), err))
-			return 1
-		}
-		if i == 0 {
-			writeLog(fmt.Sprintf("Port %d is taken; trying again every 5 seconds (another bridge may be stopping)", toInt(cfg("Port"))))
-		}
-		sleepOrStop(5 * time.Second)
-		if stopping() {
-			return stopCode
-		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitTwice
 	}
+	defer release()
+	// 2.3.1 (the owner's last change): a 2.3.0 bridge's stop of reading by itself and its 2-second switch-offs, saved on
+	// disk, are cleared (the owner's stop from FinCom is kept)
+	clearOldSwitchOffs()
+	// 2.3.0: the first free port of 9100..9199 (the remembered one first); none: said once, and the bridge stops
+	ln, err := bindAndRemember(listenLocal, ownBridgeOn)
+	if err != nil {
+		msg := err.Error()
+		if console {
+			fmt.Println(msg)
+		}
+		writeLog(msg)
+		_ = saveFile(startFailedFile(), msg)
+		return exitNoPort
+	}
+	_ = os.Remove(startFailedFile())
+	serve(ln)
 	openPairWindow(toInt(cfg("PairWindowMin")))
 	mode := "the only bridge on this computer"
 	if testMode() {
 		mode = "TEST MODE beside bridge 1.15.0 (reads Tally, sends to FinCom as a shadow, never posts)"
 	}
-	writeLog(fmt.Sprintf("FinCom Bridge %s (Go) started on 127.0.0.1:%d: %s; working for %s, Windows session %d", BridgeVersion, toInt(cfg("Port")), mode, ownerName(), mySession()))
+	writeLog(fmt.Sprintf("FinCom Bridge %s (Go) started on 127.0.0.1:%d: %s; working for %s, Windows session %d; runs %s", BridgeVersion, toInt(cfg("Port")), mode, ownerName(), mySession(), runModeText()))
 	if why := readOnlyWhy(); why != "" && !testMode() {
 		writeLog(why)
 	}
@@ -304,26 +370,14 @@ func runBridge(console bool) int {
 		fmt.Printf("\n  FinCom - Tally Bridge %s\n  Address : http://127.0.0.1:%d\n  To connect FinCom: press Connect there and type the code  %s  (until %s).\n\n", BridgeVersion, toInt(cfg("Port")), pairCode, pairUntil.Format("15:04"))
 		pairMu.Unlock()
 	}
-	func() {
-		defer func() { recover() }()
-		for _, s := range openCompanies(true) {
-			if s["skipped"] == true {
-				writeLog(fmt.Sprintf("Tally on port %d: another user's session, not used", toInt(s["port"])))
-			} else if s["ok"] == true {
-				var n []string
-				for _, c := range sessCompanies(s) {
-					n = append(n, str(c["name"]))
-				}
-				mine := ""
-				if s["mine"] == true {
-					mine = " (yours)"
-				}
-				writeLog(fmt.Sprintf("Tally on port %d%s: %s", toInt(s["port"]), mine, strings.Join(n, ", ")))
-			}
-		}
-	}()
-	showDiagnosis()
+	// 2.1.3: Tally is asked nothing at the start (no company list, no warm-up): only whether it is open
+	if p := tallyOpenNow(); p > 0 {
+		writeLog(fmt.Sprintf("Tally is open on port %d; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at %s)", p, keepDailyAt()))
+	} else {
+		writeLog("Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at " + keepDailyAt() + ")")
+	}
 	coMu.Lock()
+	planMode, _ = portPlan()
 	if planMode == "fallback" {
 		writeLog("Windows did not say which Tally belongs to you; ports from the settings are used. Choose your Tally in FinCom.")
 	}
@@ -332,30 +386,28 @@ func runBridge(console bool) int {
 		defer func() {
 			if r := recover(); r != nil {
 				writeLog(fmt.Sprintf("%s: %v", name, r))
+				crashReport("main_loop", r)
 			}
 		}()
 		f()
 	}
 	go updateLoop()
 	go beatLoop()
-	last := time.Now()
-	lastPush := time.Now()
+	go recorderWatchLoop() // round 18: the recorder trial's folder watch (file times only; Tally is not asked)
+	go recorderLiveLoop()  // 2.2.0: the live recorder's uploader (the reader is the watch's turn)
 	for !stopping() {
+		loopAt.Store(time.Now().Unix())
 		sleepOrStop(100 * time.Millisecond)
-		safe("Posting queue", syncCloudPosts)
-		safe("Watching Tally", testKeepWatch)
-		if time.Since(last).Seconds() >= float64(keepNum("KeepStartSec", 60)) {
-			last = time.Now()
-			syncConfig()
-			safe("Check", showDiagnosis)
-			safe("Could not start keeping copies in step", startKeepIfNeeded)
-		}
-		// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
-		if !keepRunning() && time.Since(lastPush) >= 60*time.Second {
-			lastPush = time.Now()
-			go safe("Cloud", func() { invokeCloudPush() })
-		}
+		bridgeTurn(safe)
 	}
+	liveMidSave() // 2.3.1 (2.3.0 review L2/L3): the record of Tally's GUIDs learnt since its last write
 	time.Sleep(300 * time.Millisecond)
 	return stopCode
+}
+
+func unixText(u int64) string {
+	if u <= 0 {
+		return ""
+	}
+	return time.Unix(u, 0).Format("2006-01-02T15:04:05")
 }

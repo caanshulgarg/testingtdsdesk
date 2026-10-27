@@ -35,7 +35,7 @@ def day(d):
     return "".join("<TALLYMESSAGE>" + m + "</TALLYMESSAGE>" for m in re.findall(r"<VOUCHER\b[\s\S]*?</VOUCHER>", text) if "<DATE>%s</DATE>" % d in m)
 D1, D2, D3 = "20260302", "20260303", "20260304"
 try:
-    for i in range(60):
+    for i in range(240):   # up to 120 s: Deno may still be fetching the function's imports on a fresh machine
         try: urllib.request.urlopen("http://127.0.0.1:8000/", timeout=1)
         except urllib.error.HTTPError: break
         except Exception: time.sleep(0.5)

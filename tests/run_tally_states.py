@@ -48,16 +48,16 @@ with sync_playwright() as p:
     ok(r[3] == "down", "not answering for over two minutes: offline")
     chip = pg.evaluate("""() => { Bridge.st = {state: "ok", sessions: [], open: [], at: Date.now(), tallyUp: true, tallyState: "busy", busySince: "2026-10-01T12:40:00", stuck: {since: "2026-10-01T12:40:00"}}; return bridgeChip(null); }""")
     ok("Tally busy since 12:40" in chip and "tchip warn" in chip and "not responding" not in chip, "Tally stuck on this computer: “Tally busy since 12:40” (amber), not “not responding”")
-    # Settings → Tally Bridge: the three parts and the history
+    # Settings → FinCom Bridge: the three parts and the history
     hist = [{"kind": "bridge", "state": "online", "at": iso(20000)}, {"kind": "bridge", "state": "offline", "at": iso(9000), "to": iso(8800)},
             {"kind": "tally", "state": "busy", "at": iso(5000), "was": "open"}, {"kind": "tally", "state": "open", "at": iso(4800), "was": "busy"},
             {"kind": "company", "state": "closed", "name": "TESTING AAD", "at": iso(3000)}, {"kind": "tally", "state": "busy", "at": iso(100000), "was": "open"}]
     pg.evaluate("() => { Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now()}; Bridge.on = () => false; }")
     pg.evaluate(setup, [cid, {"at": iso(3), "every": 30, "tally": True, "tallyState": "busy", "busySince": iso(60)[:19], "companies": []}, hist])
-    pg.evaluate("(cid) => openCompany(cid).then(() => navHome('tally'))", cid); pg.wait_for_timeout(1500)
+    pg.evaluate("(cid) => openCompany(cid).then(() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'bridge'; render(); })", cid); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok(pg.locator('[data-part="bridge"][data-state="online"]').count() >= 1 and pg.locator('[data-part="tally"][data-state="busy"]').count() >= 1 and pg.locator('[data-part="company"][data-state="linked"]').count() >= 1,
-       "Settings → Tally Bridge: Bridge Online, Tally Busy, Company Linked, apart")
+       "Settings → FinCom Bridge: Bridge Online, Tally Busy, Company Linked, apart")
     hp = pg.locator('[data-pane="tally-history"]').inner_text() if pg.locator('[data-pane="tally-history"]').count() else ""
     ok("Connection history" in hp and "Bridge offline" in hp and "(3 min)" in hp and "Tally busy" in hp and "Closed in Tally: TESTING AAD" in hp, "the connection history: an offline spell with its length, Tally busy, a company closed")
     ok(pg.locator('[data-pane="tally-history"] tbody tr').count() == 5, "only the last 24 hours (an older event left out)")
