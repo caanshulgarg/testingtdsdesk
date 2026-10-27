@@ -23,7 +23,7 @@ import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import BooksSource from "../parts/BooksSource.jsx";
-import { PlanCredit, FirmAccount, PeopleEtc, Platform } from "./Account.jsx";
+import { PlanCredit, FirmAccount, PeopleEtc } from "./Account.jsx";
 import { Rates, Reading, ClosedPeriods } from "./SettingsMore.jsx";
 import { BankSetup } from "../parts/BankSettings.jsx";
 import GstSettings from "./gst/GstSettings.jsx";
@@ -35,7 +35,7 @@ import { clientTallyState } from "../lib/tallyState.js";
 import "../../../src/js/83-tds-forms-2025.js";
 
 // the list on the left: groups of sections; each section has a label and, below it, where it stands now
-function SetNav({ label, groups, current, pick }) {
+function SetNav({ label, groups, current, pick, foot }) {
   return (
     <nav className="setnav" aria-label={label}>
       {groups.map((g) => (
@@ -48,6 +48,7 @@ function SetNav({ label, groups, current, pick }) {
           ))}
         </div>
       ))}
+      {foot}
     </nav>
   );
 }
@@ -57,7 +58,7 @@ const GST_BOOK_KEYS = "books:gstSet,gstOpen,itcBasis,rule37On,gstCashLedger,gstA
 const SEC_STORES = { settings: ["client"], cotally: ["client"], cotds: ["client"], deductees: ["parties"], gstset: ["client", GST_BOOK_KEYS], bankset: ["client"], coclosed: ["client"],
   firm: ["firm"], rates: ["firm"], ai: ["firm"], reading: ["reading"] };
 const SEC_EMPTY = { cosheets: "Each change acts at once; a format deleted is kept, with who and why.", bankrules: "Each rule is saved from its own box (New rule, Change); a rule deleted is asked first.", account: "Nothing to save here: each button acts at once.",
-  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here.", platform: "Nothing to save here: each button acts at once." };
+  plan: "Nothing to save here.", autopost: "Nothing to save here: the panel has its own Save, and only the owner switches it on.", moves: "Each switch acts at once. It is kept in this browser, for you only.", bridge: "Nothing to save here: each button acts at once.", tcloud: "Nothing to save here: each button acts at once.", postlog: "Nothing to save here.", gstapi: "Nothing to save here." };
 
 // "← Back to Post to Tally": a setup page reached from another page leads back to it (smart moves round 1, Smart.setReturn)
 export function BackTo() {
@@ -66,11 +67,11 @@ export function BackTo() {
   return <p className="back-to"><button className="linkbtn" data-back-to="" onClick={() => Smart.goBack()}>{"← Back to " + back.label}</button></p>;
 }
 
-function Layout({ label, groups, current, pick, children, scope, cid }) {
+function Layout({ label, groups, current, pick, children, scope, cid, foot }) {
   const it = groups.flatMap((g) => g.items).find((x) => x.id === current);
   return (
     <div className="setwrap">
-      <SetNav label={label} groups={groups} current={current} pick={pick} />
+      <SetNav label={label} groups={groups} current={current} pick={pick} foot={foot} />
       <div className="setbody">
         <BackTo />
         <header className="sethead"><h2>{it.label}</h2><p>{it.about}</p></header>
@@ -104,7 +105,7 @@ function FirmDetails() {
 }
 
 function firmGroups() {
-  const a = S.account, sa = !!(a && a.superadmin);
+  const a = S.account;
   const groups = [
     { title: "Your firm", items: [
       { id: "firm", label: "Firm details", about: "The firm’s name, as it appears on the page and on what you give clients.", status: S.firm.firmName || "no name yet" },
@@ -136,7 +137,6 @@ function firmGroups() {
         status: Smart.KINDS.filter(([k]) => Smart.on(k)).length + " of " + Smart.KINDS.length + " on" },
     ] },
   ];
-  if (sa) groups.push({ title: "Administrator", items: [{ id: "platform", label: "Platform", about: "All firms, credit, plans, prices and keys.", status: S.adminData ? (S.adminData.firms || []).length + " firms" : "" }] });
   return groups;
 }
 
@@ -154,6 +154,15 @@ function MoveSwitches() {
       <input type="checkbox" data-move={k} checked={Smart.on(k)} onChange={(ev) => { Smart.set(k, ev.target.checked); redraw((n) => n + 1); render(); }} />
       <span><b>{when}</b><br /><span className="note">{what}</span></span></label>)}</div>
   </Card>;
+}
+
+// console phase 1b (27-Oct-2026): platform administration (firms, plans, prices, credit, AI keys, new firms) is FinCom's
+// console now; FinCom's own people (platform_admins) get one small link to it, in a new tab. The address is the build's:
+// console-staging.fincom.live for the testing site, console.fincom.live for the live one (app/console.json)
+function AdminConsoleLink() {
+  if (!(typeof FirmGate === "object" && FirmGate.admin())) return null;
+  return <div className="setgroup" data-admin-console=""><div className="setgroup-t">FinCom</div>
+    <a className="linkbtn" href={__CONSOLE_URL__} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "6px 10px" }}>Admin console ↗</a></div>;
 }
 
 export function FirmSettings() {
@@ -175,10 +184,9 @@ export function FirmSettings() {
     ai: () => <><AiSettings />{Cloud.on() && <AssistantSettings />}</>,
     autopost: () => <AutoPostSettings />,
     moves: () => <MoveSwitches />,
-    platform: () => <Platform />,
   }[cur];
   // the one place for the build stamp (owner's spec K1): a small About line at the foot of Settings
-  return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="">{body()}</Layout>
+  return <><Layout label="Settings" groups={groups} current={cur} pick={pick} scope="firm" cid="" foot={<AdminConsoleLink />}>{body()}</Layout>
     <p className="note about-line" data-about="">{"About FinCom: this version was built on " + String(__REACT_BUILD__).replace(/^React · /, "").replace(/(\d{2}:\d{2})(?! IST)/, "$1 IST")}</p></>;
 }
 

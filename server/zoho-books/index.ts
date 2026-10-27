@@ -37,6 +37,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
 import * as Z from "./map.js";
+import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 
 const env = (k: string, d = "") => (Deno.env.get(k) ?? d);
 const URL_ = env("SUPABASE_URL");
@@ -544,6 +545,9 @@ Deno.serve(async (req) => {
       const deadline = Date.now() + RUN_MS, done: any[] = [];
       for (const c of ((await rpc("zoho_due", { p_limit: 10 })) || []) as Conn[]) {
         if (Date.now() > deadline - 15000) break;
+        // console phase 1b: a paused firm's books are not written (its schedule simply waits)
+        const gate = await firmGate(viaClient(db), String((c as any).firm_id || ""), (c as any).client_id ? String((c as any).client_id) : null);
+        if (gate) { done.push({ connection: c.id, skipped: gate.reason }); continue; }
         done.push({ connection: c.id, ...(await syncOne(c, deadline)) });
       }
       return json(200, { ok: true, done }, req);
@@ -553,6 +557,13 @@ Deno.serve(async (req) => {
     if (!me.mfa) return json(403, { ok: false, error: "Finish the two-step sign-in first." }, req);
     const kind = String(body.kind || "");
     if (kind === "config") return json(200, { ok: true, configured: configured(), redirectUri: REDIRECT, scopes: SCOPES, dc: "India (accounts.zoho.in)" }, req);
+    // console phase 1b: a paused firm (FinCom's console) connects, reads into its books and posts nothing; it may still
+    // give up a connection (disconnect). The service role skips can_write(), so it is asked here
+    if (["connect_start", "link", "sync_now", "hook_new", "post"].includes(kind)) {
+      const mine = await rpc("zoho_member", { p_user: me.user }).catch(() => null);
+      const gate = mine && mine.firm ? await firmGate(viaClient(db), String(mine.firm), body.client ? String(body.client) : null) : null;
+      if (gate) return json(gate.status, { ok: false, reason: gate.reason, error: gate.error }, req);
+    }
     if (!configured() && kind !== "disconnect") return json(200, { ok: false, notSetUp: true, error: "Zoho Books is not set up for FinCom yet: the owner's Zoho API client id and secret are not in place." }, req);
     if (kind === "connect_start") {
       const st = randomHex(24);

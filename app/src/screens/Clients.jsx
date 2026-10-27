@@ -103,6 +103,8 @@ export default function Clients() {
   // the search box: typed at once, the list follows a moment later (as before)
   const [q, setQ] = useState(S.homeQuery || "");
   const all = Object.values(S.companies), find = q.trim().toLowerCase();
+  // console phase 1b: companies FinCom switched off are left out (sortedCompanies) unless "Show inactive" is on
+  const offN = typeof FirmGate === "object" ? all.filter((c) => FirmGate.off(c.id)).length : 0;
   const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.pan || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));
   const panel = S.multiUp ? "daybooks" : PANELS[S.clientsPanel] ? S.clientsPanel : "";
   const open = (id) => { S.clientsPanel = id; S.addingCo = false; render(); };
@@ -114,6 +116,7 @@ export default function Clients() {
       tools={<><More label="More" data-clients-more="" items={[[PANELS.upload, () => open("upload"), { "data-clients-open": "upload" }], [PANELS.daybooks, () => open("daybooks"), { "data-clients-open": "daybooks" }],
         [PANELS.reading, () => open("reading"), { "data-clients-open": "reading" }]]} />
       {/* while the Day Books' files are matched, their "Bring them in" is the main button */}
+      {(offN > 0 || S.showInactive) && <label className="chk" data-show-inactive=""><input type="checkbox" checked={!!S.showInactive} onChange={(e) => { S.showInactive = e.target.checked; render(); }} /> {"Show inactive (" + offN + ")"}</label>}
       {!S.addingCo && <button className={"btn small" + (S.multiUp ? "" : " primary")} data-add-client="" onClick={() => doAct("addCo")}>Add client</button>}</>} />
     {S.addingCo && <div className="pane" style={{ marginTop: 0 }}><AddClient /></div>}
     {panel && <Panel id={panel} />}
@@ -125,7 +128,7 @@ export default function Clients() {
         empty={<>No client matches “{q}”. Clear the search, or use <b>Add client</b> above.</>}
         cols={[
           { k: "name", role: "party", label: "Client", v: (c) => c.name, cell: (c) => { const inbox = docqCount(c.id);
-            return <><b>{c.name}</b>{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
+            return <><b>{c.name}</b>{FirmGate.off(c.id) && <> <span className="tag no" data-client-off="" title={FirmGate.offWhy(c.id)}>Switched off</span></>}{inbox > 0 && <> <span className="tag" title="Files waiting in the inbox">{"\u{1F4E5} " + inbox}</span></>}
               {(() => { const tc = clientTallyState(c).company; return tc && tc !== c.name ? <div className="note" data-client-tally-co="">Tally: {tc}</div> : null; })()}</>; } },
           { k: "tally", role: "status", label: "Tally", v: (c) => tallyStatus(c).label, cell: (c) => <TallyLight cid={c.id} /> },
           { k: "gstin", label: "GSTIN / PAN", v: (c) => c.gstin || c.pan || "", cell: (c) => <>{c.gstin ? <span className="code">{c.gstin}</span> : "—"}{c.pan && (!c.gstin || c.gstin.slice(2, 12) !== c.pan) ? <div className="nr">PAN {c.pan}</div> : null}</> },

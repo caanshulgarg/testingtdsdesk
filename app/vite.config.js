@@ -31,6 +31,12 @@ const turnstileKey = (mode) => {
   try { return String(JSON.parse(fs.readFileSync(new URL("./turnstile.json", import.meta.url), "utf8"))[mode === "test" ? "test" : "live"] || "").trim(); } catch (e) { return ""; }
 };
 const TURNSTILE = "https://challenges.cloudflare.com";
+// FinCom's console (console phase 1b): the address the Settings link for FinCom's own people opens, from
+// FINCOM_CONSOLE_URL or app/console.json ({"test": "https://console-staging.fincom.live", "live": "https://console.fincom.live"})
+const consoleUrl = (mode) => {
+  if (process.env.FINCOM_CONSOLE_URL) return process.env.FINCOM_CONSOLE_URL.trim();
+  try { return String(JSON.parse(fs.readFileSync(new URL("./console.json", import.meta.url), "utf8"))[mode === "test" ? "test" : "live"] || "").trim(); } catch (e) { return ""; }
+};
 const csp = (mode, hashes = "") => "default-src 'self'; script-src 'self'" + hashes + (turnstileKey(mode) ? " " + TURNSTILE : "") + " 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; " +
   "connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:*" + (sentryOn(mode) ? " " + SENTRY_INGEST : "") + "; " +
@@ -186,7 +192,7 @@ function serviceWorker(mode) {
 export default defineConfig(({ mode }) => ({
   base: "./",
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
-    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __TURNSTILE_KEY__: JSON.stringify(turnstileKey(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
+    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __TURNSTILE_KEY__: JSON.stringify(turnstileKey(mode)), __CONSOLE_URL__: JSON.stringify(consoleUrl(mode) || "https://console.fincom.live"), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
   plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
   build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true, target: TARGET },

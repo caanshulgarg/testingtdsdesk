@@ -21,6 +21,11 @@ and files in `tools/fn-files.json`, and `node tools/fn-files.js list|payload|dep
 Supabase deploys each function's files on their own. Send `server/_shared/cors.ts` with every one, named
 `../_shared/cors.ts` (with the Supabase CLI: copy it to `supabase/functions/_shared/cors.ts`; the CLI bundles it).
 
+**27-Oct-2026 (console phase 1b): `firmgate.ts`** (the console's switches: a paused firm, a switched-off company;
+migration 118) goes with gateway and admin (as `../_shared/firmgate.ts`) and with tally-ingest, gst-taxpro,
+fincom-assistant, fincom-transcribe, gst-2b-match, tds-challan-match, mis-run, zoho-books and fincom-call (as
+`server/_shared/firmgate.ts`, from their pinned commit in `tools/fn-files.json`).
+
 | Function (deployed name) | Source folder | Files to deploy | Origin |
 |---|---|---|---|
 | gateway | server/security/functions/gateway | index.ts, cors.ts, classify.ts, ../_shared/cors.ts | the list |

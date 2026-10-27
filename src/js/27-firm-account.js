@@ -3,6 +3,9 @@
 /* ================================================================== */
 const CLOUD_DEFAULT = {url: "https://nrtczucrlgalvtojwoes.supabase.co", key: "sb_publishable_HMkVf1jl9iOA8Xt4YaUezg_--4cIWVR", auto: true};
 const CLOUD_CHUNK = 300;      // bank rows per record
+// a login FinCom switched off from its console (banned in Supabase Auth; the sign-in function says reason user_off)
+const SWITCHED_OFF = "This account is switched off. Contact FinCom support.";
+function switchedOff(j){ return j && (j.reason === "user_off" || j.error_code === "user_banned" || /\bbanned\b/i.test(String(j.error || j.msg || j.error_description || ""))) ? SWITCHED_OFF : ""; }
 const Cloud = {
   st: {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []},
   cfg(){ let c = {}; try { c = JSON.parse(lsGet("tdsdesk:cloud") || "{}"); } catch (e){}
@@ -24,7 +27,7 @@ const Cloud = {
     const c = this.cfg();
     const r = await fetch(c.url.replace(/\/+$/, "") + "/auth/v1/" + path, {method: "POST", headers: {apikey: c.key, "Content-Type": "application/json"}, body: JSON.stringify(body)});
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
+    if (!r.ok) throw new Error(switchedOff(j) || j.error_description || j.msg || j.message || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
   // through the sign-in function, which counts wrong passwords and locks the account after 5 (review item 21);
@@ -39,7 +42,7 @@ const Cloud = {
     const j = await r.json().catch(() => null);
     // an answer that is not the sign-in function's own (the gateway's "function not found", a proxy page): sign in as before
     if (!j || (!r.ok && !("ok" in j)) || (r.ok && !j.access_token)) return direct();
-    if (!r.ok) throw new Error(j.error || ("Sign-in failed (" + r.status + ")"));
+    if (!r.ok) throw new Error(switchedOff(j) || j.error || ("Sign-in failed (" + r.status + ")"));
     return j;
   },
   async signIn(email, password){
@@ -601,8 +604,10 @@ async function cloudSync(manual){
   if (manual) render();
   let changed = !!Cloud.st.busy;
   try {
-    const sent = await cloudPush();
+    // a paused firm (FinCom's console) is read-only: what is changed here waits on this computer (src/js/99)
+    const sent = FirmGate.paused() ? 0 : await cloudPush();
     const got = await cloudPull();
+    FirmGate.load();
     if (sent || cloudPull.took) changed = true;
     try { await BookSync.tick(); } catch (e){}
     Cloud.st.lastSync = Date.now();
@@ -675,7 +680,7 @@ async function loadAccount(quiet){
     const fn = String(((a || {}).firm || {}).name || "").trim();
     if (fn && S.firm && S.firm.firmName !== fn){ S.firm.firmName = fn; Store.saveFirm(); }
     try { pickEngine(); } catch (e){}      // the plan may provide Claude
-    if (a && a.superadmin && !S.adminData) loadAdminOverview(true);
+    FirmGate.load();                                      // the console's switches (src/js/99)
     if (typeof SUP === "object") SUP.load(true);          // the Help count: tickets awaiting an answer
     if (!quiet) render();
     return a;
@@ -702,15 +707,7 @@ async function charge(code, qty, ref, note){
   } catch (e){ return true; }                            // never block work because the internet is down
 }
 /* ---------- the firm's own account screen ---------- */
-/* ---------- superadmin: firms, credit, plans, prices, keys ---------- */
-async function loadAdminOverview(quiet){
-  if (!Cloud.on()) return;
-  try {
-    const d = await Cloud.rpc("admin_overview");
-    S.adminData = d && d.firms ? d : null;
-    if (!quiet) render();
-  } catch (e){ if (!quiet) toast("Could not read the platform data: " + e.message); }
-}
+/* ---------- platform administration: moved to FinCom's console (console.fincom.live, console phase 1b) ---------- */
 
 // where a link in an email should bring the person back: this page, without its #…
 function appUrl(){ return location.origin + location.pathname; }
@@ -1300,68 +1297,6 @@ function acctDropOff(id){
     Cloud.rpc("revoke_drop_key", {p_id: id}).then(() => Cloud.rpc("my_drop_keys")).then(k => { S.dropKeys = [].concat(k || []); render(); }, e => toast(e.message));
   });
 }
-function adminPlan(firm, plan){ Cloud.rpc("admin_set_plan", {p_firm: firm, p_plan: plan}).then(() => { toast("Plan changed."); loadAdminOverview(); }, e => toast(e.message)); }
-function adminAct(act, firm, d){
-  d = d || {};
-  const g = id => (document.getElementById(id) || {}).value || "";
-  const after = msg => { toast(msg); loadAdminOverview(); loadAccount(true); };
-  if (act === "credit"){
-    askConfirm({title: "Add credit to " + (d.name || "this firm"), ok: "Add credit",
-      body: '<div class="bk-form two"><label><span>Amount</span><input type="number" id="crAmt" value="5000" step="500"></label><label><span>Note (payment reference)</span><input type="text" id="crNote"></label></div>',
-      read: () => ({amount: num((document.getElementById("crAmt") || {}).value), note: (document.getElementById("crNote") || {}).value || ""})
-    }).then(a => { if (!a) return; Cloud.rpc("admin_credit", {p_firm: firm, p_amount: a.data.amount, p_note: a.data.note}).then(r => after("Credit added. Balance: " + INR.format(num(r.balance))), e => toast(e.message)); });
-    return;
-  }
-  if (act === "prices"){ S.adminPrices = firm; render(); return; }
-  if (act === "closePrices"){ S.adminPrices = null; render(); return; }
-  if (act === "savePrices"){
-    const f = ((S.adminData || {}).firms || []).find(x => x.id === firm) || {};
-    const jobs = (f.modules || []).map(m => {
-      const v = (document.getElementById("pr_" + m.code) || {}).value;
-      const on = !!(document.getElementById("en_" + m.code) || {}).checked;
-      return Cloud.rpc("admin_set_module", {p_firm: firm, p_code: m.code, p_enabled: on, p_price: v === "" ? null : num(v)});
-    });
-    Promise.all(jobs).then(() => { S.adminPrices = null; after("Prices saved."); }, e => toast(e.message));
-    return;
-  }
-  if (act === "on" || act === "off"){ Cloud.rpc("admin_set_firm", {p_firm: firm, p_active: act === "on"}).then(() => after(act === "on" ? "Switched on." : "Switched off."), e => toast(e.message)); return; }
-  if (act === "createFirm"){
-    const name = g("nfName").trim(), email = g("nfEmail").trim();
-    if (!name || !email){ toast("The firm name and the owner's email are needed."); return; }
-    Cloud.fn("admin", {action: "create_firm", name, email, owner_name: g("nfOwner"), plan_id: g("nfPlan"), credit: num(g("nfCredit"))})
-      .then(r => { S.newFirm = {email: r.email, password: r.password}; after("Firm created."); }, e => toast(e.message));
-    return;
-  }
-  if (act === "editPlan"){ S.planEdit = d.plan; render(); return; }
-  if (act === "newPlan"){ S.planEdit = "new"; render(); return; }
-  if (act === "closePlan"){ S.planEdit = null; render(); return; }
-  if (act === "savePlan"){
-    const mods = ((S.adminData || {}).modules || []).filter(m => m.billing !== "free");
-    const includes = {};
-    mods.forEach(m => {
-      if ((document.getElementById("inc_" + m.code) || {}).checked){
-        const cap = (document.getElementById("cap_" + m.code) || {}).value;
-        includes[m.code] = cap === "" ? {cap: null} : {cap: num(cap), price_after: m.price};
-      }
-    });
-    Cloud.rpc("admin_save_plan", {p_id: d.plan && d.plan !== "new" ? d.plan : null, p_name: g("plName"), p_monthly: num(g("plFee")), p_includes: includes, p_note: g("plNote")})
-      .then(() => { S.planEdit = null; after("Plan saved."); }, e => toast(e.message));
-    return;
-  }
-  if (act === "runMonthly"){ Cloud.rpc("run_monthly", {}).then(r => after(r.charged + " firms charged" + (r.short_of_credit ? ", " + r.short_of_credit + " had too little credit" : "") + "."), e => toast(e.message)); return; }
-  if (act === "saveSignup"){
-    Cloud.rpc("admin_set_setting", {p_name: "signup", p_value: {open: !!(document.getElementById("suOpen") || {}).checked, trial_credit: num(g("suCredit")), plan: g("suPlan")}})
-      .then(() => after("Saved."), e => toast(e.message));
-    return;
-  }
-  if (act === "saveSecret"){
-    const k = d.name, v = (document.getElementById("sec_" + k) || {}).value || "";
-    if (!v.trim()){ toast("Paste the key first."); return; }
-    Cloud.rpc("admin_set_secret", {p_name: k, p_value: v.trim()}).then(() => { const el = document.getElementById("sec_" + k); if (el) el.value = ""; after("Key saved. It cannot be read back."); }, e => toast(e.message));
-    return;
-  }
-  return;
-}
 function cloudForm(k, v){ S.cloudForm = Object.assign({}, S.cloudForm, {[k]: v}); if (k === "email") Cloud.setCfg({email: v.trim()}); }
 function cloudAuto(on){ Cloud.setCfg({auto: on}); startCloudSync(); render(); }
 function docsKeep(on){ S.firm.cloudDocs = on; Store.saveFirm(); toast(on ? "Documents will be kept in the firm account." : "Documents stay on this computer only."); render(); }
@@ -1579,7 +1514,6 @@ function doAct(act, t){
       break;
     }
     case "acctRefresh": loadAccount(); break;
-    case "adminRefresh": loadAdminOverview(); break;
     case "acctHistory": {
       S.walletOpen = !S.walletOpen;
       if (S.walletOpen) Cloud.api("wallet_entries?select=at,kind,code,qty,amount,balance_after,note&order=at.desc&limit=50").then(r => { S.wallet = r || []; render(); }, e => toast(e.message));
@@ -2111,6 +2045,7 @@ let pickMode = "company";
 function pickFiles(mode){ pickMode = mode; document.getElementById("fileIn").click(); }
 async function handleFiles(files, mode){
   if (!files.length) return;
+  { const why = FirmGate.why(mode === "company" ? undefined : ""); if (why){ toast(why); return; } }   // paused, or the client switched off
   if (mode === "company" && S.view === "company" && S.coId){
     // a register (a sheet or JSON: GSTR-2B, a portal's or an ERP's) on Purchase: the sheet panel (app/src/lib/registers.js); bills as before
     const sheets = files.filter(f => isSheetFile(f));

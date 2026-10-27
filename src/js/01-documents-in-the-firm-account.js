@@ -3541,6 +3541,7 @@ async function invoiceGroups(file){
   return groups.slice(0, 100).map(g => g.pages);
 }
 async function enqueueFiles(files, target){
+  { const why = typeof FirmGate === "object" ? FirmGate.why(target === "auto" ? "" : target) : ""; if (why){ toast(why); return; } }
   const split = S.splitPdf;
   const add = [];
   for (const f of files){
@@ -4320,7 +4321,8 @@ function clearSent(why){
 /* Rendering                                                           */
 /* ------------------------------------------------------------------ */
 const app = document.getElementById("app");
-function sortedCompanies(){ return Object.values(S.companies).sort((a, b) => a.name.localeCompare(b.name)); }
+// a company FinCom switched off is left out unless "Show inactive" is on (src/js/99)
+function sortedCompanies(){ return Object.values(S.companies).filter(c => typeof FirmGate !== "object" || FirmGate.shown(c)).sort((a, b) => a.name.localeCompare(b.name)); }
 function recentIds(){ try { return JSON.parse(lsGet("tdsdesk:recent") || "[]"); } catch(e){ return []; } }
 
 // The page always ends below the bars fixed at the bottom of the window (the action bar, the testing strip),

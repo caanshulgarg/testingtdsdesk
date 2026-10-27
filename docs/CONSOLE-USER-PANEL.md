@@ -1,0 +1,34 @@
+# The user app and FinCom's console: what changed (27-Oct-2026)
+
+FinCom's own administration now lives in the console (console.fincom.live; console-staging.fincom.live for the testing
+site). The user app keeps each firm's own work and its own view of its plan, credit and people. This table says, place by
+place, what the user app had before, what it has now, and where the console controls it.
+
+Branch: `next-console-userapp` (on `next-console-p1`, with `staging-next` merged). It needs migration 118 (the
+console's foundation) to show the paused and switched-off states; before 118 runs, the app works as it did.
+Screenshots, before and after, of every changed place: `scratchpad/userpanel-shots/` (`before-*.png`, `after-*.png`).
+
+| Place in the user app | What it was before | What it is now | Where the console controls it |
+|---|---|---|---|
+| Settings › Administrator › **Platform**: the list of all firms, their credit, "Add credit", the plan picker for each firm, "Prices" for each firm, "Switch off / on" a firm | Shown to FinCom's administrators (platform_admins) inside the user app | **Removed** (moved to the console) | Firms (status: active, suspended, closed); a firm's plan, prices and credit: the console's billing pages (phase 2) |
+| Platform › **Add a firm** (firm name, owner email, plan, opening credit) | Shown to FinCom's administrators | **Removed** (moved to the console) | Firms › add a firm (invite only) |
+| Platform › **Plans** editor and "Run this month's charges" | Shown to FinCom's administrators | **Removed** (moved to the console) | Plans and the monthly run (billing, phase 2) |
+| Platform › **New accounts** (anyone may sign up, starting credit, starting plan) | Shown to FinCom's administrators | **Removed** (moved to the console) | Plans › Sign-up settings |
+| Platform › **Keys** (Claude, Google Vision, Groq) and the voice minutes of all firms | Shown to FinCom's administrators | **Removed** (moved to the console) | AI control centre › Keys and usage (phase 3) |
+| Settings › Sign-in and people: "Platform administration is locked… **Unlock administration**", and its two-step prompt | Shown to FinCom's administrators who had not given the code | **Removed** | The console's own sign-in (code from the phone always asked) |
+| Settings, at the foot of the left-hand list: **Admin console ↗** | Not there | **Added**: one small link, only for FinCom's own people (platform_admins), opens the console in a new tab | It *is* the console (address set in `app/console.json`) |
+| Settings › **Plan and credit** (credit left, plan, monthly fee, what each part charges and used this month, credit history) | The firm's view, no changes possible | **Read-only** (kept), with one line: "FinCom sets the plan, its prices and the credit. To change them, contact FinCom." | Firms › a firm › plan, prices and credit (Billing role) |
+| Settings › **Sign-in and people** (the owner invites, resets, unlocks and switches off their own people) | The owner's own | **Kept** for the owner. A person FinCom switched off cannot be switched on again by the owner ("Contact FinCom support"). A paused firm adds nobody | Users (Support role) can do the same for any firm, and switch a login off |
+| Settings › **AI help** (the owner's own on/off and monthly cap) | The owner's own | **Kept** for the owner (the console's ceiling and master switch come with the AI work) | AI control centre: coming from branch `next-console-ai` |
+| **Coupon box** (at sign-up and in Plan and credit) | Not there | Coming from branch `next-console-coupons` (not pushed yet) | Coupons |
+| **Announcements bar** (and the bell) | Not there | Coming from branch `next-console-ops` (not pushed yet) | Announcements |
+| **Feature flags** (a feature's button shown only when it is on for the firm) | Not there | Coming from branch `next-console-ops` (not pushed yet). The app already re-reads them on the console's signal (`window.loadFlags`, when that branch adds it) | Feature flags |
+| AI buttons: "**AI is paused by FinCom**" / switched off for this firm | Not there | Coming from branch `next-console-ai` (not pushed yet). The app already re-reads the AI state on the console's signal (`window.loadAiState`) | AI control centre › global and per-firm switches |
+| Every page: the **paused-firm line** "Your firm's FinCom account is paused: *reason*. You can still view your work. Contact FinCom." with a Contact FinCom link (Help) | Not there | **Added** | Firms › a firm › Suspend, Close or Reactivate (Owner role), with the reason shown to the firm |
+| While paused: the **write buttons**, drop boxes and file pickers | Worked | **Read-only**: faded, their tooltip says the reason, pressing them only shows the reason; uploads and posting to Tally refused; changes made on the computer wait there and are sent when the firm is active again | Same as above |
+| **Sign-in page** for a login FinCom switched off | Showed Supabase's words, "User is banned" | **Added**: "This account is switched off. Contact FinCom support." (also when an open session is ended by the switch-off) | Users › Switch off / Switch on (Support or Owner role) |
+| **Clients** list, the client switcher (Ctrl+K), Today and the inbox's client lists | Every company | A company FinCom switched off is **hidden**; a "Show inactive (n)" tick on Clients shows it, marked "Switched off" | Companies › Switch off / Switch on (Support or Owner role) |
+| A **switched-off company** when opened | Worked as any other | **Read-only**: one line "*Name* is switched off by FinCom: *reason*. You can still view its work; uploads and posting to Tally are off."; its write buttons, uploads and posting to Tally refused | Companies |
+| **Per-client fee** | Every company counted | A switched-off company has `clients.status = 'deactivated'`, which billing reads to leave it out (billing's work, phase 2) | Companies (the status) |
+| **How fast a console change shows** | – | The firm's status is read at sign-in, with every sync (45 s) and when the tab comes back; a company's at once (Realtime on clients). Once the signal table `firm_signals` exists (the console plan's migration 127), within seconds for the firm's status, plan, credit, flags and AI switches: the listener is in place and joins by itself | Every console change that bumps the signal |
+| Server functions that write with the service role (tally-ingest uploads, gst-taxpro, gateway, assistant, transcribe, 2B match, challan match, MIS run, Zoho, calls, people) | Skipped the read-only check | **Refuse** a paused firm (and a switched-off company where the request names one) with the same words | Firms and Companies |

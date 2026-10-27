@@ -16,6 +16,7 @@
 // claude_api_key), read with the service role. The firm's rupee cap (asst_cap_take), the cost (asst_cost_add, feature
 // "2b_match") and one log line (asst_log_add) as every Ask FinCom call.
 import { corsFor } from "../_shared/cors.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { m2bFrom2bJson, m2bRow2b, m2bRowBk } from "../_shared/match2b.js";
 import { AiClient, matchRun, reapply, SONNET } from "./match.ts";
 
@@ -161,6 +162,9 @@ export function handler(deps: Deps) {
     // the client must be one of the firm's (read as the user: row-level security decides)
     const c = (await rest("/rest/v1/clients?select=id,deleted&id=eq." + q(clientId), jwt).catch(() => [])) as any[];
     if (!c || !c.length || c[0].deleted) return reply(403, { ok: false, kind: "client", error: "This client is not one of your firm's." });
+    // console phase 1b: a paused firm, or a company FinCom switched off, keeps what was matched; nothing new is run or saved
+    // (the service role skips can_write())
+    { const gate = await firmGate(viaRest(rest, SERVICE), firm, clientId); if (gate) return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); }
 
     try {
       if (action === "latest" || (action === "run" && !writer)) {

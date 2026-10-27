@@ -46,6 +46,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { after2b } from "./automatch.ts";
+import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { r1Figures, r1PortalFigures, r3bFigures, compare, sameFigures, setoff, ledgersOf, writeAllowed, cleanR1, cleanR3b, safeText, Plain } from "./filing.ts";
 
 const SB_URL = Deno.env.get("SUPABASE_URL")!;
@@ -681,6 +682,9 @@ Deno.serve(async (req) => {
   if (who instanceof Response) return who;
   if (!canWrite(who.role) && !LOOK_OK.has(action)) return reply(403, { ok: false, error: "Only the firm's owner or staff can do this." });
   const { firm, me } = who;
+  // console phase 1b: a paused firm (FinCom's console) reads what is kept; everything that writes, spends a TaxPro call or
+  // files waits until the account is active again (the service role skips can_write(), so it is asked here)
+  if (!LOOK_OK.has(action)) { const gate = await firmGate(viaClient(admin), firm); if (gate) return reply(gate.status, { ok: false, reason: gate.reason, error: gate.error }); }
   const list = (v: unknown) => (Array.isArray(v) ? v : []).map((g: unknown) => String(g).toUpperCase()).filter((g: string) => GSTIN.test(g)).slice(0, 500);
 
   try {

@@ -34,6 +34,7 @@
 // caller's own token (its Whisper, the client's ledger names and its usage row); the summary is one call to the model
 // FinCom Assistant routes a short book answer to, within the firm's AI switch and monthly cap.
 import { corsFor, allowedOrigins } from "../_shared/cors.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import * as R from "../../app/src/calls/rules.js";
 import { costUsd, plan } from "../assistant/models.ts";
 import { buildPrompt, GROQ_URL, MODEL as STT_MODEL, MODEL_FULL as STT_MODEL_FULL } from "../fincom-transcribe/index.ts";
@@ -1111,6 +1112,7 @@ export function handler(deps: Deps) {
     },
   };
 
+  const PAUSE_REFUSED = new Set(["start", "create", "schedule", "invite", "cowork", "rec_start", "transcribe", "summarise", "notes_make", "notes_save", "tasks", "settings", "batch_save"]);
   return async (req: Request): Promise<Response> => {
     const cors = corsFor(req);
     const reply = (code: number, body: unknown) => new Response(JSON.stringify(body), { status: code, headers: { ...cors, "Content-Type": "application/json" } });
@@ -1129,6 +1131,9 @@ export function handler(deps: Deps) {
       }
       const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
       const m = await asMember(jwt);
+      // console phase 1b: a paused firm joins, reads and ends calls, but starts, records, schedules or saves nothing (the
+      // function writes with the service role, which skips can_write())
+      if (PAUSE_REFUSED.has(action)) { const gate = await firmGate(viaRest(rest, SERVICE), m.firm); if (gate) return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); }
       if (member[action]) return reply(200, await member[action](m, body, ctx));
       if (shared[action]) return reply(200, await shared[action](m, body, ctx));
       return reply(400, { ok: false, error: "Unknown request" });

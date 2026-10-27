@@ -3,8 +3,7 @@
 /* kept, one token refresh at a time across tabs, and signing out     */
 /* ================================================================== */
 // Optional for firm work: once someone turns it on, the server shows nothing of the firm without the code
-// (my_firm() is empty). Platform administration (all firms, credit, secrets) always needs it: is_superadmin() is
-// false without it, so the administrator is asked for the code only when opening administration.
+// (my_firm() is empty). Platform administration is FinCom's console now (console.fincom.live, its own sign-in and code).
 Cloud.aal = function(){
   const s = this.sess();
   try { return JSON.parse(atob(String(s.access_token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).aal || "aal1"; } catch (e){ return "aal1"; }
@@ -57,7 +56,7 @@ const sessLock = {
   },
   free(){ const l = this.held(); if (l && l.by === this.id) lsDel("tdsdesk:refreshing"); }
 };
-const SESS_REFUSED = /refresh token|invalid_grant|invalid grant|already used|not found|revoked|session/i;
+const SESS_REFUSED = /refresh token|invalid_grant|invalid grant|already used|not found|revoked|session|banned/i;
 Cloud.refreshToken = function(used){
   const s0 = this.sess();
   if (used && s0 && s0.access_token && s0.access_token !== used) return Promise.resolve();   // already newer (another request or tab did it)
@@ -90,6 +89,7 @@ Cloud.refreshToken = function(used){
 // a session that cannot continue: said in words on the sign-in page, the page kept for after signing in, nothing lost
 function sessionEnded(reason){
   if (!Cloud.sess()) return;
+  if (/\bbanned\b/i.test(reason)){ signOutHere("Switched off by FinCom.", false, SWITCHED_OFF); return; }   // FinCom's console switched the login off
   if (typeof Route === "object" && !signInNeeded()) Route.pending = Route.of();
   signOutHere("Your sign-in ended: " + reason, false, "Your sign-in ended: " + reason + ". Sign in again; your work is kept.");
 }
@@ -195,17 +195,10 @@ async function mfaAction(act){
   } else if (act === "mfaCancel"){ Cloud.st.mfa = null; Cloud.st.error = ""; render(); }
   else if (act === "mfaSignOut"){ signOutHere("Signed out."); }
   else if (act === "mfaOptIn"){ Cloud.st.mfa = {need: "enrol", required: false}; render(); }
-  else if (act === "mfaAdmin"){
-    // the administrator unlocks administration: the code if set up, else set it up now
-    Cloud.st.busy = "1"; render();
-    try { const good = (await Cloud.factors()).find(f => f.status === "verified"); Cloud.st.mfa = good ? {need: "code", factorId: good.id, forAdmin: true} : {need: "enrol", required: false, forAdmin: true}; }
-    catch (e){ toast(e.message); }
-    Cloud.st.busy = ""; render();
-  }
 }
 document.addEventListener("click", ev => {
   const t = ev.target.closest && ev.target.closest("[data-act]");
-  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|Admin|CopyKey)$/.test(t.dataset.act)) return;
+  if (!t || !/^mfa(Start|Verify|Cancel|SignOut|OptIn|CopyKey)$/.test(t.dataset.act)) return;
   ev.preventDefault(); ev.stopImmediatePropagation(); mfaAction(t.dataset.act);
 }, true);
 document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target && ev.target.id === "mfaCode"){ ev.preventDefault(); mfaAction("mfaVerify"); } }, true);
@@ -225,7 +218,7 @@ function signOutHere(msg, clearLocal, why, local){
   if (!local) auditSignOut(msg || "Signed out.", s);
   // tell the server too, so the refresh token cannot be used again
   if (!local && s && s.access_token){ const c = Cloud.cfg(); fetch(c.url.replace(/\/+$/, "") + "/auth/v1/logout", {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token}}).catch(() => {}); }
-  Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.adminData = null; S.backups = null; S.settingsTab = null;
+  Cloud.signOut(); clearInterval(cloudTimer); S.account = null; S.backups = null; FirmGate.st = null; FirmGate.co = {}; S.settingsTab = null;
   Cloud.setCfg({gate: true});
   S.signedOutWhy = why || "";
   S.view = "home"; S.coId = null;

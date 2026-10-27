@@ -216,7 +216,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
-import { autoLinkFor } from "../_shared/tallyname.js";   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
+import { autoLinkFor } from "../_shared/tallyname.js";
+import { firmGate, viaClient } from "../_shared/firmgate.ts";   // the console's switches: a paused firm, a switched-off company   // error reports to Sentry, staging only, scrubbed (docs/sentry.md)
 
 const URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -3300,6 +3301,10 @@ async function userUpload(req: Request, auth: string) {
   // fast-firstopen (25-Oct-2026): a month of a book's day files in one answer (read only; before anything below, which
   // may link a company)
   if (body.kind === "month_days") return await monthDays(firm, body);
+  // console phase 1b (migration 118): a paused firm uploads nothing, nor does a company FinCom switched off (the service
+  // role skips can_write(), so it is asked here); reading (month_days, wake) and the install log for support stay open
+  const gate = await firmGate(viaClient(db), firm, body.client ? String(body.client) : null);
+  if (gate) return reply(gate.status, { ok: false, reason: gate.reason, error: gate.error });
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });

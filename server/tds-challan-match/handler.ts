@@ -9,6 +9,7 @@
 // is on. Claude's key is the platform's (platform_secrets claude_api_key), read with the service role. The firm's rupee cap
 // (asst_cap_take), the cost (asst_cost_add, feature "tds_match") and one log line (asst_log_add) as every Ask FinCom call.
 import { corsFor } from "../_shared/cors.ts";
+import { firmGate, viaRest } from "../_shared/firmgate.ts";   // the console's switches (migration 118)
 import { tmMask } from "../_shared/tdsmatch.js";
 import { AiClient, matchRun, SONNET } from "./match.ts";
 
@@ -75,10 +76,13 @@ export function handler(deps: Deps) {
     if (!member) return reply(403, { ok: false, kind: "firm", error: "This account is not part of a firm." });
     if (member.role !== "owner" && member.role !== "staff") return reply(403, { ok: false, kind: "role", error: "Only the owner or staff can ask AI to match challans." });
     const firm = String(member.firm_id);
+    const gateP = firmGate(viaRest(rest, SERVICE), firm, asked ? clientId : null);   // read beside the client's check
     if (String(body?.action || "") !== "suggest") return reply(400, { ok: false, error: "Unknown request" });
     if (!asked) return reply(400, { ok: false, error: "Say the client, the form, the year (2026-27) and the quarter." });
     const c = await cliP;
     if (!c || !c.length || c[0].deleted) return reply(403, { ok: false, kind: "client", error: "This client is not one of your firm's." });
+    // console phase 1b: a paused firm or a switched-off company asks AI nothing (the service role skips can_write())
+    { const gate = await gateP; if (gate) return reply(gate.status, { ok: false, kind: "paused", reason: gate.reason, error: gate.error }); }
     try {
       const rows = cleanRows(body.rows), chs = cleanChallans(body.challans);
       const allowed = body.ai === true && await firmAiOn(firm);

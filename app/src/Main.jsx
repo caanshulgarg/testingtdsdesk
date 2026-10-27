@@ -15,6 +15,8 @@ import { StatusTabs } from "./TopBar.jsx";
 import { UploadLine } from "./parts/StateBar.jsx";
 // the register panel: with the registers' engine, only when a register is read
 const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
+// console phase 1b: the firm paused, or the open company switched off, by FinCom's console (src/js/99 FirmGate)
+const GateBanner = lazy(() => import("./parts/GateBanner.jsx"));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations, Meetings } = SCREENS;
@@ -71,6 +73,7 @@ export default function Main({ v }) {
     {/* a client's status tabs, the first thing on the page (were a second row of the header: stability batch 1) */}
     {/* tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): no row of the
         client's pages here any more (the sidebar lists them); its Tally chip is on the title line (TopBar.jsx ClientHeader) */}
+    {FirmGate.why() && <Guard name="the paused banner" v={v} quiet><Suspense fallback={null}><GateBanner /></Suspense></Guard>}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}
