@@ -28,6 +28,12 @@
 // logged: one usage row only (assistant_log: feature "voice", route the language, ms the audio's length, tools ["ok"] or
 // why not, with "names:<count of names corrected>" and "ai:<count>" or "ai:refused" (counts only, never the words), the
 // models used, question empty).
+// Per-firm daily cap (security review 27-Oct-2026, F9: one firm could use up the platform's shared Groq allowance and
+// stop voice typing and subtitles for every firm): before Groq is called, the firm's seconds today (India's day) are
+// summed from assistant_log, voice typing ("voice") and call subtitles ("call_subs") together, rows where Groq was
+// called; at FIRM_DAY_SECS or more the answer is 429 kind "limit" (the app then keeps the browser's own words, as for
+// Groq's own 429). The seconds logged are Groq's own measure of the clip (verbose_json "duration"), never less than the
+// secs the app sent, so a wrong secs cannot hide a long clip.
 import { corsFor } from "../_shared/cors.ts";
 import { arabicShare, checkAiFix, correctNames, devanagariShare, diffWords, FIRM_ALIASES, Name, toLatin } from "./names.ts";
 import { costUsd, HAIKU } from "../assistant/models.ts";
@@ -51,6 +57,13 @@ const TYPES: Record<string, string> = {
 };
 export const FIRM_WORDS = ["Tally", "GST", "GSTR-1", "GSTR-3B", "TDS", "TCS", "ledger", "voucher", "invoice", "debit", "credit", "lakh", "crore", "rupees", "₹"];
 const PROMPT_CHARS = 640;   // about 200 tokens
+export const FIRM_DAY_SECS = 120 * 60;   // 120 minutes of audio a firm a day
+export const FIRM_CAP_TEXT = "Today's voice-typing limit for your firm is used up; typing still works.";
+// the start of today in India (UTC+05:30), as an ISO time
+export function istDayStart(now = Date.now()): string {
+  const day = new Date(now + 330 * 60_000).toISOString().slice(0, 10);
+  return new Date(Date.parse(day + "T00:00:00Z") - 330 * 60_000).toISOString();
+}
 
 export type Style = "hinglish" | "en" | "hi" | "list";
 const BANK = /\bbank\b/i, PARTY = /sundry|debtor|creditor|customer|supplier|vendor/i;
@@ -101,8 +114,8 @@ export const AI_SYSTEM = "You correct a speech-to-text transcript for an Indian 
   "Never change, add or remove a number, an amount or a date, never translate, never rephrase, never change the meaning, and keep the script as it is. " +
   "When unsure, leave the word as it is. Reply with the corrected transcript only, nothing else.";
 
-export function handler(deps: Deps) {
-  const env = deps.env, doFetch = deps.fetch;
+export function handler(deps: Deps & { now?: () => number }) {
+  const env = deps.env, doFetch = deps.fetch, now = deps.now || Date.now;
   const URL_ = String(env("SUPABASE_URL") || "").replace(/\/+$/, ""), SERVICE = String(env("SUPABASE_SERVICE_ROLE_KEY") || ""), ANON = String(env("SUPABASE_ANON_KEY") || "");
   const rest = async (path: string, token: string, init: RequestInit = {}) => {
     const r = await doFetch(URL_ + path, { ...init, headers: { apikey: token === SERVICE ? SERVICE : ANON, Authorization: "Bearer " + token, "Content-Type": "application/json", ...(init.headers || {}) } });
@@ -120,7 +133,7 @@ export function handler(deps: Deps) {
     form.append("file", new File([audio], "clip." + ext, { type: type === "video/webm" ? "audio/webm" : type }));
     form.append("model", model);
     form.append("temperature", "0");
-    form.append("response_format", verbose ? "verbose_json" : "json");
+    form.append("response_format", "verbose_json");     // always: its "duration" is the seconds counted against the firm's cap
     if (lang !== "auto") form.append("language", lang);
     form.append("prompt", prompt);
     try { return await doFetch(GROQ_URL, { method: "POST", headers: { Authorization: "Bearer " + key }, body: form, signal: AbortSignal.timeout(45_000) }); }
@@ -156,8 +169,7 @@ export function handler(deps: Deps) {
     if (type === "application/json") {
       let body: any = null; try { body = await req.json(); } catch { /* below */ }
       if (body?.action !== "usage") return reply(400, { ok: false, error: "Unknown request" });
-      const day = new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
-      const since = new Date(Date.parse(day + "T00:00:00Z") - 330 * 60_000).toISOString();
+      const since = istDayStart(now());
       const sum = (rows: any[]) => Math.round((rows || []).reduce((s, r) => s + Number(r.ms || 0), 0) / 1000);
       const q = "/rest/v1/assistant_log?select=firm_id,ms&feature=eq.voice&at=gte." + encodeURIComponent(since);
       try {
@@ -202,9 +214,18 @@ export function handler(deps: Deps) {
       } catch { /* the firm's words alone */ }
     }
     // the usage row: no words, only what happened (counts)
+    // heard: Groq's seconds (all its answered calls), counted against the firm's day
+    let heard = 0;
     const log = (status: string[], models: string[], calls: number, costInr = 0) => rest("/rest/v1/assistant_log", SERVICE, { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify({
-      firm_id: firm, user_id: user.id, client_id: clientId, question: "", tools: status, calls, ms: Math.round(Math.min(secs, MAX_SECS) * 1000),
+      firm_id: firm, user_id: user.id, client_id: clientId, question: "", tools: status, calls, ms: Math.round(Math.max(Math.min(secs, MAX_SECS), Math.min(heard, 3600)) * 1000),
       feature: "voice", route: lang, models, ...(costInr ? { cost_inr: costInr } : {}) }) }).catch(() => null);
+
+    // the firm's seconds today (voice typing and call subtitles, rows where Groq was called), before Groq is called
+    try {
+      const used = (await rest("/rest/v1/assistant_log?select=ms&feature=in.(voice,call_subs)&calls=gte.1&firm_id=eq." + firm + "&at=gte." + encodeURIComponent(istDayStart(now())), SERVICE)) as any[];
+      const secsToday = (used || []).reduce((s, r) => s + Number(r.ms || 0), 0) / 1000;
+      if (secsToday >= FIRM_DAY_SECS) { await log(["firm_cap"], [], 0); return reply(429, { ok: false, kind: "limit", scope: "firm", error: FIRM_CAP_TEXT }); }
+    } catch { return reply(503, { ok: false, kind: "other", error: "Clearer listening could not check today's minutes; try again in a moment." }); }
 
     const key = await groqKey();
     if (!key) { await log(["nokey"], [MODEL], 0); return reply(503, { ok: false, kind: "nokey", error: "Clearer listening is not set up yet." }); }
@@ -217,6 +238,7 @@ export function handler(deps: Deps) {
     if (!r) { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening could not be reached." }); }
     if (r.status === 429) { await r.body?.cancel(); await log(["limit"], [model], 1); return reply(429, { ok: false, kind: "limit", error: "Today's limit for clearer listening is reached." }); }
     const j: any = await r.json().catch(() => null);
+    if (r.ok && j) heard += Math.max(0, Number(j.duration) || 0);
     if (!r.ok || !j || typeof j.text !== "string") { await log(["error"], [model], 1); return reply(502, { ok: false, kind: "error", error: "Clearer listening did not answer (" + r.status + ")." }); }
     let text = j.text.replace(/\s+/g, " ").trim();
     const tools = ["ok"];
@@ -225,6 +247,7 @@ export function handler(deps: Deps) {
     if (latin && arabicShare(text) > 0.5) {
       const r2 = await groq(key, model, audio, ext, type, "hi", prompt);
       const j2: any = r2 && r2.ok ? await r2.json().catch(() => null) : (await r2?.body?.cancel(), null);
+      if (j2) heard += Math.max(0, Number(j2.duration) || 0);
       if (j2 && typeof j2.text === "string" && j2.text.trim()) { text = j2.text.replace(/\s+/g, " ").trim(); tools.push("urdu:hi"); }
       else tools.push("urdu:kept");
     }

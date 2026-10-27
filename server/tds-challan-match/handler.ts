@@ -92,7 +92,9 @@ export function handler(deps: Deps) {
       });
       return reply(200, { ok: true, ...out });
     } catch (e) {
-      return reply(500, { ok: false, kind: "other", error: String((e as Error).message || e).slice(0, 300) });
+      // the detail (a database or API message) to the function's log only (security review 27-Oct-2026, F11)
+      console.error(JSON.stringify({ evt: "tds_challan_match_error", at: new Date().toISOString(), firm, error: String((e as Error)?.message || e).slice(0, 500) }));
+      return reply(500, { ok: false, kind: "other", error: "The matching could not be finished; try again in a moment." });
     }
   };
 }

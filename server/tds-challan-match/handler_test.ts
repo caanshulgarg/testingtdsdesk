@@ -131,3 +131,16 @@ Deno.test("4. a look-only member, another firm's client, no sign-in: refused", a
   eq((await call(ASK(), "")).status, 401, "not signed in");
   eq(ai.calls.length, 0, "no call");
 });
+
+Deno.test("6. an unexpected failure (security review F11): a plain message; the detail only in the log", async () => {
+  const { sb } = setup();
+  const h = handler({ env: (k) => ({ SUPABASE_URL: "http://sb", SUPABASE_SERVICE_ROLE_KEY: SERVICE, SUPABASE_ANON_KEY: "anon" } as Record<string, string>)[k], fetch: sb.fetch,
+    anthropic: () => { throw new Error('duplicate key value violates unique constraint "asst_log_secret_idx"'); } });
+  const errs: string[] = []; const ce = console.error; console.error = (...x: unknown[]) => { errs.push(x.map(String).join(" ")); };
+  let r: Response;
+  try { r = await h(new Request("http://fn/", { method: "POST", headers: { Authorization: "Bearer jwt-owner" }, body: JSON.stringify(ASK()) })); }
+  finally { console.error = ce; }
+  const j = await r.json();
+  eq([r.status, j], [500, { ok: false, kind: "other", error: "The matching could not be finished; try again in a moment." }], "a plain message only");
+  assert(errs.some((e) => e.includes("tds_challan_match_error") && e.includes("asst_log_secret_idx")), "the detail in the log: " + errs.join(" | "));
+});

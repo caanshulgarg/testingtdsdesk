@@ -44,8 +44,9 @@ const ok = (c, w) => { console.log((c ? "  ok   " : "  FAIL ") + w); if (!c) fai
   ok(G.replyStatus("bad_key", 401) === 502 && G.replyStatus("bad_key", 403) === 502, "a provider 401/403 answers 502");
   ok(G.replyStatus("rate_limit", 429) === 429 && G.replyStatus("overloaded", 529) === 529 && G.replyStatus("timed_out", 0) === 504 && G.replyStatus("declined", 200) === 422 && G.replyStatus("not_reached", 0) === 502, "429, 529, 504 (timed out), 422 (declined), 502 (not reached)");
   // the gateway uses all of it, logs one line per failure, times out at 120 s and reads the file name
-  const src = fs.readFileSync(path.join(__dirname, "..", "server/security/functions/gateway/index.ts"), "utf8");
-  ok(/from "\.\/classify\.ts"/.test(src) && /evt: "gateway_fail"/.test(src) && /request_id/.test(src) && /TIMEOUT_MS = 120_000/.test(src) && /body\.file/.test(src) && /\.slice\(0, 200\)/.test(src), "index.ts: classify.ts, one gateway_fail line, 120 s timeout, body.file (200 chars)");
+  // (since 27-Oct-2026 the gateway's code is handler.ts; index.ts only serves it)
+  const src = fs.readFileSync(path.join(__dirname, "..", "server/security/functions/gateway/handler.ts"), "utf8");
+  ok(/from "\.\/classify\.ts"/.test(src) && /evt: "gateway_fail"/.test(src) && /request_id/.test(src) && /TIMEOUT_MS = 120_000/.test(src) && /body\.file/.test(src) && /\.slice\(0, 200\)/.test(src), "handler.ts: classify.ts, one gateway_fail line, 120 s timeout, body.file (200 chars)");
   ok(!/console\.log\([^)]*(payload|messages|key\b|prompt)/.test(src), "the log line never holds the payload, messages, prompt or key");
   ok((src.match(/await refund\(\)/g) || []).length >= 6, "every failure after the charge is refunded");
   console.log(fails ? fails + " FAILED" : "all passed");

@@ -140,10 +140,21 @@ export function handler(deps: Deps) {
     if (!p || p.role !== "guest") fail(401, "This guest pass is not known.", "guest");
     return { kind: "guest", room: v!.room, participant: p };
   };
-  const room = async (id: string, firm?: string) => {
+  // a class is its batch's (security review 27-Oct-2026, F8): the database's own rule, call_batch_visible
+  // (migration-102), here too, since the function reads with the service role: the firm's owner, or a member whose
+  // sign-in email is on the batch. No batch (a client call, a meeting, a help call): every member of the firm.
+  const batchOk = async (batchId: unknown, m: Member) => {
+    if (!batchId) return true;
+    if (m.role === "owner") return true;
+    if (!m.email || !R.isUuid(String(batchId))) return false;
+    return !!(await one("/rest/v1/call_batch_members?select=batch_id&batch_id=eq." + q(String(batchId)) + "&firm_id=eq." + m.firm + "&email=eq." + q(m.email)));
+  };
+  // the room asked for: the caller's firm's (a member), and a class only for its batch and the owner
+  const room = async (id: string, firm?: string, who?: Member) => {
     if (!R.isUuid(id)) fail(400, "Say which call.");
     const r = await one("/rest/v1/call_rooms?select=*&id=eq." + q(id));
     if (!r || (firm && r.firm_id !== firm)) fail(404, "This call is not one of your firm's.", "room");
+    if (who && !(await batchOk(r.batch_id, who))) fail(403, "This class is only for its batch's members.", "batch");
     return r;
   };
   const meIn = async (r: any, who: Member | Guest) => who.kind === "guest" ? who.participant
@@ -327,6 +338,7 @@ export function handler(deps: Deps) {
       if (kind === "class") {
         batch = R.isUuid(b.batch_id) ? await one("/rest/v1/call_batches?select=*&id=eq." + q(b.batch_id) + "&firm_id=eq." + m.firm) : null;
         if (!batch) fail(404, "This batch is not one of your firm's.");
+        if (!(await batchOk(batch.id, m))) fail(403, "This class is only for its batch's members.", "batch");
       }
       let r = kind === "client" ? await one("/rest/v1/call_rooms?select=*&status=eq.open&kind=eq.client&firm_id=eq." + m.firm + "&client_id=eq." + q(client!) + "&created_at=gte." + q(new Date(now() - 12 * 3600000).toISOString()) + "&order=created_at.desc&limit=1")
         : kind === "class" ? await one("/rest/v1/call_rooms?select=*&status=eq.open&kind=eq.class&batch_id=eq." + q(batch.id) + "&order=created_at.desc&limit=1") : null;
@@ -378,7 +390,7 @@ export function handler(deps: Deps) {
         notes: (trs || []).some((x) => x.room_id === r.id && x.summary) || (caps || []).some((x) => x.room_id === r.id) })), me: m.user, email: m.email };
     },
     async join(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (r.status === "ended") fail(410, "This call has ended.", "ended");
       if (r.kind === "client" && !(await clientReadable(m.jwt, r.client_id))) fail(403, "This client is not one of your firm's.", "client");
       if (r.status === "scheduled") { await patch("call_rooms", "id=eq." + r.id, { status: "open", started_at: new Date(now()).toISOString(), ended_at: null, host_user: r.host_user || m.user }); r.status = "open"; }
@@ -407,7 +419,7 @@ export function handler(deps: Deps) {
     // Add people: the room's code link (and, for an older link, a guest token link too), emailed when FinCom's email is
     // set up (with the .ics when the meeting has a time); otherwise the words for the person's own mail app
     async invite(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!R.canHost(r.kind, m.role)) fail(403, "Only the owner or staff can invite a guest.", "role");
       if (r.status === "ended") fail(410, "This call has ended.", "ended");
       const list = [...new Set([...(Array.isArray(b.emails) ? b.emails : []), b.email].map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
@@ -425,7 +437,7 @@ export function handler(deps: Deps) {
       return { ok: true, code: r.code, url, token, link: linkUrl(b.base, token), text, subject, ics, emailed: sent, mail: !!(await mailKey()) };
     },
     async roster(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       const me = await admittedIn(r, m);
       // the people list is the members' heartbeat and the room's check for quiet rows
       await touch(me, true);
@@ -438,13 +450,13 @@ export function handler(deps: Deps) {
     async deny(m, b) { return hostSet(m, b, "denied"); },
     async remove(m, b) { return hostSet(m, b, "removed"); },
     async end(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!isHost(r, m)) fail(403, "Only the host can end the call for everyone.", "host");
       await endRoom(r);
       return { ok: true };
     },
     async cowork(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!isHost(r, m)) fail(403, "Only the host can start or stop working together.", "host");
       await admittedIn(r, m);
       const on = b.on === true;
@@ -453,14 +465,14 @@ export function handler(deps: Deps) {
     },
     // a signed-in member of the firm who can read the client follows; never a guest (they have no member token)
     async cowork_join(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       const p = await admittedIn(r, m);
       if (!r.cowork_on) fail(409, "The host has not started working together.", "cowork");
       if (!R.mayCowork({ member: true, guest: p.role === "guest" }, await clientReadable(m.jwt, r.client_id))) fail(403, "You cannot open this client, so you cannot work together on it.", "client");
       return { ok: true, topic: await R.topicFor(r.chan_key, r.cowork_epoch, "cowork"), host_user: r.host_user, client_id: r.client_id };
     },
     async rec_start(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!isHost(r, m)) fail(403, "Only the host can record.", "host");
       await admittedIn(r, m);
       const cs = await clientSetting(m.firm, r.client_id);
@@ -485,13 +497,13 @@ export function handler(deps: Deps) {
     async rec_stop(m, b) {
       const rec = await one("/rest/v1/call_recordings?select=*&id=eq." + q(String(b.recording_id || "")) + "&firm_id=eq." + m.firm);
       if (!rec) fail(404, "Not your firm's recording.");
-      const r = await room(rec.room_id, m.firm);
+      const r = await room(rec.room_id, m.firm, m);
       if (!isHost(r, m)) fail(403, "Only the host can stop the recording.", "host");
       if (!rec.ended_at) await patch("call_recordings", "id=eq." + rec.id, { ended_at: new Date(now()).toISOString() });
       return { ok: true };
     },
     async transcribe(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!(m.role === "owner" || m.role === "staff")) fail(403, "Only the owner or staff can make the transcript.", "role");
       const todo = (await svc("/rest/v1/call_pieces?select=*&room_id=eq." + q(r.id) + "&status=eq.new&tries=lt.3&order=start_ms&limit=" + TRANSCRIBE_BATCH)) as any[];
       let wait = 0;
@@ -512,7 +524,7 @@ export function handler(deps: Deps) {
       return { ok: true, ...t, wait };
     },
     async summarise(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!(m.role === "owner" || m.role === "staff")) fail(403, "Only the owner or staff can ask for the summary.", "role");
       const t = await one("/rest/v1/call_transcripts?select=*&room_id=eq." + q(r.id));
       const lines = (t && t.lines) || [];
@@ -562,7 +574,7 @@ export function handler(deps: Deps) {
     },
     // action items to the client's due list, as the person (their own rights: a look-only member is refused there)
     async tasks(m, b) {
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (!r.client_id) fail(400, "This call is not tied to a client; copy the action items instead.", "noclient");
       const items = ((Array.isArray(b.items) ? b.items : []) as any[]).slice(0, 30).map((a) => ({ title: String(a.title || "").trim().slice(0, 300), due: /^\d{4}-\d{2}-\d{2}$/.test(String(a.due || "")) ? a.due : null })).filter((a) => a.title);
       if (!items.length) fail(400, "Pick the action items to add.");
@@ -576,7 +588,7 @@ export function handler(deps: Deps) {
     },
     async remote(m, b) {
       if (!R.mayRemote(m.role)) fail(403, "Only the owner or staff can start remote help.", "role");
-      const r = await room(b.room_id, m.firm);
+      const r = await room(b.room_id, m.firm, m);
       if (b.op === "start") {
         await admittedIn(r, m);
         const reason = String(b.reason || "").trim();
@@ -612,11 +624,12 @@ export function handler(deps: Deps) {
         ws = ws.filter((p) => !R.isStale(p, t));
       } else ws = ws.filter((p) => t - (Date.parse(p.joined_at) || 0) < 15 * 60000);
       const ids = [...new Set(ws.map((p) => String(p.room_id)))].filter((x) => R.isUuid(x));
-      const rooms = ids.length ? (await svc("/rest/v1/call_rooms?select=id,title,code,kind,host_user,status,firm_id&firm_id=eq." + m.firm + "&id=in.(" + ids.join(",") + ")")) as any[] || [] : [];
+      const rooms = ids.length ? (await svc("/rest/v1/call_rooms?select=id,title,code,kind,host_user,status,firm_id,batch_id&firm_id=eq." + m.firm + "&id=in.(" + ids.join(",") + ")")) as any[] || [] : [];
       const seen = await watched(rooms.map((r) => r.host_user));
       const knocks: any[] = [];
       for (const r of rooms) {
         if (r.status === "ended") continue;
+        if (!(await batchOk(r.batch_id, m))) continue;      // a class's knocks only for its batch and the owner
         const mine = r.host_user === m.user, online = mine || await hostOnline(r, seen);
         if (!(mine || R.mayAdmit({ host: false, role: m.role, kind: r.kind, hostOnline: online }))) continue;
         for (const p of ws.filter((x) => x.room_id === r.id)) knocks.push({ id: p.id, room_id: r.id, title: r.title, code: r.code || null, name: p.name, email: p.email, verified: !!p.verified, joined_at: p.joined_at, mine, host_online: online });
@@ -625,8 +638,10 @@ export function handler(deps: Deps) {
       return { ok: true, topic: await lobbyTopic(m.firm), knocks, every: R.LOBBY.watchSecs };
     },
     async batch_list(m) {
-      const bs = (await svc("/rest/v1/call_batches?select=id,name,retention_days,archived&firm_id=eq." + m.firm + "&archived=is.false&order=created_at")) as any[];
-      const ms = (await svc("/rest/v1/call_batch_members?select=batch_id,email,name&firm_id=eq." + m.firm)) as any[];
+      const all = (await svc("/rest/v1/call_batches?select=id,name,retention_days,archived&firm_id=eq." + m.firm + "&archived=is.false&order=created_at")) as any[] || [];
+      const ms = (await svc("/rest/v1/call_batch_members?select=batch_id,email,name&firm_id=eq." + m.firm)) as any[] || [];
+      // the owner: every batch; anyone else: the batches their sign-in email is on (call_batch_visible)
+      const bs = m.role === "owner" ? all : all.filter((x) => ms.some((y) => y.batch_id === x.id && String(y.email || "").toLowerCase() === m.email && !!m.email));
       return { ok: true, batches: bs.map((x) => ({ ...x, members: ms.filter((y) => y.batch_id === x.id) })) };
     },
     async batch_save(m, b) {
@@ -636,8 +651,16 @@ export function handler(deps: Deps) {
       const emails = [...new Set(((Array.isArray(b.emails) ? b.emails : []) as unknown[]).map((e) => String(e || "").trim().toLowerCase()).filter(Boolean))];
       if (emails.length > 500 || emails.some((e) => !R.emailOk(e))) fail(400, "One of the email addresses is not one.");
       let batch: any;
-      if (b.id) { batch = await one("/rest/v1/call_batches?select=*&id=eq." + q(String(b.id)) + "&firm_id=eq." + m.firm); if (!batch) fail(404, "No such batch."); await patch("call_batches", "id=eq." + batch.id, { name }); }
-      else batch = await insert("call_batches", { firm_id: m.firm, name, created_by: m.user });
+      if (b.id) {
+        batch = await one("/rest/v1/call_batches?select=*&id=eq." + q(String(b.id)) + "&firm_id=eq." + m.firm); if (!batch) fail(404, "No such batch.");
+        // a batch is changed by the owner or by someone on it (else anyone could add themselves to any class)
+        if (!(await batchOk(batch.id, m))) fail(403, "This class is only for its batch's members.", "batch");
+        await patch("call_batches", "id=eq." + batch.id, { name });
+      } else {
+        batch = await insert("call_batches", { firm_id: m.firm, name, created_by: m.user });
+        // staff who make a batch are on it (the owner sees every batch anyway)
+        if (m.role !== "owner" && m.email && !emails.includes(m.email)) emails.push(m.email);
+      }
       if (emails.length) await svc("/rest/v1/call_batch_members?on_conflict=batch_id,email", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
         body: JSON.stringify(emails.map((e) => ({ batch_id: batch.id, firm_id: m.firm, email: e, added_by: m.user }))) });
       return { ok: true, id: batch.id };
@@ -663,7 +686,7 @@ export function handler(deps: Deps) {
     return p;
   }
   async function hostSet(m: Member, b: any, state: string) {
-    const r = await room(b.room_id, m.firm);
+    const r = await room(b.room_id, m.firm, m);
     // admit and deny: the host, or (the host not online) an owner or staff member; remove: the host only
     if (!(state === "removed" ? isHost(r, m) : await mayAdmitIn(r, m))) fail(403, "Only the host can do that.", "host");
     const p = await one("/rest/v1/call_participants?select=*&id=eq." + q(String(b.participant_id || "")) + "&room_id=eq." + q(r.id));
@@ -709,7 +732,7 @@ export function handler(deps: Deps) {
 
   // ---------------------------------------------------------------- meeting notes: who may see, the words, the AI, keeping
   async function notesRoom(m: Member, id: unknown) {
-    const r = await room(String(id || ""), m.firm);
+    const r = await room(String(id || ""), m.firm, m);
     // read as the person: the database's own rule (a class's room only for its batch and the owner)
     const seen = (await rest("/rest/v1/call_rooms?select=id&id=eq." + q(r.id), m.jwt).catch(() => [])) as any[];
     if (!seen || !seen.length) fail(404, "This meeting is not one you can see.", "room");
@@ -763,12 +786,12 @@ export function handler(deps: Deps) {
   // actions open to anyone in the call, member or guest
   const shared: Record<string, (w: Member | Guest, b: any, ctx: Ctx) => Promise<unknown>> = {
     async topic(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       await admittedIn(r, w);
       return { ok: true, topic: await R.topicFor(r.chan_key, r.chan_epoch), status: r.status };
     },
     async leave(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await meIn(r, w);
       if (p && (p.state === "admitted" || p.state === "waiting")) await patch("call_participants", "id=eq." + p.id, { state: "left", left_at: new Date(now()).toISOString() });
       if (p && p.state === "waiting") await ping(r);
@@ -785,7 +808,7 @@ export function handler(deps: Deps) {
     },
     // a guest in the call (or waiting) says it is there (every R.LOBBY.beatSecs); a quiet row comes back by it
     async beat(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       let p = await meIn(r, w);
       if (!p) fail(403, "You are not in this call.", "notin");
       if (p.state === "left") p = await comeBack(r, p);
@@ -793,7 +816,7 @@ export function handler(deps: Deps) {
       return { ok: true, state: p.state, status: r.status };
     },
     async chat(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
       const body = String(b.body || "");
       let file: any = null;
@@ -808,13 +831,13 @@ export function handler(deps: Deps) {
       return { ok: true, message: msg };
     },
     async history_chat(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       await admittedIn(r, w);
       return { ok: true, messages: await svc("/rest/v1/call_messages?select=id,participant_id,author,body,file,at&room_id=eq." + q(r.id) + "&order=id&limit=500") };
     },
     // a signed address to put one file: a chat file (20 MB), the host's recording piece, a person's own microphone piece
     async upload(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
       const what = String(b.what || ""), size = Number(b.size) || 0;
       let bucket = "call-recordings", path = "";
@@ -838,7 +861,7 @@ export function handler(deps: Deps) {
       return { ok: true, bucket, path, url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) };
     },
     async download(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       await admittedIn(r, w);
       const path = String(b.path || "");
       if (!path.startsWith(folder(r) + "chat/") || path.includes("..")) fail(403, "That file is not this call's.");
@@ -848,7 +871,7 @@ export function handler(deps: Deps) {
       return { ok: true, url: URL_ + "/storage/v1" + (url.startsWith("/") ? url : "/" + url) + (url.includes("?") ? "&" : "?") + "download" };
     },
     async consent(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await meIn(r, w);
       if (!p) fail(403, "You are not in this call.");
       const ev = String(b.event || "");
@@ -859,7 +882,7 @@ export function handler(deps: Deps) {
       return { ok: true };
     },
     async piece(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await meIn(r, w);
       if (!p || !(p.state === "admitted" || p.state === "left")) fail(403, "You are not in this call.");
       const path = String(b.path || "");
@@ -874,7 +897,7 @@ export function handler(deps: Deps) {
     // for (those someone in the call switched on). The audio and the words are never logged; they are kept (call_captions)
     // only while the call is recorded and this speaker stayed after the notice, as the transcript is
     async caption(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
       const t0 = now();
       const b64 = String(b.audio || "");
@@ -956,7 +979,7 @@ export function handler(deps: Deps) {
     // remote help (next-calls-complete): the person asked says no, or stops it, at any time; the open log row of this call
     // gets its end (the host's own End does the same through remote)
     async remote_stop(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await meIn(r, w);
       if (!p) fail(403, "You are not in this call.", "notin");
       const rows = await patch("call_remote_sessions", "room_id=eq." + r.id + "&ended_at=is.null", { ended_at: iso() });
@@ -964,7 +987,7 @@ export function handler(deps: Deps) {
     },
     // Cloudflare Realtime, the person's own session only; the app's keys never leave here
     async cf(w, b) {
-      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined);
+      const r = await room(w.kind === "guest" ? w.room : b.room_id, w.kind === "member" ? w.firm : undefined, w.kind === "member" ? w : undefined);
       const p = await admittedIn(r, w);
       const keys = await cfKeys();
       if (!keys || r.media_mode !== "sfu") fail(409, "This call runs peer to peer.", "p2p");
@@ -1111,7 +1134,9 @@ export function handler(deps: Deps) {
       return reply(400, { ok: false, error: "Unknown request" });
     } catch (e) {
       if (e instanceof Fail) return reply(e.code, { ok: false, kind: e.kind, error: e.message });
-      return reply(500, { ok: false, kind: "other", error: String((e as Error).message || e).slice(0, 300) });
+      // the detail (a database message, a stack) to the function's log only (security review 27-Oct-2026, F11)
+      console.error(JSON.stringify({ evt: "fincom_call_error", at: new Date().toISOString(), action: action.slice(0, 40), status: (e as any)?.status ?? null, code: (e as any)?.code ?? null, error: String((e as Error)?.message || e).slice(0, 500) }));
+      return reply(500, { ok: false, kind: "other", error: "Something went wrong on our side; try again in a moment." });
     }
   };
 }
