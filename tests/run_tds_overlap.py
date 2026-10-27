@@ -64,7 +64,7 @@ with sync_playwright() as p:
         print("%s (%dx%d)" % (tag, vw, vh))
         pg = br.new_page(viewport={"width": vw, "height": vh}); pg.on("pageerror", lambda e: errors.append(str(e)))
         J = lambda e, a=None: pg.evaluate(e, a)
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         J(BOOKS_JS); pg.wait_for_timeout(600); J("() => { TDSMatch.online = () => false; }")
         J(CHALLANS); J(NAMES, [LONG, WORD]); J(ALLOC); pg.wait_for_timeout(500)
         for (form, ch, add, what) in [("26Q", "chA", "", "the challan's table"), ("26Q", "chA", "chA", "+ Add deduction"), ("26Q", "chM", "", "a challan with an advance deduction"),

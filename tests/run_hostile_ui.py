@@ -15,8 +15,7 @@ with sync_playwright() as p:
     errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.add_init_script("window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective));")
     pg.goto("http://localhost:8162/"); pg.wait_for_timeout(2000)
-    b0 = pg.locator('button[data-act="useOffline"]')
-    if b0.count(): b0.first.click(); pg.wait_for_timeout(800)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     r = pg.evaluate("""async (X) => {
       const co = newCompany({name: "Co " + X, gstin: "27AAACB1234C1Z5"}); co.id = "c_hostile";
       const e = newEntry("bill " + X + ".pdf"); e.id = "e_ok";

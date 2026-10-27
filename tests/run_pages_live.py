@@ -98,7 +98,7 @@ def computer(br, tok, name):
     ctx = br.new_context(viewport={"width": 1300, "height": 900}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(name + ": " + str(e)))
     ctx.route(STAGE + "/**", route); ctx.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
-    pg.goto("http://localhost:8169/"); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8169/"); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("""([tok, uid, firm]) => { Cloud.setSess({access_token: tok, refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: uid, email: uid + "@zz.test"});
       Cloud.st.firm = firm; Cloud.st.state = "ok"; Cloud.st.members = []; S.account = {me: {role: "owner"}}; startCloudSync2(); window.__mark = "same page"; }""", [tok, USERS[tok][0], FIRM])
     wait_for(pg, "Live.st === 'live'", 10)

@@ -57,7 +57,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch()
         pg = br.new_page(viewport={"width": 1400, "height": 1000}, accept_downloads=True); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate(LOAD, {"tables": TABLES, "details": SETUP["details"]}); pg.wait_for_timeout(800)
         print("== 1. the Salary tab and the employees")
         # tds-layout (14-Oct-2026): no Salary tab on the TDS page; the salary pages are 24Q's "Employees & declarations"
@@ -130,7 +130,7 @@ try:
         for scheme in ("light", "dark"):
             for w, h, tag in ((1400, 1000, "desktop"), (390, 844, "phone")):
                 ctx = br.new_context(viewport={"width": w, "height": h}, color_scheme=scheme); p2 = ctx.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))
-                p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.click('button[data-act="useOffline"]'); p2.wait_for_timeout(1000)
+                p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); p2.wait_for_timeout(1000)
                 p2.evaluate(LOAD, {"tables": TABLES, "details": SETUP["details"]}); p2.wait_for_timeout(800)
                 p2.screenshot(path=os.path.join(OUT, "salary-%s-%s.png" % (tag, scheme)), full_page=True)
                 if tag == "phone":

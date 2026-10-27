@@ -155,7 +155,7 @@ def main():
             pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
                 body=json.dumps({"setup": {"version": "2.4.4", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.4.4.exe", "sha256": "ab" * 32}})))
             pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-            pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+            pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
             return pg
         pg = open_page(1440, 900)
         E = lambda js, *a: pg.evaluate(js, *a)

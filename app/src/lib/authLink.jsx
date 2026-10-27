@@ -13,6 +13,7 @@
 //     "choose your password" first, for the login it names, and nothing is kept until the password is saved.
 // Its own file, loaded only for these (SignIn.jsx's loadAuthLink; src/js/27 start(), Cloud.oauth, Cloud.signUp).
 import Msg from "../parts/Msg.jsx";
+import { Box } from "../screens/SignIn.jsx";
 
 export const NOT_HERE = "This sign-in link was not started on this browser — sign in again.";
 export const CONFIRMED = "Email confirmed — now sign in.";
@@ -96,8 +97,10 @@ export async function takeReturn() {
 async function save() {
   const a = (document.getElementById("spw1") || {}).value || "", b = (document.getElementById("spw2") || {}).value || "";
   const f = S.setPassword || (S.setPassword = {});
-  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) { f.error = "Use 10 characters or more, with letters and digits."; render(); return; }
-  if (a !== b) { f.error = "The two passwords are not the same."; render(); return; }
+  // errors under the box they are about (errAt), the server's under the form
+  if (a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a)) { f.error = "Use 10 characters or more, with letters and digits."; f.errAt = "spw1"; render(); return; }
+  if (a !== b) { f.error = "The two passwords are not the same."; f.errAt = "spw2"; render(); return; }
+  f.errAt = "";
   const s = f.sess || Cloud.sess() || {};
   Cloud.st.busy = "saving"; render();
   try {
@@ -113,17 +116,22 @@ async function save() {
     if (LocalOwner.other(uid)) { LocalOwner.switchTo(uid, "", email); return; }
     if (!(await Cloud.checkMfa())) await Cloud.whoAmI();
     render();
-  } catch (e) { Cloud.st.busy = ""; f.error = e.message; render(); }
+  } catch (e) { Cloud.st.busy = ""; f.error = e.message; f.errAt = ""; render(); }
 }
 
-// arrived from an invite or a reset link (review item 21): the person chooses their password first
+// arrived from an invite or a reset link (review item 21): the person chooses their password first, in the sign-in pages'
+// frame (SignIn.jsx Box; the owner, 27-Oct-2026: one heading, whose login it is, the two boxes, the button)
 export function SetPassword() {
-  const f = S.setPassword || {}, busy = Cloud.st.busy, rec = f.type === "recovery", who = f.email;
-  return <div className="signin"><div className="signin-box"><h1>{rec ? "Choose a new password" : "Welcome to FinCom"}</h1>
-    <p className="note" style={{ margin: "8px 0 14px" }}>{rec ? (who ? "Choose the password " + who + " will sign in with from now on." : "Choose the password you will sign in with from now on.")
-      : (who ? "You have been added to your firm’s account as " + who + ". Choose the password you will sign in with." : "You have been added to your firm’s account. Choose the password you will sign in with.")}</p>
-    <label className="f"><span>New password (10 characters or more, letters and digits)</span><input type="password" id="spw1" aria-label="New password" autoComplete="new-password" autoFocus /></label>
-    <label className="f" style={{ marginTop: 8 }}><span>Repeat it</span><input type="password" id="spw2" aria-label="Repeat the new password" autoComplete="new-password" onKeyDown={(ev) => { if (ev.key === "Enter") { ev.preventDefault(); save(); } }} /></label>
-    <div className="row" style={{ marginTop: 12 }}><button className="btn primary" data-act="setPasswordGo" disabled={!!busy} onClick={() => save()}>{busy ? "Saving…" : "Save and continue"}</button></div>
-    {f.error && <p className="bk-warn" style={{ marginTop: 10 }}><Msg text={f.error} /></p>}</div></div>;
+  const f = S.setPassword || {}, busy = Cloud.st.busy, rec = f.type === "recovery", who = f.email, at = f.error ? f.errAt || "" : "";
+  const box = (id, label, hint, first) => <div className="signin-field"><label htmlFor={id}>{label}</label>
+    <input type="password" id={id} autoComplete="new-password" autoFocus={first} aria-invalid={at === id ? "true" : undefined} aria-describedby={at === id ? id + "-err" : hint ? id + "-hint" : undefined}
+      onInput={() => { if (at === id) { f.error = ""; render(); } }} />
+    {at === id ? <span className="signin-field-err" id={id + "-err"}>{f.error}</span> : hint ? <span className="signin-hint" id={id + "-hint"}>{hint}</span> : null}</div>;
+  return <Box><h1>{rec ? "Choose a new password" : "Welcome to FinCom"}</h1>
+    {who && <div className="signin-sub" data-setpw-who="">{rec ? "For " : "Choose the password for "}<b>{who}</b></div>}
+    <form className="signin-form" noValidate onSubmit={(ev) => { ev.preventDefault(); if (!busy) save(); }}>
+      {box("spw1", "New password", "10 characters or more, with letters and digits.", true)}
+      {box("spw2", "Repeat the new password")}
+      <button type="submit" className="btn primary signin-submit" data-act="setPasswordGo" disabled={!!busy}>{busy ? "Saving…" : "Save and continue"}</button>
+      {f.error && !at && <div className="signin-error" role="alert" data-signin-error=""><Msg text={f.error} /></div>}</form></Box>;
 }

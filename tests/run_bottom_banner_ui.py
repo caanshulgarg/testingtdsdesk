@@ -80,7 +80,7 @@ with sync_playwright() as p:
     for name, vp, phone in [("desktop", {"width": 1440, "height": 900}, False), ("phone", {"width": 390, "height": 844}, True)]:
         pg = br.new_page(viewport=vp); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:8181/"); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate(SIGN_IN); pg.wait_for_timeout(1200)
         check(pg, name + " testing banner", phone)
         # a review build's banner, long: on a narrow desktop it takes two lines; the variable follows it (no fixed number)

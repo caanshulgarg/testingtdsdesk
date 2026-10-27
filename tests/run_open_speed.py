@@ -48,7 +48,7 @@ SWITCH = """(js) => new Promise((done) => { const t0 = performance.now(); new Fu
   const look = () => { const busy = document.querySelector('#app .pg-skel, #app [data-page-skeleton], #app .lt-loading');
     calm = busy ? 0 : calm + 1; if (calm >= 2 || performance.now() - t0 > 15000) done(Math.round(performance.now() - t0)); else requestAnimationFrame(look); };
   requestAnimationFrame(look); })"""
-DRAWN = "() => typeof S === 'object' && !document.querySelector('[data-boot-part]') && !!document.querySelector('#app .react-host, #app button[data-act=useOffline]')"
+DRAWN = "() => typeof S === 'object' && !document.querySelector('[data-boot-part]') && !!document.querySelector('#app .react-host, #app .signin-box')"
 
 CPU = float(os.environ.get("CPU", "1"))       # CPU=4: a slower laptop (Chrome's CPU slow-down, 4 times)
 def line(ctx, pg):
@@ -73,7 +73,7 @@ def main():
         pg.goto(url, wait_until="commit")
         pg.wait_for_function(DRAWN, timeout=60000, polling="raf")
         res["first"] = pg.evaluate("() => Math.round(performance.now())")
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
         pg.wait_for_function("() => !!document.querySelector('#app .react-host')", timeout=30000)
         pg.wait_for_timeout(12000)          # idle: the worker installed, the other files kept
         # 2. repeat opens (three; the median)

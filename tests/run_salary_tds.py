@@ -129,7 +129,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch()
         pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
 
         print("== 1. Leads-like payroll, TDS pay head with a blank statutory type")
         load(pg, payroll_tables())
@@ -571,7 +571,7 @@ try:
         print("== 8. light and dark, phone")
         for scheme in ("light", "dark"):
             ctx = br.new_context(viewport={"width": 390, "height": 844}, color_scheme=scheme); p2 = ctx.new_page(); p2.on("pageerror", lambda e: errors.append(str(e)))
-            p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.click('button[data-act="useOffline"]'); p2.wait_for_timeout(1000)
+            p2.goto("http://localhost:%d/" % PORT); p2.wait_for_timeout(2000); p2.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); p2.wait_for_timeout(1000)
             load(p2, payroll_tables()); p2.evaluate("() => { S.tdsTab = 'people'; render(); }"); p2.wait_for_timeout(400)
             p2.screenshot(path=os.path.join(OUT, "people-phone-%s.png" % scheme), full_page=True)
             sw = p2.evaluate("document.documentElement.scrollWidth"); cw = p2.evaluate("document.documentElement.clientWidth")

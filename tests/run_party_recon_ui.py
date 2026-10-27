@@ -62,7 +62,7 @@ SETUP = """async () => {
 
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}, accept_downloads=True); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8299/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8299/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = lambda js, *a: pg.evaluate(js, *a)
     W = pg.wait_for_timeout
     shot = lambda n: OUT and pg.screenshot(path=os.path.join(OUT, n + ".png"))

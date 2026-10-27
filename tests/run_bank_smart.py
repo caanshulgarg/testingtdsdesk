@@ -56,7 +56,7 @@ CHIP_RE = {"UPI": r"\bUPI\b", "IMPS": r"\bIMPS\b|\bMMT\b", "NEFT": r"\bNEFT\b", 
 
 def open_page(p, vp):
     pg = p.new_page(viewport=vp); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8163/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8163/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     n = pg.evaluate(SETUP); pg.wait_for_timeout(1000)
     return pg, n
 

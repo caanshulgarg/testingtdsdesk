@@ -13,7 +13,7 @@ def ok(c, w):
     if not c: fails.append(w)
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8148/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:8148/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     # as it happened: Garg Shekhar & Company, holding VMS's books and GST work
     pg.evaluate("""([bk, j2b]) => { const c = newCompany({name: "Garg Shekhar & Company", gstin: "09AANFG3202D1ZR", pan: "AANFG3202D"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
       S.books = Object.assign({loading: false, alloc: {}}, bk, {cid: c.id, misCfg: {freq: "off"}, auditCfg: {freq: "off"}, twoBs: {}, challans: [{id: "ch1", date: "20250607", tax: 1000}], salary: [{name: "x"}]});

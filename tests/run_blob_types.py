@@ -17,7 +17,7 @@ EVIL = "<html><body><b data-pwn=1>B</b><script>window.parent.__pwn = 1</script><
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.add_init_script("window.__opened = []; window.open = function(u){ window.__opened.push(String(u)); return null; };")
-    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("""async (EVIL) => { const co = newCompany({name: "Blob Co", gstin: "27AAACB1234C1Z5"}); co.id = "c_blob"; S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true};
       await openCompany(co.id);
       const f = new File([EVIL], "bill.pdf", {type: "text/html"});

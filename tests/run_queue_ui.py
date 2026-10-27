@@ -64,7 +64,7 @@ def wait_for(pg, js, t=10):
 def open_page(ctx):
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8171/"); pg.wait_for_timeout(1500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(500)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(500)
     pg.evaluate("""([cid, firm]) => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: "u1"}); Cloud.st.firm = firm; Cloud.st.state = "ok"; Cloud.st.members = [{user_id: "u1", name: "Asha"}];
       let c = S.companies[cid]; if (!c){ c = newCompany({name: "ZZ QUEUE TEST", gstin: ""}); c.id = cid; S.companies[cid] = c; } S.data[cid] = S.data[cid] || {parties: {}, entries: {}, loaded: true};
       S.coId = cid; S.view = "company"; S.tab = "books"; S.booksTab = "import"; S.books = null; render(); Live.start();

@@ -19,7 +19,7 @@ def ok(c, w):
     if not c: fails.append(w)
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8149/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:8149/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     pg.evaluate("""() => { const c = newCompany({name: "@NAME@", gstin: "@OWN@", pan: "@PAN@"}); S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.loadingCo = false;
       S.books = {loading: false, cid: c.id, vouchers: [], map: {}, meta: null, alloc: {}, challans: [], misCfg: {freq: "off"}, auditCfg: {freq: "off"}}; window.__bk = S.books;
       window.__t = []; window.toast = m => { window.__t.push(m); }; S.tab = "gstset"; render(); }""".replace("@NAME@", NAME).replace("@OWN@", OWN).replace("@PAN@", PAN))

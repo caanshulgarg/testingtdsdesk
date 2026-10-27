@@ -22,7 +22,7 @@ def open_client(pg, name, bk):
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000})
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:8133/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     open_client(pg, "ZZ TEST A (VMS books)", books)
     # FinCom 2.4.1: "What FinCom posts bills to" is no longer a tab of the ledgers page (the owner's decision); what it showed
     # is read from LedMaster.posting, the same rows

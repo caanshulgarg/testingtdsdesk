@@ -45,7 +45,7 @@ srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Qui
 try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate("() => { S.tdsDedView = 'table'; S.tdsChView = 'match'; }")   # the Deductions checks here are of the table (All rows), the Challans ones of the two-panel matcher (round 88: the steps open on a challan and on the grid)
         pg.evaluate(BOOKS_JS); pg.wait_for_timeout(800)
         # the AI step answered by a stand-in for the tds-challan-match function (never the real API): it pairs the late-May
@@ -100,7 +100,7 @@ try:
         before, cid = snap(), J("S.books.cid")
         ok(J("() => !!localStorage.getItem('tdsdesk:tdsai:' + S.books.cid + '|26Q|2026-27|Q1')"), "the AI's answer kept for this return in this browser")
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate("() => { S.tdsDedView = 'table'; S.tdsChView = 'match'; }"); pg.evaluate(BOOKS_JS)
         # the same client as before the reload (the made-up books make a new one each time: given the first one's id)
         pg.evaluate("(cid) => { const n = S.coId; S.companies[cid] = Object.assign({}, S.companies[n], {id: cid}); S.coId = cid; window.__bk.cid = cid; }", cid)

@@ -46,7 +46,7 @@ with sync_playwright() as p:
     pg.add_init_script("localStorage.setItem('tdsdesk-test:cloud', JSON.stringify({url: 'https://qbocskaiewaxqcvaunzc.supabase.co'}))")
     pg.route("https://qbocskaiewaxqcvaunzc.supabase.co/**", handle)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000)
-    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)
+    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok("Two-step sign-in" not in t and pg.locator('[data-act="cloudSignIn"]').count() == 0, "without two-step turned on, signing in goes straight in")
     pg.evaluate("mfaAction('mfaOptIn')"); pg.wait_for_timeout(500)
@@ -79,7 +79,7 @@ with sync_playwright() as p:
     pg.click('.firmmenu button:has-text("Sign out")'); pg.wait_for_timeout(400); pg.click('[data-cbx="yes"]'); pg.wait_for_timeout(1200)
     ok(ST["logout"] == 1 and pg.locator('[data-act="cloudSignIn"]').count() == 1, "signing out ends the session on the server too")
     # next sign-in asks only for the code
-    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)
+    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678"); pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1500)
     t = pg.inner_text("#app")
     ok("6-digit code for FinCom" in t and pg.locator('[data-act="mfaStart"]').count() == 0 and pg.locator('[data-act="mfaCancel"]').count() == 0, "once turned on, the next sign-in asks for the code (no skipping)")
     ok(not any("/rest/v1/records" in c[1] for c in ST["calls"][-6:]), "no firm data is asked for before the code")

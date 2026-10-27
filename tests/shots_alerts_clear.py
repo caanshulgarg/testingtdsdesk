@@ -36,7 +36,7 @@ with sync_playwright() as p:
     for label, w, h in [x for x in (("desktop", 1366, 800), ("phone", 390, 844), ("phone360", 360, 780)) if x[0] in (os.environ.get("SHOTS") or "desktop,phone,phone360").split(",")]:
         pg = br.new_page(viewport={"width": w, "height": h})
         pg.goto("http://localhost:8358/"); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
         cid = pg.evaluate(SETUP, [SCENE, "owner"]); pg.evaluate(LOCAL_DB); pg.evaluate(NOT_ANS)
         def shot(name, js):
             pg.evaluate(js, cid); pg.wait_for_timeout(1800)

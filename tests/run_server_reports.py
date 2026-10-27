@@ -126,7 +126,7 @@ try:
                     return j(json.loads(db.one("select %s(%s, %s, %s)" % (fn, q(a2["p_client"]), q(a2["p_from"]), q(a2["p_to"])), ME)))
                 return j([])
             ctx = br2 = p.chromium.launch(); pg = br2.new_page(viewport={"width": 1400, "height": 1000}); pg.route(STAGE + "/**", route)
-            pg.goto("http://localhost:8170/"); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(600)
+            pg.goto("http://localhost:8170/"); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(600)
             pg.evaluate("""() => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: "u1"}); Cloud.st.firm = "f1"; Cloud.st.state = "ok";
               const c = newCompany({name: "Testing AAD", gstin: "09AANFG3202D1ZR"}); c.id = "cmufksrrqjub2g"; S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true};
               S.coId = c.id; S.view = "company"; S.tab = "books"; S.booksTab = "mis"; S.books = null; render(); }""")

@@ -58,7 +58,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(); ctx = br.new_context(viewport={"width": 1400, "height": 1000}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     E = pg.evaluate
-    pg.goto("http://localhost:8273/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:8273/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     cid = E(SETUP, None); E(OPEN, cid); pg.wait_for_timeout(900)
 
     print("1. never set: off")
@@ -87,7 +87,7 @@ with sync_playwright() as p:
 
     print("4. after a reload")
     pg.wait_for_timeout(800); pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     kept = E("(cid) => ((S.companies[cid] || {}).choices || {}).advGst || null", cid)
     ok(bool(kept) and kept.get("value") == "on" and kept.get("state") == "confirmed", "still on after a reload (%s)" % kept)
     E(SETUP, cid)

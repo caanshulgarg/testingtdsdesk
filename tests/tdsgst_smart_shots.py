@@ -51,7 +51,7 @@ with sync_playwright() as p:
     for scheme in ["light", "dark"]:
         for w, tag in [(1400, ""), (390, "-phone")]:
             pg = br.new_page(viewport={"width": w, "height": 1000}, color_scheme=scheme)
-            pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+            pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
             pg.evaluate("(t) => { document.documentElement.setAttribute('data-theme', t); }", scheme)
             pg.evaluate(LOAD, books); pg.wait_for_timeout(1000); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(600); pg.evaluate(CHALLANS); pg.evaluate(PLANT)
             if group == "2":

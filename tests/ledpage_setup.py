@@ -107,5 +107,5 @@ def start(p, port, site, width=1366, height=900, errors=None):
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": width, "height": height})
     if errors is not None: pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:%d/" % port); pg.wait_for_timeout(2500)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     return srv, br, pg

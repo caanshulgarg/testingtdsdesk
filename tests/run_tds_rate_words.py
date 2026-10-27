@@ -46,7 +46,7 @@ def route(rt):
 try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.route(STAGE + "/**", route)
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(600)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(600)
         # the words alone, as the TDS details give them
         w = pg.evaluate("(rows) => typeof TDS.tallyRateWords === 'function' ? rows.map((r) => TDS.tallyRateWords(r)) : null", ROWS)
         ok(w == ["2% · rate worked out: Tally stored 0 (TDS ÷ assessable amount)", "2%", "2%", "0% · exempt in Tally: no rate worked out"], "TDS.tallyRateWords: worked out; marked exempt but 2,000 deducted: the rate booked; Tally's own; exempt with no tax (%s)" % w)

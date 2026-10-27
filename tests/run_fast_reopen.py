@@ -199,7 +199,7 @@ async def main():
                 await asyncio.sleep(0.2)
         async def boot():
             await pg.goto("http://localhost:%d/" % PORT); await pg.wait_for_timeout(1200)
-            if await pg.locator('button[data-act="useOffline"]').count(): await pg.click('button[data-act="useOffline"]'); await pg.wait_for_timeout(400)
+            if await pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): await pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); await pg.wait_for_timeout(400)
             await pg.evaluate("""([cid, firm]) => { Cloud.setSess({access_token: "t", refresh_token: "r", at: Date.now(), expires_in: 3600, user_id: "u1"}); Cloud.st.firm = firm; Cloud.st.state = "ok";
               let c = S.companies[cid]; if (!c){ c = newCompany({name: "ZZ Leads-like Brokers Pvt Ltd", gstin: ""}); c.id = cid; c.tan = "DELZ01234Z"; c.pan = "AAACZ1234Z"; S.companies[c.id] = c; Store.saveCompany(c); }
               S.data[c.id] = S.data[c.id] || {parties: {}, entries: {}, loaded: true}; }""", [CID, FIRM])

@@ -109,7 +109,7 @@ with sync_playwright() as p:
     def open_page(c):
         pg = c.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto(URL); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         return pg
     def sign_in(pg, uid, role="owner", scene=SCENE, where="dash"):
         cid = pg.evaluate(SETUP, [scene, role]); pg.evaluate(WHO, [uid, role])
@@ -164,7 +164,7 @@ with sync_playwright() as p:
     ok(not [x for x in b["items"] if "GARG" in x["text"]], "the same gap counting 2 entries now: still cleared (a count that ticks is not a new notification)")
     pg.evaluate(CLOSE)
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     cid = sign_in(pg, OWNER)
     b = pg.evaluate(BELL)
     ok(not [x for x in b["items"] if "GARG" in x["text"]] and b["count"] == "1", "after a reload: still gone (%s)" % [x["text"][:40] for x in b["items"]])
@@ -213,7 +213,7 @@ with sync_playwright() as p:
     ok(len(und) == 1 and len(batch) == 2 and all(r["batch"] == und[0][1].get("p_batch") for r in batch), "Undo: the rows of that Clear stamped undone, none removed (%d rows kept)" % len(DB["rows"]))
     pg.evaluate(CLOSE)
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     sign_in(pg, OWNER, scene=dict(SCENE, lines=[], alerts=[al(3, "summary", "ago:2", "Today: 140 lines, 1 held, 1 gap, 3 postings", read="ago:1")], gap=dict(GAP_Y, since=NEW_SINCE)))
     pg.evaluate("""(t) => { window.__w.devs = window.__w.devs.map(d => { d.info.beat = Object.assign({}, d.info.beat || {}, {notAnsweringSince: t}); return d; });
       TLight.st.devs = JSON.parse(JSON.stringify(window.__w.devs)); AlertHub.refresh(true); }""", NOT_ANS); pg.wait_for_timeout(900)
@@ -335,7 +335,7 @@ with sync_playwright() as p:
     pg4.evaluate("() => { S.storeKind = 'local'; render(); }"); pg4.wait_for_timeout(300)
     n_before = len(DB["rows"])
     pg4.reload(); pg4.wait_for_timeout(2500)
-    if pg4.locator('button[data-act="useOffline"]').count(): pg4.click('button[data-act="useOffline"]'); pg4.wait_for_timeout(800)
+    if pg4.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg4.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg4.wait_for_timeout(800)
     pg4.evaluate("() => { S.storeKind = 'local'; Cloud.on = () => false; if (typeof AlertClear === 'object') AlertClear.reset(); render(); }"); pg4.wait_for_timeout(600)
     b = pg4.evaluate(BELL)
     ok(not [x for x in b["items"] if "browser" in x["text"].lower()] and len(DB["rows"]) == n_before, "not signed in: kept in this browser, still gone after a reload, nothing sent to the cloud")
@@ -350,7 +350,7 @@ with sync_playwright() as p:
     ok(not [x for x in b["items"] if "GARG" in x["text"]] and not [e for e in errors if "alert" in e.lower()], "the cloud without migration 68: gone, kept in this browser, no error on the page")
     pg5.evaluate(CLOSE)
     pg5.reload(); pg5.wait_for_timeout(2500)
-    if pg5.locator('button[data-act="useOffline"]').count(): pg5.click('button[data-act="useOffline"]'); pg5.wait_for_timeout(800)
+    if pg5.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg5.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg5.wait_for_timeout(800)
     sign_in(pg5, "u-third-0003", "staff", scene=dict(SCENE, alerts=[]))
     b = pg5.evaluate(BELL)
     ok(not [x for x in b["items"] if "GARG" in x["text"]], "the cloud without migration 68: still gone after a reload (this browser)")

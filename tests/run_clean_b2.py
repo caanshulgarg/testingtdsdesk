@@ -61,7 +61,7 @@ PAGES = [
 
 def start(p, w, h):
     pg = p.new_page(viewport={"width": w, "height": h}); pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     cid = pg.evaluate(SEED, books); pg.wait_for_timeout(1200)
     return pg, cid
 

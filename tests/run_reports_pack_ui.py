@@ -66,7 +66,7 @@ with sync_playwright() as p:
     ctx = br.new_context(viewport={"width": 1440, "height": 900}, color_scheme="light", accept_downloads=True); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
     asked = []; pg.on("request", lambda r: asked.append(r.url))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     cid = pg.evaluate(SETUP, BOOKS); pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; goClient('books:fs');"); pg.wait_for_timeout(2500)
 
     print("The page and its Reports menu")
@@ -206,7 +206,7 @@ with sync_playwright() as p:
 
     print("Kept after a reload")
     pg.wait_for_timeout(1500); pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     pg.evaluate("(cid) => { S.fsFy = '2025'; openCompany(cid).then(() => { goClient('books:fs'); }); }", cid); pg.wait_for_timeout(4000)
     ok(str(pg.evaluate("((S.books.fs.reports || {})['2025'] || {a: {}}).a.b_business || ''")).startswith("software development"), "the answers are in the client's books after a reload")
     menu(pg, "board")
@@ -216,7 +216,7 @@ with sync_playwright() as p:
     print("A phone, 390 wide")
     ctx = br.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True, has_touch=True, color_scheme="light"); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(SETUP, BOOKS); pg.wait_for_timeout(1200); pg.evaluate("S.books = window.__bk; goClient('books:fs');"); pg.wait_for_timeout(2500)
     for k in ["board", "q"]:
         pg.evaluate("(k) => { S.fin = Object.assign(S.fin || {}, {rep: k}); render(); window.scrollTo(0, 0); }", k); pg.wait_for_timeout(1500)

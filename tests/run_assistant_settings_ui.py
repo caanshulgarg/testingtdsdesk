@@ -65,7 +65,7 @@ def open_settings(pg, phone):
 
 def run(pg, name, phone, role="owner", late=1, fail=0, stored=None):
     pg.goto("http://localhost:8179/"); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(SIGN_IN, [role, late, fail, stored]); pg.wait_for_timeout(900)
     open_settings(pg, phone)
     # the setting is asked again until it is known: no "Loading…" left behind

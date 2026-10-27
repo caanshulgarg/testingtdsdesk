@@ -100,7 +100,7 @@ def computer(br, tok, name):
     ctx = br.new_context(viewport={"width": 1300, "height": 900}); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(name + ": " + str(e)))
     ctx.route(STAGE + "/**", route); ctx.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
-    pg.goto("http://localhost:8168/"); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8168/"); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     sign_in(pg, tok)
     return ctx, pg
 def sign_in(pg, tok):
@@ -188,7 +188,7 @@ with sync_playwright() as p:
     # ---------- the time to open, with the stand-in (no network delay): a fresh browser and a second opening
     C = br.new_context(); pc = C.new_page(); pc.on("pageerror", lambda e: errors.append("C: " + str(e)))
     C.route(STAGE + "/**", route); C.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
-    pc.goto("http://localhost:8168/"); pc.wait_for_timeout(1500); pc.click('button[data-act="useOffline"]'); pc.wait_for_timeout(500); sign_in(pc, "tA")
+    pc.goto("http://localhost:8168/"); pc.wait_for_timeout(1500); pc.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pc.wait_for_timeout(500); sign_in(pc, "tA")
     wait_for(pc, "S.companies['%s']" % CID, 5)
     open_client(pc); first = pc.evaluate("S.books.openMs")
     pc.evaluate("() => { S.books = null; S.coId = null; render(); }"); open_client(pc); second = pc.evaluate("S.books.openMs")

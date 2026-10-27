@@ -112,12 +112,12 @@ html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
 [data-boot="signin"] .boot-page{display:none}
 .boot-signin{display:none}
 [data-boot="signin"] .boot-signin{display:flex}
-/* as tall as the real card (608 px on a computer, 641 with the Create an account line; about 670 and 700 on a phone), so it does not grow when the form arrives */
-.boot-signin .signin-box{min-height:640px}
-@media (max-width:600px){.boot-signin .signin-box{min-height:700px}}
-.boot-signin .signin-box h1{margin:0}
+/* the sign-in card (app/src/styles/signin.css), as tall as the real one (the email step: 329 px on a computer, 315 on a phone), so it does not grow when the form arrives */
+.boot-signin .signin-box{min-height:330px}
+@media (max-width:600px){.boot-signin .signin-box{min-height:316px}}
 .boot-signin .boot-bar{margin:14px 0 0}
-.boot-signin .boot-field{height:38px;margin:6px 0 0;border:1px solid var(--border,#E2E8F0);border-radius:7px}
+.boot-signin .boot-field{height:42px;margin:6px 0 0;border:1px solid var(--border,#E2E8F0);border-radius:8px}
+.boot-signin .boot-btn{margin-top:24px;border:0;background:var(--accent-subtle,#EEF2FF)}
 </style>
 <script src="./guard.js"></script>
 </head>
@@ -157,7 +157,7 @@ html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
   <div class="boot-loader" role="status" aria-label="Opening FinCom"><span class="boot-mark" aria-hidden="true">F</span><small aria-hidden="true">Opening FinCom</small></div>
   <div class="boot-skel" aria-hidden="true"><div class="boot-cards"><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div></div>
     <div class="boot-rows"><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div></div></div>
-</div><div class="signin boot-signin" data-boot-part="" aria-hidden="true"><div class="signin-box"><h1>FinCom</h1><i class="boot-bar" style="width:62%"></i><i class="boot-bar" style="width:34%"></i><i class="boot-bar" style="width:88%"></i><i class="boot-bar" style="width:20%;margin-top:18px"></i><div class="boot-field"></div><i class="boot-bar" style="width:24%"></i><div class="boot-field"></div></div></div></main>
+</div><div class="signin boot-signin" data-boot-part="" aria-hidden="true"><div class="signin-box"><div class="signin-brand"><span class="side-mark">F</span><span class="signin-brand-name">FinCom</span></div><h1>Welcome to FinCom</h1><i class="boot-bar" style="width:16%"></i><div class="boot-field"></div><div class="boot-field boot-btn"></div></div></div></main>
 <script src="./oldcheck.js"></script>
 </div>
 </div>

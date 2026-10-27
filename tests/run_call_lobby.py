@@ -159,7 +159,7 @@ with sync_playwright() as p:
     F.wait_for_timeout(3000)
     ok(F.evaluate("!location.hash.startsWith('#/join') && !document.querySelector('[data-guest-join]')"), "FinCom opens (its sign-in), the meeting kept for after")
     ok(F.evaluate("(() => { try { return JSON.parse(localStorage.getItem('fincom.join-after')).code; } catch (e) { return ''; } })()") == r4["code"], "the meeting's code kept on this browser")
-    if F.locator('button[data-act="useOffline"]').count(): F.click('button[data-act="useOffline"]'); F.wait_for_timeout(800)
+    if F.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): F.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); F.wait_for_timeout(800)
     F.evaluate(setup_js("tok-owner"))            # signed in
     ok(wait_for(F, "!!document.querySelector('[data-call-join]')", 10000), "signed in: the same meeting opens")
     press(F, "[data-call-join]")

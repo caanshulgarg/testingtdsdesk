@@ -50,7 +50,7 @@ try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
         J = lambda e, a=None: pg.evaluate(e, a); W = pg.wait_for_timeout
-        pg.goto("http://localhost:%d/" % PORT); W(2500); pg.click('button[data-act="useOffline"]'); W(1200)
+        pg.goto("http://localhost:%d/" % PORT); W(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); W(1200)
         J(LOAD, books); W(1000); J("S.books = window.__bk; render();"); W(500); J(CHALLANS); W(300)
         cid = J("S.coId")
         shown = lambda sel: pg.locator(sel).count() > 0 and pg.locator(sel).first.is_visible()

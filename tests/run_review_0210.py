@@ -32,7 +32,7 @@ with sync_playwright() as p:
     pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8202/"); pg.wait_for_timeout(2500)
     ok("This browser isn't supported" not in pg.inner_text("body"), "19. a modern browser opens FinCom as before")
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     cid = pg.evaluate(gstfix.SETUP, [books, gst]); pg.wait_for_timeout(1500); pg.evaluate("S.books = window.__bk; render()"); pg.wait_for_timeout(500)
     E = lambda js, *a: pg.evaluate(js, *a)
 

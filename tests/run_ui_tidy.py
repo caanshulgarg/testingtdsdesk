@@ -102,7 +102,7 @@ TOP = "(sel) => { const e = document.querySelector(sel); if (!e) return null; co
 
 def start(br, w, h, scheme="light"):
     pg = br.new_page(viewport={"width": w, "height": h}, color_scheme=scheme); pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate("window.__dueToday = '2026-10-11'")
     pg.evaluate(LOAD, books); pg.wait_for_timeout(700); pg.evaluate("S.books = window.__bk; render();"); pg.wait_for_timeout(300); pg.evaluate(CHALLANS); pg.wait_for_timeout(300)
     return pg, pg.evaluate("S.coId")
@@ -228,7 +228,7 @@ try:
         tl = br.new_page(viewport={"width": 1440, "height": 900}); tl.on("pageerror", lambda e: errors.append(str(e)[:200]))
         tl.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
             body=json.dumps({"setup": {"version": "2.4.4", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.4.4.exe", "sha256": "ab" * 32}})))
-        tl.goto("http://localhost:%d/" % PORT); tl.wait_for_timeout(2500); tl.click('button[data-act="useOffline"]'); tl.wait_for_timeout(800)
+        tl.goto("http://localhost:%d/" % PORT); tl.wait_for_timeout(2500); tl.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); tl.wait_for_timeout(800)
         E2, W2 = tl.evaluate, tl.wait_for_timeout
         lcid = E2("""(g) => { const c = newCompany({name: 'Link Co', gstin: g}); c.tallyName = 'Link Co'; S.companies[c.id] = c;
             S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; Store.saveCompany(c); return c.id; }""", TL.GSTIN)
@@ -324,7 +324,7 @@ try:
             for direct in (False, True):
                 ctx = br.new_context(viewport={"width": w, "height": h}); ctx.add_init_script(PROBE)
                 bp = ctx.new_page(); bp.on("pageerror", lambda e: errors.append(str(e)[:200])); cdp = ctx.new_cdp_session(bp)
-                bp.goto("http://localhost:%d/" % PORT); bp.wait_for_timeout(2500); bp.click('button[data-act="useOffline"]'); bp.wait_for_timeout(1000)
+                bp.goto("http://localhost:%d/" % PORT); bp.wait_for_timeout(2500); bp.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); bp.wait_for_timeout(1000)
                 bcid = bp.evaluate("(b) => { const seed = %s; return seed(null); }" % SEED, None)
                 bp.evaluate(BILL, [PDF]); bp.wait_for_timeout(300)
                 bp.evaluate("(c) => openCompany(c).then(() => goStep('review', 'bills'))", bcid); bp.wait_for_timeout(1500)

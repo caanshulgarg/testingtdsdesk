@@ -108,7 +108,7 @@ def main():
             pg.route(re.compile(r"^http://127\.0\.0\.1:\d+/"), on_bridge)
             pg.expose_function("pyRpc", rpc); pg.expose_function("pyApi", api)
             pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-            if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+            if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
             def as_member(uid, firm, name):
                 WHO.update(uid=uid, firm=firm, name=name); BR["url"] = pg.evaluate(SETUP, [uid, firm, name]); CALLS.clear(); BR["log"].clear(); pg.evaluate("() => { window.__toasts = []; }")
             posts = lambda: [x for x in BR["log"] if x == ("POST", "/cloudlink")]

@@ -19,7 +19,7 @@ SETUP = """() => { const c = newCompany({name: "ZZ Phase Two B Traders Private L
   Store.saveCompany(c); return c.id; }"""
 def start(p, w, h=900):
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": w, "height": h}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8174/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8174/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     cid = pg.evaluate(SETUP); pg.evaluate("(c) => openCompany(c)", cid); pg.wait_for_timeout(800)
     return br, pg, cid
 with sync_playwright() as p:

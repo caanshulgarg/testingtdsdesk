@@ -14,7 +14,7 @@ def ok(c, w):
     if not c: fails.append(w)
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)))
-    pg.goto("http://localhost:8151/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:8151/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate("""() => { const c = newCompany({name: "ZZ QUEUE"}); S.companies[c.id] = c; S.coId = c.id;
       // review 21c (02-Oct-2026): posting uses the confirmed choice of the Tally company only
       choiceConfirm(c, "postTo", "ZZ QUEUE LTD");

@@ -100,7 +100,7 @@ def main():
             body=json.dumps({"setup": {"version": "2.4.4", "url": "https://x/FinComBridge-Setup-2.4.4.exe", "sha256": "ab" * 32}})))
         pg.clock.install()
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         E = lambda js, *a: pg.evaluate(js, *a)
         E(SETUP, [[dev("closed", ())], CLIENTS])
         # the page opens and settles (its first reads, the waiting-room watcher started)

@@ -51,7 +51,7 @@ def main():
 
         print("== 2. Connect Tally: the ledgers still come by themselves")
         pg.goto("http://localhost:8455/"); pg.wait_for_timeout(2500)
-        if n('button[data-act="useOffline"]'): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        if n('button[data-act="useOffline"]'): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         d6 = TP.dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.5")
         five = {"garg shekhar & company": TP.book("garg shekhar & company"), "ABC TRADERS": TP.book("ABC TRADERS"), "GB TEXCOAT": TP.book("GB TEXCOAT", ledgers=False, days=False)}
         two = TP.companies(linked=("ABC TRADERS", "garg shekhar & company"), seen=("GB TEXCOAT",), d=d6["id"])

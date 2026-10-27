@@ -107,7 +107,7 @@ def setup(br, reduced=False):
     pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
     return ctx, pg
 def seed(pg):
-    pg.goto(URL); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto(URL); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     cid = pg.evaluate(SEED, books); pg.wait_for_timeout(1500); return cid
 
 try:
@@ -118,7 +118,7 @@ try:
         ctx, pg = setup(br)
         pg.goto(URL); pg.wait_for_timeout(3000)
         m = state(pg); c, worst = cls(m)
-        ok(pg.locator('#app button[data-act="useOffline"]').count() == 1, "the sign-in page shows")
+        ok(pg.locator('#app .signin-box [data-act="cloudSignIn"]').count() == 1, "the sign-in page shows")
         ok(c <= 0.01, "sign-in page: layout shift %.4f <= 0.01 (was 0.164) %s" % (c, worst))
         pg.screenshot(path=os.path.join(OUT, "signin.png")); ctx.close()
         # held back: the sign-in card's place, no sidebar, from the first frame

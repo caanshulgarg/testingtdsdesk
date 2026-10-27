@@ -53,7 +53,7 @@ with sync_playwright() as p:
     E = pg.evaluate
     W = pg.wait_for_timeout
     pg.goto("http://localhost:8463/"); W(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); W(1000)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); W(1000)
     toast_words = lambda: E("(() => { const t = document.getElementById('toast'); if (!t || t.classList.contains('hidden')) return ''; const c = t.cloneNode(true); c.querySelectorAll('[data-toast-acts]').forEach(x => x.remove()); return c.textContent.trim(); })()")
     # the owner's rule: a warning is shown once; where the books end earlier, one notice says so (the not-read line)
     ONCE = "(() => { const t = document.querySelector('#app').innerText; return [/Books in FinCom end/g, /Current year not yet read from Tally/g, /Books: last entry/g, /Connect FinCom Bridge to keep this up to date/g].map(r => (t.match(r) || []).length); })()"

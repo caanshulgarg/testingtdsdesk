@@ -26,7 +26,7 @@ V = [J(1, "XF/2025-26/00007", "", "Rent for May"),            # the invoice numb
      J(4, "", "", "Rent, bill no: 4411 for May")]              # nothing but the narration
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate("""(vs) => { const c = newCompany({name: "ZZ TEST", gstin: "09AAAAA0000A1Z5"}); S.companies[c.id] = c; S.coId = c.id; S.loadingCo = false;
       S.books = {loading: false, cid: c.id, vouchers: vs, gstins: {"ZZ Supplier": "%s"}, map: {}}; S.books.map = Books.mapLedgers(vs, {});
       S.books.map["Input IGST"] = {kind: "gst", side: "input", tax: "IGST", ok: true}; }""" % GSTIN, V)

@@ -44,7 +44,7 @@ with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1100})
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto("http://localhost:8148/"); pg.wait_for_timeout(2500)
-    pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1500)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1500)
     ids = pg.evaluate("""() => { const add = (n, g, t) => { const c = newCompany({name: n, gstin: g}); if (t) c.tallyName = t; S.companies[c.id] = c; Store.saveCompany(c); return c.id; };
       const a = add("ZZ TEST VMS EVENTS", "07AADCV3366N1ZU", "VMS EVENTS PRIVATE LIMITED (2024-25)"), b = add("ZZ TEST OTHER", "09AAACZ1111A1Z5", "ZZ OTHER LTD");
       S.view = "home"; S.homeTab = "clients"; render(); return [a, b]; }""")

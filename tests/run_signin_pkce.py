@@ -180,7 +180,7 @@ with sync_playwright() as pw:
     print("4. the email's confirmation link")
     ctx = context(); E = page(ctx)
     E.click('[data-act="showSignUp"]'); E.wait_for_timeout(500)
-    E.fill('[data-cloud="name"]', "Asha Rao"); E.fill('[data-cloud="firm"]', "Rao & Co"); E.fill('[data-cloud="email"]', "asha@new.test"); E.fill('[data-cloud="password"]', "a-long-password-1")
+    E.fill('[data-cloud="email"]', "asha@new.test"); E.click('[data-act="cloudSignUp"]'); E.fill('[data-cloud="name"]', "Asha Rao"); E.fill('[data-cloud="firm"]', "Rao & Co"); E.fill('[data-cloud="password"]', "a-long-password-1")
     E.click('[data-act="cloudSignUp"]'); E.wait_for_timeout(1500)
     s = ST["signups"][-1] if ST["signups"] else {}
     ok(len(s.get("challenge") or "") == 43 and s.get("redirect") == PAGE + "#confirmed", "the register form sends a code_challenge and asks to come back to this page's #confirmed (%s)" % {k: v for k, v in s.items() if k != "password"})

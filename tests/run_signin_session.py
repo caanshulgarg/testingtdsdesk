@@ -85,7 +85,7 @@ def ok(c, w):
     if not c: fails.append(w)
 def signin_page(pg): return pg.locator('[data-act="cloudSignIn"]').count() > 0
 def sign_in(pg, keep=None):
-    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.fill('[data-cloud="password"]', "pw12345678")
+    pg.fill('[data-cloud="email"]', "owner@firm.in"); pg.click('[data-act="cloudSignIn"]'); pg.fill('[data-cloud="password"]', "pw12345678")
     if keep is not None: pg.set_checked('[data-cloud="keep"]', keep)
     pg.click('[data-act="cloudSignIn"]'); pg.wait_for_timeout(1800)
 def storage(pg): return pg.evaluate("() => ({local: !!localStorage.getItem('tdsdesk-test:cloudsess'), session: !!sessionStorage.getItem('tdsdesk-test:cloudsess'), on: Cloud.on()})")
@@ -97,7 +97,10 @@ with sync_playwright() as p:
     ctx.add_init_script("(() => { const f = window.fetch.bind(window); window.fetch = (u, o) => f(String(u).replace(/^https:\\/\\/[a-z]+\\.supabase\\.co/, '%s'), o); })()" % FAKE)
     A = ctx.new_page(); A.on("pageerror", lambda e: errors.append("A: " + str(e)))
     A.goto("http://localhost:%d/" % PAGE_PORT); A.wait_for_timeout(2500)
+    # step by step (27-Oct-2026): the email, Continue, then the password and "Keep me signed in"; Edit goes back
+    A.fill('[data-cloud="email"]', "owner@firm.in"); A.click('[data-act="cloudSignIn"]')
     ok(signin_page(A) and A.locator('[data-cloud="keep"]').count() == 1 and A.is_checked('[data-cloud="keep"]'), "the sign-in form has 'Keep me signed in', ticked by default")
+    A.click('[data-signin-edit]')
     sign_in(A)
     st = storage(A)
     ok(not signin_page(A) and st["on"] and st["local"] and not st["session"], "ticked: signed in, the session is kept in localStorage " + str(st))

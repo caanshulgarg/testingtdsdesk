@@ -37,7 +37,7 @@ with sync_playwright() as p:
             for name in ["purchase-table", "bill-drawer", "bank-statement"]:
                 pg = br.new_page(viewport={"width": vw, "height": vh}, color_scheme=sch); errs = []
                 pg.on("pageerror", lambda e: errs.append(str(e)))
-                pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+                pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
                 if name == "bank-statement": pg.evaluate(BANK)
                 else: pg.evaluate(SEED, None); pg.wait_for_timeout(1000); pg.evaluate(REVIEW if name == "purchase-table" else DRAWER)
                 pg.wait_for_timeout(1500); errs.clear()

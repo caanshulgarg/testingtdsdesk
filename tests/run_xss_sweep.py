@@ -48,7 +48,7 @@ with sync_playwright() as p:
     pg.add_init_script("""window.__opened = []; window.open = function(){ const w = {closed: false, focus(){}, print(){}, close(){}, addEventListener(){},
       document: {open(){}, close(){}, write(h){ window.__opened.push(String(h)); }, title: ""}, location: {}}; return w; };
       window.saveFile = function(name, data){ try { if (typeof data === "string" && /<[a-z]/i.test(data)) window.__opened.push(data); } catch (e) {} };""")
-    pg.goto("http://localhost:8171/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8171/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate("""([bk, X, G, CO]) => { const c = newCompany({name: "Client " + X, gstin: G, tallyName: CO}); c.id = "c_xss"; S.companies[c.id] = c;
       S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {};
       return openCompany(c.id).then(() => { S.books = Object.assign({loading: false, challans: [], alloc: {}}, bk, {cid: c.id}); S.books.map = Books.mapLedgers(bk.vouchers, {});

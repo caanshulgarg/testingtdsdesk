@@ -92,7 +92,7 @@ with sync_playwright() as pw:
     ok(A.locator('[data-bot-check="login"]').get_attribute("data-ts") == KEY + "|login|interaction-only", "the check is drawn on the sign-in form with the site key, interaction-only (%s)" % A.locator('[data-bot-check="login"]').get_attribute("data-ts"))
     csp = A.evaluate(CSP)
     ok("https://challenges.cloudflare.com" in directive(csp, "script-src") and "https://challenges.cloudflare.com" in directive(csp, "frame-src"), "the CSP lets challenges.cloudflare.com in for script and frame")
-    A.fill('[data-cloud="email"]', "a@b.in"); A.fill('[data-cloud="password"]', "wrong"); A.click('[data-act="cloudSignIn"]'); A.wait_for_timeout(1200)
+    A.fill('[data-cloud="email"]', "a@b.in"); A.click('[data-act="cloudSignIn"]'); A.fill('[data-cloud="password"]', "wrong"); A.click('[data-act="cloudSignIn"]'); A.wait_for_timeout(1200)
     A.fill('[data-cloud="password"]', "wrong-again"); A.click('[data-act="cloudSignIn"]'); A.wait_for_timeout(1200)
     toks = [b.get("captcha_token") for b in ST["signin"]]
     ok(len(toks) == 2 and all(t and t.startswith("TS-") for t in toks) and toks[0] != toks[1], "Sign in sends the token to the signin function, a fresh one each try (%s)" % toks)
@@ -100,12 +100,12 @@ with sync_playwright() as pw:
     ok(A.evaluate("Cloud.on()") and (ST["signin"][-1].get("captcha_token") or "").startswith("TS-"), "and with the right password the person is signed in")
     B = page(context(), "http://localhost:%d/#/register" % PORT_BOT)
     ok(B.locator('[data-bot-check="signup"]').get_attribute("data-ts") == KEY + "|signup|interaction-only", "the register form has its own check")
-    B.fill('[data-cloud="name"]', "Asha Rao"); B.fill('[data-cloud="firm"]', "Rao & Co"); B.fill('[data-cloud="email"]', "asha@new.test"); B.fill('[data-cloud="password"]', "a-long-password-1")
+    B.fill('[data-cloud="email"]', "asha@new.test"); B.click('[data-act="cloudSignUp"]'); B.fill('[data-cloud="name"]', "Asha Rao"); B.fill('[data-cloud="firm"]', "Rao & Co"); B.fill('[data-cloud="password"]', "a-long-password-1")
     B.click('[data-act="cloudSignUp"]'); B.wait_for_timeout(1500)
     ok(ST["signup"] and (ST["signup"][-1].get("captcha_token") or "").startswith("TS-") and B.locator("[data-signup-sent]").count() == 1, "Create the account sends the token to the signup function (%s)" % (ST["signup"][-1:] and ST["signup"][-1].get("captcha_token")))
     ST["signin_404"] = True
     C = page(context(), "http://localhost:%d/" % PORT_BOT)
-    C.fill('[data-cloud="email"]', "a@b.in"); C.fill('[data-cloud="password"]', "wrong"); C.click('[data-act="cloudSignIn"]'); C.wait_for_timeout(1500)
+    C.fill('[data-cloud="email"]', "a@b.in"); C.click('[data-act="cloudSignIn"]'); C.fill('[data-cloud="password"]', "wrong"); C.click('[data-act="cloudSignIn"]'); C.wait_for_timeout(1500)
     t = ST["token"][-1] if ST["token"] else {}
     ok(((t.get("gotrue_meta_security") or {}).get("captcha_token") or "").startswith("TS-"), "no signin function (straight at Auth): the token goes as gotrue_meta_security.captcha_token (%s)" % t.get("gotrue_meta_security"))
     ST["signin_404"] = False
@@ -116,16 +116,16 @@ with sync_playwright() as pw:
     ok(D.locator("[data-bot-check]").count() == 0 and cf == [], "no check drawn, nothing asked of Cloudflare")
     ok("cloudflare" not in D.evaluate(CSP), "no Cloudflare in the CSP")
     ok(not glob.glob(os.path.join(SITE, "assets", "bot-*.js")), "no bot-check file in the build")
-    D.fill('[data-cloud="email"]', "a@b.in"); D.fill('[data-cloud="password"]', "wrong"); D.click('[data-act="cloudSignIn"]'); D.wait_for_timeout(1200)
+    D.fill('[data-cloud="email"]', "a@b.in"); D.click('[data-act="cloudSignIn"]'); D.fill('[data-cloud="password"]', "wrong"); D.click('[data-act="cloudSignIn"]'); D.wait_for_timeout(1200)
     ok(len(ST["signin"]) == n_in + 1 and sorted(ST["signin"][-1].keys()) == ["email", "password"], "Sign in sends email and password only, as before (%s)" % sorted(ST["signin"][-1].keys()))
     E = page(context(), "http://localhost:%d/#/register" % PORT_PLAIN)
     ok(E.locator("[data-bot-check]").count() == 0, "the register form: no check either")
-    E.fill('[data-cloud="name"]', "Asha Rao"); E.fill('[data-cloud="firm"]', "Rao & Co"); E.fill('[data-cloud="email"]', "asha2@new.test"); E.fill('[data-cloud="password"]', "a-long-password-1")
+    E.fill('[data-cloud="email"]', "asha2@new.test"); E.click('[data-act="cloudSignUp"]'); E.fill('[data-cloud="name"]', "Asha Rao"); E.fill('[data-cloud="firm"]', "Rao & Co"); E.fill('[data-cloud="password"]', "a-long-password-1")
     E.click('[data-act="cloudSignUp"]'); E.wait_for_timeout(1500)
     ok(len(ST["signup"]) == n_up + 1 and "captcha_token" not in ST["signup"][-1], "Create the account sends no token field (%s)" % sorted(ST["signup"][-1].keys()))
     ST["signin_404"] = True
     F = page(context(), "http://localhost:%d/" % PORT_PLAIN)
-    F.fill('[data-cloud="email"]', "a@b.in"); F.fill('[data-cloud="password"]', "wrong"); F.click('[data-act="cloudSignIn"]'); F.wait_for_timeout(1500)
+    F.fill('[data-cloud="email"]', "a@b.in"); F.click('[data-act="cloudSignIn"]'); F.fill('[data-cloud="password"]', "wrong"); F.click('[data-act="cloudSignIn"]'); F.wait_for_timeout(1500)
     ok(len(ST["token"]) == n_tok + 1 and sorted(ST["token"][-1].keys()) == ["email", "password"], "straight at Auth: email and password only, as before (%s)" % sorted(ST["token"][-1].keys()))
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     br.close()

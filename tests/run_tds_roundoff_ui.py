@@ -33,7 +33,7 @@ srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Qui
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 950}); pg.on("pageerror", lambda e: errors.append(str(e)))
     J = lambda e, a=None: pg.evaluate(e, a)
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     J(BOOKS_JS); pg.wait_for_timeout(800)
     J("() => { try { TDSMatch.online = () => false; } catch (e) {} }")
     J(GO, "file"); pg.wait_for_timeout(1200)

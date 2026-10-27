@@ -22,7 +22,7 @@ def bridge(route):
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1300, "height": 900}); pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.route("http://127.0.0.1:9100/**", bridge)
-    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2000); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto("http://localhost:8152/"); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     # a Connect button of the test's own; the React shell's sidebar lies over where it lands, so it is clicked by its event
     pg.evaluate("() => { const b = document.createElement('button'); b.dataset.act = 'bridgeConnect'; b.id = 'bc'; document.body.appendChild(b); }")
     pg.dispatch_event("#bc", "click"); pg.wait_for_timeout(400)

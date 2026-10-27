@@ -69,8 +69,8 @@ def run(br, label, kbps, latency, after_s=40):
     t0 = time.time()
     pg.goto("http://localhost:%d/" % PORT, wait_until="commit", timeout=180000)
     # the first page: the sign-in page drawn by the program (no frame left), then "without an account" -> the app
-    pg.wait_for_selector('button[data-act="useOffline"]', timeout=180000)
-    pg.click('button[data-act="useOffline"]')
+    pg.wait_for_function("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()", timeout=180000)
+    pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })")
     pg.wait_for_function("() => !document.querySelector('[data-boot-part]') && !!document.querySelector('#app')", timeout=120000)
     t1 = time.time()
     first = list(LOG); INFLIGHT["max"] = 0

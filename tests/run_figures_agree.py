@@ -41,7 +41,7 @@ SEED = """(bk) => {
   S.books.map = Books.mapLedgers(S.books.vouchers, {}); LedMaster.refresh(S.books); window.__bk = S.books; refreshStats(c.id); render(); }"""
 with sync_playwright() as p:
     br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8173/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(SEED, books); pg.wait_for_timeout(800)
     FY = pg.evaluate("fyOf(null)")
     ok(FY == "2026-27", "this year is 2026-27: " + FY)

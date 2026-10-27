@@ -20,7 +20,7 @@ SETUP = """() => { const c = newCompany({name: "ZZ Phase Two", gstin: "09AANFG32
   return [c.id, a, b]; }"""
 with sync_playwright() as p:
     br = p.chromium.launch(ignore_default_args=["--hide-scrollbars"]); pg = br.new_page(viewport={"width": 1400, "height": 900})   # real scroll bars (item 30); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto(BASE); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+    pg.goto(BASE); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
     app = lambda: pg.inner_text("#app"); top = lambda: pg.inner_text("#cobar")
     cid, a, b = pg.evaluate(SETUP)
     # 31. one date format
@@ -32,7 +32,7 @@ with sync_playwright() as p:
     ok(link == "#/c/%s/bill/%s" % (cid, a), "25. an open bill has its own address (" + link + ")")
     ok(pg.locator('#app label:has-text("Supplier name")').count() == 1, "35. the bill's field is called Supplier name")
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     ok(pg.evaluate("[S.coId, S.tab, S.selected]") == [cid, "invoices", a] and "Alpha Consultants" in pg.inner_text("#app .detail h2"), "25. Refresh opens the same bill")
     pg.evaluate("() => goClient('txn')"); pg.wait_for_timeout(600)
     ok(pg.evaluate("location.hash").endswith("/txn/bills"), "25. Transactions has its own address")
@@ -44,7 +44,7 @@ with sync_playwright() as p:
     pg.evaluate("(a) => revOpen(a)", a); pg.wait_for_timeout(500)
     ok(pg.evaluate("location.hash") == "#/c/%s/bill/%s" % (cid, a), "25. a bill opened from the review table: #/c/<client>/bill/<id> (" + pg.evaluate("location.hash") + ")")
     pg.reload(); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     ok(pg.evaluate("[S.selected, location.hash.endsWith('/bill/' + S.selected)]") == [a, True], "25. Refresh reopens that bill")
     pg.evaluate("() => { S.reviewTable = false; S.drawerOpen = false; render(); }"); pg.wait_for_timeout(300)
     # 33. keys: J/K move between bills, Ctrl+Enter approves
@@ -154,7 +154,7 @@ with sync_playwright() as p:
     ok("10 characters or more" in app(), "21. a short password is refused")
     # Until the database update ("Waiting for database" on the pull request): nothing may break
     pg.goto("about:blank"); pg.goto(BASE); pg.wait_for_timeout(2500)
-    if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     # sign-in: the sign-in function not deployed (the gateway's "not found", or the browser blocking the call) -> signs in as before
     r = pg.evaluate("""async () => { const out = [], tok = {access_token: 'T', refresh_token: 'R', user: {id: 'u', email: 'a@b.in'}};
       const fake = mode => async (u, o) => { u = String(u);

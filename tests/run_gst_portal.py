@@ -108,7 +108,7 @@ R3B_CHECK = """([ym, reg]) => { const t = GSTR.threeB(ym, reg), j = GSTR.threeBJ
   return bad; }"""
 
 def start(pg):
-    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+    pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
     pg.evaluate(LOAD, books); pg.wait_for_timeout(800); pg.evaluate("S.books = window.__bk; window.ledgersReady = () => true; render();"); pg.wait_for_timeout(400)
     # the portal tables as the screen builds them (the same function the screen calls)
     pg.evaluate("""() => { window.__r1p = (ym, reg) => { const full = GSTR.toJson(ym, reg), plain = GSTR.toJson(ym, reg, {plain: true}), names = {}; GSTR.one(ym, reg).rows.forEach(r => { if (r.gstin) names[r.gstin] = r.party; });

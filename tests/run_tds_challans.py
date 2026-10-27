@@ -88,7 +88,7 @@ def tab(pg, name):
 try:
     with sync_playwright() as p:
         br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1400, "height": 1000}); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1200)
+        pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
         pg.evaluate("() => { S.tdsDedView = 'table'; S.tdsChView = 'match'; }")   # the Deductions checks here are of the table (All rows), the Challans ones of the two-panel matcher; round 88's grid below
         nv = pg.evaluate(BOOKS_JS); pg.wait_for_timeout(1000); pg.evaluate(GO); pg.wait_for_timeout(600)
         nd = pg.evaluate("TDS.allRows().filter(r => r.fy === '2026-27' && r.q === 'Q1').length")
@@ -218,7 +218,7 @@ try:
             for w, h, tag in [(1400, 1000, "desktop"), (390, 900, "phone")]:
                 for sch in ["light", "dark"]:
                     q = br.new_page(viewport={"width": w, "height": h}, color_scheme=sch)
-                    q.goto("http://localhost:%d/" % PORT); q.wait_for_timeout(2000); q.click('button[data-act="useOffline"]'); q.wait_for_timeout(900)
+                    q.goto("http://localhost:%d/" % PORT); q.wait_for_timeout(2000); q.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); q.wait_for_timeout(900)
                     q.evaluate("(t) => document.documentElement.setAttribute('data-theme', t)", sch)
                     q.evaluate(BOOKS_JS); q.wait_for_timeout(700); q.evaluate(GO); q.wait_for_timeout(400)
                     q.evaluate("(cs) => { S.books.challans = cs; render(); }", pg.evaluate("S.books.challans")); q.wait_for_timeout(300)

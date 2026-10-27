@@ -83,7 +83,7 @@ def main():
         pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json",
             body=json.dumps({"setup": {"version": "2.4.0", "url": "https://x/assets/bridge-go/FinComBridge-Setup-2.4.0.exe", "sha256": "ab" * 32}})))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
-        pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         E = lambda js, *a: pg.evaluate(js, *a)
         txt = lambda sel: pg.inner_text(sel).strip() if pg.locator(sel).count() else ""
         def shot(name, full=True):
@@ -146,7 +146,7 @@ def main():
         # a refresh on #/tally keeps the client (start() no longer drops it for a firm page's address)
         E("() => { lsSet('tdsdesk:last', S.coId); }")
         pg.reload(); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(1000)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1000)
         if E("!!S.companies[%r]" % cid):
             s = state()
             ok(s[0] == "#/tally" and s[2] == cid and pg.locator(back).count() == 1, "1. after a refresh on #/tally the client is kept, with its Back link (%s)" % s)
@@ -292,7 +292,7 @@ def main():
 
         # ---- 6. phone width
         ph = br.new_page(viewport={"width": 390, "height": 844}); ph.on("pageerror", lambda e: errors.append(str(e)))
-        ph.goto("http://localhost:%d/" % PORT); ph.wait_for_timeout(2500); ph.click('button[data-act="useOffline"]'); ph.wait_for_timeout(800)
+        ph.goto("http://localhost:%d/" % PORT); ph.wait_for_timeout(2500); ph.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); ph.wait_for_timeout(800)
         ph.evaluate("""() => { const g = newCompany({name: 'Alpha Traders', gstin: ''}); g.tallyName = 'GARG SHEKHAR'; S.companies[g.id] = g; S.data[g.id] = {parties: {}, entries: {}, loaded: true}; g.stats = {}; S.coId = g.id; }""")
         ph.evaluate(SETUP, [DEVS, STOPS, LINKED, "owner", []]); ph.evaluate("() => navHome('tally')"); ph.wait_for_timeout(1800)
         wide = ph.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")

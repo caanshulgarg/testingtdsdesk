@@ -32,9 +32,9 @@ with sync_playwright() as p:
         ctx = br.new_context(viewport={"width": 1440, "height": 900})
         if keep_marks: ctx.add_init_script("try { localStorage.setItem('tdsdesk:cloudmarks', %s); } catch (e) {}" % json.dumps(json.dumps(MARKS)))
         pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("http://localhost:8199/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        pg.goto("http://localhost:8199/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         pg.reload(); pg.wait_for_timeout(2500)
-        if pg.locator('button[data-act="useOffline"]').count(): pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+        if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
         pg.evaluate(STUB)
         ch = pg.evaluate("cloudChanges().changes.map(r => [r.kind, r.id, !!r.deleted, JSON.stringify(r.data).length])")
         dels = [c for c in ch if c[2]]
@@ -57,7 +57,7 @@ with sync_playwright() as p:
 
     # a removal the user asks for is still sent: the deleted flag only, the server keeps the data
     ctx = br.new_context(); pg = ctx.new_page(); pg.on("pageerror", lambda e: errors.append(str(e)))
-    pg.goto("http://localhost:8199/"); pg.wait_for_timeout(2500); pg.click('button[data-act="useOffline"]'); pg.wait_for_timeout(800)
+    pg.goto("http://localhost:8199/"); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     pg.evaluate(STUB)
     pg.evaluate("""async () => { const c = newCompany({name: 'ZZ Remove Me'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; window.__cid = c.id;
       const e = newEntry('a.pdf'); S.data[c.id].entries[e.id] = e; window.__eid = e.id; await cloudPush(); }""")
