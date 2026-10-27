@@ -2949,11 +2949,13 @@ function errCopy(code, err){
 // Bill reading through FinCom's reading service: one kind for each way it fails (review of 02-Oct-2026: a bill on
 // staging only said "The Claude API refused the request"). The gateway sets the kind (server/.../gateway/classify.ts);
 // "blocked" is the browser stopping the call.
-const READ_KINDS = ["no_credit", "rate_limit", "overloaded", "too_large", "pdf_password", "unsupported_type", "timed_out", "declined", "bad_key", "bad_model", "not_reached", "blocked", "other"];
+const READ_KINDS = ["ai_off", "no_credit", "rate_limit", "overloaded", "too_large", "pdf_password", "unsupported_type", "timed_out", "declined", "bad_key", "bad_model", "not_reached", "blocked", "other"];
 const READ_RETRY_KINDS = ["rate_limit", "overloaded", "timed_out"];
 // the reason in plain words, as the end of "<file>: not read, ..."
 function readReason(err){
   const k = (err && err.kind) || "other";
+  // switched off by FinCom (the console's AI control centre), or the month's AI allowance used up: FinCom's own words
+  if (k === "ai_off") return String((err && err.serverError) || "AI for Bill reading is switched off by FinCom.") + " Type it in, or try again later.";
   return ({
     no_credit: "out of credit on the reading service. Ask the administrator to add credit.",
     rate_limit: "too many bills were sent at once (the reading service's rate limit).",

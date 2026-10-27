@@ -558,6 +558,8 @@ left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.
 | 120 | **Coupons**: `server/console/migration-120-coupons.sql` (taken by next-console-coupons; see below) |
 | 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
 | 122 | Subscriptions (free: coupons took 120) |
+| 121 | **Taken: AI control centre** (`server/console/migration-121-ai-control.sql`, branch `next-console-ai`, 27-Oct-2026; NOT run on staging): `ai_features` (the registry, seeded ON as today; a new row starts off), `ai_settings` (kill switch), `ai_plan_allowance` (by plan id), `ai_firm_settings`, `ai_allowed` (asked by every AI function through `server/_shared/ai_policy.ts`), `console_ai_*`. After 118 and the assistant's 77/96. Tested by `tests/run_migration121.py` (RED_WITHOUT_121=1 fails). docs/CONSOLE-AI.md |
+| 122 | Coupons |
 | 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
 Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
 

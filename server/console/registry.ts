@@ -11,6 +11,7 @@ import { module as admins } from "./modules/admins.ts";
 import { module as settings } from "./modules/settings.ts";
 import { module as billing } from "./modules/billing.ts";
 import { module as coupons } from "./modules/coupons.ts";
+import { module as ai } from "./modules/ai.ts";
 
 export const MODULES: Module[] = [
   me,
@@ -23,4 +24,5 @@ export const MODULES: Module[] = [
   settings,
   billing,
   coupons,
+  ai,
 ];

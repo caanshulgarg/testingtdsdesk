@@ -9,6 +9,7 @@ import { type Deps } from "../server/console/core/types.ts";
 import { MODULES } from "../server/console/registry.ts";
 import { billingFake } from "./console_billing_fake.ts";
 import { couponsFake } from "./console_coupons_fake.ts";
+import { aiRpc } from "./console_stand_ai.ts";
 
 const port = Number(Deno.args[0] || 8172);
 const pageOrigin = Deno.args[1] || "http://localhost:8171";
@@ -147,6 +148,8 @@ async function rpc(fn: string, a: any): Promise<any> {
   if (b !== undefined) return b;
   const c = coupons.rpc(fn, a);
   if (c !== undefined) return c;
+  const ai = aiRpc(fn, a, { roleOf, addAudit, firms });      // the AI control centre (console_stand_ai.ts)
+  if (ai !== undefined) return ai;
   throw new Error("stand: no rpc " + fn);
 }
 

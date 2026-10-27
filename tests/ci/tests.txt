@@ -548,3 +548,5 @@ run_migration119.py                   240
 # the console, coupons (27-Oct-2026, next-console-coupons): migration 120 on pg_stand; the user app's "Have a coupon?" (real SQL)
 run_migration120.py                   180
 run_coupon_box_ui.py                  180
+# the console, phase 4 (27-Oct-2026, next-console-ai): the AI control centre's migration 121 on pg_stand
+run_migration121.py                   180

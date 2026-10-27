@@ -34,7 +34,7 @@ const ROWS_TO_CLAUDE = 15;               // rows of a table sent to a model (the
 
 export type Ev = Record<string, unknown> & { t: string };
 type StreamClient = { beta: { messages: { stream: (p: Record<string, unknown>) => { [Symbol.asyncIterator](): AsyncIterator<any>, finalMessage(): Promise<any> } } } };
-export type Cap = { ok: boolean, used: number, cap: number, spent_inr?: number, cap_inr?: number, warn?: boolean, why?: string };
+export type Cap = { ok: boolean, used: number, cap: number, spent_inr?: number, cap_inr?: number, warn?: boolean, why?: string, message?: string };
 export type FileOut = { id: string, name: string, kind: string, path: string, expires: string, bytes?: number };
 export type TurnCtx = {
   client: StreamClient,
@@ -49,6 +49,9 @@ export type TurnCtx = {
   anchor?: string,                                 // the last entry held (periods are read against the earlier of it and today)
   exec: (fn: string, args: Record<string, unknown>) => Promise<any>,
   capTake: () => Promise<Cap>,
+  // FinCom's switch for a part of the turn (the AI control centre: "notice", "certificates"), asked before its model call;
+  // refused -> the call is not made and the turn ends with FinCom's words (kind "ai_off")
+  gate?: (feature: string) => Promise<{ ok: boolean, message?: string }>,
   costAdd?: (feature: string, usd: number, u: Usage) => Promise<{ spent_inr: number, cap_inr: number, warn: boolean, over: boolean } | null>,
   makeFile: (spec: DocSpec, fileName: string) => Promise<FileOut | null>,
   uploadFile?: (bytes: Uint8Array, fileName: string, kind: string) => Promise<FileOut | null>,
@@ -279,6 +282,10 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
   };
   // one model call: the cap first, then the call, then its cost (in rupees, added to the firm's day and the feature)
   const call = async (p: Plan, req: Record<string, unknown>, onEvent?: (ev: any) => void): Promise<any> => {
+    if (ctx.gate) {
+      const g = await ctx.gate(p.feature);
+      if (!g.ok) return { capped: { ok: false, used: 0, cap: 0, why: "ai_off", message: g.message || "AI for this part is switched off by FinCom." } as Cap };
+    }
     trace.step = "cap";
     const cap = await ctx.capTake();
     if (!cap.ok) { trace.step = "turn"; return { capped: cap }; }
@@ -314,7 +321,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
     }
     return msg;
   };
-  const capError = (cap: Cap) => emit({ t: "error", kind: "cap", message: cap.why === "calls" ? capWords("calls", cap.cap_inr || 0, cap.cap)
+  const capError = (cap: Cap) => cap.why === "ai_off" ? emit({ t: "error", kind: "ai_off", message: cap.message || "" }) : emit({ t: "error", kind: "cap", message: cap.why === "calls" ? capWords("calls", cap.cap_inr || 0, cap.cap)
     : capWords("inr", cap.cap_inr || 0, cap.cap) + " Answers from FinCom's own tools and the checks before filing keep working.",
     used: cap.used, cap: cap.cap, spent: cap.spent_inr, cap_inr: cap.cap_inr });
 
@@ -712,7 +719,7 @@ export async function runTurn(ctx: TurnCtx): Promise<TurnResult> {
       else if (ev?.type === "content_block_stop") { const d = mk.flush(); if (d) emit({ t: "text", d }); }
       else if (ev?.type === "content_block_start" && ev.content_block?.type === "server_tool_use") { webUsed = true; const n = String(ev.content_block.name || "web_search"); emit({ t: "tool", name: n, label: toolLabel(n, {}) }); }
     });
-    if (msg && msg.capped) { stopped = "cap"; capError(msg.capped); break; }
+    if (msg && msg.capped) { stopped = msg.capped.why === "ai_off" ? "ai_off" : "cap"; capError(msg.capped); break; }
     for (const b of msg.content || []) {
       if (b.type === "text") {
         texts.push(mk.unmask(String(b.text || "")));

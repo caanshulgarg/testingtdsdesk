@@ -112,7 +112,7 @@ Deno.test("the cost of 100 ledgers (Haiku, the batch's real size)", async () => 
 
 // ---- the function end to end (index.ts, action "ledger_guess") with Supabase faked: who, the firm's switch, the cache rows
 import { handler } from "./index.ts";
-function fakeSupa(o: { enabled: boolean, consent?: boolean }) {
+function fakeSupa(o: { enabled: boolean, consent?: boolean, ai?: (a: any) => any }) {
   const answers: Record<string, any>[] = [], log: string[] = [];
   const j = (x: unknown, s = 200) => new Response(JSON.stringify(x), { status: s, headers: { "Content-Type": "application/json" } });
   const f = (async (u: string | URL, init: RequestInit = {}) => {
@@ -125,6 +125,8 @@ function fakeSupa(o: { enabled: boolean, consent?: boolean }) {
     if (path.startsWith("/rest/v1/clients")) return j([{ id: "c-1", name: "ZZ Client", deleted: false }]);
     if (path.startsWith("/rest/v1/platform_secrets")) return j([{ value: "sk-test" }]);
     if (path.startsWith("/rest/v1/rpc/asst_cap_take")) return j({ ok: true });
+    // the AI control centre's switch (migration 121): on unless the test says otherwise
+    if (path.startsWith("/rest/v1/rpc/ai_allowed")) return j(o.ai ? o.ai(body) : { ok: true, reason: "on", model: null });
     if (path.startsWith("/rest/v1/rpc/")) return j({});
     if (path.startsWith("/rest/v1/assistant_answers") && (init.method || "GET") === "GET") {
       const keys = decodeURIComponent((path.match(/key=in\.\(([^)]*)\)/) || [])[1] || "").split(",");
@@ -162,4 +164,13 @@ Deno.test("the function: AI switched off for the firm, or no client: no call", a
   const s2 = fakeSupa({ enabled: true }), h2 = handler({ env, fetch: s2.f, anthropic: () => c as never, sentry: quiet });
   const b = await post(h2, { action: "ledger_guess", ledgers: [L("TDS Misc")] });
   eq([b.status, c.calls.length], [400, 0], "no client: 400, no call");
+});
+
+Deno.test("AI control centre: the GST and TDS ledger check switched off by FinCom: refused in plain words, no call", async () => {
+  const s = fakeSupa({ enabled: true, ai: (a) => ({ ok: false, reason: "feature_off", feature: a.p_feature, message: "AI for GST and TDS ledger check is switched off by FinCom." }) });
+  const c = new FakeClaude(() => []);
+  const h = handler({ env, fetch: s.f, anthropic: () => c as never, sentry: quiet });
+  const a = await post(h, { action: "ledger_guess", client_id: "c-1", ledgers: [L("TDS Misc")], parties: [] });
+  eq([a.status, a.j.kind, a.j.error, c.calls.length], [403, "ai_off", "AI for GST and TDS ledger check is switched off by FinCom.", 0], "refused, no call");
+  assert(!s.log.some((x) => x.includes("platform_secrets")), "the key is not even read");
 });

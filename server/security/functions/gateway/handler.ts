@@ -3,12 +3,16 @@
 // then calls the provider. Hardened Sep 2026: allowed origins, two-step check, request limits, real refunds.
 // Oct 2026 (bill reading failed on staging with only "The Claude API refused the request"): every failure is one
 // `kind` (classify.ts), answered as {ok:false, kind, error, status, file?}, refunded, and logged as one line.
+// 27-Oct-2026 (AI control centre, console phase 4): before anything is charged or sent, the console's switches are asked
+// (ai_allowed through ../_shared/ai_policy.ts; bill reading is "bill_read", Vision "bill_ocr"): off -> 403 kind "ai_off"
+// with the plain words "AI for <feature> is switched off by FinCom". A model set in the console replaces the caller's.
 // 27-Oct-2026 (security review F6): the server decides the model, max_tokens and the input allowed, and charges by the
 // real usage the API returns (policy.ts); Vision is charged one unit per page sent. The caller's qty is not used.
 // The Supabase client is passed in (index.ts), so handler_test.ts runs it with a stub.
 import { corsFor } from "./cors.ts";
 import { classify, declined, errorText, replyStatus } from "./classify.ts";
 import { buildClaude, MAX_BODY, MODELS, unitsFor } from "./policy.ts";
+import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 const TIMEOUT_MS = 120_000;
 
@@ -17,6 +21,12 @@ export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch
 export function handler(deps: Deps) {
   const URL_ = String(deps.env("SUPABASE_URL") || ""), SERVICE = String(deps.env("SUPABASE_SERVICE_ROLE_KEY") || ""), ANON = String(deps.env("SUPABASE_ANON_KEY") || "");
   const doFetch = deps.fetch;
+  // the console's AI switches, asked with the service role (answers kept 15 s in this instance)
+  const policy = aiPolicy(async (fn, args) => {
+    const { data, error } = await deps.client(URL_, SERVICE).rpc(fn, args);
+    if (error) throw Object.assign(new Error(error.message || "rpc"), { code: error.code, status: (error as any).status });
+    return data;
+  });
   async function secret(admin: any, name: string): Promise<string> {
     const { data } = await admin.from("platform_secrets").select("value").eq("name", name).maybeSingle();
     return data?.value || "";
@@ -75,10 +85,16 @@ export function handler(deps: Deps) {
     if (!code) return fail(400, "other", "Unknown request");
     const ref = String(body.ref || "").slice(0, 120);
 
+    // the console's switches for this feature and firm (before any charge or provider call)
+    const allowed = await policy.aiAllowed(member.firm_id, code === "claude" ? "bill_read" : "bill_ocr");
+    if (!allowed.ok) { const no = refusal(allowed); return fail(no.status, "ai_off", allowed.message, { reason: allowed.reason }); }
+
     // only what TDS Desk sends is passed on, and the server sets the model, the size and the quantity
     let payload: any, qty: number;
     if (code === "claude") {
-      const p = body.payload || {};
+      const p = { ...(body.payload || {}) };
+      // a model chosen in the console (one of MODELS) replaces the app's
+      if (allowed.model && Object.prototype.hasOwnProperty.call(MODELS, allowed.model)) p.model = allowed.model;
       log.model = String(p.model || "").slice(0, 80);
       const built = buildClaude(p);
       if (!built.ok) {

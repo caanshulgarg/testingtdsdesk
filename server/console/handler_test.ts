@@ -17,6 +17,10 @@ const FIRM = U(101), PERSON = U(11), PERSON2 = U(12);
 const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
 const tok = (uid: string, aal = "aal2") => `${b64({ alg: "HS256" })}.${b64({ sub: uid, aal, exp: 9999999999 })}.sig`;
 
+// modules with their own role-by-action test file (server/console/<name>_test.ts), left out of the matrix here
+const OWN_TEST = new Set(["ai"]);
+const OURS = MODULES.filter((m) => !OWN_TEST.has(m.name));
+const OTHER_ACTIONS = new Set(MODULES.filter((m) => OWN_TEST.has(m.name)).flatMap((m) => Object.keys(m.actions)));
 // the expected permission matrix, written from console-plan.md 2.4 (not read from the code)
 const ALL: Role[] = ["owner", "billing", "support", "viewer"];
 const EXPECT: Record<string, Role[]> = {
@@ -153,7 +157,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
 }
 
 Deno.test("every action is in the expected matrix, and the matrix covers every action", () => {
-  const names = MODULES.flatMap((m) => Object.keys(m.actions)).sort();
+  const names = OURS.flatMap((m) => Object.keys(m.actions)).sort();
   eq(names, Object.keys(EXPECT).sort(), "actions");
 });
 
@@ -346,7 +350,7 @@ Deno.test("me: role and the allowed actions", async () => {
   const f = fake();
   const r = await f.call(ID.support, "me");
   eq(r.body.data.role, "support");
-  eq(r.body.data.actions, Object.entries(EXPECT).filter(([, v]) => v.includes("support")).map(([k]) => k).sort());
+  eq(r.body.data.actions.filter((a: string) => !OTHER_ACTIONS.has(a)), Object.entries(EXPECT).filter(([, v]) => v.includes("support")).map(([k]) => k).sort());
 });
 
 Deno.test("claims decodes a token's payload", () => {

@@ -743,3 +743,27 @@ Deno.test("'check my Q4 26Q' from the chat: FinCom's own checklist, run in the b
   const r2 = await ask(c, { question: "Is the fourth-quarter TDS return for contractors fine to submit, do you think?", client_id: CLIENT });
   eq(ofType(r2.events, "prefile")[0]?.form, "26Q", "through the model");
 });
+
+// the AI control centre (console phase 4): FinCom's switch (ai_allowed, migration 121) is asked before any model; here it
+// is answered by a fetch in front of the stand (the stand itself has no ai_allowed: 404, allowed as before)
+const fincomOff = (off: string[]) => (async (input: string | URL | Request, init?: RequestInit) => {
+  const u = String(input);
+  if (u.endsWith("/rest/v1/rpc/ai_allowed")) {
+    const a = JSON.parse(String(init?.body || "{}"));
+    const name: Record<string, string> = { assistant: "Ask FinCom", mis_describe: "My MIS described", sheet_map: "Register format reading" };
+    return new Response(JSON.stringify(off.includes(a.p_feature) ? { ok: false, reason: "feature_off", feature: a.p_feature, message: "AI for " + name[a.p_feature] + " is switched off by FinCom." }
+      : { ok: true, reason: "on", model: null }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  return fetch(input, init);
+}) as typeof fetch;
+Deno.test("AI control centre: Ask FinCom (and My MIS) switched off by FinCom: refused in plain words, no model called, nothing logged", async () => {
+  const c = new MockClaude([]);
+  const q = "What were the GST rates in 2017 " + crypto.randomUUID().slice(0, 8) + "?";
+  const r = await ask(c, { question: q, client_id: null }, ME, sentryStand(), fincomOff(["assistant"]));
+  const j = JSON.parse(r.raw);
+  eq([r.status, j.ok, j.kind, j.error], [403, false, "ai_off", "AI for Ask FinCom is switched off by FinCom."], "refused with FinCom's words");
+  eq([c.calls.length, c.routerCalls.length], [0, 0], "no model called");
+  eq((await svc("/rest/v1/assistant_log?select=id&question=eq." + encodeURIComponent(q))).length, 0, "nothing logged");
+  const m = await ask(new MockClaude([]), { question: "Build my MIS: a monthly P&L with last year beside it", client_id: CLIENT }, ME, sentryStand(), fincomOff(["mis_describe"]));
+  eq([m.status, JSON.parse(m.raw).error], [403, "AI for My MIS described is switched off by FinCom."], "My MIS refused on its own switch");
+});

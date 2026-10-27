@@ -188,7 +188,7 @@ export function VoiceInput({ a, onText, client = null }) {
           if (r.text) { onText(base + sep + r.text); setFixes({ list: (r.changes || []).map((c) => ({ from: c.from, to: c.to, open: false })), at: (base + sep).length }); }
           done("");
         }
-        else done(VR.KEPT[r.kind] || VR.KEPT.error);
+        else done(VR.keptLine ? VR.keptLine(r) : VR.KEPT[r.kind] || VR.KEPT.error);
       });
     }).catch(() => setMsg((x) => (x === BUSY ? VR.KEPT.error : x)));
   };

@@ -447,6 +447,8 @@ function Call({ opts, onClose }) {
       setSubNote(j.paused ? "Translation paused for a moment (the free limit): the words are shown as said." : "");
     } catch (e) {
       if (e.kind === "limit") { R.subPauseUntil = Date.now() + 30000; setSubNote("Subtitles paused for a moment (the free limit)."); }
+      // switched off by FinCom (the console's AI control centre): its words, and no more pieces sent for a while
+      else if (e.kind === "ai_off") { R.subPauseUntil = Date.now() + 300000; setSubNote(e.message + " The browser's own captions are used."); if (!caps) toggleCaps(); }
       else if (e.kind === "nokey") { R.subPauseUntil = Date.now() + 3600000; setSubNote("Translated subtitles are not set up yet; the browser's own captions are used."); if (!caps) toggleCaps(); }
       else {
         // anything else (the line, the function): said after two in a row, a short pause, then tried again

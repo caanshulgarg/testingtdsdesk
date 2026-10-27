@@ -14,6 +14,11 @@
 // (asst_cost_add). The same first question on the same books is answered from the answer cache (assistant_answers) at no
 // cost. One log line per question: its text, the tools, how it was answered, the tokens, the cost and the time
 // (asst_log_add); never an answer or a figure of the books.
+// The AI control centre (console phase 4, 27-Oct-2026): every request that may reach a model first asks the console's
+// switches (ai_allowed through ../_shared/ai_policy.ts) for its feature: "ask" -> "assistant" (and "mis_describe" when an
+// MIS is asked for), "ledger_guess" -> "ledger_check", "sheet_map" -> "sheet_map", "classify" -> "upload_classify";
+// inside a turn a notice's and a certificate's model calls ask "notice" and "certificates" (agent.ts ctx.gate). Off ->
+// 403 kind "ai_off" with "AI for <feature> is switched off by FinCom" (in a turn: an error event of that kind).
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
 import { corsFor } from "../_shared/cors.ts";
 import { cloudReporter } from "../_shared/sentry.ts";
@@ -26,6 +31,8 @@ import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./fileta
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { capWords, costUsd as priceUsd, HAIKU } from "./models.ts";
+import { misAsked } from "./mis.ts";
+import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 export type Env = (k: string) => string | undefined;
 export type Deps = { env: Env, fetch: typeof fetch, anthropic?: (key: string) => TurnCtx["client"], sentry?: ReturnType<typeof cloudReporter>, now?: () => Date,
@@ -51,6 +58,7 @@ export function handler(deps: Deps) {
     return j;
   };
   const rpc = (fn: string, args: Record<string, unknown>, token: string) => rest("/rest/v1/rpc/" + fn, token, { method: "POST", body: JSON.stringify(args) });
+  const policy = aiPolicy((fn, args) => rpc(fn, args, SERVICE));
 
   return async (req: Request): Promise<Response> => {
     const cors = corsFor(req);
@@ -104,6 +112,8 @@ export function handler(deps: Deps) {
     // each ledger's answer cached for the firm and client; a guess only, never applied as confirmed
     if (action === "ledger_guess") {
       if (!clientId) return reply(400, { ok: false, error: "Open a client first." });
+      const lp = await policy.aiAllowed(firm, "ledger_check");
+      if (!lp.ok) { const no = refusal(lp); return reply(no.status, no.body); }
       let lkey = "";
       try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; lkey = (k && k[0] && k[0].value) || ""; } catch { lkey = ""; }
       if (!lkey) return reply(503, { ok: false, kind: "bad_key", error: "No Claude key is set on the platform yet. Ask the administrator." });
@@ -138,6 +148,11 @@ export function handler(deps: Deps) {
     if (action !== "ask" && action !== "classify" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
     const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
+    // FinCom's switches for this request's feature (and My MIS when one is asked for), before any key or model
+    for (const code of [action === "classify" ? "upload_classify" : action === "sheet_map" ? "sheet_map" : "assistant", ...(action === "ask" && misAsked(question) ? ["mis_describe"] : [])]) {
+      const p = await policy.aiAllowed(firm, code);
+      if (!p.ok) { const no = refusal(p); return reply(no.status, no.body); }
+    }
 
     // the platform's Claude key (the one bill reading uses)
     let key = "";
@@ -323,6 +338,12 @@ export function handler(deps: Deps) {
           noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),
           capTake: async () => { const r = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!r?.ok, used: Number(r?.used || 0), cap: Number(r?.cap || 0), spent_inr: Number(r?.spent_inr || 0), cap_inr: Number(r?.cap_inr || 0), warn: !!r?.warn, why: String(r?.why || "") }; },
+          gate: async (feat) => {
+            const code = feat === "notice" ? "notice" : feat === "certificates" ? "certificates" : "";
+            if (!code) return { ok: true };
+            const p = await policy.aiAllowed(firm, code);
+            return { ok: p.ok, message: p.message };
+          },
           costAdd: async (feat, usd, u) => {
             const r = await rpc("asst_cost_add", { p_firm: firm, p_feature: feat, p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }, SERVICE);
             costInr += Number(r?.inr || 0);

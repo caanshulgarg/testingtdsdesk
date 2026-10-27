@@ -15,9 +15,13 @@
 // (AIH, Settings › AI help; kept with the inputs for the timer's runs). Claude's key is the platform's (platform_secrets
 // claude_api_key), read with the service role. The firm's rupee cap (asst_cap_take), the cost (asst_cost_add, feature
 // "2b_match") and one log line (asst_log_add) as every Ask FinCom call.
+// The AI control centre (console phase 4, 27-Oct-2026): before the AI, the console's switches for "2b_match" are asked
+// (ai_allowed through ../_shared/ai_policy.ts); off -> the rules' result only, and ai.say gives FinCom's words. A model
+// set there replaces Sonnet.
 import { corsFor } from "../_shared/cors.ts";
 import { m2bFrom2bJson, m2bRow2b, m2bRowBk } from "../_shared/match2b.js";
 import { AiClient, matchRun, reapply, SONNET } from "./match.ts";
+import { aiPolicy } from "../_shared/ai_policy.ts";
 
 export type Deps = { env: (k: string) => string | undefined, fetch: typeof fetch, anthropic: (key: string) => AiClient };
 
@@ -73,6 +77,7 @@ export function handler(deps: Deps) {
     const s = await rest("/rest/v1/assistant_settings?select=enabled&firm_id=eq." + q(firm), SERVICE).catch(() => null) as any[] | null;
     return s !== null && (s[0] || { enabled: true }).enabled !== false;       // on unless the owner switched it off (14-Oct-2026)
   };
+  const policy = aiPolicy((fn, args) => rpc(fn, args));
   const keyOf = async () => {
     try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; return (k && k[0] && k[0].value) || ""; } catch { return ""; }
   };
@@ -100,14 +105,17 @@ export function handler(deps: Deps) {
       id = row[0].id;
     }
     try {
-      const allowed = inp.aiAllowed && await firmAiOn(firm);
+      // the console's switches (AI control centre): off -> the rules' result, with FinCom's words in ai.say
+      const [pol, on] = inp.aiAllowed ? await Promise.all([policy.aiAllowed(firm, "2b_match"), firmAiOn(firm)]) : [null, false];
+      const allowed = inp.aiAllowed && !!pol?.ok && on;
       const key = allowed ? await keyOf() : "";
+      const model = (pol && pol.ok && pol.model) || SONNET;
       const out = await matchRun(inp.twob, inp.books, decisions, {
-        client: key ? deps.anthropic(key) : null, aiAllowed: allowed,
+        client: key ? deps.anthropic(key) : null, aiAllowed: allowed, offSay: pol && !pol.ok ? pol.message : undefined, model,
         capTake: async () => { const c = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }); return { ok: !!c?.ok, why: String(c?.why || "") }; },
         costAdd: (usd, u) => rpc("asst_cost_add", { p_firm: firm, p_feature: "2b_match", p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }),
         log: (x) => rpc("asst_log_add", { p_firm: firm, p_user: user, p_client: inp.client, p_question: x.question, p_tools: [], p_in: x.input, p_out: x.output, p_calls: x.calls, p_ms: x.ms,
-          p_feature: "2b_match", p_route: x.route, p_models: [SONNET], p_cache_read: x.cacheRead, p_cache_write: x.cacheWrite, p_cost_inr: x.inr, p_fell_through: false }),
+          p_feature: "2b_match", p_route: x.route, p_models: [model], p_cache_read: x.cacheRead, p_cache_write: x.cacheWrite, p_cost_inr: x.inr, p_fell_through: false }),
       });
       const result = { ...out.result, periods: inp.periods, portal: inp.portal };
       const patch = { status: "done", done_at: new Date().toISOString(), inputs_hash: hash, counts: out.result.counts, line: out.result.line, result, ai: out.ai };
