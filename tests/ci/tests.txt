@@ -545,3 +545,6 @@ run_migration118.py                   180
 run_console_server.py                 120
 # the console, phase 2 (27-Oct-2026, next-console-billing): migration 119 on pg_stand (billing_test.ts runs in run_console_server.py)
 run_migration119.py                   240
+# the console, coupons (27-Oct-2026, next-console-coupons): migration 120 on pg_stand; the user app's "Have a coupon?" (real SQL)
+run_migration120.py                   180
+run_coupon_box_ui.py                  180

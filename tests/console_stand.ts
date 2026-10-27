@@ -8,6 +8,7 @@ import { makeHandler } from "../server/console/core/router.ts";
 import { type Deps } from "../server/console/core/types.ts";
 import { MODULES } from "../server/console/registry.ts";
 import { billingFake } from "./console_billing_fake.ts";
+import { couponsFake } from "./console_coupons_fake.ts";
 
 const port = Number(Deno.args[0] || 8172);
 const pageOrigin = Deno.args[1] || "http://localhost:8171";
@@ -57,6 +58,8 @@ const roleOf = (by: string) => { const a = admins.get(by); return a?.active ? a.
 const need = (by: string, roles: string[]) => { if (!roles.includes(roleOf(by))) err("not_allowed"); return roleOf(by); };
 const addAudit = (a: any, action: string, tt: string, tid: string, before: unknown, after: unknown) =>
   audit.push({ id: audit.length + 1, at: now(), who: a.p_by, role: roleOf(a.p_by), action, target_type: tt, target_id: tid, before, after, reason: a.p_reason, ip: a.p_ip, user_agent: a.p_ua });
+// the coupons module's functions (migration 120), in memory with their rules
+const coupons = couponsFake({ roleOf, audit: addAudit, emailOf });
 const memberRow = (m: typeof members[0]) => {
   const l = logins.find((x) => x.id === m.user_id)!, f = firms.find((x) => x.id === m.firm_id)!;
   return { user_id: m.user_id, name: m.name, email: l.email, firm_id: m.firm_id, firm: f.name, role: m.role, active: m.active, last_sign_in_at: l.last || null,
@@ -142,6 +145,8 @@ async function rpc(fn: string, a: any): Promise<any> {
   }
   const b = await bill(fn, a);
   if (b !== undefined) return b;
+  const c = coupons.rpc(fn, a);
+  if (c !== undefined) return c;
   throw new Error("stand: no rpc " + fn);
 }
 

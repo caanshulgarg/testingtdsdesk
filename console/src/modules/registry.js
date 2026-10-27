@@ -13,6 +13,7 @@ import { module as credit } from "./credit/index.jsx";
 import { module as plans } from "./plans/index.jsx";
 import { module as prices } from "./prices/index.jsx";
 import { module as billingRuns } from "./billing-runs/index.jsx";
+import { module as coupons } from "./coupons/index.jsx";
 
 export const MODULES = [
   dashboard,
@@ -24,6 +25,7 @@ export const MODULES = [
   plans,
   prices,
   billingRuns,
+  coupons,
   audit,
   admins,
   settings,

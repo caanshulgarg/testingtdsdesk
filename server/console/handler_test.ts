@@ -5,6 +5,7 @@ import { type Deps, type Role } from "./core/types.ts";
 import { MODULES } from "./registry.ts";
 import { billingFake } from "../../tests/console_billing_fake.ts";
 import { BILLING_EXPECT, BILLING_PARAMS } from "./billing_matrix.ts";
+import { COUPON_IDS, couponsFake } from "../../tests/console_coupons_fake.ts";
 
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
 function eq(a: unknown, b: unknown, msg = "") { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${msg} ${x} !== ${y}`); }
@@ -27,6 +28,10 @@ const EXPECT: Record<string, Role[]> = {
   "admins.list": ["owner"], "admins.add": ["owner"], "admins.set_role": ["owner"], "admins.remove": ["owner"],
   "settings.get": ["owner"],
   ...BILLING_EXPECT,
+  // coupons (migration 120): everyone reads; Owner and Billing change (console-plan.md 2.4)
+  "coupons.list": ALL, "coupon.get": ALL, "coupon.redemptions": ALL, "coupons.report": ALL, "coupon.plans": ALL,
+  "coupon.create": ["owner", "billing"], "coupon.update": ["owner", "billing"], "coupon.pause": ["owner", "billing"], "coupon.resume": ["owner", "billing"],
+  "coupon.end": ["owner", "billing"],
 };
 const R = "a good reason";
 const PARAMS: Record<string, Record<string, unknown>> = {
@@ -38,6 +43,11 @@ const PARAMS: Record<string, Record<string, unknown>> = {
   "admins.add": { email: "new@fincom.live", role: "viewer", reason: R }, "admins.set_role": { user_id: ID.viewer, role: "support", reason: R },
   "admins.remove": { user_id: ID.viewer, reason: R },
   ...BILLING_PARAMS,
+  "coupon.get": { coupon_id: COUPON_IDS.welcome }, "coupon.redemptions": { coupon_id: COUPON_IDS.welcome },
+  "coupon.create": { code: "NEW100", kind: "credit", amount_inr: 100, reason: R },
+  "coupon.update": { coupon_id: COUPON_IDS.welcome, code: "WELCOME10", kind: "percent", percent: 15, months: 3, reason: R },
+  "coupon.pause": { coupon_id: COUPON_IDS.welcome, reason: R }, "coupon.resume": { coupon_id: COUPON_IDS.paused, reason: R },
+  "coupon.end": { coupon_id: COUPON_IDS.welcome, reason: R },
 };
 
 function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } = {}) {
@@ -60,6 +70,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
   const lastOwner = (uid: string) => { if (![...admins].some(([k, v]) => k !== uid && v.active && v.role === "owner")) err("last_owner"); };
   const bill = billingFake([{ id: FIRM, name: "ABC Associates", balance: 1000 }, { id: U(102), name: "Garg Shekhar & Co", balance: 175 }],
     { roleOf: (by) => (admins.get(by)?.active ? admins.get(by)!.role : ""), audit: (a, action, tt, tid, b, af) => addAudit(a, action, tt, tid, b, af) });
+  const coupons = couponsFake({ roleOf: (by) => (admins.get(by)?.active ? admins.get(by)!.role : ""), audit: addAudit, emailOf: (id) => (id && emails[id]) || "" });
   const rpc = async (fn: string, a: any): Promise<any> => {
     calls.push(fn);
     switch (fn) {
@@ -113,6 +124,8 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
     }
     const b = await bill(fn, a);
     if (b !== undefined) return b;
+    const c = coupons.rpc(fn, a);
+    if (c !== undefined) return c;
     throw new Error("fake: no rpc " + fn);
   };
   const users = new Map(Object.entries(ID).map(([, v]) => [tok(v), { id: v, email: emails[v] || v + "@fincom.live" }]));

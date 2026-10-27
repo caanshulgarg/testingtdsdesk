@@ -12,6 +12,8 @@ import HowPage from "../parts/HowPage.jsx";
 import { useState, Suspense, lazy } from "react";
 // Academy batches (calls, stage 1): in the calls' own small-windows file, loaded when the section is opened
 const Batches = lazy(() => import("../calls/CallMenu.jsx").then((m) => ({ default: m.Batches })));
+// "Have a coupon?" under Plan and credit (migration 120's coupon_redeem): its own small file
+const CouponBox = lazy(() => import("../parts/CouponBox.jsx"));
 import Confirm, { ChoiceTag } from "../parts/Confirm.jsx";
 import Legacy from "../parts/Legacy.jsx";
 import { AiSettings } from "../parts/Ai.jsx";
@@ -163,7 +165,7 @@ export function FirmSettings() {
   const body = {
     firm: () => <FirmDetails />,
     account: () => <><FirmAccount />{Cloud.on() && <PeopleEtc />}</>,
-    plan: () => <><PlanCredit /><RecordsUsed /></>,
+    plan: () => <><PlanCredit /><Suspense fallback={null}><CouponBox /></Suspense><RecordsUsed /></>,
     batches: () => <Suspense fallback={<p className="note">Loading…</p>}><Batches /></Suspense>,
     // clean-up batch 2: one home each, the Tally page; here one line that leads there
     bridge: () => <Card><HomeLink id="bridge" text="Tally is connected in one place: the Tally page (its companies, which client each is, and help). Nothing to set here." link="Open the Tally page" go={() => goTallyPage("computers")} /></Card>,

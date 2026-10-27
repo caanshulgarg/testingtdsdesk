@@ -1,0 +1,24 @@
+/* Coupons (modules/coupons): the form and the code cells. Tokens only (styles/tokens.css), light and dark alike. */
+.code-cell { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-weight: 600; letter-spacing: .04em; }
+.coupon-terms { color: var(--text-secondary); }
+.coupon-form { max-width: 52rem; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0 var(--space-4); }
+.code-input { text-transform: uppercase; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); letter-spacing: .06em; }
+.kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--space-2); }
+.kind { position: relative; display: flex; flex-direction: column; gap: 2px; padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); cursor: pointer; min-width: 0; }
+.kind input { position: absolute; opacity: 0; pointer-events: none; }
+.kind.on { border-color: var(--accent); background: var(--accent-subtle); }
+.kind:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kind small { font-size: var(--text-xs); }
+fieldset:disabled .kind { cursor: default; opacity: .7; }
+.coupon-preview { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text-secondary); }
+.coupon-preview b { color: var(--foreground); }
+.rules { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); align-items: center; margin: 0 0 var(--space-4); }
+.rules .input.days { width: 5rem; height: var(--control-height-sm); }
+.field small { font-size: var(--text-xs); }
+/* the coupons' tables: words wrap between words only; codes, chips, sums and dates on one line */
+:is([data-table=coupons], [data-table=red], [data-table=crep]) :is(th, td) { overflow-wrap: normal; }
+:is([data-table=coupons], [data-table=red], [data-table=crep]) :is(.chip, .code-cell, td.end) { white-space: nowrap; }
+[data-table=coupons] .row-actions { flex-wrap: nowrap; justify-content: flex-end; }
+[data-table=coupons] .row-actions .btn { height: 1.75rem; padding: 0 .75rem; font-size: var(--text-xs); }
+.page-actions a.btn { text-decoration: none; }
