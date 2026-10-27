@@ -204,9 +204,10 @@ def main():
         # ---- 6. linked, not open in Tally: the one thing to do, and what came in (the row)
         scene(cos(sal_client="S1")); tally_list()
         fx = txt(R(SAL) + " [data-tco-fix]"); pill = txt(R(SAL) + " [data-tco-pill]")
-        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "waiting" and pill.startswith("Disconnected") and "not open in Tally on NWS144 (last seen 20-Oct)" in pill and fx == "Open " + SAL + " in TallyPrime on NWS144."
+        # next-link-record (the owner's step 2): Waiting for Tally and its one plain line, on the row's pill
+        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "waiting" and re.sub(r"\s+", " ", pill) == "Waiting for Tally Open " + SAL + " in TallyPrime on NWS144" and not fx
            and pg.locator(R(SAL) + " [data-tco-sync-now]").count() == 1,
-           "6. 'Disconnected — not open in Tally on NWS144 (last seen 20-Oct)', 'Open SALESIFY… in TallyPrime on NWS144.', Sync now (%s | %s)" % (pill, fx))
+           "6. 'Waiting for Tally · Open SALESIFY… in TallyPrime on NWS144', Sync now (%s | %s)" % (pill, fx))
         E("(c) => { TCloud.st[c] = Object.assign(TCloud.st[c] || {}, {at: Date.now(), books: []}); render(); }", s1[0]); pg.wait_for_timeout(500)
         pr = txt(R(SAL) + " [data-tco-sync]")
         ok("Ledgers not in FinCom yet" in pr, "6. what came in: no ledgers yet (%s)" % pr)

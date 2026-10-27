@@ -150,7 +150,8 @@ def main():
         tally_page()
         r = row(SAL)
         ok(r and r["linked"] == s1 and r["pill"] == "notopen" and not r["open"], "1. Salesify's old year, linked, not open in Tally: listed, Disconnected (%s)" % (r and r["ptext"]))
-        ok("Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144." in txt(R(SAL) + " [data-tco-fix]"), "6. Disconnected says the fix in words (%s)" % txt(R(SAL) + " [data-tco-fix]"))
+        # next-link-record (the owner's step 2): Waiting for Tally, with its one plain line on the row
+        ok("Waiting for Tally Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144" in re.sub(r"\s+", " ", txt(R(SAL) + " .tco-pill")), "6. Waiting for Tally says what to do in words (%s)" % txt(R(SAL) + " .tco-pill"))
         E("() => { window.__calls = []; }")
         more(SAL, "[data-tco-unlink]"); confirm()
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": None}]], "1. Unlink: tally_company_link(company, null) once (%s)" % links())
@@ -218,7 +219,7 @@ def main():
         g_row = row(GSC)
         client_page(gs, "dash")
         chip = E("() => { const b = document.querySelector('[data-tally-chip-at=title]'); return b ? [b.getAttribute('data-tally-pill'), b.innerText.trim(), b.getAttribute('title')] : null; }")
-        ok(chip and chip[0] == g_row["st"] == "connected" and chip[1].endswith("Connected"), "3. the client's title chip: Connected, as its row (%s / %s)" % (chip, g_row["st"]))
+        ok(chip and chip[0] == g_row["st"] == "connected" and chip[1].endswith("Linked"), "3. the client's title chip: Linked, as its row (%s / %s)" % (chip, g_row["st"]))
         E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(900)
         cl = E("() => [...document.querySelectorAll('#app [data-tally-chip-at=clients]')].map(b => [b.closest('tr') ? b.closest('tr').innerText.split('\\n')[0] : '', b.getAttribute('data-tally-pill'), b.innerText.trim()])")
         by = {re.split(r"[\t\n]", c[0])[0].strip(): c for c in cl}
@@ -230,13 +231,13 @@ def main():
         words = {x["co"]: x["ptext"] for x in rows()}
         client_page(s1, "dash")
         t = E("() => (document.querySelector('[data-tally-chip-at=title]') || {}).title || ''")
-        ok(words.get(SAL, "?") in t and words[SAL].startswith("Disconnected — not open in Tally on NWS144"), "3. the title chip's words are the row's words (%r in %r)" % (words.get(SAL), t))
+        ok(words.get(SAL, "?") in t and words[SAL].startswith("Waiting for Tally — Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144"), "3. the title chip's words are the row's words (%r in %r)" % (words.get(SAL), t))
 
         # ---- 4. every other place is gone
         client_page(gs, "cotally")
         one = txt("#app [data-tally-one]")
         ok(pg.locator("#app [data-tally-link], #app .tlink, #app [data-tally-link-choose], #app [data-tally-link-post]").count() == 0, "4. Client setup: no Tally card (no link, choose, post tick)")
-        ok(one.startswith("Tally: GARG SHEKHAR & COMPANY ● Connected") and one.endswith("Open in Tally page"), "4. Client setup: ONE line 'Tally: GARG SHEKHAR & COMPANY ● Connected · Open in Tally page' (%s)" % one)
+        ok(one.startswith("Tally: GARG SHEKHAR & COMPANY ● Linked") and one.endswith("Open in Tally page"), "4. Client setup: ONE line 'Tally: GARG SHEKHAR & COMPANY ● Linked · Open in Tally page' (%s)" % one)
         shot("4-client-setup-one-line-desktop-light", full=False)
         pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1300)
         ok(E("[S.view, S.homeTab]") == ["home", "tally"] and (row(GSC) or {}).get("focus"), "4. Open in Tally page: the Tally page, its row marked")

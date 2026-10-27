@@ -744,6 +744,8 @@ async function recorderGaps(dev: any, firm: string, bridge: string, changes: Bea
     let book: string | null = null;
     try { book = await bookForBeat(firm, c.name); } catch (e) { beatFail("tally_book_for", c.name, e); continue; }
     if (!book) continue;
+    // migration 110: a second data location of the same company records no starting point or gap
+    try { const { data: here, error: pe } = await db.rpc("tally_link_place_check", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridge }); if (!pe && here === false) continue; } catch { /* as before */ }
     let started = false;
     const sAlt = c.start ? c.start.altvchid : c.altvchid, sMst = c.start ? c.start.altmstid : c.altmstid, key = book + "|" + c.guid;
     const sd = startDone.get(key);
@@ -1115,6 +1117,15 @@ function beatHistory(prev: any, beat: any) {
     for (const c of before) if (!nowOpen.has(c)) h.push({ kind: "company", state: "closed", name: c, at: beat.at });
   }
   return h.slice(-300);
+}
+// migration 110 (next-link-record): the same company (its GUID) can be open in two data locations (a copied data folder
+// keeps the GUID: docs/tally-72-proof.md); FinCom applies data only from the place the client's link record reads
+// (tally_link_place_check: the first place after a link, or the one an owner chose). Data from another place: refused,
+// kept as "the same company in two places" for a person to choose; nothing of it applied. A cloud without 110: as before
+async function otherPlace(firm: string, book: string, dev: any, body: any) {
+  const { data, error } = await db.rpc("tally_link_place_check", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
+  if (error || data !== false) return null;
+  return { ok: false, otherPlace: true, error: "FinCom reads this company from another data location (the same company in two places). Nothing from here is applied until a person chooses on the Tally page." };
 }
 async function bookFor(firm: string, company: string) {
   const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
@@ -3782,6 +3793,13 @@ Deno.serve(sentry.wrap(async (req) => {
         const taken = new Set((have || []).filter((r: any) => r.client_id).map((r: any) => String(r.client_id)));
         const links: Record<string, boolean> = {};
         for (const c of list) {
+          // migration 110 (next-link-record): a company renamed in Tally (the GUID of a linked company under a new name,
+          // from the data location FinCom reads) takes over that link and its books once the old name has not been
+          // reported for 15 minutes (tally_link_follow); a cloud without 110 answers an error, and nothing changes
+          if (c.guid && !known.get(c.name)) {
+            const { data: fol, error: folErr } = await db.rpc("tally_link_follow", { p_firm: firm, p_company: c.name, p_guid: c.guid, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
+            if (!folErr && typeof fol === "string" && fol) { known.set(c.name, fol); taken.add(fol); }
+          }
           let client = known.get(c.name) || null, auto = false;
           if (!client && !unlinked.has(c.name)) {
             // 23-Oct-2026: linked by itself only when it is certain (autoLinkFor): the same GSTIN, or the client's NAME equal
@@ -3807,11 +3825,13 @@ Deno.serve(sentry.wrap(async (req) => {
       case "days": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await ingestDays(firm, book, body.days);
       }
       case "ledgers": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         const me = bridgeOf(dev, body, false);
         return await ingestLedgers(book, body, firm, { source: "bridge ledgers", device: dev.id, bridge: me.id, computer: me.entry.computer, user: me.entry.user });
       }
@@ -3820,6 +3840,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await applyLedgerList(firm, book, body, dev, bridgeOf(dev, body, false));
       }
       case "ledger_changes": {
@@ -3827,6 +3848,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await applyLedgerChanges(firm, book, body);
       }
       case "employees": {
@@ -3834,6 +3856,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!ledgerListAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent sixty ledger lists in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await applyEmployees(book, body);
       }
       case "period_heads": case "period_entries": case "ledger_progress": case "period_stop": {
@@ -3841,6 +3864,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many older-entries calls in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         // review 245 R3: the company's GUID must be the book's recorded one (a same-named copy never writes into the book)
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
@@ -3854,11 +3878,13 @@ Deno.serve(sentry.wrap(async (req) => {
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return reply(200, { ok: true, ...(await applyGroups(firm, book, body.ledgers, body.groups)) });
       }
       case "state": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         const st = cleanState(body.state && typeof body.state === "object" ? body.state : {});
         const { error } = await db.rpc("tally_ingest_state", { p_book: book, p_state: st });
         if (error) throw new Error(error.message);
@@ -3867,17 +3893,20 @@ Deno.serve(sentry.wrap(async (req) => {
       case "selfcheck": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         return await selfCheck(dev, firm, book, body);
       }
       case "recorder_lines": case "start_point": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return body.kind === "recorder_lines" ? await recorderLines(dev, firm, book, body) : await startPoint(dev, firm, book, body);
       }
       case "renumber_list": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         return await renumberList(book, body);
       }

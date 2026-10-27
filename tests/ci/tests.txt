@@ -122,6 +122,7 @@ run_call_lobby.py                     600  TDSDESK_SITE=../app/dist-test
 run_call_effects.py                   600
 run_calls_complete_ui.py              900  TDSDESK_SITE=../app/dist-test
 run_migration106.py                   180
+run_migration110.py                   300
 run_no_device_ui.py                   600  TDSDESK_SITE=../app/dist-test
 run_mis2.js                           120
 run_mis2_ui.py                        120  TDSDESK_SITE=../app/dist-test
@@ -511,6 +512,7 @@ run_books_reopen_freeze.py            300  TDSDESK_SITE=../app/dist-test
 run_bank_heal.py                      240  TDSDESK_SITE=../app/dist-test
 run_bank_live_parts.py                240  TDSDESK_SITE=../app/dist-test
 run_postto_link.py                    240  TDSDESK_SITE=../app/dist-test
+run_link_record.py                    300  TDSDESK_SITE=../app/dist-test
 # next-gzip-uploads (26-Oct-2026): large saves sent gzipped through records-upload; plain when it is missing or fails
 run_gz_upload.py                      240  TDSDESK_SITE=../app/dist-test
 run_records_upload_server.py          120

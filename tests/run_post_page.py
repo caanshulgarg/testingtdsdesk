@@ -84,7 +84,7 @@ with sync_playwright() as p:
     E("() => { S.account = window.__acct; S.view = 'company'; goStep('post', 'bills'); }"); pg.wait_for_timeout(500)
     E("() => { choiceConfirm(CO(), 'postTo', 'GARG SHEKHAR & COMPANY'); render(); }"); pg.wait_for_timeout(300)
     # C15: one line
-    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY on NWS144 (anshul) · Tally ready · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
+    ok(pg.locator("#app [data-post-line]").count() == 1 and line() == "Posting into GARG SHEKHAR & COMPANY on NWS144 (anshul) · Linked · Update now" and prob() == "", "C15. one line, nothing else: '%s'" % line())
     E("document.querySelector(\"#app details[data-more='post']\").open = true")
     ok(pg.inner_text("#app [data-post-bridge]") == "FinCom Bridge 2.1.1 · Ready", "C15. the bridge's version and Ready under More")
     E("document.querySelector(\"#app details[data-more='post']\").open = false")
@@ -111,7 +111,8 @@ with sync_playwright() as p:
     # C15: the action to take
     # the steady sign (11-Oct-2026): the sign's reason and fix (TallySteady.reset: first sight, no minute's wait here)
     E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'closed'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'closed', tally: false, open: []}); TallySteady.reset(); render(); }"); pg.wait_for_timeout(300)
-    ok(line() == "Posting into GARG SHEKHAR & COMPANY" and prob().startswith("TallyPrime is closed on NWS144. Open TallyPrime on NWS144") and prob().endswith("Check again"), "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
+    # next-link-record (the owner's step 2): Waiting for Tally, one plain line
+    ok(line() == "Posting into GARG SHEKHAR & COMPANY · Waiting for Tally · Update now" and prob() == "Open GARG SHEKHAR & COMPANY in TallyPrime on NWS144.", "C15. Tally closed there: '%s' / '%s'" % (line(), prob()))
     E("() => { const i = TCloud.pane.devices[0].info; i.bridges['go-1'].tallyState = 'open'; i.beat = Object.assign({}, i.beat, {at: new Date().toISOString(), tallyState: 'open', tally: true, open: ['GARG SHEKHAR & COMPANY']}); render(); }")
     E("() => { const c = CO(); window.__keep = c.postTo; c.postTo = ''; AutoPostTo.at[c.id] = Date.now(); render(); }"); pg.wait_for_timeout(300)
     ok(prob().endswith("Allow posting") and pg.locator("#app [data-post-problem] [data-post-action]").evaluate("b => b.tagName") == "BUTTON", "C15. no company chosen, one linked: 'Allow posting' (%s)" % prob())

@@ -15,6 +15,9 @@ this port is free, and do this step in Tally. Everything should be clearly spoke
      does it by itself).
   6. No bridge yet / offline: "Finish step 1 first".
   7. Phone 390: no sideways scroll.
+  8. (next-link-record; the TallyPrime 7.2 proof of 26-Oct-2026: bridge 2.4.7 connects to Tally on any port it finds) his
+     Tally on 4125 or 8000, the bridge connected: done, no warning; a clash says "Use a port between 9000 and 9999 — <n> is
+     free." above its own sentence.
 Options: --shots DIR  saves the step (proposed, done, clash) at desktop 1440 and phone 390.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_port_step.py"""
 import json, os, re, sys, threading, functools, http.server
@@ -156,11 +159,19 @@ def main():
             ok(state() == "clash" and not done() and cl.startswith("Your Tally is on 9000, same as another user. Change it to %d as above." % free) and "share one TallyPrime folder" in cl,
                say + "clash: needs action, in plain words (%r)" % cl)
             ok(free not in {9000, 1950, 2022, 2929} and free not in AVOID and "Port %d," % free in txt(STEP + " [data-port-how]"), say + "clash: a free port and the menu with it (%s)" % free)
+            ok(txt(STEP + " [data-port-warn]") == "Use a port between 9000 and 9999 — %d is free." % free, say + "clash: the one warning too (%s)" % txt(STEP + " [data-port-warn]"))
             shot("clash")
             # the guide's own read (every 20 s) ticks it without a click once ravi moves away
             E("() => { window.__devs[0].info.bridges['go-2'].tallyPort = 9070; }")
             E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
             ok(done() and state() == "done", say + "re-read: ravi moved, his 9000 is his own: ticked (%s)" % state())
+
+            # ---- 8. his Tally on a port outside 9000-9999 that his bridge reaches (the TallyPrime 7.2 proof, 26-Oct-2026: bridge
+            # 2.4.7 connects on 4125): done, no warning
+            for other in (4125, 8000):
+                scene(nws(my_port=other, my_tally="open", others=[1950, 2022, 2929]))
+                ok(state() == "done" and done() and n(STEP + " [data-port-warn]") == 0 and txt(STEP + " [data-port-state]") == "Your Tally uses port %d ✓" % other,
+                   say + "port %d, the bridge connected: done, no warning (%s)" % (other, txt(STEP)))
 
             # ---- 6. no bridge yet; offline
             scene([], [])

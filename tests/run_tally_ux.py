@@ -257,10 +257,10 @@ def main():
         lt = re.sub(r"\s+", " ", txt("#app [data-tally-one]") if pg.locator("#app [data-tally-one]").count() else "")
         E("() => { S.tab = 'cotally'; render(); }"); pg.wait_for_timeout(800)
         lt = re.sub(r"\s+", " ", txt(link))
-        ok(lt == "Tally: GARG SHEKHAR ● Connected · Open in Tally page", "5. linked: one line (%r)" % lt)
+        ok(lt == "Tally: GARG SHEKHAR ● Linked · Open in Tally page", "5. linked: one line, the one word Linked (%r)" % lt)
         R = '#app [data-tco-list=firm] [data-tco-row="GARG SHEKHAR"]'
         pg.click(link + " [data-tally-one-go]"); pg.wait_for_timeout(1200)
-        ok(pg.locator(R + " [data-tco-sync-now]").count() == 1 and txt(R + " [data-tco-pill]").startswith("Connected"), "5. its row: Connected, Sync now")
+        ok(pg.locator(R + " [data-tco-sync-now]").count() == 1 and txt(R + " [data-tco-pill]").startswith("Linked"), "5. its row: Linked, Sync now")
         # change company: the other company's row, ⋯ Link to a client… (the client moves, asked once)
         other = "ABC LTD"
         pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % other); pg.wait_for_timeout(250); pg.click('#app [data-tco-row="%s"] [data-tco-link-pick]' % other); pg.wait_for_timeout(300)

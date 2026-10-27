@@ -22,6 +22,7 @@ import { notAllowedRest } from "../parts/BankChecks.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import AutoRuns from "../parts/AutoPostRuns.jsx";
 import "../../../src/js/96-bank-sent-heal.js";
+import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
@@ -109,7 +110,8 @@ function Ready({ co, bills, canPost, more }) {
 function postWhyBlocked(co, canPost) {
   if (S.billPost && S.billPost.busy) return { kind: "busy", text: S.billPost.busy };
   if (!canPost) return { kind: "nowhere", text: "No Tally to post to from here: use More → Download Tally file." };
-  const gate = typeof postToProblem === "function" && co.postTo ? postToProblem(co, "") : "";
+  // next-link-record: with the client's link record read, the record's words always (clients.data postTo decides nothing)
+  const gate = typeof postToProblem === "function" && (co.postTo || (typeof linkPostOf === "function" && linkPostOf(co))) ? postToProblem(co, "") : "";
   return gate ? { kind: "gate", text: gate } : null;
 }
 // round 14c (C7, owner item 4, a test): "Send a FinCom reference id (REMOTEID) with each voucher (test)", owners only,

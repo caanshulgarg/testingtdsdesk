@@ -20,10 +20,11 @@ export const goTallyCard = goTallyRow;
 const MARK = { ok: "● ", warn: "◐ ", bad: "○ " };
 export default function TallyChip({ co, where = "", title }) {
   if (!co || typeof tallyLinkOf !== "function") return null;
+  // next-link-record: the client's one status line beside it (p.after: parts/LinkStatus.jsx, its own file, once loaded)
   const p = clientTallyState(co);
-  return <button type="button" className={"tag tchip " + p.level} data-tally-chip={p.state} data-tally-chip-at={where} data-tally-link-chip={p.state} data-tally-pill={p.state}
+  return <><button type="button" className={"tag tchip " + p.level} data-tally-chip={p.state} data-tally-chip-at={where} data-tally-link-chip={p.state} data-tally-pill={p.state}
     title={title || ("Tally: " + p.text + (p.company ? " (" + p.company + ")" : "") + ". Open in Tally page.")} aria-label={co.name + ", Tally: " + p.word}
-    onClick={(ev) => { ev.stopPropagation(); goTallyRow(co.id); }}>{MARK[p.level] + p.word}</button>;
+    onClick={(ev) => { ev.stopPropagation(); goTallyRow(co.id); }}>{MARK[p.level] + p.word}</button>{p.after && p.after(where)}</>;
 }
 // Client setup's one line
 export function TallyOne({ co }) {
@@ -32,6 +33,6 @@ export function TallyOne({ co }) {
   return <p className="tally-one" data-tally-one={p.state} data-tally-pill={p.state}>
     <b>Tally:</b>{" "}{linked && <span data-tally-one-company="">{p.company}</span>}{linked && " "}
     <span className={"tag " + p.level} title={p.text}>{MARK[p.level] + p.word}</span>
-    {linked && p.state !== "connected" && <span className="note">{" " + p.text.replace(/^Disconnected/, "").replace(/^ — /, "— ")}</span>}
+    {linked && p.state !== "connected" && <span className="note">{" " + (p.line ? "— " + p.line : p.text.replace(/^Disconnected/, "").replace(/^ — /, "— "))}</span>}
     {" · "}<button className="linkbtn" data-tally-one-go="" onClick={() => goTallyRow(co.id)}>{linked ? "Open in Tally page" : "Choose on Tally page"}</button></p>;
 }
