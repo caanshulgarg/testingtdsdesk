@@ -112,7 +112,7 @@ function bankCols(b, rows, nSel) {
     : r.repaired ? <> <span className="flag warn" title="Amount read from the balance change: check it">≈</span></> : null;
   return [
     // the head's tick: every line the filters show (not only the ones drawn)
-    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" checked={!!nSel && nSel === total} onChange={(ev) => selectAll(pickable, ev.target.checked)} />,
+    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" disabled={!total} title={total ? "Select all" : "No entry to select: every one shown is sent"} checked={!!nSel && nSel === total} onChange={(ev) => selectAll(pickable, ev.target.checked)} />,
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
     { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
     // the whole narration, two lines at most (all of it on hover), the party read from it first and the mode and reference
