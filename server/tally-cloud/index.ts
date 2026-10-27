@@ -3273,11 +3273,16 @@ async function userUpload(req: Request, auth: string) {
   if (!user) return reply(401, { ok: false, error: "Sign in to FinCom again." });
   const { data: mfaOk } = await asUser.rpc("mfa_ok");
   if (mfaOk !== true) return reply(403, { ok: false, error: "Finish the two-step sign-in first." });
-  const { data: m } = await db.from("members").select("firm_id, active").eq("user_id", user.id).maybeSingle();
+  const { data: m } = await db.from("members").select("firm_id, active, role").eq("user_id", user.id).maybeSingle();
   if (!m || !m.active) return reply(403, { ok: false, error: "This account is not part of a firm." });
   const firm = m.firm_id as string;
   let body: any;
   try { body = JSON.parse(await readBody(req)); } catch (e) { return (e as Error).message === "too large" ? reply(413, { ok: false, error: "Too much in one go; send fewer days at a time." }) : reply(400, { ok: false, error: "Bad request" }); }
+  // security fix batch 1 (27-Oct-2026, verify-browser-known.md item 5): only what reads (month_days, wake) is open to a
+  // member who may only look; every kind below writes the firm's books (links a company, makes or feeds a job, overwrites
+  // day files, ledgers, install logs) and is the owner's or staff's alone, as the database's can_write()
+  if (body?.kind !== "month_days" && body?.kind !== "wake" && m.role !== "owner" && m.role !== "staff")
+    return reply(403, { ok: false, error: "Only the firm's owner or staff can upload books or link Tally." });
   // an install log dropped on FinCom's Tally page (the bridge could not send it: not connected yet), for FinCom support
   if (body.kind === "install_log") {
     const text = typeof body.text === "string" ? body.text : "";

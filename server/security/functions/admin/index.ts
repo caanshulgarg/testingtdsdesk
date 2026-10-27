@@ -6,6 +6,8 @@
 //  - roles are checked; nobody can remove or demote the last owner, or touch a platform administrator
 //  - two-step sign-in is required for every admin action; made-up passwords are long and random
 //  - every action goes into the firm's audit trail
+// Security fix batch 1 (27-Oct-2026): "Add person" only invites (Supabase's invite email; no login made with a password
+// the owner chose); a login that already exists joins a firm only by accepting the invite itself (accept_invite)
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsFor } from "./cors.ts";
 
@@ -62,14 +64,32 @@ Deno.serve(async (req) => {
   const { data: mfaOk } = await asUser.rpc("mfa_ok");
   if (mfaOk !== true) return reply(403, { ok: false, reason: "mfa", error: "Finish the two-step sign-in first." });
 
+  let body: any = {};
+  try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
+
+  // security fix batch 1 (27-Oct-2026, verify-browser-known.md item 3): an invitation to a login that already existed
+  // (no firm) is taken up by that person, signed in as themselves; the firm's owner cannot pull them in. The invite is kept
+  // on the login (app_metadata.fincom_invite, written by the service role only) until then; it lasts 14 days
+  if (String(body.action || "") === "accept_invite") {
+    const inv = (user.app_metadata || {}).fincom_invite;
+    if (!user.email_confirmed_at && !(user as any).confirmed_at) return reply(403, { ok: false, error: "Confirm your email first." });
+    if (!inv || !inv.firm_id || Date.now() - Date.parse(String(inv.at || "")) > 14 * 86400000) return reply(404, { ok: false, error: "There is no invitation for this login, or it has run out. Ask the firm's owner to invite you again." });
+    const { data: had } = await admin.from("members").select("firm_id").eq("user_id", user.id).maybeSingle();
+    if (had) return reply(409, { ok: false, error: "This login already belongs to a firm." });
+    const role = ROLES.includes(String(inv.role)) ? String(inv.role) : "staff";
+    const { error: mErr } = await admin.from("members").insert({ user_id: user.id, firm_id: inv.firm_id, name: String(inv.name || "").slice(0, 120), email: String(user.email || "").toLowerCase(), role, active: true });
+    if (mErr) return reply(400, { ok: false, error: mErr.message });
+    await admin.auth.admin.updateUserById(user.id, { app_metadata: { fincom_invite: null } });
+    await admin.from("activity").insert({ firm_id: inv.firm_id, user_id: user.id, client_id: "", what: "admin.accept_invite", detail: (String(user.email || "") + " as " + role).slice(0, 500) }).then(() => {}, () => {});
+    return reply(200, { ok: true, firm_id: inv.firm_id, role });
+  }
+
   const { data: me } = await admin.from("members").select("firm_id, role, active").eq("user_id", user.id).maybeSingle();
   const { data: isAdminRow } = await admin.from("platform_admins").select("user_id").eq("user_id", user.id).maybeSingle();
   const superadmin = !!isAdminRow;
   const owner = !!me && me.active && me.role === "owner";
   if (!superadmin && !owner) return reply(403, { ok: false, error: "Only a firm owner or the administrator may do this." });
 
-  let body: any = {};
-  try { body = await req.json(); } catch { return reply(400, { ok: false, error: "Bad request" }); }
   const action = String(body.action || "");
   const firmId = superadmin && body.firm_id ? String(body.firm_id) : me?.firm_id;
   const email = String(body.email || "").trim().toLowerCase();
@@ -102,69 +122,59 @@ Deno.serve(async (req) => {
   };
 
   try {
-    if (action === "add_person") {
+    // "Add person" (add_person, and invite_person, its name in the app since review item 21): security fix batch 1 (27-Oct-2026,
+    // verify-browser-known.md item 3). No login is ever made with a password the owner chose, and nobody's password is set:
+    //  - a new email: Supabase's invite email (or the same invite link through Resend), its link to the app's page, where an
+    //    invite link asks for the password first. The member row waits on a login that cannot sign in until the link is used;
+    //  - a login that already exists and is in no firm: never added from here. A pending invite is kept on the login; they
+    //    join only by accepting it themselves (accept_invite above);
+    //  - a login in a firm (another, or this one, even switched off): refused; roles and switching on are set_person's
+    if (action === "add_person" || action === "invite_person") {
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, { ok: false, error: "A proper email address is needed." });
+      if (!firmId) return reply(400, { ok: false, error: "Say which firm the person is for." });
       const role = ROLES.includes(String(body.role)) ? String(body.role) : "staff";
-      let target = await findUser(email);
-      let password: string | null = null;
-      if (!target) {
-        password = String(body.password || "") || madeUpPassword();
-        if (password.length < 10) return reply(400, { ok: false, error: "The password must be 10 characters or more." });
-        const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name: body.name || "" } });
-        if (error) return reply(400, { ok: false, error: error.message });
-        target = data.user;
-      } else {
-        // an existing login is never taken over: it can only be added if it belongs to no firm, and keeps its own password
-        const { data: theirs } = await admin.from("members").select("firm_id").eq("user_id", target.id).maybeSingle();
-        if (theirs && theirs.firm_id !== firmId) return reply(409, { ok: false, error: "This email already belongs to another firm's login. Ask them to use a different email." });
-        if (!superadmin && await isPlatformAdmin(target.id)) return reply(403, { ok: false, error: "That login cannot be added here." });
-      }
-      const { error: mErr } = await admin.from("members").upsert({
-        user_id: target!.id, firm_id: firmId, name: String(body.name || "").slice(0, 120), email, role, active: true,
-      });
-      if (mErr) return reply(400, { ok: false, error: mErr.message });
-      await audit("admin.add_person", email + " as " + role);
-      return reply(200, password
-        ? { ok: true, email, password, role, note: "Give this password to the person; they can change it in the app." }
-        : { ok: true, email, role, note: "This person already had a login: they sign in with their own password." });
-    }
-
-    // a new person gets an email with a link to set their own password (no password is made or shown)
-    if (action === "invite_person") {
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, { ok: false, error: "A proper email address is needed." });
-      const role = ROLES.includes(String(body.role)) ? String(body.role) : "staff";
+      const name = String(body.name || "").slice(0, 120);
       const redirectTo = safeRedirect(body.redirect);
       let target = await findUser(email);
+      let resend = false;
       if (target) {
         const { data: theirs } = await admin.from("members").select("firm_id").eq("user_id", target.id).maybeSingle();
         if (theirs && theirs.firm_id !== firmId) return reply(409, { ok: false, error: "This email already belongs to another firm's login. Ask them to use a different email." });
         if (!superadmin && await isPlatformAdmin(target.id)) return reply(403, { ok: false, error: "That login cannot be added here." });
-      }
-      let sent = "";
-      if (!target) {
-        if (RESEND) {
-          const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo, data: { name: body.name || "" } } });
+        const unused = !target.email_confirmed_at && !(target as any).confirmed_at && !!(target as any).invited_at;
+        if (theirs && !unused) return reply(409, { ok: false, error: "This person is already in your firm. Change their role or switch them on from the list." });
+        if (!theirs) {
+          const inv = { firm_id: firmId, role, name, by: user.id, at: new Date().toISOString() };
+          const { error } = await admin.auth.admin.updateUserById(target.id, { app_metadata: { fincom_invite: inv } });
           if (error) return reply(400, { ok: false, error: error.message });
-          target = data.user;
-          const link = data.properties?.action_link || "";
-          const ok = await sendMail(email, "You are invited to FinCom",
-            "<p>" + esc(String(body.name || "Hello")) + ",</p><p>You have been added to your firm's FinCom account. Choose your password here (the link works once, for 24 hours):</p><p><a href=\"" + link + "\">Set my password</a></p>");
-          if (!ok) return reply(502, { ok: false, error: "The invitation could not be emailed. Try again, or use “Make a password instead”." });
-          sent = "resend";
-        } else {
-          const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { name: body.name || "" } });
-          if (error) return reply(400, { ok: false, error: error.message + " (Supabase's own mailer: set up RESEND_API_KEY to send to anyone)" });
-          target = data.user;
-          sent = "supabase";
+          if (RESEND) await sendMail(email, "You are invited to a firm on FinCom",
+            "<p>You have been invited to join a firm's FinCom account. Sign in to FinCom with your own login to accept it (the invitation lasts 14 days):</p><p><a href=\"" + esc(redirectTo) + "\">Open FinCom</a></p><p>If you did not expect this, ignore this email.</p>");
+          await audit("admin." + action, email + " as " + role + " (invite to accept: the login existed)");
+          return reply(200, { ok: true, email, role, invited: true, pending: true,
+            note: "Invite sent. " + email + " already has a FinCom login, so they join your firm only once they accept the invitation." });
         }
+        resend = true;          // invited by this firm, link not used yet: the invite sent again
       }
-      const { error: mErr } = await admin.from("members").upsert({
-        user_id: target!.id, firm_id: firmId, name: String(body.name || "").slice(0, 120), email, role, active: true,
-      });
-      if (mErr) return reply(400, { ok: false, error: mErr.message });
-      await audit("admin.invite_person", email + " as " + role + (sent ? " (invited by email)" : " (already had a login)"));
-      return reply(200, { ok: true, email, role, invited: !!sent,
-        note: sent ? "An email has gone to " + email + " with a link to set their password." : "This person already had a login: they sign in with their own password." });
+      if (RESEND) {
+        const { data, error } = await admin.auth.admin.generateLink({ type: "invite", email, options: { redirectTo, data: { name } } });
+        if (error) return reply(400, { ok: false, error: error.message });
+        target = data.user;
+        const link = data.properties?.action_link || "";
+        const ok = await sendMail(email, "You are invited to FinCom",
+          "<p>" + esc(name || "Hello") + ",</p><p>You have been added to your firm's FinCom account. Choose your password here (the link works once, for 24 hours):</p><p><a href=\"" + link + "\">Set my password</a></p>");
+        if (!ok) return reply(502, { ok: false, error: "The invitation could not be emailed. Try again." });
+      } else {
+        const { data, error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo, data: { name } });
+        if (error) return reply(400, { ok: false, error: error.message + " (Supabase's own mailer: set up RESEND_API_KEY to send to anyone)" });
+        target = data.user;
+      }
+      if (!resend) {
+        const { error: mErr } = await admin.from("members").upsert({ user_id: target!.id, firm_id: firmId, name, email, role, active: true });
+        if (mErr) return reply(400, { ok: false, error: mErr.message });
+      }
+      await audit("admin." + action, email + " as " + role + " (invited by email" + (resend ? ", sent again" : "") + ")");
+      return reply(200, { ok: true, email, role, invited: true,
+        note: "An email has gone to " + email + " with a link to set their password." });
     }
 
     // a reset link by email: the person chooses the new password themselves
