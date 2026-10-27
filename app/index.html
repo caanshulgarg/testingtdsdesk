@@ -24,6 +24,40 @@
      its hash in the page's Content-Security-Policy. It also notes when the page has been read in full (__fincomDcl): the
      program runs deferred (round 73 B), and waits for that as it did when it ran before the end of the page (domLoading). -->
 <script id="fincom-boot">(function(){window.__fincomDcl=0;document.addEventListener("DOMContentLoaded",function(){window.__fincomDcl=1});var d=document.documentElement,P="__FINCOM_LS__",ls=function(k){try{return localStorage.getItem(P+k)}catch(e){return null}},ss=function(k){try{return sessionStorage.getItem(P+k)}catch(e){return null}},j=function(t){try{return JSON.parse(t||"null")}catch(e){return null}};var c=j(ls("cloud"))||{},s=j(ss("cloudsess"))||j(ls("cloudsess")),h=String(location.hash||"").toLowerCase();var signin=!(s&&s.access_token)&&(c.gate!==false||h==="#register"||h==="#signin");if(/access_token=/.test(h)&&/type=(invite|recovery|signup|magiclink)/.test(h))signin=true;d.setAttribute("data-boot",signin?"signin":"app");try{requestAnimationFrame(function(){d.setAttribute("data-boot-shown","")})}catch(e){d.setAttribute("data-boot-shown","")}if(!signin&&ls("last")&&!/^#\/(today|clients|compliance|inbox|tally|settings|help|people|plan|rules|meetings|join)\b/.test(h))d.setAttribute("data-boot-co","");try{if(localStorage.getItem("fincom:opened")==="__FINCOM_BUILD__")d.setAttribute("data-boot-quick","")}catch(e){}try{if(navigator.onLine!==false&&location.protocol!=="file:"&&window.fetch)window.__fincomBootCheck=fetch("build.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var k="fincom-reloaded-for";if(j&&j.build&&j.build!=="__FINCOM_BUILD__"&&sessionStorage.getItem(k)!==j.build){sessionStorage.setItem(k,j.build);window.__fincomSwapping=true;var u=new URL(location.href);u.searchParams.set("v",j.build);location.replace(u.toString());return true}return false}).catch(function(){return false})}catch(e){}})();</script>
+<!-- never blank (27-Oct-2026, the owner's white page on Safari after a release: the service worker held up the page's
+     own files, nothing ran, so nothing watched or reported it). This little script runs first and depends on nothing
+     else. When the page has not been read to its end 4 s after opening (a file in its head held up: guard.js or the
+     styles; 12 s without a service worker, a slow line), when FinCom has not drawn 4 s after all its files came (8 s for
+     the worker's kept copy), or when guard.js finds that the program or the app's first file did not load
+     (window.__fincomHeal): FinCom's service worker is unregistered and its caches cleared, the previous good build
+     (last-good.json beside the page, written at publishing: docs/NEVER-BLANK.md) is opened, and it says "FinCom updated; opened the last working
+     version". Without that pointer: one clean reload from the network. Once per build in a tab, never a loop (then the
+     "FinCom did not open" note). Reported by a beacon of its own (the testing site's Sentry; on a local test server
+     only when localStorage "fincom.report" is "on"). The vite plugin puts in the storage prefix, the build id and the
+     report address, and allows this script by its hash. -->
+<script id="fincom-heal">(function(){var W=window,D=document,B="__FINCOM_BUILD__",R="__FINCOM_REPORT__",KEY="fincom:healed",NOTE="fincom:healed-note",done=false,loaded=0;
+var here=location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,""),path=here.replace(/^[a-z]+:\/\/[^\/]+/i,"");
+function ss(k,v){try{if(v===undefined)return sessionStorage.getItem(k);sessionStorage.setItem(k,v)}catch(e){return null}}
+function sw(){try{return!!(navigator.serviceWorker&&navigator.serviceWorker.controller)}catch(e){return false}}
+function parsed(){return!!D.getElementById("react-root")||!!W.__fincomOld}
+function drawn(){return parsed()&&!D.querySelector("[data-boot-part]")}
+function line(t,id){try{var d=D.getElementById(id||"fincom-heal-line");if(!d){d=D.createElement("div");d.id=id||"fincom-heal-line";d.setAttribute("role","status");d.setAttribute("data-heal-line","");d.style.cssText="position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:10001;padding:8px 14px;border-radius:8px;background:#1E2A25;color:#fff;font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;max-width:calc(100vw - 32px);box-sizing:border-box";(D.body||D.documentElement).appendChild(d)}d.textContent=t}catch(e){}}
+function report(reason){try{var local=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),on=false;try{on=localStorage.getItem("fincom.report")==="on"}catch(e){}if(!R||(local&&!on))return;
+var body=JSON.stringify({message:"FinCom healed itself: "+reason,level:"warning",platform:"javascript",tags:{heal:reason.split(":")[0],build:B},extra:{ua:navigator.userAgent,url:path,sw:sw(),kept:D.documentElement.hasAttribute("data-boot-kept"),parsed:parsed(),loaded:!!loaded,ms:Math.round(W.performance&&performance.now?performance.now():0)}});
+W.__fincomHealReport=body;fetch(R,{method:"POST",mode:"no-cors",keepalive:true,headers:{"Content-Type":"text/plain"},body:body}).catch(function(){})}catch(e){}}
+function clear(next){var left=0,over=false,end=function(){if(!over){over=true;next()}},one=function(){if(--left<=0)end()};setTimeout(end,2500);
+try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){left++;navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.filter(function(r){return r.scope===here}).map(function(r){return r.unregister()}))}).then(one,one)}}catch(e){}
+try{if(typeof caches!=="undefined"){left++;caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k.indexOf("fincom-shell:"+path+":")===0||k==="fincom-files:"+path}).map(function(k){return caches.delete(k)}))}).then(one,one)}}catch(e){}
+if(!left)end()}
+function lastGood(next){var t=setTimeout(function(){next(null)},2500);try{fetch("last-good.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){clearTimeout(t);next(j&&j.build&&j.path&&j.build!==B?j:null)},function(){clearTimeout(t);next(null)})}catch(e){clearTimeout(t);next(null)}}
+function heal(reason){if(done||W.__fincomOld||W.__fincomSwapping||D.documentElement.hasAttribute("data-guest"))return false;done=true;
+if(ss(KEY)===B){if(W.__fincomStuck)W.__fincomStuck(false);else line("FinCom did not open. Please reload the page.");return false}
+ss(KEY,B);W.__fincomStage="healing: "+reason;report(reason);line("FinCom is refreshing its files…");
+clear(function(){lastGood(function(j){if(j){try{localStorage.setItem(NOTE,String(Date.now()))}catch(e){}location.replace(new URL(j.path,here).toString())}else location.reload()})});return true}
+W.__fincomHeal=heal;
+try{var n=+localStorage.getItem(NOTE);if(n){localStorage.removeItem(NOTE);if(Date.now()-n<120000){var show=function(){line("FinCom updated; opened the last working version");setTimeout(function(){var d=D.getElementById("fincom-heal-line");if(d)d.remove()},12000)};if(D.body)show();else D.addEventListener("DOMContentLoaded",show)}}}catch(e){}
+setTimeout(function(){if(!parsed())heal("page held up"+(sw()?"":" (no worker)"))},sw()||D.documentElement.hasAttribute("data-boot-kept")?4000:12000);
+W.addEventListener("load",function(){loaded=1;setTimeout(function(){if(parsed()&&!drawn()&&!D.querySelector("[data-boot-stuck]")&&!W.__fincomLegacy)heal("not drawn")},D.documentElement.hasAttribute("data-boot-kept")?8000:4000)});})();</script>
 <style id="fincom-boot-css">
 /* The frame drawn from this page before the program has loaded (stability batch 1): the sidebar with the FinCom mark, the
    top bar with its fixed places (bell, Tally sign, firm), and the page's shape. The program draws over it in place.

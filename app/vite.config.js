@@ -81,6 +81,8 @@ function legacy(mode) {
       // the frame drawn before the program loads (index.html, stability batch 1): its little script gets this build's
       // storage prefix (the test build keeps its own, tdsdesk-test:) and id, and is allowed by its hash, the one inline script
       html = html.replace("__FINCOM_LS__", test ? "tdsdesk-test:" : "tdsdesk:").replaceAll("__FINCOM_BUILD__", BUILD_ID);
+      // the page's own healer (index.html, fincom-heal) reports by its own beacon, on the testing site only
+      html = html.replace("__FINCOM_REPORT__", sentryOn(mode) ? SENTRY_INGEST + "/api/4512221234724864/store/?sentry_version=7&sentry_key=7f2432ad2a6406244d931f4856c30933" : "");
       const hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].filter((m) => !/type="module"/.test(m[0]))
         .map((m) => " 'sha256-" + crypto.createHash("sha256").update(m[1], "utf8").digest("base64") + "'").join("");
       html = html.replace("</head>", '<meta http-equiv="Content-Security-Policy" content="' + csp(mode, hashes) + '">\n</head>');

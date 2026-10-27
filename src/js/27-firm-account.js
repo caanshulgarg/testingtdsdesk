@@ -83,7 +83,26 @@ const Cloud = {
   // stability batch 4: and the files the service worker kept after the first open (only app code is ever kept there,
   // never the firm's data; cleared all the same, so nothing of this sign-in stays behind)
   signOut(){ try { Live.stop(); } catch (e){} try { if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith("fincom-files:")).forEach(k => caches.delete(k))).catch(() => {}); } catch (e){} this.setSess(null); this.st = {state: "off", email: "", role: "", firm: "", lastSync: 0, pending: 0, error: "", busy: "", members: []}; },
+  // speed round 2 (27-Oct-2026, client_timings: about 20 reads sent at the same moment as the page opened, each 150-280 ms
+  // alone but up to 1.3 s together, and 5 s for alert_dismissals_list, tally_post_jobs and tally_post_row_flags): the
+  // reads of things the first page does not show (alerts and their dismissals, posting flags and payloads, ledgers Tally
+  // has not got, link places, the bridge's notes and releases, support, the assistant's settings, due tasks) wait until
+  // the first page is drawn and the computer is idle (afterFirstPaint, 6 s at most); the page's own reads go first
+  LATER: /^(rpc\/(alert_dismissals_list|tally_unknown_ledger_entries|tally_recorder_silent|support_list|asst_settings)\b|(tally_post_row_flags|tally_link_places|tally_alerts|tally_bridge_alerts|tally_bridge_releases|tally_bridge_rollbacks|tally_bridge_prefs|client_due_tasks)\?|tally_post_jobs\?select=id,payload)/,
+  afterFirstPaint(){
+    if (this._painted) return this._painted;
+    return this._painted = new Promise(ok => {
+      const t0 = Date.now(), idle = f => (typeof requestIdleCallback === "function" ? requestIdleCallback(f, {timeout: 1200}) : setTimeout(f, 300));
+      const look = () => {
+        if (typeof document === "undefined" || !document.querySelector || Date.now() - t0 > 6000) return ok();
+        if (document.querySelector("[data-boot-part]") || !document.querySelector("#app .react-host, #react-root > *")) return setTimeout(look, 100);
+        try { requestAnimationFrame(() => idle(ok)); } catch (e){ idle(ok); }
+      };
+      look();
+    });
+  },
   async api(path, opts, retry){
+    if (!retry && this.LATER.test(path) && !(opts && opts.now)) await this.afterFirstPaint();
     if (!retry) await this.fresh().catch(() => {});
     const c = this.cfg(), s = this.sess();
     if (!s) throw new Error("Signed out");

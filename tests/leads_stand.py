@@ -142,7 +142,13 @@ async def hold(sent, got):
     await asyncio.sleep(max(0, WIRE[0] - now))
 
 async def route(r):
-    u = urlparse(r.request.url); path = u.path; q = parse_qs(u.query); body = r.request.post_data or ""
+    u = urlparse(r.request.url); path = u.path; q = parse_qs(u.query)
+    # a save over 32 KB goes gzipped (app/src/lib/gzUpload.js): read as bytes, unpacked (post_data fails on it)
+    raw = r.request.post_data_buffer or b""
+    if raw[:2] == b"\x1f\x8b":
+        try: raw = gzip.decompress(raw)
+        except Exception: pass
+    body = raw.decode("utf-8", "replace")
     async def j(o, name=None, detail=""):
         b = json.dumps(o); await hold(len(body), len(b))
         LOG.append((time.time(), name or path.split("/")[-1], detail, len(b), r.request.method))

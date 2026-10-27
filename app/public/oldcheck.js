@@ -75,6 +75,9 @@
       var go = false, next = function (how) {
         if (go) return; go = true;
         try { sessionStorage.setItem("fincom:file-heal-net", how); } catch (x) { /* */ }
+        // 27-Oct-2026: the page's own healer (index.html, fincom-heal): FinCom's kept files cleared and the previous good
+        // build opened (last-good.json), reported by its own beacon; else, as before, the clean-up and one reload
+        try { if (window.__fincomHeal && window.__fincomHeal("file not loaded: " + name.split("?")[0])) return; } catch (x) { /* */ }
         cleanReload();
       };
       say("FinCom is refreshing its files…");
@@ -84,6 +87,8 @@
     }, true);
     window.addEventListener("unhandledrejection", function (e) { if (!first) first = "promise: " + String(e && e.reason && (e.reason.message || e.reason)); });
     setTimeout(function () { stuck(true); }, 20000);
+    // 27-Oct-2026: the note, for the page's own healer (index.html, fincom-heal) once it has healed this build already
+    window.__fincomStuck = stuck;
     function stuck(timed) {
       // 24-Oct-2026: a meeting's guest page (data-guest, src/calls/guest.jsx) is drawn in place of FinCom: it has opened
       if (shown || window.__fincomOld || document.documentElement.hasAttribute("data-guest") || !document.querySelector("[data-boot-part]")) return;
