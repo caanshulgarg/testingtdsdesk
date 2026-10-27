@@ -73,6 +73,7 @@ jobs:
           name: bridge-dist
           path: bridge-go/dist/
           if-no-files-found: error
+          retention-days: 3
 
   # round 19 (2.1.9): the Go tests that need real Windows (the recorder holding file's share modes, the trial's lock,
   # a junction refused by the install step): every test whose name holds Windows or Shared
@@ -432,3 +433,4 @@ jobs:
           name: install-logs-${{ matrix.os }}
           path: ${{ runner.temp }}/logs/
           if-no-files-found: warn
+          retention-days: 3
