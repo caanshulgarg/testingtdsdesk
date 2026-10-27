@@ -114,6 +114,7 @@ jobs:
           name: bridge-dist
           path: bridge-go/dist/
           if-no-files-found: error
+          retention-days: 3
 
   tally:
     needs: build
@@ -185,6 +186,7 @@ jobs:
         with:
           name: round4-${{ github.run_id }}
           path: spike-results/${{ github.run_id }}-${{ matrix.os }}/
+          retention-days: 3
       - name: Commit results back to the branch
         if: always()
         run: |
