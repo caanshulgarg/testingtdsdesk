@@ -3,6 +3,8 @@
 import { claims, makeHandler, sqlError } from "./core/router.ts";
 import { type Deps, type Role } from "./core/types.ts";
 import { MODULES } from "./registry.ts";
+import { billingFake } from "../../tests/console_billing_fake.ts";
+import { BILLING_EXPECT, BILLING_PARAMS } from "./billing_matrix.ts";
 
 function assert(c: unknown, msg = "assertion failed"): asserts c { if (!c) throw new Error(msg); }
 function eq(a: unknown, b: unknown, msg = "") { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${msg} ${x} !== ${y}`); }
@@ -24,6 +26,7 @@ const EXPECT: Record<string, Role[]> = {
   "firm.deactivate": ["owner"], "firm.reactivate": ["owner"],
   "admins.list": ["owner"], "admins.add": ["owner"], "admins.set_role": ["owner"], "admins.remove": ["owner"],
   "settings.get": ["owner"],
+  ...BILLING_EXPECT,
 };
 const R = "a good reason";
 const PARAMS: Record<string, Record<string, unknown>> = {
@@ -34,6 +37,7 @@ const PARAMS: Record<string, Record<string, unknown>> = {
   "firm.deactivate": { firm_id: FIRM, reason: R }, "firm.reactivate": { firm_id: U(102), reason: R },
   "admins.add": { email: "new@fincom.live", role: "viewer", reason: R }, "admins.set_role": { user_id: ID.viewer, role: "support", reason: R },
   "admins.remove": { user_id: ID.viewer, reason: R },
+  ...BILLING_PARAMS,
 };
 
 function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } = {}) {
@@ -54,6 +58,8 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
   const ownerCheck = (by: string) => { const r = admins.get(by); if (!r?.active || r.role !== "owner") err("not_owner"); };
   const roleCheck = (by: string, roles: string[]) => { const r = admins.get(by); if (!r?.active || !roles.includes(r.role)) err("not_allowed"); };
   const lastOwner = (uid: string) => { if (![...admins].some(([k, v]) => k !== uid && v.active && v.role === "owner")) err("last_owner"); };
+  const bill = billingFake([{ id: FIRM, name: "ABC Associates", balance: 1000 }, { id: U(102), name: "Garg Shekhar & Co", balance: 175 }],
+    { roleOf: (by) => (admins.get(by)?.active ? admins.get(by)!.role : ""), audit: (a, action, tt, tid, b, af) => addAudit(a, action, tt, tid, b, af) });
   const rpc = async (fn: string, a: any): Promise<any> => {
     calls.push(fn);
     switch (fn) {
@@ -105,6 +111,8 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean } =
         addAudit(a, a.p_status === "active" ? "company.reactivate" : "company.deactivate", "company", a.p_firm + "/" + a.p_client, null, { status: a.p_status });
         coStatus[a.p_client] = a.p_status; return {};
     }
+    const b = await bill(fn, a);
+    if (b !== undefined) return b;
     throw new Error("fake: no rpc " + fn);
   };
   const users = new Map(Object.entries(ID).map(([, v]) => [tok(v), { id: v, email: emails[v] || v + "@fincom.live" }]));

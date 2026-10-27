@@ -1,3 +1,6 @@
+// signup v14 (27-Oct-2026, console phase 2): the starting credit of a new firm is the console's Settings > Billing
+// "start credit" (rpc console_billing_settings, migration 119), ₹10,000 when it cannot be read; provision's answer
+// says how much (credit), for the app's welcome message.
 // signup v13 (26-Oct-2026): v12 + the app's PKCE challenge passed to Supabase's sign-up (handler.ts; security review M1),
 // the bot-check token, limits shared across running copies (migration 112), throwaway domains refused. Secrets:
 // CAPTCHA_REQUIRED=1 once Supabase Auth's bot protection is on; DISPOSABLE_DOMAINS (optional, comma-separated).
@@ -154,8 +157,15 @@ const db: Db = {
     return !!data;
   },
   async firm(id) {
-    const { data, error } = await admin.from("firms").select("created_at").eq("id", id).maybeSingle(); must(error);
-    return data ? { createdAt: Date.parse(data.created_at) } : null;
+    const { data, error } = await admin.from("firms").select("created_at, balance").eq("id", id).maybeSingle(); must(error);
+    return data ? { createdAt: Date.parse(data.created_at), balance: Number(data.balance) } : null;
+  },
+  // the console's Settings > Billing start credit (paise) in rupees (migration 119); throws when it cannot be read
+  async startCredit() {
+    const { data, error } = await admin.rpc("console_billing_settings"); must(error);
+    const p = Number((data as any)?.start_credit);
+    if (!isFinite(p)) throw new Error("no start_credit");
+    return p / 100;
   },
   async insertFirm(row) {
     const plan = await signupPlan();

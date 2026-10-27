@@ -134,7 +134,7 @@ try:
         ok("Bridges online" in text(pg) and "Recent sign-ups" in text(pg) and "Firms by plan" in text(pg), "Dashboard: tiles and lists")
         shot(pg, "03-dashboard")
         navs = pg.eval_on_selector_all("nav [data-nav]", "els => els.map(e => e.dataset.nav)")
-        ok(navs == ["dashboard", "firms", "companies", "users", "audit", "admins", "settings"], "owner's menu: %s" % navs)
+        ok(navs == ["dashboard", "firms", "companies", "users", "subscriptions", "credit", "plans", "prices", "billing-runs", "audit", "admins", "settings"], "owner's menu: %s" % navs)
         pg.click("[data-nav=firms]"); wait_rows(pg, "firms")
         ok("ABC Associates" in text(pg) and "1–25 of 33" in pg.inner_text("[data-table=firms] [data-testid=count]"), "Firms: the list, 25 a page of 33")
         shot(pg, "04-firms")
@@ -158,7 +158,7 @@ try:
         pg.click("[data-nav=admins]"); wait_rows(pg, "admins")
         ok("support@fincom.live" in text(pg) and "You" in text(pg), "Admins")
         shot(pg, "10-admins")
-        pg.click("[data-nav=settings]"); pg.wait_for_selector("text=Coming with the billing module")
+        pg.click("[data-nav=settings]"); pg.wait_for_selector("[data-testid=billing-settings] [data-setting=start_credit]")
         ok(True, "Settings (stub)")
 
         print("== 3. the DataTable")
@@ -205,7 +205,7 @@ try:
         ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
         sign_in(pg, "viewer"); pg.wait_for_selector("[data-testid=tiles]")
         navs = pg.eval_on_selector_all("nav [data-nav]", "els => els.map(e => e.dataset.nav)")
-        ok(navs == ["dashboard", "firms", "companies", "users"], "Viewer's menu: no Change history, Admins or Settings (%s)" % navs)
+        ok(navs == ["dashboard", "firms", "companies", "users", "subscriptions", "credit", "plans", "prices", "billing-runs"], "Viewer's menu: no Change history, Admins or Settings (%s)" % navs)
         pg.goto(ORIGIN + "/#/users/00000000-0000-4000-8000-000000000011"); pg.wait_for_selector("text=Two-step methods")
         ok(pg.query_selector("[data-action]") is None, "Viewer: no write button on a person")
         ok("as***@abc.test" in text(pg), "Viewer: emails partly hidden")
@@ -288,7 +288,7 @@ try:
         sign_in(pg, "owner"); pg.wait_for_selector("[data-testid=tiles]")
         for path, wait in (("dashboard", "[data-testid=tiles]"), ("firms", "[data-table=firms]"), ("firms/00000000-0000-4000-8000-000000000101", "text=Companies (clients)"),
                            ("companies", "[data-table=co]"), ("users", "[data-table=users]"), ("users/00000000-0000-4000-8000-000000000011", "text=Two-step methods"),
-                           ("audit", "[data-table=audit]"), ("admins", "[data-table=admins]"), ("settings", "text=Coming with")):
+                           ("audit", "[data-table=audit]"), ("admins", "[data-table=admins]"), ("settings", "[data-testid=billing-settings]")):
             pg.goto(ORIGIN + "/#/" + path); pg.wait_for_selector(wait); pg.wait_for_timeout(200)
             ok(no_sideways(pg), "phone: no sideways scroll on " + path)
         pg.goto(ORIGIN + "/#/firms"); wait_rows(pg, "firms"); shot(pg, "18-phone-firms")

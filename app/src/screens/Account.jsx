@@ -17,7 +17,10 @@ const at = (s) => fmtDateTime(s);
 
 function Wallet() {
   const rows = S.wallet || [];
-  const what = (w) => (w.kind === "credit" ? "Credit added" : w.kind === "fee" ? "Monthly charge" : w.kind === "refund" ? "Refund" : (w.code || "use"));
+  // the ledger's kinds (migration 119 added topup, opening, signup_credit, coupon_credit, discount)
+  const KIND = { credit: "Credit added", topup: "Credit added", signup_credit: "Credit to start with", coupon_credit: "Coupon credit", fee: "Monthly charge",
+                 refund: "Refund", adjust: "Adjustment", opening: "Opening balance", discount: "Discount" };
+  const what = (w) => KIND[w.kind] || (w.code || "use");
   // the one list table (spec K6): when (date), amount, then the rest
   return <div style={{ marginTop: 8 }}><ListTable name="wallet" className="data" rows={rows} rowKey={(w, i) => (w.at || "") + ":" + i} unit={["entry", "entries"]}
     empty="No entries yet. Credit added by FinCom and what is used appear here."

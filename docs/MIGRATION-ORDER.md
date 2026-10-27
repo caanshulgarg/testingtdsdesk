@@ -552,9 +552,27 @@ left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.
 
 | # | Module (console-plan.md 4.3) |
 |---|---|
-| 119 | Settings / platform defaults (trial credit, low-credit warning, grace days, ...) and plans v2 + price list |
+| 119 | **Taken: console billing core**, `server/console/migration-119-console-billing.sql` (see below); it also covers what 120 and 121 were reserved for |
 | 120 | Subscriptions |
 | 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
 | 122 | Coupons |
 | 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
 Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
+
+## 119: console billing core (phase 2)
+
+Branch `next-console-billing` (27-Oct-2026; file md5 7db694f144237e7c6db594db060c1bde; **NOT run on staging**: the owner runs it, after 118).
+`server/console/migration-119-console-billing.sql`. Add-only, one transaction, `lock_timeout` 10 s, safe twice; nothing
+about money changes by running it (no balance, ledger line or test-firm mark is written; the clean-up is a console
+button). Adds: `console_settings` (billing defaults: start credit ₹10,000, low-credit warning ₹500, grace 7 days, paused
+after 30, trial 0; amounts in paise), `firms.is_test`, plan fields (`per_client_fee_paise` kept in step with
+`includes.clients_price`, which an edit can no longer drop), `price_items` / `price_list` (versioned by date; `price_of`
+reads it), `subscriptions` (one per firm, all active; read_only / paused / cancelled make the firm read-only through
+`firm_is_writable()`), `wallet_entries` columns + new kinds + unique `idem_key`, **`console_credit_post(p_firm uuid,
+p_amount_paise bigint, p_kind text, p_ref text, p_reason text, p_by uuid)`** (the one way a balance changes; idempotent
+on (kind, ref)), `charge_for` charging a (item, ref, period) once, `refund_charge` / `admin_credit` / `run_monthly_core`
+through the ledger, `billing_runs` + `console_billing_run` (once per firm per month), pg_cron jobs
+`console-billing-monthly` (18:35 UTC on the 28th-31st, runs only when it is the 1st in India) and
+`console-billing-daily` (18:50 UTC), and the console's `console_*` functions (service role only). The signup function
+(v14) reads the start credit through `console_billing_settings()`. Tested on pg_stand: `tests/run_migration119.py`
+(RED_WITHOUT_119=1 fails).
