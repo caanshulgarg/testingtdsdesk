@@ -1,0 +1,37 @@
+{
+  "name": "fincom-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FinCom for Android and iOS: the user app (../app) in a Capacitor shell. The plan: mobile-plan.md (the owner's copy).",
+  "scripts": {
+    "build:web": "node scripts/build-web.mjs",
+    "build:web:staging": "node scripts/build-web.mjs --staging",
+    "sync": "node scripts/build-web.mjs && cap sync",
+    "sync:staging": "node scripts/build-web.mjs --staging && FINCOM_MOBILE_DB=staging cap sync",
+    "add:platforms": "node scripts/add-platforms.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@aparajita/capacitor-secure-storage": "8.0.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/camera": "8.2.5",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/keyboard": "8.0.6",
+    "@capacitor/push-notifications": "8.1.3",
+    "@capacitor/share": "8.0.3",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4",
+    "@capgo/capacitor-native-biometric": "8.8.2",
+    "@capgo/capacitor-share-target": "8.0.61"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

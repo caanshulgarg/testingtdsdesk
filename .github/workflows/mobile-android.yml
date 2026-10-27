@@ -1,0 +1,141 @@
+# FinCom for Android (branch next-mobile; the mobile plan, mobile-plan.md): the user app (app/) in its Capacitor shell
+# (mobile/), built into an APK (to install by hand) and an AAB (what Google Play takes).
+#   By hand only (Actions tab → "FinCom phone app (Android)" → Run workflow): never on a push. The repository is private
+#   and Actions minutes are counted (the owner decides when this runs). About 10 to 15 minutes on Linux.
+#   Signing: with the four ANDROID_* secrets (mobile-plan.md, "Secrets") the APK and AAB are signed with FinCom's upload
+#   key; without them an unsigned debug APK only is made and the log says so. Nothing is published unless "Send to Play's
+#   internal testing" is ticked and PLAY_SERVICE_ACCOUNT_JSON is set.
+#   The files are kept 3 days (artifacts), then gone.
+name: FinCom phone app (Android)
+
+on:
+  workflow_dispatch:
+    inputs:
+      database:
+        description: "Which database the app uses: staging (testers) or live (the store build)"
+        type: choice
+        options: [staging, live]
+        default: staging
+      version_name:
+        description: "Version shown in the store, e.g. 1.0.0 (empty: 0.1.<run number>)"
+        required: false
+        default: ""
+      play_internal:
+        description: "Send the signed AAB to Google Play's internal testing track (live database only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      FINCOM_MOBILE_DB: ${{ inputs.database == 'staging' && 'staging' || 'live' }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            app/package-lock.json
+            mobile/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Android SDK platform 36 (Capacitor 8 compiles against it; the runner has the SDK itself)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - name: Packages (app and mobile, exactly as locked)
+        run: |
+          (cd app && npm ci --no-audit --no-fund)
+          (cd mobile && npm ci --no-audit --no-fund)
+      - name: The phone's copy of FinCom (app/dist-mobile${{ inputs.database == 'staging' && '-test' || '' }})
+        run: node mobile/scripts/build-web.mjs ${{ inputs.database == 'staging' && '--staging' || '' }}
+      - name: The Android project (made by Capacitor when it is not in the repository yet), patched, synced
+        working-directory: mobile
+        run: |
+          node scripts/add-platforms.mjs android
+          npx cap sync android
+      - name: The testing flavour (staging) - its own id and name, so it sits beside the real app
+        if: inputs.database == 'staging'
+        working-directory: mobile/android/app
+        run: |
+          sed -i 's/applicationId "live.fincom.app"/applicationId "live.fincom.app.staging"/' build.gradle
+          sed -i 's#<string name="app_name">FinCom</string>#<string name="app_name">FinCom (testing)</string>#' src/main/res/values/strings.xml
+          grep -n applicationId build.gradle
+      - name: Firebase's google-services.json (push); without it the app builds and push stays off
+        working-directory: mobile/android/app
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json; echo "google-services.json written";
+          else echo "::notice::No GOOGLE_SERVICES_JSON secret: the app is built without push notifications"; echo '{"push":"off"}' > ../../android/app/src/main/assets/public/push-off.json; fi
+      - name: Version (versionCode = the run number, always higher than the last)
+        working-directory: mobile/android/app
+        run: |
+          NAME="${{ inputs.version_name }}"; [ -n "$NAME" ] || NAME="0.1.${{ github.run_number }}"
+          CODE=$(( 1000 + ${{ github.run_number }} ))
+          sed -i -E "s/versionCode [0-9]+/versionCode $CODE/; s/versionName \"[^\"]*\"/versionName \"$NAME\"/" build.gradle
+          grep -E "versionCode|versionName" build.gradle
+          echo "VERSION_NAME=$NAME" >> "$GITHUB_ENV"
+      - name: Signed APK and AAB (FinCom's upload key)
+        if: env.ANDROID_KEYSTORE_BASE64 != '' && env.ANDROID_KEYSTORE_PASSWORD != '' && env.ANDROID_KEY_ALIAS != '' && env.ANDROID_KEY_PASSWORD != ''
+        working-directory: mobile/android
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/fincom-upload.jks"
+          ./gradlew --no-daemon assembleRelease bundleRelease \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/fincom-upload.jks" \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+          rm -f "$RUNNER_TEMP/fincom-upload.jks"
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp app/build/outputs/apk/release/*.apk "$GITHUB_WORKSPACE/out/FinCom-$VERSION_NAME-$FINCOM_MOBILE_DB.apk"
+          cp app/build/outputs/bundle/release/*.aab "$GITHUB_WORKSPACE/out/FinCom-$VERSION_NAME-$FINCOM_MOBILE_DB.aab"
+      - name: No signing secrets - an unsigned debug APK only
+        if: env.ANDROID_KEYSTORE_BASE64 == '' || env.ANDROID_KEYSTORE_PASSWORD == '' || env.ANDROID_KEY_ALIAS == '' || env.ANDROID_KEY_PASSWORD == ''
+        working-directory: mobile/android
+        run: |
+          echo "::warning::The ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD secrets are not all set: signing skipped. A debug APK is built (installable by hand for testing, not for Google Play). mobile-plan.md says how to add them."
+          ./gradlew --no-daemon assembleDebug
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp app/build/outputs/apk/debug/*.apk "$GITHUB_WORKSPACE/out/FinCom-$VERSION_NAME-$FINCOM_MOBILE_DB-debug-unsigned.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fincom-android-${{ env.FINCOM_MOBILE_DB }}-${{ github.run_number }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 3
+      - name: Google Play internal testing
+        if: inputs.play_internal && inputs.database == 'live'
+        run: |
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ] || [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::warning::Not sent to Google Play: PLAY_SERVICE_ACCOUNT_JSON or the signing secrets are not set (mobile-plan.md, 'Secrets')"; exit 0; fi
+          echo "SEND_TO_PLAY=1" >> "$GITHUB_ENV"
+      - name: Upload to Google Play (internal track)
+        if: env.SEND_TO_PLAY == '1'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: live.fincom.app
+          releaseFiles: out/*.aab
+          track: internal
+          status: completed

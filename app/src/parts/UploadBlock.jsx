@@ -15,11 +15,18 @@ export default function UploadBlock() {
     <ReadingCheck />
     {f && <p className="note" style={{ margin: "6px 0 0" }}>Read free for this client: <b>{f.pct}%</b> of {f.n} bills ({f.google} by Google OCR, {f.claude} by Claude)</p>}
     <UploadOptions />
-    <div className="row" style={{ marginTop: 8 }}>
+    {/* the phone app (next-mobile, src/lib/native.js) adds "Scan pages": several pages, each cropped, read as one bill. A
+        whole row of its own so that the web build (__FINCOM_MOBILE__ false) keeps exactly the row below, byte for byte */}
+    {__FINCOM_MOBILE__ ? <div className="row" style={{ marginTop: 8 }}>
+      <Button className="btn small" onClick={() => doAct("camera")}>Take photo</Button>
+      {window.FinComNative && <Button className="btn small" data-native-scan="" onClick={() => window.FinComNative.scan()}>Scan pages</Button>}
+      <Button className="btn small" onClick={() => doAct("manual")}>Type an invoice</Button>
+      <Button className="btn small" onClick={() => doAct("pasteOpen")}>Paste bill details</Button>
+    </div> : <div className="row" style={{ marginTop: 8 }}>
       <Button className="btn small" onClick={() => doAct("camera")}>Take photo</Button>
       <Button className="btn small" onClick={() => doAct("manual")}>Type an invoice</Button>
       <Button className="btn small" onClick={() => doAct("pasteOpen")}>Paste bill details</Button>
-    </div>
+    </div>}
     {S.pasteOpen && <div className="pane" style={{ marginTop: 10, padding: 12 }}>
       <label className="f"><span>Bill details in JSON (one bill, or a list of bills)</span>
         <textarea rows={7} autoFocus value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'{"vendorName": "...", "invoiceNo": "...", ...}'} />

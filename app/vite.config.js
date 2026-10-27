@@ -183,11 +183,42 @@ function serviceWorker(mode) {
   };
 }
 
+// FinCom on Android and iOS (branch next-mobile; ../mobile, the mobile plan): FINCOM_MOBILE=1 builds the phone app's copy
+// (mobile/scripts/build-web.mjs) into dist-mobile/ (live database) or dist-mobile-test/ (--mode test, staging). Only that
+// build carries the phone's code: __FINCOM_MOBILE__ is false in every web build, so main.jsx's import of src/lib/native.js
+// and the upload box's "Scan pages" are dropped from the web bundle (its files and budgets as before). The phone's page:
+// viewport-fit=cover (the notch and the home bar, src/lib/native.js's safe areas), no service worker (the files are
+// inside the app), and src/lib/native-boot.js first, which starts the program and the app once the sign-in kept in the
+// Keychain / Keystore is back
+const MOBILE = process.env.FINCOM_MOBILE === "1";
+function mobileShell(mode) {
+  return {
+    name: "fincom-mobile",
+    async generateBundle() {
+      const src = fs.readFileSync(new URL("./src/lib/native-boot.js", import.meta.url), "utf8").replace("__FINCOM_LS__", mode === "test" ? "tdsdesk-test:" : "tdsdesk:");
+      const out = await esbuildTransform(src, { minify: true, charset: "utf8", target: TARGET });
+      this.emitFile({ type: "asset", fileName: "native-boot.js", source: out.code });
+    },
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        if (!ctx || !ctx.bundle) return html;
+        const vp = '<meta name="viewport" content="width=device-width, initial-scale=1">';
+        const leg = html.match(/<script defer src="(\.\/legacy\.js[^"]*)"><\/script>\n?/), entry = html.match(/<script type="module" crossorigin src="([^"]+)"><\/script>\n?/);
+        if (!html.includes(vp) || !leg || !entry) throw new Error("fincom-mobile: the page's viewport or scripts were not found (index.html changed?)");
+        return html.replace(vp, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">')
+          .replace(entry[0], "").replace(leg[0], '<script src="./native-boot.js" data-legacy="' + leg[1] + '" data-entry="' + entry[1] + '"></script>\n');
+      },
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => ({
   base: "./",
   define: { __REACT_BUILD__: JSON.stringify(stamp()), __BUILD_ID__: JSON.stringify(BUILD_ID),
-    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __TURNSTILE_KEY__: JSON.stringify(turnstileKey(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)) },
-  plugins: [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
+    __FINCOM_SENTRY__: JSON.stringify(sentryOn(mode)), __TURNSTILE_KEY__: JSON.stringify(turnstileKey(mode)), __SENTRY_RELEASE__: JSON.stringify("fincom-app-" + (sha() || BUILD_ID)),
+    __FINCOM_MOBILE__: JSON.stringify(MOBILE) },
+  plugins: MOBILE ? [react(), legacy(mode), fresh(), preloadFonts(), mobileShell(mode)] : [react(), legacy(mode), fresh(), preloadFonts(), serviceWorker(mode)],
   resolve: { alias },
-  build: { outDir: mode === "test" ? "dist-test" : "dist", emptyOutDir: true, target: TARGET },
+  build: { outDir: MOBILE ? (mode === "test" ? "dist-mobile-test" : "dist-mobile") : mode === "test" ? "dist-test" : "dist", emptyOutDir: true, target: TARGET },
 }));

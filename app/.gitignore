@@ -3,3 +3,5 @@ dist/
 dist-test/
 legacy/
 public/assets/
+dist-mobile/
+dist-mobile-test/

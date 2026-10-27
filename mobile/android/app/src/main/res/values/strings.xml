@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FinCom</string>
+    <string name="title_activity_main">FinCom</string>
+    <string name="package_name">live.fincom.app</string>
+    <string name="custom_url_scheme">live.fincom.app</string>
+</resources>

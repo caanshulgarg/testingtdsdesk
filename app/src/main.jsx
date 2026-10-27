@@ -124,6 +124,9 @@ function start() {
     afterFirstPage(() => import("./sentry.js").then((m) => { window.removeEventListener("error", keep); window.removeEventListener("unhandledrejection", keep); m.start(); }).catch(() => {}), 3000);
   }
   adopt();
+  // FinCom on a phone (next-mobile, ../mobile): the camera, sharing, the Keychain, the app lock, push, the back button
+  // (src/lib/native.js). The mobile build only: __FINCOM_MOBILE__ is false in the web builds and this line is dropped
+  if (__FINCOM_MOBILE__ && window.Capacitor) import("./lib/native.js").then((m) => m.start(), () => {});
   try { installAutopost(); } catch (e) { /* never in the way of the page */ }
   createRoot(document.getElementById("react-root")).render(<Root />);
   watchFresh();

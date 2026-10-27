@@ -540,3 +540,7 @@ run_migration116.py                   180
 run_upload_roles.py                   120
 run_admin_people.py                   120
 run_gateway_server.py                 120
+# next-mobile (27-Oct-2026): the phone app's adapter in Chromium, push tokens (migration 124) and the push-send stub (Deno)
+run_native_unit.py                    120
+run_migration124.py                   180
+run_push_send_server.py               120

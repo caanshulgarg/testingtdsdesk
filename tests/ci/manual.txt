@@ -89,3 +89,6 @@ run_migration32.py             in progress (2026-10-02): server/tally-cloud/migr
 ## flaky timing / slow stand-ins
 run_cloud_e2e.py               flaky timing: 1 check ("an entry changed in Tally: its day goes to the cloud again"), 4.5 min
 run_live_sync.py               flaky timing: two browsers in step; 4 checks waited the full 99 s
+
+## needs the phone app's build (app/dist-mobile-test: FINCOM_MOBILE=1 npx vite build --mode test), which CI's app job does not make
+run_mobile_ui.py               the mobile build (next-mobile); run after mobile/scripts/build-web.mjs --staging
