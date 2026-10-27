@@ -1,7 +1,7 @@
 """python3 run_gstr1_excel.py - GSTR-1 as an Excel to download, change and bring back (next-gstr1-excel; the owner,
 24-Oct-2026: "prepare this type of download and upload return in GSTR-1 .. user can add or delete or modify the details"
 and "it should be dynamic.. add, delete or modify"). Made-up books (gstr1_books.py, worked out by hand):
-  1. the GSTR-1 screen as it was, with Download Excel and Upload Excel beside its actions
+  1. the GSTR-1 screen as it was, with Download Excel and Upload Excel at the right end of its tab row (next-excel-buttons)
   2. Download: a sheet a portal table (the offline tool's sheet names and column heads), each an Excel Table; the hidden
      Key column; lists (place of supply, rate, invoice type, reverse charge, UQC...) to the last of 2,000 spare rows;
      the spare rows work their tax out; Summary and About; LibreOffice works the file out to FinCom's tables to the rupee
@@ -65,25 +65,25 @@ with sync_playwright() as p:
 
     print("1. the GSTR-1 screen")
     GB.open_r1(pg)
+    # next-excel-buttons (27-Oct-2026): Download Excel ▾ and Upload Excel at the right end of the return's tab row
     acts = pg.evaluate("[...document.querySelectorAll('#app [data-return-card] .ret-acts button')].map(b => (b.getAttribute('aria-label') || b.innerText).trim()).filter(Boolean)")
-    ok("Download Excel" in acts and "Upload Excel" in acts and any("GSTR-1 JSON" in a for a in acts), "Download Excel and Upload Excel beside the return's actions (%s)" % acts)
+    xl = pg.evaluate("[...document.querySelectorAll('#app .tg-tabrow [data-r1x-bar] [data-xl]')].map(b => (b.matches('details') ? b.querySelector('summary') : b).textContent.replace('▾', '').trim())")
+    ok(xl == ["Download Excel", "Upload Excel"] and any("GSTR-1 JSON" in a for a in acts), "Download Excel and Upload Excel in the return's tab row (%s; header %s)" % (xl, acts))
     ok(pg.locator("#app [data-r1-summary]").count() == 1, "the GSTR-1 summary as before")
     base = pg.evaluate(SCREEN)
     ok(abs(base["b2b"]["taxable"] - 150000) < 0.01 and abs(base["b2cl"]["taxable"] - 200000) < 0.01 and abs(base["cdnr"]["taxable"] - 10000) < 0.01, "the books: B2B 1,50,000, B2CL 2,00,000, CDNR 10,000 (%s)" % {k: base[k]["taxable"] for k in ("b2b", "b2cl", "cdnr")})
     line = pg.evaluate("() => { const a = document.querySelector('#app [data-return-card] .ret-acts'); const bs = [...a.querySelectorAll('button, summary')].filter(b => b.getClientRects().length && b.getBoundingClientRect().height > 0 && (b.getAttribute('aria-label') || b.innerText).trim()); const c = (b) => { const r = b.getBoundingClientRect(); return Math.round((r.top + r.bottom) / 2); }; return bs.map(b => [(b.getAttribute('aria-label') || b.innerText).trim().slice(0, 20), c(b)]); }")
-    ok(line and max(y for _, y in line) - min(y for _, y in line) < 6 and any(n == "Upload Excel" for n, _ in line), "the return's actions on one line at 1440 (%s)" % line)
+    ok(line and max(y for _, y in line) - min(y for _, y in line) < 6, "the return's actions on one line at 1440 (%s)" % line)
     shot(pg, "1-gstr1-buttons-desktop")
     pg.set_viewport_size({"width": 390, "height": 860}); W(pg, 600); pg.evaluate("render()"); W(pg, 400)
-    pg.click("#app [data-return-card] .ret-acts details.more > summary"); W(pg, 400)
-    items = pg.evaluate("[...document.querySelectorAll('#app [data-return-card] .more-pop .more-item')].map(b => b.innerText.trim())")
-    ok("Upload Excel" in items and any(i.startswith("Download Excel") for i in items), "phone (and under 1400 px): Download Excel and Upload Excel under the card's More (%s)" % items)
+    vis = pg.evaluate("[...document.querySelectorAll('#app [data-r1x-bar] [data-xl]')].map(b => { const r = b.getBoundingClientRect(); return r.width > 0 && r.left >= 0 && r.right <= innerWidth + 1; })")
+    ok(vis == [True, True], "phone: Download Excel and Upload Excel on screen (%s)" % vis)
     shot(pg, "1-gstr1-buttons-phone")
-    pg.keyboard.press("Escape"); W(pg, 300)
     ok(pg.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), "phone: no sideways scroll")
     pg.set_viewport_size({"width": 1440, "height": 950}); W(pg, 400); pg.evaluate("render()"); W(pg, 400)
 
     print("2. download")
-    pg.evaluate(CAPTURE); pg.click("[data-r1x=down]")
+    pg.evaluate(CAPTURE); pg.click("#app [data-r1x-bar] details[data-xl=down] > summary"); W(pg, 200); pg.click("[data-r1x=down]")
     for _ in range(120):
         if pg.evaluate("window.__files.length"): break
         W(pg, 250)

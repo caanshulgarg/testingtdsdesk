@@ -3,6 +3,7 @@
 // (src/js/16); what is typed is saved by gst9Typed and gst9cSet (src/js/23). GSTR-9's own tables (GST9.html) are the
 // same HTML the PDF is printed from, shown here as an old piece. The 9C PDF is printed from this screen
 // (FinComReact.markup("Gst9c"), see gst9PackHtml).
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import Legacy from "../../parts/Legacy.jsx";
 import CommitBox from "../../parts/CommitBox.jsx";
 
@@ -25,7 +26,9 @@ export function Gst9({ b }) {
       <p className="note">Built from the months in the books, the same figures as each month’s GSTR-1 and 3B.{" "}
         {d.missing.length > 0 && <><span className="bad">Not in the books: {d.missing.map(GSTR.label).join(", ")}.</span>{" "}</>}
         {d.twoB ? d.twoB + " months of 2B here for table 8A." : <span className="bad">No 2B here for this year, so table 8A is empty; bring the 2B files in under 2B reconciliation.</span>}</p>
-      <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("gst9Pdf")}>Download (PDF)</button><button className="btn small" onClick={() => doAct("gst9Excel")}>Excel</button></div>
+      <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("gst9Pdf")}>Download (PDF)</button>
+        {/* next-excel-buttons: GSTR-9's Excel, and the month's GSTR-1 and 3B working (the bar's, before), as the page's one Download Excel at the row's right end */}
+        <ExcelTools down={[["GSTR-9", () => doAct("gst9Excel"), { "data-xl-item": "gst9Excel" }], ["GSTR-1 and 3B working, " + GSTR.label(S.gstYm || ""), () => doAct("gstExcel"), { "data-xl-item": "gstExcel" }]]} /></div>
       <Legacy html={GST9.html(d)} />
       {Math.abs(gap6J) >= 1 && <p className="bk-alert">{"6J: ₹" + m(gap6J) + " of the credit in the 3Bs is not in 6B to 6H. It usually comes from bills marked as ITC not available, or credit entered in a 3B that is not in the books; check before filing."}</p>}
       {d.heldEnd && Math.abs(gap6J + d.heldEnd) < 2 ? <p className="note">{"6J: ₹" + m(d.heldEnd) + " of this year’s bills was held back from 3B because it was not in 2B by March; it is taken in next year’s returns and belongs in 8C and 13 when it is."}</p> : null}
@@ -64,7 +67,8 @@ export function Gst9c() {
   return (
     <section className="dash-card"><h3>GSTR-9C for {GST9.label(fy)}</h3>
       <p className="note">The reconciliation of the audited accounts with the annual return. The books give each figure; type the audited turnover and the adjustments where they apply. Reasons for any difference go in the boxes below each table.</p>
-      <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("gst9cPdf")}>Download (PDF)</button><button className="btn small" onClick={() => doAct("gst9cExcel")}>Excel</button></div>
+      <div className="row" style={{ gap: 8, margin: "8px 0" }}><button className="btn small primary" onClick={() => doAct("gst9cPdf")}>Download (PDF)</button>
+        <ExcelTools down={[["GSTR-9C", () => doAct("gst9cExcel"), { "data-xl-item": "gst9cExcel" }], ["GSTR-1 and 3B working, " + GSTR.label(S.gstYm || ""), () => doAct("gstExcel"), { "data-xl-item": "gstExcel" }]]} /></div>
       <h3 style={{ marginTop: 10 }}>5. Reconciliation of gross turnover</h3>
       <Table>
         <tr><td>5A</td><td>Turnover (including exports) as per the audited financial statements<div className="nr">from the books: {m(c.booksTurnover)}</div></td><td className="n"><Amount k="turnover" v={st.turnover} ph={String(c.booksTurnover)} /></td></tr>

@@ -8,8 +8,12 @@
 // workbook is the one Excel of a return: Download Excel and Upload Excel are also buttons in the return's header (in ⋯ only
 // on a narrow screen), and every other Excel of the return's steps (the Deductions' ⋯, the Deductees' ⋯, Validate & file's
 // Download, 24Q's) downloads it too, opened on that step's sheet (sheetOf).
+// next-excel-buttons (27-Oct-2026; the owner: "download and upload excel button should be proper"): the one Download Excel and
+// Upload Excel of a return are at the right end of the steps' tab row (ReturnExcel, parts/ExcelTools.jsx), on every step
+// and width; the header, its ⋯ and the steps' own ⋯ and buttons no longer repeat them (⋯ keeps Undo the last upload).
 import { useRef, useState } from "react";
 import { SideDrawer } from "./Shell.jsx";
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import { checkReturn } from "./Validate.jsx";
 import "../../lib/tdsXlsx.js";
 
@@ -39,13 +43,14 @@ export async function downloadExcel(form, fy, q, sheet) {
   try { const m = await mod(); await m.download(form, fy, q, { sheet: sheet || sheetOf(S.tdsTab, form, q) }); toast("Downloaded: change it in Excel, then Upload Excel here."); }
   catch (e) { toast("Could not make the Excel: " + ((e && e.message) || e)); }
 }
-export const pickUpload = () => { const el = document.querySelector("[data-tdsx-upload]"); if (el) el.click(); };
-// the ⋯ items of a return
+// the Deductions step's own file box reads both the return's Excel and the older deductions-only file (TdsReturn.jsx
+// importExcel), so Upload Excel uses it there; elsewhere the return's file box (ExcelBox)
+export const pickUpload = () => { const el = document.querySelector("#app [data-ded-import]") || document.querySelector("[data-tdsx-upload]"); if (el) el.click(); };
+// the ⋯ items of a return: Undo the last upload (next-excel-buttons: Download Excel and Upload Excel are the tab row's
+// buttons, ReturnExcel, not in ⋯)
 export function excelItems(form, fy, q) {
   const last = typeof TDSX === "object" ? TDSX.last(form, fy, q) : null;
-  return [["Download Excel", () => downloadExcel(form, fy, q), { "data-tdsx": "down" }],
-    ["Upload Excel", pickUpload, { "data-tdsx": "up" }],
-    last && ["Undo the last Excel upload (version " + last.ver + ")", () => { const r = TDSX.undo(form, fy, q); toast(r.ok ? "Undone: the return is as it was before the upload." : r.why); render(); }, { "data-tdsx": "undo" }]].filter(Boolean);
+  return [last && ["Undo the last Excel upload (version " + last.ver + ")", () => { const r = TDSX.undo(form, fy, q); toast(r.ok ? "Undone: the return is as it was before the upload." : r.why); render(); }, { "data-tdsx": "undo" }]].filter(Boolean);
 }
 
 function Rows({ list, cols }) {
@@ -102,12 +107,12 @@ export function ExcelPreview({ form, fy, q }) {
   </SideDrawer>;
 }
 
-// the header's two buttons (ReturnShell; hidden on a narrow screen, where the ⋯ has them)
-export function ExcelButtons({ form, fy, q }) {
-  return <span className="rt-xl" data-tdsx-btns="">
-    <button type="button" className="btn small" data-tdsx-btn="down" title="The whole return as one Excel, opened on this step's sheet" onClick={() => downloadExcel(form, fy, q)}>Download Excel</button>
-    <button type="button" className="btn small" data-tdsx-btn="up" title="Bring the Excel back: a preview of every change first" onClick={pickUpload}>Upload Excel</button>
-  </span>;
+// next-excel-buttons (27-Oct-2026): the return's Excel at the right end of its steps' tab row (ReturnShell), on every
+// step and every screen width: the whole return as one workbook, opened on this step's sheet, and brought back with a
+// preview of every change first
+export function ReturnExcel({ form, fy, q }) {
+  return <ExcelTools down={() => downloadExcel(form, fy, q)} up={pickUpload} downTitle="The whole return as one Excel, opened on this step's sheet"
+    downProps={{ "data-tdsx-btn": "down" }} upProps={{ "data-tdsx-btn": "up" }} data-tdsx-btns="" />;
 }
 // the upload's file box and its preview, once per return (ReturnShell)
 export function ExcelBox({ form, fy, q }) {

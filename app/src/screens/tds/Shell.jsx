@@ -14,7 +14,7 @@ import More from "../../parts/More.jsx";
 import { Lock as LockIcon } from "lucide-react";
 import "./clear.css";
 import { openAllChallans } from "./AllChallans.jsx";
-import { excelItems, ExcelBox, ExcelButtons } from "./TdsExcel.jsx";
+import { excelItems, ExcelBox, ReturnExcel } from "./TdsExcel.jsx";
 
 const day = (d) => (d ? fmtDate(tallyDate(TDS.ymd(d))) : "");
 export const Q_MON = { Q1: "Apr–Jun", Q2: "Jul–Sep", Q3: "Oct–Dec", Q4: "Jan–Mar" };
@@ -109,7 +109,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
   const go = (id) => { tdsTabGo(id); try { window.scrollTo(0, 0); } catch (e) { /* */ } };
   const nxt = primary === undefined ? nextStep(cur, form, !!filedOn) : null;
   const prim = primary !== undefined ? primary : nxt ? ["Next: " + stepName(nxt, form) + " →", () => go(nxt)] : null;
-  // next-tds-excel: the whole return as one Excel, down and back up (tds/TdsExcel.jsx), in every return's ⋯
+  // next-tds-excel: the whole return as one Excel (tds/TdsExcel.jsx): ⋯ keeps Undo the last upload; Download Excel and Upload
+  // Excel are at the right end of the steps' tab row (next-excel-buttons)
   const moreAll = [["All challans of " + fy, () => openAllChallans(fy, { fy, q, form }), { "data-ret-allch": "" }]].concat(excelItems(form, fy, q), more);
   return <div className={"rt" + (cur === "deductions" && S.tdsDedView === "table" ? " rt-compact" : "")} data-return={form + "|" + q + "|" + fy}>
     <header className="rt-head" data-return-card={form + "|" + q}>
@@ -119,11 +120,11 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
       <StatusChip st={status} title={statusTitle || (filedOn ? "Filed " + day(filedOn.on) + ": its challans are locked" : undefined)} data-status-tag="" data-ret-lock={filedOn ? (TDSReg.corrOpen(fy, q, form) ? "correction" : "locked") : undefined} />
       {n > 0 && <button type="button" className={"rt-prob" + (val.errors.length ? " bad" : "")} data-problem-count={n} title={val.errors.length + " errors, " + val.warnings.length + " warnings (Validate & file)"} onClick={() => go("file")}>{n} to fix</button>}
       <span className="rt-sp" />
-      {/* next-tds-excel2: the return's Excel, down and back, beside ⋯ (in ⋯ too) */}
-      <ExcelButtons form={form} fy={fy} q={q} />
       <More label="⋯" ariaLabel="More" items={moreAll} />
       {prim && <button className="btn small primary" data-card-primary="" onClick={prim[1]}>{prim[0]}</button>}
     </header>
+    {/* next-excel-buttons: the steps' tab row is the return's toolbar row: Download Excel and Upload Excel at its right end */}
+    <div className="rt-tabrow" data-ret-tabrow="">
     <nav className="rt-tabs" role="tablist" aria-label="Return" data-return-tabs="" data-no-why="">
       {steps.map((s) => { const dot = dotOf(s.id, val); return <button key={s.id} type="button" role="tab" className="rt-tab" data-ret-tab={s.id} aria-selected={cur === s.id} aria-current={cur === s.id ? "step" : undefined}
         disabled={s.off} title={s.off ? s.why : undefined} onClick={() => go(s.id)}>
@@ -131,6 +132,8 @@ export function ReturnShell({ fy, q, form, status, statusTitle, draft, val, prim
         {dot ? <span className={"rt-dot2 " + dot} data-tab-dot={dot} role="img" aria-label={dot === "bad" ? "has errors" : "has warnings"} /> : null}
       </button>; })}
     </nav>
+    <ReturnExcel form={form} fy={fy} q={q} />
+    </div>
     <label className="rt-railsel"><span className="sr-only">Step</span>
       <select aria-label="Step" data-ret-select="" value={cur} onChange={(ev) => go(ev.target.value)}>
         {steps.map((s, i) => <option key={s.id} value={s.id} disabled={s.off}>{i + 1}. {s.label}{s.id !== "file" && s.count != null ? " · " + s.count : ""}</option>)}</select></label>

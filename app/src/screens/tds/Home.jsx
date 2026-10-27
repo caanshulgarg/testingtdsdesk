@@ -5,6 +5,7 @@
 // challans with what is unconsumed and the way to the challan register.
 // The amounts are TDSYear.quarters (src/js/18) as before; a cell's status comes from that return's checks
 // (tds/Validate.jsx checkReturn), the same count the return's Validate & file shows.
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import More from "../../parts/More.jsx";
 import HelpButton from "../../parts/HelpButton.jsx";
 import { STATUS, StatusChip, statusOf, Q_MON } from "./Shell.jsx";
@@ -67,10 +68,11 @@ export function HomeHead({ fys, b, onYear }) {
       ["TDS ledgers (confirm, unconfirm)", () => TaxLed.go("tds"), { "data-tds-more": "ledgers" }],
       ["TDS receivable vs 26AS (Reconciliations)", () => { S.recFy = fy; booksTabGo("recon"); }, { "data-tds-more": "recon" }],
       AIH.enabled("notices") && ["Notices", () => tdsNav("notices"), { "data-tds-more": "notices" }],
-      ["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26")],
-      ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24")],
-      ["Download the whole year", () => doAct("yearExcelAll")],
     ]} />
+    {/* next-excel-buttons: the year's workbooks at the right end of the bar (they were under ⋯) */}
+    <ExcelTools down={[["Download the year, " + TDS.formName("26Q", fy), () => doAct("yearExcel26"), { "data-xl-item": "yearExcel26" }],
+      ["Download the year, " + TDS.formName("24Q", fy), () => doAct("yearExcel24"), { "data-xl-item": "yearExcel24" }],
+      ["Download the whole year", () => doAct("yearExcelAll"), { "data-xl-item": "yearExcelAll" }]]} />
     <HelpButton />
   </div>;
 }

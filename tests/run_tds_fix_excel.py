@@ -99,7 +99,10 @@ try:
         items = E("[...document.querySelectorAll('#app [data-step-tool] .more-item')].map(b => b.textContent)")
         # next-tds-excel2: the step's ⋯ downloads the return's own workbook (run_tds_excel2.py) and Upload Excel takes either
         # file back; the deductions-only Excel (TDSEdit.toExcel) is still read back here, made as before
-        ok("Download Excel" in items and "Upload Excel" in items and not any(i.startswith("Excel to correct") for i in items), "the step's ⋯: Download Excel and Upload Excel (%s)" % items)
+        # next-excel-buttons (27-Oct-2026): Download Excel and Upload Excel are the tab row's (the step's ⋯ no longer repeats
+        # them); Upload Excel there uses this step's file box (data-ded-import), which takes either file back
+        xl = E("[...document.querySelectorAll('#app [data-ret-tabrow] [data-xl-tools] [data-xl]')].map(b => b.textContent.trim())")
+        ok(xl == ["Download Excel", "Upload Excel"] and not any("Excel" in i for i in items), "the tab row: Download Excel and Upload Excel; the step's ⋯ none (%s; %s)" % (xl, items))
         pg.keyboard.press("Escape"); E("document.querySelectorAll('#app details.more[open]').forEach(d => d.open = false)")
         E(QUICK); W(1500)
         x = E(READ) if E("window.__files.length") else None

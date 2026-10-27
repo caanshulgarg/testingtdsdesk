@@ -4,6 +4,7 @@
 // Tally when the filed returns are final. The working is GSTX (src/js/56-gst-recon.js).
 //
 // State: S.reconTab (which list), S.reconSt (the sales filter), S.gstvFy (the year, shared with Returns filed).
+import ExcelTools from "../../parts/ExcelTools.jsx";
 import { useEffect } from "react";
 import { ListRows } from "../../parts/ListTable.jsx";
 
@@ -124,7 +125,8 @@ export default function Recon({ b }) {
       <select aria-label="Year" style={{ width: "auto" }} value={fy} onChange={(ev) => setAndShow("gstvFy", ev.target.value)}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
       <ImportBtn />
       <label className="chk" title="When on, every difference becomes a correction to make in Tally"><input type="checkbox" aria-label="Filed returns are final" checked={fin} onChange={(ev) => GSTX.setFinal(reg, ev.target.checked)} /> Filed returns are final</label>
-      <button className="btn small" onClick={() => GSTX.correctionsExcel(reg, fy)}>Download the corrections (Excel)</button>
+      {/* next-excel-buttons: the corrections as an Excel, Download Excel at the right end of the row */}
+      <ExcelTools down={() => GSTX.correctionsExcel(reg, fy)} downTitle="The corrections to make in Tally, as an Excel" downProps={{ "data-xl-item": "corrections" }} />
     </div>
     <nav className="bk-tabs" aria-label="Filed vs books">{TABS.map(([k, l]) => <button key={k} aria-selected={tab === k} onClick={() => setAndShow("reconTab", k)}>{l}{n[k] ? <span className="sbar-n">{n[k]}</span> : null}</button>)}</nav>
     {tab === "sales" ? <Sales reg={reg} fy={fy} /> : tab === "cn" ? <CreditNotes reg={reg} fy={fy} /> : tab === "taxtype" ? <TaxType reg={reg} fy={fy} /> : tab === "twob" ? <TwoB reg={reg} fy={fy} />
