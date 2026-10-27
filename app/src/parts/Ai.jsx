@@ -113,7 +113,7 @@ export function Notices({ b, kind }) {
 // Settings, AI help: on or off, each kind of help, clients kept away from AI, and what AI did
 export function AiSettings() {
   const c = AIH.cfg(), cos = Object.values(S.companies || {}).sort((x, y) => String(x.name).localeCompare(String(y.name)));
-  const Cb = ({ k, on, dis, children }) => <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "6px 0" }}><input type="checkbox" checked={!!on} disabled={dis} onChange={(ev) => aihSet(k, ev.target.checked)} /><span>{children}</span></label>;
+  const Cb = ({ k, on, dis, children }) => <label style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "6px 0" }}><input type="checkbox" checked={!!on} disabled={dis} title={dis ? "Switch on “Use AI help” above first" : undefined} onChange={(ev) => aihSet(k, ev.target.checked)} /><span>{children}</span></label>;
   const lg = (S.books && S.books.ai && S.books.ai.log) || [];
   return <>
     <section className="dash-card"><h3>AI help in TDS and GST</h3>

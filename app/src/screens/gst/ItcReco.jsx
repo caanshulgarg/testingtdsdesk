@@ -134,7 +134,7 @@ export default function ItcReco({ reg }) {
     <div className="bk-tablewrap"><table className="bk-table tg-fit gf-off rc-table ic-table" data-statement="" id="icTable">
       <thead>
         <tr className="rc-band"><th colSpan={3}></th><th className="rc-bk">As per books</th><th className="rc-2b">As per GSTR-2B</th><th colSpan={4}></th></tr>
-        <tr><th className="ic-tick"><input type="checkbox" aria-label="Select every line shown" data-ic-tick-all="" checked={list.length > 0 && list.every((r) => sel[r.key])} onChange={(ev) => { S.icSel = ev.target.checked ? Object.fromEntries(list.map((r) => [r.key, true])) : {}; render(); }} /></th>
+        <tr><th className="ic-tick"><input type="checkbox" aria-label="Select every line shown" data-ic-tick-all="" disabled={!list.length} title={list.length ? "Select every line shown" : "No line shown to select"} checked={list.length > 0 && list.every((r) => sel[r.key])} onChange={(ev) => { S.icSel = ev.target.checked ? Object.fromEntries(list.map((r) => [r.key, true])) : {}; render(); }} /></th>
           <th>Status</th>
           <th className={"pty" + (f.party ? " th-filtered" : "")}><span className="colh"><span>Supplier · GSTIN</span>
             <select className={"hf-sel" + (f.party ? " on" : "")} aria-label="Supplier" title="Filter: Supplier" value={f.party || ""} onChange={(ev) => setF("party", ev.target.value)}><option value="">Every supplier</option>{parties.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></span></th>

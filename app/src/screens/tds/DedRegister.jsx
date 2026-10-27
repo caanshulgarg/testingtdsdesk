@@ -57,9 +57,9 @@ function useTicks(shown) {
   const tick = (id, v) => { const n = Object.assign({}, sel); if (v) n[id] = true; else delete n[id]; S.tdsDregSel = n; render(); };
   const all = shown.length > 0 && shown.every((x) => sel[x.r.id]);
   const tickAll = (v) => { const n = Object.assign({}, sel); shown.forEach((x) => { if (v) n[x.r.id] = true; else delete n[x.r.id]; }); S.tdsDregSel = n; render(); };
-  return { sel, picked, tick, all, tickAll, clear: () => { S.tdsDregSel = {}; } };
+  return { sel, picked, tick, all, tickAll, n: shown.length, clear: () => { S.tdsDregSel = {}; } };
 }
-const TickTh = ({ t, locked }) => <th className="ck">{!locked ? <input type="checkbox" checked={t.all} aria-label="Select all shown" title="Select all shown" data-dreg-tickall="" onChange={(ev) => t.tickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>;
+const TickTh = ({ t, locked }) => <th className="ck">{!locked ? <input type="checkbox" checked={t.all} aria-label="Select all shown" disabled={!t.n} title={t.n ? "Select all shown" : "No row shown to select"} data-dreg-tickall="" onChange={(ev) => t.tickAll(ev.target.checked)} /> : <span className="sr-only">Tick</span>}</th>;
 const TickTd = ({ t, r, locked }) => <td className="ck">{!locked && <input type="checkbox" checked={!!t.sel[r.id]} data-dreg-tick={r.id} aria-label={"Tick " + (r.party || r.employee || "this deduction")} onChange={(ev) => t.tick(r.id, ev.target.checked)} />}</td>;
 const NameTd = ({ r, locked }) => <td className="dreg-name" data-dreg-name={r.id}><DedName r={r} locked={locked} title="Details" onOpen={() => { S.tdsRowDet = r.id; render(); }} /></td>;
 // the return's challans to map or move to

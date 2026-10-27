@@ -284,7 +284,10 @@ function apply(t, ym, reg) {
   const rev1 = plus(plus(t.rev1, A["4B1"]), mo.rev), rev2 = plus(t.rev2, A["4B2"]), na = plus(t.na, A["4D2"]);
   const netItc = {}; H.forEach((k) => { netItc[k] = R(itc[k] - N(rev1[k]) - N(rev2[k])); });
   const pay = GSTR.setOff(t.net, t.rcmOut, netItc, t.opening);
-  return Object.assign(t, { other, impGoods, impServ, rcmIn, itc, rev1, rev2, na, netItc, pay, payable: pay.cash, held, released, cn2b, rejBack, itcBase: base, itcAdj: A,
+  // next-fix-toggles (the owner: "ineligible ITC to eligible ITC, it did not convert"): the 17(5) reversal is the person's
+  // choice too where they set one, so the register's tie-out, GSTR-9 7E and the 3B workbook (they read t.reversal) agree
+  const reversal = plus(t.reversal, mo.rev);
+  return Object.assign(t, { other, impGoods, impServ, rcmIn, itc, rev1, rev2, na, netItc, pay, payable: pay.cash, held, released, cn2b, rejBack, itcBase: base, itcAdj: A, reversal,
     itcRev: sumCat(mo.revList), itcCats: { held: sumCat(c.held), excess: sumCat(c.excess), released: sumCat(c.released), from2b: sumCat(c.from2b), cn2b, rejBack } });
 }
 if (typeof GSTR === "object" && GSTR.threeBm && !GSTR.threeBm.itcFinal) {

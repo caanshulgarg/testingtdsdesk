@@ -25,7 +25,7 @@ const revPrep = ({ e, c }) => {
 };
 function revCols(rows, sel, nSel) {
   return [
-    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all shown" checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} />,
+    { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all shown" disabled={!rows.length} title={rows.length ? "Select all shown" : "No bill shown to select"} checked={!!nSel && nSel === rows.length} onChange={(ev) => revPickAll(ev.target.checked)} />,
       cell: ({ e }) => <input type="checkbox" checked={sel.has(e.id)} aria-label={"Select " + (e.x.vendorName || e.fileName || "bill")} onChange={(ev) => revPick(e.id, ev.target.checked)} /> },
     { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel hideIdle t="rev" k="date" label="Date" />, v: ({ e }) => e.x.invoiceDate || "", cell: ({ e }) => e.x.invoiceDate ? shortDate(e.x.invoiceDate) : "—" },
     { k: "no", role: "number", label: "Bill no.", filter: <ColFunnel hideIdle t="rev" k="no" label="Bill no." />, v: ({ e }) => e.x.invoiceNo || "", cell: ({ e }) => e.x.invoiceNo || "—" },
@@ -46,7 +46,7 @@ function revCols(rows, sel, nSel) {
     { k: "nature", label: "Payment type", filter: <ColFunnel hideIdle t="rev" k="nature" label="Payment type" />, v: ({ c }) => (c.rule && c.rule.label) || "",
       cell: ({ e }) => <select value={e.natureId || ""} aria-label="Payment type" onChange={(ev) => revNature(e.id, ev.target.value)}><RuleOptions /></select> },
     { k: "tdson", label: "Book TDS", cls: "ck", filter: <ColFunnel hideIdle t="rev" k="tds" label="Book TDS" />, cell: ({ e, c }) => <input type="checkbox" aria-label="Book TDS" checked={c.tdsWould > 0 && !c.skip} disabled={!!(c.rule && c.rule.basis === "never")}
-        title={c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway"}
+        title={c.rule && c.rule.basis === "never" ? "No TDS on this payment type: change the Payment type for TDS" : c.skip ? skipText(c.skip) : c.tdsWould > 0 ? "TDS is deducted on this bill" : "Below the limits: tick to deduct anyway"}
         onChange={(ev) => revTds(e.id, ev.target.checked)} /> },
     { k: "tds", label: "TDS", cls: "n", v: ({ c }) => num(c.tds), sum: ({ c }) => num(c.tds),
       cell: ({ c }) => c.tds ? <b>{money(c.tds)}</b> : c.tdsWould ? <span className="src muted">{money(c.tdsWould)} not booked</span> : "—" },

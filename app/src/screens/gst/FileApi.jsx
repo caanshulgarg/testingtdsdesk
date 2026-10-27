@@ -64,6 +64,8 @@ function words(k, rows) {
   return (r ? r.label : t) + ": " + (FIG[h] || h);
 }
 
+// a greyed-out choice says why (next-fix-toggles): only the firm's people, signed in, file
+const NOT_MAY = "Sign in to the firm account to change this: the firm's owner and staff file returns";
 export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || "", reg = S.gstReg || "", label }) {
   const [note, setNote] = useState(""), [pan, setPan] = useState(""), [otp, setOtp] = useState(""), [ack, setAck] = useState(false);
   const route = gstFileRoute(), gstin = GSTFILE.gstin(reg), ready = GSTFILE.apiReady(reg), s = GSTFILE.state(form, ym, reg), may = GSTFILE.mayFile();
@@ -73,11 +75,11 @@ export default function FileApi({ form = S.gstFileForm || "R1", ym = S.gstYm || 
   if (!ym || !gstin) return null;
   const busy = !!s.busy, cmp = s.cmp, differs = (cmp && cmp.differs) || (fl && fl.diffs) || [];
   const pick = <label className="note" data-gfile-route="">{"File through: "}
-    <select aria-label="File through" value={route} disabled={!may} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setRoute(ev.target.value)}>
+    <select aria-label="File through" value={route} disabled={!may} title={may ? undefined : NOT_MAY} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setRoute(ev.target.value)}>
       <option value="helper">Browser helper</option><option value="api">GST API (OTP every 30 days)</option></select></label>;
   const sign = GSTFILE.sign(), dsc = sign === "dsc";
   const signPick = route === "api" && <label className="note" data-gfile-sign="">{"Signs with: "}
-    <select aria-label="Signs with" value={sign} disabled={!may} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setSign(ev.target.value)}>
+    <select aria-label="Signs with" value={sign} disabled={!may} title={may ? undefined : NOT_MAY} style={{ width: "auto" }} onChange={(ev) => GSTFILE.setSign(ev.target.value)}>
       <option value="evc">EVC (OTP to the signatory)</option><option value="dsc">DSC (companies and LLPs)</option></select></label>;
   const head = <div className="row" style={{ justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
     <b>{"File " + name + " for " + GSTR.label(ym)}</b><span className="row" style={{ gap: 12, flexWrap: "wrap" }}>{signPick}{pick}</span></div>;

@@ -62,7 +62,7 @@ export default function AutoPostSettings() {
           <label className="f"><span>Hold before posting</span><select data-ap-hold="" value={String(v.holdMin)} onChange={(ev) => set("holdMin", Number(ev.target.value))}>
             {HOLDS.concat(HOLDS.some((h) => h[0] === v.holdMin) ? [] : [[v.holdMin, "Hold " + v.holdMin + " minutes"]]).map(([m, t]) => <option key={m} value={m}>{t}</option>)}</select></label>
         </div>
-        <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked disabled /> Only when Tally can be reached; otherwise the entries are queued and go when Tally is open <span className="note">(always)</span></label>
+        <label className="chk" style={{ marginTop: 6 }}><input type="checkbox" checked disabled title="Always on: entries are never posted while Tally cannot be reached" /> Only when Tally can be reached; otherwise the entries are queued and go when Tally is open <span className="note">(always)</span></label>
         <p className="note">FinCom checks a GSTIN’s check digit and whether the supplier is “Not filing” in the client’s 2B; it cannot see whether a registration is active (the GST portal offers no such look-up here).</p>
       </div>
       <h3 style={{ marginTop: 14 }}>Who may change this</h3>
