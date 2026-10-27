@@ -97,7 +97,7 @@ Billing never updates `coupon_discounts` directly; it uses the function. Rows ar
 console_credit_post(p_firm uuid, p_amount_paise bigint, p_kind text, p_ref text, p_reason text, p_by uuid)
 ```
 
-The call is `console_credit_post(firm, value, 'coupon', <redemption id>, 'Coupon <CODE>', <the person>)`.
+The call is `console_credit_post(firm, value, 'coupon_credit', <redemption id>, 'Coupon <CODE>', <the person>)` (`coupon_credit` is the ledger kind migration 119 allows for it; integ-console fixed the earlier `'coupon'`, which 119 refused as `bad_kind`).
 
 Migration 120 does not create this function. If 119 is not in yet, a free-credit code answers "This code cannot be used just now. Try again later." and nothing is used up. The tests stub it, in test setup only.
 

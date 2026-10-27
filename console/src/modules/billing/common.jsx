@@ -29,10 +29,11 @@ export const KINDS = [
   { value: "topup", label: "Top-up" }, { value: "charge", label: "Charge" }, { value: "fee", label: "Monthly fee" }, { value: "refund", label: "Refund" },
   { value: "adjust", label: "Adjustment" }, { value: "opening", label: "Opening" }, { value: "signup_credit", label: "Sign-up credit" },
   { value: "coupon_credit", label: "Coupon credit" }, { value: "discount", label: "Discount" }, { value: "credit", label: "Credit (old)" },
+  { value: "ai_usage", label: "AI past the allowance" },
 ];
 export const PAY_MODES = [{ value: "bank", label: "Bank transfer" }, { value: "upi", label: "UPI" }, { value: "cheque", label: "Cheque" }, { value: "cash", label: "Cash" }, { value: "gateway", label: "Payment gateway" }, { value: "other", label: "Other" }];
 export const CATEGORIES = [{ value: "goodwill", label: "Goodwill" }, { value: "correction", label: "Correction" }, { value: "test_cleanup", label: "Test clean-up" }, { value: "other", label: "Other" }];
-export const ITEMS = ["bills", "bank", "sales", "claude", "vision", "clients", "cloud", "tally", "plan", "wallet"];
+export const ITEMS = ["bills", "bank", "sales", "claude", "vision", "clients", "cloud", "tally", "plan", "wallet", "coupon", "ai"];
 
 // a rupee box: shows what was typed, keeps paise in m[key]
 export function RupeeField({ label, m, set, k, hint, testid, allowNegative = false }) {

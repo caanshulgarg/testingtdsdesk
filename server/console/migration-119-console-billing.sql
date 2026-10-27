@@ -27,7 +27,8 @@
 --                             read-only (firm_is_writable(), which 118's can_write() wrap asks) and stop charging;
 --                             past_due does not block anything. A firm may read its own row.
 --   wallet_entries (columns)  reverses_id (a refund's charge), reason, category, pay_mode, pay_ref, received_on, idem_key
---                             (unique); new kinds topup, opening, signup_credit, coupon_credit, discount.
+--                             (unique); new kinds topup, opening, signup_credit, coupon_credit, discount, ai_usage (AI past
+--                             the plan's allowance: migration 121's daily job).
 --   console_credit_post(p_firm, p_amount_paise, p_kind, p_ref, p_reason, p_by)  THE way a balance changes: it locks the
 --                             firm, writes the ledger line and sets the balance in one step; idempotent on (p_kind,
 --                             p_ref): the same pair again returns the first line and changes nothing (another firm or
@@ -291,11 +292,23 @@ returns boolean language sql stable security definer set search_path = '' as $$
                              or exists (select 1 from public.subscriptions s where s.firm_id = f.id
                                          and s.status in ('read_only', 'paused', 'cancelled'))))
 $$;
--- the app's "paused" page and banners: the firm's status and its billing status
+-- the app's "paused" page and banners: the firm's status and its billing status, and the one stage the app acts on:
+--   stage      the console's suspended / closed first (firms.status), else billing's paused / read_only / cancelled /
+--              past_due / trial, else active
+--   read_only  writing is refused (the same rule as firm_is_writable(): suspended, closed, read_only, paused, cancelled)
+--   can_read   false only when billing has paused the firm: "sign in and pay only" (console-plan.md 3.5); the app then
+--              shows its paused page with Plan and credit and Help, and nothing of the firm's work
+-- (status, reason, at: 118's fields, kept; billing_status, grace_until, renews_on, read_only_since, paused_since: 119's)
 create or replace function public.my_firm_status()
 returns jsonb language sql stable security definer set search_path = '' as $$
   select coalesce((select jsonb_build_object('status', f.status, 'reason', f.status_reason, 'at', f.status_at,
-                                             'billing_status', s.status, 'grace_until', s.grace_until, 'renews_on', s.renews_on)
+                                             'billing_status', s.status, 'grace_until', s.grace_until, 'renews_on', s.renews_on,
+                                             'read_only_since', s.read_only_since, 'paused_since', s.paused_since,
+                                             'stage', case when f.status <> 'active' then f.status
+                                                           when s.status in ('paused', 'read_only', 'cancelled', 'past_due', 'trial') then s.status
+                                                           else 'active' end,
+                                             'read_only', f.status <> 'active' or coalesce(s.status in ('read_only', 'paused', 'cancelled'), false),
+                                             'can_read', not coalesce(s.status = 'paused', false))
                      from public.members m join public.firms f on f.id = m.firm_id
                      left join public.subscriptions s on s.firm_id = f.id
                     where m.user_id = auth.uid() and m.active limit 1), jsonb_build_object('status', null))
@@ -311,7 +324,7 @@ alter table public.wallet_entries add column if not exists received_on date;
 alter table public.wallet_entries add column if not exists idem_key text;
 create unique index if not exists wallet_entries_idem_key on public.wallet_entries (idem_key) where idem_key is not null;
 create index if not exists wallet_entries_reverses on public.wallet_entries (reverses_id) where reverses_id is not null;
--- the kinds: the old five plus topup, opening, signup_credit, coupon_credit, discount (the old check is replaced by a
+-- the kinds: the old five plus topup, opening, signup_credit, coupon_credit, discount, ai_usage (the old check is replaced by a
 -- wider one; no row changes)
 do $$
 declare c record;
@@ -323,7 +336,7 @@ begin
   end loop;
   if not exists (select 1 from pg_constraint where conname = 'wallet_entries_kind_v2' and conrelid = 'public.wallet_entries'::regclass) then
     alter table public.wallet_entries add constraint wallet_entries_kind_v2 check (kind in
-      ('credit', 'charge', 'refund', 'adjust', 'fee', 'topup', 'opening', 'signup_credit', 'coupon_credit', 'discount'));
+      ('credit', 'charge', 'refund', 'adjust', 'fee', 'topup', 'opening', 'signup_credit', 'coupon_credit', 'discount', 'ai_usage'));
   end if;
 end $$;
 
@@ -338,13 +351,13 @@ declare
   v_key text; v_old public.wallet_entries; v_bal numeric; v_new numeric; v_amt numeric; v_meta jsonb; v_id bigint;
 begin
   if p_firm is null then raise exception 'console: no_firm' using errcode = 'P0002'; end if;
-  if p_kind is null or p_kind not in ('topup', 'charge', 'fee', 'refund', 'adjust', 'opening', 'signup_credit', 'coupon_credit', 'discount', 'credit') then
+  if p_kind is null or p_kind not in ('topup', 'charge', 'fee', 'refund', 'adjust', 'opening', 'signup_credit', 'coupon_credit', 'discount', 'credit', 'ai_usage') then
     raise exception 'console: bad_kind' using errcode = '22023';
   end if;
   if p_ref is null or length(btrim(p_ref)) = 0 or length(p_ref) > 300 then raise exception 'console: bad_ref' using errcode = '22023'; end if;
   if p_amount_paise is null or p_amount_paise = 0 or abs(p_amount_paise) > 100000000000 then raise exception 'console: bad_amount' using errcode = '22023'; end if;
   if (p_kind in ('topup', 'refund', 'signup_credit', 'coupon_credit', 'discount', 'credit') and p_amount_paise < 0)
-     or (p_kind in ('charge', 'fee') and p_amount_paise > 0) then
+     or (p_kind in ('charge', 'fee', 'ai_usage') and p_amount_paise > 0) then
     raise exception 'console: bad_sign' using errcode = '22023';
   end if;
   if p_kind in ('adjust', 'refund', 'opening') and length(btrim(coalesce(p_reason, ''))) < 5 then
@@ -556,6 +569,11 @@ end $$;
 -- firms that were short this month (the daily job, and after a top-up). Then the stages move on. Safe to run any number
 -- of times: one billing_runs row per firm per month, and the fee line's key fee:<firm>:<YYYY-MM>. Writes one
 -- console_audit row ("billing.run", with the reason given; who is null for the scheduled job). Answers the report.
+-- Coupons (migration 120, docs/CONSOLE-COUPONS.md "the contract with billing"), when 120 is in: a firm's live trial_days
+-- discount adds its days to the trial (from its end, or today when that is later) while the firm is active or in its
+-- trial; then the month's fee loses the firm's one live fee discount (percent of the fee capped at max_off_paise, flat
+-- up to the fee, or the whole fee for a free month): a 'discount' ledger line (ref: the redemption) and the fee line,
+-- then coupon_discount_apply() for the month. A firm short even after the discount keeps it for the retry.
 create or replace function public.console_billing_run(p_firm uuid, p_by uuid, p_mode text default 'month', p_reason text default null)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare
@@ -566,6 +584,9 @@ declare
   v_pause integer := coalesce((v_set ->> 'paused_after_days')::integer, 30);
   r record; v_run public.billing_runs; v_fee jsonb; v_amt bigint; v_post jsonb; v_out text; v_entry bigint;
   v_rows jsonb := '[]'::jsonb; v_count jsonb := '{}'::jsonb; v_role text := 'system'; v_status text; n integer;
+  v_cp boolean := to_regclass('public.coupon_discounts') is not null
+                  and to_regprocedure('public.coupon_discount_apply(bigint,date,bigint,text)') is not null;
+  d record; v_off bigint; v_dref text;
 begin
   if p_mode is null or p_mode not in ('month', 'retry') then raise exception 'console: bad_mode' using errcode = '22023'; end if;
   if p_by is not null then v_role := public.console_role_check(p_by, array['owner', 'billing']); end if;
@@ -585,18 +606,51 @@ begin
       -- a new month: the period starts again (allowances and caps refill) whether or not the fee can be paid
       update public.firms set period_start = v_month where id = r.firm_id and period_start < v_month;
       update public.subscriptions set period_start = v_month, updated_at = now() where firm_id = r.firm_id and period_start < v_month;
+      -- a coupon's longer trial (migration 120): its days added before the trial is looked at
+      if v_cp and exists (select 1 from public.subscriptions where firm_id = r.firm_id and status in ('active', 'trial')) then
+        for d in select x.id, x.value from public.coupon_discounts x
+                  where x.firm_id = r.firm_id and x.kind = 'trial_days' and x.status in ('pending', 'active') and x.months_left > 0 order by x.id loop
+          update public.subscriptions
+             set status = 'trial', trial_ends_on = greatest(coalesce(trial_ends_on, v_today), v_today) + d.value::integer, updated_at = now()
+           where firm_id = r.firm_id;
+          perform public.coupon_discount_apply(d.id, v_today, 0, 'trial:' || r.firm_id::text || ':' || v_today::text);
+        end loop;
+      end if;
       if (select status = 'trial' and coalesce(trial_ends_on, v_today) > v_today from public.subscriptions where firm_id = r.firm_id) then
         v_out := 'trial';
       else
         update public.subscriptions set status = 'active', trial_ends_on = coalesce(trial_ends_on, v_today) where firm_id = r.firm_id and status = 'trial';
         v_fee := public.console_billing_fee(r.firm_id);
         v_amt := (v_fee ->> 'total_paise')::bigint;
+        -- the firm's one live fee discount (coupons, migration 120; stacking keeps it to one)
+        v_off := 0; d := null;
+        if v_cp and v_amt > 0 then
+          select x.id, x.kind, x.value, x.max_off_paise, x.from_redemption into d from public.coupon_discounts x
+           where x.firm_id = r.firm_id and x.kind in ('percent', 'flat', 'free_months') and x.status in ('pending', 'active') and x.months_left > 0
+             and not exists (select 1 from public.coupon_discount_months m where m.discount_id = x.id and m.period = v_month)
+           order by x.id limit 1;
+          if found then
+            v_off := case d.kind when 'percent' then least(round(v_amt * d.value / 100.0)::bigint, coalesce(d.max_off_paise, v_amt))
+                                 when 'flat' then least(d.value, v_amt) else v_amt end;
+            v_fee := v_fee || jsonb_build_object('gross_paise', v_amt, 'discount_paise', v_off, 'discount_id', d.id, 'discount_kind', d.kind, 'redemption', d.from_redemption);
+          end if;
+        end if;
         if v_amt = 0 then
           v_out := 'free';
-        elsif (select round(balance * 100) from public.firms where id = r.firm_id) >= v_amt then
+        elsif (select round(balance * 100) from public.firms where id = r.firm_id) >= v_amt - v_off then
+          if v_off > 0 then
+            -- the discount line first (credit), so a firm whose credit covers only the discounted fee is charged
+            v_dref := d.from_redemption::text || ':' || to_char(v_month, 'YYYY-MM');
+            perform set_config('fincom.ledger_meta', jsonb_build_object('code', 'coupon', 'note', 'Coupon discount for ' || to_char(v_month, 'Mon YYYY'), 'ref', d.from_redemption::text)::text, true);
+            perform public.console_credit_post(r.firm_id, v_off, 'discount', v_dref, null, p_by);
+          end if;
           perform set_config('fincom.ledger_meta', jsonb_build_object('code', 'plan', 'note', 'Monthly charge for ' || to_char(v_month, 'Mon YYYY'), 'ref', to_char(v_month, 'YYYY-MM'))::text, true);
           v_post := public.console_credit_post(r.firm_id, -v_amt, 'fee', r.firm_id::text || ':' || to_char(v_month, 'YYYY-MM'), null, p_by);
           v_entry := (v_post ->> 'entry_id')::bigint;
+          if v_off > 0 then
+            perform public.coupon_discount_apply(d.id, v_month, v_off, 'discount:' || v_dref);
+            v_amt := v_amt - v_off;
+          end if;
           v_out := 'charged';
         else
           v_out := 'short';

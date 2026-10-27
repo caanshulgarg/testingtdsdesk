@@ -17,7 +17,7 @@ run first (console_admins, console_audit_add, firms.status), and made-up firms. 
      matter), paused, ended, not yet, expired, the plan, new firms only, once per firm, total uses, stacking (no stack,
      one discount at a time, a stackable credit beside a stackable discount), 5 wrong codes an hour; plain words
   5. what it records: the redemption (who, firm, when, source, terms); the use counted; free credit through
-     console_credit_post(firm, paise, 'coupon', redemption id, reason, the person); percent, flat, free months and trial
+     console_credit_post(firm, paise, 'coupon_credit', redemption id, reason, the person); percent, flat, free months and trial
      days as a coupon_discounts row; a free-credit code before 119 is in: refused, nothing used up
   6. races: two firms taking the last use at the same moment (one gets it, uses = total); one firm sending the same
      once-per-firm code twice at once (one redemption)
@@ -184,7 +184,7 @@ try:
     r = redeem(B1, "icai1000")
     posts = db.rows("select firm, amount, kind, ref, reason, by_user from test_credit_posts")
     ok(r.get("ok") is True and r.get("message") == "₹1,000 has been added to your credit.", "free credit: \"%s\"" % r.get("message"))
-    ok(posts == [{"firm": F2, "amount": "100000", "kind": "coupon", "ref": r.get("redemption_id"), "reason": "Coupon ICAI1000", "by_user": B1}], "through console_credit_post(firm, 100000 paise, 'coupon', the redemption id, reason, the person) (%s)" % posts)
+    ok(posts == [{"firm": F2, "amount": "100000", "kind": "coupon_credit", "ref": r.get("redemption_id"), "reason": "Coupon ICAI1000", "by_user": B1}], "through console_credit_post(firm, 100000 paise, 'coupon_credit', the redemption id, reason, the person) (%s)" % posts)
     ok(one("select status || '|' || value_paise from public.coupon_redemptions where id = '%s'" % r.get("redemption_id")) == "finished|100000" and one("select count(*) from public.coupon_discounts where firm_id = '%s'" % F2) == "0", "the credit redemption: finished, ₹1,000 given; no discount row")
     # stacking: a stackable trial beside the (finished) credit; then a non-stackable discount refused while the trial runs
     r = redeem(B1, "TRIAL30")

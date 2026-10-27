@@ -534,7 +534,7 @@ only (refresh, OAuth, two-step code pass); members no longer read tally_bridge_s
 function change needed. Tested on pg_stand: `tests/run_migration116.py` (RED_WITHOUT_116=1 shows the checks fail without
 it) and `tests/run_migration_order.py`.
 
-## The console (console.fincom.live): 118, and 119 to 123 reserved
+## The console (console.fincom.live): 118 to 123
 
 Console phase 1 "Foundation" (27-Oct-2026, branch `next-console-p1`; file md5 72c550c8aab0338fd2f67497c2b36a7f; **NOT run on staging**: the
 owner runs it; docs/CONSOLE-SETUP.md step A): `server/console/migration-118-console-foundation.sql` runs after 112
@@ -547,27 +547,26 @@ select and insert). Functions `console_*` (service role only). The switch-off co
 `console_post_guard` on tally_post_jobs (no posting queued or taken for a paused firm or a switched-off company). 117 is
 left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.py` (RED_WITHOUT_118=1 fails).
 
-**Reserved for the console's later modules** (each in `server/console/`, add-only, grants explicit, its own
-`tests/run_migration1NN.py`); take the next free one and write the file name here:
+**The final numbers** (integrated on branch `integ-console`, 27-Oct-2026). Run them in this order, each once, after 112;
+each is add-only, one transaction, safe twice, and has its own `tests/run_migration1NN.py`; `tests/run_migration_order.py`
+applies the whole chain twice. None is run on staging: the owner runs them.
 
-| # | Module (console-plan.md 4.3) |
-|---|---|
-| 119 | **Taken: console billing core**, `server/console/migration-119-console-billing.sql` (see below); it also covers what 120 and 121 were reserved for |
-| 120 | Subscriptions |
-| 119 | Settings / platform defaults (trial credit, low-credit warning, grace days, ...) and plans v2 + price list |
-| 120 | **Coupons**: `server/console/migration-120-coupons.sql` (taken by next-console-coupons; see below) |
-| 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
-| 122 | Subscriptions (free: coupons took 120) |
-| 121 | **Taken: AI control centre** (`server/console/migration-121-ai-control.sql`, branch `next-console-ai`, 27-Oct-2026; NOT run on staging): `ai_features` (the registry, seeded ON as today; a new row starts off), `ai_settings` (kill switch), `ai_plan_allowance` (by plan id), `ai_firm_settings`, `ai_allowed` (asked by every AI function through `server/_shared/ai_policy.ts`), `console_ai_*`. After 118 and the assistant's 77/96. Tested by `tests/run_migration121.py` (RED_WITHOUT_121=1 fails). docs/CONSOLE-AI.md |
-| 122 | Coupons |
-| 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
-| 122 | **Taken** (next-console-ops): `server/console/migration-122-console-ops.sql`: keys meta, see-as-firm log, health, support desk, exports (md5 `f3670fd0682e70f5bd06b6da56e3a6d8`) |
-| 123 | **Taken** (next-console-ops): `server/console/migration-123-notices-flags.sql`: announcements, feature flags, `announcements_active` / `flags_for_me` (md5 `55c7b424ebdd1da8853f0be3e48d7bf7`) |
-Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
+| # | File | Module |
+|---|---|---|
+| 118 | `server/console/migration-118-console-foundation.sql` | Foundation (see above) |
+| 119 | `server/console/migration-119-console-billing.sql` | Billing core: settings, plans, price list, subscriptions, the ledger (`console_credit_post`), the monthly run (see below) |
+| 120 | `server/console/migration-120-coupons.sql` | Coupons (see below; docs/CONSOLE-COUPONS.md) |
+| 121 | `server/console/migration-121-ai-control.sql` | AI control centre: `ai_features` (the registry, seeded ON as today; a new row starts off), `ai_settings` (kill switch), `ai_plan_allowance` (by plan id), `ai_firm_settings`, `ai_allowed` (asked by every AI function through `server/_shared/ai_policy.ts`), `console_ai_*`. After 118 and the assistant's 77/96. Tested by `tests/run_migration121.py` (RED_WITHOUT_121=1 fails). docs/CONSOLE-AI.md |
+| 122 | `server/console/migration-122-console-ops.sql` | Operations: keys meta, see-as-firm log, health, support desk, exports (docs/CONSOLE-SETUP.md) |
+| 123 | `server/console/migration-123-notices-flags.sql` | Announcements, feature flags, `announcements_active` / `flags_for_me` |
+| 124 | (branch `next-mobile`, not in `integ-console`) | Mobile device tokens |
+
+Numbers after 124 are taken in order when those phases start. The md5 of each file is in the deploy list of the
+integration report (the files changed while the branches were joined; check `md5sum` before running).
 
 ## 119: console billing core (phase 2)
 
-Branch `next-console-billing` (27-Oct-2026; file md5 7db694f144237e7c6db594db060c1bde; **NOT run on staging**: the owner runs it, after 118).
+Branch `next-console-billing` (27-Oct-2026; **NOT run on staging**: the owner runs it, after 118).
 `server/console/migration-119-console-billing.sql`. Add-only, one transaction, `lock_timeout` 10 s, safe twice; nothing
 about money changes by running it (no balance, ledger line or test-firm mark is written; the clean-up is a console
 button). Adds: `console_settings` (billing defaults: start credit ₹10,000, low-credit warning ₹500, grace 7 days, paused
@@ -582,6 +581,9 @@ through the ledger, `billing_runs` + `console_billing_run` (once per firm per mo
 `console-billing-daily` (18:50 UTC), and the console's `console_*` functions (service role only). The signup function
 (v14) reads the start credit through `console_billing_settings()`. Tested on pg_stand: `tests/run_migration119.py`
 (RED_WITHOUT_119=1 fails).
+
+## 120: coupons
+
 **120, coupons** (27-Oct-2026, branch `next-console-coupons`; **NOT run on staging**: the owner runs it;
 docs/CONSOLE-COUPONS.md): `server/console/migration-120-coupons.sql` runs after 118 (console_admins, console_audit_add,
 console_role_check, firms.status). Free-credit codes call `console_credit_post(uuid, bigint, text, text, text, uuid)`,

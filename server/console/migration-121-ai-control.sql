@@ -30,6 +30,14 @@
 --                      console_ai_firm_set (owner, billing). Reads: console_ai_overview, console_ai_firms,
 --                      console_ai_usage (rows by day, firm, feature and model; the console's charts are worked out
 --                      from the same rows, after the same filters, in the console-admin function).
+--   ai_usage_charges + ai_usage_charge_run(day)   AI past the allowance, charged (integ-console, 27-Oct-2026): once a
+--                      day (pg_cron console-ai-usage-daily, 18:40 UTC = 00:10 India time, for yesterday) the uses of a day
+--                      that came after the firm's allowance was used up, where the rule is 'charge', are priced at the
+--                      feature's price (per use, or per million tokens in and out; 'included' costs nothing) and posted
+--                      as ONE ledger line per firm, feature and day through billing's console_credit_post (kind
+--                      ai_usage, ref <feature>:<YYYY-MM>:<firm>:<YYYY-MM-DD>; idempotent). A day is worked out once
+--                      (ai_usage_charges keeps it); a firm short of credit keeps the amount owed and is retried each day
+--                      for 60 days. Nothing is posted before migration 119 is in.
 -- Money is in paise (integers). The usage read: assistant_log (every AI call of Ask FinCom, voice, captions, call
 -- summaries, 2B and TDS matching: cost_inr at FinCom's cost), wallet_entries (the gateway's charges for bill reading
 -- and OCR: what the firm was charged; FinCom's cost there is estimated from cost_per_use_paise).
@@ -422,12 +430,105 @@ begin
   return jsonb_build_object('firm_id', p_firm, 'ai_off', p_ai_off, 'allowance_paise', p_allowance_paise, 'after_allowance', p_after, 'features_off', v_feats);
 end $$;
 
+-- ---------------------------------------------------------------- AI past the allowance: the daily charge
+create table if not exists public.ai_usage_charges (
+  firm_id         uuid not null references public.firms (id) on delete cascade,
+  day             date not null,                   -- India's day of the uses
+  feature         text not null,                   -- ai_features.code
+  uses            integer not null default 0,
+  amount_paise    bigint not null check (amount_paise > 0),
+  status          text not null default 'short' check (status in ('short', 'charged')),   -- short: not posted yet (owed)
+  ref             text not null,
+  wallet_entry_id bigint,
+  tries           integer not null default 0,
+  created_at      timestamptz not null default now(),
+  charged_at      timestamptz,
+  primary key (firm_id, day, feature)
+);
+alter table public.ai_usage_charges enable row level security;
+revoke all on public.ai_usage_charges from public, anon, authenticated;
+grant select, insert, update on public.ai_usage_charges to service_role;
+
+-- p_day: India's day to work out (null: yesterday); then every amount still owed from the last 60 days is posted
+create or replace function public.ai_usage_charge_run(p_day date default null)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+declare
+  v_today date := (now() at time zone 'Asia/Kolkata')::date;
+  v_day date := coalesce(p_day, (now() at time zone 'Asia/Kolkata')::date - 1);
+  v_from date := date_trunc('month', coalesce(p_day, (now() at time zone 'Asia/Kolkata')::date - 1))::date;
+  v_post boolean := to_regprocedure('public.console_credit_post(uuid,bigint,text,text,text,uuid)') is not null;
+  c record; v_res jsonb; n_new integer := 0; n_ch integer := 0; n_short integer := 0;
+begin
+  if v_day >= v_today then raise exception 'console: ai_bad_day' using errcode = '22023'; end if;
+  -- 1. the day, once: each use after the allowance was used up (the month's spend before the day from
+  --    assistant_usage, as ai_allowed counts it, then the day's calls in order), at the feature's price
+  with lim as (
+    select fm.id as firm_id, coalesce(s.allowance_paise, pa.allowance_paise) as limit_paise,
+           coalesce(s.after_allowance, pa.after_allowance, 'charge') as after_rule,
+           coalesce((select round(sum(u.cost_inr) * 100) from public.assistant_usage u
+                      where u.firm_id = fm.id and u.day >= v_from and u.day < v_day), 0) as spent_before
+      from public.firms fm
+      left join public.ai_firm_settings s on s.firm_id = fm.id
+      left join public.ai_plan_allowance pa on pa.plan_id = fm.plan_id
+  ), logs as (
+    select l.firm_id, l.input_tokens, l.output_tokens, public.ai_code_of(l.feature, l.tools) as code,
+           coalesce(sum(round(l.cost_inr * 100)) over (partition by l.firm_id order by l.at, l.id rows between unbounded preceding and 1 preceding), 0) as before_today
+      from public.assistant_log l
+     where l.at >= (v_day::timestamp at time zone 'Asia/Kolkata') and l.at < ((v_day + 1)::timestamp at time zone 'Asia/Kolkata')
+  ), priced as (
+    select g.firm_id, g.code,
+           case f.price_mode when 'per_use' then f.price_per_use_paise::bigint
+                             when 'per_token' then round((g.input_tokens::numeric * f.price_in_mtok_paise + g.output_tokens::numeric * f.price_out_mtok_paise) / 1000000)::bigint
+                             else 0 end as price
+      from logs g join lim on lim.firm_id = g.firm_id join public.ai_features f on f.code = g.code
+     where lim.limit_paise is not null and lim.after_rule = 'charge' and f.counts_against_allowance
+       and lim.spent_before + g.before_today >= lim.limit_paise
+  )
+  insert into public.ai_usage_charges (firm_id, day, feature, uses, amount_paise, ref)
+  select p.firm_id, v_day, p.code, count(*), sum(p.price), p.code || ':' || to_char(v_day, 'YYYY-MM') || ':' || p.firm_id::text || ':' || v_day::text
+    from priced p group by p.firm_id, p.code having sum(p.price) > 0
+  on conflict (firm_id, day, feature) do nothing;
+  get diagnostics n_new = row_count;
+  -- 2. post what is owed (billing's ledger, migration 119): one line per firm, feature and day
+  if v_post then
+    for c in select * from public.ai_usage_charges where status = 'short' and day >= v_day - 60 order by day, firm_id, feature for update loop
+      begin
+        perform set_config('fincom.ledger_meta', jsonb_build_object('code', 'ai', 'qty', c.uses, 'ref', c.ref,
+          'note', 'AI past the allowance: ' || coalesce((select f.name from public.ai_features f where f.code = c.feature), c.feature) || ', '
+                  || c.uses || case when c.uses = 1 then ' use on ' else ' uses on ' end || to_char(c.day, 'DD-Mon-YYYY'))::text, true);
+        v_res := public.console_credit_post(c.firm_id, -c.amount_paise, 'ai_usage', c.ref, null, null);
+        update public.ai_usage_charges set status = 'charged', wallet_entry_id = (v_res ->> 'entry_id')::bigint, charged_at = now(), tries = tries + 1
+         where firm_id = c.firm_id and day = c.day and feature = c.feature;
+        n_ch := n_ch + 1;
+      exception when others then
+        if sqlerrm not like 'console: below_zero%' then raise; end if;
+        update public.ai_usage_charges set tries = tries + 1 where firm_id = c.firm_id and day = c.day and feature = c.feature;
+        n_short := n_short + 1;
+      end;
+    end loop;
+  end if;
+  if n_new + n_ch + n_short > 0 then
+    perform public.console_audit_add(null, 'system', 'ai.usage_charge', null, null, null,
+      jsonb_build_object('day', v_day, 'worked_out', n_new, 'charged', n_ch, 'short', n_short), null, null, null);
+  end if;
+  return jsonb_build_object('day', v_day, 'worked_out', n_new, 'charged', n_ch, 'short', n_short, 'posting', v_post);
+end $$;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    perform cron.schedule('console-ai-usage-daily', '40 18 * * *', 'select public.ai_usage_charge_run(null)');
+  else
+    raise notice 'console 121: pg_cron is not here; AI past the allowance is not charged on a schedule';
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------- grants: the service role only
 do $$
 declare f record;
 begin
   for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname = 'public' and (p.proname like 'console\_ai\_%' or p.proname in ('ai_allowed', 'ai_code_of', 'ai_month_spend_paise')) loop
+            where n.nspname = 'public' and (p.proname like 'console\_ai\_%' or p.proname in ('ai_allowed', 'ai_code_of', 'ai_month_spend_paise', 'ai_usage_charge_run')) loop
     execute format('revoke all on function %s from public, anon, authenticated', f.sig);
     execute format('grant execute on function %s to service_role', f.sig);
   end loop;

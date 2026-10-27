@@ -8,7 +8,9 @@ import { fmtInr, fmtNum } from "../../lib/format.js";
 import { href } from "../../lib/route.js";
 import { saveBlob, zip } from "../../lib/zip.js";
 
-const KINDS = [{ value: "topup", label: "Top-up" }, { value: "charge", label: "Charge" }, { value: "refund", label: "Refund" }, { value: "adjust", label: "Adjustment" }, { value: "fee", label: "Fee" }];
+const KINDS = [{ value: "topup", label: "Top-up" }, { value: "charge", label: "Charge" }, { value: "refund", label: "Refund" }, { value: "adjust", label: "Adjustment" }, { value: "fee", label: "Fee" },
+  { value: "opening", label: "Opening" }, { value: "signup_credit", label: "Sign-up credit" }, { value: "coupon_credit", label: "Coupon credit" },
+  { value: "discount", label: "Discount" }, { value: "ai_usage", label: "AI past the allowance" }, { value: "credit", label: "Credit (old)" }];
 const LEDGER = [
   { key: "at", label: "When", type: "date" },
   { key: "firm", label: "Firm", type: "text" },

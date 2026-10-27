@@ -20,7 +20,7 @@
 --   coupon_discount_months  one row per discount per billing period: the rupees (paise) taken off, the ledger ref.
 --   coupon_attempts         the user app's tries (for "5 wrong codes an hour"); never shown to firms.
 --   coupon_redeem(code, source)   the user app's one door (authenticated): every rule in one place, the redemption, the
---                           use counted, the credit posted (console_credit_post, kind 'coupon', ref = the redemption
+--                           use counted, the credit posted (console_credit_post, kind 'coupon_credit', ref = the redemption
 --                           id) or the discount recorded, all in one transaction. Answers {ok, code, error | message};
 --                           a refusal is in plain words and is not an error (so the try is counted).
 --   console_coupon*()       the console's reads and writes (service role only; each write re-checks the caller's
@@ -254,7 +254,7 @@ begin
     update public.coupons set uses = uses + 1 where id = c.id;
     if c.kind = 'credit' then
       execute 'select public.console_credit_post($1, $2, $3, $4, $5, $6)'
-        using v_firm, c.value, 'coupon', v_red::text, 'Coupon ' || c.code, v_uid;
+        using v_firm, c.value, 'coupon_credit', v_red::text, 'Coupon ' || c.code, v_uid;
       update public.coupon_redemptions set value_paise = c.value, status = 'finished', finished_at = now() where id = v_red;
       v_msg := public.coupon_inr(c.value) || ' has been added to your credit.';
     else

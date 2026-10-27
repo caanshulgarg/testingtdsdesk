@@ -137,6 +137,9 @@ try:
         # phase 1's items, in this order (later modules, e.g. coupons, add their own between them)
         P1 = ["dashboard", "firms", "companies", "users", "audit", "admins", "settings"]
         ok([n for n in navs if n in P1] == P1, "owner's menu: %s" % navs)
+        # every module, integrated (integ-console): billing, coupons, operations, AI
+        ok(navs == ["dashboard", "firms", "companies", "users", "subscriptions", "credit", "plans", "prices", "billing-runs", "coupons", "support",
+                    "announcements", "flags", "seeas", "health", "audit", "exports", "keys", "admins", "ai", "settings"], "owner's menu: every module (%s)" % navs)
         pg.click("[data-nav=firms]"); wait_rows(pg, "firms")
         ok("ABC Associates" in text(pg) and "1–25 of 33" in pg.inner_text("[data-table=firms] [data-testid=count]"), "Firms: the list, 25 a page of 33")
         shot(pg, "04-firms")
@@ -208,6 +211,8 @@ try:
         sign_in(pg, "viewer"); pg.wait_for_selector("[data-testid=tiles]")
         navs = pg.eval_on_selector_all("nav [data-nav]", "els => els.map(e => e.dataset.nav)")
         ok([n for n in navs if n in P1] == ["dashboard", "firms", "companies", "users"], "Viewer's menu: no Change history, Admins or Settings (%s)" % navs)
+        ok(navs == ["dashboard", "firms", "companies", "users", "subscriptions", "credit", "plans", "prices", "billing-runs", "coupons", "support",
+                    "announcements", "flags", "health", "ai"], "Viewer's menu: every module it may read; no See as firm, Change history, Exports, Keys, Admins or Settings (%s)" % navs)
         pg.goto(ORIGIN + "/#/users/00000000-0000-4000-8000-000000000011"); pg.wait_for_selector("text=Two-step methods")
         ok(pg.query_selector("[data-action]") is None, "Viewer: no write button on a person")
         ok("as***@abc.test" in text(pg), "Viewer: emails partly hidden")

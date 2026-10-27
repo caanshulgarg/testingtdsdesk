@@ -282,5 +282,32 @@ for label in ("staging", "fresh"):
     run_order(label, ORDERS[label])
 same = [fn for fn in READERS if len(set(texts.get(fn, {}).values())) == 1 and len(texts.get(fn, {})) == 2]
 ok(len(same) == len(READERS), "both orders end with the same function texts (%s)" % ([fn for fn in READERS if fn not in same] or "all %d" % len(READERS)))
+
+# the console (27-Oct-2026, integ-console; docs/MIGRATION-ORDER.md "118 to 123"): 118 -> 119 -> 120 -> 121 -> 122 -> 123 on
+# their own database (tests/console_chain_stand.py: the stand-ins each file's own test uses), the whole chain TWICE; the
+# function texts after the second pass are the first's; 119's my_firm_status / firm_is_writable replace 118's; nothing deleted
+import console_chain_stand
+print("== order: the console: " + " -> ".join(str(n) for n, _ in console_chain_stand.FILES) + ", twice")
+for _, p in console_chain_stand.PATHS:
+    t = "\n".join(l.split("--")[0] for l in open(p).read().lower().splitlines())
+    ok(not re.search(r"delete\s+from\s+(public\.)?(firms|wallet_entries|members|subscriptions)\b", t) and not re.search(r"\btruncate\s+(table\s+)?(public\.)?\w+\s*;", t),
+       "%s: deletes no firm, member, subscription or ledger row; truncates nothing" % os.path.basename(p))
+cdb = console_chain_stand.start(int(os.environ.get("PGORDER_CONSOLE_PORT") or 55471))
+try:
+    CQ = "select string_agg(p.proname || ':' || md5(p.prosrc), ',' order by p.proname, p.oid::regprocedure::text) from pg_proc p where p.pronamespace = 'public'::regnamespace"
+    r1 = console_chain_stand.apply(cdb)
+    ok(all(e is None for _, e in r1), "the console: first pass, every file runs (%s)" % [x for x in r1 if x[1]])
+    t1 = cdb.one(CQ)
+    r2 = console_chain_stand.apply(cdb)
+    ok(all(e is None for _, e in r2), "the console: second pass, every file runs again (%s)" % [x for x in r2 if x[1]])
+    ok(cdb.one(CQ) == t1, "the console: the same function texts after the second pass")
+    ok("billing_status" in cdb.one("select prosrc from pg_proc where proname = 'my_firm_status'") and "subscriptions" in cdb.one("select prosrc from pg_proc where proname = 'firm_is_writable'"),
+       "the console: 119's my_firm_status and firm_is_writable are in force (118's replaced)")
+    ok(cdb.one("select count(*) from pg_proc where proname = 'console_ledger'") == "2", "the console: console_ledger's two overloads (119 by firm, 122 by dates)")
+    want = ["console_admins", "console_audit", "subscriptions", "billing_runs", "coupons", "coupon_discounts", "ai_features", "ai_usage_charges",
+            "console_secret_meta", "console_view_log", "announcements", "feature_flags"]
+    ok(all(cdb.one("select relrowsecurity::text from pg_class where relname = '%s' and relnamespace = 'public'::regnamespace" % t) == "true" for t in want), "the console: each module's tables there, RLS on")
+finally:
+    cdb.stop()
 print("\n%d failure(s)" % len(fails) if fails else "\nall checks passed")
 sys.exit(1 if fails else 0)

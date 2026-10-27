@@ -41,7 +41,7 @@ export function ledgerColumns(me, onDone, { firm = true } = {}) {
 export const LEDGER_PRESETS = [
   { label: "All", filters: {} },
   { label: "Money in", filters: { kind: { op: "in", values: ["topup", "refund", "signup_credit", "coupon_credit", "credit", "opening"] } } },
-  { label: "Charges", filters: { kind: { op: "in", values: ["charge", "fee"] } } },
+  { label: "Charges", filters: { kind: { op: "in", values: ["charge", "fee", "ai_usage"] } } },
   { label: "Adjustments", filters: { kind: { op: "in", values: ["adjust", "opening"] } } },
 ];
 export function Tabs({ on, me }) {
