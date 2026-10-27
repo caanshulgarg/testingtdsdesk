@@ -1,0 +1,18 @@
+// Cloudflare (Workers & Pages, the Worker "fincom-console-staging"): how the FinCom Console is put on the web
+// (docs/CONSOLE-SETUP.md). Static files only, from ./site, which build-site.sh makes (or, on the `console` branch that
+// console/publish.sh writes, already holds) - never the user app, never review/.
+// Deploy branch: `console` (built files only, as main is for the app). Root directory: "/" on that branch.
+{
+  "name": "fincom-console-staging",
+  "compatibility_date": "2026-10-01",
+  "build": { "command": "sh build-site.sh" },
+  "assets": {
+    "directory": "./site",
+    // one page app with hash routes: / serves index.html; a missing file is a 404 with /404.html (never index.html with 200)
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  // the only way in is console-staging.fincom.live behind Cloudflare Access: no *.workers.dev address, no preview URLs
+  "workers_dev": false,
+  "preview_urls": false
+}
