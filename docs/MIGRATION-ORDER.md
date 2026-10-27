@@ -534,7 +534,7 @@ only (refresh, OAuth, two-step code pass); members no longer read tally_bridge_s
 function change needed. Tested on pg_stand: `tests/run_migration116.py` (RED_WITHOUT_116=1 shows the checks fail without
 it) and `tests/run_migration_order.py`.
 
-## The console (console.fincom.live): 118 to 123
+## The console (console.fincom.live): 118 to 123, and 125
 
 Console phase 1 "Foundation" (27-Oct-2026, branch `next-console-p1`; file md5 72c550c8aab0338fd2f67497c2b36a7f; **NOT run on staging**: the
 owner runs it; docs/CONSOLE-SETUP.md step A): `server/console/migration-118-console-foundation.sql` runs after 112
@@ -560,8 +560,16 @@ applies the whole chain twice. None is run on staging: the owner runs them.
 | 122 | `server/console/migration-122-console-ops.sql` | Operations: keys meta, see-as-firm log, health, support desk, exports (docs/CONSOLE-SETUP.md) |
 | 123 | `server/console/migration-123-notices-flags.sql` | Announcements, feature flags, `announcements_active` / `flags_for_me` |
 | 124 | (branch `next-mobile`, not in `integ-console`) | Mobile device tokens |
+| 125 | `server/console/migration-125-console-guards.sql` | The guards between the console and the app: a switched-off company's records and client documents refused for a firm's login; the status columns (clients, firms) the console's only; a free-credit coupon retries the month's fee; `firm_signals` (Realtime) |
 
-Numbers after 124 are taken in order when those phases start. The md5 of each file is in the deploy list of the
+Numbers after 125 are taken in order when those phases start.
+
+What the integration (branch `integ-console`) changed in the files the branches made: 119's monthly run takes coupon
+discounts (`coupon_discounts`, `coupon_discount_apply`) and coupon trial days when 120 is in; 119 allows the ledger kind
+`ai_usage`; 119's `my_firm_status()` also answers `stage`, `read_only` and `can_read` (billing's paused hides the firm's
+work in the app); 120 posts free credit with the ledger kind `coupon_credit` (119 refused `coupon`); 121 adds
+`ai_usage_charges` and `ai_usage_charge_run(day)` with the pg_cron job `console-ai-usage-daily` (18:40 UTC). Tested
+together by `tests/run_console_contracts.py`. The md5 of each file is in the deploy list of the
 integration report (the files changed while the branches were joined; check `md5sum` before running).
 
 ## 119: console billing core (phase 2)

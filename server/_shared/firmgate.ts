@@ -4,14 +4,21 @@
 // each one asks here first:
 //   firms.status      'active' | 'suspended' | 'closed'  (suspended or closed: the firm is read-only)
 //   clients.status    'active' | 'deactivated'           (a switched-off company: no uploads, no posting)
+//   subscriptions.status (billing, migration 119)        read_only, paused or cancelled: the firm is read-only too
+//                                                        (integ-console); past_due and trial do not block anything
 // Answer: null (go ahead) or {status: 403, reason, error} in plain words, the same words the app shows.
 // Before migration 118 runs the columns are missing: the read fails and the answer is null (as before). Any other failure
 // to read is also null, logged: the database's own guards still hold for everything that goes through can_write().
-export type Gate = { status: number; reason: "firm_paused" | "company_off"; error: string };
-export type Read = (table: "firms" | "clients", cols: string, eq: Record<string, string>) => Promise<any | null>;
+export type Gate = { status: number; reason: "firm_paused" | "company_off" | "billing_read_only" | "billing_paused" | "billing_cancelled"; error: string };
+export type Read = (table: "firms" | "clients" | "subscriptions", cols: string, eq: Record<string, string>) => Promise<any | null>;
+const BILLING_BLOCKS = new Set(["read_only", "paused", "cancelled"]);
 
 export const pausedWords = (reason?: string | null) =>
   "Your firm's FinCom account is paused" + (reason ? ": " + String(reason).slice(0, 300) : "") + ". You can still view your work. Contact FinCom.";
+export const billingWords = (stage: string) =>
+  stage === "paused" ? "Your firm's FinCom account is paused: the monthly fee is unpaid. Add credit or enter a coupon in Settings › Plan and credit to open it again."
+  : stage === "cancelled" ? "Your firm's FinCom subscription is cancelled, so FinCom is read-only. Contact FinCom, or enter a coupon in Settings › Plan and credit."
+  : "Your firm's FinCom account is read-only: the monthly fee could not be taken. Add credit or enter a coupon in Settings › Plan and credit.";
 export const companyOffWords = (name?: string | null, reason?: string | null) =>
   (name ? String(name).slice(0, 120) : "This company") + " is switched off by FinCom" + (reason ? ": " + String(reason).slice(0, 300) : "") +
   ". You can still view its work; uploads and posting to Tally are off.";
@@ -40,9 +47,13 @@ export async function firmGate(read: Read, firm: string, client?: string | null)
     return null;
   };
   // both at once (one round trip, not two: the functions count their waves before the AI); each failure on its own
-  const [f, c] = await Promise.all([read("firms", "status,status_reason", { id: firm }).catch(quiet),
-    client ? read("clients", "name,status,status_reason", { firm_id: firm, id: String(client) }).catch(quiet) : Promise.resolve(null)]);
+  const [f, c, s] = await Promise.all([read("firms", "status,status_reason", { id: firm }).catch(quiet),
+    client ? read("clients", "name,status,status_reason", { firm_id: firm, id: String(client) }).catch(quiet) : Promise.resolve(null),
+    read("subscriptions", "status", { firm_id: firm }).catch(quiet)]);
   if (f && f.status && f.status !== "active") return { status: 403, reason: "firm_paused", error: pausedWords(f.status_reason) };
+  if (s && typeof s.status === "string" && BILLING_BLOCKS.has(s.status)) {
+    return { status: 403, reason: ("billing_" + s.status) as Gate["reason"], error: billingWords(s.status) };
+  }
   if (c && c.status && c.status !== "active") return { status: 403, reason: "company_off", error: companyOffWords(c.name, c.status_reason) };
   return null;
 }

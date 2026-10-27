@@ -17,6 +17,7 @@ import { UploadLine } from "./parts/StateBar.jsx";
 const SheetPanel = lazy(() => import("./parts/SheetPanel.jsx"));
 // console phase 1b: the firm paused, or the open company switched off, by FinCom's console (src/js/99 FirmGate)
 const GateBanner = lazy(() => import("./parts/GateBanner.jsx"));
+const PausedPage = lazy(() => import("./parts/GateBanner.jsx").then((m) => ({ default: m.PausedPage })));
 
 const { Working, Books, Txn, Dash, DocqPanel, PostStep, DoneStep, ClientSetup, Collect, Sales, VendorRecon, ReviewTable, Invoices, Bank, Parties, Export,
   Help, Today, Compliance, InboxAll, TallyHome, FirmSettings, Clients, Drawer, BankBar, SalesBar, ActionBar, Integrations, Meetings } = SCREENS;
@@ -66,6 +67,8 @@ export default function Main({ v }) {
   if (signInNeeded()) return <Guard name="the sign-in page" v={v}><SignIn /></Guard>;
   // just signed in: FinCom opening until the firm's first sync is done (one wait, not an empty list filling in)
   if (openingAfterSignIn()) return <OpenLoader />;
+  // billing paused the firm: its work is hidden; Plan and credit and Help still open (src/js/99 FirmGate.blocked)
+  if (FirmGate.blocked() && !FirmGate.openWhileBlocked()) return <Suspense fallback={null}><PausedPage /></Suspense>;
   const company = S.view === "company" && CO();
   return <>
     {/* round 3 (05-Oct-2026): no warnings on the pages; the credit, the storage, the self-test and Tally's alerts are in

@@ -32,7 +32,8 @@ export default function CouponBox() {
     setBusy(false); setRes(r || { ok: false, error: "That code cannot be used." });
     if (r && r.ok) { setCode(""); if (typeof loadAccount === "function") loadAccount(true); }
   };
-  return <div className="pane" data-coupon-box="">
+  // data-gate-ok: a read-only or paused firm may still enter a coupon (the way back; FirmGate holds every other write)
+  return <div className="pane" data-coupon-box="" data-gate-ok="">
     <h2>Have a coupon?</h2>
     <form className="row" onSubmit={apply} noValidate style={{ alignItems: "center" }}>
       <input type="text" aria-label="Coupon code" placeholder="Coupon code" value={code} maxLength={24} spellCheck={false} autoComplete="off"

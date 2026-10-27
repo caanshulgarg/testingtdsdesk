@@ -283,7 +283,7 @@ for label in ("staging", "fresh"):
 same = [fn for fn in READERS if len(set(texts.get(fn, {}).values())) == 1 and len(texts.get(fn, {})) == 2]
 ok(len(same) == len(READERS), "both orders end with the same function texts (%s)" % ([fn for fn in READERS if fn not in same] or "all %d" % len(READERS)))
 
-# the console (27-Oct-2026, integ-console; docs/MIGRATION-ORDER.md "118 to 123"): 118 -> 119 -> 120 -> 121 -> 122 -> 123 on
+# the console (27-Oct-2026, integ-console; docs/MIGRATION-ORDER.md): 118 -> 119 -> 120 -> 121 -> 122 -> 123 -> 125 on
 # their own database (tests/console_chain_stand.py: the stand-ins each file's own test uses), the whole chain TWICE; the
 # function texts after the second pass are the first's; 119's my_firm_status / firm_is_writable replace 118's; nothing deleted
 import console_chain_stand
@@ -305,7 +305,7 @@ try:
        "the console: 119's my_firm_status and firm_is_writable are in force (118's replaced)")
     ok(cdb.one("select count(*) from pg_proc where proname = 'console_ledger'") == "2", "the console: console_ledger's two overloads (119 by firm, 122 by dates)")
     want = ["console_admins", "console_audit", "subscriptions", "billing_runs", "coupons", "coupon_discounts", "ai_features", "ai_usage_charges",
-            "console_secret_meta", "console_view_log", "announcements", "feature_flags"]
+            "console_secret_meta", "console_view_log", "announcements", "feature_flags", "firm_signals"]
     ok(all(cdb.one("select relrowsecurity::text from pg_class where relname = '%s' and relnamespace = 'public'::regnamespace" % t) == "true" for t in want), "the console: each module's tables there, RLS on")
 finally:
     cdb.stop()

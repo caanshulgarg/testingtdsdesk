@@ -12,6 +12,9 @@
   5. a company switched off: left out of the client lists (Clients, the switcher, Today) unless "Show inactive" is
      ticked, then marked Switched off; opened: one read-only line; its uploads and posting to Tally refused; a change
      coming from Realtime (the clients row) or the console's signal is taken at once
+  6. billing's stages (integ-console): read-only for the fee: the line says how to come back (Plan and credit, a coupon),
+     writes held back, the work still shown, the coupon's Apply usable; paused for the fee: the firm's work hidden behind
+     the paused page, Plan and credit (its coupon box) and Help still open; active again: all back
 Offline, made-up clients, the cloud faked in the page. SHOT_TAG=before|after and SHOTS=<dir> save the screenshots
 (before: on the build without these changes, asserts not counted).
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_console_userapp.py"""
@@ -207,6 +210,27 @@ with sync_playwright() as p:
     ok(pg.evaluate("FirmGate.paused()") is True, "a signal from the console: read again at once")
     ok(TAG == "before" or (pg.evaluate("window.__sig") == 1 and any(c[1] == "rpc/flags_for_me" for c in pg.evaluate("window.__calls"))), "and the flags and announcements asked again (%s)" % [c[1] for c in (pg.evaluate("window.__calls") or [])])
     ok(pg.evaluate("typeof Live.joinSignals") == "function", "the signal's listener is there, joined when firm_signals exists")
+
+    print("== 6. billing's stages (integ-console: my_firm_status stage / read_only / can_read)")
+    if TAG != "before":
+        RO = "Your firm’s FinCom account is read-only: the monthly fee could not be taken. Add credit or enter a coupon in Settings › Plan and credit."
+        pg.evaluate("() => { window.__fs = {status: 'active', stage: 'read_only', read_only: true, can_read: true, billing_status: 'read_only'}; S.view = 'home'; S.homeTab = 'clients'; return FirmGate.load(); }"); pg.wait_for_timeout(700)
+        ban = pg.locator("[data-gate-banner]")
+        ok(ban.count() == 1 and RO in ban.inner_text() and pg.locator("[data-gate-plan]").count() == 1, "read-only for the fee: one line that says how to come back, with Plan and credit (%r)" % (ban.inner_text() if ban.count() else ""))
+        add = pg.locator('button:text-is("Add client")')
+        ok(add.count() == 1 and add.get_attribute("aria-disabled") == "true", "its writes held back")
+        ok("Alpha Traders" in pg.inner_text("#app"), "its work still shown (reading allowed)")
+        pg.click("[data-gate-plan]"); pg.wait_for_selector("[data-coupon-apply]", timeout=8000); pg.wait_for_timeout(400)
+        ok(pg.locator("[data-coupon-apply]").get_attribute("aria-disabled") is None, "Plan and credit: the coupon's Apply is not held back (the way back)")
+        pg.evaluate("() => { window.__fs = {status: 'active', stage: 'paused', read_only: true, can_read: false, billing_status: 'paused'}; navHome('clients'); return FirmGate.load(); }"); pg.wait_for_timeout(800)
+        ok(pg.locator("[data-paused-page]").count() == 1 and "Alpha Traders" not in pg.inner_text("#app"), "paused for the fee: the firm's work hidden, the paused page instead")
+        shot(pg, "billing-paused")
+        pg.click("[data-paused-plan]"); pg.wait_for_selector("[data-coupon-apply]", timeout=8000); pg.wait_for_timeout(400)
+        ok(pg.locator("[data-paused-page]").count() == 0 and pg.locator("[data-coupon-apply]").get_attribute("aria-disabled") is None, "Plan and credit still opens, its coupon box usable")
+        pg.evaluate("() => navHome('help')"); pg.wait_for_timeout(500)
+        ok(pg.locator("[data-paused-page]").count() == 0, "Help still opens")
+        pg.evaluate("() => { window.__fs = {status: 'active', stage: 'active', read_only: false, can_read: true}; navHome('clients'); return FirmGate.load(); }"); pg.wait_for_timeout(700)
+        ok(pg.locator("[data-paused-page]").count() == 0 and pg.locator("[data-gate-banner]").count() == 0 and "Alpha Traders" in pg.inner_text("#app"), "active again: everything back")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     ctx.close(); br.close()
 if TAG == "before":

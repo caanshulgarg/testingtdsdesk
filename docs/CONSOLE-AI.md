@@ -124,9 +124,12 @@ Every change needs a reason and is written with its audit row in the same databa
 
 ## Open items
 
-- **Charge per use after the allowance**: `ai_allowed` answers `over: true` with the price; the ledger line itself waits
-  for the billing module's `ledger_post` (no balance moves without a ledger row). Until then "charge" lets AI go on as
-  today.
+- **Charge per use after the allowance** (done in integ-console): `ai_allowed` answers `over: true` with the price; once a
+  day `ai_usage_charge_run` (pg_cron `console-ai-usage-daily`, 00:10 India time, yesterday's use) posts one ledger line
+  per firm, feature and day through billing's `console_credit_post` (kind `ai_usage`, ref `<feature>:<YYYY-MM>:<firm>:<day>`)
+  for the uses after the allowance was used up where the rule is 'charge'. A feature priced "included" costs nothing
+  after the allowance: every seeded feature is "included" today, so nothing is charged until the owner sets a per-use or
+  per-token price. A firm short of credit keeps the amount owed (`ai_usage_charges`) and is retried daily for 60 days.
 - The user app does not yet grey out AI buttons before a call (`ai_state_for_me` + the platform signal, plan 3.8); it
   shows FinCom's words when a call is refused.
 - Bill reading looks like it costs more than it is charged (₹4.25 estimated against ₹3 a unit): check against the

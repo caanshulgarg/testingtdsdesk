@@ -560,3 +560,5 @@ run_migration122.py                   180
 run_migration123.py                   180
 # the console, integrated (27-Oct-2026, integ-console): 118 to 123 together; coupons in the monthly run, AI past the allowance charged, the stages
 run_console_contracts.py              240
+# migration 125 (integ-console): a switched-off company's records and uploads refused, the status columns the console's, coupons on a paused firm, firm_signals
+run_migration125.py                   180

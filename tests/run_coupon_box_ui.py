@@ -154,7 +154,7 @@ try:
         ok(any("Coupon ICAI1000: ₹1,000 has been added to your credit." in x for x in t), "the toast says what the firm got (%s)" % t)
         red = db.rows("select source, by_user, status, value_paise from public.coupon_redemptions where firm_id = '%s'" % NEWFIRM)
         ok(red == [{"source": "signup", "by_user": NEW, "status": "finished", "value_paise": "100000"}], "in the database: a signup redemption, ₹1,000 given (%s)" % red)
-        ok(db.one("select count(*) from test_credit_posts where firm = '%s' and kind = 'coupon'" % NEWFIRM) == "1", "the credit went through console_credit_post (kind coupon)")
+        ok(db.one("select count(*) from test_credit_posts where firm = '%s' and kind = 'coupon_credit'" % NEWFIRM) == "1", "the credit went through console_credit_post (kind coupon_credit, the ledger's)")
         ok(A.evaluate("localStorage.getItem('fincom:signup-coupon')") is None, "the kept code is gone")
         A.evaluate("() => Cloud.whoAmI()"); A.wait_for_timeout(500)
         ok(len(ST["redeems"]) == 1, "a later look-up does not redeem again")

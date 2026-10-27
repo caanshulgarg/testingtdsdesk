@@ -1,5 +1,5 @@
 // deno test server/_shared/firmgate_test.ts (tests/run_firmgate.py): the console's switches at a function's door
-import { companyOffWords, firmGate, pausedWords, viaClient, viaRest } from "./firmgate.ts";
+import { billingWords, companyOffWords, firmGate, pausedWords, viaClient, viaRest } from "./firmgate.ts";
 
 const assert = (c: unknown, w: string) => { if (!c) throw new Error(w); };
 const eq = (a: unknown, b: unknown, w: string) => assert(JSON.stringify(a) === JSON.stringify(b), w + ": got " + JSON.stringify(a) + ", expected " + JSON.stringify(b));
@@ -53,4 +53,22 @@ Deno.test("a supabase-js client", async () => {
   const db = (rows: Record<string, any>, err?: any) => ({ from: (t: string) => { const f: Record<string, string> = {}; const q = { select: () => q, eq: (k: string, v: string) => { f[k] = v; return q; }, maybeSingle: async () => err ? { data: null, error: err } : { data: rows[t] && rows[t].id === (f.id || rows[t].id) ? rows[t] : null, error: null } }; return q; } });
   eq((await firmGate(viaClient(db({ firms: { id: F, status: "suspended", status_reason: "" } })), F))?.reason, "firm_paused", "paused");
   eq(await firmGate(viaClient(db({}, { message: "column firms.status does not exist" })), F), null, "no column");
+});
+
+// integ-console: billing's stages (migration 119, subscriptions.status): read_only, paused and cancelled refuse writes too
+Deno.test("billing's read-only, paused or cancelled subscription: refused with words that say how to come back", async () => {
+  for (const [st, words] of [["read_only", billingWords("read_only")], ["paused", billingWords("paused")], ["cancelled", billingWords("cancelled")]]) {
+    const g = await firmGate(viaRest(rest({ firms: [{ id: F, status: "active" }], subscriptions: [{ firm_id: F, status: st }] }), "svc"), F);
+    eq(g && [g.status, g.reason, g.error], [403, "billing_" + st, words], st);
+  }
+  for (const st of ["active", "trial", "past_due"]) {
+    eq(await firmGate(viaRest(rest({ firms: [{ id: F, status: "active" }], subscriptions: [{ firm_id: F, status: st }] }), "svc"), F), null, st + ": go ahead");
+  }
+  assert(/Plan and credit/.test(billingWords("paused")) && /coupon/.test(billingWords("read_only")), "the words name Plan and credit and a coupon");
+  const seen: string[] = [];
+  await firmGate(viaRest(rest({ firms: [{ id: F, status: "active" }] }, seen), "svc"), F);
+  assert(seen.some((s) => s.includes("/rest/v1/subscriptions?select=status&firm_id=eq." + F)), "the subscription read by firm: " + seen);
+  eq(await firmGate(viaRest(rest({ firms: [{ id: F, status: "active" }] }), "svc"), F), null, "before migration 119 (no subscription row): as before");
+  // the console's suspension speaks first
+  eq((await firmGate(viaRest(rest({ firms: [{ id: F, status: "suspended" }], subscriptions: [{ firm_id: F, status: "paused" }] }), "svc"), F))?.reason, "firm_paused", "suspended first");
 });

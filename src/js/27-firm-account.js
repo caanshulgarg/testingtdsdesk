@@ -257,7 +257,8 @@ async function cloudPush(){
   if (!changes.length) return 0;
   const marks = Cloud.marks();
   const clients = changes.filter(r => r.kind === "client");
-  const rest = changes.filter(r => r.kind !== "client");
+  // a switched-off company's records wait here (the server refuses them, migration 125) and go when it is on again
+  const rest = changes.filter(r => r.kind !== "client" && !(r.client_id && typeof FirmGate === "object" && FirmGate.off(r.client_id)));
   const sendBatch = async (table, rows) => {
     await Cloud.api(table + "?on_conflict=" + (table === "clients" ? "firm_id,id" : "firm_id,kind,id"), {
       method: "POST", headers: {Prefer: "resolution=merge-duplicates,return=minimal"}, body: rows});

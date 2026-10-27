@@ -9,11 +9,24 @@
 //   FirmGate.co      the firm's companies that are not active: {cid: {status, reason}}
 //   FirmGate.why()   the words when a write is refused here (the open client's, or the one named), else ""
 // Read at sign-in and with every sync (45 s), when the tab comes back, at once from Realtime for a company (clients is
-// in the publication), and at once from the signal table firm_signals when the database has it (console plan, migration 127).
+// in the publication), and at once from the signal table firm_signals when the database has it (migration 125, server/console/migration-125-console-guards.sql).
 const FirmGate = {
   st: null, co: {},
-  paused(){ const s = this.st && this.st.status; return !!s && s !== "active"; },
-  pausedWhy(){ const r = this.st && this.st.reason; return "Your firm’s FinCom account is paused" + (r ? ": " + r : "") + ". You can still view your work. Contact FinCom."; },
+  // read-only: the console's suspended / closed (firms.status), or billing's read_only / paused / cancelled (my_firm_status's
+  // stage and read_only, migration 119 as integrated); billing's paused also hides the firm's work (can_read false: sign in
+  // and pay only), all but Settings › Plan and credit (credit, a coupon) and Help
+  paused(){ const st = this.st, s = st && st.status; return !!st && ((!!s && s !== "active") || st.read_only === true); },
+  billing(){ const st = this.st; return !!st && (!st.status || st.status === "active") && ["read_only", "paused", "cancelled"].includes(st.stage) ? st.stage : ""; },
+  blocked(){ return !!this.st && this.st.can_read === false; },
+  pausedWhy(){
+    const b = this.billing(), r = this.st && this.st.reason;
+    if (b === "paused") return "Your firm’s FinCom account is paused: the monthly fee is unpaid. Add credit or enter a coupon in Settings › Plan and credit to open it again.";
+    if (b === "cancelled") return "Your firm’s FinCom subscription is cancelled, so FinCom is read-only. Contact FinCom, or enter a coupon in Settings › Plan and credit.";
+    if (b === "read_only") return "Your firm’s FinCom account is read-only: the monthly fee could not be taken. Add credit or enter a coupon in Settings › Plan and credit.";
+    return "Your firm’s FinCom account is paused" + (r ? ": " + r : "") + ". You can still view your work. Contact FinCom.";
+  },
+  // while the work is hidden: the pages still open (Help, Settings › Plan and credit)
+  openWhileBlocked(){ return S.view === "home" && (S.homeTab === "help" || (S.homeTab === "rules" && S.settingsTab === "plan")); },
   off(cid){ const c = cid && this.co[cid]; return !!(c && c.status && c.status !== "active"); },
   offWhy(cid){ const c = this.co[cid] || {}, co = S.companies[cid];
     return ((co && co.name) || "This company") + " is switched off by FinCom" + (c.reason ? ": " + c.reason : "") + ". You can still view its work; uploads and posting to Tally are off."; },
@@ -69,7 +82,7 @@ document.addEventListener("click", ev => { if (FirmGate.why() && FirmGate.target
 }, true));
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") FirmGate.load(); });
 
-// the signal from the console (firm_signals, the console plan's migration 127: one row per firm and one for every firm,
+// the signal from the console (firm_signals, migration 125: one row per firm and one for every firm,
 // in Realtime; it only says "something changed"): the firm's status, its plan and credit and the AI switches are read
 // again within seconds. Joined only when the database has the table, on a channel of its own beside the live sync's
 Live.joinSignals = async function(){
