@@ -73,7 +73,7 @@ export default function Main({ v }) {
     {/* a client's status tabs, the first thing on the page (were a second row of the header: stability batch 1) */}
     {/* tds-layout (14-Oct-2026; the owner: "why is there Overview, Bills, GST, MIS and Settings in TDS?"): no row of the
         client's pages here any more (the sidebar lists them); its Tally chip is on the title line (TopBar.jsx ClientHeader) */}
-    {FirmGate.why() && <Guard name="the paused banner" v={v} quiet><Suspense fallback={null}><GateBanner /></Suspense></Guard>}
+    {FirmGate.why() && <Suspense fallback={null}><GateBanner /></Suspense>}
     {company && <Guard name="the status tabs" v={v} quiet><StatusTabs /></Guard>}
     {company && <Guard name="the upload line" v={v} quiet><UploadLine /></Guard>}
     {company && <Guard name="the reading cards" v={v} quiet><Working /></Guard>}

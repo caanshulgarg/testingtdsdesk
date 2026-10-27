@@ -24,6 +24,8 @@ const FirmGate = {
   },
   // a company in the lists: an active one, or any while "Show inactive" is on
   shown(c){ return !!S.showInactive || !this.off(c && c.id); },
+  offCount(){ return Object.keys(S.companies).filter(id => FirmGate.off(id)).length; },
+  showAll(ev){ S.showInactive = !!(ev && ev.target && ev.target.checked); render(); },     // Clients' "Show inactive" tick
   // FinCom's own people (platform_admins): the link to the console in Settings
   admin(){ return !!((S.account && S.account.superadmin) || (Cloud.st.mfaInfo || {}).admin); },
   async load(){
