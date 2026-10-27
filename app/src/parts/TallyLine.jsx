@@ -7,8 +7,8 @@
 //   BooksAsOf: "Books as of 15:34 · Update now" (no longer on the pages: round 3 A, below)
 //   round 3 A (the owner, 14-Oct-2026): how fresh the books are leaves the page body. PanelBooks, in the top bar's Tally
 //   panel: "Books up to 13-Oct-2026 · read 15:34" and Update now, the rest (and the timing) under Details for support.
-//   BooksStale: on a page, one small amber line, only when the books are over 2 days old, a day was not read, or
-//   reading has stopped; it opens the panel.
+//   BooksStale: was one small amber line on a page when the books were stale; since next-tally-icon only the year note
+//   (staleWords goes to the header's Tally icon's popover).
 
 export default function TallyLine({ co, update = true }) {
   if (!co || typeof tallyLine !== "function") return null;
@@ -59,12 +59,13 @@ export function staleWords(cid) {
   }
   return "";
 }
+// next-tally-icon (27-Oct-2026; the owner: "don't need everywhere tally status"): how fresh the books are from Tally is no
+// line on the pages any more: it is in the header's Tally icon's popover (parts/TallyIcon.jsx, staleWords) and the Tally
+// panel. Left here: the books hold nothing of this financial year (round 14c C6), a note about the figures themselves
 export function BooksStale({ cid }) {
-  // the books hold nothing of this financial year (round 14c C6): said in the same one line
-  const w = staleWords(cid), y = typeof booksYearNote === "function" ? booksYearNote(cid) : "";
-  if (!w && !y) return null;
-  return <p className="books-stale" data-books-stale="" role="status">{w}{w && y ? " " : ""}{y && <span data-books-year-note="">{y}</span>}{" "}
-    <button className="linkbtn" data-books-stale-open="" onClick={() => { if (!S.tallyPanel) doAct("tallyPanel"); }}>See Tally</button></p>;
+  const y = typeof booksYearNote === "function" ? booksYearNote(cid) : "";
+  if (!y) return null;
+  return <p className="books-stale" data-books-year="" role="status"><span data-books-year-note="">{y}</span></p>;
 }
 // whether the panel shows the books' part (it then carries the one Update now)
 export function panelBooksShown(cid) {

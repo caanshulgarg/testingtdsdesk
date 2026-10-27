@@ -114,6 +114,17 @@ export function booksLoad(cids) {
 // [{company (the exact name, as the cloud keeps it), gstin, client (id or ""), device, seen, open (open in Tally now),
 // reported (the cloud has its row: it can be linked), st (tallyCoState)}], once each (spaces collapsed), open first
 const hidden = () => new Set([].concat((S.firm && S.firm.tallyHidden) || []));
+// next-bridge-follows-login (27-Oct-2026; the owner saw IX DESIGNS, another login's company, in firm ABC as "Not a client"):
+// a computer revoked, or one whose bridge moved away to another login (tally_devices.info.movedAway, migration 115); a
+// device the firm's computers no longer list (TLight drops revoked ones) counts too, once they were read
+export function deviceGone(id) {
+  if (!id) return false;
+  const all = [].concat((typeof TLight === "object" && TLight.st.devs) || [], (TCloud.pane || {}).devices || []).filter((d) => d && d.id === id);
+  if (all.some((d) => d.revoked || (d.info && d.info.movedAway))) return true;
+  return !all.length && typeof TLight === "object" && !!TLight.st.loaded && (TLight.st.devs || []).length > 0;
+}
+// opts.hidden: the companies removed from the list too; opts.gone: a company no client has whose computer was removed or
+// moved away (behind "From a removed computer (n)"); a linked one stays, marked "computer moved" (moved)
 export function companyRows(opts) {
   const by = new Map(), put = (name, x) => { const k = coKey(name); if (!k) return; const r = by.get(k) || { company: String(name), gstin: "", client: "", device: "", seen: "", open: false, reported: false, nowName: "" };
     if (x.reported && !r.reported) r.company = String(name);   // the link names the company exactly as the cloud has it
@@ -129,8 +140,10 @@ export function companyRows(opts) {
   const hid = hidden();
   // a client deleted here: its company is not linked to anyone FinCom shows
   let rows = [...by.values()].map((r) => { const co = r.client && S.companies && S.companies[r.client]; return Object.assign(r, { client: co && co.deleted ? "" : r.client, st: tallyCoState(r.company) }); })
-    .map((r) => Object.assign(r, { open: r.open || r.st.state === "connected", hidden: !r.client && !r.open && hid.has(coKey(r.company)) }));
+    .map((r) => Object.assign(r, { open: r.open || r.st.state === "connected", hidden: !r.client && !r.open && hid.has(coKey(r.company)) }))
+    .map((r) => { const g = !r.open && deviceGone(r.device); return Object.assign(r, { gone: g && !r.client, moved: g && !!r.client }); });
   if (!(opts && opts.hidden)) rows = rows.filter((r) => !r.hidden);
+  if (!(opts && opts.gone)) rows = rows.filter((r) => !r.gone);
   return rows.sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)) || a.company.localeCompare(b.company));
 }
 // a client of the same name (the period off) or the same GSTIN, already in FinCom: the row links to it, never a second one
@@ -593,6 +606,8 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined}>
     <div className="tco-main"><b className="tco-name" title={r.nowName ? "In FinCom’s cloud: " + r.company : undefined}>{shown(r.nowName || r.company)}</b>
       {r.nowName && <span className="tag" data-tco-renamed={r.company}>renamed in Tally</span>}
+      {r.moved && <span className="tag warn" data-tco-moved={r.company} title="The computer this company came from was removed, or its FinCom Bridge now sends to another login">computer moved</span>}
+      {r.gone && <span className="tag" data-tco-gone={r.company}>from a removed computer</span>}
       {r.why && <span className={"tag " + (r.why === "like" ? "warn" : "ok")} data-tco-why={r.why}>{r.why === "gstin" ? "same GSTIN" : r.why === "name" ? "same name" : "similar name"}</span>}
       {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}
       {meta && <span className="note tco-meta">{meta}</span>}</div>
@@ -613,8 +628,9 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
 // ---------- the list. rows: the rows to show (default: every company); forCo: the client the list links to (from its
 // "Choose on Tally page"); focus: the client whose rows are marked (from its "Open in Tally page")
 export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm" }) {
-  const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [, tick] = useState(0);
-  const all = companyRows({ hidden: true }), list = rows || all.filter((r) => showHid || !r.hidden), nHid = all.filter((r) => r.hidden).length;
+  const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [showGone, setShowGone] = useState(false), [, tick] = useState(0);
+  const all = companyRows({ hidden: true, gone: true }), list = rows || all.filter((r) => (showHid || !r.hidden) && (showGone || !r.gone));
+  const nHid = all.filter((r) => r.hidden && !r.gone).length, nGone = all.filter((r) => r.gone).length;
   useEffect(() => { booksLoad(list.filter((r) => r.client).map((r) => r.client)); pendTick(all); });
   // a click kept for a company not sent yet: the computers and companies are read again every 10 seconds
   const waiting = Object.keys(PEND()).length > 0;
@@ -633,6 +649,7 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
     {list.length === 0 ? (empty || <p className="note" data-tco-empty="">No company seen in Tally yet. Open your company in TallyPrime on the computer with FinCom Bridge: it shows here within a minute.</p>)
       : <ul className="tco-rows">{hits.map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} />)}</ul>}
     {k && !hits.length && <p className="note" data-tco-none="">No company matches “{q}”.</p>}
+    {!rows && nGone > 0 && <button className="linkbtn" data-tco-show-gone={nGone} aria-expanded={showGone} onClick={() => setShowGone(!showGone)}>{(showGone ? "Hide: from a removed computer (" : "From a removed computer (") + nGone + ")"}</button>}
     {!rows && nHid > 0 && <button className="linkbtn" data-tco-show-hidden={nHid} onClick={() => setShowHid(!showHid)}>{showHid ? "Hide removed companies" : "Show hidden (" + nHid + ")"}</button>}
   </section>;
 }

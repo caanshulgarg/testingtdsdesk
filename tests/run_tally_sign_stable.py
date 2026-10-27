@@ -16,6 +16,9 @@ Beat sequences played on a made-up clock (Date.now), the React test build (app/d
     tallyStatus never says "Reconnecting…"; a missed beat or two do not change the firm's sign;
   - posting reads the real state (tallySignNow / postThroughWords), never the steady one;
   - the Post to Tally page's status line says the same sign's words, steady; its posting gate stays real-time.
+next-tally-icon (27-Oct-2026; the owner: "header is too noisy of tally remarks"): the header has one Tally icon, the client's
+word (run_tally_icon.py); this computer's steady state (tallyHere) is said in the Tally panel's card (Details in the icon's
+popover), read here from tallyHere and that card. Post to Tally: no status line; "into <company>" at the Post button.
 """
 import os, re, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -56,16 +59,18 @@ with sync_playwright() as p:
     def dev(i, name, pc, user, ago=5, **k):
         b = dict({"at": isoAgo(ago), "every": 30, "tally": True, "tallyState": "open", "open": ["TESTING AAD"], "computer": pc, "windowsUser": user}, **k)
         return {"id": i, "name": name, "last_seen": b["at"], "info": {"computer": pc, "beat": b}}
+    # this computer's steady state (the header's icon says the client's word; this is the Tally panel's card)
     def sign():
-        return pg.evaluate("""() => { const b = document.querySelector('#cobar [data-tally-sign]'); if (!b) return null;
-          return {code: b.getAttribute('data-tally-here'), level: b.getAttribute('data-tally-level'), on: b.getAttribute('data-tally-sign'), text: b.innerText.trim(), title: b.getAttribute('title') || ''}; }""")
+        return pg.evaluate("""() => { if (!document.querySelector('header.top [data-tally-icon]')) return null; const h = tallyHere(CO());
+          return {code: h.code, level: h.level, on: h.level === 'ok' ? 'on' : 'off', text: h.label, title: tallyHereWords(h)}; }""")
     def card():
-        return pg.evaluate("""() => { const c = document.querySelector('#cobar .tsign-pop [data-tally-here-card]'); if (!c) return null;
+        if not pg.evaluate("S.tallyPanel"): pg.evaluate("() => { S.tallyPanel = true; render(); }"); pg.wait_for_timeout(500)
+        return pg.evaluate("""() => { const c = document.querySelector('[data-overlay=tallypanel] [data-tally-here-card]'); if (!c) return null;
           return {text: c.innerText, next: [...c.querySelectorAll('[data-tally-next]')].map(b => [b.getAttribute('data-tally-next'), b.innerText.trim()]),
             other: (c.querySelector('[data-tally-other]') || {}).innerText || '', confirmed: (c.querySelector('[data-tally-confirmed]') || {}).innerText || ''}; }""")
     seen = []
     def press(act):
-        pg.hover("#cobar [data-tally-sign]"); pg.wait_for_timeout(150); pg.click("#cobar .tsign-pop [data-tally-next=%s]" % act)
+        card(); pg.click("[data-overlay=tallypanel] [data-tally-here-card] [data-tally-next=%s]" % act)
     def watch(label):
         s = sign(); seen.append((label, s["code"] if s else None)); return s
 
@@ -73,9 +78,7 @@ with sync_playwright() as p:
     pg.evaluate("TallySteady.reset()"); put(local())
     s = watch("ready")
     ok(s and s["code"] == "ready" and s["text"] == "Tally ready" and s["on"] == "on" and s["level"] == "ok", "the bridge here answers, Tally open with TESTING AAD: green “Tally ready” (%s)" % (s,))
-    dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
-    bg = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign]')).backgroundColor")
-    ok(dot == "rgb(21, 128, 61)" and bg in ("rgb(255, 255, 255)", "rgba(0, 0, 0, 0)") or dot == "rgb(21, 128, 61)", "quiet when all is well: a green dot on a plain pill (dot %s, pill %s)" % (dot, bg))
+    ok(pg.locator("header.top [data-tally-icon]").count() == 1 and not pg.inner_text("header.top [data-tally-icon]").strip(), "the header: one Tally icon, no words on it")
     c = card()
     ok(c and "NWS144 (anshul)" in c["text"] and "TESTING AAD" in c["text"] and re.search(r"\d{2}:\d{2}", c["confirmed"] or ""), "hover: the computer with its Windows user, the company, last confirmed (%s)" % ((c or {}).get("text", "").replace("\n", " / ")[:200],))
     ok("Last confirmed" in s["title"] or "last confirmed" in s["title"], "the title says when last confirmed (%s)" % s["title"][:160])
@@ -106,8 +109,6 @@ with sync_playwright() as p:
     put({"state": "down", "computer": "NWS144", "error": "not running"}); s = watch("down 0"); ok(s["code"] == "ready", "the bridge here not answering: not at once (%s)" % s["code"])
     tick(61); s = watch("down 61")
     ok(s["code"] == "stopped" and s["text"] == "Bridge stopped" and s["level"] == "bad", "not answering for a minute: red “Bridge stopped” (%s)" % (s,))
-    dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
-    ok(dot == "rgb(185, 28, 28)", "a red dot (%s)" % dot)
     c = card()
     ok(c and "Start menu" in c["text"] and c["next"] and c["next"][0][0] == "tallyCheck", "the hover: start it (the icon near the clock / Start menu) and Check again (%s)" % ((c or {}).get("text", "").replace("\n", " / ")[:200],))
     # Check again: the answer at once (the bridge started meanwhile, but Tally closed: amber at once, no minute's wait)
@@ -137,19 +138,18 @@ with sync_playwright() as p:
     s = watch("none")
     # integ-link (27-Oct-2026): the client is Linked through NWS144: the sign speaks of this computer, never "Tally not on this
     # computer" beside the client's "Linked" (run_link_record.py)
-    ok(s["code"] == "none" and s["text"] == "This PC: no bridge (not needed)" and s["level"] == "idle", "no bridge here, the client Linked: grey “This PC: no bridge (not needed)” (%s)" % (s,))
+    ok(s["code"] == "none" and s["level"] == "idle" and "This PC" not in pg.inner_text("header.top") and "not on this computer" not in pg.inner_text("header.top"),
+       "no bridge here, the client Linked: idle, and the header says nothing of this computer (%s)" % (s,))
     ok("NWS144" not in s["text"] and not re.search(r"\b(via|through)\b", s["text"]), "the sign never names another computer (%s)" % s["text"])
     c = card()
     ok(c and c["other"] == "Posting goes through NWS144 (Ranjeet).", "the hover's quiet second line: “Posting goes through NWS144 (Ranjeet).” (%s)" % ((c or {}).get("other"),))
     ok(c and c["next"] and c["next"][0] == ["tallyConnect", "Tally page"], "its button: Open Connect Tally (%s)" % ((c or {}).get("next"),))
-    dot = pg.evaluate("getComputedStyle(document.querySelector('#cobar [data-tally-sign] .tsign-dot')).backgroundColor")
-    ok(dot not in ("rgb(185, 28, 28)", "rgb(21, 128, 61)"), "grey, not an alarm (%s)" % dot)
     # two computers: still "not on this computer", the second line counts them
     put(None, [dev("d2", "NWS144 · NW144\\Ranjeet", "NWS144", "NW144\\Ranjeet"), dev("d3", "Accounts", "NWS210", "NWS210\\kiran")])
     s = watch("two"); c = card()
     ok(s["code"] == "none" and c and "NWS144 (Ranjeet)" in c["other"] and "NWS210 (kiran)" in c["other"], "two computers serve: the sign the same, the second line names both (%s)" % ((c or {}).get("other"),))
     # nobody
-    put(None, []); tick(61)
+    put(None, []); sign(); tick(61)
     c = card(); ok(c and "No computer of the firm has Tally ready" in c["other"], "no computer at all: the second line says so (%s)" % ((c or {}).get("other"),))
     # Connect this computer: the Tally page's connect steps, and the way back
     put(None, [dev("d2", "NWS144 · NW144\\Ranjeet", "NWS144", "NW144\\Ranjeet")])
@@ -208,8 +208,8 @@ with sync_playwright() as p:
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySign(S.companies[cid]).words, s.on]; }", cid)
     # next-link-record (the owner's step 2): the Post line says the client's one word (Linked), from the same steady sign
     ok(ps[0] == "Linked" and ps[3] == "NWS144 (anshul)" and ps[2] == "Tally ready on NWS144 (anshul)" and not ps[1], "Post line: the one word, “Linked”, on NWS144 (anshul), no problem (%s)" % (ps,))
-    pl = pg.evaluate("() => { const e = document.querySelector('#app [data-post-line]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
-    ok(pl.startswith("Posting into TESTING AAD on NWS144 (anshul) · Linked"), "on the page: “%s”" % pl)
+    pl = pg.evaluate("() => [document.querySelectorAll('#app [data-post-line]').length, document.getElementById('app').innerText.includes('Posting into')]")
+    ok(pl == [0, False], "on the page: no status line (next-tally-icon) (%s)" % pl)
     put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5, tallyState="closed", tally=False, open=[])]); tick(1)
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, tallySignNow(S.companies[cid]).on, postThroughWords(S.companies[cid])]; }", cid)
     # next-link-record (the owner, 26-Oct-2026: the same word everywhere, from one function): the Post line says Waiting for
@@ -220,23 +220,26 @@ with sync_playwright() as p:
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text, s.problem && s.problem.button, s.problem && s.problem.kind]; }", cid)
     ok(ps[0] == "Waiting for Tally" and ps[1] == "Open TESTING AAD in TallyPrime on NWS144." and not ps[2] and ps[3] == "waiting", "closed for a minute: Waiting for Tally, one plain line (%s)" % (ps,))
     prob = pg.evaluate("() => { const e = document.querySelector('#app [data-post-problem]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
-    ok("Open TESTING AAD in TallyPrime on NWS144" in prob, "on the page: “%s”" % prob[:120])
+    ok(not prob, "before Post is pressed: nothing about Tally on the page (%r)" % prob[:120])
+    pg.evaluate("() => { S.postTried = S.coId; render(); }"); pg.wait_for_timeout(300)
+    prob = pg.evaluate("() => { const e = document.querySelector('#app [data-post-problem]'); return e ? e.innerText.replace(/\\s+/g, ' ') : ''; }")
+    ok(prob.startswith("Not sent to Tally. Open TESTING AAD in Tally.") and "NWS144" not in prob, "once Post was pressed, in plain words: “%s”" % prob[:120])
     put(None, [dev("d2", "Office computer", "NWS144", "NW144\\anshul", ago=5)])
     ps = pg.evaluate("(cid) => { const s = postStatusFor(S.companies[cid]); return [s.where, s.problem && s.problem.text]; }", cid)
     ok(ps[0] == "Linked" and not ps[1], "open again: Linked at once (%s)" % (ps,))
     pg.evaluate("(cid) => { S.companies[cid].postTo = ''; S.view = 'company'; S.tab = 'dash'; S.step = null; render(); }", cid)
 
-    # 10. a phone: the dot and a short word
+    # 10. a phone: the same one icon, no words
     pg.set_viewport_size({"width": 390, "height": 800}); pg.evaluate("TallySteady.reset()"); put(local()); pg.wait_for_timeout(300)
-    s = sign(); ok(s and s["text"] == "Tally ready", "a phone: “Tally ready” (%s)" % (s,))
+    s = sign(); ok(s and s["text"] == "Tally ready" and pg.locator("header.top [data-tally-icon]").count() == 1, "a phone: one icon; this computer “Tally ready” (%s)" % (s,))
     pg.evaluate("TallySteady.reset()"); put(None, []); pg.wait_for_timeout(200)
-    s = sign(); ok(s and s["text"] == "No bridge here", "a phone, no bridge here (the client waiting for Tally): “No bridge here” (%s)" % (s,))
+    s = sign(); ok(s and s["code"] == "none" and not pg.inner_text("header.top [data-tally-icon]").strip(), "a phone, no bridge here: the icon, no words (%s)" % (s,))
     pg.set_viewport_size({"width": 1366, "height": 768})
 
     # never "via", "through", "Reconnecting" in the top bar, whatever happened above
     # the owner (11-Oct-2026): never "via" in the Tally wording
     ok(pg.evaluate("(cid) => tallySign(S.companies[cid]).words", cid).find("via") < 0 and "via" not in pg.evaluate("(cid) => tallySignNow(S.companies[cid]).words", cid), "the firm's sign never says “via”")
-    words = pg.evaluate("() => [...document.querySelectorAll('#cobar [data-tally-sign]')].map(b => b.innerText).join(' ')")
+    words = pg.evaluate("() => [...document.querySelectorAll('header.top [data-tally-icon]')].map(b => b.getAttribute('aria-label')).join(' ')")
     ok(not re.search(r"via|through|econnecting", words), "the sign's words never say via / through / Reconnecting (%s)" % words)
     ok(not errors, "no page errors " + str(errors[:2]))
     br.close()

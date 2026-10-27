@@ -241,12 +241,14 @@ def main():
         one_line("Needs you", "7. a held entry")
         shot(pg, "card-4-needs-you-desktop-light")
 
-        # ---- 8. the chip and the top bar say the same words
+        # ---- 8. the chip and the header's Tally icon say the same word
         scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
-        sign = E("() => { const b = document.querySelector('[data-tally-sign]'); return b ? [b.getAttribute('data-tally-link-sign'), b.title] : null; }")
         words = re.sub(r"\s+", " ", txt(one))
-        ok(sign and sign[0] in ("waiting", "needs") and "Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK" in sign[1] and "Open GARG SHEKHAR in TallyPrime on FRONTDESK" in words,
-           "8. the top bar's sign says the line's words: 'Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK' (%s)" % (sign,))
+        # next-tally-icon: the header's one Tally icon on the client's page says the same word, in plain words (no computer)
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid); pg.wait_for_timeout(1200)
+        sign = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? [b.getAttribute('data-tally-icon'), b.getAttribute('aria-label')] : null; }")
+        ok(sign and sign[0] == "waiting" and sign[1].startswith("Tally: Waiting for Tally — Open GARG SHEKHAR in Tally") and "FRONTDESK" not in sign[1] and "Open GARG SHEKHAR in TallyPrime on FRONTDESK" in words,
+           "8. the header's Tally icon says the word, plainly: 'Waiting for Tally — Open GARG SHEKHAR in Tally'; the Tally page names the computer (%s)" % (sign,))
         E("() => navHome('clients')"); pg.wait_for_timeout(900)
         chip = E("(c) => { const r = [...document.querySelectorAll('#app [data-tally-link-chip]')].map(e => e.innerText.trim()); return r; }", cid)
         ok(any(c.endswith("Waiting for Tally") for c in chip) and all(any(c.endswith(w) for w in WORDS) for c in chip), "8. the Clients chip: the same words (%s)" % chip)

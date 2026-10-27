@@ -45,7 +45,7 @@ SPY = """() => {
   if (!TCloud.__spied) { TCloud.__spied = 1; const m = TCloud.refreshPane.bind(TCloud); TCloud.refreshPane = function(){ fx('refreshPane', ''); return m(); }; }
 }"""
 STATE = """() => { const yes = document.querySelector('#confirmBox [data-cbx="yes"]'); const vis = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }; return {view: S.view, home: S.homeTab, ttab: S.tallyTab, tab: S.tab, co: S.coId, step: S.step || '', guide: JSON.stringify(S.tallyGuide || {}),
-  more: JSON.stringify(S.tallyMore || {}), panel: !!S.tallyPanel, set: S.settingsTab || '', hash: location.hash, confirm: vis(yes), selects: [...document.querySelectorAll('select')].map(x => x.value).join('|') + '/' + [...document.querySelectorAll('input[type=checkbox]')].map(x => x.checked ? 1 : 0).join(''),
+  more: JSON.stringify(S.tallyMore || {}), panel: !!S.tallyPanel, pop: !!document.querySelector('[data-tally-pop]'), popmsg: ((document.querySelector('[data-tally-pop-msg]') || {}).innerText || ''), set: S.settingsTab || '', hash: location.hash, confirm: vis(yes), selects: [...document.querySelectorAll('select')].map(x => x.value).join('|') + '/' + [...document.querySelectorAll('input[type=checkbox]')].map(x => x.checked ? 1 : 0).join(''),
   calls: (window.__calls || []).length, wakes: (window.__wakes || []).length, reads: window.__reads || 0, fx: (window.__fx || []).length,
   text: (document.querySelector('#app') || document.body).innerText.length + ':' + ((document.querySelector('#app') || document.body).innerText.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)),
   details: [...document.querySelectorAll('details')].filter(d => d.open).length}; }"""
@@ -82,6 +82,11 @@ def expect(name, d, calls, fx):
     if "[data-release-rollback]" in name: return "tally_release_rollback" in rpc and d["asked"], "Roll back -> asked, then tally_release_rollback"
     if "[data-read-stop-all]" in name or "[data-read-stop=" in name: return "tally_read_stop" in rpc and d["asked"], "Stop reading -> asked, then tally_read_stop"
     if "[data-update-now]" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn, "Update now -> tallyUpdateNow"
+    # next-tally-icon: the popover's actions, done in place (never the side panel)
+    if "[data-tally-pop-act=link]" in name: return "tally_company_link" in rpc and not d["panel"], "the popover's Link -> tally_company_link, in place"
+    if "[data-tally-pop-act=update]" in name: return ("tallyUpdateNow" in fxn or "doAct" in fxn) and not d["panel"], "the popover's Update now -> tallyUpdateNow, in place"
+    if "[data-tally-pop-page]" in name: return d["home"] == "tally", "the popover's Open Tally page -> the Tally page"
+    if "[data-tally-icon=" in name: return d["pop"] and not d["panel"], "the Tally icon -> its popover, no side panel"
     # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update now
     if "[data-tco-act=" in name or "[data-tco-relink]" in name: return "tally_company_link" in rpc, "Add as client / Link -> tally_company_link"
     if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update now"
@@ -125,9 +130,10 @@ def main():
             def go():
                 at_client(cid, "dash")(); E("() => doAct('tallyPanel')"); pg.wait_for_timeout(600)
             return go
-        def at_hover(cid):
+        # next-tally-icon (27-Oct-2026): the header's one Tally icon opens its popover (no hover card, no side panel)
+        def at_pop(cid):
             def go():
-                at_client(cid, "dash")(); pg.hover("#cobar [data-tally-sign]"); pg.wait_for_timeout(300)
+                at_client(cid, "dash")(); pg.click("#cobar [data-tally-icon]"); pg.wait_for_selector("#cobar [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(300)
             return go
         def at_tcloud(): E("() => { S.view = 'home'; S.homeTab = 'rules'; S.settingsTab = 'tcloud'; render(); }"); pg.wait_for_timeout(1500)
         def at_tab(t): return lambda: (E("(t) => { S.tallyTab = t; Rec.act.at = 0; render(); }", t), pg.wait_for_timeout(1200))
@@ -136,11 +142,10 @@ def main():
             ("Advanced (opened, each computer's Details)", at_fold, "#app [data-advanced]"),
             ("Sync activity", at_tab("activity"), "#app nav.sbar"),
             ("Everything sent", at_tab("sent"), "#app nav.sbar"),
-            ("top bar sign (not linked client)", at_client(G, "dash"), "#cobar .tsign-wrap"),
-            ("top bar sign's hover card", at_hover(G), "#cobar .tsign-pop"),
+            ("the header's Tally icon (not linked client)", at_client(G, "dash"), "#cobar .tally-icon-wrap"),
+            ("the Tally icon's popover (not linked client)", at_pop(G), "#cobar [data-tally-pop]"),
+            ("the Tally icon's popover (linked client)", at_pop(T), "#cobar [data-tally-pop]"),
             ("top bar Tally panel", at_panel(T), ".tallypanel"),
-            ("client chip (not linked)", at_client(G, "dash"), "#cobar .tbar-h"),
-            ("client chip (linked)", at_client(T, "dash"), "#cobar .tbar-h"),
             ("Clients list chips", at_home("clients"), "#app table[data-list=\"clients\"]"),
             ("Today's not-linked line", at_home("today"), "#app [data-not-linked-line]"),
             ("Getting ready (not linked client)", at_client(G, "dash"), "#app [data-onb-step=\"link\"]"),
@@ -204,7 +209,7 @@ def main():
                             pg.wait_for_timeout(900)
                         a = E(STATE); calls = E("window.__calls || []")[calls0:]; fx = E("window.__fx || []")[fx0:]
                         a["asked"] = asked
-                        changed = [k for k in ("view", "home", "ttab", "tab", "co", "step", "guide", "more", "panel", "set", "hash", "details", "selects") if a[k] != b[k]]
+                        changed = [k for k in ("view", "home", "ttab", "tab", "co", "step", "guide", "more", "panel", "pop", "popmsg", "set", "hash", "details", "selects") if a[k] != b[k]]
                         what = []
                         if changed: what.append("changed " + ",".join(changed))
                         if asked: what.append("asked first")

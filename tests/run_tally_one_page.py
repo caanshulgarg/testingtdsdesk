@@ -9,7 +9,7 @@ show in the dropdown always"; "check the Suvit rules as well". Website only (the
      listed at once, at the top; "New year of Salesify Marketing LLP · Link"; the click is kept and done by itself once the
      company is in FinCom's cloud (on 24-Oct tally_company_link refused it twice); the older year stays linked and says
      "Earlier year".
-  3. One status, one function: the row's pill, the client's title chip and the Clients list's chip say the same; a Tally
+  3. One status, one function: the row's pill, the client's Tally icon (next-tally-icon; was its title chip) and the Clients list's chip say the same; a Tally
      name left on another client ("Testing AAD": GARG SHEKHAR & COMPANY) does not make it linked.
   4. Every other place is gone: Client setup has one line ("Tally: <company> ● Connected · Open in Tally page"), Books ›
      From Tally, the Overview, Add client, Settings and Today show no link or status block of their own; the Tally page
@@ -218,8 +218,9 @@ def main():
         tally_page()
         g_row = row(GSC)
         client_page(gs, "dash")
-        chip = E("() => { const b = document.querySelector('[data-tally-chip-at=title]'); return b ? [b.getAttribute('data-tally-pill'), b.innerText.trim(), b.getAttribute('title')] : null; }")
-        ok(chip and chip[0] == g_row["st"] == "connected" and chip[1].endswith("Linked"), "3. the client's title chip: Linked, as its row (%s / %s)" % (chip, g_row["st"]))
+        # next-tally-icon (27-Oct-2026): the client's word is the header's one Tally icon (its aria-label), no title chip
+        chip = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? [b.getAttribute('data-tally-pill'), b.getAttribute('aria-label'), b.getAttribute('data-tally-icon')] : null; }")
+        ok(chip and chip[0] == g_row["st"] == "connected" and chip[1].startswith("Tally: Linked") and chip[2] == "linked", "3. the client's Tally icon: Linked, as its row (%s / %s)" % (chip, g_row["st"]))
         E("() => { S.view = 'home'; navHome('clients'); }"); pg.wait_for_timeout(900)
         cl = E("() => [...document.querySelectorAll('#app [data-tally-chip-at=clients]')].map(b => [b.closest('tr') ? b.closest('tr').innerText.split('\\n')[0] : '', b.getAttribute('data-tally-pill'), b.innerText.trim()])")
         by = {re.split(r"[\t\n]", c[0])[0].strip(): c for c in cl}
@@ -230,8 +231,9 @@ def main():
         tally_page()
         words = {x["co"]: x["ptext"] for x in rows()}
         client_page(s1, "dash")
-        t = E("() => (document.querySelector('[data-tally-chip-at=title]') || {}).title || ''")
-        ok(words.get(SAL, "?") in t and words[SAL].startswith("Waiting for Tally — Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144"), "3. the title chip's words are the row's words (%r in %r)" % (words.get(SAL), t))
+        t = E("() => (document.querySelector('header.top [data-tally-icon]') || {getAttribute: () => ''}).getAttribute('aria-label') || ''")
+        ok(words[SAL].startswith("Waiting for Tally — Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144") and t.startswith("Tally: Waiting for Tally — Open SALESIFY MARKETING LLP - (from 1-Apr-25) in Tally") and "NWS144" not in t,
+           "3. the Tally icon says the row's word, in plain words (the row names the computer) (%r / %r)" % (words.get(SAL), t))
 
         # ---- 4. every other place is gone
         client_page(gs, "cotally")

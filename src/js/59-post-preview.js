@@ -959,7 +959,8 @@ function postTargetWire(box, co, company){
 async function postAllToTally(only){
   const co = CO();
   if (!co) return;
-  S.postRefused = null;
+  // next-tally-icon: Post was pressed: what stops it in Tally is said on the page now (Post.jsx StatusLine)
+  S.postRefused = null; S.postTried = co.id;
   const said = [], t0 = toast, from = typeof Smart === "object" ? Smart.here() : "";
   window.toast = (m, o) => { said.push(String(m)); return t0(m, o); };
   try {

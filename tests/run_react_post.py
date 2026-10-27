@@ -22,7 +22,7 @@ with sync_playwright() as p:
     app = lambda: pg.inner_text("#app")
     # review of 02-Oct-2026 (C15-C18): one line, one table of the entries, one main button, the rest under More
     T = "#app [data-post-table]"
-    ok(pg.locator("#app [data-post-line]").count() == 1 and pg.locator(T + " tbody tr").count() == 3 and pg.inner_text("#app [data-post-main]") == "Post 3 to Tally", "Post to Tally: one line, the three bills in one table, Post 3 to Tally")
+    ok(pg.locator("#app [data-post-line]").count() == 0 and pg.locator("#app [data-post-into]").count() == 1 and pg.locator(T + " tbody tr").count() == 3 and pg.inner_text("#app [data-post-main]") == "Post 3 to Tally", "Post to Tally: one line, the three bills in one table, Post 3 to Tally")
     # second pass of 02-Oct-2026: the ledgers on one line, the party first
     ok("Alpha Consultants · Professional Charges · TDS" in pg.inner_text(T), "each bill's ledgers on one line: party, expense, TDS")
     pg.evaluate("document.querySelector(\"#app details[data-more='post']\").open = true"); pg.click('#app [data-more="post"] button:has-text("How to import the file into Tally")'); pg.wait_for_timeout(300)

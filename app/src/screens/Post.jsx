@@ -1,8 +1,10 @@
 // Step 3 of a client, "Post to Tally". Was viewPostStep() (src/js/02) and viewExport() (src/js/27).
 // Review of 02-Oct-2026, second pass (Testing AAD, screen of 17:43): the page shows only what needs a decision.
-//   1. one status line: "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read 17:43 · Update now"; a second
-//      line only when something is wrong, saying what to do, with one button where it helps; the bridge's version and
-//      "Ready" are under More (postStatusFor, src/js/59);
+//   1. no status line (next-tally-icon, 27-Oct-2026; the owner: "don't need everywhere tally status"): how Tally is, is the
+//      header's one Tally icon and its popover. Where the posting goes is a small label at the Post button ("into GARG
+//      SHEKHAR & COMPANY"); a line only when something stops the posting, saying what to do, with one button where it
+//      helps: what a person must decide (the company, a ledger, a posting refused) at once, Tally itself (closed, not
+//      open, Needs you) only once Post was pressed; the bridge's version and "Ready" are under More (postStatusFor, src/js/97);
 //   2. "Ready to post": approved bills only, one row each (date, party, bill no., amount, the ledgers on one line), one
 //      button "Post N to Tally"; "Nothing waiting to post" when there are none;
 //   3. "Needs your attention", only when it has rows: a bill once, one line of reason, at most two buttons. A bill sent
@@ -21,6 +23,7 @@ import { useState } from "react";
 import { notAllowedRest } from "../parts/BankChecks.jsx";
 import HomeLink, { goTallyPage } from "../parts/HomeLink.jsx";
 import AutoRuns from "../parts/AutoPostRuns.jsx";
+import { tallyIconState } from "../parts/TallyIcon.jsx";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
@@ -29,22 +32,28 @@ import "../../../src/js/98-post-register.js";
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 const OPTIONAL_HELP = "Tally does not show these in the Day Book: Display More Reports → Exception Reports → Optional Vouchers. Open one and press Ctrl+L to make it a regular entry.";
 
-// 1. the status line, and a second line only when something is wrong
+// 1. a line only when something stops the posting. What a person decides (kinds stop, company, ledger) is said at once;
+// Tally's own state (Waiting for Tally, Needs you, the bridge) is the header's icon, and said here only once Post was
+// pressed for this client (S.postTried), at the moment it matters, in the icon's plain words (the owner: "I don't need
+// NWS144... need only Tally": no computer, port or bridge in a message about posting)
+const DECIDE = ["stop", "company", "ledger"];
 function StatusLine({ co, noProblem }) {
-  const s = postStatusFor(co), p = noProblem ? null : s.problem;
+  const s = postStatusFor(co), p0 = noProblem ? null : s.problem;
+  const tally = p0 && !DECIDE.includes(p0.kind);
+  const p = p0 && (!tally || S.postTried === co.id) ? (tally ? Object.assign({}, p0, { text: plainLine(co) }) : p0) : null;
   return <>
-    <div className="post-status" data-post-line="">
-      <span>{"Posting into "}<b>{s.company}</b>{s.on ? <span data-post-on="">{" on " + s.on}</span> : null}</span>
-      {s.where && <span data-post-where="">{"· " + s.where}</span>}
-      {s.reading ? <span data-post-read="" data-reading="">{"· Reading now…"}</span> : s.read ? <span data-post-read="">{"· read " + tallyHm(s.read)}</span> : null}
-      {s.where && <span>{"· "}<button className="linkbtn" data-update-now="" onClick={() => tallyUpdateNow(co.id)}>Update now</button></span>}
-    </div>
     {p && <div className="bk-alert bad post-problem" data-post-problem={p.kind} data-not-allowed={p.kind === "stop" ? "" : undefined} data-guessed={p.kind === "stop" && !p.msg ? "" : undefined}>
       <span>{p.msg ? <><b>Not sent to Tally: choose the Tally company.</b> {notAllowedRest(p.msg)} The bills are still waiting here.</> : p.text}</span>
       {p.button && p.go && <button className="btn small" data-post-action="" data-choose-company={p.kind === "stop" ? "" : undefined} onClick={p.go}>{p.button}</button>}
       {(p.offer || []).map((o) => <button key={o.company} className="btn small" data-post-allow={o.company} onClick={o.go}>{o.company}</button>)}
     </div>}
   </>;
+}
+
+// Tally's own state in one plain sentence (parts/TallyIcon.jsx), "Not sent to Tally. Open X in Tally."
+function plainLine(co) {
+  const t = tallyIconState(co);
+  return "Not sent to Tally. " + (t.icon === "linked" ? "Tally did not answer. Try again." : String(t.line || "").replace(/\.?$/, "."));
 }
 
 // what the last posting run said, in one line (and what is going on while it runs)
@@ -77,7 +86,7 @@ function RunLine({ co }) {
 }
 
 // 2. Ready to post
-function Ready({ co, bills, canPost, more }) {
+function Ready({ co, bills, canPost, more, into }) {
   const closed = (e) => typeof ClosedP === "object" ? ClosedP.note(e.x.invoiceDate, !!(e.snapshot && e.snapshot.tds)) : [];
   const n = bills.ready.length, why = n > 0 ? postWhyBlocked(co, canPost) : null;
   return <section className="post-sec" data-post-ready="">
@@ -100,7 +109,10 @@ function Ready({ co, bills, canPost, more }) {
     {/* the owner's spec of 04-Oct: the entries waiting in the queue (4) or being posted now (5), in the fixed layout */}
     <div data-post-queue=""><EntryList co={co} tab="topost" canPost={canPost} title="Waiting to post and posting now" /></div>
     <div className="row" style={{ marginTop: 10, gap: 8, alignItems: "center" }}>
-      {n > 0 && <button className="btn primary" data-post-main="" disabled={!!why} onClick={() => doAct("postAll")}>{"Post " + n + " to Tally"}</button>}
+      {n > 0 && <button className="btn primary" data-post-main="" disabled={!!why} title={into ? "Post " + n + " to Tally, into " + into : undefined}
+        onClick={() => doAct("postAll")}>{"Post " + n + " to Tally"}</button>}
+      {/* where the posting goes: a small label at the button (it was the page's "Posting into …" status line) */}
+      {n > 0 && into && <span className="note post-into" data-post-into="">{"into "}<b>{into}</b></span>}
       {n > 0 && why && <span className={"note" + (why.kind === "busy" ? "" : " bad")} data-post-why={why.kind}>{why.text}</span>}
       {more}
     </div>
@@ -520,7 +532,7 @@ export function PostStep() {
       <StatusLine co={co} noProblem={tab === "posted"} />
       <RunLine co={co} />
       {tab === "topost" && <div data-post-panel="topost" role="tabpanel">
-        <Ready co={co} bills={bills} canPost={canPost} more={more} />
+        <Ready co={co} bills={bills} canPost={canPost} more={more} into={status.company} />
         <TestCopies co={co} bills={bills} />
         {(nb > 0 || ns > 0) && <p className="note" data-post-others="" style={{ margin: "8px 0 0" }}>{"Also ready, posted from their own pages: "}
           {nb > 0 && <button className="linkbtn" onClick={() => goStep("post", "bank")}>{plural(nb, "bank line", "bank lines")}</button>}{nb > 0 && ns > 0 && " · "}

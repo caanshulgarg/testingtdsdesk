@@ -75,7 +75,8 @@ try:
         got = pg.evaluate("S.books.vouchers.filter(v => v.date.startsWith('202603')).length")
         own = pg.evaluate("async (x) => (await Books.importDayBook(new Blob([x], {type: 'text/xml'}))).vouchers.length", "<ENVELOPE>" + "".join(p_ for d, p_ in march) + "</ENVELOPE>")
         ok(got == own, "FinCom has every March entry, as it reads them from Tally's own day book: %d of %d" % (got, own))
-        ok("In step with Tally" in pg.inner_text(".lk-fresh"), "the page says the company is in step with Tally")
+        # next-tally-icon (27-Oct-2026): no Tally status sentence on the page; the header's Tally icon says how Tally is
+        ok("In step with Tally" not in pg.inner_text("#app"), "the page says nothing of Tally's state (the header's Tally icon does)")
         # ---------- nothing changes in Tally: only the tiny question is asked
         from collections import Counter
         n0 = len(fake_tally.LOG); time.sleep(20)
@@ -170,7 +171,9 @@ try:
         sk = until(lambda: "20260318" in ((man() or {}).get("skipped") or []), 120, 2)
         ok(bool(sk), "a day Tally cannot give is noted as not read (the rest carries on)")
         fresh(); pg.wait_for_timeout(800)
-        ok("not read" in pg.inner_text(".lk-fresh"), "the page says which day is not read yet: " + pg.inner_text(".lk-fresh")[:200].replace("\n", " "))
+        # (next-tally-icon: said in the header's Tally icon's popover, from staleWords)
+        sw = pg.evaluate("() => { const b = S.books || {}, f = booksFresh(b, S.coId); return (f.skipped || []).length; }")
+        ok(sw >= 1, "the books know which day is not read yet (the popover says it): %s" % sw)
         time.sleep(40)
         tries = [x for x in fake_tally.LOG[n0:] if x[0] == "DayBook" and x[1] <= "20260318" <= x[2]]
         ok(len(tries) <= 6, "and Tally is not asked for it again and again: %d tries in about a minute" % len(tries))

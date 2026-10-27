@@ -18,7 +18,9 @@ with sync_playwright() as p:
       S.view = "home"; S.homeTab = "clients"; render(); }""")
     pg.wait_for_timeout(800)
     top = lambda: pg.inner_text("#cobar")
-    ok("Clients" in top() and "ZZ Test Firm" in top() and "Tally" in top(), "home: the top bar has the title, the firm and the Tally chip")
+    # next-tally-icon (27-Oct-2026): the Tally sign is an icon (its words in its aria-label)
+    ok("Clients" in top() and "ZZ Test Firm" in top() and pg.locator("#cobar [data-tally-icon]").count() == 1 and (pg.get_attribute("#cobar [data-tally-icon]", "aria-label") or "").startswith("Tally: "),
+       "home: the top bar has the title, the firm and the Tally icon")
     # stability batch 1: no hidden "FinCom" h1 and firm line under it in the header (the firm is on the firm button)
     ok(pg.locator("#firmLine").count() == 0 and "ZZ Test Firm" in pg.inner_text("#cobar .firmbtn"), "the firm on the firm button (no hidden firm line)")
     # the switcher: F3, type, arrows, Enter
@@ -63,7 +65,10 @@ with sync_playwright() as p:
     # ui-tidy (13-Oct-2026); 15-Oct-2026: while the client is not linked, the Tally sign points to the one place to link, the
     # Tally page's Connect Tally (step 4, this client); once linked it opens the Tally panel, as before
     cid0 = pg.evaluate("S.coId")
-    pg.click("#cobar .tallychip"); pg.wait_for_timeout(600)
+    # next-tally-icon (27-Oct-2026): the header's one Tally icon opens its popover; its "Open Tally page" goes to the list
+    pg.click("#cobar [data-tally-icon]"); pg.wait_for_selector("#cobar [data-tally-pop-page]", timeout=15000)
+    ok(pg.evaluate("!!S.tallyPanel") is False, "the Tally icon opens its popover, not the side panel")
+    pg.click("#cobar [data-tally-pop-page]"); pg.wait_for_timeout(600)
     # 23-Oct-2026 (next-tally-suvit): it opens the client's own Tally card, which lists the companies in Tally with Link
     ok(pg.evaluate("[S.view, S.homeTab, (S.tallyGuide || {}).cid]") == ["home", "tally", cid0] and pg.locator("#app [data-tco-list=firm], #app [data-connect-guide=signin]").count() == 1, "the Tally sign of a client not linked opens the Tally page's list for it (24-Oct-2026: the one place)")
     pg.evaluate("(c) => { S.view = 'company'; S.coId = c; S.tab = 'cotally'; render(); }", cid0); pg.wait_for_timeout(600)

@@ -1,6 +1,7 @@
 """python3 run_post_page2.py - Post to Tally, second pass of the review of 02-Oct-2026 (Testing AAD, screen of 17:43):
 the page shows only what needs a decision.
-  1. one status line, "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read 15:34 · Update now"; it says
+  1. one status line (since next-tally-icon its words only, postStatusFor; the page shows none, the header's Tally icon
+     does), "Posting into GARG SHEKHAR & COMPANY · Tally open on NWS144 · read 15:34 · Update now"; it says
      "Reading now…" while the Tally computer reads, and the new time as soon as its heartbeat is passed on (Realtime);
   2. "Ready to post": approved bills only, the ledgers on one line (a Round Off of nothing left out), one button
      "Post N to Tally"; "Nothing waiting to post" with no table and no button when there are none;
@@ -96,24 +97,30 @@ with sync_playwright() as p:
     def go_tab(name):
         pg.click('#app [data-post-tabs] [data-post-tab="%s"]' % name); pg.wait_for_timeout(250)
     on = lambda: pg.get_attribute('#app [data-post-tab][aria-selected="true"]', "data-post-tab")
-    # ---- 1. the status line, and the read time after an event-driven read
-    line = txt("#app [data-post-line]")
+    # ---- 1. the status line, and the read time after an event-driven read. next-tally-icon (27-Oct-2026): the line is no
+    # longer on the page (the header's Tally icon says it); its words are still postStatusFor's, read here as the line was
+    PL = """() => { const s = postStatusFor(CO()); return 'Posting into ' + s.company + (s.on ? ' on ' + s.on : '') + (s.where ? ' · ' + s.where : '') +
+      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update now' : ''); }"""
+    ok(pg.locator("#app [data-post-line]").count() == 0 and "Posting into" not in txt("#app"), "1. no status line on the page (the header's Tally icon)")
+    line = E(PL)
     ok(line == "Posting into GARG SHEKHAR & COMPANY on NWS144 · Linked · read %s · Update now" % hm(E("window.__read0")) and pg.locator("#app [data-post-problem]").count() == 0,
        "1. one status line, nothing else: %r" % line)
     E("() => { Live.tallyTopic = 'realtime:fincom-tally-f-1'; Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1', beat: {updating: true}}}}); }")
     pg.wait_for_timeout(300)
-    ok("· Reading now…" in txt("#app [data-post-line]") and "read " + hm(E("window.__read0")) not in txt("#app [data-post-line]"), "7. a read going on (the heartbeat passed on at once): 'Reading now…' (%s)" % txt("#app [data-post-line]"))
+    ok("· Reading now…" in E(PL) and "read " + hm(E("window.__read0")) not in E(PL), "7. a read going on (the heartbeat passed on at once): 'Reading now…' (%s)" % E(PL))
     E("""() => { window.__read1 = window.__ago(1); Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1',
       beat: {updating: false, lastRead: window.__read1, companies: [{name: 'GARG SHEKHAR & COMPANY', open: true, at: window.__read1, lastRead: window.__read1}]}}}}); }""")
     pg.wait_for_timeout(300)
     r1 = hm(E("window.__read1"))
-    ok(txt("#app [data-post-line]") == "Posting into GARG SHEKHAR & COMPANY on NWS144 · Linked · read %s · Update now" % r1, "7. right after the read: 'read %s' (%s)" % (r1, txt("#app [data-post-line]")))
-    pg.click("#app [data-post-line] [data-update-now]"); pg.wait_for_timeout(300)
-    ok("· Reading now…" in txt("#app [data-post-line]") and any(r[0] == "tally_want_update" for r in E("window.__rpc")), "7. Update now: asked, and 'Reading now…' until a newer read comes in")
+    ok(E(PL) == "Posting into GARG SHEKHAR & COMPANY on NWS144 · Linked · read %s · Update now" % r1, "7. right after the read: 'read %s' (%s)" % (r1, E(PL)))
+    # Update now: the header's Tally icon's popover
+    pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-act=update]", timeout=15000)
+    pg.click("header.top [data-tally-pop-act=update]"); pg.wait_for_timeout(300); pg.keyboard.press("Escape")
+    ok("· Reading now…" in E(PL) and any(r[0] == "tally_want_update" for r in E("window.__rpc")), "7. Update now: asked, and 'Reading now…' until a newer read comes in")
     E("""() => { window.__read2 = window.__ago(0); Live.got({topic: Live.tallyTopic, event: 'broadcast', payload: {type: 'broadcast', event: 'beat', payload: {device: 'd-1',
       beat: {updating: false, lastRead: window.__read2, companies: [{name: 'GARG SHEKHAR & COMPANY', open: true, lastRead: window.__read2}]}}}}); }""")
     pg.wait_for_timeout(300)
-    ok(("read " + hm(E("window.__read2"))) in txt("#app [data-post-line]") and "Reading now" not in txt("#app [data-post-line]"), "7. and the new read time as soon as it is passed on (%s)" % txt("#app [data-post-line]"))
+    ok(("read " + hm(E("window.__read2"))) in E(PL) and "Reading now" not in E(PL), "7. and the new read time as soon as it is passed on (%s)" % E(PL))
     ok(on() == "errors", "1b. a posting still failed (jD): the Errors tab opens by itself (%s)" % on())
     go_tab("topost")
     E("document.querySelector(\"#app details[data-more='post']\").open = true")

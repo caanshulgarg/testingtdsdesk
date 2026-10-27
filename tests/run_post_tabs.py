@@ -112,8 +112,8 @@ with sync_playwright() as p:
        and [E("(el => el.textContent)(document.querySelectorAll('#app [data-post-tab]')[%d])" % i).split(" ")[0] for i in range(3)] == ["Ready", "Errors", "In"],
        "three lists on the row of states: Ready to post, Errors, In Tally (%s)" % txt("#app [data-post-tabs]"))
     ok(pg.locator("#app .post-tabs").count() == 0, "no second row of chips on the page")
-    ok(E("(() => { const l = document.querySelector('#app [data-post-line]'), t = document.querySelector('#app [data-post-tabs]'); return !!(l && t && (t.compareDocumentPosition(l) & Node.DOCUMENT_POSITION_FOLLOWING)); })()"),
-       "the row of states first, the status line under it")
+    # next-tally-icon (27-Oct-2026): no status line under it any more (the header's Tally icon says how Tally is)
+    ok(pg.locator("#app [data-post-tabs]").count() == 1 and pg.locator("#app [data-post-line]").count() == 0, "the row of states first; no Tally status line under it")
     # ---- the tab with work opens by itself: Errors
     ok(on() == "errors", "Errors opens by itself when there are errors (%s)" % on())
     # ---- each tab's rows

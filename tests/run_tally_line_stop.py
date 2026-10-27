@@ -58,7 +58,9 @@ with sync_playwright() as p:
     refresh = lambda: (E("async () => { TLight.st.at = 0; await TLight.refresh(); render(); }"), pg.wait_for_timeout(500))
     cid, oid = E(SETUP, ["owner"]); pg.wait_for_timeout(900)
     # the line as before while nothing is stopped
-    pl = lambda: txt("#app [data-post-line]")
+    # next-tally-icon: the line is no longer on the page; its words (postStatusFor), read as the line was
+    pl = lambda: E("""() => { const s = postStatusFor(CO()); return 'Posting into ' + s.company + (s.on ? ' on ' + s.on : '') + (s.where ? ' · ' + s.where : '') +
+      (s.reading ? ' · Reading now…' : s.read ? ' · read ' + tallyHm(s.read) : '') + (s.where ? ' · Update now' : ''); }""")
     ok(pl().startswith("Posting into ZZ TEST on NWS144 (tally) · Linked") and "Update now" in pl(), "no stop: the line, with the one word Linked (%s)" % pl())
     # ---- FinCom stopped reading on the computer (tally_read_stops, with who and when; the beat's readStop too)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}];
@@ -88,8 +90,10 @@ with sync_playwright() as p:
     ok(not E("window.__rpc") and not E("window.__keep") and E("window.__toasts") and E("window.__toasts")[0].startswith("Reading is stopped by Anshul"), "doAct('keepNow') (Refresh books, FromTally's Update now): refused the same way (%s)" % E("window.__toasts"))
     # the Post page's second line
     E("async (id) => { await openCompany(id); goStep('post', 'bills'); }", cid); pg.wait_for_timeout(700)
+    # next-tally-icon: said on the page once Post was pressed, in plain words (who and why: the Tally page and the panel)
+    E("() => { S.postTried = S.coId; render(); }"); pg.wait_for_timeout(300)
     pp = txt("#app [data-post-problem]")
-    ok(pg.get_attribute("#app [data-post-problem]", "data-post-problem") == "stopped" and any(pp.startswith("Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m)) for m in (40, 41)) and "Tally page" in pp, "Post page: the second line says it, and where to resume (%s)" % pp)
+    ok(pg.get_attribute("#app [data-post-problem]", "data-post-problem") == "stopped" and pp.startswith("Not sent to Tally. Reading from Tally is stopped.") and "NWS144" not in pp, "Post page: once Post was pressed, the line says it plainly (%s)" % pp)
     # ---- a stop for all computers: Resume resumes all
     E("""() => { window.__stops = [{id: 8, device_id: null, action: "stop", reason: "Bridge update", stopped_at: new Date(Date.now() - 2 * 60000).toISOString(), stopped_by: "u-neha", cleared_at: null, cleared_by: null}]; delete window.__dev.info.readStop; }""")
     refresh()
