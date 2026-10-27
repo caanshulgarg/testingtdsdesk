@@ -80,8 +80,8 @@ function inregCols(cess) {
       // next-itc-excel-edit: the same Eligible? as on the 2B reconciliation's line (and the Excel), on the bill the line is decided on
       if (x && x.docs[0].id === r.id) { const el = (x.e && x.e.el) || x.defE || "eligible";
         return <><select aria-label="Eligible?" data-ir-elig={r.id} value={el} onChange={(ev) => { ITCF.setElig(r.reg, x, ev.target.value); render(); }}>
-          {ITCF.ELIG.map(([k, l]) => <option key={k} value={k}>{l + (k === x.defE ? " (books)" : "")}</option>)}</select><div className="nr">{r.kindL}{r.blocked ? " · 17(5) in Tally" : ""}</div></>; }
-      return <>{r.kindL}{r.blocked && <div className="nr">section 17(5)</div>}</>; } },
+          {ITCF.ELIG.map(([k, l]) => <option key={k} value={k}>{l + (k === x.defE ? " (books)" : "")}</option>)}</select><div className="nr" data-ir-kind={r.id} title={r.kindL + (r.elSet ? ", set in FinCom" : "") + (r.blocked ? " · marked 17(5) in Tally" : "")}>{r.kindL + (r.elSet ? ", set in FinCom" : "")}{r.blocked ? " · 17(5) in Tally" : ""}</div></>; }
+      return <>{r.kindL + (r.elSet ? ", set in FinCom" : "")}{r.blocked && <div className="nr">section 17(5) in Tally</div>}</>; } },
   ];
 }
 

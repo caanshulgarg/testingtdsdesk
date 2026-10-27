@@ -673,8 +673,12 @@ function inregRows(b){
     (res.rejected || []).forEach(x => x.books.forEach(d => { st[d.id] = {s: "rejected", issues: ["rejected in IMS" + (x.p.remarks ? ": " + x.p.remarks : "")]}; }));
     (res.reversed || []).forEach(([a, c]) => { st[a.id] = {s: "reversed", issues: ["reversed by voucher " + c.voucher + " of " + GSTAmend.dmy(c.bookDate)]}; st[c.id] = {s: "reversed", issues: ["reverses voucher " + a.voucher + " of " + GSTAmend.dmy(a.bookDate)]}; });
   }
+  // next-fix-toggles: Eligible? set by a person on the bill's line (app/src/lib/itcFinal.js) is the bill's kind, over
+  // Tally's 17(5) mark (kept as r.blocked, shown as a note); tax booked to an ineligible ledger stays as booked
+  const els = new Map(); if (typeof ITCF === "object") ITCF.rows(reg).forEach(x => { if (!x.fixed && x.s && x.s.el) (x.docs || []).forEach(d => els.set(d.id, x.e.el)); });
   rows.forEach(r => {
     r.kindL = r.import ? (r.supply === "Goods" ? "Import of goods" : "Import of services") : r.rcm ? "Reverse charge" : r.blocked || r.ineligible ? "Not to be taken" : r.dir < 0 ? "Credit reduced" : "Eligible";
+    const el = els.get(r.id); if (el && !r.import && !r.rcm && !r.ineligible){ r.elSet = el; r.kindL = el !== "eligible" ? "Not to be taken" : r.dir < 0 ? "Credit reduced" : "Eligible"; }
     const x = st[r.id];
     r.twoB = x ? ({matched: "In 2B", diff: "In 2B, differs", probable: "In 2B? confirm", reversed: "Booked and reversed", rejected: "Rejected in IMS"})[x.s] || x.s : (r.rcm && !r.gstin) || r.import ? "not expected in 2B" : loaded.has(r.ym) ? "Not in 2B" : "2B not brought in";
     r.twoBWhy = x && x.issues ? x.issues.join("; ") : "";

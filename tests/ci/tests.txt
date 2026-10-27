@@ -491,6 +491,8 @@ run_2b_follow_ui.py                   240  TDSDESK_SITE=../app/dist-test
 # credit for 3B with adjustments), 3B figures in windows, the Excel round trip (LibreOffice when present)
 run_itc_final.js                      120
 run_itc_simple_ui.py                  600  TDSDESK_SITE=../app/dist-test
+run_itc_toggle_ui.py                  600  TDSDESK_SITE=../app/dist-test
+run_state_controls.py                 2400 TDSDESK_SITE=../app/dist-test
 # next-gstr1-excel (24-Oct-2026): GSTR-1 as an Excel (a sheet a portal table, Excel Tables, lists, formulas) downloaded,
 # changed (add, delete, modify) and brought back: preview, errors, Apply as FinCom's corrections (JSON, screen, 3B 3.1), Undo
 run_gstr1_excel.js                    120
