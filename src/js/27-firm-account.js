@@ -147,7 +147,8 @@ const Cloud = {
       this._provAt = Date.now();
       const p = await this.provision().catch(e => ({ok: false, error: e.message}));
       if (p && p.ok && p.firm_id){
-        if (p.created) toast("Welcome. Your firm is ready, with \u20b910,000 of credit to start with.");
+        // the amount is the one the server gave (console Settings > Billing), never a fixed figure
+        if (p.created) toast("Welcome. Your firm is ready" + (num(p.credit) > 0 ? ", with " + INR.format(num(p.credit)) + " of credit to start with." : "."));
         return this.whoAmI();
       }
       this._provErr = (p && p.error) || "";
@@ -697,6 +698,7 @@ async function charge(code, qty, ref, note){
       toast("Credit finished: " + INR.format(num(r.needed)) + " needed, " + INR.format(num(r.balance)) + " left. Ask the administrator to add credit.");
     } else if (r && r.reason === "module_off") toast("This part is switched off for your firm.");
     else if (r && r.reason === "firm_off") toast("This firm's account is switched off. Contact the administrator.");
+    else if (r && r.reason === "read_only") toast("Your FinCom account is read-only until the monthly fee is paid. Everything can still be seen and exported. Ask the administrator to add credit.");
     render();
     return false;
   } catch (e){ return true; }                            // never block work because the internet is down

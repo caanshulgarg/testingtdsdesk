@@ -20,6 +20,7 @@ function memDb(now: () => number) {
     admins: new Set<string>(["admin-1"]),
     after: [] as string[],
     failCredit: 0,                       // the next n credit writes fail (a crash part-way)
+    startCredit: 10000 as number | "fail",   // the console's Settings > Billing start credit, in rupees
   };
   // every call gives way once, as a network round trip does, so calls made together interleave
   const hop = () => new Promise((r) => setTimeout(r, 0));
@@ -27,7 +28,8 @@ function memDb(now: () => number) {
     memberOf: async (uid) => { await hop(); return t.members.get(uid)?.firm_id ?? null; },
     memberEmailElsewhere: async (email, uid) => { await hop(); return [...t.members.values()].some((m) => m.email === email && m.user_id !== uid); },
     isPlatformAdmin: async (uid) => { await hop(); return t.admins.has(uid); },
-    firm: async (id) => { await hop(); const f = t.firms.get(id); return f ? { createdAt: f.createdAt } : null; },
+    firm: async (id) => { await hop(); const f = t.firms.get(id); return f ? { createdAt: f.createdAt, balance: f.balance } : null; },
+    startCredit: async () => { await hop(); if (t.startCredit === "fail") throw new Error("no such function"); return t.startCredit as number; },
     insertFirm: async (row) => { await hop(); if (t.firms.has(row.id)) return false; t.firms.set(row.id, { ...row, createdAt: now() }); return true; },
     deleteFirm: async (id) => { await hop(); t.firms.delete(id); },
     insertMember: async (row) => { await hop(); if (t.members.has(row.user_id)) return false; t.members.set(row.user_id, { ...row }); return true; },
@@ -264,7 +266,7 @@ Deno.test("a confirmed user's first provision: exactly one firm, its own, with �
   const { handler, t } = fake();
   const id = await ownFirmId("u-new");
   const r = await read(await handler(provision("tok-new")));
-  eq(r, { status: 200, body: { ok: true, created: true, firm_id: id } });
+  eq(r, { status: 200, body: { ok: true, created: true, firm_id: id, credit: 10000 } });
   eq(SIGNUP_CREDIT, 10000);
   const f = t.firms.get(id)!;
   eq([f.name, f.balance], ["Rao & Co", 10000]);
@@ -421,4 +423,33 @@ Deno.test("a throwaway email domain gets the same answer and nothing is sent (th
   outs.forEach((o, i) => eq(o, OK, "answer " + i));
   await Promise.all(log.bg);
   eq(log.signups.map((s: any) => s.email), ["real@example.test"]);
+});
+
+Deno.test("the starting credit comes from the console's Settings (₹200 here): the firm, its credit line and the answer agree", async () => {
+  const { handler, t } = fake();
+  t.startCredit = 200;
+  const r = await read(await handler(provision("tok-new")));
+  eq([r.status, r.body.created, r.body.credit], [200, true, 200]);
+  eq(t.firms.get(r.body.firm_id)!.balance, 200);
+  eq(t.credits, [{ firm_id: r.body.firm_id, amount: 200, by: "u-new" }]);
+});
+
+Deno.test("the setting cannot be read (migration 119 not run) or is not believable: ₹10,000 as before", async () => {
+  for (const v of ["fail", 5e9, -1, NaN] as (number | "fail")[]) {
+    const { handler, t } = fake();
+    t.startCredit = v;
+    const r = await read(await handler(provision("tok-new")));
+    eq([r.body.credit, t.firms.get(r.body.firm_id)!.balance, t.credits[0].amount], [10000, 10000, 10000], String(v));
+  }
+});
+
+Deno.test("a provision cut off, then the setting changed: the finishing call writes the line for the balance the firm has", async () => {
+  const { handler, t, tick } = fake();
+  t.startCredit = 500; t.failCredit = 1;
+  eq((await handler(provision("tok-new"))).status, 500);
+  t.startCredit = 9000;
+  tick(3 * 60_000);
+  const id = await ownFirmId("u-new");
+  eq((await read(await handler(provision("tok-new")))).body, { ok: true, created: false, firm_id: id });
+  eq([t.firms.get(id)!.balance, t.credits.map((c) => c.amount)], [500, [500]]);
 });

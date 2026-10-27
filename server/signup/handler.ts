@@ -14,8 +14,10 @@
 //      No firm, no credit, no member row is made here.
 //  (b) provision ({action: "provision"} with the person's own token): on the first sign-in the app asks for the
 //      person's firm. Only a login whose email is confirmed (by Supabase's link, or verified by Google/Microsoft) and
-//      that belongs to no firm gets one: its own firm, the person its owner, with SIGNUP_CREDIT (₹10,000) on the firm's
-//      balance and one "credit" line in its wallet (the same path as v10's trial credit). The firm's id is derived from
+//      that belongs to no firm gets one: its own firm, the person its owner, with the starting credit on the firm's
+//      balance and one "credit" line in its wallet (the same path as v10's trial credit). The starting credit is the
+//      console's Settings > Billing "start credit" (console_billing_settings().start_credit, paise; migration 119), and
+//      SIGNUP_CREDIT (₹10,000, what sign-up gave before) when that cannot be read. The firm's id is derived from
 //      the login's id, so however often it is retried, or sent from two tabs at once, there is one firm and one credit.
 //  (c) the platform administrator (a platform_admins login, two-step sign-in done) may create a firm and its owner (v11).
 // Earlier: v10 (kept as v10-deployed.ts.txt) made a firm with trial credit for anyone, unconfirmed, and answered 409
@@ -26,7 +28,8 @@ export const NEUTRAL = CHECK_EMAIL;
 export const TOO_MANY = "Too many tries. Wait a few minutes and try again.";
 export const MIN_MS = 700;      // every public answer takes at least this long ...
 export const JITTER_MS = 150;   // ... plus up to this much at random
-export const SIGNUP_CREDIT = 10000;   // rupees, on firms.balance and one wallet_entries credit line
+export const SIGNUP_CREDIT = 10000;   // rupees: the starting credit when the console's setting cannot be read
+export const MAX_START_CREDIT = 1000000;   // rupees: a setting above this is not believed (the console allows ₹10,00,000)
 const RECOVER_AFTER_MS = 120_000;     // a firm older than this with no credit line: its maker was cut off; the line is written
 
 export const normEmail = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -70,7 +73,9 @@ export interface Db {
   memberOf(userId: string): Promise<string | null>;                 // the firm of the login's member row (active or not)
   memberEmailElsewhere(email: string, userId: string): Promise<boolean>;   // a member row with this email under another login
   isPlatformAdmin(userId: string): Promise<boolean>;
-  firm(id: string): Promise<{ createdAt: number } | null>;
+  firm(id: string): Promise<{ createdAt: number; balance?: number } | null>;
+  // the console's starting credit in rupees (Settings > Billing; migration 119); may throw or be missing: SIGNUP_CREDIT then
+  startCredit?(): Promise<number>;
   insertFirm(row: { id: string; name: string; balance: number; note: string }): Promise<boolean>;   // false: the id exists
   deleteFirm(id: string): Promise<void>;
   insertMember(row: { user_id: string; firm_id: string; name: string; email: string; role: string; active: boolean }): Promise<boolean>;   // false: the login has a row
@@ -145,6 +150,15 @@ export function firmNameFor(u: AuthUser): string {
   return (who + "'s firm").slice(0, 160);
 }
 
+// the starting credit (rupees): the console's setting, else SIGNUP_CREDIT
+export async function startCredit(db: Db): Promise<number> {
+  try {
+    const v = db.startCredit ? await db.startCredit() : NaN;
+    if (typeof v === "number" && isFinite(v) && v >= 0 && v <= MAX_START_CREDIT) return Math.round(v * 100) / 100;
+  } catch { /* migration 119 not run yet, or the database did not answer: the old amount */ }
+  return SIGNUP_CREDIT;
+}
+
 export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{ status: number; body: Record<string, unknown> }> {
   if (!u.confirmed || !u.email) return { status: 403, body: { ok: false, reason: "not_confirmed", error: "Confirm your email first: open the link we sent you, then sign in." } };
   const mine = await db.memberOf(u.id);
@@ -157,8 +171,9 @@ export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{
   // a sign-up firm that was made once and later closed is not made again
   if (u.signupFirm && (u.signupFirm !== id || !existing)) return { status: 403, body: { ok: false, reason: "closed", error: "This account's firm was closed. Ask the administrator." } };
   let created = false;
+  const credit = existing ? null : await startCredit(db);
   if (!existing) {
-    created = await db.insertFirm({ id, name: firmNameFor(u), balance: SIGNUP_CREDIT, note: "Signed up (" + (u.provider || "email") + ", email confirmed)" });
+    created = await db.insertFirm({ id, name: firmNameFor(u), balance: credit!, note: "Signed up (" + (u.provider || "email") + ", email confirmed)" });
     if (!created) existing = await db.firm(id);        // made by a call running at the same time
   }
   await db.markUser(u, id);
@@ -171,7 +186,9 @@ export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{
     writeCredit = true;
   }
   if (writeCredit) {
-    await db.insertOpeningCredit(id, SIGNUP_CREDIT, u.id);
+    // the line matches the balance the firm was made with (a later call that finishes it reads that balance)
+    const amount = created ? credit! : (typeof existing?.balance === "number" ? existing.balance : await startCredit(db));
+    await db.insertOpeningCredit(id, amount, u.id);
     await db.afterCreate(id, u.id, (firmNameFor(u) + " owner " + u.email + " (signup, " + (u.provider || "email") + ")").slice(0, 500));
   }
   const joined = await db.insertMember({ user_id: u.id, firm_id: id, name: String(u.name || "").slice(0, 120), email: u.email, role: "owner", active: true });
@@ -182,7 +199,7 @@ export async function provisionFirm(db: Db, u: AuthUser, now: number): Promise<{
       return { status: 200, body: { ok: true, created: false, firm_id: other } };
     }
   }
-  return { status: 200, body: { ok: true, created, firm_id: id } };
+  return { status: 200, body: created ? { ok: true, created, firm_id: id, credit } : { ok: true, created, firm_id: id } };
 }
 
 export function makeHandler(d: Deps) {

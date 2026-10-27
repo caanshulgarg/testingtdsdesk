@@ -7,6 +7,7 @@
 import { makeHandler } from "../server/console/core/router.ts";
 import { type Deps } from "../server/console/core/types.ts";
 import { MODULES } from "../server/console/registry.ts";
+import { billingFake } from "./console_billing_fake.ts";
 
 const port = Number(Deno.args[0] || 8172);
 const pageOrigin = Deno.args[1] || "http://localhost:8171";
@@ -62,6 +63,8 @@ const memberRow = (m: typeof members[0]) => {
            mfa: l.factors.some((x) => x.status === "verified"), switched_off: m.off, firm_status: f.status };
 };
 
+// the billing module's functions (migration 119), in memory: the first three firms plus a few more
+const bill = billingFake([...firms.slice(0, 8), { id: U(150), name: "Big Test Credit", balance: 499999610 }] as any, { roleOf, audit: (a, action, tt, tid, before, after) => addAudit(a, action, tt, tid, before, after) });
 async function rpc(fn: string, a: any): Promise<any> {
   switch (fn) {
     case "console_audit_add":
@@ -137,6 +140,8 @@ async function rpc(fn: string, a: any): Promise<any> {
       Object.assign(c!, { status: a.p_status, status_reason: a.p_reason, status_at: now() }); return {};
     }
   }
+  const b = await bill(fn, a);
+  if (b !== undefined) return b;
   throw new Error("stand: no rpc " + fn);
 }
 
