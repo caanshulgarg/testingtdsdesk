@@ -23,6 +23,10 @@ export interface Deps {
   rateHit(bucket: string, key: string, max: number, windowS: number): Promise<boolean>;   // migration 112's auth_rate_hit
   origins: string[];                                                        // the sites allowed to call
   log(msg: string, err?: unknown): void;
+  // outbound calls (a key's Test, the Sentry summary, a support reply's email): index.ts gives fetch with a time limit
+  http?(url: string, init?: RequestInit): Promise<Response>;
+  // this function's own secrets, read only for the names modules/keys.ts lists (never SUPABASE_SERVICE_ROLE_KEY)
+  env?(name: string): string | undefined;
 }
 
 export type Target = { type: string; id: string } | null;

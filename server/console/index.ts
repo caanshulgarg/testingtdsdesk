@@ -44,6 +44,8 @@ const deps: Deps = {
   },
   origins: [...DEFAULT_ORIGINS, ...(Deno.env.get("CONSOLE_ORIGINS") || "").split(",").map((s) => s.trim()).filter(Boolean)],
   log: (msg, err) => console.error("console-admin:", msg, err instanceof Error ? err.message : err ?? ""),
+  http: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(8000) }),
+  env: (name) => Deno.env.get(name),
 };
 
 Deno.serve(makeHandler(deps, MODULES));

@@ -555,6 +555,6 @@ left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.
 | 119 | Settings / platform defaults (trial credit, low-credit warning, grace days, ...) and plans v2 + price list |
 | 120 | Subscriptions |
 | 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
-| 122 | Coupons |
-| 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
+| 122 | **Taken** (next-console-ops): `server/console/migration-122-console-ops.sql`: keys meta, see-as-firm log, health, support desk, exports (md5 `f3670fd0682e70f5bd06b6da56e3a6d8`) |
+| 123 | **Taken** (next-console-ops): `server/console/migration-123-notices-flags.sql`: announcements, feature flags, `announcements_active` / `flags_for_me` (md5 `55c7b424ebdd1da8853f0be3e48d7bf7`) |
 Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.

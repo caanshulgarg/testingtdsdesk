@@ -9,7 +9,8 @@
 //   action="firms.list"             the list action
 //   params={{ firm_id }}            extra fixed params sent with every call
 //   columns={[{ key, label, type: "text"|"select"|"date"|"number"|"bool", options?: [{value,label}] | ["a","b"],
-//               render?: (row) => node, sortable?: true, filter?: true, phone?: true (shown on phones), align?: "end" }]}
+//               render?: (row) => node, sortable?: true, filter?: true, phone?: true (shown on phones), align?: "end",
+//               hidden?: true (not a table column: a filter and a CSV column only) }]}
 //   presets={[{ label: "Active", filters: { status: { op: "in", values: ["active"] } } }, { label: "All", filters: {} }]}
 //   defaultPreset={0}               the preset applied when the hash has no filters for this table
 //   me={me}                         the signed-in admin (saved views are kept per admin)
@@ -114,6 +115,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
     const dir = sort?.col === c.key && sort.dir === "asc" ? "desc" : "asc";
     update({ s: `${c.key}:${dir}` });
   };
+  const shown = columns.filter((c) => !c.hidden);
   const keyOf = (r) => (typeof rowKey === "function" ? rowKey(r) : r[rowKey]);
   const from = st.total ? page * size + 1 : 0, to = Math.min(st.total, page * size + size);
 
@@ -173,7 +175,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
         <table className="table">
           <thead>
             <tr>
-              {columns.map((c) => (
+              {shown.map((c) => (
                 <th key={c.key} className={(c.phone === false ? "no-phone " : "") + (c.align === "end" ? "end" : "")} aria-sort={sort?.col === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
                   {c.sortable === false ? c.label : <button className="th-b" onClick={() => toggleSort(c)}>{c.label}{sort?.col === c.key ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}</button>}
                 </th>
@@ -184,7 +186,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
             {st.rows.map((r) => (
               <tr key={keyOf(r)} className={onRow ? "click" : ""} onClick={onRow ? () => onRow(r) : undefined} tabIndex={onRow ? 0 : undefined}
                   onKeyDown={onRow ? (e) => { if (e.key === "Enter") onRow(r); } : undefined}>
-                {columns.map((c) => <td key={c.key} data-label={c.label} className={(c.phone === false ? "no-phone " : "") + (c.align === "end" ? "end" : "")}>{c.render ? c.render(r) : fmtCell(c, r[c.key])}</td>)}
+                {shown.map((c) => <td key={c.key} data-label={c.label} className={(c.phone === false ? "no-phone " : "") + (c.align === "end" ? "end" : "")}>{c.render ? c.render(r) : fmtCell(c, r[c.key])}</td>)}
               </tr>
             ))}
           </tbody>

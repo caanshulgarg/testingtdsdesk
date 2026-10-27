@@ -9,6 +9,13 @@ import { module as users } from "./modules/users.ts";
 import { module as audit } from "./modules/audit.ts";
 import { module as admins } from "./modules/admins.ts";
 import { module as settings } from "./modules/settings.ts";
+import { module as keys } from "./modules/keys.ts";
+import { module as announcements } from "./modules/announcements.ts";
+import { module as flags } from "./modules/flags.ts";
+import { module as support } from "./modules/support.ts";
+import { module as health } from "./modules/health.ts";
+import { module as exportsMod } from "./modules/exports.ts";
+import { module as seeas } from "./modules/seeas.ts";
 
 export const MODULES: Module[] = [
   me,
@@ -19,4 +26,11 @@ export const MODULES: Module[] = [
   audit,
   admins,
   settings,
+  keys,
+  announcements,
+  flags,
+  support,
+  health,
+  exportsMod,
+  seeas,
 ];
