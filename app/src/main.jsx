@@ -73,7 +73,18 @@ function registerWorker() {
     const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     let asked = null; try { asked = localStorage.getItem("fincom.sw"); } catch (e) { /* storage blocked */ }
     if (asked === "off" || (local && asked !== "on")) return;
-    navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+    // 27-Oct-2026 (the blank page on Safari): a new build's worker waits (sw/sw.js, install) until a page of its build
+    // has drawn FinCom; this page has (registerWorker runs after the first page), so a waiting worker of this build is
+    // asked to take over now, and one still installing once it is ready. A worker of another build is never asked here
+    const takeOver = (w) => { try { if (w && typeof __BUILD_ID__ !== "undefined") w.postMessage({ type: "fincom:take-over", build: __BUILD_ID__ }); } catch (e) { /* it takes over when no page is open */ } };
+    const watchNew = (r) => {
+      if (!r) return;
+      takeOver(r.waiting);
+      const follow = (w) => { if (w) w.addEventListener("statechange", () => { if (w.state === "installed") takeOver(w); }); };
+      follow(r.installing);
+      r.addEventListener("updatefound", () => follow(r.installing));
+    };
+    navigator.serviceWorker.register("./sw.js", { scope: "./" }).then(watchNew, () => {});
     // round 73 B: the worker keeps only what the first page needs when it is installed; the rest of this build's files
     // once it is ready and the computer is idle again (sw/sw.js, "fincom:keep-rest")
     // speed round: not on a slow line (lineSlow, screens/lazy.js): there each file is kept when it is first used

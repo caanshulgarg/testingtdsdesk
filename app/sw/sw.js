@@ -3,8 +3,8 @@
 // Rules (the owner's, 11-Oct-2026):
 //  - never an outdated app after a release: the page itself (index.html) always comes from the network first (past
 //    every cache, with a short wait), and only from here when there is no line; every other file has its build's hash
-//    in its name or address, so a new build's files are new files. A new build's worker takes over at once (skipWaiting,
-//    clients.claim) and drops the old build's files; the open page says "A newer FinCom is out. Reload" (fresh.js);
+//    in its name or address, so a new build's files are new files. A new build's worker takes over once a page of its
+//    build has drawn FinCom (27-Oct-2026: never while a page is loading; install below) and drops the old build's files; the open page says "A newer FinCom is out. Reload" (fresh.js);
 //  - only FinCom's own code, styles and fonts are kept: nothing from Supabase (the firm's data), the bridge, Sentry or
 //    any other address goes through here at all; build.json is always the network's;
 //  - on sign-out the page clears the files kept after the first open (fincom-files:…) as well (src/js/27).
@@ -29,11 +29,19 @@ const ask = (f) => new Request(f, { cache: HASHED(f) ? "default" : "reload" });
 // 600 KB, twice at once on the first open after each release; the owner: "it's too slow" on office Wi-Fi). Now the
 // install takes only what the browser already holds (only-if-cached: never the line), and the page itself (5 KB); the rest
 // of the first page's files is kept by keepRest below once the page is up and idle, or when first used
+// 27-Oct-2026 (the owner's BLANK page on Safari after the speed build): that install took nothing from the line, so it
+// was over in a few milliseconds, and skipWaiting() + clients.claim() put the new worker in charge WHILE the new build's
+// first page was still loading through the previous worker. Safari stops a worker that is replaced, and the requests it
+// was answering for the page (guard.js, the styles: they hold up the page's drawing and its scripts) never finished: a
+// white page, no script ran, so no watch and no report. Now a new build's worker never takes over by itself while a page
+// is open: it waits until a page of ITS build has drawn FinCom and asks ("fincom:take-over" with its build id,
+// src/main.jsx), or, as browsers do anyway, until no FinCom page is open. A worker installed with no page in its charge
+// (the first open here) still starts at once.
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(SHELL).then((c) => Promise.all(FILES.map((f) => {
     const q = f === "./" ? ask(f) : new Request(f, { cache: "only-if-cached", mode: "same-origin" });
     return fetch(q).then((r) => (f === "./" ? r.ok && !r.redirected : keepable(r)) ? c.put(new Request(f), r) : null).catch(() => null);
-  }))).then(() => self.skipWaiting()));
+  }))).then(() => { if (!self.registration.active) return self.skipWaiting(); }));
 });
 // the rest, one file after another (never in the way of the page's own requests); a file already kept is not fetched again
 let keeping = null;
@@ -52,6 +60,8 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("message", (e) => {
   if (e.data === "fincom:signed-out") e.waitUntil(caches.delete(RUNTIME));
   if (e.data === "fincom:keep-rest") e.waitUntil(keepRest());
+  // a page of this build has drawn FinCom (its own requests are done): this worker may take over now (install, above)
+  if (e.data && e.data.type === "fincom:take-over" && e.data.build === VERSION) e.waitUntil(self.skipWaiting());
 });
 
 // the page: the network first, past the browser's cache; this computer's copy only when there is no answer (or none in 4 s).
@@ -119,7 +129,8 @@ self.addEventListener("fetch", (e) => {
   if (u.searchParams.has("fincom-net")) return;
   const rest = u.pathname.slice(SCOPE.length);
   // the two little scripts without a hash in their name: the network first, this computer's copy without a line
-  if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(caches.open(SHELL).then((c) => fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()); return r; }, () => c.match(req, { ignoreSearch: true }).then((h) => h || Response.error())))); return; }
+  // 27-Oct-2026: they hold up the page: this computer's copy first (little, below)
+  if (rest === "guard.js" || rest === "oldcheck.js") { e.respondWith(little(req, e)); return; }
   // kept here: only files whose name or address carries their build's hash (assets/…, legacy.js?v=…)
   if (!((rest.startsWith("assets/") && CODE.test(rest)) || (rest === "legacy.js" && u.search))) return;
   e.respondWith(asset(req));
@@ -133,6 +144,22 @@ self.addEventListener("fetch", (e) => {
 const KEEP = /(javascript|ecmascript|text\/css|font\/|application\/(x-)?font|woff|wasm)/i;
 const good = (r) => !!r && r.ok && r.type === "basic" && !r.redirected;
 const keepable = (r) => good(r) && KEEP.test(r.headers.get("Content-Type") || "");
+// guard.js and oldcheck.js, the two little scripts without a hash: they hold up the reading of the page (guard.js in its
+// head, oldcheck.js in its body), and asking the line for them first cost the owner's opens 3 s and 28 s on office Wi-Fi
+// (client_timings 27-Oct-2026: open/dom 9.8 s and 34.8 s, every other file from here, one script waiting on the line).
+// They change seldom and any build runs with either copy: this computer's copy at once, the line's asked meanwhile and
+// kept for the next open; without a copy, the line, and never more than 4 s of waiting when a copy turns up
+async function little(req, e) {
+  const c = await caches.open(SHELL);
+  const n = fetch(req, { cache: "no-cache" }).then((r) => { if (r.ok) c.put(req, r.clone()).catch(() => {}); return r; });
+  try { e.waitUntil(n.catch(() => {})); } catch (x) { /* kept when it comes, if the worker is still up */ }
+  const h = await caches.match(req, { ignoreSearch: true, ignoreVary: true }).catch(() => null);
+  if (h && h.ok) { n.catch(() => {}); return h; }
+  const r = await Promise.race([n.catch(() => null), wait(4000)]);
+  if (r) return r;
+  const h2 = await caches.match(req, { ignoreSearch: true, ignoreVary: true }).catch(() => null);
+  return h2 || n.catch(() => Response.error());
+}
 async function asset(req) {
   let hit = null;
   try { hit = await caches.match(req, { ignoreVary: true }); } catch (e) { hit = null; }
