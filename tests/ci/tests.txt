@@ -534,3 +534,9 @@ run_prefetch_books.py                 300  TDSDESK_SITE=../app/dist-test
 run_tally_poll.py                     240  TDSDESK_SITE=../app/dist-test
 run_open_line.py                      400  TDSDESK_SITE=../app/dist-test
 run_open_speed.py                     300  TDSDESK_SITE=../app/dist-test
+# security fix batch 1 (27-Oct-2026): migration 116 (look-only members refused on writes; pg_stand), tally-ingest uploads
+# owner/staff only, Add person only invites, the AI gateway's limits (Deno)
+run_migration116.py                   180
+run_upload_roles.py                   120
+run_admin_people.py                   120
+run_gateway_server.py                 120

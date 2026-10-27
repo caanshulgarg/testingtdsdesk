@@ -1,12 +1,12 @@
 {
   "_": "Edge functions deployed as uploaded files from one commit (tools/deploy-fn-files.md). sha: the commit the files come from; entry: the module the root index.ts imports; call: true when index.ts calls its exported main() (the module only serves when it is the main module, import.meta.main); rollback: the version to go back to.",
-  "fincom-call":       { "sha": "365bbb5f5b86f355e68fd8fca98fd1450b84e272", "entry": "server/video-calls/index.ts",       "call": true,  "verify_jwt": false },
-  "tally-ingest":      { "sha": "21edcfd26ff234c05781314b3f0b37a2892311aa", "entry": "server/tally-cloud/index.ts",       "call": false, "verify_jwt": false },
+  "fincom-call":       { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/video-calls/index.ts",       "call": true,  "verify_jwt": false },
+  "tally-ingest":      { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/tally-cloud/index.ts",       "call": false, "verify_jwt": false },
   "gst-2b-match":      { "sha": "dfc79fbaef4202437592e3f8355fdf55178258e3", "entry": "server/gst-2b-match/index.ts",      "call": false, "verify_jwt": false },
   "fincom-assistant":  { "sha": "1de642a6be0d278b6c9ffd140be729de8cb7d622", "entry": "server/assistant/index.ts",         "call": true,  "verify_jwt": false },
-  "tds-challan-match": { "sha": "d1169d3049df42bbe6698f6319d8c951ac1d7db4", "entry": "server/tds-challan-match/index.ts", "call": false, "verify_jwt": false },
-  "fincom-transcribe": { "sha": "fc9883ad306b919f5059be93544e6447264e4729", "entry": "server/fincom-transcribe/index.ts", "call": true,  "verify_jwt": false },
+  "tds-challan-match": { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/tds-challan-match/index.ts", "call": false, "verify_jwt": false },
+  "fincom-transcribe": { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/fincom-transcribe/index.ts", "call": true,  "verify_jwt": false },
   "mis-run":           { "sha": "bee47d2003ac04ae7973930c4fbc8ddaef3d8a83", "entry": "server/mis-run/index.ts",           "call": true,  "verify_jwt": false },
   "zoho-books":        { "sha": "5279ae45b6823c5a16f4f6c037e4f0cb769de9e3", "entry": "server/zoho-books/index.ts",        "call": false, "verify_jwt": false },
-  "gst-taxpro":        { "sha": "0823a1e2364d0bee02bc0572609111057d653909", "entry": "server/gst-taxpro/index.ts",        "call": false, "verify_jwt": false }
+  "gst-taxpro":        { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/gst-taxpro/index.ts",        "call": false, "verify_jwt": false }
 }

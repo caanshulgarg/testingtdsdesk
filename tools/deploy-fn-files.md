@@ -50,7 +50,7 @@ With the Supabase CLI the same files can be deployed from a checkout of that com
 | tally-ingest | server/tally-cloud/index.ts | tally-cloud/{parse,monthpack}.js, _shared/{names.js,cors.ts,sentry.ts,sentry-scrub.js,tallyname.js} |
 | gst-2b-match | server/gst-2b-match/index.ts | gst-2b-match/{match,handler}.ts, assistant/{models,router,entries}.ts, _shared/{match2b.js,assistant-labels.js,cors.ts} |
 | fincom-assistant | server/assistant/index.ts | 25 files of server/assistant (and tools/), _shared/{cors.ts,sentry.ts,sentry-scrub.js,misdef.js,assistant-labels.js}, src/js/78-reports.js, src/js/80-assets.js |
-| tds-challan-match | server/tds-challan-match/index.ts | tds-challan-match/{match,handler}.ts, assistant/{models,router}.ts, _shared/{tdsmatch.js,assistant-labels.js,cors.ts} |
+| tds-challan-match | server/tds-challan-match/index.ts | tds-challan-match/{match,handler}.ts, assistant/{models,router,entries}.ts, _shared/{tdsmatch.js,assistant-labels.js,cors.ts} |
 | fincom-transcribe | server/fincom-transcribe/index.ts | fincom-transcribe/names.ts, assistant/{models,router,entries,mask}.ts, _shared/{cors.ts,assistant-labels.js}, app/src/calls/rules.js |
 | mis-run | server/mis-run/index.ts | mis-run/{handler,data,pdf}.ts, _shared/{cors.ts,misdef.js,misledger.js,misageing.js}, app/src/lib/{misCustom,misXlsx}.js |
 | zoho-books | server/zoho-books/index.ts | zoho-books/map.js, _shared/{cors.ts,names.js} |
