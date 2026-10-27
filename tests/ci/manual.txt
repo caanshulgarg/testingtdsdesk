@@ -89,3 +89,4 @@ run_migration32.py             in progress (2026-10-02): server/tally-cloud/migr
 ## flaky timing / slow stand-ins
 run_cloud_e2e.py               flaky timing: 1 check ("an entry changed in Tally: its day goes to the cloud again"), 4.5 min
 run_live_sync.py               flaky timing: two browsers in step; 4 checks waited the full 99 s
+run_console_ui.py   the console's screens (Playwright + Deno stand): needs console/node_modules (React 19, Vite), which CI does not install yet; run it with CONSOLE_DIST set to a built console

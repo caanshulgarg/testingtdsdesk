@@ -540,3 +540,6 @@ run_migration116.py                   180
 run_upload_roles.py                   120
 run_admin_people.py                   120
 run_gateway_server.py                 120
+# the console, phase 1 (27-Oct-2026, next-console-p1): migration 118 on pg_stand; the console-admin function (Deno)
+run_migration118.py                   180
+run_console_server.py                 120

@@ -533,3 +533,28 @@ tally_post_row_remove / tally_post_row_restore; lockout_access_token_hook refuse
 only (refresh, OAuth, two-step code pass); members no longer read tally_bridge_switches.from_firm / from_device. No app or
 function change needed. Tested on pg_stand: `tests/run_migration116.py` (RED_WITHOUT_116=1 shows the checks fail without
 it) and `tests/run_migration_order.py`.
+
+## The console (console.fincom.live): 118, and 119 to 123 reserved
+
+Console phase 1 "Foundation" (27-Oct-2026, branch `next-console-p1`; file md5 72c550c8aab0338fd2f67497c2b36a7f; **NOT run on staging**: the
+owner runs it; docs/CONSOLE-SETUP.md step A): `server/console/migration-118-console-foundation.sql` runs after 112
+(the console-admin function calls 112's `auth_rate_hit`). Add-only, one transaction, `lock_timeout` 10 s, safe twice.
+Tables `console_admins` (role owner / billing / support / viewer; a trigger keeps one active owner) and `console_audit`
+(append-only: update, delete and truncate refused by trigger); RLS on, no policy, service role only (console_audit:
+select and insert). Functions `console_*` (service role only). The switch-off columns `firms.status` / `status_reason` /
+`status_by` / `status_at`, `clients.status` / ..., `members.console_off_at`; `firm_is_writable()` and `my_firm_status()`
+(signed-in people); `can_write()` wrapped once with `and public.firm_is_writable()` (its own text kept); trigger
+`console_post_guard` on tally_post_jobs (no posting queued or taken for a paused firm or a switched-off company). 117 is
+left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.py` (RED_WITHOUT_118=1 fails).
+
+**Reserved for the console's later modules** (each in `server/console/`, add-only, grants explicit, its own
+`tests/run_migration1NN.py`); take the next free one and write the file name here:
+
+| # | Module (console-plan.md 4.3) |
+|---|---|
+| 119 | Settings / platform defaults (trial credit, low-credit warning, grace days, ...) and plans v2 + price list |
+| 120 | Subscriptions |
+| 121 | Credit ledger: `ledger_post`, `ledger_check`, idempotency, the monthly run |
+| 122 | Coupons |
+| 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
+Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
