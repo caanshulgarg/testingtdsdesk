@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-boot="app">
+<head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="FinCom: read purchase bills and bank statements, work out TDS and GST, and post the entries to Tally.">
+<!-- stability batch 5: the browser's own parts (scroll bars, boxes) and a phone's bar in the page's colours from the first frame -->
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F8FAFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0B1120" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231F6F5C'/%3E%3Cpath d='M11 9v14M11 9h11M11 16h8' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>FinCom</title>
+<link rel="preload" as="script" href="./legacy.js?v=5728d1a92640">
+<!-- steady open (stability batch 1, 11-Oct-2026): before the first paint, which frame to draw. The sign-in page when nobody is
+     signed in and "without an account" was not chosen (signInNeeded, src/js/27), else the app; a client's frame when one was
+     open last time; and whether this build has opened here before (then no FinCom loader: the files are in the cache).
+     A page from an older build is swapped for the current one at once, before the big files load (stability batch 4),
+     not after the whole app has loaded; also when the service worker served it (17-Oct-2026: on a slow line its 4 s wait
+     ran out and it answered with the old page it kept, or a cache on the way kept the old page; the owner had to press
+     Ctrl+Shift+R). The swap asks for the page by a new address (?v=build), which the worker takes from the network; the
+     program is not started on a page being swapped, nor, on the worker's kept copy (data-boot-kept), before the check
+     has answered (src/main.jsx), so the old build is never drawn and then replaced. The loader and the page's shape are timed from the first frame on screen (data-boot-shown). The vite plugin (vite.config.js, fincom-boot) puts in the storage prefix and the build id, and allows this script by
+     its hash in the page's Content-Security-Policy. A page served from /next/ (the trial address, docs/RELEASE-FLOW.md) is marked data-trial: its strip says TRIAL. It also notes when the page has been read in full (__fincomDcl): the
+     program runs deferred (round 73 B), and waits for that as it did when it ran before the end of the page (domLoading). -->
+<script id="fincom-boot">(function(){window.__fincomDcl=0;document.addEventListener("DOMContentLoaded",function(){window.__fincomDcl=1});var d=document.documentElement,P="tdsdesk-test:",ls=function(k){try{return localStorage.getItem(P+k)}catch(e){return null}},ss=function(k){try{return sessionStorage.getItem(P+k)}catch(e){return null}},j=function(t){try{return JSON.parse(t||"null")}catch(e){return null}};var c=j(ls("cloud"))||{},s=j(ss("cloudsess"))||j(ls("cloudsess")),h=String(location.hash||"").toLowerCase();var signin=!(s&&s.access_token)&&(c.gate!==false||h==="#register"||h==="#signin");if(/access_token=/.test(h)&&/type=(invite|recovery|signup|magiclink)/.test(h))signin=true;d.setAttribute("data-boot",signin?"signin":"app");if(/\/next\/(index\.html)?$/.test(location.pathname))d.setAttribute("data-trial","");try{requestAnimationFrame(function(){d.setAttribute("data-boot-shown","")})}catch(e){d.setAttribute("data-boot-shown","")}if(!signin&&ls("last")&&!/^#\/(today|clients|compliance|inbox|tally|settings|help|people|plan|rules|meetings|join)\b/.test(h))d.setAttribute("data-boot-co","");try{if(localStorage.getItem("fincom:opened")==="mvqxr2ny-c9ff60")d.setAttribute("data-boot-quick","")}catch(e){}try{if(navigator.onLine!==false&&location.protocol!=="file:"&&window.fetch)window.__fincomBootCheck=fetch("build.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){var k="fincom-reloaded-for";if(j&&j.build&&j.build!=="mvqxr2ny-c9ff60"&&sessionStorage.getItem(k)!==j.build){sessionStorage.setItem(k,j.build);window.__fincomSwapping=true;var u=new URL(location.href);u.searchParams.set("v",j.build);location.replace(u.toString());return true}return false}).catch(function(){return false})}catch(e){}})();</script>
+<!-- never blank (27-Oct-2026, the owner's white page on Safari after a release: the service worker held up the page's
+     own files, nothing ran, so nothing watched or reported it). This little script runs first and depends on nothing
+     else. When the page has not been read to its end 4 s after opening (a file in its head held up: guard.js or the
+     styles; 12 s without a service worker, a slow line), when FinCom has not drawn 4 s after all its files came (8 s for
+     the worker's kept copy), or when guard.js finds that the program or the app's first file did not load
+     (window.__fincomHeal): FinCom's service worker is unregistered and its caches cleared, the previous good build
+     (last-good.json beside the page, written at publishing: docs/NEVER-BLANK.md) is opened, and it says "FinCom updated; opened the last working
+     version". Without that pointer: one clean reload from the network. Once per build in a tab, never a loop (then the
+     "FinCom did not open" note). Reported by a beacon of its own (the testing site's Sentry; on a local test server
+     only when localStorage "fincom.report" is "on"). The vite plugin puts in the storage prefix, the build id and the
+     report address, and allows this script by its hash. -->
+<script id="fincom-heal">(function(){var W=window,D=document,B="mvqxr2ny-c9ff60",R="https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/store/?sentry_version=7&sentry_key=7f2432ad2a6406244d931f4856c30933",KEY="fincom:healed",NOTE="fincom:healed-note",done=false,loaded=0;
+var here=location.href.replace(/[?#].*$/,"").replace(/[^\/]*$/,""),path=here.replace(/^[a-z]+:\/\/[^\/]+/i,"");
+function ss(k,v){try{if(v===undefined)return sessionStorage.getItem(k);sessionStorage.setItem(k,v)}catch(e){return null}}
+function sw(){try{return!!(navigator.serviceWorker&&navigator.serviceWorker.controller)}catch(e){return false}}
+function parsed(){return!!D.getElementById("react-root")||!!W.__fincomOld}
+function drawn(){return parsed()&&!D.querySelector("[data-boot-part]")}
+function line(t,id){try{var d=D.getElementById(id||"fincom-heal-line");if(!d){d=D.createElement("div");d.id=id||"fincom-heal-line";d.setAttribute("role","status");d.setAttribute("data-heal-line","");d.style.cssText="position:fixed;left:50%;top:16px;transform:translateX(-50%);z-index:10001;padding:8px 14px;border-radius:8px;background:#1E2A25;color:#fff;font:13px/1.4 -apple-system,Segoe UI,Arial,sans-serif;max-width:calc(100vw - 32px);box-sizing:border-box";(D.body||D.documentElement).appendChild(d)}d.textContent=t}catch(e){}}
+function report(reason){try{var local=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname),on=false;try{on=localStorage.getItem("fincom.report")==="on"}catch(e){}if(!R||(local&&!on))return;
+var body=JSON.stringify({message:"FinCom healed itself: "+reason,level:"warning",platform:"javascript",tags:{heal:reason.split(":")[0],build:B},extra:{ua:navigator.userAgent,url:path,sw:sw(),kept:D.documentElement.hasAttribute("data-boot-kept"),parsed:parsed(),loaded:!!loaded,ms:Math.round(W.performance&&performance.now?performance.now():0)}});
+W.__fincomHealReport=body;fetch(R,{method:"POST",mode:"no-cors",keepalive:true,headers:{"Content-Type":"text/plain"},body:body}).catch(function(){})}catch(e){}}
+function clear(next){var left=0,over=false,end=function(){if(!over){over=true;next()}},one=function(){if(--left<=0)end()};setTimeout(end,2500);
+try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){left++;navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.filter(function(r){return r.scope===here}).map(function(r){return r.unregister()}))}).then(one,one)}}catch(e){}
+try{if(typeof caches!=="undefined"){left++;caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k.indexOf("fincom-shell:"+path+":")===0||k==="fincom-files:"+path}).map(function(k){return caches.delete(k)}))}).then(one,one)}}catch(e){}
+if(!left)end()}
+function lastGood(next){var t=setTimeout(function(){next(null)},2500);try{fetch("last-good.json?t="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.json():null}).then(function(j){clearTimeout(t);next(j&&j.build&&j.path&&j.build!==B?j:null)},function(){clearTimeout(t);next(null)})}catch(e){clearTimeout(t);next(null)}}
+function heal(reason){if(done||W.__fincomOld||W.__fincomSwapping||D.documentElement.hasAttribute("data-guest"))return false;done=true;
+if(ss(KEY)===B){if(W.__fincomStuck)W.__fincomStuck(false);else line("FinCom did not open. Please reload the page.");return false}
+ss(KEY,B);W.__fincomStage="healing: "+reason;report(reason);line("FinCom is refreshing its files…");
+clear(function(){lastGood(function(j){if(j){try{localStorage.setItem(NOTE,String(Date.now()))}catch(e){}location.replace(new URL(j.path,here).toString())}else location.reload()})});return true}
+W.__fincomHeal=heal;
+try{var n=+localStorage.getItem(NOTE);if(n){localStorage.removeItem(NOTE);if(Date.now()-n<120000){var show=function(){line("FinCom updated; opened the last working version");setTimeout(function(){var d=D.getElementById("fincom-heal-line");if(d)d.remove()},12000)};if(D.body)show();else D.addEventListener("DOMContentLoaded",show)}}}catch(e){}
+setTimeout(function(){if(!parsed())heal("page held up"+(sw()?"":" (no worker)"))},sw()||D.documentElement.hasAttribute("data-boot-kept")?4000:12000);
+W.addEventListener("load",function(){loaded=1;setTimeout(function(){if(parsed()&&!drawn()&&!D.querySelector("[data-boot-stuck]")&&!W.__fincomLegacy)heal("not drawn")},D.documentElement.hasAttribute("data-boot-kept")?8000:4000)});})();</script>
+<style id="fincom-boot-css">
+/* The frame drawn from this page before the program has loaded (stability batch 1): the sidebar with the FinCom mark, the
+   top bar with its fixed places (bell, Tally sign, firm), and the page's shape. The program draws over it in place.
+   Nothing here moves when the real page arrives: the same classes, the same sizes (app/src/styles/steady.css). */
+.boot-bar{display:block;height:12px;border-radius:6px;background:var(--surface-muted,#EEF1F5)}
+.boot-side{display:contents}
+.boot-side .boot-co{display:none;height:58px;margin:4px 0 10px;border:1px solid var(--border,#E2E8F0);border-radius:12px;background:var(--surface,#fff)}
+[data-boot-co] .boot-side .boot-co{display:block}
+.boot-side .boot-item{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 10px}
+.boot-side .boot-item::before{content:"";flex:none;width:26px;height:26px;border-radius:7px;background:var(--surface-muted,#EEF1F5)}
+.boot-side .boot-item .boot-bar{flex:0 1 auto;width:var(--w,96px);height:10px}
+.boot-side .boot-lbl{padding:14px 10px 6px}
+.boot-side .boot-lbl .boot-bar{width:56px;height:9px}
+.boot-side .boot-co-only{display:none}
+[data-boot-co] .boot-side .boot-co-only{display:block}
+[data-boot-co] .boot-side .boot-firm-only{display:none}
+@media (max-width:600px){.boot-side .boot-lbl,.boot-side .boot-co,.boot-side .boot-firm-only,.boot-side .boot-co-only{display:none!important}
+  .boot-side .boot-item{flex:1 1 0;flex-direction:column;justify-content:center;gap:4px;min-height:55px;padding:0}
+  .boot-side .boot-item .boot-bar{width:36px;height:8px}}
+.boot-head .tbar-title h2 .boot-bar{display:inline-block;width:150px;height:22px;vertical-align:-3px;border-radius:7px}
+.boot-head .tbar-title .note .boot-bar{display:inline-block;width:120px;height:10px}
+.boot-pill{display:block;height:34px;border-radius:999px;background:var(--surface-muted,#EEF1F5)}
+.boot-head .tb-firm .boot-pill{border-radius:8px}
+/* the page: the FinCom mark while the program loads (only when it takes more than 300 ms, for at most a second, and never
+   when this build has opened here before), then the page's shape */
+.boot-page{position:relative;min-height:calc(100vh - 140px)}
+.boot-loader{position:absolute;left:0;right:0;top:min(28vh,220px);display:flex;flex-direction:column;align-items:center;gap:12px;opacity:0;pointer-events:none}
+[data-boot-shown] .boot-loader{animation:boot-loader 1300ms linear both}
+.boot-mark{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#4F46E5,#7C3AED);color:#fff;
+  font:700 24px/1 "Geist","Geist Variable","Inter",system-ui,sans-serif;box-shadow:0 6px 18px rgb(79 70 229 / .25)}
+.boot-loader small{color:var(--text-muted,#64748B);font-size:13px}
+.boot-skel{opacity:0}
+[data-boot-shown] .boot-skel{animation:boot-show 1ms linear 1300ms both}
+[data-boot-quick] .boot-loader{display:none}
+[data-boot-shown][data-boot-quick] .boot-skel{animation-delay:300ms}
+@keyframes boot-loader{0%,23%{opacity:0}31%,88%{opacity:1}100%{opacity:0}}
+@keyframes boot-show{to{opacity:1}}
+@media (prefers-reduced-motion:no-preference){.boot-mark{animation:boot-pulse 1.4s ease-in-out infinite}}
+@keyframes boot-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(.94);opacity:.72}}
+@media (prefers-reduced-motion:reduce){@keyframes boot-loader{0%,23%{opacity:0}24%,99%{opacity:1}100%{opacity:0}}}
+.boot-skel .boot-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
+.boot-skel .boot-card{height:118px;border:1px solid var(--border,#E2E8F0);border-radius:16px;background:var(--surface,#fff)}
+.boot-skel .boot-rows{border:1px solid var(--border,#E2E8F0);border-radius:12px;background:var(--surface,#fff);padding:6px 18px}
+.boot-skel .boot-row{display:flex;gap:18px;padding:13px 0;border-bottom:1px solid var(--border-subtle,#EEF1F5)}
+.boot-skel .boot-row:last-child{border-bottom:0}
+.boot-skel .boot-row .boot-bar{flex:1}
+.boot-skel .boot-row .boot-bar:first-child{flex:0 0 18%}
+@media (max-width:900px){.boot-skel .boot-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* the sign-in page: no sidebar and no top bar from the first frame, the card where the sign-in card will be */
+html[data-boot="signin"] #side,html[data-boot="signin"] header.top{display:none!important}
+html[data-boot="signin"] .shell .mainwrap{margin-left:0!important}
+[data-boot="signin"] .boot-page{display:none}
+.boot-signin{display:none}
+[data-boot="signin"] .boot-signin{display:flex}
+/* as tall as the real card (608 px on a computer, 641 with the Create an account line; about 670 and 700 on a phone), so it does not grow when the form arrives */
+.boot-signin .signin-box{min-height:640px}
+@media (max-width:600px){.boot-signin .signin-box{min-height:700px}}
+.boot-signin .signin-box h1{margin:0}
+.boot-signin .boot-bar{margin:14px 0 0}
+.boot-signin .boot-field{height:38px;margin:6px 0 0;border:1px solid var(--border,#E2E8F0);border-radius:7px}
+</style>
+<script src="./guard.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/index-B-8rhsto.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-C7LdjMWR.css">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-qP9P2cmBlhJNDD9QsNR0aEGIiO7UuHMaC+aqhkxb6Q0=' 'sha256-yXzbMqnZPHToCPnpni6fSmM0zuouzipn+lIqLVF6whU=' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob: https://*.supabase.co wss://*.supabase.co http://127.0.0.1:* http://localhost:* https://o4512221111320576.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<style>.is-test .side-brand::after{content:"TEST";display:block;margin-top:4px;font-size:11px;letter-spacing:.14em;color:#E9A06A}.is-test header.top{box-shadow:inset 0 3px 0 #E2761B}body.is-test::after{content:"TESTING SITE · not for real client work · post only to a ZZ TEST company in Tally";position:fixed;left:0;right:0;bottom:0;z-index:70;background:#E2761B;color:#fff;font-size:12.5px;text-align:center;padding:3px 8px;letter-spacing:.04em;pointer-events:none}@media (max-width:600px){body.is-test::after{font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 6px}}</style><style>body.is-test::after{content:"REVIEW BUILD – Faster open · one Tally icon · Excel buttons · Tally follows your login · never blank · staging database · not for real client work";background:#6B3FA0}.is-test .side-brand::after{content:"REVIEW BUILD – Faster open · one Tally icon · Excel buttons · Tally follows your login · never blank";color:#C9A8F0}</style>
+<style>html[data-trial] body.is-test::after{content:"TRIAL · REVIEW BUILD – Faster open · one Tally icon · Excel buttons · Tally follows your login · never blank · a new build on trial · staging database · not for real client work";background:#B42318}html[data-trial] .is-test .side-brand::after{content:"TRIAL";color:#F97066}html[data-trial] .is-test header.top{box-shadow:inset 0 3px 0 #B42318}</style>
+<link rel="preload" as="font" type="font/woff2" crossorigin href="./assets/geist-latin-wght-normal-BgDaEnEv.woff2">
+<link rel="preload" as="font" type="font/woff2" crossorigin href="./assets/inter-latin-wght-normal-Dx4kXJAl.woff2">
+</head>
+<body class="is-test">
+<a class="skip" id="skipLink" href="#app">Skip to the work</a>
+<div class="shell">
+<nav class="side" id="side" aria-label="Main">
+<div class="boot-side" data-boot-part="" aria-hidden="true">
+<div class="side-brand"><span class="side-mark">F</span><span class="side-name">FinCom</span></div>
+<div class="boot-co"></div>
+<div class="boot-lbl boot-firm-only"><i class="boot-bar"></i></div>
+<div class="boot-item"><i class="boot-bar"></i></div>
+<div class="boot-lbl boot-co-only"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:70px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:110px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:84px"><i class="boot-bar"></i></div>
+<div class="boot-item" style="--w:100px"><i class="boot-bar"></i></div>
+<div class="boot-lbl boot-co-only"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:76px"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:64px"><i class="boot-bar"></i></div>
+<div class="boot-item boot-co-only" style="--w:118px"><i class="boot-bar"></i></div>
+</div>
+</nav>
+<div class="mainwrap">
+<header class="top">
+  <div class="wrap">
+    <div class="toprow">
+      <div class="cobar" id="cobar"><div class="headrow boot-head" data-boot-part="" aria-hidden="true">
+        <div class="tbar"><div class="tbar-title"><h2>&#8203;<i class="boot-bar"></i></h2><span class="note">&#8203;<i class="boot-bar"></i></span></div></div>
+        <div class="topright"><span class="tb-page"></span><span class="tb-global"><span class="tb-slot tb-bell"><i class="boot-pill"></i></span><span class="tb-slot tb-tally"><i class="boot-pill"></i></span><span class="tb-slot tb-firm"><i class="boot-pill"></i></span></span></div>
+      </div></div>
+    </div>
+    <nav class="tabs" role="tablist" id="tabs"></nav>
+  </div>
+</header>
+<main class="wrap" id="app"><div class="boot-page" data-boot-part="">
+  <div class="boot-loader" role="status" aria-label="Opening FinCom"><span class="boot-mark" aria-hidden="true">F</span><small aria-hidden="true">Opening FinCom</small></div>
+  <div class="boot-skel" aria-hidden="true"><div class="boot-cards"><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div><div class="boot-card"></div></div>
+    <div class="boot-rows"><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div><div class="boot-row"><i class="boot-bar"></i><i class="boot-bar"></i><i class="boot-bar"></i></div></div></div>
+</div><div class="signin boot-signin" data-boot-part="" aria-hidden="true"><div class="signin-box"><h1>FinCom</h1><i class="boot-bar" style="width:62%"></i><i class="boot-bar" style="width:34%"></i><i class="boot-bar" style="width:88%"></i><i class="boot-bar" style="width:20%;margin-top:18px"></i><div class="boot-field"></div><i class="boot-bar" style="width:24%"></i><div class="boot-field"></div></div></div></main>
+<script src="./oldcheck.js" data-report="https://o4512221111320576.ingest.us.sentry.io/api/4512221234724864/store/?sentry_version=7&amp;sentry_key=7f2432ad2a6406244d931f4856c30933"></script>
+</div>
+</div>
+<div id="modal" class="hidden"></div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileIn" accept="application/pdf,image/*,.jpg,.jpeg,.jfif,.png,.webp,.heic,.xlsx,.xls,.csv,.json" multiple class="hidden">
+<input type="file" id="camIn" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="tallyIn" accept=".xml" multiple class="hidden">
+<input type="file" id="booksIn" accept=".xml" class="hidden">
+<input type="file" id="marketIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="salaryIn" accept=".csv,.txt,.xlsx,.xls" class="hidden">
+<input type="file" id="mastersIn" accept=".xml" class="hidden">
+<input type="file" id="tbCheckIn" accept=".xml" class="hidden">
+<input type="file" id="multiBooksIn" accept=".xml" multiple class="hidden">
+<input type="file" id="tbIn" accept=".xml" class="hidden">
+<input type="file" id="filedIn" accept=".json,application/json" multiple class="hidden">
+<input type="file" id="twoBIn" accept=".json,application/json" multiple class="hidden">
+<div id="react-root"></div>
+<!-- the business logic (Tally, GST, TDS, bank), then the React screens on top of it. Both run once the page is read
+     (round 73 B: legacy.js deferred, so it never holds up reading the page), still in this order -->
+<script defer src="./legacy.js?v=5728d1a92640"></script>
+<script type="module" crossorigin src="./assets/index-B-8rhsto.js"></script>
+</body>
+</html>
