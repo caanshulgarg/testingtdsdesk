@@ -100,6 +100,8 @@ export function billingFake(firms: FakeFirm[], h: Hooks) {
   };
 
   return async function rpc(fn: string, a: any): Promise<any> {
+    // console_ledger(p_from, p_to, p_limit) is the exports' overload (migration 122, console_ops_fake.ts), not this one
+    if (fn === "console_ledger" && "p_from" in (a || {})) return undefined;
     switch (fn) {
       case "console_plans": return plans.map(planJson);
       case "console_plan_save": {

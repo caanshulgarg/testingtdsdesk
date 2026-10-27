@@ -51,6 +51,7 @@ function Firm({ me, id }) {
                                        </select>
                                      </label>)} />}
             {off && <ReasonButton me={me} action="firm.reactivate" params={{ firm_id: id }} label="Reactivate firm" tone="primary" onDone={reload} />}
+            {me.actions.includes("seeas.open") && <a className="btn" href={href("seeas/" + id)} data-testid="firm-seeas">See as this firm</a>}
           </>}>
       <ErrorNote error={error} onRetry={reload} />
       <div className="chips"><StatusChip status={f.status} />{off && f.status_reason && <span className="muted">“{f.status_reason}” · {f.status_by || ""} {fmtTime(f.status_at)}</span>}</div>

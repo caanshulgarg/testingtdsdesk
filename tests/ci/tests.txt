@@ -550,3 +550,6 @@ run_migration120.py                   180
 run_coupon_box_ui.py                  180
 # the console, phase 4 (27-Oct-2026, next-console-ai): the AI control centre's migration 121 on pg_stand
 run_migration121.py                   180
+# the console, phase 5 (27-Oct-2026, next-console-ops): migrations 122 and 123 on pg_stand
+run_migration122.py                   180
+run_migration123.py                   180

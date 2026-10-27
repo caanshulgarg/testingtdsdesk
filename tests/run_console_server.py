@@ -2,7 +2,8 @@
 (server/console/handler_test.ts): every role against every action (allowed: runs and is audited; refused: 403 and the
 refusal audited), aal1 refused, a login that is not an admin refused, a reason required for every write, nothing runs
 when the audit row cannot be written, the last owner and own-role rules, the switch-off actions, the lists' server-side
-filters / sort / paging / CSV export, the Viewer's hidden emails. Skipped (and passes) without Deno, as the other
+filters / sort / paging / CSV export, the Viewer's hidden emails; and the phase 5 modules (server/console/ops_test.ts: keys never shown, tested and rotated;
+support desk; see as this firm; exports; health; announcements; flags). Skipped (and passes) without Deno, as the other
 function tests."""
 import os, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))

@@ -561,6 +561,8 @@ left for the plan's fix-first work. Tested on pg_stand: `tests/run_migration118.
 | 121 | **Taken: AI control centre** (`server/console/migration-121-ai-control.sql`, branch `next-console-ai`, 27-Oct-2026; NOT run on staging): `ai_features` (the registry, seeded ON as today; a new row starts off), `ai_settings` (kill switch), `ai_plan_allowance` (by plan id), `ai_firm_settings`, `ai_allowed` (asked by every AI function through `server/_shared/ai_policy.ts`), `console_ai_*`. After 118 and the assistant's 77/96. Tested by `tests/run_migration121.py` (RED_WITHOUT_121=1 fails). docs/CONSOLE-AI.md |
 | 122 | Coupons |
 | 123 | AI control centre (`ai_features`, `ai_take` / `ai_settle`) |
+| 122 | **Taken** (next-console-ops): `server/console/migration-122-console-ops.sql`: keys meta, see-as-firm log, health, support desk, exports (md5 `f3670fd0682e70f5bd06b6da56e3a6d8`) |
+| 123 | **Taken** (next-console-ops): `server/console/migration-123-notices-flags.sql`: announcements, feature flags, `announcements_active` / `flags_for_me` (md5 `55c7b424ebdd1da8853f0be3e48d7bf7`) |
 Numbers after 123 (flags, announcements, signals, keys) are taken in order when those phases start.
 
 ## 119: console billing core (phase 2)

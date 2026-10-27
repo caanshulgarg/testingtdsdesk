@@ -15,6 +15,13 @@ import { module as prices } from "./prices/index.jsx";
 import { module as billingRuns } from "./billing-runs/index.jsx";
 import { module as coupons } from "./coupons/index.jsx";
 import { module as ai } from "./ai/index.jsx";
+import { module as support } from "./support/index.jsx";
+import { module as announcements } from "./announcements/index.jsx";
+import { module as flags } from "./flags/index.jsx";
+import { module as seeas } from "./seeas/index.jsx";
+import { module as health } from "./health/index.jsx";
+import { module as exportsMod } from "./exports/index.jsx";
+import { module as keys } from "./keys/index.jsx";
 
 export const MODULES = [
   dashboard,
@@ -27,7 +34,14 @@ export const MODULES = [
   prices,
   billingRuns,
   coupons,
+  support,
+  announcements,
+  flags,
+  seeas,
+  health,
   audit,
+  exportsMod,
+  keys,
   admins,
   ai,
   settings,

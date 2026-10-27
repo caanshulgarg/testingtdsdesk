@@ -12,6 +12,8 @@ import WhyNotes from "./parts/WhyNotes.jsx";
 import { AssistantLauncher } from "./parts/AssistantLauncher.jsx";
 // the Assistant's panel: loaded the first time it opens, then kept (so it can slide out)
 const Assistant = lazy(() => import("./parts/Assistant.jsx"));
+// announcements from FinCom (one bar) and the feature flags: a small chunk of its own, loaded after the page
+const Announce = lazy(() => import("./parts/Announce.jsx"));
 let asstEver = false;
 function AssistantSlot() {
   const a = typeof ASST === "object" ? ASST.st() : {};
@@ -53,6 +55,7 @@ export default function App() {
       <WhyNotes />
       <Guard name="the assistant" v={v} quiet><AssistantSlot /></Guard>
       <Guard name="the check before filing" v={v} quiet><PreFilePanel /></Guard>
+      <Guard name="announcements" v={v} quiet><Suspense fallback={null}><Announce /></Suspense></Guard>
       {islands().map(({ key, name, host, props }) => {
         const Screen = SCREENS[name];
         return Screen ? createPortal(<Guard name={name} v={v}><Suspense fallback={null}><Screen {...props} /></Suspense></Guard>, host, key) : null;

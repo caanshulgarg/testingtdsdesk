@@ -157,3 +157,26 @@ a.tile:hover { border-color: var(--border-strong); }
   .dt-search { flex-basis: 100%; }
   .diff { max-width: 60vw; }
 }
+
+/* phase 5 (next-console-ops): announcement bar preview (as the user app draws it), a long pick list, threads, pre */
+.ann-bar { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-radius: var(--radius-pill); border: 1px solid var(--border); background: var(--surface-raised); box-shadow: var(--shadow-raised); max-width: 40rem; }
+.ann-bar .ann-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ann-bar .ann-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--text-muted); flex: none; }
+.ann-bar.ann-warning { border-color: color-mix(in oklab, var(--warning) 45%, transparent); }
+.ann-bar.ann-warning .ann-dot { background: var(--warning); }
+.ann-bar.ann-urgent { border-color: color-mix(in oklab, var(--danger) 45%, transparent); }
+.ann-bar.ann-urgent .ann-dot { background: var(--danger); }
+.ann-x { color: var(--text-muted); }
+.pick { max-height: 14rem; overflow: auto; padding: var(--space-2) 0; flex-direction: column; flex-wrap: nowrap; }
+fieldset.card { min-width: 0; }
+.thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.msg { padding: var(--space-3) var(--space-4); border-radius: 1rem; border: 1px solid var(--border); background: var(--surface); max-width: 46rem; }
+.msg.support { margin-left: auto; background: var(--accent-subtle); }
+.msg.internal { background: color-mix(in oklab, var(--warning) 9%, transparent); border-style: dashed; }
+.msg-head { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-1); }
+.msg-body { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 18rem; gap: var(--space-4); align-items: start; }
+.readonly-banner { border: 1px dashed var(--border-strong); }
+@media (max-width: 760px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-top: var(--space-3); flex-wrap: wrap; }
+.chip { white-space: nowrap; }

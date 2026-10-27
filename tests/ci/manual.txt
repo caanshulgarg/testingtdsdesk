@@ -93,3 +93,5 @@ run_console_ui.py   the console's screens (Playwright + Deno stand): needs conso
 run_console_billing_ui.py   the console's billing screens (Playwright + Deno stand), as run_console_ui.py: run it with CONSOLE_DIST set to a built console
 run_console_coupons_ui.py   the console's Coupons screens (Playwright + Deno stand): as run_console_ui.py, needs console/node_modules; run it with CONSOLE_DIST set to a built console
 run_console_ai_ui.py   the console's AI control centre screens (Playwright + Deno stand): as run_console_ui.py, needs a built console (CONSOLE_DIST)
+run_console_ops_ui.py   the console's phase 5 screens (Playwright + Deno stand): needs console/node_modules; run it with CONSOLE_DIST set to a built console
+run_announce_bar.py     the user app's announcement bar and flags: run on the React test build (TDSDESK_SITE=../app/dist-test)
