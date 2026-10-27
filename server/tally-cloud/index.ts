@@ -7,6 +7,8 @@
 //
 // Requests (POST, JSON):
 //   {kind:"hello", version, info}                    -> {firm, device}
+//   (a revoked or unknown key gets 401 on every kind, beats included: a bridge moved to another firm, migration 115,
+//    is heard by the old firm no more)
 //   {kind:"companies", companies:[{name, gstin}]}    -> {links: {name: true|false}}; a company named exactly as one
 //                                                       client's Tally name, with no GSTIN clash, is linked by itself
 //   {kind:"days", company, days:[{day, gz}]}         -> each day's day book (gzip, base64): kept in the bucket
@@ -1036,6 +1038,14 @@ async function ownKey(dev: any, firm: string, body: any) {
   if (!/^go-[0-9a-f]{6,32}$/.test(bid)) return reply(400, { ok: false, error: "Not a FinCom Bridge id." });
   if (!/^fcd_[0-9a-f]{48}$/.test(oldKey)) return reply(400, { ok: false, error: "The old computer key is missing." });
   const { data: old } = await db.from("tally_devices").select("id, firm_id, revoked").eq("key_hash", await sha256(oldKey)).maybeSingle();
+  // migration 115 (the owner, 27-Oct-2026: the bridge follows the FinCom login using it): an old key of ANOTHER firm, with
+  // a switch a member of this firm who may write asked for (tally_bridge_follow_ask): the old firm's binding released and
+  // its key removed when no other bridge uses it (its data kept). Without 115, or not asked: refused as before
+  if (old && !old.revoked && old.firm_id !== firm && old.id !== dev.id) {
+    const { data, error } = await db.rpc("tally_bridge_follow_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
+    if (!error) { console.log("tally-ingest: bridge follows login", bid, old.id, "->", dev.id, JSON.stringify(data)); return reply(data && (data as any).ok === false ? 409 : 200, data); }
+    if (error.code !== "PGRST202" && !missingFn(String(error.message || ""))) return reply(500, { ok: false, error: error.message });
+  }
   if (!old || old.revoked || old.firm_id !== firm || old.id === dev.id) return reply(403, { ok: false, error: "Not moved: the old computer key is not a key of this firm that FinCom knows." });
   const { data, error } = await db.rpc("tally_bridge_own_key_move", { p_bridge: bid, p_from: old.id, p_to: dev.id, p_user: String(me.user || "").slice(0, 120) });
   if (error) return (error.code === "PGRST202" || missingFn(String(error.message || ""))) ? reply(409, { ok: false, error: "FinCom's cloud is not ready for this yet (migration 54)." }) : reply(500, { ok: false, error: error.message });

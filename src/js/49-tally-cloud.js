@@ -1000,7 +1000,8 @@ const TCloud = {
     try {
       const devs = [].concat(await Cloud.api("tally_devices?select=id,name,main_bridge,info,created_by,revoked") || []).filter(d => !d.revoked);
       const d = devs.find(x => x.info && x.info.bridges && x.info.bridges[id]);
-      if (!d) return false;                                                  // not reported yet: next time
+      // not reported to this firm: to another one (then it follows this login, app/src/lib/bridgeFollow.js), or not yet
+      if (!d) return !!(window.loadBridgeFollow && await (await window.loadBridgeFollow()).follow());
       const bs = d.info.bridges, u = (x) => String((x && x.user) || "").trim().toLowerCase();
       const links = [].concat(await Cloud.api("tally_member_bridges?select=user_id,device_id,bridge_id") || []);
       const mine = links.find(l => l.user_id === me && l.bridge_id), taken = links.some(l => l.user_id !== me && l.bridge_id === id && l.device_id === d.id);

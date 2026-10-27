@@ -515,3 +515,12 @@ then tally-ingest (it calls tally_post_register_apply after posts_update and tal
 and day files; without 111 it skips them), then the app build (it reads the register; without it, as before). Tested on pg_stand:
 `tests/run_migration111.py` (its `--staging-sql` prints the read-only SELECT that counts the backfill on staging);
 `tests/run_post_register_server.py`, `tests/run_post_register_ui.py`.
+
+The bridge follows the login (27-Oct-2026, branch next-bridge-follows-login; NOT run on staging):
+`server/tally-cloud/migration-115-bridge-follows-login.sql` runs after 54/55 (it needs 54's tally_bridge_ids, tally_bridge_device,
+tally_bridge_user and tally_post_jobs.target_bridge / taken_by). Add-only, one transaction, `lock_timeout` 10 s, no drop, no
+"delete from", safe twice: one new table (tally_bridge_switches, add-only by trigger: who, when, from and to which firm),
+functions tally_bridge_whose / tally_bridge_follow_ask (members who may write) and tally_bridge_follow_move (service role:
+tally-ingest's own_key with an old key of another firm; the old firm's binding released and its key revoked when no other
+bridge uses it; data kept). Grants explicit. Deploy order: 115, then tally-ingest, then the app build. No bridge change
+(2.4.7). Tested on pg_stand: `tests/run_migration115.py`; the page: `tests/run_bridge_follows_login.py`.
