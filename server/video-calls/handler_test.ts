@@ -806,3 +806,74 @@ Deno.test("notes: Take notes tells everyone and keeps each person's words only a
   await n3.call({ action: "end", room_id: c.j.room.id }, "tok-staff");
   eq((await n3.call({ action: "meetings" }, "tok-staff")).j.recent[0].recording, false, "notes alone are not called a recording");
 });
+
+Deno.test("a class is its batch's (security review F8): staff outside the batch cannot list, start, join, read or knock-answer it; staff on it and the owner can; look-only sees nothing", async () => {
+  const s = stand({ mail: true });
+  // the owner makes a batch with S2 on it (not Riya, not Look)
+  const b = await s.call({ action: "batch_save", name: "GST batch 2", emails: ["s2@a.test", "student@x.test"] }, "tok-owner");
+  eq(b.status, 200, "the owner makes a batch");
+  const bid = b.j.id;
+  // the list: the owner and S2 see it; Riya and Look do not
+  const names = async (tok: string) => ((await s.call({ action: "batch_list" }, tok)).j.batches || []).map((x: any) => x.id);
+  eq([(await names("tok-owner")).includes(bid), (await names("tok-staff2")).includes(bid), (await names("tok-staff")).includes(bid), (await names("tok-look")).includes(bid)],
+    [true, true, false, false], "batch_list: owner yes, staff on it yes, staff off it no, look-only no");
+  // start: Riya (staff, not on it) refused; S2 starts it
+  const no = await s.call({ action: "start", kind: "class", batch_id: bid }, "tok-staff");
+  eq([no.status, no.j.kind], [403, "batch"], "staff off the batch cannot start its class");
+  eq(s.T.call_rooms.length, 0, "no room made for her");
+  const a = await s.call({ action: "start", kind: "class", batch_id: bid }, "tok-staff2");
+  eq(a.status, 200, "staff on the batch start its class");
+  const rid = a.j.room.id;
+  // join, by id and by code: Riya and Look refused; the owner comes in
+  for (const tok of ["tok-staff", "tok-look"]) {
+    const j = await s.call({ action: "join", room_id: rid }, tok);
+    eq([j.status, j.j.kind], [403, "batch"], tok + ": join by id refused");
+    eq((await s.call({ action: "join_code", code: a.j.room.code }, tok)).status, 403, tok + ": join by code refused");
+  }
+  eq((await s.call({ action: "join", room_id: rid }, "tok-owner")).status, 200, "the owner joins any class of the firm");
+  eq(s.T.call_participants.filter((p) => p.room_id === rid && [STAFF, LOOK].includes(p.user_id)).length, 0, "no row made for Riya or Look");
+  // the room's work: chat, its history, the transcript, the summary, notes, recording, the people list
+  await s.call({ action: "chat", room_id: rid, body: "Today: GSTR-1" }, "tok-staff2");
+  for (const [act, extra] of [["chat", { body: "hi" }], ["history_chat", {}], ["transcribe", {}], ["summarise", {}], ["notes_get", {}], ["rec_start", {}], ["roster", {}], ["topic", {}], ["download", { path: "x" }]] as [string, any][]) {
+    const r = await s.call({ action: act, room_id: rid, ...extra }, "tok-staff");
+    assert(r.status === 403 || r.status === 404, act + ": refused for staff off the batch (" + r.status + " " + JSON.stringify(r.j) + ")");
+    assert(!JSON.stringify(r.j).includes("GSTR-1"), act + ": nothing of the class said");
+  }
+  eq((await s.call({ action: "history_chat", room_id: rid }, "tok-owner")).status, 200, "the owner reads the class's chat");
+  eq((await s.call({ action: "history_chat", room_id: rid }, "tok-staff2")).status, 200, "staff on the batch read its chat");
+  // changing the batch (adding oneself): only the owner or someone on it
+  const self = await s.call({ action: "batch_save", id: bid, name: "GST batch 2", emails: ["staff@a.test"] }, "tok-staff");
+  eq([self.status, s.T.call_batch_members.some((x) => x.batch_id === bid && x.email === "staff@a.test")], [403, false], "staff cannot add themselves to another's batch");
+  eq((await s.call({ action: "batch_save", id: bid, name: "GST batch 2", emails: ["s3@a.test"] }, "tok-staff2")).status, 200, "staff on it can");
+  // a batch staff make has them on it
+  const mine = await s.call({ action: "batch_save", name: "Riya's batch", emails: [] }, "tok-staff");
+  assert(s.T.call_batch_members.some((x) => x.batch_id === mine.j.id && x.email === "staff@a.test"), "the maker is on her new batch");
+  // the waiting room: a visitor knocks on the class with its host away; staff on the batch are asked, Riya is not
+  await s.call({ action: "leave", room_id: rid }, "tok-staff2");     // the host leaves; the owner stays in the class
+  const g = await s.call({ action: "guest_start", code: a.j.room.code, name: "Visitor", email: "visitor@x.test" });
+  assert(g.status === 200, "the visitor asks to join: " + JSON.stringify(g.j));
+  for (let i = 0; i < 2; i++) { s.tick(50000); await s.call({ action: "guest_poll", gt: g.j.gt }); await s.call({ action: "beat", room_id: rid }, "tok-owner"); }
+  const k3 = (await s.call({ action: "lobby" }, "tok-staff3")).j.knocks.map((k: any) => k.room_id);
+  const kR = (await s.call({ action: "lobby" }, "tok-staff")).j.knocks.map((k: any) => k.room_id);
+  const kO = (await s.call({ action: "lobby" }, "tok-owner")).j.knocks.map((k: any) => k.room_id);
+  eq([k3.includes(rid), kR.includes(rid), kO.includes(rid)], [true, false, true], "lobby: staff on the batch and the owner see the knock; staff off it do not");
+  // a client call is still every member's
+  const c = await s.call({ action: "start", kind: "client", client_id: "c1" }, "tok-owner");
+  eq((await s.call({ action: "join", room_id: c.j.room.id }, "tok-staff")).status, 200, "no batch: any member joins as before");
+});
+
+Deno.test("an unexpected failure (F11): a plain message; the detail only in the log", async () => {
+  const s = stand();
+  const a = await s.call({ action: "start", kind: "meeting", title: "Review" }, "tok-staff");
+  // the database answers a raw error for the people list (a PostgREST message with a table name)
+  const T = s.T as any;
+  const real = T.call_participants;
+  Object.defineProperty(T, "call_participants", { get() { throw new Error('relation "public.call_participants_secret" does not exist'); }, configurable: true });
+  const errs: string[] = []; const ce = console.error; console.error = (...x: unknown[]) => { errs.push(x.map(String).join(" ")); };
+  let r;
+  try { r = await s.call({ action: "roster", room_id: a.j.room.id }, "tok-staff"); }
+  finally { console.error = ce; Object.defineProperty(T, "call_participants", { value: real, writable: true, configurable: true }); }
+  eq(r.status, 500, "500");
+  eq(r.j, { ok: false, kind: "other", error: "Something went wrong on our side; try again in a moment." }, "a plain message only");
+  assert(errs.some((e) => e.includes("fincom_call_error") && e.includes("roster")), "the detail logged: " + errs.join(" | "));
+});

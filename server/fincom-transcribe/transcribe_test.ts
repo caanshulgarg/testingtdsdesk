@@ -6,7 +6,7 @@
 // turbo for a long one or at the full model's limit, the Hinglish sample-sentence prompt in English letters, Devanagari
 // written in English letters, the names corrected with their changes, the AI step under the cap and checked, and the
 // usage row with counts only.
-import { buildPrompt, handler } from "./index.ts";
+import { buildPrompt, FIRM_CAP_TEXT, FIRM_DAY_SECS, handler, istDayStart } from "./index.ts";
 import { HAIKU } from "../assistant/models.ts";
 
 function assert(c: unknown, w: string): asserts c { if (!c) throw new Error(w); }
@@ -19,8 +19,10 @@ type Call = { url: string, method: string, auth: string, body: Uint8Array | stri
 
 // the stand: users by token, the firm's members, its client and book, the ledgers, the key, the log
 function stand(o: { key?: string | null, groq?: (form: Record<string, string>) => Response, superadmin?: boolean, aal2?: boolean, assistantOff?: boolean,
-  claudeKey?: string, claude?: (body: any) => Response, capOk?: boolean } = {}) {
+  claudeKey?: string, claude?: (body: any) => Response, capOk?: boolean, today?: any[], now?: () => number } = {}) {
   const calls: Call[] = [], logRows: any[] = [], rpcs: [string, any][] = [];
+  // the rows already logged today (the per-firm cap): {firm_id, feature, ms, calls, at}; the rows this stand logs join them
+  const dayRows: any[] = o.today ? [...o.today] : [];
   const ledgers = [
     { name: "Richa Khandelwal", primary_group: "Sundry Debtors", open: 250000, firm_id: FIRM },
     { name: "AIR ESS EXIM PRIVATE LIMITED", primary_group: "Sundry Creditors", open: -900000, firm_id: FIRM },
@@ -84,7 +86,14 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
       assert(q.get("name") === "eq.groq_api_key", "the key is the platform's groq_api_key");
       return json(o.key ? [{ value: o.key }] : []);
     }
-    if (p === "/rest/v1/assistant_log" && method === "POST") { logRows.push(JSON.parse(String(body))); return new Response(null, { status: 201 }); }
+    if (p === "/rest/v1/assistant_log" && method === "POST") { const row = JSON.parse(String(body)); logRows.push(row); dayRows.push({ ...row, at: new Date(o.now ? o.now() : Date.now()).toISOString() }); return new Response(null, { status: 201 }); }
+    if (p === "/rest/v1/assistant_log" && method === "GET" && q.get("feature") === "in.(voice,call_subs)") {
+      // the per-firm cap: read with the service role, the caller's firm, today's rows where Groq was called
+      assert(auth === "service-key", "the cap read with the service role");
+      assert(q.get("firm_id") === "eq." + FIRM && q.get("calls") === "gte.1", "the caller's firm, Groq calls only");
+      const since = String(q.get("at") || "").replace(/^gte\./, "");
+      return json(dayRows.filter((r) => r.firm_id === FIRM && ["voice", "call_subs"].includes(r.feature) && Number(r.calls) >= 1 && r.at >= since).map((r) => ({ ms: r.ms })));
+    }
     if (p === "/rest/v1/assistant_log" && method === "GET") {
       assert(q.get("feature") === "eq.voice", "usage: the voice rows only");
       const rows = [{ firm_id: FIRM, ms: 90_000 }, { firm_id: FIRM, ms: 30_000 }, { firm_id: OTHER_FIRM, ms: 60_000 }];
@@ -92,7 +101,7 @@ function stand(o: { key?: string | null, groq?: (form: Record<string, string>) =
     }
     return json({ message: "not in the stand: " + method + " " + p }, 404);
   }) as typeof fetch;
-  const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake });
+  const h = handler({ env: (k) => ({ SUPABASE_URL: SUPA, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: fake, now: o.now });
   return { h, calls, logRows, rpcs };
 }
 
@@ -149,7 +158,7 @@ Deno.test("the words prompt: the firm's words and the client's own top ledger an
   assert(typeof j.ms === "number" && j.ms >= 0, "the time taken, in ms");
   const g = s.calls.find((x) => x.url === "https://api.groq.com/openai/v1/audio/transcriptions")!;
   assert(g, "Groq's transcriptions endpoint was called");
-  eq([g.method, g.form!.model, g.form!.temperature, g.form!.response_format, g.form!.language], ["POST", "whisper-large-v3", "0", "json", "hi"], "the full model for a 12 s clip, temperature 0, json, Hindi");
+  eq([g.method, g.form!.model, g.form!.temperature, g.form!.response_format, g.form!.language], ["POST", "whisper-large-v3", "0", "verbose_json", "hi"], "the full model for a 12 s clip, temperature 0, verbose_json (its duration counts against the firm's day), Hindi");
   const pr = g.form!.prompt;
   for (const w of ["Tally", "GST", "GSTR-1", "GSTR-3B", "TDS", "ledger", "voucher", "lakh", "crore", "rupees"]) assert(pr.toLowerCase().includes(w.toLowerCase()), "the firm's word " + w + " in " + pr);
   for (const n of ["Richa Khandelwal", "AIR ESS EXIM", "Larkspur Traders"]) assert(pr.includes(n), "the client's name " + n + " in the prompt: " + pr);
@@ -323,5 +332,43 @@ Deno.test("verbose=1 (live subtitles in calls): Whisper's verbose answer and the
   eq(s.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format, "verbose_json", "asked for the verbose answer");
   const plain = stand({ key: "gsk_test" });
   const j2 = await (await send(plain.h, { lang: "hi" })).json();
-  eq([j2.language, plain.calls.find((x) => x.url.startsWith("https://api.groq.com/"))!.form!.response_format], [undefined, "json"], "without verbose: unchanged (no language, json)");
+  eq([j2.language, Object.keys(j2).sort()], [undefined, ["changes", "model", "ms", "ok", "text"]], "without verbose: the answer unchanged (no language)");
+});
+
+Deno.test("the per-firm daily cap (F9): 429 with the plain words once the firm's minutes today are used; open again the next day in India", async () => {
+  // 11:00 IST on 27-Oct-2026; today began at 18:30 UTC the day before
+  let t = Date.parse("2026-10-27T05:30:00Z");
+  eq(istDayStart(t), "2026-10-26T18:30:00.000Z", "India's day starts at 18:30 UTC");
+  const at = (ms: number) => new Date(ms).toISOString();
+  const today = [
+    { firm_id: FIRM, feature: "voice", ms: (FIRM_DAY_SECS - 100) * 1000, calls: 1, at: at(t - 3_600_000) },        // nearly all of it, today
+    { firm_id: FIRM, feature: "voice", ms: 9_000_000, calls: 1, at: at(Date.parse("2026-10-26T18:00:00Z")) },        // yesterday in India: not counted
+    { firm_id: FIRM, feature: "voice", ms: 9_000_000, calls: 0, at: at(t - 60_000) },                                // Groq not called: not counted
+    { firm_id: OTHER_FIRM, feature: "voice", ms: 9_000_000, calls: 1, at: at(t - 60_000) },                          // another firm's
+  ];
+  let n = 0;
+  const s = stand({ key: "gsk_test", today, now: () => t, groq: () => { n++; return new Response(JSON.stringify({ text: "ok", duration: 59.5 })); } });
+  // under the cap (100 s left): heard; Groq's own 59.5 s is logged, not the 5 s the app said
+  let r = await send(s.h, { secs: 5, client: "" });
+  eq(r.status, 200, "under the cap");
+  eq(s.logRows.at(-1).ms, 59_500, "Groq's duration logged, not the secs sent");
+  r = await send(s.h, { secs: 5, client: "" });
+  eq(r.status, 200, "41 s left: still heard");
+  // now over: 429, the plain words, Groq not called, the refusal logged with no Groq call
+  r = await send(s.h, { secs: 5, client: "" });
+  const j = await r.json();
+  eq([r.status, j.kind, j.error], [429, "limit", FIRM_CAP_TEXT], "over the cap: 429 with the plain words");
+  eq(n, 2, "Groq not called over the cap");
+  eq([s.logRows.at(-1).tools, s.logRows.at(-1).calls], [["firm_cap"], 0], "the refusal logged, with no Groq call");
+  // call subtitles count too
+  const sub = stand({ key: "gsk_test", now: () => t, today: [{ firm_id: FIRM, feature: "call_subs", ms: FIRM_DAY_SECS * 1000, calls: 1, at: at(t - 1000) }] });
+  eq((await send(sub.h, { client: "" })).status, 429, "call subtitles share the firm's day");
+  // the next day in India (00:05 IST on 28-Oct): open again
+  t = Date.parse("2026-10-27T18:35:00Z");
+  r = await send(s.h, { secs: 5, client: "" });
+  eq(r.status, 200, "the next day: heard again");
+  eq(n, 3, "Groq called again");
+  // the usage answer is unchanged
+  const u = await s.h(new Request("http://x/", { method: "POST", headers: { Authorization: "Bearer tok-me", "Content-Type": "application/json" }, body: JSON.stringify({ action: "usage" }) }));
+  eq(u.status, 200, "usage still answers");
 });
