@@ -41,6 +41,8 @@ import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 // fast-firstopen: a client's books new to this browser, brought in newest year first (lib/firstOpen.js; TCloud.load)
 window.loadFirstOpen = () => import("./lib/firstOpen.js");
+// the bridge follows the FinCom login using it (migration 115; TCloud.autoOwn)
+window.loadBridgeFollow = () => import("./lib/bridgeFollow.js");
 window.loadRegisters = () => import("./lib/registers.js").catch((e) => { staleReload(e, true); throw e; });
 // ROUND 99: the financial statements' Excel and PDF (src/lib/finExport.js, FinSt with it), loaded the first time they
 // are asked for. Until then FinXlsx / FinPdf load it and pass the call on; the PDF's window is opened at once (a pop-up
