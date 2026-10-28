@@ -17,7 +17,7 @@
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
 
-const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000;
+const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
 // the watcher: one for the page (module state, drawn with render())
 export const FL = { st: "waiting", found: null, other: null, old: null, code: "", msg: "", busy: false, pairedAt: 0, scanAt: 0, err: "", tries: 0 };
 const FRESH = { ...FL };
@@ -47,10 +47,15 @@ async function scan() {
   if (FL.busy || FL.st === "pairing") return;
   if (Bridge.on() && (FL.st === "linking" || FL.st === "error")) return;
   if (Bridge.on() && await Bridge.ensureProven()) return afterPair();
-  const all = (await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 1500)))).filter(Boolean);
+  const all = (await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 2500)))).filter(Boolean);
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;
+  if (mine) FL.mineAt = Date.now();
+  // 28-Oct-2026 (staging, NWS144: tally_connect_steps found / other_user every 6 s for 10 minutes): the bridge found a
+  // moment ago is not given up for one scan where it did not answer in time (or another Windows user's bridge answered
+  // alone): the code box stayed only a few seconds, then "another Windows user" and back. Kept for STICKY_MS
+  if (!mine && FL.st === "code" && FL.found && Date.now() - (FL.mineAt || 0) < STICKY_MS) return;
   if (mine) { say({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
   else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
   else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
@@ -129,7 +134,7 @@ function TrayPicture() {
   </div>;
 }
 
-function CodeBox() {
+export function CodeBox() {
   const [v, setV] = useState("");
   const set = (x) => { const d = String(x || "").replace(/\D/g, "").slice(0, 6); setV(d); if (d.length === 6) { setV(""); submitCode(d); } };
   return <div className="fl-codebox">

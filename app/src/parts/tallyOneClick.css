@@ -1,0 +1,18 @@
+/* Tally on this computer (next-tally-oneclick): three buttons, each with its answer. Theme tokens only. */
+#app .oc { margin: 0 0 12px; min-width: 0; }
+#app .oc-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 10px; }
+#app .oc-top h3 { margin: 0; font-size: 16px; }
+#app .oc-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#app .oc-big { font-size: 15px; padding: 10px 18px; min-height: 42px; }
+#app .oc-acts .btn { min-height: 38px; }
+#app .oc-say { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--surface-muted); overflow-wrap: anywhere; }
+#app .oc-say.ok { background: var(--st-done-soft, var(--surface-muted)); color: var(--st-done, var(--success)); font-weight: 600; }
+#app .oc-say.bad { background: var(--st-attention-soft, var(--surface-muted)); }
+#app .oc-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+#app .oc-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+#app .oc-co { flex: 1 1 220px; min-width: 0; font-weight: 600; }
+#app .oc-port { margin: 8px 0 0; }
+#app .oc-port label { display: block; margin: 0 0 4px; font-size: 13px; color: var(--text-secondary, var(--text)); }
+#app .oc-port input { width: 110px; font-size: 18px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
+#app .oc-code, #app .oc-dl { margin: 10px 0 0; }
+@media (max-width: 760px) { #app .oc-acts .btn { flex: 1 1 100%; } }

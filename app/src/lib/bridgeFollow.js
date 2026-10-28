@@ -8,12 +8,24 @@
 // firm's binding and removes the old key when no other bridge uses it (its data kept). Asked of the cloud first
 // (tally_bridge_whose): only when the bridge reports to ANOTHER firm, never while a posting is waiting or running on it
 // there (tried again next minute), and only for a member who may write (the cloud refuses anyone else).
+// 28-Oct-2026 (next-tally-oneclick): a bridge that reports to NO firm (its computer key unknown or removed: tally-ingest
+// answers its beats 401, e.g. after the firm it was connected to was deleted) and whose heartbeat does not reach FinCom
+// gets a key of the signed-in firm the same way (lib/tallyConnect.js rekey). It was left alone before: TCloud.auto sees
+// "connected" (the bridge holds a key) and this only moved a bridge reporting to another live firm.
 /* global TCloud, Bridge, S, toast */
+import { deadKey, rekey } from "./tallyConnect.js";
 export async function follow() {
   const id = (Bridge.cfg() || {}).bridgeId || "";
   if (!/^go-[0-9a-f]{6,32}$/.test(id)) return false;
   let w;
   try { w = await TCloud.rpc("tally_bridge_whose", { p_bridge: id }); } catch (e) { return false; }   // a cloud without migration 115: as before
+  if (w && w.may && deadKey(w, (Bridge.st || {}).beat)) {
+    if (!(await Bridge.ensureProven())) return false;
+    TCloud.autoAt = Date.now() + 30 * 60000;                                 // one key at a time (no pile of keys)
+    try { await rekey("key not known to FinCom"); } catch (e) { TCloud.autoErr = (e && e.message) || String(e); return false; }
+    toast("Tally on this computer is connected to " + ((S.firm && S.firm.firmName) || "your firm") + " again (its old key was not valid any more).");
+    return true;
+  }
   if (!w || !w.may || w.mine || !w.elsewhere) return false;
   // a posting waiting or running on it in the other firm: asked again next minute (true: TCloud.auto stops this pass, so its
   // 10-minute pace does not replace the minute; the bridge does not report here yet, so nothing else is left undone)

@@ -16,6 +16,7 @@ import { lastEntry } from "../lib/tallyState.js";
 import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
 import CompaniesInTally, { companyRows } from "../parts/TallyCompanies.jsx";
 import ConnectThisComputer, { LocalTally } from "../parts/TallyFirstLink.jsx";
+import TallyOneClick from "../parts/TallyOneClick.jsx";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -1179,6 +1180,8 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   // only when something stands, Help & support (closed)
   return <>
     <GuideRefresh />
+    {/* next-tally-oneclick: Connect this computer · Find Tally · Get companies, each with its answer (parts/TallyOneClick.jsx) */}
+    {!Bridge.blocked() && <TallyOneClick download={<DownloadBtn m={m} primary />} codeBelow={!gx.done.install || !!((S.tallyGuide || {}).step === 1 && (S.tallyGuide || {}).at && !Bridge.on())} />}
     <ConnectGuide x={gx} m={m} connectStep={connectStep} />
     <ComputersLine x={gx} rows={rows} latest={latest} m={m} />
     <FirmCompanies />
