@@ -37,7 +37,7 @@ with sync_playwright() as p:
     pg.click("#app [data-add-tally-go]"); pg.wait_for_timeout(1200)
     rows = pg.evaluate("[...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tco-state')])")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
-    ok(zz and zz[0][2] == "connected" and "Not linked" in zz[0][1] and "Link to client…" in zz[0][1] and "Add as client" not in zz[0][1], "the Tally page: ZZ TEST, open in Tally on this computer, Not linked, Link to client… (Task D) (%s)" % (zz and zz[0][1]))
+    ok(zz and zz[0][2] == "connected" and "Not linked" in zz[0][1] and "Choose client" in zz[0][1] and "Add as client" not in zz[0][1], "the Tally page: ZZ TEST, open in Tally on this computer, Not linked, the client picker (Task D) (%s)" % (zz and zz[0][1]))
     gs = [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"]
     ok(gs and "Testing AAD" in gs[0][1] and "Add as client" not in gs[0][1], "GARG SHEKHAR & COMPANY is listed with its client Testing AAD, not offered to add (%s)" % (gs and gs[0][1]))
     pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-act=pick]'); pg.wait_for_timeout(250)   # Task D: + New client inside Link to client…

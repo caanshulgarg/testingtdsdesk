@@ -185,9 +185,9 @@ def main():
         ok("— Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and line.endswith("Open in Tally page"), "3. the line: Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK (%s)" % line)
         to_row()
         # next-tally-smart: a linked company not open now is one quiet line under Your linked clients (no false alarm)
-        LR = '#app [data-linked-clients] [data-linked-row="GARG SHEKHAR"]'
-        ok(pg.locator(LR).count() == 1 and pg.locator(R("GARG SHEKHAR")).count() == 0 and "not open in Tally now" in txt(LR + " [data-linked-meta]") and pg.locator(LR + " [data-tco-more]").count() == 1,
-           "3. not open: under Your linked clients, 'not open in Tally now', with ⋯ (%s)" % txt(LR))
+        LR = R("GARG SHEKHAR") + "[data-linked-row]"
+        ok(pg.locator(LR).count() == 1 and txt(LR + " .tco-pill") == "Waiting for Tally" and "not open in Tally now" in txt(LR + " [data-linked-meta]") and pg.locator(LR + " [data-tco-more]").count() == 1 and "FRONTDESK" not in txt(LR),
+           "3. not open: under Your linked clients, Waiting for Tally, 'not open in Tally now', with ⋯, no computer's name (%s)" % txt(LR))
         shot(pg, "card-2-waiting-desktop-light")
 
         # ---- 4. Connected

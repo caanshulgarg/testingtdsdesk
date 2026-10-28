@@ -124,28 +124,31 @@ def main():
         tally_page()
         rs = rows()
         ok([r["co"] for r in rs][:2] == sorted([VMS, GSC], key=lambda c: c) or set(r["co"] for r in rs[:2]) == {VMS, GSC}, "1. the companies open in Tally now come first (%s)" % [r["co"] for r in rs])
-        ok([r["co"] for r in rs][2:] == [SAL, OLD] or [r["co"] for r in rs][2:] == [OLD, SAL], "1. then the ones seen before (%s)" % [r["co"] for r in rs])
-        # next-tally-one-page (Suvit: Connected / Disconnected are a linked company's): not linked, "Not a client", open or not
-        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not linked · open in Tally on NWS144", "1. VMS EVENTS open on NWS144, not linked: Not linked · open in Tally (Task D: neutral words) (%s)" % row(VMS)["pill"])
-        ok(row(SAL)["pill"] == "Not linked · not open in Tally now", "1. Salesify, not linked, not open (%s)" % row(SAL)["pill"])
+        # next-tally-smart (28-Oct-2026; the owner: "show only currently opened Tally"): the ones seen before, not open and not
+        # linked, are not on the page; they are under Help & support › Every company seen
+        ok([r["co"] for r in rs][2:] == [] and "Salesify" not in txt("#app") and OLD not in txt("#app"), "1. the ones seen before (not open, not linked): not on the page (%s)" % [r["co"] for r in rs])
+        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not linked · open in Tally", "1. VMS EVENTS open, not linked: Not linked · open in Tally (Task D: neutral words; no computer's name) (%s)" % row(VMS)["pill"])
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+        allrows = lambda: E("""() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=all] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), {pill: r.querySelector('[data-tco-pill]').innerText.replace(/\\s+/g, ' ').trim(), text: r.innerText.replace(/\\s+/g, ' '), act: (r.querySelector('select[data-tco-act=pick]') || {}).tagName || ''}]))""")
+        ok(allrows().get(SAL, {}).get("pill") == "Not linked · not open in Tally now" and allrows()[SAL]["act"] == "SELECT", "1. Help & support › Every company seen: Salesify, not linked, not open, the picker (%s)" % allrows().get(SAL))
+        E("() => { S.tallyMore = {}; render(); }")
         scene(cos(sal="GS", old="GS")); tally_page()
-        # next-link-record (the owner's step 2, 26-Oct-2026): one word per client, Waiting for Tally with its one plain line
-        ok(row(SAL)["pill"] == "Waiting for Tally Open " + SAL + " in TallyPrime on NWS144", "1. linked, not open: 'Waiting for Tally · Open ... in TallyPrime on NWS144' (%s)" % row(SAL)["pill"])
-        ok(row(OLD)["pill"] == "Waiting for Tally Open " + OLD + " in TallyPrime on LAPTOP" and row(OLD)["st"] == "offline", "1. its computer off: 'Waiting for Tally · Open MASTER CAD INFRA in TallyPrime on LAPTOP' (%s)" % row(OLD)["pill"])
+        # next-tally-smart: a linked company not open now is one quiet line under Your linked clients (no false alarm)
+        lrow = lambda co: txt('#app [data-tco-list=firm] [data-linked-row="%s"]' % co).replace("\n", " ")
+        ok(row(SAL)["pill"] == "Waiting for Tally" and "not open in Tally now" in lrow(SAL), "1. linked, not open: under Your linked clients, 'Waiting for Tally', 'not open in Tally now' (%s)" % lrow(SAL))
+        ok(row(OLD)["pill"] == "Waiting for Tally" and row(OLD)["st"] == "offline" and "LAPTOP" not in lrow(OLD), "1. its computer off: the same quiet line, no computer's name (%s)" % lrow(OLD))
         scene(cos()); tally_page()
-        ok("NWS144" in row(VMS)["text"] and "LAPTOP" in row(OLD)["text"] and "last seen 20-Oct" in row(SAL)["text"], "1. each row names its computer and when it was last seen")
-        ok(row(VMS)["act"] == "Link to client…" and row(SAL)["act"] == "Link to client…" and "Add as client" not in row(VMS)["text"], "1. not linked: ONE 'Link to client…', no Add as client suggestion (Task D) (%s, %s)" % (row(VMS)["act"], row(SAL)["act"]))
-        ok(row(GSC)["act"] == "Link to client…" and row(GSC)["pre"] == E("window.__ids.GS"), "3. GARG SHEKHAR & COMPANY (2025-26) with Garg Shekhar & Company already a client: 'Link to client…' with it chosen (%s)" % row(GSC)["pre"])
+        ok("NWS144" not in row(VMS)["text"] and "LAPTOP" not in txt("#app [data-tco-list=firm]"), "1. no computer's name on a row (the owner's rule)")
+        ok(row(VMS)["pre"] == "" and "Choose client" in row(VMS)["text"] and "Add as client" not in row(VMS)["text"], "1. not linked: the client picker, no Add as client suggestion (Task D) (%s)" % row(VMS)["act"][:40])
+        ok(row(GSC)["act"] != "" and row(GSC)["pre"] == E("window.__ids.GS"), "3. GARG SHEKHAR & COMPANY (2025-26) with Garg Shekhar & Company already a client: the picker with it chosen (%s)" % row(GSC)["pre"])
         ok(pg.locator("#app [data-tco-q]").count() == 0, "1. no search box with 4 companies")
         ok(E("() => { const a = document.querySelector('#app [data-tco-list=firm]'), g = document.querySelector('#app [data-connect-guide]'); return !!a && (!g || !!(g.compareDocumentPosition(a) & 4)); }"), "1. Companies in Tally right under the steps")
         shot("tally-page-list-desktop-light")
 
         # ---- 5. the three steps
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", True], ["port", True], ["open", True], ["add", False]], "5. four steps (26-Oct-2026: Set Tally's port): install, port and open ticked from the beats, Add as client next (%s)" % g)
+        ok(g == [] and "NWS144 ● online" in txt("#app [data-pc-lines]").replace("\n", " "), "5. a computer connected: no steps (next-tally-smart); the status card, NWS144 ● online (%s)" % txt("#app [data-status-card]")[:100])
         ok(pg.locator("#app [data-strip-step], #app [data-connect-step=link], #app [data-connect-step=ledgers], #app [data-connect-step=daybook], #app [data-guide-picker]").count() == 0, "5. no six-step strip, no Link / Ledgers / Day Book steps")
-        gtxt = txt("#app [data-connect-guide]")
-        ok("Install FinCom Bridge on the Tally computer" in gtxt and "Open your company in TallyPrime" in gtxt and "Link each company to its client" in gtxt and "Set Tally’s port" in gtxt and "3 of 4 done" in gtxt, "5. the four steps' words, 3 of 4 done (%s)" % gtxt[:160])
         shot("guide-3-steps-desktop-light")
 
         # ---- 2. Add as client: one click
@@ -207,7 +210,7 @@ def main():
            "4. days of this year missing: ⋯ Upload older entries (Day Book)")
         # the Disconnected rows, for the pictures
         r = row(SAL)
-        ok(r and r["pill"].startswith("Waiting for Tally Open ") and "Garg Shekhar & Company" in r["text"], "4. a linked company not open: Waiting for Tally, with its client (%s)" % (r and r["text"]))
+        ok(r and r["pill"] == "Waiting for Tally" and "not open in Tally now" in r["text"] and "Garg Shekhar & Company" in r["text"], "4. a linked company not open: Waiting for Tally, quietly, with its client (%s)" % (r and r["text"][:160]))
         E("() => { document.querySelectorAll('#app details[open]').forEach(d => d.open = false); }")
         shot("disconnected-rows-desktop-light")
 
@@ -217,19 +220,23 @@ def main():
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
         ok(g == [["install", False], ["port", False], ["open", False], ["add", False]] and pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
         scene(cos(), devs=[dev(opened=(), tally="closed")]); tally_page()
-        g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.hasAttribute('data-done'))")
-        ok(g == [True, False, False, False] and "Open TallyPrime on NWS144" in txt("#app [data-connect-step=open]"), "5. bridge on, Tally closed: step 3 says open TallyPrime on NWS144 (%s)" % txt("#app [data-connect-step=open]"))
+        ok(pg.locator("#app [data-connect-step=open]").count() == 0 and "Tally not open" in txt("#app [data-pc-lines]"), "5. bridge on, Tally closed: the card says Tally not open (%s)" % txt("#app [data-pc-lines]").replace("\n", " "))
         scene(cos(vms="GS"), devs=[dev()]); tally_page()
-        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-connected-line]").count() == 1 and "Connected computers: NWS144 ● online" in txt("#app [data-pc-lines]"),
-           "5. a company linked: no steps, one line 'Connected computers: NWS144 ● online' (%s)" % txt("#app [data-pc-lines]"))
+        ok(pg.locator("#app [data-connect-step]").count() == 0 and "NWS144" in txt("#app [data-pc-lines]") and "Connected" in txt("#app [data-tsc-word]"),
+           "5. a company linked: no steps, the card 'NWS144 · Connected' (%s)" % txt("#app [data-status-card]").replace("\n", " ")[:100])
         shot("tally-page-all-done-desktop-light")
 
         # ---- 1b. more than 10 companies: a search box
         many = [{"company": "CO %02d TRADERS" % i, "client_id": None, "device_id": D1, "gstin": "", "last_seen": "ago:%d" % (100 + i), "linked_at": None, "linked_by": None} for i in range(12)]
         scene(cos(extra=many)); tally_page()
-        ok(pg.locator("#app [data-tco-q]").count() == 1, "1. 16 companies: a search box")
-        pg.fill("#app [data-tco-q]", "co 07"); pg.wait_for_timeout(300)
-        ok([r["co"] for r in rows()] == ["CO 07 TRADERS"], "1. the search finds one (%s)" % [r["co"] for r in rows()])
+        # next-tally-smart: the 12 seen earlier (not open, not linked) are under Help & support › Every company seen, with the search box
+        ok(pg.locator("#app [data-tco-list=firm] [data-tco-q]").count() == 0 and E("() => document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]').length") == 2, "1. the page: the two open companies only, no search box")
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        ok(pg.locator("#app [data-tco-list=all] [data-tco-q]").count() == 1, "1. 16 companies seen: a search box in Every company seen")
+        pg.fill("#app [data-tco-list=all] [data-tco-q]", "co 07"); pg.wait_for_timeout(300)
+        found = E("() => [...document.querySelectorAll('#app [data-tco-list=all] [data-tco-row]')].map(r => r.getAttribute('data-tco-row'))")
+        ok(found == ["CO 07 TRADERS"], "1. the search finds one (%s)" % found)
+        E("() => { S.tallyMore = {}; render(); }")
 
         # ---- 6. the same pill everywhere
         scene(cos(sal="GS"))

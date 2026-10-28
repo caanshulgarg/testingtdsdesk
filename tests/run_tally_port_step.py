@@ -100,20 +100,19 @@ def main():
                 if SHOTS:
                     os.makedirs(SHOTS, exist_ok=True)
                     # the whole guide, from the page (an element shot scrolls it under the sticky top bar)
-                    b = E("() => { const r = document.querySelector('#app [data-connect-guide]').getBoundingClientRect(); return {x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height}; }")
+                    b = E("() => { const r = document.querySelector('#app [data-status-card], #app [data-connect-guide]').getBoundingClientRect(); return {x: r.left + scrollX, y: r.top + scrollY, width: r.width, height: r.height}; }")
                     pg.screenshot(path=os.path.join(SHOTS, "%s-%s.png" % (name, tag)), full_page=True, clip=b)
             state = lambda: pg.get_attribute(STEP + " [data-port-state]", "data-port-state") if n(STEP + " [data-port-state]") else None
-            done = lambda: n(STEP + "[data-done]") == 1
+            # next-tally-smart (28-Oct-2026): once a computer is connected the step is on the status card, only while his Tally is
+            # not answering on a port of its own; done: no step, the card says Connected
+            done = lambda: n(STEP) == 0 and "Connected" in txt("#app [data-tsc-word]")
             say = "%s: " % tag
 
             # ---- 1, 2. proposed: his Tally not answering yet; every other user's port skipped
             scene(nws())
-            order = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => e.getAttribute('data-connect-step'))")
-            ok(order == ["install", "port", "open", "add"], say + "the steps in order: install, port, open, add (%s)" % order)
-            titles = E("() => [...document.querySelectorAll('#app [data-connect-step] .tc3-body > b')].map(e => e.innerText.trim())")
-            ok(len(titles) == 4 and titles[1] == "Set Tally’s port" and titles[0].startswith("Install FinCom Bridge") and titles[2].startswith("Open"),
-               say + "step 2 is 'Set Tally’s port', after Install and before Open (%s)" % titles)
-            ok(txt("#app [data-guide-count]") == "1 of 4 done", say + "1 of 4 done (%s)" % txt("#app [data-guide-count]"))
+            ok(n("#app [data-connect-guide]") == 0 and n("#app [data-status-card] " + STEP[5:]) == 1 and "Tally not open" in txt("#app [data-tsc-word]"),
+               say + "connected, Tally not answering: no wizard; 'Set Tally’s port' on the status card (%s)" % txt("#app [data-status-card]")[:120])
+            ok(txt(STEP + " > b") == "Set Tally’s port", say + "its title")
             ok(state() == "set" and not done(), say + "proposed: the step needs him (%s)" % state())
             free = int(pg.get_attribute(STEP + " [data-port-free]", "data-port-free") or 0)
             big = txt(STEP + " [data-port-free-big]")
@@ -132,7 +131,7 @@ def main():
             pg.click(STEP + " [data-port-used-toggle]"); pg.wait_for_timeout(200)
             ok(txt(STEP + " [data-port-used]").startswith("In use on NWS144: 1950, 2022, 2929, 3543, 9000, 9002"), say + "it opens the list (%s)" % txt(STEP + " [data-port-used]")[:60])
             pg.click(STEP + " [data-port-used-toggle]"); pg.wait_for_timeout(200)
-            ok("Open TallyPrime on NWS144 and open your company." == txt('#app [data-connect-step="open"] .tc3-p'), say + "step 3 short: %r" % txt('#app [data-connect-step="open"] .tc3-p'))
+            ok("Open TallyPrime and your company" in txt("#app [data-tsc-need=tally]"), say + "the card's line: open TallyPrime and your company: %r" % txt("#app [data-tsc-need=tally]"))
             ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), say + "no sideways scroll (%s)" % E("() => [document.documentElement.scrollWidth, window.innerWidth]"))
             shot("proposed")
 
@@ -142,42 +141,39 @@ def main():
                 Object.assign(me, {tallyPort: p, tally: true, tallyState: 'open', open: ['GB TEXCOAT']}); }""", free)
             r0 = E("window.__reads")
             pg.click(STEP + " [data-port-check]"); pg.wait_for_timeout(1500)
-            ok(E("window.__reads") > r0 and done() and state() == "done" and txt(STEP + " [data-port-state]") == "Your Tally uses port %d ✓" % free,
-               say + "Check: read again, the step turns green: %r" % txt(STEP + " [data-port-state]"))
-            ok(txt("#app [data-guide-count]") == "2 of 4 done" or txt("#app [data-guide-count]") == "3 of 4 done", say + "the count moves on (%s)" % txt("#app [data-guide-count]"))
+            ok(E("window.__reads") > r0 and done(), say + "Check: read again, the step gives way, Connected: %r" % txt("#app [data-status-card]")[:100])
 
             # ---- 3. his Tally already on a port of its own: ticked
             scene(nws(my_port=9002, my_tally="open", others=[1950, 2022, 2929, 3543, 9000]))
-            ok(done() and state() == "done" and txt(STEP + " .tc3-say") == "Your Tally uses port 9002 ✓" and n(STEP + " [data-port-how]") == 0,
-               say + "already on 9002, nobody else: 'Your Tally uses port 9002 ✓', ticked, no menu (%s)" % txt(STEP))
+            ok(done() and state() is None and n(STEP + " [data-port-how]") == 0 and "port" not in txt("#app [data-status-card]").lower(),
+               say + "already on 9002, nobody else: Connected, no port step, no port words (%s)" % txt("#app [data-status-card]")[:100])
             shot("done")
 
             # ---- 4. clash: his Tally on 9000, ravi's Tally on 9000 too
             scene(nws(my_port=9000, my_tally="open", others=[1950, 2022, 2929], ravi_port=9000))
             free = int(pg.get_attribute(STEP + " [data-port-free]", "data-port-free") or 0)
             cl = txt(STEP + " [data-port-clash]")
-            ok(state() == "clash" and not done() and cl.startswith("Your Tally is on 9000, same as another user. Change it to %d as above." % free) and "share one TallyPrime folder" in cl,
-               say + "clash: needs action, in plain words (%r)" % cl)
+            ok(state() == "clash" and not done() and cl.startswith("Your Tally is on 9000, same as another user. Change it to %d as above." % free) and "share one TallyPrime folder" in cl and "Port clash" in txt("#app [data-tsc-word]"),
+               say + "clash: needs action, in plain words, the card's word Port clash (%r)" % cl)
             ok(free not in {9000, 1950, 2022, 2929} and free not in AVOID and "Port %d," % free in txt(STEP + " [data-port-how]"), say + "clash: a free port and the menu with it (%s)" % free)
             ok(txt(STEP + " [data-port-warn]") == "Use a port between 9000 and 9999 — %d is free." % free, say + "clash: the one warning too (%s)" % txt(STEP + " [data-port-warn]"))
             shot("clash")
             # the guide's own read (every 20 s) ticks it without a click once ravi moves away
             E("() => { window.__devs[0].info.bridges['go-2'].tallyPort = 9070; }")
             E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
-            ok(done() and state() == "done", say + "re-read: ravi moved, his 9000 is his own: ticked (%s)" % state())
+            ok(done() and state() is None, say + "re-read: ravi moved, his 9000 is his own: Connected, no step (%s)" % state())
 
             # ---- 8. his Tally on a port outside 9000-9999 that his bridge reaches (the TallyPrime 7.2 proof, 26-Oct-2026: bridge
             # 2.4.7 connects on 4125): done, no warning
             for other in (4125, 8000):
                 scene(nws(my_port=other, my_tally="open", others=[1950, 2022, 2929]))
-                ok(state() == "done" and done() and n(STEP + " [data-port-warn]") == 0 and txt(STEP + " [data-port-state]") == "Your Tally uses port %d ✓" % other,
-                   say + "port %d, the bridge connected: done, no warning (%s)" % (other, txt(STEP)))
+                ok(state() is None and done() and n(STEP + " [data-port-warn]") == 0, say + "port %d, the bridge connected: Connected, no step, no warning (%s)" % (other, txt("#app [data-status-card]")[:80]))
 
             # ---- 6. no bridge yet; offline
             scene([], [])
             ok(state() == "wait" and txt(STEP + " [data-port-state]").startswith("Finish step 1 first") and not done(), say + "no bridge: 'Finish step 1 first' (%s)" % txt(STEP))
             scene(nws(my_at="ago:30"))
-            ok(state() == "offline" and txt(STEP + " [data-port-state]") == "Finish step 1 first: FinCom Bridge on NWS144 is offline.", say + "offline: 'Finish step 1 first: ... offline' (%s)" % txt(STEP))
+            ok(state() is None and n("#app [data-tsc-need=offline]") == 1, say + "offline: the card says the computer is not connected, no port step (%s)" % txt("#app [data-status-card]")[:100])
             pg.close()
         ok(not errors, "no page errors " + str(errors[:2]))
         br.close()

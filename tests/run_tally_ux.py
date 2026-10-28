@@ -263,7 +263,8 @@ def main():
         ok(pg.locator(R + " [data-tco-sync-now]").count() == 1 and txt(R + " [data-tco-pill]").startswith("Linked"), "5. its row: Linked, Sync now")
         # change company: the other company's row, Link to client… (the client moves, asked once)
         other = "ABC LTD"
-        pg.click('#app [data-tco-row="%s"] [data-tco-act=pick]' % other); pg.wait_for_timeout(300)   # Task D: Link to client…
+        # next-tally-smart: a company not open now, not linked, is under Help & support › Every company seen
+        if not pg.locator('#app [data-tco-row="%s"]' % other).count(): E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
         pg.select_option('#app [data-tco-row="%s"] [data-tco-relink-pick]' % other, cid); pg.click('#app [data-tco-row="%s"] [data-tco-relink]' % other)
         pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
         ok(["tally_company_link", {"p_company": other, "p_client": cid}] in calls("tally_company_link"), "5. another company for the client -> tally_company_link (asked once)")

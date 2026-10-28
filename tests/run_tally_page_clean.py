@@ -188,7 +188,7 @@ def main():
         # 24-Oct-2026 (next-tally-one-page): companies are linked, so no steps: one line of the computers instead
         gd = "#app [data-connect-guide]"
         # next-tally-smart: a computer connected: no steps; ONE status card for it ("NWS144 · anshul · FinCom Bridge 2.4.1 · Paused")
-        card = txt("#app [data-status-card]")
+        card = re.sub(r"\s+", " ", txt("#app [data-status-card]"))
         ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1 and card.startswith("NWS144 · anshul") and "Paused" in card,
            "a computer connected: no steps; the one status card, Paused (%s)" % card[:120])
         # the owner, 28-Oct-2026 ("show only currently opened Tally"): VMS EVENTS was seen once, not open, not linked: not on the
@@ -252,7 +252,7 @@ def main():
         # problem and its one action)
         def guide_scene(d, cos=None):
             scene([d], cos if cos is not None else companies(linked=(), d=d["id"])); return d["id"]
-        card = lambda: txt("#app [data-status-card]")
+        card = lambda: re.sub(r"\s+", " ", txt("#app [data-status-card]"))
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
         ok(steps() == [] and n("#app [data-tsc-need=offline]") == 1 and "NWS144 (anshul) is not connected" in card(), "offline: no steps; the card says it is not connected (%s)" % card()[:140])
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))

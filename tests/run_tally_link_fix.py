@@ -146,13 +146,17 @@ def main():
         ok(len(by_name("Salesify Marketing LLP")) + len(by_name("salesify marketing llp.")) == 1, "3. Add asks first; No adds nothing")
         # the Tally page's list with that client there: the row links it to the existing client, no second one
         rows = tally_list()
-        ok([r[0] for r in rows] == [VMS, SAL], "1. Companies in Tally: the two companies, the one open now first (%s)" % [r[0] for r in rows])
-        ok(rows and "NWS144 · open now" in rows[0][2] and re.search(r"NWS144 · last seen 20-Oct", rows[1][2] or "") is not None, "1. each with its computer, and when it was last seen (%s)" % [r[2] for r in rows])
+        # next-tally-smart (28-Oct-2026): the list is the companies open now; one seen earlier, not open and not linked, is
+        # under Help & support › Every company seen (to link or take off the list); no computer's name on a row
+        ok([r[0] for r in rows] == [VMS], "1. Open in Tally now: the open company only (%s)" % [r[0] for r in rows])
+        ok(rows and "NWS144" not in rows[0][2] and "open in Tally" in rows[0][2], "1. open in Tally, no computer's name (%s)" % [r[2] for r in rows])
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
+        ok("last seen 20-Oct" in txt(RA(SAL)), "1. Help & support › Every company seen: Salesify, last seen 20-Oct (%s)" % txt(RA(SAL))[:120])
         n0 = len(calls())
-        q = txt(R(SAL) + " [data-tco-act]")
-        pre = E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", R(SAL))
-        ok(q == "Link to client…" and pre == s1[0], "3. the row says 'Link to client…' with Salesify Marketing LLP chosen in it (Task D) (%s, %s)" % (q, pre))
-        pg.click(R(SAL) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(SAL) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
+        pre = E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", RA(SAL))
+        ok(pg.locator(RA(SAL) + " select[data-tco-act=pick]").count() == 1 and pre == s1[0], "3. the row has the client picker with Salesify Marketing LLP chosen in it (Task D) (%s)" % pre)
+        pg.click(RA(SAL) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
         ok(calls()[n0:] == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}]] and len(by_name("Salesify Marketing LLP")) == 1 and len(by_name("SALESIFY MARKETING LLP")) == 0,
            "3. linked to the existing Salesify, no second client (%s)" % calls()[n0:])
 
@@ -175,7 +179,7 @@ def main():
         ok(t4 == "Tally: ◐ Not linked · Choose on Tally page" and pg.locator("#app [data-tally-link]").count() == 0, "4. not linked: one line, 'Choose on Tally page', no card (%r)" % t4)
         rows = tally_list(s1[0])
         ok(rows and rows[0][0] == VMS and rows[1][0] == SAL and rows[1][1] == "name" and "same name" in rows[1][2], "4. every company, open first, Salesify's marked 'same name' (%s)" % [(r[0], r[1]) for r in rows])
-        ok(rows and "last seen 20-Oct" in rows[1][2] and "NWS144" in rows[1][2] and rows[1][3] == "Link to Salesify Marketing LLP", "4. with its computer, 'last seen 20-Oct', Link to Salesify Marketing LLP (%s)" % (rows and rows[1]))
+        ok(rows and "last seen 20-Oct" in rows[1][2] and "NWS144" not in rows[1][2] and rows[1][3] == "Link to Salesify Marketing LLP", "4. 'last seen 20-Oct', no computer's name, Link to Salesify Marketing LLP (%s)" % (rows and rows[1]))
         shot("card-not-linked-desktop")
         n0 = len(calls())
         pg.click(R(SAL) + " [data-tco-act=link]"); pg.wait_for_timeout(1200)
@@ -187,10 +191,11 @@ def main():
         pg.click(R(VMS) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
         ok(pg.locator(R(VMS) + " [data-tco-not-this]").count() == 1 and pg.locator(R(VMS) + " [data-tco-unlink]").count() == 1, "5. ⋯ Link to another client, Unlink on the wrong company's row")
         E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
-        q = txt(R(SAL) + " [data-tco-act]")
-        ok(q == "Link to client…" and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", R(SAL)) == s1[0], "5. the right company: 'Link to client…' with Salesify Marketing LLP chosen (%s)" % q)
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)   # next-tally-smart: not open, not linked: under Help & support › Every company seen
+        RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
+        ok(pg.locator(RA(SAL) + " select[data-tco-act=pick]").count() == 1 and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", RA(SAL)) == s1[0], "5. the right company: the picker with Salesify Marketing LLP chosen")
         n0 = len(calls())
-        pg.click(R(SAL) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(SAL) + " [data-tco-relink]"); confirm(True); pg.wait_for_timeout(1000)
+        pg.click(RA(SAL) + " [data-tco-relink]"); confirm(True); pg.wait_for_timeout(1000)
         got = calls()[n0:]
         ok(got == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}], ["tally_company_link", {"p_company": VMS, "p_client": None}]],
            "5. asked once, the client moves: SALESIFY linked, VMS EVENTS unlinked (%s)" % got)
@@ -206,9 +211,9 @@ def main():
         scene(cos(sal_client="S1")); tally_list()
         fx = txt(R(SAL) + " [data-tco-fix]"); pill = txt(R(SAL) + " [data-tco-pill]")
         # next-link-record (the owner's step 2): Waiting for Tally and its one plain line, on the row's pill
-        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "waiting" and re.sub(r"\s+", " ", pill) == "Waiting for Tally Open " + SAL + " in TallyPrime on NWS144" and not fx
+        ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1[0]) == "waiting" and re.sub(r"\s+", " ", pill) == "Waiting for Tally" and not fx and "not open in Tally now" in txt(R(SAL) + " [data-linked-meta]")
            and pg.locator(R(SAL) + " [data-tco-sync-now]").count() == 1,
-           "6. 'Waiting for Tally · Open SALESIFY… in TallyPrime on NWS144', Sync now (%s | %s)" % (pill, fx))
+           "6. 'Waiting for Tally', quietly (not open in Tally now), Sync now (%s | %s)" % (pill, fx))
         E("(c) => { TCloud.st[c] = Object.assign(TCloud.st[c] || {}, {at: Date.now(), books: []}); render(); }", s1[0]); pg.wait_for_timeout(500)
         pr = txt(R(SAL) + " [data-tco-sync]")
         ok("Ledgers not in FinCom yet" in pr, "6. what came in: no ledgers yet (%s)" % pr)

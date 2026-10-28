@@ -86,3 +86,8 @@
 #app .tsc-act { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 #app .tpc-one { display: inline; }
 @media (max-width: 760px) { #app .tsc-right { margin-left: 0; } }
+#app .tsc-port { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+#app .tsc-port > b { display: block; margin: 0 0 4px; }
+#app .tco-group { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; padding: 14px 0 4px; border-top: 1px solid var(--border-subtle, var(--border)); }
+#app .tco-group b { font-size: 15px; }
+#app .tco-row.tco-quiet { padding-top: 7px; padding-bottom: 7px; }

@@ -25,7 +25,7 @@
 //     next-tally-linknow (28-Oct-2026): a company OPEN in Tally is registered and linked at the click (tally-ingest
 //     "link_now"); only a company no computer has open now waits for its computer this way.
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
 import "../../../src/js/96-bank-sent-heal.js";
@@ -512,7 +512,7 @@ export function SyncLine({ cid, compact = false, words = false, bar = false }) {
 // ---------- one row
 // the pill: a linked company's state (lib/tallyState.js, the words every place uses), Earlier year when a newer year of
 // the same client is in use, Not a client when not linked
-function Pill({ r, st, co, earlier }) {
+function Pill({ r, st, co, earlier, noLine = false }) {
   // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): a company not linked says so neutrally
   if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not linked">
     <span className="tag">Not linked</span><span className="tco-why">{r.open ? " · open in Tally" + (st.computer ? " on " + st.computer.split(" · ")[0] : "") : " · not open in Tally now"}</span></span>;
@@ -521,9 +521,9 @@ function Pill({ r, st, co, earlier }) {
   // next-link-record: a linked company says the client's one word (Linked / Waiting for Tally / Needs you) and its one line
   const w = co ? linkWord(co, r.company) : null;
   if (w) return <span className="tco-pill" data-tco-pill={st.state} data-tco-pill-text={w.text} data-tco-word={w.kind}>
-    <span className={"tag " + w.level}>{w.word}</span>{w.line && <span className="tco-why">{w.line}</span>}</span>;
+    <span className={"tag " + w.level}>{w.word}</span>{w.line && !noLine && <span className="tco-why">{w.line}</span>}</span>;
   return <span className="tco-pill" data-tco-pill={st.state} data-tco-pill-text={st.text}>
-    <span className={"tag " + st.level}>{st.word}</span>{st.state !== "connected" && <span className="tco-why">{st.text.replace(/^Disconnected/, "")}</span>}</span>;
+    <span className={"tag " + st.level}>{st.word}</span>{st.state !== "connected" && !noLine && <span className="tco-why">{st.text.replace(/^Disconnected/, "")}</span>}</span>;
 }
 // Disconnected, in words: what to do (Suvit: open the company in Tally on its computer)
 function fixOf(r, st) {
@@ -566,6 +566,9 @@ function TwoPlaces({ co, company }) {
 // data-tco-act="pick" (the row's one action) and data-tco-pre (the client chosen first)
 export function Pick({ r, co, onClose, pre = "", inline = false }) {
   const [pick, setPick] = useState(pre || ""), [busy, setBusy] = useState(false);
+  // a client of the same name made after the row was drawn: chosen by itself (nothing chosen yet)
+  const gone = (id) => !id || !S.companies || !S.companies[id] || S.companies[id].deleted;
+  useEffect(() => { if (pre && gone(pick)) setPick(pre); }, [pre]);
   const cs = rankClients(r, co ? co.id : "");
   const go = async () => { const t = S.companies[pick]; if (!t) return; setBusy(true);
     const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok && onClose) onClose(); };
@@ -573,7 +576,7 @@ export function Pick({ r, co, onClose, pre = "", inline = false }) {
     {!inline && <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>}
     <select data-tco-relink-pick="" {...(inline ? { "data-tco-act": "pick", "data-tco-pre": pre || "" } : {})} aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
       <option value="">{inline ? "Choose client" : "Choose a client…"}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-    <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
+    <button className={"btn small" + (inline ? "" : " primary")} data-tco-relink="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
     {!inline && <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>}
     {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addAsClient(r); } finally { setBusy(false); } if (id && onClose) onClose(); }}>+ New client with this name</button>}</div>;
 }
@@ -603,8 +606,9 @@ export function LinkedMenu({ r, co, may, onPick, computer = "" }) {
 // ("Choose client", the likeliest chosen), never a button to open it and never an "Add as client" suggestion. The quiet
 // second line: its word (Linked / Waiting for Tally / Needs you), the ledgers and the last entry FinCom holds, Sync now
 // and ⋯. No computer's name on a row (the top card says which computer this is; many computers: under ⋯).
-// pcs: the firm has more than one computer (the computer then said under ⋯)
-export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null, pcs = false }) {
+// pcs: the firm has more than one computer (the computer then said under ⋯). quiet: a linked company not open now (the
+// list's "Your linked clients" group): its word without a line to fix, "not open in Tally now · last entry <date>"
+export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null, pcs = false, quiet = false }) {
   const [busy, setBusy] = useState(""), [pick, setPick] = useState(false);
   const co = r.client && S.companies ? S.companies[r.client] : null, may = canWrite(), st = r.st || tallyCoState(r.company), wordOf = co ? linkWord(co, r.company) : null;
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
@@ -612,7 +616,8 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   const sib = co ? (rows || []).filter((o) => o.client === co.id && o.company !== r.company && yearKey(o.company) === yearKey(r.company)) : [];
   const newer = co && !r.open ? sib.find((o) => o.open || String(o.seen) > String(r.seen)) : null, earlier = newer ? shown(newer.company) : "";
   const last = co && k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
-  const meta = wordOf && wordOf.line ? "" : last ? "last entry " + seenWords(last) : r.open ? "" : r.seen ? "last seen " + seenWords(r.seen) : "";
+  const when = last ? "last entry " + seenWords(last) : r.open ? "" : r.seen ? "last seen " + seenWords(r.seen) : "";
+  const meta = quiet ? [r.open ? "open in Tally on another computer" : "not open in Tally now", when].filter(Boolean).join(" · ") : wordOf && wordOf.line ? "" : when;
   const yr = !co && !r.client ? yearOf(r, rows) : null, tw = !co && !forCo && !yr ? twinOf(r) : null;
   const pend = PEND()[coKey(r.company)], err = (S.tcoErr || {})[coKey(r.company)];
   const run = (kind, job, fn) => async () => {
@@ -654,9 +659,9 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
         </div></details> : null;
   }
   // the quiet word: a linked company's (Linked / Waiting for Tally / Needs you); not linked and not open: when it was seen
-  const quiet = !co ? <span className="note" data-tco-pill="notclient" data-tco-pill-text="Not linked">{r.open ? "Not linked · open in Tally" : "Not linked · not open in Tally now"}</span> : null;
-  return <li className={"tco-row" + (focus ? " tco-focus" : "")} data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-tco-open={r.open ? "" : undefined}
-    data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined}>
+  const quietWord = !co ? <span className="note" data-tco-pill="notclient" data-tco-pill-text="Not linked">{r.open ? "Not linked · open in Tally" : "Not linked · not open in Tally now"}</span> : null;
+  return <li className={"tco-row" + (focus ? " tco-focus" : "") + (quiet ? " tco-quiet" : "")} data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-tco-open={r.open ? "" : undefined}
+    data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined} data-linked-row={quiet ? r.company : undefined}>
     <div className="tco-client" data-tco-side="client">{client}</div>
     <span className="tco-arrow" aria-hidden="true">⟷</span>
     <div className="tco-main" data-tco-side="tally"><b className="tco-name" title={r.nowName ? "In FinCom’s cloud: " + r.company : undefined}>{shown(r.nowName || r.company)}</b>
@@ -665,15 +670,15 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
       {r.gone && <span className="tag" data-tco-gone={r.company}>from a removed computer</span>}
       {r.why && <span className={"tag " + (r.why === "like" ? "warn" : "ok")} data-tco-why={r.why}>{r.why === "gstin" ? "same GSTIN" : r.why === "name" ? "same name" : "similar name"}</span>}
       {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}</div>
-    {(co || quiet || meta || acts) && <div className="tco-line2">
-      {co ? <Pill r={r} st={st} co={co} earlier={earlier} /> : quiet}
+    {(co || quietWord || meta || acts) && <div className="tco-line2">
+      {co ? <Pill r={r} st={st} co={co} earlier={earlier} noLine={quiet} /> : quietWord}
       {co && <SyncLine cid={co.id} words />}
-      {meta && <span className="note tco-meta">{meta}</span>}
+      {meta && <span className="note tco-meta" data-linked-meta={quiet ? "" : undefined}>{meta}</span>}
       {acts && <span className="tco-act">{acts}</span>}
     </div>}
-    {co && !earlier && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
+    {co && !earlier && !quiet && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
       : st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>)}
-    {!r.reported && !pend && r.open && SENDING[coKey(r.company)] && <div className="tco-under note" data-tco-unreported="">{"Sending " + shown(r.company) + " to FinCom and linking it…"}</div>}
+    {!r.reported && !pend && r.open && !co && <div className="tco-under note" data-tco-unreported="">{SENDING[coKey(r.company)] ? "Sending " + shown(r.company) + " to FinCom and linking it…" : "Not in FinCom’s cloud yet: Link to client… sends it and links it at once."}</div>}
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
       : "Waiting for the Tally computer to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
@@ -682,29 +687,13 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     {pick && <div className="tco-under"><Pick r={r} co={co} pre={co ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
   </li>;
 }
-// Your linked clients (next-tally-smart): a client whose company is NOT open in Tally now, one line: the client, its Tally
-// company, "not open in Tally now · last entry <date>", and ⋯ (the same items as an open row's). Nothing to fix is said
-// here: the company is simply not open (the owner: "no false alarms at all")
-export function LinkedLine({ r, rows = null, pcs = false }) {
-  const [pick, setPick] = useState(false);
-  const co = S.companies && S.companies[r.client]; if (!co) return null;
-  const may = canWrite(), k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, st = r.st || tallyCoState(r.company);
-  const last = k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
-  const when = last ? "last entry " + seenWords(last) : r.seen ? "last seen " + seenWords(r.seen) : "";
-  return <li className="tco-row tlc-row" data-linked-row={r.company} data-linked-client={co.id} data-tco-linked={co.id}>
-    <div className="tco-client" data-tco-side="client"><button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></div>
-    <span className="tco-arrow" aria-hidden="true">⟷</span>
-    <div className="tco-main" data-tco-side="tally"><b className="tco-name">{shown(r.nowName || r.company)}</b></div>
-    <div className="tco-line2"><span className="note tco-meta" data-linked-meta="">{["not open in Tally now", when].filter(Boolean).join(" · ")}</span>
-      <span className="tco-act"><LinkedMenu r={r} co={co} may={may} onPick={setPick} computer={pcs ? (st.computer || "").split(" · ")[0] : ""} /></span></div>
-    {pick && <div className="tco-under"><Pick r={r} co={co} pre="" onClose={() => setPick(false)} /></div>}
-  </li>;
-}
 // ---------- the list. rows: the rows to show (default: every company); forCo: the client the list links to (from its
 // "Choose on Tally page"); focus: the client whose rows are marked (from its "Open in Tally page")
-export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm", count = null, pcs = false }) {
+// only: which of every company this list holds (Help & support › Every company seen: those not on the page already), with
+// the hidden and the removed computer's behind their toggles as before
+export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm", count = null, pcs = false, only = null }) {
   const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [showGone, setShowGone] = useState(false), [, tick] = useState(0);
-  const all = companyRows({ hidden: true, gone: true }), list = rows || all.filter((r) => (showHid || !r.hidden) && (showGone || !r.gone));
+  const all = companyRows({ hidden: true, gone: true }).filter((r) => !only || only(r)), list = rows || all.filter((r) => (showHid || !r.hidden) && (showGone || !r.gone));
   const nHid = all.filter((r) => r.hidden && !r.gone).length, nGone = all.filter((r) => r.gone).length;
   useEffect(() => { booksLoad(list.filter((r) => r.client).map((r) => r.client)); pendTick(all); });
   // a click kept for a company not sent yet: the computers and companies are read again every 10 seconds
@@ -725,7 +714,10 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
     {list.length === 0 ? (empty || <p className="note" data-tco-empty="">No company seen in Tally yet. Open your company in TallyPrime on the computer with FinCom Bridge: it shows here within a minute.</p>)
       : <>{/* the owner's two headings: the client on the left, the Tally company on the right */}
         <div className="tco-cols" data-tco-cols="" aria-hidden="true"><span>Client</span><span /><span>Tally company</span></div>
-        <ul className="tco-rows">{hits.map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} pcs={pcs} />)}</ul></>}
+        <ul className="tco-rows">{hits.map((r, i) => <React.Fragment key={r.company}>
+          {r.group === "linked" && (i === 0 || hits[i - 1].group !== "linked") && <li className="tco-group" data-tco-group="linked" data-linked-clients={hits.filter((x) => x.group === "linked").length}>
+            <b>Your linked clients</b><span className="note">{" · " + nOf(hits.filter((x) => x.group === "linked").length, "client", "clients") + " · not open in Tally now"}</span></li>}
+          <CompanyRow r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} pcs={pcs} quiet={r.group === "linked"} /></React.Fragment>)}</ul></>}
     {k && !hits.length && <p className="note" data-tco-none="">No company matches “{q}”.</p>}
     {!rows && nGone > 0 && <button className="linkbtn" data-tco-show-gone={nGone} aria-expanded={showGone} onClick={() => setShowGone(!showGone)}>{(showGone ? "Hide: from a removed computer (" : "From a removed computer (") + nGone + ")"}</button>}
     {!rows && nHid > 0 && <button className="linkbtn" data-tco-show-hidden={nHid} onClick={() => setShowHid(!showHid)}>{showHid ? "Hide removed companies" : "Show hidden (" + nHid + ")"}</button>}

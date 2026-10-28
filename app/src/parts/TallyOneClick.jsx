@@ -11,21 +11,25 @@
 //                           companies open now are the page's list, never a second list here
 // Nothing new is asked of the bridge or Tally: /ping, /status, /diagnose, /cloudlink and the RPCs FinCom already uses.
 import { useEffect, useState } from "react";
-import { connectNow, findTally, getCompanies, usePort, keyRefused } from "../lib/tallyConnect.js";
+import { connectNow, findTally, getCompanies, usePort, keyRefused, lookHere } from "../lib/tallyConnect.js";
 import { FL } from "./TallyFirstLink.jsx";
 import "./tallyOneClick.css";
 
 // the card's state (module state, drawn with render())
-export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false };
-if (typeof window !== "undefined") window.FCOneClick = { OC, reset() { Object.assign(OC, { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false }); } };
+export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: 0 };
+// a fresh start (the tests, a sign-out): a click still running then answers to nobody (gen)
+export function resetOC() { Object.assign(OC, { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: (OC.gen || 0) + 1 }); }
+if (typeof window !== "undefined") window.FCOneClick = { OC, reset: resetOC };
 const redraw = () => { if (typeof render === "function") render(); };
 const set = (p) => { Object.assign(OC, p); redraw(); };
 
 export async function run(which, fn) {
   if (OC.busy) return;
+  const gen = OC.gen;
   set({ busy: which });
   let r;
   try { r = await fn(); } catch (e) { r = { st: "error", say: String((e && e.message) || e) }; }
+  if (OC.gen !== gen) return null;
   set({ busy: "", [which]: Object.assign({ at: Date.now() }, r) });
   return r;
 }
@@ -46,13 +50,33 @@ export async function doRefresh(cloud) {
 
 // once per page open (and at most every 2 minutes): this browser's bridge holds a key FinCom refuses? Asks no Tally
 export function useRefusedCheck() {
-  useEffect(() => {
+  useEffect(() => {   // (at every drawing, at most every 2 minutes; a fresh start asks again)
     if (Date.now() - OC.checkedAt < 120000) return;
     OC.checkedAt = Date.now();
-    Promise.resolve(keyRefused()).then((x) => { if (x !== OC.refused) set({ refused: !!x }); }, () => {});
-  }, []);
+    const gen = OC.gen;
+    Promise.resolve(keyRefused()).then((x) => { if (OC.gen === gen && x !== OC.refused) set({ refused: !!x }); }, () => {});
+  });
 }
 
+// this browser not connected to a bridge: is there a FinCom Bridge on THIS computer (/ping on 127.0.0.1, nothing secret
+// sent), once per page open and at most every 2 minutes? "mine" | "other" | "old" | "": the card offers Connect this
+// computer only when one is here (a phone, or a browser elsewhere, is never told to connect)
+export function useHereProbe(on) {
+  useEffect(() => {   // (at every drawing, at most every 2 minutes; a reset of the card asks again)
+    if (!on || typeof Bridge !== "object" || Bridge.blocked() || Date.now() - OC.hereAt < 120000) return;
+    OC.hereAt = Date.now();
+    Promise.resolve(lookHere()).then((h) => { const v = h.mine ? "mine" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) set({ here: v }); }, () => {});
+  });
+}
+// this browser holds a key for a bridge here whose state is not read yet: read it now (at most every 30 s), so the card
+// never says "not connected" of a bridge it has not asked
+export function useLocalRead(on) {
+  useEffect(() => {
+    if (!on || typeof Bridge !== "object" || Date.now() - (OC.localAt || 0) < 30000) return;
+    OC.localAt = Date.now();
+    Promise.resolve(Bridge.refresh(false)).catch(() => null).then(() => redraw());
+  });
+}
 export const Line = ({ r, hook }) => r && r.say ? <p className={"oc-say " + (r.st === "ok" || r.st === "found" ? "ok" : r.st === "code" ? "wait" : "bad")} data-oc-say={hook} data-oc-st={r.st} role="status">{(r.st === "ok" || r.st === "found" ? "✓ " : "") + r.say}</p> : null;
 
 export function PortBox() {

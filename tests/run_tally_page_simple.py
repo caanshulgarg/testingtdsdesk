@@ -195,14 +195,14 @@ def main():
         # ---- 2. a bridge heard from, Tally open, no company linked: three ticked, Link to do
         scene([OK_DEV], UNLINKED, fold=False)
         steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(steps == [["install", True], ["port", True], ["open", True], ["add", False]], "guide: Install, the port and the company ticked, Add as client not (%s)" % steps)
+        ok(steps == [] and pg.locator("#app [data-status-card]").count() == 1, "a computer connected: no steps, the status card (next-tally-smart) (%s)" % steps)
         ok(pg.locator("#app [data-tco-list=firm] [data-tco-act]").count() >= 1, "guide: the companies' rows carry the one button (Add as client, or Link to <client>)")
         shot("guide-link")
         # a company linked: Link ticks once no client is left unlinked (5c: each client to a company of its own)
         scene([OK_DEV], LINKED, fold=False)
         un = E("Object.values(S.companies).filter(c => !c.deleted && tallyLinkOf(c).state === 'unlinked').length")
-        ok(pg.locator('#app [data-connect-step="add"][data-done]').count() == 1 or pg.locator('#app [data-connect-guide="done"]').count() == 1,
-           "guide: a company added as a client ticks step 3 (%d clients not linked)" % un)
+        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-status-card]").count() == 1,
+           "a company linked: still no steps, the status card (%d clients not linked)" % un)
 
         # ---- 3. one card per computer + Windows user, ONE status line each
         scene(DEVS, LINKED)
@@ -309,7 +309,9 @@ def main():
         E("""() => { const rpc = TCloud.rpc, today = new Date().toISOString().slice(0, 10);
             TCloud.rpc = async (fn, a) => fn === "tally_status" ? (await new Promise(r => setTimeout(r, 5)), [{book: "bk-" + a.p_client, company: "X", from: "2026-04-01", openAsOn: "2026-03-31", ledgersAt: new Date().toISOString(), days: 150, to: today, state: {}}]) : rpc(fn, a);
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
-        ok(pg.locator('#app [data-connect-guide="done"]').count() == 1 and pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "every client linked: the guide folds to one green line with 'Connect another computer'")
+        ok(pg.locator("#app [data-status-card]").count() == 1 and pg.locator("#app [data-connect-step]").count() == 0, "every client linked: the status card, no steps")
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(400)
+        ok(pg.locator("#app [data-advanced] [data-guide-again]").count() == 1, "Help & support: 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
         ok(pg.locator("#app [data-connect-step]").count() == 4 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with

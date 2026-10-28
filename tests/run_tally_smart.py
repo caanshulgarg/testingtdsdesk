@@ -57,7 +57,7 @@ def main():
             ids = E(T.SETUP, [devs, cos, [], role, T.CLIENTS, True, books or {}]); pg.wait_for_timeout(1800); return ids
         def shot(name):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.evaluate("() => { if (typeof toastHide === 'function') toastHide(); }"); pg.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)
-        rows = lambda sel="[data-tco-list=firm]": E("(s) => [...document.querySelectorAll('#app ' + s + ' [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), linked: r.getAttribute('data-tco-linked'), open: r.hasAttribute('data-tco-open'), text: r.innerText.replace(/\\s+/g, ' ').trim(), act: (r.querySelector('[data-tco-act]') || {}).getAttribute ? (r.querySelector('[data-tco-act]') || {getAttribute: () => ''}).getAttribute('data-tco-act') : ''}))", sel)
+        rows = lambda sel="[data-tco-list=firm]": E("(s) => [...document.querySelectorAll('#app ' + s + ' [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), linked: r.getAttribute('data-tco-linked'), open: r.hasAttribute('data-tco-open'), linked_row: r.hasAttribute('data-linked-row'), text: r.innerText.replace(/\\s+/g, ' ').trim(), act: (r.querySelector('[data-tco-act]') || {}).getAttribute ? (r.querySelector('[data-tco-act]') || {getAttribute: () => ''}).getAttribute('data-tco-act') : ''}))", sel)
         # the owner's scene: NWS144 online, Tally open with GB TEXCOAT (linked) and VMS EVENTS (not linked); ABC TRADERS linked but
         # not open; OLD CO seen last week, not linked, not open
         d6 = T.dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT", "VMS EVENTS"), version="2.4.7")
@@ -71,9 +71,9 @@ def main():
         ok(n("#app [data-oc-connect]") == 0 and n("#app [data-oc-find]") == 0 and n("#app [data-tsc-refresh]") == 1, "connected: no Connect / Find Tally button, only Refresh")
         ok(n("#app [data-scope-pick]") == 0 and "All computers" not in body(), "one computer: nothing about other computers, no switch")
         print("== 2. the list: open companies only, client left, Tally company right")
-        rs = rows(); names = [r["co"] for r in rs]
+        rs = [r for r in rows() if not r["linked_row"]]; names = [r["co"] for r in rs]
         ok(sorted(names) == ["GB TEXCOAT", "VMS EVENTS"] and all(r["open"] for r in rs), "the list is the companies open in Tally now (%s)" % names)
-        ok(n("#app [data-tco-list=firm] [data-tco-cols]") == 1 and txt("#app [data-tco-list=firm] [data-tco-cols]") == "Client Tally company", "the two headings: Client · Tally company (%s)" % txt("#app [data-tco-list=firm] [data-tco-cols]"))
+        ok(n("#app [data-tco-list=firm] [data-tco-cols]") == 1 and txt("#app [data-tco-list=firm] [data-tco-cols]").lower() == "client tally company", "the two headings: Client · Tally company (%s)" % txt("#app [data-tco-list=firm] [data-tco-cols]"))
         gb = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
         ok(txt(gb + ' [data-tco-side="client"]').startswith("Linked to client: GB TEXCOAT") and txt(gb + ' [data-tco-side="tally"]') == "GB TEXCOAT" and n(gb + " [data-tco-client]") == 1,
            "a linked row: 'Linked to client: GB TEXCOAT' on the left (the name opens the client), the Tally company on the right (%s | %s)" % (txt(gb + ' [data-tco-side="client"]'), txt(gb + ' [data-tco-side="tally"]')))
@@ -90,14 +90,15 @@ def main():
         shot("1-owner-1440")
         print("== 3. closed + not linked: hidden; linked + closed: Your linked clients")
         ok("OLD CO" not in body(), "a company seen earlier, not open, not linked: not on the page")
-        lc = "#app [data-linked-clients]"
-        ok(n(lc) == 1 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1, "Your linked clients: ABC TRADERS (linked, not open) and only it")
+        lc = "#app [data-tco-list=firm]"
+        ok(n(lc + " [data-tco-group=linked]") == 1 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1 and "Your linked clients" in txt(lc + " [data-tco-group=linked]"),
+           "Your linked clients: ABC TRADERS (linked, not open) and only it, after the open ones")
         lt = txt(lc + ' [data-linked-row="ABC TRADERS"]')
-        ok(lt.startswith("ABC TRADERS") and "ABC TRADERS" in txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tco-side="tally"]') and "not open in Tally now" in txt(lc + " [data-linked-meta]"), "its one line: client · company · not open in Tally now (%s)" % lt)
-        ok(n(lc + " [data-tco-fix]") == 0 and "Open ABC TRADERS in TallyPrime" not in body() and n("#app [data-needs-you]") == 0, "nothing to fix for a company simply not open (no false alarm)")
-        ok(n(lc + " [data-tco-more]") == 1, "its ⋯ (Unlink, Link to another client, Open client)")
+        ok("Linked to client: ABC TRADERS" in lt and txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tco-side="tally"]') == "ABC TRADERS" and "not open in Tally now" in txt(lc + ' [data-linked-row="ABC TRADERS"] [data-linked-meta]'), "its one line: client · company · not open in Tally now (%s)" % lt)
+        ok(n(lc + " [data-linked-row] [data-tco-fix]") == 0 and "Open ABC TRADERS in TallyPrime" not in body() and n("#app [data-needs-you]") == 0 and "NWS144" not in lt, "nothing to fix for a company simply not open (no false alarm), no computer's name")
+        ok(n(lc + " [data-linked-row] [data-tco-more]") == 1, "its ⋯ (Unlink, Link to another client, Open client)")
         pg.click(lc + ' [data-linked-row="ABC TRADERS"] [data-tco-more] summary'); pg.wait_for_timeout(300)
-        ok(n(lc + " [data-tco-unlink]") == 1 and n(lc + " [data-tco-not-this]") == 1 and n(lc + " [data-tco-open]") == 1, "⋯ holds Unlink, Link to another client, Open client")
+        ok(n(lc + " [data-linked-row] [data-tco-unlink]") == 1 and n(lc + " [data-linked-row] [data-tco-not-this]") == 1 and n(lc + " [data-linked-row] [data-tco-open]") == 1, "⋯ holds Unlink, Link to another client, Open client")
         pg.keyboard.press("Escape")
         # Help & support holds every company seen (OLD CO, to link or remove)
         pg.click("#app [data-advanced] [data-bridge-details]"); pg.wait_for_timeout(700)
@@ -117,12 +118,13 @@ def main():
         print("== 6. problems: one line, one action")
         scene([T.dev(9, "NWS144", "anshul", tally="closed", opened=(), version="2.4.7")], cos, books=T.HELD_ALL)
         card = txt("#app [data-status-card]")
-        ok("Tally not open" in card and n("#app [data-tsc-need=tally]") == 1 and n("#app [data-status-card] .btn").__le__(1), "Tally not open: the one line, one action (%s)" % card[:160])
-        ok(n("#app [data-connect-step]") == 0 and "FinCom Bridge on NWS144 is offline" not in card, "still no wizard; no false offline")
+        ok("Tally not open" in card and n("#app [data-tsc-need=tally]") == 1 and n("#app [data-status-card] .btn.primary") <= 1, "Tally not open: the one line, one primary action at most (%d primary: %s)" % (n("#app [data-status-card] .btn.primary"), card[:160]))
+        # (the owner's port step, 26-Oct-2026, is on the card while his Tally is not answering: not a wizard)
+        ok(n("#app [data-connect-step]:not([data-port-step])") == 0 and n("#app [data-connect-guide]") == 0 and "FinCom Bridge on NWS144 is offline" not in card, "still no wizard; no false offline")
         scene([T.PAUSED], T.companies(), books=T.HELD_ALL)
         card = txt("#app [data-status-card]")
         ok("Paused" in card and "Resume background reading" in card and n("#app [data-tsc-need=paused]") == 1, "reading paused: said once with how to resume (%s)" % card[:160])
-        ok(n("#app [data-tco-none-open]") == 1 and n("#app [data-linked-clients] [data-linked-row]") == 2 and "VMS EVENTS" not in body(), "no company open: the list says so; the two linked clients under Your linked clients; VMS EVENTS (seen, not linked) not on the page")
+        ok(n("#app [data-tco-none-open]") == 1 and n("#app [data-tco-list=firm] [data-linked-row]") == 2 and "VMS EVENTS" not in body(), "no company open: the list says so; the two linked clients under Your linked clients; VMS EVENTS (seen, not linked) not on the page")
         shot("2-paused-1440")
         scene([T.dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=())], cos, books=T.HELD_ALL)
         card = txt("#app [data-status-card]")
@@ -135,7 +137,7 @@ def main():
         for w, h, scheme in ((1366, 768, "light"), (1440, 900, "dark"), (390, 844, "light"), (390, 844, "dark")):
             pg = open_page(w, h, scheme); E = lambda js, *a: pg.evaluate(js, *a); n = lambda sel: pg.locator(sel).count()
             E(T.SETUP, [[d6], cos, [], "owner", T.CLIENTS, True, T.HELD_ALL]); pg.wait_for_timeout(1800)
-            for sel in ("[data-status-card]", "[data-tco-list=firm]", "[data-linked-clients]"):
+            for sel in ("[data-status-card]", "[data-tco-list=firm]"):
                 o = E(OVERLAP, "#app " + sel)
                 ok(not o.get("missing") and not o["hits"] and not o["out"] and o["sw"] <= o["iw"], "%d %s %s: %d boxes, none intersect, none outside (%s)" % (w, scheme, sel, o.get("n", 0), {k: o[k] for k in ("hits", "out") if o.get(k)}))
             if w == 390:

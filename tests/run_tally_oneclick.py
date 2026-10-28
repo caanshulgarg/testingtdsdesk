@@ -287,10 +287,15 @@ def main():
         ok(len(calls("tally_device_create")) == 1 and len(posts()) == 1, "6. one key, handed once (%d, %d)" % (len(calls("tally_device_create")), len(posts())))
         # 7. no bridge; another user's
         bridge_reset(on=False); open_tally(DEAD, UNPAIRED)
-        pg.click("#app [data-oc-connect]")
-        ok(wait("() => { const e = document.querySelector('#app [data-oc-say=connect]'); return !!e && e.getAttribute('data-oc-st') === 'none'; }"), "7. no bridge")
-        ok(txt("#app [data-oc-say=connect]").startswith("FinCom Bridge is not running on this computer") and pg.locator("#app [data-status-card] [data-bridge-download]").count() == 1, "7. its words and the Download button")
+        # next-tally-smart: no bridge on this computer (the page's own look, /ping): no Connect offered (a phone is never told to
+        # connect); the way is Help & support › Connect another computer, the steps with the download
+        pg.wait_for_timeout(3000)
+        ok(pg.locator("#app [data-oc-connect]").count() == 0, "7. no bridge here: no Connect this computer on the card")
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.click("#app [data-guide-again]"); pg.wait_for_timeout(600)
+        ok(pg.locator("#app [data-firstlink] [data-bridge-download]").count() == 1, "7. Connect another computer: the steps with the download")
+        E("() => { S.tallyGuide = {}; S.tallyMore = {}; render(); }")
         bridge_reset(yours=False); open_tally(DEAD, UNPAIRED)
+        ok(wait("() => !!document.querySelector('#app [data-oc-connect][data-oc-here=other]')"), "7. another Windows user's bridge found here: Connect this computer offered")
         pg.click("#app [data-oc-connect]")
         ok(wait("() => { const e = document.querySelector('#app [data-oc-say=connect]'); return !!e && e.getAttribute('data-oc-st') === 'other'; }"), "7. another Windows user's bridge: its line (%s)" % txt("#app [data-oc-say=connect]"))
         # 8. a bridge that does not answer: a reason within the limit

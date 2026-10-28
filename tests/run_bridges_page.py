@@ -67,8 +67,9 @@ with sync_playwright() as p:
     # 15-Oct-2026 (the calm page): one line a computer on the page; its card (Details) under Advanced
     # 24-Oct-2026 (next-tally-one-page): no company linked yet, so the three steps lead (no computers' line); the
     # computer's facts are on its card under Help & support
-    ok(pg.locator("#app [data-pc-line]").count() == 0 and pg.locator('#app [data-connect-step="install"][data-done]').count() == 1 and "2 companies open in Tally on NWS144" in pg.inner_text("#app [data-connect-guide]"),
-       "5. the steps: installed, 2 companies open (the count, not the names) (%s)" % pg.inner_text("#app [data-connect-guide]").replace("\n", " ")[:160])
+    # next-tally-smart (28-Oct-2026): a computer connected: no steps; the one status card, "Tally open: 2 companies"
+    ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-status-card]").count() == 1 and "Tally open: 2 companies" in pg.inner_text("#app [data-status-card]"),
+       "5. the card: 2 companies open (the count, not the names) (%s)" % pg.inner_text("#app [data-status-card]").replace("\n", " ")[:160])
     ok(pg.locator(card).count() == 0 and pg.locator("#app [data-bridges]").count() == 0 and pg.locator("#app [data-bridge-details]").count() == 1,
        "5. no card and no table: the download and the details behind More")
     t = pg.inner_text("#app")

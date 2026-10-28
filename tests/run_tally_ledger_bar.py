@@ -62,7 +62,11 @@ def main():
             E("() => { S.tallyGuide = {}; S.tallyTab = 'computers'; navHome('tally'); }"); pg.wait_for_timeout(1000)
         now_lp = lambda rnd, read, of, done, ago_s=0: E("([r, a, o, d, s]) => { window.__lp = {round: r, read: a, of: o, done: d, at: new Date(Date.now() - s * 1000).toISOString()}; }", [rnd, read, of, done, ago_s])
         def add_vms():
-            pg.click(R(VMS) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(VMS) + " [data-tco-add-new]"); pg.wait_for_timeout(1200)   # Task D: + New client inside Link to client…
+            # Task D: + New client inside the client picker. next-tally-smart: a company not open now is under Help & support ›
+            # Every company seen (the open ones are the page's list)
+            if not pg.locator(R(VMS)).count(): E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+            RR = R(VMS) if pg.locator(R(VMS)).count() else '#app [data-tco-list=all] [data-tco-row="%s"]' % VMS
+            pg.click(RR + " [data-tco-add-new]"); pg.wait_for_timeout(1200)
             ids = E("(n) => Object.values(S.companies).filter(c => !c.deleted && c.tallyName === n).map(c => c.id)", VMS)
             # the link makes the client's book in the cloud (tally_books, no ledgers yet): what tally_status then gives
             if ids: E("(c) => { window.__books[c] = window.__fix(%s); }" % json.dumps(NOBOOK_DAYS("VMS", None)), ids[0])

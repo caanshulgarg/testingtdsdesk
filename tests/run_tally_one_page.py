@@ -160,18 +160,24 @@ def main():
         r = row(SAL)
         ok(r and r["linked"] == s1 and r["pill"] == "notopen" and not r["open"], "1. Salesify's old year, linked, not open in Tally: listed, Disconnected (%s)" % (r and r["ptext"]))
         # next-link-record (the owner's step 2): Waiting for Tally, with its one plain line on the row
-        ok("Waiting for Tally Open SALESIFY MARKETING LLP - (from 1-Apr-25) in TallyPrime on NWS144" in re.sub(r"\s+", " ", txt(R(SAL) + " .tco-pill")), "6. Waiting for Tally says what to do in words (%s)" % txt(R(SAL) + " .tco-pill"))
+        ok(re.sub(r"\s+", " ", txt(R(SAL) + " .tco-pill")) == "Waiting for Tally" and "not open in Tally now" in txt(R(SAL) + " [data-linked-meta]"), "6. Waiting for Tally, quietly: 'not open in Tally now' under Your linked clients (next-tally-smart) (%s)" % txt(R(SAL) + " [data-linked-meta]"))
         E("() => { window.__calls = []; }")
         more(SAL, "[data-tco-unlink]"); confirm()
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": None}]], "1. Unlink: tally_company_link(company, null) once (%s)" % links())
-        r = row(SAL)
-        ok(r is not None and r["linked"] == "" and r["pill"] == "notclient", "1. after Unlink it STAYS in the list, marked Not a client (%s)" % (r and r["text"][:120]))
-        ok(r and r["act"] == "Link to client…" and r["pre"] == s1, "1. with one action: 'Link to client…', Salesify Marketing LLP chosen in it (%s, %s)" % (r and r["act"], r and r["pre"]))
+        # next-tally-smart (28-Oct-2026): not open and not linked now, it leaves the page's list for Help & support › Every
+        # company seen (nothing deleted), with the client picker
+        ok(row(SAL) is None, "1. after Unlink (not open): off the page's list")
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
+        r = next((x for x in rows("all") if x["co"] == SAL), None)
+        ok(r is not None and r["linked"] == "" and r["pill"] == "notclient", "1. it STAYS under Every company seen, marked Not linked (%s)" % (r and r["text"][:120]))
+        ok(r and pg.locator(RA(SAL) + " select[data-tco-act=pick]").count() == 1 and r["pre"] == s1, "1. with one action: the client picker, Salesify Marketing LLP chosen in it (%s)" % (r and r["pre"]))
         ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1) == "unlinked", "1. the client is Not linked, though its books' copy kept here still names the company (the 24-Oct cause)")
         ok(E("(c) => S.companies[c].tallyName", s1) == "", "4. Unlink cleared the client's Tally name (%r)" % E("(c) => S.companies[c].tallyName", s1))
         shot("1-after-unlink-desktop-light")
         E("() => { window.__calls = []; }")
-        pick_link(SAL); pg.wait_for_timeout(1200)
+        pg.click(RA(SAL) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
+        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(400)
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": s1}]], "1. linked again in ONE click, not open in Tally (%s)" % links())
         r = row(SAL)
         ok(r and r["linked"] == s1 and r["pill"] == "notopen", "1. the row is linked to Salesify Marketing LLP again (%s)" % (r and r["ptext"]))
@@ -184,7 +190,7 @@ def main():
         ok(NEW in [x["co"] for x in rs] and next(x for x in rs if x["co"] == NEW)["reported"] == "no", "2. 'Salesify Marketing LLP 2026-27', open in Tally, not in FinCom's cloud yet: listed at once")
         ok(set(x["co"] for x in rs[:3]) == {NEW, VMS, GSC} and all(x["open"] for x in rs[:3]), "2. the companies open in Tally are at the top (%s)" % [x["co"] for x in rs])
         r = row(NEW)
-        ok(r["act"] == "Link to client…" and r["pre"] == s1, "6. a new year of a linked client: 'Link to client…' with Salesify Marketing LLP chosen (%s, %s)" % (r["act"], r["pre"]))
+        ok("Choose client" in r["act"] and r["pre"] == s1, "6. a new year of a linked client: the client picker with Salesify Marketing LLP chosen (%s)" % r["pre"])
         ok("Link to client… sends it and links it at once" in txt(R(NEW) + " [data-tco-unreported]"), "2. it says plainly a click links it at once (%s)" % txt(R(NEW) + " [data-tco-unreported]"))
         E("() => { window.__calls = []; }")
         # next-tally-linknow (staging 28-Oct-2026: five refusals "no computer has reported … yet"): the click links it NOW:
@@ -207,7 +213,7 @@ def main():
         # while Salesify Marketing LLP is linked to "SALESIFY MARKETING LLP - (from 1-Apr-25)": New year of <client> · Link, at once
         scene(cos(new=True)); tally_page()
         r = row(NEW)
-        ok(r["reported"] == "yes" and r["act"] == "Link to client…" and r["pre"] == s1 and row(SAL)["linked"] == s1, "2. staging's case: the new year, in the cloud, not linked: 'Link to client…', Salesify Marketing LLP chosen (%s)" % r["act"])
+        ok(r["reported"] == "yes" and "Choose client" in r["act"] and r["pre"] == s1 and row(SAL)["linked"] == s1, "2. staging's case: the new year, in the cloud, not linked: the picker, Salesify Marketing LLP chosen (%s)" % r["pre"])
         E("() => { window.__calls = []; }")
         pick_link(NEW); pg.wait_for_timeout(1200)
         ok(links() == [["tally_company_link", {"p_company": NEW, "p_client": s1}]] and row(SAL)["linked"] == s1 and row(SAL)["pill"] == "earlier", "2. one click: linked beside the old year (not moved, nothing asked); the old year 'Earlier year' (%s)" % links())
@@ -219,7 +225,7 @@ def main():
         BRAND = "BRAND NEW TRADERS (2026-27)"
         E("([d, n]) => { const b = Object.assign({}, window.__devs[0].info.beat); b.open = b.open.concat([n]); b.at = new Date().toISOString(); TLight.beatIn({device: d, beat: b}); }", [D1, BRAND]); pg.wait_for_timeout(700)
         r = row(BRAND)
-        ok(r is not None and r["open"] and r["act"] == "Link to client…" and "Add as client" not in r["text"], "2. a brand-new company opened in Tally: listed within one beat, open, Link to client… (no Add as client suggestion) (%s)" % (r and r["text"][:100]))
+        ok(r is not None and r["open"] and "Choose client" in r["act"] and "Add as client" not in r["text"], "2. a brand-new company opened in Tally: listed within one beat, open, the client picker (no Add as client suggestion) (%s)" % (r and r["text"][:100]))
         tally_page({"step": 4, "cid": ta, "at": 1})
         r = row(BRAND)
         ok(r is not None and r["act"] == "Link to Testing AAD" and rows().index(r) < 4, "2. and in Testing AAD's chooser, among the open ones at the top: 'Link to Testing AAD'")
@@ -262,7 +268,7 @@ def main():
         ok(len(rs) == 5 and set(x["co"] for x in rs[:3]) == {NEW, VMS, GSC}, "5. from Testing AAD: EVERY company (5), the open ones first (%s)" % [x["co"] for x in rs])
         ok(row(VMS)["act"] == "Link to Testing AAD" and row(NEW)["act"] == "Link to Testing AAD", "5. each not linked: 'Link to Testing AAD' (%s, %s)" % (row(VMS)["act"], row(NEW)["act"]))
         g = row(GSC)
-        ok("Linked to Garg Shekhar & Company" in g["text"] and g["act"] == "Move here", "5. open and linked to another client: shown with its client's name and 'Move here' (%s)" % g["text"][:140])
+        ok("Linked to client: Garg Shekhar & Company" in g["text"] and g["act"] == "Move here", "5. open and linked to another client: shown with its client's name and 'Move here' (%s)" % g["text"][:140])
         shot("5-choose-for-client-desktop-light")
         E("() => { window.__calls = []; }")
         pg.click(R(GSC) + " [data-tco-act=move]"); confirm()
@@ -284,8 +290,8 @@ def main():
         tally_page()
         ok(pg.locator("#app [data-tally-clients], #app [data-card-seen], #app p[data-tally-focus], #app h3:text-is('Status')").count() == 0, "4. Tally page: no clients' table, no status block, no 'Seen, not linked', no focus line")
         ok(pg.locator("#app [data-page-more]").count() == 1 and pg.locator("#app [data-bridge-more]").count() == 0, "4. Help & support is there, closed")
-        ok(pg.locator("#app [data-connect-step]").count() == 0 and txt("#app [data-connected-line]").startswith("● online") and "Connected computers: NWS144" in txt("#app [data-pc-lines]"),
-           "7. a company linked: no steps; 'Connected computers: NWS144 ● online' (%s)" % txt("#app [data-pc-lines]"))
+        ok(pg.locator("#app [data-connect-step]").count() == 0 and "NWS144 ● online" in txt("#app [data-pc-lines]").replace("\n", " "),
+           "7. a computer connected: no steps; the status card, NWS144 ● online (next-tally-smart) (%s)" % txt("#app [data-status-card]").replace("\n", " ")[:100])
         shot("tally-page-mixed-desktop-light")
 
         # ---- 5./6. the actions: Add as client, Link to a client…, the ⋯ of a linked row, Sync now, Post entries here
@@ -309,17 +315,18 @@ def main():
         more(GSC, "[data-tco-post-here]"); confirm()
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. Post entries here: the client's confirmed posting company")
         ok("Stop posting here" in menu(GSC), "6. then ⋯ says Stop posting here")
-        ok(pg.locator(R(VMS) + " [data-tco-more]").count() == 0 and row(VMS)["act"] == "Link to client…" and "Add as client" not in row(VMS)["text"], "5. a company not linked, open: ONE 'Link to client…', no ⋯, no Add as client (%s)" % row(VMS)["text"][:120])
+        ok(pg.locator(R(VMS) + " [data-tco-more]").count() == 0 and "Choose client" in row(VMS)["act"] and "Add as client" not in row(VMS)["text"], "5. a company not linked, open: the client picker alone, no ⋯, no Add as client (%s)" % row(VMS)["text"][:120])
         E("() => { window.__calls = []; }")
         n0 = E("() => Object.values(S.companies).filter(c => !c.deleted).length")
         pick_add(VMS); pg.wait_for_timeout(1300)
         vm = E("() => Object.values(S.companies).filter(c => !c.deleted && c.name === 'VMS EVENTS PRIVATE LIMITED').map(c => c.id)")
         ok(len(vm) == 1 and E("() => Object.values(S.companies).filter(c => !c.deleted).length") == n0 + 1 and links() == [["tally_company_link", {"p_company": VMS, "p_client": vm[0]}]],
            "5. + New client with this name (inside Link to client…): one client (the period off its name), linked once (%s)" % links())
-        E("() => { window.__calls = []; }")
-        pg.click(R(OLD) + " [data-tco-act=pick]"); pg.wait_for_timeout(250)
-        pg.select_option(R(OLD) + " [data-tco-relink-pick]", ta); pg.click(R(OLD) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
-        ok(links() == [["tally_company_link", {"p_company": OLD, "p_client": ta}]], "5. ⋯ Link to a client…: linked to the client chosen (%s)" % links())
+        E("() => { window.__calls = []; S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)   # next-tally-smart: not open, not linked: under Help & support
+        RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
+        pg.select_option(RA(OLD) + " [data-tco-relink-pick]", ta); pg.click(RA(OLD) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
+        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
+        ok(links() == [["tally_company_link", {"p_company": OLD, "p_client": ta}]], "5. the picker (Every company seen): linked to the client chosen (%s)" % links())
         # an open company unlinked stays, at the top
         E("() => { window.__calls = []; }")
         more(GSC, "[data-tco-unlink]"); confirm()
@@ -347,7 +354,7 @@ def main():
         scene(cos(sal=None, gsc=None))
         tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => e.getAttribute('data-connect-step'))")
-        ok(g == ["install", "port", "open", "add"] and pg.locator("#app [data-connected-line]").count() == 0, "7. nothing linked yet: the four steps (%s)" % g)
+        ok(g == [] and pg.locator("#app [data-status-card]").count() == 1, "7. nothing linked yet but a computer connected: no steps (next-tally-smart: the four steps only for a computer never connected) (%s)" % g)
         shot("tally-page-steps-desktop-light")
 
         # ---- 8. phone 390, light and dark: no sideways scroll; pictures
