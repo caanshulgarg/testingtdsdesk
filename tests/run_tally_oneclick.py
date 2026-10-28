@@ -81,6 +81,14 @@ def on_bridge(route):
             BR["beat"] = {"on": True, "last": "", "missedSince": "", "every": 30}
             return send(200, {"ok": True, "connected": True, "firm": "Test Firm", "device": "NWS144 · NW144\\anshul"})
         return send(200, {"ok": True, "connected": bool(BR["cloudKey"]), "url": BR["url"]})
+    if path == "/ledgers/refresh":
+        # bridge-go events.go wakeLedgers: a company never kept on this computer is not read
+        if not BR.get("kept"): return send(200, {"ok": True, "started": False, "why": "this company is not kept in step on this computer"})
+        return send(200, {"ok": True, "started": True})
+    if path == "/keep" and req.method == "POST":
+        b = json.loads(req.post_data or "{}")
+        if b.get("now"): BR["kept"] = True
+        return send(200, {"ok": True, "on": True, "running": True})
     return send(200, {"ok": True})
 posts = lambda: [x for x in BR["log"] if x[0] == "POST" and x[1] == "/cloudlink"]
 
@@ -99,7 +107,8 @@ SETUP = """([whose, devs]) => {
     if (fn === "tally_bridge_whose") { if (window.__whose === "throw") throw new Error("no such function"); return window.__rekeyed ? {may: true, mine: true, elsewhere: false, busy: false} : copy(window.__whose); }
     if (fn === "tally_device_create") return (window.__rekeyed = true) && {id: "d-new-" + window.__calls.length, key: "fcd_" + "0a".repeat(24)};
     if (fn === "tally_company_link") return {ok: true};
-    if (fn === "tally_status") return [];
+    if (fn === "tally_status") return copy(window.__books || []);
+    if (fn === "tally_period_status") return window.__lp ? {ledger: copy(window.__lp)} : {};
     return {ok: true}; };
   window.tallyLinkClient = async (company, cid) => { window.__calls.push(["link", {company, cid}]); return true; };
   window.cloudPushNow = async () => {}; window.firstSync = () => {};
@@ -206,6 +215,27 @@ def main():
         E("() => { window.__linkNowHang = false; window.__ocMsScale = 1; window.__calls = []; }")
         lk.click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % VMS, 5000), "3b. Link to <client> again: linked, the row says so (%s)" % txt("#app [data-oc-co='%s']" % VMS))
+        # 12. next-tally-linknow (Task C; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
+        # company is not kept in step on this computer"): linked, the ledgers are taken by themselves: the bridge here starts
+        # keeping the company (POST /keep {now, company}, Update now's request), and the bar shows the count as it comes
+        bridge_reset(kept=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
+        open_tally(MINE)
+        cid = E("() => { Object.keys(S.companies).forEach(k => { if (/^VMS Events/i.test(S.companies[k].name)) delete S.companies[k]; }); const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: %s}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; window.__books = [{book: 'bk-vms', company: %s, from: '2026-04-01', to: '2026-10-28', days: 0, ledgersAt: ''}]; window.__lp = null; render(); return co.id; }" % (json.dumps(VMS), json.dumps(VMS)))
+        pg.click("#app [data-oc-get]")
+        wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-link]\")" % VMS)
+        pg.locator("#app [data-oc-co='%s'] [data-oc-link]" % VMS).click()
+        ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "12. linked")
+        for _ in range(40):
+            if any(x[0] == "POST" and x[1] == "/keep" for x in BR["log"]): break
+            pg.wait_for_timeout(250)
+        kp = [json.loads(x[2] or "{}") for x in BR["log"] if x[0] == "POST" and x[1] == "/keep"]
+        ok(any(x[1] == "/ledgers/refresh" for x in BR["log"]) and kp and kp[0].get("now") is True and kp[0].get("company") == VMS, "12. not kept here yet: the bridge is asked to keep it now (%s)" % kp)
+        ok(E("() => !document.querySelector('#app [data-tco-sync=stuck]')"), "12. no 'did not read … not kept in step' (%s)" % txt("#app [data-tco-sync=stuck]"))
+        E("() => { window.__lp = {round: 'r1', read: 312, of: 0, at: new Date().toISOString(), done: false}; }")
+        ok(wait("() => /Reading ledgers from Tally… 312 so far/.test((document.querySelector('#app [data-tco-sync=running]') || {}).textContent || '')", 20000), "12. the count as it comes (%s)" % txt("#app [data-tco-sync]"))
+        E("() => { window.__lp = {round: 'r1', read: 1240, of: 1240, at: new Date().toISOString(), done: true}; }")
+        ok(wait("() => /1,240 ledgers from Tally ✓/.test((document.querySelector('#app [data-tco-sync=done]') || {}).textContent || '')", 20000), "12. done: the ledgers in FinCom (%s)" % txt("#app [data-tco-sync]"))
+        shot("12-ledgers")
         # 4. already connected
         bridge_reset(cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)
