@@ -91,3 +91,9 @@
 #app .tco-group { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; padding: 14px 0 4px; border-top: 1px solid var(--border-subtle, var(--border)); }
 #app .tco-group b { font-size: 15px; }
 #app .tco-row.tco-quiet { padding-top: 7px; padding-bottom: 7px; }
+/* a phone: a row's ⋯ menu opens within the row's second line (never past the screen's edge) */
+@media (max-width: 760px) {
+  #app .tco-line2 { position: relative; }
+  #app .tco-line2 .tco-more { position: static; }
+  #app .tco-line2 .bk-menu-list { right: 0; left: auto; min-width: 0; width: min(320px, 100%); }
+}
