@@ -590,8 +590,9 @@ func TestTypedPortElevatedOwnAndStrictAnswer(t *testing.T) {
 	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, p)); str(res["reason"]) != useNotTally {
 		t.Fatalf("a <Response> of another program: %v", res)
 	}
-	if !tallyEnvelope("\ufeff <?xml version=\"1.0\"?>\r\n<ENVELOPE><HEADER>") || tallyEnvelope("<html><ENVELOPE>") {
-		t.Fatal("the envelope rule")
+	if !isTallyAnswer("\ufeff <?xml version=\"1.0\"?>\r\n<ENVELOPE><HEADER>") || isTallyAnswer("<html><ENVELOPE>") ||
+		!isTallyAnswer("<RESPONSE>Unknown Request</RESPONSE>") || isTallyAnswer(`<?xml version="1.0"?><Response><Status>404</Status></Response>`) {
+		t.Fatal("the Tally answer rule")
 	}
 }
 
@@ -611,5 +612,31 @@ func TestAnyPortEmptyAnswerKeepsMark(t *testing.T) {
 	notTallyMu.Unlock()
 	if !marked {
 		t.Fatal("an empty answer ended the mark")
+	}
+}
+
+// --- review 2.4.8 round 3 (R3-1, R3-7): the review's cases
+
+// a port set by hand whose program Windows will not open (no user, no error) and which runs in another user's session is
+// another user's: skipped, never asked; in this user's session (TallyPrime as administrator) it is asked
+func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
+	mine, theirs := newStandTally(t), newStandTally(t)
+	standBridge(t, mine, "")
+	fakeWindows(t, []fakeProc{{10, 1, "java", ""}, {20, 2, "java", ""}, {30, 1, "tally", ""}}, [][2]int{{mine.port, 10}, {theirs.port, 20}})
+	oldL := listenerUserOf
+	t.Cleanup(func() { listenerUserOf = oldL; resetOtherUser() })
+	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
+	resetOtherUser()
+	setCfg("OnlyMySession", true)
+	setCfg("TallyPorts", []any{float64(theirs.port), float64(mine.port)})
+	ss := openCompanies(true)
+	if s := sessionFor(ss, theirs.port); s == nil || s["skipped"] != true {
+		t.Fatalf("another session's unopenable program: %v", jsonText(ss))
+	}
+	if s := sessionFor(ss, mine.port); s == nil || s["ok"] != true {
+		t.Fatalf("this session's (as administrator): %v", jsonText(ss))
+	}
+	if len(theirs.ids()) != 0 {
+		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
 	}
 }
