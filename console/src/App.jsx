@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LogOut, Menu, Moon, Sun } from "lucide-react";
-import { aal, clearEnded, ended, enroll, myFactors, onSession, session, signIn, signOut, verify, watchIdle } from "./lib/auth.js";
+import { aal, clearEnded, dropLink, ended, enroll, forgotPassword, myFactors, onSession, passwordProblem, pendingLink, session, setPassword as savePassword, signIn, signOut, verify, watchIdle } from "./lib/auth.js";
 import { call } from "./lib/api.js";
 import { href, useRoute } from "./lib/route.js";
 import { MODULES } from "./modules/registry.js";
@@ -37,13 +37,16 @@ export function App() {
     call("me").then(setMe, (e) => { setErr(e.message); signOut(e.reason === "not_admin" ? "This login is not a console admin." : e.message); });
   }, [sess?.access_token ? sess.user?.id + aal() : ""]);
   useEffect(() => (sess && aal() === "aal2" ? watchIdle() : undefined), [!!sess && aal() === "aal2"]);
-  if (!sess || aal() !== "aal2") return <SignIn sess={sess} />;
+  if (!sess || aal() !== "aal2" || pendingLink()) return <SignIn sess={sess} />;
   if (!me) return <div className="center"><p className="muted" role="status">{err || "Opening the console…"}</p></div>;
   return <Shell me={me} />;
 }
 
 function SignIn({ sess }) {
-  const [step, setStep] = useState(sess ? "factor" : "password");
+  const link = pendingLink();                     // arrived from an invite or reset email: the password first
+  const [step, setStep] = useState(link ? "setpw" : sess ? "factor" : "password");
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
@@ -59,6 +62,7 @@ function SignIn({ sess }) {
     setFactor({ id: e.id, qr: qrSrc(e.totp?.qr_code), secret: e.totp?.secret }); setStep("enroll");
   };
   useEffect(() => { if (sess && step === "factor") run(toFactor); }, []);
+  const to = (s) => { setMsg(""); clearEnded(); setStep(s); };
   return (
     <main className="signin">
       <div className="signin-card">
@@ -70,6 +74,40 @@ function SignIn({ sess }) {
             <label className="field"><span>Email</span><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
             <label className="field"><span>Password</span><input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
             <button className="btn primary wide" disabled={busy}>{busy ? "Signing in…" : "Continue"}</button>
+            <button type="button" className="link" onClick={() => to("forgot")}>Forgot password?</button>
+          </form>
+        )}
+        {step === "forgot" && (
+          <form onSubmit={(e) => { e.preventDefault(); run(async () => { await forgotPassword(email); setStep("sent"); }); }}>
+            <h2>Forgot password</h2>
+            <p>Type the email of your FinCom login. We send it a link to set a new password.</p>
+            <label className="field"><span>Email</span><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
+            <button className="btn primary wide" disabled={busy}>{busy ? "Sending…" : "Send the link"}</button>
+            <button type="button" className="link" onClick={() => to("password")}>Back to sign-in</button>
+          </form>
+        )}
+        {step === "sent" && (
+          <div className="stack">
+            <div className="note" role="status" data-testid="sent">If <b>{email.trim()}</b> has a FinCom login, an email with a link to set a new password is on its way. The link works once. Check the spam folder if it does not come in a few minutes.</div>
+            <button type="button" className="link" onClick={() => to("password")}>Back to sign-in</button>
+          </div>
+        )}
+        {step === "setpw" && (
+          <form noValidate onSubmit={(e) => {
+            e.preventDefault();
+            const bad = passwordProblem(pw1, pw2);
+            if (bad) { setMsg(bad); return; }
+            run(async () => { await savePassword(pw1); setPw1(""); setPw2(""); await toFactor(); });
+          }}>
+            <h2>{link?.type === "recovery" ? "Set a new password" : "Set your password"}</h2>
+            {link?.type === "recovery"
+              ? <p>For <b>{link?.email}</b>. After this you enter the code from your authenticator app.</p>
+              : <p>Welcome. You have been added to the FinCom Console. Choose the password for <b>{link?.email}</b>. Next you set up two-step sign-in with an authenticator app on your phone.</p>}
+            <label className="field"><span>New password</span><input className="input" type="password" autoComplete="new-password" value={pw1} onChange={(e) => setPw1(e.target.value)} data-testid="pw1" autoFocus /></label>
+            <label className="field"><span>Type it again</span><input className="input" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} data-testid="pw2" /></label>
+            <p className="small muted">10 characters or more, with letters and digits.</p>
+            <button className="btn primary wide" disabled={busy}>{busy ? "Saving…" : "Save and continue"}</button>
+            <button type="button" className="link" onClick={() => { dropLink(); to("password"); }}>Back to sign-in</button>
           </form>
         )}
         {(step === "code" || step === "enroll") && (

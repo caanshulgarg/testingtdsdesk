@@ -42,6 +42,17 @@ const deps: Deps = {
     const { data, error } = await admin.rpc("auth_rate_hit", { p_bucket: bucket, p_key: key, p_max: max, p_window_s: windowS }); must(error);
     return data === true;
   },
+  // Supabase Auth's admin invite (as supabase-js inviteUserByEmail: redirect_to in the query). The email is Supabase's own
+  // mailer unless the project has SMTP set; the link's redirect must be allowed in Auth > URL Configuration.
+  async authInvite(email, redirectTo, data) {
+    const r = await fetch(URL + "/auth/v1/invite?redirect_to=" + encodeURIComponent(redirectTo), {
+      method: "POST", headers: { apikey: SERVICE, Authorization: "Bearer " + SERVICE, "Content-Type": "application/json" },
+      body: JSON.stringify({ email, data }), signal: AbortSignal.timeout(15000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j?.id) throw Object.assign(new Error(String(j?.msg || j?.message || j?.error_description || "invite " + r.status)), { status: r.status, code: j?.error_code || "" });
+    return { id: String(j.id) };
+  },
   origins: [...DEFAULT_ORIGINS, ...(Deno.env.get("CONSOLE_ORIGINS") || "").split(",").map((s) => s.trim()).filter(Boolean)],
   log: (msg, err) => console.error("console-admin:", msg, err instanceof Error ? err.message : err ?? ""),
   http: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(8000) }),

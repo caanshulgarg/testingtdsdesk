@@ -14,7 +14,9 @@ const roleField = (m, set) => (
 );
 function Admins({ me }) {
   const [n, setN] = useState(0);
+  const [note, setNote] = useState("");
   const done = () => setN(n + 1);
+  const added = (d) => { setNote(d?.invited ? `Invitation sent to ${d.email}. They get an email to set a password, then they set up two-step sign-in. They show here as ${d.role} now.` : ""); done(); };
   const cols = [
     { key: "email", label: "Email", type: "text" },
     { key: "role", label: "Role", type: "select", options: ROLES },
@@ -31,12 +33,14 @@ function Admins({ me }) {
   ];
   return (
     <Page title="Admins" sub="Who may use the console, and with which role. Only an owner sees this page. There must always be one active owner."
-          actions={<ReasonButton me={me} action="admins.add" params={{}} label="Add an admin" tone="primary" onDone={done}
+          actions={<ReasonButton me={me} action="admins.add" params={{ role: "viewer" }} label="Add an admin" tone="primary" onDone={added}
                                  extra={(m, set) => (<>
-                                   <label className="field"><span>Email of an existing FinCom login</span>
+                                   <label className="field"><span>Email</span>
                                      <input className="input" type="email" value={m.email || ""} onChange={(e) => set({ ...m, email: e.target.value })} data-testid="admin-email" /></label>
+                                   <p className="small muted">If they have no FinCom login yet, they get an email to set a password.</p>
                                    {roleField(m, set)}
                                  </>)} />}>
+      {note && <div className="note" role="status" data-testid="admins-note">{note}</div>}
       <DataTable key={n} id="admins" action="admins.list" columns={cols} me={me} rowKey="user_id"
                  presets={[{ label: "Active", filters: { active: { op: "is", value: true } } }, { label: "Removed", filters: { active: { op: "is", value: false } } }, { label: "All", filters: {} }]} />
     </Page>

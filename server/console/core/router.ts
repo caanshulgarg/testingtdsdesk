@@ -23,7 +23,7 @@ const SQL_WORDS: Record<string, [number, string]> = {
   last_owner: [409, "There must always be one active owner. Add another owner first."],
   not_owner: [403, "Only an owner can do that."],
   own_role: [403, "You cannot change or remove your own admin access. Ask another owner."],
-  no_login: [404, "There is no FinCom login with that email. The person must sign up (or be invited) first."],
+  no_login: [404, "There is no FinCom login with that email. The person must sign up (or be invited) first."],   // only without Deps.authInvite
   already_admin: [409, "That login is already a console admin."],
   not_admin: [404, "That login is not an active console admin."],
   bad_role: [400, "Choose one of: owner, billing, support, viewer."],
@@ -120,7 +120,7 @@ export function makeHandler(deps: Deps, modules: Module[]) {
     try { row = await deps.adminRow(user.id); } catch (e) { deps.log("adminRow", e); return fail(new ConsoleError(500, "Could not check your access. Try again.", "server")); }
     if (!row || !row.active || !ROLES.includes(row.role as Role)) return fail(new ConsoleError(403, "This login is not a console admin.", "not_admin"));
     const ip = (req.headers.get("cf-connecting-ip") || (req.headers.get("x-forwarded-for") || "").split(",")[0] || "").trim().slice(0, 64);
-    const caller: Caller = { id: user.id, email: user.email, role: row.role as Role, ip, ua: (req.headers.get("User-Agent") || "").slice(0, 300) };
+    const caller: Caller = { id: user.id, email: user.email, role: row.role as Role, ip, ua: (req.headers.get("User-Agent") || "").slice(0, 300), origin };
     const allowed = Object.keys(actions).filter((a) => actions[a].roles.includes(caller.role)).sort();
     const audit = async (action: string, target: Target, before: unknown, after: unknown, reason?: string | null) => {
       await deps.rpc("console_audit_add", {

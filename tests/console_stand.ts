@@ -1,6 +1,9 @@
 // tests/console_stand.ts: a stand-in for Supabase for the console's screen tests (tests/run_console_ui.py). It serves
 //   /auth/v1/*                     a small fake of Supabase Auth: password sign-in, TOTP enrol / challenge / verify
-//                                  (the code 123456), refresh, logout, banned logins
+//                                  (the code 123456), refresh, logout, banned logins; the admin invite (console-admin's
+//                                  Deps.authInvite), "forgot password" (/recover) and a new password (PUT /user)
+//   /__mail                        the emails Supabase Auth would have sent: {to, type, redirect_to, link}; the link is
+//                                  where the email's button lands (redirect_to#access_token=…&type=invite|recovery)
 //   /functions/v1/console-admin    the REAL router and modules (server/console), with in-memory services that keep the
 //                                  database functions' rules (audit rows, roles, the last owner, statuses)
 // No network, no real database. Run: deno run --allow-net --allow-env tests/console_stand.ts <port> <page origin>
@@ -74,6 +77,13 @@ const bill = billingFake([...firms.slice(0, 8), { id: U(150), name: "Big Test Cr
 const ops = opsFake({ audit: (r) => audit.push({ id: audit.length + 1, at: now(), ...r, user_agent: null }), auditRows: () => audit, roleOf: (id) => roleOf(id) || undefined,
   emailOf: (id) => emailOf(id), firms: firms.map((f) => ({ id: f.id, name: f.name, plan_id: f.plan === "Monthly, all included" ? OPS.P2 : OPS.P1, balance: f.balance })) });
 const outbound: { url: string }[] = [];
+// the emails Supabase Auth would send (an invite, a reset link); each link's tokens are a fresh aal1 session
+const mail: { to: string; type: string; redirect_to: string; link: string; data?: unknown }[] = [];
+const sendLink = (l: Login, type: "invite" | "recovery", redirect: string, data?: unknown) => {
+  const s = session(l, "aal1");
+  const h = new URLSearchParams({ access_token: s.access_token, expires_at: String(s.expires_at), expires_in: "3600", refresh_token: s.refresh_token, token_type: "bearer", type });
+  mail.push({ to: l.email, type, redirect_to: redirect, link: redirect + "#" + h, data });
+};
 async function rpc(fn: string, a: any): Promise<any> {
   const o = await ops.rpc(fn, a);
   if (o !== NOPE) return o;
@@ -117,7 +127,7 @@ async function rpc(fn: string, a: any): Promise<any> {
       const l = logins.find((x) => x.email === String(a.p_email).toLowerCase()); if (!l) err("no_login");
       if (admins.get(l!.id)?.active) err("already_admin");
       if (!["owner", "billing", "support", "viewer"].includes(a.p_role)) err("bad_role");
-      admins.set(l!.id, { role: a.p_role, active: true, added_at: now(), added_by: a.p_by }); addAudit(a, "admins.add", "admin", l!.id, null, { role: a.p_role }); return { user_id: l!.id };
+      admins.set(l!.id, { role: a.p_role, active: true, added_at: now(), added_by: a.p_by }); addAudit(a, "admins.add", "admin", l!.id, null, { role: a.p_role }); return { user_id: l!.id, role: a.p_role, active: true };
     }
     case "console_admin_set_role": {
       need(a.p_by, ["owner"]); if (a.p_by === a.p_user) err("own_role");
@@ -165,7 +175,7 @@ const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/
 const tokens = new Map<string, { id: string; aal: string }>();
 let n = 0;
 function session(l: Login, aal: string) {
-  const access = `${b64({ alg: "HS256" })}.${b64({ sub: l.id, aal, n: ++n, exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
+  const access = `${b64({ alg: "HS256" })}.${b64({ sub: l.id, email: l.email, aal, n: ++n, exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
   const refresh = "r" + n;
   tokens.set(access, { id: l.id, aal }); tokens.set(refresh, { id: l.id, aal });
   return { access_token: access, refresh_token: refresh, expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, token_type: "bearer", user: { id: l.id, email: l.email } };
@@ -182,6 +192,15 @@ const deps: Deps = {
   log: (m, e) => console.error("stand:", m, e instanceof Error ? e.message : e ?? ""),
   http: opsHttp(outbound),
   env: (k) => ENV[k],
+  // POST /auth/v1/invite: a login with no password and no firm; the email's link lands on redirect_to
+  authInvite: async (email, redirectTo, data) => {
+    if (logins.some((x) => x.email === email)) throw Object.assign(new Error("A user with this email address has already been registered"), { status: 422, code: "email_exists" });
+    if (email.startsWith("ratelimit")) throw Object.assign(new Error("email rate limit exceeded"), { status: 429, code: "over_email_send_rate_limit" });
+    const l: Login = { id: U(300 + logins.length), email, password: "", factors: [] };
+    logins.push(l);
+    sendLink(l, "invite", redirectTo, data);
+    return { id: l.id };
+  },
 };
 const fn = makeHandler(deps, MODULES);
 const CORS = { "Access-Control-Allow-Origin": pageOrigin, "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
@@ -191,13 +210,15 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log("stand rea
   const u = new URL(req.url);
   if (u.pathname === "/functions/v1/console-admin") return await fn(req);
   if (u.pathname === "/__audit") return json(200, audit);
+  if (u.pathname === "/__mail") return json(200, mail);
+  if (u.pathname === "/__members") return json(200, members.map((m) => ({ user_id: m.user_id, email: emailOf(m.user_id), firm_id: m.firm_id })));
   if (u.pathname === "/__ops") return json(200, { bell: ops.bell, views: ops.views, meta: ops.meta, outbound: outbound.map((x) => x.url), tickets: ops.tickets.map((t) => ({ id: t.id, status: t.status, assignee: t.assignee, n: t.thread.length })) });
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer /, "");
   const who = tokens.get(bearer);
-  const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+  const body = req.method === "POST" || req.method === "PUT" ? await req.json().catch(() => ({})) : {};
   if (u.pathname === "/auth/v1/token" && u.searchParams.get("grant_type") === "password") {
-    const l = logins.find((x) => x.email === String(body.email || "").toLowerCase() && x.password === body.password);
+    const l = logins.find((x) => x.email === String(body.email || "").toLowerCase() && !!x.password && x.password === body.password);
     if (!l) return json(400, { code: 400, error_code: "invalid_credentials", msg: "Invalid login credentials" });
     if (l.banned) return json(400, { code: 400, error_code: "user_banned", msg: "User is banned" });
     return json(200, session(l, "aal1"));
@@ -206,8 +227,21 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log("stand rea
     const t = tokens.get(body.refresh_token); const l = t && logins.find((x) => x.id === t.id);
     return l ? json(200, session(l, t!.aal)) : json(400, { error_code: "refresh_token_not_found" });
   }
+  // "forgot password": always the same answer (whether the email has a login is not told); a link only for a real one
+  if (u.pathname === "/auth/v1/recover" && req.method === "POST") {
+    const l = logins.find((x) => x.email === String(body.email || "").trim().toLowerCase());
+    if (l && !l.banned) sendLink(l, "recovery", u.searchParams.get("redirect_to") || "");
+    return json(200, {});
+  }
   if (!who) return json(401, { code: 401, msg: "invalid JWT" });
   const l = logins.find((x) => x.id === who.id)!;
+  if (u.pathname === "/auth/v1/user" && req.method === "PUT") {
+    const pw = String(body.password || "");
+    if (pw.length < 8) return json(422, { code: 422, error_code: "weak_password", msg: "Password should be at least 8 characters." });
+    if (pw === l.password) return json(422, { code: 422, error_code: "same_password", msg: "New password should be different from the old password." });
+    l.password = pw;
+    return json(200, { id: l.id, email: l.email, factors: l.factors });
+  }
   if (u.pathname === "/auth/v1/user") return json(200, { id: l.id, email: l.email, factors: l.factors });
   if (u.pathname === "/auth/v1/factors" && req.method === "POST") {
     const f = { id: "f-new-" + (++n), factor_type: "totp", status: "unverified", friendly_name: body.friendly_name, created_at: now() };

@@ -10,7 +10,8 @@ export type Role = "owner" | "billing" | "support" | "viewer";
 export const ROLES: Role[] = ["owner", "billing", "support", "viewer"];
 export const ALL: Role[] = ROLES;
 
-export type Caller = { id: string; email: string; role: Role; ip: string; ua: string };
+// origin: the console site the call came from (one of Deps.origins): where an invite's email link brings the person back
+export type Caller = { id: string; email: string; role: Role; ip: string; ua: string; origin: string };
 
 // the services an action may use (index.ts wires the real ones with the service role; tests pass fakes)
 export interface Deps {
@@ -25,6 +26,10 @@ export interface Deps {
   log(msg: string, err?: unknown): void;
   // outbound calls (a key's Test, the Sentry summary, a support reply's email): index.ts gives fetch with a time limit
   http?(url: string, init?: RequestInit): Promise<Response>;
+  // Supabase Auth's admin invite (POST /auth/v1/invite, service role): a new login with no password and an email whose
+  // link brings the person to redirectTo to choose one. Throws an Error with status and code (GoTrue's error_code).
+  // It makes no member row: the person is in no firm (admins.add).
+  authInvite?(email: string, redirectTo: string, data: Record<string, unknown>): Promise<{ id: string }>;
   // this function's own secrets, read only for the names modules/keys.ts lists (never SUPABASE_SERVICE_ROLE_KEY)
   env?(name: string): string | undefined;
 }

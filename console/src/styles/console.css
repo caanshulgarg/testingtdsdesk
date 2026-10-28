@@ -59,6 +59,9 @@ textarea.input, .field textarea { height: auto; padding: var(--space-2) var(--sp
 .signin-card h1 { margin-bottom: var(--space-1); }
 .signin-card form { margin-top: var(--space-5); display: flex; flex-direction: column; }
 .signin-card .link { margin-top: var(--space-3); align-self: center; }
+.signin-card h2 { font-size: var(--text-lg); margin: 0 0 var(--space-2); }
+.signin-card form p { margin: 0 0 var(--space-3); }
+.signin-card .stack { margin-top: var(--space-5); display: flex; flex-direction: column; }
 .enrol { text-align: center; }
 .qr { background: #fff; padding: var(--space-2); border-radius: 1rem; margin: var(--space-2) auto; display: block; }
 

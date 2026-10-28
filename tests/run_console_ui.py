@@ -14,7 +14,10 @@ headers, the CSP included (only upgrade-insecure-requests left out: the test pag
      on, suspend and reactivate a firm, deactivate a company: status chips change, rows in the change history
   6. phone (390 px): no sideways scroll on any screen; the menu opens
   7. dark mode: the toggle, and the system's dark preference; screenshots
-  8. no CSP violation and no page error anywhere; signed out after 30 minutes without activity"""
+  8. no CSP violation and no page error anywhere; signed out after 30 minutes without activity
+  9. add an admin by an email with no login: invited (the stand's /__mail), the role row, the change history, no firm;
+     the invite link opens "Set your password" (the tokens gone from the address), then the QR enrolment and the code;
+     "Forgot password?" sends a reset link that opens the same screen, then the code; an expired link in plain words"""
 import os, sys, json, time, socket, subprocess, threading, functools, http.server, re
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.normpath(os.path.join(HERE, ".."))
 from playwright.sync_api import sync_playwright
@@ -57,9 +60,10 @@ for _ in range(600):
     try: socket.create_connection(("127.0.0.1", STAND_PORT), 0.2).close(); break
     except OSError: time.sleep(0.1)
 os.makedirs(SHOTS, exist_ok=True)
-def stand_audit():
+def stand_get(path):
     import urllib.request
-    return json.loads(urllib.request.urlopen("http://127.0.0.1:%d/__audit" % STAND_PORT).read())
+    return json.loads(urllib.request.urlopen("http://127.0.0.1:%d/%s" % (STAND_PORT, path)).read())
+def stand_audit(): return stand_get("__audit")
 
 errors, csp = [], []
 def forward(route):
@@ -315,6 +319,83 @@ try:
         pg.clock.fast_forward("02:00"); pg.wait_for_selector("text=signed out after 30 minutes")
         ok(pg.evaluate("sessionStorage.getItem('fincom-console:session')") is None, "31 minutes idle: signed out, the session gone")
         shot(pg, "21-idle")
+        ctx.close()
+
+        print("== 9. invite a new admin, set the password, forgot password")
+        ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
+        sign_in(pg, "owner"); pg.wait_for_selector("[data-testid=tiles]")
+        pg.goto(ORIGIN + "/#/admins"); wait_rows(pg, "admins")
+        pg.click("button[data-action='admins.add']"); pg.wait_for_selector("dialog [data-testid=admin-email]")
+        ok("If they have no FinCom login yet, they get an email to set a password." in pg.inner_text("dialog"), "the add dialog says a new email gets an email to set a password")
+        pg.fill("[data-testid=admin-email]", "Neha@FinCom.live"); pg.select_option("[data-testid=role-select]", "billing")
+        pg.fill("dialog textarea", "Joins the billing desk"); shot(pg, "22-admin-invite")
+        pg.click(btn); pg.wait_for_selector("dialog", state="detached"); wait_rows(pg, "admins")
+        ok("neha@fincom.live" in pg.inner_text("[data-table=admins]"), "Admins: a new email is added (invited)")
+        ok("invitation" in pg.inner_text("[data-testid=admins-note]").lower() and "neha@fincom.live" in pg.inner_text("[data-testid=admins-note]") and "as billing" in pg.inner_text("[data-testid=admins-note]"), "a note says the invitation email was sent (%s)" % pg.inner_text("[data-testid=admins-note]"))
+        shot(pg, "23-admin-invited")
+        mails = [m for m in stand_get("__mail") if m["to"] == "neha@fincom.live"]
+        ok(len(mails) == 1 and mails[0]["type"] == "invite" and mails[0]["redirect_to"] == ORIGIN + "/" and mails[0]["data"] == {"console_invite": True}, "one invite email, to the console's own site (%s)" % [(m["type"], m["redirect_to"]) for m in mails])
+        au = stand_audit()
+        inv = [a for a in au if a["action"] == "admins.invite"]
+        ok(len(inv) == 1 and inv[0]["after"]["note"] == "invited and added as billing" and inv[0]["reason"] == "Joins the billing desk", "the change history: \"invited and added as billing\" with the reason")
+        ok(any(a["action"] == "admins.add" and a["after"] == {"role": "billing"} for a in au[-3:]), "and the role row's own entry")
+        ok(not any(m["email"] == "neha@fincom.live" for m in stand_get("__members")), "console only: no member row, no firm")
+        ctx.close()
+        # the invite link
+        ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
+        pg.goto(mails[0]["link"]); pg.wait_for_selector("text=Set your password")
+        ok("access_token" not in pg.url and pg.evaluate("location.hash") == "", "the link's tokens are taken out of the address (%s)" % pg.url)
+        ok("neha@fincom.live" in text(pg), "it says whose login it is")
+        ok(pg.evaluate("sessionStorage.getItem('fincom-console:session')") is None, "nothing is kept until the password is saved")
+        shot(pg, "24-set-password")
+        pg.fill("[data-testid=pw1]", "short1"); pg.fill("[data-testid=pw2]", "short1"); pg.click("button:has-text('Save and continue')")
+        pg.wait_for_selector("text=10 characters or more")
+        ok(True, "a short password: refused in plain words")
+        pg.fill("[data-testid=pw1]", "Neha-pass-1234"); pg.fill("[data-testid=pw2]", "Neha-pass-12345"); pg.click("button:has-text('Save and continue')")
+        pg.wait_for_selector("text=not the same")
+        ok(True, "two different passwords: refused")
+        pg.fill("[data-testid=pw2]", "Neha-pass-1234"); pg.click("button:has-text('Save and continue')")
+        pg.wait_for_selector("img.qr"); pg.wait_for_timeout(300)
+        ok(pg.evaluate("(() => { const i = document.querySelector('img.qr'); return !!i && i.complete && i.naturalWidth > 0; })()") and "Scan this" in text(pg), "password saved: then the authenticator enrolment with its QR code")
+        shot(pg, "25-invite-enrol")
+        pg.fill("input[autocomplete=one-time-code]", "123456"); pg.click("button:has-text('Sign in')")
+        pg.wait_for_selector("[data-testid=tiles]")
+        ok(pg.inner_text("[data-testid=role]") == "billing" and "neha@fincom.live" in pg.inner_text("[data-testid=who]"), "the invited admin is in, as billing")
+        ok("access_token" not in pg.url, "no tokens left in the address")
+        pg.click("[data-testid=signout]"); pg.wait_for_selector("input[type=password]")
+        pg.fill("input[type=email]", "neha@fincom.live"); pg.fill("input[type=password]", "Neha-pass-1234"); pg.click("button:has-text('Continue')")
+        pg.wait_for_selector("input[autocomplete=one-time-code]")
+        ok("6-digit code" in text(pg), "later: the new password and the code sign in")
+        ctx.close()
+        # an expired or used link
+        ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
+        pg.goto(ORIGIN + "/#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired")
+        pg.wait_for_selector("[role=alert]")
+        ok("expired" in pg.inner_text("[role=alert]") and pg.evaluate("location.hash") == "", "an expired link: plain words, the address cleaned (%s)" % pg.inner_text("[role=alert]"))
+        # forgot password
+        pg.click("button:has-text('Forgot password?')"); pg.wait_for_selector("text=Send the link")
+        pg.fill("input[type=email]", "billing@fincom.live"); pg.click("button:has-text('Send the link')")
+        pg.wait_for_selector("[data-testid=sent]")
+        ok("billing@fincom.live" in pg.inner_text("[data-testid=sent]"), "forgot password: \"check your email\" (%s)" % pg.inner_text("[data-testid=sent]"))
+        shot(pg, "26-forgot-sent")
+        pg.click("button:has-text('Back to sign-in')"); pg.click("button:has-text('Forgot password?')")
+        pg.fill("input[type=email]", "nobody@nowhere.test"); pg.click("button:has-text('Send the link')"); pg.wait_for_selector("[data-testid=sent]")
+        ok("nobody@nowhere.test" in pg.inner_text("[data-testid=sent]"), "an unknown email gets the same answer (who has a login is not told)")
+        rec = [m for m in stand_get("__mail") if m["type"] == "recovery"]
+        ok(len(rec) == 1 and rec[0]["to"] == "billing@fincom.live" and rec[0]["redirect_to"] == ORIGIN + "/", "one reset email, back to the console (%s)" % [(m["to"], m["redirect_to"]) for m in rec])
+        ctx.close()
+        ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
+        pg.goto(rec[0]["link"]); pg.wait_for_selector("text=Set a new password")
+        ok("access_token" not in pg.url and "billing@fincom.live" in text(pg), "the reset link opens the same screen, the address cleaned")
+        pg.fill("[data-testid=pw1]", "Billing-pass-123"); pg.fill("[data-testid=pw2]", "Billing-pass-123"); pg.click("button:has-text('Save and continue')")
+        pg.wait_for_selector("text=different from the old")
+        ok(True, "the same password again: plain words")
+        pg.fill("[data-testid=pw1]", "Billing-new-4567"); pg.fill("[data-testid=pw2]", "Billing-new-4567"); pg.click("button:has-text('Save and continue')")
+        pg.wait_for_selector("input[autocomplete=one-time-code]")
+        ok(pg.query_selector("img.qr") is None and "6-digit code" in text(pg), "an authenticator already set up: the code is asked (no new QR)")
+        pg.fill("input[autocomplete=one-time-code]", "123456"); pg.click("button:has-text('Sign in')")
+        pg.wait_for_selector("[data-testid=tiles]")
+        ok(pg.inner_text("[data-testid=role]") == "billing", "reset done and signed in")
         ctx.close()
         br.close()
     ok(not errors, "no page errors (%s)" % errors[:3])

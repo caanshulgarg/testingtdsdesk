@@ -1,6 +1,10 @@
 // Sign-in for the console, straight against Supabase Auth's REST API (no SDK): email and password, then the
 // authenticator code (TOTP). The session lives in this tab only (sessionStorage), never localStorage: closing the tab
 // ends it. Only the public publishable key is here; the service key never reaches the browser.
+// An email's link (an invite from Admins > Add an admin, or "Forgot password?") lands here with Supabase's tokens in the
+// address (#access_token=…&type=invite|recovery). takeLink() takes them out of the address at once (history.replaceState,
+// before the hash routes read it); they are kept in memory only, for "Set your password", and the session starts only
+// once the password is saved (PUT /auth/v1/user). Then the usual: the authenticator (enrolment or code).
 export const SUPABASE_URL = __SUPABASE_URL__;
 export const SUPABASE_KEY = __SUPABASE_KEY__;
 const SKEY = "fincom-console:session";
@@ -11,6 +15,25 @@ const subs = new Set();
 let endedWhy = "";                   // why the last session ended (shown on the sign-in page)
 export const ended = () => endedWhy;
 export const clearEnded = () => { endedWhy = ""; };
+
+let link = null;                     // {type: "invite" | "recovery", email, sess} from an email's link, until the password is saved
+const EXPIRED = "That link has expired or was already used. Use “Forgot password?” below to get a new one.";
+(function takeLink() {
+  const h = location.hash.replace(/^#/, "");
+  if (!/(^|&)(access_token|error|error_code|error_description)=/.test(h)) return;
+  const q = new URLSearchParams(h);
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { /* */ }
+  const tok = q.get("access_token") || "", type = q.get("type") || "";
+  if (tok && (type === "invite" || type === "recovery")) {
+    link = { type, email: String(claims(tok).email || ""), sess: { access_token: tok, refresh_token: q.get("refresh_token") || "",
+             expires_in: Number(q.get("expires_in")) || 3600, expires_at: Number(q.get("expires_at")) || 0, user: { id: claims(tok).sub, email: claims(tok).email } } };
+    if (!link.sess.expires_at) delete link.sess.expires_at;
+  } else if (tok) endedWhy = "That sign-in link cannot be used here. Sign in with your email and password.";
+  else endedWhy = /expired|invalid/i.test(q.get("error_code") + " " + q.get("error_description")) ? EXPIRED
+                  : "That link did not work: " + String(q.get("error_description") || q.get("error") || "").slice(0, 160);
+})();
+export const pendingLink = () => link;
+export const dropLink = () => { link = null; };
 const emit = () => subs.forEach((f) => f(sess));
 export const onSession = (f) => { subs.add(f); return () => subs.delete(f); };
 function save(s) {
@@ -33,7 +56,14 @@ const WORDS = {
   mfa_challenge_expired: "That took too long. Enter the newest code.",
   over_request_rate_limit: "Too many tries. Wait a few minutes.",
   email_not_confirmed: "Confirm your email first.",
+  over_email_send_rate_limit: "Too many emails were sent just now. Wait an hour and try again.",
+  weak_password: "That password is too weak. Use 10 characters or more, with letters and digits.",
+  same_password: "Choose a password different from the old one.",
 };
+// the password rule of the FinCom app (src/js/27, app/src/lib/authLink.jsx): 10 characters or more, letters and digits
+export const passwordProblem = (a, b) =>
+  a.length < 10 || !/[A-Za-z]/.test(a) || !/\d/.test(a) ? "Use 10 characters or more, with letters and digits."
+  : a !== b ? "The two passwords are not the same." : "";
 async function gotrue(path, { method = "POST", body, token } = {}) {
   let r;
   try {
@@ -46,12 +76,26 @@ async function gotrue(path, { method = "POST", body, token } = {}) {
   if (!r.ok) {
     const code = j.error_code || j.code || "";
     const banned = /banned/i.test(String(j.msg || j.message || j.error_description || ""));
-    throw new Error(banned ? WORDS.user_banned : WORDS[code] || (r.status === 429 ? WORDS.over_request_rate_limit : "Sign-in failed. Try again."));
+    const e = new Error(banned ? WORDS.user_banned : WORDS[code] || (r.status === 429 ? WORDS.over_request_rate_limit : "Sign-in failed. Try again."));
+    e.status = r.status; e.code = code;
+    throw e;
   }
   return j;
 }
 
 export async function signIn(email, password) { save(await gotrue("/token?grant_type=password", { body: { email: email.trim(), password } })); }
+// "Set your password" (an invite or a reset link): saved with the link's own sign-in, which becomes this tab's session
+export async function setPassword(password) {
+  if (!link) throw new Error(EXPIRED);
+  try { await gotrue("/user", { method: "PUT", token: link.sess.access_token, body: { password } }); }
+  catch (e) { if (e.status === 401 || e.status === 403) { link = null; throw new Error(EXPIRED); } throw e; }
+  const s = link.sess; link = null;
+  save(s);
+}
+// "Forgot password?": Supabase Auth emails a reset link back to this console (the same answer whether or not the email has a login)
+export async function forgotPassword(email) {
+  await gotrue("/recover?redirect_to=" + encodeURIComponent(location.origin + "/"), { body: { email: email.trim() } });
+}
 export async function myFactors() {
   const u = await gotrue("/user", { method: "GET", token: await token() });
   return (u.factors || []).filter((f) => f.factor_type === "totp");

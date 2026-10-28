@@ -49,9 +49,19 @@ python3 -I scratchpad/fn_deploy.py <checkout> console-admin server/console/index
 ## Step C. Supabase Auth settings (owner, once)
 
 1. Supabase > **Authentication > URL Configuration > Redirect URLs** > add `https://console-staging.fincom.live/**`
-   (and `https://console.fincom.live/**` when going live). Save.
+   (and `https://console.fincom.live/**` when going live). Save. Without it, the invite and "Forgot password?" emails'
+   links land on the user app (the Site URL) instead of the console.
 2. Supabase > **Authentication > Multi-factor** (Sign In / Providers > Multi-Factor): **TOTP (App Authenticator)** must
    be **Enabled**. The console refuses everything until the authenticator code is entered.
+3. Emails (Admins > Add an admin for an email with no login, and "Forgot password?" on the console's sign-in) go
+   through Supabase Auth's own mailer, which sends only a few an hour on a free project, unless **Authentication >
+   Emails > SMTP Settings** is set up (for example with Resend). Too many: the console says to wait an hour.
+
+**Adding a new admin by email.** Admins > Add an admin: type the email, pick the role, give a reason. If the email has
+no FinCom login yet, Supabase sends an invitation email; its link opens the console's "Set your password" (10
+characters or more, with letters and digits), then the authenticator (QR code) and the code. The person is in no firm
+(no member row): a console login only. The change history shows "invited and added as <role>". Also add the email to
+the Cloudflare Access list (Step D, 4), or Cloudflare stops them before the console.
 
 ## Step D. Cloudflare Access: the lock (owner, once)
 
@@ -107,7 +117,7 @@ way `main` carries the app's built files. A source branch (root directory `conso
 | Companies | all | the firms' clients (name, GSTIN, status; never books). **Deactivate / reactivate: Support, Owner** |
 | Users | all (Viewer sees emails partly hidden) | list and a person. **Reset two-step, sign out everywhere, switch off / on: Support, Owner** |
 | Change history | Owner (all), Billing and Support (own and their role's) | every console action, views included; it can only be added to |
-| Admins | Owner | add an existing FinCom login with a role, change a role, remove. There is always one owner |
+| Admins | Owner | add an admin by email with a role (no login yet: an invitation email to set a password), change a role, remove. There is always one owner |
 | Settings | Owner | a stub: platform defaults arrive with the billing module |
 
 Every write needs a reason and goes into the change history with before and after values.

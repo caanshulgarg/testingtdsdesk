@@ -72,7 +72,7 @@ const PARAMS: Record<string, Record<string, unknown>> = {
   "exports.all": { reason: R }, "seeas.open": { firm_id: FIRM, reason: R },
 };
 
-function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ruleFirst?: boolean; env?: Record<string, string> } = {}) {
+function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ruleFirst?: boolean; env?: Record<string, string>; invite?: "none" | "rate" | "down" | "exists" } = {}) {
   const admins = new Map<string, { role: string; active: boolean }>([
     [ID.owner, { role: "owner", active: true }], [ID.billing, { role: "billing", active: true }],
     [ID.support, { role: "support", active: true }], [ID.viewer, { role: "viewer", active: true }],
@@ -89,6 +89,17 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ru
     emailOf: (id) => emails[id] || id + "@fincom.live", firms: [{ id: FIRM, name: "ABC Associates", plan_id: OPS.P1 }, { id: U(102), name: "Garg Shekhar & Co", plan_id: OPS.P2 }] });
   if (opts.ruleFirst) ops.rules.push({ id: 1, flag_key: "zoho_books", scope: "firm", target_id: FIRM, value: true, until: null, note: "", updated_by: ID.owner });
   const http: { url: string; init?: RequestInit }[] = [];
+  // Supabase Auth's admin invite (POST /auth/v1/invite): a new login with no password, and no member row anywhere
+  const invites: { email: string; redirectTo: string; data: Record<string, unknown> }[] = [];
+  let nextUser = 50;
+  const authInvite = async (email: string, redirectTo: string, data: Record<string, unknown>) => {
+    if (opts.invite === "rate") throw Object.assign(new Error("email rate limit exceeded"), { status: 429, code: "over_email_send_rate_limit" });
+    if (opts.invite === "down") throw Object.assign(new Error("Error sending invite email"), { status: 500, code: "unexpected_failure" });
+    if (opts.invite === "exists") throw Object.assign(new Error("A user with this email address has already been registered"), { status: 422, code: "email_exists" });
+    invites.push({ email, redirectTo, data });
+    const id = U(++nextUser); emails[id] = email; emails[email] = id;
+    return { id };
+  };
   const addAudit = (a: any, action: string, target_type: string, target_id: string, before: unknown, after: unknown) =>
     audit.push({ who: a.p_by, role: admins.get(a.p_by)?.role, action, target_type, target_id, before, after, reason: a.p_reason, ip: a.p_ip });
   const ownerCheck = (by: string) => { const r = admins.get(by); if (!r?.active || r.role !== "owner") err("not_owner"); };
@@ -122,7 +133,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ru
         const uid = emails[String(a.p_email).toLowerCase()]; if (!uid) err("no_login");
         if (admins.get(uid)?.active) err("already_admin");
         admins.set(uid, { role: a.p_role, active: true }); addAudit(a, "admins.add", "admin", uid, null, { role: a.p_role });
-        return { user_id: uid };
+        return { user_id: uid, role: a.p_role, active: true };
       }
       case "console_admin_set_role": {
         ownerCheck(a.p_by); if (a.p_by === a.p_user) err("own_role");
@@ -170,6 +181,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ru
     log: () => {},
     http: opsHttp(http),
     env: (k) => (opts.env || ENV)[k],
+    authInvite: opts.invite === "none" ? undefined : authInvite,
   };
   const h = makeHandler(deps, MODULES);
   const call = async (who: string, action: string, params: Record<string, unknown> = {}, o: { aal?: string; origin?: string; jwt?: string } = {}) => {
@@ -179,7 +191,7 @@ function fake(opts: { failAudit?: boolean; failBan?: boolean; rate?: boolean; ru
     }));
     return { status: r.status, body: await r.json() };
   };
-  return { call, audit, admins, banned, calls, firmStatus, coStatus, ops, http, get factors() { return factors; } };
+  return { call, audit, admins, banned, calls, firmStatus, coStatus, ops, http, invites, emails, get factors() { return factors; } };
 }
 
 Deno.test("every action is in the expected matrix, and the matrix covers every action", () => {
@@ -267,6 +279,62 @@ Deno.test("the last owner cannot be removed or demoted; nobody changes their own
   eq(r.status, 403);
   assert(!f.audit.some((x) => x.action === "admins.remove" && x.target_id === ID.billing), "no audit for a refused removal");
   assert([...f.admins.values()].some((v) => v.active && v.role === "owner"), "an owner remains");
+});
+
+Deno.test("add an admin by a new email: invited by Supabase Auth (to the console's own site), role row, audited; console only", async () => {
+  const f = fake();
+  const r = await f.call(ID.owner, "admins.add", { email: "  Neha@FinCom.live ", role: "support", reason: "Joins the support desk" });
+  eq([r.status, r.body.ok], [200, true], JSON.stringify(r.body));
+  eq(f.invites, [{ email: "neha@fincom.live", redirectTo: ORIGIN + "/", data: { console_invite: true } }], "one invite, to the console");
+  const uid = f.emails["neha@fincom.live"];
+  eq([r.body.data.user_id, r.body.data.role, r.body.data.invited], [uid, "support", true]);
+  eq(f.admins.get(uid), { role: "support", active: true }, "the role row");
+  const inv = f.audit.find((x) => x.action === "admins.invite")!;
+  assert(inv, "an invite row in the change history: " + JSON.stringify(f.audit));
+  // written before the invite is sent (nothing is done unless it is recorded): its target is the email
+  eq([inv.who, inv.target_type, inv.target_id, inv.reason, inv.after?.note, inv.after?.role], [ID.owner, "admin", "neha@fincom.live", "Joins the support desk", "invited and added as support", "support"]);
+  assert(f.audit.some((x) => x.action === "admins.add" && x.target_id === uid), "and the role row's own audit row");
+  // nothing about firms or members was touched: only the admin functions and the audit
+  eq([...new Set(f.calls)].sort(), ["console_admin_add", "console_audit_add"], "calls");
+});
+
+Deno.test("add an admin whose email has a login: no invite (as before)", async () => {
+  const f = fake();
+  const r = await f.call(ID.owner, "admins.add", { email: "new@fincom.live", role: "viewer", reason: R });
+  eq(r.status, 200);
+  eq(f.invites.length, 0, "no invite");
+  assert(!r.body.data.invited, "not invited");
+  assert(!f.audit.some((x) => x.action === "admins.invite"), "no invite row");
+});
+
+Deno.test("invite: owner only, reason required, a bad email refused, and Supabase Auth's failures in plain words", async () => {
+  let f = fake();
+  for (const role of ["billing", "support", "viewer"] as const) eq((await f.call(ID[role], "admins.add", { email: "x1@fincom.live", role: "viewer", reason: R })).status, 403, role);
+  eq((await f.call(ID.owner, "admins.add", { email: "x1@fincom.live", role: "viewer", reason: "" })).body.reason, "reason");
+  let r = await f.call(ID.owner, "admins.add", { email: "not an email", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [400, "bad_email"]);
+  r = await f.call(ID.owner, "admins.add", { email: "x1@fincom.live", role: "chief", reason: R });
+  eq([r.status, r.body.reason], [400, "bad_role"], "a bad role is refused before any invite");
+  eq(f.invites.length, 0, "no invite for any of these");
+  f = fake({ invite: "rate" });
+  r = await f.call(ID.owner, "admins.add", { email: "x2@fincom.live", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [429, "invite_rate"]);
+  assert(f.audit.some((x) => x.action === "admins.invite.failed" && x.target_id === "x2@fincom.live"), "the failed invite is in the history");
+  assert(/email/i.test(r.body.error) && !/rate limit exceeded/.test(r.body.error), "plain words: " + r.body.error);
+  eq(f.admins.size, 4, "no admin row");
+  f = fake({ invite: "down" });
+  r = await f.call(ID.owner, "admins.add", { email: "x3@fincom.live", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [502, "invite"]);
+  f = fake({ invite: "exists" });
+  r = await f.call(ID.owner, "admins.add", { email: "x4@fincom.live", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [409, "invite_exists"]);
+  f = fake({ invite: "none" });
+  r = await f.call(ID.owner, "admins.add", { email: "x5@fincom.live", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [404, "no_login"], "no invite service: as before");
+  f = fake({ failAudit: true });
+  r = await f.call(ID.owner, "admins.add", { email: "x6@fincom.live", role: "viewer", reason: R });
+  eq([r.status, r.body.reason], [500, "audit"]);
+  eq(f.invites.length, 0, "the invite row comes first: when it cannot be written, nobody is invited");
 });
 
 Deno.test("the database's refusals reach the screen as plain words, never database text", () => {
