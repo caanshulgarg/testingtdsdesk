@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -346,5 +347,41 @@ func TestTypedPortOwnUserOnly(t *testing.T) {
 	code, res := callLocal(t, "POST", "/ports/use", "", fmt.Sprintf(`{"port": %d}`, f.port))
 	if code != 403 || len(f.ids()) != 0 {
 		t.Fatalf("another user's program: %d %v, Tally asked %v", code, res, f.ids())
+	}
+}
+
+// 2.4.8 adds and changes no Tally request: the allow-list table as 2.4.5's, the decision line names 2.4.8 with 2.4.7's
+// kept as history, a dated line for 2.4.8; the test sheet names this version's new steps
+func TestRelease248VersionAllowListUnchanged(t *testing.T) {
+	if BridgeVersion != "2.4.8" {
+		t.Fatalf("BridgeVersion %s", BridgeVersion)
+	}
+	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"
+	if h := allowListHash(allowListRows()); h != table245 {
+		t.Fatalf("the allow-list's table changed (%s): 2.4.8 adds or changes no request", h)
+	}
+	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
+	line := group(`(?m)^(First table: .*)$`, al, 1)
+	for _, w := range []string{"allowed for 2.4.8 by the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed",
+		"TDSDeskCompanies exactly as built", "as for 2.4.7: the owner's standing decision of 2026-10-06", "as for 2.4.6: the owner's standing decision of 2026-10-06"} {
+		if !strings.Contains(line, w) {
+			t.Errorf("the decision line does not say %q", w)
+		}
+	}
+	if strings.Contains(al, "allowed for 2.4.7 by") || strings.Contains(al, "allowed for 2.4.6 by") {
+		t.Error("an earlier version's decision still worded as the current one")
+	}
+	if !regexp.MustCompile(`re-measured on 2026-10-28 for 2\.4\.8: no request was measured again[^\n]*allowed for 2\.4\.8 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+		t.Error("no dated line for 2.4.8")
+	}
+	sheet := readText(filepath.Join("..", "docs", "bridge-2.4.8-test-sheet.txt"))
+	for _, w := range []string{"2.4.8", "port 4125", "Use this port", "another Windows user", "within 2 seconds", "3.0 + 7.1 by the owner's decision of 2026-10-28"} {
+		if !strings.Contains(sheet, w) {
+			t.Errorf("the test sheet does not say %q", w)
+		}
+	}
+	// the typed port's request is the light company list exactly as built (no new request shape)
+	if tallyRequestID(companiesRequest()) != "TDSDeskCompanies" || checkAllowed(companiesRequest()) != nil {
+		t.Fatal("the typed port's request is not the allow-listed company list")
 	}
 }
