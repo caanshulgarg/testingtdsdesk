@@ -214,7 +214,7 @@ def main():
         bridge_reset(on=False); E(FRESH); scene([], [])
         E("() => { navHome('clients'); }"); pg.wait_for_timeout(900)
         ok(pg.locator("#app [data-fl-first]").count() == 1, "1. Clients with no client: 'Start with Tally'")
-        ok("Add as client" in txt("#app [data-fl-first]") and pg.locator("#app [data-fl-start]").inner_text().strip() == "Connect Tally", "1. it says what Connect Tally gives, with one Connect Tally button (%s)" % txt("#app [data-fl-first]"))
+        ok("Link to client…" in txt("#app [data-fl-first]") and pg.locator("#app [data-fl-start]").inner_text().strip() == "Connect Tally", "1. it says what Connect Tally gives, with one Connect Tally button (%s)" % txt("#app [data-fl-first]"))
         shot("01-clients-first-run")
         pg.click("#app [data-fl-start]"); pg.wait_for_timeout(900)
         ok(E("() => S.view === 'tally' || /tally/.test(location.hash)") or pg.locator("#app [data-connect-guide]").count() == 1, "1. Connect Tally opens the Tally page")
@@ -289,10 +289,10 @@ def main():
         ok(pg.locator("#app [data-firstlink]").count() == 0, "8. Connect this computer gives way")
         ok(pg.locator("#app [data-connect-step=open][data-done]").count() == 1 and "2 companies open in Tally on NWS144" in txt("#app [data-connect-step=open]"), "8. step 2: '2 companies open in Tally on NWS144.' (%s)" % txt("#app [data-connect-step=open]"))
         rows = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), (r.querySelector('[data-tco-act]') || {}).innerText || ''])")
-        ok(sorted(r[0] for r in rows) == sorted([VMS, GSC]) and all(r[1] == "Add as client" for r in rows), "8. Companies in Tally: both, each with Add as client (%s)" % rows)
+        ok(sorted(r[0] for r in rows) == sorted([VMS, GSC]) and all(r[1] == "Link to client…" for r in rows), "8. Companies in Tally: both, each with Link to client… (Task D: no Add as client) (%s)" % rows)
         shot("08-companies")
-        pg.click('#app [data-tco-row="%s"] [data-tco-act]' % VMS); pg.wait_for_timeout(1500)
-        ok(any(c[0] == "tally_company_link" and c[1].get("p_company") == VMS for c in calls()), "8. Add as client: linked in one click (tally_company_link)")
+        pg.click('#app [data-tco-row="%s"] [data-tco-act=pick]' % VMS); pg.wait_for_timeout(250); pg.click('#app [data-tco-row="%s"] [data-tco-add-new]' % VMS); pg.wait_for_timeout(1500)
+        ok(any(c[0] == "tally_company_link" and c[1].get("p_company") == VMS for c in calls()), "8. + New client with this name: linked (tally_company_link)")
         try: pg.wait_for_selector("#app [data-connect-guide=done]", timeout=8000); done = True
         except Exception: done = False
         ok(done and pg.locator("#app [data-connect-guide=open], #app section[data-connect-guide]").count() == 0, "8. the three steps give way to 'Connected computers: NWS144 ● online'")

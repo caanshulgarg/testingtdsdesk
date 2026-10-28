@@ -6,10 +6,10 @@ Companies says Connected / Disconnected; Sync master re-syncs. FinCom, website o
   1. The Tally page's Companies in Tally: every company the firm's computers have seen, open now first, then the latest
      seen; each with its computer, the pill (Connected / "Disconnected — not open in Tally on NWS144 (last seen 20-Oct)" /
      "Disconnected — computer offline since …") and ONE action. A search box once there are more than 10.
-  2. Add as client: one click: the client made with the company's name (the period off) and GSTIN, linked
+  2. + New client with this name (inside Link to client…; Task D: no Add as client button): the client made with the company's name (the period off) and GSTIN, linked
      (tally_company_link once), the first sync's wake sent once (TCloudUp kind wake, what ledgers), the progress, then
      "1,240 ledgers imported ✓ at 16:20 IST · Entries Apr–Oct 2026 ✓". The page stays.
-  3. A client of the same name already there: the row says "Link to <client>", no second client.
+  3. A client of the same name already there: "Link to client…" has it chosen, no second client.
   4. Linked: the client's name, Sync now (the existing Update now: tally_want_update), ⋯ Not this client (link another
      client / unlink), Upload older entries (Day Book) only while days are missing.
   5. Connect Tally: three steps (Install FinCom Bridge, Open your company in TallyPrime, Add as client) that tick from
@@ -108,7 +108,7 @@ def main():
             E("() => { S.tallyGuide = {}; S.tallyTab = 'computers'; navHome('tally'); }"); pg.wait_for_timeout(1200)
         def rows():
             return E("""() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), st: r.getAttribute('data-tco-state'),
-                pill: r.querySelector('[data-tco-pill]').innerText.replace(/\\s+/g, ' ').trim(), text: r.innerText.replace(/\\s+/g, ' '), act: (r.querySelector('[data-tco-act]') || {}).innerText || '',
+                pill: r.querySelector('[data-tco-pill]').innerText.replace(/\\s+/g, ' ').trim(), text: r.innerText.replace(/\\s+/g, ' '), act: (r.querySelector('[data-tco-act]') || {}).innerText || '', pre: (r.querySelector('[data-tco-pre]') || {getAttribute: () => ''}).getAttribute('data-tco-pre') || '',
                 linked: r.getAttribute('data-tco-linked')}))""")
         def row(co): return next((r for r in rows() if r["co"] == co), None)
         def shot(name, page=None, full=True):
@@ -126,16 +126,16 @@ def main():
         ok([r["co"] for r in rs][:2] == sorted([VMS, GSC], key=lambda c: c) or set(r["co"] for r in rs[:2]) == {VMS, GSC}, "1. the companies open in Tally now come first (%s)" % [r["co"] for r in rs])
         ok([r["co"] for r in rs][2:] == [SAL, OLD] or [r["co"] for r in rs][2:] == [OLD, SAL], "1. then the ones seen before (%s)" % [r["co"] for r in rs])
         # next-tally-one-page (Suvit: Connected / Disconnected are a linked company's): not linked, "Not a client", open or not
-        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not a client · open in Tally on NWS144", "1. VMS EVENTS open on NWS144, not linked: Not a client · open in Tally (%s)" % row(VMS)["pill"])
-        ok(row(SAL)["pill"] == "Not a client · not open in Tally now", "1. Salesify, not linked, not open (%s)" % row(SAL)["pill"])
+        ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not linked · open in Tally on NWS144", "1. VMS EVENTS open on NWS144, not linked: Not linked · open in Tally (Task D: neutral words) (%s)" % row(VMS)["pill"])
+        ok(row(SAL)["pill"] == "Not linked · not open in Tally now", "1. Salesify, not linked, not open (%s)" % row(SAL)["pill"])
         scene(cos(sal="GS", old="GS")); tally_page()
         # next-link-record (the owner's step 2, 26-Oct-2026): one word per client, Waiting for Tally with its one plain line
         ok(row(SAL)["pill"] == "Waiting for Tally Open " + SAL + " in TallyPrime on NWS144", "1. linked, not open: 'Waiting for Tally · Open ... in TallyPrime on NWS144' (%s)" % row(SAL)["pill"])
         ok(row(OLD)["pill"] == "Waiting for Tally Open " + OLD + " in TallyPrime on LAPTOP" and row(OLD)["st"] == "offline", "1. its computer off: 'Waiting for Tally · Open MASTER CAD INFRA in TallyPrime on LAPTOP' (%s)" % row(OLD)["pill"])
         scene(cos()); tally_page()
         ok("NWS144" in row(VMS)["text"] and "LAPTOP" in row(OLD)["text"] and "last seen 20-Oct" in row(SAL)["text"], "1. each row names its computer and when it was last seen")
-        ok(row(VMS)["act"] == "Add as client" and row(SAL)["act"] == "Add as client", "1. not linked: 'Add as client' (%s, %s)" % (row(VMS)["act"], row(SAL)["act"]))
-        ok(row(GSC)["act"] == "Link to Garg Shekhar & Company", "3. GARG SHEKHAR & COMPANY (2025-26) with Garg Shekhar & Company already a client: 'Link to Garg Shekhar & Company' (%s)" % row(GSC)["act"])
+        ok(row(VMS)["act"] == "Link to client…" and row(SAL)["act"] == "Link to client…" and "Add as client" not in row(VMS)["text"], "1. not linked: ONE 'Link to client…', no Add as client suggestion (Task D) (%s, %s)" % (row(VMS)["act"], row(SAL)["act"]))
+        ok(row(GSC)["act"] == "Link to client…" and row(GSC)["pre"] == E("window.__ids.GS"), "3. GARG SHEKHAR & COMPANY (2025-26) with Garg Shekhar & Company already a client: 'Link to client…' with it chosen (%s)" % row(GSC)["pre"])
         ok(pg.locator("#app [data-tco-q]").count() == 0, "1. no search box with 4 companies")
         ok(E("() => { const a = document.querySelector('#app [data-tco-list=firm]'), g = document.querySelector('#app [data-connect-guide]'); return !!a && (!g || !!(g.compareDocumentPosition(a) & 4)); }"), "1. Companies in Tally right under the steps")
         shot("tally-page-list-desktop-light")
@@ -145,13 +145,14 @@ def main():
         ok(g == [["install", True], ["port", True], ["open", True], ["add", False]], "5. four steps (26-Oct-2026: Set Tally's port): install, port and open ticked from the beats, Add as client next (%s)" % g)
         ok(pg.locator("#app [data-strip-step], #app [data-connect-step=link], #app [data-connect-step=ledgers], #app [data-connect-step=daybook], #app [data-guide-picker]").count() == 0, "5. no six-step strip, no Link / Ledgers / Day Book steps")
         gtxt = txt("#app [data-connect-guide]")
-        ok("Install FinCom Bridge on the Tally computer" in gtxt and "Open your company in TallyPrime" in gtxt and "Add as client" in gtxt and "Set Tally’s port" in gtxt and "3 of 4 done" in gtxt, "5. the four steps' words, 3 of 4 done (%s)" % gtxt[:160])
+        ok("Install FinCom Bridge on the Tally computer" in gtxt and "Open your company in TallyPrime" in gtxt and "Link each company to its client" in gtxt and "Set Tally’s port" in gtxt and "3 of 4 done" in gtxt, "5. the four steps' words, 3 of 4 done (%s)" % gtxt[:160])
         shot("guide-3-steps-desktop-light")
 
         # ---- 2. Add as client: one click
         E("() => { window.__calls = []; }")
         n0 = len(by_name("VMS EVENTS PRIVATE LIMITED"))
-        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=add]' % VMS); pg.wait_for_timeout(900)
+        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=pick]' % VMS); pg.wait_for_timeout(250)
+        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-add-new]' % VMS); pg.wait_for_timeout(900)
         vm = by_name("VMS EVENTS PRIVATE LIMITED")
         ok(n0 == 0 and len(vm) == 1, "2. one click: the client VMS EVENTS PRIVATE LIMITED is made (the period off its name) (%s)" % vm)
         cid = vm[0] if vm else ""
@@ -177,7 +178,8 @@ def main():
         # ---- 3. Link to the client already there: no second client
         E("() => { window.__calls = []; }")
         n_before = len(E("() => Object.values(S.companies).filter(c => !c.deleted)"))
-        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=link]' % GSC); pg.wait_for_timeout(1200)
+        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=pick]' % GSC); pg.wait_for_timeout(250)
+        pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-relink]' % GSC); pg.wait_for_timeout(1200)
         gs = E("window.__ids.GS")
         ok(calls("tally_company_link") == [["tally_company_link", {"p_company": GSC, "p_client": gs}]] and len(E("() => Object.values(S.companies).filter(c => !c.deleted)")) == n_before,
            "3. Link to Garg Shekhar & Company: linked to it, no second client (%s)" % calls("tally_company_link"))
@@ -286,7 +288,8 @@ def main():
                 if SHOTS:
                     # after Add as client: the progress, on this size and theme
                     q.evaluate(SETUP, [[dev()], cos(), {}, {}]); q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1200)
-                    q.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=add]' % VMS); q.wait_for_timeout(1500)
+                    q.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=pick]' % VMS); q.wait_for_timeout(250)
+                    q.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-add-new]' % VMS); q.wait_for_timeout(1500)
                     q.screenshot(path=os.path.join(SHOTS, "after-add-progress-%s-%s.png" % (tag, scheme)), full_page=True)
                 q.close()
         br.close()

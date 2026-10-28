@@ -9,7 +9,9 @@ it holds a key; the cloud's tally_bridge_whose says neither mine nor elsewhere).
   2. Connect this computer: ONE tally_device_create, the key handed over (POST /cloudlink, the ingest address), green
      "Connected: NWS144 (anshul) sends Tally to Test Firm. Its old key … was replaced." at once; then Find Tally and Get
      companies run by themselves: the Tally on port 9000 with its companies; each company Link to <client> / Create client
-  3. Create client from this company: the client made and linked (tally_company_link); Link to <client>: linked
+  3. Link to client… (Task D: no Create client suggestion): the clients, the one of the same name chosen; "+ New client
+     with this name" inside it makes the client and links it; 3b. a company the cloud has no row for: link_now first;
+     12. linked: the bridge here starts keeping it (POST /keep now) and the ledgers' count shows
   4. already connected (the cloud's mine, a fresh beat): "Connected" and no new key
   5. Find Tally with no Tally: "Open TallyPrime and a company, then press Find Tally again", a port to type, Use this port
      (the page's Tally pin), its own answer for that port; "Find it by itself again"
@@ -20,6 +22,9 @@ it holds a key; the cloud's tally_bridge_whose says neither mine nor elsewhere).
   9. TCloud.auto (opening FinCom, nothing pressed): a refused key is replaced by itself (lib/bridgeFollow.js)
  10. the connect panel's scan keeps the bridge it found for one scan the bridge missed (the code box stays)
  11. no sideways scroll at 1440 and 390; --shots DIR saves the steps at both widths
+ 13. next-tally-anyport (bridge 2.4.8): Use this port asks the bridge (POST /ports/use) and says its plain reason (another
+     Windows user's Tally, nothing listening, no answer in 2 s); a port the bridge keeps: Tally found there; Find it by
+     itself again: POST /ports/use {port: 0}; a 2.4.7 bridge: the page's pin only (5.), /ports/use never called
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_oneclick.py [--shots DIR]"""
 import hashlib, hmac, json, os, re, sys, threading, functools, http.server, time
 from urllib.parse import urlparse, parse_qs
@@ -42,7 +47,7 @@ OLDKEY = "fcd_" + "ee" * 24
 BR, INGEST = {}, ["https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/tally-ingest"]
 def bridge_reset(**kw):
     BR.clear(); BR.update({"on": True, "yours": True, "window": False, "tally": True, "open": [VMS, GSC], "log": [], "cloudKey": OLDKEY, "url": INGEST[0],
-        "beat": {"on": True, "last": "", "missedSince": "2026-10-28T10:00:00", "every": 30}, "hang": "", "user": "NW144\\anshul"}); BR.update(kw)
+        "beat": {"on": True, "last": "", "missedSince": "2026-10-28T10:00:00", "every": 30}, "hang": "", "user": "NW144\\anshul", "ver": "2.4.7", "tport": 9000, "ports": {}}); BR.update(kw)
 def mac(secret, msg): return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 def on_bridge(route):
     req = route.request; u = urlparse(req.url); port = u.port; q = parse_qs(u.query); path = u.path
@@ -54,7 +59,7 @@ def on_bridge(route):
     send = lambda st, o: route.fulfill(status=st, headers=H, content_type="application/json", body=json.dumps(o))
     BR["log"].append((req.method, path, req.post_data or ""))
     if path == "/ping":
-        p = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.4.7", "impl": "go", "yours": BR["yours"]}
+        p = {"ok": True, "bridge": "FinCom Tally Bridge", "version": BR["ver"], "impl": "go", "yours": BR["yours"]}
         if BR["yours"]:
             p.update({"bridgeId": BID, "port": 9100}); n = q.get("n", [""])[0]
             if n and origin:
@@ -69,9 +74,17 @@ def on_bridge(route):
         return send(403, {"ok": False, "error": "That is not the code shown in the bridge window.", "needCode": True})
     if req.headers.get("x-bridge-key") != KEY: return send(401, {"ok": False, "error": "Wrong bridge key."})
     if path == "/status":
-        ses = [{"port": 9000, "ok": BR["tally"], "mine": True, "companies": [{"name": c} for c in (BR["open"] if BR["tally"] else [])], "error": "" if BR["tally"] else "Tally is not open (nothing listens on this port)"},
+        ses = [{"port": BR["tport"], "ok": BR["tally"], "mine": True, "companies": [{"name": c} for c in (BR["open"] if BR["tally"] else [])], "error": "" if BR["tally"] else "Tally is not open (nothing listens on this port)"},
                {"port": 9001, "ok": True, "mine": False, "skipped": True, "user": "ravi", "companies": []}]
-        return send(200, {"ok": True, "version": "2.4.7", "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": "auto", "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
+        return send(200, {"ok": True, "version": BR["ver"], "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": "auto", "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
+    if path == "/ports/use" and req.method == "POST":
+        # bridge-go anyport.go: the typed port tried by the bridge; kept only when it is this user's TallyPrime
+        n = json.loads(req.post_data or "{}").get("port")
+        if n == 0: BR["tport"] = 9000; return send(200, {"ok": True, "port": 0, "auto": True})
+        r = BR["ports"].get(n)
+        if r: return send(200, {"ok": False, "port": n, "reason": r[0], "error": r[1]})
+        BR["tport"], BR["tally"] = n, True
+        return send(200, {"ok": True, "port": n, "companies": BR["open"], "user": BR["user"]})
     if path == "/diagnose": return send(200, {"ok": True, "findings": [{"level": "bad", "text": "Your TallyPrime is not running.", "fix": "Open TallyPrime."}], "tallies": [], "user": BR["user"], "mySession": 1})
     if path == "/cloudlink":
         if req.method == "POST":
@@ -81,6 +94,14 @@ def on_bridge(route):
             BR["beat"] = {"on": True, "last": "", "missedSince": "", "every": 30}
             return send(200, {"ok": True, "connected": True, "firm": "Test Firm", "device": "NWS144 · NW144\\anshul"})
         return send(200, {"ok": True, "connected": bool(BR["cloudKey"]), "url": BR["url"]})
+    if path == "/ledgers/refresh":
+        # bridge-go events.go wakeLedgers: a company never kept on this computer is not read
+        if not BR.get("kept"): return send(200, {"ok": True, "started": False, "why": "this company is not kept in step on this computer"})
+        return send(200, {"ok": True, "started": True})
+    if path == "/keep" and req.method == "POST":
+        b = json.loads(req.post_data or "{}")
+        if b.get("now"): BR["kept"] = True
+        return send(200, {"ok": True, "on": True, "running": True})
     return send(200, {"ok": True})
 posts = lambda: [x for x in BR["log"] if x[0] == "POST" and x[1] == "/cloudlink"]
 
@@ -99,10 +120,18 @@ SETUP = """([whose, devs]) => {
     if (fn === "tally_bridge_whose") { if (window.__whose === "throw") throw new Error("no such function"); return window.__rekeyed ? {may: true, mine: true, elsewhere: false, busy: false} : copy(window.__whose); }
     if (fn === "tally_device_create") return (window.__rekeyed = true) && {id: "d-new-" + window.__calls.length, key: "fcd_" + "0a".repeat(24)};
     if (fn === "tally_company_link") return {ok: true};
-    if (fn === "tally_status") return [];
+    if (fn === "tally_status") return copy(window.__books || []);
+    if (fn === "tally_period_status") return window.__lp ? {ledger: copy(window.__lp)} : {};
     return {ok: true}; };
   window.tallyLinkClient = async (company, cid) => { window.__calls.push(["link", {company, cid}]); return true; };
   window.cloudPushNow = async () => {}; window.firstSync = () => {};
+  // next-tally-linknow: tally-ingest's link_now (registers the company for the bridge's device and links it), or its refusal
+  window.__linkNowFail = ""; window.__linkNowHang = false;
+  TCloudUp.post = async (body, who) => { window.__calls.push(["post", copy(body)]);
+    if (body.kind !== "link_now") return {ok: true};
+    if (window.__linkNowHang) return new Promise(() => {});
+    if (window.__linkNowFail) throw new Error(window.__linkNowFail);
+    return {ok: true, linked: true, company: body.company, client: body.client, device: "d-nws", registered: true}; };
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role: "owner", id: "u-1"})});
   TCloud.pane.devices = window.__devs; TCloud.pane.companies = window.__companies; TCloud.pane.at = Date.now(); TCloud.pane.err = ""; TCloud.pane.stops = [];
   TLight.st.at = Date.now(); TLight.st.devs = window.__devs; TLight.st.cos = window.__companies; TLight.st.stops = [];
@@ -168,17 +197,67 @@ def main():
         ok(pg.locator("#app [data-oc-refused]").count() == 0, "2. the refused line gives way")
         ok(wait("() => !!document.querySelector('#app [data-oc-cos]')"), "2. Find Tally and Get companies ran by themselves")
         ok("Port 9000" in txt("#app [data-oc-tallies]") and "another Windows user" in txt("#app [data-oc-tally='9001']"), "2. each Tally with its port and whose (%s)" % txt("#app [data-oc-tallies]"))
-        ok(pg.locator("#app [data-oc-cos] [data-oc-co]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-add]").count() == 2, "2. each company with Create client from this company")
+        ok(pg.locator("#app [data-oc-cos] [data-oc-co]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-pick]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-add]").count() == 0, "2. each company with Link to client… (Task D: no Create client suggestion)")
         ok(wide() <= 0, "11. no sideways scroll at 1440")
         shot("2-connected")
         # 3. Create client / Link to <client>
         n0 = E("() => Object.keys(S.companies).length")
-        pg.locator("#app [data-oc-co='%s'] [data-oc-add]" % GSC).click()
+        # Task D: a new client only from the small "+ New client with this name" inside the picker
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % GSC).click()
+        ok(pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-relink-pick]" % GSC).count() == 1, "3. Link to client…: the clients to choose from")
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-add-new]" % GSC).click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "3. Create client: linked")
         ok(E("() => Object.keys(S.companies).length") == n0 + 1, "3. the client made")
         E("() => { const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: ''}); S.companies[co.id] = co; render(); return co.id; }"); pg.wait_for_timeout(400)
-        lk = pg.locator("#app [data-oc-co='%s'] [data-oc-link]" % VMS)
-        ok(lk.count() == 1 and lk.inner_text().strip() == "Link to VMS Events Private Limited", "3. a client of the same name: Link to <client> (%s)" % (lk.inner_text() if lk.count() else ""))
+        vcid = E("() => Object.values(S.companies).find(c => c.name === 'VMS Events Private Limited').id")
+        pk = pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS)
+        ok(pk.count() == 1 and pk.get_attribute("data-oc-pre") == vcid, "3. a client of the same name: chosen first in Link to client…")
+        def link_vms():
+            if not pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox]" % VMS).count(): pk.click()
+            ok(pg.locator("#app [data-oc-co='%s'] [data-tco-relink-pick]" % VMS).input_value() == vcid, "3. the picker has the client of the same name chosen")
+            pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
+        # 3b. next-tally-linknow (staging 28-Oct-2026: "no computer has reported Salesify Marketing LLP 2026-27 yet" five times):
+        # a company Get companies listed that FinCom's cloud has no row for is registered and linked in the same click
+        lnow = lambda: [c[1] for c in calls("post") if c[1].get("kind") == "link_now"]
+        ok(len(lnow()) == 1 and lnow()[0]["company"] == GSC and lnow()[0]["bridge"] == BID and lnow()[0]["client"], "3b. Create client on a company not in the cloud: link_now with the company, the new client and this browser's bridge (%s)" % lnow())
+        ok(E("() => { const c = window.__calls; const a = c.findIndex(x => x[0] === 'post' && x[1].kind === 'link_now'), b = c.findIndex(x => x[0] === 'link'); return a >= 0 && b > a; }"), "3b. sent to FinCom first, then the usual link")
+        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % GSC.replace("'", "\\'"), 5000), "3b. the row says Linked at once, no reload (%s)" % txt("#app [data-oc-co='%s']" % GSC))
+        # a refusal (the bridge's computer not of this firm): the plain reason, never "done by itself within a minute"
+        E("() => { window.__linkNowFail = 'FinCom Bridge on this computer is not connected to your firm yet, so FinCom cannot take it from it. Press Connect this computer, then Link again.'; window.__calls = []; }")
+        link_vms()
+        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\")" % VMS), "3b. refused: said on the row")
+        f = txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS)
+        ok(f.startswith("Not linked: FinCom Bridge on this computer is not connected to your firm yet") and "within a minute" not in f and "by itself" not in f, "3b. its plain reason (%s)" % f)
+        ok(not calls("link"), "3b. nothing linked after a refusal")
+        # the cloud slow: a reason within the limit, never a spinner
+        E("() => { window.__linkNowFail = ''; window.__linkNowHang = true; window.__ocMsScale = 0.05; window.__calls = []; }")
+        t0 = time.time(); link_vms()
+        ok(wait("() => /did not answer in time/.test((document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\") || {}).textContent || '') && !window.__calls.some(c => c[0] === 'link')" % VMS, 10000) and time.time() - t0 < 10, "3b. no answer: the reason within the limit (%s)" % txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS))
+        E("() => { window.__linkNowHang = false; window.__ocMsScale = 1; window.__calls = []; }")
+        link_vms()
+        ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % VMS, 5000), "3b. Link to <client> again: linked, the row says so (%s)" % txt("#app [data-oc-co='%s']" % VMS))
+        # 12. next-tally-linknow (Task C; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
+        # company is not kept in step on this computer"): linked, the ledgers are taken by themselves: the bridge here starts
+        # keeping the company (POST /keep {now, company}, Update now's request), and the bar shows the count as it comes
+        bridge_reset(kept=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
+        open_tally(MINE)
+        cid = E("() => { Object.keys(S.companies).forEach(k => { if (/^VMS Events/i.test(S.companies[k].name)) delete S.companies[k]; }); const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: %s}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; window.__books = [{book: 'bk-vms', company: %s, from: '2026-04-01', to: '2026-10-28', days: 0, ledgersAt: ''}]; window.__lp = null; render(); return co.id; }" % (json.dumps(VMS), json.dumps(VMS)))
+        pg.click("#app [data-oc-get]")
+        wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-pick]\")" % VMS)
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS).click()
+        pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
+        ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "12. linked")
+        for _ in range(40):
+            if any(x[0] == "POST" and x[1] == "/keep" for x in BR["log"]): break
+            pg.wait_for_timeout(250)
+        kp = [json.loads(x[2] or "{}") for x in BR["log"] if x[0] == "POST" and x[1] == "/keep"]
+        ok(any(x[1] == "/ledgers/refresh" for x in BR["log"]) and kp and kp[0].get("now") is True and kp[0].get("company") == VMS, "12. not kept here yet: the bridge is asked to keep it now (%s)" % kp)
+        ok(E("() => !document.querySelector('#app [data-tco-sync=stuck]')"), "12. no 'did not read … not kept in step' (%s)" % txt("#app [data-tco-sync=stuck]"))
+        E("() => { window.__lp = {round: 'r1', read: 312, of: 0, at: new Date().toISOString(), done: false}; }")
+        ok(wait("() => /Reading ledgers from Tally… 312 so far/.test((document.querySelector('#app [data-tco-sync=running]') || {}).textContent || '')", 20000), "12. the count as it comes (%s)" % txt("#app [data-tco-sync]"))
+        E("() => { window.__lp = {round: 'r1', read: 1240, of: 1240, at: new Date().toISOString(), done: true}; }")
+        ok(wait("() => /1,240 ledgers from Tally ✓/.test((document.querySelector('#app [data-tco-sync=done]') || {}).textContent || '')", 20000), "12. done: the ledgers in FinCom (%s)" % txt("#app [data-tco-sync]"))
+        shot("12-ledgers")
         # 4. already connected
         bridge_reset(cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)
@@ -196,6 +275,7 @@ def main():
         shot("5-no-tally")
         pg.fill("#app [data-oc-port-in]", "9123"); pg.click("#app [data-oc-port-use]")
         ok(wait("() => Bridge.cfg().port === 9123"), "5. Use this port: the page's Tally pin")
+        ok(not any(x[1] == "/ports/use" for x in BR["log"]), "5. a 2.4.7 bridge: /ports/use not called")
         ok(wait("() => /port 9123/.test((document.querySelector('#app [data-oc-say=find]') || {}).textContent || '')"), "5. its answer for that port (%s)" % txt("#app [data-oc-say=find]"))
         pg.click("#app [data-oc-port-auto]")
         ok(wait("() => !Bridge.cfg().port"), "5. Find it by itself again: the pin off")
@@ -203,6 +283,28 @@ def main():
         pg.click("#app [data-oc-find]")
         ok(wait("() => { const e = document.querySelector('#app [data-oc-say=find]'); return !!e && e.getAttribute('data-oc-st') === 'found'; }"), "5. Tally opened: found")
         ok("TallyPrime on port 9000: 2 companies open" in txt("#app [data-oc-say=find]"), "5. found in words (%s)" % txt("#app [data-oc-say=find]"))
+        # 13. a 2.4.8 bridge: the typed port tried by the bridge itself
+        OTHERU = "Port 9001 is the TallyPrime of ravi, another Windows user on this computer. FinCom Bridge uses only your own TallyPrime (anshul): open TallyPrime in your own login and use its port."
+        NOTHING = "Nothing is listening on port 9050 on this computer. Check that TallyPrime is open and the port in TallyPrime: F1 Help > Settings > Connectivity (TallyPrime acts as Both)."
+        SLOW = "Port 9070 did not answer within 2 seconds. If it is your TallyPrime, it may be busy (a message box or a long report open): close it in TallyPrime and try again."
+        bridge_reset(ver="2.4.8", tally=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30},
+                     ports={9001: ["otheruser", OTHERU], 9050: ["nothing", NOTHING], 9070: ["timeout", SLOW]})
+        open_tally(MINE)
+        pg.click("#app [data-oc-find]")
+        wait("() => !!document.querySelector('#app [data-oc-none]')")
+        for port, words in ((9001, OTHERU), (9050, NOTHING), (9070, SLOW)):
+            pg.fill("#app [data-oc-port-in]", str(port)); pg.click("#app [data-oc-port-use]")
+            ok(wait("() => { const e = document.querySelector('#app [data-oc-say=port]'); return !!e && e.textContent.indexOf(%s) >= 0; }" % json.dumps(words[:40])), "13. port %d refused in the bridge's plain words (%s)" % (port, txt("#app [data-oc-say=port]")))
+            ok(E("() => !Bridge.cfg().port") and pg.locator("#app [data-oc-none]").count() == 1, "13. port %d: nothing pinned, still none" % port)
+        shot("13-refused")
+        used = [json.loads(x[2] or "{}").get("port") for x in BR["log"] if x[1] == "/ports/use"]
+        ok(used == [9001, 9050, 9070], "13. each typed port asked of the bridge once (%s)" % used)
+        pg.fill("#app [data-oc-port-in]", "4125"); pg.click("#app [data-oc-port-use]")
+        ok(wait("() => { const e = document.querySelector('#app [data-oc-say=find]'); return !!e && e.getAttribute('data-oc-st') === 'found'; }"), "13. port 4125 kept by the bridge: Tally found")
+        ok("TallyPrime on port 4125: 2 companies open" in txt("#app [data-oc-say=find]") and E("() => Bridge.cfg().port") == 4125, "13. found on 4125, the page asks that Tally (%s)" % txt("#app [data-oc-say=find]"))
+        BR["tally"] = False; pg.click("#app [data-oc-find]"); wait("() => !!document.querySelector('#app [data-oc-port-auto]')")
+        pg.click("#app [data-oc-port-auto]")
+        ok(wait("() => !Bridge.cfg().port") and [json.loads(x[2] or "{}").get("port") for x in BR["log"] if x[1] == "/ports/use"][-1:] == [0], "13. Find it by itself again: the bridge automatic again (port 0), the pin off")
         # 6. this browser not connected to the bridge: tray or code; the code connects and the firm key follows, one key
         bridge_reset(window=True)
         open_tally(DEAD, UNPAIRED)

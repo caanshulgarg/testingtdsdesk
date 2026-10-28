@@ -191,8 +191,8 @@ def main():
            "a company linked: no steps; 'Connected computers: NWS144 ○ reading paused' (%s)" % txt('#app [data-connect-guide="done"]'))
         # the owner, 15-Oct-2026: VMS EVENTS was seen once, not open; the list shows it, not a client yet
         vr = E("() => { const r = document.querySelector('#app [data-tco-list=firm] [data-tco-row=\"VMS EVENTS\"]'); return r ? [r.getAttribute('data-tco-state'), r.innerText.replace(/\\s+/g, ' ')] : null; }")
-        ok(vr and vr[0] == "notopen" and "Not a client · not open in Tally now" in vr[1] and "Add as client" in vr[1],
-           "Companies in Tally: VMS EVENTS (seen, not open): Not a client · not open in Tally now, Add as client (%s)" % vr)
+        ok(vr and vr[0] == "notopen" and "Not linked · not open in Tally now" in vr[1] and "Link to client…" in vr[1] and "Add as client" not in vr[1],
+           "Companies in Tally: VMS EVENTS (seen, not open): Not linked · not open in Tally now, Link to client… (Task D: no Add as client) (%s)" % vr)
         # 1. the computers: only those heard in 7 days
         lines = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => [e.getAttribute('data-pc-line'), e.innerText.replace(/\\s+/g, ' ').trim()])")
         ok(len(lines) == 1 and lines[0][0] == D1 and "OLDPC" not in body and "Older bridge" not in body, "one line per computer heard in 7 days; the old bridge is not on the page (%s)" % lines)
@@ -264,8 +264,8 @@ def main():
         ok(steps() == [["install", True], ["port", True], ["open", True], ["add", False]] and txt("#app [data-guide-open-count]") == "3 companies open in Tally on NWS144." and "VMS EVENTS" not in txt('#app [data-connect-step="open"]'),
            "three companies open: three ticked (port too); step 2 says the number open, never their names (%s / %s)" % (steps(), txt("#app [data-guide-open-count]")))
         rs = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-tco-state'), (r.querySelector('[data-tco-act]') || {}).innerText])")
-        ok(sorted(r[0] for r in rs) == ["GARG SHEKHAR", "GB TEXCOAT", "VMS EVENTS"] and all(r[1] == "connected" for r in rs) and dict((r[0], r[2]) for r in rs)["GB TEXCOAT"] == "Link to GB TEXCOAT",
-           "Companies in Tally: every company open, Connected; GB TEXCOAT, a client already: 'Link to GB TEXCOAT' (%s)" % rs)
+        ok(sorted(r[0] for r in rs) == ["GARG SHEKHAR", "GB TEXCOAT", "VMS EVENTS"] and all(r[1] == "connected" for r in rs) and dict((r[0], r[2]) for r in rs)["GB TEXCOAT"] == "Link to client…" and n('#app [data-tco-row="GB TEXCOAT"] [data-tco-pre]:not([data-tco-pre=""])') == 1,
+           "Companies in Tally: every company open, Connected; GB TEXCOAT, a client already: 'Link to client…' with it chosen (%s)" % rs)
         # the client a pointer names: the same GSTIN on top, Link to it
         E("""(c) => { S.companies[c].gstin = '09AANFG3202D1ZR'; window.__companies.push({company: 'GARG SHEKHAR', client_id: null, device_id: 'd0000000-0000-4000-8000-000000000006', gstin: '09AANFG3202D1ZR', last_seen: new Date().toISOString(), linked_at: new Date(Date.now() - 3600e3).toISOString()});
             TCloud.pane.devices = null; TCloud.pane.at = 0; TLight.st.cos = window.__companies; openConnectTally(4, c); }""", G); pg.wait_for_timeout(1800)
@@ -317,9 +317,11 @@ def main():
         unl = companies(linked=("ABC TRADERS", "garg shekhar & company"), seen=("GB TEXCOAT",), d=d6["id"])
         ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
         row5 = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
-        ok(txt(row5 + " [data-tco-act]") == "Link to GB TEXCOAT", "GB TEXCOAT open, the client of that name not linked: Link to GB TEXCOAT (%s)" % txt(row5))
+        ok(txt(row5 + " [data-tco-act]") == "Link to client…" and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", row5) == T, "GB TEXCOAT open, the client of that name not linked: Link to client…, GB TEXCOAT chosen (%s)" % txt(row5))
+        def link5():
+            pg.click(row5 + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(row5 + " [data-tco-relink]")
         E("() => { window.__wakes = []; window.__calls = []; }")
-        pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1500)
+        link5(); pg.wait_for_timeout(1500)
         wk = [w for w in E("window.__wakes") if w.get("kind") == "wake"]
         ok(wk == [{"kind": "wake", "what": "ledgers", "client": T}], "Link: the ledgers-only wake, one call (%s)" % wk)
         ok(n(row5 + " [data-tco-sync=running] .tco-bar") == 1 and txt(row5 + " [data-tco-sync-words]").startswith("Reading ledgers from Tally\u2026"), "while reading: the moving bar (26-Oct-2026: the ledgers' one bar) (%s)" % txt(row5 + " [data-tco-sync]"))
@@ -333,7 +335,7 @@ def main():
         shot("row-first-sync-done")
         # no progress for 3 minutes (26-Oct-2026; was 10 minutes)
         ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
-        pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1000)
+        link5(); pg.wait_for_timeout(1000)
         E("(t) => { S.tcoSync[t].at = Date.now() - 11 * 60000; }", T); pg.wait_for_timeout(11500)
         lt = txt(row5 + " [data-tco-sync=stuck]")
         ok(lt.startswith("No progress from Tally in 3 minutes: keep GB TEXCOAT open in TallyPrime") and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1 and n(row5 + " [data-tco-masters]") == 1,
@@ -357,7 +359,7 @@ def main():
             ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
             if ans: E("(a) => { window.__wakeAns = a; }", ans)
             else: E("() => { window.__askT = window.__askT || Ledgers.askTally; Ledgers.askTally = async (cid) => ({cid, via: 'bridge', ans: {ok: true, started: false, why: 'background reading is paused in the tray (Update now still reads the ledger list)'}}); }")
-            pg.click(row5 + " [data-tco-act]"); pg.wait_for_timeout(1500)
+            link5(); pg.wait_for_timeout(1500)
             st = txt(row5 + ' [data-tco-sync=stuck][data-tco-stuck="error"]')
             ok(st.startswith(words) and n(row5 + " .tco-bar") == 0 and n(row5 + " [data-tco-sync-again]") == 1, "the reply '%s': stopped at once with the reason, Try again (%s)" % (why, st))
             if why == "woken 0": shot("row-first-sync-nobody")
@@ -486,8 +488,8 @@ def main():
         # next-tally-firstlink (the owner: "it should be above, on the Tally icon"): VMS EVENTS is open in Tally and no
         # client's, so the icon carries the badge; next-tally-icon: its popover links it in place ([Link], VMS EVENTS listed)
         pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(400)
-        ok(n('header.top [data-tally-pop] [data-tally-pop-pick] option[value="VMS EVENTS"]') == 1 and n("header.top [data-tally-pop-act=link]") == 1 and n("[data-tally-badge]") == 1 and not E("!!S.tallyPanel"),
-           "the header's Tally icon (a company open, not linked: its badge): the popover offers Link, VMS EVENTS in its list, no side panel (%s)" % E("[S.view, S.homeTab, !!S.tallyPanel]"))
+        ok(n('header.top [data-tally-pop] [data-tally-pop-pick] option[value="VMS EVENTS"]') == 1 and n("header.top [data-tally-pop-act=link]") == 1 and n("[data-tally-badge]") == 0 and not E("!!S.tallyPanel"),
+           "the header's Tally icon (a company open, not linked: no badge, Task D): the client's popover offers Link, VMS EVENTS in its list, no side panel (%s)" % E("[S.view, S.homeTab, !!S.tallyPanel]"))
         pg.keyboard.press("Escape"); pg.wait_for_timeout(400)
         # Getting ready's Link to Tally step
         at_client("dash")

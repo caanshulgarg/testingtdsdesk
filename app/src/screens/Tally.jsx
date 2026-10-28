@@ -750,9 +750,9 @@ function ConnectGuide({ x, m, connectStep }) {
               : !(s && (s.paused || s.stopped)) ? <p className="tc3-p note">{"Open your company in TallyPrime on " + pc + ": it shows in the list below within a minute."}</p>
               : x.openNow.length ? <p className="tc3-p note" data-guide-open-count={x.openNow.length}>{openWords(x)}</p> : null}</>}
       </Step>
-      <Step k="add" n={4} title="Click “Add as client” (or “Link”) in the list below" done={d.add} now={now === "add"}>
+      <Step k="add" n={4} title="Link each company to its client (“Link to client…” in the list below)" done={d.add} now={now === "add"}>
         {d.add ? <span className="note" data-guide-added={x.linkedN}>{nOf(x.linkedN, "company is", "companies are") + " clients in FinCom. Their first sync runs by itself."}</span>
-          : <span className="note">One click: FinCom adds the client with the company’s name and GSTIN, links it and brings its ledgers and entries by itself.</span>}
+          : <span className="note">Choose the client the company belongs to: FinCom links it and brings its ledgers and entries by itself.</span>}
       </Step>
     </ol>
     {/* next-tally-firstlink: until a bridge of the firm is heard (or Connect another computer, this browser not connected

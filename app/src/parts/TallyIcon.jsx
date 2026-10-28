@@ -11,7 +11,7 @@
 // only Tally... it should be simple to understand"): never a computer's name, a port, a Windows user or the bridge here;
 // those are on the Tally page.
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { clientTallyState, unlinkedOpen, mayLink, tallyDevs, lastEntry } from "../lib/tallyState.js";
+import { clientTallyState, tallyDevs, lastEntry } from "../lib/tallyState.js";
 import { useDismiss } from "./dismiss.js";
 
 const TallyPop = lazy(() => import("./TallyPop.jsx"));
@@ -71,7 +71,8 @@ export default function TallyIcon() {
   const was = useRef(false);
   useEffect(() => { const a = document.activeElement; if (was.current && !open && (!a || a === document.body)) back(); was.current = open; }, [open]);
   const s = tallyIconState(co), t = typeof tallyStatus === "function" ? tallyStatus(co) : { state: "" };
-  const nOpen = mayLink() ? unlinkedOpen().length : 0;
+  // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no count or badge of companies not linked
+  const nOpen = 0;
   const words = "Tally: " + s.word + (s.line ? " — " + s.line : "") + (nOpen ? " — " + nOpen + (nOpen === 1 ? " company open in Tally is" : " companies open in Tally are") + " not linked" : "");
   return <span className="tsign-wrap tally-icon-wrap" ref={ref}>
     <button type="button" className={"tsign tallyicon " + TONE[s.icon]} data-tally-icon={s.icon} data-tally-sign={s.icon === "linked" ? "on" : "off"}

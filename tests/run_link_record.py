@@ -17,7 +17,8 @@ answers the link functions as migration 110 does (run_migration110.py tests the 
      Needs you (one line, one button: posting stopped, the bridge cannot reach Tally on its port) / Not linked (Link); a
      Tally on port 4125 the bridge reaches is fine; the same word on the header's Tally icon, the Clients list, the Tally
      page's row and Post to Tally. (next-tally-icon: the icon's popover says it in plain words, run_tally_icon.py)
-  7. The same company in two places (a copied data folder keeps the GUID): Needs you, Choose; the Tally page's card
+  7. The same company in two places (a copied data folder keeps the GUID): ONLY two different real folders that each sent
+     entries (migration 127; fourteen near misses never raise it); Needs you, Choose; the Tally page's card
      (① the place FinCom reads, ② the other, nothing of it applied); an owner's Use ② asks the cloud; staff see no choice.
   8. Check my Tally: the bridge's false "not accepting connections on port N" is left out while the bridge reaches Tally.
   6. Before migration 110 (no record at all): the old rules (tally_companies, clients.data postTo).
@@ -211,8 +212,8 @@ def main():
         pg = page(); E = lambda js, *a: pg.evaluate(js, *a)
         E(SETUP, [store(), "owner", ME, CLIENTS])
         tally_page(pg)
-        ok(pg.locator(R(ALPHA) + " [data-tco-act=link]").count() == 1 and E("(c) => tallyLinkOf(S.companies[c]).state", CA) == "unlinked", "before: Alpha Traders not linked, its row offers Link")
-        pg.click(R(ALPHA) + " [data-tco-act=link]"); pg.wait_for_timeout(2500)
+        ok(pg.locator(R(ALPHA) + " [data-tco-act=pick]").count() == 1 and E("(c) => tallyLinkOf(S.companies[c]).state", CA) == "unlinked", "before: Alpha Traders not linked, its row offers Link to client…")
+        pg.click(R(ALPHA) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(ALPHA) + " [data-tco-relink]"); pg.wait_for_timeout(2500)
         lk = rpc(pg, "tally_company_link")
         ok(lk == [["tally_company_link", {"p_company": ALPHA, "p_client": CA}]], "Link calls the link function once, for this client (%s)" % lk)
         r = E("(b) => window.__links.find(l => l.book_id === b)", "b-alpha")
@@ -232,8 +233,7 @@ def main():
         shot(pg, "1-linked-title", "header.top")
         # the same company (its GUID) linked to another client: refused on its row
         tally_page(pg)
-        pg.click(R(ITS2) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
-        pg.click(R(ITS2) + " [data-tco-link-pick]"); pg.wait_for_timeout(300)
+        pg.click(R(ITS2) + " [data-tco-act=pick]"); pg.wait_for_timeout(300)   # Task D: Link to client…
         pg.select_option(R(ITS2) + " [data-tco-relink-pick]", CS); pg.click(R(ITS2) + " [data-tco-relink]")
         try: pg.wait_for_selector(R(ITS2) + " [data-tco-err]", timeout=15000)
         except Exception: pass
@@ -383,15 +383,29 @@ def main():
         lap = {"go-3": {"at": "ago:1", "version": "2.4.7", "computer": "LAPTOP", "user": "ravi", "mode": "main", "tallyState": "open", "open": [ALPHA], "tallyPort": 9001, "dataFolder": "D:\\Copy\\Data"}}
         s7 = store(links=[dict(rec(ALPHA, "b-alpha", CA, GA), data_loc="f-nws", data_folder="C:\\Users\\anshul\\TallyPrime\\Data"), rec(ITS, "b-its", CE, GE)], devs=[dev(OPEN, BEAT, bridges=lap)])
         s7["cos"][0]["client_id"] = CA
-        s7["places"] = [{"book_id": "b-alpha", "data_loc": "f-nws", "data_folder": "C:\\Users\\anshul\\TallyPrime\\Data", "computer": "NWS144", "windows_user": "anshul", "tally_port": 9005, "state": "chosen", "last_seen": "ago:1"},
-                        {"book_id": "b-alpha", "data_loc": "f-lap", "data_folder": "D:\\Copy\\Data", "computer": "LAPTOP", "windows_user": "ravi", "tally_port": 9001, "state": "waiting", "last_seen": "ago:2"}]
+        s7["places"] = [{"book_id": "b-alpha", "data_loc": "f-nws", "data_folder": "C:\\Users\\anshul\\TallyPrime\\Data", "computer": "NWS144", "windows_user": "anshul", "tally_port": 9005, "state": "chosen", "last_seen": "ago:1", "entries_at": "ago:1", "last_entry": "2026-10-27"},
+                        {"book_id": "b-alpha", "data_loc": "f-lap", "data_folder": "D:\\Copy\\Data", "computer": "LAPTOP", "windows_user": "ravi", "tally_port": 9001, "state": "waiting", "last_seen": "ago:2", "entries_at": "ago:2", "last_entry": "2026-10-20"}]
+        # migration 127 (the owner: "I don't want false alarms at all, use a proper system"): near misses never raise it
+        REAL = "C:\\Users\\anshul\\TallyPrime\\Data"
+        P = lambda loc, folder, pc="NWS144", state="waiting", seen=True: dict({"book_id": "b-alpha", "data_loc": loc, "data_folder": folder, "computer": pc, "windows_user": "anshul", "tally_port": 9005, "state": state, "last_seen": "ago:1"}, **({"entries_at": "ago:1", "last_entry": "2026-10-27"} if seen else {}))
+        chosen = P("f-nws", REAL, state="chosen")
+        near = [("staging: 'Data:' and none", [P("f-x", "Data:", state="chosen"), P("d-x", None)]), ("blank folder", [chosen, P("f-1", "")]), ("'Data:'", [chosen, P("f-2", "Data:")]),
+                ("no folder (a port only)", [chosen, P("p-3", None)]), ("a word", [chosen, P("f-4", "Data")]), ("a drive alone", [chosen, P("f-5", "D:")]), ("a relative path", [chosen, P("f-6", "TallyPrime\\Data")]),
+                ("upper case", [chosen, P("f-7", REAL.upper())]), ("a trailing backslash", [chosen, P("f-8", REAL + "\\")]), ("forward slashes", [chosen, P("f-9", REAL.replace("\\", "/"))]),
+                ("doubled backslashes", [chosen, P("f-10", REAL.replace("\\", "\\\\"))]), ("a real other folder, no entries seen from it", [chosen, P("f-11", "D:\\Copy\\Data", "LAPTOP", seen=False)]),
+                ("the place FinCom reads has no entries yet", [P("f-nws", REAL, state="chosen", seen=False), P("f-12", "D:\\Copy\\Data", "LAPTOP")]), ("a half UNC '\\\\server'", [chosen, P("f-13", "\\\\server")])]
+        for what, pl in near:
+            s7n = dict(s7); s7n["places"] = pl
+            E(SETUP, [s7n, "owner", ME, CLIENTS]); client_page(pg, CA)
+            stn = status(pg)
+            ok(stn["state"] != "needs" and "two places" not in stn["words"], "near miss, %s: no 'two places' (%s)" % (what, stn["words"][:80]))
         E(SETUP, [s7, "owner", ME, CLIENTS]); client_page(pg, CA)
         st = status(pg)
         ok(st["state"] == "needs" and st["words"] == ALPHA + " is open in two places with different data. Choose which one is the books." and st["buttons"] == ["place1", "place2"], "Needs you: the same company in two places, Use ① / Use ② (%s)" % st)
         status(pg, keep=True); pg.click("header.top [data-tally-pop-page]"); pg.wait_for_timeout(1500)
         card = T(pg, "#app [data-tco-two-places]")
-        ok(E("() => S.homeTab") == "tally" and card.startswith(ALPHA + " is open in two places with different data:") and "① NWS144 · anshul · C:\\Users\\anshul\\TallyPrime\\Data (FinCom reads this one)" in card
-           and "② LAPTOP · ravi · D:\\Copy\\Data" in card and "nothing from the other is applied" in card, "Choose opens the Tally page's card: ① the place FinCom reads, ② the other (%s)" % card[:300])
+        ok(E("() => S.homeTab") == "tally" and card.startswith(ALPHA + " is open in two places with different data:") and "① C:\\Users\\anshul\\TallyPrime\\Data · NWS144 · login anshul · last entry 27-Oct-2026 (FinCom reads this one)" in card
+           and "② D:\\Copy\\Data · LAPTOP · login ravi · last entry 20-Oct-2026" in card and "nothing from the other is applied" in card, "Choose opens the Tally page's card: ① the place FinCom reads, ② the other, each with its full folder, computer, login and last entry (%s)" % card[:300])
         shot(pg, "7-two-places", "#app [data-tco-two-places]")
         pg.click("#app [data-tco-two-places] [data-tco-place-use='2']"); pg.wait_for_timeout(1500)
         ch = rpc(pg, "tally_link_place_choose")

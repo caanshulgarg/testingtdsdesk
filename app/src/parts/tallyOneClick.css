@@ -16,3 +16,4 @@
 #app .oc-port input { width: 110px; font-size: 18px; padding: 6px 8px; font-variant-numeric: tabular-nums; }
 #app .oc-code, #app .oc-dl { margin: 10px 0 0; }
 @media (max-width: 760px) { #app .oc-acts .btn { flex: 1 1 100%; } }
+#app .oc-pickbox { flex: 1 1 100%; min-width: 0; }

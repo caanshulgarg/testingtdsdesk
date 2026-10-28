@@ -9,7 +9,6 @@ import { TallyStates } from "./parts/TallyStates.jsx";
 import HelpButton from "./parts/HelpButton.jsx";
 import { useLayoutEffect, Suspense, lazy } from "react";
 // next-tally-firstlink: the companies open in Tally, not linked, with their one-click link, at the top of the Tally panel
-const TallyOffer = lazy(() => import("./parts/TallyOffer.jsx"));
 import { createPortal } from "react-dom";
 import Bell from "./parts/Bell.jsx";
 import { Inbox as InboxIcon } from "lucide-react";
@@ -23,7 +22,7 @@ import Button from "./parts/Button.jsx";
 import { goTallyPage } from "./parts/HomeLink.jsx";
 import { StateBar } from "./parts/StateBar.jsx";
 import { useDismiss } from "./parts/dismiss.js";
-import { clientTallyState, mayLink } from "./lib/tallyState.js";
+import { clientTallyState } from "./lib/tallyState.js";
 // next-tally-icon (27-Oct-2026): the header's ONE Tally sign, an icon with a status dot (its words on hover and in its popover)
 import TallyIcon from "./parts/TallyIcon.jsx";
 
@@ -272,7 +271,7 @@ function TallyPanel({ open }) {
       // Esc stays with the app's own key handler (src/js), which closes the panel first, as before
       onEscapeKeyDown={(ev) => ev.preventDefault()}>
       {open && <><div className="tp-body">
-        {mayLink() && <Suspense fallback={null}><TallyOffer /></Suspense>}
+        {/* Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no offers of companies not linked here */}
         <HereCard h={tallyHere(co)} link={co ? Object.assign({}, tallyLinkOf(co), { pill: clientTallyState(co) }) : null} />
         <p className="note" style={{ margin: "10px 0 4px" }}><b>The firm’s Tally computers</b></p>
         <div data-tally-firm=""><TallyDetail s={tallySign(co)} /></div>

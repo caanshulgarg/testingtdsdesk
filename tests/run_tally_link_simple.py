@@ -233,7 +233,7 @@ def main():
         n0 = len(calls("tally_company_link"))
         pg.click(R("GARG SHEKHAR") + " [data-tco-unlink]"); confirm(True); pg.wait_for_timeout(600)
         ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "GARG SHEKHAR", "p_client": None}]], "6. Unlink -> tally_company_link with no client (%s)" % calls("tally_company_link")[n0:])
-        ok(txt(R("GARG SHEKHAR") + " [data-tco-pill]").startswith("Not a client") and E("(c) => S.companies[c].tallyName", cid) == "", "6. it stays listed (Not a client); the client's Tally name is cleared")
+        ok(txt(R("GARG SHEKHAR") + " [data-tco-pill]").startswith("Not linked") and E("(c) => S.companies[c].tallyName", cid) == "", "6. it stays listed (Not linked); the client's Tally name is cleared")
 
         # ---- 7. a held entry or a stop: Needs you (the owner's step 2, 26-Oct-2026), the same everywhere
         scene(LINKED(D1), lines=HELD)
@@ -260,7 +260,7 @@ def main():
         rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.innerText.replace(/\\s+/g, ' ')]]))")
         ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Sync now" in rows["GARG SHEKHAR"][2],
            "9. Companies in Tally: GARG SHEKHAR, Connected, its client Link Co, Sync now (%s)" % rows.get("GARG SHEKHAR"))
-        ok("Add as client" in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): Add as client (%s)" % rows.get("ABC LTD"))
+        ok("Link to client…" in rows.get("ABC LTD", ["", "", ""])[2] and "Add as client" not in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): Link to client…, no Add as client (Task D) (%s)" % rows.get("ABC LTD"))
         zz = E("window.__zz")
         E("(z) => openConnectTally(4, z)", zz); pg.wait_for_timeout(900)
         ok(pg.locator('#app [data-tco-for="%s"]' % zz).count() == 1 and txt(R("ABC LTD") + " [data-tco-act]") == "Link to ZZ Other" and txt(R("GARG SHEKHAR") + " [data-tco-act]") == "Move here",
@@ -272,7 +272,7 @@ def main():
         shot(pg, "tally-page-desktop-light")
         # a change of company from the list: ABC LTD ⋯ Link to a client… → Link Co (asked: it moves from GARG SHEKHAR)
         n0 = len(calls("tally_company_link"))
-        menu_open("ABC LTD"); pg.click(R("ABC LTD") + " [data-tco-link-pick]"); pg.wait_for_timeout(300)
+        pg.click(R("ABC LTD") + " [data-tco-act=pick]"); pg.wait_for_timeout(300)   # Task D: Link to client… (no ⋯ while open)
         pg.select_option(R("ABC LTD") + " [data-tco-relink-pick]", cid); pg.click(R("ABC LTD") + " [data-tco-relink]"); confirm(True); pg.wait_for_timeout(900)
         ok(calls("tally_company_link")[n0:] == [["tally_company_link", {"p_company": "ABC LTD", "p_client": cid}], ["tally_company_link", {"p_company": "GARG SHEKHAR", "p_client": None}]],
            "9. ABC LTD linked to Link Co, GARG SHEKHAR unlinked (%s)" % calls("tally_company_link")[n0:])

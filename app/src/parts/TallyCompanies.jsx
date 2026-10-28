@@ -22,6 +22,8 @@
 //   - a company open in Tally that its computer has not sent to FinCom's cloud yet (a new company: tally_company_link
 //     says "no computer has reported it yet"): the click is kept and done by itself as soon as the computer sends it
 //     (on 24-Oct-2026 the owner's two clicks on "Salesify Marketing LLP 2026-27" were refused that way and lost).
+//     next-tally-linknow (28-Oct-2026): a company OPEN in Tally is registered and linked at the click (tally-ingest
+//     "link_now"); only a company no computer has open now waits for its computer this way.
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
 import { useState, useEffect } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
@@ -31,6 +33,9 @@ import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import LinkStatus from "./LinkStatus.jsx";
 import { linkWord } from "../lib/linkStatus.js";
+import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
+// next-tally-linknow: the companies being sent to FinCom and linked now (coKey: true), for the rows' words
+export const SENDING = {};
 
 const SEARCH_AT = 10, POLL_MS = 10000, STUCK_MS = 3 * 60000, PEND_MS = 10 * 60000;
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
@@ -177,6 +182,17 @@ function rankClients(r, skip) {
 export async function linkClient(company, cid, opts) {
   const D = typeof Drafts === "object" && Drafts.secs ? Drafts : null;
   if (D) D.attributeAll();
+  // next-tally-linknow: a company FinCom's cloud has no row for yet (open in Tally, its computer's 5-minute report not in
+  // yet) is registered and linked by tally-ingest in one call; then the usual link below (the same link: nothing changes)
+  if (cid && !cloudKnows(company)) {
+    const k0 = coKey(company), E0 = (S.tcoErr = S.tcoErr || {});
+    SENDING[k0] = true; render();
+    // a client just made here reaches the cloud first (the link checks it there), as tallyLinkClient does
+    try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e) { /* the link says why */ }
+    try { await linkNow(company, cid); delete E0[k0]; }
+    catch (e) { TCloud.linkErr = String((e && e.message) || e); E0[k0] = TCloud.linkErr; toast("Could not link it: " + TCloud.linkErr); return false; }
+    finally { delete SENDING[k0]; render(); }
+  }
   const ok = await tallyLinkClient(company, cid, opts);
   if (ok && D && cid) {
     Object.values(D.secs).forEach((s) => { if (s.paths) s.paths.forEach((c, k) => { if (c && c.path && c.path[0] === "tallyName") s.paths.delete(k); }); if (s.armed && s.stores) s.pre = s.stores.map((st) => st.snap()); });
@@ -233,7 +249,7 @@ export async function moveTo(r, co) {
 export const unlink = (r) => {
   const co = S.companies[r.client];
   return askConfirm({ title: "Unlink " + shown(r.company) + " from " + ((co && co.name) || "its client") + "?", ok: "Unlink", danger: true,
-    body: "<p>Its books stop coming to " + esc((co && co.name) || "the client") + ". The company stays in this list (Not a client), to add or link again in one click. Nothing in Tally changes.</p>" })
+    body: "<p>Its books stop coming to " + esc((co && co.name) || "the client") + ". The company stays in this list (Not linked), to link again in one click. Nothing in Tally changes.</p>" })
     .then((ok) => (ok ? linkClient(r.company, null) : false));
 };
 // Remove company (Suvit: an unused company taken off the list): hidden, never deleted; Show hidden puts it back
@@ -491,8 +507,9 @@ export function SyncLine({ cid, compact = false }) {
 // the pill: a linked company's state (lib/tallyState.js, the words every place uses), Earlier year when a newer year of
 // the same client is in use, Not a client when not linked
 function Pill({ r, st, co, earlier }) {
-  if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not a client">
-    <span className="tag warn">Not a client</span><span className="tco-why">{r.open ? " · open in Tally" + (st.computer ? " on " + st.computer.split(" · ")[0] : "") : " · not open in Tally now"}</span></span>;
+  // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): a company not linked says so neutrally
+  if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not linked">
+    <span className="tag">Not linked</span><span className="tco-why">{r.open ? " · open in Tally" + (st.computer ? " on " + st.computer.split(" · ")[0] : "") : " · not open in Tally now"}</span></span>;
   if (earlier) return <span className="tco-pill" data-tco-pill="earlier" data-tco-pill-text={"Earlier year of " + earlier}>
     <span className="tag">Earlier year</span><span className="tco-why">{" · " + earlier + " is the newer year"}</span></span>;
   // next-link-record: a linked company says the client's one word (Linked / Waiting for Tally / Needs you) and its one line
@@ -517,12 +534,15 @@ function TwoPlaces({ co, company }) {
   const rec = typeof LinkRec === "object" && LinkRec.ready() ? LinkRec.forClient(co.id).find((x) => LinkRec.isName(x, company)) : null;
   const later = (S.tcoLater = S.tcoLater || {});
   if (!rec || !LinkRec.twoPlaces(rec) || later[rec.book_id]) return null;
-  const ps = LinkRec.placesOf(rec), owner = isOwner(), N = ["①", "②", "③", "④"];
-  const where = (x) => [x.computer, x.windows_user, x.data_folder || (x.tally_port ? "port " + x.tally_port : "")].filter(Boolean).join(" · ");
+  // migration 127: only places with a real data folder that sent entries; each with its full folder, computer, Windows
+  // login and last entry (the owner: "no false alarms at all")
+  const ps = LinkRec.realPlaces ? LinkRec.realPlaces(rec) : LinkRec.placesOf(rec), owner = isOwner(), N = ["①", "②", "③", "④"];
+  const day = (d) => { const t = Date.parse(String(d || "") + "T00:00:00Z"); return t ? new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-") : ""; };
+  const where = (x) => [x.data_folder, x.computer, x.windows_user ? "login " + x.windows_user : "", x.last_entry ? "last entry " + day(x.last_entry) : ""].filter(Boolean).join(" · ");
   const use = async (x) => { setBusy(x.data_loc); await LinkRec.choosePlace(rec, x.data_loc); setBusy(""); };
   return <div className="tco-under tco-two bk-warn" data-tco-two-places={rec.book_id} role="group" aria-label={shown(company) + " is open in two places"}>
     <p style={{ margin: "0 0 4px" }}><b>{shown(company) + " is open in two places with different data:"}</b></p>
-    <ul style={{ margin: "0 0 6px", paddingLeft: 18 }}>{ps.map((x, i) => <li key={x.data_loc} data-tco-place={x.state}>{(N[i] || "·") + " " + where(x) + (x.state === "chosen" ? " (FinCom reads this one)" : "")}
+    <ul style={{ margin: "0 0 6px", paddingLeft: 18 }}>{ps.map((x, i) => <li key={x.data_loc} data-tco-place={x.state} data-tco-place-folder={x.data_folder}>{(N[i] || "·") + " " + where(x) + (x.state === "chosen" ? " (FinCom reads this one)" : "")}
       {x.last_seen ? <span className="note">{" · last seen " + seenWords(x.last_seen)}</span> : null}</li>)}</ul>
     <p className="note" style={{ margin: "0 0 6px" }}>Which one is your books? FinCom reads only that one; nothing from the other is applied.</p>
     {owner ? <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
@@ -532,17 +552,21 @@ function TwoPlaces({ co, company }) {
   </div>;
 }
 // choose a client: "Link to a client…" (not linked) and "Link to another client" (linked: it moves, asked once)
-function Pick({ r, co, onClose }) {
-  const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
+// Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): the ONE way to link a company not linked: the clients
+// already in FinCom (the likeliest first and chosen, when one is: the same GSTIN or name, the client before this year);
+// a new client only from the small "+ New client with this name" inside it, never a button of its own
+export function Pick({ r, co, onClose, pre = "" }) {
+  const [pick, setPick] = useState(pre || ""), [busy, setBusy] = useState(false);
   const cs = rankClients(r, co ? co.id : "");
   const go = async () => { const t = S.companies[pick]; if (!t) return; setBusy(true);
-    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
+    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
   return <div className="tco-relink" data-tco-relink-box={r.company}>
     <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>
     <select data-tco-relink-pick="" aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
       <option value="">Choose a client…</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-    <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={go}>{co ? "Move" : "Link"}</button>
-    <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button></div>;
+    <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
+    <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>
+    {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addAsClient(r); } finally { setBusy(false); } if (id) onClose(); }}>+ New client with this name</button>}</div>;
 }
 export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null }) {
   const [busy, setBusy] = useState(""), [pick, setPick] = useState(false);
@@ -556,7 +580,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   const yr = !co && !r.client ? yearOf(r, rows) : null, tw = !co && !forCo && !yr ? twinOf(r) : null;
   const pend = PEND()[coKey(r.company)], err = (S.tcoErr || {})[coKey(r.company)];
   const run = (kind, job, fn) => async () => {
-    if (!r.reported) { keep(r, job); return; }
+    if (!r.reported && !r.open) { keep(r, job); return; }   // next-tally-linknow: open in Tally: linked now (linkClient)
     setBusy(kind); let id = ""; try { id = await fn(); } finally { setBusy(""); }
     if (id && onDone) onDone(id === true ? (job.cid || "") : id);
   };
@@ -581,7 +605,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
         {may && (postsHere(co, r.company) ? <button data-tco-post-stop={co.id} onClick={close(() => postHere(co, r.company, false))}>Stop posting here<small>{co.name + "’s entries are posted into this company now."}</small></button>
           : <button data-tco-post-here={co.id} onClick={close(() => postHere(co, r.company, true))}>Post entries here<small>{"Post " + co.name + "’s entries into this company (asked first)."}</small></button>)}
         {may && <button data-tco-not-this={r.company} onClick={close(() => setPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
-        {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>It stays in this list as Not a client.</small></button>}
+        {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>It stays in this list as Not linked.</small></button>}
         {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
         {TCloud.groupStatus && <button data-tco-cloud-check={co.id} onClick={close(() => TCloud.groupStatus(co.id))}>What is in the cloud?<small>The groups, and the ledgers with a group, FinCom’s cloud holds.</small></button>}
         {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
@@ -589,20 +613,18 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
       </div></details></>;
   else if (!may) act = <span className="note">A member of the firm who may make changes adds it.</span>;
   else {
-    const target = forCo || yr || tw;
-    const main = target ? <button className={"btn small" + (forCo || yr ? " primary" : "")} data-tco-act={yr && !forCo ? "year" : "link"} data-tco-link={target.id} disabled={!!busy}
-        onClick={run("link", { kind: "link", cid: target.id, keep: !!(yr && !forCo) }, () => linkTo(r, target, { keep: !!(yr && !forCo) }).then((ok) => ok && target.id))}>
-        {busy ? "Linking…" : yr && !forCo ? "New year of " + yr.name + " · Link" : "Link to " + target.name}</button>
-      : <button className="btn small primary" data-tco-act="add" disabled={!!busy} onClick={run("add", { kind: "add" }, () => addAsClient(r))}>{busy ? "Adding…" : "Add as client"}</button>;
+    // Task D: from a client's "Choose on Tally page" the person named the client: Link to <client>. Otherwise ONE neutral
+    // "Link to client…" (the clients already in FinCom, the likeliest chosen); no "Add as client" suggestion
+    const main = forCo ? <button className="btn small primary" data-tco-act="link" data-tco-link={forCo.id} disabled={!!busy}
+        onClick={run("link", { kind: "link", cid: forCo.id }, () => linkTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Linking…" : "Link to " + forCo.name}</button>
+      : <button className="btn small" data-tco-act="pick" data-tco-pre={(yr || tw || {}).id || ""} disabled={!!busy} onClick={() => setPick(!pick)}>Link to client…</button>;
     act = <>{main}
-      <details className="bk-menu tco-more" data-tco-more={r.company}>
+      {(r.hidden || !r.open) && <details className="bk-menu tco-more" data-tco-more={r.company}>
         <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
         <div className="bk-menu-list">
-          <button data-tco-link-pick={r.company} onClick={close(() => setPick(true))}>Link to a client…<small>Choose the client this company belongs to.</small></button>
-          {!target && <button data-tco-add-new={r.company} onClick={close(run("add", { kind: "add" }, () => addAsClient(r)))}>Add as client<small>A new client with this company’s name and GSTIN.</small></button>}
           {r.hidden ? <button data-tco-unhide={r.company} onClick={close(() => hideCo(r, false))}>Show again<small>Back in the list.</small></button>
-            : !r.open && <button data-tco-hide={r.company} onClick={close(() => hideCo(r, true))}>Remove company<small>Off this list (not deleted; Show hidden puts it back).</small></button>}
-        </div></details></>;
+            : <button data-tco-hide={r.company} onClick={close(() => hideCo(r, true))}>Remove company<small>Off this list (not deleted; Show hidden puts it back).</small></button>}
+        </div></details>}</>;
   }
   return <li className={"tco-row" + (focus ? " tco-focus" : "")} data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-tco-open={r.open ? "" : undefined}
     data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined}>
@@ -617,13 +639,13 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     <div className="tco-act">{act}</div>
     {co && !earlier && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
       : st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>)}
-    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{(st.computer ? st.computer.split(" · ")[0] : "Its computer") + " has not sent this company to FinCom yet (a minute or two after it is opened). A click now is kept and done by itself then."}</div>}
+    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{SENDING[coKey(r.company)] ? "Sending " + shown(r.company) + " to FinCom and linking it…" : "Open in Tally on " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + ", not in FinCom yet: Link to client… sends it and links it at once."}</div>}
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
       : "Waiting for " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + " to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
     {co && !earlier && <TwoPlaces co={co} company={r.company} />}
     {co && <div className="tco-under"><SyncLine cid={co.id} /><CloudSays cid={co.id} /></div>}
-    {pick && <div className="tco-under"><Pick r={r} co={co} onClose={() => setPick(false)} /></div>}
+    {pick && <div className="tco-under"><Pick r={r} co={co} pre={co ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
   </li>;
 }
 

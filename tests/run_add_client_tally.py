@@ -29,6 +29,7 @@ with sync_playwright() as p:
       TCloud.pane.companies = [{company: 'ZZ TEST', client_id: null, gstin: ''}, {company: 'GARG SHEKHAR & COMPANY', client_id: g.id, gstin: '09AANFG3202D1ZR'}];
       TCloud.link = async (c, id) => { window.__calls.push(['link', c, id]); return true; };
       window.cloudPushNow = async () => { window.__calls.push(['push']); };
+      TCloudUp.post = async (b) => { if (b && b.kind === 'link_now') window.__calls.push(['link_now', b.company]); return {ok: true, linked: true, device: 'd-1'}; };   // next-tally-linknow
       doAct('addCo'); }""")
     pg.wait_for_timeout(600)
     # 24-Oct-2026 (next-tally-one-page): Add client picks no Tally company; its one button opens the Tally page's list
@@ -36,13 +37,16 @@ with sync_playwright() as p:
     pg.click("#app [data-add-tally-go]"); pg.wait_for_timeout(1200)
     rows = pg.evaluate("[...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tco-state')])")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
-    ok(zz and zz[0][2] == "connected" and "Not a client" in zz[0][1] and "Add as client" in zz[0][1], "the Tally page: ZZ TEST, open in Tally on this computer, Not a client, Add as client (%s)" % (zz and zz[0][1]))
+    ok(zz and zz[0][2] == "connected" and "Not linked" in zz[0][1] and "Link to client…" in zz[0][1] and "Add as client" not in zz[0][1], "the Tally page: ZZ TEST, open in Tally on this computer, Not linked, Link to client… (Task D) (%s)" % (zz and zz[0][1]))
     gs = [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"]
     ok(gs and "Testing AAD" in gs[0][1] and "Add as client" not in gs[0][1], "GARG SHEKHAR & COMPANY is listed with its client Testing AAD, not offered to add (%s)" % (gs and gs[0][1]))
-    pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-act=add]'); pg.wait_for_timeout(1500)
+    pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-act=pick]'); pg.wait_for_timeout(250)   # Task D: + New client inside Link to client…
+    pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-add-new]'); pg.wait_for_timeout(1500)
     r = pg.evaluate("(() => { const c = Object.values(S.companies).find(x => x.name === 'ZZ TEST'); return {postTo: c.postTo || '', tally: c.tallyName, id: c.id, calls: window.__calls, home: S.homeTab}; })()")
-    ok(r["tally"] == "ZZ TEST" and r["home"] == "tally" and not r["postTo"], "added (the page stays on the list): Tally name ZZ TEST; posting waits for Post entries here")
-    ok(r["calls"][:2] == [["push"], ["link", "ZZ TEST", r["id"]]], "sent to the server, then linked to ZZ TEST in the cloud (%s)" % r["calls"])
+    # the owner, 26-Oct-2026: linking a client to its Tally company also allows posting into it (postToOnLink)
+    ok(r["tally"] == "ZZ TEST" and r["home"] == "tally" and r["postTo"] == "ZZ TEST", "added (the page stays on the list): Tally name ZZ TEST; posting allowed into it by the link (%s)" % {k: r[k] for k in ("tally", "home", "postTo")})
+    c = [x for x in r["calls"] if x[0] != "link_now"]
+    ok(c[:2] == [["push"], ["link", "ZZ TEST", r["id"]]] and all(x[0] != "link_now" for x in r["calls"]), "sent to the server (the cloud has the company: no link_now), then linked to ZZ TEST in the cloud (%s)" % r["calls"])
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails))

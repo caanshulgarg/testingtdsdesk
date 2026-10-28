@@ -213,6 +213,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
 import { packMonth, monthEnd } from "./monthpack.js";
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1155,6 +1156,20 @@ async function otherPlace(firm: string, book: string, dev: any, body: any) {
   const { data, error } = await db.rpc("tally_link_place_check", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
   if (error || data !== false) return null;
   return { ok: false, otherPlace: true, error: "FinCom reads this company from another data location (the same company in two places). Nothing from here is applied until a person chooses on the Tally page." };
+}
+// migration 127 (the owner, 28-Oct-2026: "I don't want false alarms at all"): a place counts as a second place only once
+// entries came from it; the latest day of these days with an entry in it is kept with the place (tally_link_place_seen).
+// After the place check (which makes the place). A cloud without 127: nothing (the function is missing), never fails
+async function lastEntryDay(daysIn: unknown): Promise<string> {
+  return await latestEntryDay(daysIn, async (d: any) => typeof d.b64 === "string" ? new TextDecoder("utf-8").decode(b64bytes(d.b64)) : typeof d.gz === "string" ? (await gunzip(b64bytes(d.gz), MAX_DAY)).text : "");
+}
+async function placeSeen(firm: string, book: string, dev: any, body: any) {
+  try {
+    const d = await lastEntryDay(body?.days);
+    if (!d) return;
+    const { error } = await db.rpc("tally_link_place_seen", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id, p_last: d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) });
+    if (error && !missingFn(String(error.message || "")) && error.code !== "PGRST202") console.error("tally-ingest tally_link_place_seen", String(error.message || "").slice(0, 200));
+  } catch (e) { console.error("tally-ingest placeSeen", (e as Error).message); }
 }
 async function bookFor(firm: string, company: string) {
   const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
@@ -3267,6 +3282,59 @@ async function monthDays(firm: string, body: any) {
   return new Response(packMonth(out), { status: 200, headers: { ...cors, "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
 }
 
+// next-tally-linknow (28-Oct-2026; the owner: "FinCom should not deny. If I click, it should link it."). On staging the
+// owner's Link on "Salesify Marketing LLP 2026-27" (Get companies, the bridge on NWS144) was refused five times by
+// tally_company_link ("no computer has reported … yet", 13:11:03-13:12:05 UTC): tally_companies was written only by the
+// bridge's "companies" message, every 5 minutes (bridge-go cloud.go CloudLinksSec), the row came at 13:16:08.
+// registerOpenFromBeat: the companies a beat says open that the firm's list lacks get their row (device, last seen) at
+// once; nothing is linked here (the "companies" message still links by itself when certain). Only when the beat's open
+// list changed, or every 5 minutes per device; never fails the beat
+const beatRegAt = new Map<string, number>();
+async function registerOpenFromBeat(firm: string, dev: any, beat: any, prevInfo: any) {
+  try {
+    const was = JSON.stringify((prevInfo && prevInfo.beat && Array.isArray(prevInfo.beat.open)) ? prevInfo.beat.open : []), now = JSON.stringify(beat.open || []);
+    if (!(beat.open || []).length && !(beat.companies || []).some((c: any) => c && c.open)) return;
+    if (was === now && Date.now() - (beatRegAt.get(dev.id) || 0) < 300000) return;
+    beatRegAt.set(dev.id, Date.now());
+    if (beatRegAt.size > 5000) beatRegAt.clear();
+    const { data: have, error } = await db.from("tally_companies").select("company").eq("firm_id", firm);
+    if (error) return;
+    const fresh = beatNewOpen(beat, new Set(((have || []) as any[]).map((r) => String(r.company))));
+    if (!fresh.length) return;
+    const at = new Date().toISOString();
+    const { error: ie } = await db.from("tally_companies").upsert(fresh.map((company) => ({ firm_id: firm, company, device_id: dev.id, last_seen: at })), { onConflict: "firm_id,company", ignoreDuplicates: true });
+    if (ie) console.error("tally-ingest beat: companies not registered", dev.id, String(ie.message || "").slice(0, 200));
+    else console.log("tally-ingest beat: companies registered", dev.id, JSON.stringify(fresh));
+  } catch (e) { console.error("tally-ingest beat: registerOpenFromBeat", (e as Error).message); }
+}
+// {kind:"link_now", company, client, bridge} from the firm's owner or staff (the gate above): the company as this browser's
+// own FinCom Bridge returned it (Get companies). Registered for the device of the CALLER'S firm that runs that bridge
+// (info.bridges has its id), else one whose beat has the company open; none: refused in plain words (connect this
+// computer first). Then linked as the person (tally_company_link with their sign-in: every guard of the link record
+// stays: the GSTIN of another PAN, the same company linked to another client, two data locations)
+async function linkNow(firm: string, body: any, asUser: any, userId: string) {
+  const company = cleanCompany(body.company), client = String(body.client || "");
+  if (!company) return reply(400, { ok: false, error: "Say which Tally company." });
+  if (!client) return reply(400, { ok: false, error: "Say which client." });
+  const { data: cl } = await db.from("clients").select("id, deleted").eq("firm_id", firm).eq("id", client).maybeSingle();
+  if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
+  const { data: devs, error: de } = await db.from("tally_devices").select("id, firm_id, revoked, info").eq("firm_id", firm);
+  if (de) throw new Error(de.message);
+  const { data: row } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("company", company).maybeSingle();
+  let device = row ? String(row.device_id || "") : "";
+  if (!row) {
+    const d = linkDevice(((devs || []) as any[]).filter((x) => x.firm_id === firm), String(body.bridge || ""), company);
+    if (!d) return reply(409, { ok: false, noDevice: true, error: "FinCom Bridge on this computer is not connected to your firm yet, so FinCom cannot take " + company + " from it. Press Connect this computer, then Link again." });
+    device = String(d.id);
+    const { error: ie } = await db.from("tally_companies").upsert({ firm_id: firm, company, device_id: device, last_seen: new Date().toISOString() }, { onConflict: "firm_id,company", ignoreDuplicates: true });
+    if (ie) throw new Error(ie.message);
+    console.log("tally-ingest link_now: registered", firm, device, company, userId);
+  }
+  const { error: le } = await asUser.rpc("tally_company_link", { p_company: company, p_client: client });
+  if (le) return reply(409, { ok: false, error: String(le.message || "Could not link it.") });
+  return reply(200, { ok: true, linked: true, company, client, device, registered: !row });
+}
+
 async function userUpload(req: Request, auth: string) {
   const asUser = createClient(URL, ANON, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
   const { data: who } = await asUser.auth.getUser();
@@ -3305,6 +3373,9 @@ async function userUpload(req: Request, auth: string) {
   // role skips can_write(), so it is asked here); reading (month_days, wake) and the install log for support stay open
   const gate = await firmGate(viaClient(db), firm, body.client ? String(body.client) : null);
   if (gate) return reply(gate.status, { ok: false, reason: gate.reason, error: gate.error });
+  // next-tally-linknow: Link / Add as client on a company this browser's own FinCom Bridge returned (Get companies), linked
+  // at once, also before the bridge's own report reached FinCom
+  if (body.kind === "link_now") return await linkNow(firm, body, asUser, user.id);
   const clientId = String(body.client || "");
   const { data: cl } = await db.from("clients").select("id, name, tally_name, gstin, deleted").eq("firm_id", firm).eq("id", clientId).maybeSingle();
   if (!cl || cl.deleted) return reply(404, { ok: false, error: "No such client in this firm." });
@@ -3482,6 +3553,9 @@ Deno.serve(sentry.wrap(async (req) => {
         const want = (dev as any).want_update_at, sent = (dev as any).want_sent_at;
         const updateNow = !!want && (!sent || Date.parse(want) > Date.parse(sent));
         await db.from("tally_devices").update(updateNow ? { info, want_sent_at: want } : { info }).eq("id", dev.id);
+        // next-tally-linknow: the companies this beat says open that the firm's list lacks are registered now (they were
+        // only by the "companies" message, every 5 minutes): a click on Link works within a beat of Tally opening it
+        await registerOpenFromBeat(firm, dev, beat, prevInfo);
         // 02-Oct-2026: a new last read, a read going on, or Tally's state changed: passed on at once on the firm's
         // broadcast channel (FinCom's pages listen: Live.joinTally), so "read 17:43" / "Reading now…" changes at once
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
@@ -3878,7 +3952,7 @@ Deno.serve(sentry.wrap(async (req) => {
       case "days": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
+        { const elsewhere = await otherPlace(firm, book, dev, body); await placeSeen(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await ingestDays(firm, book, body.days);
       }
       case "ledgers": {

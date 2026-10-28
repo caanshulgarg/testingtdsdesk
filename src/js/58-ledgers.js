@@ -253,7 +253,18 @@ const Ledgers = {
     const here = typeof bridgeLive === "function" && bridgeLive(co) && typeof Bridge === "object" && !!Bridge.openFor(co);
     r.via = here ? "bridge" : "cloud";
     try {
-      if (here) r.ans = await Bridge.call("/ledgers/refresh", {company: tallyCoName(co)}, 30000);
+      if (here){
+        const company = tallyCoName(co);
+        r.ans = await Bridge.call("/ledgers/refresh", {company}, 30000);
+        // next-tally-linknow (28-Oct-2026; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
+        // company is not kept in step on this computer", right after it was linked): a company this bridge has never kept
+        // is started with Update now for it (POST /keep {now, company}, the request Update now sends): the run makes its
+        // kept state and reads its ledger list first (keep.go step: FinComCompany, then the ledgers), its progress as usual
+        if (r.ans && r.ans.started === false && /not kept in step/i.test(String(r.ans.why || ""))){
+          const k = await Bridge.call("/keep", {now: true, company}, 30000);
+          r.ans = {ok: true, started: true, keeping: true, company, keep: k || null};
+        }
+      }
       else if (typeof TCloud === "object" && TCloud.on()) r.ans = await TCloudUp.post({kind: "wake", what: "ledgers", client: cid}, {client: cid});
       else r.via = "";
     } catch (e){ r.err = (e && e.message) || String(e); }

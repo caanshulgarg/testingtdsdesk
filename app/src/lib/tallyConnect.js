@@ -20,8 +20,12 @@
 //   findTally()   the bridge's status asked fresh (/status?fresh=1: the same light company request it always sends) and its
 //                 diagnosis (/diagnose: no Tally request): each Tally it sees, its port, whose it is, its companies.
 //   usePort(p)    the page's existing Tally pin (bridgePin, src/js/24): FinCom asks only the Tally on that port.
+//   typePort(p)   FinCom Bridge 2.4.8 and later (bridge-go/anyport.go): the bridge itself tries the typed port (POST
+//                 /ports/use: the same light company request, at most 2 seconds) and keeps it only when it answers as
+//                 TallyPrime and is this Windows user's; else its plain reason (nothing listening, not Tally, another
+//                 user's Tally, no answer in 2 seconds). An older bridge: the page's pin as before (usePort).
 // Every step is bounded (STEP_MS), so nothing spins for ever; each answer is {st, say} in plain words.
-/* global Bridge, TCloud, S, bridgePin */
+/* global Bridge, TCloud, S, bridgePin, bridgeVer */
 
 export const STEP_MS = 20000, LINK_MS = 45000;
 const BEAT_FRESH_MS = 120000;
@@ -168,6 +172,30 @@ export function usePort(p) {
   return true;
 }
 
+// 2.4.8: the bridge here takes a typed port itself (POST /ports/use); an older one only knows the page's pin
+export const ANYPORT_VERSION = "2.4.8";
+export function bridgeTakesPort() {
+  const v = typeof Bridge === "object" && Bridge.st && Bridge.st.version;
+  if (!v) return false;
+  const k = (x) => String(x || "").split(".").map((n) => String(Number(n) || 0).padStart(3, "0")).join(".");
+  return (typeof bridgeVer === "function" ? bridgeVer(v) >= bridgeVer(ANYPORT_VERSION) : k(v) >= k(ANYPORT_VERSION));
+}
+
+// Use this port: a 2.4.8 bridge tries it and keeps it only when it is your own TallyPrime ({st: "ok"|"refused"|"bad"|
+// "error", say}); 0: automatic again. An older bridge: the page's pin, as before ({st: "pinned"})
+export async function typePort(p) {
+  const n = Number(String(p == null ? "" : p).replace(/\D/g, "")) || 0;
+  if (n > 65535) return { st: "bad", say: "Type a port number from 1 to 65535 (TallyPrime: F1 → Settings → Connectivity)." };
+  if (!bridgeTakesPort()) return usePort(n) ? { st: "pinned", port: n } : { st: "bad", say: "Type a port number from 1 to 65535." };
+  let j;
+  try { j = await within(Bridge.call("/ports/use", { port: n }, 15000), STEP_MS, "FinCom Bridge did not answer in time."); }
+  catch (e) { return { st: e && e.code === "bridge" ? "refused" : "error", port: n, say: msg(e) }; }
+  usePort(n); // the page asks only that Tally, as before (0: automatic)
+  if (!n) return { st: "ok", port: 0, say: "FinCom Bridge finds your TallyPrime by itself again." };
+  const cos = [].concat(j.companies || []);
+  return { st: "ok", port: n, companies: cos, say: "Your TallyPrime answered on port " + n + " (" + (cos.length ? cos.length + (cos.length === 1 ? " company" : " companies") + " open" : "no company open") + "). FinCom Bridge keeps this port." };
+}
+
 // the companies open in the Tally found (the same request as Find Tally; read again when older than 10 seconds)
 export async function getCompanies() {
   if (typeof Bridge !== "object" || !Bridge.on()) return { st: "noconnect", say: "Connect this computer first." };
@@ -180,4 +208,22 @@ export async function getCompanies() {
   if (!st.tallyUp) return { st: "none", list: [], say: "TallyPrime is not answering on this computer. Press Find Tally." };
   const list = [].concat(st.open || []).map((o) => ({ company: o.name, gstin: o.gstin || "", port: o.port }));
   return { st: list.length ? "found" : "none", list, say: list.length ? list.length + (list.length === 1 ? " company" : " companies") + " open in Tally." : "Tally is open, but no company is open in it. Open your company in TallyPrime, then press Get companies again." };
+}
+
+// next-tally-linknow (28-Oct-2026; the owner: "FinCom should not deny. If I click, it should link it."). A company open in
+// Tally that FinCom's cloud has no row for yet (the bridge reports its companies every 5 minutes; on staging the owner's
+// five clicks on "Salesify Marketing LLP 2026-27" were refused meanwhile): tally-ingest's "link_now" registers it for the
+// device of the firm that runs this browser's own bridge (else one whose beat has it open) and links it, in one call.
+// The answer's row goes into what this page shows at once, so the row says Linked without a reload
+export const LINKNOW_MS = 30000;
+export const cloudKnows = (company) => [].concat((typeof TLight === "object" && TLight.st && TLight.st.cos) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || [])
+  .some((r) => r && r.company === company);
+export async function linkNow(company, cid) {
+  if (typeof TCloudUp !== "object") throw new Error("Sign in to the firm account first.");
+  const bridge = typeof Bridge === "object" && Bridge.cfg ? String(Bridge.cfg().bridgeId || "") : "";
+  const j = await within(TCloudUp.post({ kind: "link_now", company, client: cid, bridge }, {}), LINKNOW_MS, "FinCom's cloud did not answer in time (the internet on this computer?). Press Link again.");
+  const row = { company, client_id: cid, device_id: (j && j.device) || "", gstin: "", last_seen: new Date().toISOString(), linked_at: new Date().toISOString(), linked_by: "" };
+  [(typeof TLight === "object" && TLight.st && TLight.st.cos) || null, (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || null]
+    .forEach((list) => { if (Array.isArray(list) && !list.some((r) => r && r.company === company)) list.push(Object.assign({}, row)); });
+  return j;
 }

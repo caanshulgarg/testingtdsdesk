@@ -37,7 +37,7 @@ function AddClient() {
     <h2>Add client</h2>
     <p className="note addc-tally" data-add-from-tally="" style={{ margin: "4px 0 0" }}>{"A client whose books are in Tally? "}
       <button className="linkbtn" data-add-tally-go="" onClick={() => { S.addingCo = false; S.tallyGuide = {}; S.tallyFocus = ""; navHome("tally"); }}>Add it from the Tally page</button>
-      {" (Companies in Tally: Add as client). Or type a client below."}</p>
+      {" (Companies in Tally: Link to client…, + New client with this name). Or type a client below."}</p>
     <div className="grid" style={{ marginTop: 10 }} onKeyDown={(e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") save(); }}>
       <label className="f wide"><span>Client name</span><input type="text" id="ncName" autoFocus autoComplete="off" placeholder="e.g. Gupta Traders Pvt Ltd" value={v.name} onChange={set("name")} /></label>
       <label className="f"><span>GSTIN</span><input type="text" autoComplete="off" placeholder="09AAACG1111A1Z5" value={v.gstin} onChange={set("gstin")} /></label>

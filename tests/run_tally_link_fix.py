@@ -150,8 +150,9 @@ def main():
         ok(rows and "NWS144 · open now" in rows[0][2] and re.search(r"NWS144 · last seen 20-Oct", rows[1][2] or "") is not None, "1. each with its computer, and when it was last seen (%s)" % [r[2] for r in rows])
         n0 = len(calls())
         q = txt(R(SAL) + " [data-tco-act]")
-        ok(q == "Link to Salesify Marketing LLP", "3. the row says 'Link to Salesify Marketing LLP' (%s)" % q)
-        pg.click(R(SAL) + " [data-tco-act]"); pg.wait_for_timeout(1200)
+        pre = E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", R(SAL))
+        ok(q == "Link to client…" and pre == s1[0], "3. the row says 'Link to client…' with Salesify Marketing LLP chosen in it (Task D) (%s, %s)" % (q, pre))
+        pg.click(R(SAL) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(SAL) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
         ok(calls()[n0:] == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}]] and len(by_name("Salesify Marketing LLP")) == 1 and len(by_name("SALESIFY MARKETING LLP")) == 0,
            "3. linked to the existing Salesify, no second client (%s)" % calls()[n0:])
 
@@ -159,7 +160,7 @@ def main():
         scene(cos(sal_client="S1"))
         tally_list()
         n0 = len(calls())
-        pg.click(R(VMS) + " [data-tco-act=add]"); pg.wait_for_timeout(1500)
+        pg.click(R(VMS) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(VMS) + " [data-tco-add-new]"); pg.wait_for_timeout(1500)
         vm = by_name("VMS EVENTS PRIVATE LIMITED")
         ok(len(vm) == 1 and calls()[n0:] == [["tally_company_link", {"p_company": VMS, "p_client": vm[0] if vm else ""}]],
            "1. Add as client: VMS EVENTS PRIVATE LIMITED added (the period off its name) and linked at once (%s)" % calls()[n0:])
@@ -187,14 +188,14 @@ def main():
         ok(pg.locator(R(VMS) + " [data-tco-not-this]").count() == 1 and pg.locator(R(VMS) + " [data-tco-unlink]").count() == 1, "5. ⋯ Link to another client, Unlink on the wrong company's row")
         E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
         q = txt(R(SAL) + " [data-tco-act]")
-        ok(q == "Link to Salesify Marketing LLP", "5. the right company says 'Link to Salesify Marketing LLP' (%s)" % q)
+        ok(q == "Link to client…" and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", R(SAL)) == s1[0], "5. the right company: 'Link to client…' with Salesify Marketing LLP chosen (%s)" % q)
         n0 = len(calls())
-        pg.click(R(SAL) + " [data-tco-act]"); confirm(True); pg.wait_for_timeout(1000)
+        pg.click(R(SAL) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(SAL) + " [data-tco-relink]"); confirm(True); pg.wait_for_timeout(1000)
         got = calls()[n0:]
         ok(got == [["tally_company_link", {"p_company": SAL, "p_client": s1[0]}], ["tally_company_link", {"p_company": VMS, "p_client": None}]],
            "5. asked once, the client moves: SALESIFY linked, VMS EVENTS unlinked (%s)" % got)
         ok(E("(c) => tallyLinkOf(S.companies[c]).company", s1[0]) == SAL, "5. the client now names SALESIFY")
-        ok(txt(R(VMS) + " [data-tco-pill]").startswith("Not a client"), "5. VMS EVENTS stays in the list, Not a client")
+        ok(txt(R(VMS) + " [data-tco-pill]").startswith("Not linked"), "5. VMS EVENTS stays in the list, Not linked")
         # Unlink only
         scene(cos(vms_client="S1")); tally_list()
         pg.click(R(VMS) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
