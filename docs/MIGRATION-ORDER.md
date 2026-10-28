@@ -561,6 +561,7 @@ applies the whole chain twice. None is run on staging: the owner runs them.
 | 123 | `server/console/migration-123-notices-flags.sql` | Announcements, feature flags, `announcements_active` / `flags_for_me` |
 | 124 | (branch `next-mobile`, not in `integ-console`) | Mobile device tokens |
 | 125 | `server/console/migration-125-console-guards.sql` | The guards between the console and the app: a switched-off company's records and client documents refused for a firm's login; the status columns (clients, firms) the console's only; a free-credit coupon retries the month's fee; `firm_signals` (Realtime) |
+| 126 | `server/video-calls/migration-126-call-media-diag.sql` | `call_participants.media_diag` (jsonb, service role only): what each person's call connection did (ICE state, candidate types, bytes received, pull errors) from fincom-call's "diag" step; add-only, after 102/106. Branch `next-fix-meet-media`, NOT run on staging (the owner runs it); fincom-call works without it (the log line alone) |
 
 Numbers after 125 are taken in order when those phases start.
 

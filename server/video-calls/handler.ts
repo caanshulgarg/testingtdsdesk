@@ -1014,6 +1014,9 @@ export function handler(deps: Deps) {
       };
       let sid = String(p.cf_session || "");
       const op = String(b.op || "");
+      // the layer asked for, and the next one down (or up) when the publisher is not sending it: Cloudflare's default
+      // ("none") sends no picture at all then (28-Oct-2026: a laptop's camera starts with its smallest layer only)
+      const layer = (rid: unknown) => ({ preferredRid: String(rid).slice(0, 4), priorityOrdering: "asciibetical", ridNotAvailable: "asciibetical" });
       if (op === "session") {
         const j = await call("POST", "/sessions/new");
         sid = String(j.sessionId || "");
@@ -1031,13 +1034,22 @@ export function handler(deps: Deps) {
         const others = (await svc("/rest/v1/call_participants?select=cf_session&state=eq.admitted&room_id=eq." + q(r.id))) as any[];
         const okSess = new Set(others.map((x) => x.cf_session).filter(Boolean));
         const tracks = ((b.tracks || []) as any[]).slice(0, 48).filter((t) => okSess.has(String(t.sessionId)) && String(t.sessionId) !== sid)
-          .map((t) => ({ location: "remote", sessionId: String(t.sessionId), trackName: String(t.trackName).slice(0, 64), ...(t.rid ? { simulcast: { preferredRid: String(t.rid).slice(0, 4) } } : {}) }));
+          .map((t) => ({ location: "remote", sessionId: String(t.sessionId), trackName: String(t.trackName).slice(0, 64), ...(t.rid ? { simulcast: layer(t.rid) } : {}) }));
         if (!tracks.length) fail(400, "No track of this call to receive.");
         return { ok: true, ...(await call("POST", "/sessions/" + q(sid) + "/tracks/new", { tracks })) };
       }
       if (op === "renegotiate") return { ok: true, ...(await call("PUT", "/sessions/" + q(sid) + "/renegotiate", { sessionDescription: desc(b.sdp) })) };
       if (op === "close") return { ok: true, ...(await call("PUT", "/sessions/" + q(sid) + "/tracks/close", { tracks: ((b.mids || []) as any[]).slice(0, 48).map((m) => ({ mid: String(m) })), force: true, ...(b.sdp ? { sessionDescription: desc(b.sdp) } : {}) })) };
-      if (op === "layer") return { ok: true, ...(await call("PUT", "/sessions/" + q(sid) + "/tracks/update", { tracks: ((b.tracks || []) as any[]).slice(0, 48).map((t) => ({ mid: String(t.mid), simulcast: { preferredRid: String(t.rid || "h").slice(0, 4) } })) })) };
+      if (op === "layer") return { ok: true, ...(await call("PUT", "/sessions/" + q(sid) + "/tracks/update", { tracks: ((b.tracks || []) as any[]).slice(0, 48).map((t) => ({ mid: String(t.mid), simulcast: layer(t.rid || "h") })) })) };
+      // what the person's line did (media.js stats(): ICE state, candidate types, bytes received, pull errors), for the next
+      // look at a call that did not work: kept on their own row (media_diag, migration 126) and one log line; no media,
+      // no names. Before 126 the log line alone.
+      if (op === "diag") {
+        const d = R.callDiag(b.diag);
+        console.log(JSON.stringify({ evt: "fincom_call_diag", at: iso(), room: r.id, participant: p.id, cf_session: sid, ...d }));
+        const kept = await patch("call_participants", "id=eq." + p.id, { media_diag: { ...d, at: iso() } }).then(() => true, () => false);
+        return { ok: true, kept };
+      }
       fail(400, "Unknown call-service step.");
     },
   };

@@ -23,7 +23,7 @@ const uuid = () => "eeeeeeee-0000-4000-8000-" + String(++uuidN).padStart(12, "0"
 type Row = Record<string, any>;
 
 function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean, aiAnswer?: string, transcribe?: (n: number) => Response, look429?: boolean,
-  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, fincom?: (a: any) => any } = {}) {
+  groq?: boolean, stt?: (form: FormData, n: number) => Response, chat?: (body: any, n: number) => Response, noLobby?: boolean, noDiag?: boolean, fincom?: (a: any) => any } = {}) {
   const T: Record<string, Row[]> = {
     members: Object.values(USERS).map((u) => ({ user_id: u.id, firm_id: u.firm, role: u.role, active: true, name: u.name, email: u.email })),
     firms: [{ id: FIRM, name: "Garg & Co" }, { id: FIRM2, name: "B" }],
@@ -96,6 +96,8 @@ function stand(o: { cf?: boolean, mail?: boolean, ai?: boolean, aiOff?: boolean,
         // before migration 106: no heartbeat columns, no call_watch
         if (o.noLobby && (table === "call_watch" || /seen_at|left_why/.test(String(sp.get("select") || "") + JSON.stringify(body || {}) + url.search)))
           return J({ code: table === "call_watch" ? "42P01" : "42703", message: "column or relation does not exist" }, table === "call_watch" ? 404 : 400);
+        // before migration 126: no media_diag column
+        if (o.noDiag && /media_diag/.test(JSON.stringify(body || {}))) return J({ code: "42703", message: "column media_diag does not exist" }, 400);
         if (!T[table]) return J({ message: "no table " + table }, 404);
         const service = tok === "service-key";
         // a member's own token: row-level security by firm (reads), the due list's rule (writes: owner or staff)
@@ -203,7 +205,36 @@ Deno.test("with Cloudflare's keys: the SFU; the person's own session only; track
   eq(pull.status, 400, "nothing to pull until the other's session is in this call");
   const pull2 = await s.call({ action: "cf", room_id: a.j.room.id, op: "pull", tracks: [{ sessionId: "cf-1", trackName: "cam", rid: "h" }, { sessionId: "someone-else", trackName: "cam" }] }, "tok-owner");
   eq(pull2.status, 200, "pulled");
-  eq(s.log.cf[s.log.cf.length - 1].body.tracks, [{ location: "remote", sessionId: "cf-1", trackName: "cam", simulcast: { preferredRid: "h" } }], "only this call's track, with its layer");
+  eq(s.log.cf[s.log.cf.length - 1].body.tracks, [{ location: "remote", sessionId: "cf-1", trackName: "cam", simulcast: { preferredRid: "h", priorityOrdering: "asciibetical", ridNotAvailable: "asciibetical" } }], "only this call's track, with its layer and the next one when it is not sent");
+  await s.call({ action: "cf", room_id: a.j.room.id, op: "layer", tracks: [{ mid: "1", rid: "q" }] }, "tok-owner");
+  eq(s.log.cf[s.log.cf.length - 1].body.tracks, [{ mid: "1", simulcast: { preferredRid: "q", priorityOrdering: "asciibetical", ridNotAvailable: "asciibetical" } }], "a layer change keeps the fallback");
+});
+
+Deno.test("the line's report (28-Oct-2026, no picture and no voice): kept on the person's own row, plain fields only; works before migration 126", async () => {
+  for (const noDiag of [false, true]) {
+    const s = stand({ cf: true, noDiag });
+    const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+    await s.call({ action: "cf", room_id: a.j.room.id, op: "session" }, "tok-staff");
+    const logged: string[] = [];
+    const orig = console.log; console.log = (x: unknown) => { logged.push(String(x)); };
+    let r;
+    try {
+      r = await s.call({ action: "cf", room_id: a.j.room.id, op: "diag", diag: { why: "10s", ice: "checking", conn: "connecting", turn: false, local: "host", remote: "", rx: { audio: 0, video: 0 }, tx: { audio: 5000, video: 90000 },
+        peers: 1, want: 2, got: 0, errors: ["not_found_track_error@1", "<b>x</b>"], name: "Anshul", ip: "203.0.113.7", sdp: "v=0 secret" } }, "tok-staff");
+    } finally { console.log = orig; }
+    eq([r.status, r.j.kept], [200, !noDiag], "answered" + (noDiag ? " before 126" : ""));
+    const row = s.T.call_participants.find((p) => p.cf_session === "cf-1") as Row;
+    assert(row, "the row");
+    if (!noDiag) {
+      eq([row.media_diag.ice, row.media_diag.local, row.media_diag.got, row.media_diag.errors], ["checking", "host", 0, ["not_found_track_error@1"]], "the report on the person's row");
+      assert(!/Anshul|203\.0\.113|secret/.test(JSON.stringify(row.media_diag)), "no name, address or SDP kept");
+    } else assert(!("media_diag" in row), "nothing written without the column");
+    const line = logged.find((x) => x.includes("fincom_call_diag"));
+    assert(line && line.includes("not_found_track_error@1") && !/Anshul|203\.0\.113|secret|cftok/.test(line), "one plain log line: " + line);
+  }
+  const s = stand({ cf: true });
+  const a = await s.call({ action: "start", kind: "help" }, "tok-staff");
+  eq((await s.call({ action: "cf", room_id: a.j.room.id, op: "diag", diag: {} }, "tok-owner")).status >= 400, true, "only someone in the call");
 });
 
 Deno.test("guests: link, name and email, a code by email, the waiting room, admitted by the host; removed: the channel moves on", async () => {

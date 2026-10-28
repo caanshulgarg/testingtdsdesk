@@ -20,6 +20,7 @@ import { Mic, MicOff, Video, VideoOff, MonitorUp, Hand, Smile, Captions, Ellipsi
 import { makeApi, base, publicKey } from "./api.js";
 import { channel } from "./realtime.js";
 import { createMedia } from "./media.js";
+import { makeVoices } from "./voice.js";
 import { makeEffects, loadChoice, saveChoice, effectsOn, effectsSupport, BACKGROUNDS, shrinkImage } from "./effects.js";
 import { compositeRecorder, micPieces, uploadQueue } from "./recorder.js";
 import { LOBBY, waitText, codeFrom } from "./rules.js";
@@ -121,6 +122,7 @@ function Call({ opts, onClose }) {
   const [remote, setRemote] = useState(null);             // remote help: {phase, id, peerId, rid, reason}
   const [after, setAfter] = useState(null);               // after the call
   const [needTap, setNeedTap] = useState(false);          // the browser held the others' sound until a tap
+  const [netNote, setNetNote] = useState("");             // the line to the call service not up (a network that blocks calls)
   const [gone, setGone] = useState("");                   // this device's place was left (its other device left, or away too long)
   const [admitOk, setAdmitOk] = useState(false);          // the server lets me answer the waiting room (the host away: owner or staff)
   const [wait, setWait] = useState(null);                 // a guest asking: {host_name, host_online}
@@ -190,7 +192,7 @@ function Call({ opts, onClose }) {
   async function pickDevice(kind, id) {
     const want = Object.assign({}, dev, { [kind]: id });
     setDev(want);
-    if (kind === "out") { document.querySelectorAll("#fincom-call video[data-cam]").forEach((v) => { try { v.setSinkId && v.setSinkId(id); } catch (e) { /* */ } }); return; }
+    if (kind === "out") { if (R.voices) R.voices.setSink(id); return; }
     const old = R.raw;
     if (R.fxp) { R.fxp.stop(); R.fxp = null; }
     if (old) old.getTracks().forEach((t) => t.stop());
@@ -322,9 +324,14 @@ function Call({ opts, onClose }) {
     if (phase !== "in" || !sess) return;
     openChannel(sess.topic);
     const local = new MediaStream([...(R.raw ? R.raw.getAudioTracks() : []), ...(outVideo() && cam ? [outVideo()] : [])]);
+    // the others' voices: each in its own <audio> element (voice.js), the pictures' <video> elements always muted
+    if (R.voices) R.voices.stop();
+    R.voices = makeVoices({ root: document.getElementById("fincom-call") || document.body, onBlocked: (b) => setNeedTap(b) });
+    if (dev.out) R.voices.setSink(dev.out);
     R.media = createMedia(sess.mode, { signal: sig, me: sess.me.id, ice: sess.ice, api, room: sess.room.id,
-      onRemote: (pid, s) => { if (!s) R.remotes.delete(pid); else R.remotes.set(pid, Object.assign(R.remotes.get(pid) || {}, s)); force(); },
-      onLevel: (l) => { setLevel(l); if (l === "audio") { setAudioOnly(true); say("The line is weak: audio only for now."); } } });
+      onRemote: (pid, s) => { if (!s) R.remotes.delete(pid); else R.remotes.set(pid, Object.assign(R.remotes.get(pid) || {}, s)); const x = R.remotes.get(pid); R.voices && R.voices.set(pid, x && x.cam); force(); },
+      onLevel: (l) => { setLevel(l); if (l === "audio") { setAudioOnly(true); say("The line is weak: audio only for now."); } },
+      onNet: (n) => setNetNote(n.blocked ? (n.turn ? "The call cannot get through this network. Check the internet connection, or try another network." : "Your network is blocking the call. FinCom will use a relay once it is set up.") : "") });
     R.media.start(local).catch((e) => setErr("The call could not connect: " + e.message));
     api.call("history_chat", { room_id: sess.room.id }).then((j) => setChat(j.messages || [])).catch(() => {});
     const offs = [
@@ -639,6 +646,7 @@ function Call({ opts, onClose }) {
     if (endAll && sess) { sig.send("end", {}); await api.call("end", { room_id: sess.room.id }).catch(() => {}); }
     else if (sess && !why) await api.call("leave", { room_id: sess.room.id }).catch(() => {});
     try { R.media && R.media.stop(); } catch (e) { /* */ }
+    try { R.voices && R.voices.stop(); R.voices = null; } catch (e) { /* */ }
     setTimeout(() => { try { R.ch && R.ch.close(); } catch (e) { /* */ } }, 300);
     [R.raw, R.screen].forEach((s) => s && s.getTracks().forEach((t) => t.stop()));
     if (R.fxp) { R.fxp.stop(); R.fxp = null; }
@@ -651,6 +659,7 @@ function Call({ opts, onClose }) {
     stopCowork(); stopMic();
     if (R.subMic) { R.subMic.stop(); R.subMic = null; }
     try { R.media && R.media.stop(); } catch (e) { /* */ }
+    try { R.voices && R.voices.stop(); R.voices = null; } catch (e) { /* */ }
     try { R.ch && R.ch.close(); } catch (e) { /* */ }
     [R.raw, R.screen].forEach((s) => s && s.getTracks().forEach((t) => t.stop()));
     if (R.fxp) { R.fxp.stop(); R.fxp = null; }
@@ -752,10 +761,11 @@ function Call({ opts, onClose }) {
       <b className="call-title">{sess.room.title}</b>
       {rec && <span className="call-rec" data-call-recording={rec.notes ? undefined : ""} data-call-notes-on={rec.notes ? "" : undefined} role="status">● {rec.notes ? NOTES_TEXT : CONSENT_TEXT}</span>}
       {status === "reconnecting" && <span className="call-warn" data-call-reconnecting="">Reconnecting…</span>}
+      {netNote && <span className="call-warn" role="status" data-call-net="">{netNote}</span>}
       {level !== "high" && <span className="call-warn" data-call-level={level}>{level === "audio" || audioOnly ? "Weak line: audio only" : "Weak line: picture made smaller"}</span>}
       {sess.mode === "p2p" && <span className="call-note" title="Until the call service is set up, calls run directly between computers">Up to {sess.max} people</span>}
       {cowork && <span className="call-note">Working together</span>}
-      {needTap && <button type="button" className="call-primary" onClick={() => { document.querySelectorAll("#fincom-call video[data-cam]:not(.mirror)").forEach((x) => { x.muted = false; x.play().catch(() => {}); }); setNeedTap(false); }} data-call-sound="">Turn on sound</button>}
+      {needTap && <button type="button" className="call-primary" onClick={() => { if (R.voices) R.voices.unlock(); else setNeedTap(false); }} data-call-sound="">Tap to hear</button>}
       <button type="button" className="call-btn small" onClick={() => setMin(!min)} data-call-min-btn="">{min ? "Open the call" : "Make small"}</button>
     </header>
     {remote && remote.phase === "started" && <div className="call-banner" data-remote-banner="" role="status">Remote control in progress{remote.id ? "" : remote.target === sess.me.id ? ": " + nameOf(remote.from) + " is controlling your computer through RustDesk." : ""}{remote.id && <button type="button" className="call-btn small" onClick={() => markRemote("ended")} data-remote-end="">End</button>}
@@ -892,20 +902,21 @@ function Call({ opts, onClose }) {
   </div>;
 }
 
-function Vid({ stream, muted, name, screen, me }) {
+function Vid({ stream, name, screen, me }) {
   const v = useRef(null);
   useEffect(() => {
     const el = v.current; if (!el) return;
     if (el.srcObject !== stream) el.srcObject = stream || null;
-    // started by hand (a stream set after the element is made does not always start); a browser that will not play sound
-    // before a tap plays it muted and says so on the bar (Safari on a phone)
-    if (stream) el.play().catch(() => { if (!muted) { el.muted = true; el.play().catch(() => {}); window.dispatchEvent(new Event("fincom-call-tap")); } });
+    // started by hand (a stream set after the element is made does not always start); always muted: the voice plays in
+    // its own <audio> element (voice.js), so a picture that has not come yet never holds the sound back
+    el.muted = true;
+    if (stream) el.play().catch(() => {});
   }, [stream]);
-  return <video ref={v} autoPlay playsInline muted={!!muted} data-cam={screen ? undefined : ""} data-screen={screen ? "" : undefined} data-name={name} className={me ? "mirror" : ""} />;
+  return <video ref={v} autoPlay playsInline muted data-cam={screen ? undefined : ""} data-screen={screen ? "" : undefined} data-name={name} className={me ? "mirror" : ""} />;
 }
 function Tile({ name, stream, camOn, micOn, hand, react, me, state, speaking }) {
   return <div className={"call-tile" + (speaking && micOn ? " speaking" : "")} data-tile={name} data-speaking={speaking && micOn ? "" : undefined}>
-    {stream ? <Vid stream={stream} muted={me} name={name} me={me} /> : null}
+    {stream ? <Vid stream={stream} name={name} me={me} /> : null}
     {(!camOn || !stream) && <div className="call-camoff"><span className="call-avatar">{String(name || "?").slice(0, 1).toUpperCase()}</span></div>}
     <span className="call-name">{hand ? "✋ " : ""}{name}{micOn ? "" : " · muted"}{state === "disconnected" ? " · reconnecting" : ""}</span>
     {!micOn && <span className="call-muted" aria-hidden="true">🔇</span>}

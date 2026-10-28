@@ -410,3 +410,20 @@ export function termsKept(src, out, names) {
   for (const n of (names || [])) { const nm = String(n || "").trim(); if (nm.length >= 3 && /[A-Za-z]/.test(nm) && s.toLowerCase().includes(nm.toLowerCase()) && !o.toLowerCase().includes(nm.toLowerCase())) return false; }
   return true;
 }
+
+// ---------------------------------------------------------------- a call's line, for the next look (28-Oct-2026)
+// media.js sends what its connection did (op "diag"); only these fields are kept, short and plain: no media, no names,
+// no addresses (a candidate's type, never its IP)
+const DIAG_WORD = /^[a-z0-9_:@.-]{0,40}$/i;
+export function callDiag(x) {
+  const o = x && typeof x === "object" ? x : {};
+  const word = (v) => { const s = String(v == null ? "" : v).slice(0, 40); return DIAG_WORD.test(s) ? s : ""; };
+  const num = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, 1e12) : 0; };
+  const kinds = (v) => ({ audio: num(v && v.audio), video: num(v && v.video) });
+  return {
+    why: word(o.why), ice: word(o.ice), conn: word(o.conn), turn: o.turn === true, local: word(o.local), remote: word(o.remote), proto: word(o.proto),
+    rx: kinds(o.rx), tx: kinds(o.tx), peers: Math.min(num(o.peers), 100), want: Math.min(num(o.want), 200), got: Math.min(num(o.got), 200),
+    rebuilds: Math.min(num(o.rebuilds), 10), secs: Math.min(num(o.secs), 86400),
+    errors: (Array.isArray(o.errors) ? o.errors : []).slice(-10).map(word).filter(Boolean),
+  };
+}
