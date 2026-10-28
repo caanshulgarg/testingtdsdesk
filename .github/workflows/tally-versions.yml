@@ -145,7 +145,9 @@ jobs:
           echo "setup origin: BUILT from source $f SHA-256 $(sha256sum "$f" | awk '{print $1}')" | tee dist/setup-origin.txt
       # the ref's own ledger requests (ledlist: written by a throwaway go test from the ref's source, never committed) and
       # entry request (tds240 / selfck / upg time and judge with it); a ref without a function leaves that file out
+      # (mode batch alone: not needed; the Windows job makes its own inputs, below)
       - name: The bridge's own requests at the ref
+        if: steps.mode.outputs.modes != 'batch'
         continue-on-error: true
         working-directory: bridge-go
         run: |
@@ -197,8 +199,6 @@ jobs:
           # (the harness checkout is gone once the ref is checked out at the root: redate.py is taken from this run's commit)
           # dbbig: the same, about 30,000 entries all in FY 2026-27 (DBM_PROFILE=big)
           case ",${{ steps.mode.outputs.modes }}," in *,dbbig,*|*,g245,*|*,proof72,*) export DBM_PROFILE=big ;; esac
-          # batch (2.4.9 phase 1): the same ~30,000 entries, then ~70,000 more in dbm2-vouchers-NN.xml (about 1,00,000 in all)
-          case ",${{ steps.mode.outputs.modes }}," in *,batch,*) export DBM_PROFILE=big100 ;; esac
           if [ -f ../tests/fixtures/big/make_big_company.py ] && git fetch -q --depth 1 origin ${{ github.sha }} && git show FETCH_HEAD:.github/tally-spike/dbm/redate.py > "$RUNNER_TEMP/redate.py"; then
             n=$(python3 "$RUNNER_TEMP/redate.py" --total)
             python3 ../tests/fixtures/big/make_big_company.py --vouchers "$n" --chunk 100000 --out dist/dbmgen > /dev/null
@@ -207,18 +207,6 @@ jobs:
           # tdsm: ZZ BIG TEST's masters, from its own generator at the ref (masters only are used)
           if [ -f ../tests/fixtures/big/make_big_company.py ]; then python3 ../tests/fixtures/big/make_big_company.py --vouchers 10 --chunk 10 --out dist/big > /dev/null && rm -f dist/big/big-vouchers-*.xml && ls -la dist/big; fi
           ls -la dist/ledreq dist/requests
-      # batch (bridge 2.4.9 phase 1, measure only): the candidate batch requests built by the ref's own code (formCollection /
-      # fcCollection with FinComVoucherObject's kept fields; a throwaway go test from this run's harness, never committed)
-      - name: Batch candidates at the ref (mode batch)
-        if: contains(steps.mode.outputs.modes, 'batch')
-        working-directory: bridge-go
-        run: |
-          git fetch -q --depth 1 origin ${{ github.sha }}
-          git show FETCH_HEAD:.github/tally-spike/batch/zz_fcbatch_req_test.go > zz_fcbatch_req_test.go
-          FC_BATCH_OUT="$PWD/dist/batchreq" go test -run '^TestFCBatchReq$' -count=1 .
-          rm -f zz_fcbatch_req_test.go
-          echo "Written by a go test (harness .github/tally-spike/batch/zz_fcbatch_req_test.go at ${{ github.sha }}) from the ref $(git rev-parse HEAD): dayHeadsRequest, voucherObjectRequest, formCollection / fcCollection" > dist/batchreq/SOURCE.txt
-          ls -la dist/batchreq; cat dist/batchreq/b1-range.xml
       # tds240: the cloud's own parser at the ref (parse.js with server/_shared); selfck: migration 65 at the ref (its
       # tally_selfcheck_words gives the words the stub answers)
       - name: Cloud parser and migration 65 at the ref
@@ -329,7 +317,10 @@ jobs:
           got=$(sha256sum bridge-go/dist/old247/FinComBridge-Setup-2.4.7.exe | awk '{print $1}')
           [ "$got" = 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799 ] || { echo "::error::2.4.7 setup SHA-256 $got"; exit 1; }
           echo "2.4.7 setup SHA-256 $got"
+      # mode batch alone needs no artifact (28-Oct-2026: the account's artifact storage quota was full and every upload
+      # failed): its Windows job makes its own inputs and commits its own results
       - uses: actions/upload-artifact@v4
+        continue-on-error: ${{ steps.mode.outputs.modes == 'batch' }}
         with:
           name: bridge-dist
           path: bridge-go/dist/
@@ -371,9 +362,45 @@ jobs:
             .github
             bridge-go/addon
       - uses: actions/download-artifact@v4
+        if: matrix.mode != 'batch'
         with:
           name: bridge-dist
           path: bridge-dist
+      # batch (bridge 2.4.9 phase 1, measure only): the inputs made here, from the ref (no artifact): the candidate batch
+      # requests built by the ref's own code (formCollection / fcCollection with FinComVoucherObject's kept fields; the
+      # harness's batch\zz_fcbatch_req_test.go, run once in a copy of the ref, never committed) and ZZ BIG TEST's entries
+      # from its own generator, re-dated by dbm\redate.py with DBM_PROFILE=big100 (~30,000, then ~70,000 more)
+      - uses: actions/checkout@v4
+        if: matrix.mode == 'batch'
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: bref
+          sparse-checkout: |
+            bridge-go
+            tests/fixtures/big
+      - uses: actions/setup-go@v5
+        if: matrix.mode == 'batch'
+        with:
+          go-version-file: bref/bridge-go/go.mod
+          cache-dependency-path: bref/bridge-go/go.sum
+      - name: Batch inputs (mode batch)
+        if: matrix.mode == 'batch'
+        timeout-minutes: 30
+        run: |
+          $d = Join-Path $env:GITHUB_WORKSPACE 'bridge-dist'; New-Item -ItemType Directory -Force $d | Out-Null
+          Copy-Item .github/tally-spike/batch/zz_fcbatch_req_test.go bref/bridge-go/
+          Push-Location bref/bridge-go; $env:FC_BATCH_OUT = Join-Path $d 'batchreq'; go test -run '^TestFCBatchReq$' -count=1 .; $rc = $LASTEXITCODE; Remove-Item zz_fcbatch_req_test.go; Pop-Location
+          if ($rc -ne 0) { Write-Host "::error::the batch requests could not be built at the ref"; exit 1 }
+          "Written by a go test (harness .github/tally-spike/batch/zz_fcbatch_req_test.go at ${{ github.sha }}) from the ref ${{ needs.build.outputs.sha }}: dayHeadsRequest, voucherObjectRequest, formCollection / fcCollection" | Set-Content (Join-Path $d 'batchreq\SOURCE.txt')
+          Get-Content (Join-Path $d 'batchreq\b1-range.xml')
+          $env:DBM_PROFILE = 'big100'
+          $n = python .github/tally-spike/dbm/redate.py --total
+          python bref/tests/fixtures/big/make_big_company.py --vouchers $n --chunk 100000 --out (Join-Path $d 'dbmgen') | Out-Null
+          python .github/tally-spike/dbm/redate.py (Join-Path $d 'dbmgen') (Join-Path $d 'dbm')
+          Copy-Item (Join-Path $d 'dbmgen\big-masters.xml') (Join-Path $d 'dbm'); Remove-Item (Join-Path $d 'dbmgen') -Recurse -Force
+          Copy-Item bref/bridge-go/addon/FinComRecorder.tdl $d -ErrorAction SilentlyContinue
+          "bridge source: ${{ needs.build.outputs.sha }}" | Set-Content (Join-Path $d 'bridge-source.txt')
+          Get-ChildItem (Join-Path $d 'dbm') | Measure-Object Length -Sum | ForEach-Object { "dbm: $($_.Count) files, $([math]::Round($_.Sum / 1MB)) MB" }
       - name: Desktop check
         run: |
           New-Item -ItemType Directory -Force $env:RES | Out-Null
@@ -449,8 +476,31 @@ jobs:
           }
           if (Test-Path "$env:RES\installer.txt") { Get-Content "$env:RES\installer.txt" | ForEach-Object { Add-Content $r "INFO installer: $_" } }
           Get-Content $r | ForEach-Object { if ($_ -like 'FAIL*') { Write-Host "::error::$_" } elseif ($_ -like 'HARNESS*' -or $_ -like 'NOT REACHABLE*') { Write-Host "::warning::$_" } elseif ($_ -like 'PASS*') { Write-Host "::notice::$_" } else { Write-Host $_ } }
+      # batch: the kept-field diff here, then the results committed to the run's own branch by this job (no artifact)
+      - name: Batch diff and results to the branch (mode batch)
+        if: always() && matrix.mode == 'batch'
+        continue-on-error: true
+        run: |
+          $b = Join-Path $env:RES 'versions\captures\batch'; $r = Join-Path $env:RES 'versions\results.txt'
+          $z = Join-Path $b 'raw.zip'
+          if (Test-Path $z) {
+            Expand-Archive $z -DestinationPath $b -Force
+            Copy-Item .github/tally-spike/batch/zz_fcbatch_diff_test.go bref/bridge-go/
+            Push-Location bref/bridge-go; $env:FC_BATCH_DIFF_DIR = $b; $env:FC_BATCH_DIFF_OUT = Join-Path $b 'diff.txt'; go test -run '^TestFCBatchDiff$' -count=1 -timeout 30m .; Remove-Item zz_fcbatch_diff_test.go; Pop-Location
+            Remove-Item (Join-Path $b 'raw') -Recurse -Force -ErrorAction SilentlyContinue
+            if ((Get-Item $z).Length -gt 25MB) { Write-Host "raw.zip $((Get-Item $z).Length) bytes: not committed"; Remove-Item $z }
+            python .github/tally-spike/batch/v8.py (Join-Path $b 'diff.txt') | Add-Content $r -Encoding UTF8
+          } else { Add-Content $r "HARNESS v8 kept fields identical to FinComVoucherObject's, through the bridge's strip: no raw answers kept" -Encoding UTF8 }
+          $sum = "spike-results/versions/${{ github.run_id }}-${{ matrix.version }}-batch-summary.txt"
+          Get-Content $r | Where-Object { $_ -match '^(PASS|FAIL|HARNESS|NOT REACHABLE|MEASURE)' } | ForEach-Object { "[${{ matrix.version }}-batch] $_" } | Set-Content $sum -Encoding UTF8
+          git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
+          git add --sparse "spike-results/versions/${{ github.run_id }}-${{ matrix.version }}-batch" $sum
+          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} batch ${{ matrix.version }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          $br = '${{ github.ref_name }}'
+          for ($i = 0; $i -lt 6; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 15 }
       - name: Artifact
         if: always()
+        continue-on-error: ${{ matrix.mode == 'batch' }}
         uses: actions/upload-artifact@v4
         with:
           name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
@@ -472,36 +522,6 @@ jobs:
         with:
           pattern: tally-*-${{ github.run_id }}
           path: got
-      # batch (2.4.9 phase 1): every batch answer's entries against FinComVoucherObject's, through the ref's own strip (the
-      # harness's zz_fcbatch_diff_test.go in the ref's bridge-go, never committed): v8 in each job's results
-      - uses: actions/checkout@v4
-        if: needs.build.outputs.mode == 'batch'
-        with:
-          ref: ${{ needs.build.outputs.sha }}
-          path: bref
-          sparse-checkout: |
-            bridge-go
-      - uses: actions/setup-go@v5
-        if: needs.build.outputs.mode == 'batch'
-        with:
-          go-version-file: bref/bridge-go/go.mod
-          cache-dependency-path: bref/bridge-go/go.sum
-      - name: Batch diff (kept fields, batch against one by one)
-        if: needs.build.outputs.mode == 'batch'
-        continue-on-error: true
-        run: |
-          cp .github/tally-spike/batch/zz_fcbatch_diff_test.go bref/bridge-go/
-          for d in got/tally-*-batch-${{ github.run_id }}; do
-            b="$GITHUB_WORKSPACE/$d/versions/captures/batch"; r="$GITHUB_WORKSPACE/$d/versions/results.txt"
-            if [ ! -f "$b/raw.zip" ]; then echo "HARNESS v8 kept fields identical to FinComVoucherObject's, through the bridge's strip: no raw answers kept" >> "$r"; continue; fi
-            (cd "$b" && unzip -q -o raw.zip)
-            (cd bref/bridge-go && FC_BATCH_DIFF_DIR="$b" FC_BATCH_DIFF_OUT="$b/diff.txt" go test -run '^TestFCBatchDiff$' -count=1 .) || echo "diff test failed for $d"
-            rm -rf "$b/raw"
-            # raw answers kept beside the results only while small (the artifact keeps them 3 days)
-            [ "$(stat -c %s "$b/raw.zip")" -le 25000000 ] || { echo "raw.zip $(stat -c %s "$b/raw.zip") bytes: not committed"; rm -f "$b/raw.zip"; }
-            python3 .github/tally-spike/batch/v8.py "$b/diff.txt" >> "$r"
-          done
-          rm -f bref/bridge-go/zz_fcbatch_diff_test.go
       - name: Commit results back to tally-versions
         run: |
           for d in got/tally-*-${{ github.run_id }}; do
