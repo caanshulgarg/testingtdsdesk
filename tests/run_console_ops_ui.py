@@ -19,6 +19,7 @@ with console/_headers' own headers, the CSP included (only upgrade-insecure-requ
 import os, sys, json, time, socket, subprocess, threading, functools, http.server, zipfile, io, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.normpath(os.path.join(HERE, ".."))
 from playwright.sync_api import sync_playwright
+import console_dt as dt
 SUPA = "https://qbocskaiewaxqcvaunzc.supabase.co"
 PAGE_PORT, STAND_PORT = int(os.environ.get("CONSOLE_PAGE_PORT", 8181)), int(os.environ.get("CONSOLE_STAND_PORT", 8182))
 ORIGIN = "http://localhost:%d" % PAGE_PORT
@@ -105,11 +106,10 @@ try:
         shot(pg, "01-keys")
         pg.click("[data-table=keys] .seg-b:has-text('Not set')"); wait_rows(pg, "keys")
         ok(all("Not set" in r for r in pg.eval_on_selector_all("[data-table=keys] tbody tr", "els => els.map(e => e.innerText)")), "preset: not set")
-        pg.click("[data-table=keys] [data-testid=filters-toggle]")
-        pg.check("[data-filter='provider:Cloudflare']"); wait_rows(pg, "keys")
+        dt.pick(pg, "keys", "provider", "Cloudflare"); wait_rows(pg, "keys")
         wait_count(pg, "keys", "of 4")
-        ok("Provider: Cloudflare" in pg.inner_text("[data-table=keys] .chips"), "a filter on the provider: 4 Cloudflare keys not set")
-        pg.click("[data-table=keys] [data-testid=clear-all]"); pg.click("[data-table=keys] .seg-b:has-text('All')"); wait_rows(pg, "keys")
+        ok("provider" in dt.marked(pg, "keys"), "a filter on the provider from its header: 4 Cloudflare keys not set")
+        dt.clear_filters(pg, "keys"); pg.click("[data-table=keys] .seg-b:has-text('All')"); wait_rows(pg, "keys")
         pg.click("[data-table=keys] tbody tr:has-text('Claude API key')"); pg.wait_for_selector("text=What stops if this key fails")
         pg.click("[data-action='keys.set']"); pg.wait_for_selector("dialog[open]")
         ok(pg.get_attribute("[data-testid=key-value]", "type") == "password", "the value box hides what is typed")

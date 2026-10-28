@@ -17,6 +17,7 @@ else built here) is served with console/_headers' own CSP. Same harness as run_c
 import os, sys, json, time, socket, subprocess, threading, functools, http.server, re
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.normpath(os.path.join(HERE, ".."))
 from playwright.sync_api import sync_playwright
+import console_dt as dt
 SUPA = "https://qbocskaiewaxqcvaunzc.supabase.co"
 PAGE_PORT, STAND_PORT = int(os.environ.get("CONSOLE_PAGE_PORT", 8181)), int(os.environ.get("CONSOLE_STAND_PORT", 8182))
 ORIGIN = "http://localhost:%d" % PAGE_PORT
@@ -114,8 +115,8 @@ try:
         pg.click("[data-table=subs] .seg-b:has-text('Needs attention')"); wait_rows(pg, "subs")
         ok(pg.locator("[data-table=subs] tbody tr").count() == 1 and "Past due" in pg.inner_text("[data-table=subs] tbody"), "preset Needs attention: the past-due firm")
         pg.click("[data-table=subs] .seg-b:has-text('All')"); wait_rows(pg, "subs")
-        pg.click("[data-table=subs] [data-testid=filters-toggle]"); pg.check("[data-filter='status:active']"); wait_rows(pg, "subs")
-        ok("Status: Active" in pg.inner_text("[data-table=subs] .chips") and "Past due" not in pg.inner_text("[data-table=subs] tbody"), "a status filter from the panel, with its chip")
+        dt.pick(pg, "subs", "status", "active"); wait_rows(pg, "subs")
+        ok(dt.marked(pg, "subs") == ["status"] and "Past due" not in pg.inner_text("[data-table=subs] tbody"), "a status filter from the Status header, the header marked")
         with pg.expect_download() as dl:
             pg.click("[data-table=subs] [data-testid=export]")
         csv = open(dl.value.path(), encoding="utf-8-sig").read()
@@ -177,7 +178,7 @@ try:
 
         print("== 4. credit")
         pg.click("[data-nav=credit]"); n = rows(pg, "ledger")
-        pg.click("[data-table=ledger] [data-testid=filters-toggle]"); pg.check("[data-filter='kind:topup']"); wait_rows(pg, "ledger")
+        dt.pick(pg, "ledger", "kind", "topup"); wait_rows(pg, "ledger")
         kinds = set(pg.eval_on_selector_all("[data-table=ledger] tbody td[data-label=Kind]", "els => els.map(e => e.innerText)"))
         ok(kinds == {"Top-up"}, "the all-firms ledger: kind filter (%s)" % kinds)
         with pg.expect_download() as dl:

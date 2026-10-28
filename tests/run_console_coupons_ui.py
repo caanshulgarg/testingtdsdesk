@@ -4,7 +4,8 @@ console-admin router and modules, the coupons' database functions kept in memory
 (tests/console_coupons_fake.ts; the SQL itself: run_migration120.py). The built console (CONSOLE_DIST, else built here
 into $TMPDIR/console-dist) is served with console/_headers' own headers, the CSP included.
   1. the list: the seeded coupons; status chips; presets Active / Paused / Finished / All; a filter from the panel on
-     status, usage, kind, a yes/no rule (filter-only columns), a number range, campaign text; chips; Clear all; Export
+     status, usage, kind, a yes/no rule (filter-only columns, under "More filters"), a number range, campaign text, all
+     from the column headers; the headers marked; Clear filters; Export
      CSV (downloaded, and in the change history)
   2. create: the form shows the fields of the chosen kind and what firms get in words; a bad code is said on the page;
      the reason dialog (off below 5 characters); a code taken in other letters refused in plain words; then the coupon's
@@ -21,6 +22,7 @@ import os, sys, json, time, socket, subprocess, threading, functools, http.serve
 HERE = os.path.dirname(os.path.abspath(__file__)); ROOT = os.path.normpath(os.path.join(HERE, ".."))
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+import console_dt as dt
 SUPA = "https://qbocskaiewaxqcvaunzc.supabase.co"
 PAGE_PORT, STAND_PORT = int(os.environ.get("CONSOLE_PAGE_PORT", 8181)), int(os.environ.get("CONSOLE_STAND_PORT", 8182))
 ORIGIN = "http://localhost:%d" % PAGE_PORT
@@ -113,28 +115,31 @@ try:
         ok(set(codes(pg)) == {"ICAI1000", "OLDTRIAL"}, "preset Finished: ended, expired, used up")
         pg.click("[data-table=coupons] .seg-b:has-text('Active')"); count(pg, "coupons", 1)
         pg.click("[data-table=coupons] .seg-b:has-text('All')"); count(pg, "coupons", 4)
-        pg.click("[data-table=coupons] [data-testid=filters-toggle]")
-        labels = pg.eval_on_selector_all("[data-testid=filter-panel] .f-label", "els => els.map(e => e.innerText)")
-        want = ["Code", "Kind", "Terms", "Status", "Usage", "Uses", "Total uses", "Firms", "Given", "Valid from", "Valid to", "Plans", "Once per firm", "New firms only", "Stacks", "Campaign", "Created"]
-        ok(labels == want, "a filter for every column, the rules too (%s)" % labels)
+        heads = pg.eval_on_selector_all("[data-table=coupons] thead [data-colf]", "els => els.map(e => e.dataset.colf)")
+        ok(heads == ["code", "kind", "terms", "status", "uses", "given_inr", "valid_to", "created_at", "_more"], "a filter in every column's header, and More filters (%s)" % heads)
+        dt.open_col(pg, "coupons", "_more")
+        labels = pg.eval_on_selector_all("[data-table=coupons] .colpop .f-label", "els => els.map(e => e.innerText)")
+        want = ["Usage", "Total uses", "Firms", "Valid from", "Plans", "Once per firm", "New firms only", "Stacks", "Campaign"]
+        ok(labels == want, "More filters: the rules that are not a column (%s)" % labels)
         shot(pg, "c02-filters")
-        pg.check("[data-filter='status:used_up']"); count(pg, "coupons", 1)
-        ok(codes(pg) == ["ICAI1000"] and "Status: Used up" in text(pg, "[data-table=coupons] .chips"), "status filter: Used up, with its chip")
-        pg.uncheck("[data-filter='status:used_up']"); count(pg, "coupons", 4)
-        pg.check("[data-filter='usage:unused']"); count(pg, "coupons", 2)
-        ok(set(codes(pg)) == {"FIRST2FREE", "OLDTRIAL"}, "usage filter: not used yet")
-        pg.uncheck("[data-filter='usage:unused']"); count(pg, "coupons", 4)
-        pg.select_option("[data-filter='new_firms_only']", "true"); count(pg, "coupons", 1)
+        pg.keyboard.press("Escape")
+        dt.pick(pg, "coupons", "status", "used_up"); count(pg, "coupons", 1)
+        ok(codes(pg) == ["ICAI1000"] and dt.marked(pg, "coupons") == ["status"], "status filter: Used up, the Status header marked")
+        dt.pick(pg, "coupons", "status"); count(pg, "coupons", 4)
+        dt.pick(pg, "coupons", "usage", "unused", more=True); count(pg, "coupons", 2)
+        ok(set(codes(pg)) == {"FIRST2FREE", "OLDTRIAL"} and dt.marked(pg, "coupons") == ["_more"], "usage filter (More filters): not used yet; More filters marked")
+        dt.pick(pg, "coupons", "usage", more=True); count(pg, "coupons", 4)
+        dt.open_col(pg, "coupons", "_more"); pg.check("[data-filter='new_firms_only:true']"); dt.apply_col(pg, "coupons"); count(pg, "coupons", 1)
         ok(codes(pg) == ["FIRST2FREE"], "a rule (filter only, not a column): new firms only")
-        pg.select_option("[data-filter='new_firms_only']", ""); count(pg, "coupons", 4)
-        pg.fill("[data-filter='given_inr:from']", "1500"); count(pg, "coupons", 1)
-        ok(codes(pg) == ["ICAI1000"], "a number range: given from ₹1,500")
-        pg.fill("[data-filter='given_inr:from']", ""); count(pg, "coupons", 4)
-        pg.fill("[data-filter='campaign']", "diwali"); pg.press("[data-filter='campaign']", "Enter"); count(pg, "coupons", 1)
-        pg.check("[data-filter='kind:percent']"); count(pg, "coupons", 1)
-        ok(codes(pg) == ["WELCOME10"] and "Kind: % off" in text(pg, "[data-table=coupons] .chips"), "campaign text and kind together")
-        pg.click("[data-table=coupons] [data-testid=clear-all]"); count(pg, "coupons", 4)
-        ok("coupons.f" not in pg.url or "coupons.f=%7B%7D" in pg.url, "Clear all")
+        dt.open_col(pg, "coupons", "_more"); pg.check("[data-filter='new_firms_only:any']"); dt.apply_col(pg, "coupons"); count(pg, "coupons", 4)
+        dt.open_col(pg, "coupons", "given_inr"); pg.fill("[data-filter='given_inr:from']", "1500"); dt.apply_col(pg, "coupons"); count(pg, "coupons", 1)
+        ok(codes(pg) == ["ICAI1000"] and dt.marked(pg, "coupons") == ["given_inr"], "a number range from the Given header: given from ₹1,500")
+        dt.open_col(pg, "coupons", "given_inr"); pg.click("[data-table=coupons] .colpop [data-cp=clear]"); count(pg, "coupons", 4)
+        dt.open_col(pg, "coupons", "_more"); pg.fill("[data-filter='campaign']", "diwali"); pg.press("[data-filter='campaign']", "Enter"); count(pg, "coupons", 1)
+        dt.pick(pg, "coupons", "kind", "percent"); count(pg, "coupons", 1)
+        ok(codes(pg) == ["WELCOME10"] and sorted(dt.marked(pg, "coupons")) == ["_more", "kind"], "campaign text and kind together")
+        dt.clear_filters(pg, "coupons"); count(pg, "coupons", 4)
+        ok("coupons.f" not in pg.url or "coupons.f=%7B%7D" in pg.url, "Clear filters")
         with pg.expect_download() as dl: pg.click("[data-table=coupons] [data-testid=export]")
         csvt = open(dl.value.path(), encoding="utf-8-sig").read()
         ok(csvt.startswith("code,kind,terms,status,usage") and "WELCOME10" in csvt, "Export CSV: every column")
@@ -176,7 +181,7 @@ try:
         pg.goto(ORIGIN + "/#/coupons/" + WELCOME); wait_rows(pg, "red")
         ok(count(pg, "red", 2) and "ABC Associates" in text(pg, "[data-table=red]") and "Sign-up" in text(pg, "[data-table=red]"), "its redemptions: firm, where, given")
         pg.click("[data-table=red] .seg-b:has-text('Running')"); count(pg, "red", 2)
-        pg.click("[data-table=red] [data-testid=filters-toggle]"); pg.check("[data-filter='source:signup']"); count(pg, "red", 1)
+        dt.pick(pg, "red", "source", "signup"); count(pg, "red", 1)
         ok("ABC Associates" in text(pg, "[data-table=red] tbody"), "filter: source Sign-up")
         with pg.expect_download() as dl: pg.click("[data-table=red] [data-testid=export]")
         ok("asha@abc.test" in open(dl.value.path(), encoding="utf-8-sig").read(), "redemptions export")
@@ -206,7 +211,7 @@ try:
         t = text(pg, "[data-table=crep]")
         ok("ICAI1000" in t and "WELCOME10" in t and "₹1,000" in t and "₹500" in t, "given per coupon and month (credit and discounts)")
         pg.click("[data-table=crep] .seg-b:has-text('This month')"); wait_rows(pg, "crep")
-        ok("Month: from" in text(pg, "[data-table=crep] .chips"), "preset This month (a date range)")
+        ok(dt.marked(pg, "crep") == ["month"] and "Month" in text(pg, "[data-table=crep] [data-testid=filters-on]"), "preset This month (a date range): the Month header marked")
         pg.click("[data-table=crep] .seg-b:has-text('All')"); wait_rows(pg, "crep")
         with pg.expect_download() as dl: pg.click("[data-table=crep] [data-testid=export]")
         ok(open(dl.value.path(), encoding="utf-8-sig").read().startswith("month,code,kind,campaign,redemptions,credit_inr,discount_inr,total_inr"), "report export")

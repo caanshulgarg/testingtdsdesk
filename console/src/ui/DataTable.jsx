@@ -1,5 +1,8 @@
-// DataTable: the one list component every console list uses. Search, a filter per column by its type, sorting,
-// paging, filter chips with "Clear all", quick presets (e.g. Active / Deactivated / All), saved views per admin
+// DataTable: the one list component every console list uses. Search, a filter in each column's header by its type (as
+// the user app's lists: a filter button on the header opens a pop-up with a search box and a checklist, a box, From /
+// To, or Any / Yes / No; the header is marked while its filter is on; one "Clear filters" link above the table; the
+// columns that are a filter only sit under "More filters" on the header row), sorting, paging, quick presets
+// (e.g. Active / Deactivated / All), saved views per admin
 // (localStorage), the state in the URL hash (bookmarkable), and Export CSV (the server makes the CSV of the filtered
 // rows and records the export in the change history). Filtering, sorting and paging happen on the SERVER: the
 // action receives {q, filters, sort, page, size} (server/console/core/listquery.ts) and answers {total, rows}.
@@ -18,12 +21,12 @@
 //   onRow={(row) => go(...)}        a row's click
 //   exportName="firms"              file name for Export CSV (omit to hide the button)
 //   rowKey="id" | (row) => string />
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Filter } from "lucide-react";
 import { call } from "../lib/api.js";
 import { download } from "../lib/format.js";
 import { parse, setQuery, useRoute } from "../lib/route.js";
 
-const OPS = { text: "contains", select: "in", date: "range", number: "range", bool: "is" };
 const opts = (c) => (c.options || []).map((o) => (typeof o === "string" ? { value: o, label: o } : o));
 const loadViews = (key) => { try { return JSON.parse(localStorage.getItem(key) || "[]"); } catch { return []; } };
 const saveViews = (key, v) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* storage off: views last this page only */ } };
@@ -81,7 +84,6 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action, req, nonce]);
 
-  const [panel, setPanel] = useState(false);
   const [busyExport, setBusyExport] = useState(false);
   const [exportErr, setExportErr] = useState("");
   const doExport = async () => {
@@ -109,7 +111,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
   const applyView = (v) => { update({ q: v.q || "", f: v.filters || {}, s: v.sort || "" }); closeViews(); };
   const dropView = (name) => { const v = views.filter((x) => x.name !== name); setViews(v); saveViews(viewsKey, v); };
 
-  const active = Object.entries(filters).filter(([c]) => columns.some((x) => x.key === c));
+  const active = Object.entries(filters).filter(([c]) => columns.some((x) => x.key === c && canFilter(x)));
   const presetOn = (p) => JSON.stringify(p.filters) === JSON.stringify(filters);
   const toggleSort = (c) => {
     if (c.sortable === false) return;
@@ -117,6 +119,18 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
     update({ s: `${c.key}:${dir}` });
   };
   const shown = columns.filter((c) => c.list !== false && !c.hidden);
+  // the columns that are a filter only (not a column of the table): under "More filters" on the header row, in the
+  // last header when that one has no label (a column of buttons), else in a header of its own
+  const extra = columns.filter((c) => (c.list === false || c.hidden) && canFilter(c));
+  const extraOn = extra.some((c) => filters[c.key]);
+  const extraCol = extra.length > 0 && !(shown.length && !shown[shown.length - 1].label);
+
+  // the header pop-up: one open at a time; Esc, Cancel, Apply or a click outside closes it, the focus back on its button
+  const [pop, setPop] = useState(null);
+  const btns = useRef({});
+  const reg = (k, el) => { if (el) btns.current[k] = el; };
+  const toggle = (k) => setPop((p) => (p === k ? null : k));
+  const closePop = (focus = true) => { const b = btns.current[pop]; setPop(null); if (focus && b) b.focus(); };
   const keyOf = (r) => (typeof rowKey === "function" ? rowKey(r) : r[rowKey]);
   const from = st.total ? page * size + 1 : 0, to = Math.min(st.total, page * size + size);
 
@@ -129,9 +143,6 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
             {presets.map((p) => <button key={p.label} className={"seg-b" + (presetOn(p) ? " on" : "")} aria-pressed={presetOn(p)} onClick={() => setFilters(p.filters)}>{p.label}</button>)}
           </div>
         )}
-        <button className={"btn ghost" + (panel ? " on" : "")} aria-expanded={panel} onClick={() => setPanel(!panel)} data-testid="filters-toggle">
-          Filters{active.length ? ` (${active.length})` : ""}
-        </button>
         <details className="views" ref={viewsRef}>
           <summary className="btn ghost">Views</summary>
           <div className="menu">
@@ -153,20 +164,10 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
         {exportName && <button className="btn ghost" onClick={doExport} disabled={busyExport} data-testid="export">{busyExport ? "Exporting…" : "Export CSV"}</button>}
       </div>
 
-      {panel && (
-        <div className="dt-filters" data-testid="filter-panel">
-          {columns.filter((c) => c.filter !== false).map((c) => <FilterControl key={c.key} c={c} f={filters[c.key]} set={(f) => setFilter(c.key, f)} />)}
-        </div>
-      )}
-
-      {(active.length > 0 || search) && (
-        <div className="chips" aria-label="Active filters">
-          {search && <span className="chip chip-filter">Search: “{search}” <button aria-label="Remove search" onClick={() => update({ q: "" })}>×</button></span>}
-          {active.map(([col, f]) => {
-            const c = columns.find((x) => x.key === col);
-            return <span key={col} className="chip chip-filter">{c.label}: {describe(c, f)} <button aria-label={"Remove filter " + c.label} onClick={() => setFilter(col, null)}>×</button></span>;
-          })}
-          <button className="link" onClick={() => update({ q: "", f: {} })} data-testid="clear-all">Clear all</button>
+      {active.length > 0 && (
+        <div className="dt-on" data-testid="filters-on">
+          <span className="muted small">Filtered by {active.map(([col]) => columns.find((x) => x.key === col).label).join(", ")}</span>
+          <button className="link small" onClick={() => setFilters({})} data-testid="clear-filters">Clear filters</button>
         </div>
       )}
       {exportErr && <div className="note note-bad" role="alert">{exportErr}</div>}
@@ -176,11 +177,20 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
         <table className="table">
           <thead>
             <tr>
-              {shown.map((c) => (
-                <th key={c.key} className={(c.phone === false ? "no-phone " : "") + (c.align === "end" ? "end" : "")} aria-sort={sort?.col === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
-                  {c.sortable === false ? c.label : <button className="th-b" onClick={() => toggleSort(c)}>{c.label}{sort?.col === c.key ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}</button>}
-                </th>
-              ))}
+              {shown.map((c, i) => {
+                const fc = canFilter(c), on = !!filters[c.key], more = i === shown.length - 1 && extra.length > 0 && !c.label;
+                return (
+                  <th key={c.key} data-col={c.key} data-filtered={fc && on ? "" : undefined} className={[c.align === "end" && "end", !c.label && !more && "th-blank", more && "th-more"].filter(Boolean).join(" ") || undefined}
+                      aria-sort={sort?.col === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+                    <span className="colh">
+                      {c.sortable === false ? (c.label ? <span>{c.label}</span> : null) : <button className="th-b" onClick={() => toggleSort(c)}>{c.label}{sort?.col === c.key ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}</button>}
+                      {fc && <FilterButton k={c.key} label={c.label} on={on} open={pop === c.key} reg={reg} toggle={toggle} />}
+                      {more && <MoreButton on={extraOn} open={pop === MORE} reg={reg} toggle={toggle} />}
+                    </span>
+                  </th>
+                );
+              })}
+              {extraCol && <th className="th-more" data-col={MORE}><span className="colh"><MoreButton on={extraOn} open={pop === MORE} reg={reg} toggle={toggle} /></span></th>}
             </tr>
           </thead>
           <tbody>
@@ -188,6 +198,7 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
               <tr key={keyOf(r)} className={onRow ? "click" : ""} onClick={onRow ? () => onRow(r) : undefined} tabIndex={onRow ? 0 : undefined}
                   onKeyDown={onRow ? (e) => { if (e.key === "Enter") onRow(r); } : undefined}>
                 {shown.map((c) => <td key={c.key} data-label={c.label} className={(c.phone === false ? "no-phone " : "") + (c.align === "end" ? "end" : "")}>{c.render ? c.render(r) : fmtCell(c, r[c.key])}</td>)}
+                {extraCol && <td className="td-more" />}
               </tr>
             ))}
           </tbody>
@@ -195,6 +206,11 @@ export function DataTable({ id, action, columns, params = {}, presets, defaultPr
         {!st.loading && !st.error && st.rows.length === 0 && <p className="muted empty">{empty}</p>}
         {st.loading && <p className="muted empty" role="status">Reading…</p>}
       </div>
+      {pop && (
+        <ColPop key={pop} cols={pop === MORE ? extra : columns.filter((c) => c.key === pop)} title={pop === MORE ? "More filters" : columns.find((c) => c.key === pop)?.label}
+                id={pop} filters={filters} anchor={btns.current[pop]} onClose={closePop}
+                onApply={(ch) => { const n = { ...filters }; for (const [col, f] of Object.entries(ch)) { if (f) n[col] = f; else delete n[col]; } setFilters(n); closePop(true); }} />
+      )}
       <div className="dt-foot">
         <span className="muted small" data-testid="count">{st.total ? `${from}–${to} of ${st.total}` : "0"}</span>
         <select className="input small" aria-label="Rows per page" value={size} onChange={(e) => update({ n: e.target.value })}>
@@ -216,47 +232,168 @@ function fmtCell(c, v) {
   return String(v);
 }
 
-function FilterControl({ c, f, set }) {
-  const label = <span className="f-label">{c.label}</span>;
+// ---- the filters in the column headers (as the user app's lists, src/js/23-column-filters.js and ListTable's
+// ColFunnel): a small filter button on a header, filled while its filter is on; it opens a pop-up under the header.
+
+const MORE = "_more";
+const TYPES = ["text", "select", "date", "number", "bool"];
+function canFilter(c) { return c.filter !== false && !!c.label && TYPES.includes(c.type); }
+
+function FilterButton({ k, label, on, open, reg, toggle }) {
+  return (
+    <button type="button" ref={(el) => reg(k, el)} className={"colf" + (on ? " on" : "") + (open ? " open" : "")} data-colf={k}
+            aria-label={"Filter " + label} aria-haspopup="dialog" aria-expanded={open} title={on ? `Filter ${label} (on)` : `Filter ${label}`}
+            onClick={(e) => { e.stopPropagation(); toggle(k); }}>
+      <Filter size={12} strokeWidth={2.25} fill={on ? "currentColor" : "none"} aria-hidden="true" />
+    </button>
+  );
+}
+function MoreButton({ on, open, reg, toggle }) {
+  return (
+    <button type="button" ref={(el) => reg(MORE, el)} className={"colf colf-more" + (on ? " on" : "") + (open ? " open" : "")} data-colf={MORE}
+            aria-label="More filters" aria-haspopup="dialog" aria-expanded={open} title={on ? "More filters (on)" : "More filters"}
+            onClick={(e) => { e.stopPropagation(); toggle(MORE); }}>
+      <Filter size={12} strokeWidth={2.25} fill={on ? "currentColor" : "none"} aria-hidden="true" /><span>More</span>
+    </button>
+  );
+}
+
+// a filter as typed (draft) made into what the server takes, or null when it filters nothing
+function tidy(c, f) {
+  if (!f) return null;
+  if (f.op === "contains") { const v = String(f.value || "").trim(); return v ? { op: "contains", value: v } : null; }
+  if (f.op === "in") return f.values && f.values.length ? f : null;
+  if (f.op === "is") return typeof f.value === "boolean" ? f : null;
+  const from = f.from === "" || f.from === undefined ? null : f.from, to = f.to === "" || f.to === undefined ? null : f.to;
+  return from === null && to === null ? null : { op: "range", from, to };
+}
+
+// India's dates for the quick picks
+const day = (d) => d.toISOString().slice(0, 10);
+function quick(which) {
+  const now = new Date(Date.now() + 330 * 60000), y = now.getUTCFullYear(), m = now.getUTCMonth(), today = day(now);
+  if (which === "7d") return { from: day(new Date(Date.UTC(y, m, now.getUTCDate() - 6))), to: today };
+  if (which === "month") return { from: day(new Date(Date.UTC(y, m, 1))), to: today };
+  if (which === "last") return { from: day(new Date(Date.UTC(y, m - 1, 1))), to: day(new Date(Date.UTC(y, m, 0))) };
+  return { from: day(new Date(Date.UTC(m >= 3 ? y : y - 1, 3, 1))), to: today };   // the financial year, from 1 April
+}
+const QUICK = [["7d", "Last 7 days"], ["month", "This month"], ["last", "Last month"], ["fy", "This FY"]];
+
+function ColPop({ cols, title, id, filters, anchor, onClose, onApply }) {
+  const [draft, setDraft] = useState(() => Object.fromEntries(cols.map((c) => [c.key, filters[c.key] || null])));
+  const ref = useRef(null);
+  const [pos, setPos] = useState(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const el = ref.current;
+      if (!el || !anchor) return;
+      const r = anchor.getBoundingClientRect(), vw = document.documentElement.clientWidth, vh = window.innerHeight, m = 12, gap = 6;
+      const w = Math.min(el.offsetWidth, vw - 2 * m);
+      const left = Math.max(m, Math.min(r.right - w > m && r.left + w > vw - m ? r.right - w : r.left, vw - w - m));
+      const below = vh - r.bottom - gap - m, above = r.top - gap - m, h = el.scrollHeight;
+      const up = h > below && above > below;
+      setPos({ left, top: up ? undefined : r.bottom + gap, bottom: up ? vh - r.top + gap : undefined, maxHeight: Math.max(120, up ? above : below) });
+    };
+    place();
+    addEventListener("resize", place); addEventListener("scroll", place, true);
+    return () => { removeEventListener("resize", place); removeEventListener("scroll", place, true); };
+  }, [anchor]);
+  useEffect(() => {
+    const el = ref.current;
+    const key = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(true); } };
+    const down = (e) => { if (!el.contains(e.target) && !(anchor && anchor.contains(e.target))) onClose(false); };
+    document.addEventListener("keydown", key, true); document.addEventListener("pointerdown", down, true);
+    return () => { document.removeEventListener("keydown", key, true); document.removeEventListener("pointerdown", down, true); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // the cursor in its first box once it is placed (a hidden pop-up cannot take the focus)
+  const placed = !!pos;
+  useEffect(() => { if (placed) (ref.current.querySelector(".cp-body input") || ref.current.querySelector("button"))?.focus(); }, [placed]);
+  const apply = (e) => { e?.preventDefault(); onApply(Object.fromEntries(cols.map((c) => [c.key, tidy(c, draft[c.key])]))); };
+  const clear = () => onApply(Object.fromEntries(cols.map((c) => [c.key, null])));
+  const one = cols.length === 1;
+  return (
+    <div className="colpop" role="dialog" aria-label={one ? "Filter " + title : title} data-colpop={id} ref={ref}
+         style={pos ? { left: pos.left, top: pos.top, bottom: pos.bottom, maxHeight: pos.maxHeight } : { left: 0, top: 0, visibility: "hidden" }}>
+      <form onSubmit={apply} className="cp-form">
+        <div className="cp-head"><b>{one ? "Filter: " + title : title}</b>
+          <button type="button" className="cp-x" data-cp="close" aria-label="Close" onClick={() => onClose(true)}>×</button></div>
+        <div className="cp-body">
+          {cols.map((c) => (
+            <div className="cp-field" key={c.key}>
+              {!one && <span className="f-label">{c.label}</span>}
+              <Field c={c} f={draft[c.key]} id={id} search={one || opts(c).length > 6} set={(f) => setDraft((d) => ({ ...d, [c.key]: f }))} />
+            </div>
+          ))}
+        </div>
+        <div className="cp-foot">
+          <button type="button" className="link small" data-cp="clear" onClick={clear}>Clear</button>
+          <span />
+          <button type="button" className="btn ghost sm" data-cp="cancel" onClick={() => onClose(true)}>Cancel</button>
+          <button type="submit" className="btn primary sm" data-cp="apply">Apply</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({ c, f, id, search, set }) {
+  const [q, setQ] = useState("");
   if (c.type === "text") {
-    return (
-      <label className="field">{label}
-        <input className="input" placeholder="contains…" defaultValue={f?.value || ""} data-filter={c.key}
-               onBlur={(e) => set(e.target.value.trim() ? { op: OPS.text, value: e.target.value.trim() } : null)}
-               onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-      </label>
-    );
+    return <input className="input cp-full" type="text" placeholder="Contains…" aria-label={c.label + " contains"} data-filter={c.key}
+                  value={f?.value || ""} onChange={(e) => set({ op: "contains", value: e.target.value })} />;
   }
   if (c.type === "select") {
     const vals = f?.values || [];
-    const tog = (v) => { const n = vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v]; set(n.length ? { op: "in", values: n } : null); };
+    const tog = (v) => set({ op: "in", values: vals.includes(v) ? vals.filter((x) => x !== v) : [...vals, v] });
+    const s = q.trim().toLowerCase();
     return (
-      <fieldset className="field">{<legend className="f-label">{c.label}</legend>}
-        <div className="checks">
-          {opts(c).map((o) => <label key={o.value} className="check"><input type="checkbox" checked={vals.includes(o.value)} onChange={() => tog(o.value)} data-filter={c.key + ":" + o.value} /> {o.label}</label>)}
+      <>
+        {search && <input className="input cp-search" type="search" placeholder="Search…" aria-label={"Search " + c.label} value={q} onChange={(e) => setQ(e.target.value)} />}
+        <div className="cp-list">
+          {opts(c).map((o) => (
+            <label key={o.value} className="cp-item" hidden={!!s && !String(o.label).toLowerCase().includes(s) && !vals.includes(o.value)}>
+              <input type="checkbox" checked={vals.includes(o.value)} onChange={() => tog(o.value)} data-filter={c.key + ":" + o.value} /><span>{o.label}</span>
+            </label>
+          ))}
+          {s && !opts(c).some((o) => String(o.label).toLowerCase().includes(s)) && <p className="muted small cp-none">Nothing matches that.</p>}
         </div>
-      </fieldset>
+      </>
     );
   }
   if (c.type === "bool") {
+    const cur = f ? String(f.value) : "any";
     return (
-      <label className="field">{label}
-        <select className="input" value={f ? String(f.value) : ""} data-filter={c.key} onChange={(e) => set(e.target.value === "" ? null : { op: "is", value: e.target.value === "true" })}>
-          <option value="">Any</option><option value="true">{c.yes || "Yes"}</option><option value="false">{c.no || "No"}</option>
-        </select>
-      </label>
+      <div className="cp-list cp-radios" role="radiogroup" aria-label={c.label}>
+        {[["any", "Any"], ["true", c.yes || "Yes"], ["false", c.no || "No"]].map(([v, l]) => (
+          <label key={v} className="cp-item">
+            <input type="radio" name={`cp-${id}-${c.key}`} checked={cur === v} data-filter={c.key + ":" + v}
+                   onChange={() => set(v === "any" ? null : { op: "is", value: v === "true" })} /><span>{l}</span>
+          </label>
+        ))}
+      </div>
     );
   }
   const num = c.type === "number";
   const val = (v) => (v === "" ? null : num ? Number(v) : v);
-  const upd = (from, to) => set(from === null && to === null ? null : { op: "range", from, to });
+  const from = f?.from ?? null, to = f?.to ?? null;
+  const upd = (a, b) => set({ op: "range", from: a, to: b });
   return (
-    <fieldset className="field">{<legend className="f-label">{c.label}</legend>}
-      <div className="range">
-        <input className="input" type={num ? "number" : "date"} aria-label={c.label + " from"} value={f?.from ?? ""} data-filter={c.key + ":from"} onChange={(e) => upd(val(e.target.value), f?.to ?? null)} />
-        <span className="muted">to</span>
-        <input className="input" type={num ? "number" : "date"} aria-label={c.label + " to"} value={f?.to ?? ""} data-filter={c.key + ":to"} onChange={(e) => upd(f?.from ?? null, val(e.target.value))} />
+    <>
+      {!num && (
+        <div className="cp-quick">
+          {QUICK.map(([k, l]) => {
+            const r = quick(k), on = from === r.from && to === r.to;
+            return <button type="button" key={k} className={"cp-chip" + (on ? " on" : "")} aria-pressed={on} data-cpquick={k} onClick={() => upd(r.from, r.to)}>{l}</button>;
+          })}
+        </div>
+      )}
+      <div className="cp-range">
+        <label>From<input className="input" type={num ? "number" : "date"} step={num ? "any" : undefined} inputMode={num ? "decimal" : undefined}
+                          value={from ?? ""} data-filter={c.key + ":from"} onChange={(e) => upd(val(e.target.value), to)} /></label>
+        <label>To<input className="input" type={num ? "number" : "date"} step={num ? "any" : undefined} inputMode={num ? "decimal" : undefined}
+                        value={to ?? ""} data-filter={c.key + ":to"} onChange={(e) => upd(from, val(e.target.value))} /></label>
       </div>
-    </fieldset>
+    </>
   );
 }
