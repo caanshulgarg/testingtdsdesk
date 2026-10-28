@@ -102,7 +102,7 @@ function Panel({ id }) {
 export default function Clients() {
   // the search box: typed at once, the list follows a moment later (as before)
   const [q, setQ] = useState(S.homeQuery || "");
-  const all = Object.values(S.companies), find = q.trim().toLowerCase();
+  const all = Object.values(S.companies).filter((c) => c && !c.deleted), find = q.trim().toLowerCase();
   // console phase 1b: companies FinCom switched off are left out (sortedCompanies) unless "Show inactive" is on
   const offN = FirmGate.offCount();
   const cos = sortedCompanies().filter((c) => !find || c.name.toLowerCase().includes(find) || (c.gstin || "").toLowerCase().includes(find) || (c.pan || "").toLowerCase().includes(find) || (c.tallyName || "").toLowerCase().includes(find));

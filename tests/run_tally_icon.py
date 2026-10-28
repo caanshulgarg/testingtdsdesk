@@ -32,6 +32,12 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 NOT_PLAIN = re.compile(r"NWS144|anshul|[Pp]ort \d|\bport\b|[Bb]ridge|TallyPrime|This PC|this computer")
+# next-fix-clientremove (the owner, 28-Oct-2026: "no visibility of which client it's linked to"): the popover names the
+# Tally company and its computer on one labelled line ("Tally company: <company> on <computer>"); the rest stays plain
+_NP = NOT_PLAIN
+class _Plain:
+    def search(self, t): return _NP.search(re.sub(r"Tally company: [^\n]*", "", t or ""))
+NOT_PLAIN = _Plain()
 ICON = "header.top [data-tally-icon]"
 POP = "header.top [data-tally-pop]"
 
@@ -151,7 +157,7 @@ def main():
         two = [dict(rec(ALPHA, "b-alpha", CA, GA), data_loc="f-nws"), rec(ITS, "b-its", CE, GE)]
         scene(pg, [dev(OPEN, BEAT, bridges=lap)], two, places=places)
         i = icon(pg); po = pop_open(pg)
-        ok(i["state"] == "needs" and po["acts"] == ["place1", "place2"] and "two places" in po["line"] and not re.search(r"LAPTOP|NWS144|ravi|anshul|Data", po["text"]), "two places: Use ① / Use ②, no computer names (%s)" % po)
+        ok(i["state"] == "needs" and po["acts"] == ["place1", "place2"] and "two places" in po["line"] and not re.search(r"LAPTOP|NWS144|ravi|anshul|Data", re.sub(r"Tally company: [^\n]*", "", po["text"])), "two places: Use ① / Use ②, no computer names (%s)" % po)
         shot(pg, "desktop-popover-needs-two-places", POP, 12)
         E("() => { window.__rpc = []; }")
         m = act(pg, "place2", 2200)

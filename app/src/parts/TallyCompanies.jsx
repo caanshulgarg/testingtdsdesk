@@ -145,8 +145,10 @@ export function companyRows(opts) {
   tallyDevs().forEach((d) => { if (pcLive(d)) openOn(d).forEach((n) => put(rowOf(n), { device: d.id, seen: ((d.info || {}).beat || {}).at || "", open: true })); });
   try { if (typeof Bridge === "object" && Bridge.up()) [].concat(Bridge.st.open || []).forEach((o) => { if (o && o.name) put(rowOf(o.name), { open: true }); }); } catch (e) { /* no bridge here */ }
   const hid = hidden();
-  // a client deleted here: its company is not linked to anyone FinCom shows
-  let rows = [...by.values()].map((r) => { const co = r.client && S.companies && S.companies[r.client]; return Object.assign(r, { client: co && co.deleted ? "" : r.client, st: tallyCoState(r.company) }); })
+  // a client removed (here, on another computer, or as the cloud says: clientRemoved): its company is Not linked, free to
+  // link (next-fix-clientremove: it read "Linked to a client not on this computer", with no Link to client…)
+  const gone = (id) => (typeof clientRemoved === "function" ? clientRemoved(id) : !!(S.companies && S.companies[id] && S.companies[id].deleted));
+  let rows = [...by.values()].map((r) => Object.assign(r, { client: r.client && gone(r.client) ? "" : r.client, st: tallyCoState(r.company) }))
     .map((r) => Object.assign(r, { open: r.open || r.st.state === "connected", hidden: !r.client && !r.open && hid.has(coKey(r.company)) }))
     .map((r) => { const g = !r.open && deviceGone(r.device); return Object.assign(r, { gone: g && !r.client, moved: g && !!r.client }); });
   if (!(opts && opts.hidden)) rows = rows.filter((r) => !r.hidden);
@@ -592,10 +594,11 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     <button className="linkbtn" data-tco-pending-cancel="" onClick={() => { delete PEND()[coKey(r.company)]; render(); }}>Cancel</button></span>;
   else if (r.client && !co) act = <span className="note" data-tco-elsewhere="">Linked to a client not on this computer</span>;
   else if (co && forCo && co.id !== forCo.id) act = <>
-    <span className="note tco-linked-to" data-tco-linked-to={co.id}>{"Linked to " + co.name}</span>
+    <span className="note tco-linked-to" data-tco-linked-to={co.id}>Linked to client: <b>{co.name}</b></span>
     {may && <button className="btn small" data-tco-act="move" data-tco-move={forCo.id} disabled={!!busy} onClick={run("move", { kind: "move", cid: forCo.id }, () => moveTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Moving…" : "Move here"}</button>}</>;
   else if (co) act = <>
-    <button className="linkbtn tco-client" data-tco-client={co.id} onClick={() => openCompany(co.id)}>{co.name + " ›"}</button>
+    {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): a labelled line, the name opens the client */}
+    <span className="tco-linked-to" data-tco-linked-label={co.id}><span className="note">Linked to client:</span> <button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></span>
     {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
     <details className="bk-menu tco-more" data-tco-more={r.company}>
       <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>

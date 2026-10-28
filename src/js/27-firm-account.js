@@ -207,6 +207,17 @@ function cloudSnapshot(){
 // the open statement's lines, all of them here: a statement held only in part (its parts still coming) sends no rows
 function bankWhole(b){ const st = b.cur && b.rows.length && b.stmts.find(s => s.id === b.cur); return !!st && !(st.n > b.rows.length); }
 function cloudKey(r){ return r.kind + "|" + (r.client_id || "") + "|" + r.id; }
+// next-fix-clientremove (28-Oct-2026): a client removed here or on another computer: it is gone from S.companies, its sync
+// mark is "gone" (or its removal waits to be sent), or the cloud said so (TCloud.removed, read with the Tally page). A
+// Tally company linked to it is free (not "linked to a client not on this computer")
+function clientRemoved(id){
+  if (!id) return false;
+  const c = S.companies && S.companies[id];
+  if (c) return !!c.deleted;
+  if (typeof TCloud === "object" && TCloud.removed && TCloud.removed.has(String(id))) return true;
+  const k = "client|" + id + "|" + id;
+  try { return Cloud.marks()[k] === "gone" || k in Cloud.dels(); } catch (e){ return false; }
+}
 // The last copy of each record this computer and the server agreed on (sent from here, or taken from the server), kept
 // in memory as JSON: the base cloudApplyNow merges against when a copy comes in over a change made here and not yet
 // sent (owner, 04-Oct-2026). Clients keep theirs in BankDB (ClientBase).
@@ -2016,6 +2027,9 @@ function doAct(act, t){
       confirmTyped({title: "Remove " + name + "?", ok: "Remove client", body: '<p class="note">It leaves the client list on every computer of the firm. The firm account keeps its details, bills, bank and books, marked removed, and they can be brought back. Nothing in Tally is touched.</p>'}).then(ok => {
         if (!ok) return;
         S.coId = null; S.view = "home";
+        // next-fix-clientremove: its Tally companies are released (the cloud does it too on the removal, migration 128,
+        // with who / when / why); this browser shows them free at once
+        if (typeof tallyReleaseClient === "function") tallyReleaseClient(cid).catch(() => {});
         Store.deleteCompany(cid, ok.reason).then(() => { toast(name + " removed. The firm account keeps its data."); render(); }); render();
       });
       break;

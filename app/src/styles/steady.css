@@ -54,6 +54,14 @@ header.top .tsign.tallyicon.idle .tsign-dot { background: var(--st-waiting); }
 .tally-pop .link-status { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin: 0 0 6px; color: var(--text, var(--ink)); }
 .tally-pop .link-status .linkbtn { font-weight: 600; }
 .tally-pop .tally-pop-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 0; }
+/* next-fix-clientremove (the owner: "this is overlapping"): the link card stacks label, list and Link with room between
+   (the list's focus ring ran over the Link button, Open Tally page sat under it); the list never wider than the card */
+.tally-pop .tally-pop-link { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin: 6px 0 2px; min-width: 0; }
+.tally-pop .tally-pop-link > label { margin: 0; }
+.tally-pop .tally-pop-link select { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.tally-pop .tally-pop-link > .btn { align-self: flex-start; margin-top: 2px; }
+.tally-pop .tally-pop-co { overflow-wrap: anywhere; }
+.tally-pop .tally-pop-foot { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid var(--border, var(--rule)); }
 /* a phone: the same single icon; its popover keeps inside the screen */
 @media (max-width: 600px) { .tally-pop { position: fixed; top: calc(var(--head-h, 96px) + 4px); left: 16px; right: 16px; width: auto; } }
 .tb-slot.tb-firm .firmbtn { max-width: 100%; min-width: 0; align-items: stretch; overflow: hidden; }

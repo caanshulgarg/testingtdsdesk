@@ -607,6 +607,8 @@ const TCloud = {
       } catch (e){ p.prefs = []; p.links = []; p.noTarget = true; }
       await this.loadBridgeAlerts();
       p.companies = await this.restAll("tally_companies?select=company,client_id,device_id,gstin,last_seen,linked_at,linked_by&order=company.asc");
+      // next-fix-clientremove: the firm's removed clients (a company still linked to one is free; clientRemoved)
+      try { this.removed = new Set([].concat(await Cloud.api("clients?select=id&deleted=is.true") || []).map(r => String(r && r.id || "")).filter(Boolean)); } catch (e){ /* kept as read before */ }
       // migration-35: the stops and resumes from FinCom with who and when (round 4, item 24: the latest 300 rows; the
       // standing stops and the latest resume a computer are taken out here), and the bridge versions on trial, approved
       // or withdrawn (members may read both); without the migration, none (the lines still show what each heartbeat says)
@@ -2329,7 +2331,8 @@ async function tallyLinkClient(company, cid, opts){
   if (typeof TCloud !== "object" || !TCloud.on() || !company) return false;
   opts = opts || {};
   const co = cid ? CO(cid) : null, all = [].concat((typeof TLight === "object" && TLight.st.cos) || [], TCloud.pane.companies || []);
-  const was = Array.from(new Set(all.filter(r => r && r.company === company && r.client_id).map(r => String(r.client_id))));
+  // a removed client holds nothing (next-fix-clientremove): its company is free to link, never "linked to another client"
+  const was = Array.from(new Set(all.filter(r => r && r.company === company && r.client_id && !(typeof clientRemoved === "function" && clientRemoved(r.client_id))).map(r => String(r.client_id))));
   if (cid && !opts.move && was.some(x => x !== String(cid))){ toast(company + " is linked to " + ((CO(was.find(x => x !== String(cid))) || {}).name || "another client") + ": move it from its row on the Tally page."); return false; }
   if (co){ try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e){} }
   const before = cid && !opts.keep ? Array.from(new Set(all.filter(r => r && r.company && r.company !== company && String(r.client_id || "") === String(cid)).map(r => r.company))) : [];
@@ -2349,6 +2352,19 @@ async function tallyLinkClient(company, cid, opts){
   was.filter(x => x !== String(cid || "")).forEach(x => { const k = CO(x); if (k && k.tallyName && !all.some(r => r.company !== company && String(r.client_id || "") === x)){ k.tallyName = ""; Store.saveCompany(k); } });
   render();
   return true;
+}
+// next-fix-clientremove (28-Oct-2026): a client being removed releases its Tally companies (each unlinked through the
+// link function; the cloud's own release on the removal, migration 128, keeps who / when / why); shown free here at once
+async function tallyReleaseClient(cid){
+  if (!cid || typeof TCloud !== "object") return 0;
+  const rows = [].concat((typeof TLight === "object" && TLight.st.cos) || [], TCloud.pane.companies || []).filter(r => r && r.company && String(r.client_id || "") === String(cid));
+  const names = Array.from(new Set(rows.map(r => r.company)));
+  rows.forEach(r => { r.client_id = null; });
+  TCloud.removed = TCloud.removed || new Set(); TCloud.removed.add(String(cid));
+  if (TCloud.on()) for (const n of names){ try { await TCloud.rpc("tally_company_link", {p_company: n, p_client: null}); } catch (e){ /* the cloud releases it on the removal */ } }
+  if (typeof LinkRec === "object" && LinkRec.st) LinkRec.st.at = 0;
+  if (typeof TLight === "object") TLight.st.at = 0;
+  return names.length;
 }
 // the client's company in the cloud's link: of several (a client with a company a year), the latest seen
 function tallyRowOf(co, rows){

@@ -10,12 +10,13 @@
 //                       page's Link) / Download FinCom Bridge when no computer of the firm has it
 // Owners' actions are hidden from staff, with one line saying who can do them. Plain words (the owner: "I don't need
 // NWS144... need only Tally"): the sentence is TallyIcon's (tallyIconState); never a computer's name, a port, a Windows
-// user or the bridge here (they are on the Tally page). Its own file, loaded on the first click (the app's first file is
+// user or the bridge here (they are on the Tally page), but for one labelled line "Tally company: <company> on <computer>"
+// (next-fix-clientremove: the owner asked which company a client is linked to). Its own file, loaded on the first click (the app's first file is
 // at its size budget).
 import { useEffect, useRef, useState } from "react";
 import "../../../src/js/98-link-record.js";
 import "./LinkStatus.jsx";
-import { tallyDevs, mayLink, coKey } from "../lib/tallyState.js";
+import { tallyDevs, mayLink, coKey, tallyCoState } from "../lib/tallyState.js";
 import { companyRows, linkTo } from "./TallyCompanies.jsx";
 import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
@@ -25,6 +26,8 @@ import { tallyIconState, clock } from "./TallyIcon.jsx";
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 const now = () => clock(Date.now());
+// the computer a company is read on (its first word: "NWS144 · anshul" -> NWS144)
+const pcName = (company) => { try { return String((tallyCoState(company) || {}).computer || "").split(" · ")[0].trim(); } catch (e) { return ""; } };
 const OWNER_ONLY = <p className="note" data-tally-pop-owner="">An owner of the firm can do this.</p>;
 
 // FinCom Bridge's setup (assets/bridge-go/latest.json, as the Tally page reads it)
@@ -40,16 +43,22 @@ function Download() {
 // Link to Tally company: the companies seen that are no client's, the same GSTIN (then the same name) first
 function LinkPick({ co, run }) {
   const g = String(co.gstin || "").trim().toUpperCase(), k = coKey(co.tallyName || co.name);
-  const rows = companyRows().filter((r) => r.reported && !r.client)
-    .sort((a, b) => ((String(b.gstin || "").toUpperCase() === g && g ? 2 : coKey(b.company) === k ? 1 : 0) - (String(a.gstin || "").toUpperCase() === g && g ? 2 : coKey(a.company) === k ? 1 : 0)));
+  // next-fix-clientremove: a client restored is offered the companies it held before it was removed (tally_link_history,
+  // migration 128) first, then the same GSTIN, then the same name
+  const [hist, setHist] = useState(null);
+  useEffect(() => { let on = true; if (typeof Cloud === "object" && Cloud.on && Cloud.on() && co.id)
+    Promise.resolve(Cloud.api("tally_link_history?select=company_name&client_id=eq." + encodeURIComponent(co.id) + "&order=at.desc&limit=5")).then((r) => on && setHist([].concat(r || []).map((x) => x.company_name)), () => {});
+    return () => { on = false; }; }, [co.id]);
+  const score = (r) => ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : coKey(r.company) === k ? 1 : 0);
+  const rows = companyRows().filter((r) => r.reported && !r.client).sort((a, b) => score(b) - score(a));
   const [pick, setPick] = useState("");
   const sel = pick || (rows[0] ? rows[0].company : "");
   if (!mayLink()) return <p className="note" data-tally-pop-owner="">An owner or staff member of the firm links it.</p>;
   if (!rows.length) return tallyDevs().length ? <p className="note" data-tally-pop-none="">No Tally company to link yet: open the company in Tally; it shows here within a minute.</p> : <Download />;
   return <div className="tally-pop-link" data-tally-pop-link="">
     <label className="note" htmlFor="tallyPopPick">Link to Tally company</label>
-    <select id="tallyPopPick" data-tally-pop-pick="" value={sel} onChange={(e) => setPick(e.target.value)}>
-      {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : r.open ? " (open now)" : "")}</option>)}
+    <select id="tallyPopPick" data-tally-pop-pick="" value={sel} title={sel} onChange={(e) => setPick(e.target.value)}>
+      {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : (hist || []).includes(r.company) ? " (linked before)" : "")}</option>)}
     </select>
     <button type="button" className="btn small primary" data-tally-pop-act="link" onClick={() => run(async () => {
       const r = rows.find((x) => x.company === sel); if (!r) return "Choose a company.";
@@ -106,6 +115,8 @@ export default function TallyPop({ co, nOpen, close, back }) {
     onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (back) back(); } }}>
     <p className="tally-pop-head"><span className={"tsign-dot " + TONE[s.icon]} aria-hidden="true" /><b data-tally-pop-word="">{s.word}</b></p>
     {line && <p className="tally-pop-line" data-tally-pop-line="">{line}</p>}
+    {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): the company linked, and where */}
+    {co && s.icon !== "none" && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b>{pcName(s.company) ? " on " + pcName(s.company) : ""}</p>}
     <Actions co={co} s={s} run={run} busy={busy} />
     {busy && <p className="note" data-tally-pop-busy="">Working…</p>}
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}

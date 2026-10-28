@@ -4324,7 +4324,7 @@ function clearSent(why){
 /* ------------------------------------------------------------------ */
 const app = document.getElementById("app");
 // a company FinCom switched off is left out unless "Show inactive" is on (src/js/99)
-function sortedCompanies(){ return Object.values(S.companies).filter(c => typeof FirmGate !== "object" || FirmGate.shown(c)).sort((a, b) => a.name.localeCompare(b.name)); }
+function sortedCompanies(){ return Object.values(S.companies).filter(c => c && !c.deleted && (typeof FirmGate !== "object" || FirmGate.shown(c))).sort((a, b) => a.name.localeCompare(b.name)); }
 function recentIds(){ try { return JSON.parse(lsGet("tdsdesk:recent") || "[]"); } catch(e){ return []; } }
 
 // The page always ends below the bars fixed at the bottom of the window (the action bar, the testing strip),

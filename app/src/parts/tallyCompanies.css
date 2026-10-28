@@ -12,8 +12,11 @@
 #app .tco-meta { flex: 1 0 100%; }
 #app .tco-pill { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 4px; overflow-wrap: anywhere; color: var(--text-muted); font-size: 13px; }
 #app .tco-pill .tag { white-space: nowrap; }
-#app .tco-act { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px 8px; }
-#app .tco-client { font-weight: 600; min-width: 0; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#app .tco-act { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 8px; min-width: 0; }
+/* next-fix-clientremove: "Linked to client: <name>" (the name opens the client); it wraps, never runs under the buttons */
+#app .tco-linked-to { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; max-width: 100%; }
+#app .tco-linked-to > .note { white-space: nowrap; }
+#app .tco-client { font-weight: 600; min-width: 0; text-align: left; overflow-wrap: anywhere; white-space: normal; }   /* the whole name (two of a name differ by the year) */
 #app .tco-more summary::after { content: none; }
 #app .tco-under { grid-column: 1 / -1; min-width: 0; }
 #app .tco-sync { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 2px 0 0; overflow-wrap: anywhere; }
