@@ -146,6 +146,7 @@ jobs:
       # the ref's own ledger requests (ledlist: written by a throwaway go test from the ref's source, never committed) and
       # entry request (tds240 / selfck / upg time and judge with it); a ref without a function leaves that file out
       - name: The bridge's own requests at the ref
+        if: steps.mode.outputs.mode != 'dbjson'
         continue-on-error: true
         working-directory: bridge-go
         run: |
