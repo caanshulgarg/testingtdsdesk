@@ -12,6 +12,9 @@
 #       taken from that day's heads (so the range holds exactly the N asked: only that day's entries are looked at)
 #   B2  the same with every kept list fetched whole ("LIST.*"); the bridge's strip keeps only the approved fields
 #   B3  B1 with the filter $MasterID = m1 OR ... OR $MasterID = mN (any N MasterIDs of that day, not a run of them)
+#   B4  B1 with every ledger-line field also under LEDGERENTRIES (7.1 run 40741546645: a collection's ALLLEDGERENTRIES of
+#       an item invoice also holds the items' sales ledger; its LEDGERENTRIES are the invoice's own lines); B5 = B3 so
+#   (B2 was measured on 7.1 in run 40741546645 only: the same kept fields as B1, 3x the size, slower; dropped)
 #   C0  control: B1 with no date (the whole company looked at; FinComByMaster's lesson, proof72 run 40362606548: 3 s at
 #       ~30,000 entries) - expected over 2 s, measured to show why the day is in the request
 # Steps:
@@ -19,10 +22,10 @@
 #     background days ~2,215), plus on 31-Aug: ten Sales invoices of 50 items and payroll entries of 100 and 500
 #     employees (paymv.ps1's payroll)
 #   2 FinComVoucherObject for every entry of the diff windows (raw kept: the reference) and timed
-#   3 the sweep: days 01-Jun, 02-Jul, 31-Aug, 01-Aug; B1, B2, B3; N = 5, 10, 25, 50, 100; 6 windows each spread over
-#     the day (the last ends at the 500-employee payroll on 31-Aug); exact set checked; times, window hold, size
+#   3 the sweep, day by day: FinComDayHeads, then B1, B4, B3, B5 with N = 5, 10, 25, 50, 100, 200; 6 windows each spread
+#     over the day (the last ends at the 500-employee payroll on 31-Aug); exact set checked; times, window hold, size
 #   4 the diff windows (31-Aug: four of 25 from the start, the last 25 with the invoices and payrolls; 01-Aug: the
-#     first 25) for B1, B2, B3: raw kept; the collect job compares every kept field with FinComVoucherObject's (v8)
+#     first 25) for B1, B4, B3, B5: raw kept; the job then compares every kept field with FinComVoucherObject's (v8)
 #   5 C0 (control)
 #   6 ~70,000 more entries (dbm2-vouchers-NN.xml, round robin over the background days: ~1,00,000 in all; 01-Aug then
 #     holds ~7,600), then 2, 3 and 5 again
@@ -88,7 +91,7 @@ function MidsOf([string]$b) {
 $bq = Join-Path $env:BRIDGE_DIST 'batchreq'
 $RB = @{}
 foreach ($f in @(Get-ChildItem $bq -Filter '*.xml' -ErrorAction SilentlyContinue)) { $RB[$f.BaseName] = (Get-Content $f.FullName -Raw).Trim() }
-$needRB = 'dayheads', 'object', 'b1-range', 'b2-range', 'b1-list', 'c0-range'
+$needRB = 'dayheads', 'object', 'b1-range', 'b4-range', 'b4-list', 'b1-list', 'c0-range'
 $missRB = @($needRB | Where-Object { -not $RB[$_] })
 if ($missRB.Count) { foreach ($c in $V1, $V2, $V3, $V4, $V5, $V6, $V7) { VRes $c 'HARNESS' "the candidate requests are not in bridge-dist\batchreq: $($missRB -join ', ')" }; return }
 Copy-Item (Join-Path $bq '*') $bt -ErrorAction SilentlyContinue   # the exact XML measured, beside the results
@@ -96,24 +99,27 @@ Info "batch: requests from $bq ($(Get-Content (Join-Path $bq 'SOURCE.txt') -Tota
 function ObjReq([int64]$mid) { (WithDay $RB['object'] '20991231').Replace('ID:99999', "ID:$mid") }
 function HeadsReq([string]$d) { WithDay $RB['dayheads'] $d }
 function RangeReq([string]$form, [string]$d, [int64]$a, [int64]$b) {
-  $t = switch ($form) { 'B1' { $RB['b1-range'] } 'B2' { $RB['b2-range'] } 'C0' { $RB['c0-range'] } }
+  $t = switch ($form) { 'B1' { $RB['b1-range'] } 'B2' { $RB['b2-range'] } 'B4' { $RB['b4-range'] } 'C0' { $RB['c0-range'] } }
   return (WithDay $t $d).Replace('111111', "$a").Replace('222222', "$b")
 }
-function ListReq([string]$d, [int64[]]$mids) { (WithDay $RB['b1-list'] $d).Replace('@@MIDS@@', ((@($mids | ForEach-Object { "`$MasterID = $_" })) -join ' OR ')) }
-function FormReq([string]$form, [string]$d, [int64[]]$w) { if ($form -eq 'B3') { return ListReq $d $w }; return RangeReq $form $d $w[0] $w[-1] }
-$FORMS = 'B1', 'B2', 'B3'
-$SIZES = 5, 10, 25, 50, 100
+function ListReq([string]$d, [int64[]]$mids, [string]$tpl = 'b1-list') { (WithDay $RB[$tpl] $d).Replace('@@MIDS@@', ((@($mids | ForEach-Object { "`$MasterID = $_" })) -join ' OR ')) }
+function FormReq([string]$form, [string]$d, [int64[]]$w) { if ($form -eq 'B3') { return ListReq $d $w }; if ($form -eq 'B5') { return ListReq $d $w 'b4-list' }; return RangeReq $form $d $w[0] $w[-1] }
+# (B2, every kept list whole, was measured on 7.1 in run 40741546645: the same kept fields as B1, answers 3x the size and
+# slower; dropped. B4 / B5 = B1 / B3 with the ledger lines also under LEDGERENTRIES, for item invoices)
+$FORMS = 'B1', 'B4', 'B3', 'B5'
+$SIZES = 5, 10, 25, 50, 100, 200
 $REPS = 6
 # the harness's own truth for one day (no time limit; never a bridge request): every entry of that day with its type and
 # number, in FinComDayHeads' own date form
 function DayTruth([string]$d) {
-  $x = (HeadsReq $d).Replace('<FETCH>GUID, MASTERID, ALTERID, DATE</FETCH>', '<FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER</FETCH>').Replace('FinComDayHeads', 'FCBTruth')
+  $x = (HeadsReq $d).Replace('<FETCH>GUID, MASTERID, ALTERID, DATE</FETCH>', '<FETCH>GUID, MASTERID, ALTERID, DATE, VOUCHERTYPENAME, VOUCHERNUMBER, NARRATION</FETCH>').Replace('FinComDayHeads', 'FCBTruth')
   $r = TSetup $x 600
   $l = [Collections.Generic.List[object]]::new()
   foreach ($m in [regex]::Matches((NoInfo $r.body), '(?s)<VOUCHER[ >].*?</VOUCHER>')) {
     $v = $m.Value
     $l.Add([pscustomobject]@{ mid = [int64]('0' + [regex]::Match($v, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value); date = [regex]::Match($v, '<DATE[^>]*>\s*(\d{8})').Groups[1].Value
-        type = [regex]::Match($v, '<VOUCHERTYPENAME[^>]*>([^<]*)<').Groups[1].Value; no = [regex]::Match($v, '<VOUCHERNUMBER[^>]*>([^<]*)<').Groups[1].Value })
+        type = [regex]::Match($v, '<VOUCHERTYPENAME[^>]*>([^<]*)<').Groups[1].Value; no = [regex]::Match($v, '<VOUCHERNUMBER[^>]*>([^<]*)<').Groups[1].Value
+        narr = [regex]::Match($v, '<NARRATION[^>]*>([^<]*)<').Groups[1].Value })
   }
   $bad = @($l | Where-Object { $_.date -ne $d }).Count
   if ($bad) { Info "batch: the truth for $d holds $bad entries of other dates (kept out)" }
@@ -247,9 +253,8 @@ function Phase([string]$ph, [string[]]$days, [bool]$keepRaw) {
   foreach ($d in $days) {
     $t = DayTruth $d
     $H[$d] = [int64[]]@($t | ForEach-Object { $_.mid })
-    if ($d -eq '20260831') { foreach ($e in $t) { if ($e.no -like 'BI-50-*') { $script:special[$e.mid] = 'inv50' } elseif ($e.no -eq 'PM-PAY-100') { $script:special[$e.mid] = 'pay100' } elseif ($e.no -eq 'PM-PAY-500') { $script:special[$e.mid] = 'pay500' } } }
-    # FinComDayHeads itself, timed (the request before every batch)
-    $r = TS (HeadsReq $d); $null = Row $ph 'heads' 'FinComDayHeads' $d $H[$d].Count $H[$d] $r
+    # by narration (Tally numbers imported entries itself: run 40741546645 gave the invoices 11453.. and the payrolls 1, 2)
+    if ($d -eq '20260831') { foreach ($e in $t) { if ($e.narr -like 'BI-50-*') { $script:special[$e.mid] = 'inv50' } elseif ($e.narr -like 'PM-PAY-100 *') { $script:special[$e.mid] = 'pay100' } elseif ($e.narr -like 'PM-PAY-500 *') { $script:special[$e.mid] = 'pay500' } } }
     Info ("batch {0}: {1} holds {2} entries (MasterIDs {3}..{4})" -f $ph, $d, $H[$d].Count, $(if ($H[$d].Count) { $H[$d][0] } else { '-' }), $(if ($H[$d].Count) { $H[$d][-1] } else { '-' }))
   }
   # the diff windows: 31-Aug four of 25 from the start and the last 25 (the invoices and payrolls); 01-Aug the first 25
@@ -265,9 +270,12 @@ function Phase([string]$ph, [string[]]$days, [bool]$keepRaw) {
   }
   # the sweep
   foreach ($d in $days) {
+    # FinComDayHeads, timed, right before the day's batches (the bridge's order: the heads, then the entries)
+    $r = TS (HeadsReq $d); $null = Row $ph 'heads' 'FinComDayHeads' $d $H[$d].Count $H[$d] $r
+    $first = $true
     foreach ($n in $SIZES) {
       foreach ($w in (Windows $H[$d] $n)) {
-        foreach ($f in $FORMS) { $r = TS (FormReq $f $d $w.w); $null = Row $ph 'sweep' $f $d $H[$d].Count $w.w $r $w.k }
+        foreach ($f in $FORMS) { $r = TS (FormReq $f $d $w.w); $o = Row $ph 'sweep' $f $d $H[$d].Count $w.w $r $w.k; $o | Add-Member -NotePropertyName first -NotePropertyValue $first; $first = $false }
       }
     }
   }
@@ -294,7 +302,7 @@ function Report([string]$ph, [string]$vExact, [string]$vSize, [int]$count) {
   foreach ($h in @($rows | Where-Object { $_.phase -eq $ph -and $_.what -eq 'heads' })) { MLine ("{0} FinComDayHeads {1} ({2} entries): {3} ms, window held {4} ms, {5:N0} chars" -f $ph, $h.day, $h.dayN, $h.ms, $h.blockedMs, $h.chars) }
   $best = @()
   foreach ($f in $FORMS) {
-    $okN = 0; $okN1 = 0; $parts = @()
+    $okN = 0; $okN1 = 0; $okS = 0; $parts = @()
     foreach ($n in $SIZES) {
       $l = @($sw | Where-Object { $_.form -eq $f -and $_.n -eq $n })
       if (-not $l.Count) { continue }
@@ -304,10 +312,14 @@ function Report([string]$ph, [string]$vExact, [string]$vSize, [int]$count) {
           ((@($l | Group-Object day | ForEach-Object { $g = St $_.Group; '{0} ({1}) worst {2} ms held {3} ms' -f $_.Name, $_.Group[0].dayN, $g.worst, $g.held })) -join '; '))
       if ($s.ok2) { $okN = $n }
       if ($s.ok2 -and $s.worst -le 1000) { $okN1 = $n }
+      $sm = St @($l | Where-Object { [int]$_.dayN -le 3000 })
+      if ($sm -and $sm.ok2) { $okS = $n }
       $parts += "N=$n worst $($s.worst) ms"
     }
-    $best += "$f largest N within 2 s every time $okN (within 1 s $okN1)"
+    $best += "$f largest N within 2 s every time $okN (within 1 s $okN1; on days of at most 3,000 entries $okS)"
   }
+  # the first batch of a day, right after its FinComDayHeads (Tally's first look at that day's entries since other days)
+  foreach ($x in @($sw | Where-Object { $_.first })) { MLine ("{0} first batch of {1} ({2} entries) after its heads: {3} n={4} {5} ms, window held {6} ms" -f $ph, $x.day, $x.dayN, $x.form, $x.n, $x.ms, $x.blockedMs) }
   $bad = @($sw | Where-Object { $_.ok -and -not $_.exact })
   $noAns = @($sw | Where-Object { -not $_.ok })
   VRes $vExact $(if (-not $sw.Count) { 'HARNESS' } elseif ($bad.Count) { 'FAIL' } elseif ($noAns.Count) { 'HARNESS' } else { 'PASS' }) `

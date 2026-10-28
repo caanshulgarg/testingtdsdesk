@@ -16,7 +16,7 @@ if not lines:
 forms = {}
 for l in lines:
     print("MEASURE diff " + l[5:])
-    m = re.match(r"DIFF (\S+) (\S+): asked (\d+), kept fields identical (\d+), identical but lines in another order (\d+), differ (\d+), missing (\d+), extra (\d+), held by the strip \(batch (\d+), one-by-one (\d+)\), no one-by-one answer (\d+)", l)
+    m = re.match(r"DIFF (\S+) (\S+): REMOTEID \(= GUID\) only in the batch answer \d+; asked (\d+), kept fields identical (\d+), identical but lines in another order (\d+), differ (\d+), missing (\d+), extra (\d+), held by the strip \(batch (\d+), one-by-one (\d+)\), no one-by-one answer (\d+)", l)
     if not m:
         continue
     ph, fm = m.group(1), m.group(2)

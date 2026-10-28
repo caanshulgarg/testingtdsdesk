@@ -9,6 +9,10 @@ package main
 //   b1-range.xml   candidate B1: a Voucher collection of ONE day (the FinComDayHeads date form, yyyymmdd TYPE="Date"),
 //                  FETCH = the fields FinComVoucherObject keeps today (named), filter $MasterID >= a AND $MasterID <= b
 //   b2-range.xml   candidate B2: the same, FETCH = the same top-level fields and every kept list whole ("LIST.*")
+//   b4-range.xml   candidate B4 (after 7.1 run 40741546645): B1 plus every ALLLEDGERENTRIES field again under
+//                  LEDGERENTRIES. A Voucher collection's ALLLEDGERENTRIES of an item invoice also holds the items' sales
+//                  ledger (summed); its LEDGERENTRIES are the invoice's own ledger lines, as FinComVoucherObject's answer
+//                  holds them. The 2.4.9 converter takes LEDGERENTRIES for an entry with items (the diff checks it)
 //   b1-list.xml    candidate B3: B1 with the filter $MasterID = m1 OR $MasterID = m2 ... (@@MIDS@@ filled by the harness)
 //   c0-range.xml   control C0: B1 with NO date (the whole company's vouchers looked at): expected over 2 s on a big company
 // FC_BATCH_OUT names the folder. Placeholders: @@CO@@ (company), 20991231 (the day), 111111 / 222222 (a / b), @@MIDS@@.
@@ -76,6 +80,17 @@ func fcBatchWide() []string {
 	return append(top, lists...)
 }
 
+// B1's fields, then each ALLLEDGERENTRIES field again under LEDGERENTRIES
+func fcBatchLed() []string {
+	o := fcBatchExact()
+	for _, f := range fcBatchExact() {
+		if strings.HasPrefix(f, "ALLLEDGERENTRIES.") {
+			o = append(o, strings.TrimPrefix(f, "ALL"))
+		}
+	}
+	return o
+}
+
 func TestFCBatchReq(t *testing.T) {
 	out := os.Getenv("FC_BATCH_OUT")
 	if out == "" {
@@ -92,6 +107,8 @@ func TestFCBatchReq(t *testing.T) {
 		"object.xml":   voucherObjectRequest("@@CO@@", "99999"),
 		"b1-range.xml": formCollection(fcBatchID, "@@CO@@", formPlainT, "20991231", "20991231", exact, rng),
 		"b2-range.xml": formCollection(fcBatchID, "@@CO@@", formPlainT, "20991231", "20991231", wide, rng),
+		"b4-range.xml": formCollection(fcBatchID, "@@CO@@", formPlainT, "20991231", "20991231", strings.Join(fcBatchLed(), ", "), rng),
+		"b4-list.xml":  formCollection(fcBatchID, "@@CO@@", formPlainT, "20991231", "20991231", strings.Join(fcBatchLed(), ", "), "@@MIDS@@"),
 		"b1-list.xml":  formCollection(fcBatchID, "@@CO@@", formPlainT, "20991231", "20991231", exact, "@@MIDS@@"),
 		"c0-range.xml": fcCollection(fcBatchID, "@@CO@@", "", "Voucher", exact, rng),
 		"fetch-exact.txt": strings.Join(fcBatchExact(), "\n") + "\n",

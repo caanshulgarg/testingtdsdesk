@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -68,11 +69,14 @@ func fcFlat(stripped string) []string {
 
 // the stripped entries of an answer by MasterID, and the ones held (the strip's reason). hold: FinComVoucherObject's strip
 // (fastStripWhy); else the strip the bridge already uses for a Voucher collection's answer (fastStripCollection, which
-// keeps ALLLEDGERENTRIES and drops the LEDGERENTRIES a collection adds beside them)
-func fcStripAll(raw string, hold bool) (map[string]string, map[string]string) {
+// keeps ALLLEDGERENTRIES and drops the LEDGERENTRIES a collection adds beside them). conv: fcBatchConvert first
+func fcStripAll(raw string, hold, conv bool) (map[string]string, map[string]string) {
 	out, held := map[string]string{}, map[string]string{}
 	for _, m := range reVchBlock.FindAllString(raw, -1) {
 		c := cleanXML(m)
+		if conv {
+			c = fcBatchConvert(c)
+		}
 		v, why := fastStrip(c, hold)
 		id := tagNum(c, "MASTERID")
 		if why != "" || v == "" {
@@ -121,6 +125,32 @@ func fcCanon(stripped string) string {
 	return strings.Join(at, " ") + c(root)
 }
 
+// the 2.4.9 converter's one step before the strip (proposed; run 40741546645 on 7.1): in a batch answer, an entry with
+// items (ALLINVENTORYENTRIES with a stock item) keeps its LEDGERENTRIES as its ledger lines, and its ALLLEDGERENTRIES
+// (which a collection fills with the items' sales ledger too) is dropped; any other entry is left as Tally sent it
+var reFcAllLed = regexp.MustCompile(`(?s)<ALLLEDGERENTRIES\.LIST(?:\s[^>]*)?>.*?</ALLLEDGERENTRIES\.LIST>`)
+var reFcItem = regexp.MustCompile(`<STOCKITEMNAME[^>]*>\s*[^<\s]`)
+
+func fcBatchConvert(v string) string {
+	if !strings.Contains(v, "<LEDGERENTRIES.LIST") || !strings.Contains(v, "<ALLINVENTORYENTRIES.LIST") || !reFcItem.MatchString(v) {
+		return v
+	}
+	return reFcAllLed.ReplaceAllString(v, "")
+}
+
+// a REMOTEID the batch answer carries and FinComVoucherObject's does not, equal to the entry's GUID (an approved field
+// already kept): set aside, counted
+func fcRemoteIDOnly(fb []string, guid string) []string {
+	var o []string
+	for _, x := range fb {
+		if x == "@REMOTEID="+guid {
+			continue
+		}
+		o = append(o, x)
+	}
+	return o
+}
+
 func fcMinus(a, b []string) []string {
 	m := map[string]int{}
 	for _, x := range b {
@@ -160,7 +190,15 @@ func TestFCBatchDiff(t *testing.T) {
 	var detail []string
 	pathsDiffer := map[string]map[string]int{}
 	objCache := map[string]string{}
+	var plan2 []fcDiffWin
 	for _, w := range plan {
+		plan2 = append(plan2, w)
+		c := w
+		c.Form = w.Form + "+conv"
+		plan2 = append(plan2, c)
+	}
+	remoteOnly := map[string]int{}
+	for _, w := range plan2 {
 		k := w.Phase + " " + w.Form
 		if sum[k] == nil {
 			sum[k] = &agg{}
@@ -168,7 +206,7 @@ func TestFCBatchDiff(t *testing.T) {
 			pathsDiffer[k] = map[string]int{}
 		}
 		a := sum[k]
-		got, held := fcStripAll(read(w.File), false)
+		got, held := fcStripAll(read(w.File), false, strings.HasSuffix(w.Form, "+conv"))
 		asked := map[string]bool{}
 		for _, mid := range w.Mids {
 			asked[mid] = true
@@ -186,7 +224,7 @@ func TestFCBatchDiff(t *testing.T) {
 			}
 			ref, okc := objCache[mid]
 			if !okc {
-				o, oh := fcStripAll(read("obj-"+mid+".xml"), true)
+				o, oh := fcStripAll(read("obj-"+mid+".xml"), true, false)
 				ref = o[mid]
 				if why, bad := oh[mid]; bad {
 					ref = "HELD:" + why
@@ -203,6 +241,12 @@ func TestFCBatchDiff(t *testing.T) {
 				continue
 			}
 			fb, fo := fcFlat(v), fcFlat(ref)
+			if n := len(fb); true {
+				fb = fcRemoteIDOnly(fb, tagValue(v, "GUID"))
+				if len(fb) < n {
+					remoteOnly[k]++
+				}
+			}
 			onlyB, onlyO := fcMinus(fb, fo), fcMinus(fo, fb)
 			if len(onlyB) == 0 && len(onlyO) == 0 {
 				a.same++
@@ -239,8 +283,8 @@ func TestFCBatchDiff(t *testing.T) {
 			pd = append(pd, fmt.Sprintf("%s x%d", p, n))
 		}
 		sort.Strings(pd)
-		fmt.Fprintf(&b, "DIFF %s: asked %d, kept fields identical %d, identical but lines in another order %d, differ %d, missing %d, extra %d, held by the strip (batch %d, one-by-one %d), no one-by-one answer %d; fields that differ: %s\n",
-			k, a.asked, a.same, a.sameUnordered, a.differ, a.missing, a.extra, a.heldB, a.heldO, a.noRef, fcCut(pd, 40))
+		fmt.Fprintf(&b, "DIFF %s: REMOTEID (= GUID) only in the batch answer %d; asked %d, kept fields identical %d, identical but lines in another order %d, differ %d, missing %d, extra %d, held by the strip (batch %d, one-by-one %d), no one-by-one answer %d; fields that differ: %s\n",
+			k, remoteOnly[k], a.asked, a.same, a.sameUnordered, a.differ, a.missing, a.extra, a.heldB, a.heldO, a.noRef, fcCut(pd, 40))
 	}
 	for _, d := range detail {
 		b.WriteString("DETAIL " + d + "\n")
