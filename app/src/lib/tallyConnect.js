@@ -20,8 +20,12 @@
 //   findTally()   the bridge's status asked fresh (/status?fresh=1: the same light company request it always sends) and its
 //                 diagnosis (/diagnose: no Tally request): each Tally it sees, its port, whose it is, its companies.
 //   usePort(p)    the page's existing Tally pin (bridgePin, src/js/24): FinCom asks only the Tally on that port.
+//   typePort(p)   FinCom Bridge 2.4.8 and later (bridge-go/anyport.go): the bridge itself tries the typed port (POST
+//                 /ports/use: the same light company request, at most 2 seconds) and keeps it only when it answers as
+//                 TallyPrime and is this Windows user's; else its plain reason (nothing listening, not Tally, another
+//                 user's Tally, no answer in 2 seconds). An older bridge: the page's pin as before (usePort).
 // Every step is bounded (STEP_MS), so nothing spins for ever; each answer is {st, say} in plain words.
-/* global Bridge, TCloud, S, bridgePin */
+/* global Bridge, TCloud, S, bridgePin, bridgeVer */
 
 export const STEP_MS = 20000, LINK_MS = 45000;
 const BEAT_FRESH_MS = 120000;
@@ -166,6 +170,30 @@ export function usePort(p) {
   if (n && (n < 1 || n > 65535)) return false;
   if (typeof bridgePin === "function") bridgePin(n); else Bridge.setCfg({ port: n });
   return true;
+}
+
+// 2.4.8: the bridge here takes a typed port itself (POST /ports/use); an older one only knows the page's pin
+export const ANYPORT_VERSION = "2.4.8";
+export function bridgeTakesPort() {
+  const v = typeof Bridge === "object" && Bridge.st && Bridge.st.version;
+  if (!v) return false;
+  const k = (x) => String(x || "").split(".").map((n) => String(Number(n) || 0).padStart(3, "0")).join(".");
+  return (typeof bridgeVer === "function" ? bridgeVer(v) >= bridgeVer(ANYPORT_VERSION) : k(v) >= k(ANYPORT_VERSION));
+}
+
+// Use this port: a 2.4.8 bridge tries it and keeps it only when it is your own TallyPrime ({st: "ok"|"refused"|"bad"|
+// "error", say}); 0: automatic again. An older bridge: the page's pin, as before ({st: "pinned"})
+export async function typePort(p) {
+  const n = Number(String(p == null ? "" : p).replace(/\D/g, "")) || 0;
+  if (n > 65535) return { st: "bad", say: "Type a port number from 1 to 65535 (TallyPrime: F1 → Settings → Connectivity)." };
+  if (!bridgeTakesPort()) return usePort(n) ? { st: "pinned", port: n } : { st: "bad", say: "Type a port number from 1 to 65535." };
+  let j;
+  try { j = await within(Bridge.call("/ports/use", { port: n }, 15000), STEP_MS, "FinCom Bridge did not answer in time."); }
+  catch (e) { return { st: e && e.code === "bridge" ? "refused" : "error", port: n, say: msg(e) }; }
+  usePort(n); // the page asks only that Tally, as before (0: automatic)
+  if (!n) return { st: "ok", port: 0, say: "FinCom Bridge finds your TallyPrime by itself again." };
+  const cos = [].concat(j.companies || []);
+  return { st: "ok", port: n, companies: cos, say: "Your TallyPrime answered on port " + n + " (" + (cos.length ? cos.length + (cos.length === 1 ? " company" : " companies") + " open" : "no company open") + "). FinCom Bridge keeps this port." };
 }
 
 // the companies open in the Tally found (the same request as Find Tally; read again when older than 10 seconds)
