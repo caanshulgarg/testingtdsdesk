@@ -34,6 +34,18 @@ if os.environ.get("DBM_PROFILE") == "big":
     BACKGROUND = 2216
     PER_FILE = 500
     FROM = "20260401"
+# Mode batch (DBM_PROFILE=big100; bridge 2.4.9 phase 1, measure only): the same ~30,000 entries as big (written as
+# dbm-vouchers-NN.xml, imported first), then EXTRA more written as dbm2-vouchers-NN.xml (imported second, to make about
+# 1,00,000), given to the 13 background days in turn (one each, round robin), so a day's MasterIDs are no longer one
+# block: the 2.4.9 batch is measured on ~30,000 entries and again on ~1,00,000
+EXTRA = 0
+if os.environ.get("DBM_PROFILE") == "big100":
+    TARGETS = {"20260601": 100, "20260702": 300, "20260831": 800}
+    EMPTY = {"20260531"}
+    BACKGROUND = 2216
+    PER_FILE = 500
+    FROM = "20260401"
+    EXTRA = 70000
 
 
 def allowed_days():
@@ -62,8 +74,13 @@ def plan_dates():
     return seq
 
 
+def extra_dates():
+    bg = [d for d in allowed_days() if d not in EMPTY and d not in TARGETS]
+    return [bg[i % len(bg)] for i in range(EXTRA)] if EXTRA else []
+
+
 def total():
-    return len(plan_dates())
+    return len(plan_dates()) + len(extra_dates())
 
 
 def main():
@@ -78,20 +95,23 @@ def main():
             text += f.read()
     vouchers = re.findall(r"<VOUCHER .*?</VOUCHER>", text, flags=re.S)
     dates = plan_dates()
-    if len(vouchers) < len(dates):
+    extra = extra_dates()
+    if len(vouchers) < len(dates) + len(extra):
         print("only %d vouchers for %d dates" % (len(vouchers), len(dates)), file=sys.stderr)
         return 1
     out, plan = [], {}
-    for v, d in zip(vouchers, dates):
+    for v, d in zip(vouchers, dates + extra):
         v = re.sub(r"(<(?:DATE|EFFECTIVEDATE|REFERENCEDATE|INSTRUMENTDATE|BANKERSDATE)>)\d{8}(</)", r"\g<1>%s\g<2>" % d, v)
         t = re.search(r'VCHTYPE="([^"]+)"', v).group(1)
         p = plan.setdefault(d, {"total": 0, "types": {}})
         p["total"] += 1
         p["types"][t] = p["types"].get(t, 0) + 1
         out.append(v)
-    for i in range(0, len(out), PER_FILE):
-        with open(os.path.join(dest, "dbm-vouchers-%02d.xml" % (i // PER_FILE + 1)), "w", encoding="utf-8") as f:
-            f.write("".join("<TALLYMESSAGE xmlns:UDF=\"TallyUDF\">%s</TALLYMESSAGE>" % v for v in out[i:i + PER_FILE]))
+    first, second = out[:len(dates)], out[len(dates):]
+    for name, part in (("dbm-vouchers", first), ("dbm2-vouchers", second)):
+        for i in range(0, len(part), PER_FILE):
+            with open(os.path.join(dest, "%s-%02d.xml" % (name, i // PER_FILE + 1)), "w", encoding="utf-8") as f:
+                f.write("".join("<TALLYMESSAGE xmlns:UDF=\"TallyUDF\">%s</TALLYMESSAGE>" % v for v in part[i:i + PER_FILE]))
     with open(os.path.join(dest, "dbm-plan.json"), "w", encoding="utf-8") as f:
         json.dump({"targets": TARGETS, "empty": sorted(EMPTY), "background": BACKGROUND, "days": plan}, f, indent=1, sort_keys=True)
     print("dbm: %d vouchers re-dated over %d days into %d file(s); targets %s" % (len(out), len(plan), (len(out) + PER_FILE - 1) // PER_FILE,
