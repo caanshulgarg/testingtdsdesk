@@ -385,3 +385,140 @@ func TestRelease248VersionAllowListUnchanged(t *testing.T) {
 		t.Fatal("the typed port's request is not the allow-listed company list")
 	}
 }
+
+// --- review 2.4.8 round 1 (R1-1 .. R1-5), written before the fixes
+
+// R1-1: a posting going on: the typed try is refused at once and nothing is sent; a try that waits too long keeps nothing
+func TestTypedPortBusyAndBounded(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	importsInFlight.Add(1)
+	res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port))
+	importsInFlight.Store(0)
+	if str(res["reason"]) != useBusy || len(f.ids()) != 0 {
+		t.Fatalf("during a posting: %v, Tally asked %v", res, f.ids())
+	}
+	old := usePortWait
+	usePortWait = 200 * time.Millisecond
+	t.Cleanup(func() { usePortWait = old })
+	f.slow = func(id, body string) time.Duration { return 900 * time.Millisecond }
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port)); str(res["reason"]) != useBusy {
+		t.Fatalf("over the wait: %v", res)
+	}
+	time.Sleep(1500 * time.Millisecond) // the try's late answer
+	if _, auto := cleanPorts(cfg("TallyPorts")); !auto {
+		t.Fatalf("kept after the page was answered: %v", cfg("TallyPorts"))
+	}
+}
+
+// R1-2: a typed port that is not Tally and drops the connection leaves the real Tally's "not answering" record as it was
+func TestTypedPortLeavesRealTallyState(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { l.Close() })
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			buf := make([]byte, 512)
+			_, _ = c.Read(buf)
+			c.Close() // drops the connection without an answer
+		}
+	}()
+	drop := l.Addr().(*net.TCPAddr).Port
+	setTallyStuck(f.port)
+	before := readText(stuckFile())
+	res := postUse(t, fmt.Sprintf(`{"port": %d}`, drop))
+	if res["ok"] == true || str(res["reason"]) != useNotTally {
+		t.Fatalf("a port that drops the connection: %v", res)
+	}
+	if readText(stuckFile()) != before || needProbe(drop) {
+		t.Fatalf("the typed port left a mark: stuck %s (was %s), probe %v", readText(stuckFile()), before, needProbe(drop))
+	}
+}
+
+// R1-4: Tally set on another computer (TallyHost): the typed port is not tried (whose it is cannot be told)
+func TestTypedPortRemoteTallyHostRefused(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	setCfg("TallyHost", "10.0.0.5")
+	t.Cleanup(func() { setCfg("TallyHost", "127.0.0.1") })
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port)); str(res["reason"]) != useBad || !strings.Contains(str(res["error"]), "TallyHost") || len(f.ids()) != 0 {
+		t.Fatalf("remote TallyHost: %v %v", res, f.ids())
+	}
+}
+
+// R1-3: Tally's own short refusal or an empty answer never marks its port; a mark ends when Tally answers
+func TestAnyPortTallyRefusalNotMarked(t *testing.T) {
+	if !isTallyAnswer("<RESPONSE>Unknown Request, cannot be processed</RESPONSE>") || notTallyAnswer("") || notTallyAnswer("  ") || !notTallyAnswer("<html>x</html>") {
+		t.Fatal("the answer rules")
+	}
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	noteNotTally(f.port, 99) // another program held the port before
+	ss := openCompanies(true)
+	if s := sessionFor(ss, f.port); s == nil || s["ok"] != true {
+		t.Fatalf("Tally: %v", jsonText(ss))
+	}
+	notTallyMu.Lock()
+	_, marked := notTally[f.port]
+	notTallyMu.Unlock()
+	if marked {
+		t.Fatal("Tally's answer did not end the mark")
+	}
+}
+
+// R1-5: a port set by hand (or tally.ini's, in the fallback) that Windows says is another user's program is skipped
+func TestAnyPortSetPortOfOtherUserSkipped(t *testing.T) {
+	mine, theirs := newStandTally(t), newStandTally(t)
+	standBridge(t, mine, "")
+	t.Setenv("TDSBRIDGE_FAKE", "")
+	oldL, oldO := listenerUserOf, ownSIDsOf
+	t.Cleanup(func() { listenerUserOf, ownSIDsOf = oldL, oldO })
+	ownSIDsOf = func() []string { return []string{sidAnshul} }
+	listenerUserOf = func(p int) (string, bool, error) {
+		if p == theirs.port {
+			return sidRavi, true, nil
+		}
+		return sidAnshul, true, nil
+	}
+	setCfg("OnlyMySession", true)
+	setCfg("TallyPorts", []any{float64(theirs.port), float64(mine.port)})
+	forgetPlanCache()
+	ss := openCompanies(true)
+	if s := sessionFor(ss, theirs.port); s == nil || s["skipped"] != true {
+		t.Fatalf("another user's port set by hand: %v", jsonText(ss))
+	}
+	if s := sessionFor(ss, mine.port); s == nil || s["ok"] != true {
+		t.Fatalf("own port: %v", jsonText(ss))
+	}
+	// the fallback: tally.ini (one file for every user of the server) names their port
+	d := t.TempDir()
+	_ = os.WriteFile(filepath.Join(d, "tally.ini"), []byte(fmt.Sprintf("[Tally]\r\nServer Port = %d\r\n", theirs.port)), 0o644)
+	oldD := tallyIniDirsFn
+	tallyIniDirsFn = func() []string { return []string{d} }
+	t.Cleanup(func() { tallyIniDirsFn = oldD; resetIniPorts() })
+	resetIniPorts()
+	setCfg("TallyPorts", "auto")
+	setCfg("FallbackPorts", []any{float64(mine.port)})
+	forgetPlanCache()
+	ss = openCompanies(true)
+	if s := sessionFor(ss, theirs.port); s == nil || s["skipped"] != true {
+		t.Fatalf("another user's tally.ini port in the fallback: %v", jsonText(ss))
+	}
+	if len(theirs.ids()) != 0 {
+		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
+	}
+}

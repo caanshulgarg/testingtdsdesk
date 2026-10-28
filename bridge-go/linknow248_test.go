@@ -18,6 +18,7 @@ func TestLinkNowAsksCloudLinksAgain(t *testing.T) {
 	cloudMu.Unlock()
 	holdLinks(map[string]bool{"Linked Co": true})
 	cloudLinksAgain.Store(false)
+	resetLinksAsked()
 	t.Cleanup(func() {
 		cloudMu.Lock()
 		cloudLinks, cloudLinksAt = oldL, oldAt
@@ -44,6 +45,16 @@ func TestLinkNowAsksCloudLinksAgain(t *testing.T) {
 	if cloudLinksDue(300) {
 		t.Fatal("asked again once only")
 	}
+	// review 2.4.8 (R1-9): the same company again within a minute (Update now after each posting to a company never
+	// linked): the links are not asked again at every push; another company is
+	askLinksFor("Salesify Marketing LLP 2026-27")
+	if cloudLinksDue(300) {
+		t.Fatal("the same company within a minute: not asked again")
+	}
+	askLinksFor("Another Co")
+	if !cloudLinksDue(300) {
+		t.Fatal("another company not held as linked: asked")
+	}
 	cloudMu.Lock()
 	cloudLinksAt = time.Now().Add(-301 * time.Second)
 	cloudMu.Unlock()
@@ -60,6 +71,7 @@ func TestWakeUpdateOfACompanyNotLinkedAsksLinks(t *testing.T) {
 	cloudMu.Unlock()
 	holdLinks(nil)
 	cloudLinksAgain.Store(false)
+	resetLinksAsked()
 	t.Cleanup(func() {
 		cloudMu.Lock()
 		cloudLinks, cloudLinksAt = oldL, oldAt

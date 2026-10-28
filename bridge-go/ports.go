@@ -291,7 +291,7 @@ func portPlan() (string, []M) {
 				l = append(l, f)
 				continue
 			}
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
 		}
 		for _, f := range tallyHTTPListeners(lis) {
 			if !containsInt(ports, toInt(f["port"])) && f["mine"] == true {
@@ -307,7 +307,7 @@ func portPlan() (string, []M) {
 		ports, _ := cleanPorts(cfg("FallbackPorts"))
 		ports = mergePorts(tallyIniPorts(), ports)
 		for _, p := range ports {
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
 		}
 		return "fallback", l
 	}
@@ -463,7 +463,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
 			e["error"] = err.Error()
-		} else if !isTallyAnswer(raw) {
+		} else if notTallyAnswer(raw) {
 			// 2.4.8 (anyport.go): the port answers, but not as Tally (another listener of a Tally program, or another
 			// program on a port set by hand): not a Tally; a program's port is left out of the plan while it holds it
 			e["error"], e["notTally"] = "this port answers, but not as TallyPrime", true
@@ -471,6 +471,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				noteNotTally(toInt(pp["port"]), pid)
 			}
 		} else {
+			clearNotTally(toInt(pp["port"])) // review 2.4.8 (R1-3): Tally's own answer ends any earlier mark
 			list := []any{}
 			for _, c := range xmlDoc(raw).All("COMPANY") {
 				name := nameOf(c)
@@ -784,6 +785,16 @@ func keepUserInTally() bool {
 		return false
 	}
 	return platFrontIsTally()
+}
+
+// review 2.4.8 (R1-5): a port the plan names without a Tally program Windows lists there (set by hand, or tally.ini's
+// in the fallback): false when Windows says the program listening there is another Windows user's (then skipped with
+// OnlyMySession like any other user's Tally), else nil (not known), as before
+func mineByWindows(port int) any {
+	if portOfOtherUser(port) {
+		return false
+	}
+	return nil
 }
 
 // a first, then b's ports not in a

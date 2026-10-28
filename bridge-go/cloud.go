@@ -185,14 +185,33 @@ func holdLinks(m map[string]bool) {
 	cloudLinksMu.Unlock()
 }
 
+// review 2.4.8 (R1-9): one company makes the links be asked again at most once a minute (FinCom's Update now after each
+// posting to a company never linked does not re-ask the cloud at every push)
+var linksAskedFor = map[string]time.Time{}
+
+func resetLinksAsked() {
+	cloudLinksMu.Lock()
+	linksAskedFor = map[string]time.Time{}
+	cloudLinksMu.Unlock()
+}
+
 func askLinksFor(company string) {
 	if strings.TrimSpace(company) == "" {
 		return
 	}
 	cloudLinksMu.Lock()
 	on := cloudLinksHeld[company]
+	again := !on && time.Since(linksAskedFor[company]) >= time.Minute
+	if again {
+		linksAskedFor[company] = time.Now()
+		for k, at := range linksAskedFor {
+			if time.Since(at) >= time.Minute {
+				delete(linksAskedFor, k)
+			}
+		}
+	}
 	cloudLinksMu.Unlock()
-	if !on {
+	if again {
 		cloudLinksAgain.Store(true)
 	}
 }
