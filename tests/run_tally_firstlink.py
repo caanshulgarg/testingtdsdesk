@@ -283,19 +283,18 @@ def main():
         shot("07-linking")
         # ---- 8. the cloud hears it: step 1 ticks, the companies, Add as client
         E("([d, c]) => { window.__devs = window.__fix(d); window.__companies = window.__fix(c); }", [[dev()], cos()])
-        try: pg.wait_for_selector("#app [data-connect-step=install][data-done]", timeout=12000); heard = True
+        # next-tally-smart: a computer heard: the steps give way to the one status card (never a wizard once connected)
+        try: pg.wait_for_function("() => !document.querySelector('#app [data-connect-step]') && /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')", timeout=12000); heard = True
         except Exception: heard = False
-        ok(heard, "8. the cloud hears the bridge: step 1 ticks by itself")
+        ok(heard, "8. the cloud hears the bridge: the steps give way, the card says Connected (%s)" % txt("#app [data-status-card]")[:100])
         ok(pg.locator("#app [data-firstlink]").count() == 0, "8. Connect this computer gives way")
-        ok(pg.locator("#app [data-connect-step=open][data-done]").count() == 1 and "2 companies open in Tally on NWS144" in txt("#app [data-connect-step=open]"), "8. step 2: '2 companies open in Tally on NWS144.' (%s)" % txt("#app [data-connect-step=open]"))
-        rows = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), (r.querySelector('[data-tco-act]') || {}).innerText || ''])")
-        ok(sorted(r[0] for r in rows) == sorted([VMS, GSC]) and all(r[1] == "Link to client…" for r in rows), "8. Companies in Tally: both, each with Link to client… (Task D: no Add as client) (%s)" % rows)
+        ok("Tally open: 2 companies" in txt("#app [data-status-card]"), "8. the card: 'Tally open: 2 companies' (%s)" % txt("#app [data-status-card]")[:120])
+        rows = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.querySelectorAll('select[data-tco-act=pick]').length, r.innerText])")
+        ok(sorted(r[0] for r in rows) == sorted([VMS, GSC]) and all(r[1] == 1 and "Add as client" not in r[2] for r in rows), "8. Open in Tally now: both, each with the client picker (Task D: no Add as client) (%s)" % [r[:2] for r in rows])
         shot("08-companies")
-        pg.click('#app [data-tco-row="%s"] [data-tco-act=pick]' % VMS); pg.wait_for_timeout(250); pg.click('#app [data-tco-row="%s"] [data-tco-add-new]' % VMS); pg.wait_for_timeout(1500)
+        pg.click('#app [data-tco-row="%s"] [data-tco-add-new]' % VMS); pg.wait_for_timeout(1500)
         ok(any(c[0] == "tally_company_link" and c[1].get("p_company") == VMS for c in calls()), "8. + New client with this name: linked (tally_company_link)")
-        try: pg.wait_for_selector("#app [data-connect-guide=done]", timeout=8000); done = True
-        except Exception: done = False
-        ok(done and pg.locator("#app [data-connect-guide=open], #app section[data-connect-guide]").count() == 0, "8. the three steps give way to 'Connected computers: NWS144 ● online'")
+        ok(pg.locator("#app [data-connect-guide], #app [data-connect-step]").count() == 0 and pg.locator("#app [data-status-card]").count() == 1, "8. still the one card, no steps")
         shot("08-first-link-done")
         # ---- 9. failures: the firm link refused; Tally not answering
         bridge_reset(); E(FRESH); scene([], []); E("() => { window.__failCreate = true; openConnectTally(1, ''); }")

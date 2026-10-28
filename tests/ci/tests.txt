@@ -518,6 +518,10 @@ run_bank_heal.py                      240  TDSDESK_SITE=../app/dist-test
 run_bank_live_parts.py                240  TDSDESK_SITE=../app/dist-test
 run_postto_link.py                    240  TDSDESK_SITE=../app/dist-test
 run_link_record.py                    300  TDSDESK_SITE=../app/dist-test
+run_client_remove.py                  300  TDSDESK_SITE=../app/dist-test
+run_tally_smart.py                    300  TDSDESK_SITE=../app/dist-test
+run_tally_oneclick.py                 300  TDSDESK_SITE=../app/dist-test
+run_tally_firstlink.py                300  TDSDESK_SITE=../app/dist-test
 # next-tally-icon (27-Oct-2026): the header's one Tally icon, its four states and its popover's actions
 run_tally_icon.py                     300  TDSDESK_SITE=../app/dist-test
 # next-gzip-uploads (26-Oct-2026): large saves sent gzipped through records-upload; plain when it is missing or fails

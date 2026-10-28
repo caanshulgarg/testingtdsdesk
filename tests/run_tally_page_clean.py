@@ -187,22 +187,26 @@ def main():
         # of Companies in Tally)
         # 24-Oct-2026 (next-tally-one-page): companies are linked, so no steps: one line of the computers instead
         gd = "#app [data-connect-guide]"
-        ok(n("#app [data-connect-step]") == 0 and txt('#app [data-connect-guide="done"]').startswith("Connected computers: NWS144 ○ reading paused"),
-           "a company linked: no steps; 'Connected computers: NWS144 ○ reading paused' (%s)" % txt('#app [data-connect-guide="done"]'))
-        # the owner, 15-Oct-2026: VMS EVENTS was seen once, not open; the list shows it, not a client yet
-        vr = E("() => { const r = document.querySelector('#app [data-tco-list=firm] [data-tco-row=\"VMS EVENTS\"]'); return r ? [r.getAttribute('data-tco-state'), r.innerText.replace(/\\s+/g, ' ')] : null; }")
-        ok(vr and vr[0] == "notopen" and "Not linked · not open in Tally now" in vr[1] and "Link to client…" in vr[1] and "Add as client" not in vr[1],
-           "Companies in Tally: VMS EVENTS (seen, not open): Not linked · not open in Tally now, Link to client… (Task D: no Add as client) (%s)" % vr)
-        # 1. the computers: only those heard in 7 days
+        # next-tally-smart: a computer connected: no steps; ONE status card for it ("NWS144 · anshul · FinCom Bridge 2.4.1 · Paused")
+        card = txt("#app [data-status-card]")
+        ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1 and card.startswith("NWS144 · anshul") and "Paused" in card,
+           "a computer connected: no steps; the one status card, Paused (%s)" % card[:120])
+        # the owner, 28-Oct-2026 ("show only currently opened Tally"): VMS EVENTS was seen once, not open, not linked: not on the
+        # page; under Help & support › Every company seen, Not linked · not open in Tally now, the picker (Task D: no Add as client)
+        ok(n('#app [data-tco-list=firm] [data-tco-row="VMS EVENTS"]') == 0 and "VMS EVENTS" not in body, "VMS EVENTS (seen, not open, not linked): not on the page")
+        pg.click("#app [data-advanced] [data-bridge-details]"); pg.wait_for_timeout(700)
+        vr = E("() => { const r = document.querySelector('#app [data-advanced] [data-tco-list=all] [data-tco-row=\"VMS EVENTS\"]'); return r ? [r.getAttribute('data-tco-state'), r.innerText.replace(/\\s+/g, ' '), r.querySelectorAll('select[data-tco-act=pick]').length] : null; }")
+        ok(vr and vr[0] == "notopen" and "Not linked · not open in Tally now" in vr[1] and vr[2] == 1 and "Add as client" not in vr[1],
+           "Help & support › Every company seen: VMS EVENTS, Not linked · not open in Tally now, the picker (Task D: no Add as client) (%s)" % vr)
+        pg.click("#app [data-advanced] [data-bridge-details]"); pg.wait_for_timeout(500)
+        # 1. the computers: only those heard in 7 days (the card is this computer's; the old bridge is under Help & support)
         lines = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => [e.getAttribute('data-pc-line'), e.innerText.replace(/\\s+/g, ' ').trim()])")
-        ok(len(lines) == 1 and lines[0][0] == D1 and "OLDPC" not in body and "Older bridge" not in body, "one line per computer heard in 7 days; the old bridge is not on the page (%s)" % lines)
-        l1 = lines[0][1] if lines else ""
-        ok("NWS144" in l1 and "reading paused" in l1, "the computer's word: reading paused (%s)" % l1)
-        up = "#app [data-pc-line=\"%s\"] [data-pc-update]" % D1
+        ok(len(lines) == 1 and lines[0][0] == D1 and "OLDPC" not in body and "Older bridge" not in body, "one computer heard in 7 days: the card is its; the old bridge is not on the page (%s)" % lines)
+        up = "#app [data-status-card] [data-pc-update]"
         ok(n(up) == 1 and txt(up) == "Update to 2.4.4" and "2.4.4" in (pg.get_attribute(up, "href") or ""), "an older bridge: Update to 2.4.4, the one download (%s)" % txt(up))
         # 2. nothing said twice, no Day Book counts
         body = page()
-        once = ["Update to 2.4.4", "Connected computers"]
+        once = ["Update to 2.4.4", "Reading is paused"]
         ok(all(body.count(w) == 1 for w in once), "each problem's words once on the page (%s)" % [(w, body.count(w)) for w in once])
         gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you", "Clients and their Tally company"]
         ok(not [w for w in gone if w in body], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in body])
@@ -223,6 +227,7 @@ def main():
         E("(c) => openConnectTally(4, c)", G); pg.wait_for_timeout(900)
         ok(E("[S.view, S.homeTab, (S.tallyGuide || {}).step, (S.tallyGuide || {}).cid]") == ["home", "tally", 4, G] and n('#app [data-tco-for="%s"]' % G) == 1,
            "a pointer: Companies in Tally for that client (%s)" % E("[S.view, S.homeTab, S.tallyGuide]"))
+        # (next-tally-smart: for a client named, every company, the open ones first, so one not open now can be linked too)
         ok(txt('#app [data-tco-list=firm] [data-tco-row="VMS EVENTS"] [data-tco-act]') == "Link to garg shekhar & company" and all(t == "Move here" for t in E("() => [...document.querySelectorAll(\"#app [data-tco-list=firm] [data-tco-linked]:not([data-tco-linked='']) [data-tco-act]\")].map(b => b.innerText.trim())")),
            "his scene: the company seen (not open) is offered, 'Link to garg shekhar & company'; the linked ones show their client and 'Move here' (%s)" % txt('#app [data-tco-list=firm]')[:200])
         # the fold, opened: everything else, nothing removed
@@ -243,29 +248,28 @@ def main():
         E("(c) => { openCompany(c); S.tab = 'books'; S.booksTab = 'import'; render(); }", ids["GB TEXCOAT"]); pg.wait_for_timeout(1200)
         ok(n("#app [data-up-drop]") == 1 and n("#app [data-tally-link]") == 0, "Books › From Tally: the Day Book upload, no Tally card")
 
-        # ---- 2. the guide in each state (no company added yet: the steps stay on the page)
+        # ---- 2. the status card in each state (next-tally-smart: a computer connected shows no steps; the card says the one
+        # problem and its one action)
         def guide_scene(d, cos=None):
             scene([d], cos if cos is not None else companies(linked=(), d=d["id"])); return d["id"]
+        card = lambda: txt("#app [data-status-card]")
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
-        ok(steps() == [["install", True], ["port", False], ["open", False], ["add", False]] and "FinCom Bridge on NWS144 is offline" in txt("#app [data-connect-guide]"),
-           "offline: installed, the rest not; step 2 says it is offline (%s)" % steps())
+        ok(steps() == [] and n("#app [data-tsc-need=offline]") == 1 and "NWS144 (anshul) is not connected" in card(), "offline: no steps; the card says it is not connected (%s)" % card()[:140])
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))
-        ok(steps() == [["install", True], ["port", True], ["open", False], ["add", False]] and "Reading is paused" not in page() and "Open your company in TallyPrime on NWS144" in txt("#app [data-connect-guide]"),
-           "Tally answering, no company: install and port ticked, open your company (%s)" % steps())
+        ok(steps() == [] and "Reading is paused" not in page() and n("#app [data-tsc-need=noco]") == 1 and "Open your company in TallyPrime" in card(), "Tally answering, no company: open your company (%s)" % card()[:140])
         d = guide_scene(dev(4, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"paused": True}))
-        ok(steps()[2] == ["open", False] and "Reading is paused on NWS144." in txt("#app [data-connect-guide]"), "a company open, reading paused: step 2 not done, how to resume (%s)" % steps())
+        ok(n("#app [data-tsc-need=paused]") == 1 and "Reading is paused here" in card() and "Resume background reading" in card(), "a company open, reading paused: how to resume (%s)" % card()[:160])
         d = guide_scene(dev(5, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"readStopped": {"by": "fincom", "reason": "Tally hangs", "at": "ago:4"}}))
-        sp = '#app [data-connect-step="open"]'
-        ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: step 2 with the owner's Resume (%s)" % txt(sp))
+        sp = '#app [data-status-card]'
+        ok("Reading stopped" in txt(sp) and n(sp + " [data-read-resume]") == 1, "stopped from FinCom: the card with the owner's Resume (%s)" % txt(sp)[:140])
         pg.click(sp + " [data-read-resume]"); pg.wait_for_timeout(600)
         ok([c for c in E("window.__calls") if c[0] == "tally_read_resume"], "Resume calls tally_read_resume")
         D6 = "d0000000-0000-4000-8000-000000000006"
         d = guide_scene(dev(6, "NWS144", "anshul", tally="open", opened=("VMS EVENTS", "GARG SHEKHAR", "GB TEXCOAT")), companies(linked=(), seen=("VMS EVENTS",), d=D6))
-        ok(steps() == [["install", True], ["port", True], ["open", True], ["add", False]] and txt("#app [data-guide-open-count]") == "3 companies open in Tally on NWS144." and "VMS EVENTS" not in txt('#app [data-connect-step="open"]'),
-           "three companies open: three ticked (port too); step 2 says the number open, never their names (%s / %s)" % (steps(), txt("#app [data-guide-open-count]")))
-        rs = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-tco-state'), (r.querySelector('[data-tco-act]') || {}).innerText])")
-        ok(sorted(r[0] for r in rs) == ["GARG SHEKHAR", "GB TEXCOAT", "VMS EVENTS"] and all(r[1] == "connected" for r in rs) and dict((r[0], r[2]) for r in rs)["GB TEXCOAT"] == "Link to client…" and n('#app [data-tco-row="GB TEXCOAT"] [data-tco-pre]:not([data-tco-pre=""])') == 1,
-           "Companies in Tally: every company open, Connected; GB TEXCOAT, a client already: 'Link to client…' with it chosen (%s)" % rs)
+        ok(steps() == [] and "Tally open: 3 companies" in card() and "VMS EVENTS" not in card(), "three companies open: the card says the number open, never their names (%s)" % card()[:120])
+        rs = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-tco-state'), r.querySelectorAll('select[data-tco-act=pick]').length])")
+        ok(sorted(r[0] for r in rs) == ["GARG SHEKHAR", "GB TEXCOAT", "VMS EVENTS"] and all(r[1] == "connected" for r in rs) and dict((r[0], r[2]) for r in rs)["GB TEXCOAT"] == 1 and n('#app [data-tco-row="GB TEXCOAT"] [data-tco-pre]:not([data-tco-pre=""])') == 1,
+           "Open in Tally now: every company open, Connected; GB TEXCOAT, a client already: the picker with it chosen (%s)" % rs)
         # the client a pointer names: the same GSTIN on top, Link to it
         E("""(c) => { S.companies[c].gstin = '09AANFG3202D1ZR'; window.__companies.push({company: 'GARG SHEKHAR', client_id: null, device_id: 'd0000000-0000-4000-8000-000000000006', gstin: '09AANFG3202D1ZR', last_seen: new Date().toISOString(), linked_at: new Date(Date.now() - 3600e3).toISOString()});
             TCloud.pane.devices = null; TCloud.pane.at = 0; TLight.st.cos = window.__companies; openConnectTally(4, c); }""", G); pg.wait_for_timeout(1800)
@@ -279,18 +283,18 @@ def main():
         # all well: the guide is one green line, All good
         d6 = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
         d = d6["id"]; scene([d6], companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]), books=HELD_ALL)
-        gl = txt('#app [data-connect-guide="done"]')
-        ok(n("#app [data-connect-step]") == 0 and gl.startswith("Connected computers: NWS144 ● online"), "linked: one line, 'Connected computers: NWS144 ● online' (%s)" % gl)
+        gl = card()
+        ok(n("#app [data-connect-step]") == 0 and gl.startswith("NWS144 · anshul · FinCom Bridge 2.4.4 Connected"), "linked, all well: no steps; the card 'NWS144 · anshul · FinCom Bridge 2.4.4 · Connected' (%s)" % gl[:120])
         ok(n("#app [data-all-good]") == 1 and n("#app [data-needs-you]") == 0, "nothing needs him: All good, no Needs you")
-        pl = txt("#app [data-pc-line=\"%s\"]" % d)
-        ok("● online" in pl and "Update to" not in pl, "all well: online, no update (%s)" % pl)
+        ok("Update to" not in gl and n("#app [data-tsc-need]") == 0, "all well: no update, no problem line (%s)" % gl[:120])
         pg.wait_for_timeout(1500)
         held_l = txt('#app [data-tco-row="GB TEXCOAT"] [data-tco-sync=held]')
         ok(re.match(r"Ledgers [\d,]+ \u00b7 Entries Apr\u2013\w{3} 2026$", held_l) or held_l.startswith("Ledgers"), "a linked company's row: what FinCom holds (%s)" % held_l)
-        pg.click("#app [data-guide-again]"); pg.wait_for_timeout(700)
-        ok(n("#app [data-connect-step]") == 4 and n("#app [data-guide-hide]") == 1, "Connect another computer: the four steps again, with Hide the steps")
+        fold(True); pg.click("#app [data-guide-again]"); pg.wait_for_timeout(700)
+        ok(n("#app [data-connect-step]") == 4 and n("#app [data-guide-hide]") == 1, "Help & support › Connect another computer: the four steps again, with Hide the steps")
         pg.click("#app [data-guide-hide]"); pg.wait_for_timeout(500)
-        ok(n("#app [data-connect-step]") == 0 and n('#app [data-connect-guide="done"]') == 1, "Hide the steps: the green line again")
+        ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1, "Hide the steps: the card alone again")
+        fold(False)
         # ---- 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option.. include this automatically
         # in 2.4.5.. it should not ask the clients"): the add-on not recording on a computer whose bridge is older than 2.2.0:
         # no ask anywhere on the page (the guide, the computer's line, Help & support, its details) to load, update or turn
@@ -317,7 +321,7 @@ def main():
         unl = companies(linked=("ABC TRADERS", "garg shekhar & company"), seen=("GB TEXCOAT",), d=d6["id"])
         ids = scene([d6], unl, books=five); T = ids["GB TEXCOAT"]
         row5 = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
-        ok(txt(row5 + " [data-tco-act]") == "Link to client…" and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", row5) == T, "GB TEXCOAT open, the client of that name not linked: Link to client…, GB TEXCOAT chosen (%s)" % txt(row5))
+        ok(n(row5 + " select[data-tco-act=pick]") == 1 and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", row5) == T, "GB TEXCOAT open, the client of that name not linked: the picker, GB TEXCOAT chosen (%s)" % txt(row5))
         def link5():
             pg.click(row5 + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(row5 + " [data-tco-relink]")
         E("() => { window.__wakes = []; window.__calls = []; }")
@@ -383,12 +387,11 @@ def main():
         many = ["CO %03d" % i for i in range(1, 101)]; mclients = ["CLIENT %03d" % i for i in range(1, 101)]
         dm = dev(7, "NWS144", "anshul", tally="open", opened=tuple(many), version="2.4.4")
         ids = E(SETUP, [[dm], [{"company": c, "client_id": None, "device_id": dm["id"], "gstin": "", "last_seen": "ago:1"} for c in many], [], "owner", mclients, True, {}]); pg.wait_for_timeout(2500)
-        gd100 = "#app [data-connect-guide]"
-        ok(txt('#app [data-guide-open-count]') == "100 companies open in Tally on NWS144.", "100 open: the count only (%s)" % txt('#app [data-guide-open-count]'))
-        names = E("() => (document.querySelector('#app [data-connect-guide]').innerText.match(/CO \\d{3}/g) || []).length")
-        ok(names == 0, "100 open: no company's name in the guide (%d)" % names)
-        h = E("() => document.querySelector('#app [data-connect-guide]').getBoundingClientRect().height")
-        ok(h < 700, "100 companies, 100 clients: the guide stays compact (%d px high)" % h)
+        ok("Tally open: 100 companies" in txt("#app [data-status-card]"), "100 open: the card says the count only (%s)" % txt("#app [data-status-card]")[:120])
+        names = E("() => (document.querySelector('#app [data-status-card]').innerText.match(/CO \\d{3}/g) || []).length")
+        ok(names == 0, "100 open: no company's name on the card (%d)" % names)
+        h = E("() => document.querySelector('#app [data-status-card]').getBoundingClientRect().height")
+        ok(h < 300, "100 companies, 100 clients: the card stays compact (%d px high)" % h)
         pcl = E("() => [...document.querySelectorAll('#app [data-pc-line]')].map(e => e.innerText).join(' ')")
         ok("CO 050" not in pcl, "100 open: the computers' line names no company (%s)" % pcl[:160])
         c42 = ids["CLIENT 042"]
@@ -456,7 +459,7 @@ def main():
         # nothing installed: step 1 with the one download
         scene([], [])
         ok(steps() == [["install", False], ["port", False], ["open", False], ["add", False]] and n('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') == 1
-           and "2.4.4" in txt('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: step 1 with the download (%s)" % steps())
+           and "2.4.4" in txt('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: the four steps, step 1 with the download (%s)" % steps())
 
         # ---- 5. every former entry point lands on the one place to link a client: its own Tally card (the companies in Tally
         # it may be, each with Link) or Companies in Tally; none links or connects on its own

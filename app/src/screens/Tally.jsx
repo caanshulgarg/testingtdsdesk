@@ -14,9 +14,11 @@ import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry } from "../lib/tallyState.js";
 import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
-import CompaniesInTally, { companyRows } from "../parts/TallyCompanies.jsx";
-import ConnectThisComputer, { LocalTally } from "../parts/TallyFirstLink.jsx";
-import TallyOneClick from "../parts/TallyOneClick.jsx";
+import CompaniesInTally, { companyRows, LinkedLine } from "../parts/TallyCompanies.jsx";
+import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLink.jsx";
+import { OC, doConnect, doFind, doRefresh, useRefusedCheck, Line, Found } from "../parts/TallyOneClick.jsx";
+import { coKey, openOn } from "../lib/tallyState.js";
+import { beatFresh } from "../lib/tallyConnect.js";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -720,15 +722,15 @@ function ConnectGuide({ x, m, connectStep }) {
     const e = (k && !d[k] && document.querySelector('#app [data-connect-step="' + k + '"]')) || ((g.step || 0) >= 3 ? document.querySelector("#app [data-tco-list=firm]") : null) || document.querySelector("#app [data-connect-guide]");
     if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 80); return () => clearTimeout(t); }, [g.at]);
   if (p.devices == null && !p.err) return null;
-  // 24-Oct-2026: the steps only until the first company is linked (then the computers' one line); Connect another computer
-  // (step 1 asked again) shows them once more
-  if ((all || d.add) && !((g.step || 0) > 0 && (g.step || 0) < 3 && g.at)) return null;
+  // next-tally-smart (the owner: "no step wizard once connected"): the steps only while no computer of the firm is heard
+  // (a computer never connected); Connect another computer (step 1 asked again) shows them once more
+  if (d.install && !((g.step || 0) > 0 && (g.step || 0) < 3 && g.at)) return null;
   const now = GUIDE_KEYS.find((k) => !d[k]), owner = isOwner(), r = x.r, s = x.s, pc = r ? r.computer : "the Tally computer", user = (r && r.user) || "the Tally user";
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll(), stop = s && s.stopped ? ((TCloud.stopFor && TCloud.stopFor(r.device.id)) || {}) : null;
   const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
   return <section className="pane tguide tconnect tc3" data-connect-guide={now || "open"}>
     <div className="tc3-top"><h3>Connect Tally</h3><span className="note tg-count" data-guide-count={doneN}>{doneN + " of " + GUIDE_KEYS.length + " done"}</span>
-      {all && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
+      {d.install && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
     <ol className="tc3-steps">
       <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
         {d.install ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + ". "}
@@ -761,37 +763,147 @@ function ConnectGuide({ x, m, connectStep }) {
     {!all && d.install && <button className="btn small" data-check-again="" style={{ marginTop: 8 }} onClick={checkAgain}>Check again</button>}
   </section>;
 }
-// once a company is linked: one line of the computers ("Connected computers: NWS144 ● online · LAPTOP ○ offline since
-// 14:02"), their Update or Resume where one is needed, and Connect another computer
-function ComputersLine({ x, rows, latest, m }) {
-  const g = S.tallyGuide || {};
-  if (!x.done.add || ((g.step || 0) > 0 && (g.step || 0) < 3 && g.at)) return null;
+// the computers heard this week, one short span each ("NWS144 ● online · LAPTOP ○ offline since 14:02"), their Update or
+// Resume where one is needed: the status card's "All computers" view (next-tally-smart; was the line under the guide)
+function PcLines({ rows, latest, m }) {
   const owner = isOwner(), allStopped = TCloud.stoppedAll && TCloud.stoppedAll(), week = cardsOf(rows).filter(heardThisWeek);
-  const calm = !needsItems().length && week.length > 0 && week.every((r) => { const s = pcState(r, latest); return s.live && r.online && s.tallyOk && !s.paused && !s.stopped && !s.update; });
-  return <p className="tconnected tpcs-one" data-connect-guide="done" data-pc-lines="" data-all-good={calm ? "" : undefined} style={{ margin: "0 0 10px" }}>
-    <b>Connected computers:</b>{" "}
+  return <span data-pc-lines="">
     {week.length ? week.map((r, i) => { const s = pcState(r, latest), on = s.live && r.online, w = !s.live ? "older bridge" : !r.online ? "offline" + (r.at ? " since " + tallyHm(r.at) : "") : s.stopped ? "reading stopped" : s.paused ? "reading paused" : !s.tallyOk ? "online, Tally not open" : "online";
       return <span key={cardKey(r)} className="tpc-one" data-pc-line={r.device.id} data-pc-state={w}>{i > 0 && " · "}{pcName(r).split(" · ")[0] + " "}
         <span className={on && !s.stopped && !s.paused && s.tallyOk ? "tpc-ok" : "bad"} data-connected-line="">{(on && !s.stopped && !s.paused ? (s.tallyOk ? "● " : "◐ ") : "○ ") + w}</span>
         {s.update && !s.stopped && <>{" "}<UpdateBtn m={m} /></>}
         {s.stopped && owner && !allStopped && <>{" "}<button className="btn small primary" data-pc-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button></>}</span>; })
       : <span className="note">none heard this week</span>}
-    {" "}<button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button></p>;
+  </span>;
 }
-// the list. From a client not linked ("Choose on Tally page"): every company, the ones open now first, each with "Link to
-// <client>" (or, linked to another client, "Move here"); from a client linked ("Open in Tally page"): its row(s) marked
-function FirmCompanies() {
-  const g = S.tallyGuide || {}, forCo = guideFor(g);
+// ---------------------------------------------------------------------------------------------------------------------
+// ONE status card for this computer (next-tally-smart, 28-Oct-2026; the owner: "show only currently opened Tally; make the
+// complete page smart; simple click to connect and get the company; no false alarms at all"):
+//   "NWS144 · FinCom Bridge 2.4.7 · Connected" / "Tally open: 2 companies" / a problem in ONE plain line with ONE action.
+//   Connect this computer only while it is needed (never connected here, a key FinCom refuses, not linked to the firm);
+//   Find Tally only while Tally is not found; a port box only when asked; Refresh always (quiet).
+// This computer: this browser's own FinCom Bridge (Bridge.st) with the cloud's row of it (TCloud.localRow); a browser
+// elsewhere (a phone): the firm's one computer. More than one computer: a small switch, This computer / All computers
+// (S.tallyScope), and nothing about the others until it is turned. Never a step wizard once a computer is connected.
+// ---------------------------------------------------------------------------------------------------------------------
+const shortUser = (u) => String(u || "").split("\\").pop();
+// what this browser knows of this computer: {local (Bridge.st when this browser's bridge answers), me (its cloud row, else
+// the firm's one computer), week (the computers heard this week), many}
+function thisComputer(rows) {
+  const local = typeof Bridge === "object" && Bridge.on() && Bridge.st && Bridge.st.state === "ok" ? Bridge.st : null;
+  const week = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
+  const loc = TCloud.localRow ? TCloud.localRow() : null;
+  const me = (loc && week.find((r) => r.id === loc.id)) || (!local && week.length === 1 ? week[0] : null);
+  return { local, me, week, many: week.length > 1 };
+}
+// the scope of the page: "this" (this computer's Tally) or "all" (every computer): the switch only when the firm has more
+// than one computer and this browser is on one of them
+function scopeOf(tc) {
+  const can = tc.many && !!(tc.local || tc.me);
+  if (!can) return { scope: tc.many ? "all" : "this", can };
+  return { scope: S.tallyScope === "all" ? "all" : "this", can };
+}
+function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
+  useRefusedCheck();
+  const tc = thisComputer(rows), { local, me, week } = tc, { scope, can } = scopeOf(tc);
+  const c = OC.c, f = OC.f, b = OC.busy, owner = isOwner(), localOn = typeof Bridge === "object" && Bridge.on();
+  // the code typed (here or below) connected this browser to the bridge: the firm's key at once
+  useEffect(() => { if (c && c.st === "code" && localOn && !b) doConnect(false); }, [c && c.st, localOn]);
+  const firm = (S.firm && S.firm.firmName) || "your firm", connectedNow = !!(c && c.st === "ok");
+  const pc = local ? { computer: local.computer || (me && me.computer) || "This computer", user: shortUser(local.user) } : me;
+  const name = pc ? pcName(pc) : "This computer", ver = (local && local.version) || (me && me.version) || "";
+  const s = me ? pcState(me, latest) : null;
+  const openHere = local ? [].concat(local.open || []).map((o) => (o && o.name) || "").filter(Boolean) : (s ? s.open : []);
+  const tallyUp = local ? !!local.tallyUp : !!(s && s.tallyOk);
+  // the one word, the one problem line and its one action (in this order: nothing known here, a refused key, not linked
+  // to the firm, offline, stopped, paused, Tally not open, no company open, a slow company or a version by hand: needOf)
+  let word = "Connected", lv = "ok", need = "", act = null, kind = "";
+  const connectBtn = (label) => <button className="btn small primary" data-oc-connect="" disabled={!!b} onClick={() => doConnect(false)}>{b === "c" ? "Connecting…" : label || "Connect this computer"}</button>;
+  const findBtn = <button className="btn small primary" data-oc-find="" disabled={!!b} onClick={doFind}>{b === "f" ? "Looking for Tally…" : "Find Tally"}</button>;
+  const n0 = me ? needOf(me, latest, owner, allStopped) : null;
+  if (!local && !me) { word = "Not connected"; lv = "bad"; kind = "none";
+    need = week.length ? "FinCom is not open on a Tally computer here." : "FinCom Bridge is not connected on this computer yet: the steps below take a minute."; act = week.length ? null : connectBtn(); }
+  else if (local && OC.refused && !connectedNow) { word = "Not accepted"; lv = "bad"; kind = "refused";
+    need = "FinCom Bridge here has a key FinCom does not accept any more (it was connected to a firm that is gone, or its key was removed), so Tally is not reaching FinCom. Connect this computer gets a new key for " + firm + " at once."; act = connectBtn(); }
+  else if (local && !me && !connectedNow && !beatFresh(local.beat)) { word = "Not linked to " + firm; lv = "warn"; kind = "unlinked"; need = "FinCom Bridge on this computer is not sending Tally to " + firm + " yet."; act = connectBtn(); }
+  else if (n0 && (n0.kind === "offline" || n0.kind === "install") && !local) { word = n0.kind === "offline" ? "Offline" : "Older bridge"; lv = "bad"; kind = n0.kind; need = n0.text; act = <NeedAct r={me} n={n0} m={m} />; }
+  else if (s && s.stopped) { word = "Stopped"; lv = "bad"; kind = "stopped"; const st = (TCloud.stopFor && TCloud.stopFor(me.device.id)) || {};
+    need = "Reading stopped" + (st.stopped_by ? " by " + who(st.stopped_by) : "") + ": " + (s.rd.reason || st.reason || "no reason given");
+    act = owner && !allStopped ? <button className="btn small primary" data-read-resume={me.device.id} onClick={() => TCloud.readResume(me)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null; }
+  else if (s && s.paused) { word = "Paused"; lv = "warn"; kind = "paused"; need = "Reading is paused here. To resume: " + RESUME_TRAY + "."; }
+  else if (!tallyUp) { word = "Tally not open"; lv = "warn"; kind = "tally"; need = "Tally is not open on " + name.split(" · ")[0] + ". Open TallyPrime and your company" + (local ? ", then Find Tally." : "."); act = local ? findBtn : me ? <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button> : null; }
+  else if (!openHere.length) { word = "No company open"; lv = "warn"; kind = "noco"; need = "Tally is open, but no company is. Open your company in TallyPrime: it shows here within a minute."; }
+  else if (n0 && n0.kind !== "tally" && n0.kind !== "main") { word = n0.kind === "version" ? "Update ready" : "Needs you"; lv = "warn"; kind = n0.kind; need = n0.text; act = <NeedAct r={me} n={n0} m={m} />; }
+  else if (s && s.update) { word = "Connected"; lv = "ok"; kind = "update"; need = ""; }
+  const tallyLine = kind === "none" || kind === "refused" ? "" : tallyUp ? "Tally open: " + (openHere.length ? nOf(openHere.length, "company", "companies") : "no company open") : "Tally not open";
+  const refresh = () => doRefresh(checkAgain);
+  const calm = !kind && scope !== "all" && !needsItems().length;
+  return <section className="pane tsc" data-status-card={kind || "ok"} data-scope={scope} data-all-good={calm ? "" : undefined} aria-label="This computer">
+    <div className="tsc-top">
+      <div className="tsc-name" data-tsc-name="" data-pc-lines={scope !== "all" && me ? "" : undefined}>{scope === "all" ? <b>All computers</b>
+        : <><b data-pc-line={me ? me.device.id : undefined} data-pc-state={me ? word.toLowerCase() : undefined}>{name}</b>{ver && <span className="note">{" · FinCom Bridge " + ver}</span>}</>}
+        {scope !== "all" && <span className={"tag " + lv} data-tsc-word="" data-connected-line="">{word}</span>}</div>
+      <span className="tsc-right">
+        {can && <span className="tsc-switch" role="group" aria-label="Which computers">
+          <button className={"linkbtn" + (scope === "this" ? " on" : "")} data-scope-pick="this" aria-pressed={scope === "this"} onClick={() => { S.tallyScope = "this"; render(); }}>This computer</button>
+          <button className={"linkbtn" + (scope === "all" ? " on" : "")} data-scope-pick="all" aria-pressed={scope === "all"} onClick={() => { S.tallyScope = "all"; render(); }}>All computers</button></span>}
+        {/* this browser not connected to a FinCom Bridge: the one click, quiet (the owner: "a simple click to connect") */}
+        {!local && kind !== "none" && <button className="linkbtn" data-oc-connect="" disabled={!!b} onClick={() => doConnect(false)}>{b === "c" ? "Connecting…" : "Connect this computer"}</button>}
+        <button className="linkbtn" data-oc-get="" data-tsc-refresh="" disabled={!!b} onClick={refresh}>{b === "g" ? "Refreshing…" : "Refresh"}</button></span>
+    </div>
+    {scope === "all" ? <p className="tsc-line" data-tsc-all=""><PcLines rows={rows} latest={latest} m={m} /></p> : <>
+      {tallyLine && <p className="tsc-line" data-tsc-tally={openHere.length}>{tallyLine}</p>}
+      {need && <p className={"tsc-need " + lv} data-tsc-need={kind} data-oc-refused={kind === "refused" ? "" : undefined}><span>{need}</span>{act && <span className="tsc-act">{act}</span>}</p>}
+      {s && s.update && !s.stopped && kind !== "version" && <p className="tsc-line note" data-tsc-update="">{"A newer FinCom Bridge is ready for this computer. "}<UpdateBtn m={m} /></p>}
+    </>}
+    {/* the clicks' answers, in plain words (each once; a line goes when the next click answers) */}
+    <Line r={c} hook="connect" />
+    {c && c.st === "code" && (codeBelow ? <p className="note" data-oc-code-below="">Or type the 6 digits in Connect this computer below.</p> : <div className="oc-code"><CodeBox /></div>)}
+    {c && (c.st === "none" || c.st === "old") && <div className="oc-dl"><DownloadBtn m={m} primary /></div>}
+    {(kind === "tally" || (f && f.st !== "found")) && <Found f={f} />}
+  </section>;
+}
+// the page's list: the companies OPEN in Tally right now (live: the beats every 30 s, this browser's bridge, and Refresh),
+// on this computer (the scope) or on every computer. A company seen earlier and not open now is not here: linked, it is
+// under Your linked clients; not linked, under Help & support › Every company seen. From a client not linked ("Choose on
+// Tally page"): the open companies ranked for it, each with "Link to <client>"
+function hereKeys(tc) {
+  const ks = new Set();
+  if (tc.local) [].concat(tc.local.open || []).forEach((o) => { const k = coKey(o && o.name); if (k) ks.add(k); });
+  if (tc.me) openOn(tc.me.device).forEach((n) => { const k = coKey(n); if (k) ks.add(k); });
+  return ks;
+}
+function OpenCompanies({ rows }) {
+  const g = S.tallyGuide || {}, forCo = guideFor(g), tc = thisComputer(rows), { scope } = scopeOf(tc);
+  const all = companyRows(), here = scope === "this" && tc.many ? hereKeys(tc) : null;
+  let list = forCo ? all.slice() : all.filter((r) => r.open && (!here || here.has(coKey(r.company))));
   const note = forCo ? <p className="note tco-for" data-tco-for={forCo.id}>{"Linking " + forCo.name + ": press “Link to " + forCo.name + "” on its company. "}
     <button className="linkbtn" data-tco-for-clear="" onClick={() => { S.tallyGuide = {}; render(); }}>Show the list for every client</button></p> : null;
-  let ranked = null;
   if (forCo) {
-    const rows = companyRows(), sc = new Map((typeof suggestFor === "function" ? suggestFor(forCo, rows.map((r) => Object.assign({}, r, { client: "" }))) : []).map((x) => [x.company, x]));
-    ranked = rows.map((r) => { const x = sc.get(r.company); return Object.assign(r, x && !r.client ? { why: x.why || undefined, score: x.score } : { score: -1 }); })
+    const sc = new Map((typeof suggestFor === "function" ? suggestFor(forCo, list.map((r) => Object.assign({}, r, { client: "" }))) : []).map((x) => [x.company, x]));
+    list = list.map((r) => { const x = sc.get(r.company); return Object.assign(r, x && !r.client ? { why: x.why || undefined, score: x.score } : { score: -1 }); })
       .sort((a, b) => (b.open - a.open) || (b.score - a.score) || String(b.seen).localeCompare(String(a.seen)));
   }
   const focus = !forCo && S.tallyFocus && S.companies && S.companies[S.tallyFocus] ? S.tallyFocus : "";
-  return <section className="pane tcompanies" data-tally-focus={focus || undefined}><CompaniesInTally rows={ranked} forCo={forCo} note={note} focus={focus} /></section>;
+  const pcWord = scope === "all" && tc.many ? " across " + tc.week.length + " computers" : "";
+  const empty = forCo ? null : <p className="note" data-tco-empty="" data-tco-none-open="">{"No company is open in Tally right now" + pcWord + ". Open your company in TallyPrime: it shows here within a minute."}</p>;
+  return <section className="pane tcompanies" data-tally-focus={focus || undefined}>
+    <CompaniesInTally rows={list} forCo={forCo} note={note} focus={focus} title="Open in Tally now" empty={empty} pcs={tc.many}
+      count={(l) => nOf(l.length, "company", "companies") + " open" + pcWord} /></section>;
+}
+// Your linked clients: the clients whose company is not open in Tally now, one quiet line each (client · Tally company ·
+// not open in Tally now · last entry); nothing when every linked company is open
+function LinkedClients({ rows }) {
+  const tc = thisComputer(rows), { scope } = scopeOf(tc), here = scope === "this" && tc.many ? hereKeys(tc) : null;
+  const all = companyRows({ hidden: true });
+  const list = all.filter((r) => r.client && S.companies && S.companies[r.client] && !S.companies[r.client].deleted && !(r.open && (!here || here.has(coKey(r.company)))))
+    .sort((a, b) => S.companies[a.client].name.localeCompare(S.companies[b.client].name));
+  if (!list.length) return null;
+  return <section className="pane tco tlinked" data-linked-clients={list.length}>
+    <div className="tco-head"><h3>Your linked clients</h3><span className="note">{nOf(list.length, "client", "clients") + " · not open in Tally now"}</span></div>
+    <div className="tco-cols" data-tco-cols="" aria-hidden="true"><span>Client</span><span /><span>Tally company</span></div>
+    <ul className="tco-rows">{list.map((r) => <LinkedLine key={r.company} r={r} rows={all} pcs={tc.many} />)}</ul>
+  </section>;
 }
 // 2. Needs you: only what neither the guide nor a computer's line says (reading stopped on all computers, a computer key
 // refused). sources: the slot for 2.4.1's card of a book open in two data locations (SourceCards on next-241), drawn
@@ -928,7 +1040,11 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
       <BridgesHeard />
       <H id="this-computer">This computer</H>
       <BridgeSettings inDetails />
+      <H id="companies">Every company seen in Tally</H>
+      <p className="note" style={{ margin: "0 0 6px" }}>Every company the firm’s computers have seen, open or not: to link one that is not open now, or take one off the list.</p>
+      <CompaniesInTally hook="all" title="" pcs={cardsOf(rows).filter(heardThisWeek).length > 1} />
       <H id="install">Install on another computer</H>
+      <p className="note" style={{ margin: "0 0 6px" }}><button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button>{" (the steps, on that computer)"}</p>
       <BridgeDownload m={m} again={rows.length > 0} />
     </div>}
   </div>;
@@ -1175,16 +1291,15 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     <PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), ctl = TCloud.pane.ctl || {};
-  const gx = guideState(rows, latest);
-  // next-tally-one-page: the three steps until the first link (then the computers' one line), Companies in Tally, Needs you
-  // only when something stands, Help & support (closed)
+  const gx = guideState(rows, latest), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
+  // next-tally-smart: ONE status card for this computer; the four steps only for a computer never connected; the companies
+  // OPEN in Tally now; Your linked clients (not open now); Needs you only when something stands; Help & support (closed)
   return <>
     <GuideRefresh />
-    {/* next-tally-oneclick: Connect this computer · Find Tally · Get companies, each with its answer (parts/TallyOneClick.jsx) */}
-    {!Bridge.blocked() && <TallyOneClick download={<DownloadBtn m={m} primary />} codeBelow={!gx.done.install || !!((S.tallyGuide || {}).step === 1 && (S.tallyGuide || {}).at && !Bridge.on())} />}
+    {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={!gx.done.install || !!((S.tallyGuide || {}).step === 1 && (S.tallyGuide || {}).at && !Bridge.on())} />}
     <ConnectGuide x={gx} m={m} connectStep={connectStep} />
-    <ComputersLine x={gx} rows={rows} latest={latest} m={m} />
-    <FirmCompanies />
+    <OpenCompanies rows={rows} />
+    <LinkedClients rows={rows} />
     {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     <NeedsYou sources={sourcesSlot} />

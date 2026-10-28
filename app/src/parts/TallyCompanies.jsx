@@ -495,13 +495,17 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
   return null;
 }
 const hm = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : ""; return String(t || "").replace(/\s*IST$/, ""); };
-export function SyncLine({ cid, compact = false }) {
+// words: only the held words, inline on the row's second line (nothing while a read runs: the bar is under the row);
+// bar: only the bar of a read going on (next-tally-smart: the two halves of the row)
+export function SyncLine({ cid, compact = false, words = false, bar = false }) {
   const x = (S.tcoSync || {})[cid], bk = cloudBook(cid), n = ledgersOf(cid), days = daybookHeld(cid);
-  if (x) return <LedgerBar cid={cid} where="row" />;
+  if (x) return words ? null : <LedgerBar cid={cid} where="row" />;
+  if (bar) return null;
   const led = ledgersHeld(cid), ent = days ? "Entries " + (entriesWords(bk) || "this year") : "";
   // no first sync here now: what FinCom holds, when known
   if (compact || !(TCloud.st && TCloud.st[cid] && TCloud.st[cid].at)) return null;
-  return <p className="note tco-sync" data-tco-sync="held">{[led ? (n > 0 ? "Ledgers " + Number(n).toLocaleString("en-IN") : "Ledgers in FinCom") : "Ledgers not in FinCom yet", ent || "this year’s entries not in FinCom yet"].join(" · ")}</p>;
+  const say = [led ? (n > 0 ? "Ledgers " + Number(n).toLocaleString("en-IN") : "Ledgers in FinCom") : "Ledgers not in FinCom yet", ent || "this year’s entries not in FinCom yet"].join(" · ");
+  return words ? <span className="note tco-sync tco-sync-words" data-tco-sync="held">{say}</span> : <p className="note tco-sync" data-tco-sync="held">{say}</p>;
 }
 
 
@@ -557,20 +561,50 @@ function TwoPlaces({ co, company }) {
 // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): the ONE way to link a company not linked: the clients
 // already in FinCom (the likeliest first and chosen, when one is: the same GSTIN or name, the client before this year);
 // a new client only from the small "+ New client with this name" inside it, never a button of its own
-export function Pick({ r, co, onClose, pre = "" }) {
+// inline (next-tally-smart, the owner's layout rule: the client on the LEFT of the row, the Tally company on the right):
+// the picker IS the row's client side, open from the start ("Choose client"), no button to open it; its select carries
+// data-tco-act="pick" (the row's one action) and data-tco-pre (the client chosen first)
+export function Pick({ r, co, onClose, pre = "", inline = false }) {
   const [pick, setPick] = useState(pre || ""), [busy, setBusy] = useState(false);
   const cs = rankClients(r, co ? co.id : "");
   const go = async () => { const t = S.companies[pick]; if (!t) return; setBusy(true);
-    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
-  return <div className="tco-relink" data-tco-relink-box={r.company}>
-    <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>
-    <select data-tco-relink-pick="" aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
-      <option value="">Choose a client…</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok && onClose) onClose(); };
+  return <div className={"tco-relink" + (inline ? " tco-relink-inline" : "")} data-tco-relink-box={r.company}>
+    {!inline && <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>}
+    <select data-tco-relink-pick="" {...(inline ? { "data-tco-act": "pick", "data-tco-pre": pre || "" } : {})} aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
+      <option value="">{inline ? "Choose client" : "Choose a client…"}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
     <button className="btn small primary" data-tco-relink="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
-    <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>
-    {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addAsClient(r); } finally { setBusy(false); } if (id) onClose(); }}>+ New client with this name</button>}</div>;
+    {!inline && <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>}
+    {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addAsClient(r); } finally { setBusy(false); } if (id && onClose) onClose(); }}>+ New client with this name</button>}</div>;
 }
-export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null }) {
+// the ⋯ of a linked company (the same items wherever the company is listed: open now, or under Your linked clients):
+// Sync master, Sync vouchers, Post entries here, Link to another client, Unlink, the Day Book while days are missing, what
+// is in the cloud, read again (owner), Open client; many: the computer that keeps it (the owner: no computer's name on a row)
+export function LinkedMenu({ r, co, may, onPick, computer = "" }) {
+  const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
+  return <details className="bk-menu tco-more" data-tco-more={r.company}>
+    <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
+    <div className="bk-menu-list">
+      {computer && <div className="note tco-menu-pc" data-tco-menu-pc="">{"Kept on " + computer}</div>}
+      {may && <button data-tco-sync-master={co.id} onClick={close(() => syncMaster(co.id, r.company))}>Sync master<small>Send ledgers and groups now: ledgers, groups, parties, stock items and banks from Tally.</small></button>}
+      {may && <button data-tco-sync-vouchers={co.id} onClick={close(() => tallyUpdateNow(co.id))}>Sync vouchers<small>The entries made in Tally since the last read.</small></button>}
+      {may && (postsHere(co, r.company) ? <button data-tco-post-stop={co.id} onClick={close(() => postHere(co, r.company, false))}>Stop posting here<small>{co.name + "’s entries are posted into this company now."}</small></button>
+        : <button data-tco-post-here={co.id} onClick={close(() => postHere(co, r.company, true))}>Post entries here<small>{"Post " + co.name + "’s entries into this company (asked first)."}</small></button>)}
+      {may && <button data-tco-not-this={r.company} onClick={close(() => onPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
+      {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>The company is free to link again.</small></button>}
+      {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
+      {TCloud.groupStatus && <button data-tco-cloud-check={co.id} onClick={close(() => TCloud.groupStatus(co.id))}>What is in the cloud?<small>The groups, and the ledgers with a group, FinCom’s cloud holds.</small></button>}
+      {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
+      <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
+    </div></details>;
+}
+// the row (next-tally-smart, 28-Oct-2026; the owner's layout rule): the CLIENT on the left, the TALLY COMPANY on the right,
+// under the list's two headings (Client · Tally company); a company not linked has the picker itself on the left
+// ("Choose client", the likeliest chosen), never a button to open it and never an "Add as client" suggestion. The quiet
+// second line: its word (Linked / Waiting for Tally / Needs you), the ledgers and the last entry FinCom holds, Sync now
+// and ⋯. No computer's name on a row (the top card says which computer this is; many computers: under ⋯).
+// pcs: the firm has more than one computer (the computer then said under ⋯)
+export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone = null, pcs = false }) {
   const [busy, setBusy] = useState(""), [pick, setPick] = useState(false);
   const co = r.client && S.companies ? S.companies[r.client] : null, may = canWrite(), st = r.st || tallyCoState(r.company), wordOf = co ? linkWord(co, r.company) : null;
   const k = co && typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
@@ -578,7 +612,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   const sib = co ? (rows || []).filter((o) => o.client === co.id && o.company !== r.company && yearKey(o.company) === yearKey(r.company)) : [];
   const newer = co && !r.open ? sib.find((o) => o.open || String(o.seen) > String(r.seen)) : null, earlier = newer ? shown(newer.company) : "";
   const last = co && k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
-  const meta = [st.computer || "", last ? "last entry " + seenWords(last) : r.open ? "open now" : r.seen ? "last seen " + seenWords(r.seen) : ""].filter(Boolean).join(" · ");
+  const meta = wordOf && wordOf.line ? "" : last ? "last entry " + seenWords(last) : r.open ? "" : r.seen ? "last seen " + seenWords(r.seen) : "";
   const yr = !co && !r.client ? yearOf(r, rows) : null, tw = !co && !forCo && !yr ? twinOf(r) : null;
   const pend = PEND()[coKey(r.company)], err = (S.tcoErr || {})[coKey(r.company)];
   const run = (kind, job, fn) => async () => {
@@ -588,73 +622,87 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const syncing = co && k && k.line && k.line.reading;
-  let act;
-  if (pend) act = <span className="tco-wait" data-tco-pending={pend.kind}>
+  const pc = pcs ? (st.computer || "").split(" · ")[0] : "";
+  let client, acts = null;
+  if (pend) client = <span className="tco-wait" data-tco-pending={pend.kind}>
     <button className="btn small" disabled>{pend.late ? "Not sent yet" : "Waiting…"}</button>
     <button className="linkbtn" data-tco-pending-cancel="" onClick={() => { delete PEND()[coKey(r.company)]; render(); }}>Cancel</button></span>;
-  else if (r.client && !co) act = <span className="note" data-tco-elsewhere="">Linked to a client not on this computer</span>;
-  else if (co && forCo && co.id !== forCo.id) act = <>
+  else if (r.client && !co) client = <span className="note" data-tco-elsewhere="">Linked to a client not on this computer</span>;
+  else if (co && forCo && co.id !== forCo.id) client = <>
     <span className="note tco-linked-to" data-tco-linked-to={co.id}>Linked to client: <b>{co.name}</b></span>
     {may && <button className="btn small" data-tco-act="move" data-tco-move={forCo.id} disabled={!!busy} onClick={run("move", { kind: "move", cid: forCo.id }, () => moveTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Moving…" : "Move here"}</button>}</>;
-  else if (co) act = <>
-    {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): a labelled line, the name opens the client */}
-    <span className="tco-linked-to" data-tco-linked-label={co.id}><span className="note">Linked to client:</span> <button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></span>
-    {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
-    <details className="bk-menu tco-more" data-tco-more={r.company}>
-      <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
-      <div className="bk-menu-list">
-        {may && <button data-tco-sync-master={co.id} onClick={close(() => syncMaster(co.id, r.company))}>Sync master<small>Send ledgers and groups now: ledgers, groups, parties, stock items and banks from Tally.</small></button>}
-        {may && <button data-tco-sync-vouchers={co.id} onClick={close(() => tallyUpdateNow(co.id))}>Sync vouchers<small>The entries made in Tally since the last read.</small></button>}
-        {may && (postsHere(co, r.company) ? <button data-tco-post-stop={co.id} onClick={close(() => postHere(co, r.company, false))}>Stop posting here<small>{co.name + "’s entries are posted into this company now."}</small></button>
-          : <button data-tco-post-here={co.id} onClick={close(() => postHere(co, r.company, true))}>Post entries here<small>{"Post " + co.name + "’s entries into this company (asked first)."}</small></button>)}
-        {may && <button data-tco-not-this={r.company} onClick={close(() => setPick(true))}>Link to another client<small>It moves to the client you choose (asked once).</small></button>}
-        {may && <button className="danger" data-tco-unlink={r.company} onClick={close(() => unlink(r))}>Unlink<small>It stays in this list as Not linked.</small></button>}
-        {oldDaysMissing(co.id) && <button data-tco-daybook={co.id} onClick={close(() => openFromTally(co.id))}>Upload older entries (Day Book)<small>Days of this year not in FinCom yet: upload Tally’s Day Book once.</small></button>}
-        {TCloud.groupStatus && <button data-tco-cloud-check={co.id} onClick={close(() => TCloud.groupStatus(co.id))}>What is in the cloud?<small>The groups, and the ledgers with a group, FinCom’s cloud holds.</small></button>}
-        {isOwner() && TCloud.reparse && <button data-tco-reparse={co.id} onClick={close(() => TCloud.reparse(co.id))}>Read the kept day books again<small>For support: FinCom’s cloud reads what it keeps again.</small></button>}
-        <button data-tco-open={co.id} onClick={close(() => openCompany(co.id))}>Open client<small>{co.name}</small></button>
-      </div></details></>;
-  else if (!may) act = <span className="note">A member of the firm who may make changes adds it.</span>;
+  else if (co) {
+    // next-fix-clientremove (the owner: "no visibility of which client it's linked to"): a labelled line, the name opens the client
+    client = <span className="tco-linked-to" data-tco-linked-label={co.id}><span className="note">Linked to client:</span> <button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></span>;
+    acts = <>
+      {may && <button className="btn small" data-tco-sync-now={co.id} disabled={!!syncing} onClick={() => syncNow(co.id, r.company)}>{syncing ? "Syncing…" : "Sync now"}</button>}
+      <LinkedMenu r={r} co={co} may={may} onPick={setPick} computer={pc} /></>;
+  }
+  else if (!may) client = <span className="note">A member of the firm who may make changes adds it.</span>;
   else {
-    // Task D: from a client's "Choose on Tally page" the person named the client: Link to <client>. Otherwise ONE neutral
-    // "Link to client…" (the clients already in FinCom, the likeliest chosen); no "Add as client" suggestion
-    const main = forCo ? <button className="btn small primary" data-tco-act="link" data-tco-link={forCo.id} disabled={!!busy}
+    // Task D: from a client's "Choose on Tally page" the person named the client: Link to <client>. Otherwise the picker
+    // itself (the clients already in FinCom, the likeliest chosen); no "Add as client" suggestion
+    client = forCo ? <button className="btn small primary" data-tco-act="link" data-tco-link={forCo.id} disabled={!!busy}
         onClick={run("link", { kind: "link", cid: forCo.id }, () => linkTo(r, forCo).then((ok) => ok && forCo.id))}>{busy ? "Linking…" : "Link to " + forCo.name}</button>
-      : <button className="btn small" data-tco-act="pick" data-tco-pre={(yr || tw || {}).id || ""} disabled={!!busy} onClick={() => setPick(!pick)}>Link to client…</button>;
-    act = <>{main}
-      {(r.hidden || !r.open) && <details className="bk-menu tco-more" data-tco-more={r.company}>
+      : <Pick r={r} co={null} inline pre={(yr || tw || {}).id || ""} />;
+    acts = (r.hidden || !r.open) ? <details className="bk-menu tco-more" data-tco-more={r.company}>
         <summary className="btn small" aria-label={"More for " + shown(r.company)}>⋯</summary>
         <div className="bk-menu-list">
+          {pc && <div className="note tco-menu-pc" data-tco-menu-pc="">{"Seen on " + pc}</div>}
           {r.hidden ? <button data-tco-unhide={r.company} onClick={close(() => hideCo(r, false))}>Show again<small>Back in the list.</small></button>
             : <button data-tco-hide={r.company} onClick={close(() => hideCo(r, true))}>Remove company<small>Off this list (not deleted; Show hidden puts it back).</small></button>}
-        </div></details>}</>;
+        </div></details> : null;
   }
+  // the quiet word: a linked company's (Linked / Waiting for Tally / Needs you); not linked and not open: when it was seen
+  const quiet = !co ? <span className="note" data-tco-pill="notclient" data-tco-pill-text="Not linked">{r.open ? "Not linked · open in Tally" : "Not linked · not open in Tally now"}</span> : null;
   return <li className={"tco-row" + (focus ? " tco-focus" : "")} data-tco-row={r.company} data-tco-state={st.state} data-tco-linked={co ? co.id : ""} data-tco-open={r.open ? "" : undefined}
     data-tco-reported={r.reported ? "yes" : "no"} data-focus={focus ? "" : undefined} data-why={r.why || undefined}>
-    <div className="tco-main"><b className="tco-name" title={r.nowName ? "In FinCom’s cloud: " + r.company : undefined}>{shown(r.nowName || r.company)}</b>
+    <div className="tco-client" data-tco-side="client">{client}</div>
+    <span className="tco-arrow" aria-hidden="true">⟷</span>
+    <div className="tco-main" data-tco-side="tally"><b className="tco-name" title={r.nowName ? "In FinCom’s cloud: " + r.company : undefined}>{shown(r.nowName || r.company)}</b>
       {r.nowName && <span className="tag" data-tco-renamed={r.company}>renamed in Tally</span>}
       {r.moved && <span className="tag warn" data-tco-moved={r.company} title="The computer this company came from was removed, or its FinCom Bridge now sends to another login">computer moved</span>}
       {r.gone && <span className="tag" data-tco-gone={r.company}>from a removed computer</span>}
       {r.why && <span className={"tag " + (r.why === "like" ? "warn" : "ok")} data-tco-why={r.why}>{r.why === "gstin" ? "same GSTIN" : r.why === "name" ? "same name" : "similar name"}</span>}
-      {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}
-      {meta && <span className="note tco-meta">{meta}</span>}</div>
-    <Pill r={r} st={st} co={co} earlier={earlier} />
-    <div className="tco-act">{act}</div>
+      {spacesOdd(r.company) && <span className="tag warn" data-tco-spaces="" title={"In Tally: “" + r.company + "”"}>name has extra spaces in Tally</span>}</div>
+    {(co || quiet || meta || acts) && <div className="tco-line2">
+      {co ? <Pill r={r} st={st} co={co} earlier={earlier} /> : quiet}
+      {co && <SyncLine cid={co.id} words />}
+      {meta && <span className="note tco-meta">{meta}</span>}
+      {acts && <span className="tco-act">{acts}</span>}
+    </div>}
     {co && !earlier && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
       : st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>)}
-    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{SENDING[coKey(r.company)] ? "Sending " + shown(r.company) + " to FinCom and linking it…" : "Open in Tally on " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + ", not in FinCom yet: Link to client… sends it and links it at once."}</div>}
+    {!r.reported && !pend && r.open && SENDING[coKey(r.company)] && <div className="tco-under note" data-tco-unreported="">{"Sending " + shown(r.company) + " to FinCom and linking it…"}</div>}
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
-      : "Waiting for " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + " to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
+      : "Waiting for the Tally computer to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
     {co && !earlier && <TwoPlaces co={co} company={r.company} />}
-    {co && <div className="tco-under"><SyncLine cid={co.id} /><CloudSays cid={co.id} /></div>}
+    {co && <div className="tco-under"><SyncLine cid={co.id} bar /><CloudSays cid={co.id} /></div>}
     {pick && <div className="tco-under"><Pick r={r} co={co} pre={co ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
   </li>;
 }
-
+// Your linked clients (next-tally-smart): a client whose company is NOT open in Tally now, one line: the client, its Tally
+// company, "not open in Tally now · last entry <date>", and ⋯ (the same items as an open row's). Nothing to fix is said
+// here: the company is simply not open (the owner: "no false alarms at all")
+export function LinkedLine({ r, rows = null, pcs = false }) {
+  const [pick, setPick] = useState(false);
+  const co = S.companies && S.companies[r.client]; if (!co) return null;
+  const may = canWrite(), k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, st = r.st || tallyCoState(r.company);
+  const last = k && (!k.company || k.company === r.company) ? lastEntry(co, k) : "";
+  const when = last ? "last entry " + seenWords(last) : r.seen ? "last seen " + seenWords(r.seen) : "";
+  return <li className="tco-row tlc-row" data-linked-row={r.company} data-linked-client={co.id} data-tco-linked={co.id}>
+    <div className="tco-client" data-tco-side="client"><button className="linkbtn tco-client" data-tco-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></div>
+    <span className="tco-arrow" aria-hidden="true">⟷</span>
+    <div className="tco-main" data-tco-side="tally"><b className="tco-name">{shown(r.nowName || r.company)}</b></div>
+    <div className="tco-line2"><span className="note tco-meta" data-linked-meta="">{["not open in Tally now", when].filter(Boolean).join(" · ")}</span>
+      <span className="tco-act"><LinkedMenu r={r} co={co} may={may} onPick={setPick} computer={pcs ? (st.computer || "").split(" · ")[0] : ""} /></span></div>
+    {pick && <div className="tco-under"><Pick r={r} co={co} pre="" onClose={() => setPick(false)} /></div>}
+  </li>;
+}
 // ---------- the list. rows: the rows to show (default: every company); forCo: the client the list links to (from its
 // "Choose on Tally page"); focus: the client whose rows are marked (from its "Open in Tally page")
-export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm" }) {
+export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm", count = null, pcs = false }) {
   const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [showGone, setShowGone] = useState(false), [, tick] = useState(0);
   const all = companyRows({ hidden: true, gone: true }), list = rows || all.filter((r) => (showHid || !r.hidden) && (showGone || !r.gone));
   const nHid = all.filter((r) => r.hidden && !r.gone).length, nGone = all.filter((r) => r.gone).length;
@@ -668,13 +716,16 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
   useEffect(() => { if (!focus) return; const t = setTimeout(() => { const e = document.querySelector("#app [data-tco-row][data-focus]"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 120); return () => clearTimeout(t); }, [focus]);
   const k = list.length > SEARCH_AT ? coKey(q) : "", hits = k ? list.filter((r) => coKey(r.company).includes(k) || (r.client && S.companies[r.client] && coKey(S.companies[r.client].name).includes(k))) : list;
   const nOpen = list.filter((r) => r.open).length;
+  const countWords = count ? count(list) : nOf(list.length, "company", "companies") + " · " + nOpen + " open in Tally now";
   return <section className="tco" data-tco-list={hook} data-tco-n={list.length}>
     <div className="tco-head">{title && <h3>{title}</h3>}
-      {title && list.length > 0 && <span className="note" data-tco-count="">{nOf(list.length, "company", "companies") + " · " + nOpen + " open in Tally now"}</span>}
+      {title && list.length > 0 && countWords && <span className="note" data-tco-count="">{countWords}</span>}
       {list.length > SEARCH_AT && <input type="search" className="tco-q" data-tco-q="" aria-label="Find a company" placeholder="Find a company or client" value={q} onChange={(ev) => setQ(ev.target.value)} />}</div>
     {note}
     {list.length === 0 ? (empty || <p className="note" data-tco-empty="">No company seen in Tally yet. Open your company in TallyPrime on the computer with FinCom Bridge: it shows here within a minute.</p>)
-      : <ul className="tco-rows">{hits.map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} />)}</ul>}
+      : <>{/* the owner's two headings: the client on the left, the Tally company on the right */}
+        <div className="tco-cols" data-tco-cols="" aria-hidden="true"><span>Client</span><span /><span>Tally company</span></div>
+        <ul className="tco-rows">{hits.map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} pcs={pcs} />)}</ul></>}
     {k && !hits.length && <p className="note" data-tco-none="">No company matches “{q}”.</p>}
     {!rows && nGone > 0 && <button className="linkbtn" data-tco-show-gone={nGone} aria-expanded={showGone} onClick={() => setShowGone(!showGone)}>{(showGone ? "Hide: from a removed computer (" : "From a removed computer (") + nGone + ")"}</button>}
     {!rows && nHid > 0 && <button className="linkbtn" data-tco-show-hidden={nHid} onClick={() => setShowHid(!showHid)}>{showHid ? "Hide removed companies" : "Show hidden (" + nHid + ")"}</button>}

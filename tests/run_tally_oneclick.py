@@ -157,7 +157,7 @@ def main():
             os.makedirs(SHOTS, exist_ok=True)
             for w, h in ((1440, 900), (390, 844)):
                 pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(350)
-                pg.locator("#app [data-oneclick]").screenshot(path=os.path.join(SHOTS, "%s-%s.png" % (name, "desktop" if w > 800 else "phone")))
+                pg.screenshot(path=os.path.join(SHOTS, "%s-%s.png" % (name, "desktop" if w > 800 else "phone")), full_page=True)
             pg.set_viewport_size({"width": 1440, "height": 900})
         def open_tally(whose, pair=PAIRED, devs=None):
             E(SETUP, [whose, devs if devs is not None else [OTHER]]); E(pair); E("() => { navHome('tally'); }"); pg.wait_for_timeout(900)
@@ -184,57 +184,55 @@ def main():
         ok(len(calls("tally_device_create")) == 1 and len(posts()) == 1, "2. one key made, handed over once (%d, %d)" % (len(calls("tally_device_create")), len(posts())))
         ok(BR["cloudKey"] == "fcd_" + "0a" * 24 and BR["url"].endswith("/functions/v1/tally-ingest"), "2. the bridge holds the new key and FinCom's ingest address")
         ok(pg.locator("#app [data-oc-refused]").count() == 0, "2. the refused line gives way")
-        ok(wait("() => !!document.querySelector('#app [data-oc-cos]')"), "2. Find Tally and Get companies ran by themselves")
-        ok("Port 9000" in txt("#app [data-oc-tallies]") and "another Windows user" in txt("#app [data-oc-tally='9001']"), "2. each Tally with its port and whose (%s)" % txt("#app [data-oc-tallies]"))
-        ok(pg.locator("#app [data-oc-cos] [data-oc-co]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-pick]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-add]").count() == 0, "2. each company with Link to client… (Task D: no Create client suggestion)")
+        # next-tally-smart: the companies open are the page's list (Open in Tally now), never a second list on the card
+        ok(wait("() => document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]').length === 2"), "2. Find Tally and Get companies ran by themselves: the two companies in Open in Tally now")
+        ok("Tally open: 2 companies" in txt("#app [data-status-card]") and pg.locator("#app [data-oc-tallies]").count() == 0, "2. the card says Tally open: 2 companies; no list of Tallys and ports while all is well (%s)" % txt("#app [data-status-card]")[:120])
+        ok(pg.locator("#app [data-tco-list=firm] select[data-tco-act=pick]").count() == 2 and pg.locator("#app [data-tco-add], #app [data-oc-add]").count() == 0, "2. each company with the client picker (Task D: no Create client suggestion)")
         ok(wide() <= 0, "11. no sideways scroll at 1440")
         shot("2-connected")
         # 3. Create client / Link to <client>
         n0 = E("() => Object.keys(S.companies).length")
         # Task D: a new client only from the small "+ New client with this name" inside the picker
-        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % GSC).click()
-        ok(pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-relink-pick]" % GSC).count() == 1, "3. Link to client…: the clients to choose from")
-        pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-add-new]" % GSC).click()
+        ok(pg.locator("#app [data-tco-row='%s'] [data-tco-relink-pick]" % GSC).count() == 1, "3. the picker: the clients to choose from")
+        pg.locator("#app [data-tco-row='%s'] [data-tco-add-new]" % GSC).click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "3. Create client: linked")
         ok(E("() => Object.keys(S.companies).length") == n0 + 1, "3. the client made")
         E("() => { const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: ''}); S.companies[co.id] = co; render(); return co.id; }"); pg.wait_for_timeout(400)
         vcid = E("() => Object.values(S.companies).find(c => c.name === 'VMS Events Private Limited').id")
-        pk = pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS)
-        ok(pk.count() == 1 and pk.get_attribute("data-oc-pre") == vcid, "3. a client of the same name: chosen first in Link to client…")
+        pk = pg.locator("#app [data-tco-row='%s'] select[data-tco-act=pick]" % VMS)
+        ok(pk.count() == 1 and pk.get_attribute("data-tco-pre") == vcid, "3. a client of the same name: chosen first in the picker")
         def link_vms():
-            if not pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox]" % VMS).count(): pk.click()
-            ok(pg.locator("#app [data-oc-co='%s'] [data-tco-relink-pick]" % VMS).input_value() == vcid, "3. the picker has the client of the same name chosen")
-            pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
+            ok(pg.locator("#app [data-tco-row='%s'] [data-tco-relink-pick]" % VMS).input_value() == vcid, "3. the picker has the client of the same name chosen")
+            pg.locator("#app [data-tco-row='%s'] [data-tco-relink]" % VMS).click()
         # 3b. next-tally-linknow (staging 28-Oct-2026: "no computer has reported Salesify Marketing LLP 2026-27 yet" five times):
         # a company Get companies listed that FinCom's cloud has no row for is registered and linked in the same click
         lnow = lambda: [c[1] for c in calls("post") if c[1].get("kind") == "link_now"]
         ok(len(lnow()) == 1 and lnow()[0]["company"] == GSC and lnow()[0]["bridge"] == BID and lnow()[0]["client"], "3b. Create client on a company not in the cloud: link_now with the company, the new client and this browser's bridge (%s)" % lnow())
         ok(E("() => { const c = window.__calls; const a = c.findIndex(x => x[0] === 'post' && x[1].kind === 'link_now'), b = c.findIndex(x => x[0] === 'link'); return a >= 0 && b > a; }"), "3b. sent to FinCom first, then the usual link")
-        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % GSC.replace("'", "\\'"), 5000), "3b. the row says Linked at once, no reload (%s)" % txt("#app [data-oc-co='%s']" % GSC))
+        ok(wait("() => !!document.querySelector(\"#app [data-tco-row='%s'] [data-tco-linked-label]\")" % GSC.replace("'", "\\'"), 5000), "3b. the row says Linked to client at once, no reload (%s)" % txt("#app [data-tco-row='%s']" % GSC))
         # a refusal (the bridge's computer not of this firm): the plain reason, never "done by itself within a minute"
         E("() => { window.__linkNowFail = 'FinCom Bridge on this computer is not connected to your firm yet, so FinCom cannot take it from it. Press Connect this computer, then Link again.'; window.__calls = []; }")
         link_vms()
-        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\")" % VMS), "3b. refused: said on the row")
-        f = txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS)
-        ok(f.startswith("Not linked: FinCom Bridge on this computer is not connected to your firm yet") and "within a minute" not in f and "by itself" not in f, "3b. its plain reason (%s)" % f)
+        ok(wait("() => !!document.querySelector(\"#app [data-tco-row='%s'] [data-tco-err]\")" % VMS), "3b. refused: said on the row")
+        f = txt("#app [data-tco-row='%s'] [data-tco-err]" % VMS)
+        ok(f.startswith("Could not link it: FinCom Bridge on this computer is not connected to your firm yet") and "within a minute" not in f and "by itself" not in f, "3b. its plain reason (%s)" % f)
         ok(not calls("link"), "3b. nothing linked after a refusal")
         # the cloud slow: a reason within the limit, never a spinner
         E("() => { window.__linkNowFail = ''; window.__linkNowHang = true; window.__ocMsScale = 0.05; window.__calls = []; }")
         t0 = time.time(); link_vms()
-        ok(wait("() => /did not answer in time/.test((document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\") || {}).textContent || '') && !window.__calls.some(c => c[0] === 'link')" % VMS, 10000) and time.time() - t0 < 10, "3b. no answer: the reason within the limit (%s)" % txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS))
+        ok(wait("() => /did not answer in time/.test((document.querySelector(\"#app [data-tco-row='%s'] [data-tco-err]\") || {}).textContent || '') && !window.__calls.some(c => c[0] === 'link')" % VMS, 10000) and time.time() - t0 < 10, "3b. no answer: the reason within the limit (%s)" % txt("#app [data-tco-row='%s'] [data-tco-err]" % VMS))
         E("() => { window.__linkNowHang = false; window.__ocMsScale = 1; window.__calls = []; }")
         link_vms()
-        ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % VMS, 5000), "3b. Link to <client> again: linked, the row says so (%s)" % txt("#app [data-oc-co='%s']" % VMS))
+        ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-tco-row='%s'] [data-tco-linked-label]\")" % VMS, 5000), "3b. Link again: linked, the row says so (%s)" % txt("#app [data-tco-row='%s']" % VMS))
         # 12. next-tally-linknow (Task C; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
         # company is not kept in step on this computer"): linked, the ledgers are taken by themselves: the bridge here starts
         # keeping the company (POST /keep {now, company}, Update now's request), and the bar shows the count as it comes
         bridge_reset(kept=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)
         cid = E("() => { Object.keys(S.companies).forEach(k => { if (/^VMS Events/i.test(S.companies[k].name)) delete S.companies[k]; }); const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: %s}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; window.__books = [{book: 'bk-vms', company: %s, from: '2026-04-01', to: '2026-10-28', days: 0, ledgersAt: ''}]; window.__lp = null; render(); return co.id; }" % (json.dumps(VMS), json.dumps(VMS)))
-        pg.click("#app [data-oc-get]")
-        wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-pick]\")" % VMS)
-        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS).click()
-        pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
+        pg.click("#app [data-oc-get]")   # Refresh
+        wait("() => !!document.querySelector(\"#app [data-tco-row='%s'] select[data-tco-act=pick]\")" % VMS)
+        pg.locator("#app [data-tco-row='%s'] [data-tco-relink]" % VMS).click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "12. linked")
         for _ in range(40):
             if any(x[0] == "POST" and x[1] == "/keep" for x in BR["log"]): break
@@ -250,9 +248,9 @@ def main():
         # 4. already connected
         bridge_reset(cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)
-        pg.click("#app [data-oc-connect]")
-        ok(wait("() => { const e = document.querySelector('#app [data-oc-say=connect]'); return !!e && e.getAttribute('data-oc-st') === 'ok'; }"), "4. already connected: Connected")
-        ok(not calls("tally_device_create") and not posts(), "4. no new key")
+        # next-tally-smart: connected, the card says so and offers no Connect button (one action only when one is needed)
+        ok(wait("() => /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')"), "4. already connected: the card says Connected (%s)" % txt("#app [data-status-card]")[:100])
+        ok(pg.locator("#app [data-oc-connect]").count() == 0 and not calls("tally_device_create") and not posts(), "4. no Connect button, no new key")
         ok(pg.locator("#app [data-oc-refused]").count() == 0, "4. nothing refused said")
         # 5. Find Tally, none; a port typed
         bridge_reset(tally=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
@@ -260,7 +258,10 @@ def main():
         pg.click("#app [data-oc-find]")
         ok(wait("() => !!document.querySelector('#app [data-oc-none]')"), "5. no Tally: the one line")
         ok(txt("#app [data-oc-none]") == "Open TallyPrime and a company, then press Find Tally again.", "5. its words (%s)" % txt("#app [data-oc-none]"))
-        ok(pg.locator("#app [data-oc-port-in]").count() == 1 and "Open TallyPrime" in txt("#app [data-oc-fix]"), "5. a port to type, and the bridge's own finding")
+        ok("Tally not open" in txt("#app [data-tsc-word]") and "Open TallyPrime" in txt("#app [data-oc-fix]"), "5. the card: Tally not open, with the bridge's own finding")
+        ok(pg.locator("#app [data-oc-port-in]").count() == 0 and pg.locator("#app [data-oc-port-ask]").count() == 1, "5. a port box only when asked")
+        pg.click("#app [data-oc-port-ask]")
+        ok(pg.locator("#app [data-oc-port-in]").count() == 1, "5. Set its port: the port to type")
         shot("5-no-tally")
         pg.fill("#app [data-oc-port-in]", "9123"); pg.click("#app [data-oc-port-use]")
         ok(wait("() => Bridge.cfg().port === 9123"), "5. Use this port: the page's Tally pin")
@@ -268,9 +269,9 @@ def main():
         pg.click("#app [data-oc-port-auto]")
         ok(wait("() => !Bridge.cfg().port"), "5. Find it by itself again: the pin off")
         BR["tally"] = True
-        pg.click("#app [data-oc-find]")
-        ok(wait("() => { const e = document.querySelector('#app [data-oc-say=find]'); return !!e && e.getAttribute('data-oc-st') === 'found'; }"), "5. Tally opened: found")
-        ok("TallyPrime on port 9000: 2 companies open" in txt("#app [data-oc-say=find]"), "5. found in words (%s)" % txt("#app [data-oc-say=find]"))
+        pg.click("#app [data-oc-get]")   # Refresh
+        ok(wait("() => /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')"), "5. Tally opened, Refresh: Connected")
+        ok("Tally open: 2 companies" in txt("#app [data-status-card]") and pg.locator("#app [data-oc-find]").count() == 0, "5. found in words; Find Tally gives way (%s)" % txt("#app [data-status-card]")[:120])
         # 6. this browser not connected to the bridge: tray or code; the code connects and the firm key follows, one key
         bridge_reset(window=True)
         open_tally(DEAD, UNPAIRED)
@@ -288,7 +289,7 @@ def main():
         bridge_reset(on=False); open_tally(DEAD, UNPAIRED)
         pg.click("#app [data-oc-connect]")
         ok(wait("() => { const e = document.querySelector('#app [data-oc-say=connect]'); return !!e && e.getAttribute('data-oc-st') === 'none'; }"), "7. no bridge")
-        ok(txt("#app [data-oc-say=connect]").startswith("FinCom Bridge is not running on this computer") and pg.locator("#app [data-oneclick] [data-bridge-download]").count() == 1, "7. its words and the Download button")
+        ok(txt("#app [data-oc-say=connect]").startswith("FinCom Bridge is not running on this computer") and pg.locator("#app [data-status-card] [data-bridge-download]").count() == 1, "7. its words and the Download button")
         bridge_reset(yours=False); open_tally(DEAD, UNPAIRED)
         pg.click("#app [data-oc-connect]")
         ok(wait("() => { const e = document.querySelector('#app [data-oc-say=connect]'); return !!e && e.getAttribute('data-oc-st') === 'other'; }"), "7. another Windows user's bridge: its line (%s)" % txt("#app [data-oc-say=connect]"))
@@ -315,7 +316,7 @@ def main():
         BR["on"] = False; pg.wait_for_timeout(6500)
         ok(E("() => document.querySelector('#app [data-firstlink]').getAttribute('data-firstlink')") == "code", "10. one missed scan: the code box stays")
         # 11. phone width
-        bridge_reset(); open_tally(DEAD); pg.click("#app [data-oc-connect]"); wait("() => !!document.querySelector('#app [data-oc-cos]')")
+        bridge_reset(); open_tally(DEAD); pg.click("#app [data-oc-connect]"); wait("() => document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]').length === 2")
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(400)
         ok(wide() <= 0, "11. no sideways scroll at 390 (%d)" % wide())
         pg.set_viewport_size({"width": 1440, "height": 900})

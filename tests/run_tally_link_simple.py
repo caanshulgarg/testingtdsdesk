@@ -156,7 +156,7 @@ def main():
         to_row()
         opts = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' ')])")
         ok([o[0] for o in opts] == ["ABC LTD", "GARG SHEKHAR"] and "same GSTIN" in opts[0][1], "1. the companies seen, the same GSTIN on top (%s)" % opts)
-        ok("LAPTOP" in opts[0][1] and "NWS144" in opts[1][1], "1. each with its computer (%s)" % [o[1] for o in opts])
+        ok("LAPTOP" not in opts[0][1] and "NWS144" not in opts[1][1], "1. no computer's name on a row (next-tally-smart, the owner's rule) (%s)" % [o[1] for o in opts])
         n0 = len(calls("tally_company_link"))
         pg.click(R("ABC LTD") + " [data-tco-act=link]"); pg.wait_for_timeout(1200)
         lk = calls("tally_company_link")[n0:]
@@ -184,8 +184,10 @@ def main():
         line = one_line("Waiting for Tally", "3. waiting")
         ok("— Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and line.endswith("Open in Tally page"), "3. the line: Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK (%s)" % line)
         to_row()
-        ok(re.sub(r"\s+", " ", txt(R("GARG SHEKHAR") + " .tco-pill")) == "Waiting for Tally Open GARG SHEKHAR in TallyPrime on FRONTDESK" and pg.locator(R("GARG SHEKHAR") + " [data-tco-sync-now]").count() == 1 and E("(c) => !!document.querySelector('#app [data-tco-row][data-focus][data-tco-linked=\"' + c + '\"]')", cid),
-           "3. its row (marked): Waiting for Tally, open it in TallyPrime on FRONTDESK; Sync now (%s)" % txt(R("GARG SHEKHAR") + " .tco-pill"))
+        # next-tally-smart: a linked company not open now is one quiet line under Your linked clients (no false alarm)
+        LR = '#app [data-linked-clients] [data-linked-row="GARG SHEKHAR"]'
+        ok(pg.locator(LR).count() == 1 and pg.locator(R("GARG SHEKHAR")).count() == 0 and "not open in Tally now" in txt(LR + " [data-linked-meta]") and pg.locator(LR + " [data-tco-more]").count() == 1,
+           "3. not open: under Your linked clients, 'not open in Tally now', with ⋯ (%s)" % txt(LR))
         shot(pg, "card-2-waiting-desktop-light")
 
         # ---- 4. Connected
@@ -196,7 +198,7 @@ def main():
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no name box, no 'Posting allowed to' card")
         to_row()
         rt = re.sub(r"\s+", " ", txt(R("GARG SHEKHAR")))
-        ok(re.search(r"NWS144 · last entry (today|yesterday) \d\d:\d\d", rt) is not None and "Sync now" in rt, "4. the row: computer and last entry, Sync now (%s)" % rt)
+        ok(re.search(r"last entry (today |yesterday )?\d\d:\d\d", rt) is not None and "Sync now" in rt and "NWS144" not in rt, "4. the row: the last entry, Sync now, no computer's name (%s)" % rt)
         shot(pg, "card-3-reading-desktop-light")
 
         # ---- 5. posting: the one linked company is confirmed from the link by itself (26-Oct-2026); Stop posting here and
@@ -260,7 +262,7 @@ def main():
         rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.innerText.replace(/\\s+/g, ' ')]]))")
         ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Sync now" in rows["GARG SHEKHAR"][2],
            "9. Companies in Tally: GARG SHEKHAR, Connected, its client Link Co, Sync now (%s)" % rows.get("GARG SHEKHAR"))
-        ok("Link to client…" in rows.get("ABC LTD", ["", "", ""])[2] and "Add as client" not in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): Link to client…, no Add as client (Task D) (%s)" % rows.get("ABC LTD"))
+        ok("Choose client" in rows.get("ABC LTD", ["", "", ""])[2] and pg.locator(R("ABC LTD") + " select[data-tco-act=pick]").count() == 1 and "Add as client" not in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): the client picker, no Add as client (Task D) (%s)" % rows.get("ABC LTD"))
         zz = E("window.__zz")
         E("(z) => openConnectTally(4, z)", zz); pg.wait_for_timeout(900)
         ok(pg.locator('#app [data-tco-for="%s"]' % zz).count() == 1 and txt(R("ABC LTD") + " [data-tco-act]") == "Link to ZZ Other" and txt(R("GARG SHEKHAR") + " [data-tco-act]") == "Move here",
@@ -279,7 +281,7 @@ def main():
         # every client linked: the steps fold to the computers' line
         E("() => { const ids = Object.values(S.companies).filter(x => !x.deleted).map(x => x.id); window.__companies = ids.map((id, i) => ({company: 'CO ' + i, client_id: id, device_id: '%s', gstin: ''})); TLight.st.cos = window.__companies; TCloud.pane.companies = window.__companies; render(); }" % D1)
         pg.wait_for_timeout(1500)
-        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-guide-again]").count() == 1, "9. linked: no steps, one line with 'Connect another computer'")
+        ok(pg.locator("#app [data-connect-step]").count() == 0 and pg.locator("#app [data-status-card]").count() == 1, "9. linked: no steps, the one status card")
         # this computer's Tallys (Details): no linking there
         E("""() => { Bridge.cfg = () => ({url: 'http://localhost:1', key: 'k', follow: false, port: 0}); Bridge.blocked = () => false; Bridge.on = () => true; Bridge.up = () => true;
               Object.assign(Bridge.st, {state: 'ok', version: '2.4.1', mode: 'auto', user: 'anshul', tallyUp: true, at: Date.now(), open: [{name: 'QQ ELSEWHERE'}],
