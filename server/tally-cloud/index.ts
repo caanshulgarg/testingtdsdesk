@@ -213,6 +213,9 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
 import { packMonth, monthEnd } from "./monthpack.js";
+// 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported from TallyPrime as JSON, each object read as
+// the XML element Tally writes for it (the one rule, shared with the app: server/_shared/tallyjson.js)
+import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
@@ -2918,6 +2921,9 @@ function wholeChars(b: Uint8Array, enc: string) {
   const need = b[k] >= 0xF0 ? 4 : b[k] >= 0xE0 ? 3 : b[k] >= 0xC0 ? 2 : 1;
   return k + need > b.length ? k : b.length;
 }
+// 28-Oct-2026: a JSON Day Book's object not yet whole, carried to the next piece: an account number, IFSC or "favouring" whose
+// value is whole in it is emptied (as dropBankDetails does once the voucher is whole); the JSON stays valid
+const dropJsonBank = (t: string) => /accountnumber|ifscode|paymentfavouring/i.test(t) ? t.replace(/"(accountnumber|ifscode|paymentfavouring)"(\s*:\s*)"(?:[^"\\]|\\.)*"/gi, '"$1"$2""') : t;
 const dayXml = (vs: string[]) => "<ENVELOPE><BODY><DATA>" + vs.map((v) => "<TALLYMESSAGE>" + v + "</TALLYMESSAGE>").join("") + "</DATA></BODY></ENVELOPE>";
 async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const t0 = performance.now(); let wait = 0;
@@ -2949,7 +2955,18 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const nextFrom = from + cut;
   const tail0 = typeof u.tail === "string" ? u.tail : "", tailLen = tail0.length, tailAt0 = Number.isFinite(Number(u.tailAt)) ? Number(u.tailAt) : from;
   // only the very start of the file may hold the BOM (dropped); elsewhere U+FEFF is text
-  const text = tail0 + new TextDecoder(enc, { ignoreBOM: from > 0 }).decode(bytes.subarray(0, cut));
+  const fresh = new TextDecoder(enc, { ignoreBOM: from > 0 }).decode(bytes.subarray(0, cut));
+  // 28-Oct-2026: a JSON Day Book (told at its first piece; a late pass reads it again from its start): its objects cut out
+  // whole by the scanner (its state carried from piece to piece, as the XML's cut voucher is), each as Tally's XML element
+  const fmt = String(u.fmt || "") || (from === 0 && isJsonText(fresh) ? "json" : "xml");
+  const js = fmt === "json" ? jsonScanner(u.js && typeof u.js === "object" ? { ...u.js, buf: tail0 } : null) : null;
+  const jsCarried = js ? js.carried() : 0;
+  const jsRaw: string[] = js ? js.push(fresh) : [];
+  // the first object cut out began in the carried part (at tailAt0) when one was carried; every other in this piece
+  const jsEls = jsRaw.map((t, i) => ({ x: elemXml(t), carried: i === 0 && jsCarried > 0 })).filter((e) => /^<VOUCHER[\s>]/.test(e.x));
+  const jsAt = new Map<number, boolean>(); let jsLen = 0;
+  for (const e of jsEls) { jsAt.set(jsLen, e.carried); jsLen += e.x.length; }
+  const text = js ? jsEls.map((e) => e.x).join("") : tail0 + fresh;
   const pend: Record<string, string[]> = (u.pend && typeof u.pend === "object") ? u.pend : {};
   const seen = new Set<string>(Array.isArray(u.seen) ? u.seen : []), lateDays = new Set<string>(Array.isArray(u.late) ? u.late : []), only = new Set<string>(Array.isArray(u.only) ? u.only : []);
   const ext: Record<string, number[]> = (u.ext && typeof u.ext === "object") ? u.ext : {};
@@ -2961,7 +2978,7 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
     if (!d || d < rf || d > rt) continue;
     n++;
     if (late) { if (only.has(d)) (pend[d] = pend[d] || []).push(dropBankDetails(v)); continue; }
-    const at = m.index < tailLen ? tailAt0 : from, e = ext[d];
+    const at = js ? (jsAt.get(m.index) ? tailAt0 : from) : m.index < tailLen ? tailAt0 : from, e = ext[d];
     ext[d] = e ? [Math.min(e[0], at), Math.max(e[1], nextFrom)] : [at, nextFrom];
     if (seen.has(d)) { lateDays.add(d); continue; }
     (pend[d] = pend[d] || []).push(dropBankDetails(v));   // 2.4.4 (review 244 R2-M2): never a salary payment's bank details queued
@@ -2971,8 +2988,10 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   const k = text.slice(lastEnd).search(/<VOUCHER\b/);
   const tailStart = k >= 0 ? lastEnd + k : Math.max(lastEnd, text.length - 16);
   // 2.4.4 (review 244 R3-L1): the cut voucher carried in the next piece's message (kept in the queue's archive) without the
-  // bank details; a tag cut at the range end is whole again when the voucher is re-joined, and cleaned then
-  const tail = dropBankDetails(text.slice(tailStart)), tailAt = tailStart < tailLen ? tailAt0 : from;
+  // bank details; a tag cut at the range end is whole again when the voucher is re-joined, and cleaned then. A JSON Day
+  // Book carries its scanner's state instead (the object not yet whole), its bank details dropped once it is whole
+  const jsState = js ? js.state() : null;
+  const tail = js ? dropJsonBank(String(jsState!.buf || "")) : dropBankDetails(text.slice(tailStart)), tailAt = js ? (jsCarried && !jsRaw.length ? tailAt0 : from) : tailStart < tailLen ? tailAt0 : from;
   // the days complete now: every day before the latest met (a Day Book is in date order); at the end, all
   const emit = late ? (isLast ? [...only].sort() : []) : Object.keys(pend).filter((d) => isLast || d < top).sort();
   const files: { day: string; vs: string[] }[] = emit.map((d) => ({ day: d, vs: pend[d] || [] }));
@@ -3001,10 +3020,11 @@ async function uploadPiece(job: string, firm: string, book: string, u: any) {
   }
   flush();
   let next: Record<string, unknown> | null = null;
-  if (!isLast) next = { ...u, from: nextFrom, enc, tail, tailAt, pend, seen: [...seen], late: [...lateDays].sort(), ext, top };
+  if (!isLast) next = { ...u, from: nextFrom, enc, fmt, js: jsState ? { ...jsState, buf: "" } : undefined, tail, tailAt, pend, seen: [...seen], late: [...lateDays].sort(), ext, top };
   else if (lt.length) {
-    const a = Math.min(...lt.map((d) => ext[d][0])), b = Math.max(...lt.map((d) => ext[d][1]));
-    next = { path, size: size0, range: { from: rf, to: rt }, enc, pass: "late", from: a, end: b, only: lt, pend: {}, tail: "", tailAt: a };
+    // a JSON Day Book's late days are read again from its start (an object's place in the file is known only from there)
+    const a = js ? 0 : Math.min(...lt.map((d) => ext[d][0])), b = js ? size0 : Math.max(...lt.map((d) => ext[d][1]));
+    next = { path, size: size0, range: { from: rf, to: rt }, enc, fmt, pass: "late", from: a, end: b, only: lt, pend: {}, tail: "", tailAt: a };
     console.log("tally-ingest upload not in date order: " + lt.length + " day(s) read again whole", job, lt.slice(0, 10).join(","));
   }
   if (next) msgs.push({ job, firm, book, upload: next });

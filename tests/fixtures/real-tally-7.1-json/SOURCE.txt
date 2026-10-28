@@ -1,0 +1,23 @@
+Real TallyPrime 7.1 (Educational mode, FileVersion 1.1.7.1) exports of one throwaway test company, "FinCom Spike Co"
+(TEST DATA ONLY), made by the real-Tally harness's mode dbjson (branch tally-dbjson, .github/tally-spike/dbjsonv.ps1,
+workflow tally-versions): tdsgst/masters.json and vouchers-p1.json (GST, TDS, bill-wise: 39 entries), payg/ (payroll,
+employees as cost centres: 36 entries), an item invoice (stock item Laptop, HSN 8471), a journal with a cost centre, an
+optional entry, a cancelled one (FC/26-27/012).
+
+Run 40737035612 (28-Oct-2026), on Tally's own screens (keys, each screen read by OCR):
+  daybook-ui.xml        Day Book, Alt+F2 1-4-2026 to 31-3-2027, Alt+E Current, File Format XML (Data Interchange), E: Export
+                        (C:\Program Files\TallyPrime\DayBook.xml; UTF-16LE with the BOM, 3,306,730 bytes, 81 vouchers)
+  daybook-ui.json       the same, F8 File Format JSON (Data Exchange) (DayBook.json; UTF-16LE with the BOM, 2,380,588 bytes,
+                        81 vouchers: {"tallymessage": [{"metadata": {"type": "Voucher", ...}, ...}]})
+  transactions-ui.xml / .json   Alt+E > Company Data > Transactions (its default period, May 2026; 31 vouchers), XML and JSON
+  master-ui.json        Alt+E > Company Data > Masters, JSON (Master.json, UTF-16LE with the BOM)
+By Tally's HTTP port (UTF-8, no BOM):
+  masters-http.xml      List of Accounts, Export Data, SVEXPORTFORMAT XML (run 40737035612)
+  masters-native.json   the JSON request (headers version 1, tallyrequest Export, type Data, id List of Accounts) (run 40737035612)
+  daybook-1apr-http.xml / daybook-1apr-native.json   Day Book by Export Data XML and by the JSON request: Tally answers
+                        only the Day Book's own date (1-Apr-2026, 6 vouchers) whatever period is asked (run 40733556381)
+
+The format list Tally 7.1 shows (F8): Day Book: Excel (Spreadsheet), HTML (Web-Publishing), JPEG (Image), JSON (Data
+Exchange), PDF (Read-only document), XML (Data Interchange); Company Data: ASCII (Comma Delimited), JSON (Data Exchange),
+XML (Data Interchange). One JSON form only (no separate report JSON on 7.1). SVEXPORTFORMAT JSON / JSONEx in an XML
+request is ignored (XML comes back).
