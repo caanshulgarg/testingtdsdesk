@@ -76,7 +76,7 @@ def on_bridge(route):
     if path == "/status":
         ses = [{"port": BR["tport"], "ok": BR["tally"], "mine": True, "companies": [{"name": c} for c in (BR["open"] if BR["tally"] else [])], "error": "" if BR["tally"] else "Tally is not open (nothing listens on this port)"},
                {"port": 9001, "ok": True, "mine": False, "skipped": True, "user": "ravi", "companies": []}]
-        return send(200, {"ok": True, "version": BR["ver"], "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": "auto", "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
+        return send(200, {"ok": True, "version": BR["ver"], "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": BR.get("mode", "auto"), "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
     if path == "/ports/use" and req.method == "POST":
         # bridge-go anyport.go: the typed port tried by the bridge; kept only when it is this user's TallyPrime
         n = json.loads(req.post_data or "{}").get("port")
@@ -305,6 +305,11 @@ def main():
         BR["tally"] = False; pg.click("#app [data-oc-find]"); wait("() => !!document.querySelector('#app [data-oc-port-auto]')")
         pg.click("#app [data-oc-port-auto]")
         ok(wait("() => !Bridge.cfg().port") and [json.loads(x[2] or "{}").get("port") for x in BR["log"] if x[1] == "/ports/use"][-1:] == [0], "13. Find it by itself again: the bridge automatic again (port 0), the pin off")
+        # review 2.4.8 (R1-8): another browser (no page pin) of a bridge that keeps a typed port: Find it by itself again shows
+        BR["mode"] = "config"; E("() => { Bridge.setCfg({port: 0}); }")
+        pg.click("#app [data-oc-find]"); wait("() => !!document.querySelector('#app [data-oc-none]')")
+        ok(pg.locator("#app [data-oc-port-auto]").count() == 1, "13. the bridge keeps a port, this browser has no pin: Find it by itself again shown")
+        BR["mode"] = "auto"
         # 6. this browser not connected to the bridge: tray or code; the code connects and the firm key follows, one key
         bridge_reset(window=True)
         open_tally(DEAD, UNPAIRED)

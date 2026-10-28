@@ -15,7 +15,7 @@
 // next-tally-linknow (28-Oct-2026): Link / Create client on a company FinCom's cloud has no row for yet is registered and
 // linked at once (tally-ingest "link_now", lib/tallyConnect.js linkNow), never "done by itself within a minute"
 import { useEffect, useState } from "react";
-import { connectNow, findTally, getCompanies, typePort, keyRefused } from "../lib/tallyConnect.js";
+import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefused } from "../lib/tallyConnect.js";
 import { CodeBox, FL } from "./TallyFirstLink.jsx";
 import { companyRows, twinOf, yearOf, Pick } from "./TallyCompanies.jsx";
 import { coKey } from "../lib/tallyState.js";
@@ -52,7 +52,8 @@ function useRefusedCheck() {
 const Line = ({ r, hook }) => r && r.say ? <p className={"oc-say " + (r.st === "ok" || r.st === "found" ? "ok" : r.st === "code" ? "wait" : "bad")} data-oc-say={hook} data-oc-st={r.st} role="status">{(r.st === "ok" || r.st === "found" ? "✓ " : "") + r.say}</p> : null;
 
 // 2.4.8: a 2.4.8 bridge tries the typed port itself and keeps it only when it is your own TallyPrime (its plain reason
-// otherwise, OC.p); an older bridge: the page's pin as before (lib/tallyConnect.js typePort)
+// otherwise, OC.p); an older bridge: the page's pin as before (lib/tallyConnect.js typePort). Find it by itself again
+// also when the bridge itself keeps a port (its mode "config"), seen from another browser without the page's pin
 function PortBox() {
   const [p, setP] = useState(String((typeof Bridge === "object" && Bridge.cfg().port) || ""));
   const go = async () => { const r = await run("p", () => typePort(p)); if (r && (r.st === "ok" || r.st === "pinned")) run("f", findTally); };
@@ -62,7 +63,7 @@ function PortBox() {
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <input id="ocPort" data-oc-port-in="" inputMode="numeric" maxLength={5} placeholder="9000" value={p} onChange={(e) => setP(e.target.value.replace(/\D/g, "").slice(0, 5))} />
       <button className="btn small" data-oc-port-use="" disabled={!p || !!OC.busy} onClick={go}>{OC.busy === "p" ? "Trying the port…" : "Use this port"}</button>
-      {Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0 && <button className="linkbtn" data-oc-port-auto="" onClick={auto}>Find it by itself again</button>}
+      {(Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0 || (bridgeTakesPort() && Bridge.st && Bridge.st.mode === "config")) && <button className="linkbtn" data-oc-port-auto="" onClick={auto}>Find it by itself again</button>}
     </div>
     {OC.p && OC.p.st !== "pinned" && OC.p.st !== "ok" && <Line r={OC.p} hook="port" />}</div>;
 }
