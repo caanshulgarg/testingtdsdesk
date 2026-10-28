@@ -45,7 +45,7 @@ on:
         description: 'proof72 only: the sections to run (comma list of section letters, e.g. b for the port screen); empty: all'
         default: ''
       upg_from:
-        description: 'upg: the published release installed first (2.3.3, 2.4.0 for 2.4.1''s gate, 2.4.1 for 2.4.2''s gate, 2.4.2 for 2.4.3''s gate, 2.4.3 for 2.4.4''s gate, 2.4.4 for 2.4.5''s gate, 2.4.5 for 2.4.6''s gate, 2.4.6 for 2.4.7''s gate)'
+        description: 'upg: the published release installed first (2.3.3, 2.4.0 for 2.4.1''s gate, 2.4.1 for 2.4.2''s gate, 2.4.2 for 2.4.3''s gate, 2.4.3 for 2.4.4''s gate, 2.4.4 for 2.4.5''s gate, 2.4.5 for 2.4.6''s gate, 2.4.6 for 2.4.7''s gate, 2.4.7 for 2.4.8''s gate)'
         default: '2.3.3'
 permissions:
   contents: write
@@ -218,7 +218,7 @@ jobs:
       # upg: the published 2.3.3 (commit 91faf7f3, setup SHA-256 8280206b...e5e5) and its add-on, the install the gate's
       # setup goes over
       - name: Bridge 2.3.3 (upg)
-        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from != '2.4.0' && inputs.upg_from != '2.4.1' && inputs.upg_from != '2.4.2' && inputs.upg_from != '2.4.3' && inputs.upg_from != '2.4.4' && inputs.upg_from != '2.4.5' && inputs.upg_from != '2.4.6'
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from != '2.4.0' && inputs.upg_from != '2.4.1' && inputs.upg_from != '2.4.2' && inputs.upg_from != '2.4.3' && inputs.upg_from != '2.4.4' && inputs.upg_from != '2.4.5' && inputs.upg_from != '2.4.6' && inputs.upg_from != '2.4.7'
         run: |
           git fetch -q --depth 1 origin 91faf7f3b04932e65624b8bff5072c7ffa62b8f9
           mkdir -p bridge-go/dist/old233
@@ -304,6 +304,17 @@ jobs:
           got=$(sha256sum bridge-go/dist/old246/FinComBridge-Setup-2.4.6.exe | awk '{print $1}')
           [ "$got" = a64a93cf596a1c644ee352ed69ca75b7ff53d689e481d224f654abd9f4a55917 ] || { echo "::error::2.4.6 setup SHA-256 $got"; exit 1; }
           echo "2.4.6 setup SHA-256 $got"
+      # upg_from=2.4.7 (2.4.8's gate): the published 2.4.7 (committed at 915592c4, setup SHA-256 69aa6b74...8799) and its add-on
+      - name: Bridge 2.4.7 (upg from 2.4.7)
+        if: contains(steps.mode.outputs.modes, 'upg') && inputs.upg_from == '2.4.7'
+        run: |
+          git fetch -q --depth 1 origin 915592c421e61957fb0166c3242c0bb6cbbb59fc
+          mkdir -p bridge-go/dist/old247
+          git show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.4.7.exe > bridge-go/dist/old247/FinComBridge-Setup-2.4.7.exe
+          git show FETCH_HEAD:bridge-go/addon/FinComRecorder.tdl > bridge-go/dist/old247/FinComRecorder.tdl
+          got=$(sha256sum bridge-go/dist/old247/FinComBridge-Setup-2.4.7.exe | awk '{print $1}')
+          [ "$got" = 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799 ] || { echo "::error::2.4.7 setup SHA-256 $got"; exit 1; }
+          echo "2.4.7 setup SHA-256 $got"
       - uses: actions/upload-artifact@v4
         with:
           name: bridge-dist
@@ -390,6 +401,7 @@ jobs:
           if ($env:VMODE -eq 'tds240') { $want += @('t1 TDS typed on the screen: the TDS details carried to FinCom', 't2 TDS rate: worked out only where Tally stores 0, never on an exempt line') }
           if ($env:VMODE -eq 'selfck') { $want += @('n1 nightly check: Tally''s changes compared, the missing fetched', 'n2 nightly check: the words recorded', 'n3 nightly check: once a night') }
           if ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.0') { $want += @('u1 2.4.1 installed over 2.4.0: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.0: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
+          elseif ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.7') { $want += @('u1 2.4.8 installed over 2.4.7: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.7: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
           elseif ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.6') { $want += @('u1 2.4.7 installed over 2.4.6: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.6: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
           elseif ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.5') { $want += @('u1 2.4.6 installed over 2.4.5: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.5: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
           elseif ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.4') { $want += @('u1 2.4.5 installed over 2.4.4: the version and the settings carried', 'u2 the recorder state carried: nothing sent twice, nothing lost', 'u3 held lines from 2.4.4: each asked once in all and ended', 'u4 a new save after the upgrade arrives with its body') }
