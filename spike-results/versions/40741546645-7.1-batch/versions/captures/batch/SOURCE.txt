@@ -1,0 +1,1 @@
+Written by a go test (harness .github/tally-spike/batch/zz_fcbatch_req_test.go at faf25b4698d5c2bff98c01ae11ff734f4200a1fa) from the ref dd46060305cd1adf549eafc9ef80852083c8cbca: dayHeadsRequest, voucherObjectRequest, formCollection / fcCollection

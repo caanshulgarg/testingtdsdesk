@@ -1,0 +1,1422 @@
+[18:11:12] ---- c1 install and open the company (TallyPrime 7.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-28, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 5 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 5 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>7</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-28, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.7 s after start, GET 534 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 5 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dbm\req: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+  INFO batch: window probe running True (beats 19)
+  INFO batch: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\batchreq (Written by a go test (harness .github/tally-spike/batch/zz_fcbatch_req_test.go at faf25b4698d5c2bff98c01ae11ff734f4200a1fa) from the ref dd46060305cd1adf549eafc9ef80852083c8cbca: dayHeadsRequest, voucherObjectRequest, formCollection / fcCollection)
+[18:11:47] ---- batch: ZZ BIG TEST (~30,000 entries)
+[db] company: cost centres, bill-wise: created 0, altered 1, errors 0, 30.6 ms
+[db] ZZ BIG TEST masters: created 1114, altered 1, errors 0, 3074.3 ms
+[db] dbm-vouchers-01.xml: created 500, altered 0, errors 0, 4249.9 ms
+[db] dbm-vouchers-02.xml: created 500, altered 0, errors 0, 4364.4 ms
+[db] dbm-vouchers-03.xml: created 500, altered 0, errors 0, 4343.2 ms
+[db] dbm-vouchers-04.xml: created 500, altered 0, errors 0, 4113.1 ms
+[db] dbm-vouchers-05.xml: created 500, altered 0, errors 0, 4471.8 ms
+[db] dbm-vouchers-06.xml: created 500, altered 0, errors 0, 4962.4 ms
+[db] dbm-vouchers-07.xml: created 500, altered 0, errors 0, 4550.4 ms
+[db] dbm-vouchers-08.xml: created 500, altered 0, errors 0, 4547.6 ms
+[db] dbm-vouchers-09.xml: created 500, altered 0, errors 0, 5171.3 ms
+[db] dbm-vouchers-10.xml: created 500, altered 0, errors 0, 4715.7 ms
+[db] dbm-vouchers-11.xml: created 500, altered 0, errors 0, 4880.8 ms
+[db] dbm-vouchers-12.xml: created 500, altered 0, errors 0, 4911 ms
+[db] dbm-vouchers-13.xml: created 500, altered 0, errors 0, 5128.8 ms
+[db] dbm-vouchers-14.xml: created 500, altered 0, errors 0, 5086 ms
+[db] dbm-vouchers-15.xml: created 500, altered 0, errors 0, 4874.7 ms
+[db] dbm-vouchers-16.xml: created 500, altered 0, errors 0, 4613.3 ms
+[db] dbm-vouchers-17.xml: created 500, altered 0, errors 0, 4741.3 ms
+[db] dbm-vouchers-18.xml: created 500, altered 0, errors 0, 4898.2 ms
+[db] dbm-vouchers-19.xml: created 500, altered 0, errors 0, 4840.2 ms
+[db] dbm-vouchers-20.xml: created 500, altered 0, errors 0, 4830 ms
+[db] dbm-vouchers-21.xml: created 500, altered 0, errors 0, 4857.4 ms
+[db] dbm-vouchers-22.xml: created 500, altered 0, errors 0, 4942.4 ms
+[db] dbm-vouchers-23.xml: created 500, altered 0, errors 0, 5108.3 ms
+[db] dbm-vouchers-24.xml: created 500, altered 0, errors 0, 5320.9 ms
+[db] dbm-vouchers-25.xml: created 500, altered 0, errors 0, 5268.2 ms
+[db] dbm-vouchers-26.xml: created 500, altered 0, errors 0, 4957.8 ms
+[db] dbm-vouchers-27.xml: created 500, altered 0, errors 0, 5025.8 ms
+[db] dbm-vouchers-28.xml: created 500, altered 0, errors 0, 4768.1 ms
+[db] dbm-vouchers-29.xml: created 500, altered 0, errors 0, 4828.8 ms
+[db] dbm-vouchers-30.xml: created 500, altered 0, errors 0, 4884.2 ms
+[db] dbm-vouchers-31.xml: created 500, altered 0, errors 0, 5709.9 ms
+[db] dbm-vouchers-32.xml: created 500, altered 0, errors 0, 6700.2 ms
+[db] dbm-vouchers-33.xml: created 500, altered 0, errors 0, 7272.9 ms
+[db] dbm-vouchers-34.xml: created 500, altered 0, errors 0, 5628.4 ms
+[db] dbm-vouchers-35.xml: created 500, altered 0, errors 0, 5109 ms
+[db] dbm-vouchers-36.xml: created 500, altered 0, errors 0, 4872.4 ms
+[db] dbm-vouchers-37.xml: created 500, altered 0, errors 0, 4821.1 ms
+[db] dbm-vouchers-38.xml: created 500, altered 0, errors 0, 5176.2 ms
+[db] dbm-vouchers-39.xml: created 500, altered 0, errors 0, 5454.9 ms
+[db] dbm-vouchers-40.xml: created 500, altered 0, errors 0, 7077.5 ms
+[db] dbm-vouchers-41.xml: created 500, altered 0, errors 0, 7486.4 ms
+[db] dbm-vouchers-42.xml: created 500, altered 0, errors 0, 7656.4 ms
+[db] dbm-vouchers-43.xml: created 500, altered 0, errors 0, 8038.6 ms
+[db] dbm-vouchers-44.xml: created 500, altered 0, errors 0, 7484.5 ms
+[db] dbm-vouchers-45.xml: created 500, altered 0, errors 0, 5124.4 ms
+[db] dbm-vouchers-46.xml: created 500, altered 0, errors 0, 4856.8 ms
+[db] dbm-vouchers-47.xml: created 500, altered 0, errors 0, 4912.5 ms
+[db] dbm-vouchers-48.xml: created 500, altered 0, errors 0, 4942.2 ms
+[db] dbm-vouchers-49.xml: created 500, altered 0, errors 0, 4893.9 ms
+[db] dbm-vouchers-50.xml: created 500, altered 0, errors 0, 5052 ms
+[db] dbm-vouchers-51.xml: created 500, altered 0, errors 0, 5910.2 ms
+[db] dbm-vouchers-52.xml: created 500, altered 0, errors 0, 5533.2 ms
+[db] dbm-vouchers-53.xml: created 500, altered 0, errors 0, 5411.1 ms
+[db] dbm-vouchers-54.xml: created 500, altered 0, errors 0, 5330.1 ms
+[db] dbm-vouchers-55.xml: created 500, altered 0, errors 0, 5066.3 ms
+[db] dbm-vouchers-56.xml: created 500, altered 0, errors 0, 5340.3 ms
+[db] dbm-vouchers-57.xml: created 500, altered 0, errors 0, 5350 ms
+[db] dbm-vouchers-58.xml: created 500, altered 0, errors 0, 5110.3 ms
+[db] dbm-vouchers-59.xml: created 500, altered 0, errors 0, 5490 ms
+[db] dbm-vouchers-60.xml: created 500, altered 0, errors 0, 5265.2 ms
+[db] dbm-vouchers-61.xml: created 8, altered 0, errors 0, 155.6 ms
+  INFO batch: masters created 1114 (errors 0); entries created 30008 (errors 0)
+[db] batch: 50 items, sales, GST and party ledgers: created 55, altered 0, errors 0, 156.7 ms
+[db] batch: ten invoices of 50 items on 31-Aug: created 10, altered 0, errors 0, 1737.6 ms
+[db] batch: payroll on: created 0, altered 1, errors 0, 11.5 ms
+[db] batch: pay heads, salary payable, employee group: created 10, altered 0, errors 0, 51.6 ms
+[db] batch: employees, part 1: created 250, altered 0, errors 0, 565.7 ms
+[db] batch: employees, part 2: created 250, altered 0, errors 0, 587 ms
+[db] batch: payroll of 100 employees on 31-Aug: created 1, altered 0, errors 0, 87.4 ms
+[db] batch: payroll of 500 employees on 31-Aug: created 1, altered 0, errors 0, 333.3 ms
+######## PASS v1 test data made (~30,000 entries; 50-item invoices and payroll entries of 100 and 500 employees on 31-Aug): 30,021 entries in the company (masters created 1114 (errors 0); entries created 30008 (errors 0)); invoices of 50 items 10/10, payroll entries 2/2 (100 and 500 employees) on 31-Aug
+[18:17:15] ---- batch: phase p1 (~30,000 entries)
+[batch] p1 heads FinComDayHeads 20260601 n=100 k=-1: 26.6 ms, held 0 ms, 123098 chars, got 100 exact True
+  INFO batch p1: 20260601 holds 100 entries (MasterIDs 8866..8965)
+[batch] p1 heads FinComDayHeads 20260702 n=300 k=-1: 57 ms, held 0 ms, 366688 chars, got 300 exact True
+  INFO batch p1: 20260702 holds 300 entries (MasterIDs 13398..13697)
+[batch] p1 heads FinComDayHeads 20260831 n=812 k=-1: 108.6 ms, held 0 ms, 990196 chars, got 812 exact True
+  INFO batch p1: 20260831 holds 812 entries (MasterIDs 20346..30021)
+[batch] p1 heads FinComDayHeads 20260801 n=2216 k=-1: 227.8 ms, held 0 ms, 2699763 chars, got 2216 exact True
+  INFO batch p1: 20260801 holds 2216 entries (MasterIDs 15914..18129)
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 60540 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60534 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 9.5 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.8 ms, held 0 ms, 68693 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 80921 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 9.1 ms, held 0 ms, 68753 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.3 ms, held 0 ms, 60515 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68758 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.7 ms, held 0 ms, 68693 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.5 ms, held 0 ms, 68743 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.8 ms, held 0 ms, 67507 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 80872 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68693 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 68705 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.8 ms, held 0 ms, 68741 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 9.4 ms, held 0 ms, 68771 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.4 ms, held 0 ms, 67510 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 10.6 ms, held 0 ms, 80922 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.8 ms, held 0 ms, 60512 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 60542 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 60553 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 60501 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68732 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60542 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.5 ms, held 0 ms, 68688 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 60535 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.9 ms, held 0 ms, 68753 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8 ms, held 0 ms, 60535 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 12.6 ms, held 0 ms, 60528 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 11.8 ms, held 0 ms, 68745 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.8 ms, held 0 ms, 67487 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60529 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 60541 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.1 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 80921 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.3 ms, held 0 ms, 68720 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 9.4 ms, held 0 ms, 68745 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 12.8 ms, held 0 ms, 60525 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 60550 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 60508 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 10.4 ms, held 0 ms, 68731 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 67498 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 80917 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.1 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 80872 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 67518 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.4 ms, held 0 ms, 68733 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68749 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 10 ms, held 0 ms, 68687 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.6 ms, held 0 ms, 68743 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60542 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68737 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68705 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.8 ms, held 0 ms, 68742 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 59579 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 8.6 ms, held 0 ms, 68745 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60539 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60544 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 9.8 ms, held 0 ms, 80884 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.5 ms, held 0 ms, 68768 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 67500 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68738 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60536 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60549 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68758 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68705 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.2 ms, held 0 ms, 68708 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 80915 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 80932 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.7 ms, held 0 ms, 60541 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68751 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 68688 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.2 ms, held 0 ms, 60541 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68755 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.9 ms, held 0 ms, 59579 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 59579 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 68707 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 80934 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 68732 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60520 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 67498 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68748 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68752 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68717 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68698 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68698 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68717 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.2 ms, held 0 ms, 60548 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 67477 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68704 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68740 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 67489 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60542 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68768 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 68747 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.9 ms, held 0 ms, 80900 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68738 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68742 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.6 ms, held 0 ms, 60535 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.6 ms, held 0 ms, 60544 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 60509 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.7 ms, held 0 ms, 60540 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 4.1 ms, held 0 ms, 59579 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 67505 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68689 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68748 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68702 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 80879 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68733 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 67489 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68741 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 7.1 ms, held 0 ms, 80940 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 60545 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68740 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68687 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68760 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68745 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68743 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68738 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 80924 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.2 ms, held 0 ms, 60558 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68705 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60532 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68708 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 67487 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60503 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68743 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68726 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60513 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68741 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 60549 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 67498 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 60552 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60540 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 75.4 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 92.3 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 93.2 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 77.2 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 88.6 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 78.5 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 77.8 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 79.4 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 80.5 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 81.3 ms, held 0 ms, 1385979 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 203.7 ms, held 0 ms, 2383848 chars, got 1 exact True
+[batch] p1 object FinComVoucherObject  n=1 k=-1: 1005.1 ms, held 970 ms, 11754249 chars, got 1 exact True
+[batch] p1 sweep B1 20260601 n=5 k=0: 52.4 ms, held 0 ms, 42066 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=0: 40.2 ms, held 0 ms, 124188 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=0: 34.8 ms, held 0 ms, 42066 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=5 k=1: 31.7 ms, held 0 ms, 44729 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=1: 38 ms, held 0 ms, 126352 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=1: 34.9 ms, held 0 ms, 44729 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=5 k=2: 33.2 ms, held 0 ms, 39855 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=2: 39.2 ms, held 0 ms, 118483 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=2: 33.1 ms, held 0 ms, 39855 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=5 k=3: 34 ms, held 0 ms, 38032 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=3: 36.3 ms, held 0 ms, 118943 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=3: 31.2 ms, held 0 ms, 38032 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=5 k=4: 34.6 ms, held 0 ms, 41642 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=4: 34 ms, held 0 ms, 120436 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=4: 28.7 ms, held 0 ms, 41642 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=5 k=5: 28 ms, held 0 ms, 47520 chars, got 5 exact True
+[batch] p1 sweep B2 20260601 n=5 k=5: 36.5 ms, held 0 ms, 140648 chars, got 5 exact True
+[batch] p1 sweep B3 20260601 n=5 k=5: 32.2 ms, held 0 ms, 47520 chars, got 5 exact True
+[batch] p1 sweep B1 20260601 n=10 k=0: 32.9 ms, held 0 ms, 84858 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=0: 43.7 ms, held 0 ms, 252393 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=0: 37.4 ms, held 0 ms, 84858 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=10 k=1: 32.5 ms, held 0 ms, 83445 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=1: 41.4 ms, held 0 ms, 249298 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=1: 35.4 ms, held 0 ms, 83445 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=10 k=2: 34.8 ms, held 0 ms, 81645 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=2: 40.4 ms, held 0 ms, 244525 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=2: 35.1 ms, held 0 ms, 81645 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=10 k=3: 33.6 ms, held 0 ms, 82325 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=3: 42.1 ms, held 0 ms, 248660 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=3: 33.6 ms, held 0 ms, 82325 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=10 k=4: 31.3 ms, held 0 ms, 82531 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=4: 39.2 ms, held 0 ms, 250598 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=4: 32.3 ms, held 0 ms, 82531 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=10 k=5: 32.5 ms, held 0 ms, 91523 chars, got 10 exact True
+[batch] p1 sweep B2 20260601 n=10 k=5: 40.2 ms, held 0 ms, 272166 chars, got 10 exact True
+[batch] p1 sweep B3 20260601 n=10 k=5: 32.6 ms, held 0 ms, 91523 chars, got 10 exact True
+[batch] p1 sweep B1 20260601 n=25 k=0: 36.3 ms, held 0 ms, 213787 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=0: 59.7 ms, held 0 ms, 638116 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=0: 38.9 ms, held 0 ms, 213787 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=25 k=1: 38.5 ms, held 0 ms, 203796 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=1: 69.2 ms, held 0 ms, 622392 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=1: 38.8 ms, held 0 ms, 203796 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=25 k=2: 43 ms, held 0 ms, 194751 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=2: 55.3 ms, held 0 ms, 592780 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=2: 39.1 ms, held 0 ms, 194751 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=25 k=3: 35.3 ms, held 0 ms, 203072 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=3: 57.7 ms, held 0 ms, 614564 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=3: 40.2 ms, held 0 ms, 203072 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=25 k=4: 42.6 ms, held 0 ms, 208647 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=4: 80.2 ms, held 0 ms, 628560 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=4: 42.4 ms, held 0 ms, 208647 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=25 k=5: 42.1 ms, held 0 ms, 212023 chars, got 25 exact True
+[batch] p1 sweep B2 20260601 n=25 k=5: 58.5 ms, held 0 ms, 634494 chars, got 25 exact True
+[batch] p1 sweep B3 20260601 n=25 k=5: 39.4 ms, held 0 ms, 212023 chars, got 25 exact True
+[batch] p1 sweep B1 20260601 n=50 k=0: 42.8 ms, held 0 ms, 409114 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=0: 79.4 ms, held 0 ms, 1240258 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=0: 45.1 ms, held 0 ms, 409114 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=50 k=1: 55.2 ms, held 0 ms, 405913 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=1: 83.4 ms, held 0 ms, 1238024 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=1: 46.9 ms, held 0 ms, 405913 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=50 k=2: 45 ms, held 0 ms, 404874 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=2: 78.5 ms, held 0 ms, 1229360 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=2: 46.2 ms, held 0 ms, 404874 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=50 k=3: 43.9 ms, held 0 ms, 405846 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=3: 77.7 ms, held 0 ms, 1235886 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=3: 47.5 ms, held 0 ms, 405846 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=50 k=4: 54.3 ms, held 0 ms, 409536 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=4: 85.5 ms, held 0 ms, 1237458 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=4: 45.8 ms, held 0 ms, 409536 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=50 k=5: 54.7 ms, held 0 ms, 421124 chars, got 50 exact True
+[batch] p1 sweep B2 20260601 n=50 k=5: 81.5 ms, held 0 ms, 1272267 chars, got 50 exact True
+[batch] p1 sweep B3 20260601 n=50 k=5: 47.1 ms, held 0 ms, 421124 chars, got 50 exact True
+[batch] p1 sweep B1 20260601 n=100 k=0: 58 ms, held 0 ms, 828692 chars, got 100 exact True
+[batch] p1 sweep B2 20260601 n=100 k=0: 163 ms, held 0 ms, 2510979 chars, got 100 exact True
+[batch] p1 sweep B3 20260601 n=100 k=0: 62.3 ms, held 0 ms, 828692 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=5 k=0: 43.7 ms, held 0 ms, 40214 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=0: 44.4 ms, held 0 ms, 118403 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=0: 38.8 ms, held 0 ms, 40214 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=5 k=1: 38.1 ms, held 0 ms, 43947 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=1: 50.3 ms, held 0 ms, 126036 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=1: 51.9 ms, held 0 ms, 43947 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=5 k=2: 43.4 ms, held 0 ms, 46484 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=2: 40.6 ms, held 0 ms, 128643 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=2: 38.8 ms, held 0 ms, 46484 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=5 k=3: 43.9 ms, held 0 ms, 36763 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=3: 50.3 ms, held 0 ms, 112171 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=3: 49.6 ms, held 0 ms, 36763 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=5 k=4: 45.3 ms, held 0 ms, 46005 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=4: 44.9 ms, held 0 ms, 133138 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=4: 44.8 ms, held 0 ms, 46005 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=5 k=5: 41.5 ms, held 0 ms, 43909 chars, got 5 exact True
+[batch] p1 sweep B2 20260702 n=5 k=5: 44.3 ms, held 0 ms, 125999 chars, got 5 exact True
+[batch] p1 sweep B3 20260702 n=5 k=5: 43.2 ms, held 0 ms, 43909 chars, got 5 exact True
+[batch] p1 sweep B1 20260702 n=10 k=0: 41.9 ms, held 0 ms, 80076 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=0: 51.5 ms, held 0 ms, 242529 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=0: 50.1 ms, held 0 ms, 80076 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=10 k=1: 51.2 ms, held 0 ms, 88895 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=1: 60.2 ms, held 0 ms, 253143 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=1: 51.8 ms, held 0 ms, 88895 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=10 k=2: 50.7 ms, held 0 ms, 94983 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=2: 65 ms, held 0 ms, 268099 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=2: 51.5 ms, held 0 ms, 94983 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=10 k=3: 50.6 ms, held 0 ms, 78060 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=3: 55.3 ms, held 0 ms, 237771 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=3: 48.5 ms, held 0 ms, 78060 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=10 k=4: 47.9 ms, held 0 ms, 87960 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=4: 49.7 ms, held 0 ms, 257230 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=4: 44.3 ms, held 0 ms, 87960 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=10 k=5: 39.9 ms, held 0 ms, 87356 chars, got 10 exact True
+[batch] p1 sweep B2 20260702 n=10 k=5: 48.4 ms, held 0 ms, 251594 chars, got 10 exact True
+[batch] p1 sweep B3 20260702 n=10 k=5: 41.1 ms, held 0 ms, 87356 chars, got 10 exact True
+[batch] p1 sweep B1 20260702 n=25 k=0: 52.2 ms, held 0 ms, 212506 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=0: 63.2 ms, held 0 ms, 630190 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=0: 49.3 ms, held 0 ms, 212506 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=25 k=1: 52.2 ms, held 0 ms, 224131 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=1: 70.6 ms, held 0 ms, 649128 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=1: 52.5 ms, held 0 ms, 224131 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=25 k=2: 57.9 ms, held 0 ms, 219869 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=2: 70 ms, held 0 ms, 638207 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=2: 52.5 ms, held 0 ms, 219869 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=25 k=3: 49.2 ms, held 0 ms, 209941 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=3: 61.3 ms, held 0 ms, 624748 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=3: 55.1 ms, held 0 ms, 209941 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=25 k=4: 51.9 ms, held 0 ms, 214682 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=4: 79.4 ms, held 0 ms, 637466 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=4: 59.3 ms, held 0 ms, 214682 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=25 k=5: 60.1 ms, held 0 ms, 219004 chars, got 25 exact True
+[batch] p1 sweep B2 20260702 n=25 k=5: 78.3 ms, held 0 ms, 646106 chars, got 25 exact True
+[batch] p1 sweep B3 20260702 n=25 k=5: 58.4 ms, held 0 ms, 219004 chars, got 25 exact True
+[batch] p1 sweep B1 20260702 n=50 k=0: 65.5 ms, held 0 ms, 434163 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=0: 105.4 ms, held 0 ms, 1292807 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=0: 67.5 ms, held 0 ms, 434163 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=50 k=1: 64.9 ms, held 0 ms, 431770 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=1: 99.7 ms, held 0 ms, 1265048 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=1: 89.5 ms, held 0 ms, 431770 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=50 k=2: 71.6 ms, held 0 ms, 439765 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=2: 130.1 ms, held 0 ms, 1273581 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=2: 68.7 ms, held 0 ms, 439765 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=50 k=3: 62.3 ms, held 0 ms, 404180 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=3: 102.6 ms, held 0 ms, 1208434 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=3: 65.4 ms, held 0 ms, 404180 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=50 k=4: 62.2 ms, held 0 ms, 416281 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=4: 103.5 ms, held 0 ms, 1243815 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=4: 88.4 ms, held 0 ms, 416281 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=50 k=5: 72 ms, held 0 ms, 443486 chars, got 50 exact True
+[batch] p1 sweep B2 20260702 n=50 k=5: 100.1 ms, held 0 ms, 1322512 chars, got 50 exact True
+[batch] p1 sweep B3 20260702 n=50 k=5: 61.9 ms, held 0 ms, 443486 chars, got 50 exact True
+[batch] p1 sweep B1 20260702 n=100 k=0: 76.2 ms, held 0 ms, 864387 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=0: 155.8 ms, held 0 ms, 2556309 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=0: 79.4 ms, held 0 ms, 864387 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=100 k=1: 80 ms, held 0 ms, 876487 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=1: 156.1 ms, held 0 ms, 2555806 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=1: 82.1 ms, held 0 ms, 876487 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=100 k=2: 84.2 ms, held 0 ms, 856655 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=2: 166.8 ms, held 0 ms, 2516297 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=2: 92.1 ms, held 0 ms, 856655 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=100 k=3: 98.3 ms, held 0 ms, 823112 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=3: 169.5 ms, held 0 ms, 2446650 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=3: 87.2 ms, held 0 ms, 823112 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=100 k=4: 85.1 ms, held 0 ms, 830853 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=4: 162.1 ms, held 0 ms, 2495138 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=4: 82.6 ms, held 0 ms, 830853 chars, got 100 exact True
+[batch] p1 sweep B1 20260702 n=100 k=5: 79.5 ms, held 0 ms, 858221 chars, got 100 exact True
+[batch] p1 sweep B2 20260702 n=100 k=5: 166.4 ms, held 0 ms, 2564781 chars, got 100 exact True
+[batch] p1 sweep B3 20260702 n=100 k=5: 102.1 ms, held 0 ms, 858221 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=5 k=0: 105.2 ms, held 0 ms, 39728 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=0: 104.8 ms, held 0 ms, 115129 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=0: 101.9 ms, held 0 ms, 39728 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=5 k=1: 105.1 ms, held 0 ms, 43544 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=1: 111.2 ms, held 0 ms, 125682 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=1: 101.9 ms, held 0 ms, 43544 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=5 k=2: 99.4 ms, held 0 ms, 39709 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=2: 133.7 ms, held 0 ms, 115139 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=2: 102 ms, held 0 ms, 39709 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=5 k=3: 105.7 ms, held 0 ms, 34836 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=3: 104.1 ms, held 0 ms, 106877 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=3: 99.3 ms, held 0 ms, 34836 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=5 k=4: 101 ms, held 0 ms, 43126 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=4: 101.4 ms, held 0 ms, 121935 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=4: 100.1 ms, held 0 ms, 43126 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=5 k=5: 288.5 ms, held 0 ms, 5502019 chars, got 5 exact True
+[batch] p1 sweep B2 20260831 n=5 k=5: 485.9 ms, held 251 ms, 8472588 chars, got 5 exact True
+[batch] p1 sweep B3 20260831 n=5 k=5: 313.8 ms, held 0 ms, 5502019 chars, got 5 exact True
+[batch] p1 sweep B1 20260831 n=10 k=0: 111.3 ms, held 0 ms, 81437 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=0: 112.1 ms, held 0 ms, 241095 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=0: 98.8 ms, held 0 ms, 81437 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=10 k=1: 98.6 ms, held 0 ms, 82173 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=1: 109 ms, held 0 ms, 243099 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=1: 103.5 ms, held 0 ms, 82173 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=10 k=2: 103.5 ms, held 0 ms, 79519 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=2: 113.9 ms, held 0 ms, 233225 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=2: 108.3 ms, held 0 ms, 79519 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=10 k=3: 104.5 ms, held 0 ms, 78339 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=3: 112.2 ms, held 0 ms, 232528 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=3: 113.2 ms, held 0 ms, 78339 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=10 k=4: 101.3 ms, held 0 ms, 82535 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=4: 111.5 ms, held 0 ms, 243411 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=4: 108 ms, held 0 ms, 82535 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=10 k=5: 354.2 ms, held 251 ms, 6774504 chars, got 10 exact True
+[batch] p1 sweep B2 20260831 n=10 k=5: 716.5 ms, held 607 ms, 14167438 chars, got 10 exact True
+[batch] p1 sweep B3 20260831 n=10 k=5: 334.6 ms, held 251 ms, 6774504 chars, got 10 exact True
+[batch] p1 sweep B1 20260831 n=25 k=0: 103.4 ms, held 0 ms, 212182 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=0: 136.5 ms, held 0 ms, 629180 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=0: 106.7 ms, held 0 ms, 212182 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=25 k=1: 108.4 ms, held 0 ms, 205929 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=1: 137.3 ms, held 0 ms, 615221 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=1: 105.1 ms, held 0 ms, 205929 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=25 k=2: 100.8 ms, held 0 ms, 204897 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=2: 147.8 ms, held 0 ms, 603807 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=2: 104.3 ms, held 0 ms, 204897 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=25 k=3: 103.1 ms, held 0 ms, 206008 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=3: 134.7 ms, held 0 ms, 623008 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=3: 107.6 ms, held 0 ms, 206008 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=25 k=4: 102.9 ms, held 0 ms, 206352 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=4: 137.1 ms, held 0 ms, 613523 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=4: 111.7 ms, held 0 ms, 206352 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=25 k=5: 364.1 ms, held 250 ms, 7382248 chars, got 25 exact True
+[batch] p1 sweep B2 20260831 n=25 k=5: 839.2 ms, held 619 ms, 16746171 chars, got 25 exact True
+[batch] p1 sweep B3 20260831 n=25 k=5: 361.8 ms, held 252 ms, 7382248 chars, got 25 exact True
+[batch] p1 sweep B1 20260831 n=50 k=0: 116.7 ms, held 0 ms, 415126 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=0: 157.6 ms, held 0 ms, 1241993 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=0: 130.9 ms, held 0 ms, 415126 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=50 k=1: 113.2 ms, held 0 ms, 414633 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=1: 173.5 ms, held 0 ms, 1238716 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=1: 151.1 ms, held 0 ms, 414633 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=50 k=2: 148.8 ms, held 0 ms, 426384 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=2: 159.7 ms, held 0 ms, 1264525 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=2: 142.4 ms, held 0 ms, 426384 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=50 k=3: 115.8 ms, held 0 ms, 413216 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=3: 171.4 ms, held 0 ms, 1241820 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=3: 148.1 ms, held 0 ms, 413216 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=50 k=4: 126.9 ms, held 0 ms, 416551 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=4: 168 ms, held 0 ms, 1228764 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=4: 132.6 ms, held 0 ms, 416551 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=50 k=5: 380.7 ms, held 251 ms, 7588118 chars, got 50 exact True
+[batch] p1 sweep B2 20260831 n=50 k=5: 886.6 ms, held 603 ms, 17358141 chars, got 50 exact True
+[batch] p1 sweep B3 20260831 n=50 k=5: 383.8 ms, held 253 ms, 7588118 chars, got 50 exact True
+[batch] p1 sweep B1 20260831 n=100 k=0: 136.8 ms, held 0 ms, 843064 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=0: 248.6 ms, held 0 ms, 2510328 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=0: 161 ms, held 0 ms, 843064 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=100 k=1: 144.5 ms, held 0 ms, 826631 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=1: 230.9 ms, held 0 ms, 2474962 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=1: 159 ms, held 0 ms, 826631 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=100 k=2: 144.6 ms, held 0 ms, 836997 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=2: 229.4 ms, held 0 ms, 2501104 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=2: 156.7 ms, held 0 ms, 836997 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=100 k=3: 149.3 ms, held 0 ms, 826739 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=3: 243.2 ms, held 0 ms, 2477795 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=3: 169.8 ms, held 0 ms, 826739 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=100 k=4: 140.8 ms, held 0 ms, 836721 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=4: 220.7 ms, held 0 ms, 2492566 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=4: 154 ms, held 0 ms, 836721 chars, got 100 exact True
+[batch] p1 sweep B1 20260831 n=100 k=5: 409.4 ms, held 262 ms, 8013198 chars, got 100 exact True
+[batch] p1 sweep B2 20260831 n=100 k=5: 1019.4 ms, held 624 ms, 18622415 chars, got 100 exact True
+[batch] p1 sweep B3 20260831 n=100 k=5: 417.1 ms, held 252 ms, 8013198 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=5 k=0: 177.5 ms, held 0 ms, 42893 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=0: 179.5 ms, held 0 ms, 127169 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=0: 178.6 ms, held 0 ms, 42893 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=5 k=1: 182.5 ms, held 0 ms, 39890 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=1: 181.1 ms, held 0 ms, 118155 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=1: 173.6 ms, held 0 ms, 39890 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=5 k=2: 182.3 ms, held 0 ms, 42008 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=2: 176 ms, held 0 ms, 124135 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=2: 191.8 ms, held 0 ms, 42008 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=5 k=3: 182.6 ms, held 0 ms, 47326 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=3: 181.4 ms, held 0 ms, 132766 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=3: 179.9 ms, held 0 ms, 47326 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=5 k=4: 171.8 ms, held 0 ms, 44373 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=4: 176.7 ms, held 0 ms, 128688 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=4: 179.3 ms, held 0 ms, 44373 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=5 k=5: 173.3 ms, held 0 ms, 45155 chars, got 5 exact True
+[batch] p1 sweep B2 20260801 n=5 k=5: 176.8 ms, held 0 ms, 132723 chars, got 5 exact True
+[batch] p1 sweep B3 20260801 n=5 k=5: 178 ms, held 0 ms, 45155 chars, got 5 exact True
+[batch] p1 sweep B1 20260801 n=10 k=0: 173.6 ms, held 0 ms, 86349 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=0: 177.6 ms, held 0 ms, 252773 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=0: 171.3 ms, held 0 ms, 86349 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=10 k=1: 184.4 ms, held 0 ms, 80803 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=1: 179 ms, held 0 ms, 241146 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=1: 178.1 ms, held 0 ms, 80803 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=10 k=2: 176.2 ms, held 0 ms, 80741 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=2: 172 ms, held 0 ms, 241085 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=2: 170.8 ms, held 0 ms, 80741 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=10 k=3: 174.2 ms, held 0 ms, 92073 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=3: 177.2 ms, held 0 ms, 265140 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=3: 176.8 ms, held 0 ms, 92073 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=10 k=4: 165 ms, held 0 ms, 82961 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=4: 182.2 ms, held 0 ms, 246064 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=4: 177.7 ms, held 0 ms, 82961 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=10 k=5: 172.1 ms, held 0 ms, 81181 chars, got 10 exact True
+[batch] p1 sweep B2 20260801 n=10 k=5: 174.2 ms, held 0 ms, 244089 chars, got 10 exact True
+[batch] p1 sweep B3 20260801 n=10 k=5: 172.1 ms, held 0 ms, 81181 chars, got 10 exact True
+[batch] p1 sweep B1 20260801 n=25 k=0: 209.8 ms, held 0 ms, 208857 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=0: 203.3 ms, held 0 ms, 625824 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=0: 183.3 ms, held 0 ms, 208857 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=25 k=1: 185.3 ms, held 0 ms, 203712 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=1: 193.4 ms, held 0 ms, 614268 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=1: 183.7 ms, held 0 ms, 203712 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=25 k=2: 173.5 ms, held 0 ms, 199658 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=2: 197.8 ms, held 0 ms, 605153 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=2: 195 ms, held 0 ms, 199658 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=25 k=3: 191.3 ms, held 0 ms, 211780 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=3: 253.8 ms, held 0 ms, 629900 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=3: 185.3 ms, held 0 ms, 211780 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=25 k=4: 179.8 ms, held 0 ms, 206527 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=4: 208.9 ms, held 0 ms, 618043 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=4: 195 ms, held 0 ms, 206527 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=25 k=5: 184.6 ms, held 0 ms, 208817 chars, got 25 exact True
+[batch] p1 sweep B2 20260801 n=25 k=5: 275.2 ms, held 0 ms, 623595 chars, got 25 exact True
+[batch] p1 sweep B3 20260801 n=25 k=5: 191.3 ms, held 0 ms, 208817 chars, got 25 exact True
+[batch] p1 sweep B1 20260801 n=50 k=0: 205 ms, held 0 ms, 421961 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=0: 236.9 ms, held 0 ms, 1268271 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=0: 210.9 ms, held 0 ms, 421961 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=50 k=1: 193.3 ms, held 0 ms, 407547 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=1: 261.3 ms, held 0 ms, 1229193 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=1: 202.1 ms, held 0 ms, 407547 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=50 k=2: 212.3 ms, held 0 ms, 409707 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=2: 242.9 ms, held 0 ms, 1224558 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=2: 220.2 ms, held 0 ms, 409707 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=50 k=3: 199.9 ms, held 0 ms, 425141 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=3: 271.8 ms, held 0 ms, 1274674 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=3: 224.8 ms, held 0 ms, 425141 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=50 k=4: 203.1 ms, held 0 ms, 420506 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=4: 240.7 ms, held 0 ms, 1251976 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=4: 204.3 ms, held 0 ms, 420506 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=50 k=5: 212.7 ms, held 0 ms, 419007 chars, got 50 exact True
+[batch] p1 sweep B2 20260801 n=50 k=5: 238.5 ms, held 0 ms, 1259759 chars, got 50 exact True
+[batch] p1 sweep B3 20260801 n=50 k=5: 219.8 ms, held 0 ms, 419007 chars, got 50 exact True
+[batch] p1 sweep B1 20260801 n=100 k=0: 220.5 ms, held 0 ms, 851038 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=0: 298.1 ms, held 252 ms, 2559136 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=0: 252.7 ms, held 0 ms, 851038 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=100 k=1: 233.5 ms, held 0 ms, 818475 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=1: 297.5 ms, held 252 ms, 2462136 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=1: 269.8 ms, held 0 ms, 818475 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=100 k=2: 208.4 ms, held 0 ms, 828963 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=2: 292.5 ms, held 0 ms, 2475235 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=2: 290.4 ms, held 0 ms, 828963 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=100 k=3: 217.2 ms, held 0 ms, 820211 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=3: 303.2 ms, held 251 ms, 2472845 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=3: 255.4 ms, held 0 ms, 820211 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=100 k=4: 233 ms, held 0 ms, 814794 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=4: 298.5 ms, held 0 ms, 2438715 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=4: 270.3 ms, held 0 ms, 814794 chars, got 100 exact True
+[batch] p1 sweep B1 20260801 n=100 k=5: 238.8 ms, held 0 ms, 842119 chars, got 100 exact True
+[batch] p1 sweep B2 20260801 n=100 k=5: 327.5 ms, held 250 ms, 2531604 chars, got 100 exact True
+[batch] p1 sweep B3 20260801 n=100 k=5: 253.1 ms, held 0 ms, 842119 chars, got 100 exact True
+[batch] p1 diff B1 20260831 n=25 k=1: 122 ms, held 0 ms, 212182 chars, got 25 exact True
+[batch] p1 diff B2 20260831 n=25 k=1: 145.9 ms, held 0 ms, 629180 chars, got 25 exact True
+[batch] p1 diff B3 20260831 n=25 k=1: 131 ms, held 0 ms, 212182 chars, got 25 exact True
+[batch] p1 diff B1 20260831 n=25 k=2: 125.8 ms, held 0 ms, 204490 chars, got 25 exact True
+[batch] p1 diff B2 20260831 n=25 k=2: 173.3 ms, held 0 ms, 614359 chars, got 25 exact True
+[batch] p1 diff B3 20260831 n=25 k=2: 131.1 ms, held 0 ms, 204490 chars, got 25 exact True
+[batch] p1 diff B1 20260831 n=25 k=3: 120.7 ms, held 0 ms, 216088 chars, got 25 exact True
+[batch] p1 diff B2 20260831 n=25 k=3: 155 ms, held 0 ms, 636611 chars, got 25 exact True
+[batch] p1 diff B3 20260831 n=25 k=3: 117.6 ms, held 0 ms, 216088 chars, got 25 exact True
+[batch] p1 diff B1 20260831 n=25 k=4: 117.1 ms, held 0 ms, 214942 chars, got 25 exact True
+[batch] p1 diff B2 20260831 n=25 k=4: 159.1 ms, held 0 ms, 634816 chars, got 25 exact True
+[batch] p1 diff B3 20260831 n=25 k=4: 114.9 ms, held 0 ms, 214942 chars, got 25 exact True
+[batch] p1 diff B1 20260831 n=25 k=5: 384.5 ms, held 253 ms, 7382248 chars, got 25 exact True
+[batch] p1 diff B2 20260831 n=25 k=5: 942.7 ms, held 612 ms, 16746171 chars, got 25 exact True
+[batch] p1 diff B3 20260831 n=25 k=5: 382.6 ms, held 253 ms, 7382248 chars, got 25 exact True
+[batch] p1 diff B1 20260801 n=25 k=6: 196.8 ms, held 0 ms, 208857 chars, got 25 exact True
+[batch] p1 diff B2 20260801 n=25 k=6: 229.9 ms, held 0 ms, 625824 chars, got 25 exact True
+[batch] p1 diff B3 20260801 n=25 k=6: 204 ms, held 0 ms, 208857 chars, got 25 exact True
+[batch] p1 control C0 20260831 n=5 k=-1: 1833.9 ms, held 1703 ms, 39728 chars, got 5 exact True
+[batch] p1 control C0 20260831 n=25 k=-1: 3305.8 ms OVER 2 s, held 2850 ms, 212182 chars, got 25 exact True
+######## PASS v2 one by one: FinComVoucherObject for every entry compared (the reference): 150 entries asked one by one, each answered with its own MasterID 150; 150 requests: median 6.1 ms, p95 79.4 ms, worst 1005.1 ms, window held worst 970 ms, over 2 s 0, exact 150/150, size median 68,708 / max 11,754,249 chars
+MEASURE p1 one by one FinComVoucherObject (30,021 entries in the company): all 150 requests: median 6.1 ms, p95 79.4 ms, worst 1005.1 ms, window held worst 970 ms, over 2 s 0, exact 150/150, size median 68,708 / max 11,754,249 chars; without the invoices and payrolls 150 requests: median 6.1 ms, p95 79.4 ms, worst 1005.1 ms, window held worst 970 ms, over 2 s 0, exact 150/150, size median 68,708 / max 11,754,249 chars; the 500-employee payroll  ms, the 100  ms, a 50-item invoice worst  ms
+MEASURE p1 FinComDayHeads 20260601 (100 entries): 26.6 ms, window held 0 ms, 123,098 chars
+MEASURE p1 FinComDayHeads 20260702 (300 entries): 57 ms, window held 0 ms, 366,688 chars
+MEASURE p1 FinComDayHeads 20260831 (812 entries): 108.6 ms, window held 0 ms, 990,196 chars
+MEASURE p1 FinComDayHeads 20260801 (2216 entries): 227.8 ms, window held 0 ms, 2,699,763 chars
+MEASURE p1 B1 N=5: 24 requests: median 52.4 ms, p95 182.6 ms, worst 288.5 ms, window held worst 0 ms, over 2 s 0, exact 24/24, size median 42,893 / max 5,502,019 chars; without the 500-employee payroll: worst 288.5 ms, held 0 ms; Tally's own pace at the median 5,725 entries a minute; by day: 20260601 (100) worst 52.4 ms held 0 ms; 20260702 (300) worst 45.3 ms held 0 ms; 20260801 (2216) worst 182.6 ms held 0 ms; 20260831 (812) worst 288.5 ms held 0 ms
+MEASURE p1 B1 N=10: 24 requests: median 51.2 ms, p95 184.4 ms, worst 354.2 ms, window held worst 251 ms, over 2 s 0, exact 24/24, size median 82,531 / max 6,774,504 chars; without the 500-employee payroll: worst 354.2 ms, held 251 ms; Tally's own pace at the median 11,719 entries a minute; by day: 20260601 (100) worst 34.8 ms held 0 ms; 20260702 (300) worst 51.2 ms held 0 ms; 20260801 (2216) worst 184.4 ms held 0 ms; 20260831 (812) worst 354.2 ms held 251 ms
+MEASURE p1 B1 N=25: 30 requests: median 103.1 ms, p95 364.1 ms, worst 384.5 ms, window held worst 253 ms, over 2 s 0, exact 30/30, size median 208,857 / max 7,382,248 chars; without the 500-employee payroll: worst 384.5 ms, held 253 ms; Tally's own pace at the median 14,549 entries a minute; by day: 20260601 (100) worst 43 ms held 0 ms; 20260702 (300) worst 60.1 ms held 0 ms; 20260801 (2216) worst 209.8 ms held 0 ms; 20260831 (812) worst 384.5 ms held 253 ms
+MEASURE p1 B1 N=50: 24 requests: median 72 ms, p95 212.7 ms, worst 380.7 ms, window held worst 251 ms, over 2 s 0, exact 24/24, size median 416,281 / max 7,588,118 chars; without the 500-employee payroll: worst 380.7 ms, held 251 ms; Tally's own pace at the median 41,667 entries a minute; by day: 20260601 (100) worst 55.2 ms held 0 ms; 20260702 (300) worst 72 ms held 0 ms; 20260801 (2216) worst 212.7 ms held 0 ms; 20260831 (812) worst 380.7 ms held 251 ms
+MEASURE p1 B1 N=100: 19 requests: median 144.5 ms, p95 409.4 ms, worst 409.4 ms, window held worst 262 ms, over 2 s 0, exact 19/19, size median 836,721 / max 8,013,198 chars; without the 500-employee payroll: worst 409.4 ms, held 262 ms; Tally's own pace at the median 41,522 entries a minute; by day: 20260601 (100) worst 58 ms held 0 ms; 20260702 (300) worst 98.3 ms held 0 ms; 20260801 (2216) worst 238.8 ms held 0 ms; 20260831 (812) worst 409.4 ms held 262 ms
+MEASURE p1 B2 N=5: 24 requests: median 50.3 ms, p95 181.4 ms, worst 485.9 ms, window held worst 251 ms, over 2 s 0, exact 24/24, size median 124,188 / max 8,472,588 chars; without the 500-employee payroll: worst 485.9 ms, held 251 ms; Tally's own pace at the median 5,964 entries a minute; by day: 20260601 (100) worst 40.2 ms held 0 ms; 20260702 (300) worst 50.3 ms held 0 ms; 20260801 (2216) worst 181.4 ms held 0 ms; 20260831 (812) worst 485.9 ms held 251 ms
+MEASURE p1 B2 N=10: 24 requests: median 65 ms, p95 182.2 ms, worst 716.5 ms, window held worst 607 ms, over 2 s 0, exact 24/24, size median 246,064 / max 14,167,438 chars; without the 500-employee payroll: worst 716.5 ms, held 607 ms; Tally's own pace at the median 9,231 entries a minute; by day: 20260601 (100) worst 43.7 ms held 0 ms; 20260702 (300) worst 65 ms held 0 ms; 20260801 (2216) worst 182.2 ms held 0 ms; 20260831 (812) worst 716.5 ms held 607 ms
+MEASURE p1 B2 N=25: 30 requests: median 137.1 ms, p95 839.2 ms, worst 942.7 ms, window held worst 619 ms, over 2 s 0, exact 30/30, size median 625,824 / max 16,746,171 chars; without the 500-employee payroll: worst 942.7 ms, held 619 ms; Tally's own pace at the median 10,941 entries a minute; by day: 20260601 (100) worst 80.2 ms held 0 ms; 20260702 (300) worst 79.4 ms held 0 ms; 20260801 (2216) worst 275.2 ms held 0 ms; 20260831 (812) worst 942.7 ms held 619 ms
+MEASURE p1 B2 N=50: 24 requests: median 130.1 ms, p95 271.8 ms, worst 886.6 ms, window held worst 603 ms, over 2 s 0, exact 24/24, size median 1,241,993 / max 17,358,141 chars; without the 500-employee payroll: worst 886.6 ms, held 603 ms; Tally's own pace at the median 23,059 entries a minute; by day: 20260601 (100) worst 85.5 ms held 0 ms; 20260702 (300) worst 130.1 ms held 0 ms; 20260801 (2216) worst 271.8 ms held 0 ms; 20260831 (812) worst 886.6 ms held 603 ms
+MEASURE p1 B2 N=100: 19 requests: median 230.9 ms, p95 1019.4 ms, worst 1019.4 ms, window held worst 624 ms, over 2 s 0, exact 19/19, size median 2,501,104 / max 18,622,415 chars; without the 500-employee payroll: worst 1019.4 ms, held 624 ms; Tally's own pace at the median 25,985 entries a minute; by day: 20260601 (100) worst 163 ms held 0 ms; 20260702 (300) worst 169.5 ms held 0 ms; 20260801 (2216) worst 327.5 ms held 252 ms; 20260831 (812) worst 1019.4 ms held 624 ms
+MEASURE p1 B3 N=5: 24 requests: median 51.9 ms, p95 191.8 ms, worst 313.8 ms, window held worst 0 ms, over 2 s 0, exact 24/24, size median 42,893 / max 5,502,019 chars; without the 500-employee payroll: worst 313.8 ms, held 0 ms; Tally's own pace at the median 5,780 entries a minute; by day: 20260601 (100) worst 34.9 ms held 0 ms; 20260702 (300) worst 51.9 ms held 0 ms; 20260801 (2216) worst 191.8 ms held 0 ms; 20260831 (812) worst 313.8 ms held 0 ms
+MEASURE p1 B3 N=10: 24 requests: median 51.8 ms, p95 178.1 ms, worst 334.6 ms, window held worst 251 ms, over 2 s 0, exact 24/24, size median 82,531 / max 6,774,504 chars; without the 500-employee payroll: worst 334.6 ms, held 251 ms; Tally's own pace at the median 11,583 entries a minute; by day: 20260601 (100) worst 37.4 ms held 0 ms; 20260702 (300) worst 51.8 ms held 0 ms; 20260801 (2216) worst 178.1 ms held 0 ms; 20260831 (812) worst 334.6 ms held 251 ms
+MEASURE p1 B3 N=25: 30 requests: median 106.7 ms, p95 361.8 ms, worst 382.6 ms, window held worst 253 ms, over 2 s 0, exact 30/30, size median 208,857 / max 7,382,248 chars; without the 500-employee payroll: worst 382.6 ms, held 253 ms; Tally's own pace at the median 14,058 entries a minute; by day: 20260601 (100) worst 42.4 ms held 0 ms; 20260702 (300) worst 59.3 ms held 0 ms; 20260801 (2216) worst 204 ms held 0 ms; 20260831 (812) worst 382.6 ms held 253 ms
+MEASURE p1 B3 N=50: 24 requests: median 89.5 ms, p95 224.8 ms, worst 383.8 ms, window held worst 253 ms, over 2 s 0, exact 24/24, size median 416,281 / max 7,588,118 chars; without the 500-employee payroll: worst 383.8 ms, held 253 ms; Tally's own pace at the median 33,520 entries a minute; by day: 20260601 (100) worst 47.5 ms held 0 ms; 20260702 (300) worst 89.5 ms held 0 ms; 20260801 (2216) worst 224.8 ms held 0 ms; 20260831 (812) worst 383.8 ms held 253 ms
+MEASURE p1 B3 N=100: 19 requests: median 159 ms, p95 417.1 ms, worst 417.1 ms, window held worst 252 ms, over 2 s 0, exact 19/19, size median 836,721 / max 8,013,198 chars; without the 500-employee payroll: worst 417.1 ms, held 252 ms; Tally's own pace at the median 37,736 entries a minute; by day: 20260601 (100) worst 62.3 ms held 0 ms; 20260702 (300) worst 102.1 ms held 0 ms; 20260801 (2216) worst 290.4 ms held 0 ms; 20260831 (812) worst 417.1 ms held 252 ms
+######## PASS v3 the batch forms at ~30,000 entries: exactly the entries asked, every time: 363 batch requests at 30,021 entries, exact 363; inexact: none; no answer: none
+######## PASS v4 the largest batch within 2 s (no window hold of 2 s) at ~30,000 entries: B1 largest N within 2 s every time 100 (within 1 s 100); B2 largest N within 2 s every time 100 (within 1 s 50); B3 largest N within 2 s every time 100 (within 1 s 100) (worst over every day and window, the 500-employee payroll included; window held under 2 s; exact)
+[18:19:43] ---- batch: ~70,000 more entries (about 1,00,000)
+[db] dbm2-vouchers-01.xml: created 500, altered 0, errors 0, 6623.5 ms
+[db] dbm2-vouchers-02.xml: created 500, altered 0, errors 0, 6380.9 ms
+[db] dbm2-vouchers-03.xml: created 500, altered 0, errors 0, 6559.9 ms
+[db] dbm2-vouchers-04.xml: created 500, altered 0, errors 0, 6600.1 ms
+[db] dbm2-vouchers-05.xml: created 500, altered 0, errors 0, 6885.4 ms
+[db] dbm2-vouchers-06.xml: created 500, altered 0, errors 0, 6774.8 ms
+[db] dbm2-vouchers-07.xml: created 500, altered 0, errors 0, 6823.6 ms
+[db] dbm2-vouchers-08.xml: created 500, altered 0, errors 0, 6820.5 ms
+[db] dbm2-vouchers-09.xml: created 500, altered 0, errors 0, 6797.4 ms
+[db] dbm2-vouchers-10.xml: created 500, altered 0, errors 0, 7496.4 ms
+[db] dbm2-vouchers-100.xml: created 500, altered 0, errors 0, 6608.1 ms
+[db] dbm2-vouchers-101.xml: created 500, altered 0, errors 0, 6724.2 ms
+[db] dbm2-vouchers-102.xml: created 500, altered 0, errors 0, 6448.2 ms
+[db] dbm2-vouchers-103.xml: created 500, altered 0, errors 0, 6820.2 ms
+[db] dbm2-vouchers-104.xml: created 500, altered 0, errors 0, 6797.7 ms
+[db] dbm2-vouchers-105.xml: created 500, altered 0, errors 0, 6793.9 ms
+[db] dbm2-vouchers-106.xml: created 500, altered 0, errors 0, 6935 ms
+[db] dbm2-vouchers-107.xml: created 500, altered 0, errors 0, 6946.5 ms
+[db] dbm2-vouchers-108.xml: created 500, altered 0, errors 0, 7164.1 ms
+[db] dbm2-vouchers-109.xml: created 500, altered 0, errors 0, 7707.2 ms
+[db] dbm2-vouchers-11.xml: created 500, altered 0, errors 0, 7570 ms
+[db] dbm2-vouchers-110.xml: created 500, altered 0, errors 0, 7273.7 ms
+[db] dbm2-vouchers-111.xml: created 500, altered 0, errors 0, 7158.9 ms
+[db] dbm2-vouchers-112.xml: created 500, altered 0, errors 0, 6565.8 ms
+[db] dbm2-vouchers-113.xml: created 500, altered 0, errors 0, 6516.4 ms
+[db] dbm2-vouchers-114.xml: created 500, altered 0, errors 0, 6678.3 ms
+[db] dbm2-vouchers-115.xml: created 500, altered 0, errors 0, 6702.7 ms
+[db] dbm2-vouchers-116.xml: created 500, altered 0, errors 0, 6742.8 ms
+[db] dbm2-vouchers-117.xml: created 500, altered 0, errors 0, 6837 ms
+[db] dbm2-vouchers-118.xml: created 500, altered 0, errors 0, 6768.4 ms
+[db] dbm2-vouchers-119.xml: created 500, altered 0, errors 0, 6866.3 ms
+[db] dbm2-vouchers-12.xml: created 500, altered 0, errors 0, 6802.2 ms
+[db] dbm2-vouchers-120.xml: created 500, altered 0, errors 0, 6672 ms
+[db] dbm2-vouchers-121.xml: created 500, altered 0, errors 0, 6889.9 ms
+[db] dbm2-vouchers-122.xml: created 500, altered 0, errors 0, 7132.1 ms
+[db] dbm2-vouchers-123.xml: created 500, altered 0, errors 0, 7663.6 ms
+[db] dbm2-vouchers-124.xml: created 500, altered 0, errors 0, 7877.3 ms
+[db] dbm2-vouchers-125.xml: created 500, altered 0, errors 0, 7298 ms
+[db] dbm2-vouchers-126.xml: created 500, altered 0, errors 0, 6634.4 ms
+[db] dbm2-vouchers-127.xml: created 500, altered 0, errors 0, 6962 ms
+[db] dbm2-vouchers-128.xml: created 500, altered 0, errors 0, 6563.3 ms
+[db] dbm2-vouchers-129.xml: created 500, altered 0, errors 0, 6834.5 ms
+[db] dbm2-vouchers-13.xml: created 500, altered 0, errors 0, 7303.7 ms
+[db] dbm2-vouchers-130.xml: created 500, altered 0, errors 0, 6827.5 ms
+[db] dbm2-vouchers-131.xml: created 500, altered 0, errors 0, 6625.5 ms
+[db] dbm2-vouchers-132.xml: created 500, altered 0, errors 0, 6972 ms
+[db] dbm2-vouchers-133.xml: created 500, altered 0, errors 0, 6921.5 ms
+[db] dbm2-vouchers-134.xml: created 500, altered 0, errors 0, 7736 ms
+[db] dbm2-vouchers-135.xml: created 500, altered 0, errors 0, 8306.8 ms
+[db] dbm2-vouchers-136.xml: created 500, altered 0, errors 0, 6571 ms
+[db] dbm2-vouchers-137.xml: created 500, altered 0, errors 0, 6839.3 ms
+[db] dbm2-vouchers-138.xml: created 500, altered 0, errors 0, 7200.4 ms
+[db] dbm2-vouchers-139.xml: created 500, altered 0, errors 0, 6971.5 ms
+[db] dbm2-vouchers-14.xml: created 500, altered 0, errors 0, 6964.2 ms
+[db] dbm2-vouchers-140.xml: created 500, altered 0, errors 0, 6960.8 ms
+[db] dbm2-vouchers-15.xml: created 500, altered 0, errors 0, 7086.3 ms
+[db] dbm2-vouchers-16.xml: created 500, altered 0, errors 0, 6969.3 ms
+[db] dbm2-vouchers-17.xml: created 500, altered 0, errors 0, 6833.4 ms
+[db] dbm2-vouchers-18.xml: created 500, altered 0, errors 0, 7391.6 ms
+[db] dbm2-vouchers-19.xml: created 500, altered 0, errors 0, 7446.1 ms
+[db] dbm2-vouchers-20.xml: created 500, altered 0, errors 0, 7841.4 ms
+[db] dbm2-vouchers-21.xml: created 500, altered 0, errors 0, 7399.9 ms
+[db] dbm2-vouchers-22.xml: created 500, altered 0, errors 0, 7261.5 ms
+[db] dbm2-vouchers-23.xml: created 500, altered 0, errors 0, 7232.8 ms
+[db] dbm2-vouchers-24.xml: created 500, altered 0, errors 0, 7022.1 ms
+[db] dbm2-vouchers-25.xml: created 500, altered 0, errors 0, 7184.5 ms
+[db] dbm2-vouchers-26.xml: created 500, altered 0, errors 0, 7193.7 ms
+[db] dbm2-vouchers-27.xml: created 500, altered 0, errors 0, 7161.1 ms
+[db] dbm2-vouchers-28.xml: created 500, altered 0, errors 0, 7048.6 ms
+[db] dbm2-vouchers-29.xml: created 500, altered 0, errors 0, 7214.8 ms
+[db] dbm2-vouchers-30.xml: created 500, altered 0, errors 0, 6809.3 ms
+[db] dbm2-vouchers-31.xml: created 500, altered 0, errors 0, 6967.7 ms
+[db] dbm2-vouchers-32.xml: created 500, altered 0, errors 0, 7310.6 ms
+[db] dbm2-vouchers-33.xml: created 500, altered 0, errors 0, 7181.3 ms
+[db] dbm2-vouchers-34.xml: created 500, altered 0, errors 0, 6727.4 ms
+[db] dbm2-vouchers-35.xml: created 500, altered 0, errors 0, 6904.3 ms
+[db] dbm2-vouchers-36.xml: created 500, altered 0, errors 0, 6520.2 ms
+[db] dbm2-vouchers-37.xml: created 500, altered 0, errors 0, 6539.7 ms
+[db] dbm2-vouchers-38.xml: created 500, altered 0, errors 0, 6635.6 ms
+[db] dbm2-vouchers-39.xml: created 500, altered 0, errors 0, 6628.6 ms
+[db] dbm2-vouchers-40.xml: created 500, altered 0, errors 0, 6493.4 ms
+[db] dbm2-vouchers-41.xml: created 500, altered 0, errors 0, 6690.9 ms
+[db] dbm2-vouchers-42.xml: created 500, altered 0, errors 0, 7146.6 ms
+[db] dbm2-vouchers-43.xml: created 500, altered 0, errors 0, 6944.9 ms
+[db] dbm2-vouchers-44.xml: created 500, altered 0, errors 0, 6786 ms
+[db] dbm2-vouchers-45.xml: created 500, altered 0, errors 0, 7153.1 ms
+[db] dbm2-vouchers-46.xml: created 500, altered 0, errors 0, 7133.2 ms
+[db] dbm2-vouchers-47.xml: created 500, altered 0, errors 0, 7025.8 ms
+[db] dbm2-vouchers-48.xml: created 500, altered 0, errors 0, 6789.6 ms
+[db] dbm2-vouchers-49.xml: created 500, altered 0, errors 0, 7091.2 ms
+[db] dbm2-vouchers-50.xml: created 500, altered 0, errors 0, 7258.4 ms
+[db] dbm2-vouchers-51.xml: created 500, altered 0, errors 0, 6846.7 ms
+[db] dbm2-vouchers-52.xml: created 500, altered 0, errors 0, 7150.8 ms
+[db] dbm2-vouchers-53.xml: created 500, altered 0, errors 0, 7121.5 ms
+[db] dbm2-vouchers-54.xml: created 500, altered 0, errors 0, 6984.3 ms
+[db] dbm2-vouchers-55.xml: created 500, altered 0, errors 0, 7013.5 ms
+[db] dbm2-vouchers-56.xml: created 500, altered 0, errors 0, 7115.5 ms
+[db] dbm2-vouchers-57.xml: created 500, altered 0, errors 0, 7529.6 ms
+[db] dbm2-vouchers-58.xml: created 500, altered 0, errors 0, 7069.7 ms
+[db] dbm2-vouchers-59.xml: created 500, altered 0, errors 0, 7551.5 ms
+[db] dbm2-vouchers-60.xml: created 500, altered 0, errors 0, 7935.3 ms
+[db] dbm2-vouchers-61.xml: created 500, altered 0, errors 0, 6747.2 ms
+[db] dbm2-vouchers-62.xml: created 500, altered 0, errors 0, 7389.8 ms
+[db] dbm2-vouchers-63.xml: created 500, altered 0, errors 0, 6897.7 ms
+[db] dbm2-vouchers-64.xml: created 500, altered 0, errors 0, 7604.6 ms
+[db] dbm2-vouchers-65.xml: created 500, altered 0, errors 0, 7797.7 ms
+[db] dbm2-vouchers-66.xml: created 500, altered 0, errors 0, 8082.9 ms
+[db] dbm2-vouchers-67.xml: created 500, altered 0, errors 0, 7230.3 ms
+[db] dbm2-vouchers-68.xml: created 500, altered 0, errors 0, 7953.8 ms
+[db] dbm2-vouchers-69.xml: created 500, altered 0, errors 0, 7825.6 ms
+[db] dbm2-vouchers-70.xml: created 500, altered 0, errors 0, 7641.2 ms
+[db] dbm2-vouchers-71.xml: created 500, altered 0, errors 0, 7496.4 ms
+[db] dbm2-vouchers-72.xml: created 500, altered 0, errors 0, 8175.7 ms
+[db] dbm2-vouchers-73.xml: created 500, altered 0, errors 0, 7720 ms
+[db] dbm2-vouchers-74.xml: created 500, altered 0, errors 0, 7778.1 ms
+[db] dbm2-vouchers-75.xml: created 500, altered 0, errors 0, 7626.1 ms
+[db] dbm2-vouchers-76.xml: created 500, altered 0, errors 0, 7901.7 ms
+[db] dbm2-vouchers-77.xml: created 500, altered 0, errors 0, 7229.9 ms
+[db] dbm2-vouchers-78.xml: created 500, altered 0, errors 0, 6668.6 ms
+[db] dbm2-vouchers-79.xml: created 500, altered 0, errors 0, 6629.5 ms
+[db] dbm2-vouchers-80.xml: created 500, altered 0, errors 0, 6697.2 ms
+[db] dbm2-vouchers-81.xml: created 500, altered 0, errors 0, 7464.4 ms
+[db] dbm2-vouchers-82.xml: created 500, altered 0, errors 0, 6835.1 ms
+[db] dbm2-vouchers-83.xml: created 500, altered 0, errors 0, 6646.4 ms
+[db] dbm2-vouchers-84.xml: created 500, altered 0, errors 0, 6831.4 ms
+[db] dbm2-vouchers-85.xml: created 500, altered 0, errors 0, 6803.1 ms
+[db] dbm2-vouchers-86.xml: created 500, altered 0, errors 0, 6833.8 ms
+[db] dbm2-vouchers-87.xml: created 500, altered 0, errors 0, 6566.1 ms
+[db] dbm2-vouchers-88.xml: created 500, altered 0, errors 0, 6840.2 ms
+[db] dbm2-vouchers-89.xml: created 500, altered 0, errors 0, 6802.6 ms
+[db] dbm2-vouchers-90.xml: created 500, altered 0, errors 0, 6813.3 ms
+[db] dbm2-vouchers-91.xml: created 500, altered 0, errors 0, 7011.2 ms
+[db] dbm2-vouchers-92.xml: created 500, altered 0, errors 0, 6935.9 ms
+[db] dbm2-vouchers-93.xml: created 500, altered 0, errors 0, 6783.2 ms
+[db] dbm2-vouchers-94.xml: created 500, altered 0, errors 0, 6810.3 ms
+[db] dbm2-vouchers-95.xml: created 500, altered 0, errors 0, 6677.6 ms
+[db] dbm2-vouchers-96.xml: created 500, altered 0, errors 0, 6940.3 ms
+[db] dbm2-vouchers-97.xml: created 500, altered 0, errors 0, 6779.4 ms
+[db] dbm2-vouchers-98.xml: created 500, altered 0, errors 0, 6840.2 ms
+[db] dbm2-vouchers-99.xml: created 500, altered 0, errors 0, 6756.4 ms
+  INFO batch: phase 2 import: created 70000, errors 0, 17.0 min; the company holds 100,021 entries
+[18:36:42] ---- batch: phase p2 (~1,00,000 entries)
+[batch] p2 heads FinComDayHeads 20260601 n=100 k=-1: 34.7 ms, held 0 ms, 123102 chars, got 100 exact True
+  INFO batch p2: 20260601 holds 100 entries (MasterIDs 8866..8965)
+[batch] p2 heads FinComDayHeads 20260702 n=300 k=-1: 55.9 ms, held 0 ms, 366692 chars, got 300 exact True
+  INFO batch p2: 20260702 holds 300 entries (MasterIDs 13398..13697)
+[batch] p2 heads FinComDayHeads 20260831 n=812 k=-1: 146.1 ms, held 0 ms, 990200 chars, got 812 exact True
+  INFO batch p2: 20260831 holds 812 entries (MasterIDs 20346..30021)
+[batch] p2 heads FinComDayHeads 20260801 n=7601 k=-1: 3799.7 ms OVER 2 s, held 3506 ms, 9262446 chars, got 7601 exact True
+  INFO batch p2: 20260801 holds 7601 entries (MasterIDs 15914..100020)
+[batch] p2 heads FinComDayHeads 20260402 n=7601 k=-1: 3994.9 ms OVER 2 s, held 3874 ms, 9254722 chars, got 7601 exact True
+  INFO batch p2: 20260402 holds 7601 entries (MasterIDs 2218..100014)
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 113.6 ms, held 0 ms, 60544 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 9 ms, held 0 ms, 60538 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 30.8 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 9.4 ms, held 0 ms, 68697 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 18.8 ms, held 0 ms, 80925 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 60519 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68762 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68697 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68747 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 67511 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 80863 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.2 ms, held 0 ms, 68684 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 8.9 ms, held 0 ms, 68709 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 8.5 ms, held 0 ms, 68732 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 8.4 ms, held 0 ms, 68775 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 67515 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 80926 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 60516 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60557 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 60505 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7 ms, held 0 ms, 68736 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.5 ms, held 0 ms, 68692 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 14.6 ms, held 0 ms, 60539 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 62.5 ms, held 0 ms, 68757 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 60539 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 60532 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.1 ms, held 0 ms, 68749 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 67491 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 60533 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 60545 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.8 ms, held 0 ms, 80912 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 9 ms, held 0 ms, 68711 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68749 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60529 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60554 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.6 ms, held 0 ms, 60512 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.9 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.7 ms, held 0 ms, 67502 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.7 ms, held 0 ms, 80921 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 80863 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 67522 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68737 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 68740 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68691 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 68734 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.3 ms, held 0 ms, 68741 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68696 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 60550 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68746 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 59583 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 60550 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 68736 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 60543 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60548 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 8.5 ms, held 0 ms, 80875 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68772 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 67504 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.4 ms, held 0 ms, 68729 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.7 ms, held 0 ms, 60540 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 60553 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.2 ms, held 0 ms, 68749 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68709 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 68712 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 33.4 ms, held 0 ms, 80919 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.4 ms, held 0 ms, 80923 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60545 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.2 ms, held 0 ms, 68742 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68679 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60545 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.5 ms, held 0 ms, 68759 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 59583 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.9 ms, held 0 ms, 59583 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68698 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 80938 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68723 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 60524 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 67502 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 68739 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 68743 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.2 ms, held 0 ms, 68708 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 68702 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68702 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 68721 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 60552 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 67481 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68695 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 67493 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 60546 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68772 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 8 ms, held 0 ms, 68738 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 80891 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 68742 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.9 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 68733 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 60539 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60548 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.6 ms, held 0 ms, 60513 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.5 ms, held 0 ms, 60544 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 59583 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 67509 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.8 ms, held 0 ms, 68680 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68739 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.7 ms, held 0 ms, 68706 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 80883 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68724 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.4 ms, held 0 ms, 67493 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 68732 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.1 ms, held 0 ms, 80944 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5 ms, held 0 ms, 60549 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68744 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68678 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 7.2 ms, held 0 ms, 68751 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.1 ms, held 0 ms, 68735 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.7 ms, held 0 ms, 68749 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 52.3 ms, held 0 ms, 68734 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.3 ms, held 0 ms, 68729 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.5 ms, held 0 ms, 80915 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.1 ms, held 0 ms, 60562 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 12.7 ms, held 0 ms, 68696 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.9 ms, held 0 ms, 60536 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.6 ms, held 0 ms, 68699 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.6 ms, held 0 ms, 67491 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 60507 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.8 ms, held 0 ms, 68734 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6.2 ms, held 0 ms, 68717 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 60517 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 6 ms, held 0 ms, 68732 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.9 ms, held 0 ms, 60553 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.6 ms, held 0 ms, 67502 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 4.8 ms, held 0 ms, 60556 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 5.3 ms, held 0 ms, 60544 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 130.9 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 73.8 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 96.9 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 76.8 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 73.3 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 75.8 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 91.6 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 95.1 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 77.5 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 87.9 ms, held 0 ms, 1385983 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 211.3 ms, held 0 ms, 2383852 chars, got 1 exact True
+[batch] p2 object FinComVoucherObject  n=1 k=-1: 1068.4 ms, held 991 ms, 11754253 chars, got 1 exact True
+[batch] p2 sweep B1 20260601 n=5 k=0: 241.6 ms, held 0 ms, 42070 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=0: 47.1 ms, held 0 ms, 124192 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=0: 42.1 ms, held 0 ms, 42070 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=5 k=1: 38.9 ms, held 0 ms, 44733 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=1: 43.5 ms, held 0 ms, 126356 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=1: 41.4 ms, held 0 ms, 44733 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=5 k=2: 38.5 ms, held 0 ms, 39859 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=2: 40.3 ms, held 0 ms, 118487 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=2: 38.4 ms, held 0 ms, 39859 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=5 k=3: 43.6 ms, held 0 ms, 38036 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=3: 39.7 ms, held 0 ms, 118947 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=3: 39.8 ms, held 0 ms, 38036 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=5 k=4: 50.2 ms, held 0 ms, 41646 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=4: 42.7 ms, held 0 ms, 120440 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=4: 40.3 ms, held 0 ms, 41646 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=5 k=5: 42 ms, held 0 ms, 47524 chars, got 5 exact True
+[batch] p2 sweep B2 20260601 n=5 k=5: 41.1 ms, held 0 ms, 140652 chars, got 5 exact True
+[batch] p2 sweep B3 20260601 n=5 k=5: 38.5 ms, held 0 ms, 47524 chars, got 5 exact True
+[batch] p2 sweep B1 20260601 n=10 k=0: 38.1 ms, held 0 ms, 84862 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=0: 46.5 ms, held 0 ms, 252397 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=0: 41.8 ms, held 0 ms, 84862 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=10 k=1: 40.7 ms, held 0 ms, 83449 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=1: 45.5 ms, held 0 ms, 249302 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=1: 55.6 ms, held 0 ms, 83449 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=10 k=2: 38.7 ms, held 0 ms, 81649 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=2: 45.3 ms, held 0 ms, 244529 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=2: 41.7 ms, held 0 ms, 81649 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=10 k=3: 40 ms, held 0 ms, 82329 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=3: 45.9 ms, held 0 ms, 248664 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=3: 43.4 ms, held 0 ms, 82329 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=10 k=4: 41.2 ms, held 0 ms, 82535 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=4: 45.9 ms, held 0 ms, 250602 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=4: 41.2 ms, held 0 ms, 82535 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=10 k=5: 40.8 ms, held 0 ms, 91527 chars, got 10 exact True
+[batch] p2 sweep B2 20260601 n=10 k=5: 47.3 ms, held 0 ms, 272170 chars, got 10 exact True
+[batch] p2 sweep B3 20260601 n=10 k=5: 41.4 ms, held 0 ms, 91527 chars, got 10 exact True
+[batch] p2 sweep B1 20260601 n=25 k=0: 42.1 ms, held 0 ms, 213791 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=0: 65.9 ms, held 0 ms, 638120 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=0: 50.4 ms, held 0 ms, 213791 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=25 k=1: 47.3 ms, held 0 ms, 203800 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=1: 68.5 ms, held 0 ms, 622396 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=1: 49.8 ms, held 0 ms, 203800 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=25 k=2: 46.1 ms, held 0 ms, 194755 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=2: 63.7 ms, held 0 ms, 592784 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=2: 50.2 ms, held 0 ms, 194755 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=25 k=3: 45.7 ms, held 0 ms, 203076 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=3: 70.1 ms, held 0 ms, 614568 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=3: 48.4 ms, held 0 ms, 203076 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=25 k=4: 44.8 ms, held 0 ms, 208651 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=4: 65.2 ms, held 0 ms, 628564 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=4: 47.1 ms, held 0 ms, 208651 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=25 k=5: 44.3 ms, held 0 ms, 212027 chars, got 25 exact True
+[batch] p2 sweep B2 20260601 n=25 k=5: 67.9 ms, held 0 ms, 634498 chars, got 25 exact True
+[batch] p2 sweep B3 20260601 n=25 k=5: 46.2 ms, held 0 ms, 212027 chars, got 25 exact True
+[batch] p2 sweep B1 20260601 n=50 k=0: 64.4 ms, held 0 ms, 409118 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=0: 94.5 ms, held 0 ms, 1240262 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=0: 61.5 ms, held 0 ms, 409118 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=50 k=1: 57 ms, held 0 ms, 405917 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=1: 95.7 ms, held 0 ms, 1238028 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=1: 74.1 ms, held 0 ms, 405917 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=50 k=2: 53.4 ms, held 0 ms, 404878 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=2: 113.8 ms, held 0 ms, 1229364 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=2: 56.9 ms, held 0 ms, 404878 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=50 k=3: 53.4 ms, held 0 ms, 405850 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=3: 90.3 ms, held 0 ms, 1235890 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=3: 55.1 ms, held 0 ms, 405850 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=50 k=4: 54.8 ms, held 0 ms, 409540 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=4: 92.4 ms, held 0 ms, 1237462 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=4: 54.2 ms, held 0 ms, 409540 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=50 k=5: 76.2 ms, held 0 ms, 421128 chars, got 50 exact True
+[batch] p2 sweep B2 20260601 n=50 k=5: 97.6 ms, held 0 ms, 1272271 chars, got 50 exact True
+[batch] p2 sweep B3 20260601 n=50 k=5: 78.3 ms, held 0 ms, 421128 chars, got 50 exact True
+[batch] p2 sweep B1 20260601 n=100 k=0: 68.7 ms, held 0 ms, 828696 chars, got 100 exact True
+[batch] p2 sweep B2 20260601 n=100 k=0: 156.4 ms, held 0 ms, 2510983 chars, got 100 exact True
+[batch] p2 sweep B3 20260601 n=100 k=0: 72.6 ms, held 0 ms, 828696 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=5 k=0: 93.5 ms, held 0 ms, 40218 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=0: 60 ms, held 0 ms, 118407 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=0: 56 ms, held 0 ms, 40218 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=5 k=1: 59.8 ms, held 0 ms, 43904 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=1: 63.1 ms, held 0 ms, 125993 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=1: 57.4 ms, held 0 ms, 43904 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=5 k=2: 58.6 ms, held 0 ms, 46441 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=2: 59 ms, held 0 ms, 128600 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=2: 59.6 ms, held 0 ms, 46441 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=5 k=3: 58.1 ms, held 0 ms, 36767 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=3: 61.8 ms, held 0 ms, 112175 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=3: 57.1 ms, held 0 ms, 36767 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=5 k=4: 58.6 ms, held 0 ms, 45962 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=4: 61.3 ms, held 0 ms, 133095 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=4: 55.4 ms, held 0 ms, 45962 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=5 k=5: 55.1 ms, held 0 ms, 43913 chars, got 5 exact True
+[batch] p2 sweep B2 20260702 n=5 k=5: 58.8 ms, held 0 ms, 126003 chars, got 5 exact True
+[batch] p2 sweep B3 20260702 n=5 k=5: 56.5 ms, held 0 ms, 43913 chars, got 5 exact True
+[batch] p2 sweep B1 20260702 n=10 k=0: 57.2 ms, held 0 ms, 80080 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=0: 65.7 ms, held 0 ms, 242533 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=0: 58.9 ms, held 0 ms, 80080 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=10 k=1: 58.2 ms, held 0 ms, 88852 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=1: 67 ms, held 0 ms, 253100 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=1: 60.2 ms, held 0 ms, 88852 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=10 k=2: 60.3 ms, held 0 ms, 94846 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=2: 66.1 ms, held 0 ms, 267962 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=2: 59.1 ms, held 0 ms, 94846 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=10 k=3: 58.5 ms, held 0 ms, 78064 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=3: 71 ms, held 0 ms, 237775 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=3: 58.6 ms, held 0 ms, 78064 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=10 k=4: 60.6 ms, held 0 ms, 87870 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=4: 64.9 ms, held 0 ms, 257140 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=4: 62.6 ms, held 0 ms, 87870 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=10 k=5: 59 ms, held 0 ms, 87313 chars, got 10 exact True
+[batch] p2 sweep B2 20260702 n=10 k=5: 65.3 ms, held 0 ms, 251551 chars, got 10 exact True
+[batch] p2 sweep B3 20260702 n=10 k=5: 60.7 ms, held 0 ms, 87313 chars, got 10 exact True
+[batch] p2 sweep B1 20260702 n=25 k=0: 65 ms, held 0 ms, 212369 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=0: 84 ms, held 0 ms, 630053 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=0: 79.6 ms, held 0 ms, 212369 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=25 k=1: 69.7 ms, held 0 ms, 224041 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=1: 87.9 ms, held 0 ms, 649038 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=1: 65.6 ms, held 0 ms, 224041 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=25 k=2: 63.4 ms, held 0 ms, 219544 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=2: 80.5 ms, held 0 ms, 637882 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=2: 63 ms, held 0 ms, 219544 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=25 k=3: 63.2 ms, held 0 ms, 209804 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=3: 82.3 ms, held 0 ms, 624611 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=3: 74.8 ms, held 0 ms, 209804 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=25 k=4: 64.3 ms, held 0 ms, 214498 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=4: 92.6 ms, held 0 ms, 637282 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=4: 64.6 ms, held 0 ms, 214498 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=25 k=5: 61.9 ms, held 0 ms, 218867 chars, got 25 exact True
+[batch] p2 sweep B2 20260702 n=25 k=5: 81.1 ms, held 0 ms, 645969 chars, got 25 exact True
+[batch] p2 sweep B3 20260702 n=25 k=5: 73.8 ms, held 0 ms, 218867 chars, got 25 exact True
+[batch] p2 sweep B1 20260702 n=50 k=0: 85.1 ms, held 0 ms, 433791 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=0: 114.7 ms, held 0 ms, 1292435 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=0: 92.6 ms, held 0 ms, 433791 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=50 k=1: 75.9 ms, held 0 ms, 431539 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=1: 134.6 ms, held 0 ms, 1264817 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=1: 72.1 ms, held 0 ms, 431539 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=50 k=2: 72.9 ms, held 0 ms, 439252 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=2: 110.7 ms, held 0 ms, 1273068 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=2: 71.2 ms, held 0 ms, 439252 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=50 k=3: 87.8 ms, held 0 ms, 403808 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=3: 105.2 ms, held 0 ms, 1208062 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=3: 72 ms, held 0 ms, 403808 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=50 k=4: 71.4 ms, held 0 ms, 415956 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=4: 107.8 ms, held 0 ms, 1243490 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=4: 73.9 ms, held 0 ms, 415956 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=50 k=5: 69.7 ms, held 0 ms, 443020 chars, got 50 exact True
+[batch] p2 sweep B2 20260702 n=50 k=5: 111.6 ms, held 0 ms, 1322046 chars, got 50 exact True
+[batch] p2 sweep B3 20260702 n=50 k=5: 85.3 ms, held 0 ms, 443020 chars, got 50 exact True
+[batch] p2 sweep B1 20260702 n=100 k=0: 87.5 ms, held 0 ms, 863780 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=0: 180.8 ms, held 0 ms, 2555702 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=0: 94.7 ms, held 0 ms, 863780 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=100 k=1: 105 ms, held 0 ms, 875739 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=1: 199.9 ms, held 0 ms, 2555058 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=1: 91.9 ms, held 0 ms, 875739 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=100 k=2: 113.5 ms, held 0 ms, 855766 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=2: 197 ms, held 0 ms, 2515408 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=2: 104.2 ms, held 0 ms, 855766 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=100 k=3: 86.3 ms, held 0 ms, 822364 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=3: 166.2 ms, held 0 ms, 2445902 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=3: 91.1 ms, held 0 ms, 822364 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=100 k=4: 98.9 ms, held 0 ms, 830199 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=4: 177.1 ms, held 0 ms, 2494484 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=4: 107.6 ms, held 0 ms, 830199 chars, got 100 exact True
+[batch] p2 sweep B1 20260702 n=100 k=5: 100 ms, held 0 ms, 857426 chars, got 100 exact True
+[batch] p2 sweep B2 20260702 n=100 k=5: 182 ms, held 0 ms, 2563986 chars, got 100 exact True
+[batch] p2 sweep B3 20260702 n=100 k=5: 99.3 ms, held 0 ms, 857426 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=5 k=0: 183.4 ms, held 0 ms, 39732 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=0: 125.4 ms, held 0 ms, 115133 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=0: 120.8 ms, held 0 ms, 39732 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=5 k=1: 124.6 ms, held 0 ms, 43454 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=1: 125.8 ms, held 0 ms, 125592 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=1: 128.3 ms, held 0 ms, 43454 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=5 k=2: 126.4 ms, held 0 ms, 39713 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=2: 131.3 ms, held 0 ms, 115143 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=2: 123.3 ms, held 0 ms, 39713 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=5 k=3: 124.1 ms, held 0 ms, 34793 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=3: 126.6 ms, held 0 ms, 106834 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=3: 133.3 ms, held 0 ms, 34793 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=5 k=4: 127.8 ms, held 0 ms, 43083 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=4: 130.4 ms, held 0 ms, 121892 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=4: 153 ms, held 0 ms, 43083 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=5 k=5: 345.2 ms, held 251 ms, 5502023 chars, got 5 exact True
+[batch] p2 sweep B2 20260831 n=5 k=5: 527.7 ms, held 252 ms, 8472592 chars, got 5 exact True
+[batch] p2 sweep B3 20260831 n=5 k=5: 332.4 ms, held 252 ms, 5502023 chars, got 5 exact True
+[batch] p2 sweep B1 20260831 n=10 k=0: 125.9 ms, held 0 ms, 81347 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=0: 132.2 ms, held 0 ms, 241005 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=0: 127.6 ms, held 0 ms, 81347 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=10 k=1: 129.8 ms, held 0 ms, 82083 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=1: 127.9 ms, held 0 ms, 243009 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=1: 138.7 ms, held 0 ms, 82083 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=10 k=2: 123 ms, held 0 ms, 79476 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=2: 132.8 ms, held 0 ms, 233182 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=2: 126.4 ms, held 0 ms, 79476 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=10 k=3: 124.1 ms, held 0 ms, 78155 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=3: 137.2 ms, held 0 ms, 232344 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=3: 125.4 ms, held 0 ms, 78155 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=10 k=4: 126.4 ms, held 0 ms, 82445 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=4: 132.6 ms, held 0 ms, 243321 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=4: 133.8 ms, held 0 ms, 82445 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=10 k=5: 356.4 ms, held 251 ms, 6774508 chars, got 10 exact True
+[batch] p2 sweep B2 20260831 n=10 k=5: 777.1 ms, held 608 ms, 14167442 chars, got 10 exact True
+[batch] p2 sweep B3 20260831 n=10 k=5: 357.4 ms, held 251 ms, 6774508 chars, got 10 exact True
+[batch] p2 sweep B1 20260831 n=25 k=0: 138.2 ms, held 0 ms, 211857 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=0: 150.9 ms, held 0 ms, 628855 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=0: 132.5 ms, held 0 ms, 211857 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=25 k=1: 131.1 ms, held 0 ms, 205651 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=1: 151.2 ms, held 0 ms, 614943 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=1: 134.1 ms, held 0 ms, 205651 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=25 k=2: 134.2 ms, held 0 ms, 204619 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=2: 168.6 ms, held 0 ms, 603529 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=2: 131.9 ms, held 0 ms, 204619 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=25 k=3: 131.3 ms, held 0 ms, 205589 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=3: 152.1 ms, held 0 ms, 622589 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=3: 132.8 ms, held 0 ms, 205589 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=25 k=4: 132.3 ms, held 0 ms, 205886 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=4: 162.9 ms, held 0 ms, 613057 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=4: 134.5 ms, held 0 ms, 205886 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=25 k=5: 384.8 ms, held 265 ms, 7382017 chars, got 25 exact True
+[batch] p2 sweep B2 20260831 n=25 k=5: 913.5 ms, held 607 ms, 16745940 chars, got 25 exact True
+[batch] p2 sweep B3 20260831 n=25 k=5: 399.1 ms, held 251 ms, 7382017 chars, got 25 exact True
+[batch] p2 sweep B1 20260831 n=50 k=0: 139.2 ms, held 0 ms, 414425 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=0: 185.2 ms, held 0 ms, 1241292 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=0: 156.6 ms, held 0 ms, 414425 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=50 k=1: 140.5 ms, held 0 ms, 413932 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=1: 183.6 ms, held 0 ms, 1238015 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=1: 155 ms, held 0 ms, 413932 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=50 k=2: 142.1 ms, held 0 ms, 425636 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=2: 179.1 ms, held 0 ms, 1263777 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=2: 158 ms, held 0 ms, 425636 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=50 k=3: 146.3 ms, held 0 ms, 412280 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=3: 180.6 ms, held 0 ms, 1240884 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=3: 144 ms, held 0 ms, 412280 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=50 k=4: 137.2 ms, held 0 ms, 415803 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=4: 181.7 ms, held 0 ms, 1228016 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=4: 152.1 ms, held 0 ms, 415803 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=50 k=5: 387.6 ms, held 250 ms, 7587370 chars, got 50 exact True
+[batch] p2 sweep B2 20260831 n=50 k=5: 926.3 ms, held 614 ms, 17357393 chars, got 50 exact True
+[batch] p2 sweep B3 20260831 n=50 k=5: 956 ms, held 654 ms, 7587370 chars, got 50 exact True
+[batch] p2 sweep B1 20260831 n=100 k=0: 184.8 ms, held 0 ms, 841423 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=0: 243.6 ms, held 0 ms, 2508687 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=0: 192.1 ms, held 0 ms, 841423 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=100 k=1: 176.4 ms, held 0 ms, 825178 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=1: 244.1 ms, held 0 ms, 2473509 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=1: 171.1 ms, held 0 ms, 825178 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=100 k=2: 161.3 ms, held 0 ms, 835262 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=2: 242.7 ms, held 0 ms, 2499369 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=2: 181.9 ms, held 0 ms, 835262 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=100 k=3: 170.9 ms, held 0 ms, 825098 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=3: 253.2 ms, held 0 ms, 2476154 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=3: 191.1 ms, held 0 ms, 825098 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=100 k=4: 161.3 ms, held 0 ms, 835315 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=4: 253 ms, held 0 ms, 2491160 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=4: 165.5 ms, held 0 ms, 835315 chars, got 100 exact True
+[batch] p2 sweep B1 20260831 n=100 k=5: 411.1 ms, held 252 ms, 8011651 chars, got 100 exact True
+[batch] p2 sweep B2 20260831 n=100 k=5: 1088.3 ms, held 999 ms, 18620868 chars, got 100 exact True
+[batch] p2 sweep B3 20260831 n=100 k=5: 419.6 ms, held 251 ms, 8011651 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=5 k=0: 3083.6 ms OVER 2 s, held 2787 ms, 42850 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=0: 763 ms, held 603 ms, 127126 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=0: 759.2 ms, held 619 ms, 42850 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=5 k=1: 776.1 ms, held 615 ms, 41393 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=1: 790.4 ms, held 614 ms, 125658 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=1: 777.1 ms, held 612 ms, 41393 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=5 k=2: 790.7 ms, held 619 ms, 42768 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=2: 771.7 ms, held 613 ms, 121028 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=2: 782.7 ms, held 616 ms, 42768 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=5 k=3: 785.9 ms, held 616 ms, 43517 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=3: 791.4 ms, held 628 ms, 125627 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=3: 820.5 ms, held 616 ms, 43517 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=5 k=4: 818.8 ms, held 616 ms, 48136 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=4: 775.2 ms, held 608 ms, 139130 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=4: 774.8 ms, held 616 ms, 48136 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=5 k=5: 777.3 ms, held 611 ms, 37128 chars, got 5 exact True
+[batch] p2 sweep B2 20260801 n=5 k=5: 786.8 ms, held 628 ms, 112518 chars, got 5 exact True
+[batch] p2 sweep B3 20260801 n=5 k=5: 799.4 ms, held 627 ms, 37128 chars, got 5 exact True
+[batch] p2 sweep B1 20260801 n=10 k=0: 788 ms, held 614 ms, 86259 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=0: 801.7 ms, held 613 ms, 252683 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=0: 810.4 ms, held 606 ms, 86259 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=10 k=1: 787.9 ms, held 615 ms, 81550 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=1: 808 ms, held 614 ms, 250033 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=1: 853.4 ms, held 616 ms, 81550 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=10 k=2: 800.3 ms, held 610 ms, 84464 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=2: 813.4 ms, held 613 ms, 248083 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=2: 848.6 ms, held 603 ms, 84464 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=10 k=3: 825.3 ms, held 615 ms, 83454 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=3: 830.8 ms, held 615 ms, 244335 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=3: 811.7 ms, held 603 ms, 83454 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=10 k=4: 803.3 ms, held 613 ms, 90712 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=4: 812.7 ms, held 614 ms, 271517 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=4: 891.6 ms, held 613 ms, 90712 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=10 k=5: 805.8 ms, held 620 ms, 75433 chars, got 10 exact True
+[batch] p2 sweep B2 20260801 n=10 k=5: 815.8 ms, held 619 ms, 229089 chars, got 10 exact True
+[batch] p2 sweep B3 20260801 n=10 k=5: 814.4 ms, held 613 ms, 75433 chars, got 10 exact True
+[batch] p2 sweep B1 20260801 n=25 k=0: 823.3 ms, held 616 ms, 208627 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=0: 841 ms, held 602 ms, 625594 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=0: 844.6 ms, held 621 ms, 208627 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=25 k=1: 814.1 ms, held 614 ms, 204942 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=1: 837 ms, held 615 ms, 621472 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=1: 844.1 ms, held 613 ms, 204942 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=25 k=2: 817.6 ms, held 615 ms, 210858 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=2: 837.5 ms, held 621 ms, 620815 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=2: 856.1 ms, held 603 ms, 210858 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=25 k=3: 807.4 ms, held 616 ms, 212642 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=3: 822.3 ms, held 617 ms, 633051 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=3: 840.7 ms, held 613 ms, 212642 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=25 k=4: 863.5 ms, held 614 ms, 219554 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=4: 845.8 ms, held 614 ms, 663184 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=4: 891.9 ms, held 614 ms, 219554 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=25 k=5: 874.2 ms, held 614 ms, 199777 chars, got 25 exact True
+[batch] p2 sweep B2 20260801 n=25 k=5: 846.9 ms, held 615 ms, 596460 chars, got 25 exact True
+[batch] p2 sweep B3 20260801 n=25 k=5: 860.5 ms, held 614 ms, 199777 chars, got 25 exact True
+[batch] p2 sweep B1 20260801 n=50 k=0: 854.1 ms, held 615 ms, 421449 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=0: 929.7 ms, held 615 ms, 1267759 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=0: 962.1 ms, held 615 ms, 421449 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=50 k=1: 872.5 ms, held 616 ms, 415578 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=1: 884.1 ms, held 615 ms, 1257465 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=1: 903.2 ms, held 615 ms, 415578 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=50 k=2: 883.8 ms, held 606 ms, 418064 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=2: 862.7 ms, held 614 ms, 1235839 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=2: 953.8 ms, held 616 ms, 418064 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=50 k=3: 877.5 ms, held 617 ms, 424767 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=3: 894.7 ms, held 616 ms, 1268891 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=3: 921.7 ms, held 614 ms, 424767 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=50 k=4: 855.5 ms, held 602 ms, 433734 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=4: 894.7 ms, held 617 ms, 1299001 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=4: 925.7 ms, held 615 ms, 433734 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=50 k=5: 851 ms, held 613 ms, 409762 chars, got 50 exact True
+[batch] p2 sweep B2 20260801 n=50 k=5: 878.4 ms, held 616 ms, 1216537 chars, got 50 exact True
+[batch] p2 sweep B3 20260801 n=50 k=5: 909.6 ms, held 614 ms, 409762 chars, got 50 exact True
+[batch] p2 sweep B1 20260801 n=100 k=0: 853.1 ms, held 609 ms, 849868 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=0: 942 ms, held 612 ms, 2557966 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=0: 998 ms, held 978 ms, 849868 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=100 k=1: 848.2 ms, held 627 ms, 829864 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=1: 930.9 ms, held 614 ms, 2504811 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=1: 976.4 ms, held 615 ms, 829864 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=100 k=2: 865.7 ms, held 616 ms, 837566 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=2: 932.6 ms, held 621 ms, 2481823 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=2: 985.9 ms, held 614 ms, 837566 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=100 k=3: 854.7 ms, held 616 ms, 830227 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=3: 930.8 ms, held 624 ms, 2481389 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=3: 982.7 ms, held 615 ms, 830227 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=100 k=4: 861.6 ms, held 617 ms, 848879 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=4: 950.7 ms, held 615 ms, 2555939 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=4: 988 ms, held 618 ms, 848879 chars, got 100 exact True
+[batch] p2 sweep B1 20260801 n=100 k=5: 858.1 ms, held 614 ms, 819457 chars, got 100 exact True
+[batch] p2 sweep B2 20260801 n=100 k=5: 920.9 ms, held 617 ms, 2461437 chars, got 100 exact True
+[batch] p2 sweep B3 20260801 n=100 k=5: 976.4 ms, held 614 ms, 819457 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=5 k=0: 1803.8 ms, held 1691 ms, 38583 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=0: 812.4 ms, held 616 ms, 113979 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=0: 809.6 ms, held 609 ms, 38583 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=5 k=1: 815.7 ms, held 624 ms, 40185 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=1: 813.4 ms, held 622 ms, 118968 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=1: 845.3 ms, held 614 ms, 40185 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=5 k=2: 815.6 ms, held 614 ms, 36203 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=2: 816.5 ms, held 616 ms, 108313 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=2: 819.4 ms, held 614 ms, 36203 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=5 k=3: 811.6 ms, held 613 ms, 43476 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=3: 816.8 ms, held 607 ms, 125614 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=3: 815.9 ms, held 608 ms, 43476 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=5 k=4: 814.5 ms, held 616 ms, 32702 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=4: 813.1 ms, held 614 ms, 101406 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=4: 826.1 ms, held 613 ms, 32702 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=5 k=5: 851.6 ms, held 627 ms, 40062 chars, got 5 exact True
+[batch] p2 sweep B2 20260402 n=5 k=5: 816.2 ms, held 624 ms, 118850 chars, got 5 exact True
+[batch] p2 sweep B3 20260402 n=5 k=5: 820 ms, held 618 ms, 40062 chars, got 5 exact True
+[batch] p2 sweep B1 20260402 n=10 k=0: 832.2 ms, held 615 ms, 73297 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=0: 839.3 ms, held 614 ms, 220797 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=0: 838.8 ms, held 615 ms, 73297 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=10 k=1: 828.5 ms, held 614 ms, 80229 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=1: 831.7 ms, held 615 ms, 237748 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=1: 829.3 ms, held 614 ms, 80229 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=10 k=2: 819.4 ms, held 611 ms, 80830 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=2: 829.6 ms, held 623 ms, 234578 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=2: 833.8 ms, held 605 ms, 80830 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=10 k=3: 820 ms, held 614 ms, 78314 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=3: 830.3 ms, held 615 ms, 235368 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=3: 827.7 ms, held 616 ms, 78314 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=10 k=4: 821.6 ms, held 615 ms, 78252 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=4: 837.8 ms, held 626 ms, 237891 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=4: 826.6 ms, held 621 ms, 78252 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=10 k=5: 823.9 ms, held 614 ms, 83309 chars, got 10 exact True
+[batch] p2 sweep B2 20260402 n=10 k=5: 819.3 ms, held 616 ms, 249741 chars, got 10 exact True
+[batch] p2 sweep B3 20260402 n=10 k=5: 824.2 ms, held 610 ms, 83309 chars, got 10 exact True
+[batch] p2 sweep B1 20260402 n=25 k=0: 831.5 ms, held 613 ms, 205217 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=0: 835.9 ms, held 614 ms, 611777 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=0: 881.3 ms, held 615 ms, 205217 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=25 k=1: 838.6 ms, held 614 ms, 198470 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=1: 845.8 ms, held 603 ms, 597641 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=1: 896.8 ms, held 614 ms, 198470 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=25 k=2: 841.4 ms, held 607 ms, 207603 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=2: 882.1 ms, held 613 ms, 615390 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=2: 873.5 ms, held 613 ms, 207603 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=25 k=3: 839.2 ms, held 615 ms, 196910 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=3: 877.1 ms, held 616 ms, 593495 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=3: 870.6 ms, held 612 ms, 196910 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=25 k=4: 837.8 ms, held 615 ms, 207764 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=4: 856.5 ms, held 609 ms, 640147 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=4: 874.4 ms, held 616 ms, 207764 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=25 k=5: 830 ms, held 618 ms, 210149 chars, got 25 exact True
+[batch] p2 sweep B2 20260402 n=25 k=5: 842.7 ms, held 615 ms, 630050 chars, got 25 exact True
+[batch] p2 sweep B3 20260402 n=25 k=5: 907 ms, held 615 ms, 210149 chars, got 25 exact True
+[batch] p2 sweep B1 20260402 n=50 k=0: 839.5 ms, held 615 ms, 406301 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=0: 878.3 ms, held 627 ms, 1210081 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=0: 908.5 ms, held 613 ms, 406301 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=50 k=1: 847.6 ms, held 615 ms, 407408 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=1: 904.6 ms, held 614 ms, 1234661 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=1: 906.7 ms, held 607 ms, 407408 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=50 k=2: 841.9 ms, held 616 ms, 423618 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=2: 886.7 ms, held 605 ms, 1249629 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=2: 904.6 ms, held 613 ms, 423618 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=50 k=3: 939.6 ms, held 617 ms, 410980 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=3: 886.6 ms, held 614 ms, 1246763 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=3: 911.8 ms, held 604 ms, 410980 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=50 k=4: 845.6 ms, held 607 ms, 413112 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=4: 891.7 ms, held 617 ms, 1256495 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=4: 911.8 ms, held 616 ms, 413112 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=50 k=5: 887.4 ms, held 612 ms, 418046 chars, got 50 exact True
+[batch] p2 sweep B2 20260402 n=50 k=5: 879.9 ms, held 614 ms, 1257209 chars, got 50 exact True
+[batch] p2 sweep B3 20260402 n=50 k=5: 912.5 ms, held 617 ms, 418046 chars, got 50 exact True
+[batch] p2 sweep B1 20260402 n=100 k=0: 862.5 ms, held 614 ms, 815207 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=0: 958.9 ms, held 615 ms, 2451293 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=0: 1007.3 ms, held 610 ms, 815207 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=100 k=1: 875 ms, held 627 ms, 786696 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=1: 965 ms, held 616 ms, 2389860 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=1: 1018.6 ms, held 611 ms, 786696 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=100 k=2: 880.4 ms, held 616 ms, 849553 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=2: 969.7 ms, held 614 ms, 2502236 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=2: 1009.5 ms, held 614 ms, 849553 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=100 k=3: 901.9 ms, held 614 ms, 802238 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=3: 963.9 ms, held 613 ms, 2437705 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=3: 1015.8 ms, held 975 ms, 802238 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=100 k=4: 883.1 ms, held 615 ms, 819954 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=4: 963.6 ms, held 615 ms, 2486978 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=4: 1032.5 ms, held 976 ms, 819954 chars, got 100 exact True
+[batch] p2 sweep B1 20260402 n=100 k=5: 879.8 ms, held 622 ms, 818739 chars, got 100 exact True
+[batch] p2 sweep B2 20260402 n=100 k=5: 954.8 ms, held 615 ms, 2467285 chars, got 100 exact True
+[batch] p2 sweep B3 20260402 n=100 k=5: 1009.5 ms, held 613 ms, 818739 chars, got 100 exact True
+[batch] p2 diff B1 20260831 n=25 k=1: 137.7 ms, held 0 ms, 211857 chars, got 25 exact True
+[batch] p2 diff B2 20260831 n=25 k=1: 161.7 ms, held 0 ms, 628855 chars, got 25 exact True
+[batch] p2 diff B3 20260831 n=25 k=1: 156.9 ms, held 0 ms, 211857 chars, got 25 exact True
+[batch] p2 diff B1 20260831 n=25 k=2: 138.2 ms, held 0 ms, 204118 chars, got 25 exact True
+[batch] p2 diff B2 20260831 n=25 k=2: 159.4 ms, held 0 ms, 613987 chars, got 25 exact True
+[batch] p2 diff B3 20260831 n=25 k=2: 142.9 ms, held 0 ms, 204118 chars, got 25 exact True
+[batch] p2 diff B1 20260831 n=25 k=3: 137.2 ms, held 0 ms, 215669 chars, got 25 exact True
+[batch] p2 diff B2 20260831 n=25 k=3: 171.1 ms, held 0 ms, 636192 chars, got 25 exact True
+[batch] p2 diff B3 20260831 n=25 k=3: 154.5 ms, held 0 ms, 215669 chars, got 25 exact True
+[batch] p2 diff B1 20260831 n=25 k=4: 138.2 ms, held 0 ms, 214429 chars, got 25 exact True
+[batch] p2 diff B2 20260831 n=25 k=4: 184.2 ms, held 0 ms, 634303 chars, got 25 exact True
+[batch] p2 diff B3 20260831 n=25 k=4: 142.2 ms, held 0 ms, 214429 chars, got 25 exact True
+[batch] p2 diff B1 20260831 n=25 k=5: 423.4 ms, held 251 ms, 7382017 chars, got 25 exact True
+[batch] p2 diff B2 20260831 n=25 k=5: 948 ms, held 611 ms, 16745940 chars, got 25 exact True
+[batch] p2 diff B3 20260831 n=25 k=5: 417.3 ms, held 251 ms, 7382017 chars, got 25 exact True
+[batch] p2 diff B1 20260801 n=25 k=6: 872.9 ms, held 614 ms, 208627 chars, got 25 exact True
+[batch] p2 diff B2 20260801 n=25 k=6: 870.7 ms, held 615 ms, 625594 chars, got 25 exact True
+[batch] p2 diff B3 20260801 n=25 k=6: 882.9 ms, held 616 ms, 208627 chars, got 25 exact True
+[batch] p2 control C0 20260831 n=5 k=-1: 14407 ms OVER 2 s, held 14320 ms, 39732 chars, got 5 exact True
+[batch] p2 control C0 20260831 n=25 k=-1: 9562.5 ms OVER 2 s, held 9478 ms, 211857 chars, got 25 exact True
+MEASURE p2 one by one FinComVoucherObject (100,021 entries in the company): all 150 requests: median 6.3 ms, p95 87.9 ms, worst 1068.4 ms, window held worst 991 ms, over 2 s 0, exact 150/150, size median 68,709 / max 11,754,253 chars; without the invoices and payrolls 150 requests: median 6.3 ms, p95 87.9 ms, worst 1068.4 ms, window held worst 991 ms, over 2 s 0, exact 150/150, size median 68,709 / max 11,754,253 chars; the 500-employee payroll  ms, the 100  ms, a 50-item invoice worst  ms
+MEASURE p2 FinComDayHeads 20260601 (100 entries): 34.7 ms, window held 0 ms, 123,102 chars
+MEASURE p2 FinComDayHeads 20260702 (300 entries): 55.9 ms, window held 0 ms, 366,692 chars
+MEASURE p2 FinComDayHeads 20260831 (812 entries): 146.1 ms, window held 0 ms, 990,200 chars
+MEASURE p2 FinComDayHeads 20260801 (7601 entries): 3799.7 ms, window held 3506 ms, 9,262,446 chars
+MEASURE p2 FinComDayHeads 20260402 (7601 entries): 3994.9 ms, window held 3874 ms, 9,254,722 chars
+MEASURE p2 B1 N=5: 30 requests: median 127.8 ms, p95 1803.8 ms, worst 3083.6 ms, window held worst 2787 ms, over 2 s 1, exact 30/30, size median 41,646 / max 5,502,023 chars; without the 500-employee payroll: worst 3083.6 ms, held 2787 ms; Tally's own pace at the median 2,347 entries a minute; by day: 20260402 (7601) worst 1803.8 ms held 1691 ms; 20260601 (100) worst 241.6 ms held 0 ms; 20260702 (300) worst 93.5 ms held 0 ms; 20260801 (7601) worst 3083.6 ms held 2787 ms; 20260831 (812) worst 345.2 ms held 251 ms
+MEASURE p2 B1 N=10: 30 requests: median 125.9 ms, p95 828.5 ms, worst 832.2 ms, window held worst 620 ms, over 2 s 0, exact 30/30, size median 82,329 / max 6,774,508 chars; without the 500-employee payroll: worst 832.2 ms, held 620 ms; Tally's own pace at the median 4,766 entries a minute; by day: 20260402 (7601) worst 832.2 ms held 615 ms; 20260601 (100) worst 41.2 ms held 0 ms; 20260702 (300) worst 60.6 ms held 0 ms; 20260801 (7601) worst 825.3 ms held 620 ms; 20260831 (812) worst 356.4 ms held 251 ms
+MEASURE p2 B1 N=25: 36 requests: median 137.7 ms, p95 872.9 ms, worst 874.2 ms, window held worst 618 ms, over 2 s 0, exact 36/36, size median 208,651 / max 7,382,017 chars; without the 500-employee payroll: worst 874.2 ms, held 618 ms; Tally's own pace at the median 10,893 entries a minute; by day: 20260402 (7601) worst 841.4 ms held 618 ms; 20260601 (100) worst 47.3 ms held 0 ms; 20260702 (300) worst 69.7 ms held 0 ms; 20260801 (7601) worst 874.2 ms held 616 ms; 20260831 (812) worst 423.4 ms held 265 ms
+MEASURE p2 B1 N=50: 30 requests: median 140.5 ms, p95 887.4 ms, worst 939.6 ms, window held worst 617 ms, over 2 s 0, exact 30/30, size median 415,578 / max 7,587,370 chars; without the 500-employee payroll: worst 939.6 ms, held 617 ms; Tally's own pace at the median 21,352 entries a minute; by day: 20260402 (7601) worst 939.6 ms held 617 ms; 20260601 (100) worst 76.2 ms held 0 ms; 20260702 (300) worst 87.8 ms held 0 ms; 20260801 (7601) worst 883.8 ms held 617 ms; 20260831 (812) worst 387.6 ms held 250 ms
+MEASURE p2 B1 N=100: 25 requests: median 411.1 ms, p95 883.1 ms, worst 901.9 ms, window held worst 627 ms, over 2 s 0, exact 25/25, size median 830,227 / max 8,011,651 chars; without the 500-employee payroll: worst 901.9 ms, held 627 ms; Tally's own pace at the median 14,595 entries a minute; by day: 20260402 (7601) worst 901.9 ms held 627 ms; 20260601 (100) worst 68.7 ms held 0 ms; 20260702 (300) worst 113.5 ms held 0 ms; 20260801 (7601) worst 865.7 ms held 627 ms; 20260831 (812) worst 411.1 ms held 252 ms
+MEASURE p2 B2 N=5: 30 requests: median 126.6 ms, p95 816.5 ms, worst 816.8 ms, window held worst 628 ms, over 2 s 0, exact 30/30, size median 121,028 / max 8,472,592 chars; without the 500-employee payroll: worst 816.8 ms, held 628 ms; Tally's own pace at the median 2,370 entries a minute; by day: 20260402 (7601) worst 816.8 ms held 624 ms; 20260601 (100) worst 47.1 ms held 0 ms; 20260702 (300) worst 63.1 ms held 0 ms; 20260801 (7601) worst 791.4 ms held 628 ms; 20260831 (812) worst 527.7 ms held 252 ms
+MEASURE p2 B2 N=10: 30 requests: median 132.6 ms, p95 837.8 ms, worst 839.3 ms, window held worst 626 ms, over 2 s 0, exact 30/30, size median 244,529 / max 14,167,442 chars; without the 500-employee payroll: worst 839.3 ms, held 626 ms; Tally's own pace at the median 4,525 entries a minute; by day: 20260402 (7601) worst 839.3 ms held 626 ms; 20260601 (100) worst 47.3 ms held 0 ms; 20260702 (300) worst 71 ms held 0 ms; 20260801 (7601) worst 830.8 ms held 619 ms; 20260831 (812) worst 777.1 ms held 608 ms
+MEASURE p2 B2 N=25: 36 requests: median 162.9 ms, p95 913.5 ms, worst 948 ms, window held worst 621 ms, over 2 s 0, exact 36/36, size median 625,594 / max 16,745,940 chars; without the 500-employee payroll: worst 948 ms, held 621 ms; Tally's own pace at the median 9,208 entries a minute; by day: 20260402 (7601) worst 882.1 ms held 616 ms; 20260601 (100) worst 70.1 ms held 0 ms; 20260702 (300) worst 92.6 ms held 0 ms; 20260801 (7601) worst 870.7 ms held 621 ms; 20260831 (812) worst 948 ms held 611 ms
+MEASURE p2 B2 N=50: 30 requests: median 181.7 ms, p95 926.3 ms, worst 929.7 ms, window held worst 627 ms, over 2 s 0, exact 30/30, size median 1,243,490 / max 17,357,393 chars; without the 500-employee payroll: worst 929.7 ms, held 627 ms; Tally's own pace at the median 16,511 entries a minute; by day: 20260402 (7601) worst 904.6 ms held 627 ms; 20260601 (100) worst 113.8 ms held 0 ms; 20260702 (300) worst 134.6 ms held 0 ms; 20260801 (7601) worst 929.7 ms held 617 ms; 20260831 (812) worst 926.3 ms held 614 ms
+MEASURE p2 B2 N=100: 25 requests: median 920.9 ms, p95 969.7 ms, worst 1088.3 ms, window held worst 999 ms, over 2 s 0, exact 25/25, size median 2,494,484 / max 18,620,868 chars; without the 500-employee payroll: worst 1088.3 ms, held 999 ms; Tally's own pace at the median 6,515 entries a minute; by day: 20260402 (7601) worst 969.7 ms held 616 ms; 20260601 (100) worst 156.4 ms held 0 ms; 20260702 (300) worst 199.9 ms held 0 ms; 20260801 (7601) worst 950.7 ms held 624 ms; 20260831 (812) worst 1088.3 ms held 999 ms
+MEASURE p2 B3 N=5: 30 requests: median 128.3 ms, p95 826.1 ms, worst 845.3 ms, window held worst 627 ms, over 2 s 0, exact 30/30, size median 41,646 / max 5,502,023 chars; without the 500-employee payroll: worst 845.3 ms, held 627 ms; Tally's own pace at the median 2,338 entries a minute; by day: 20260402 (7601) worst 845.3 ms held 618 ms; 20260601 (100) worst 42.1 ms held 0 ms; 20260702 (300) worst 59.6 ms held 0 ms; 20260801 (7601) worst 820.5 ms held 627 ms; 20260831 (812) worst 332.4 ms held 252 ms
+MEASURE p2 B3 N=10: 30 requests: median 127.6 ms, p95 853.4 ms, worst 891.6 ms, window held worst 621 ms, over 2 s 0, exact 30/30, size median 82,329 / max 6,774,508 chars; without the 500-employee payroll: worst 891.6 ms, held 621 ms; Tally's own pace at the median 4,702 entries a minute; by day: 20260402 (7601) worst 838.8 ms held 621 ms; 20260601 (100) worst 55.6 ms held 0 ms; 20260702 (300) worst 62.6 ms held 0 ms; 20260801 (7601) worst 891.6 ms held 616 ms; 20260831 (812) worst 357.4 ms held 251 ms
+MEASURE p2 B3 N=25: 36 requests: median 142.2 ms, p95 896.8 ms, worst 907 ms, window held worst 621 ms, over 2 s 0, exact 36/36, size median 208,651 / max 7,382,017 chars; without the 500-employee payroll: worst 907 ms, held 621 ms; Tally's own pace at the median 10,549 entries a minute; by day: 20260402 (7601) worst 907 ms held 616 ms; 20260601 (100) worst 50.4 ms held 0 ms; 20260702 (300) worst 79.6 ms held 0 ms; 20260801 (7601) worst 891.9 ms held 621 ms; 20260831 (812) worst 417.3 ms held 251 ms
+MEASURE p2 B3 N=50: 30 requests: median 155 ms, p95 956 ms, worst 962.1 ms, window held worst 654 ms, over 2 s 0, exact 30/30, size median 415,578 / max 7,587,370 chars; without the 500-employee payroll: worst 962.1 ms, held 654 ms; Tally's own pace at the median 19,355 entries a minute; by day: 20260402 (7601) worst 912.5 ms held 617 ms; 20260601 (100) worst 78.3 ms held 0 ms; 20260702 (300) worst 92.6 ms held 0 ms; 20260801 (7601) worst 962.1 ms held 616 ms; 20260831 (812) worst 956 ms held 654 ms
+MEASURE p2 B3 N=100: 25 requests: median 419.6 ms, p95 1018.6 ms, worst 1032.5 ms, window held worst 978 ms, over 2 s 0, exact 25/25, size median 830,227 / max 8,011,651 chars; without the 500-employee payroll: worst 1032.5 ms, held 978 ms; Tally's own pace at the median 14,299 entries a minute; by day: 20260402 (7601) worst 1032.5 ms held 976 ms; 20260601 (100) worst 72.6 ms held 0 ms; 20260702 (300) worst 107.6 ms held 0 ms; 20260801 (7601) worst 998 ms held 978 ms; 20260831 (812) worst 419.6 ms held 251 ms
+######## PASS v5 the batch forms at ~1,00,000 entries: exactly the entries asked, every time: 453 batch requests at 100,021 entries, exact 453; inexact: none; no answer: none
+######## PASS v6 the largest batch within 2 s (no window hold of 2 s) at ~1,00,000 entries: B1 largest N within 2 s every time 100 (within 1 s 100); B2 largest N within 2 s every time 100 (within 1 s 50); B3 largest N within 2 s every time 100 (within 1 s 50) (worst over every day and window, the 500-employee payroll included; window held under 2 s; exact)
+MEASURE p1 control C0 (no date) n=5: 1833.9 ms, window held 1703 ms, got 5 exact True
+MEASURE p1 control C0 (no date) n=25: 3305.8 ms, window held 2850 ms, got 25 exact True
+MEASURE p2 control C0 (no date) n=5: 14407 ms, window held 14320 ms, got 5 exact True
+MEASURE p2 control C0 (no date) n=25: 9562.5 ms, window held 9478 ms, got 25 exact True
+######## PASS v7 the control (no date: the whole company looked at) and the rule: one request at a time, 2 s stop, Tally responding: 1129 measured requests, at most 1 at Tally at once, hung 0, Tally not responding after 0; at the end responding True (company list 1.6 ms); the control without a date: p1 n=5 1833.9 ms held 1703 ms, p1 n=25 3305.8 ms held 2850 ms, p2 n=5 14407 ms held 14320 ms, p2 n=25 9562.5 ms held 9478 ms
+  INFO batch: raw answers zipped: 3.2 MB
