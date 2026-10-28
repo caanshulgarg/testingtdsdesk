@@ -1,7 +1,7 @@
 FINCOM 2.4.8 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.8.exe
-Fingerprint: SHA-256 (set at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f (FinComBridge-Setup-2.4.8.exe, built 28-Oct-2026 23:35 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.8 changes (the owner's approval of 28-Oct-2026, "let's do"; nothing new is asked of Tally, no request shape
 changed; FinCom's page of branch next-tally-anyport or later uses Use this port with it, an older page pins as before):

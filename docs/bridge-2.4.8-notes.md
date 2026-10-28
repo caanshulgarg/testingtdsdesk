@@ -7,7 +7,8 @@ shape changed. FinCom's page changes with it, on the app branch next-tally-anypo
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.8.exe |
-| Fingerprint | (set at the build) |
+| Fingerprint | SHA-256 `030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f` (FinComBridge-Setup-2.4.8.exe, built 28-Oct-2026 23:35 IST at the commit after ce438bf9d, bridge sources 673783feb, POSTONLY=any) |
+| Program | FinComBridge-2.4.8.exe, SHA-256 `910c270f6b8e9cc6d0941d0b7f6c758d4cc7de8fc527af5921ecf9c3f26a3608` |
 | Replaces | 2.4.7 (kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 
