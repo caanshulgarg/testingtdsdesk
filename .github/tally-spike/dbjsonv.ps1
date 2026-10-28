@@ -113,12 +113,14 @@ try {
   $k = JImp 'Vouchers' (JJv 'DJ/C02' '20260601' 'DJ2 travel with a cost centre, dbjson test data' '' $true) 'DJ2 cost centre'; if ($k.c -eq 1) { $made += 'DJ2' } else { $bad += "DJ2 ($($k.line))" }
   $k = JImp 'Vouchers' (JJv 'DJ/O03' '20260602' 'DJ3 optional journal, dbjson test data' '<ISOPTIONAL>Yes</ISOPTIONAL>' $false) 'DJ3 optional'; if ($k.c -eq 1) { $made += 'DJ3' } else { $bad += "DJ3 ($($k.line))" }
   $k = JImp 'Vouchers' (JJv 'DJ/X04' '20260701' 'DJ4 journal then cancelled, dbjson test data' '' $false) 'DJ4 to cancel'; if ($k.c -eq 1) { $made += 'DJ4' } else { $bad += "DJ4 ($($k.line))" }
-  $cx = $null
-  foreach ($form in @('<VOUCHER DATE="01-Jul-2026" TAGNAME="Voucher Number" TAGVALUE="DJ/X04" VCHTYPE="Journal" ACTION="Cancel"><NARRATION>DJ4 journal then cancelled, dbjson test data</NARRATION></VOUCHER>',
-                      '<VOUCHER DATE="20260701" TAGNAME="VoucherNumber" TAGVALUE="DJ/X04" VCHTYPE="Journal" ACTION="Cancel"></VOUCHER>')) {
-    $cx = JImp 'Vouchers' $form 'DJ4 cancel'
-    if (($cx.c + $cx.a) -ge 1 -or "$($cx.line)" -eq '') { break }
-  }
+  # a cancelled entry: FC/26-27/012 cancelled on the screen as tdsgst does it (Day Book of 31-5-2026, its first entry, Alt+X),
+  # by XML when the keys did not (run 40733556381: ACTION Cancel with TAGNAME alone was refused)
+  KeysTo '%g' 3; KeysTo 'Day Book' 2; KeysTo '{ENTER}' 4; KeysTo '{F2}' 3; KeysTo '31-5-2026{ENTER}' 4 'dj-cancel-daybook'; KeysTo '{HOME}' 2; KeysTo '%x' 3; KeysTo 'y' 4 'dj-cancelled'
+  KeysTo '{ESC}' 2; KeysTo '{ESC}' 2
+  $c12 = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>DjC</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260531</SVFROMDATE><SVTODATE>20260531</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="DjC" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>VOUCHERNUMBER, ISCANCELLED</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'dbjson cancel check' 60
+  if ("$c12" -notmatch '(?s)FC/26-27/012</VOUCHERNUMBER>.{0,400}<ISCANCELLED[^>]*>Yes|<ISCANCELLED[^>]*>Yes.{0,400}FC/26-27/012<') {
+    $null = JImp 'Vouchers' '<VOUCHER DATE="20260531" TAGNAME="Voucher Number" TAGVALUE="FC/26-27/012" VCHTYPE="Sales" ACTION="Cancel"><DATE>20260531</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>FC/26-27/012</VOUCHERNUMBER></VOUCHER>' 'S12 cancel by XML (the keys did not)'
+  } else { Info 'dbjson: FC/26-27/012 cancelled by keys (Alt+X)' }
   $chk = Post ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>DjChk</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + $co1 + '</SVCURRENTCOMPANY><SVFROMDATE>20260401</SVFROMDATE><SVTODATE>20270331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="DjChk" ISMODIFY="No"><TYPE>Voucher</TYPE><FETCH>VOUCHERNUMBER, ISCANCELLED, ISOPTIONAL, DATE</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 'dbjson check' 120
   $nAll = JVchCount $chk
   $canc = [regex]::Matches("$chk", '(?s)<VOUCHER[ >].*?</VOUCHER>') | Where-Object { $_.Value -match '<ISCANCELLED[^>]*>Yes' } | ForEach-Object { [regex]::Match($_.Value, '<VOUCHERNUMBER[^>]*>([^<]*)<').Groups[1].Value }
@@ -141,48 +143,41 @@ function JNewFiles([datetime]$since) {
   }
   return , @($f | Sort-Object FullName -Unique)
 }
-# the export screen: Alt+E, the first choice (the current report), then the configuration and the format; the format list's
-# words are kept (which JSON forms Tally offers). $pick: words typed in the format list, $down: Down keys after typing
-function JExportUi([string]$tag, [string]$pick, [int]$down = 0) {
+# the export (run 40733556381's screens): Alt+E opens Export's menu (REPORTS: CuRrent Ctrl+E, Others, GST Returns; COMPANY
+# DATA: Masters, Transactions, CoNfiguration); the Export screen shows File Format (XML (Data Interchange) by default for the
+# Day Book), Export to, Folder Path (C:\Program Files\TallyPrime), File Name; F8 (File Format) lists the formats; E exports.
+# $menu: the menu letter; $fmt: words typed in the format list ('' keeps the default); $down: Down keys after typing
+function JExportUi([string]$tag, [string]$menu, [string]$fmt, [int]$down = 0) {
   $t0 = (Get-Date).AddSeconds(-2)
   $null = TK '%e' 2.5 "$tag-alt-e"
-  $s = TdsScreen "$tag-export-menu"
-  if ($s -match 'Current|Others|Export') { $null = TK '{ENTER}' 2.5 "$tag-current" }
+  $null = TK $menu 3 "$tag-menu"
   $s = TdsScreen "$tag-export-screen"
-  # the configuration (C) when the screen has it; the format field is found by Enter until the format list shows
-  $null = TK 'c' 2 "$tag-configure"
-  $list = ''
-  for ($i = 0; $i -lt 12; $i++) {
-    $s = TdsScreen "$tag-field$i"
-    if ($s -match 'Data Interchange|Spreadsheet|Web-Publishing|\(Image\)|List of (File )?Formats') { $list = $s; break }
-    $null = TK '{ENTER}' 1.5 ''
+  Info "dbjson ui ${tag}: the export screen: $(if ($s.Length -gt 500) { $s.Substring(0, 500) } else { $s })"
+  if ($fmt) {
+    $null = TK '{F8}' 2.5 ''
+    $list = TdsScreen "$tag-format-list"
+    $script:djFormats = $list
+    Info "dbjson ui ${tag}: the format list (F8): $list"
+    $null = TK (SK $fmt) 1.5 "$tag-typed"
+    for ($d = 0; $d -lt $down; $d++) { $null = TK '{DOWN}' 1 '' }
+    $null = TK '{ENTER}' 2.5 ''
+    $s = TdsScreen "$tag-format-set"
+    $m = [regex]::Match($s, 'File Format\s*:?\s*(.{0,40})')
+    Info "dbjson ui ${tag}: after choosing '$fmt': File Format $($m.Groups[1].Value)"
   }
-  if (-not $list) { TdsSay "$tag : the format list was not seen"; $null = TK '{ESC}' 1.5 ''; $null = TK '{ESC}' 1.5 ''; return $null }
-  $script:djFormats = $list
-  Info "dbjson ui ${tag}: the format list as Tally shows it: $list"
-  $null = TK (SK $pick) 1.5 "$tag-typed"
-  for ($d = 0; $d -lt $down; $d++) { $null = TK '{DOWN}' 1 '' }
-  $null = TK '{ENTER}' 2 "$tag-format-chosen"
-  # the rest of the configuration accepted as it is; then the export itself (E: Send / Export, else Ctrl+A)
-  $null = TK '^a' 2.5 "$tag-config-accepted"
-  $s = TdsScreen "$tag-before-send"
-  if ($s -match 'Yes or No|Accept') { $null = TK 'y' 2 "$tag-yes" }
-  $null = TK 'e' 4 "$tag-send"
-  $s = TdsScreen "$tag-after-send"
-  if ($s -match 'Yes or No|Accept|Export\?') { $null = TK 'y' 4 "$tag-yes2" }
-  if ($s -match 'Export') { $null = TK '^a' 4 "$tag-send-ctrl-a" }
+  $null = TK 'e' 6 "$tag-export"
+  $s = TdsScreen "$tag-after-export"
+  if ($s -match 'Yes or No|Accept\?|Overwrite|already exists') { $null = TK 'y' 6 "$tag-yes" }
   Start-Sleep 8
-  $s = TdsScreen "$tag-done"
   $new = JNewFiles $t0
-  Info "dbjson ui ${tag}: files written since the export began: $(($new | ForEach-Object { "$($_.FullName) ($($_.Length) bytes)" }) -join '; ')"
+  Info "dbjson ui ${tag}: files written: $(($new | ForEach-Object { "$($_.FullName) ($($_.Length) bytes)" }) -join '; ')"
   $kept = @()
   foreach ($f in $new) {
     $dst = "ui-$tag-$($f.Name)"; Copy-Item $f.FullName (Join-Path $cap $dst) -Force
     $b = [IO.File]::ReadAllBytes($f.FullName); $kept += "$dst ($($b.Length) bytes, $(JEnc $b))"
-    $script:uiFiles += $f.FullName
+    Remove-Item $f.FullName -Force -ErrorAction SilentlyContinue
   }
-  # back to the report (the export screen closes itself; an Esc too many is caught by the next Gateway)
-  for ($i = 0; $i -lt 2; $i++) { $s = TdsScreen "$tag-back$i"; if ($s -match 'Day Book|List of Accounts') { break }; $null = TK '{ESC}' 1.5 '' }
+  $s = TdsScreen "$tag-done"
   return , $kept
 }
 function JOpenReport([string]$goto, [string]$words, [bool]$period) {
@@ -198,24 +193,29 @@ function JOpenReport([string]$goto, [string]$words, [bool]$period) {
     Info "dbjson ui: the Day Book after Alt+F2 ($fromD to $toD): $(if ($s.Length -gt 400) { $s.Substring(0, 400) } else { $s })"
   }
 }
-$uiDb = @{}; $uiMs = @()
+$ui = [ordered]@{}
 try {
   Say '---- dbjson: the Day Book exported by the screens'
   JOpenReport 'Day Book' 'Day Book' $true
-  $uiDb['xml'] = JExportUi 'daybook-xml' 'XML'
+  $ui['daybook-xml'] = JExportUi 'daybook-xml' 'r' ''
   JOpenReport 'Day Book' 'Day Book' $true
-  $uiDb['json'] = JExportUi 'daybook-json' 'JSON'
-  # a second JSON form when the list offers two (e.g. "JSON (Data Interchange)" beside a plain JSON)
-  if (([regex]::Matches("$script:djFormats", 'JSON')).Count -ge 2) {
-    JOpenReport 'Day Book' 'Day Book' $true
-    $uiDb['json2'] = JExportUi 'daybook-json2' 'JSON' 1
-  }
-  $xOk = @($uiDb['xml']).Count -gt 0; $jOk = @($uiDb['json']).Count -gt 0
-  JRes $J2 $(if ($xOk -and $jOk) { 'PASS' } else { 'HARNESS' }) ("XML: {0}; JSON: {1}; second JSON: {2}; the format list: {3}" -f $(if ($xOk) { $uiDb['xml'] -join ', ' } else { 'no file found' }), $(if ($jOk) { $uiDb['json'] -join ', ' } else { 'no file found' }), $(if ($uiDb['json2']) { $uiDb['json2'] -join ', ' } else { 'not offered / none' }), $script:djFormats)
-  Say '---- dbjson: List of Accounts exported by the screens'
+  $ui['daybook-json'] = JExportUi 'daybook-json' 'r' 'JSON'
+  # a second JSON form when the list offers two
+  if (([regex]::Matches("$script:djFormats", 'JSON')).Count -ge 2) { JOpenReport 'Day Book' 'Day Book' $true; $ui['daybook-json2'] = JExportUi 'daybook-json2' 'r' 'JSON' 1 }
+  # Company Data: Transactions (every entry of the period) and Masters, as JSON and as XML
+  JOpenReport 'Day Book' 'Day Book' $true
+  $ui['trans-json'] = JExportUi 'trans-json' 't' 'JSON'
+  JOpenReport 'Day Book' 'Day Book' $true
+  $ui['trans-xml'] = JExportUi 'trans-xml' 't' 'XML'
+  $xOk = @($ui['daybook-xml']).Count -gt 0; $jOk = @($ui['daybook-json'] | Where-Object { $_ -match '\.json' }).Count -gt 0
+  JRes $J2 $(if ($xOk -and $jOk) { 'PASS' } else { 'HARNESS' }) (($ui.GetEnumerator() | ForEach-Object { "$($_.Key): $(if (@($_.Value).Count) { $_.Value -join ', ' } else { 'no file' })" }) -join '; ')
+  Say '---- dbjson: masters exported by the screens'
   JOpenReport 'List of Accounts' 'List of Accounts|Accounts' $false
-  $uiMs = JExportUi 'masters-json' 'JSON'
-  JRes $J3 $(if (@($uiMs).Count) { 'PASS' } else { 'HARNESS' }) $(if (@($uiMs).Count) { $uiMs -join ', ' } else { 'no file found (see the tds-* screens)' })
+  $ui['loa-json'] = JExportUi 'loa-json' 'r' 'JSON'
+  JOpenReport 'List of Accounts' 'List of Accounts|Accounts' $false
+  $ui['masters-json'] = JExportUi 'masters-json' 'm' 'JSON'
+  $mOk = @($ui['loa-json'] + $ui['masters-json'] | Where-Object { $_ -match '\.json' }).Count -gt 0
+  JRes $J3 $(if ($mOk) { 'PASS' } else { 'HARNESS' }) ("List of Accounts: $(@($ui['loa-json']) -join ', '); Masters: $(@($ui['masters-json']) -join ', ')")
 } catch { Write-Host "dbjson ui: $_"; JRes $J2 'HARNESS' "the screens step stopped: $_"; JRes $J3 'HARNESS' "the screens step stopped: $_" }
 
 # ---------------------------------------------------------------- 3. the HTTP port
