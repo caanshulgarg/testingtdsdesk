@@ -3,10 +3,10 @@ The owner: "I was trying to delink Salesify.. after delinking and relinking it i
 things which are not required.. make it completely like Suvit.. somewhere it is showing, other places it is not showing..
 I have to go everywhere to see where to add.. I need a clear page only"; "if there is a company open in Tally, it should
 show in the dropdown always"; "check the Suvit rules as well". Website only (the bridge and every Tally request unchanged).
-  1. Unlink, then link again, a company NOT open in Tally: it stays in the list (Not a client) and links again in one click;
+  1. Unlink, then link again, a company NOT open in Tally: it stays in the list (Not linked) and links again (Link to client…);
      the books' copy kept here for the client does not keep it "linked" (the 24-Oct cause), its Tally name is cleared.
   2. A company open in Tally that its computer has not sent to FinCom yet (a new year: "Salesify Marketing LLP 2026-27"):
-     listed at once, at the top; "New year of Salesify Marketing LLP · Link"; the click links it at once (tally-ingest link_now
+     listed at once, at the top; "Link to client…" with Salesify Marketing LLP chosen (Task D); the click links it at once (tally-ingest link_now
      registers it; on 24-Oct and 28-Oct tally_company_link refused it while the computer's report was not in); the older year stays linked and says
      "Earlier year".
   3. One status, one function: the row's pill, the client's Tally icon (next-tally-icon; was its title chip) and the Clients list's chip say the same; a Tally
@@ -14,7 +14,7 @@ show in the dropdown always"; "check the Suvit rules as well". Website only (the
   4. Every other place is gone: Client setup has one line ("Tally: <company> ● Connected · Open in Tally page"), Books ›
      From Tally, the Overview, Add client, Settings and Today show no link or status block of their own; the Tally page
      has no clients' table, no status block, no "Seen, not linked". Help & support is closed.
-  5. Add as client and Link to … still work; ⋯ Link to a client…; from a client not linked: every company, the open ones
+  5. Link to client… (+ New client with this name inside it; no Add as client button, Task D); from a client not linked: every company, the open ones
      first, "Link to <client>", and one linked to another client: "Linked to X · Move here" (asked once).
   6. Suvit's rules: Sync now = Sync master + Sync vouchers (both under ⋯); Disconnected only for a linked company, with the
      fix in words; Remove company (not linked, not open) hides it, Show hidden puts it back; a name with extra spaces says
@@ -125,7 +125,7 @@ def main():
         def rows(hook="firm"):
             return E("""(h) => [...document.querySelectorAll('#app [data-tco-list=' + h + '] [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), st: r.getAttribute('data-tco-state'),
                 pill: r.querySelector('[data-tco-pill]').getAttribute('data-tco-pill'), ptext: r.querySelector('[data-tco-pill]').getAttribute('data-tco-pill-text'),
-                text: r.innerText.replace(/\\s+/g, ' '), act: ((r.querySelector('[data-tco-act]') || {}).innerText || '').trim(), open: r.hasAttribute('data-tco-open'),
+                text: r.innerText.replace(/\\s+/g, ' '), act: ((r.querySelector('[data-tco-act]') || {}).innerText || '').trim(), pre: ((r.querySelector('[data-tco-pre]') || {getAttribute: () => ''}).getAttribute('data-tco-pre') || ''), open: r.hasAttribute('data-tco-open'),
                 reported: r.getAttribute('data-tco-reported'), linked: r.getAttribute('data-tco-linked'), focus: r.hasAttribute('data-focus')}))""", hook)
         def row(co): return next((r for r in rows() if r["co"] == co), None)
         R = lambda co: '#app [data-tco-list=firm] [data-tco-row="%s"]' % co
@@ -135,6 +135,14 @@ def main():
             pg.click(R(co) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
             it = E("(s) => [...document.querySelectorAll(s + ' .bk-menu-list button')].map(b => b.innerText.split('\\n')[0])", R(co))
             pg.keyboard.press("Escape"); E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)"); return it
+        # Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): a company not linked has ONE "Link to client…" (the
+        # clients already in FinCom, the likeliest chosen); a new client only from "+ New client with this name" inside it
+        def pick_link(co, cid=None):
+            pg.click(R(co) + " [data-tco-act=pick]"); pg.wait_for_timeout(250)
+            if cid: pg.select_option(R(co) + " [data-tco-relink-pick]", cid)
+            pg.click(R(co) + " [data-tco-relink]")
+        def pick_add(co):
+            pg.click(R(co) + " [data-tco-act=pick]"); pg.wait_for_timeout(250); pg.click(R(co) + " [data-tco-add-new]")
         def confirm(yes=True):
             sel = '#confirmBox [data-cbx="%s"]' % ("yes" if yes else "no")
             pg.wait_for_selector(sel, state="visible", timeout=10000); pg.click(sel)
@@ -158,12 +166,12 @@ def main():
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": None}]], "1. Unlink: tally_company_link(company, null) once (%s)" % links())
         r = row(SAL)
         ok(r is not None and r["linked"] == "" and r["pill"] == "notclient", "1. after Unlink it STAYS in the list, marked Not a client (%s)" % (r and r["text"][:120]))
-        ok(r and r["act"] == "Link to Salesify Marketing LLP", "1. with one action: 'Link to Salesify Marketing LLP' (%s)" % (r and r["act"]))
+        ok(r and r["act"] == "Link to client…" and r["pre"] == s1, "1. with one action: 'Link to client…', Salesify Marketing LLP chosen in it (%s, %s)" % (r and r["act"], r and r["pre"]))
         ok(E("(c) => tallyLinkOf(S.companies[c]).state", s1) == "unlinked", "1. the client is Not linked, though its books' copy kept here still names the company (the 24-Oct cause)")
         ok(E("(c) => S.companies[c].tallyName", s1) == "", "4. Unlink cleared the client's Tally name (%r)" % E("(c) => S.companies[c].tallyName", s1))
         shot("1-after-unlink-desktop-light")
         E("() => { window.__calls = []; }")
-        pg.click(R(SAL) + " [data-tco-act=link]"); pg.wait_for_timeout(1200)
+        pick_link(SAL); pg.wait_for_timeout(1200)
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": s1}]], "1. linked again in ONE click, not open in Tally (%s)" % links())
         r = row(SAL)
         ok(r and r["linked"] == s1 and r["pill"] == "notopen", "1. the row is linked to Salesify Marketing LLP again (%s)" % (r and r["ptext"]))
@@ -176,12 +184,12 @@ def main():
         ok(NEW in [x["co"] for x in rs] and next(x for x in rs if x["co"] == NEW)["reported"] == "no", "2. 'Salesify Marketing LLP 2026-27', open in Tally, not in FinCom's cloud yet: listed at once")
         ok(set(x["co"] for x in rs[:3]) == {NEW, VMS, GSC} and all(x["open"] for x in rs[:3]), "2. the companies open in Tally are at the top (%s)" % [x["co"] for x in rs])
         r = row(NEW)
-        ok(r["act"] == "New year of Salesify Marketing LLP · Link", "6. a new year of a linked client: 'New year of Salesify Marketing LLP · Link' (%s)" % r["act"])
-        ok("Link or Add as client sends it and links it at once" in txt(R(NEW) + " [data-tco-unreported]"), "2. it says plainly a click links it at once (%s)" % txt(R(NEW) + " [data-tco-unreported]"))
+        ok(r["act"] == "Link to client…" and r["pre"] == s1, "6. a new year of a linked client: 'Link to client…' with Salesify Marketing LLP chosen (%s, %s)" % (r["act"], r["pre"]))
+        ok("Link to client… sends it and links it at once" in txt(R(NEW) + " [data-tco-unreported]"), "2. it says plainly a click links it at once (%s)" % txt(R(NEW) + " [data-tco-unreported]"))
         E("() => { window.__calls = []; }")
         # next-tally-linknow (staging 28-Oct-2026: five refusals "no computer has reported … yet"): the click links it NOW:
         # tally-ingest's link_now registers it for the computer and links it, then the usual link (nothing kept, nothing waits)
-        pg.click(R(NEW) + " [data-tco-act=year]")
+        pick_link(NEW)
         for _ in range(30):
             if links(): break
             pg.wait_for_timeout(300)
@@ -199,9 +207,9 @@ def main():
         # while Salesify Marketing LLP is linked to "SALESIFY MARKETING LLP - (from 1-Apr-25)": New year of <client> · Link, at once
         scene(cos(new=True)); tally_page()
         r = row(NEW)
-        ok(r["reported"] == "yes" and r["act"] == "New year of Salesify Marketing LLP · Link" and row(SAL)["linked"] == s1, "2. staging's case: the new year, in the cloud, not linked: 'New year of Salesify Marketing LLP · Link' (%s)" % r["act"])
+        ok(r["reported"] == "yes" and r["act"] == "Link to client…" and r["pre"] == s1 and row(SAL)["linked"] == s1, "2. staging's case: the new year, in the cloud, not linked: 'Link to client…', Salesify Marketing LLP chosen (%s)" % r["act"])
         E("() => { window.__calls = []; }")
-        pg.click(R(NEW) + " [data-tco-act=year]"); pg.wait_for_timeout(1200)
+        pick_link(NEW); pg.wait_for_timeout(1200)
         ok(links() == [["tally_company_link", {"p_company": NEW, "p_client": s1}]] and row(SAL)["linked"] == s1 and row(SAL)["pill"] == "earlier", "2. one click: linked beside the old year (not moved, nothing asked); the old year 'Earlier year' (%s)" % links())
         scene(cos())   # back to the beat-only new year for what follows
         tally_page()
@@ -211,7 +219,7 @@ def main():
         BRAND = "BRAND NEW TRADERS (2026-27)"
         E("([d, n]) => { const b = Object.assign({}, window.__devs[0].info.beat); b.open = b.open.concat([n]); b.at = new Date().toISOString(); TLight.beatIn({device: d, beat: b}); }", [D1, BRAND]); pg.wait_for_timeout(700)
         r = row(BRAND)
-        ok(r is not None and r["open"] and r["act"] == "Add as client", "2. a brand-new company opened in Tally: listed within one beat, open, Add as client (%s)" % (r and r["text"][:100]))
+        ok(r is not None and r["open"] and r["act"] == "Link to client…" and "Add as client" not in r["text"], "2. a brand-new company opened in Tally: listed within one beat, open, Link to client… (no Add as client suggestion) (%s)" % (r and r["text"][:100]))
         tally_page({"step": 4, "cid": ta, "at": 1})
         r = row(BRAND)
         ok(r is not None and r["act"] == "Link to Testing AAD" and rows().index(r) < 4, "2. and in Testing AAD's chooser, among the open ones at the top: 'Link to Testing AAD'")
@@ -301,16 +309,15 @@ def main():
         more(GSC, "[data-tco-post-here]"); confirm()
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. Post entries here: the client's confirmed posting company")
         ok("Stop posting here" in menu(GSC), "6. then ⋯ says Stop posting here")
-        it = menu(VMS)
-        ok(it == ["Link to a client…", "Add as client", "Remove company"][:2] or it == ["Link to a client…", "Add as client"], "5. ⋯ of a company not linked, open: Link to a client…, Add as client (no Remove while open) (%s)" % it)
+        ok(pg.locator(R(VMS) + " [data-tco-more]").count() == 0 and row(VMS)["act"] == "Link to client…" and "Add as client" not in row(VMS)["text"], "5. a company not linked, open: ONE 'Link to client…', no ⋯, no Add as client (%s)" % row(VMS)["text"][:120])
         E("() => { window.__calls = []; }")
         n0 = E("() => Object.values(S.companies).filter(c => !c.deleted).length")
-        pg.click(R(VMS) + " [data-tco-act=add]"); pg.wait_for_timeout(1300)
+        pick_add(VMS); pg.wait_for_timeout(1300)
         vm = E("() => Object.values(S.companies).filter(c => !c.deleted && c.name === 'VMS EVENTS PRIVATE LIMITED').map(c => c.id)")
         ok(len(vm) == 1 and E("() => Object.values(S.companies).filter(c => !c.deleted).length") == n0 + 1 and links() == [["tally_company_link", {"p_company": VMS, "p_client": vm[0]}]],
-           "5. Add as client: one client (the period off its name), linked once (%s)" % links())
+           "5. + New client with this name (inside Link to client…): one client (the period off its name), linked once (%s)" % links())
         E("() => { window.__calls = []; }")
-        more(OLD, "[data-tco-link-pick]")
+        pg.click(R(OLD) + " [data-tco-act=pick]"); pg.wait_for_timeout(250)
         pg.select_option(R(OLD) + " [data-tco-relink-pick]", ta); pg.click(R(OLD) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
         ok(links() == [["tally_company_link", {"p_company": OLD, "p_client": ta}]], "5. ⋯ Link to a client…: linked to the client chosen (%s)" % links())
         # an open company unlinked stays, at the top

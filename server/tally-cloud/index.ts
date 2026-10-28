@@ -213,7 +213,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { parseDay, amt, cleanName, d8, dropBankDetails } from "./parse.js";
 import { packMonth, monthEnd } from "./monthpack.js";
-import { linkDevice, beatNewOpen, cleanCompany } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1156,6 +1156,20 @@ async function otherPlace(firm: string, book: string, dev: any, body: any) {
   const { data, error } = await db.rpc("tally_link_place_check", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id });
   if (error || data !== false) return null;
   return { ok: false, otherPlace: true, error: "FinCom reads this company from another data location (the same company in two places). Nothing from here is applied until a person chooses on the Tally page." };
+}
+// migration 127 (the owner, 28-Oct-2026: "I don't want false alarms at all"): a place counts as a second place only once
+// entries came from it; the latest day of these days with an entry in it is kept with the place (tally_link_place_seen).
+// After the place check (which makes the place). A cloud without 127: nothing (the function is missing), never fails
+async function lastEntryDay(daysIn: unknown): Promise<string> {
+  return await latestEntryDay(daysIn, async (d: any) => typeof d.b64 === "string" ? new TextDecoder("utf-8").decode(b64bytes(d.b64)) : typeof d.gz === "string" ? (await gunzip(b64bytes(d.gz), MAX_DAY)).text : "");
+}
+async function placeSeen(firm: string, book: string, dev: any, body: any) {
+  try {
+    const d = await lastEntryDay(body?.days);
+    if (!d) return;
+    const { error } = await db.rpc("tally_link_place_seen", { p_firm: firm, p_book: book, p_device: dev.id, p_bridge: bridgeOf(dev, body, false).id, p_last: d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8) });
+    if (error && !missingFn(String(error.message || "")) && error.code !== "PGRST202") console.error("tally-ingest tally_link_place_seen", String(error.message || "").slice(0, 200));
+  } catch (e) { console.error("tally-ingest placeSeen", (e as Error).message); }
 }
 async function bookFor(firm: string, company: string) {
   const { data, error } = await db.rpc("tally_book_for", { p_firm: firm, p_company: company });
@@ -3938,7 +3952,7 @@ Deno.serve(sentry.wrap(async (req) => {
       case "days": {
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
-        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
+        { const elsewhere = await otherPlace(firm, book, dev, body); await placeSeen(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         return await ingestDays(firm, book, body.days);
       }
       case "ledgers": {

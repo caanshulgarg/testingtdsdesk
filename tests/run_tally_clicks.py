@@ -88,7 +88,9 @@ def expect(name, d, calls, fx):
     if "[data-tally-pop-page]" in name: return d["home"] == "tally", "the popover's Open Tally page -> the Tally page"
     if "[data-tally-icon=" in name: return d["pop"] and not d["panel"], "the Tally icon -> its popover, no side panel"
     # next-tally-suvit: Add as client / Link on a company's row: the link (tally_company_link); Sync now: Update now
-    if "[data-tco-act=" in name or "[data-tco-relink]" in name: return "tally_company_link" in rpc, "Add as client / Link -> tally_company_link"
+    # Task D (28-Oct-2026): "Link to client…" only opens the clients to choose from (nothing linked yet): no effect to check
+    if "[data-tco-act=pick]" in name: return None, ""
+    if "[data-tco-act=" in name or "[data-tco-relink]" in name or "[data-tco-add-new=" in name: return "tally_company_link" in rpc, "Link / + New client with this name -> tally_company_link"
     if "[data-tco-sync-now=" in name or "[data-tally-sync-now=" in name: return "tallyUpdateNow" in fxn or "doAct" in fxn or "tally_want_update" in rpc, "Sync now -> Update now"
     # next-tally-one-page: Today's chip, a client's one Tally line and its chips: the Tally page (the one place)
     if "[data-not-linked-go]" in name or "[data-tally-one-go]" in name: return d["home"] == "tally", "-> the Tally page"

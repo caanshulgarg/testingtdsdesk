@@ -264,8 +264,8 @@ try:
         tl.click('#cobar [data-tally-icon]'); tl.wait_for_selector('#cobar [data-tally-pop-word]', timeout=15000); W2(500)
         offers = E2("() => [...document.querySelectorAll('#cobar [data-tally-pop-pick] option')].map(e => e.value)")
         ok(len(offers) >= 2 and tl.locator('#cobar [data-tally-pop-act=link]').count() == 1
-           and E2("(document.querySelector('#cobar [data-tally-badge]') || {}).textContent") == "2" and E2("[S.view, S.coId, !!S.tallyPanel]") == ["company", lcid, False],
-           "the header's Tally icon (not linked, 2 companies open in Tally not linked: its badge 2) → its popover, the companies with Link, no side panel (%s %s)" % (offers, E2("[S.view, S.coId, !!S.tallyPanel]")))
+           and tl.locator('#cobar [data-tally-badge]').count() == 0 and E2("[S.view, S.coId, !!S.tallyPanel]") == ["company", lcid, False],
+           "the header's Tally icon (not linked; Task D: no badge for companies not linked) → its popover, the companies with Link, no side panel (%s %s)" % (offers, E2("[S.view, S.coId, !!S.tallyPanel]")))
         tl.keyboard.press("Escape"); W2(400)
         # with no company open in Tally that is no client's: no badge; the popover's Open Tally page opens the list for this client
         scene(TL.SEEN, [TL.dev(1, "NWS144", "anshul", opened=())]); E2("(c) => openCompany(c).then(() => goClient('dash'))", lcid); W2(900)

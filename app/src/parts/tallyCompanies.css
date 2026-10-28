@@ -50,3 +50,4 @@
   #app .tco-q { margin-left: 0; width: 100%; }
   #app .tc3 ol.tc3-steps { grid-template-columns: minmax(0, 1fr); }
 }
+#app .tco-relink .tco-new { font-size: 12px; }

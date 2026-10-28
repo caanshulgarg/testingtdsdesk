@@ -1,4 +1,6 @@
-"""python3 run_tally_nudge.py - "Tally is open: link it", on the Tally icon (24-Oct-2026, next-tally-firstlink; the owner:
+"""python3 run_tally_nudge.py - NO "Tally is open: link it" anywhere (Task D, 28-Oct-2026, next-tally-linknow; the owner: "No
+suggestion to add clients"): no line, badge, count or offer for companies open in Tally that are no client's. Was:
+"Tally is open: link it", on the Tally icon (24-Oct-2026, next-tally-firstlink; the owner:
 "I could not find how to link.. what to do after installing bridge and opening Tally", then "I do not want 'Tally is
 open and link' on every page.. it should be above, on the Tally icon").
 Stub cloud as run_tally_suvit.py (TLight: the computers' beats and the companies FinCom keeps):
@@ -69,67 +71,26 @@ def main():
         def open_panel():
             sign().click(); pg.wait_for_timeout(900)
 
-        # ---- 1. no line on the pages; the badge on the Tally sign
-        scene([SV.dev(opened=(VMS, GSC))], SV.cos())
-        ok(pg.locator("[data-tally-nudge]").count() == 0, "1. Today: no 'Tally is open' line on the page")
-        ok(badge() == "2", "1. the Tally sign's badge: 2 companies open in Tally, not linked (%s)" % badge())
-        ok("2 companies open in Tally are not linked: click to link" in (sign().get_attribute("aria-label") or ""), "1. the sign says so to a screen reader (%s)" % sign().get_attribute("aria-label"))
-        ok(pg.locator(PANEL).count() == 0 and pg.locator("[data-tally-offers]").count() == 0, "1. nothing offered until the sign is clicked")
-        shot("1-badge")
-        E("() => { navHome('clients'); }"); pg.wait_for_timeout(900)
-        ok(pg.locator("[data-tally-nudge]").count() == 0 and badge() == "2", "1. Clients: no line, the same badge")
-        E("() => { navHome('today'); }"); pg.wait_for_timeout(700)
-        # ---- 2. the click: the panel starts with the offers
-        open_panel()
-        ok(pg.locator(OFF).count() == 1, "2. a click on the sign opens the Tally panel with the offers")
-        offers = E("(s) => [...document.querySelectorAll(s + ' [data-tally-offer]')].map(o => [o.getAttribute('data-tally-offer'), o.innerText.replace(/\\s+/g, ' ').trim()])", OFF)
-        ok(sorted(o[0] for o in offers) == sorted([VMS, GSC]), "2. both companies offered (%s)" % [o[0] for o in offers])
-        ok(E("(s) => { const p = document.querySelector(s), o = p.querySelector('[data-tally-offers]'), h = p.querySelector('[data-tally-here-card]'); return !!o && (!h || !!(o.compareDocumentPosition(h) & 4)); }", PANEL), "2. at the top of the panel")
-        vm = next((o[1] for o in offers if o[0] == VMS), "")
-        ok(vm.startswith("Tally is open on NWS144 with " + VMS + ".") and "Add as new client" in vm and "Link to existing client ▾" in vm, "2. 'Tally is open on NWS144 with VMS…' [Add as new client] [Link to existing client ▾] (%s)" % vm[:160])
-        gs_btn = PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link-to]' % GSC
-        ok(pg.locator(gs_btn).count() == 1 and pg.locator(gs_btn).inner_text().strip() == "Link to Garg Shekhar & Company", "2. the same name: [Link to Garg Shekhar & Company] first")
-        shot("2-panel-open"); narrow("panel open")
-        # ---- 3. Add as new client
-        E("() => { window.__calls = []; }")
-        pg.click(PANEL + ' [data-tally-offer="%s"] [data-tally-offer-add]' % VMS); pg.wait_for_timeout(1800)
-        ids = E("(n) => Object.values(S.companies).filter(c => !c.deleted && c.tallyName === n).map(c => c.id)", VMS)
-        ok(len(ids) == 1 and calls("tally_company_link") == [["tally_company_link", {"p_company": VMS, "p_client": ids[0]}]], "3. Add as new client: the client made and linked once (%s)" % calls("tally_company_link"))
-        ok(any(c[0] == "post" and c[1].get("what") == "ledgers" for c in calls()), "3. and the ledgers' first sync asked")
-        E("() => { TLight.st.at = 0; render(); }"); pg.wait_for_timeout(900)
-        ok(badge() == "1", "3. the badge goes to 1 (%s)" % badge())
-        # Link to existing client
-        scene([SV.dev(opened=(SAL,))], SV.cos(vms="GS"))
+        # Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): companies open in Tally that are no client's are
+        # never offered: no line, no badge, no count, no "Add as new client" anywhere; the Tally page's Get companies and its
+        # list's "Link to client…" are the only places, when the person asks
+        for role in ("owner", "staff"):
+            scene([SV.dev(opened=(VMS, GSC))], SV.cos(), role=role)
+            ok(pg.locator("[data-tally-nudge]").count() == 0, "1. %s, Today: no 'Tally is open' line on the page" % role)
+            ok(badge() == "", "1. %s: no badge on the Tally sign (%s)" % (role, badge()))
+            ok("not linked" not in (sign().get_attribute("aria-label") or "") if sign().count() else True, "1. %s: the sign says nothing of companies not linked (%s)" % (role, sign().get_attribute("aria-label") if sign().count() else ""))
+            E("() => { navHome('clients'); }"); pg.wait_for_timeout(900)
+            ok(pg.locator("[data-tally-nudge]").count() == 0 and badge() == "", "1. %s, Clients: no line, no badge" % role)
+            E("() => { navHome('today'); }"); pg.wait_for_timeout(700)
+            if sign().count():
+                open_panel()
+                ok(pg.locator("[data-tally-offers], [data-tally-offer]").count() == 0 and "Add as new client" not in (pg.inner_text("body") or ""), "2. %s: the Tally sign's click offers no company to add or link" % role)
+                close_panel(); pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+            shot("1-no-badge-" + role)
+        narrow("today")
         gs = E("window.__ids.GS")
-        open_panel(); E("() => { window.__calls = []; }")
-        pg.select_option(PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link]' % SAL, gs); pg.wait_for_timeout(800)
-        ok(pg.locator('#confirmBox [data-cbx="yes"]').is_visible(), "3. that client has another company: asked once")
-        pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1500)
-        ok(calls("tally_company_link")[:1] == [["tally_company_link", {"p_company": SAL, "p_client": gs}]], "3. Link to existing client: one choice links it (%s)" % calls("tally_company_link"))
-        # ---- 4. a client's own page, not linked
-        scene([SV.dev(opened=(VMS,))], SV.cos())
         E("(c) => openCompany(c)", gs); pg.wait_for_timeout(1500)
-        ok(pg.locator("[data-tally-nudge]").count() == 0 and badge() == "1", "4. the client's page: no line, the badge (%s)" % badge())
-        open_panel()
-        here = PANEL + ' [data-tally-offer="%s"] [data-tally-offer-link-to="%s"]' % (VMS, gs)
-        ok(pg.locator(OFF).count() == 1 and pg.locator(here).count() == 1 and pg.locator(here).inner_text().strip() == "Link to Garg Shekhar & Company", "4. the panel (not the Tally page), with [Link to Garg Shekhar & Company] first")
-        shot("4-client-panel")
-        E("() => { window.__calls = []; }"); pg.click(here); pg.wait_for_timeout(1500)
-        ok(calls("tally_company_link") == [["tally_company_link", {"p_company": VMS, "p_client": gs}]], "4. one click links THIS client (%s)" % calls("tally_company_link"))
-        # ---- 5. a viewer: nothing
-        scene([SV.dev(opened=(VMS, GSC))], SV.cos(), role="viewer")
-        ok(badge() == "", "5. a viewer: no badge")
-        open_panel()
-        ok(pg.locator(PANEL).count() == 1 and pg.locator(OFF).count() == 0, "5. a viewer: the panel without offers")
-        E("() => { S.account.me.role = 'staff'; render(); }"); pg.wait_for_timeout(500)
-        close_panel()
-        ok(badge() == "2", "5. staff (may link): the badge (%s)" % badge())
-        # ---- 6. nothing open unlinked
-        scene([SV.dev(opened=())], SV.cos())
-        ok(badge() == "", "6. nothing open unlinked: no badge")
-        E("(c) => openCompany(c)", gs); pg.wait_for_timeout(1500)
-        sign().click(); pg.wait_for_timeout(1000)
-        ok(pg.locator(PANEL).count() == 0 and E("() => S.view") == "home" and E("() => S.homeTab") == "tally", "6. a client not linked: the sign still goes to its Tally card (%s)" % E("() => [S.view, S.homeTab]"))
+        ok(pg.locator("[data-tally-nudge], [data-tally-offers]").count() == 0 and badge() == "", "4. a client's page: no line, no badge, no offers")
         ok(not errors, "no page errors (%s)" % errors[:3])
         br.close()
     srv.shutdown()

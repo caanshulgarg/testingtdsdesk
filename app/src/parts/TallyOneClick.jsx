@@ -7,7 +7,7 @@
 //                              and connects by itself), or its 6 digits typed here.
 //   2. Find Tally              the bridge looks for TallyPrime now: each Tally, its port, whose, its companies; none: one
 //                              plain line and a port to type (Use this port: the page's own Tally pin)
-//   3. Get companies           the companies open in that Tally, each with Link to <client> or Create client from this company
+//   3. Get companies           the companies open in that Tally, each Linked to <client> or with Link to client… (Task D)
 // On opening the page (this browser connected to the bridge), a refused key is said plainly with the same button.
 // Nothing new is asked of the bridge or Tally: /ping, /status, /diagnose, /cloudlink and the RPCs FinCom already uses.
 // next-tally-linknow (28-Oct-2026): Link / Create client on a company FinCom's cloud has no row for yet is registered and
@@ -15,7 +15,7 @@
 import { useEffect, useState } from "react";
 import { connectNow, findTally, getCompanies, usePort, keyRefused } from "../lib/tallyConnect.js";
 import { CodeBox, FL } from "./TallyFirstLink.jsx";
-import { companyRows, twinOf, linkTo, addAsClient, SENDING } from "./TallyCompanies.jsx";
+import { companyRows, twinOf, yearOf, Pick } from "./TallyCompanies.jsx";
 import { coKey } from "../lib/tallyState.js";
 import "./tallyOneClick.css";
 
@@ -75,16 +75,19 @@ function Found({ f }) {
   </>;
 }
 
+// Task D (the owner, 28-Oct-2026: "No suggestion to add clients. In Get companies, all open companies should come"): each
+// company open in Tally now, linked ("Linked to <client>") or with ONE "Link to client…": the clients already in FinCom
+// (the likeliest chosen), a new client only from the small "+ New client with this name" inside it
 function CompanyLine({ x }) {
-  const k = coKey(x.company), row = companyRows({ hidden: true }).find((r) => coKey(r.company) === k) || { company: x.company, gstin: x.gstin, client: "" };
-  const r = Object.assign({}, row, { gstin: row.gstin || x.gstin || "" }), linked = r.client && S.companies && S.companies[r.client];
-  const twin = !linked ? twinOf(r) : null, busy = OC.act[k];
-  const act = (fn) => async () => { OC.act[k] = "busy"; redraw(); let ok = false; try { ok = !!(await fn()); } catch (e) { ok = false; } OC.act[k] = ok ? "done" : "fail"; redraw(); };
+  const k = coKey(x.company), row = companyRows({ hidden: true }).find((r) => coKey(r.company) === k) || { company: x.company, gstin: x.gstin, client: "", open: true };
+  const r = Object.assign({}, row, { gstin: row.gstin || x.gstin || "", open: true }), linked = r.client && S.companies && S.companies[r.client];
+  const twin = !linked ? twinOf(r) || yearOf(r) : null, open = !!OC.act[k], err = !linked && (S.tcoErr || {})[k];
+  const toggle = () => { OC.act[k] = !OC.act[k]; redraw(); };
   return <li data-oc-co={x.company}><span className="oc-co">{x.company}</span>
     {linked ? <span className="tag ok" data-oc-linked="">{"Linked to " + linked.name}</span>
-      : twin ? <button className="btn small primary" data-oc-link={twin.id} disabled={busy === "busy"} onClick={act(() => linkTo(r, twin))}>{busy === "busy" ? (SENDING[k] ? "Sending to FinCom…" : "Linking…") : "Link to " + twin.name}</button>
-      : <button className="btn small primary" data-oc-add="" disabled={busy === "busy"} onClick={act(() => addAsClient(r))}>{busy === "busy" ? (SENDING[k] ? "Sending to FinCom…" : "Creating…") : "Create client from this company"}</button>}
-    {busy === "fail" && <span className="note bad" data-oc-act-fail="">{"Not linked: " + (TCloud.linkErr || "FinCom's cloud did not take it") + "."}</span>}
+      : <button className="btn small" data-oc-pick="" data-oc-pre={(twin && twin.id) || ""} onClick={toggle}>Link to client…</button>}
+    {!linked && open && <div className="oc-pickbox" data-oc-pickbox=""><Pick r={r} co={null} pre={(twin && twin.id) || ""} onClose={() => { OC.act[k] = false; redraw(); }} /></div>}
+    {err && <span className="note bad" data-oc-act-fail="">{"Not linked: " + err + "."}</span>}
   </li>;
 }
 

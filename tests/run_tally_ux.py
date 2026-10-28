@@ -261,9 +261,9 @@ def main():
         R = '#app [data-tco-list=firm] [data-tco-row="GARG SHEKHAR"]'
         pg.click(link + " [data-tally-one-go]"); pg.wait_for_timeout(1200)
         ok(pg.locator(R + " [data-tco-sync-now]").count() == 1 and txt(R + " [data-tco-pill]").startswith("Linked"), "5. its row: Linked, Sync now")
-        # change company: the other company's row, ⋯ Link to a client… (the client moves, asked once)
+        # change company: the other company's row, Link to client… (the client moves, asked once)
         other = "ABC LTD"
-        pg.click('#app [data-tco-row="%s"] [data-tco-more] summary' % other); pg.wait_for_timeout(250); pg.click('#app [data-tco-row="%s"] [data-tco-link-pick]' % other); pg.wait_for_timeout(300)
+        pg.click('#app [data-tco-row="%s"] [data-tco-act=pick]' % other); pg.wait_for_timeout(300)   # Task D: Link to client…
         pg.select_option('#app [data-tco-row="%s"] [data-tco-relink-pick]' % other, cid); pg.click('#app [data-tco-row="%s"] [data-tco-relink]' % other)
         pg.wait_for_selector('#confirmBox [data-cbx="yes"]', state="visible", timeout=10000); pg.click('#confirmBox [data-cbx="yes"]'); pg.wait_for_timeout(1000)
         ok(["tally_company_link", {"p_company": other, "p_client": cid}] in calls("tally_company_link"), "5. another company for the client -> tally_company_link (asked once)")

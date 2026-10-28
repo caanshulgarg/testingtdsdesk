@@ -19,7 +19,7 @@
 const LinkRec = {
   st: {rows: null, at: 0, p: null, missing: false, err: "", guid: {}, now: null},
   COLS: "book_id,client_id,company_guid,company_name,gstin,device_id,computer,posting_allowed,state,linked_by,linked_at,updated_by,updated_at,version,how,data_loc,data_folder,windows_user,tally_port",
-  PCOLS: "book_id,data_loc,data_folder,computer,windows_user,tally_port,state,last_seen",
+  PCOLS: "book_id,data_loc,data_folder,computer,windows_user,tally_port,state,last_seen,entries_at,last_entry",
   on(){ return typeof TCloud === "object" && TCloud.on() && !this.st.missing; },
   // read, and there: a firm without any record (110 not run, or never linked: the backfill made one for every link, and
   // every link since makes one) keeps the old rules, which then say the same (nothing linked)
@@ -77,14 +77,31 @@ const LinkRec = {
   // in two places; nothing from them is applied)
   placesOf(r){ const l = r ? [].concat(this.st.places || []).filter(x => x.book_id === r.book_id) : [];
     return l.sort((a, b) => (a.state === "chosen" ? 0 : 1) - (b.state === "chosen" ? 0 : 1) || String(b.last_seen || "").localeCompare(String(a.last_seen || ""))); },
-  // next-tally-linknow (28-Oct-2026; staging: ONE computer, bridge and Windows user shown as two places, "Data:" and none):
-  // only a real folder is a data location (migration 127, tally_real_folder); two places need two real folders, or the
-  // same folder on two computers. A place without one (Tally closed, TallyPrime's "Data:", a port only) is never a second
-  realFolder(f){ return /^([A-Za-z]:[\\/]|\\\\[^\\/]+[\\/]|\/)/.test(String(f || "").trim()); },
+  // next-tally-linknow (28-Oct-2026; staging: ONE computer, bridge and Windows user shown as two places, "Data:" and none;
+  // the owner: "I don't want false alarms at all, use a proper system"). Two places ONLY when two different, complete
+  // folders (absolute paths, compared normalised as migration 127's tally_folder_norm: case, / or \, repeated and trailing
+  // separators; the same folder on another computer is another place) have each sent entries (entries_at). Anything else
+  // (blank, TallyPrime's "Data:", a port only, Tally closed, the same folder spelled differently, a restart) is one place,
+  // said nowhere. A cloud without 127 gives no entries_at (its places are not read at all): never a card
+  folderKey(f){
+    const a = String(f || "").trim().replace(/\//g, "\\").toLowerCase();
+    const unc = /^\\\\[^\\]+\\[^\\]+/.test(a);
+    if (/^\\\\/.test(a) && !unc) return "";
+    const b = unc ? "\\\\" + a.slice(2).replace(/\\+/g, "\\") : a.replace(/\\+/g, "\\");
+    if (!/^([a-z]:\\[^\\]|\\\\[^\\]+\\[^\\]+|\\[^\\])/.test(b)) return "";
+    return b.replace(/\\+$/, "");
+  },
+  realFolder(f){ return !!this.folderKey(f); },
   twoPlaces(r){
-    const l = this.placesOf(r).filter(x => (x.state === "waiting" || x.state === "chosen") && this.realFolder(x.data_folder));
-    const k = x => String(x.computer || "").toLowerCase() + "|" + String(x.data_folder || "").trim().toLowerCase();
-    return l.some(x => x.state === "waiting") && new Set(l.map(k)).size > 1;
+    const l = this.placesOf(r).filter(x => (x.state === "waiting" || x.state === "chosen") && x.entries_at && this.realFolder(x.data_folder));
+    const k = x => String(x.computer || "").trim().toLowerCase() + "|" + this.folderKey(x.data_folder);
+    return l.some(x => x.state === "waiting") && l.some(x => x.state === "chosen") && new Set(l.map(k)).size > 1;
+  },
+  // the places the card shows: those of twoPlaces, one per folder
+  realPlaces(r){
+    const seen = new Set();
+    return this.placesOf(r).filter(x => (x.state === "waiting" || x.state === "chosen") && x.entries_at && this.realFolder(x.data_folder))
+      .filter(x => { const k = String(x.computer || "").trim().toLowerCase() + "|" + this.folderKey(x.data_folder); if (seen.has(k)) return false; seen.add(k); return true; });
   },
   // an owner's choice of the place that is the books (tally_link_place_choose); true when the cloud took it
   async choosePlace(r, loc){

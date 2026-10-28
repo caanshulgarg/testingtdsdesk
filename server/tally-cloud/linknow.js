@@ -51,3 +51,18 @@ export function beatNewOpen(beat, have) {
   for (const c of Array.isArray(b.companies) ? b.companies : []) if (c && c.open === true) add(c.name);
   return out.slice(0, 50);
 }
+
+// migration 127 (the owner: "I don't want false alarms at all"): a data place counts only once entries came from it. The
+// latest day of a days call that has an entry (<VOUCHER), read latest first (one day read in the usual case); "" when none.
+// decode(day) gives the day's text (tally-ingest: b64 or gzip); a day that cannot be read is passed over
+const DAY = /^(19|20)\d\d(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/;
+export async function latestEntryDay(days, decode) {
+  const list = (Array.isArray(days) ? days : []).slice(0, 62).filter((d) => d && typeof d.day === "string" && DAY.test(d.day))
+    .sort((x, y) => y.day.localeCompare(x.day));
+  for (const d of list) {
+    let text = "";
+    try { text = String(await decode(d)); } catch (_) { continue; }
+    if (/<VOUCHER[\s>]/i.test(text)) return d.day;
+  }
+  return "";
+}

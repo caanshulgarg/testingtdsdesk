@@ -62,7 +62,7 @@ function LinkPick({ co, run }) {
 // the same company in two places: Use ① (the place FinCom reads) or Use ② (owners)
 function Places({ co, run }) {
   const lp = typeof linkPostOf === "function" ? linkPostOf(co) : null, rec = lp ? lp.pick || lp.recs[0] : null;
-  const places = rec && typeof LinkRec === "object" ? LinkRec.placesOf(rec) : [];
+  const places = rec && typeof LinkRec === "object" ? (LinkRec.realPlaces ? LinkRec.realPlaces(rec) : LinkRec.placesOf(rec)) : [];
   return <div data-tally-pop-places="">
     <ol className="note tally-pop-places">{places.map((p) => <li key={p.data_loc}>{(p.state === "chosen" ? "The data FinCom reads now" : "The other copy") + (p.last_seen ? ", last seen " + clock(p.last_seen) : "")}</li>)}</ol>
     {isOwner() ? <p className="tally-pop-acts">{places.map((p, i) => <button key={p.data_loc} type="button" className={"btn small" + (i ? "" : " primary")} data-tally-pop-act={"place" + (i + 1)}
@@ -110,7 +110,7 @@ export default function TallyPop({ co, nOpen, close, back }) {
     {busy && <p className="note" data-tally-pop-busy="">Working…</p>}
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}
     {stale && <p className="note books-stale" data-books-stale="">{stale}</p>}
-    {nOpen > 0 && <p className="note" data-tally-pop-offer="">{nOpen + (nOpen === 1 ? " company open in Tally is" : " companies open in Tally are") + " not linked to a client yet."}</p>}
+    {/* Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no count of companies not linked */}
     <p className="tally-pop-foot"><button type="button" className="linkbtn" data-tally-pop-page="" onClick={() => { close(); if (co) goTallyRow(co.id); else goTallyPage(); }}>Open Tally page</button></p>
   </div>;
 }

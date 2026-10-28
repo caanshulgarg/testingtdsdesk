@@ -146,8 +146,8 @@ def main():
 
         # Needs you (the same company in two places): Use ② for an owner, who can for staff
         lap = {"go-3": {"at": "ago:1", "version": "2.4.7", "computer": "LAPTOP", "user": "ravi", "mode": "main", "tallyState": "open", "open": [ALPHA], "tallyPort": 9001, "dataFolder": "D:\\Copy\\Data"}}
-        places = [{"book_id": "b-alpha", "data_loc": "f-nws", "data_folder": "C:\\Users\\anshul\\TallyPrime\\Data", "computer": "NWS144", "windows_user": "anshul", "tally_port": 9005, "state": "chosen", "last_seen": "ago:1"},
-                  {"book_id": "b-alpha", "data_loc": "f-lap", "data_folder": "D:\\Copy\\Data", "computer": "LAPTOP", "windows_user": "ravi", "tally_port": 9001, "state": "waiting", "last_seen": "ago:2"}]
+        places = [{"book_id": "b-alpha", "data_loc": "f-nws", "data_folder": "C:\\Users\\anshul\\TallyPrime\\Data", "computer": "NWS144", "windows_user": "anshul", "tally_port": 9005, "state": "chosen", "last_seen": "ago:1", "entries_at": "ago:1", "last_entry": "2026-10-27"},
+                  {"book_id": "b-alpha", "data_loc": "f-lap", "data_folder": "D:\\Copy\\Data", "computer": "LAPTOP", "windows_user": "ravi", "tally_port": 9001, "state": "waiting", "last_seen": "ago:2", "entries_at": "ago:2", "last_entry": "2026-10-20"}]
         two = [dict(rec(ALPHA, "b-alpha", CA, GA), data_loc="f-nws"), rec(ITS, "b-its", CE, GE)]
         scene(pg, [dev(OPEN, BEAT, bridges=lap)], two, places=places)
         i = icon(pg); po = pop_open(pg)

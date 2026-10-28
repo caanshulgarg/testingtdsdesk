@@ -9,7 +9,9 @@ it holds a key; the cloud's tally_bridge_whose says neither mine nor elsewhere).
   2. Connect this computer: ONE tally_device_create, the key handed over (POST /cloudlink, the ingest address), green
      "Connected: NWS144 (anshul) sends Tally to Test Firm. Its old key … was replaced." at once; then Find Tally and Get
      companies run by themselves: the Tally on port 9000 with its companies; each company Link to <client> / Create client
-  3. Create client from this company: the client made and linked (tally_company_link); Link to <client>: linked
+  3. Link to client… (Task D: no Create client suggestion): the clients, the one of the same name chosen; "+ New client
+     with this name" inside it makes the client and links it; 3b. a company the cloud has no row for: link_now first;
+     12. linked: the bridge here starts keeping it (POST /keep now) and the ledgers' count shows
   4. already connected (the cloud's mine, a fresh beat): "Connected" and no new key
   5. Find Tally with no Tally: "Open TallyPrime and a company, then press Find Tally again", a port to type, Use this port
      (the page's Tally pin), its own answer for that port; "Find it by itself again"
@@ -184,17 +186,25 @@ def main():
         ok(pg.locator("#app [data-oc-refused]").count() == 0, "2. the refused line gives way")
         ok(wait("() => !!document.querySelector('#app [data-oc-cos]')"), "2. Find Tally and Get companies ran by themselves")
         ok("Port 9000" in txt("#app [data-oc-tallies]") and "another Windows user" in txt("#app [data-oc-tally='9001']"), "2. each Tally with its port and whose (%s)" % txt("#app [data-oc-tallies]"))
-        ok(pg.locator("#app [data-oc-cos] [data-oc-co]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-add]").count() == 2, "2. each company with Create client from this company")
+        ok(pg.locator("#app [data-oc-cos] [data-oc-co]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-pick]").count() == 2 and pg.locator("#app [data-oc-cos] [data-oc-add]").count() == 0, "2. each company with Link to client… (Task D: no Create client suggestion)")
         ok(wide() <= 0, "11. no sideways scroll at 1440")
         shot("2-connected")
         # 3. Create client / Link to <client>
         n0 = E("() => Object.keys(S.companies).length")
-        pg.locator("#app [data-oc-co='%s'] [data-oc-add]" % GSC).click()
+        # Task D: a new client only from the small "+ New client with this name" inside the picker
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % GSC).click()
+        ok(pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-relink-pick]" % GSC).count() == 1, "3. Link to client…: the clients to choose from")
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox] [data-tco-add-new]" % GSC).click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "3. Create client: linked")
         ok(E("() => Object.keys(S.companies).length") == n0 + 1, "3. the client made")
         E("() => { const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: ''}); S.companies[co.id] = co; render(); return co.id; }"); pg.wait_for_timeout(400)
-        lk = pg.locator("#app [data-oc-co='%s'] [data-oc-link]" % VMS)
-        ok(lk.count() == 1 and lk.inner_text().strip() == "Link to VMS Events Private Limited", "3. a client of the same name: Link to <client> (%s)" % (lk.inner_text() if lk.count() else ""))
+        vcid = E("() => Object.values(S.companies).find(c => c.name === 'VMS Events Private Limited').id")
+        pk = pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS)
+        ok(pk.count() == 1 and pk.get_attribute("data-oc-pre") == vcid, "3. a client of the same name: chosen first in Link to client…")
+        def link_vms():
+            if not pg.locator("#app [data-oc-co='%s'] [data-oc-pickbox]" % VMS).count(): pk.click()
+            ok(pg.locator("#app [data-oc-co='%s'] [data-tco-relink-pick]" % VMS).input_value() == vcid, "3. the picker has the client of the same name chosen")
+            pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
         # 3b. next-tally-linknow (staging 28-Oct-2026: "no computer has reported Salesify Marketing LLP 2026-27 yet" five times):
         # a company Get companies listed that FinCom's cloud has no row for is registered and linked in the same click
         lnow = lambda: [c[1] for c in calls("post") if c[1].get("kind") == "link_now"]
@@ -203,17 +213,17 @@ def main():
         ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % GSC.replace("'", "\\'"), 5000), "3b. the row says Linked at once, no reload (%s)" % txt("#app [data-oc-co='%s']" % GSC))
         # a refusal (the bridge's computer not of this firm): the plain reason, never "done by itself within a minute"
         E("() => { window.__linkNowFail = 'FinCom Bridge on this computer is not connected to your firm yet, so FinCom cannot take it from it. Press Connect this computer, then Link again.'; window.__calls = []; }")
-        lk.click()
+        link_vms()
         ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\")" % VMS), "3b. refused: said on the row")
         f = txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS)
         ok(f.startswith("Not linked: FinCom Bridge on this computer is not connected to your firm yet") and "within a minute" not in f and "by itself" not in f, "3b. its plain reason (%s)" % f)
         ok(not calls("link"), "3b. nothing linked after a refusal")
         # the cloud slow: a reason within the limit, never a spinner
         E("() => { window.__linkNowFail = ''; window.__linkNowHang = true; window.__ocMsScale = 0.05; window.__calls = []; }")
-        t0 = time.time(); lk.click()
+        t0 = time.time(); link_vms()
         ok(wait("() => /did not answer in time/.test((document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\") || {}).textContent || '') && !window.__calls.some(c => c[0] === 'link')" % VMS, 10000) and time.time() - t0 < 10, "3b. no answer: the reason within the limit (%s)" % txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS))
         E("() => { window.__linkNowHang = false; window.__ocMsScale = 1; window.__calls = []; }")
-        lk.click()
+        link_vms()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % VMS, 5000), "3b. Link to <client> again: linked, the row says so (%s)" % txt("#app [data-oc-co='%s']" % VMS))
         # 12. next-tally-linknow (Task C; staging: "FinCom Bridge did not read Salesify Marketing LLP 2026-27's ledgers: this
         # company is not kept in step on this computer"): linked, the ledgers are taken by themselves: the bridge here starts
@@ -222,8 +232,9 @@ def main():
         open_tally(MINE)
         cid = E("() => { Object.keys(S.companies).forEach(k => { if (/^VMS Events/i.test(S.companies[k].name)) delete S.companies[k]; }); const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: %s}); S.companies[co.id] = co; S.data[co.id] = {parties: {}, entries: {}, loaded: true}; co.stats = {}; window.__books = [{book: 'bk-vms', company: %s, from: '2026-04-01', to: '2026-10-28', days: 0, ledgersAt: ''}]; window.__lp = null; render(); return co.id; }" % (json.dumps(VMS), json.dumps(VMS)))
         pg.click("#app [data-oc-get]")
-        wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-link]\")" % VMS)
-        pg.locator("#app [data-oc-co='%s'] [data-oc-link]" % VMS).click()
+        wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-pick]\")" % VMS)
+        pg.locator("#app [data-oc-co='%s'] [data-oc-pick]" % VMS).click()
+        pg.locator("#app [data-oc-co='%s'] [data-tco-relink]" % VMS).click()
         ok(wait("() => window.__calls.some(c => c[0] === 'link')"), "12. linked")
         for _ in range(40):
             if any(x[0] == "POST" and x[1] == "/keep" for x in BR["log"]): break

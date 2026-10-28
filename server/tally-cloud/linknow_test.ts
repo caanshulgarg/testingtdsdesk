@@ -8,7 +8,7 @@
 //      removed one, never another firm's (the caller's firm's devices only are passed in)
 //   2. beatNewOpen: the companies a beat says open that the firm's tally_companies lacks (registered from the beat at once)
 //   3. cleanCompany: the company's name as the bridge returned it (trimmed, no control characters, at most 200)
-import { linkDevice, beatNewOpen, cleanCompany } from "./linknow.js";
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const SAL = "Salesify Marketing LLP 2026-27", EDGE = "EDGE STRATEGIES - (from 1-Apr-24)";
@@ -54,4 +54,16 @@ Deno.test("cleanCompany: the name as the bridge returned it", () => {
   assert(cleanCompany("A\u0000B") === "", "control characters refused");
   assert(cleanCompany("x".repeat(250)) === "", "longer than 200 refused, never cut (another company's name)");
   assert(cleanCompany(undefined) === "" && cleanCompany(42) === "" && cleanCompany("   ") === "", "nothing");
+});
+Deno.test("latestEntryDay: the latest day with an entry (migration 127: a place counts once entries came from it)", async () => {
+  const dec = async (d: { t?: string; bad?: boolean }) => { if (d.bad) throw new Error("not gzip"); return d.t || ""; };
+  const v = "<ENVELOPE><VOUCHER REMOTEID='x'>1</VOUCHER></ENVELOPE>", empty = "<ENVELOPE></ENVELOPE>";
+  assert(await latestEntryDay([{ day: "20261001", t: v }, { day: "20261003", t: empty }, { day: "20261002", t: v }], dec) === "20261002", "the latest day with an entry");
+  assert(await latestEntryDay([{ day: "20261005", bad: true }, { day: "20261004", t: v }], dec) === "20261004", "a day not read is passed over");
+  assert(await latestEntryDay([{ day: "20261003", t: empty }], dec) === "", "only empty days: none");
+  assert(await latestEntryDay([{ day: "2026-10-03", t: v }, { day: "x", t: v }], dec) === "", "not a day: none");
+  assert(await latestEntryDay(null, dec) === "" && await latestEntryDay([], dec) === "", "nothing");
+  let reads = 0;
+  await latestEntryDay(Array.from({ length: 30 }, (_, i) => ({ day: "202610" + String(i + 1).padStart(2, "0"), t: v })), async (d: { t?: string }) => { reads++; return d.t || ""; });
+  assert(reads === 1, "one day read in the usual case (" + reads + ")");
 });
