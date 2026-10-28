@@ -7,7 +7,7 @@ flight). A pass by this session over the threats below was also made.
 Claude Code's security-review command did not give a usable report. It ran against the main checkout (tax-accuracy),
 which needs origin/HEAD, not against this branch. That temporary origin/HEAD was removed again.
 
-Range: d1d7c038b..fd2fb3dcb
+Range: d1d7c038b..673783feb
 
 ## Threats looked at
 

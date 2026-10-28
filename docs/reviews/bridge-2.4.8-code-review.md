@@ -3,7 +3,7 @@
 Reviewer: review sessions run with Claude Code's code-review recipe. Each session was a fresh forked context that had
 only the repository and the range. Every round's fixes were reviewed again in the next round.
 
-Range: d1d7c038b..fd2fb3dcb
+Range: d1d7c038b..673783feb
 
 Scope: bridge-go/anyport.go (new), ports.go, server.go (POST /ports/use), tally.go (TC.trial, TC.unplanned and the trial's
 checks before the send), inflight.go (errProbeHold, abandonSlot.noMark), cloud.go and events.go (the links asked again
@@ -72,6 +72,10 @@ app/src/parts/TallyOneClick.jsx (next-tally-anyport, merged); tests/gen_post_sha
 - Lows: the session is looked up only when Windows gave no user, and the answer patterns share one head (both fixed).
   Kept: the two checks before the send (before and after the rest) return two error kinds for the same event. An
   unplanned trial's late answer may clear a mark if the port joined the plan during its hold (up to TallyAbandonMaxSec).
+
+## After round 5
+
+673783feb: the recorder_lines and beat test fixtures name 2.4.8 (the version string only; no code change).
 
 ## Open
 
