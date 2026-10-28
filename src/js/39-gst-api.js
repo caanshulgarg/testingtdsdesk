@@ -33,7 +33,10 @@ const GSTAPI = {
   async status(gstin){
     this.seen[gstin] = Date.now();
     const j = await this.call({action: "status", gstins: [gstin]}), x = (j.sessions || [])[0];
-    this.sess[gstin] = x ? Object.assign(this.sess[gstin] || {}, this.sessOf(x)) : (this.sess[gstin] && this.sess[gstin].sentAt ? {sentAt: this.sess[gstin].sentAt} : undefined);
+    // nothing kept: the entry goes (an undefined entry broke Settings' GST API line, FINCOM-APP-STAGING-6)
+    if (x) this.sess[gstin] = Object.assign(this.sess[gstin] || {}, this.sessOf(x));
+    else if (this.sess[gstin] && this.sess[gstin].sentAt) this.sess[gstin] = {sentAt: this.sess[gstin].sentAt};
+    else delete this.sess[gstin];
   },
   sessOf(x){ return {until: Date.parse(x.until), connectedAt: x.connectedAt, error: x.error || "", accessUntil: x.accessUntil || "", accessDays: x.accessDays || 0, endedAt: x.endedAt || "", refreshedAt: x.refreshedAt || ""}; },
   // every client's GSTIN at once (Settings → GST API): sessions, the returns kept on the server, the e-invoice users

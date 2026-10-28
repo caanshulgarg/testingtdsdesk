@@ -26,6 +26,8 @@ with sync_playwright() as p:
     card(); pg.wait_for_timeout(800); h = card()
     ok(any(c.get("action") == "status" and c.get("gstins") == [G] for c in calls), "the card asks the server which GSTINs it keeps connected")
     ok(">Send OTP<" in h and "Connected to the portal" not in h, "nothing kept on the server: Send OTP" + ("" if ">Send OTP<" in h else " [" + h[:300] + "]"))
+    # FINCOM-APP-STAGING-6 (iPhone, 27-Oct): an empty answer left GSTAPI.sess[g] = undefined, and Settings' GST API line read .accessUntil of it
+    ok(pg.evaluate("Object.values(GSTAPI.sess || {}).every(Boolean)"), "nothing kept on the server: no empty session entry left behind")
     # another tab, another staff member: the server already has the session from an OTP given earlier
     SERVER["sessions"] = [{"gstin": G, "username": "gargshekhar09", "until": "2099-01-01T00:00:00Z", "connectedAt": "2026-09-29T13:00:00Z", "error": None}]
     pg.evaluate("GSTAPI.seen = {}"); card(); pg.wait_for_timeout(800); h = card()
