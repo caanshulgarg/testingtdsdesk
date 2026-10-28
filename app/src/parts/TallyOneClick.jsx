@@ -10,10 +10,12 @@
 //   3. Get companies           the companies open in that Tally, each with Link to <client> or Create client from this company
 // On opening the page (this browser connected to the bridge), a refused key is said plainly with the same button.
 // Nothing new is asked of the bridge or Tally: /ping, /status, /diagnose, /cloudlink and the RPCs FinCom already uses.
+// next-tally-linknow (28-Oct-2026): Link / Create client on a company FinCom's cloud has no row for yet is registered and
+// linked at once (tally-ingest "link_now", lib/tallyConnect.js linkNow), never "done by itself within a minute"
 import { useEffect, useState } from "react";
 import { connectNow, findTally, getCompanies, usePort, keyRefused } from "../lib/tallyConnect.js";
 import { CodeBox, FL } from "./TallyFirstLink.jsx";
-import { companyRows, twinOf, linkTo, addAsClient } from "./TallyCompanies.jsx";
+import { companyRows, twinOf, linkTo, addAsClient, SENDING } from "./TallyCompanies.jsx";
 import { coKey } from "../lib/tallyState.js";
 import "./tallyOneClick.css";
 
@@ -80,9 +82,9 @@ function CompanyLine({ x }) {
   const act = (fn) => async () => { OC.act[k] = "busy"; redraw(); let ok = false; try { ok = !!(await fn()); } catch (e) { ok = false; } OC.act[k] = ok ? "done" : "fail"; redraw(); };
   return <li data-oc-co={x.company}><span className="oc-co">{x.company}</span>
     {linked ? <span className="tag ok" data-oc-linked="">{"Linked to " + linked.name}</span>
-      : twin ? <button className="btn small primary" data-oc-link={twin.id} disabled={busy === "busy"} onClick={act(() => linkTo(r, twin))}>{busy === "busy" ? "Linking…" : "Link to " + twin.name}</button>
-      : <button className="btn small primary" data-oc-add="" disabled={busy === "busy"} onClick={act(() => addAsClient(r))}>{busy === "busy" ? "Creating…" : "Create client from this company"}</button>}
-    {busy === "fail" && <span className="note bad" data-oc-act-fail="">{(TCloud.linkErr || "Not linked yet") + ". It is done by itself once this computer sends the company to FinCom (within a minute)."}</span>}
+      : twin ? <button className="btn small primary" data-oc-link={twin.id} disabled={busy === "busy"} onClick={act(() => linkTo(r, twin))}>{busy === "busy" ? (SENDING[k] ? "Sending to FinCom…" : "Linking…") : "Link to " + twin.name}</button>
+      : <button className="btn small primary" data-oc-add="" disabled={busy === "busy"} onClick={act(() => addAsClient(r))}>{busy === "busy" ? (SENDING[k] ? "Sending to FinCom…" : "Creating…") : "Create client from this company"}</button>}
+    {busy === "fail" && <span className="note bad" data-oc-act-fail="">{"Not linked: " + (TCloud.linkErr || "FinCom's cloud did not take it") + "."}</span>}
   </li>;
 }
 

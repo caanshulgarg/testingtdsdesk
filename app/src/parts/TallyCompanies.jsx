@@ -22,6 +22,8 @@
 //   - a company open in Tally that its computer has not sent to FinCom's cloud yet (a new company: tally_company_link
 //     says "no computer has reported it yet"): the click is kept and done by itself as soon as the computer sends it
 //     (on 24-Oct-2026 the owner's two clicks on "Salesify Marketing LLP 2026-27" were refused that way and lost).
+//     next-tally-linknow (28-Oct-2026): a company OPEN in Tally is registered and linked at the click (tally-ingest
+//     "link_now"); only a company no computer has open now waits for its computer this way.
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
 import { useState, useEffect } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
@@ -31,6 +33,9 @@ import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import LinkStatus from "./LinkStatus.jsx";
 import { linkWord } from "../lib/linkStatus.js";
+import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
+// next-tally-linknow: the companies being sent to FinCom and linked now (coKey: true), for the rows' words
+export const SENDING = {};
 
 const SEARCH_AT = 10, POLL_MS = 10000, STUCK_MS = 3 * 60000, PEND_MS = 10 * 60000;
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
@@ -177,6 +182,17 @@ function rankClients(r, skip) {
 export async function linkClient(company, cid, opts) {
   const D = typeof Drafts === "object" && Drafts.secs ? Drafts : null;
   if (D) D.attributeAll();
+  // next-tally-linknow: a company FinCom's cloud has no row for yet (open in Tally, its computer's 5-minute report not in
+  // yet) is registered and linked by tally-ingest in one call; then the usual link below (the same link: nothing changes)
+  if (cid && !cloudKnows(company)) {
+    const k0 = coKey(company), E0 = (S.tcoErr = S.tcoErr || {});
+    SENDING[k0] = true; render();
+    // a client just made here reaches the cloud first (the link checks it there), as tallyLinkClient does
+    try { if (typeof cloudPushNow === "function") await cloudPushNow(); } catch (e) { /* the link says why */ }
+    try { await linkNow(company, cid); delete E0[k0]; }
+    catch (e) { TCloud.linkErr = String((e && e.message) || e); E0[k0] = TCloud.linkErr; toast("Could not link it: " + TCloud.linkErr); return false; }
+    finally { delete SENDING[k0]; render(); }
+  }
   const ok = await tallyLinkClient(company, cid, opts);
   if (ok && D && cid) {
     Object.values(D.secs).forEach((s) => { if (s.paths) s.paths.forEach((c, k) => { if (c && c.path && c.path[0] === "tallyName") s.paths.delete(k); }); if (s.armed && s.stores) s.pre = s.stores.map((st) => st.snap()); });
@@ -536,7 +552,7 @@ function Pick({ r, co, onClose }) {
   const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
   const cs = rankClients(r, co ? co.id : "");
   const go = async () => { const t = S.companies[pick]; if (!t) return; setBusy(true);
-    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
+    const ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true)); setBusy(false); if (ok) onClose(); };
   return <div className="tco-relink" data-tco-relink-box={r.company}>
     <span className="note">{co ? shown(r.company) + " is not " + co.name + "’s? Link it to" : "Link " + shown(r.company) + " to"}</span>
     <select data-tco-relink-pick="" aria-label={"The client " + shown(r.company) + " belongs to"} value={pick} onChange={(ev) => setPick(ev.target.value)}>
@@ -556,7 +572,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   const yr = !co && !r.client ? yearOf(r, rows) : null, tw = !co && !forCo && !yr ? twinOf(r) : null;
   const pend = PEND()[coKey(r.company)], err = (S.tcoErr || {})[coKey(r.company)];
   const run = (kind, job, fn) => async () => {
-    if (!r.reported) { keep(r, job); return; }
+    if (!r.reported && !r.open) { keep(r, job); return; }   // next-tally-linknow: open in Tally: linked now (linkClient)
     setBusy(kind); let id = ""; try { id = await fn(); } finally { setBusy(""); }
     if (id && onDone) onDone(id === true ? (job.cid || "") : id);
   };
@@ -617,7 +633,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     <div className="tco-act">{act}</div>
     {co && !earlier && (wordOf ? wordOf.button && <div className="tco-under note" data-tco-fix=""><LinkStatus co={co} where="row" company={r.company} /></div>
       : st.state !== "connected" && fixOf(r, st) && <div className="tco-under note" data-tco-fix="">{fixOf(r, st)}</div>)}
-    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{(st.computer ? st.computer.split(" · ")[0] : "Its computer") + " has not sent this company to FinCom yet (a minute or two after it is opened). A click now is kept and done by itself then."}</div>}
+    {!r.reported && !pend && r.open && <div className="tco-under note" data-tco-unreported="">{SENDING[coKey(r.company)] ? "Sending " + shown(r.company) + " to FinCom and linking it…" : "Open in Tally on " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + ", not in FinCom yet: Link or Add as client sends it and links it at once."}</div>}
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
       : "Waiting for " + (st.computer ? st.computer.split(" · ")[0] : "its computer") + " to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}

@@ -181,3 +181,21 @@ export async function getCompanies() {
   const list = [].concat(st.open || []).map((o) => ({ company: o.name, gstin: o.gstin || "", port: o.port }));
   return { st: list.length ? "found" : "none", list, say: list.length ? list.length + (list.length === 1 ? " company" : " companies") + " open in Tally." : "Tally is open, but no company is open in it. Open your company in TallyPrime, then press Get companies again." };
 }
+
+// next-tally-linknow (28-Oct-2026; the owner: "FinCom should not deny. If I click, it should link it."). A company open in
+// Tally that FinCom's cloud has no row for yet (the bridge reports its companies every 5 minutes; on staging the owner's
+// five clicks on "Salesify Marketing LLP 2026-27" were refused meanwhile): tally-ingest's "link_now" registers it for the
+// device of the firm that runs this browser's own bridge (else one whose beat has it open) and links it, in one call.
+// The answer's row goes into what this page shows at once, so the row says Linked without a reload
+export const LINKNOW_MS = 30000;
+export const cloudKnows = (company) => [].concat((typeof TLight === "object" && TLight.st && TLight.st.cos) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || [])
+  .some((r) => r && r.company === company);
+export async function linkNow(company, cid) {
+  if (typeof TCloudUp !== "object") throw new Error("Sign in to the firm account first.");
+  const bridge = typeof Bridge === "object" && Bridge.cfg ? String(Bridge.cfg().bridgeId || "") : "";
+  const j = await within(TCloudUp.post({ kind: "link_now", company, client: cid, bridge }, {}), LINKNOW_MS, "FinCom's cloud did not answer in time (the internet on this computer?). Press Link again.");
+  const row = { company, client_id: cid, device_id: (j && j.device) || "", gstin: "", last_seen: new Date().toISOString(), linked_at: new Date().toISOString(), linked_by: "" };
+  [(typeof TLight === "object" && TLight.st && TLight.st.cos) || null, (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || null]
+    .forEach((list) => { if (Array.isArray(list) && !list.some((r) => r && r.company === company)) list.push(Object.assign({}, row)); });
+  return j;
+}

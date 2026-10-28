@@ -103,6 +103,13 @@ SETUP = """([whose, devs]) => {
     return {ok: true}; };
   window.tallyLinkClient = async (company, cid) => { window.__calls.push(["link", {company, cid}]); return true; };
   window.cloudPushNow = async () => {}; window.firstSync = () => {};
+  // next-tally-linknow: tally-ingest's link_now (registers the company for the bridge's device and links it), or its refusal
+  window.__linkNowFail = ""; window.__linkNowHang = false;
+  TCloudUp.post = async (body, who) => { window.__calls.push(["post", copy(body)]);
+    if (body.kind !== "link_now") return {ok: true};
+    if (window.__linkNowHang) return new Promise(() => {});
+    if (window.__linkNowFail) throw new Error(window.__linkNowFail);
+    return {ok: true, linked: true, company: body.company, client: body.client, device: "d-nws", registered: true}; };
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role: "owner", id: "u-1"})});
   TCloud.pane.devices = window.__devs; TCloud.pane.companies = window.__companies; TCloud.pane.at = Date.now(); TCloud.pane.err = ""; TCloud.pane.stops = [];
   TLight.st.at = Date.now(); TLight.st.devs = window.__devs; TLight.st.cos = window.__companies; TLight.st.stops = [];
@@ -179,6 +186,26 @@ def main():
         E("() => { const co = newCompany({name: 'VMS Events Private Limited', gstin: '', tallyName: ''}); S.companies[co.id] = co; render(); return co.id; }"); pg.wait_for_timeout(400)
         lk = pg.locator("#app [data-oc-co='%s'] [data-oc-link]" % VMS)
         ok(lk.count() == 1 and lk.inner_text().strip() == "Link to VMS Events Private Limited", "3. a client of the same name: Link to <client> (%s)" % (lk.inner_text() if lk.count() else ""))
+        # 3b. next-tally-linknow (staging 28-Oct-2026: "no computer has reported Salesify Marketing LLP 2026-27 yet" five times):
+        # a company Get companies listed that FinCom's cloud has no row for is registered and linked in the same click
+        lnow = lambda: [c[1] for c in calls("post") if c[1].get("kind") == "link_now"]
+        ok(len(lnow()) == 1 and lnow()[0]["company"] == GSC and lnow()[0]["bridge"] == BID and lnow()[0]["client"], "3b. Create client on a company not in the cloud: link_now with the company, the new client and this browser's bridge (%s)" % lnow())
+        ok(E("() => { const c = window.__calls; const a = c.findIndex(x => x[0] === 'post' && x[1].kind === 'link_now'), b = c.findIndex(x => x[0] === 'link'); return a >= 0 && b > a; }"), "3b. sent to FinCom first, then the usual link")
+        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % GSC.replace("'", "\\'"), 5000), "3b. the row says Linked at once, no reload (%s)" % txt("#app [data-oc-co='%s']" % GSC))
+        # a refusal (the bridge's computer not of this firm): the plain reason, never "done by itself within a minute"
+        E("() => { window.__linkNowFail = 'FinCom Bridge on this computer is not connected to your firm yet, so FinCom cannot take it from it. Press Connect this computer, then Link again.'; window.__calls = []; }")
+        lk.click()
+        ok(wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\")" % VMS), "3b. refused: said on the row")
+        f = txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS)
+        ok(f.startswith("Not linked: FinCom Bridge on this computer is not connected to your firm yet") and "within a minute" not in f and "by itself" not in f, "3b. its plain reason (%s)" % f)
+        ok(not calls("link"), "3b. nothing linked after a refusal")
+        # the cloud slow: a reason within the limit, never a spinner
+        E("() => { window.__linkNowFail = ''; window.__linkNowHang = true; window.__ocMsScale = 0.05; window.__calls = []; }")
+        t0 = time.time(); lk.click()
+        ok(wait("() => /did not answer in time/.test((document.querySelector(\"#app [data-oc-co='%s'] [data-oc-act-fail]\") || {}).textContent || '') && !window.__calls.some(c => c[0] === 'link')" % VMS, 10000) and time.time() - t0 < 10, "3b. no answer: the reason within the limit (%s)" % txt("#app [data-oc-co='%s'] [data-oc-act-fail]" % VMS))
+        E("() => { window.__linkNowHang = false; window.__ocMsScale = 1; window.__calls = []; }")
+        lk.click()
+        ok(wait("() => window.__calls.some(c => c[0] === 'link')") and wait("() => !!document.querySelector(\"#app [data-oc-co='%s'] [data-oc-linked]\")" % VMS, 5000), "3b. Link to <client> again: linked, the row says so (%s)" % txt("#app [data-oc-co='%s']" % VMS))
         # 4. already connected
         bridge_reset(cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30})
         open_tally(MINE)

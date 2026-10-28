@@ -6,8 +6,8 @@ show in the dropdown always"; "check the Suvit rules as well". Website only (the
   1. Unlink, then link again, a company NOT open in Tally: it stays in the list (Not a client) and links again in one click;
      the books' copy kept here for the client does not keep it "linked" (the 24-Oct cause), its Tally name is cleared.
   2. A company open in Tally that its computer has not sent to FinCom yet (a new year: "Salesify Marketing LLP 2026-27"):
-     listed at once, at the top; "New year of Salesify Marketing LLP · Link"; the click is kept and done by itself once the
-     company is in FinCom's cloud (on 24-Oct tally_company_link refused it twice); the older year stays linked and says
+     listed at once, at the top; "New year of Salesify Marketing LLP · Link"; the click links it at once (tally-ingest link_now
+     registers it; on 24-Oct and 28-Oct tally_company_link refused it while the computer's report was not in); the older year stays linked and says
      "Earlier year".
   3. One status, one function: the row's pill, the client's Tally icon (next-tally-icon; was its title chip) and the Clients list's chip say the same; a Tally
      name left on another client ("Testing AAD": GARG SHEKHAR & COMPANY) does not make it linked.
@@ -177,18 +177,20 @@ def main():
         ok(set(x["co"] for x in rs[:3]) == {NEW, VMS, GSC} and all(x["open"] for x in rs[:3]), "2. the companies open in Tally are at the top (%s)" % [x["co"] for x in rs])
         r = row(NEW)
         ok(r["act"] == "New year of Salesify Marketing LLP · Link", "6. a new year of a linked client: 'New year of Salesify Marketing LLP · Link' (%s)" % r["act"])
-        ok("has not sent this company to FinCom yet" in txt(R(NEW) + " [data-tco-unreported]"), "2. it says plainly the computer has not sent it yet (%s)" % txt(R(NEW) + " [data-tco-unreported]"))
+        ok("Link or Add as client sends it and links it at once" in txt(R(NEW) + " [data-tco-unreported]"), "2. it says plainly a click links it at once (%s)" % txt(R(NEW) + " [data-tco-unreported]"))
         E("() => { window.__calls = []; }")
-        pg.click(R(NEW) + " [data-tco-act=year]"); pg.wait_for_timeout(700)
-        ok(links() == [] and pg.locator(R(NEW) + " [data-tco-pending]").count() == 1, "2. the click is kept (nothing refused, nothing asked of the cloud yet)")
-        shot("2-kept-click-desktop-light")
-        # NWS144 sends the company: the link is made by itself
-        E("() => { const n = new Date().toISOString(); window.__companies.push({company: %s, client_id: null, device_id: %s, gstin: '', last_seen: n, linked_at: null, linked_by: null}); }" % (json.dumps(NEW), json.dumps(D1)))
+        # next-tally-linknow (staging 28-Oct-2026: five refusals "no computer has reported … yet"): the click links it NOW:
+        # tally-ingest's link_now registers it for the computer and links it, then the usual link (nothing kept, nothing waits)
+        pg.click(R(NEW) + " [data-tco-act=year]")
         for _ in range(30):
             if links(): break
-            pg.wait_for_timeout(500)
-        pg.wait_for_timeout(800)
-        ok(links() == [["tally_company_link", {"p_company": NEW, "p_client": s1}]], "2. once sent, it is linked by itself, to Salesify Marketing LLP, and the old year is NOT unlinked (%s)" % links())
+            pg.wait_for_timeout(300)
+        pg.wait_for_timeout(600)
+        lnow = [c[1] for c in E("window.__calls") if c[0] == "post" and c[1].get("kind") == "link_now"]
+        ok(len(lnow) == 1 and lnow[0]["company"] == NEW and lnow[0]["client"] == s1, "2. link_now: the company as Tally names it, for Salesify Marketing LLP (%s)" % lnow)
+        ok(pg.locator(R(NEW) + " [data-tco-pending]").count() == 0, "2. no 'Waiting…' click kept")
+        shot("2-kept-click-desktop-light")
+        ok(links() == [["tally_company_link", {"p_company": NEW, "p_client": s1}]], "2. linked at the click, to Salesify Marketing LLP, and the old year is NOT unlinked (%s)" % links())
         ok(row(NEW)["linked"] == s1 and row(SAL)["linked"] == s1, "2. both years are Salesify Marketing LLP's")
         ok(row(SAL)["pill"] == "earlier" and "Earlier year" in row(SAL)["text"], "6. the older year says 'Earlier year', not Disconnected (%s)" % row(SAL)["ptext"])
         ok(row(NEW)["pill"] == "connected", "2. the new year: Connected (%s)" % row(NEW)["ptext"])
