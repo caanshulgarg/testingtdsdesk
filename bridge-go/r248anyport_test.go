@@ -272,11 +272,17 @@ func TestTypedPortRefused(t *testing.T) {
 	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser || !strings.Contains(str(res["error"]), "another Windows user") {
 		t.Fatalf("by Windows user: %v", res)
 	}
-	// a process the bridge may not open (another user's, as a non-administrator): refused too
+	// a process the bridge may not open (another user's, as a non-administrator): refused too; Windows not saying its
+	// session: refused as not known (R5-1)
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
-	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser {
-		t.Fatalf("unopenable process: %v", res)
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useUnknown {
+		t.Fatalf("unopenable process, session not known: %v", res)
 	}
+	fakeWindows(t, []fakeProc{{20, 2, "java", ""}}, [][2]int{{theirs.port, 20}})
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser {
+		t.Fatalf("unopenable process in another session: %v", res)
+	}
+	fakeWindows(t, nil, nil)
 	// Windows could not say
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, errors.New("GetExtendedTcpTable: denied") }
 	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useUnknown {
@@ -618,11 +624,11 @@ func TestAnyPortEmptyAnswerKeepsMark(t *testing.T) {
 // --- review 2.4.8 round 3 (R3-1, R3-7): the review's cases
 
 // a port set by hand whose program Windows will not open (no user, no error) and which runs in another user's session is
-// another user's: skipped, never asked; in this user's session (TallyPrime as administrator) it is asked
+// another user's: skipped, never asked; R5-2: so is a program in this user's session that is not TallyPrime
 func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
 	mine, theirs := newStandTally(t), newStandTally(t)
 	standBridge(t, mine, "")
-	fakeWindows(t, []fakeProc{{10, 1, "java", ""}, {20, 2, "java", ""}, {30, 1, "tally", ""}}, [][2]int{{mine.port, 10}, {theirs.port, 20}})
+	fakeWindows(t, []fakeProc{{10, 1, "java", ""}, {20, 2, "tally", ""}}, [][2]int{{mine.port, 10}, {theirs.port, 20}})
 	oldL := listenerUserOf
 	t.Cleanup(func() { listenerUserOf = oldL; resetOtherUser() })
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
@@ -633,8 +639,8 @@ func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
 	if s := sessionFor(ss, theirs.port); s == nil || s["skipped"] != true {
 		t.Fatalf("another session's unopenable program: %v", jsonText(ss))
 	}
-	if s := sessionFor(ss, mine.port); s == nil || s["ok"] != true {
-		t.Fatalf("this session's (as administrator): %v", jsonText(ss))
+	if s := sessionFor(ss, mine.port); s == nil || s["skipped"] != true {
+		t.Fatalf("an unopenable program that is not TallyPrime: %v", jsonText(ss))
 	}
 	if len(theirs.ids()) != 0 {
 		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
@@ -645,14 +651,22 @@ func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
 func TestAnyPortRound4(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"k248"`)
-	// R4-3: a program Windows will not open, and Windows does not say its session: nothing decided (not another user's)
+	// R4-3/R5-1: a program Windows will not open, and Windows does not say its session: another user's for the plan, not kept
 	t.Setenv("TDSBRIDGE_FAKE", "")
 	oldL := listenerUserOf
 	t.Cleanup(func() { listenerUserOf = oldL; resetOtherUser() })
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
 	resetOtherUser()
-	if ok, _, _ := netState(); !ok && portOfOtherUser(f.port) {
-		t.Fatal("Windows not saying the session made the port another user's")
+	if ok, _, _ := netState(); !ok {
+		if !portOfOtherUser(f.port) {
+			t.Fatal("R5-1: Windows not saying the session: the port must count as another user's (never asked)")
+		}
+		otherUserMu.Lock()
+		_, kept := otherUserAt[f.port]
+		otherUserMu.Unlock()
+		if kept {
+			t.Fatal("an undecided answer was kept")
+		}
 	}
 	listenerUserOf = oldL
 	// R4-4: Tally's short <RESPONSE> to the company list: the typed port is not kept
