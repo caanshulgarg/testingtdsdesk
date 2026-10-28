@@ -315,7 +315,9 @@ jobs:
           got=$(sha256sum bridge-go/dist/old247/FinComBridge-Setup-2.4.7.exe | awk '{print $1}')
           [ "$got" = 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799 ] || { echo "::error::2.4.7 setup SHA-256 $got"; exit 1; }
           echo "2.4.7 setup SHA-256 $got"
+      # dbjson needs no bridge: its jobs go on when the artifact store is full (28-Oct-2026: "Artifact storage quota has been hit")
       - uses: actions/upload-artifact@v4
+        continue-on-error: ${{ steps.mode.outputs.mode == 'dbjson' }}
         with:
           name: bridge-dist
           path: bridge-go/dist/
@@ -357,6 +359,7 @@ jobs:
             .github
             bridge-go/addon
       - uses: actions/download-artifact@v4
+        if: matrix.mode != 'dbjson'
         with:
           name: bridge-dist
           path: bridge-dist
@@ -435,8 +438,19 @@ jobs:
           }
           if (Test-Path "$env:RES\installer.txt") { Get-Content "$env:RES\installer.txt" | ForEach-Object { Add-Content $r "INFO installer: $_" } }
           Get-Content $r | ForEach-Object { if ($_ -like 'FAIL*') { Write-Host "::error::$_" } elseif ($_ -like 'HARNESS*' -or $_ -like 'NOT REACHABLE*') { Write-Host "::warning::$_" } elseif ($_ -like 'PASS*') { Write-Host "::notice::$_" } else { Write-Host $_ } }
+      # dbjson: the results committed from here to the run's own branch (no artifact store needed)
+      - name: Results to the branch (dbjson)
+        if: always() && matrix.mode == 'dbjson'
+        run: |
+          $br = '${{ github.ref_name }}'; $d = "spike-results/versions/${{ github.run_id }}-${{ matrix.version }}-${{ matrix.mode }}"
+          git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
+          git sparse-checkout add spike-results 2>$null
+          git add --sparse -f $d
+          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} dbjson ${{ matrix.version }}" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          for ($i = 0; $i -lt 5; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 10 }
+          exit 0
       - name: Artifact
-        if: always()
+        if: always() && matrix.mode != 'dbjson'
         uses: actions/upload-artifact@v4
         with:
           name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
