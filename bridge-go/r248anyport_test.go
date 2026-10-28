@@ -640,3 +640,32 @@ func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
 		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
 	}
 }
+
+// --- review 2.4.8 round 4 (R4-3, R4-4): the review's cases
+func TestAnyPortRound4(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	// R4-3: a program Windows will not open, and Windows does not say its session: nothing decided (not another user's)
+	t.Setenv("TDSBRIDGE_FAKE", "")
+	oldL := listenerUserOf
+	t.Cleanup(func() { listenerUserOf = oldL; resetOtherUser() })
+	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
+	resetOtherUser()
+	if ok, _, _ := netState(); !ok && portOfOtherUser(f.port) {
+		t.Fatal("Windows not saying the session made the port another user's")
+	}
+	listenerUserOf = oldL
+	// R4-4: Tally's short <RESPONSE> to the company list: the typed port is not kept
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("<RESPONSE>Unknown Request, cannot be processed</RESPONSE>"))
+	}))
+	t.Cleanup(s.Close)
+	p := s.Listener.Addr().(*net.TCPAddr).Port
+	setCfg("TallyPorts", "auto")
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, p)); res["ok"] == true || !strings.Contains(str(res["error"]), "did not give its list of companies") {
+		t.Fatalf("a <RESPONSE>: %v", res)
+	}
+	if _, auto := cleanPorts(cfg("TallyPorts")); !auto {
+		t.Fatalf("kept: %v", cfg("TallyPorts"))
+	}
+}

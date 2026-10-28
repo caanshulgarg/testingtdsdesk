@@ -311,6 +311,9 @@ type TC struct {
 	unplanned bool
 }
 
+// 2.4.8 (anyport.go): the typed port's trial's yield, looked at right before the send (tallyRaw)
+type trialYieldKey struct{}
+
 // 2.4.5 ROUND 104: the rest before a send (tallyRaw): GentleMs, or the request's own shorter rest (TC.gentleMs)
 type gentleKey struct{}
 
@@ -518,6 +521,10 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		case <-time.After(time.Duration(ms) * time.Millisecond):
 		}
 	}
+	// 2.4.8 review round 4 (R4-2): the typed port's trial looks again after the rest, right before the send
+	if y, _ := ctx.Value(trialYieldKey{}).(func() bool); y != nil && y() {
+		return "", errPreempted
+	}
 	host := cfgS("TallyHost")
 	if host == "" {
 		host = "127.0.0.1"
@@ -612,8 +619,8 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 			slot.bound = true
 			writeLog(fmt.Sprintf("Tally %d did not answer an earlier request (%s, sent at %s) in %s: taken as not answering; the next request may go (the small check first)",
 				port, id, t0.Format("15:04:05"), abandonMax().Round(time.Second)))
-			setProbeFrom(port, gaveUp)
-			if !slot.noMark { // review round 3 (R3-3): a typed port that is not a Tally the bridge uses: no stuck record
+			if !slot.noMark { // review rounds 3-4 (R3-3, R4-1): a typed port that is not a Tally the bridge uses: no marks
+				setProbeFrom(port, gaveUp)
 				setTallyStuck(port)
 			}
 			return
@@ -1013,6 +1020,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	}
 	if tc.gentleMs > 0 {
 		ctx = context.WithValue(ctx, gentleKey{}, tc.gentleMs)
+	}
+	if tc.trial && tc.yield != nil {
+		ctx = context.WithValue(ctx, trialYieldKey{}, tc.yield)
 	}
 	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
 	if tc.copier && !tc.person {

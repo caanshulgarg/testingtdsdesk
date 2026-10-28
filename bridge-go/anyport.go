@@ -31,6 +31,7 @@ import (
 // answer (a byte-order mark, white space or an XML declaration before it allowed), or Tally's own short refusal
 // <RESPONSE>...</RESPONSE> (upper case, as Tally writes it, e.g. while a company is loading); never a <Response> inside
 // another program's XML
+var reTallyEnvelope = regexp.MustCompile(`^\x{FEFF}?\s*(<\?xml[^>]*\?>\s*)?<(?i:ENVELOPE)[\s>]`)
 var reTallyAnswer = regexp.MustCompile(`^\x{FEFF}?\s*(<\?xml[^>]*\?>\s*)?(<(?i:ENVELOPE)[\s>]|<RESPONSE>)`)
 
 func isTallyAnswer(raw string) bool { return reTallyAnswer.MatchString(raw) }
@@ -211,8 +212,12 @@ func portOfOtherUser(port int) bool {
 		ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf())
 		other = !ok
 	} else {
+		// R4-3: the session decides; Windows not saying it decides nothing (not kept)
 		known, mine := portSessionMine(port)
-		other = !(known && mine)
+		if !known {
+			return false
+		}
+		other = !mine
 	}
 	otherUserMu.Lock()
 	otherUserAt[port], otherUserIs[port] = time.Now(), other
@@ -269,14 +274,10 @@ func tryTypedPort(port int) (M, error) {
 		if err != nil {
 			return fail(useUnknown, fmt.Sprintf("Windows did not say which program listens on port %d, so FinCom Bridge cannot tell whether it is your own TallyPrime; nothing was asked there. Try again in a moment.", port))
 		}
-		// R2-6: a program this bridge may not open ("" with no error) is this user's only when Windows lists it as this
-		// user's TallyPrime by its session (run as administrator); else another user's
-		mineBySession := false
-		for _, f := range lis {
-			if toInt(f["port"]) == port && f["mine"] == true {
-				mineBySession = true
-			}
-		}
+		// R2-6, R4-5: a program this bridge may not open ("" with no error) is this user's only when Windows says it runs
+		// in one of the owner's sessions (TallyPrime as administrator), the plan's own rule (portSessionMine); else another
+		// user's (also when Windows does not say: the typed port is kept only when it is known to be this user's)
+		_, mineBySession := portSessionMine(port)
 		if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok && !(sid == "" && mineBySession) {
 			return fail(useOtherUser, fmt.Sprintf("Port %d belongs to a program of another Windows user on this computer (another user's TallyPrime). FinCom Bridge uses only your own TallyPrime (%s): open TallyPrime in your own login and use its port.", port, me))
 		}
@@ -310,7 +311,10 @@ func tryTypedPort(port int) (M, error) {
 	}
 	lately := fmt.Sprintf("Port %d did not answer lately; FinCom Bridge asks it again by itself within a minute. If it is your TallyPrime, close any message box or long report in it, then try again.", port)
 	switch {
+	case err == nil && reTallyEnvelope.MatchString(raw):
 	case err == nil && isTallyAnswer(raw):
+		// R4-4: Tally's own short refusal, not its company list: not kept
+		return fail(useTimeout, fmt.Sprintf("TallyPrime on port %d answered but did not give its list of companies (it may still be loading a company). Open a company in TallyPrime, then try again.", port))
 	case err == nil:
 		return fail(useNotTally, fmt.Sprintf("Port %d answers, but not as TallyPrime (another program uses it). Type the port shown in TallyPrime: F1 Help > Settings > Connectivity.", port))
 	case errors.Is(err, errTrialProbe) || errors.Is(err, errProbeHold):
