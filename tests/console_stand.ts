@@ -212,7 +212,8 @@ Deno.serve({ port, hostname: "127.0.0.1", onListen: () => console.log("stand rea
   if (u.pathname === "/auth/v1/factors" && req.method === "POST") {
     const f = { id: "f-new-" + (++n), factor_type: "totp", status: "unverified", friendly_name: body.friendly_name, created_at: now() };
     l.factors.push(f);
-    const svg = encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><rect x="1" y="1" width="7" height="7"/><rect x="13" y="1" width="7" height="7"/><rect x="1" y="13" width="7" height="7"/><rect x="10" y="10" width="3" height="3"/></svg>');
+    // as GoTrue really sends it (28-Oct: the owner saw no QR): raw, un-encoded SVG markup with '#' colours
+    const svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21"><rect width="21" height="21" fill="#fff"/><rect x="1" y="1" width="7" height="7"/><rect x="13" y="1" width="7" height="7"/><rect x="1" y="13" width="7" height="7"/><rect x="10" y="10" width="3" height="3"/></svg>');
     return json(200, { id: f.id, type: "totp", totp: { qr_code: "data:image/svg+xml;utf-8," + svg, secret: "JBSWY3DPEHPK3PXP", uri: "otpauth://totp/FinCom" } });
   }
   let m = u.pathname.match(/^\/auth\/v1\/factors\/([^/]+)\/challenge$/);

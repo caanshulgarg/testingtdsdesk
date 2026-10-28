@@ -114,6 +114,8 @@ try:
         ctx, pg = new_page(br, viewport={"width": 1360, "height": 900})
         pg.goto(ORIGIN + "/"); pg.fill("input[type=email]", "new@fincom.live"); pg.fill("input[type=password]", "Newbie-pass-123"); pg.click("button:has-text('Continue')")
         pg.wait_for_selector("img.qr")
+        pg.wait_for_timeout(500)
+        ok(pg.evaluate("(() => { const i = document.querySelector('img.qr'); return !!i && i.complete && i.naturalWidth > 0; })()"), "the QR code is drawn (GoTrue's raw SVG made a safe image)")
         ok(pg.inner_text("[data-testid=totp-secret]") == "JBSWY3DPEHPK3PXP" and "Scan this" in text(pg), "no authenticator yet: enrolment with a QR code and the key")
         shot(pg, "02-enrol")
         pg.fill("input[autocomplete=one-time-code]", "123456"); pg.click("button:has-text('Sign in')")

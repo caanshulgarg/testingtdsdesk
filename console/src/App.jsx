@@ -6,6 +6,26 @@ import { href, useRoute } from "./lib/route.js";
 import { MODULES } from "./modules/registry.js";
 import { Chip } from "./ui/bits.jsx";
 
+// the QR code as a safe image source (as the user app's mfaQrSrc, src/js/43-two-step.js). GoTrue sends qr_code as a raw,
+// un-encoded SVG data URI ("data:image/svg+xml;utf-8,<svg ... fill=\"#000000\">"): the '#' starts a URL fragment, so the
+// image is blank (28-Oct-2026, the owner's first console sign-in). Raw markup is re-encoded as base64; base64, PNG and
+// percent-encoded sources are kept or decoded; anything else gives "" (never injected as HTML).
+function qrSrc(qr) {
+  qr = String(qr || "").trim();
+  if (!qr) return "";
+  const b64 = (svg) => "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+  if (/^<(\?xml|svg)/i.test(qr)) return b64(qr);
+  if (/^data:image\/png;base64,/i.test(qr)) return qr;
+  if (/^data:image\/svg\+xml/i.test(qr)) {
+    const at = qr.indexOf(","); if (at < 0) return "";
+    const head = qr.slice(0, at), body = qr.slice(at + 1);
+    if (/;base64$/i.test(head)) return qr;
+    if (/^\s*</.test(body)) return b64(body);
+    try { return b64(decodeURIComponent(body)); } catch { return qr; }
+  }
+  return "";
+}
+
 export function App() {
   const [sess, setSess] = useState(session());
   const [me, setMe] = useState(null);
@@ -36,7 +56,7 @@ function SignIn({ sess }) {
     const v = fs.find((f) => f.status === "verified");
     if (v) { setFactor({ id: v.id }); setStep("code"); return; }
     const e = await enroll();
-    setFactor({ id: e.id, qr: e.totp?.qr_code, secret: e.totp?.secret }); setStep("enroll");
+    setFactor({ id: e.id, qr: qrSrc(e.totp?.qr_code), secret: e.totp?.secret }); setStep("enroll");
   };
   useEffect(() => { if (sess && step === "factor") run(toFactor); }, []);
   return (
