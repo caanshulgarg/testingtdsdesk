@@ -1,0 +1,160 @@
+INFO TallyPrime 7.1, mode dbjson, runner GitHub Actions 1000013523, 2026-10-28T17:38:57
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-28, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-28, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 12.2 s after start, GET 2047 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 10 ms, 'FinCom Spike Co' in it: True
+INFO dbjson tdsgst masters company: created 0, altered 1, errors 0
+INFO dbjson tdsgst masters vchtypes: created 0, altered 7, errors 0
+INFO dbjson tdsgst masters natures: created 8, altered 0, errors 0
+INFO dbjson tdsgst masters ledgers: created 63, altered 0, errors 0
+INFO dbjson payg masters (payroll, employees as cost centres): created 18, altered 1, errors 0
+INFO dbjson stock item, cost centre, travel ledger, item voucher type: created 6, altered 0, errors 0
+INFO dbjson tdsgst S01: created 1, altered 0, errors 0
+INFO dbjson tdsgst S02: created 1, altered 0, errors 0
+INFO dbjson tdsgst S03: created 1, altered 0, errors 0
+INFO dbjson tdsgst S04: created 1, altered 0, errors 0
+INFO dbjson tdsgst S05: created 1, altered 0, errors 0
+INFO dbjson tdsgst S06: created 1, altered 0, errors 0
+INFO dbjson tdsgst S07: created 1, altered 0, errors 0
+INFO dbjson tdsgst S08: created 1, altered 0, errors 0
+INFO dbjson tdsgst S09: created 1, altered 0, errors 0
+INFO dbjson tdsgst S10: created 1, altered 0, errors 0
+INFO dbjson tdsgst S11: created 1, altered 0, errors 0
+INFO dbjson tdsgst S12: created 1, altered 0, errors 0
+INFO dbjson tdsgst S13: created 1, altered 0, errors 0
+INFO dbjson tdsgst S14: created 1, altered 0, errors 0
+INFO dbjson tdsgst S15: created 1, altered 0, errors 0
+INFO dbjson tdsgst CN1: created 1, altered 0, errors 0
+INFO dbjson tdsgst CN2: created 1, altered 0, errors 0
+INFO dbjson tdsgst DN1: created 1, altered 0, errors 0
+INFO dbjson tdsgst RV1: created 1, altered 0, errors 0
+INFO dbjson tdsgst P01: created 1, altered 0, errors 0
+INFO dbjson tdsgst P02: created 1, altered 0, errors 0
+INFO dbjson tdsgst P03: created 1, altered 0, errors 0
+INFO dbjson tdsgst P04: created 1, altered 0, errors 0
+INFO dbjson tdsgst P05: created 1, altered 0, errors 0
+INFO dbjson tdsgst DN2: created 1, altered 0, errors 0
+INFO dbjson tdsgst T01: created 1, altered 0, errors 0
+INFO dbjson tdsgst T02: created 1, altered 0, errors 0
+INFO dbjson tdsgst T03: created 1, altered 0, errors 0
+INFO dbjson tdsgst T04: created 1, altered 0, errors 0
+INFO dbjson tdsgst T05: created 1, altered 0, errors 0
+INFO dbjson tdsgst T06: created 1, altered 0, errors 0
+INFO dbjson tdsgst T07: created 1, altered 0, errors 0
+INFO dbjson tdsgst T08: created 1, altered 0, errors 0
+INFO dbjson tdsgst T09: created 1, altered 0, errors 0
+INFO dbjson tdsgst T10: created 1, altered 0, errors 0
+INFO dbjson tdsgst T11: created 1, altered 0, errors 0
+INFO dbjson tdsgst TC1: created 1, altered 0, errors 0
+INFO dbjson tdsgst TC2: created 1, altered 0, errors 0
+INFO dbjson tdsgst S20: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202604: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202604: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202604: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202605: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202605: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202605: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202606: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202606: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202606: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202607: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202607: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202607: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202608: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202608: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202608: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202609: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202609: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202609: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202610: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202610: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202610: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202611: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202611: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202611: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202612: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202612: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202612: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202701: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202701: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202701: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202702: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202702: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202702: created 1, altered 0, errors 0
+INFO dbjson payg PE-PAY-202703: created 1, altered 0, errors 0
+INFO dbjson payg PE-SAL-202703: created 1, altered 0, errors 0
+INFO dbjson payg PE-TDS-202703: created 1, altered 0, errors 0
+INFO dbjson DJ1 item invoice: created 1, altered 0, errors 0
+INFO dbjson DJ2 cost centre: created 1, altered 0, errors 0
+INFO dbjson DJ3 optional: created 1, altered 0, errors 0
+INFO dbjson DJ4 to cancel: created 1, altered 0, errors 0
+INFO dbjson S12 cancel by XML (the keys did not): created 1, altered 0, errors 0
+INFO dbjson: entries in Tally: 82; cancelled: 12, 18; optional: 19, 15; dates: 20260401 20260402 20260501 20260502 20260531 20260601 20260602 20260701 20260702 20260801 20260802 20260901 20260902 20261001 20261002 20261101 20261102 20261201 20261202 20270101 20270102 20270201 20270202 20270301 20270302 20270331
+PASS j1 test data made (GST, TDS, bill-wise, cost centres, payroll, inventory, optional, cancelled): 79 entries made by XML (82 in Tally, 20260401 to 20270331); cancelled: 12, 18; optional: 19, 15; refused: none
+INFO dbjson ui: the Day Book after Alt+F2 (1-4-2026 to 31-3-2027): Unity EDU Prime K: Company Y: Data Day Book Day Book Date Particulars ILApr-26 Spike Party I-Apr-26 Contract Charges I-Apr-26 Professional Fees I-Apr-26 Commission Paid I-Apr-26 Rent I-Apr-26 PE Basic 2-Apr-26 PE Salary Payable 2-Apr-26 Purchase of Goods 2-Apr-26 Interest Paid 2-Apr-26 Professional Fees 2-Apr-26 Professional Fees 2-Apr-26 Contract Charges Way-26 Royalty Paid Way-26 Alpha Traders D
+INFO dbjson ui daybook-xml: the export screen: EDU Prime Day Book Unity Quit K: Company Y: Data Export Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print Show Narrations Show Voucher No. Format of Report Show Bill-wise details Show Inventory details Show Mode of Payment/ Receipt Show additional bank details and status File Format Export to Folder Path File Name Enable Stripe View Configure Q Search No Yes Condensed No No No No XML (Data Interchange) Local drive C:\Progr
+INFO dbjson ui daybook-xml: files written: C:\Program Files\TallyPrime\DayBook.xml (3306730 bytes)
+INFO dbjson ui: the Day Book after Alt+F2 (1-4-2026 to 31-3-2027): Unity EDU Prime K: Company Y: Data Day Book Day Book Date Particulars ILApr-26 Spike Party I-Apr-26 Contract Charges I-Apr-26 Professional Fees I-Apr-26 Commission Paid I-Apr-26 Rent I-Apr-26 PE Basic 2-Apr-26 PE Salary Payable 2-Apr-26 Purchase of Goods 2-Apr-26 Interest Paid 2-Apr-26 Professional Fees 2-Apr-26 Professional Fees 2-Apr-26 Contract Charges Way-26 Royalty Paid Way-26 Alpha Traders D
+INFO dbjson ui daybook-json: the export screen: EDU Prime Day Book Unity Quit K: Company Y: Data Export Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print Show Narrations Show Voucher No. Format of Report Show Bill-wise details Show Inventory details Show Mode of Payment/ Receipt Show additional bank details and status File Format Export to Folder Path File Name Enable Stripe View Configure Q Search No Yes Condensed No No No No XML (Data Interchange) Local drive C:\Progr
+INFO dbjson ui daybook-json: the format list (F8): Find details entered in masters and transactions. EDU Prime Day Book Unity Quit (Alt+F) O: Import K: Company Y: Data File Format Z: Exchange A Accept Q Search E: Export M: Share p: print Fl: Help FinCom Spike Co Export Settings List of File Formats Excel (Spreadsheet) HTML (Web-Publishing) JPEG (Image) JSON (Data Exchange) PDF (Read-only document) XML (Data Interchange) aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/al'} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:41 PM 10/28/2026
+INFO dbjson ui daybook-json: after choosing 'JSON': File Format Export to Folder Path File Name Enable S
+INFO dbjson ui daybook-json: files written: C:\Program Files\TallyPrime\DayBook.json (2380588 bytes)
+INFO dbjson ui: the Day Book after Alt+F2 (1-4-2026 to 31-3-2027): Unity EDU Prime K: Company Y: Data Day Book Day Book Date Particulars ILApr-26 Spike Party I-Apr-26 Contract Charges I-Apr-26 Professional Fees I-Apr-26 Commission Paid I-Apr-26 Rent I-Apr-26 PE Basic 2-Apr-26 PE Salary Payable 2-Apr-26 Purchase of Goods 2-Apr-26 Interest Paid 2-Apr-26 Professional Fees 2-Apr-26 Professional Fees 2-Apr-26 Contract Charges Way-26 Royalty Paid Way-26 Alpha Traders D
+INFO dbjson ui trans-json: the export screen: EDU Prime Transactions Unity Quit K: Company Y: Data Export Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print All Vouchers No 1-May-26 to 31-May-26 XML (Data Interchange) Local drive C:\Program Files\TallyPrime Transactions.xml No Export Fl: Help F5:No. of Copies Export to F7: Title F8: File Format FIO Type of Voucher entries Include dependent masters period File Format Export to Folder Path File Name Enable Stripe View Co
+INFO dbjson ui trans-json: the format list (F8): EDU Prime Transactions Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Export Settings (Alt+F) O: Import E: Export M: Share p: print Fl: Help File Format A Accept Q Search List of File Formats ASCII (Comma Delimited) JSON (Data Exchange) XML (Data Interchange) aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/al'} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:43 PM 10/28/2026
+INFO dbjson ui trans-json: after choosing 'JSON': File Format FIO Type of Voucher entries Include depe
+INFO dbjson ui trans-json: files written: C:\Program Files\TallyPrime\Transactions.json (846004 bytes)
+INFO dbjson ui: the Day Book after Alt+F2 (1-4-2026 to 31-3-2027): Unity EDU Prime K: Company Y: Data Day Book Day Book Date Particulars ILApr-26 Spike Party I-Apr-26 Contract Charges I-Apr-26 Professional Fees I-Apr-26 Commission Paid I-Apr-26 Rent I-Apr-26 PE Basic 2-Apr-26 PE Salary Payable 2-Apr-26 Purchase of Goods 2-Apr-26 Interest Paid 2-Apr-26 Professional Fees 2-Apr-26 Professional Fees 2-Apr-26 Contract Charges Way-26 Royalty Paid Way-26 Alpha Traders D
+INFO dbjson ui trans-xml: the export screen: EDU Prime Transactions Unity Quit K: Company Y: Data Export Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print All Vouchers No 1-May-26 to 31-May-26 XML (Data Interchange) Local drive C:\Program Files\TallyPrime Transactions.xml No Export Fl: Help F5:No. of Copies Export to F7: Title F8: File Format FIO Type of Voucher entries Include dependent masters period File Format Export to Folder Path File Name Enable Stripe View Co
+INFO dbjson ui trans-xml: the format list (F8): EDU Prime Transactions Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Export Settings (Alt+F) O: Import E: Export M: Share p: print Fl: Help File Format A Accept Q Search List of File Formats ASCII (Comma Delimited) JSON (Data Exchange) XML (Data Interchange) aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/al'} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:44 PM 10/28/2026
+INFO dbjson ui trans-xml: after choosing 'XML': File Format FIO Type of Voucher entries Include depe
+INFO dbjson ui trans-xml: files written: C:\Program Files\TallyPrime\Transactions.xml (1262178 bytes)
+PASS j2 Day Book exported by the screens as XML and as JSON: daybook-xml: ui-daybook-xml-DayBook.xml (3306730 bytes, UTF-16LE with BOM); daybook-json: ui-daybook-json-DayBook.json (2380588 bytes, UTF-16LE with BOM); trans-json: ui-trans-json-Transactions.json (846004 bytes, UTF-16LE with BOM); trans-xml: ui-trans-xml-Transactions.xml (1262178 bytes, UTF-16LE with BOM)
+INFO dbjson ui loa-json: the export screen: a Find details entered in masters and transactions. EDU Prime Unity K: Company Y: Data (Alt+F) O: Import Z: Exchange Q Search E: Export M: Share REPORTS CuRrent Others GST Returns COMPANY DATA Masters Transactions CoNfiguration p: print Ctrl+E Fl: Help FinCom Spike Co aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/a"} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:45 PM 10/28/2026
+INFO dbjson ui loa-json: the format list (F8): a Find details entered in masters and transactions. EDU Prime Unity K: Company Y: Data (Alt+F) O: Import Z: Exchange Q Search E: Export M: Share REPORTS CuRrent Others GST Returns COMPANY DATA Masters Transactions CoNfiguration p: print Ctrl+E Fl: Help FinCom Spike Co aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/a"} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:45 PM 10/28/2026
+INFO dbjson ui loa-json: after choosing 'JSON': File Format 
+INFO dbjson ui loa-json: files written: 
+INFO dbjson ui masters-json: the export screen: EDU Prime Masters Unity Quit K: Company Y: Data Export Find details entered in masters and transactions. Z: Exchange FinCom Spike Co (Alt+F) O: Import E: Export M: Share p: print x Type of Masters Include dependent masters Export Closing Balances as Opening File Format Export to Folder Path File Name Enable Stripe View Ledgers No No XML (Data Interchange) Local drive C:\Program Files\TallyPrime Master.xml Configure No E Export Fl: Help F5:No. of Copies Export to F7: Title F8: File Format FIO Con
+INFO dbjson ui masters-json: the format list (F8): EDU Prime Masters Unity Quit K: Company Y: Data Find details entered in masters and transactions. Z: Exchange FinCom Spike Co Export Settings (Alt+F) O: Import E: Export M: Share p: print Fl: Help File Format A Accept Q Search List of File Formats ASCII (Comma Delimited) JSON (Data Exchange) XML (Data Interchange) aldl— bc6bb .338. on_id 58b—0 ening rrela d3947 ing j ' , "sou 590a- ion 3-7d2 ' : "n/a ion 3-7d2 'n/al'} : "830e Mode Windows Server 2025 Datacenter Build 26100.ge_release240331-1435 5:47 PM 10/28/2026
+INFO dbjson ui masters-json: after choosing 'JSON': File Format Export to Folder Path File Name Enable S
+INFO dbjson ui masters-json: files written: C:\Program Files\TallyPrime\Master.json (1101400 bytes)
+PASS j3 List of Accounts exported by the screens as JSON: List of Accounts: ; Masters: ui-masters-json-Master.json (1101400 bytes, UTF-16LE with BOM)
+INFO dbjson http http-daybook-xml.xml: 47167 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 45 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <VO...
+INFO dbjson http http-masters-xml.xml: 2367455 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 344 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <CU...
+INFO dbjson http http-daybook-json.json: 47167 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 21 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <VO...
+INFO dbjson http http-masters-json.json: 2367455 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 335 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <CU...
+INFO dbjson http http-daybook-jsonex.json: 47167 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 22 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <VO...
+INFO dbjson http http-masters-jsonex.json: 2367455 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 298 ms: <ENVELOPE> <HEADER> <TALLYREQUEST>Import Data</TALLYREQUEST> </HEADER> <BODY> <IMPORTDATA> <REQUESTDESC> <REPORTNAME>All Masters</REPORTNAME> <STATICVARIABLES> <SVCURRENTCOMPANY>FinCom Spike Co</SVCURRENTCOMPANY> </STATICVARIABLES> </REQUESTDESC> <REQUESTDATA> <TALLYMESSAGE xmlns:UDF="TallyUDF"> <CU...
+INFO dbjson http http-jsonreq-daybook-1.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 13 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-1 (id 'Day Book', svExportFormat 'jsonex'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-daybook-2.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 10 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-2 (id 'Day Book', svExportFormat '$$SysName:JSONEx'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-daybook-3.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 10 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-3 (id 'Day Book', svExportFormat 'json'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-daybook-4.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 10 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-4 (id 'DayBook', svExportFormat 'jsonex'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-daybook-5.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 10 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-5 (id 'DayBook', svExportFormat '$$SysName:JSONEx'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-daybook-6.json: 16210 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 10 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Voucher", "remoteid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000004c", "vchkey": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000b58c:00000008", "vchtype": "Payment", "action": "Create", "objview": "Accounting Voucher View" }, "oldaudit...
+INFO dbjson http jsonreq-daybook-6 (id 'DayBook', svExportFormat 'json'): 1 vouchertypename keys
+INFO dbjson http http-jsonreq-masters.json: 1252746 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 192 ms: { "status": "1", "data": { "tallymessage": [ { "metadata": { "type": "Currency", "name": "?", "reservedname": "" }, "guid": "24885fa7-e83c-48f3-b231-351a4352b9e8-0000001d", "mailingname": "INR", "originalname": "?", "expandedsymbol": "INR", "decimalsymbol": "paise", "isupdatingtargetid": false, "isd...
+INFO dbjson http http-vouchers-xml.xml: 4712737 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 734 ms: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>0</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0...
+INFO dbjson http http-vouchers-jsonex.json: 4712737 bytes, UTF-8 (or ASCII) no BOM, answer Content-Type 'System.String[]', 639 ms: <ENVELOPE> <HEADER> <VERSION>1</VERSION> <STATUS>1</STATUS> </HEADER> <BODY> <DESC> <CMPINFO> <COMPANY>0</COMPANY> <GROUP>0</GROUP> <LEDGER>0</LEDGER> <COSTCATEGORY>0</COSTCATEGORY> <COSTCENTRE>0</COSTCENTRE> <GODOWN>0</GODOWN> <STOCKGROUP>0</STOCKGROUP> <STOCKCATEGORY>0</STOCKCATEGORY> <STOCKITEM>0...
+PASS j4 Day Book and masters exported by the HTTP port (XML, JSON, JSONEx, the JSON request): db-json: 1 XML vouchers / 0 JSON vouchertypename keys; db-jsonex: 1 XML vouchers / 0 JSON vouchertypename keys; db-xml: 1 XML vouchers / 0 JSON vouchertypename keys; jsonreq-1: id=Day Book fmt=jsonex 1; jsonreq-2: id=Day Book fmt=$$SysName:JSONEx 1; jsonreq-3: id=Day Book fmt=json 1; jsonreq-4: id=DayBook fmt=jsonex 1; jsonreq-5: id=DayBook fmt=$$SysName:JSONEx 1; jsonreq-6: id=DayBook fmt=json 1; ms-json: 2367455 characters; ms-jsonex: 2367455 characters; ms-xml: 2367455 characters; vch-jsonex: 82 / 0; vch-xml: 82 / 0
+PASS j5 captures kept: companies.xml (1656 bytes), http-daybook-json.json (47167 bytes), http-daybook-jsonex.json (47167 bytes), http-daybook-xml.xml (47167 bytes), http-jsonreq-daybook-1.json (16210 bytes), http-jsonreq-daybook-2.json (16210 bytes), http-jsonreq-daybook-3.json (16210 bytes), http-jsonreq-daybook-4.json (16210 bytes), http-jsonreq-daybook-5.json (16210 bytes), http-jsonreq-daybook-6.json (16210 bytes), http-jsonreq-masters.json (1252746 bytes), http-masters-json.json (2367455 bytes), http-masters-jsonex.json (2367455 bytes), http-masters-xml.xml (2367455 bytes), http-vouchers-jsonex.json (4712737 bytes), http-vouchers-xml.xml (4712737 bytes), tally-header.xml (1629 bytes), ui-daybook-json-DayBook.json (2380588 bytes), ui-daybook-xml-DayBook.xml (3306730 bytes), ui-masters-json-Master.json (1101400 bytes), ui-trans-json-Transactions.json (846004 bytes), ui-trans-xml-Transactions.xml (1262178 bytes)
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 1 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1
