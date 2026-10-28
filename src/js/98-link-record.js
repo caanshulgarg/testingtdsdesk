@@ -77,7 +77,15 @@ const LinkRec = {
   // in two places; nothing from them is applied)
   placesOf(r){ const l = r ? [].concat(this.st.places || []).filter(x => x.book_id === r.book_id) : [];
     return l.sort((a, b) => (a.state === "chosen" ? 0 : 1) - (b.state === "chosen" ? 0 : 1) || String(b.last_seen || "").localeCompare(String(a.last_seen || ""))); },
-  twoPlaces(r){ return this.placesOf(r).some(x => x.state === "waiting"); },
+  // next-tally-linknow (28-Oct-2026; staging: ONE computer, bridge and Windows user shown as two places, "Data:" and none):
+  // only a real folder is a data location (migration 127, tally_real_folder); two places need two real folders, or the
+  // same folder on two computers. A place without one (Tally closed, TallyPrime's "Data:", a port only) is never a second
+  realFolder(f){ return /^([A-Za-z]:[\\/]|\\\\[^\\/]+[\\/]|\/)/.test(String(f || "").trim()); },
+  twoPlaces(r){
+    const l = this.placesOf(r).filter(x => (x.state === "waiting" || x.state === "chosen") && this.realFolder(x.data_folder));
+    const k = x => String(x.computer || "").toLowerCase() + "|" + String(x.data_folder || "").trim().toLowerCase();
+    return l.some(x => x.state === "waiting") && new Set(l.map(k)).size > 1;
+  },
   // an owner's choice of the place that is the books (tally_link_place_choose); true when the cloud took it
   async choosePlace(r, loc){
     try { await TCloud.rpc("tally_link_place_choose", {p_book: r.book_id, p_loc: loc}); }
