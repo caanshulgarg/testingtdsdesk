@@ -471,7 +471,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				noteNotTally(toInt(pp["port"]), pid)
 			}
 		} else {
-			clearNotTally(toInt(pp["port"])) // review 2.4.8 (R1-3): Tally's own answer ends any earlier mark
+			if isTallyAnswer(raw) {
+				clearNotTally(toInt(pp["port"])) // review 2.4.8 (R1-3, R2-8): Tally's own answer ends an earlier mark
+			}
 			list := []any{}
 			for _, c := range xmlDoc(raw).All("COMPANY") {
 				name := nameOf(c)

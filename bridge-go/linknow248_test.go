@@ -45,11 +45,18 @@ func TestLinkNowAsksCloudLinksAgain(t *testing.T) {
 	if cloudLinksDue(300) {
 		t.Fatal("asked again once only")
 	}
-	// review 2.4.8 (R1-9): the same company again within a minute (Update now after each posting to a company never
-	// linked): the links are not asked again at every push; another company is
+	// review 2.4.8 (R1-9, R2-5): the same company again within 15 s (Update now after each posting to a company never
+	// linked): the links are not asked again at every push; another company is; the same one after 15 s is
 	askLinksFor("Salesify Marketing LLP 2026-27")
 	if cloudLinksDue(300) {
-		t.Fatal("the same company within a minute: not asked again")
+		t.Fatal("the same company within 15 s: not asked again")
+	}
+	cloudLinksMu.Lock()
+	linksAskedFor["Salesify Marketing LLP 2026-27"] = time.Now().Add(-16 * time.Second)
+	cloudLinksMu.Unlock()
+	askLinksFor("Salesify Marketing LLP 2026-27")
+	if !cloudLinksDue(300) {
+		t.Fatal("the same company after 15 s (linked a little later): asked again")
 	}
 	askLinksFor("Another Co")
 	if !cloudLinksDue(300) {

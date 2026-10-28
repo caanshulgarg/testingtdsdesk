@@ -386,7 +386,7 @@ func TestRelease248VersionAllowListUnchanged(t *testing.T) {
 	}
 }
 
-// --- review 2.4.8 round 1 (R1-1 .. R1-5), written before the fixes
+// --- review 2.4.8 round 1 (R1-1 .. R1-5): the review's cases
 
 // R1-1: a posting going on: the typed try is refused at once and nothing is sent; a try that waits too long keeps nothing
 func TestTypedPortBusyAndBounded(t *testing.T) {
@@ -520,5 +520,96 @@ func TestAnyPortSetPortOfOtherUserSkipped(t *testing.T) {
 	}
 	if len(theirs.ids()) != 0 {
 		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
+	}
+}
+
+// --- review 2.4.8 round 2 (R2-1 .. R2-8): the review's cases
+
+// R2-1/R2-2: a port whose small check is due or pending: the typed try sends nothing (no 10 s small check) and says so
+func TestTypedPortNoSmallCheck(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	setProbeAfterTimeout(f.port)
+	res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port))
+	if str(res["reason"]) != useTimeout || !strings.Contains(str(res["error"]), "did not answer lately") || len(f.ids()) != 0 {
+		t.Fatalf("small check pending: %v, Tally asked %v", res, f.ids())
+	}
+	probeMu.Lock()
+	if p := probes[f.port]; p != nil {
+		p.last = time.Now().Add(-time.Hour) // the small check due now
+	}
+	probeMu.Unlock()
+	res = postUse(t, fmt.Sprintf(`{"port": %d}`, f.port))
+	if str(res["reason"]) != useTimeout || len(f.ids()) != 0 {
+		t.Fatalf("small check due: %v, Tally asked %v", res, f.ids())
+	}
+}
+
+// R2-4: a try given up (the page answered busy) sends nothing once it gets Tally's lock
+func TestTypedPortGivenUpSendsNothing(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	old := usePortWait
+	usePortWait = 100 * time.Millisecond
+	t.Cleanup(func() { usePortWait = old })
+	g := portLock(f.port)
+	g.ch <- struct{}{} // another request holds Tally's lock
+	res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port))
+	time.Sleep(300 * time.Millisecond)
+	<-g.ch // the lock let go
+	time.Sleep(700 * time.Millisecond)
+	if str(res["reason"]) != useBusy || len(f.ids()) != 0 {
+		t.Fatalf("given up: %v, Tally asked %v", res, f.ids())
+	}
+}
+
+// R2-6: this user's TallyPrime run as administrator (Windows will not open it: no user, no error) is accepted when Windows
+// lists it in this user's session; R2-7: another program's XML with a <Response> is not Tally
+func TestTypedPortElevatedOwnAndStrictAnswer(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"k248"`)
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}})
+	setCfg("TallyPorts", "auto")
+	oldL, oldO := listenerUserOf, ownSIDsOf
+	t.Cleanup(func() { listenerUserOf, ownSIDsOf = oldL, oldO })
+	ownSIDsOf = func() []string { return []string{sidAnshul} }
+	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, f.port)); res["ok"] != true {
+		t.Fatalf("own TallyPrime as administrator: %v", res)
+	}
+	listenerUserOf = oldL
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`<?xml version="1.0"?><Response><Status>404</Status></Response>`))
+	}))
+	t.Cleanup(s.Close)
+	p := s.Listener.Addr().(*net.TCPAddr).Port
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, p)); str(res["reason"]) != useNotTally {
+		t.Fatalf("a <Response> of another program: %v", res)
+	}
+	if !tallyEnvelope("\ufeff <?xml version=\"1.0\"?>\r\n<ENVELOPE><HEADER>") || tallyEnvelope("<html><ENVELOPE>") {
+		t.Fatal("the envelope rule")
+	}
+}
+
+// R2-8: an empty answer does not end a not-Tally mark
+func TestAnyPortEmptyAnswerKeepsMark(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(s.Close)
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	p := s.Listener.Addr().(*net.TCPAddr).Port
+	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}}, [][2]int{{f.port, 10}, {p, 10}})
+	setCfg("TallyPorts", []any{float64(p)})
+	noteNotTally(p, 10)
+	openCompanies(true)
+	notTallyMu.Lock()
+	_, marked := notTally[p]
+	notTallyMu.Unlock()
+	if !marked {
+		t.Fatal("an empty answer ended the mark")
 	}
 }

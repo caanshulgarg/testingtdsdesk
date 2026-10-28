@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,6 +34,16 @@ func isTallyAnswer(raw string) bool { return re(`(?i)<(ENVELOPE|RESPONSE)[\s>]`)
 // review 2.4.8 (R1-3): an answer that shows the port is NOT Tally's: something came back and it is not Tally's XML. An
 // empty answer proves nothing (taken as before)
 func notTallyAnswer(raw string) bool { return strings.TrimSpace(raw) != "" && !isTallyAnswer(raw) }
+
+// review 2.4.8 round 2 (R2-7): the typed port is kept only for Tally's own answer to the company list: its envelope
+// first in the answer (a byte-order mark, white space or an XML declaration before it allowed), never a <Response>
+// anywhere in another program's XML
+var reTallyEnvelope = regexp.MustCompile(`^\x{FEFF}?\s*(<\?xml[^>]*\?>\s*)?<ENVELOPE[\s>]`)
+
+func tallyEnvelope(raw string) bool { return reTallyEnvelope.MatchString(raw) }
+
+// the typed try found the port's small check due (it did not answer lately): nothing was sent
+var errTrialProbe = errors.New("Tally on this port did not answer lately; nothing is sent to it until it answers its small check")
 
 // --- a. ports of a Tally program that answered, but not as Tally: port -> the program (pid) and when
 type notTallyMark struct {
@@ -137,31 +149,45 @@ func nothingWords(port int) string {
 	return fmt.Sprintf("Nothing is listening on port %d on this computer. Check that TallyPrime is open and the port in TallyPrime: F1 Help > Settings > Connectivity (TallyPrime acts as Both).", port)
 }
 
-// the typed port's light request: the company list, the 2-second stop, postings first (it gives way to a posting)
-func usePortTC() *TC {
-	return &TC{copier: true, light: true, limitMs: recorderLimitMs(), yield: func() bool { return postingGoing() || importsInFlight.Load() > 0 }}
+// the typed port's light request: the company list, the 2-second stop, postings first (it gives way to a posting), a
+// trial (no small check, no marks); given up (the page answered): nothing is sent once it has the lock
+func usePortTC(given *atomic.Bool) *TC {
+	return &TC{copier: true, light: true, trial: true, limitMs: recorderLimitMs(), yield: func() bool { return postingGoing() || given.Load() }}
 }
 
-// the port is in the plan now (a Tally the bridge already asks)
-func portPlanned(port int) bool {
-	_, plan := portPlan()
-	for _, p := range plan {
-		if toInt(p["port"]) == port {
-			return true
-		}
-	}
-	return false
-}
+// review 2.4.8 (R1-5): Windows says the program listening on the port is another Windows user's (its token's user, a
+// SID that is not this bridge's); false when it is this user's, nothing listens, Windows cannot tell (not Windows), or
+// the program may not be opened (R2-6: also this user's TallyPrime run as administrator: as before, not decided here).
+// Kept 5 seconds (the plan is made often)
+var (
+	otherUserMu sync.Mutex
+	otherUserAt = map[int]time.Time{}
+	otherUserIs = map[int]bool{}
+)
 
-// review 2.4.8 (R1-5): Windows says the program listening on the port is another Windows user's (its token); false when
-// it is this user's, nothing listens, or Windows cannot tell (not Windows)
 func portOfOtherUser(port int) bool {
-	sid, checked, err := listenerUserOf(port)
-	if !checked || err != nil {
-		return false
+	otherUserMu.Lock()
+	if at, ok := otherUserAt[port]; ok && time.Since(at) < 5*time.Second {
+		v := otherUserIs[port]
+		otherUserMu.Unlock()
+		return v
 	}
-	ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf())
-	return !ok
+	otherUserMu.Unlock()
+	other := false
+	if sid, checked, err := listenerUserOf(port); checked && err == nil && sid != "" {
+		ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf())
+		other = !ok
+	}
+	otherUserMu.Lock()
+	otherUserAt[port], otherUserIs[port] = time.Now(), other
+	otherUserMu.Unlock()
+	return other
+}
+
+func resetOtherUser() {
+	otherUserMu.Lock()
+	otherUserAt, otherUserIs = map[int]time.Time{}, map[int]bool{}
+	otherUserMu.Unlock()
 }
 
 // what one try of a typed port found (no settings changed)
@@ -206,7 +232,15 @@ func tryTypedPort(port int) (M, error) {
 		if err != nil {
 			return fail(useUnknown, fmt.Sprintf("Windows did not say which program listens on port %d, so FinCom Bridge cannot tell whether it is your own TallyPrime; nothing was asked there. Try again in a moment.", port))
 		}
-		if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok {
+		// R2-6: a program this bridge may not open ("" with no error) is this user's only when Windows lists it as this
+		// user's TallyPrime by its session (run as administrator); else another user's
+		mineBySession := false
+		for _, f := range tallyListeners() {
+			if toInt(f["port"]) == port && f["mine"] == true {
+				mineBySession = true
+			}
+		}
+		if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok && !(sid == "" && mineBySession) {
 			return fail(useOtherUser, fmt.Sprintf("Port %d belongs to a program of another Windows user on this computer (another user's TallyPrime). FinCom Bridge uses only your own TallyPrime (%s): open TallyPrime in your own login and use its port.", port, me))
 		}
 	}
@@ -216,33 +250,14 @@ func tryTypedPort(port int) (M, error) {
 	if postingGoing() || userWaiting(port) {
 		return fail(useBusy, busyWords)
 	}
-	known := portPlanned(port)
-	// review 2.4.8 (R1-2): a port that did not answer lately is not asked now (its small check would hold Tally up to
-	// TallyProbeSec); the bridge asks it again by itself
-	if known && needProbe(port) {
-		return fail(useTimeout, fmt.Sprintf("Port %d did not answer the last time it was asked; FinCom Bridge asks it again by itself within a minute. If it is your TallyPrime, close any message box or long report in it.", port))
-	}
-	stuckBefore, hadStuck := readText(stuckFile()), exists(stuckFile())
 	type res struct {
 		raw string
 		err error
 	}
 	got := make(chan res, 1)
+	given := &atomic.Bool{}
 	go func() {
-		r, e := invokeTally(usePortTC(), port, companiesRequest(), 3)
-		if e != nil && !known {
-			// review 2.4.8 (R1-2): a typed port that is not a Tally the bridge uses leaves no mark on the real one's
-			// state (its stuck record, its small check, its busy spell)
-			clearProbe(port)
-			busyMu.Lock()
-			delete(busySince, port)
-			busyMu.Unlock()
-			if hadStuck {
-				_ = saveFile(stuckFile(), stuckBefore)
-			} else {
-				clearTallyStuck(port)
-			}
-		}
+		r, e := invokeTally(usePortTC(given), port, companiesRequest(), 3)
 		got <- res{r, e}
 	}()
 	var raw string
@@ -250,21 +265,26 @@ func tryTypedPort(port int) (M, error) {
 	case r := <-got:
 		raw, err = r.raw, r.err
 	case <-time.After(usePortWait):
-		// review 2.4.8 (R1-1): the try waited too long (for Tally's lock): it ends without keeping anything
+		// review 2.4.8 (R1-1, R2-4): the try waited too long (for Tally's lock): it ends keeping nothing, and once it gets
+		// the lock it sends nothing (its yield)
+		given.Store(true)
 		return fail(useBusy, busyWords)
 	}
+	lately := fmt.Sprintf("Port %d did not answer lately; FinCom Bridge asks it again by itself within a minute. If it is your TallyPrime, close any message box or long report in it, then try again.", port)
 	switch {
-	case err == nil && isTallyAnswer(raw):
+	case err == nil && tallyEnvelope(raw):
 	case err == nil:
 		return fail(useNotTally, fmt.Sprintf("Port %d answers, but not as TallyPrime (another program uses it). Type the port shown in TallyPrime: F1 Help > Settings > Connectivity.", port))
+	case errors.Is(err, errTrialProbe) || strings.Contains(err.Error(), fmt.Sprintf("(port %d) is busy", port)):
+		return fail(useTimeout, lately) // R2-2: the bridge's own hold (a small check due or pending), nothing sent
 	case errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRetryWait):
 		return fail(useBusy, busyWords)
 	case errors.Is(err, errRecorderStop) || errors.Is(err, errTimeout) || re(`timed out`).MatchString(err.Error()):
 		return fail(useTimeout, fmt.Sprintf("Port %d did not answer within 2 seconds. If it is your TallyPrime, it may be busy (a message box or a long report open): close it in TallyPrime and try again.", port))
 	case re(`refused|No connection`).MatchString(err.Error()):
 		return fail(useNothing, nothingWords(port))
-	case errors.Is(err, errClosed) || isBusyErr(err):
-		return fail(useNotTally, fmt.Sprintf("Port %d closed the connection without answering as TallyPrime. Type the port shown in TallyPrime: F1 Help > Settings > Connectivity.", port))
+	case errors.Is(err, errClosed) || re(`was closed|forcibly closed`).MatchString(err.Error()):
+		return fail(useNotTally, fmt.Sprintf("Port %d closed the connection without answering. If it is your TallyPrime, try again in a moment; otherwise type the port shown in TallyPrime: F1 Help > Settings > Connectivity.", port))
 	default:
 		return fail(useError, fmt.Sprintf("FinCom Bridge could not try port %d: %s", port, cutRunes(err.Error(), 160)))
 	}
@@ -308,4 +328,5 @@ func forgetPlanCache() {
 	coMu.Unlock()
 	_ = os.Remove(filepath.Join(syncDir(), "open-companies.json"))
 	forgetTallyOpen()
+	resetOtherUser()
 }

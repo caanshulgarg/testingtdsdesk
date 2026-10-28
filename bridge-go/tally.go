@@ -302,6 +302,10 @@ type TC struct {
 	// 2.4.5 ROUND 104 (the owner's choice (a) of 22-Oct-2026): a shorter rest before the send than GentleMs (the period
 	// fetch at night while nobody is at Tally, daypull.go pullGentleMs); 0: the setting's. Never a longer one
 	gentleMs int
+	// 2.4.8 (anyport.go, review round 2): the typed port's one try: never the small check (a Tally that did not answer
+	// lately is refused at once, errTrialProbe), and a failure leaves no mark (stuck record, small check, busy spell): the
+	// port may not be a Tally the bridge uses at all
+	trial bool
 }
 
 // 2.4.5 ROUND 104: the rest before a send (tallyRaw): GentleMs, or the request's own shorter rest (TC.gentleMs)
@@ -1050,6 +1054,10 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	// 2.1.4 (02-Oct-2026, rebuilt): a Tally that did not answer keeps working on that request. Nothing else is sent
 	// until a tiny company-level request (the company's name and GUID) has answered; that check goes at most once a
 	// minute (TallyProbeEverySec, 60) and is the only request until it answers
+	if tc.trial && needProbe(port) {
+		unlock()
+		return "", errTrialProbe
+	}
 	if needProbe(port) {
 		co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
 		praw, perr := freeProbe(ctx, port, co)
@@ -1129,7 +1137,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		}
 	} else {
 		fail = err.Error()
-		if re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
+		if !tc.trial && re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
 			// next-inflight: a request held as in flight (Tally still on it) owes no small check here: its end decides
 			// (finished: none; the long bound: the check first). One Tally closed is checked as before
 			if !held {
