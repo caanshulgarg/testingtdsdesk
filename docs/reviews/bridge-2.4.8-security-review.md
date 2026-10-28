@@ -59,3 +59,5 @@ Range: d1d7c038b..673783feb
 
 - Nothing new is asked of Tally.
 - POST /ports/use is a new local address of the bridge, with the same gate as every other address.
+
+Range reviewed in all (for release-check.sh, which reads the last range named): d1d7c038b..673783feb

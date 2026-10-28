@@ -90,3 +90,5 @@ app/src/parts/TallyOneClick.jsx (next-tally-anyport, merged); tests/gen_post_sha
 - Postings go first.
 - Another user's Tally is never asked, by session or by SID (TestAnyPortAutoFindsOwnTallyAnyPort, TestTypedPortRefused,
   TestAnyPortUnopenableOtherSessionSkipped).
+
+Range reviewed in all (for release-check.sh, which reads the last range named): d1d7c038b..673783feb
