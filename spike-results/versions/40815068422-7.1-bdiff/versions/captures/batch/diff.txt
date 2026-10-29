@@ -1,0 +1,3 @@
+PASS d1 every entry of the groups as FinComVoucherObject gives it, through the bridge's own batch path: 134 entries compared over 36 group answers: 134 identical (Credit Note 4, Debit Note 4, Journal 22, Payment 52, Purchase 10, Receipt 2, Sales 36, Stock Journal 4), 0 differ, 0 missing, 2 left for FinComVoucherObject (payroll, held by the strip, or a line a group gives otherwise: FinCom gets FinComVoucherObject's answer)
+DETAIL B5 B5-20260401-1.xml: MasterID 1 (Journal) left for FinComVoucherObject: an On Account bill allocation with no name, as a group gives it
+DETAIL B4 B4-20260401-1.xml: MasterID 1 (Journal) left for FinComVoucherObject: an On Account bill allocation with no name, as a group gives it
