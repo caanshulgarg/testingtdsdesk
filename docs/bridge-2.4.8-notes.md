@@ -58,4 +58,28 @@ shape changed. FinCom's page changes with it, on the app branch next-tally-anypo
 
 ## Gates
 
-Real-Tally gate: 3.0 + 7.1 by the owner's decision of 2026-10-28 (no request change). (Results below once run.)
+- Tests first: r248anyport_test.go, linknow248_test.go, run_tally_oneclick.py check 13 (the stub bridge as 2.4.8) and
+  check 5 (a 2.4.7 bridge: /ports/use never called).
+- `go vet` Linux and Windows: clean. `go test ./...` passed.
+- release_check_test.sh: all cases as expected. release-check.sh: PASSED for 2.4.8 at ce438bf9d.
+- Five review rounds (docs/reviews/bridge-2.4.8-{code,security}-review.md). 0 High and 0 Medium are open; the Lows are
+  recorded there.
+- Build: setup SHA-256 030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f, built at a9cbec7f8's parent
+  ebc7aba31; a9cbec7f8 moved the assets (latest.json names 2.4.8).
+- CI run 40742046429 at a9cbec7f8:
+  - Attempts 1-3 stopped on GitHub's artifact quota, then on billing (not the bridge).
+  - Attempt 4: app, bridge-linux and bridge-linux-typed green. Shares 2, 5 and 10 green. Shares 1, 3, 4, 6, 8 and 9 red
+    on tests that fail the same way on staging-next a6df741db without 2.4.8 (CI 40855347982): run_migration_grants,
+    run_renumber_list, run_recorder_server, run_assistant_ui, run_ledpage241, run_payroll_ui, run_older_entries_ui,
+    run_stability, run_quiet_refresh and run_cors_preflight. They are being fixed separately on next-fix-ci-1029.
+  - Share 7 (run_books_speed, a speed-budget test) was red in attempt 4. It passed 4 times out of 4 locally on this
+    branch and was green in attempt 5 (job 123406148629).
+  - Accepted as matching staging-next by the owner's coordinator, 29-Oct-2026.
+- Windows CI (FinCom Bridge on Windows: go-tests-windows, build, the committed setup installed on windows-2022 and
+  windows-2025): run 40742033385, attempt 4, success.
+- Real-Tally gate: 3.0 + 7.1 by the owner's decision of 2026-10-28 (no request change). tally-versions run 40742050496,
+  attempt 4: modes quick and upg, upg_from=2.4.7, harness cc7def746, the committed setup (setup origin: COMMITTED
+  assets-test/bridge-go/FinComBridge-Setup-2.4.8.exe SHA-256 030f4303...d83f). 16 of 16 PASS:
+  - quick: c1 and c2 on 3.0 and 7.1;
+  - upg on 3.0 and 7.1: c1, c2; u1 "2.4.8 installed over 2.4.7: settings changed: none"; u2 nothing sent twice, nothing
+    lost; u3 "each asked once in all and ended: 50"; u4 a new save after the upgrade arrives with its body.
