@@ -290,10 +290,13 @@ try:
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())
+        # the Tally page of 28-Oct-2026 (the owner: "make the complete page smart"; 5b33fb387, e2fb8e710): the four steps only
+        # for a computer never connected; once a bridge beats, ONE status card says where it stands (run_tally_smart.py)
+        card = lambda: E2("() => ((document.querySelector('#app [data-status-card]') || {}).innerText || '').replace(/\\s+/g, ' ').trim()")
         scene([], [TL.dev(1, "NWS144", "anshul", opened=(), tally="closed")]); card_again()
-        ok(steps() == [1, 0, 0, 0], "the bridge beats, Tally closed: step 1 ticked (%s)" % steps())
+        ok(steps() == [] and card().startswith("NWS144 · anshul · FinCom Bridge") and "Tally not open" in card(), "the bridge beats, Tally closed: no steps; the status card names the computer and says Tally not open (%s %s)" % (steps(), card()[:120]))
         scene(TL.SEEN, TL.DEVS); card_again()
-        ok(steps() == [1, 1, 1, 0], "Tally open on a company: steps 1 to 3 ticked (the port too), not 4 (%s)" % steps())
+        ok(steps() == [] and "NWS144 ● online" in card(), "Tally open on a company (three computers): no steps; the status card lists the computers, NWS144 online (%s %s)" % (steps(), card()[:120]))
         E2("(c) => openConnectTally(4, c)", lcid); W2(900)
         tl.click('#app [data-tco-list=firm] [data-tco-row="GARG SHEKHAR"] [data-tco-act=link]'); W2(1500)
         ok(E2("(c) => tallyLinkOf(S.companies[c]).company", lcid) == "GARG SHEKHAR", "Link to Link Co on GARG SHEKHAR's row: linked")
