@@ -2,7 +2,7 @@
 automatically (the owner's decision of 26-Oct-2026; was ROUND 102/103's "Bring older entries from Tally" card and the
 per-computer "Reading older entries" switch). The React test build (app/dist-test):
   1. Books › From Tally: no "Bring older entries from Tally" card and none of its words; ONE plain line above the upload:
-     "Older entries: in Tally open Day Book, choose the period (F2), Alt+E → Export as XML, then drop the file here.";
+     "Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here.";
      nothing asks the cloud to fetch a period (no tally_period_choose / tally_period_pause).
   2. Connect Tally: the ledgers still come by themselves (the first sync's bar: "312 of 1,240"); no older-entries card on
      the Tally page.
@@ -22,7 +22,7 @@ fails, errors, cons = [], [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
-LINE = "Older entries: in Tally open Day Book, choose the period (F2), Alt+E → Export as XML, then drop the file here."
+LINE = "Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here."
 GONE = ["Bring older entries from Tally", "Counting the year in Tally", "Whole year", "Reading older entries", "outside office hours", "Old-days test"]
 
 def main():

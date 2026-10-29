@@ -236,6 +236,42 @@ def same_as_browser(tag, path_on_disk, job, rng=("20260401", "20270331"), allow_
     twice = [d for d, v in got.items() if len(v) > 1]
     if not allow_again: ok(not twice, "%s: each day queued once (%s)" % (tag, twice[:5]))
     return got
+def server_texts(job):
+    """{day: the text of the LAST day file queued for it} of this job"""
+    out = {}
+    for x in sorted(FS.QUEUE, key=lambda x: x["msg_id"]):
+        msg = x["message"] or {}
+        if msg.get("job") != job or not isinstance(msg.get("days"), list): continue
+        for d in msg["days"]: out[d["day"]] = gzip.decompress(base64.b64decode(d["gz"])).decode("utf-8")
+    return out
+def same_parse(tag, xml_path, job, rng=("20260401", "20270331")):
+    """28-Oct-2026: a JSON Day Book's day files read by the cloud's parse.js into exactly the entries and lines of the same
+    Day Book's XML, day by day (the browser's split of the XML)"""
+    raw = open(xml_path, "rb").read(); text = raw[2:].decode("utf-16le") if raw[:2] == b"\xff\xfe" else raw.decode("utf-8").lstrip("\ufeff")
+    by = {}
+    for v in re.findall(r"<VOUCHER\b[\s\S]*?</VOUCHER>", text):
+        d = re.search(r"<DATE>(\d{8})</DATE>", v).group(1)
+        if rng[0] <= d <= rng[1]: by.setdefault(d, []).append(v)
+    want = {d: "<ENVELOPE><BODY><DATA>" + "".join("<TALLYMESSAGE>" + v + "</TALLYMESSAGE>" for v in by.get(d, [])) + "</DATA></BODY></ENVELOPE>" for d in day_list(*rng)}
+    got = server_texts(job)
+    a, b = os.path.join(TMP, "want.json"), os.path.join(TMP, "got.json"); json.dump(want, open(a, "w")); json.dump(got, open(b, "w"))
+    js = os.path.join(TMP, "sameparse.mjs")
+    open(js, "w").write("""
+import { parseDay } from %s;
+const A = JSON.parse(Deno.readTextFileSync(Deno.args[0])), B = JSON.parse(Deno.readTextFileSync(Deno.args[1]));
+const c = (t) => { const r = parseDay(t || ""); return JSON.stringify([r.vouchers.slice().sort((x, y) => x.guid < y.guid ? -1 : 1), r.lines.map((l) => JSON.stringify(l)).sort(), r.n, r.alterMax]); };
+const days = Object.keys(A), diff = days.filter((d) => c(A[d]) !== c(B[d])), missing = days.filter((d) => !(d in B));
+let n = 0; for (const d of days) n += parseDay(A[d]).n;
+console.log(JSON.stringify({days: days.length, entries: n, diff: diff.slice(0, 5), ndiff: diff.length, missing: missing.length}));
+""" % json.dumps("file://" + os.path.join(SQLDIR, "parse.js")))
+    r = subprocess.run([DENO, "run", "--allow-read", js, a, b], capture_output=True, text=True)
+    res = json.loads(r.stdout) if r.returncode == 0 else {"error": r.stderr[-400:]}
+    ok(res.get("days") == len(day_list(*rng)) and res.get("ndiff") == 0 and res.get("missing") == 0 and res.get("entries", 0) > 0,
+       "%s: every day's entries and lines, read by parse.js, exactly the XML's (%s)" % (tag, res))
+def to_json(xml_path, out, enc="utf8"):
+    r = subprocess.run(["node", os.path.join(HERE, "tally_xml_to_json.mjs"), xml_path, out, enc], capture_output=True, text=True)
+    if r.returncode: raise SystemExit("tally_xml_to_json failed: " + r.stderr[-400:])
+    return json.loads(r.stdout)
 try:
     db = pg_stand.start(30484)      # below the ephemeral range (32768-60999): the thousands of requests here leave client ports in TIME_WAIT
     ok(SPLIT_BODY is not None, "the browser's split() read from src/js/49-tally-cloud.js")
@@ -295,6 +331,23 @@ try:
         ok(rgs and rgs[0] == (0, PIECE_B - 1) and second == want2, "B %s: the first range [0, %d] ended inside %s; the next range starts at its start, byte %s (%s)"
            % (tag, PIECE_B - 1, "a UTF-8 character" if enc == "utf-8" else "a surrogate pair (and between a code unit's two bytes)", want2, rgs[:3]))
         pieces_ms.append(("B " + tag + ", 1,000,003-byte pieces", piece_times(job)))
+    # 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported as JSON (Tally's object schema, as
+    # TallyPrime 7.1 writes it), in ranges of 1,000,003 bytes (objects cut anywhere, inside strings and characters), UTF-8
+    # and UTF-16LE with the BOM; and one out of date order (its late days read again from the file's start)
+    print("== J. a JSON Day Book, ranges of 1,000,003 bytes")
+    for tag, enc, shuffle in (("UTF-8", "utf8", False), ("UTF-16LE, BOM", "utf16", False), ("UTF-8, out of date order", "utf8", True)):
+        text = make_book(3 * 1024 * 1024, seed=7 + len(tag), shuffle=shuffle, tag="j%d" % len(tag))
+        px = os.path.join(TMP, "j%d.xml" % len(tag)); open(px, "wb").write(encode(text, "utf-16le", True))
+        pj = os.path.join(TMP, "j%d.json" % len(tag)); info = to_json(px, pj, enc); data = open(pj, "rb").read()
+        c, r, c2, r2, job, path = upload("DayBook.json", data)
+        ok(work_until_done(job) and jrow(job).get("status") == "done" and jrow(job).get("done") == jrow(job).get("total") and jrow(job).get("total", 0) >= 365,
+           "J %s (%.1f MB, %d vouchers): the job done, %s of %s days" % (tag, len(data) / 1048576, info["vouchers"], jrow(job).get("done"), jrow(job).get("total")))
+        rg = [(a_, b_) for k_, a_, b_ in FS.RANGES if k_ == "tally-uploads/" + path and b_ > 0]
+        ok(len(rg) >= 2, "J %s: read in %d ranges" % (tag, len(rg)))
+        same_parse("J " + tag, px, job)
+        pt = piece_times(job)
+        ok(pt and max(ms for _, ms in pt) < 2000, "J %s: each piece's own work within 2 s (%d pieces, %.0f ms at most)" % (tag, len(pt), max([ms for _, ms in pt] or [0])))
+        pieces_ms.append(("J " + tag + ", 1,000,003-byte pieces", pt))
     # 17-Oct-2026 (the owner: a new company's Day Book refused): a Day Book whose ledger masters come first (1.5 MB of them
     # before the first voucher, more than a piece), UTF-16LE without the BOM: read as every other
     text = make_book(2 * 1024 * 1024, seed=9, tag="m"); i = text.index("<TALLYMESSAGE")

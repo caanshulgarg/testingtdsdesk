@@ -1221,10 +1221,30 @@ async function tallyFileKind(f){
   }
   const kind = vch ? "daybook" : /<(LEDGER|GROUP) NAME=/.test(head) ? "masters" : /<DSPACCNAME>/.test(head) ? "tb" : "";
   if (!kind && /<ENVELOPE[\s>]/i.test(head) && /<SVCURRENTCOMPANY>|<TALLYMESSAGE[\s>]|<IMPORTDATA>|<TALLYREQUEST>|Day ?Book/i.test(head))
-    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Format XML, and upload that file."};
-  if (!kind) return {kind, why: f.name + " is not a file FinCom can read: it is not a Tally Day Book, ledger masters or trial balance saved as XML. In TallyPrime open the report, then Alt+E (Export) \u2192 Format XML, and upload that file. If it is a Day Book, send the file to FinCom support so we can see why."};
+    return {kind, empty: true, why: f.name + " is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example 1-Apr-2025 to today), then Alt+E (Export) \u2192 Format XML or JSON, and upload that file."};
+  if (!kind) return {kind, why: f.name + " is not a file FinCom can read: it is not a Tally Day Book, ledger masters or trial balance saved as XML or JSON. In TallyPrime open the report, then Alt+E (Export) \u2192 Format XML or JSON, and upload that file. If it is a Day Book, send the file to FinCom support so we can see why."};
   if (!/<\/ENVELOPE>\s*$/.test(tail)) return {kind: "", why: f.name + " looks cut short: it does not end as a Tally export does. Export it again from Tally and upload the whole file."};
   return {kind};
+}
+// 28-Oct-2026: a file that is not plain XML (a zip, JSON, Excel's or a PDF's first bytes) is opened by TallyJson
+// (app/src/lib/tallyJson.js, window.loadTallyJson): [{file}] or [{name, why}], each file of a zip on its own
+async function tallyNeedsOpen(f){
+  const h = new Uint8Array(await f.slice(0, 64).arrayBuffer());
+  if ((h[0] === 0x50 && h[1] === 0x4B) || (h[0] === 0xD0 && h[1] === 0xCF) || (h[0] === 0x25 && h[1] === 0x50 && h[2] === 0x44 && h[3] === 0x46)) return true;
+  const enc = Books.encodingOf(h), t = new TextDecoder(enc).decode(h.subarray(0, h.length & ~1)).replace(/^\uFEFF/, "").replace(/^\s+/, "");
+  return t[0] === "{" || t[0] === "[";
+}
+async function tallyOpenFiles(files, step){
+  const out = [];
+  for (const f of files){
+    let need = false; try { need = await tallyNeedsOpen(f); } catch (e){}
+    if (!need){ out.push({file: f}); continue; }
+    let m = null, why = "";
+    try { m = typeof window.loadTallyJson === "function" ? (await window.loadTallyJson()).TallyJson : null; } catch (e){ why = String((e && e.message) || e).replace(/[.\s]+$/, ""); }
+    if (!m){ out.push({name: f.name, why: f.name + " could not be opened: FinCom’s reader for JSON and zip files did not load" + (why ? " (" + why + ")" : "") + ". Reload the page and choose the file again."}); continue; }
+    (await m.unpack([f], step)).forEach(x => out.push(x));
+  }
+  return out;
 }
 // the client's books open on this page (openBooks, src/js/18), waited for: {ok} or {why} (said on From Tally)
 async function tallyBooksReady(cid, ms){
@@ -1252,8 +1272,8 @@ async function tallyFiles(files){
   const cid = S.coId, co = CO(), name = (co && co.name) || "this client";
   files = Array.from(files || []);
   if (!cid){ toast("Open a client first, then choose its Tally file: FinCom reads it into that client’s books."); return; }
-  if (!files.length){ S.tallyUp = {cid, at: Date.now(), busy: false, lines: [{kind: "", ok: false, text: "No file came with that: drop or choose the XML file itself (exported from Tally), not a link or a folder."}]}; render(); return; }
-  files.forEach(f => tallyCrumb("file_chosen", {size_mb: Math.round((f.size || 0) / 1048576), kind: /\.xml$/i.test(f.name || "") ? "xml" : "other"}));
+  if (!files.length){ S.tallyUp = {cid, at: Date.now(), busy: false, lines: [{kind: "", ok: false, text: "No file came with that: drop or choose the XML or JSON file itself (exported from Tally), not a link or a folder."}]}; render(); return; }
+  files.forEach(f => tallyCrumb("file_chosen", {size_mb: Math.round((f.size || 0) / 1048576), kind: (/\.(xml|json|zip)$/i.exec(f.name || "") || [, "other"])[1].toLowerCase()}));
   if (!S.books || S.books.cid !== cid || S.books.loading){
     tallyCrumb("books_ready", {ready: false});
     S.tallyUp = {cid, at: Date.now(), busy: true, lines: [{kind: "wait", ok: true, text: "Opening " + name + "’s books… the file is read as soon as they are open."}]};
@@ -1270,7 +1290,14 @@ async function tallyFiles(files){
   const u = S.tallyUp = {cid, at: Date.now(), busy: true, lines: []}; render();
   const said = l => { u.lines.push(l); render(); };
   const seen = [];
-  for (const f of files){ let k; try { k = await tallyFileKind(f); } catch (e){ k = {kind: "", why: "Could not read " + f.name + ": " + ((e && e.message) || e)}; } seen.push([f, k]); }
+  // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a JSON export, a zip of Tally files (each file in it taken
+  // as if chosen on its own), an Excel or PDF file: opened first by TallyJson (loaded only then); what comes out is Tally's XML
+  const opened = await tallyOpenFiles(files, m => { b.busy = m; softRender(); });
+  b.busy = "";
+  for (const x of opened){
+    if (!x.file){ seen.push([{name: x.name}, {kind: "", why: x.why}]); continue; }
+    const f = x.file; let k; try { k = await tallyFileKind(f); } catch (e){ k = {kind: "", why: "Could not read " + f.name + ": " + ((e && e.message) || e)}; } seen.push([f, k]);
+  }
   const order = {masters: 0, daybook: 1, tb: 2, "": 3};
   seen.sort((x, y) => order[x[1].kind] - order[y[1].kind]);
   const iso8 = v => String(v || "").replace(/-/g, "");
@@ -1320,7 +1347,7 @@ function booksChange(t){
     const f = (t.files || [])[0]; t.value = "";
     if (!f) return true;
     const iso8 = v => String(v || "").replace(/-/g, "");
-    bringDayBookFile(f, iso8(S.dbFrom), iso8(S.dbTo));
+    tallyOpenFiles([f]).then(xs => xs.forEach(x => x.file ? bringDayBookFile(x.file, iso8(S.dbFrom), iso8(S.dbTo)) : toast(x.why)));
     return true;
   }
   if (t.id === "tbIn"){
@@ -1336,7 +1363,7 @@ function booksChange(t){
   }
   if (t.id === "mastersIn"){
     const f = (t.files || [])[0]; t.value = "";
-    if (f) bringMastersFile(f);
+    if (f) tallyOpenFiles([f]).then(xs => xs.forEach(x => x.file ? bringMastersFile(x.file) : toast(x.why)));        // XML, JSON or a zip of them
     return true;
   }
   if (t.id === "filedIn"){
@@ -1445,7 +1472,10 @@ const MultiUp = {
     const files = Array.from(inp.files || []); inp.value = "";
     if (!files.length) return;
     S.multiUp = {rows: [], busy: false, reading: true}; render();
-    for (const f of files){
+    // 28-Oct-2026: a JSON Day Book, or a zip of Day Books, opened first (each file of a zip a row of its own)
+    for (const x of await tallyOpenFiles(files)){
+      if (!x.file){ S.multiUp.rows.push({f: {name: x.name}, name: "", gstin: "", cid: "", status: "not taken: " + x.why}); continue; }
+      const f = x.file;
       let fc = {}; try { fc = await Books.fileCompany(f); } catch (e){}
       S.multiUp.rows.push({f, name: fc.name || "", gstin: fc.gstin || "", cid: this.match(fc), status: "waiting"});
     }

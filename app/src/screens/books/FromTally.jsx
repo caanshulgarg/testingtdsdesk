@@ -3,7 +3,7 @@
 // be removed"): one short flow, docs/ui-pass/uploadpage/README.md says what went and why.
 //   1. one status line: "Books from Tally: FY 2026-27 · entries up to 07-Oct-2026 · 2 days need a Day Book";
 //   2. Upload Tally data: one drop area (the same file box, #tallyIn, as the top bar's Upload Tally data) for a Day Book,
-//      the ledger masters or a trial balance XML. Which file it is, and its dates, come from the file (tallyFiles,
+//      the ledger masters or a trial balance, as XML or JSON or a zip of them (28-Oct-2026). Which file it is, and its dates, come from the file (tallyFiles,
 //      src/js/23); only a trial balance's date is asked, as Tally does not write it in the file. The progress line (the
 //      file on its way to FinCom's cloud, the server's job) and the result in plain words;
 //   3. Days that need a Day Book: the days the shared classifier says only that day's Day Book settles (Rec.needKind,
@@ -38,7 +38,7 @@ function Status({ b, days }) {
   const first = firstEntry(b), span = fyOf(first) === fyOf(last) ? "FY " + fyOf(last) : "FY " + fyOf(first) + " to " + fyOf(last);
   const bits = ["Books from Tally: " + (n && last ? span : "nothing yet")];
   if (n && last) bits.push("entries " + d(first) + " to " + d(last));
-  else bits.push("upload the Day Book XML exported from Tally");
+  else bits.push("upload the Day Book (XML or JSON) exported from Tally");
   if (n && !b.ledInfoAt && !Object.keys(b.pans || {}).length) bits.push("ledger masters not uploaded");
   if (n && (m.parts || []).length && !(b.tb && Object.keys(b.tb.led || {}).length)) bits.push("opening balances not uploaded");
   const k = days.reduce((a, x) => a + x.days, 0);
@@ -58,8 +58,8 @@ function Drop() {
     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); doAct("tallyPick"); } }}
     onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); tallyFiles(Array.from(e.dataTransfer.files || [])); }}>
-    <strong>Drop the Day Book or ledger masters XML here</strong>
-    <div className="note">or click to choose it. FinCom reads which file it is, and its dates, from the file.</div>
+    <strong>Drop the Day Book or ledger masters here (XML, JSON or a zip of them)</strong>
+    <div className="note">or click to choose it; several months at once are fine. FinCom reads which file it is, and its dates, from the file.</div>
   </div>;
 }
 
@@ -90,7 +90,7 @@ function Upload({ b }) {
     {opening && <p className="bk-alert" data-up-opening="" style={{ margin: "0 0 10px" }}><b>Opening balances:</b> in Tally, open <b>Trial Balance</b> as on the day before the books here start, press <b>Ctrl+E</b>, choose <b>XML</b>, and drop the file below; FinCom asks whether to use it as the opening balances. With FinCom Bridge linked, Update now reads them by itself.</p>}
     {/* 26-Oct-2026 (the owner): older entries come ONLY from Tally's Day Book file, never fetched automatically (the
         "Bring older entries from Tally" card is gone); the upload is the one way, said in one line */}
-    <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, choose the period (F2), Alt+E → Export as XML, then drop the file here.</p>
+    <p className="note" data-up-older="" style={{ margin: "0 0 8px" }}>Older entries: in Tally open Day Book, choose the period (Alt+F2), E: Export → File Format (F8): XML or JSON, then drop the file here.</p>
     <Drop />
     {lim && <p className="note" data-up-limit="" style={{ margin: "8px 0 0" }}>{"Only " + fmtDate(lim[0]) + (lim[1] !== lim[0] ? " to " + fmtDate(lim[1]) : "") + " is taken from the next Day Book. "}
       <button className="linkbtn" onClick={() => { S.dbFrom = ""; S.dbTo = ""; render(); }}>Take the file’s own dates</button></p>}
@@ -135,8 +135,8 @@ function Days({ days }) {
 function HowTo() {
   return <details className="up-howto" data-howto="" style={{ margin: "0 0 12px" }}><summary>How to export from Tally</summary>
     <ol className="note" style={{ margin: "6px 0 0 18px", padding: 0 }}>
-      <li>In Tally, open <b>Display More Reports → Day Book</b> and press <b>F2</b> for the dates; for the ledger masters, <b>Display More Reports → List of Accounts</b>.</li>
-      <li>Press <b>Ctrl+E</b> (Export), choose <b>XML</b> as the format, and export.</li>
+      <li>In Tally, open <b>Display More Reports → Day Book</b> and press <b>Alt+F2</b> for the period; for the ledger masters, <b>Display More Reports → List of Accounts</b>.</li>
+      <li>Press <b>Alt+E</b> (Export) → <b>Current</b>, then <b>F8</b> (File Format) for <b>XML</b> or <b>JSON</b>, and <b>E</b> to export. Several months, or a zip of them, can be dropped at once.</li>
       <li>Drop the file above. Uploading the same dates again replaces them; nothing is counted twice.</li>
     </ol></details>;
 }

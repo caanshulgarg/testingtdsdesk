@@ -61,7 +61,7 @@ ADDON_ASK = re.compile(r"\b(load|loaded|update|turn on|switch on|enable|install)
                        r"|\b(add-on|addon|TDLs?|recorder)\b[^.\n]{0,40}\b(not loaded|not recording|load|update|turn on)\b|not recording|Manage Local TDLs", re.I)
 PLAIN = ("is not a file FinCom can read", "If it is a Day Book, send the file to FinCom support so we can see why.")
 EMPTY_WORDS = (" is a Tally export with no entries in it. In TallyPrime open Day Book, press F2 and choose the whole period (for example "
-               "1-Apr-2025 to today), then Alt+E (Export) → Format XML, and upload that file.")
+               "1-Apr-2025 to today), then Alt+E (Export) → Format XML or JSON, and upload that file.")
 
 with sync_playwright() as p:
     srv, br, pg = U.start(p, 8489, SITE, errors=errors)
@@ -142,7 +142,12 @@ with sync_playwright() as p:
     ok(res == "DayBook-empty.xml" + EMPTY_WORDS and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1,
        "a Tally export with no entries: says so, with how to export the whole period (%s)" % res)
     ok("not a Day Book" not in res and "not a Tally" not in res, "never called 'not a Day Book'")
-    for path, what in [(ZIP, "a zip renamed .xml"), (HTML, "a web page saved as .xml")]:
+    # 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a zip, even one named .xml, is opened and each Tally file in
+    # it read as if chosen on its own (run_daybook_json.py has the rest)
+    n0 = E("S.books.vouchers.length"); res = up(ZIP)
+    ok(re.search(taken, res) is not None and E("S.tallyUp.lines[0].kind") == "daybook" and E("S.books.vouchers.length") == n0,
+       "a zip named .xml holding the Day Book: opened, the Day Book in it read (%s)" % res)
+    for path, what in [(HTML, "a web page saved as .xml")]:
         res = up(path)
         ok(all(w in res for w in PLAIN) and res.endswith(PLAIN[1]) and E("S.tallyUp.lines[0].ok") is False and E("S.books.vouchers.length") == n1,
            "%s: refused in plain words, ending with the support line (%s)" % (what, res))
