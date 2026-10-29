@@ -172,6 +172,7 @@ type pullWork struct {
 	oneByOne bool
 	batches  int
 	single   map[string]bool // entries a group's answer left for FinComVoucherObject
+	warmAt   time.Time       // review R1-5: the day's heads, or its last group, answered (the bridge's clock)
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -203,6 +204,7 @@ var pull = struct {
 	lookHold int
 	// 2.4.9: the FinComVoucherBatch request being asked now (the dated guard lets only it through; batch249.go)
 	batchAsk string
+	batchCo  map[string]int // review R1-4: the group size a company's slow days came down to (batch249.go pullBatchCo)
 }{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
@@ -678,6 +680,9 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 	} else if w.typeIdx++; w.typeIdx >= len(it.types()) {
 		w.headsDone = true
 	}
+	if w.headsDone {
+		w.warmAt = nowFn()
+	}
 	pullNote(it, "heads", w)
 	return true, w.headsDone
 }
@@ -838,7 +843,6 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 		writeLog(fmt.Sprintf("Older entries of %s: the entry with MasterID %s is no longer of %s in Tally; not sent (the day is counted again)", it.Company, mid, liveDay(it.Day)))
 	default:
 		w.got = append(w.got, x)
-		batchTOSLearn(it.Company, mid, x) // 2.4.9: what its group left unknown, settled by FinComVoucherObject's answer
 	}
 	pullNote(it, "fetch", w)
 	return true, true
@@ -961,17 +965,24 @@ func pullFlush(w *pullWork) bool {
 		return true
 	}
 	it := w.it
-	vs := make([]any, 0, len(w.got))
-	for _, x := range w.got {
+	// 2.4.9 review R1-3: a body of at most DayPullBatch entries and 4 MB (one entry over it at most), the rest in the next
+	// (a group adds up to 100 entries at once)
+	n, size := 0, 0
+	for n < len(w.got) && n < pullFlushAt() && (n == 0 || size+len(w.got[n]) <= 4<<20) {
+		size += len(w.got[n])
+		n++
+	}
+	vs := make([]any, 0, n)
+	for _, x := range w.got[:n] {
 		vs = append(vs, x)
 	}
 	r := invokeCloud(M{"kind": "period_entries", "company": it.Company, "company_guid": it.CGUID, "day": it.Day, "vouchers": vs, "gone": toAny(w.gone), "full": true}, 120)
 	if !pullCloudOK(w, r, "the entries") {
 		return false
 	}
-	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), len(w.got), map[bool]string{true: "y", false: "ies"}[len(w.got) == 1],
+	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
 		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0]))
-	w.got, w.gone = nil, nil
+	w.got, w.gone = append([]string(nil), w.got[n:]...), nil
 	// an entry whose lines did not total zero was not taken: FinCom marked the day to be uploaded by hand (its words)
 	if words := str(r.json["upload"]); words != "" {
 		pullNoteUpload(it, "entries", words)

@@ -16,10 +16,12 @@
 //     goes through (fastStripWhy: only the approved fields; an entry whose lines the strip cannot keep whole is held,
 //     never sent short). Measured: every kept field identical to FinComVoucherObject's answer, 150 of 150 entries on
 //     every release.
-//  4. The slow-group rule: a group stopped at 2 s is asked again in half-size groups; a half-size group also stopped,
-//     an answer that is not exactly the entries asked, or an entry the strip holds: that day goes one by one with
-//     FinComVoucherObject, as before. Tally's window held 2 s or more stops the company's period (the 2.4.5 freeze
-//     safety, unchanged).
+//  4. The slow-group rule: a group stopped at 2 s is asked again in half-size groups (once: 100, then 50); a half-size
+//     group also stopped: one by one with FinComVoucherObject, as before; the size kept for the company's next days
+//     (review R1-4). After a stop Tally's window is watched until Tally has finished the group (review R1-2): held 2 s
+//     or more, or not finished within TallyAbandonWaitSec, the company's period stops. An answer that is not exactly the
+//     entries asked: the day one by one. An entry a group gives otherwise than FinComVoucherObject: that entry one by one
+//     (batchEntry). Tally's window held 2 s or more stops the company's period (the 2.4.5 freeze safety, unchanged).
 //
 // Every other rule of the period fetch stays: one request in flight, the six conditions before each, postings first,
 // idle only, the per-computer switch, only approved fields kept (before anything is logged, stored or sent). Payroll
@@ -27,13 +29,14 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -77,6 +80,14 @@ func batchFetchFields() []string {
 
 var batchFetchText = strings.Join(batchFetchFields(), ", ")
 
+// 2.4.9 review R1-11 / S-5: the approved FETCH, frozen (the text of testdata/batch249/b4-range.xml)
+const batchFetchSHA = "cd914d4c22caf66ab493da5a734baf236609f998a3cbbc7ab1f972d6d0f54280"
+
+func batchFetchOK() bool {
+	s := sha256.Sum256([]byte(batchFetchText))
+	return hex.EncodeToString(s[:]) == batchFetchSHA
+}
+
 // a MasterID as the bridge asks it: digits, no leading zero, 18 at most (as voucherObjectRequest)
 func batchMidOK(m string) bool {
 	return m != "" && len(m) <= 18 && onlyDigits(m) == m && m[0] != '0'
@@ -84,7 +95,7 @@ func batchMidOK(m string) bool {
 
 // B4: one day, MasterIDs a..b; "" for anything else
 func voucherBatchRangeRequest(company, day string, a, b int64) string {
-	if !isTallyDate(day) || a <= 0 || b < a {
+	if !isTallyDate(day) || a <= 0 || b < a || !batchFetchOK() {
 		return ""
 	}
 	return formCollection(vchBatchID, company, formPlainT, day, day, batchFetchText, fmt.Sprintf(batchFilter, a, b))
@@ -92,7 +103,7 @@ func voucherBatchRangeRequest(company, day string, a, b int64) string {
 
 // B5: one day, the MasterIDs listed (1 to 100, each once, as given); "" for anything else
 func voucherBatchListRequest(company, day string, mids []string) string {
-	if !isTallyDate(day) || len(mids) == 0 || len(mids) > batchMaxN {
+	if !isTallyDate(day) || len(mids) == 0 || len(mids) > batchMaxN || !batchFetchOK() {
 		return ""
 	}
 	seen := map[string]bool{}
@@ -138,7 +149,8 @@ func voucherBatchRebuild(x string) string {
 var errBatchRefused = errors.New("FinCom Bridge asks Tally for a day's older entries only as built, for the group the older-entries fetch is reading now, under the 2-second stop; nothing was sent to Tally")
 
 func voucherBatchExact(tc *TC, x string) bool {
-	if tallyRequestID(x) != vchBatchID || tc == nil || tc.limitMs <= 0 || tc.limitMs > 2000 || x != voucherBatchRebuild(x) {
+	// review R1-10 / S-3: the period fetch's own TC (a copier's background request, not a person's): the stop applies
+	if tallyRequestID(x) != vchBatchID || tc == nil || !tc.copier || tc.person || !tc.bg || tc.limitMs <= 0 || tc.limitMs > 2000 || x != voucherBatchRebuild(x) {
 		return false
 	}
 	if _, ok := startPointOf(pinCo(x)); !ok {
@@ -153,18 +165,36 @@ func voucherBatchExact(tc *TC, x string) bool {
 var (
 	reBatchAllLed = regexp.MustCompile(`(?s)<ALLLEDGERENTRIES\.LIST(?:\s[^>]*)?>.*?</ALLLEDGERENTRIES\.LIST\s*>`)
 	reBatchLed    = regexp.MustCompile(`(?s)<LEDGERENTRIES\.LIST(?:\s[^>]*)?>.*?</LEDGERENTRIES\.LIST\s*>`)
-	reBatchItem   = regexp.MustCompile(`(?s)<ALLINVENTORYENTRIES\.LIST(?:\s[^>]*)?>.*?<STOCKITEMNAME[^>]*>\s*[^<\s]`)
+	// review R1-9: each item list to its own end (an empty one is not read past), a filled STOCKITEMNAME inside it
+	reBatchInv  = regexp.MustCompile(`(?s)<ALLINVENTORYENTRIES\.LIST(?:\s[^>]*)?>.*?</ALLINVENTORYENTRIES\.LIST\s*>`)
+	reBatchItem = regexp.MustCompile(`<STOCKITEMNAME[^>]*>\s*[^<\s]`)
 	// lists a Voucher collection's answer adds that FinComVoucherObject's answer does not hold, and that FinCom never keeps:
 	// Tally's working copy of the ledger lines (VCHLEDINFOS), and the cost-category view of them (CATEGORYENTRY, which the
-	// strip reads only as a payroll's pay heads: payroll entries are never in a group)
+	// strip reads only as employees' pay heads: an entry whose pay heads the strip would write or hold on is never taken
+	// from a group, review R1-1 / S-1, batchEntryWhy)
 	reBatchExtra = regexp.MustCompile(`(?s)<(VCHLEDINFOS|CATEGORYENTRY)\.LIST(?:\s[^>]*)?>.*?</(?:VCHLEDINFOS|CATEGORYENTRY)\.LIST\s*>`)
+	reBatchInfo  = regexp.MustCompile(`(?s)<VCHLEDINFOS\.LIST(?:\s[^>]*)?>.*?</VCHLEDINFOS\.LIST\s*>`)
+	reBatchCat   = regexp.MustCompile(`<CATEGORYENTRY\.LIST[\s>]`)
 )
+
+func batchHasItems(v string) bool {
+	for _, b := range reBatchInv.FindAllString(v, -1) {
+		if reBatchItem.MatchString(b) {
+			return true
+		}
+	}
+	return false
+}
 
 // one <VOUCHER> of a FinComVoucherBatch answer as FinComVoucherObject's answer holds it: an entry with items keeps its
 // LEDGERENTRIES as its ledger lines, any other its ALLLEDGERENTRIES; never both (the collection's own extra lists out)
-func batchConvert(v string) string {
-	v = reBatchExtra.ReplaceAllString(v, "")
-	if reBatchItem.MatchString(v) && reBatchLed.MatchString(v) {
+func batchConvert(v string) string { return batchLines(reBatchExtra.ReplaceAllString(v, "")) }
+
+// the converter with the collection's CATEGORYENTRY kept (VCHLEDINFOS out): what the strip makes of the pay heads
+func batchConvertCat(v string) string { return batchLines(reBatchInfo.ReplaceAllString(v, "")) }
+
+func batchLines(v string) string {
+	if batchHasItems(v) && reBatchLed.MatchString(v) {
 		return reBatchAllLed.ReplaceAllString(v, "")
 	}
 	if reBatchAllLed.MatchString(v) {
@@ -179,14 +209,14 @@ func batchConvert(v string) string {
 //   - every release adds an "On Account" bill allocation with no name to a bill-wise party's line that has none
 //     (FinComVoucherObject's answer has no allocation there): such an entry is always read one by one;
 //   - TallyPrime 3.0 .. 6.2 leave a line's GST type of supply (GSTOVRDNTYPEOFSUPPLY) empty in a collection where the
-//     object export gives the one the ledger (or stock item) holds, "Goods" or "Services"; where neither holds one both
-//     are empty (ZZ BIG TEST, run 40750991113). So a line with a GST nature or taxability and no type of supply is taken
-//     from a group only for a ledger / stock item this bridge has seen FinComVoucherObject answer with no type of supply
-//     too: the first entry naming an unknown one is read one by one (FinComVoucherObject), which settles it for the company;
-//     the group's other entries naming it are asked again in the next group.
+//     object export gives the one the ledger (or stock item) holds, "Goods" or "Services". So an entry with a line that has
+//     a GST nature or taxability and no type of supply (empty or left out) is never taken from a group: FinComVoucherObject
+//     reads it. (Review 249 round 2, H1 / M1 / M2: no "the ledger holds none" is learned and carried to other entries:
+//     a ledger changed in Tally, another company of the same name, or a type set on one entry could not then be told.)
+//     On 7.1 groups give the type, so nothing is left for it.
 
-// the lines of an entry with a GST nature or taxability and no type of supply, as "<list>|<name>" (the ledger's or the
-// stock item's name), and why the entry is to be read one by one whatever the lines ("" when not)
+// the lines of an entry with a GST nature or taxability and no type of supply (empty or left out), as "<list>|<name>"
+// (the ledger's or the stock item's name), and why the entry is to be read one by one whatever the lines ("" when not)
 func batchTOSLines(v string) (keys []string, always string) {
 	root := fastTree(v)
 	if root == nil {
@@ -199,18 +229,16 @@ func batchTOSLines(v string) (keys []string, always string) {
 			return
 		}
 		kid := map[string]string{}
-		has := map[string]bool{}
 		for _, k := range e.kids {
 			if !k.hasKids {
 				kid[k.name] = strings.Trim(html.UnescapeString(k.text), "\x04 \t\r\n")
-				has[k.name] = true
 			}
 		}
 		if e.name == "BILLALLOCATIONS.LIST" && strings.EqualFold(kid["BILLTYPE"], "On Account") && kid["NAME"] == "" {
 			always = "an On Account bill allocation with no name, as a group gives it"
 			return
 		}
-		if (kid["GSTOVRDNTAXABILITY"] != "" || kid["GSTOVRDNNATURE"] != "") && has["GSTOVRDNTYPEOFSUPPLY"] && kid["GSTOVRDNTYPEOFSUPPLY"] == "" {
+		if (kid["GSTOVRDNTAXABILITY"] != "" || kid["GSTOVRDNNATURE"] != "") && kid["GSTOVRDNTYPEOFSUPPLY"] == "" {
 			name := kid["LEDGERNAME"]
 			if name == "" {
 				name = kid["STOCKITEMNAME"]
@@ -227,98 +255,6 @@ func batchTOSLines(v string) (keys []string, always string) {
 	walk(root)
 	sort.Strings(keys)
 	return keys, always
-}
-
-// what this bridge has learned per company: "<list>|<name>" -> FinComVoucherObject also gives no type of supply (true)
-// or gives one (false)
-var batchTOS = struct {
-	mu    sync.Mutex
-	known map[string]bool
-	probe map[string][]string // company|MasterID -> the keys its one-by-one answer settles
-}{known: map[string]bool{}, probe: map[string][]string{}}
-
-func batchTOSKey(company, k string) string { return companyKey(company) + "|" + k }
-
-// the entry may be taken from the group: every line without a type of supply names a ledger / item known to have none
-// in FinComVoucherObject's answer too. probe: the keys still unknown (the entry is to be read one by one to learn them)
-func batchTOSTake(company string, keys []string) (ok bool, unknown []string) {
-	batchTOS.mu.Lock()
-	defer batchTOS.mu.Unlock()
-	ok = true
-	for _, k := range keys {
-		same, known := batchTOS.known[batchTOSKey(company, k)]
-		if !known {
-			unknown = append(unknown, k)
-			ok = false
-		} else if !same {
-			ok = false
-		}
-	}
-	return ok, unknown
-}
-
-func batchTOSProbe(company, mid string, keys []string) {
-	batchTOS.mu.Lock()
-	batchTOS.probe[companyKey(company)+"|"+mid] = keys
-	batchTOS.mu.Unlock()
-}
-
-func batchTOSProbing(company, mid string) bool {
-	batchTOS.mu.Lock()
-	defer batchTOS.mu.Unlock()
-	_, ok := batchTOS.probe[companyKey(company)+"|"+mid]
-	return ok
-}
-
-// FinComVoucherObject's kept answer for an entry read one by one: what it gives for the lines its group left unknown
-func batchTOSLearn(company, mid, kept string) {
-	batchTOS.mu.Lock()
-	defer batchTOS.mu.Unlock()
-	pk := companyKey(company) + "|" + mid
-	keys, ok := batchTOS.probe[pk]
-	if !ok {
-		return
-	}
-	delete(batchTOS.probe, pk)
-	root := fastTree(kept)
-	if root == nil {
-		return
-	}
-	got := map[string]string{}
-	var walk func(e *fastEl, path string)
-	walk = func(e *fastEl, path string) {
-		if !e.hasKids {
-			return
-		}
-		name, tos := "", ""
-		for _, k := range e.kids {
-			if !k.hasKids {
-				switch k.name {
-				case "LEDGERNAME", "STOCKITEMNAME":
-					name = strings.ToLower(strings.TrimSpace(html.UnescapeString(k.text)))
-				case "GSTOVRDNTYPEOFSUPPLY":
-					tos = strings.Trim(html.UnescapeString(k.text), "\x04 \t\r\n")
-				}
-			}
-		}
-		// the strip writes ALLLEDGERENTRIES for an entry's own lines whichever list Tally used
-		list := strings.TrimSuffix(e.name, ".LIST")
-		if list == "ALLLEDGERENTRIES" {
-			got["LEDGERENTRIES|"+name] += tos
-		}
-		got[list+"|"+name] += tos
-		for _, k := range e.kids {
-			walk(k, path)
-		}
-	}
-	walk(root, "")
-	for _, k := range keys {
-		v, seen := got[k]
-		if !seen {
-			continue // not settled by this answer
-		}
-		batchTOS.known[batchTOSKey(company, k)] = v == ""
-	}
 }
 
 // errBatchInexact: the answer was not exactly the entries asked (one missing, one more, one twice, another day): not used
@@ -407,8 +343,7 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 	for _, m := range mids {
 		asked[m] = true
 	}
-	out, single, again := map[string]string{}, map[string]bool{}, map[string]bool{}
-	probing := map[string]bool{}
+	out, single := map[string]string{}, map[string]bool{}
 	raw = reCmpInfo.ReplaceAllString(raw, "")
 	for _, b := range reVchBlock.FindAllString(raw, -1) {
 		c := cleanXML(b)
@@ -416,46 +351,22 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 		switch {
 		case mid == "" || !asked[mid]:
 			return nil, nil, batchInexactError{"an entry not asked (MasterID " + or(mid, "none") + ")"}
-		case out[mid] != "" || single[mid] || again[mid]:
+		case out[mid] != "" || single[mid]:
 			return nil, nil, batchInexactError{"MasterID " + mid + " twice"}
 		case normDate(tagValue(c, "DATE")) != day:
 			return nil, nil, batchInexactError{"MasterID " + mid + " dated " + or(normDate(tagValue(c, "DATE")), "no date")}
 		}
-		payrollLearn(company, c)
-		if payrollEntry(company, tagValue(c, "VOUCHERTYPENAME")) {
-			single[mid] = true
-			continue
-		}
-		cv := batchConvert(c)
-		keys, always := batchTOSLines(cv)
-		if always != "" {
-			single[mid] = true
-			continue
-		}
-		if ok, unknown := batchTOSTake(company, keys); !ok {
-			if len(unknown) > 0 && !probing[strings.Join(unknown, "\n")] {
-				// the first entry naming these unknown lines: read one by one, which settles them for the company
-				probing[strings.Join(unknown, "\n")] = true
-				batchTOSProbe(company, mid, unknown)
-				single[mid] = true
-			} else if len(unknown) > 0 {
-				again[mid] = true // asked again in the next group, once its probe has settled the lines
-			} else {
-				single[mid] = true // a line whose ledger / item FinComVoucherObject gives a type of supply for
-			}
-			continue
-		}
-		v, why := fastStripWhy(cv)
-		if why != "" || v == "" {
+		v, leave := batchEntry(company, c)
+		if leave != "" {
 			single[mid] = true
 			continue
 		}
 		out[mid] = v
 	}
-	if len(out)+len(single)+len(again) != len(mids) {
+	if len(out)+len(single) != len(mids) {
 		var miss []string
 		for _, m := range mids {
-			if out[m] == "" && !single[m] && !again[m] {
+			if out[m] == "" && !single[m] {
 				miss = append(miss, m)
 			}
 		}
@@ -464,8 +375,79 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 	return out, single, nil
 }
 
+// one entry of a group's answer (cleaned): as FinCom keeps it, or why FinComVoucherObject is to read it instead (leave;
+// the same steps the gate's field-by-field comparison runs
+func batchEntry(company, c string) (v, leave string) {
+	payrollLearn(company, c)
+	if payrollEntry(company, tagValue(c, "VOUCHERTYPENAME")) {
+		return "", "a payroll entry"
+	}
+	cv := batchConvert(c)
+	// review R1-1 / S-1: pay heads (a salary entry of a Tally base type, which payroll learning never learns): the
+	// strip with the collection's CATEGORYENTRY must make exactly what it makes without it, else one by one
+	if reBatchCat.MatchString(c) {
+		a, wa := fastStripWhy(cv)
+		b, wb := fastStripWhy(batchConvertCat(c))
+		if a != b || wa != wb {
+			return "", "employees' pay heads under its lines"
+		}
+	}
+	keys, always := batchTOSLines(cv)
+	if always != "" {
+		return "", always
+	}
+	if len(keys) > 0 {
+		return "", "a GST line the group gives with no type of supply (" + strings.Join(keys, ", ") + ")"
+	}
+	v, why := fastStripWhy(cv)
+	if why != "" || v == "" {
+		return "", or(why, "nothing kept")
+	}
+	return v, ""
+}
+
 // the group size of the day being read: 100, halved after a group stopped at 2 s; 0: one by one
 func pullBatchMax() int { return maxI(1, minI(keepNum("DayPullBatchMax", batchMaxN), batchMaxN)) }
+
+// review R1-4: the group size a company's slow days came down to, kept for its next days for the rest of this run of the
+// bridge (by company name and GUID): 0 none; 1 one by one. So the 2 s stop is met at most twice a company (100, then 50)
+func pullBatchCoKey(it pullItem) string {
+	return companyKey(it.Company) + "|" + strings.ToLower(it.CGUID)
+}
+
+func pullBatchCo(it pullItem) int {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	return pull.batchCo[pullBatchCoKey(it)]
+}
+
+func pullBatchCoSet(it pullItem, n int) {
+	pull.mu.Lock()
+	defer pull.mu.Unlock()
+	if pull.batchCo == nil {
+		pull.batchCo = map[string]int{}
+	}
+	pull.batchCo[pullBatchCoKey(it)] = n
+}
+
+// review R1-5 (the owner's approval, section 6 point 1: a day's groups go straight after its FinComDayHeads): heads older
+// than this when a group is due are asked of Tally again first
+func pullHeadsFresh() time.Duration {
+	return time.Duration(maxI(10, keepNum("DayPullHeadsFreshSec", 60))) * time.Second
+}
+
+// review R1-2 / S-2: after a group stopped at 2 s, until Tally has finished it (the request the bridge gave up on, whose
+// lock is held until then): false when Tally had not by the bound
+func pullAwaitEarlier(port int, bound time.Duration) bool {
+	end := time.Now().Add(bound)
+	for earlierBusy(port) {
+		if time.Now().After(end) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return true
+}
 
 // a day's group by FinComVoucherBatch (daypull.go pullFetchStep): (sent, more); handled false: one by one this step
 func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
@@ -475,16 +457,22 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	}
 	if w.batchN == 0 {
 		w.batchN = pullBatchMax()
-	}
-	// an entry read one by one to settle what a group left unknown goes before the next group
-	for _, m := range w.want {
-		if w.single[m] && batchTOSProbing(it.Company, m) {
+		if n := pullBatchCo(it); n > 0 && n < w.batchN {
+			w.batchN = n // review R1-4: the size this company's earlier slow day came down to
+		}
+		if w.batchN < 2 {
+			w.oneByOne = true
 			return false, false, false
 		}
 	}
 	g, contiguous := batchGroup(w.want, w.heads, w.batchN, func(m string) bool { return w.single[m] || payrollEntry(it.Company, w.heads[m].Type) })
 	if len(g) < 2 {
 		return false, false, false
+	}
+	if !w.warmAt.IsZero() && nowFn().Sub(w.warmAt) > pullHeadsFresh() {
+		// review R1-5: the day's heads are asked of Tally again (FinCom is not told them again: what it wants stands)
+		w.headsDone, w.heads, w.warmAt = false, map[string]pullHead{}, time.Time{}
+		return true, false, true
 	}
 	tc := recorderTC(nil)
 	var took float64
@@ -494,7 +482,13 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	listed := pullCoListed(w, port)
 	held := windowHoldFn()
 	got, single, err := fetchVoucherBatch(tc, it.Company, port, it.Day, g, contiguous, liveBodySec(), listed)
-	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+	from := time.Now().Add(-time.Duration(took * float64(time.Second)))
+	unfinished := false
+	if errors.Is(err, errRecorderStop) && took > 0 {
+		// review R1-2 / S-2: the window watched until Tally has finished the group it was stopped on
+		unfinished = !pullAwaitEarlier(port, abandonWait())
+	}
+	holdMs := held(from)
 	if took == 0 {
 		holdMs = 0
 	}
@@ -515,14 +509,19 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	case holdMs >= limit:
 		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %d entries of the day were read (%s)", float64(holdMs)/1000, len(g), form))
 		return true, true, false
+	case unfinished:
+		pullStopCompany(w, "over2s", fmt.Sprintf("a group of %d entries (%s): Tally had not finished it %d s after the 2 s stop", len(g), form, int(abandonWait().Seconds())))
+		return true, true, false
 	case errors.Is(err, errRecorderStop):
-		// the owner's approval of 29-Oct-2026, point 4: halve, then one by one
+		// the owner's approval of 29-Oct-2026, point 4: halve, then one by one (review R1-4: for the company's next days too)
 		if w.batchN >= pullBatchMax() && len(g) >= 4 {
 			w.batchN = maxI(2, len(g)/2)
+			pullBatchCoSet(it, w.batchN)
 			writeLog(fmt.Sprintf("Older entries of %s: %s: a group of %d entries (%s) took Tally over 2 s; asked again %d at a time", it.Company, liveDay(it.Day), len(g), form, w.batchN))
 		} else {
 			w.oneByOne = true
-			writeLog(fmt.Sprintf("Older entries of %s: %s: a group of %d entries (%s) took Tally over 2 s; the day's other entries are read one by one", it.Company, liveDay(it.Day), len(g), form))
+			pullBatchCoSet(it, 1)
+			writeLog(fmt.Sprintf("Older entries of %s: %s: a group of %d entries (%s) took Tally over 2 s; the company's other entries are read one by one", it.Company, liveDay(it.Day), len(g), form))
 		}
 		return true, true, true
 	case errors.Is(err, errBatchInexact):
@@ -539,23 +538,17 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 		return true, true, false
 	}
 	w.fails = 0
-	w.asked += len(g)
+	w.warmAt = nowFn()
+	w.asked += len(g) - len(single) // review R1-7: an entry left for FinComVoucherObject is counted when it reads it
 	w.batches++
 	in := map[string]bool{}
-	var probes []string
 	for _, m := range g {
 		if single[m] {
 			if w.single == nil {
 				w.single = map[string]bool{}
 			}
-			w.single[m] = true // left wanted: FinComVoucherObject reads it (a payroll entry, one the strip would hold, a probe)
-			if batchTOSProbing(it.Company, m) {
-				probes = append(probes, m)
-			}
+			w.single[m] = true // left wanted: FinComVoucherObject reads it (a payroll entry, pay heads, one the strip would hold, ...)
 			continue
-		}
-		if got[m] == "" {
-			continue // asked again in the next group (its lines settled by a probe first)
 		}
 		in[m] = true
 		x, h := got[m], w.heads[m]
@@ -565,14 +558,9 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 		}
 		w.got = append(w.got, x)
 	}
-	// the probes first (FinComVoucherObject reads them next), then the rest as they were
-	rest := append([]string{}, probes...)
-	isProbe := map[string]bool{}
-	for _, m := range probes {
-		isProbe[m] = true
-	}
+	var rest []string
 	for _, m := range w.want {
-		if !in[m] && !isProbe[m] {
+		if !in[m] {
 			rest = append(rest, m)
 		}
 	}

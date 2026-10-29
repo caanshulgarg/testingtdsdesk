@@ -238,6 +238,7 @@ func pullReset() {
 	pull.items, pull.work = nil, nil
 	pull.stopped, pull.upload, pull.tell, pull.done, pull.state, pull.said = map[int]string{}, map[string]M{}, map[string]M{}, map[string]time.Time{}, map[string]M{}, map[string]string{}
 	pull.stopCo = map[string]M{}
+	pull.batchCo = map[string]int{}
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
 	pullSaveMu.Lock()
 	pullSaveText.Store("")

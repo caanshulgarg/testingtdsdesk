@@ -39,20 +39,38 @@ change.
    - Each entry keeps the REMOTEID attribute Tally writes on a collection's VOUCHER, equal to its GUID (an approved
      field; FinCom's reader takes the GUID first).
    - What a group gives otherwise than FinComVoucherObject (the gate's field-by-field comparison on the tdsgst and
-     payroll test companies, tally-versions mode bdiff, run 40800355969) is never taken from it:
-     - an "On Account" bill allocation with no name, which every release adds to a bill-wise party's line that has none:
-       that entry is read one by one;
+     payroll test companies, tally-versions mode bdiff, run 40800355969) is never taken from it; that entry is read one
+     by one:
+     - an "On Account" bill allocation with no name, which every release adds to a bill-wise party's line that has none;
      - TallyPrime 3.0 .. 6.2 leave a line's GST type of supply empty in a group where FinComVoucherObject gives the one
-       the ledger or stock item holds ("Goods"). The first entry naming such a ledger is read one by one and its answer
-       settles the ledger for the company (kept in memory, per company): a ledger that holds none (ZZ BIG TEST's) has its
-       entries taken from groups; one that holds a type has its entries read one by one. On 7.1 groups give the type.
-       So on 3.0 .. 6.2, entries on GST ledgers set to Goods / Services go one by one, as in 2.4.8.
+       the ledger or stock item holds ("Goods"): an entry with a line that has a GST nature or taxability and no type of
+       supply (empty or left out) is read one by one, every time. Nothing read from one entry is carried to another
+       (review round 2, H1 / M1 / M2). So on 3.0 .. 6.2 entries with GST lines go one by one, as in 2.4.8; on 7.1 groups
+       give the type and take them.
+     - employees' pay heads under an entry's lines (a salary entry of a Tally base type, which the payroll learning never
+       learns; review round 1, R1-1 / S-1): the strip with the collection's CATEGORYENTRY must make exactly what it makes
+       without it, else the entry is read one by one.
+   - The gate's answers on 7.1 and 3.0 (bdiff run 40815068422: tdsgst, TDS challan payments, salary payments per
+     employee, stock journals, an optional sales entry) are kept in testdata/batch249/gate-*.zip and compared entry by
+     entry in TestR249R1GateAnswersAsObject: 7.1 134 identical, 2 left; 3.0 78 identical, 58 left; none differs.
 3. **Checks on every group answer** (fetchVoucherBatch): every entry asked, none more, none twice, all dated the day;
    otherwise the answer is not used and the day goes one by one (one log line). Each entry's GUID is checked against the
    day's list as before.
-4. **The slow-group rule**: a group stopped at 2 s (Tally's window answering) is asked again in groups of half its size;
-   a half-size group also stopped: the day goes one by one. Tally's window not answering for 2 s during a group stops the
-   company's period, as in 2.4.5 (freeze safety, unchanged).
+4. **The slow-group rule**: a group stopped at 2 s (Tally's window answering) is asked again in groups of half its size,
+   once (100, then 50: not 25 and less; review R1-8); a half-size group also stopped: one by one. The size a company came
+   down to is kept for its next days for the rest of the bridge's run (review R1-4), so the 2 s stop is met at most twice
+   a company. After a stop the bridge waits for Tally to finish the group (as since 2.3.1) and watches Tally's window
+   until then (review R1-2 / S-2): a hold of 2 s or more by then stops the company's period ("window"), and Tally not
+   done within TallyAbandonWaitSec (20 s) stops it too ("over2s"). Tally's window not answering for 2 s during a group
+   stops the company's period, as in 2.4.5.
+5. **Heads, then groups** (the approval, section 6 point 1; review R1-5): a day's heads older than 60 s when a group is
+   due (FinCom slow to answer them, a pause) are asked of Tally again first (DayPullHeadsFreshSec).
+6. **Uploads** (review R1-3): what was read goes to FinCom in bodies of at most DayPullBatch entries and 4 MB (one entry
+   over it at most), so a group of large entries never makes one body FinCom refuses.
+7. **The guard and the request** (review R1-10 / S-3, R1-11 / S-5): the dated guard lets a group through only under the
+   period fetch's own stop (a copier's background request, not a person's); the FETCH is frozen (its SHA-256 in
+   batch249.go, batchFetchSHA): a change of FinComVoucherObject's fields never widens FinComVoucherBatch (the request is
+   then not built, and the entries go one by one).
 
 ## Measured (real TallyPrime, test data)
 

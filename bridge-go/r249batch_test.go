@@ -508,14 +508,11 @@ func TestR249PullPayrollOneByOneOthersInAGroup(t *testing.T) {
 }
 
 // 2.4.9's gate (bdiff run 40800355969, TallyPrime 3.0, the tdsgst and payroll companies): what a group gives otherwise
-// than FinComVoucherObject. An "On Account" bill allocation Tally adds: always one by one. A line with a GST nature and no
-// type of supply (3.0 .. 6.2): the first entry naming that ledger is read one by one and its answer settles the ledger:
-// tdsgst's "Sales Goods 18%" holds "Goods" (its entries one by one from then on), ZZ BIG TEST's ledgers hold none (their
-// entries taken from groups, identical); salary payments are taken from the group, identical
+// than FinComVoucherObject is never taken from it. An "On Account" bill allocation Tally adds: one by one. A line with a
+// GST nature and no type of supply (3.0 .. 6.2): one by one, whatever was read before (review 249 round 2 H1 / M1 / M2:
+// nothing learned from one entry is carried to another). Salary payments: taken from the group, identical
 func TestR249GroupLeavesWhatItGivesOtherwise(t *testing.T) {
-	batchTOS.mu.Lock()
-	batchTOS.known, batchTOS.probe = map[string]bool{}, map[string][]string{}
-	batchTOS.mu.Unlock()
+	liveBridge(t, "") // the bridge's folders (and its log) in a temporary place: payroll learning may write a line
 	reRemote := regexp.MustCompile(` REMOTEID="[^"]*"`)
 	load := func(dir string, files ...string) map[string]string {
 		o := map[string]string{}
@@ -540,62 +537,43 @@ func TestR249GroupLeavesWhatItGivesOtherwise(t *testing.T) {
 		return o
 	}
 	same := func(dir, mid, c string) {
-		got, why := fastStripWhy(batchConvert(c))
-		if why != "" || reRemote.ReplaceAllString(got, "") != reRemote.ReplaceAllString(obj(dir, mid), "") {
-			t.Errorf("MasterID %s taken from a group differs (%s)", mid, why)
+		got, leave := batchEntry("BDIFF CO", c)
+		if leave != "" || reRemote.ReplaceAllString(got, "") != reRemote.ReplaceAllString(obj(dir, mid), "") {
+			t.Errorf("MasterID %s taken from a group differs (%s)", mid, leave)
 		}
 	}
 	td := filepath.Join("testdata", "batch249", "3.0-bdiff")
 	e := load(td, "B5-20260501-2.xml", "B4-20260401-1.xml", "B4-20260602-39.xml")
-	if _, always := batchTOSLines(batchConvert(e["1"])); !strings.Contains(always, "On Account") {
-		t.Fatalf("the journal with Tally's own On Account allocation: %q", always)
+	if _, leave := batchEntry("BDIFF CO", e["1"]); !strings.Contains(leave, "On Account") {
+		t.Fatalf("the journal with Tally's own On Account allocation: %q", leave)
 	}
-	for _, mid := range []string{"46", "48"} { // salary payments: nothing to settle, identical
-		if k, always := batchTOSLines(batchConvert(e[mid])); len(k) != 0 || always != "" {
-			t.Fatalf("salary payment %s: %v %q", mid, k, always)
-		}
+	for _, mid := range []string{"46", "48"} { // salary payments: identical
 		same(td, mid, e[mid])
 	}
-	const co = "BDIFF CO"
-	k2, _ := batchTOSLines(batchConvert(e["2"]))
-	if ok, unknown := batchTOSTake(co, k2); ok || len(unknown) == 0 || !strings.Contains(strings.Join(k2, ","), "sales goods 18%") {
-		t.Fatalf("an unknown ledger taken: %v %v", k2, unknown)
+	for _, mid := range []string{"2", "39"} { // "Sales Goods 18%": no type of supply in the group, "Goods" in the object
+		if _, leave := batchEntry("BDIFF CO", e[mid]); !strings.Contains(leave, "sales goods 18%") {
+			t.Fatalf("MasterID %s: %q", mid, leave)
+		}
 	}
-	batchTOSProbe(co, "2", k2)
-	batchTOSLearn(co, "2", obj(td, "2"))
-	if ok, unknown := batchTOSTake(co, k2); ok || len(unknown) != 0 {
-		t.Fatalf("a ledger FinComVoucherObject gives Goods for is taken from groups: %v", unknown)
+	// a line with the tag left out (not only empty) is left too (round 2 M3)
+	if _, leave := batchEntry("BDIFF CO", strings.Replace(e["2"], "<GSTOVRDNTYPEOFSUPPLY></GSTOVRDNTYPEOFSUPPLY>", "", -1)); leave == "" {
+		t.Fatal("a GST line without the type-of-supply tag taken")
 	}
-	k39, _ := batchTOSLines(batchConvert(e["39"]))
-	if ok, _ := batchTOSTake(co, k39); ok {
-		t.Fatal("another entry of that ledger taken")
-	}
-	// ZZ BIG TEST on 3.0: its ledgers hold no type of supply: after one probe each, its entries come from groups
+	// ZZ BIG TEST on 3.0: an entry with a GST line is left; every entry taken is identical
 	zd := filepath.Join("testdata", "batch249", "3.0")
-	z := load(zd, "batch-20260831-w5.xml", "batch-20260801-w6.xml")
-	learned := 0
-	for mid, c := range z {
-		k, always := batchTOSLines(batchConvert(c))
-		if always != "" {
-			t.Fatalf("ZZ BIG TEST %s: %s", mid, always)
+	left, taken := 0, 0
+	for mid, c := range load(zd, "batch-20260831-w5.xml", "batch-20260801-w6.xml") {
+		if _, leave := batchEntry("ZZ BIG", c); leave != "" {
+			left++
+			continue
 		}
-		if ok, unknown := batchTOSTake("ZZ BIG", k); !ok {
-			if len(unknown) == 0 {
-				t.Fatalf("ZZ BIG TEST %s refused for a known ledger", mid)
-			}
-			batchTOSProbe("ZZ BIG", mid, unknown)
-			batchTOSLearn("ZZ BIG", mid, obj(zd, mid))
-			learned++
-		}
-		if ok, _ := batchTOSTake("ZZ BIG", k); !ok {
-			t.Fatalf("ZZ BIG TEST %s still not taken after its probe", mid)
-		}
+		taken++
 		same(zd, mid, c)
 	}
-	if learned == 0 || learned > 5 {
-		t.Fatalf("%d probes", learned)
+	if left == 0 || taken == 0 {
+		t.Fatalf("3.0 ZZ BIG TEST: %d left, %d taken", left, taken)
 	}
-	// 7.1 gives the type of supply in a group: nothing to settle
+	// 7.1 gives the type of supply in a group: nothing left for it
 	for mid, c := range load(filepath.Join("testdata", "batch249", "7.1"), "batch-20260831-w5.xml", "batch-20260801-w6.xml") {
 		if k, always := batchTOSLines(batchConvert(c)); len(k) != 0 || always != "" {
 			t.Fatalf("7.1 %s: %v %q", mid, k, always)
@@ -603,29 +581,19 @@ func TestR249GroupLeavesWhatItGivesOtherwise(t *testing.T) {
 	}
 }
 
-// the probe in the period fetch: a group whose entries name a ledger with a GST nature and no type of supply: the first
-// is read one by one (FinComVoucherObject: no type of supply either), then the others come in the next group
-func TestR249PullProbeThenGroup(t *testing.T) {
-	batchTOS.mu.Lock()
-	batchTOS.known, batchTOS.probe = map[string]bool{}, map[string][]string{}
-	batchTOS.mu.Unlock()
+// in the period fetch: entries with a GST line and no type of supply are read one by one; the others of the day come
+// in the group; FinCom gets all, as FinComVoucherObject gives them
+func TestR249PullGSTLineWithoutTypeOneByOne(t *testing.T) {
 	f, _, m := pullBridgeWith(t, "")
-	types := make([]string, 10)
-	for i := range types {
-		types[i] = "Sales"
-	}
-	vs := pullDay(f, "20250915", 2000, types...)
+	vs := pullDay(f, "20250915", 2000, "Sales", "Sales", "Sales", "Sales", "Receipt", "Receipt")
 	f.mu.Lock()
-	for _, v := range vs {
+	for _, v := range vs[:4] {
 		v.extra = `<ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales GST</LEDGERNAME><AMOUNT>5.00</AMOUNT><GSTOVRDNNATURE>Sales Taxable</GSTOVRDNNATURE><GSTOVRDNTYPEOFSUPPLY></GSTOVRDNTYPEOFSUPPLY></ALLLEDGERENTRIES.LIST>`
 	}
 	f.mu.Unlock()
 	applyPeriodDays(pullList("20250915"))
 	pullRun(t, 40)
-	if len(batchBodies(f)) != 2 || f.n(vchObjectID) != 1 || len(sentEntries(m)) != 10 {
+	if len(batchBodies(f)) != 1 || f.n(vchObjectID) != 4 || len(sentEntries(m)) != 6 {
 		t.Fatalf("groups %d, one by one %d, sent %d", len(batchBodies(f)), f.n(vchObjectID), len(sentEntries(m)))
-	}
-	if ok, _ := batchTOSTake(zz, []string{"ALLLEDGERENTRIES|sales gst"}); !ok {
-		t.Fatal("the ledger not settled")
 	}
 }
