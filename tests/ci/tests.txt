@@ -63,6 +63,8 @@ run_fin_xlsx.py                       180  @libreoffice  # needs LibreOffice: ta
 run_fin_statements_ui.py              300  TDSDESK_SITE=../app/dist-test
 run_fs_period.js                      120
 run_fs_period_ui.py                   450  TDSDESK_SITE=../app/dist-test @libreoffice  # needs LibreOffice (the period workbooks recalculated), dealt with run_fin_xlsx.py
+run_fs_recon.js                       120
+run_fs_recon_ui.py                    300  TDSDESK_SITE=../app/dist-test
 run_reports_pack.js                   120
 run_reports_pack_ui.py                300  TDSDESK_SITE=../app/dist-test
 run_gateway_errors.js                 120

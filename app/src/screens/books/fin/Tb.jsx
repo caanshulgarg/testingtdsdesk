@@ -77,6 +77,7 @@ export function Tb({ d, kind, fy }) {
     <header><h3>{"Trial balance and mapping, " + (T.period && !T.period.full ? T.period.range : FC.fyLabel(fy))}</h3><p data-fin-pysrc={T.pySrc}>{"In rupees, a debit positive" + (T.period && !T.period.full ? ": balance sheet ledgers as on " + T.period.asAt + ", income and expenses for the period" : "") + ". " + ({
       copy: T.period && !T.period.full && T.period.cmp !== "fy" ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
       none: "No PY: the same period of last year is not in FinCom’s copy." }[T.pySrc] || "PY from the opening balances.")}</p></header>
+    {T.carried && <p className="note" data-fin-carried="">{T.carried.note + ": " + T.carried.list.map((a) => "Dr " + a.dr + " / Cr " + a.cr + " " + rs(a.amt)).join("; ") + ". Pass them in Tally, then tick it on last year’s Checks tab."}</p>}
     {unm >= 0.005 && <p className="fin-unmapped" data-fin-unmapped="">{"Unmapped balance " + inr(unm)}{s.src !== "none" && <button type="button" className="linkbtn" onClick={() => setFin({ src: "none", tbF: null })}>Show them</button>}</p>}
     <div className="fin-tools">
       <input type="search" id="finq" aria-label="Find a ledger" data-fk="finq" placeholder="Find a ledger or group" value={s.q || ""} onChange={(ev) => { st().q = ev.target.value; setAndShow("fin", st(), true); }} />
@@ -129,7 +130,7 @@ function Adjustments({ d, fy }) {
     <summary>{"Adjustments" + (list.length ? " (" + list.length + ")" : "")}</summary>
     <p className="note">{"Audit entries for these statements only (" + pl + "); FinCom never posts them to Tally."}</p>
     {list.length > 0 && <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="adj"><thead><tr><th>Debit</th><th>Credit</th><th className="n">Amount</th><th>Narration</th><th /></tr></thead>
-      <tbody>{list.map((a, i) => <tr key={i} data-fin-adjrow={i}><td>{a.dr}</td><td>{a.cr}</td><td className="n">{rs(a.amt)}</td><td>{a.narr}</td>
+      <tbody>{list.map((a, i) => <tr key={i} data-fin-adjrow={i}><td>{a.dr}</td><td>{a.cr}</td><td className="n">{rs(a.amt)}</td><td>{a.narr}{a.recon ? <span className="fin-why">{"matches the audited balance sheet · " + (a.by || "") + " · undo it from the Checks tab’s history"}</span> : null}</td>
         <td><button type="button" className="linkbtn" onClick={() => { FinSt.adjDel(pk, i); toast("Adjustment removed."); render(); }}>Remove</button></td></tr>)}</tbody></table></div>}
     <datalist id="finLedgers">{led.map((l) => <option key={l} value={l} />)}</datalist>
     <div className="fin-adj-add">

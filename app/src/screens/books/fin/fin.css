@@ -162,3 +162,20 @@ table.fin-pyt input.fin-pyamt { width: 130px; min-height: 28px; text-align: righ
 .fin-pycheck { margin-top: 18px; }
 .fin-pycheck h4 { margin: 0 0 2px; font-size: 14px; font-weight: 600; }
 .fin-pycheck > p { margin: 0 0 8px; }
+
+/* matching the audited balance sheet (fin/Recon.jsx) */
+.fin-recon { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border-subtle, var(--border)); }
+.fin-recon h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.fin-rprops { margin-top: 14px; }
+.fin-rph { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.fin-rprop { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--border-subtle, var(--border)); font-size: 13px; min-width: 0; }
+.fin-rprop > div { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.fin-rprop .fin-why { max-width: none; }
+.fin-ract { display: inline-flex; gap: 6px; }
+.fin-rleft { margin-top: 10px; font-size: 13px; }
+.fin-rleft ul, .fin-rlog ul { margin: 4px 0 0; padding-left: 18px; }
+.fin-rlog { margin-top: 12px; font-size: 12.5px; }
+.fin-rlog summary { cursor: pointer; color: var(--text-secondary); }
+.fin-rlog li .linkbtn { margin-left: 8px; }
+.fin-rcarry { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; }
+.fin-rcarry p { flex: 1 1 100%; margin: 0; }

@@ -26,6 +26,7 @@ import Details from "./fin/Details.jsx";
 import Period from "./fin/Period.jsx";
 import PyBs, { PyCheck } from "./fin/PyBs.jsx";
 import Stock from "./fin/Stock.jsx";
+import Recon from "./fin/Recon.jsx";
 import "./fin/fin.css";
 // the reports pack (ROUND 100): the Board's Report, the auditor's report, the MRL and their questionnaire, a lazy chunk
 // of its own opened from the header's "Reports" menu (the page keeps its seven tabs)
@@ -73,6 +74,7 @@ function Checks({ d }) {
           <td className="n">{c.value !== 0 && f[0] && <button type="button" className="linkbtn" onClick={() => setFin(Object.assign({ tab: f[0] }, f[1] || {}))}>Open</button>}</td></tr>; })}
       </tbody></table></div>
     <PyCheck d={d} />
+    <Recon d={d} fy={d.fy} />
   </section>;
 }
 

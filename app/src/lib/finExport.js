@@ -831,7 +831,29 @@ function built(fy, opt) {
 }
 const fileBase = (d) => String(d.inputs.name || "Client").replace(/[\\/:*?"<>|]+/g, " ").trim() + " Financial statements " + (d.period && !d.period.full ? d.period.range : "FY " + fyLabel(d.fy));
 
+// the entries accepted to match the audited balance sheet (FinRecon.journal), as journal vouchers for Tally: one row a
+// voucher, the date, the ledgers and the amount (FinCom never posts them)
+async function journalBook(fy) {
+  const ExcelJS = await ensureExcelJs(), rows = G.FinRecon ? G.FinRecon.journal(fy) : [];
+  const wb = new ExcelJS.Workbook(); wb.creator = "FinCom";
+  const ws = wb.addWorksheet("Journal");
+  const name = (G.FinSt.inputs().name || "Client").replace(/[\\/:*?"<>|]+/g, " ").trim();
+  ws.addRow([name + ": journal entries to match the audited balance sheet (" + (rows[0] ? rows[0].date : "") + "), to pass in Tally"]).font = { bold: true };
+  ws.addRow(["Date", "Voucher type", "Debit ledger", "Credit ledger", "Amount (Rs)", "Narration"]).font = { bold: true };
+  rows.forEach((r) => { const x = ws.addRow([r.date, r.type, r.dr, r.cr, r.amt, r.narr]); x.getCell(5).numFmt = "#,##0.00"; });
+  [12, 12, 40, 40, 16, 70].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  return { buffer: await wb.xlsx.writeBuffer(), name: name + " Journal entries for Tally " + (rows[0] ? rows[0].date : "") + ".xlsx", rows };
+}
+
 export const FinXlsx = {
+  journalMake: journalBook,
+  async journal(fy) {
+    const x = await journalBook(fy);
+    const blob = new Blob([x.buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    if (typeof G.saveFile === "function") await G.saveFile(x.name, blob);
+    else { const a = document.createElement("a"), u = URL.createObjectURL(blob); a.href = u; a.download = x.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
+    return x.name;
+  },
   async make(fy, opt) {
     const ExcelJS = await ensureExcelJs(), d = built(fy, opt || {});
     const { wb, cells, sheets } = workbook(ExcelJS, d);

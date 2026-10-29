@@ -4,3 +4,5 @@
 import "../../../src/js/88-fin-statements.js";
 // last year's balance sheet, uploaded (FinPyBs: read, codes, the PY column and the suggestions), with the page too
 import "../../../src/js/88-fin-pybs.js";
+// FinCom's balance sheet matched with the audited one (FinRecon: the differences, the proposals, approving them)
+import "../../../src/js/88-fin-recon.js";

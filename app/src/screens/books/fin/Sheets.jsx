@@ -28,6 +28,7 @@ export function Sheet({ d, title, children, sub }) {
     {P.spansNote && <p className="note" data-fin-spans="">{P.spansNote}</p>}
     {P.cmpNote && <p className="note" data-fin-cmpnote="">{P.cmpNote}</p>}
     {P.pyNote && <p className="note" data-fin-pynote="">{P.pyNote}</p>}
+    {d.tb.carried && <p className="note" data-fin-carried="">{d.tb.carried.note + ", dated " + FinSt.DMY(String(+d.fy) + "0331") + " and kept in FinCom; not in Tally."}</p>}
     {(d.tb.warn || []).map((w) => <p key={w} className="note">{w}</p>)}
     {children}
   </section>;
