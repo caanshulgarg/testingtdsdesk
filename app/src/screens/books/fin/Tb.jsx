@@ -33,7 +33,9 @@ function CodeList({ kind, at, value, onPick, onClose, allowRule }) {
   const groups = codeGroups(kind).map(([g, list]) => [g, list.filter(([c, l]) => !t || c.toLowerCase().startsWith(t) || l.toLowerCase().includes(t) || g.toLowerCase().includes(t))]).filter(([, l]) => l.length);
   const W = Math.min(380, window.innerWidth - 32), left = Math.max(16, Math.min(at.left, window.innerWidth - W - 16));
   const below = at.bottom + 4, room = window.innerHeight - below;
-  const pos = room > 260 ? { top: below, left } : { bottom: Math.max(8, window.innerHeight - at.top + 4), left };
+  // below the button when the list fits there (its full height, or more room than above), else above it; never past the window
+  const need = Math.min(380, window.innerHeight * 0.7) + 8, above = at.top - 12;
+  const pos = room >= need || room >= above ? { top: below, left, maxHeight: Math.max(160, Math.min(380, room - 8)) } : { bottom: Math.max(8, window.innerHeight - at.top + 4), left, maxHeight: Math.max(160, Math.min(380, above)) };
   return <div className="fin-pick" ref={box} style={pos} role="dialog" aria-label="Choose a code" data-fin-pick="">
     <input ref={inp} type="search" aria-label="Find a code" placeholder="Find a code or a line" value={q} onChange={(ev) => setQ(ev.target.value)}
       onKeyDown={(ev) => { if (ev.key === "Enter") { const f = groups[0] && groups[0][1][0]; if (f) onPick(f[0]); } }} />
@@ -72,7 +74,9 @@ export function Tb({ d, kind, fy }) {
   const tot = (k) => shown.reduce((a, r) => a + (+r[k] || 0), 0);
   const SRC = [["", "All codes"], ["none", "Unmapped (" + n.none + ")"], ["suggested", "Suggested (" + n.suggested + ")"], ["hand", "By hand (" + n.hand + ")"]];
   return <section className="fin-sheet" data-fin-tb="">
-    <header><h3>{"Trial balance and mapping, " + FC.fyLabel(fy)}</h3><p>{"In rupees, a debit positive. PY " + (T.pySrc === "copy" ? "from last year in FinCom’s copy" : T.pySrc === "typed" ? "as typed" : "from the opening balances") + "."}</p></header>
+    <header><h3>{"Trial balance and mapping, " + (T.period && !T.period.full ? T.period.range : FC.fyLabel(fy))}</h3><p data-fin-pysrc={T.pySrc}>{"In rupees, a debit positive" + (T.period && !T.period.full ? ": balance sheet ledgers as on " + T.period.asAt + ", income and expenses for the period" : "") + ". " + ({
+      copy: T.period && !T.period.full ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
+      none: "No PY: the same period of last year is not in FinCom’s copy." }[T.pySrc] || "PY from the opening balances.")}</p></header>
     {unm >= 0.005 && <p className="fin-unmapped" data-fin-unmapped="">{"Unmapped balance " + inr(unm)}{s.src !== "none" && <button type="button" className="linkbtn" onClick={() => setFin({ src: "none", tbF: null })}>Show them</button>}</p>}
     <div className="fin-tools">
       <input type="search" id="finq" aria-label="Find a ledger" data-fk="finq" placeholder="Find a ledger or group" value={s.q || ""} onChange={(ev) => { st().q = ev.target.value; setAndShow("fin", st(), true); }} />
@@ -92,7 +96,8 @@ export function Tb({ d, kind, fy }) {
         <td className="n">{rs(r.py)}</td><td className="n">{rs(r.cy)}</td><td className="n">{r.adj ? rs(r.adj) : ""}</td><td className="n">{rs(r.final)}</td>
         <td className="code">{r.synthetic ? <span className="note">{r.code + " " + FinSt.CODES[r.code].label}</span> : <>
           <CodeBtn r={r} kind={kind} open={pick && pick.l === r.ledger} onOpen={(at) => setPick(pick && pick.l === r.ledger ? null : { l: r.ledger, at })} />
-          {r.code && <Tag kind={r.codeSrc === "hand" ? "info" : "no"} className="fin-src" data-fin-srctag={r.codeSrc}>{r.codeSrc === "hand" ? "By hand" : "Suggested"}</Tag>}</>}</td>
+          {r.code && <Tag kind={r.codeSrc === "hand" ? "info" : "no"} className="fin-src" data-fin-srctag={r.codeSrc} title={r.why || undefined}>{r.codeSrc === "hand" ? "By hand" : "Suggested"}</Tag>}
+          {r.code && r.codeSrc === "suggested" && r.why && <span className="fin-why" data-fin-why={r.ledger}>{r.why}</span>}</>}</td>
         {lent && <td>{!r.synthetic && isLent(r.ledger) && <input type="checkbox" aria-label={"Loan given (investing): " + r.ledger} checked={MIS.flowMark(r.ledger) === "loan_given"} onChange={(ev) => loanGiven(r.ledger, ev.target.checked)} />}</td>}
       </tr>)}
         {!shown.length && <tr><td colSpan={lent ? 9 : 8} className="note">No ledger here. <button type="button" className="linkbtn" onClick={() => setFin({ tbF: null, src: "", q: "" })}>Show every ledger</button></td></tr>}
@@ -110,21 +115,22 @@ export function Tb({ d, kind, fy }) {
 }
 
 function Adjustments({ d, fy }) {
-  const list = d.tb.adj || [], s = st(), led = d.tb.rows.filter((r) => !r.synthetic).map((r) => r.ledger);
+  // kept for the period the statements are for (FinSt.periodKey: the year, or "<fy>:<from>-<to>")
+  const list = d.tb.adj || [], s = st(), led = d.tb.rows.filter((r) => !r.synthetic).map((r) => r.ledger), pk = FinSt.periodKey(fy, d.period), pl = d.period && !d.period.full ? d.period.range : FC.fyLabel(fy);
   const [f, setF] = useState({ dr: "", cr: "", amt: "", narr: "" });
   const add = () => {
     const amt = +String(f.amt).replace(/,/g, "");
     if (!f.dr.trim() || !f.cr.trim() || !(amt > 0)) { toast("Give the ledger to debit, the ledger to credit and the amount."); return; }
     if (f.dr.trim() === f.cr.trim()) { toast("The ledger to debit and the ledger to credit must differ."); return; }
-    FinSt.adjAdd(fy, { dr: f.dr.trim(), cr: f.cr.trim(), amt, narr: f.narr.trim() });
-    setF({ dr: "", cr: "", amt: "", narr: "" }); toast("Adjustment added to " + FC.fyLabel(fy) + "."); render();
+    FinSt.adjAdd(pk, { dr: f.dr.trim(), cr: f.cr.trim(), amt, narr: f.narr.trim() });
+    setF({ dr: "", cr: "", amt: "", narr: "" }); toast("Adjustment added to " + pl + "."); render();
   };
   return <details className="fin-adj" data-fin-adj="" open={!!s.adjOpen} onToggle={(ev) => { st().adjOpen = ev.currentTarget.open; }}>
     <summary>{"Adjustments" + (list.length ? " (" + list.length + ")" : "")}</summary>
-    <p className="note">Audit entries for these statements only; FinCom never posts them to Tally.</p>
+    <p className="note">{"Audit entries for these statements only (" + pl + "); FinCom never posts them to Tally."}</p>
     {list.length > 0 && <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="adj"><thead><tr><th>Debit</th><th>Credit</th><th className="n">Amount</th><th>Narration</th><th /></tr></thead>
       <tbody>{list.map((a, i) => <tr key={i} data-fin-adjrow={i}><td>{a.dr}</td><td>{a.cr}</td><td className="n">{rs(a.amt)}</td><td>{a.narr}</td>
-        <td><button type="button" className="linkbtn" onClick={() => { FinSt.adjDel(fy, i); toast("Adjustment removed."); render(); }}>Remove</button></td></tr>)}</tbody></table></div>}
+        <td><button type="button" className="linkbtn" onClick={() => { FinSt.adjDel(pk, i); toast("Adjustment removed."); render(); }}>Remove</button></td></tr>)}</tbody></table></div>}
     <datalist id="finLedgers">{led.map((l) => <option key={l} value={l} />)}</datalist>
     <div className="fin-adj-add">
       <input list="finLedgers" aria-label="Ledger to debit" placeholder="Debit ledger" value={f.dr} onChange={(ev) => setF(Object.assign({}, f, { dr: ev.target.value }))} />

@@ -14,20 +14,29 @@ function Fig({ v, dec, note, label }) {
   return <button type="button" className="fin-fig" data-fin-fig={note} title={"Open the note: " + label} onClick={() => openNote(note)}>{t}</button>;
 }
 
+// the period's words (FinSt.periodOf): the full year as before, a part of it by its dates
+const per = (d) => d.period || { full: true };
+const part = (d) => !per(d).full;
+const asAt = (d) => (part(d) ? per(d).asAt : dmy(fyEnd(d.fy)));
+const forWhat = (d) => (part(d) ? per(d).forWhat : "for the year ended " + dmy(fyEnd(d.fy)));
+
 export function Sheet({ d, title, children, sub }) {
-  const nm = (d.inputs && d.inputs.name) || "";
+  const nm = (d.inputs && d.inputs.name) || "", P = per(d);
   return <section className="fin-sheet" data-fin-sheet="">
-    <header><h3>{title}</h3><p>{[nm, d.inputs && d.inputs.cin ? "CIN " + d.inputs.cin : "", sub].filter(Boolean).join(" · ")}</p></header>
+    <header><h3 data-fin-title="">{title}</h3><p>{[nm, d.inputs && d.inputs.cin ? "CIN " + d.inputs.cin : "", sub].filter(Boolean).join(" · ")}</p></header>
     <p className="fin-unit" data-fin-unitline="">{d.inputs.unitLine}</p>
+    {P.pyNote && <p className="note" data-fin-pynote="">{P.pyNote}</p>}
+    {(d.tb.warn || []).map((w) => <p key={w} className="note">{w}</p>)}
     {children}
   </section>;
 }
 
 function Head({ d, first = "Particulars", note = true, at = "As at " }) {
-  const fy = d.fy;
+  const fy = d.fy, P = per(d), pl = at !== "As at ";
+  const cy = part(d) ? (pl ? P.range : at + P.asAt) : at + dmy(fyEnd(fy)), py = part(d) ? (pl ? P.pyRange : at + P.pyAsAt) : at + dmy(fyEnd(+fy - 1));
   return <>
     <colgroup><col />{note && <col style={{ width: 56 }} />}<col className="fig" /><col className="fig" /></colgroup>
-    <thead><tr><th>{first}</th>{note && <th className="no">Note</th>}<th className="n">{at + dmy(fyEnd(fy))}</th><th className="n">{at + dmy(fyEnd(+fy - 1))}</th></tr></thead>
+    <thead><tr><th>{first}</th>{note && <th className="no">Note</th>}<th className="n" data-fin-colcy="">{cy}</th><th className="n" data-fin-colpy="">{py}</th></tr></thead>
   </>;
 }
 const nz = (z) => (z.cy != null && Math.abs(z.cy) > 1e-9) || (z.py != null && Math.abs(z.py) > 1e-9);
@@ -35,7 +44,7 @@ const nz = (z) => (z.cy != null && Math.abs(z.cy) > 1e-9) || (z.py != null && Ma
 export function BalanceSheet({ d }) {
   const dec = d.inputs.dec, S2 = d.bs.sections, T = d.bs.total;
   const parts = [["I", "Equity and liabilities", ["EQ", "NCL", "CL"], T.eqL], ["II", "Assets", ["NCA", "CA"], T.assets]];
-  return <Sheet d={d} title={"Balance sheet as at " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Balance sheet as at " + asAt(d)}>
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="bs"><Head d={d} /><tbody>
       {parts.map(([r, label, secs, tot]) => <Fragment key={r}>
         <tr className="h1"><td colSpan={4}>{r + ". " + label}</td></tr>
@@ -68,7 +77,7 @@ export function ProfitLoss({ d }) {
       <td className="n"><Fig v={z.cy} dec={dec} note={note} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} note={note} label={z.label} /></td></tr>);
   });
   const eps = d.pl.eps;
-  return <Sheet d={d} title={"Statement of profit and loss for the year ended " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Statement of profit and loss " + forWhat(d)}>
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="pl"><Head d={d} at="Year ended " /><tbody>
       {rows}
       {eps && <tr className="muted" data-fin-line="eps"><td>{ROMAN[r] + ". Earnings per equity share (in rupees, face value ₹" + (d.inputs.shares.face || 10) + "): basic and diluted"}</td><td className="no" />
@@ -81,8 +90,8 @@ const CF_HEAD = { pbt: "A. Cash flow from operating activities", dep: "Adjustmen
 const CF_SUB = { opBefore: 1, cashGen: 1, op: 1, inv: 1, fin: 1, net: 1 };
 export function CashFlow({ d }) {
   const dec = d.inputs.dec, cf = d.cf;
-  if (!cf.cy) return <Sheet d={d} title={"Cash flow statement for the year ended " + dmy(fyEnd(d.fy))}><p className="note">The cash flow needs last year’s balances, which are not in FinCom’s copy. Type last year’s audited trial balance in the Trial balance tab.</p></Sheet>;
-  return <Sheet d={d} title={"Cash flow statement for the year ended " + dmy(fyEnd(d.fy))} sub="Indirect method (AS 3)">
+  if (!cf.cy) return <Sheet d={d} title={"Cash flow statement " + forWhat(d)}><p className="note">The cash flow needs last year’s balances, which are not in FinCom’s copy. Type last year’s audited trial balance in the Trial balance tab.</p></Sheet>;
+  return <Sheet d={d} title={"Cash flow statement " + forWhat(d)} sub="Indirect method (AS 3)">
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="cf"><Head d={d} note={false} at="Year ended " /><tbody>
       {cf.lines.map((z) => {
         if (z.key === "diff") return null;
@@ -117,14 +126,14 @@ export function Notes({ d, onRegister }) {
     const el = document.getElementById("fin-note-" + s.note);
     if (el && el.scrollIntoView) el.scrollIntoView({ block: "start" });
   }, [s.note]);
-  return <Sheet d={d} title={"Notes to the financial statements for the year ended " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Notes to the financial statements " + forWhat(d)}>
     <nav className="fin-notes-jump" aria-label="Notes">{d.notes.map((n) => <button key={n.key} type="button" data-fin-jump={n.key} onClick={() => setFin({ note: n.key })}>{n.no + " " + n.title}</button>)}</nav>
     {d.notes.map((n) => <section key={n.key} id={"fin-note-" + n.key} className={"fin-note" + (s.note === n.key ? " on" : "")} data-fin-note={n.key}>
       <h4>{"Note " + n.no + " · " + n.title}{(n.key === "8" || n.key === "34") && onRegister && <small><button type="button" className="linkbtn" onClick={onRegister}>Fixed asset register</button></small>}</h4>
       {(n.key === "8" || n.key === "34") ? <>
-        <Grid g={n.ppe.cy} dec={dec} label={"Year ended " + dmy(fyEnd(d.fy))} />
-        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Previous year</summary><Grid g={n.ppe.py} dec={dec} label={"Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
-      </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} />
+        <Grid g={n.ppe.cy} dec={dec} label={part(d) ? per(d).range : "Year ended " + dmy(fyEnd(d.fy))} />
+        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>{part(d) ? "The same period last year" : "Previous year"}</summary><Grid g={n.ppe.py} dec={dec} label={part(d) ? per(d).pyRange : "Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
+      </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} at={part(d) && n.st === "PL" ? "Period " : "As at "} />
         <tbody>{n.lines.map((z, i) => {
           const cs = codesOf(n, z), cls = z.head ? "h2" : z.total ? "sub" : "l1";
           const lab = cs.length && !z.head ? <button type="button" className="fin-fig" data-fin-tbline={cs.join(",")} title="Open its ledgers in the trial balance" onClick={() => openTb(cs, "Note " + n.no + " · " + z.label)}>{z.label}</button> : z.label;

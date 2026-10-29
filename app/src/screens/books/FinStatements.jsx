@@ -3,7 +3,8 @@
 // the Accounts page (its Mapping is the Trial balance & mapping tab). Opens from the client's menu (books:fs), from
 // Reports ("Financial statements"), and from old links to books:fs.
 //
-// Header: year · Unit · Decimals · Details (the company's details, a drawer) · Reports (a menu: the Board's Report, the auditor's report, the MRL, their questionnaire, Download all; fin/Reports.jsx) · Download Excel · Download PDF (with trial
+// Header: year · Period (Full year, H1, a quarter, 9 months, Year to date, Custom From-To: fin/Period.jsx; the statements are
+// for that period: the P&L its movements, the balance sheet as on its last day) · Unit · Decimals · Details (the company's details, a drawer) · Reports (a menu: the Board's Report, the auditor's report, the MRL, their questionnaire, Download all; fin/Reports.jsx) · Download Excel · Download PDF (with trial
 // balance), built by window.FinXlsx.download / window.FinPdf.open in the chosen unit and decimals. Tabs: Balance sheet · Profit & loss · Cash flow · Notes · Computation of income ·
 // Trial balance & mapping · Checks (a red count only when a check is not 0).
 //
@@ -22,6 +23,8 @@ import { BalanceSheet, ProfitLoss, CashFlow, Notes, openNote } from "./fin/Sheet
 import { Tb } from "./fin/Tb.jsx";
 import { Comp } from "./fin/Comp.jsx";
 import Details from "./fin/Details.jsx";
+import Period from "./fin/Period.jsx";
+import PyBs, { PyCheck } from "./fin/PyBs.jsx";
 import "./fin/fin.css";
 // the reports pack (ROUND 100): the Board's Report, the auditor's report, the MRL and their questionnaire, a lazy chunk
 // of its own opened from the header's "Reports" menu (the page keeps its seven tabs)
@@ -68,6 +71,7 @@ function Checks({ d }) {
           <td className={"n " + (c.value ? "fin-bad" : "fin-ok")}>{c.value ? fig(c.value, rupees ? 2 : dec) : "0"}</td>
           <td className="n">{c.value !== 0 && f[0] && <button type="button" className="linkbtn" onClick={() => setFin(Object.assign({ tab: f[0] }, f[1] || {}))}>Open</button>}</td></tr>; })}
       </tbody></table></div>
+    <PyCheck d={d} />
   </section>;
 }
 
@@ -77,7 +81,7 @@ function Body({ d, tab, fy, kind }) {
   if (tab === "cf") return <CashFlow d={d} />;
   if (tab === "notes") return <Notes d={d} onRegister={reg} />;
   if (tab === "comp") return <Comp d={d} fy={fy} kind={kind} />;
-  if (tab === "tb") return <Tb d={d} fy={fy} kind={kind} />;
+  if (tab === "tb") return <><PyBs d={d} fy={fy} kind={kind} /><Tb d={d} fy={fy} kind={kind} /></>;
   if (tab === "checks") return <Checks d={d} />;
   return <BalanceSheet d={d} />;
 }
@@ -90,21 +94,22 @@ export default function FinStatements({ b }) {
     <p style={{ margin: "0 0 8px" }}><button type="button" className="linkbtn" data-fin-back="" onClick={() => { S.fsTab = ""; render(); }}>← Financial statements</button></p>
     <FixedAssets b={b} fy={fy} /></>;
   if (!fy) return <div className="bk-none">The statements are made from the day book, which is not in yet. <button className="linkbtn" onClick={() => goClient("books:import")}>Bring in from Tally</button></div>;
-  const inp = FinSt.inputs(), unit = inp.unit, dec = inp.dec;
-  const d = built(b, fy, unit, dec), rep = REP_MENU.some(([k]) => k === s.rep) ? s.rep : "", tab = rep ? "" : FIN_TABS.some(([k]) => k === s.tab) ? s.tab : "bs";
-  const bad = d && !d.error ? d.checks.filter((x) => x.value !== 0).length : 0;
+  const inp = FinSt.inputs(), unit = inp.unit, dec = inp.dec, per = FinSt.periodGet(fy), period = per.full ? undefined : per;
+  const d = built(b, fy, unit, dec, period), rep = REP_MENU.some(([k]) => k === s.rep) ? s.rep : "", tab = rep ? "" : FIN_TABS.some(([k]) => k === s.tab) ? s.tab : "bs";
+  const bad = d && !d.error ? d.checks.filter((x) => x.value !== 0).length + (d.pyCheck ? d.pyCheck.bad : 0) : 0;
   const tabs = FIN_TABS.map(([k, l]) => k === "checks" && bad ? [k, l, bad] : [k, l]);
-  return <div className="fin" data-fin="" data-phone-scroll="" data-fin-unit={unit} data-fin-dec={dec}>
+  return <div className="fin" data-fin="" data-phone-scroll="" data-fin-unit={unit} data-fin-dec={dec} data-fin-from={per.from} data-fin-to={per.to}>
     <div className="fin-head" data-fin-head="">
       <select aria-label="Year" value={fy} onChange={(ev) => fsFyGo(ev.target.value)}>{years.map((y) => <option key={y} value={y}>{FC.fyLabel(y)}</option>)}</select>
+      <Period fy={fy} per={per} />
       <Seg label="Unit" value={unit} list={UNITS} onPick={(v) => { FinSt.inputsSet({ unit: v }); render(); }} />
       <Seg label="Decimals" value={dec} list={[[0, "0"], [2, "2"]]} onPick={(v) => { FinSt.inputsSet({ dec: v }); render(); }} />
       <span className="fin-sp" />
       <Button className="btn small" data-fin-details-open="" onClick={() => openDetail("finInputs", fy)}>Details</Button>
       <More label="Reports" align="end" data-fin-reports="" items={REP_MENU.map(([k, l]) => [l, () => setFin({ rep: k, qk: "" }), { "data-fin-rep": k }])
         .concat([["Download all as one PDF", () => downloadAll("pdf", fy, { unit, dec }), { "data-fin-all": "pdf" }], ["Download all as a zip", () => downloadAll("zip", fy, { unit, dec }), { "data-fin-all": "zip" }]])} />
-      <Button className="btn small" data-fin-dl="xlsx" onClick={() => download("xlsx", fy, { unit, dec })}>Download Excel</Button>
-      <Button className="btn small" data-fin-dl="pdf" onClick={() => download("pdf", fy, { unit, dec, includeTb: !!s.pdfTb })}>Download PDF</Button>
+      <Button className="btn small" data-fin-dl="xlsx" onClick={() => download("xlsx", fy, { unit, dec, period })}>Download Excel</Button>
+      <Button className="btn small" data-fin-dl="pdf" onClick={() => download("pdf", fy, { unit, dec, period, includeTb: !!s.pdfTb })}>Download PDF</Button>
       <label className="note" style={{ whiteSpace: "nowrap" }}><input type="checkbox" aria-label="PDF with the trial balance" checked={!!s.pdfTb} onChange={(ev) => setFin({ pdfTb: ev.target.checked })} /> with trial balance</label>
     </div>
     <PageTabs tabs={tabs} value={tab} onPick={(k) => setFin({ tab: k, rep: "", note: k === "notes" ? s.note : "" })} label="Financial statements" attr="data-fin-tab" max={7} className="fin-tabs" />

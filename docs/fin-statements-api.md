@@ -41,6 +41,44 @@ adjustments Dr an 8E / 34D ledger, Cr the asset (less the reverse). The PPE sche
 the accumulated depreciation (below), so the charge for the year is the depreciation ledger's, the additions are not net
 of it, and the net block stays the TB's. Such an entry is not read as a sale in the income-tax depreciation (`taxDep`).
 
+## A period of the year (29-Oct-2026)
+
+| Call | Returns |
+|---|---|
+| `FinSt.periods(fy, {today?})` | the presets `[{key, label, from, to}]`: `fy` Full year, `h1`, `q1`-`q4`, `m9` (Apr-Dec), `ytd` (to today, held to the year), `custom` |
+| `FinSt.periodOf(fy, {preset, from?, to?})` | `{key, label, from, to, full, fyFrom, fyTo, pyFrom, pyTo, asAt, pyAsAt, range, pyRange, forWhat, pyForWhat}`; custom dates held to the year (none in it: the full year) |
+| `FinSt.periodKey(fy, p)` | what a period's adjustments and PPE sales are kept under: `fy` for the full year, else `"<fy>:<from>-<to>"` |
+| `FinSt.periodGet(fy)` / `periodSet({preset, from?, to?})` | the page's choice, per client in `b.fs.period` (synced) |
+| `FinSt.tb(fy, period?)`, `FinSt.build(fy, {unit, dec, period?})` | no period: the full year, exactly as before |
+
+A part of the year (From after the year's start and/or To before its end):
+- **P&L**: the movements From -> To. **Balance sheet**: as on To (the year's opening + the movements to To).
+- **Surplus**: the profit of the year before From is FinCom's line **4E** in Note 4 ("Add: profit for 01-Apr to <From - 1>
+  (earlier in the year)", a synthetic TB row; never a ledger's code, not in the code list). Note 4 then reads: balance at the
+  beginning of the year (last year's audited closing) + the earlier part + the profit for the period = balance at the end
+  of the period, so the balance sheet ties and the opening still agrees with last year.
+- **Comparative**: the same dates a year earlier from FinCom's copy (`pySrc: "copy"`), else blank (`"none"`,
+  `d.period.pyNote`). The PY cash flow and PPE schedule are that period's, worked out the same way.
+- **Cash flow / PPE schedule** start from the balances at the start of the period: a third TB column `op` (Excel Trial
+  Balance M, in the unit N; notes' `op` in Notes column M). The full year keeps the PY column for this.
+- **Computation of income**: a full financial year only: `d.comp` is null, `d.compNote` says so; no `compPbt` or
+  `surplus` check.
+- Typed stock (FS) is the year's: the opening stock is carried to To, and `d.tb.warn` says so.
+
+## Last year's balance sheet, uploaded (`FinPyBs`, src/js/88-fin-pybs.js)
+
+Read in the browser only: Excel/CSV rows (`fromRows`), a PDF's text lines (`fromText`; a scan is not read, nothing is sent
+anywhere). `prepare(read, kind)` gives each line a code and `use` (a note's lines where they add up to the face line, else the
+face line; totals never). Kept add-only in `b.fs.pyBs[fy].versions[{v, at, by, file, size, sha256, src, unit, usePy, lines}]`
+(the latest is used; no SQL). It is:
+- the **PY column** when the copy has no previous year (`pySrc: "upload"`: one synthetic TB row per code; the PPE schedule
+  then starts from FinCom's own opening gross block and depreciation, column `op`);
+- the **suggestions** (`FinPyBs.suggestions`, in `FinSt.codeOf` after a hand choice and before the rules): a ledger named in a
+  line, else the one used line its opening balance equals (unique both ways; a face line keeps a finer rule code in the
+  same head); the TB row's `why`: "from last year's balance sheet: <line>";
+- the check `d.pyCheck {rows[{id, label, up, fc, diff}], bad}`: the lines used vs FinCom's opening balances by their codes,
+  by head of the balance sheet, in rupees (the upload's rounding allowed).
+
 ## The workbook
 
 Sheets: Inputs, Balance Sheet, Profit-Loss, CF, Notes, PPE (Note 8 / 34), Computation of Income, Trial Balance, JV.

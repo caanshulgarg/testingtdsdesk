@@ -64,6 +64,9 @@ function TaxDep({ c, fy }) {
 
 export function Comp({ d, fy, kind }) {
   const c = d.comp;
+  // a part of the year: the computation is for a full financial year only, and says so
+  if (!c) return <section className="fin-sheet fin-comp" data-fin-compsheet=""><header><h3>Computation of income</h3><p>{d.period ? d.period.range : ""}</p></header>
+    <p className="note" data-fin-compnote="">{d.compNote}</p></section>;
   return <section className="fin-sheet fin-comp" data-fin-compsheet="">
     <header><h3>{"Computation of income, assessment year " + c.ay}</h3><p>{[d.inputs.name, d.inputs.pan ? "PAN " + d.inputs.pan : "", "previous year ended " + dmy(fyEnd(fy))].filter(Boolean).join(" · ")}</p></header>
     <p className="fin-unit">(Amounts in rupees)</p>
