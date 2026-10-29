@@ -165,7 +165,9 @@ WATCH = r"""(() => {
     if (!(typeof S === 'object' && S && S.books && S.books.cid === '%s' && !S.books.loading)) return;
     const app = document.querySelector('#app'); if (!app) return;
     const t = app.innerText, m = t.match(busy), ld = app.querySelector('[data-loading]');
-    if (m || ld) window.__w.seen.push((m ? m[0] : 'a loading frame') + ' @' + Math.round(performance.now()));
+    // which frame, and where (CI 40898330057 saw 'a loading frame @2081' once, never here): its words and the page part it is in
+    const where = (e) => { const out = []; for (let x = e; x && x !== app && out.length < 4; x = x.parentElement) { const d = [...x.attributes].filter(a => a.name.startsWith('data-')).map(a => a.name).join(','); if (d || x.className) out.push(x.tagName.toLowerCase() + (d ? '[' + d + ']' : '') + (typeof x.className === 'string' && x.className ? '.' + x.className.split(' ')[0] : '')); } return out.join(' < '); };
+    if (m || ld) window.__w.seen.push((m ? m[0] : 'a loading frame') + ' @' + Math.round(performance.now()) + (ld ? ' (' + ((ld.innerText || '').trim().slice(0, 60)) + ' | ' + where(ld) + ')' : ''));
   } catch (e) {} }, 40);
 })()""" % CID
 def cat(rows, since):

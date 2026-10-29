@@ -109,7 +109,8 @@ for i in "${!T[@]}"; do
   if [ ! -f "$TESTS/$t" ]; then R+=("MISSING"); S+=(0); fails=$((fails+1)); echo "MISSING $t"; continue; fi
   case "$t" in
     *.js|*.mjs) cmd=(node "$t") ;;
-    *.py) cmd=(python3 "$t") ;;
+    # unbuffered: a test stopped at its time limit still leaves what it printed (CI 40898330057: run_quiet_refresh, 900 s, nothing)
+    *.py) cmd=(python3 -u "$t") ;;
     *) R+=("UNKNOWN"); S+=(0); fails=$((fails+1)); echo "UNKNOWN $t"; continue ;;
   esac
   pre=()

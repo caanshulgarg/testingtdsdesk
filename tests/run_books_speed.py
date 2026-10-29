@@ -202,7 +202,10 @@ async def main():
         for k in range(2):
             await pg.reload(); await boot(); await quiet(1.5); t0 = time.time(); a = await m()
             u = await open_client(L.CID, "reopening (try %d):" % (k + 1), n=len(L.VOUCHERS), fresh=True); u2s.append(u)
-            if u is not None: before.append(L.cat(t0, t0 + u))
+            if u is not None:
+                before.append(L.cat(t0, t0 + u))
+                # which requests, for a failure's own record (CI 40898330057 saw 13 on one try, never seen here)
+                before[-1]["names"] = sorted({x[1] for x in L.LOG if t0 <= x[0] <= t0 + u}); before[-1]["ms"] = int(u * 1000)
             await quiet(); c2 = L.cat(t0); b = await m()
         u2 = min([x for x in u2s if x is not None] or [None])
         print("     %s; %s" % (json.dumps(c2), json.dumps(delta(a, b))))
@@ -210,7 +213,7 @@ async def main():
         # speed round 2 (the owner, 27-Oct-2026: "under 1 s"): the books kept here drawn at once; the server's changes and
         # the cloud copy's check asked only once they are on screen, side by side
         ok(u2 is not None and u2 * 1000 <= PREFETCHED, "a client whose books are kept here is usable in %s ms (<= %d)" % (int(u2 * 1000) if u2 else "-", PREFETCHED))
-        ok(before and all(x["calls"] <= BEFORE_PAINT and x["items_calls"] == 0 for x in before), "at most %d requests to the cloud answered before the page is usable, the server's changes not among them (%s)" % (BEFORE_PAINT, [(x["calls"], x["items_calls"]) for x in before]))
+        ok(before and all(x["calls"] <= BEFORE_PAINT and x["items_calls"] == 0 for x in before), "at most %d requests to the cloud answered before the page is usable, the server's changes not among them (%s)" % (BEFORE_PAINT, [(x["calls"], x["items_calls"]) + ((x["ms"], x["names"][:20]) if x["calls"] > BEFORE_PAINT else ()) for x in before]))
         ok(c2["dayfiles"] == 0 and c2["months"] == 0 and c2["items_from0"] == 0, "no day file and no work fetched from the start (%d, %d, %d)" % (c2["dayfiles"], c2["months"], c2["items_from0"]))
         ok(c2["heads_kb"] < 64, "the cloud copy's entries are not read in full on a reopening (%d KB of entry heads)" % c2["heads_kb"])
         # ---------- 2b. the stale-copy guard: a colleague changed an item while this browser was closed
