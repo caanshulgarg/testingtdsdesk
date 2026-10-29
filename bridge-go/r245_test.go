@@ -177,9 +177,16 @@ type pullModel struct {
 	upload  map[string]M     // day -> the upload mark
 }
 
+// 2.4.9: the 2.4.5 tests read the entries one by one (DayPullBatchMax 1: the path payroll entries, a day gone one by one
+// and the setting keep); r249batch_test.go reads them in groups (pullBridgeWith with no setting)
 func pullBridge(t *testing.T) (*standTally, *standCloud, *pullModel) {
 	t.Helper()
-	_, f, c := liveBridge(t, `,"DayPullGapMs":0,"KeepRestMs":1`)
+	return pullBridgeWith(t, `,"DayPullBatchMax":1`)
+}
+
+func pullBridgeWith(t *testing.T, extra string) (*standTally, *standCloud, *pullModel) {
+	t.Helper()
+	_, f, c := liveBridge(t, `,"DayPullGapMs":0,"KeepRestMs":1`+extra)
 	at := time.Date(2026, 10, 21, 10, 0, 0, 0, liveZone)
 	nowFn = func() time.Time { return at }
 	t.Cleanup(func() { nowFn = time.Now })

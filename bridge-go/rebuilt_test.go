@@ -66,6 +66,7 @@ type standTally struct {
 	led          []*tLed                                                            // the ledger masters (the ledger list; ledgers_test.go)
 	behave       func(w http.ResponseWriter, r *http.Request, id, body string) bool // a failure (faketally_test.go): true when it answered (or never will)
 	headsAllDays bool                                                               // 2.4.5: FinComDayHeads answered with every day's entries (the date not applied)
+	batchAll     bool                                                               // 2.4.9: FinComVoucherBatch answered with every entry of the day (the filter not applied)
 	coName       string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
 	grp          [][2]string
 	mid          int64 // the last MasterID given
@@ -475,6 +476,23 @@ func newStandTally(t *testing.T) *standTally {
 				if (v.date == day || f.headsAllDays) && (typ == "" || v.typ == typ) {
 					fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4b8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View"><DATE TYPE="Date">%s</DATE><GUID>%s</GUID><REQUESTORRULE/><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><ALTERID TYPE="Number"> %d</ALTERID><MASTERID TYPE="Number"> %s</MASTERID></VOUCHER>`,
 						v.guid, v.guid, esc(v.typ), v.date, v.guid, esc(v.typ), esc(v.no), v.alter, v.master)
+				}
+			}
+		case "FinComVoucherBatch": // 2.4.9: one day's entries with a MasterID in a..b, or one of those listed
+			day, _ := pinDates(body)
+			var lo, hi int64 = -1, -1
+			list := map[string]bool{}
+			if m := reBatchRange.FindStringSubmatch(body); m != nil {
+				lo, hi = toI64(m[1]), toI64(m[2])
+			} else if m := reBatchList.FindStringSubmatch(body); m != nil {
+				for _, x := range reBatchMid.FindAllStringSubmatch(m[1], -1) {
+					list[x[1]] = true
+				}
+			}
+			for _, v := range f.vch {
+				mv := toI64(v.master)
+				if v.date == day && (f.batchAll || (lo >= 0 && mv >= lo && mv <= hi) || list[v.master]) {
+					o.WriteString(v.xml())
 				}
 			}
 		case "FinComLedgerIds": // 2.4.5: the ledgers' MasterIDs in (after, upto]

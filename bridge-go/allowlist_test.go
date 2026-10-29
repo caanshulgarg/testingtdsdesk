@@ -91,6 +91,20 @@ func driveEveryRequest(t *testing.T) *standTally {
 	if _, err = invokeTally(recorderTC(nil), f.port, dayHeadsTypeRequest(zz, td, "Sales"), 5); err == nil {
 		t.Fatal("the by-type form went to Tally")
 	}
+	// 2.4.9: the group the older-entries fetch is reading (batch249.go; the path is driven in r249batch_test.go); another
+	// group, not the one being asked, is refused at the gate
+	bx := voucherBatchRangeRequest(zz, td, 1, 2)
+	if _, err = invokeTally(recorderTC(nil), f.port, bx, 5); err == nil {
+		t.Fatal("a group not being asked went to Tally")
+	}
+	pull.mu.Lock()
+	pull.batchAsk = bx
+	pull.mu.Unlock()
+	_, err = invokeTally(recorderTC(nil), f.port, bx, 5)
+	pull.mu.Lock()
+	pull.batchAsk = ""
+	pull.mu.Unlock()
+	must("a day's group", err)
 	applyPeriodDays(M{"periodDays": []any{}})
 	_, err = invokeTally(recorderTC(nil), f.port, ledgerIdsRequest(zz, 0, 0), 5)
 	must("the ledger count", err)

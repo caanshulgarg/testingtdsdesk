@@ -165,6 +165,13 @@ type pullWork struct {
 	coAt   time.Time
 	coReal time.Time
 	coPort int
+	// 2.4.9 (the owner's approval of 29-Oct-2026): the group size of FinComVoucherBatch for this day (0: not set yet; halved
+	// after a group stopped at 2 s), one by one from here (a half-size group stopped, an inexact answer, an entry held),
+	// and the groups asked
+	batchN   int
+	oneByOne bool
+	batches  int
+	single   map[string]bool // entries a group's answer left for FinComVoucherObject
 }
 
 // review 245 R15 (M1): a payroll entry waits for its employees at most EmployeeWaitTries tries (a minute apart) and
@@ -194,6 +201,8 @@ var pull = struct {
 	// ROUND 104 (b): the last period request answered with Tally's window watched to its end (wall clock) and its hold
 	lookAt   time.Time
 	lookHold int
+	// 2.4.9: the FinComVoucherBatch request being asked now (the dated guard lets only it through; batch249.go)
+	batchAsk string
 }{empAt: map[string]time.Time{}, stopped: map[int]string{}, upload: map[string]M{}, tell: map[string]M{}, stopCo: map[string]M{}, done: map[string]time.Time{}, state: map[string]M{}, said: map[string]string{}}
 
 // --- the beat answer: periodDays [{company, company_guid, day, fetch, types}], at most 3
@@ -737,6 +746,11 @@ func pullCloudOK(w *pullWork, r cloudResp, what string) bool {
 // one entry FinCom lacks, by FinComVoucherObject (unchanged; after the company list, as 2.3.4 asks it)
 func pullFetchStep(w *pullWork, port int) (bool, bool) {
 	it := w.it
+	// 2.4.9 (the owner's approval of 29-Oct-2026): up to 100 of the day's wanted entries in one request (batch249.go);
+	// payroll entries, a day read by type, and a day gone one by one: one entry a request as below
+	if handled, sent, more := pullBatchStep(w, port); handled {
+		return sent, more
+	}
 	mid := w.want[0]
 	// ROUND 103 (B, the owner's decision of 12-Oct-2026 kept for older days): a payroll voucher (its type as Tally's list of
 	// the day names it: Tally's own Payroll, or a type this bridge has seen carrying employees' pay heads) goes through the
