@@ -8,8 +8,9 @@ Tally; remove earlier Tally opened but not opened currently; make the complete p
      headings; a company not linked has the picker itself ("Choose client", existing clients only, "+ New client with
      this name" small inside it) and never an "Add as client" suggestion; a linked one says "Linked to client: <name>"
   3. a company seen earlier, not open and not linked: NOT on the page (only under Help & support › Every company seen)
-  4. a linked client whose company is not open: one quiet line under "Your linked clients" (client · company · not open
-     in Tally now · last entry), nothing to fix
+  4. every linked client, its company open or not: one quiet row under "Clients linked to Tally (N)" (client · company ·
+     open now / not open in Tally now · last entry), nothing to fix; ⋯ Change Tally company… and Unlink
+     (next-fix-tally-links, run_tally_links_ui.py)
   5. one computer: nothing about other computers; two: the switch This computer / All computers
   6. a problem is one plain line with one action (Tally not open; reading paused; offline), never an alert for nothing
   7. no element overlaps, no sideways scroll, at 1366, 1440 and 390, light and dark
@@ -88,17 +89,17 @@ def main():
         ok(not ADD_ASK.search(body()) and n("#app [data-tco-add]") == 0, "no 'Add as client' suggestion anywhere on the page")
         ok(txt(vm + ' [data-tco-side="tally"]') == "VMS EVENTS" and n(vm + " [data-tco-more]") == 0, "the Tally company on the right; nothing else on the row")
         shot("1-owner-1440")
-        print("== 3. closed + not linked: hidden; linked + closed: Your linked clients")
+        print("== 3. closed + not linked: hidden; linked: Clients linked to Tally")
         ok("OLD CO" not in body(), "a company seen earlier, not open, not linked: not on the page")
         lc = "#app [data-tco-list=firm]"
-        ok(n(lc + " [data-tco-group=linked]") == 1 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1 and "Your linked clients" in txt(lc + " [data-tco-group=linked]"),
-           "Your linked clients: ABC TRADERS (linked, not open) and only it, after the open ones")
+        ok(n(lc + " [data-tlk]") == 1 and txt(lc + " [data-tlk-head]") == "Clients linked to Tally (2)" and n(lc + " [data-tlk-row]") == 2 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1,
+           "Clients linked to Tally (2): GB TEXCOAT (open) and ABC TRADERS (not open), after the open ones (%s)" % txt(lc + " [data-tlk-head]"))
         lt = txt(lc + ' [data-linked-row="ABC TRADERS"]')
-        ok("Linked to client: ABC TRADERS" in lt and txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tco-side="tally"]') == "ABC TRADERS" and "not open in Tally now" in txt(lc + ' [data-linked-row="ABC TRADERS"] [data-linked-meta]'), "its one line: client · company · not open in Tally now (%s)" % lt)
+        ok(txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tlk-side="client"]') == "ABC TRADERS" and txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tlk-side="tally"]') == "ABC TRADERS" and "not open in Tally now" in txt(lc + ' [data-linked-row="ABC TRADERS"] [data-linked-meta]'), "its one line: client · company · not open in Tally now (%s)" % lt)
         ok(n(lc + " [data-linked-row] [data-tco-fix]") == 0 and "Open ABC TRADERS in TallyPrime" not in body() and n("#app [data-needs-you]") == 0 and "NWS144" not in lt, "nothing to fix for a company simply not open (no false alarm), no computer's name")
-        ok(n(lc + " [data-linked-row] [data-tco-more]") == 1, "its ⋯ (Unlink, Link to another client, Open client)")
+        ok(n(lc + " [data-linked-row] [data-tco-more]") == 1, "its ⋯ (Change Tally company…, Unlink)")
         pg.click(lc + ' [data-linked-row="ABC TRADERS"] [data-tco-more] summary'); pg.wait_for_timeout(300)
-        ok(n(lc + " [data-linked-row] [data-tco-unlink]") == 1 and n(lc + " [data-linked-row] [data-tco-not-this]") == 1 and n(lc + " [data-linked-row] [data-tco-open]") == 1, "⋯ holds Unlink, Link to another client, Open client")
+        ok(n(lc + " [data-linked-row] [data-tco-unlink]") == 1 and n(lc + " [data-linked-row] [data-tlk-change]") == 1, "⋯ holds Change Tally company… and Unlink")
         pg.keyboard.press("Escape")
         # Help & support holds every company seen (OLD CO, to link or remove)
         pg.click("#app [data-advanced] [data-bridge-details]"); pg.wait_for_timeout(700)

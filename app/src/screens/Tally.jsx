@@ -14,7 +14,7 @@ import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry } from "../lib/tallyState.js";
 import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
-import CompaniesInTally, { companyRows } from "../parts/TallyCompanies.jsx";
+import CompaniesInTally, { companyRows, LinkedClients } from "../parts/TallyCompanies.jsx";
 import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLink.jsx";
 import { OC, doConnect, doFind, doRefresh, useRefusedCheck, useHereProbe, useLocalRead, Line, Found } from "../parts/TallyOneClick.jsx";
 import { coKey, openOn } from "../lib/tallyState.js";
@@ -853,6 +853,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   const tallyLine = kind === "none" || kind === "refused" ? "" : tallyUp ? "Tally open: " + (openHere.length ? nOf(openHere.length, "company", "companies") : "no company open") : "Tally not open";
   const refresh = () => doRefresh(checkAgain);
   const calm = !kind && scope !== "all" && !needsItems().length;
+  const g0 = S.tallyGuide || {}, gOpen = !!(g0.at && (g0.step || 0) > 0 && (g0.step || 0) < 3), setupOk = !!(local || me || week.length) && !["none", "refused", "unlinked", "checking"].includes(kind);
   return <section className="pane tsc" data-status-card={kind || "ok"} data-scope={scope} data-all-good={calm ? "" : undefined} aria-label="This computer">
     <div className="tsc-top">
       <div className="tsc-name" data-tsc-name="" data-pc-lines={scope !== "all" && me ? "" : undefined} data-pc-line={scope !== "all" && me ? me.device.id : undefined} data-pc-state={scope !== "all" && me ? word.toLowerCase() : undefined}>{scope === "all" ? <b>All computers</b>
@@ -864,6 +865,9 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
           <button className={"linkbtn" + (scope === "all" ? " on" : "")} data-scope-pick="all" aria-pressed={scope === "all"} onClick={() => { S.tallyScope = "all"; render(); }}>All computers</button></span>}
         {/* this browser not connected to a FinCom Bridge: the one click, quiet (the owner: "a simple click to connect") */}
         {!local && kind !== "none" && !!OC.here && <button className="linkbtn" data-oc-connect="" data-oc-here={OC.here} disabled={!!b} onClick={() => doConnect(false)}>{b === "c" ? "Connecting…" : "Connect this computer"}</button>}
+        {/* next-fix-tally-links (the owner: "the steps was hidden after connecting"): connected, the steps stay folded
+            behind this small link (Connect another computer: step 1 asked again; Hide the steps folds them back) */}
+        {setupOk && <button className="linkbtn" data-tsc-setup="" aria-expanded={gOpen} onClick={() => { if (gOpen) { S.tallyGuide = {}; render(); } else openConnectTally(1, ""); }}>Set up again / another computer</button>}
         <button className="linkbtn" data-oc-get="" data-tsc-refresh="" disabled={!!b} onClick={refresh}>{b === "g" ? "Refreshing…" : "Refresh"}</button></span>
     </div>
     {scope === "all" ? <p className="tsc-line" data-tsc-all=""><PcLines rows={rows} latest={latest} m={m} /></p> : <>
@@ -883,7 +887,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
 }
 // the page's list: the companies OPEN in Tally right now (live: the beats every 30 s, this browser's bridge, and Refresh),
 // on this computer (the scope) or on every computer. A company seen earlier and not open now is not here: linked, it is
-// under Your linked clients; not linked, under Help & support › Every company seen. From a client not linked ("Choose on
+// under Clients linked to Tally below the list; not linked, under Help & support › Every company seen. From a client not linked ("Choose on
 // Tally page"): the open companies ranked for it, each with "Link to <client>"
 function hereKeys(tc) {
   const ks = new Set();
@@ -895,10 +899,9 @@ function OpenCompanies({ rows }) {
   const g = S.tallyGuide || {}, forCo = guideFor(g), tc = thisComputer(rows), { scope } = scopeOf(tc);
   const all = companyRows(), here = scope === "this" && tc.many ? hereKeys(tc) : null;
   const openHere = (r) => r.open && (!here || here.has(coKey(r.company)));
-  // then Your linked clients: a linked company not open now (or open on another computer, in This computer's view), quiet
-  const linked = forCo ? [] : companyRows({ hidden: true }).filter((r) => r.client && S.companies && S.companies[r.client] && !S.companies[r.client].deleted && !openHere(r))
-    .sort((a, b) => S.companies[a.client].name.localeCompare(S.companies[b.client].name)).map((r) => Object.assign(r, { group: "linked" }));
-  let list = forCo ? all.slice() : all.filter(openHere).map((r) => Object.assign(r, { group: "" })).concat(linked);
+  // next-fix-tally-links: the linked clients (open or not) are their own quiet section under this list, Clients linked to
+  // Tally (parts/TallyCompanies.jsx LinkedClients), always there; this list is the companies open now only
+  let list = forCo ? all.slice() : all.filter(openHere);
   const note = forCo ? <p className="note tco-for" data-tco-for={forCo.id}>{"Linking " + forCo.name + ": press “Link to " + forCo.name + "” on its company. "}
     <button className="linkbtn" data-tco-for-clear="" onClick={() => { S.tallyGuide = {}; render(); }}>Show the list for every client</button></p> : null;
   if (forCo) {
@@ -909,10 +912,10 @@ function OpenCompanies({ rows }) {
   const focus = !forCo && S.tallyFocus && S.companies && S.companies[S.tallyFocus] ? S.tallyFocus : "";
   const pcWord = scope === "all" && tc.many ? " across " + tc.week.length + " computers" : "";
   const none = <p className="note" data-tco-empty="" data-tco-none-open="">{"No company is open in Tally right now" + pcWord + ". Open your company in TallyPrime: it shows here within a minute."}</p>;
-  const nOpen = list.filter((r) => !r.group).length;
+  const nOpen = list.length, inList = new Set(list.map((r) => coKey(r.company)));
   return <section className="pane tcompanies" data-tally-focus={focus || undefined}>
-    <CompaniesInTally rows={list} forCo={forCo} note={forCo ? note : <>{nOpen === 0 && linked.length > 0 && none}{note}</>} focus={focus} title="Open in Tally now" empty={forCo ? null : none} pcs={tc.many}
-      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} /></section>;
+    <CompaniesInTally rows={list} forCo={forCo} note={note} focus={focus} title="Open in Tally now" empty={forCo ? null : none} pcs={tc.many}
+      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} after={<LinkedClients inList={inList} here={here} />} /></section>;
 }
 // 2. Needs you: only what neither the guide nor a computer's line says (reading stopped on all computers, a computer key
 // refused). sources: the slot for 2.4.1's card of a book open in two data locations (SourceCards on next-241), drawn
@@ -1303,7 +1306,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), ctl = TCloud.pane.ctl || {};
   const gx = guideState(rows, latest), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   // next-tally-smart: ONE status card for this computer; the four steps only for a computer never connected; the companies
-  // OPEN in Tally now; Your linked clients (not open now); Needs you only when something stands; Help & support (closed)
+  // OPEN in Tally now; Clients linked to Tally (every linked client, open or not); Needs you only when something stands; Help & support (closed)
   return <>
     <GuideRefresh />
     {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={!gx.done.install || !!((S.tallyGuide || {}).step === 1 && (S.tallyGuide || {}).at && !Bridge.on())} />}
