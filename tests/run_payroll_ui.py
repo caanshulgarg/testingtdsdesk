@@ -27,7 +27,11 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(Quiet, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
 LOAD = """(a) => {
-  const c = newCompany({name: "PE Payroll Test Co"}); c.tan = "DELP01234E"; c.pan = "AAACP1234Q"; S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
+  const c = newCompany({name: "PE Payroll Test Co"}); c.tan = "DELP01234E"; c.pan = "AAACP1234Q";
+  // 3ffef91d3 (the owner, 25/26-Oct-2026): an empty required deductor detail blocks the file; the deductor's details given
+  c.tds26q = {flat: "12 First Floor", town: "New Delhi", state: "07", pin: "110005", email: "a@b.in", phone: "9811111111",
+    person: "Ravi Kumar", personDesignation: "Partner", personPan: "ABCPK1234K", personFlat: "12 First Floor", personTown: "New Delhi"};
+  S.companies[c.id] = c; S.coId = c.id; S.view = "company"; S.tab = "books"; S.loadingCo = false;
   const T = a.tables.tables, b = {cid: c.id, loading: false, vouchers: [], meta: {from: "20260401", to: "20270331"}, challans: [], alloc: {}, certs: []};
   S.books = b;
   BookSrc.apply(b, T.tally_vouchers, T.tally_lines, []);
