@@ -91,4 +91,15 @@ app/src/parts/TallyOneClick.jsx (next-tally-anyport, merged); tests/gen_post_sha
 - Another user's Tally is never asked, by session or by SID (TestAnyPortAutoFindsOwnTallyAnyPort, TestTypedPortRefused,
   TestAnyPortUnopenableOtherSessionSkipped).
 
-Range reviewed in all (for release-check.sh, which reads the last range named): d1d7c038b..673783feb
+## Round 6: the build and the staging release (673783feb..a9cbec7f8)
+
+ebc7aba31 adds the built setup and program (assets-test/bridge-go/FinComBridge-Setup-2.4.8.exe and its .sha256,
+FinComBridge-2.4.8.exe), the release log row and the fingerprints. a9cbec7f8 moves 2.4.7's setup, program and
+latest.json to bridge-go-old and makes latest.json name 2.4.8. Checked:
+- the .sha256, the setup's bytes and latest.json agree (setup 030f4303...d83f, program 910c270f...3608);
+- the setup was built by bridge-go/build.sh with POSTONLY=any from 673783feb's sources, after release-check passed at
+  ce438bf9d;
+- latest.json's addresses are the staging review site's;
+- no source changed.
+
+Range reviewed in all (for release-check.sh, which reads the last range named): d1d7c038b..a9cbec7f8
