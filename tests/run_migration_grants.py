@@ -21,6 +21,7 @@ import os, re, sys, json, glob, hashlib
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 import zoho_stand as Z            # part(), VAULT (Vault made plain for 75), psql_file()
+import console_chain_stand as CHAIN_STAND   # staging's billing / assistant / pg_cron shapes the console's migrations lean on
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 SERVER = os.path.join(ROOT, "server")
 M97 = os.path.join(SERVER, "security", "migration-97-explicit-grants.sql")
@@ -102,6 +103,14 @@ NEW_SUPABASE = """
 do $$ declare r text; begin foreach r in array array['anon', 'authenticated', 'service_role'] loop
   if not exists (select 1 from pg_roles where rolname = r) then execute format('create role %I nologin', r); end if; end loop; end $$;
 alter role service_role bypassrls;
+-- Supabase's own: the Auth admin role and auth's tables the later migrations read (116's sign-in hook, the console's 118+)
+do $$ begin if not exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then create role supabase_auth_admin nologin; end if; end $$;
+create schema if not exists auth;
+create table if not exists auth.users (id uuid primary key, email text, created_at timestamptz default now(), last_sign_in_at timestamptz,
+  email_confirmed_at timestamptz default now(), banned_until timestamptz, raw_app_meta_data jsonb default '{}', raw_user_meta_data jsonb default '{}');
+create table if not exists auth.mfa_factors (id uuid primary key default gen_random_uuid(), user_id uuid, friendly_name text, factor_type text, status text, created_at timestamptz default now());
+create table if not exists auth.sessions (id uuid primary key default gen_random_uuid(), user_id uuid, created_at timestamptz default now(), updated_at timestamptz default now());
+grant usage on schema auth to anon, authenticated, service_role, supabase_auth_admin;
 grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public revoke all on tables from anon, authenticated, service_role;
 alter default privileges in schema public revoke all on sequences from anon, authenticated, service_role;
@@ -134,8 +143,23 @@ try:
         ok(rc == 0, "2. %s runs%s" % (f, "" if rc == 0 else ": " + err[-400:]))
         if rc: raise SystemExit("cannot go on: %s failed" % f)
     made = {r["name"] for r in db.rows(ACL)} - before
+    # the shapes staging's own tables have where the later migrations (the console's 118 to 125) lean on them: the console
+    # tests' stand-ins, one source (console_chain_stand: billing's tables and old functions, pg_cron),
+    # made idempotent for this stand (a table or column already here is kept). They are there before 97, as on staging
+    # (their grants left out: every privilege compared comes from the migrations and 97)
+    shape = lambda t: "\n".join(l for l in t.splitlines() if not l.strip().lower().startswith(("grant ", "revoke ")))
+    idem = lambda t: re.sub(r"\badd column (?!if not exists)", "add column if not exists ", re.sub(r"\bcreate table (?!if not exists)", "create table if not exists ", t, flags=re.I), flags=re.I)
+    for name, block in (("billing", CHAIN_STAND.BILLING), ("cron", CHAIN_STAND.OPS.CRON)):
+        try: db.sql(idem(shape(block)))
+        except Exception as e: ok(False, "2. staging's %s tables as the console's stand makes them: %s" % (name, str(e)[-300:]))
     have = {r["name"] for r in db.rows(ACL)}
     standins = sorted(n for n in REL if n not in have and n not in SKIP)
+    # the tables the later migrations change, made as their own file makes them (one source), not as bare stand-ins
+    REAL = {"tally_companies": ("tally-cloud/migration.sql", r"create table if not exists public\.tally_companies \(.*?\n\);")}
+    for n, (f, rx) in REAL.items():
+        if n in standins:
+            m = re.search(rx, open(os.path.join(SERVER, f)).read(), re.S); assert m, "%s: no %s" % (f, n)
+            db.sql(m.group(0)); standins.remove(n)
     for n in standins:
         db.sql(("create sequence if not exists public.%s;" if REL[n]["kind"] == "sequence" else "create table if not exists public.%s (id bigint);") % n)
     print("  ..   stand-ins for what was made before the migrations (%d): %s" % (len(standins), " ".join(standins)))
