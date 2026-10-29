@@ -76,12 +76,28 @@
      two lines, fixed columns that fit 1366 with no sideways scroll, and no heading or cell running into the next one: every
      cell clips what does not fit, and the boxes in it (the ledger, the voucher type) are drawn by the page, not by the
      browser, so Safari's wider native select cannot spill over ---- */
-  #app .bk-smart .bk-tablewrap { overflow: visible; }
+  /* 29-Oct-2026 (the owner: "column header is running behind when we scroll down it.. maybe freeze that column"): the
+     lines scroll inside their own box, as a spreadsheet does. Before, the box was "overflow: visible" under the list
+     table's max-height, so the table ran out of it: the page's column (.mainwrap) stayed as tall as the box, the app's
+     header (sticky inside that column) scrolled away with it, and the table's header, kept at --head-h, had the lines
+     showing above it. Now the header row stays at the top of the box (opaque, a hairline under it), the tick and Date
+     columns stay put when the box scrolls sideways (a narrow window, or a column made wider), and the page never scrolls
+     sideways */
+  #app .bk-smart .bk-tablewrap { overflow: auto; max-height: max(320px, calc(100vh - var(--head-h, 0px) - var(--bottom-banner-h, 0px) - 76px)); overscroll-behavior-x: contain; isolation: isolate; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) { min-width: 1060px; }
   #app .bk-smart .bs-grid { outline: none; }
   #app .bk-smart .bs-grid:focus-visible { box-shadow: 0 0 0 2px var(--ledger, var(--accent)); border-radius: 10px; }
   #app .bk-smart table.bk-table.lt.lt:not(.cards) { table-layout: fixed; width: 100%; font-size: 13.5px; }
-  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th { position: sticky; top: var(--head-h, 0px); z-index: 4; padding: 0 6px; height: 34px; font-size: 12.5px;
-    overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-sizing: border-box; }
+  #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th { position: sticky; top: 0; z-index: 4; padding: 0 6px; height: 34px; font-size: 12.5px;
+    overflow: hidden; white-space: nowrap; text-overflow: ellipsis; box-sizing: border-box; background: var(--surface, var(--sheet));
+    border-bottom: 0; vertical-align: middle; box-shadow: inset 0 -1px 0 var(--border, var(--rule)), 0 2px 4px -2px rgb(0 0 0 / .12); }
+  /* the frozen columns: above the lines that pass under them; the header's frozen corner above both */
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > tbody > tr > td[data-frz] { z-index: 2; background: var(--surface, var(--sheet)); }
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > tbody > tr:hover > td[data-frz] { background: color-mix(in oklab, var(--foreground) 3%, var(--surface)); }
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > tbody > tr.picked > td[data-frz] { background: var(--flag-soft) !important; }
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > thead th[data-frz] { z-index: 6; }
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > tbody > tr > td[data-frz="1"] { box-shadow: inset -1px 0 0 var(--border, var(--rule)); }
+  #app .bk-smart table.bk-table.lt.lt-frozen:not(.cards) > thead th[data-frz="1"] { box-shadow: inset -1px -1px 0 var(--border, var(--rule)), 0 2px 4px -2px rgb(0 0 0 / .12); }
   #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th[data-sortable] { padding: 0 4px 0 0; }
   #app .bk-smart table.bk-table.lt.lt:not(.cards) > thead th .lt-sort { min-height: 34px; padding: 6px 2px 6px 6px; min-width: 0; }
   #app .bk-smart table.bk-table:not(.cards) > thead th .colh { display: flex; align-items: center; gap: 0; min-width: 0; max-width: 100%; }
@@ -115,14 +131,28 @@
   #app .bk-smart table.bk-table:not(.cards) td.ac .icon { width: 24px; height: 24px; min-height: 0; min-width: 0; padding: 0; }
   #app .bk-smart table.bk-table:not(.cards) td.ac .linkbtn { font-size: 13px; }
 
-  /* Particulars: the party in bold on line 1; line 2 small and grey: the mode and reference, then the narration (all of it
-     on hover). Each line is cut with "…", never run into the next column */
-  #app .bk-smart .bs-narr { display: block; min-width: 0; overflow: hidden; }
-  #app .bk-smart .bs-narr .pn { display: block; font-weight: 600; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: none; color: var(--foreground, var(--ink)); }
-  #app .bk-smart .bs-narr .l2 { display: block; font-size: 12px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  /* Particulars: the party in bold; under it, small and grey, the mode and reference, then the narration (the narration
+     alone: two lines). A line stays about 40 px (the owner's density, 24-Oct-2026, run_bank_smart.py). 29-Oct-2026 (the
+     owner: "if particulars are long I cannot see it"): a line cut short has "More" on its end, which opens all of it in
+     the line, wrapped between words; all of it is on hover too; and a column made wider (drag its header's edge) shows
+     more of it */
+  #app .bk-smart .bs-narr { display: block; position: relative; min-width: 0; overflow: hidden; }
+  #app .bk-smart .bs-narr .pn, #app .bk-smart .bs-narr .l2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-clamp: 1; overflow: hidden;
+    white-space: normal; overflow-wrap: break-word; word-break: normal; text-overflow: clip; max-width: none; }
+  #app .bk-smart .bs-narr .pn { font-weight: 600; line-height: 18px; color: var(--foreground, var(--ink)); -webkit-line-clamp: 1; line-clamp: 1; }
+  #app .bk-smart .bs-narr .pn.solo { -webkit-line-clamp: 2; line-clamp: 2; font-weight: 500; line-height: 16px; font-size: 12.5px; }
+  #app .bk-smart .bs-narr .l2 { font-size: 12px; line-height: 15px; color: var(--muted); }
+  #app .bk-smart .bs-narr.open .pn, #app .bk-smart .bs-narr.open .l2 { display: block; -webkit-line-clamp: unset; line-clamp: none; overflow: visible; }
   #app .bk-smart .bs-narr .l2:empty { display: none; }
   #app .bk-smart .bs-narr .md { font-weight: 600; letter-spacing: .02em; }
-  #app .bk-smart .bs-narr .nr { font-size: inherit; white-space: nowrap; max-width: none; overflow: visible; color: inherit; }
+  #app .bk-smart .bs-narr .nr { font-size: inherit; white-space: normal; max-width: none; overflow: visible; color: inherit; }
+  /* "More" sits on the end of the last line (the line keeps its height); "Less" under the opened text */
+  #app .bk-smart .bs-narr .bs-narr-more { display: none; position: absolute; right: 0; font-size: 12px; line-height: 15px; padding: 0 2px 0 18px; min-height: 0; height: auto; bottom: 0;
+    background: linear-gradient(90deg, transparent, var(--surface, var(--sheet)) 14px); }
+  #app .bk-smart table.bk-table > tbody > tr:hover .bs-narr .bs-narr-more { background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 3%, var(--surface)) 14px); }
+  #app .bk-smart table.bk-table > tbody > tr.picked .bs-narr .bs-narr-more { background: linear-gradient(90deg, transparent, var(--flag-soft) 14px); }
+  #app .bk-smart .bs-narr[data-clip] .bs-narr-more { display: inline; }
+  #app .bk-smart .bs-narr.open .bs-narr-more { display: inline; position: static; padding: 0; background: none; }
 
   /* the ledger: a box with its list (type to search) on every open line, Confirm beside a suggestion; where it came from is
      on the box (title) */
@@ -150,6 +180,7 @@
 
 @media (max-width: 600px) {
   #app .bk-smart .bs-search { width: 100%; }
+  #app .bk-smart .bs-narr .bs-narr-more { display: none; }
   /* a phone's card: the party, then the mode, reference and narration under it, wrapped */
   #app .bk-smart .bs-narr { min-width: 0; overflow-wrap: anywhere; }
   #app .bk-smart table.bk-table .bs-narr .pn { display: block; font-weight: 600; white-space: normal; overflow: visible; text-overflow: clip; max-width: none; }

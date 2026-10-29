@@ -66,6 +66,25 @@
 #app .lt-wrap > table.lt.lt tfoot td { bottom: 0; }
 #app table.lt.lt td .code { white-space: nowrap; overflow-wrap: normal; }
 #app .bk-tablewrap > table.bk-table:not(.cards) > thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+/* a list that opts in (ListTable resize / freeze, 29-Oct-2026): a handle on each header's right edge to drag the column
+   wider (double-click puts it back), and the first columns kept in place while the list's box scrolls sideways. Lists that
+   do not opt in are as before */
+#app table.lt.lt-rsz > thead th[data-k] { position: sticky; }
+#app table.lt.lt-rsz > thead th .lt-rz { position: absolute; top: 0; right: 0; bottom: 0; width: 8px; cursor: col-resize; z-index: 3; touch-action: none; user-select: none; }
+#app table.lt.lt-rsz > thead th .lt-rz::after { content: ""; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 1px; background: var(--border-strong, var(--rule-strong)); opacity: .55; }
+#app table.lt.lt-rsz > thead th:hover .lt-rz::after, #app table.lt.lt-rsz > thead th .lt-rz:hover::after { opacity: 1; width: 2px; right: 2px; background: var(--ledger, var(--accent)); }
+html.lt-resizing, html.lt-resizing * { cursor: col-resize !important; user-select: none !important; }
+#app table.lt.lt-frozen:not(.cards) [data-frz] { position: sticky; }
+#app table.lt.lt-frozen:not(.cards) > tbody > tr > td[data-frz] { z-index: 1; background: var(--surface); }
+#app table.lt.lt-frozen:not(.cards) > thead th[data-frz] { z-index: 3; }
+#app table.lt.lt-frozen:not(.cards) [data-frz="0"] { left: 0; }
+#app table.lt.lt-frozen:not(.cards) [data-frz="1"] { left: var(--lt-frz1, 0px); }
+#app table.lt.lt-frozen:not(.cards) [data-frz="2"] { left: var(--lt-frz2, 0px); }
+@media (max-width: 600px) {
+  #app table.lt.lt-rsz .lt-rz { display: none; }
+  #app table.lt.lt-sized.cards { width: auto !important; }
+}
+#app table.lt.lt-rsz.cards .lt-rz { display: none; }
 
 /* 3. a phone: the table scrolls inside its own box, the page stays put */
 @media (max-width: 600px) {

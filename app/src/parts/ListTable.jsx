@@ -17,11 +17,18 @@
 //   (the tick box), filter: the column's filter button (ColFunnel), td(row) → more attributes for the cell, title,
 //   w: its width in % for a table laid out fixed}.
 //
+// Two things a list opts into (29-Oct-2026, the owner on the bank statement: "maybe freeze that column", "an option to
+// increase the width of any column"); every other list looks as before:
+//  - resize: each header has a handle on its right edge; drag it to make the column wider or narrower (not under
+//    MIN_W), a double-click puts that column back. The widths are kept per list in this browser (localStorage
+//    tdsdesk:colw:<name>); a list with widths of its own scrolls sideways inside its box;
+//  - freeze: the first n columns (the tick box, the date) stay put while the box scrolls sideways.
+//
 // Drawn in Arc's table style (src/arc/registry/components/sortable-data-table: its sort button, and its header, rules,
 // sorted-column tint and row hover redrawn on table.lt in styles/arc-look.css, because its own phone layout would undo
 // FinCom's phone cards, src/js/53-phone.js), on the same table as before, so every list keeps its rows, cells and
 // attributes; an empty list is Arc's empty state (EmptyNote).
-import { Children, Fragment, cloneElement, isValidElement } from "react";
+import { Children, Fragment, cloneElement, isValidElement, useLayoutEffect, useRef } from "react";
 import Loading from "./Loading.jsx";
 import EmptyNote from "./EmptyNote.jsx";
 import arc from "@/registry/components/sortable-data-table/sortable-data-table.module.css";
@@ -61,6 +68,81 @@ export function setSort(name, k) {
   render();
 }
 
+// ---- column widths a person dragged (resize), kept per list in this browser ----
+const MIN_W = 48;
+const wKey = (name) => "tdsdesk:colw:" + name;
+const wCache = {};
+export function colWidths(name) {
+  if (!(name in wCache)) {
+    let v = null;
+    try { v = JSON.parse(localStorage.getItem(wKey(name)) || "null"); } catch (e) { v = null; }
+    wCache[name] = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  }
+  return wCache[name];
+}
+function keepWidths(name, w) {
+  wCache[name] = w;
+  try { if (Object.keys(w).length) localStorage.setItem(wKey(name), JSON.stringify(w)); else localStorage.removeItem(wKey(name)); } catch (e) { /* storage blocked: kept while the page is open */ }
+}
+const resizable = (c) => c.role !== "pick" && c.resize !== false;
+// the table's own width once a person has set widths: the columns' widths added up; a column left to itself (reset with
+// a double-click) keeps at least 160 px and the table then fills at least its box
+function tableWidth(cs, w) {
+  if (!cs.some((c) => w[c.k])) return undefined;
+  const auto = cs.filter((c) => !w[c.k]).length;
+  const sum = cs.reduce((a, c) => a + (w[c.k] || 0), 0) + auto * 160;
+  return auto ? "max(100%, " + sum + "px)" : sum + "px";
+}
+// the drag: every column's width as drawn is taken first (so nothing jumps), then the one dragged follows the pointer
+function startResize(ev, name, k) {
+  if (ev.button !== 0) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const th = ev.currentTarget.closest("th"), table = th && th.closest("table");
+  if (!table) return;
+  const heads = [...table.querySelectorAll(":scope > thead > tr > th[data-k]")];
+  const w = {};
+  heads.forEach((h) => { w[h.dataset.k] = Math.round(h.getBoundingClientRect().width); });
+  const x0 = ev.clientX, w0 = w[k];
+  let moved = false;
+  const set = (nw) => {
+    w[k] = Math.max(MIN_W, Math.round(nw));
+    heads.forEach((h) => { if (w[h.dataset.k]) h.style.width = w[h.dataset.k] + "px"; });
+    table.style.width = Object.values(w).reduce((a, b) => a + b, 0) + "px";
+  };
+  const move = (e) => { if (!moved && Math.abs(e.clientX - x0) < 3) return; moved = true; set(w0 + e.clientX - x0); };
+  const up = () => {
+    window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up);
+    document.documentElement.classList.remove("lt-resizing");
+    if (moved) { keepWidths(name, w); render(); }
+  };
+  document.documentElement.classList.add("lt-resizing");
+  window.addEventListener("pointermove", move); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+}
+function resetWidth(ev, name, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  const w = { ...colWidths(name) };
+  delete w[k];
+  keepWidths(name, w); render();
+}
+function Grip({ name, c }) {
+  return <span className="lt-rz" role="separator" aria-orientation="vertical" aria-label={"Drag to change the width of " + (c.label || "this column") + "; double-click to reset"}
+    title="Drag to widen · double-click to reset" onPointerDown={(ev) => startResize(ev, name, c.k)} onClick={(ev) => ev.stopPropagation()} onDoubleClick={(ev) => resetWidth(ev, name, c.k)} />;
+}
+// a frozen column's cells: the first n columns stay put while the box scrolls sideways (the offsets are set on the table
+// as --lt-frz1, --lt-frz2 from the header's widths)
+const frz = (i, freeze) => (freeze && i < freeze ? { "data-frz": String(i) } : {});
+function useFreeze(freeze) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const t = ref.current;
+    if (!t || !freeze) return;
+    const hs = [...t.querySelectorAll(":scope > thead > tr > th")];
+    let left = 0;
+    for (let i = 1; i < freeze && i < hs.length; i++) { left += hs[i - 1].getBoundingClientRect().width; t.style.setProperty("--lt-frz" + i, Math.round(left) + "px"); }
+  });
+  return ref;
+}
+
 const sortable = (c) => !!c.v && c.sort !== false && !["pick", "row", "act"].includes(c.role);
 const sumOf = (c) => (c.sum === false ? null : typeof c.sum === "function" ? c.sum : c.sum || c.role === "amount" ? c.v : null);
 const sortVal = (v) => (blank(v) ? undefined : typeof v === "number" ? String(v) : String(v));
@@ -68,16 +150,19 @@ const sortVal = (v) => (blank(v) ? undefined : typeof v === "number" ? String(v)
 // Arc's marks on a cell: right-aligned figures, the column sorted by
 const isNum = (c) => /\bn\b/.test(c.cls || "") || c.role === "amount";
 const arcCell = (c, on) => ({ "data-numeric": isNum(c) ? "" : undefined, "data-sorted": on ? "" : undefined });
-function Head({ name, c, s, via }) {
+function Head({ name, c, s, via, rz, w, fz }) {
   const on = s && s.k === c.k, arrow = on ? (s.dir === "desc" ? "▼" : "▲") : "";
   const label = <span className="gfl">{c.label}</span>;
   const inner = c.head !== undefined ? c.head
     : sortable(c) ? <button type="button" className={"lt-sort " + arc.sortButton} title={"Sort by " + String(c.label || "").toLowerCase()} onClick={() => (via ? via(c.k) : setSort(name, c.k))}><span className={arc.sortInner}>{label}<span className="lt-ar" aria-hidden="true">{arrow}</span></span></button>
     : label;
+  const grip = rz && resizable(c);
   return <th className={[c.cls, c.thCls].filter(Boolean).join(" ") || undefined} data-role={c.role || ""} title={c.title} {...arcCell(c, on)}
-    data-sortable={sortable(c) && c.head === undefined ? "" : undefined}
+    data-sortable={sortable(c) && c.head === undefined ? "" : undefined} data-k={rz ? c.k : undefined} data-rz={grip ? "" : undefined} {...(fz || {})}
+    style={rz && w && w[c.k] ? { width: w[c.k] + "px" } : undefined}
     aria-sort={on ? (s.dir === "desc" ? "descending" : "ascending") : sortable(c) ? "none" : undefined}>
     {c.filter ? <span className="colh">{inner}{c.filter}</span> : inner}
+    {grip && <Grip name={name} c={c} />}
   </th>;
 }
 
@@ -110,29 +195,34 @@ export function ListWrap({ children, className }) {
 }
 
 export default function ListTable({ name, cols, rows, rowKey, rowProps, prep, unit = ["entry", "entries"], of, empty, loading, limit, more,
-  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead }) {
+  className = "bk-table", wrap, style, foot = true, id, after, before, tail, sortVia, footNote, keepHead, resize, freeze }) {
   // sortVia: {state: {k, dir}, by(k)}: a list whose order is kept elsewhere (the rows come in sorted); the headers and
   // arrows are the same
   const cs = orderCols(cols), s = sortOf(name);
   const Wrap = wrap || ListWrap;
+  const tref = useFreeze(freeze);
+  const w = resize ? colWidths(name) : null, tw = w ? tableWidth(cs, w) : undefined;
+  const tcls = className + " lt" + (resize ? " lt-rsz" : "") + (freeze ? " lt-frozen" : "") + (tw ? " lt-sized" : "");
+  const tstyle = tw ? { ...(style || {}), width: tw } : style;
+  const heads = <thead><tr>{cs.map((c, i) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} rz={resize} w={w} fz={frz(i, freeze)} />)}</tr></thead>;
   if (loading) return <Loading what={typeof loading === "string" ? loading : unit[1]} rows={4} cols={cs.length} />;
   // keepHead (t70): a list whose filters are in its headers keeps its headers when nothing matches, so they can be changed
-  if (!rows.length && keepHead) return <Wrap><table className={className + " lt"} data-list={name} style={style} id={id}>
-    <thead><tr>{cs.map((c) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} />)}</tr></thead>
+  if (!rows.length && keepHead) return <Wrap><table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
+    {heads}
     <tbody><tr className="lt-none"><td colSpan={cs.length}><EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />{keepHead !== true ? keepHead : null}</td></tr></tbody></table></Wrap>;
   if (!rows.length) return empty === null ? null : <EmptyNote className="bk-none lt-empty" data-list-empty="" what={empty || "Nothing here yet."} />;
   const sorted = sortVia ? sortVia.state : s;
   const all = sortVia ? rows : sortRows(name, cs, rows), shown = limit ? all.slice(0, limit) : all;
   return <>
     <Wrap>
-      <table className={className + " lt"} data-list={name} style={style} id={id}>
-        {cs.some((c) => c.w) && <colgroup>{cs.map((c) => <col key={c.k} style={c.w ? { width: c.w + "%" } : undefined} />)}</colgroup>}
-        <thead><tr>{cs.map((c) => <Head key={c.k} name={name} c={c} s={sortVia ? sortVia.state : s} via={sortVia && sortVia.by} />)}</tr></thead>
+      <table className={tcls} data-list={name} style={tstyle} id={id} ref={tref}>
+        {cs.some((c) => c.w) && !tw && <colgroup>{cs.map((c) => <col key={c.k} style={c.w ? { width: c.w + "%" } : undefined} />)}</colgroup>}
+        {heads}
         <tbody>{shown.map((r, i) => {
           const p = prep ? prep(r) : undefined, rp = rowProps ? rowProps(r, p) : {}, k = rowKey ? rowKey(r, i) : i;
-          const tr = <tr key={k} {...rp}>{cs.map((c) => {
+          const tr = <tr key={k} {...rp}>{cs.map((c, ci) => {
             const { className: ec, ...extra } = (c.td && c.td(r, p)) || {};
-            return <td key={c.k} {...arcCell(c, sorted && sorted.k === c.k)} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
+            return <td key={c.k} {...arcCell(c, sorted && sorted.k === c.k)} {...frz(ci, freeze)} {...extra} className={[c.cls, ec].filter(Boolean).join(" ") || undefined} data-sort={sortable(c) ? sortVal(c.v(r)) : undefined}>{c.cell(r, p, i)}</td>;
           })}</tr>;
           // a row opened under its row (a challan's deductions): one cell across the table
           const open = after && after(r, p);

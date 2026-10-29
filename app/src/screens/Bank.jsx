@@ -11,7 +11,7 @@
 // shown, a rule from the filter), the bulk voucher type and narration and the keys are parts/bank/ (24-Oct-2026).
 import More from "../parts/More.jsx";
 import Msg from "../parts/Msg.jsx";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import SmartBar from "../parts/bank/SmartBar.jsx";
 import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear, ledgersFromBooks } from "../parts/bank/smart.js";
 import HeadFilter from "../parts/bank/HeadFilter.jsx";
@@ -119,11 +119,17 @@ function bankCols(b, rows, nSel) {
     // in small letters (24-Oct-2026: one line of 60 letters and a second of the narration cut short, 69 px a row)
     // 25-Oct-2026 (the owner: "size has become too short"; party, mode, reference and narration ran together): the party in
     // bold on its own line; under it, small and grey, the mode and reference, then the narration, with separators
+    // 29-Oct-2026 (the owner: "if particulars are long I cannot see it"): wrapped between words, never cut with "…": the
+    // party on up to two lines (the narration alone on three), the mode, reference and narration on up to two; a line cut
+    // short has "More" under it, which opens all of it in the line (all of it is on hover too)
     { k: "narr", role: "party", label: "Particulars", cls: "pt", filter: <ColFunnel t="bank" k="narr" label="Particulars" />, v: (r) => bankParty(r) || r.narr || "", cell: (r) => {
       const party = bankParty(r), sub = [r.dec.mode !== "OTHER" ? r.dec.mode : "", r.dec.chq ? "Chq " + r.dec.chq : r.dec.utr || ""].filter(Boolean).join(" · ");
-      return <div className="bs-narr" title={r.narr}>
-        <div className="pn">{party || r.narr}</div>
-        <div className="l2">{sub && <span className="md">{sub}</span>}{sub && party && <span className="sep" aria-hidden="true"> · </span>}{party && <span className="nr">{r.narr}</span>}</div></div>; } },
+      const open = !!(b.narrOpen && b.narrOpen[r.id]);
+      return <div className={"bs-narr" + (open ? " open" : "")} title={r.narr}>
+        <div className={"pn" + (party ? "" : " solo")}>{party || r.narr}</div>
+        <div className="l2">{sub && <span className="md">{sub}</span>}{sub && party && <span className="sep" aria-hidden="true"> · </span>}{party && <span className="nr">{r.narr}</span>}</div>
+        <button type="button" className="linkbtn bs-narr-more" data-narr-more="" aria-expanded={open ? "true" : "false"} title={open ? "Show less" : "Show all of the narration"}
+          onClick={(ev) => { ev.stopPropagation(); b.narrOpen = { ...(b.narrOpen || {}), [r.id]: !open }; render(); }}>{open ? "Less" : "More"}</button></div>; } },
     { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
     { k: "dep", role: "amount", label: "Deposit", cls: "n", filter: <ColFunnel t="bank" k="dep" label="Deposit" />, v: (r) => num(r.credit) || null, sum: (r) => num(r.credit), cell: (r) => <>{bkAmt(r.credit)}{r.credit ? flag(r) : null}</> },
     { k: "bal", role: "amount", label: "Balance", cls: "n bal", sum: false, filter: <HeadFilter k="bal" label="Balance" />, v: (r) => (r.balance === null || r.balance === undefined || r.balance === "" ? null : num(r.balance)),
@@ -171,15 +177,43 @@ function RunLine() {
     .then((a) => a && loadAP().then((ap) => ap.undoRun(b.cid, run)).then((r) => { toast(r.words || r.why); render(); }))}>Undo this run ({n})</button></p>;
 }
 
+// the particulars that do not fit their lines (the party, or the mode, reference and narration under it)
+function markClipped(g) {
+  if (!g) return;
+  g.querySelectorAll(".bs-narr").forEach((n) => {
+    if (n.classList.contains("open")) return;
+    const cut = [...n.children].some((x) => x.tagName === "DIV" && x.scrollHeight > x.clientHeight + 1);
+    if (cut !== n.hasAttribute("data-clip")) n.toggleAttribute("data-clip", cut);
+  });
+}
+
+function wheelToTop(ev, g) {
+  if (ev.ctrlKey || ev.deltaY <= 0 || Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return;
+  const box = ev.target && ev.target.closest && ev.target.closest(".bk-tablewrap");
+  if (!box || !g.contains(box) || !/(auto|scroll)/.test(getComputedStyle(box).overflowY) || box.scrollHeight <= box.clientHeight + 1) return;
+  const head = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--head-h")) || 0;
+  const gap = box.getBoundingClientRect().top - head;
+  if (gap <= 1) return;
+  const se = document.scrollingElement || document.documentElement, y = se.scrollTop;
+  window.scrollBy(0, Math.min(gap, ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? window.innerHeight : 1)));
+  if (se.scrollTop !== y) ev.preventDefault();
+}
+
 function Table({ tab, all }) {
   const b = B(), total = all.length, grid = useRef(null);
   const nSel = all.filter((r) => b.sel.has(r.id) && r.state !== "sent").length;
   // the keys (parts/bank/smart.js): up, down, Enter, Space, A; a ledger set from the keys moves on to the next line
   useEffect(() => { const g = grid.current; if (!g) return; const ch = (ev) => kbChange(ev, g); g.addEventListener("change", ch); return () => g.removeEventListener("change", ch); }, []);
+  // a narration cut short shows its "More" (bankSmart.css): marked after every drawing and when the grid's width changes
+  useLayoutEffect(() => markClipped(grid.current));
+  // the lines scroll in their own box (bankSmart.css): a scroll down over the box first brings the box up under the app's
+  // header, then scrolls the lines, so it reads as one scroll; going up, the lines first, then the page
+  useEffect(() => { const g = grid.current; if (!g) return; const w = (ev) => wheelToTop(ev, g); g.addEventListener("wheel", w, { passive: false }); return () => g.removeEventListener("wheel", w); }, []);
+  useEffect(() => { const g = grid.current; if (!g || typeof ResizeObserver !== "function") return; const o = new ResizeObserver(() => markClipped(g)); o.observe(g); return () => o.disconnect(); }, []);
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
-    <ListTable name="bank" className="bk-table gf-off" keepHead cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
       rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : ""), "data-rid": r.id })}
       empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />

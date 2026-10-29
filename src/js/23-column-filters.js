@@ -1442,15 +1442,20 @@ function bankInput(t){
 }
 
 
-// a long statement keeps going as you scroll: the next lines load when the end of the list comes into view
+// a long statement keeps going as you scroll: the next lines load when the end of the list comes into view. 29-Oct-2026:
+// the lines scroll inside their own box on a desktop (app/src/parts/bank/bankSmart.css), so the box's scroll counts too
+// (caught on the way down) and the end is the box's end
 let bankMoreBusy = false;
 window.addEventListener("scroll", () => {
   if (bankMoreBusy || !S.bank || S.view !== "company" || S.tab !== "bank") return;
   const m = document.querySelector(".bk-more [data-act='bankMore']");
-  if (!m || m.getBoundingClientRect().top > window.innerHeight + 300) return;
+  if (!m) return;
+  const box = document.querySelector(".bk-smart .bk-tablewrap");
+  if (box && box.scrollHeight > box.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(box).overflowY)) { if (box.scrollHeight - box.scrollTop - box.clientHeight > 600) return; }
+  else if (m.getBoundingClientRect().top > window.innerHeight + 300) return;
   bankMoreBusy = true;
   requestAnimationFrame(() => { S.bank.limit += 200; render(); setTimeout(() => { bankMoreBusy = false; }, 250); });
-}, {passive: true});
+}, {passive: true, capture: true});
 /* ================================================================== */
 /* Day books for several clients at once (build 195): each file's      */
 /* company is read from the file and matched to a client (GSTIN, else   */
