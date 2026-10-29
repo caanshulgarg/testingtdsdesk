@@ -17,6 +17,8 @@ import os, re, json, time, threading, functools, http.server, itertools, datetim
 from urllib.parse import urlparse, parse_qs, unquote
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gz_route import with_records_upload   # a save over 32 KB goes gzipped through records-upload (b889edb79)
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 IDLE = int(os.environ.get("QUIET_IDLE", "60"))
@@ -210,7 +212,7 @@ with sync_playwright() as p:
     pg.on("console", lambda m: m.type == "error" and errors.append("console: " + m.text[:300]))
     navs = []
     pg.on("framenavigated", lambda f: navs.append(f.url) if f == pg.main_frame else None)
-    ctx.route(STAGE + "/**", route); ctx.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
+    ctx.route(STAGE + "/**", with_records_upload(route)); ctx.route_web_socket(re.compile(r"wss://qbocskaiewaxqcvaunzc\.supabase\.co/realtime/.*"), ws_route)
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2000); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     setup(pg)
     ok(pg.evaluate("Live.st") == "live", "signed in to the stand-in cloud, live sync on")
