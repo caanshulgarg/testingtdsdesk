@@ -21,7 +21,20 @@ const covers = (h, list) => { const have = String(h || "").toLowerCase().split("
     const dir = path.join(ROOT, "server/security/functions", fn);
     const m = await import(path.join(dir, "cors.ts"));
     const src = fs.readFileSync(path.join(dir, "index.ts"), "utf8");
-    ok(/import \{ corsFor \} from "\.\/cors\.ts"/.test(src) && /req\.method === "OPTIONS"\) return new Response\("ok", \{ headers: cors \}\)/.test(src), fn + ": index.ts answers OPTIONS with corsFor(req)");
+    if (!/from "\.\/handler\.ts"/.test(src)) {
+      ok(/import \{ corsFor \} from "\.\/cors\.ts"/.test(src) && /req\.method === "OPTIONS"\) return new Response\("ok", \{ headers: cors \}\)/.test(src), fn + ": index.ts answers OPTIONS with corsFor(req)");
+    } else {
+      // gateway (79d4b8ab6) and signin (26-Oct-2026): index.ts only wires the services into handler.ts, which answers.
+      // The handler as index.ts builds it, asked a real browser preflight: 200 with this function's corsFor headers
+      const h = await import(path.join(dir, "handler.ts"));
+      let serve = null;
+      if (fn === "gateway" && /Deno\.serve\(handler\(/.test(src)) serve = h.handler({ env: () => "", fetch: () => { throw new Error("no fetch on a preflight"); }, client: () => { throw new Error("no database on a preflight"); } });
+      if (fn === "signin" && /import \{ corsFor \} from "\.\/cors\.ts"/.test(src) && /makeHandler\(\{\s*cors: corsFor,/.test(src)) serve = h.makeHandler({ cors: m.corsFor });
+      let r = null;
+      try { r = serve && await serve(new Request("https://x.supabase.co/functions/v1/" + fn, { method: "OPTIONS", headers: { Origin: SITES[0], "Access-Control-Request-Method": "POST", "Access-Control-Request-Headers": APP_HEADERS.join(", ") } })); } catch (e) { r = null; }
+      ok(!!r && r.status === 200 && r.headers.get("access-control-allow-origin") === SITES[0] && covers(r.headers.get("access-control-allow-headers"), APP_HEADERS) && /POST/.test(r.headers.get("access-control-allow-methods") || ""),
+        fn + ": index.ts's handler answers a browser preflight (OPTIONS) with corsFor(req) (" + (r ? r.status + " " + r.headers.get("access-control-allow-origin") : "no answer") + ")");
+    }
     ok(!/const ALLOWED\s*=/.test(fs.readFileSync(path.join(dir, "cors.ts"), "utf8")), fn + ": keeps no list of its own");
     for (const o of SITES) {
       const h = m.corsFor(req(o));
