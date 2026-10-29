@@ -313,7 +313,7 @@ func TestR249PullListFormGroupsOf100AndPayroll(t *testing.T) {
 // 7. the slow-group rule (the owner's point 4): a group stopped at 2 s asked again in halves; a half also stopped: the
 // day one by one; nothing stopped the company (Tally's window answered)
 func TestR249PullSlowGroupHalvesThenOneByOne(t *testing.T) {
-	f, c, m := pullBridgeWith(t, "")
+	f, c, m := pullBridgeWith(t, `,"TallyAbandonMaxSec":600`)
 	var stops []M
 	c.mu.Lock()
 	prev := c.other
@@ -346,6 +346,7 @@ func TestR249PullSlowGroupHalvesThenOneByOne(t *testing.T) {
 		nowFn = func() time.Time { return at }
 		applyPeriodDays(pullList("20250915"))
 	}
+	r3Settle()
 	bs := batchBodies(f)
 	if len(bs) != 2 {
 		t.Fatalf("%d groups asked (want the first of 100 and one of 50)", len(bs))

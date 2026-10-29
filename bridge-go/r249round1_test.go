@@ -108,6 +108,7 @@ func TestR249R1WindowWatchedAfterAStop(t *testing.T) {
 	t.Cleanup(func() { windowHoldFn = old })
 	applyPeriodDays(pullList("20250915"))
 	pullRun(t, 10)
+	r3Settle()
 	if len(batchBodies(f)) != 1 || len(*stops) != 1 || str((*stops)[0]["why"]) != "window" {
 		t.Fatalf("groups %d, stops %v", len(batchBodies(f)), *stops)
 	}
@@ -128,11 +129,9 @@ func TestR249R1StoppedGroupNotFinishedStopsCompany(t *testing.T) {
 	f.mu.Unlock()
 	applyPeriodDays(pullList("20250915"))
 	pullRun(t, 10)
+	r3Settle() // Tally ends the group 2 s after the bound: its line is written while this test's folders are still there
 	if len(batchBodies(f)) != 1 || len(*stops) != 1 || str((*stops)[0]["why"]) != "over2s" {
 		t.Fatalf("groups %d, stops %v", len(batchBodies(f)), *stops)
-	} // Tally ends the group 2 s after the bound: its line is written while this test's folders are still there
-	for end := time.Now().Add(10 * time.Second); earlierBusyAny() && time.Now().Before(end); {
-		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -191,7 +190,7 @@ func TestR249R1UploadBodiesStaySmall(t *testing.T) {
 // R1-4 (Medium): the group size a company's slow day came down to carries to its next days (a run of the bridge): a
 // day whose 100 stopped and 50 went: the next day starts at 50; a day that went one by one: the next day one by one
 func TestR249R1SlowSizeCarriesToTheNextDay(t *testing.T) {
-	f, c, m := pullBridgeWith(t, "")
+	f, c, m := pullBridgeWith(t, `,"TallyAbandonMaxSec":600`)
 	stops := r1Stops(c)
 	n := 120
 	types := make([]string, n)
@@ -211,6 +210,7 @@ func TestR249R1SlowSizeCarriesToTheNextDay(t *testing.T) {
 	}
 	f.mu.Unlock()
 	r1RunDays(t, m, len(a)+len(b), "20250915", "20250916")
+	r3Settle()
 	var sizes []int64
 	for _, x := range batchBodies(f) {
 		if r := reBatchRange.FindStringSubmatch(x); r != nil {
@@ -224,7 +224,7 @@ func TestR249R1SlowSizeCarriesToTheNextDay(t *testing.T) {
 }
 
 func TestR249R1OneByOneCarriesToTheNextDay(t *testing.T) {
-	f, _, m := pullBridgeWith(t, "")
+	f, _, m := pullBridgeWith(t, `,"TallyAbandonMaxSec":600`)
 	types := make([]string, 120)
 	for i := range types {
 		types[i] = "Sales"
@@ -240,6 +240,7 @@ func TestR249R1OneByOneCarriesToTheNextDay(t *testing.T) {
 	}
 	f.mu.Unlock()
 	r1RunDays(t, m, len(a)+len(b), "20250915", "20250916")
+	r3Settle()
 	if len(batchBodies(f)) != 2 || f.n(vchObjectID) != len(a)+len(b) {
 		t.Fatalf("groups %d (want the first day's 100 and 50 only), one by one %d", len(batchBodies(f)), f.n(vchObjectID))
 	}

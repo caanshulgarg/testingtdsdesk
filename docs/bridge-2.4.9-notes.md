@@ -58,10 +58,13 @@ change.
    day's list as before.
 4. **The slow-group rule**: a group stopped at 2 s (Tally's window answering) is asked again in groups of half its size,
    once (100, then 50: not 25 and less; review R1-8); a half-size group also stopped: one by one. The size a company came
-   down to is kept for its next days for the rest of the bridge's run (review R1-4), so the 2 s stop is met at most twice
-   a company. After a stop the bridge waits for Tally to finish the group (as since 2.3.1) and watches Tally's window
+   down to is kept for its next days while its period is read as chosen in FinCom (review R1-4, round 3 L4: chosen again,
+   groups of 100 again), so the 2 s stop is met at most twice a company and choice. After a stop the bridge waits for Tally to finish the group (as since 2.3.1) and watches Tally's window
    until then (review R1-2 / S-2): a hold of 2 s or more by then stops the company's period ("window"), and Tally not
-   done within TallyAbandonWaitSec (20 s) stops it too ("over2s"). Tally's window not answering for 2 s during a group
+   done within TallyAbandonWaitSec (20 s; 60 s at most) stops it too ("over2s"). With TallyAbandonMaxSec 0 (the request
+   closed at the stop, so Tally's end cannot be watched) a stopped group stops the company's period, as any stop did in
+   2.4.8 (round 3 M1). An answer that is not exactly the entries asked (one more, one missing, one of another date) sends
+   that day one by one: safe, at the cost of the day's speed; the log line names the cause (review R1-12, a note). Tally's window not answering for 2 s during a group
    stops the company's period, as in 2.4.5.
 5. **Heads, then groups** (the approval, section 6 point 1; review R1-5): a day's heads older than 60 s when a group is
    due (FinCom slow to answer them, a pause) are asked of Tally again first (DayPullHeadsFreshSec).
@@ -70,7 +73,12 @@ change.
 7. **The guard and the request** (review R1-10 / S-3, R1-11 / S-5): the dated guard lets a group through only under the
    period fetch's own stop (a copier's background request, not a person's); the FETCH is frozen (its SHA-256 in
    batch249.go, batchFetchSHA): a change of FinComVoucherObject's fields never widens FinComVoucherBatch (the request is
-   then not built, and the entries go one by one).
+   then not built, and the entries go one by one; round 3 L1).
+8. **Known limit** (round 3 L5, Low): on 3.0 .. 6.2 a GST line is told by its GST nature or taxability in the group's
+   answer. A line with neither, and no type of supply, is taken from the group; in the gate's data (bdiff, every entry
+   of the tdsgst, TDS, payroll and stock-journal companies on all five releases) every such entry taken is identical
+   to FinComVoucherObject's answer. A ledger whose GST details Tally works out only in the object export is not in that
+   data; the field-by-field gate (bdiff) is run on each release before publishing.
 
 ## Measured (real TallyPrime, test data)
 

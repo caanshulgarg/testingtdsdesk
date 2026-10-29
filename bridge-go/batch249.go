@@ -409,10 +409,11 @@ func batchEntry(company, c string) (v, leave string) {
 // the group size of the day being read: 100, halved after a group stopped at 2 s; 0: one by one
 func pullBatchMax() int { return maxI(1, minI(keepNum("DayPullBatchMax", batchMaxN), batchMaxN)) }
 
-// review R1-4: the group size a company's slow days came down to, kept for its next days for the rest of this run of the
-// bridge (by company name and GUID): 0 none; 1 one by one. So the 2 s stop is met at most twice a company (100, then 50)
+// review R1-4: the group size a company's slow days came down to, kept for its next days while its period is read as
+// chosen (by company name, GUID and FinCom's time of the choice; round 3 L4: chosen again, groups of 100 again): 0 none;
+// 1 one by one. So the 2 s stop is met at most twice a company and choice (100, then 50)
 func pullBatchCoKey(it pullItem) string {
-	return companyKey(it.Company) + "|" + strings.ToLower(it.CGUID)
+	return companyKey(it.Company) + "|" + strings.ToLower(it.CGUID) + "|" + it.ChosenAt
 }
 
 func pullBatchCo(it pullItem) int {
@@ -437,10 +438,23 @@ func pullHeadsFresh() time.Duration {
 }
 
 // review R1-2 / S-2: after a group stopped at 2 s, until Tally has finished it (the request the bridge gave up on, whose
-// lock is held until then): false when Tally had not by the bound
+// lock is held until then): false when Tally had not by the bound. Round 3 L3: at most 60 s, and not while the bridge
+// stops
+var pullStoppingFn = stopping
+
+func pullAwaitBound(d time.Duration) time.Duration {
+	if d > time.Minute {
+		return time.Minute
+	}
+	return d
+}
+
 func pullAwaitEarlier(port int, bound time.Duration) bool {
-	end := time.Now().Add(bound)
+	end := time.Now().Add(pullAwaitBound(bound))
 	for earlierBusy(port) {
+		if pullStoppingFn() {
+			return true // the bridge is stopping: nothing more is asked anyway
+		}
 		if time.Now().After(end) {
 			return false
 		}
@@ -453,6 +467,12 @@ func pullAwaitEarlier(port int, bound time.Duration) bool {
 func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	it := w.it
 	if w.split || w.oneByOne || pullBatchMax() < 2 {
+		return false, false, false
+	}
+	if !batchFetchOK() {
+		// round 3 L1: a FETCH other than the approved one: no group is built; the day is read one by one
+		w.oneByOne = true
+		liveSayOnce("pull|fetchtext", "Older entries: the request for 100 entries at a time is not the one approved in this build; entries are read one by one")
 		return false, false, false
 	}
 	if w.batchN == 0 {
@@ -485,8 +505,10 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	from := time.Now().Add(-time.Duration(took * float64(time.Second)))
 	unfinished := false
 	if errors.Is(err, errRecorderStop) && took > 0 {
-		// review R1-2 / S-2: the window watched until Tally has finished the group it was stopped on
-		unfinished = !pullAwaitEarlier(port, abandonWait())
+		// review R1-2 / S-2: the window watched until Tally has finished the group it was stopped on. Round 3 M1: with
+		// TallyAbandonMaxSec 0 the request is closed at the stop and Tally's end cannot be watched: as 2.4.8, the stop
+		// ends the company's period
+		unfinished = abandonMax() <= 0 || !pullAwaitEarlier(port, abandonWait())
 	}
 	holdMs := held(from)
 	if took == 0 {
@@ -510,7 +532,7 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 		pullStopCompany(w, "window", fmt.Sprintf("Tally's window did not answer for %.1f s while %d entries of the day were read (%s)", float64(holdMs)/1000, len(g), form))
 		return true, true, false
 	case unfinished:
-		pullStopCompany(w, "over2s", fmt.Sprintf("a group of %d entries (%s): Tally had not finished it %d s after the 2 s stop", len(g), form, int(abandonWait().Seconds())))
+		pullStopCompany(w, "over2s", fmt.Sprintf("a group of %d entries (%s): Tally had not finished it %d s after the 2 s stop (or could not be watched)", len(g), form, int(pullAwaitBound(abandonWait()).Seconds())))
 		return true, true, false
 	case errors.Is(err, errRecorderStop):
 		// the owner's approval of 29-Oct-2026, point 4: halve, then one by one (review R1-4: for the company's next days too)
