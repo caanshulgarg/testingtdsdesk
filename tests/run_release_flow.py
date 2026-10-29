@@ -182,16 +182,22 @@ try:
     with open(OWN, "w") as h: h.write("[core]\n\tcheckStat = minimal\n\ttrustctime = false\n")
     O2, M2 = os.path.join(T, "o2.git"), os.path.join(T, "m2")
     sh(["git", "init", "-q", "--bare", "-b", "main", O2], T); sh(["git", "clone", "-q", O2, M2], T)
-    for d, bid in (("review", "mvst0myq-ea18ee"), ("next", "mvtf73y7-326d5c")):
-        os.makedirs(os.path.join(M2, d))
+    # and deeper in the folder (main 17f5d69b3, the 2.4.9 promote: review/assets/bridge-go/latest.json, the same size)
+    NESTED = os.path.join("assets", "bridge-go", "latest.json")
+    for d, bid, ver in (("review", "mvst0myq-ea18ee", "2.4.8"), ("next", "mvtf73y7-326d5c", "2.4.9")):
+        os.makedirs(os.path.join(M2, d, "assets", "bridge-go"))
         with open(os.path.join(M2, d, "build.json"), "w") as h: h.write(json.dumps({"build": bid, "stamp": "React · 29-Oct-2026 05:57"}))
+        with open(os.path.join(M2, d, NESTED), "w") as h: h.write(json.dumps({"version": ver, "sha256": ver.replace(".", "") * 8}))
     t0 = int(time.time()) - 100
-    for d in ("review", "next"): os.utime(os.path.join(M2, d, "build.json"), (t0, t0))   # the same second, as one checkout makes them
+    for d in ("review", "next"):     # the same second, as one checkout makes them
+        for f in ("build.json", NESTED): os.utime(os.path.join(M2, d, f), (t0, t0))
     sh(["git", "add", "-A"], M2); sh(["git", "commit", "-qm", "main"], M2); sh(["git", "push", "-q", "origin", "HEAD:main"], M2)
     sh(["git", "fetch", "-q", "origin"], M2)
     r = sh(["bash", "-c", '. "$1"; replace_folder next review; finish review "Promote" "done"', "-", os.path.join(APP, "release-lib.sh")], M2, {"GIT_CONFIG_GLOBAL": OWN, "DRY": "1"}, check=False)
     got = sh(["git", "show", "HEAD:review/build.json"], M2, check=False).stdout
     ok(r.returncode == 0 and "mvtf73y7-326d5c" in got, "review/build.json committed with the new build (%s) %s" % (got.strip()[:60], (r.stdout + r.stderr).strip()[-200:]))
+    got2 = sh(["git", "show", "HEAD:review/" + NESTED.replace(os.sep, "/")], M2, check=False).stdout
+    ok('"2.4.9"' in got2 and sh(["git", "status", "--porcelain"], M2).stdout.strip() == "", "review/%s too, deeper in the folder, and nothing left uncommitted (%s)" % (NESTED, got2.strip()[:40]))
     # and the whole promote, on the owner's settings
     F, _ = publish("next", "F", 0.2)
     r = run("promote-next.sh", env={"GIT_CONFIG_GLOBAL": OWN}); c_F = head()
