@@ -1,0 +1,170 @@
+[15:57:31] ---- c1 install and open the company (TallyPrime 4.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>4</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 21 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dbm\req: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+  INFO stockm: candidate requests a1-items-chunk, a1-items-tail, a2-itembat-chunk, a2-itembat-tail, a3-stockgroups, b1-stockledger, b2-stockledger-list, d1-stocksummary, d1x-stocksummary-items, d2-itemclosing-all, d2-itemclosing-chunk, d3-itemclosing-one
+[15:58:04] ---- stockm: test data generator
+  INFO stockm: gen.py: {"S": {"items": 600, "entries": {"Credit Note": 158, "Purchase": 1057, "Sales": 1512, "Stock Journal": 132, "Debit Note": 126}, "lines": 12513}, "L": {"items": 2400, "entries": {"Sales": 8493, "Purchase": 5875, "Stock Journal": 871, "Debit Note": 830, "Credit Note": 884}, "lines": 71345}}
+  INFO stockm: company field ISINTEGRATED: Yes
+  INFO stockm: company field ISINVENTORYON: Yes
+  INFO stockm: company field USEINVENTORY: 
+  INFO stockm: company field ISMAINTAININVENTORY: 
+[15:58:06] ---- stockm: part S data
+[db] masters S: created 633, altered 0, errors 0, 1923.3 ms
+[db] S v-S-creditnote-01.xml: created 158, altered 0, errors 0, 3195.5 ms
+[db] S v-S-purchase-01.xml: created 250, altered 0, errors 0, 8570.4 ms
+[db] S v-S-purchase-02.xml: created 250, altered 0, errors 0, 8996.4 ms
+[db] S v-S-purchase-03.xml: created 250, altered 0, errors 0, 9630.2 ms
+[db] S v-S-purchase-04.xml: created 250, altered 0, errors 0, 9639.1 ms
+[db] S v-S-purchase-05.xml: created 57, altered 0, errors 0, 2367 ms
+[db] S v-S-sales-01.xml: created 250, altered 0, errors 0, 9199.6 ms
+[db] S v-S-sales-02.xml: created 250, altered 0, errors 0, 9984.3 ms
+[db] S v-S-sales-03.xml: created 250, altered 0, errors 0, 10586.3 ms
+[db] S v-S-sales-04.xml: created 250, altered 0, errors 0, 10823.5 ms
+[db] S v-S-sales-05.xml: created 250, altered 0, errors 0, 10248.8 ms
+[db] S v-S-sales-06.xml: created 250, altered 0, errors 0, 11654.3 ms
+[db] S v-S-sales-07.xml: created 12, altered 0, errors 0, 653.2 ms
+[db] S v-S-stockjournal-01.xml: created 132, altered 0, errors 0, 2739.3 ms
+[db] S v-S-debitnote-01.xml: created 126, altered 0, errors 0, 6540.8 ms
+  INFO stockm: S made: masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132)
+[16:00:03] ---- stockm: part S measured
+MEASURE ---- part S (600 items, 5973 entries in Tally)
+MEASURE S A1 FinComStockItems all (MasterID > 0): worst 71.9 ms (each 71.9 / 40.6 / 39.7), 534221 bytes, 601 items, ok True
+MEASURE S A1 FinComStockItems chunk (0, 2000]: worst 42.3 ms (each 42.3), 534221 bytes, 601 items, ok True
+MEASURE S A2 FinComStockItemsGodown all: worst 79.4 ms (each 79.4 / 48.4 / 47.3), 716810 bytes, 601 items, ok True
+MEASURE S A3 FinComStockGroups: worst 5.3 ms (each 5.3 / 4.4 / 3.7), 6346 bytes, 1 items, ok True
+MEASURE S A1 stored opening: 600 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 119041872.01
+MEASURE S D1 Stock Summary (groups) 20260401-20260402: worst 236.3 ms (each 236.3 / 15.4 / 9.5), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20260402: worst 343.2 ms (each 343.2 / 299.6), 126892 bytes, 541 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20260402: worst 34.6 ms (each 34.6 / 22.5), 367596 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20260401-20261031: worst 152.1 ms (each 152.1 / 10 / 15.2), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20261031: worst 308.1 ms (each 308.1 / 221.3), 138477 bytes, 590 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20261031: worst 24.5 ms (each 24.5 / 23.2), 368899 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20260401-20270331: worst 113.4 ms (each 113.4 / 13.5 / 10.2), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20270331: worst 291.2 ms (each 291.2 / 225), 138189 bytes, 588 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20270331: worst 28.3 ms (each 24.5 / 28.3), 369075 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20261001-20261031: worst 118.5 ms (each 118.5 / 12.4 / 12.3), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20261001-20261031: worst 329.8 ms (each 329.8 / 227.9), 138477 bytes, 590 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20261001-20261031: worst 23.4 ms (each 23.4 / 22.6), 370179 bytes, 601 items, ok True
+MEASURE S D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 27.2 ms (each 22 / 25.6 / 27.2), 369075 bytes, 601 items, ok True
+MEASURE S D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 4.4 ms (each 4 / 4.4 / 3.2), 2143 bytes, 2 items, ok True
+MEASURE S D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 3.9 ms (each 3.1 / 3.9 / 3), 2143 bytes, 2 items, ok True
+  INFO stockm: full stock item export (harness): 578.5 ms, 5593391 bytes
+[16:00:08] ---- stockm: part L data
+[db] masters L: created 2400, altered 0, errors 0, 18169 ms
+[db] L v-L-sales-01.xml: created 250, altered 0, errors 0, 10155.2 ms
+[db] L v-L-sales-02.xml: created 250, altered 0, errors 0, 10717.1 ms
+[db] L v-L-sales-03.xml: created 250, altered 0, errors 0, 11369.7 ms
+[db] L v-L-sales-04.xml: created 250, altered 0, errors 0, 12523.7 ms
+[db] L v-L-sales-05.xml: created 250, altered 0, errors 0, 13421.8 ms
+[db] L v-L-sales-06.xml: created 250, altered 0, errors 0, 14263.5 ms
+[db] L v-L-sales-07.xml: created 250, altered 0, errors 0, 14901.8 ms
+[db] L v-L-sales-08.xml: created 250, altered 0, errors 0, 13423 ms
+[db] L v-L-sales-09.xml: created 250, altered 0, errors 0, 13496.3 ms
+[db] L v-L-sales-10.xml: created 250, altered 0, errors 0, 13604.2 ms
+[db] L v-L-sales-11.xml: created 250, altered 0, errors 0, 13662.5 ms
+[db] L v-L-sales-12.xml: created 250, altered 0, errors 0, 13414.1 ms
+[db] L v-L-sales-13.xml: created 250, altered 0, errors 0, 13868.4 ms
+[db] L v-L-sales-14.xml: created 250, altered 0, errors 0, 14418.3 ms
+[db] L v-L-sales-15.xml: created 250, altered 0, errors 0, 13357.6 ms
+[db] L v-L-sales-16.xml: created 250, altered 0, errors 0, 13743.1 ms
+[db] L v-L-sales-17.xml: created 250, altered 0, errors 0, 13895.7 ms
+[db] L v-L-sales-18.xml: created 250, altered 0, errors 0, 14284.5 ms
+[db] L v-L-sales-19.xml: created 250, altered 0, errors 0, 14259 ms
+[db] L v-L-sales-20.xml: created 250, altered 0, errors 0, 14539.6 ms
+[db] L v-L-sales-21.xml: created 250, altered 0, errors 0, 14227.1 ms
+[db] L v-L-sales-22.xml: created 250, altered 0, errors 0, 14482.6 ms
+[db] L v-L-sales-23.xml: created 250, altered 0, errors 0, 14922.9 ms
+[db] L v-L-sales-24.xml: created 250, altered 0, errors 0, 13522.7 ms
+[db] L v-L-sales-25.xml: created 250, altered 0, errors 0, 14388 ms
+[db] L v-L-sales-26.xml: created 250, altered 0, errors 0, 14731.5 ms
+[db] L v-L-sales-27.xml: created 250, altered 0, errors 0, 14427.8 ms
+[db] L v-L-sales-28.xml: created 250, altered 0, errors 0, 15140.3 ms
+[db] L v-L-sales-29.xml: created 250, altered 0, errors 0, 14795.9 ms
+[db] L v-L-sales-30.xml: created 250, altered 0, errors 0, 14575.3 ms
+[db] L v-L-sales-31.xml: created 250, altered 0, errors 0, 14771.3 ms
+[db] L v-L-sales-32.xml: created 250, altered 0, errors 0, 14698.2 ms
+[db] L v-L-sales-33.xml: created 250, altered 0, errors 0, 15530.8 ms
+[db] L v-L-sales-34.xml: created 243, altered 0, errors 0, 14485 ms
+[db] L v-L-purchase-01.xml: created 250, altered 0, errors 0, 15484.1 ms
+[db] L v-L-purchase-02.xml: created 250, altered 0, errors 0, 15697.5 ms
+[db] L v-L-purchase-03.xml: created 250, altered 0, errors 0, 16307 ms
+[db] L v-L-purchase-04.xml: created 250, altered 0, errors 0, 17027 ms
+[db] L v-L-purchase-05.xml: created 250, altered 0, errors 0, 17535.5 ms
+[db] L v-L-purchase-06.xml: created 250, altered 0, errors 0, 17423.7 ms
+[db] L v-L-purchase-07.xml: created 250, altered 0, errors 0, 18272.3 ms
+[db] L v-L-purchase-08.xml: created 250, altered 0, errors 0, 18451.1 ms
+[db] L v-L-purchase-09.xml: created 250, altered 0, errors 0, 19094.4 ms
+[db] L v-L-purchase-10.xml: created 250, altered 0, errors 0, 18995.5 ms
+[db] L v-L-purchase-11.xml: created 250, altered 0, errors 0, 19345.7 ms
+[db] L v-L-purchase-12.xml: created 250, altered 0, errors 0, 19526 ms
+[db] L v-L-purchase-13.xml: created 250, altered 0, errors 0, 19250.2 ms
+[db] L v-L-purchase-14.xml: created 250, altered 0, errors 0, 19268 ms
+[db] L v-L-purchase-15.xml: created 250, altered 0, errors 0, 19176.8 ms
+[db] L v-L-purchase-16.xml: created 250, altered 0, errors 0, 19418.1 ms
+[db] L v-L-purchase-17.xml: created 250, altered 0, errors 0, 18884.1 ms
+[db] L v-L-purchase-18.xml: created 250, altered 0, errors 0, 20063.7 ms
+[db] L v-L-purchase-19.xml: created 250, altered 0, errors 0, 20412.4 ms
+[db] L v-L-purchase-20.xml: created 250, altered 0, errors 0, 19901.6 ms
+[db] L v-L-purchase-21.xml: created 250, altered 0, errors 0, 20176.8 ms
+[db] L v-L-purchase-22.xml: created 250, altered 0, errors 0, 18808.8 ms
+[db] L v-L-purchase-23.xml: created 250, altered 0, errors 0, 18334.7 ms
+[db] L v-L-purchase-24.xml: created 125, altered 0, errors 0, 8501 ms
+[db] L v-L-stockjournal-01.xml: created 250, altered 0, errors 0, 7326.1 ms
+[db] L v-L-stockjournal-02.xml: created 250, altered 0, errors 0, 7454.9 ms
+[db] L v-L-stockjournal-03.xml: created 250, altered 0, errors 0, 7367 ms
+[db] L v-L-stockjournal-04.xml: created 121, altered 0, errors 0, 3561.4 ms
+[db] L v-L-debitnote-01.xml: created 250, altered 0, errors 0, 17175.2 ms
+[db] L v-L-debitnote-02.xml: created 250, altered 0, errors 0, 17164.7 ms
+[db] L v-L-debitnote-03.xml: created 250, altered 0, errors 0, 17780.8 ms
+[db] L v-L-debitnote-04.xml: created 80, altered 0, errors 0, 5483.2 ms
+[db] L v-L-creditnote-01.xml: created 250, altered 0, errors 0, 11137.5 ms
+[db] L v-L-creditnote-02.xml: created 250, altered 0, errors 0, 11459.7 ms
+[db] L v-L-creditnote-03.xml: created 250, altered 0, errors 0, 11159.6 ms
+[db] L v-L-creditnote-04.xml: created 134, altered 0, errors 0, 6100.4 ms
+  INFO stockm: L made: masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132); masters L: 2400 created, 0 errors; entries L: Credit Note 884, Debit Note 830, Purchase 5875, Sales 8493, Stock Journal 871 in 17.2 min; in Tally after L: 39879 entries (Credit Note 1042, Debit Note 956, Journal 1, Purchase 6932, Sales 10005, Stock Journal 1003)
+[16:17:43] ---- stockm: part L measured
+MEASURE ---- part L (3000 items, 39879 entries in Tally)
+MEASURE L A1 FinComStockItems all (MasterID > 0): worst 345.8 ms (each 345.8 / 177.7 / 174.8), 2672325 bytes, 3001 items, ok True
+MEASURE L A1 FinComStockItems chunk (0, 2000]: worst 100 ms (each 100), 1568216 bytes, 1762 items, ok True
+MEASURE L A1 FinComStockItems chunk (2000, 4000]: worst 74.3 ms (each 74.3), 1105640 bytes, 1240 items, ok True
+MEASURE L A2 FinComStockItemsGodown all: worst 247.4 ms (each 247.4 / 221.3 / 220.6), 3619634 bytes, 3001 items, ok True
+MEASURE L A3 FinComStockGroups: worst 3.4 ms (each 3.4 / 3.2 / 3), 6351 bytes, 1 items, ok True
+MEASURE L A1 stored opening: 3000 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 650194967.88
+######## PASS s2 (a) stock item masters: the stored opening read back exactly as made: 3,000 items: 3000 read, 0 differ; A1 worst 345.8 ms at 3,000 items (S: 71.9 ms at 600)
+MEASURE L D1 Stock Summary (groups) 20260401-20260402: worst 1097.7 ms (each 1097.7 / 16.6 / 15.1), 2255 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20260402: worst 1645.5 ms (each 1645.5 / 1113.7), 645726 bytes, 2751 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20260402: worst 129.2 ms (each 116.2 / 129.2), 1835426 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20260401-20261031: worst 666.3 ms (each 666.3 / 16.5 / 14.8), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20261031: worst 1437.4 ms (each 1437.4 / 1139.8), 684868 bytes, 2914 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20261031: worst 120.4 ms (each 107.4 / 120.4), 1840702 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20260401-20270331: worst 546.4 ms (each 546.4 / 17.9 / 16.4), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20270331: worst 1518 ms (each 1518 / 1154), 692274 bytes, 2942 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20270331: worst 126.7 ms (each 126.7 / 112.5), 1841889 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20261001-20261031: worst 591.5 ms (each 591.5 / 19 / 17), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20261001-20261031: worst 1647.5 ms (each 1647.5 / 1149.1), 684868 bytes, 2914 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20261001-20261031: worst 118.8 ms (each 111.6 / 118.8), 1846269 bytes, 3001 items, ok True
+MEASURE L D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 74.1 ms (each 69.4 / 69.8 / 74.1), 1081414 bytes, 1762 items, ok True
+MEASURE L D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 6.9 ms (each 6.9 / 6.9 / 6.5), 2148 bytes, 2 items, ok True
+MEASURE L D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 6.9 ms (each 6.5 / 6.9 / 6.2), 2148 bytes, 2 items, ok True
+######## PASS s1 the stock test data made (items with opening, a year of inventory entries): masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132); masters L: 2400 created, 0 errors; entries L: Credit Note 884, Debit Note 830, Purchase 5875, Sales 8493, Stock Journal 871 in 17.2 min; in Tally after L: 39879 entries (Credit Note 1042, Debit Note 956, Journal 1, Purchase 6932, Sales 10005, Stock Journal 1003)
+[16:18:00] ---- stockm: (b) Stock-in-Hand ledger
+[db] stock ledger (integrated): created 1, altered 0, errors 0, 10.2 ms
+MEASURE B1 FinComStockLedger (integrated): worst 5.9 ms (each 5.9 / 4.1 / 4.5), 2394 bytes, 1 items, ok True
+MEASURE B2 FinComStockLedgerL whole list (integrated): worst 3.9 ms (each 3.8 / 3.8 / 3.9), 2394 bytes, 1 items, ok True
+[db] company ISINTEGRATED No: created 0, altered 1, errors 0, 9.1 ms
+[db] stock ledger (not integrated): created 0, altered 1, errors 0, 8.4 ms
+MEASURE B1 FinComStockLedger (not integrated): worst 5.2 ms (each 5.2 / 4.5 / 4.1), 2394 bytes, 1 items, ok True
+MEASURE B2 FinComStockLedgerL whole list (not integrated): worst 4.7 ms (each 4.7 / 3.8 / 3.6), 2394 bytes, 1 items, ok True
+MEASURE D1 Stock Summary (groups) 20260401-20270331 (not integrated): worst 18.5 ms (each 18.5 / 16 / 15.9), 2265 bytes, 10 rows, ok True
+######## FAIL s3 (b) the Stock-in-Hand ledger: stored opening and closing values read back: made integrated: created 1, errors 0; integrated: opening '-250000.00', closing values 2; FinComLedgers today (integrated): 'SM Closing Stock' opening '-250000.00'; company ISINTEGRATED No: altered 1, errors 0; read back 'No'; altered not integrated: altered 1, errors 0; not integrated: opening '-250000.00', closing values: 20261031 -275000.00, 20270331 -300000.00; B1 worst 5.2 ms
+######## PASS s4 (d) Tally's computed stock closing: times: measured (a figure, not a pass mark): worst at 3,000 items / 20,000 entries 1647.5 ms; D1 Stock Summary (groups) 20260401-20260402: 1097.7 ms; D1X Stock Summary (every item) 20260401-20260402: 1645.5 ms; D2 FinComStockClosing all items 20260401-20260402: 129.2 ms; D1 Stock Summary (groups) 20260401-20261031: 666.3 ms; D1X Stock Summary (every item) 20260401-20261031: 1437.4 ms; D2 FinComStockClosing all items 20260401-20261031: 120.4 ms; D1 Stock Summary (groups) 20260401-20270331: 546.4 ms; D1X Stock Summary (every item) 20260401-20270331: 1518 ms; D2 FinComStockClosing all items 20260401-20270331: 126.7 ms; D1 Stock Summary (groups) 20261001-20261031: 591.5 ms; D1X Stock Summary (every item) 20261001-20261031: 1647.5 ms; D2 FinComStockClosing all items 20261001-20261031: 118.8 ms; D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: 74.1 ms; D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: 6.9 ms; D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: 6.9 ms
+######## PASS s5 one request at a time, Tally responding after each: 320 requests, at most 1 at Tally at once; Tally responding after each: True; over 2 s: none

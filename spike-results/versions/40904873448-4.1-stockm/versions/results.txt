@@ -1,0 +1,85 @@
+INFO TallyPrime 4.1, mode stockm, runner GitHub Actions 1000013765, 2026-10-29T15:57:30
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 21 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dbm\req: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+INFO stockm: candidate requests a1-items-chunk, a1-items-tail, a2-itembat-chunk, a2-itembat-tail, a3-stockgroups, b1-stockledger, b2-stockledger-list, d1-stocksummary, d1x-stocksummary-items, d2-itemclosing-all, d2-itemclosing-chunk, d3-itemclosing-one
+INFO stockm: gen.py: {"S": {"items": 600, "entries": {"Credit Note": 158, "Purchase": 1057, "Sales": 1512, "Stock Journal": 132, "Debit Note": 126}, "lines": 12513}, "L": {"items": 2400, "entries": {"Sales": 8493, "Purchase": 5875, "Stock Journal": 871, "Debit Note": 830, "Credit Note": 884}, "lines": 71345}}
+INFO stockm: company field ISINTEGRATED: Yes
+INFO stockm: company field ISINVENTORYON: Yes
+INFO stockm: company field USEINVENTORY: 
+INFO stockm: company field ISMAINTAININVENTORY: 
+INFO stockm: S made: masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132)
+MEASURE ---- part S (600 items, 5973 entries in Tally)
+MEASURE S A1 FinComStockItems all (MasterID > 0): worst 71.9 ms (each 71.9 / 40.6 / 39.7), 534221 bytes, 601 items, ok True
+MEASURE S A1 FinComStockItems chunk (0, 2000]: worst 42.3 ms (each 42.3), 534221 bytes, 601 items, ok True
+MEASURE S A2 FinComStockItemsGodown all: worst 79.4 ms (each 79.4 / 48.4 / 47.3), 716810 bytes, 601 items, ok True
+MEASURE S A3 FinComStockGroups: worst 5.3 ms (each 5.3 / 4.4 / 3.7), 6346 bytes, 1 items, ok True
+MEASURE S A1 stored opening: 600 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 119041872.01
+MEASURE S D1 Stock Summary (groups) 20260401-20260402: worst 236.3 ms (each 236.3 / 15.4 / 9.5), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20260402: worst 343.2 ms (each 343.2 / 299.6), 126892 bytes, 541 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20260402: worst 34.6 ms (each 34.6 / 22.5), 367596 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20260401-20261031: worst 152.1 ms (each 152.1 / 10 / 15.2), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20261031: worst 308.1 ms (each 308.1 / 221.3), 138477 bytes, 590 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20261031: worst 24.5 ms (each 24.5 / 23.2), 368899 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20260401-20270331: worst 113.4 ms (each 113.4 / 13.5 / 10.2), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20260401-20270331: worst 291.2 ms (each 291.2 / 225), 138189 bytes, 588 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20260401-20270331: worst 28.3 ms (each 24.5 / 28.3), 369075 bytes, 601 items, ok True
+MEASURE S D1 Stock Summary (groups) 20261001-20261031: worst 118.5 ms (each 118.5 / 12.4 / 12.3), 2255 bytes, 10 rows, ok True
+MEASURE S D1X Stock Summary (every item) 20261001-20261031: worst 329.8 ms (each 329.8 / 227.9), 138477 bytes, 590 rows, ok True
+MEASURE S D2 FinComStockClosing all items 20261001-20261031: worst 23.4 ms (each 23.4 / 22.6), 370179 bytes, 601 items, ok True
+MEASURE S D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 27.2 ms (each 22 / 25.6 / 27.2), 369075 bytes, 601 items, ok True
+MEASURE S D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 4.4 ms (each 4 / 4.4 / 3.2), 2143 bytes, 2 items, ok True
+MEASURE S D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 3.9 ms (each 3.1 / 3.9 / 3), 2143 bytes, 2 items, ok True
+INFO stockm: full stock item export (harness): 578.5 ms, 5593391 bytes
+INFO stockm: L made: masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132); masters L: 2400 created, 0 errors; entries L: Credit Note 884, Debit Note 830, Purchase 5875, Sales 8493, Stock Journal 871 in 17.2 min; in Tally after L: 39879 entries (Credit Note 1042, Debit Note 956, Journal 1, Purchase 6932, Sales 10005, Stock Journal 1003)
+MEASURE ---- part L (3000 items, 39879 entries in Tally)
+MEASURE L A1 FinComStockItems all (MasterID > 0): worst 345.8 ms (each 345.8 / 177.7 / 174.8), 2672325 bytes, 3001 items, ok True
+MEASURE L A1 FinComStockItems chunk (0, 2000]: worst 100 ms (each 100), 1568216 bytes, 1762 items, ok True
+MEASURE L A1 FinComStockItems chunk (2000, 4000]: worst 74.3 ms (each 74.3), 1105640 bytes, 1240 items, ok True
+MEASURE L A2 FinComStockItemsGodown all: worst 247.4 ms (each 247.4 / 221.3 / 220.6), 3619634 bytes, 3001 items, ok True
+MEASURE L A3 FinComStockGroups: worst 3.4 ms (each 3.4 / 3.2 / 3), 6351 bytes, 1 items, ok True
+MEASURE L A1 stored opening: 3000 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 650194967.88
+PASS s2 (a) stock item masters: the stored opening read back exactly as made: 3,000 items: 3000 read, 0 differ; A1 worst 345.8 ms at 3,000 items (S: 71.9 ms at 600)
+MEASURE L D1 Stock Summary (groups) 20260401-20260402: worst 1097.7 ms (each 1097.7 / 16.6 / 15.1), 2255 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20260402: worst 1645.5 ms (each 1645.5 / 1113.7), 645726 bytes, 2751 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20260402: worst 129.2 ms (each 116.2 / 129.2), 1835426 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20260401-20261031: worst 666.3 ms (each 666.3 / 16.5 / 14.8), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20261031: worst 1437.4 ms (each 1437.4 / 1139.8), 684868 bytes, 2914 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20261031: worst 120.4 ms (each 107.4 / 120.4), 1840702 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20260401-20270331: worst 546.4 ms (each 546.4 / 17.9 / 16.4), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20260401-20270331: worst 1518 ms (each 1518 / 1154), 692274 bytes, 2942 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20260401-20270331: worst 126.7 ms (each 126.7 / 112.5), 1841889 bytes, 3001 items, ok True
+MEASURE L D1 Stock Summary (groups) 20261001-20261031: worst 591.5 ms (each 591.5 / 19 / 17), 2265 bytes, 10 rows, ok True
+MEASURE L D1X Stock Summary (every item) 20261001-20261031: worst 1647.5 ms (each 1647.5 / 1149.1), 684868 bytes, 2914 rows, ok True
+MEASURE L D2 FinComStockClosing all items 20261001-20261031: worst 118.8 ms (each 111.6 / 118.8), 1846269 bytes, 3001 items, ok True
+MEASURE L D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 74.1 ms (each 69.4 / 69.8 / 74.1), 1081414 bytes, 1762 items, ok True
+MEASURE L D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 6.9 ms (each 6.9 / 6.9 / 6.5), 2148 bytes, 2 items, ok True
+MEASURE L D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 6.9 ms (each 6.5 / 6.9 / 6.2), 2148 bytes, 2 items, ok True
+PASS s1 the stock test data made (items with opening, a year of inventory entries): masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132); masters L: 2400 created, 0 errors; entries L: Credit Note 884, Debit Note 830, Purchase 5875, Sales 8493, Stock Journal 871 in 17.2 min; in Tally after L: 39879 entries (Credit Note 1042, Debit Note 956, Journal 1, Purchase 6932, Sales 10005, Stock Journal 1003)
+MEASURE B1 FinComStockLedger (integrated): worst 5.9 ms (each 5.9 / 4.1 / 4.5), 2394 bytes, 1 items, ok True
+MEASURE B2 FinComStockLedgerL whole list (integrated): worst 3.9 ms (each 3.8 / 3.8 / 3.9), 2394 bytes, 1 items, ok True
+MEASURE B1 FinComStockLedger (not integrated): worst 5.2 ms (each 5.2 / 4.5 / 4.1), 2394 bytes, 1 items, ok True
+MEASURE B2 FinComStockLedgerL whole list (not integrated): worst 4.7 ms (each 4.7 / 3.8 / 3.6), 2394 bytes, 1 items, ok True
+MEASURE D1 Stock Summary (groups) 20260401-20270331 (not integrated): worst 18.5 ms (each 18.5 / 16 / 15.9), 2265 bytes, 10 rows, ok True
+FAIL s3 (b) the Stock-in-Hand ledger: stored opening and closing values read back: made integrated: created 1, errors 0; integrated: opening '-250000.00', closing values 2; FinComLedgers today (integrated): 'SM Closing Stock' opening '-250000.00'; company ISINTEGRATED No: altered 1, errors 0; read back 'No'; altered not integrated: altered 1, errors 0; not integrated: opening '-250000.00', closing values: 20261031 -275000.00, 20270331 -300000.00; B1 worst 5.2 ms
+PASS s4 (d) Tally's computed stock closing: times: measured (a figure, not a pass mark): worst at 3,000 items / 20,000 entries 1647.5 ms; D1 Stock Summary (groups) 20260401-20260402: 1097.7 ms; D1X Stock Summary (every item) 20260401-20260402: 1645.5 ms; D2 FinComStockClosing all items 20260401-20260402: 129.2 ms; D1 Stock Summary (groups) 20260401-20261031: 666.3 ms; D1X Stock Summary (every item) 20260401-20261031: 1437.4 ms; D2 FinComStockClosing all items 20260401-20261031: 120.4 ms; D1 Stock Summary (groups) 20260401-20270331: 546.4 ms; D1X Stock Summary (every item) 20260401-20270331: 1518 ms; D2 FinComStockClosing all items 20260401-20270331: 126.7 ms; D1 Stock Summary (groups) 20261001-20261031: 591.5 ms; D1X Stock Summary (every item) 20261001-20261031: 1647.5 ms; D2 FinComStockClosing all items 20261001-20261031: 118.8 ms; D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: 74.1 ms; D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: 6.9 ms; D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: 6.9 ms
+PASS s5 one request at a time, Tally responding after each: 320 requests, at most 1 at Tally at once; Tally responding after each: True; over 2 s: none
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.4.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 44673232 bytes, Last-Modified Tue, 12 Mar 2024 09:23:50 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 1 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
