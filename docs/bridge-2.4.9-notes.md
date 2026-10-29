@@ -89,16 +89,24 @@ change.
 - Field by field (tally-versions mode bdiff, run 40834628041 at e16baaf86, all five releases): every entry taken from a
   group identical to FinComVoucherObject's answer (7.1: 142; 3.0 .. 6.2: 86 each), 0 differ, 0 missing; the rest left
   for FinComVoucherObject.
-- The real-Tally gate of this build (run 40838981120, 29-Oct-2026, the committed setup 161adb96...42fc0 installed on each
-  release; branch tally-batch249, local_dist=yes because the account's artifact storage is full):
-  - upg (2.4.9 over the published 2.4.8, a9cbec7f8, setup 030f4303...d83f): PASS c1, c2, u1-u4 on 3.0, 4.1, 5.1, 6.2, 7.1.
-  - g245 (ZZ BIG TEST, about 30,000 entries, Apr-Sep fetched, 7,852 entries FinCom lacked): 7.1 every check PASS; 3.0,
-    4.1, 5.1, 6.2 every check PASS but g3, which counted an entry asked once in a group and then read alone (left by the
-    group: a GST line without a type of supply) as "asked twice". Counted from the run's own proxy logs, no entry was
-    asked twice otherwise (3.0 and 5.1: 4,768 group-then-alone, 0 else; 4.1 and 6.2: one group of 100 asked again after
-    a cut for a posting, as the harness allows). The harness counts it apart since afafc3a0a; the rerun could not start
-    (GitHub: "recent account payments have failed or your spending limit needs to be increased").
-  - Speed, the night pace (g10), entries a minute while the bridge reads: 7.1 2,801 (1,00,000 entries in about 36 min);
-    3.0 647, 4.1 624, 5.1 628, 6.2 610 (1,00,000 in about 2.6-2.7 h), where ZZ BIG TEST's GST entries go one by one
-    (4,770 of 7,852). 2.4.8's pace on the same data: about 430 a minute (run 40750991113 for 2.4.9's forms); 2.4.5: 165.
+- The real-Tally gate of this build (the committed setup 161adb96...42fc0 installed on each release, branch
+  tally-batch249, local_dist=yes; review round 5 checked these against the runs' summaries):
+  - upg (2.4.9 over the published 2.4.8, a9cbec7f8, setup 030f4303...d83f): PASS c1, c2, u1-u4 on 3.0 (run 40838981120)
+    and on 4.1, 5.1, 6.2, 7.1 (run 40875226108; in 40838981120 their results did not reach the branch).
+  - g245 (ZZ BIG TEST, about 30,000 entries, Apr-Sep fetched, 7,852 entries FinCom lacked), every check PASS: 7.1 in run
+    40838981120 (13 of 13); 3.0, 4.1, 5.1 in run 40850921512 and 6.2 in run 40873289822 (13 of 13 each). The earlier g3
+    FAILs on 3.0 .. 6.2 (40838981120, and 6.2 in 40850921512) were the harness counting an entry asked once in a group
+    and then read alone (left by the group: a GST line without a type of supply), alone or after a group cut for a
+    posting, as "asked twice"; the harness counts them apart since afafc3a0a and 02f2bc53d. The harness's own figures in
+    the passing runs: asked twice 0 on all five; left by a group and read alone 4,768 (3.0, 4.1, 5.1) and 4,278 (6.2,
+    where 490 more were cut for a posting first).
+  - Speed, the night pace (g10, entries a minute while the bridge reads; the same runs): 7.1 2,801 (1,00,000 entries in
+    about 36 min); 3.0 601, 4.1 605, 5.1 623, 6.2 624 (1,00,000 in about 160-166 min), where ZZ BIG TEST's GST entries go
+    one by one. 2.4.8's pace on the same data: about 430 a minute; 2.4.5: 165.
   - No request over 2 s, one at a time, Tally's window never held 2 s (g4 PASS on all five).
+- CI 40839005998 (at 8e6208992): attempt 2: app, bridge-linux, bridge-linux-typed green; the shares red only on tests
+  red on staging-next without 2.4.9 (CI 40855347982: run_migration_grants, run_renumber_list, run_recorder_server,
+  run_older_entries_ui, run_cors_preflight, run_stability), plus run_fast_reopen (share 2, a timing check under a 2x CPU
+  slow-down) and share 5's Python packages step (infra). Attempt 3 (the one rerun): shares 2, 5 green; run_open_line's
+  "2 script files at once ahead (5)" red in share 3, green in attempt 2 and red the same way on staging-next's own build
+  (integ-249, no app file changed by 2.4.9). Windows CI 40839003581 attempt 2: green.

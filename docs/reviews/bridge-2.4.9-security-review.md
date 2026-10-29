@@ -148,4 +148,9 @@ also code review R1-3 and R1-6 (the tdsgst and payg fixtures), before the 2.4.9 
 
 High open: 0. Medium open: 0.
 
-Range: a9cbec7f8..e16baaf86
+- Round 5, range e16baaf86..29986936c (the build and the staging release): docs/reviews/review-249-round5.md. The program
+  rebuilt from the reviewed sources is byte for byte the committed one; hashes and latest.json consistent, staging only;
+  2.4.8 kept byte for byte. M1 (upg evidenced on 3.0 only): upg run again on 4.1-7.1, run 40875226108, PASS; L1, L2 (the
+  gate notes stale or not reproducible): the notes rewritten with the runs' own figures.
+
+Range reviewed in all (for release-check.sh, which reads the last range named): a9cbec7f8..29986936c
