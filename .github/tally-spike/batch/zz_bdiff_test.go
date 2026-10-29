@@ -66,15 +66,33 @@ func TestFCBDiff(t *testing.T) {
 				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: a payroll entry", w.Form, w.File, mid, typ))
 				continue
 			}
-			v, why := fastStripWhy(batchConvert(c))
+			var want string
+			for _, ov := range reVchBlock.FindAllString(read("obj-"+mid+".xml"), -1) {
+				want, _ = fastStripWhy(cleanXML(ov))
+			}
+			// fetchVoucherBatch's own steps: an entry the group gives otherwise is left (a probe settles its lines with its
+			// own FinComVoucherObject answer, as pullFetchStep does)
+			cv := batchConvert(c)
+			keys, always := batchTOSLines(cv)
+			if always != "" {
+				left++
+				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: %s", w.Form, w.File, mid, typ, always))
+				continue
+			}
+			if ok, unknown := batchTOSTake("BDIFF CO", keys); !ok {
+				if len(unknown) > 0 && want != "" {
+					batchTOSProbe("BDIFF CO", mid, unknown)
+					batchTOSLearn("BDIFF CO", mid, want)
+				}
+				left++
+				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: a line's type of supply (%s)", w.Form, w.File, mid, typ, strings.Join(keys, ", ")))
+				continue
+			}
+			v, why := fastStripWhy(cv)
 			if why != "" || v == "" {
 				left++
 				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: %s", w.Form, w.File, mid, typ, why))
 				continue
-			}
-			var want string
-			for _, ov := range reVchBlock.FindAllString(read("obj-"+mid+".xml"), -1) {
-				want, _ = fastStripWhy(cleanXML(ov))
 			}
 			if want == "" {
 				missing++
@@ -106,7 +124,7 @@ func TestFCBDiff(t *testing.T) {
 		st = "FAIL"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s: %d entries compared over %d group answers: %d identical (%s), %d differ, %d missing, %d left for FinComVoucherObject (payroll, or held by the strip: FinCom gets FinComVoucherObject's answer)\n",
+	fmt.Fprintf(&b, "%s %s: %d entries compared over %d group answers: %d identical (%s), %d differ, %d missing, %d left for FinComVoucherObject (payroll, held by the strip, or a line a group gives otherwise: FinCom gets FinComVoucherObject's answer)\n",
 		st, name, same+differ, len(plan), same, strings.Join(ts, ", "), differ, missing, left)
 	for _, d := range det {
 		b.WriteString("DETAIL " + d + "\n")

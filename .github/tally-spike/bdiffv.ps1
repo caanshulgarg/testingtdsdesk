@@ -42,7 +42,13 @@ try {
   $made['tdsgst entries'] = "$ok of $($V1.vouchers.Count)$(if ($bad.Count) { '; refused ' + ($bad -join '; ') })"
   # ---- TDS challan payments (tdschv.ps1's PX1 shape, on tdsgst's TDS ledgers): one with the challan, tax, interest and
   # late fee; one plain tax payment of another nature
-  $nat = 'Fees for Professional Services'; $duty = 'TDS Payable 194J'
+  # the nature of payment as Tally's own TDSRate masters name it (a TDS company has Tally's natures; else one by XML)
+  $null = DbImp 'All Masters' (TM '<TDSRATE NAME="BD Nature 194J" ACTION="Create"><NAME.LIST><NAME>BD Nature 194J</NAME></NAME.LIST><NAME>BD Nature 194J</NAME><SECTIONNUMBER>194J</SECTIONNUMBER><PAYMENTCODE>94J</PAYMENTCODE></TDSRATE>') 'a TDS nature by XML'
+  $natX = TSetup ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>BDNat</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>' + (LE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="BDNat" ISMODIFY="No"><TYPE>TDSRate</TYPE><FETCH>NAME</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>') 120
+  $natNames = @([regex]::Matches("$($natX.body)", '<TDSRATE NAME="([^"]*)"') | ForEach-Object { [Net.WebUtility]::HtmlDecode($_.Groups[1].Value) })
+  $nat = @($natNames | Where-Object { $_ -match 'Profession' }) + @($natNames | Where-Object { $_ -match '194J' }) + @($natNames) + @('BD Nature 194J') | Select-Object -First 1
+  $made['TDS natures in Tally'] = "$($natNames.Count) (used '$nat')"
+  $duty = 'TDS Payable 194J'
   foreach ($p in @(@{ no = 'BD-TDS-1'; d = '20260602'; tax = '10000.00'; int = '150.00'; fee = '200.00'; tot = '10350.00'; chal = '54321' }, @{ no = 'BD-TDS-2'; d = '20260702'; tax = '4500.00'; int = ''; fee = ''; tot = '4500.00'; chal = '54400' })) {
     $x = '<VOUCHER VCHTYPE="Payment" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>' + $p.d + '</DATE><EFFECTIVEDATE>' + $p.d + '</EFFECTIVEDATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><VOUCHERNUMBER>' + $p.no + '</VOUCHERNUMBER><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW><NARRATION>' + $p.no + ' TDS challan payment by XML</NARRATION>' +
       '<STATPAYMENTTYPE>TDS</STATPAYMENTTYPE><TAXPAYPERIODFROMDATE>20260501</TAXPAYPERIODFROMDATE><TAXPAYPERIODTODATE>20260531</TAXPAYPERIODTODATE><TDSNATUREOFPAYMENT>' + (LE $nat) + '</TDSNATUREOFPAYMENT><TDSSECTIONNO>194J</TDSSECTIONNO>' +
@@ -53,6 +59,7 @@ try {
       '<ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + $p.tot + '</AMOUNT><BANKALLOCATIONS.LIST><DATE>' + $p.d + '</DATE><INSTRUMENTDATE>' + $p.d + '</INSTRUMENTDATE><NAME>' + $p.no + '</NAME><TRANSACTIONTYPE>Cheque</TRANSACTIONTYPE><INSTRUMENTNUMBER>778899</INSTRUMENTNUMBER><AMOUNT>' + $p.tot + '</AMOUNT></BANKALLOCATIONS.LIST></ALLLEDGERENTRIES.LIST></VOUCHER>'
     $k = DbImp 'Vouchers' (TM $x) "TDS challan payment $($p.no)"
     if ($k.c -ne 1) { $k = DbImp 'Vouchers' (TM ($x -replace '(?s)<BANKALLOCATIONS\.LIST>.*?</BANKALLOCATIONS\.LIST>', '')) "TDS challan payment $($p.no) (no bank allocation)" }
+    if ($k.c -ne 1) { $k = DbImp 'Vouchers' (TM ($x -replace '<TDSNATUREOFPAYMENT>[^<]*</TDSNATUREOFPAYMENT>', '' -replace '<STATNATURENAME>[^<]*</STATNATURENAME>', '')) "TDS challan payment $($p.no) (no nature)" }
     $made["TDS challan payment $($p.no)"] = "created $($k.c)$(if ($k.line) { ': ' + $k.line })"
   }
   # ---- payroll (payg/: the company renamed to this one, as paygv.ps1 does)
@@ -82,7 +89,8 @@ $all = TSetup ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALL
 $ents = @(foreach ($mm in [regex]::Matches((NoInfo $all.body), '(?s)<VOUCHER[ >].*?</VOUCHER>')) { $v = $mm.Value
     [pscustomobject]@{ mid = [int64]('0' + [regex]::Match($v, '<MASTERID[^>]*>\s*(\d+)').Groups[1].Value); date = [regex]::Match($v, '<DATE[^>]*>\s*(\d{8})').Groups[1].Value; type = [regex]::Match($v, '<VOUCHERTYPENAME[^>]*>([^<]*)<').Groups[1].Value } })
 $byType = ($ents | Group-Object type | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ', '
-DRes $D0 $(if ($ents.Count -ge 60 -and @($ents | Where-Object { $_.type -eq 'Stock Journal' }).Count -ge 2 -and @($ents | Where-Object { $_.type -eq 'Payroll' }).Count -ge 1) { 'PASS' } else { 'HARNESS' }) ("{0} entries in Tally ({1}); {2}" -f $ents.Count, $byType, (($made.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" }) -join '; '))
+$tdsPay = @($made.Keys | Where-Object { $_ -like 'TDS challan payment *' -and "$($made[$_])" -like 'created 1*' }).Count
+DRes $D0 $(if ($ents.Count -ge 60 -and @($ents | Where-Object { $_.type -eq 'Stock Journal' }).Count -ge 2 -and @($ents | Where-Object { $_.type -eq 'Payroll' }).Count -ge 1 -and $tdsPay -ge 1) { 'PASS' } else { 'HARNESS' }) ("{0} entries in Tally ({1}); {2}" -f $ents.Count, $byType, (($made.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" }) -join '; '))
 $plan = [Collections.Generic.List[object]]::new(); $rows = [Collections.Generic.List[object]]::new()
 foreach ($g in @($ents | Where-Object { $_.mid -gt 0 } | Group-Object date | Sort-Object Name)) {
   $d = $g.Name
