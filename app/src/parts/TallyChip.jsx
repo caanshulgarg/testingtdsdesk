@@ -1,4 +1,4 @@
-import { clientTallyState } from "../lib/tallyState.js";
+import { clientTallyState, mayLink } from "../lib/tallyState.js";
 // ONE page for Tally (24-Oct-2026, next-tally-one-page; the owner: "somewhere it is showing, other places it is not
 // showing.. I have to go everywhere to see where to add.. I need a clear page only"): a client's company in Tally is
 // added, linked, moved, unlinked and synced on the Tally page's Companies in Tally only. Everywhere else a client's Tally
@@ -34,5 +34,8 @@ export function TallyOne({ co }) {
     <b>Tally:</b>{" "}{linked && <span data-tally-one-company="">{p.company}</span>}{linked && " "}
     <span className={"tag " + p.level} title={p.text}>{MARK[p.level] + p.word}</span>
     {linked && p.state !== "connected" && <span className="note">{" " + (p.line ? "— " + p.line : p.text.replace(/^Disconnected/, "").replace(/^ — /, "— "))}</span>}
-    {" · "}<button className="linkbtn" data-tally-one-go="" onClick={() => goTallyRow(co.id)}>{linked ? "Open in Tally page" : "Choose on Tally page"}</button></p>;
+    {" · "}<button className="linkbtn" data-tally-one-go="" onClick={() => goTallyRow(co.id)}>{linked ? "Open in Tally page" : "Choose on Tally page"}</button>
+    {/* next-fix-tally-links: Change (the Tally page, this client's picker open) and Unlink (asked first), as on the Tally page */}
+    {linked && (!(S.account && S.account.me) || mayLink()) && <>{" · "}<button className="linkbtn" data-tally-one-change="" onClick={() => { S.tallyChange = co.id; goTallyRow(co.id); }}>Change</button>
+      {" · "}<button className="linkbtn" data-tally-one-unlink="" onClick={() => import("./TallyCompanies.jsx").then((m) => m.unlink({ company: (tallyLinkOf(co) || {}).company || p.company, client: co.id }))}>Unlink</button></>}</p>;
 }

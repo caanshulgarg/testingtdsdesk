@@ -97,3 +97,8 @@
   #app .tco-line2 .tco-more { position: static; }
   #app .tco-line2 .bk-menu-list { right: 0; left: auto; min-width: 0; width: min(320px, 100%); }
 }
+/* Clients linked to Tally (next-fix-tally-links): under the companies open now, quiet */
+#app .tlk { margin: 14px 0 0; padding: 12px 0 0; border-top: 1px solid var(--border-subtle, var(--border)); min-width: 0; }
+#app .tlk-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0 0 2px; }
+#app .tlk-head b { font-size: 15px; }
+#app .tlk-pick select { min-width: 0; max-width: 100%; flex: 1 1 220px; }
