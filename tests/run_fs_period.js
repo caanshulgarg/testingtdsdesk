@@ -67,7 +67,9 @@ try {
   const cu = FinSt.periodOf ? FinSt.periodOf("2025", {preset: "custom", from: "20250815", to: "20251120"}) : {};
   ok(cu.from === "20250815" && cu.to === "20251120" && !cu.full, "custom: 15-Aug to 20-Nov");
   const cl = FinSt.periodOf ? FinSt.periodOf("2025", {preset: "custom", from: "20250101", to: "20270101"}) : {};
-  ok(cl.from === "20250401" && cl.to === "20260331" && cl.full, "custom dates outside the year are held to it (" + cl.from + "-" + cl.to + ")");
+  ok(cl.from === "20250101" && cl.to === "20260331" && !cl.full && cl.spans, "custom: To held to the year's end; From may be in the previous year (" + cl.from + "-" + cl.to + ", spans two years)");
+  const c2 = FinSt.periodOf("2025", {preset: "custom", from: "20230101", to: "20250930"});
+  ok(c2.from === "20240401" && c2.to === "20250930", "... but not before the previous year's start (" + c2.from + ")");
   const yt = FinSt.periodOf ? FinSt.periodOf("2024", {preset: "ytd"}, {today: "20261029"}) : {};
   ok(yt.to === "20250331" && yt.full, "year to date of a closed year is the full year");
 
@@ -127,6 +129,34 @@ try {
   const cu2 = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "custom", from: "20250815", to: "20251120"}});
   ok(cu2.bs.total.eqL.cy === cu2.bs.total.assets.cy && cu2.checks.every(c => c.value === 0) && cu2.cf.cy.diff === 0, "custom 15-Aug to 20-Nov: ties, checks 0, cash flow ends at the cash");
 
+  ok(h1.period.cmp === "same" && h1.period.cmpNote === "Comparative: the same period last year (01-Apr-2024 to 30-Sep-2024; the balance sheet as at 30-Sep-2024).", "the comparative named: " + h1.period.cmpNote);
+
+  console.log("\nCompare with the last full year");
+  const h1y = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "h1", cmp: "fy"}});
+  ok(h1y.period.cmp === "fy" && h1y.period.pyAsAt === "31-Mar-2025" && h1y.period.pyPlLabel === "Year ended 31-Mar-2025" && /last full year \(the year ended 31-Mar-2025; the balance sheet as at 31-Mar-2025\)/.test(h1y.period.cmpNote),
+    "headings: " + [h1y.period.pyAsAt, h1y.period.pyPlLabel, h1y.period.cmpNote].join(" | "));
+  eq(h1y.bs.total.assets.py, 6141000, "PY balance sheet as at 31-Mar-2025"); eq(h1y.bs.total.eqL.py, 6141000, "... and it ties");
+  eq(note(h1y, "13").total.py, 10000000, "PY revenue: the whole of 2024-25"); eq(h1y.pl.pat.py, 1564000, "PY profit: 2024-25's");
+  eq(h1y.bs.total.assets.cy, h1.bs.total.assets.cy, "the period's own figures unchanged"); eq(h1y.pl.pat.cy, h1.pl.pat.cy, "... and its profit");
+  eq(h1y.cf.py && h1y.cf.py.op, 1239000, "PY cash flow: the year 2024-25");
+  ok(h1y.checks.every(c => c.value === 0) && h1y.checks.some(c => c.key === "surplus"), "every check reads 0, with the surplus against last year's closing: " + h1y.checks.filter(c => c.value).map(c => c.key + " " + c.value).join("; "));
+
+  console.log("\nA period across 31 March (1-Jan-2025 to 30-Jun-2025, in 2025-26)");
+  const cx = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "custom", from: "20250101", to: "20250630"}}), q1b = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "q1"}});
+  ok(!cx.error && cx.period.spans && /spans two financial years \(2024-25 and 2025-26\)/.test(cx.period.spansNote), "said plainly: " + cx.period.spansNote);
+  const revX = -r2(["Software Services - Export", "Software Services - Domestic"].reduce((s2, n) => s2 + parts(C.plp[n])[3] + parts(C.plc[n])[0], 0));
+  eq(note(cx, "13").total.cy, revX, "revenue: January-March 2025 + April-June 2025");
+  eq(cx.bs.total.assets.cy, q1b.bs.total.assets.cy, "the balance sheet as on 30-Jun-2025, as Q1's"); eq(cx.bs.total.eqL.cy, cx.bs.total.assets.cy, "... it ties");
+  const q4p = -r2(Object.keys(C.plp).reduce((s2, n) => s2 + parts(C.plp[n])[3], 0));
+  eq(line(cx, "4", "4E").cy, -q4p, "Note 4: January-March 2025's profit, already in the opening balance, taken out");
+  ok(/already in the balance at the beginning of the year/.test(line(cx, "4", "4E").label || ""), "... " + line(cx, "4", "4E").label);
+  eq(line(cx, "4", "4A").cy, 4531000, "the reserves start from 01-Apr-2025's balance");
+  ok(cx.checks.every(c => c.value === 0) && cx.cf.cy.diff === 0, "checks 0, the cash flow ends at the cash: " + cx.checks.filter(c => c.value).map(c => c.key + " " + c.value).join("; "));
+  ok(cx.tb.pySrc === "none", "the same dates a year earlier (from 1-Jan-2024) are not in the copy: blank");
+  const cxy = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "custom", from: "20250101", to: "20250630", cmp: "fy"}});
+  ok(cxy.bs.total.assets.py === cxy.bs.total.eqL.py && note(cxy, "13").total.py === 10000000 && cxy.checks.every(c => c.value === 0),
+    "compared with the last full year: its balance sheet as at 31-Mar-2025 ties (" + cxy.bs.total.assets.py + "; Juniper Travels, a debit on 30-Jun-2025, is an advance to a supplier), revenue 2024-25");
+
   console.log("\nAdjustments belong to the period they were made for; the choice is kept for the client");
   const b = ctx.S.books, k = FinSt.periodKey("2025", {preset: "h1"});
   ok(k === "2025:20250401-20250930" && FinSt.periodKey("2025", {preset: "fy"}) === "2025", "the period's key: " + k);
@@ -145,6 +175,8 @@ try {
   ok(!fh.error && fh.tb.pySrc === "none" && fh.tb.rows.every(r => !r.py), "the firm (copy from 1-Apr-2025): the PY column blank (" + (fh.tb && fh.tb.pySrc) + ")");
   ok(/not in FinCom/i.test(fh.period.pyNote || ""), "... with a one-line note: " + fh.period.pyNote);
   ok(fh.bs.total.eqL.cy === fh.bs.total.assets.cy && fh.checks.every(c => c.value === 0), "... the firm's H1 ties, checks 0" + fh.checks.filter(c => c.value).map(c => " " + c.key + " " + c.value).join(""));
+  const fhy = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "h1", cmp: "fy"}});
+  ok(fhy.tb.pySrc === "opening" && fhy.bs.total.eqL.py === 600000 && fhy.bs.total.assets.py === 600000, "compared with the last full year: its balance sheet from the opening balances (6,00,000)");
 
   console.log("\nLast year's balance sheet: reading it");
   const PB = x.FinPyBs;
@@ -225,5 +257,46 @@ try {
   const cb = use(company(true)); cb.fs.pyBs = nb.fs.pyBs;
   const co = FinSt.build("2025", {unit: 1, dec: 2});
   ok(co.tb.pySrc === "copy", "with last year in the copy, the PY column is the copy's even with an upload");
+
+  console.log("\nStock: as on each date, where it comes from, never made up");
+  const sb = use(company(true)); sb.fs.stock = {open: 200000, close: 260000};
+  const s0 = FinSt.build("2025", {unit: 1, dec: 2});
+  ok(figs(s0) === figs(FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "fy"}})), "the full year with stock typed: a period of Full year is the same");
+  eq(line(s0, "39", "39A").cy, 260000, "closing stock 2,60,000"); eq(s0.pl.chg.cy, -60000, "changes in inventories: 2,00,000 - 2,60,000");
+  eq(line(s0, "39", "39A").py, 200000, "PY inventories: this year's opening");
+  ok(s0.stock.A.src === "typed" && s0.stock.C.src === "typed" && s0.checks.every(c => c.value === 0), "sources: typed; checks 0 " + s0.checks.filter(c => c.value).map(c => c.key).join(","));
+  let sh = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "h1"}});
+  const miss = sh.checks.find(c => c.key === "stockMissing") || {};
+  ok(miss.value === 1 && /Closing stock \(as on 30-Sep-2025\)/.test(miss.label) && sh.stock.C.v == null, "H1: the closing stock on 30-Sep-2025 is not known, and said so (" + miss.label + "); nothing carried");
+  ok(sh.bs.total.eqL.cy === sh.bs.total.assets.cy, "... the balance sheet still ties");
+  FinSt.stockSet("20250930", 230000);
+  sh = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "h1"}});
+  ok(sh.stock.C.src === "typed" && /^typed by .+ on \d\d-[A-Z][a-z]{2}-\d{4}$/.test(sh.stock.C.label) && sb.fs.stockAt["20250930"].v === 230000, "typed as on 30-Sep-2025, kept per client per date: " + sh.stock.C.label);
+  eq(sh.pl.chg.cy, -30000, "H1 changes in inventories: opening 2,00,000 - closing 2,30,000"); eq(line(sh, "39", "39A").cy, 230000, "inventories as on 30-Sep-2025");
+  ok(sh.checks.every(c => c.value === 0), "checks 0 " + sh.checks.filter(c => c.value).map(c => c.key + " " + c.value).join("; "));
+  let sq = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "q2"}});
+  ok((sq.checks.find(c => c.key === "stockMissing") || {}).label === "Stock not known: Opening stock at the start of the period (as on 30-Jun-2025)", "Q2 needs the stock on 30-Jun-2025: " + (sq.checks.find(c => c.key === "stockMissing") || {}).label);
+  FinSt.stockSet("20250630", 210000);
+  sq = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "q2"}}); const sq1 = FinSt.build("2025", {unit: 1, dec: 2, period: {preset: "q1"}});
+  eq(sq.pl.chg.cy, -20000, "Q2: opening at the start of the period 2,10,000 - closing 2,30,000");
+  eq(r2(sq.pl.pat.cy + sq1.pl.pat.cy), sh.pl.pat.cy, "Q1 + Q2 profit = H1's, stock included");
+  ok(sq.checks.every(c => c.value === 0) && sq.bs.total.eqL.cy === sq.bs.total.assets.cy && sq.cf.cy.diff === 0, "Q2 ties, checks 0, cash flow 0 " + sq.checks.filter(c => c.value).map(c => c.key + " " + c.value).join("; "));
+  FinSt.stockSet("20250630", null); ok(!("20250630" in sb.fs.stockAt), "a typed figure can be forgotten");
+  // the opening stock from last year's balance sheet (its Inventories), and the check against Tally's stock
+  const prInv = Object.assign({}, pr, {lines: pr.lines.concat([{label: "(e) Inventories", amt: 200000, py: 0, face: true, code: "39A", use: true}])});
+  const ub = use(books(C, "20250401", [["20260331", C.c, C.plc, C.p]], true, open25)); ub.fs = {};
+  PB.save("2025", prInv, {by: "test"});
+  let su = FinSt.build("2025", {unit: 1, dec: 2});
+  ok(su.stock.A.src === "upload" && su.stock.A.v === 200000 && /Inventories/.test(su.stock.A.label), "opening stock from last year's balance sheet: " + su.stock.A.label);
+  ok((su.checks.find(c => c.key === "stockMissing") || {}).label === "Stock not known: Closing stock (as on 31-Mar-2026)", "the closing stock is asked for");
+  FinSt.stockSet("20260331", 250000); su = FinSt.build("2025", {unit: 1, dec: 2});
+  eq(su.pl.chg.cy, -50000, "changes in inventories: 2,00,000 (last year's balance sheet) - 2,50,000 (typed)");
+  ok((su.checks.find(c => c.key === "stockOpen") || {}).value === 0, "opening stock = last year's closing stock (the same source)");
+  const tbk = use(books(C, "20250401", [["20260331", C.c, C.plc, C.p]], true, Object.assign({}, open25, {"Stock in Hand": 195000, "Profit & Loss A/c": -4531000 - 195000})));
+  tbk.under["Stock in Hand"] = "Stock-in-Hand"; tbk.tb.led["Stock in Hand"].parent = "Stock-in-Hand"; tbk.fs = {};
+  PB.save("2025", prInv, {by: "test"});
+  const st2 = FinSt.build("2025", {unit: 1, dec: 2});
+  ok(st2.stock.integrated && st2.stock.A.src === "tally" && st2.stock.A.v === 195000, "Tally keeps stock: its Stock-in-hand ledger is the source (" + st2.stock.A.v + ")");
+  ok((st2.checks.find(c => c.key === "stockOpen") || {}).value === -5000, "the check: opening stock 1,95,000 (Tally) vs last year's balance sheet 2,00,000: -5,000");
 } catch (e){ console.error(e); fails++; }
 console.log("\n" + (fails ? fails + " FAILED" : "all passed")); process.exit(fails ? 1 : 0);

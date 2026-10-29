@@ -31,7 +31,7 @@ export function built(b, fy, unit, dec, period) {
   const co = typeof CO === "function" ? CO() : null, firm = S.firm || {};
   // the reports' answers (b.fs.reports, ROUND 100) do not change the statements
   let fsTxt = ""; try { fsTxt = JSON.stringify(Object.assign({}, b.fs, { reports: undefined })); } catch (e) { fsTxt = String(Date.now()); }
-  const key = [b.cid, fy, unit, dec, period ? period.from + "-" + period.to : "", (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
+  const key = [b.cid, fy, unit, dec, period ? period.from + "-" + period.to + "-" + period.cmp : "", (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
     co ? [co.name, co.pan, co.cin, co.entity, co.address].join("|") : "", [firm.firmName, firm.frn, firm.partner, firm.mno].join("|")].join("\u0001");
   if (memo.key === key && memo.d) return memo.d;
   let d;

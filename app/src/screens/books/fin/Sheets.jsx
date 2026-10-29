@@ -25,6 +25,8 @@ export function Sheet({ d, title, children, sub }) {
   return <section className="fin-sheet" data-fin-sheet="">
     <header><h3 data-fin-title="">{title}</h3><p>{[nm, d.inputs && d.inputs.cin ? "CIN " + d.inputs.cin : "", sub].filter(Boolean).join(" · ")}</p></header>
     <p className="fin-unit" data-fin-unitline="">{d.inputs.unitLine}</p>
+    {P.spansNote && <p className="note" data-fin-spans="">{P.spansNote}</p>}
+    {P.cmpNote && <p className="note" data-fin-cmpnote="">{P.cmpNote}</p>}
     {P.pyNote && <p className="note" data-fin-pynote="">{P.pyNote}</p>}
     {(d.tb.warn || []).map((w) => <p key={w} className="note">{w}</p>)}
     {children}
@@ -33,7 +35,7 @@ export function Sheet({ d, title, children, sub }) {
 
 function Head({ d, first = "Particulars", note = true, at = "As at " }) {
   const fy = d.fy, P = per(d), pl = at !== "As at ";
-  const cy = part(d) ? (pl ? P.range : at + P.asAt) : at + dmy(fyEnd(fy)), py = part(d) ? (pl ? P.pyRange : at + P.pyAsAt) : at + dmy(fyEnd(+fy - 1));
+  const cy = part(d) ? (pl ? P.range : at + P.asAt) : at + dmy(fyEnd(fy)), py = part(d) ? (pl ? P.pyPlLabel : at + P.pyAsAt) : at + dmy(fyEnd(+fy - 1));
   return <>
     <colgroup><col />{note && <col style={{ width: 56 }} />}<col className="fig" /><col className="fig" /></colgroup>
     <thead><tr><th>{first}</th>{note && <th className="no">Note</th>}<th className="n" data-fin-colcy="">{cy}</th><th className="n" data-fin-colpy="">{py}</th></tr></thead>
@@ -132,7 +134,7 @@ export function Notes({ d, onRegister }) {
       <h4>{"Note " + n.no + " · " + n.title}{(n.key === "8" || n.key === "34") && onRegister && <small><button type="button" className="linkbtn" onClick={onRegister}>Fixed asset register</button></small>}</h4>
       {(n.key === "8" || n.key === "34") ? <>
         <Grid g={n.ppe.cy} dec={dec} label={part(d) ? per(d).range : "Year ended " + dmy(fyEnd(d.fy))} />
-        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>{part(d) ? "The same period last year" : "Previous year"}</summary><Grid g={n.ppe.py} dec={dec} label={part(d) ? per(d).pyRange : "Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
+        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>{part(d) ? (per(d).cmp === "fy" ? "The last full year" : "The same period last year") : "Previous year"}</summary><Grid g={n.ppe.py} dec={dec} label={part(d) ? per(d).pyPlLabel : "Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
       </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} at={part(d) && n.st === "PL" ? "Period " : "As at "} />
         <tbody>{n.lines.map((z, i) => {
           const cs = codesOf(n, z), cls = z.head ? "h2" : z.total ? "sub" : "l1";

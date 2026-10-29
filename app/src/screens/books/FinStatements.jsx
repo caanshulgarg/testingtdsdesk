@@ -25,6 +25,7 @@ import { Comp } from "./fin/Comp.jsx";
 import Details from "./fin/Details.jsx";
 import Period from "./fin/Period.jsx";
 import PyBs, { PyCheck } from "./fin/PyBs.jsx";
+import Stock from "./fin/Stock.jsx";
 import "./fin/fin.css";
 // the reports pack (ROUND 100): the Board's Report, the auditor's report, the MRL and their questionnaire, a lazy chunk
 // of its own opened from the header's "Reports" menu (the page keeps its seven tabs)
@@ -59,7 +60,7 @@ function download(kind, fy, o) {
 
 // where each check is put right
 const FIX = { bsCy: ["bs"], bsPy: ["bs"], tbCy: ["tb"], tbPy: ["tb"], unmapped: ["tb", { src: "none", tbF: null }], surplus: ["notes", { note: "4" }], ppeDep: ["notes", { note: "8" }],
-  ppeNet: ["notes", { note: "8" }], cfCy: ["cf"], cfPy: ["cf"], deferredTax: ["notes", { note: "9" }], compPbt: ["comp"], unit: [""] };
+  ppeNet: ["notes", { note: "8" }], cfCy: ["cf"], cfPy: ["cf"], deferredTax: ["notes", { note: "9" }], compPbt: ["comp"], unit: [""], stockMissing: ["tb"], stockOpen: ["tb"] };
 function Checks({ d }) {
   const dec = d.inputs.dec, bad = d.checks.filter((c) => c.value !== 0);
   return <section className="fin-sheet" data-fin-checks="">
@@ -81,7 +82,7 @@ function Body({ d, tab, fy, kind }) {
   if (tab === "cf") return <CashFlow d={d} />;
   if (tab === "notes") return <Notes d={d} onRegister={reg} />;
   if (tab === "comp") return <Comp d={d} fy={fy} kind={kind} />;
-  if (tab === "tb") return <><PyBs d={d} fy={fy} kind={kind} /><Tb d={d} fy={fy} kind={kind} /></>;
+  if (tab === "tb") return <><PyBs d={d} fy={fy} kind={kind} /><Stock d={d} /><Tb d={d} fy={fy} kind={kind} /></>;
   if (tab === "checks") return <Checks d={d} />;
   return <BalanceSheet d={d} />;
 }

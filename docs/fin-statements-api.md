@@ -65,6 +65,19 @@ A part of the year (From after the year's start and/or To before its end):
   `surplus` check.
 - Typed stock (FS) is the year's: the opening stock is carried to To, and `d.tb.warn` says so.
 
+### The comparative, a period across 31 March, and stock (owner, 29-Oct-2026)
+- `period.cmp`: `"same"` (default) the same dates a year earlier; `"fy"` the last full year (its P&L and cash flow, the
+  balance sheet as at the previous 31 March: the full year's PY column, from the copy, typed, uploaded or the opening
+  balances). Header "Compare with"; `pyPlHead`, `pyPlLabel`, `cmpNote` name the comparative's dates.
+- Custom From may be in the previous financial year (`spans`, `spansNote`): the period belongs to To's year; its reserves
+  start from that year's opening and line 4E takes out the profit From -> 31 March already in it.
+- Stock (`d.stock {integrated, dates {A, B, C}, A, B, C, missing, upInv}`): as on the day before the year (A), before the
+  period (B) and on To (C), each `{v, src: tally/upload/typed/none, label}`: Tally's Stock-in-hand ledgers, else (A only)
+  last year's balance sheet's Inventories, else typed (`FinSt.stockSet(ymd, v)`: `b.fs.stockAt`, who and when), else the old
+  `b.fs.stock {open, close}`. Not known: nil and the check `stockMissing`. TB rows: 39A closing (C), 42A changes (B - C), 4A
+  opening of the year (-A), 4E the change before the period (A - B); in Excel they read the Inputs cells `STOCK_FY_OPEN`,
+  `STOCK_OPEN`, `STOCK_CLOSE`. Check `stockOpen`: opening stock - last year's balance sheet's Inventories (an upload only).
+
 ## Last year's balance sheet, uploaded (`FinPyBs`, src/js/88-fin-pybs.js)
 
 Read in the browser only: Excel/CSV rows (`fromRows`), a PDF's text lines (`fromText`; a scan is not read, nothing is sent

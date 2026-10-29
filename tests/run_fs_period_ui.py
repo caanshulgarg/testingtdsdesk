@@ -181,6 +181,19 @@ with sync_playwright() as p:
     pg.evaluate("goClient('dash')"); pg.wait_for_timeout(600); pg.evaluate("goClient('books:fs')"); pg.wait_for_timeout(1500)
     ok(fin() == ["20250401", "20250930"], "back on the page: still H1 (kept for the client)")
 
+    print("\nCompare with: the same period last year, or the last full year")
+    tab("bs")
+    ok(pg.locator("#app select[data-fin-cmp]").input_value() == "same" and "Comparative: the same period last year (01-Apr-2024 to 30-Sep-2024" in pg.inner_text("#app [data-fin-cmpnote]"), "a part of the year compares with the same period by default, and says so")
+    pg.select_option("#app select[data-fin-cmp]", "fy"); pg.wait_for_timeout(900); tab("bs")
+    ok(cols() == ["As at 30-Sep-2025", "As at 31-Mar-2025"] and "the last full year (the year ended 31-Mar-2025" in pg.inner_text("#app [data-fin-cmpnote]"), "Last full year: the balance sheet against 31-Mar-2025 (%s)" % cols())
+    ok(pg.locator('#app table[data-fin-table="bs"] tr[data-fin-total="II"] td').nth(3).inner_text().strip() == "61,41,000.00", "... 61,41,000.00, last year's closing")
+    tab("pl")
+    ok(cols() == ["01-Apr-2025 to 30-Sep-2025", "Year ended 31-Mar-2025"] and pg.locator('#app table[data-fin-table="pl"] tr[data-fin-line="rev"] td').nth(3).inner_text().strip() == "1,00,00,000.00", "the P&L against the whole of 2024-25 (%s)" % cols())
+    ok(pg.evaluate("S.books.fs.period.cmp") == "fy", "the comparative chosen is kept for the client")
+    hy = pg.evaluate("(a) => window.loadFinExport().then(m => FinPdf.html('2025', {unit: 1, dec: 2, period: a}))", {"preset": "h1", "cmp": "fy"})
+    ok("Year ended<br>31-Mar-2025" in hy and "the last full year" in hy, "the PDF names the comparative's dates")
+    pg.select_option("#app select[data-fin-cmp]", "same"); pg.wait_for_timeout(900)
+
     print("\nQ2: the earlier part of the year in Note 4")
     pg.select_option("#app [data-fin-preset]", "q2"); pg.wait_for_timeout(900); tab("notes")
     n4 = pg.inner_text('#app section[data-fin-note="4"]')
@@ -196,8 +209,33 @@ with sync_playwright() as p:
     ok(title() == "Balance sheet as at 20-Nov-2025" and tot("I") == tot("II"), "as at 20-Nov-2025, ties (%s)" % tot("II"))
     ok(pg.evaluate("S.books.fs.period.preset") == "custom" and pg.evaluate("S.books.fs.period.from") == "20250815", "the custom dates are kept")
 
+    print("\nA period across 31 March")
+    pg.fill("#app input[data-fin-from]", "2025-01-01"); pg.wait_for_timeout(900)
+    pg.fill("#app input[data-fin-to]", "2025-06-30"); pg.wait_for_timeout(900)
+    tab("bs")
+    ok(fin() == ["20250101", "20250630"] and "spans two financial years (2024-25 and 2025-26)" in pg.inner_text("#app [data-fin-spans]") and tot("I") == tot("II"), "01-Jan-2025 to 30-Jun-2025: said to span two years, ties (%s)" % tot("II"))
+    tab("notes")
+    ok("already in the balance at the beginning of the year" in pg.inner_text('#app section[data-fin-note="4"]'), "Note 4 takes out January-March's profit, already in the opening")
+
+    print("\nStock, typed as on its dates")
+    pg.select_option("#app [data-fin-preset]", "h1"); pg.wait_for_timeout(900); tab("tb")
+    ok("No stock is known" in pg.inner_text("#app [data-fin-stockpanel]"), "no stock known: nothing assumed")
+    box = lambda dt: pg.locator('#app [data-fin-stockpanel] input[aria-label="Stock as on %s"]' % dt)
+    box("31-Mar-2025").fill("200000"); box("31-Mar-2025").press("Tab"); pg.wait_for_timeout(1000)
+    tab("checks")
+    ok(pg.locator('#app tr[data-fin-check="stockMissing"]').count() == 1 and "Closing stock (as on 30-Sep-2025)" in pg.inner_text('#app tr[data-fin-check="stockMissing"]'), "the opening typed, the closing asked for on the Checks tab")
+    tab("tb")
+    box("30-Sep-2025").fill("230000"); box("30-Sep-2025").press("Tab"); pg.wait_for_timeout(1000)
+    src = pg.inner_text('#app [data-fin-stockpanel] tr[data-fin-stock="20250930"] [data-fin-stocksrc]')
+    ok(src.startswith("typed by ") and pg.evaluate("S.books.fs.stockAt['20250930'].v") == 230000, "typed, kept per date, with who and when: " + src)
+    tab("pl")
+    chg = pg.locator('#app table[data-fin-table="pl"] tr[data-fin-line="chg"] td').nth(2).inner_text().strip()
+    ok(chg == "(30,000.00)", "changes in inventories: 2,00,000 less 2,30,000 = (30,000.00) (%s)" % chg)
+    tab("checks")
+    ok(pg.locator('#app [data-fin-check]:not([data-v="0"])').count() == 0, "every check reads 0 with the stock")
+
     print("\nThe Excel and the PDF for a period")
-    for nm, per in [("h1", h1), ("q2", {"preset": "custom", "from": "20250701", "to": "20250930"}), ("custom", {"preset": "custom", "from": "20250815", "to": "20251120"})]:
+    for nm, per in [("h1", h1), ("h1fy", {"preset": "custom", "from": "20250401", "to": "20250930", "cmp": "fy"}), ("cross", {"preset": "custom", "from": "20250101", "to": "20250630"}), ("q2", {"preset": "custom", "from": "20250701", "to": "20250930"}), ("custom", {"preset": "custom", "from": "20250815", "to": "20251120"})]:
         for unit, dec in ((1, 2), (1000, 0)):
             x = pg.evaluate(MAKE, {"unit": unit, "dec": dec, "period": per})
             path = os.path.join(OUT, "%s-u%d-d%d.xlsx" % (nm, unit, dec)); open(path, "wb").write(base64.b64decode(x["b64"])); made.append((nm, unit, dec, path, x))
@@ -290,6 +328,10 @@ for nm, unit, dec, path, x in made:
     ok(P["range"] in wb["Profit-Loss"]["C3"].value and wb["Balance Sheet"]["C3"].value == "Balance Sheet as at " + P["asAt"] and P["range"] in wb["CF"]["C3"].value and P["range"] in wb["Notes"]["C3"].value,
        "%s: the period in the headings (%s / %s)" % (os.path.basename(path), wb["Balance Sheet"]["C3"].value, wb["Profit-Loss"]["C3"].value))
     ok("full financial year" in str(wb["Computation of Income"]["C5"].value), "%s: the computation sheet says it is for a full year" % os.path.basename(path))
+    if nm == "h1fy": ok(wb["Profit-Loss"]["H5"].value == "Year ended\n31-Mar-2025" and wb["Balance Sheet"]["H6"].value == "As at\n31-Mar-2025", "%s: the comparative's dates in the heads" % os.path.basename(path))
+    if nm in ("h1", "h1fy"):
+        tbs = wb["Trial Balance"]; f = [tbs.cell(r, 4).value for r in range(5, tbs.max_row + 1) if str(tbs.cell(r, 1).value).startswith("Closing stock as on")]
+        ok(f == ["=STOCK_CLOSE"] and wb["Inputs"]["E11"].value == 200000 and wb["Inputs"]["E12"].value == 230000, "%s: the stock rows read the Inputs' stock cells (%s)" % (os.path.basename(path), f))
     bad = [(c["sheet"] + "!" + c["addr"], c["v"], resolve(d, c["src"])) for c in x["cells"] if c["src"] and not same(c["v"], resolve(d, c["src"]))]
     ok(not bad, "%s: the values written are FinSt.build's %s" % (os.path.basename(path), bad[:4]))
 rc = recalc([m[3] for m in made])
@@ -306,7 +348,9 @@ else:
         ok(not bad and len(figs) > 150, "%s: the %d figures on screen equal the formulas' values %s" % (n, len(figs), bad[:4]))
         ws = lv["Inputs"]; chk = [r for r in range(1, ws.max_row + 1) if ws.cell(r, 2).value == "Checks (all should be zero)"]
         vals = [(ws.cell(r, 2).value, ws.cell(r, 3).value) for r in range(chk[0] + 1, ws.max_row + 1) if ws.cell(r, 2).value] if chk else []
-        ok(len(vals) >= 8 and all(v == 0 for _, v in vals), "%s: the %d checks on Inputs read 0 %s" % (n, len(vals), [z for z in vals if z[1] != 0]))
+        # (a period whose stock on its first day was not typed: that check reads as on the screen, the rest 0)
+        sm = [c["value"] for c in x["d"]["checks"] if c["key"] == "stockMissing"]
+        ok(len(vals) >= 8 and all(v == 0 or (str(k).startswith("Stock not known") and sm and v == sm[0]) for k, v in vals), "%s: the %d checks on Inputs read as on the screen (0, but stock not typed %s) %s" % (n, len(vals), sm, [z for z in vals if z[1] != 0]))
         bs = lv["Balance Sheet"]; tots = [bs.cell(r, 6).value for r in range(1, bs.max_row + 1) if bs.cell(r, 3).value == "TOTAL"]
         ok(len(tots) == 2 and same(tots[0], tots[1]) and same(tots[1], x["d"]["bs"]["total"]["assets"]["cy"]), "%s: the balance sheet ties at %s, as on the screen" % (n, tots))
     shutil.copy(made[0][3], os.path.join(OUT, "sample-h1.xlsx"))

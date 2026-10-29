@@ -146,7 +146,7 @@ function workbook(ExcelJS, d) {
   const inRows = [["name", "Name of the entity", inp.name], ["entity", "Constitution", (G.FS && G.FS.ENTITY && G.FS.ENTITY[d.entity]) || (co ? "Company" : "Firm")],
     ["cin", co ? "CIN" : "LLPIN / registration number", inp.cin], ["pan", "PAN", inp.pan], ["address", "Registered office / address", inp.address], ["holding", "Holding company", inp.holding],
     ["shares", "Number of equity shares (CY and PY)", inp.shares.number === "" ? "" : N(inp.shares.number)], ["face", "Face value per share (Rs)", inp.shares.face === "" ? "" : N(inp.shares.face)],
-    ["auth", "Authorised equity shares", inp.shares.authorised === "" ? "" : N(inp.shares.authorised)], ["fy", "Financial year", fyLabel(d.fy)]].concat(part ? [["period", "Period", per.range]] : []).concat([["asat", "Balance sheet date", cyAt],
+    ["auth", "Authorised equity shares", inp.shares.authorised === "" ? "" : N(inp.shares.authorised)], ["fy", "Financial year", fyLabel(d.fy)]].concat(part ? [["period", "Period", per.range + (per.spans ? " (spans two financial years)" : "")], ["cmp", "Comparative", per.cmpNote.replace(/^Comparative: /, "")]] : []).concat([["asat", "Balance sheet date", cyAt],
     ["afirm", "Auditor: firm", inp.auditor.firm], ["frn", "Firm registration number", inp.auditor.frn], ["partner", "Auditor: partner", inp.auditor.partner], ["mno", "Membership number", inp.auditor.mno],
     ["aplace", "Auditor: place of signing", inp.auditor.place], ["place", co ? "Directors: place of signing" : "Partners: place of signing", inp.place], ["date", "Date of signing", inp.date],
     ["udin", "UDIN", inp.udin], ["regime", "Tax regime", inp.regime]]);
@@ -165,6 +165,19 @@ function workbook(ExcelJS, d) {
   put("inp", "F8", "The unit, short", { i: true, sz: 9 });
   WS.inp.getCell("E4").name = "UNIT"; WS.inp.getCell("E5").name = "DEC"; WS.inp.getCell("E7").name = "TOL";
   const UNITLINE = A(SH.inp, "E", 6), UWORD = A(SH.inp, "E", 8);
+  // stock (Rs), as on each date, with where it comes from: the trial balance's stock rows read these cells (STOCK_*)
+  const sk = d.stock || {}, hasStk = d.tb.rows.some((x) => x.stk), STK = {};
+  if (hasStk) {
+    put("inp", "E10", "Stock (Rs)", { b: true });
+    const SD2 = [["A", "STOCK_FY_OPEN", "Opening stock at the start of the year"]].concat(sk.dates.B !== sk.dates.A ? [["B", "STOCK_OPEN", "Opening stock at the start of the period"]] : [], [["C", "STOCK_CLOSE", "Closing stock"]]);
+    SD2.forEach(([k, nm, label], i) => {
+      const r = 11 + i, z = sk[k] || {};
+      put("inp", "E" + r, z.v == null ? 0 : z.v, { b: true, fill: "FFFFFF00", nf: NF2 }); WS.inp.getCell("E" + r).name = nm; STK[k] = nm;
+      put("inp", "F" + r, label + " (as on " + fs.DMY(sk.dates[k]) + "): " + (z.v == null ? "not known" : z.label), { i: true, sz: 9 });
+    });
+    if (!STK.B) STK.B = STK.A;
+  }
+  const stkF = (e) => e.replace(/[ABC]/g, (k) => STK[k]);
   // directors / partners, three rows each (name, DIN, designation)
   let r = 4 + inRows.length + 1;
   const ppl = (co ? inp.directors : (inp.partners && inp.partners.length ? inp.partners : inp.directors)) || [];
@@ -207,7 +220,7 @@ function workbook(ExcelJS, d) {
   T.forEach((x, i) => {
     const rr = t0 + i; R.tbRow[x.ledger] = rr;
     put("tb", "A" + rr, x.ledger); put("tb", "B" + rr, x.group || "");
-    put("tb", "C" + rr, x.py, { nf: NF2 }); put("tb", "D" + rr, x.cy, { nf: NF2 });
+    put("tb", "C" + rr, x.py, { nf: NF2 }); put("tb", "D" + rr, x.stk ? { f: stkF(x.stk.cy), v: x.cy, src: ["tb", "rows", i, "cy"] } : x.cy, { nf: NF2 });
     const crit = /[*?~]|^[=<>]/.test(x.ledger) ? null : "$A" + rr;
     const adjF = crit ? "SUMIF(JV!$B:$B," + crit + ",JV!$D:$D)-SUMIF(JV!$C:$C," + crit + ",JV!$D:$D)"
       : "SUMPRODUCT((JV!$B$" + jv0 + ":$B$" + jvN + "=$A" + rr + ")*JV!$D$" + jv0 + ":$D$" + jvN + ")-SUMPRODUCT((JV!$C$" + jv0 + ":$C$" + jvN + "=$A" + rr + ")*JV!$D$" + jv0 + ":$D$" + jvN + ")";
@@ -216,7 +229,7 @@ function workbook(ExcelJS, d) {
     put("tb", "G" + rr, x.code || ""); put("tb", "J" + rr, x.side || "");
     put("tb", "H" + rr, { f: "F" + rr + "/UNIT", v: x.final / unit }, { nf: nf }); put("tb", "I" + rr, { f: "C" + rr + "/UNIT", v: x.py / unit }, { nf: nf });
     put("tb", "K" + rr, x.code && fs.CODES[x.code] ? fs.CODES[x.code].label : x.code ? "" : "(no code)", { i: true, sz: 9, color: x.code ? undefined : "FFC00000" });
-    if (hasOp) { put("tb", "M" + rr, N(x.op), { nf: NF2 }); put("tb", "N" + rr, { f: "M" + rr + "/UNIT", v: N(x.op) / unit }, { nf: nf }); }
+    if (hasOp) { put("tb", "M" + rr, x.stk && x.stk.op !== "0" ? { f: stkF(x.stk.op), v: N(x.op) } : N(x.op), { nf: NF2 }); put("tb", "N" + rr, { f: "M" + rr + "/UNIT", v: N(x.op) / unit }, { nf: nf }); }
     // L (a gross block): the year's depreciation credited straight to this asset (no accumulated-depreciation ledger):
     // the day book's entries debiting 8E / 34D (a value) and the JV rows Dr depreciation / Cr this asset (less the reverse)
     if (isGross(x.code)) put("tb", "L" + rr, { f: N(x.depCrBook) + "+SUMPRODUCT((" + jvR("C") + "=$A" + rr + ")*(" + jvR("E") + '="dep")*' + jvR("D") + ")-SUMPRODUCT((" + jvR("B") + "=$A" + rr + ")*(" + jvR("F") + '="dep")*' + jvR("D") + ")",
@@ -254,7 +267,7 @@ function workbook(ExcelJS, d) {
     put(k, "C" + row, "Particulars", { b: true });
     if (noteCol !== false) put(k, "E" + row, "Note", { b: true, al: "center" });
     const w = isPL ? (part ? "For the period\n" : "Year ended\n") : "As at\n";
-    put(k, "F" + row, w + (isPL && part ? per.range : cyAt), { b: true, al: "right", wrap: true }); put(k, "H" + row, w + (isPL && part ? per.pyRange : pyAt), { b: true, al: "right", wrap: true });
+    put(k, "F" + row, w + (isPL && part ? per.range : cyAt), { b: true, al: "right", wrap: true }); put(k, "H" + row, isPL && part ? per.pyPlHead.join("\n") : w + pyAt, { b: true, al: "right", wrap: true });
     WS[k].getRow(row).height = 31;
   };
   const stdWidths = (k) => widths(k, { A: 3, B: 4, C: 62, D: 3, E: 8, F: 18, G: 3, H: 18 });
@@ -270,7 +283,7 @@ function workbook(ExcelJS, d) {
     const adjs = ((((G.S || {}).books || {}).fs || {}).ppeAdj || {})[fs.periodKey ? fs.periodKey(d.fy, per) : d.fy] || {};
     const one = (col, g) => {
       const gr = g[col], partial = !!gr.partial;
-      put("ppe", "C" + pr, (part ? (col === "cy" ? "For the period " + per.range : "For the period " + per.pyRange) : "As at " + asAt(col === "cy" ? d.fy : String(yearOf(d.fy) - 1))), { b: true }); pr++;
+      put("ppe", "C" + pr, (part ? (col === "cy" ? "For the period " + per.range : per.pyForWhat.replace(/^f/, "F")) : "As at " + asAt(col === "cy" ? d.fy : String(yearOf(d.fy) - 1))), { b: true }); pr++;
       PPEH.forEach((h, i) => put("ppe", "CDEFGHIJKLM"[i] + pr, h, { b: true, sz: 9, al: i ? "center" : undefined, wrap: true }));
       WS.ppe.getRow(pr).height = 31; pr++;
       if (!gr.rows.length) { put("ppe", "C" + pr, "Nil", { i: true }); pr++; store[col] = {}; return; }
@@ -351,7 +364,7 @@ function workbook(ExcelJS, d) {
     put("notes", "C" + nr, "Note " + n.no, { b: true }); nr++;
     put("notes", "C" + nr, n.title, { b: true });
     const w = n.st === "PL" ? (part ? "For the period\n" : "Year ended\n") : "As at\n", isPLn = n.st === "PL";
-    put("notes", "F" + nr, w + (isPLn && part ? per.range : cyAt), { b: true, al: "right", wrap: true }); put("notes", "H" + nr, w + (isPLn && part ? per.pyRange : pyAt), { b: true, al: "right", wrap: true });
+    put("notes", "F" + nr, w + (isPLn && part ? per.range : cyAt), { b: true, al: "right", wrap: true }); put("notes", "H" + nr, isPLn && part ? per.pyPlHead.join("\n") : w + pyAt, { b: true, al: "right", wrap: true });
     if (part) put("notes", "M" + nr, "At the start of the period\n(for the cash flow)", { b: true, al: "right", wrap: true, sz: 9 });
     WS.notes.getRow(nr).height = 31; nr++;
     const ix = d.notes.indexOf(n);
@@ -767,7 +780,8 @@ function workbook(ExcelJS, d) {
       return zf("(" + ppeT(R.ppe, "M") + "+" + ppeT(R.int, "M") + ")-ROUND(SUMPRODUCT(ISNUMBER(MATCH(" + TBrng("G") + ",{" + codes.map(qs).join(",") + "},0))*" + TBrng("H") + "),DEC)", "TOL"); },
     cfCy: () => zf(R.cf.diff.cy, "TOL"), cfPy: () => zf(R.cf.diff.py || "0", "TOL"),
     deferredTax: () => zf(P("def", "cy") + "-(ROUND(" + grp("31", "dtl", "cy") + "-" + grp("31", "dtl", OBc) + ",DEC)-ROUND(" + grp("9", "dta", "cy") + "-" + grp("9", "dta", OBc) + ",DEC))", "TOL"),
-    compPbt: () => cchk.pbt, unit: () => "IF(OR(UNIT=1,UNIT=1000,UNIT=100000,UNIT=10000000),0,1)" };
+    compPbt: () => cchk.pbt,
+    stockOpen: () => { const u2 = N(sk.upInv); return "IF(ABS(ROUND(" + (STK.A || N(sk.A && sk.A.v)) + "-" + u2 + ",2))<0.011,0,ROUND(" + (STK.A || N(sk.A && sk.A.v)) + "-" + u2 + ",2))"; }, unit: () => "IF(OR(UNIT=1,UNIT=1000,UNIT=100000,UNIT=10000000),0,1)" };
   d.checks.forEach((c, i) => put("inp", "C" + chkRows[c.key], ckF[c.key] ? { f: ckF[c.key], v: c.value, src: ["checks", i, "value"] } : c.value, { nf, fill: undefined }));
   void chkStart;
 
@@ -775,11 +789,11 @@ function workbook(ExcelJS, d) {
   if (co) {
     const ra = ratios(d);
     titles("ar", "Accounting ratios (Schedule III)");
-    ["Sr. no.", "Ratio", "Numerator", "Denominator", part ? per.range : fyLabel(d.fy), part ? per.pyRange : fyLabel(String(yearOf(d.fy) - 1)), "Variance"].forEach((h, i) => put("ar", "BCDEFGH"[i] + "6", h, { b: true, box: true, al: "center", wrap: true }));
+    ["Sr. no.", "Ratio", "Numerator", "Denominator", part ? per.range : fyLabel(d.fy), part ? per.pyPlLabel : fyLabel(String(yearOf(d.fy) - 1)), "Variance"].forEach((h, i) => put("ar", "BCDEFGH"[i] + "6", h, { b: true, box: true, al: "center", wrap: true }));
     WS.ar.getRow(6).height = 31;
     // the figures the ratios use, linked to the statements, below the table
     const c0 = 7 + ra.list.length + 2, CA = {};
-    put("ar", "C" + c0, "Figures used", { b: true }); put("ar", "F" + c0, part ? per.range : fyLabel(d.fy), { b: true, al: "right" }); put("ar", "G" + c0, part ? per.pyRange : fyLabel(String(yearOf(d.fy) - 1)), { b: true, al: "right" });
+    put("ar", "C" + c0, "Figures used", { b: true }); put("ar", "F" + c0, part ? per.range : fyLabel(d.fy), { b: true, al: "right" }); put("ar", "G" + c0, part ? per.pyPlLabel : fyLabel(String(yearOf(d.fy) - 1)), { b: true, al: "right" });
     const refOf = (k, col) => (R.bsSec[k] ? R.bsSec[k][col] || "0" : k === "obb" ? grp("11", "obb", col) : k === "int14A" ? ln("14", "14A", col) : k === "int14D" ? ln("14", "14D", col) : R.bs[k] ? R.bs[k][col] : R.pl[k] ? R.pl[k][col] : "0");
     Object.keys(ra.comps).forEach((k, i) => {
       const rr = c0 + 1 + i; CA[k] = rr;
@@ -849,7 +863,7 @@ export function pdfHtml(d, opt) {
   const cy = part ? per.asAt : asAt(d.fy), py = part ? per.pyAsAt : asAt(String(yearOf(d.fy) - 1)), forWhat = part ? per.forWhat : "for the year ended " + cy;
   const M = (v) => money(v, dec);
   const head = (title) => '<header><div class="co">' + H(inp.name) + '</div><div class="st">' + H(title) + '</div><div class="un">' + H(inp.unitLine) + "</div></header>";
-  const colHead = (isPL, which) => (isPL ? (part ? "For the period" : "Year ended") : "As at") + "<br>" + H(isPL && part ? (which ? per.pyRange : per.range) : which ? py : cy);
+  const colHead = (isPL, which) => (isPL && part && which ? per.pyPlHead.map(H).join("<br>") : (isPL ? (part ? "For the period" : "Year ended") : "As at") + "<br>" + H(isPL && part ? per.range : which ? py : cy));
   const cols = (isPL, note) => "<thead><tr><th>Particulars</th>" + (note === false ? "" : '<th class="c">Note</th>') + '<th class="n">' + colHead(isPL, 0) + '</th><th class="n">' + colHead(isPL, 1) + "</th></tr></thead>";
   const row = (label, no, a, b, cls, note) => '<tr class="' + (cls || "") + '"><td>' + H(label) + "</td>" + (note === false ? "" : '<td class="c">' + H(no || "") + "</td>") + '<td class="n">' + M(a) + '</td><td class="n">' + M(b) + "</td></tr>";
   const ppl = (co ? inp.directors : (inp.partners && inp.partners.length ? inp.partners : inp.directors)) || [];
@@ -883,7 +897,7 @@ export function pdfHtml(d, opt) {
     });
     pages.push(["bs", "Balance Sheet as at " + cy, "<table>" + cols(false) + "<tbody>" + t + "</tbody></table>" + notesLine() + sig()]);
   }
-  function notesLine() { const last = d.notes.length ? d.notes[d.notes.length - 1].no : 2; return '<p class="ref">The accompanying notes 1-' + last + " form an integral part of the financial statements.</p>"; }
+  function notesLine() { const last = d.notes.length ? d.notes[d.notes.length - 1].no : 2; return (part ? [per.cmpNote, per.spansNote].filter(Boolean).map((t) => '<p class="ref" data-fs-cmp="">' + H(t) + "</p>").join("") : "") + '<p class="ref">The accompanying notes 1-' + last + " form an integral part of the financial statements.</p>"; }
   // P&L
   {
     const B = { inc: 1, tot: 1, pbe: 1, pbt: 1, tax: 1 };
@@ -913,7 +927,7 @@ export function pdfHtml(d, opt) {
       let g = '<div class="note"><h3>Note ' + H(d.noteOf[key] || "-") + " " + H(title) + "</h3>";
       ["cy", "py"].forEach((col) => {
         const gr = sched[col];
-        g += '<div class="sub">' + (part ? "For the period " + H(col === "cy" ? per.range : per.pyRange) : "As at " + H(col === "cy" ? cy : py)) + '</div><table class="grid"><thead><tr><th>Particulars</th>' + ["Gross block opening", "Additions", "(Sales)", "Gross block closing", "Acc. dep. opening", "Charge for the year", "(Sales) dep.", "Acc. dep. closing", "Net block opening", "Net block closing"].map((h) => '<th class="n">' + h + "</th>").join("") + "</tr></thead><tbody>";
+        g += '<div class="sub">' + (part ? H(col === "cy" ? "For the period " + per.range : per.pyForWhat.replace(/^f/, "F")) : "As at " + H(col === "cy" ? cy : py)) + '</div><table class="grid"><thead><tr><th>Particulars</th>' + ["Gross block opening", "Additions", "(Sales)", "Gross block closing", "Acc. dep. opening", "Charge for the year", "(Sales) dep.", "Acc. dep. closing", "Net block opening", "Net block closing"].map((h) => '<th class="n">' + h + "</th>").join("") + "</tr></thead><tbody>";
         gr.rows.forEach((x) => { g += "<tr><td>" + H(x.label) + "</td>" + "DEFGHIJKLM".split("").map((c) => '<td class="n">' + (x[c] == null ? "" : M(x[c])) + "</td>").join("") + "</tr>"; });
         if (gr.rows.length) g += '<tr class="grand"><td>Total</td>' + "DEFGHIJKLM".split("").map((c) => '<td class="n">' + (gr.total[c] == null ? "" : M(gr.total[c])) + "</td>").join("") + "</tr>";
         else g += '<tr><td colspan="11"><i>Nil</i></td></tr>';
