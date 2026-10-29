@@ -51,6 +51,20 @@ $G7 = 'g7 User TDL = No left untouched and reported'
 $G8 = 'g8 job files read while written: nothing lost, never missing'
 $G9 = 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)'
 $G10 = 'g10 the night pace: day after day, more than 3 days an answer, entries a minute measured'
+
+# 2.4.9: the entries an entry request asked: FinComVoucherObject's one MasterID; FinComVoucherBatch's list, or its range
+# a..b read against that day's heads as FinCom's stub was told them (proxy235.py: mid "<day>:<a>..<b>" or "<day>:<m1>,...")
+function EntryMidsOf($q, $gs) {
+  if ($q.id -eq 'FinComVoucherObject') { return @("$($q.mid)") }
+  if ($q.id -ne 'FinComVoucherBatch') { return @() }
+  $p = "$($q.mid)".Split(':', 2); if ($p.Count -lt 2) { return @() }
+  if ($p[1] -match '^(\d+)\.\.(\d+)$') {
+    $a = [int64]$Matches[1]; $b = [int64]$Matches[2]
+    return @(@((Prop (Prop $gs 'head_mids') $p[0])) | Where-Object { [int64]$_ -ge $a -and [int64]$_ -le $b } | ForEach-Object { "$_" })
+  }
+  return @($p[1].Split(',') | Where-Object { $_ })
+}
+$EntryIds = 'FinComVoucherObject', 'FinComVoucherBatch'
 $G11 = 'g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail'
 $fcAddon = 'C:\ProgramData\FinCom\addon\FinComRecorder.tdl'
 $otherTdl = 'C:\fcother\FinComOtherTest.tdl'
@@ -239,8 +253,8 @@ try {
     Start-Sleep 10; $gs = GState
     if (-not $gs) { continue }
     $done = @((Prop $gs 'done')); $left = @($part | Where-Object { $_ -notin $done -and $_ -notin @((Prop $gs 'upload').PSObject.Properties.Name) })
-    $px = GProxy; $objNow = @($px | Where-Object { $_.id -eq 'FinComVoucherObject' -and [int64]$_.t0 -ge $tFetch }).Count
-    Write-Host "[g245] fetch: $($part.Count - $left.Count) of $($part.Count) days done; FinComVoucherObject asked $objNow"
+    $px = GProxy; $objNow = 0; foreach ($q in @($px | Where-Object { $_.id -in $EntryIds -and [int64]$_.t0 -ge $tFetch })) { $objNow += @(EntryMidsOf $q $gs).Count }
+    Write-Host "[g245] fetch: $($part.Count - $left.Count) of $($part.Count) days done; entries asked $objNow (FinComVoucherObject and FinComVoucherBatch)"
     # g5: a posting from FinCom while the fetch is going (entries being asked)
     if (-not $posted -and $objNow -ge 50) {
       $posted = $true
@@ -264,14 +278,14 @@ try {
   $words = "{0} of {1} vouchers ({2}%) · {3}" -f (Nf $x), (Nf $y), $pct, $(if ($y - $x) { "$(Nf ($y - $x)) left" } else { 'all in FinCom' })
   $px = GProxy
   $pxF = @($px | Where-Object { [int64]$_.t0 -ge $tFetch -and [int64]$_.t0 -le $tFetchEnd })
-  $objMids = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' } | ForEach-Object { "$($_.mid)" })
+  $objMids = @(foreach ($q in @($pxF | Where-Object { $_.id -in $EntryIds })) { EntryMidsOf $q $gs })
   # ROUND 104 (g3): every MasterID FinCom wanted, over all its answers (a day of more than 2,000 is wanted over two:
   # tally_period_held's limit); 'want' keeps only each day's last answer
   $wantAll = @(); $wantMap = Prop $gs 'want_all'; if (-not $wantMap) { $wantMap = Prop $gs 'want' }; foreach ($p in @($wantMap.PSObject.Properties)) { $wantAll += @($p.Value | ForEach-Object { "$_" }) }
   # ROUND 104 (g3, run 39647340380 on 3.0): an entry whose read was cut so FinCom's posting went first ("a background read
   # was stopped at once so FinCom's request goes first; it resumes afterwards") is asked again by design: a second ask of
   # a MasterID whose earlier ask was within 5 s of the posting is not counted as asked twice (it is said in the evidence)
-  $objReqs = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' })
+  $objReqs = @(foreach ($q in @($pxF | Where-Object { $_.id -in $EntryIds })) { foreach ($m in @(EntryMidsOf $q $gs)) { [pscustomobject]@{ id = $q.id; mid = $m; t0 = $q.t0; t1 = $q.t1 } } })
   $script:objCutN = 0
   $objTwice = @($objReqs | Group-Object mid | Where-Object { $_.Count -gt 1 } | Where-Object {
       $g = @($_.Group | Sort-Object { [int64]$_.t0 }); $early = @($g | Select-Object -First ($g.Count - 1))
@@ -304,7 +318,7 @@ try {
   # ================================================================ g10 the night pace (ROUND 103, the owner's decision of 21-Oct-2026, evening)
   $el = @((Prop $gs 'entries_log') | Where-Object { [double]$_[0] * 1000 -ge $tFetch -and [double]$_[0] * 1000 -le $tFetchEnd })
   $nEnt = ($el | ForEach-Object { [int]$_[1] } | Measure-Object -Sum).Sum
-  $objF = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' } | Sort-Object { [int64]$_.t0 })
+  $objF = @($pxF | Where-Object { $_.id -in $EntryIds } | Sort-Object { [int64]$_.t0 })
   $spanMin = if ($objF.Count -ge 2) { ([int64]$objF[-1].t1 - [int64]$objF[0].t0) / 60000.0 } else { 0 }
   $perMin = if ($spanMin -gt 0) { [math]::Round($nEnt / $spanMin) } else { 0 }
   $maxL = [int](Prop $gs 'max_listed'); $nb = [int](Prop $gs 'night_beats'); $beatsF = [int](Prop $gs 'beats') - $b0
@@ -334,7 +348,7 @@ try {
   if (-not $imp) { GRes $G5 'HARNESS' 'the fetch never reached 50 entries asked: no posting made during it' }
   else {
     $impReq = @($px | Where-Object { $_.id -eq 'Import' -and [int64]$_.t0 -ge $imp.s -and [int64]$_.t0 -le $imp.e }) | Select-Object -First 1
-    $pullIds = 'FinComDayHeads', 'FinComVoucherObject'
+    $pullIds = 'FinComDayHeads', 'FinComVoucherObject', 'FinComVoucherBatch'
     $inside = if ($impReq) { @($px | Where-Object { $_.id -in $pullIds -and [int64]$_.t0 -gt [int64]$impReq.t0 -and [int64]$_.t0 -lt $imp.e }).Count } else { -1 }
     $before = if ($impReq) { @($px | Where-Object { $_.id -in $pullIds -and [int64]$_.t0 -ge $imp.s -and [int64]$_.t0 -lt [int64]$impReq.t0 }).Count } else { -1 }
     $afterN = @($px | Where-Object { $_.id -in $pullIds -and [int64]$_.t0 -ge $imp.e }).Count
@@ -400,7 +414,7 @@ try {
   # ROUND 104 (g9): the proxy's suspend line has no t0 (GProxy keeps request lines only): read from the whole log
   $pxEv = if (Test-Path $proxyLog) { @(Get-Content $proxyLog -Encoding UTF8 | ForEach-Object { try { $_ | ConvertFrom-Json } catch {} } | Where-Object { $_.event }) } else { @() }
   $sus = @($pxEv | Where-Object { $_.event -eq 'suspend' -and [int64]$_.t -ge $t9 })
-  $heads9 = @($px | Where-Object { $_.id -in 'FinComDayHeads', 'FinComVoucherObject' -and [int64]$_.t0 -ge $t9 })
+  $heads9 = @($px | Where-Object { $_.id -in 'FinComDayHeads', 'FinComVoucherObject', 'FinComVoucherBatch' -and [int64]$_.t0 -ge $t9 })
   $after = @($heads9 | Select-Object -Skip 1)
   $resp9 = DbResponding
   $st9 = (GState).periodPull

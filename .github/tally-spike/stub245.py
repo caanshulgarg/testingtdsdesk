@@ -177,6 +177,7 @@ class H(BaseHTTPRequestHandler):
                         if isinstance(r, list) and len(r) >= 4:
                             h[str(r[1])] = (str(r[0]), int(r[2] or 0), str(r[3]))
                     HEADS[d] = h
+                    st.setdefault('head_mids', {})[d] = sorted(h.keys(), key=int)  # 2.4.9: a group's range read against the day's heads
                     st['payroll_mids'] = sorted(set(st.get('payroll_mids') or []) | {mid for mid, (g, a, t) in h.items() if t == 'Payroll'}, key=int)
                     st['counted'][d] = len(h)
                     st['heads_asked'][d] = st['heads_asked'].get(d, 0) + 1

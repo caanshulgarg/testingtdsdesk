@@ -20,9 +20,10 @@ def logj(o):
         f.write(json.dumps(o) + '\n')
 
 def rid(b):
-    s = b[:8000].decode('utf-8', 'replace')
+    # 2.4.9: FinComVoucherBatch's FETCH is about 7.6 KB before its filter: the first 64 KB are read
+    s = b[:65536].decode('utf-8', 'replace')
     if s.startswith('﻿') or b[:2] in (b'\xff\xfe', b'\xfe\xff'):
-        try: s = b[:16000].decode('utf-16', 'replace')
+        try: s = b[:131072].decode('utf-16', 'replace')
         except Exception: pass
     mid = ''
     if re.search(r'<TALLYREQUEST>\s*Import', s, re.I):
@@ -38,6 +39,11 @@ def rid(b):
         i = m.group(1).strip() if m else ''
         m2 = re.search(r'\$MasterID\s*=\s*(\d+)', s, re.I)
         mid = m2.group(1) if m2 else ''
+        if i == 'FinComVoucherBatch':
+            # 2.4.9: "<day>:<a>..<b>" (the range form) or "<day>:<m1>,<m2>,..." (the list form)
+            d = re.search(r'<SVFROMDATE[^>]*>(\d{8})<', s)
+            r = re.search(r'\$MasterID &gt;= (\d+) AND \$MasterID &lt;= (\d+)', s)
+            mid = (d.group(1) if d else '') + ':' + (r.group(1) + '..' + r.group(2) if r else ','.join(re.findall(r'\$MasterID = (\d+)', s)))
     t = re.search(r'<TALLYREQUEST>([^<]*)</TALLYREQUEST>', s)
     return i, (t.group(1) if t else ''), mid
 
