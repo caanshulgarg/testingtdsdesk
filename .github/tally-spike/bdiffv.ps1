@@ -94,7 +94,9 @@ try {
   $k = DbImp 'Vouchers' (TM (& $pay 'BD-CC-1' '20260802' '1000.00' '' $true)) 'payment with cost centres'; $made['payment with cost centres'] = "created $($k.c)$(if ($k.line) { ': ' + $k.line })"
   $k = DbImp 'Vouchers' (TM (& $pay 'BD-OPT-1' '20260802' '700.00' '<ISOPTIONAL>Yes</ISOPTIONAL>' $false)) 'optional payment'; $made['optional payment'] = "created $($k.c)$(if ($k.line) { ': ' + $k.line })"
   $k = DbImp 'Vouchers' (TM (& $pay 'BD-CAN-1' '20260802' '300.00' '' $false)) 'payment to cancel'
-  $k2 = DbImp 'Vouchers' (TM '<VOUCHER DATE="20260802" TAGNAME="Voucher Number" TAGVALUE="BD-CAN-1" ACTION="Cancel" VCHTYPE="Payment"><NARRATION>BD-CAN-1 cancelled by XML</NARRATION></VOUCHER>') 'cancel the payment'
+  # run 40828798872: DATE="20260802" was read as 0-0-0; Tally's own form d-MMM-yyyy, then the element as well
+  $k2 = DbImp 'Vouchers' (TM '<VOUCHER DATE="2-Aug-2026" TAGNAME="Voucher Number" TAGVALUE="BD-CAN-1" ACTION="Cancel" VCHTYPE="Payment"><DATE>20260802</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><VOUCHERNUMBER>BD-CAN-1</VOUCHERNUMBER><NARRATION>BD-CAN-1 cancelled by XML</NARRATION></VOUCHER>') 'cancel the payment'
+  if ($k2.e -gt 0 -or ($k2.c + $k2.a) -eq 0) { $k2 = DbImp 'Vouchers' (TM '<VOUCHER DATE="02-Aug-2026" TAGNAME="VoucherNumber" TAGVALUE="BD-CAN-1" ACTION="Cancel" VCHTYPE="Payment"><NARRATION>BD-CAN-1 cancelled by XML</NARRATION></VOUCHER>') 'cancel the payment (2)' }
   $made['cancelled payment'] = "created $($k.c), cancel: created $($k2.c) altered $($k2.a) errors $($k2.e)$(if ($k2.line) { ': ' + $k2.line })"
 } catch { Info "bdiff: test data stopped: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
 
