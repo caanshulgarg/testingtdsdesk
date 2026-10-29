@@ -1,10 +1,10 @@
 {
- "build": "mvs1068d-637eac",
+ "build": "mvs990eg-e0f32a",
  "path": "../review-prev/",
- "stamp": "React \u00b7 28-Oct-2026 16:53 \u00b7 e6400ebf3",
- "commit": "d97359004f9b93a5c510107997384ee2277098f1",
- "replacedBy": "mvs990eg-e0f32a",
+ "stamp": "React \u00b7 28-Oct-2026 20:44 \u00b7 d1d7c038b",
+ "commit": "10a1c2b35e4817aa936933c8211a9840b261ad27",
+ "replacedBy": "mvst0myq-ea18ee",
  "how": "promote",
- "at": "2026-10-28T15:16:04Z",
+ "at": "2026-10-29T00:31:27Z",
  "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"
 }
