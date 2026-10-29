@@ -61,7 +61,9 @@ shape changed. FinCom's page changes with it, on the app branch next-tally-anypo
 - Tests first: r248anyport_test.go, linknow248_test.go, run_tally_oneclick.py check 13 (the stub bridge as 2.4.8) and
   check 5 (a 2.4.7 bridge: /ports/use never called).
 - `go vet` Linux and Windows: clean. `go test ./...` passed.
-- release_check_test.sh: all cases as expected. release-check.sh: PASSED for 2.4.8 at ce438bf9d.
+- release_check_test.sh: all cases as expected. release-check.sh: PASSED for 2.4.8 at ce438bf9d (before the build), and
+  again after the gates with FORCE_REBUILD=1, on a temporary commit with latest.json as before the release, since step 1
+  refuses a version latest.json already names (8647d7278, not pushed; as for 2.4.7).
 - Five review rounds (docs/reviews/bridge-2.4.8-{code,security}-review.md). 0 High and 0 Medium are open; the Lows are
   recorded there.
 - Build: setup SHA-256 030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f, built at a9cbec7f8's parent
