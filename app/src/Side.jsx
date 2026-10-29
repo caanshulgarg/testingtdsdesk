@@ -96,6 +96,9 @@ function tree() {
       { icon: "recon", label: "Reconciliations", on: bt === "recon", go: () => goClient("books:recon"), title: "TDS receivable vs 26AS" },
     ]],
     ["Books", [
+      // 29-Oct-2026 (the owner: "From Tally is not visible anywhere"): the Tally page's redesign dropped Connect Tally's
+      // step 6, the last way in, so From Tally (Day Book, ledger masters, trial balance) is in the sidebar again
+      { icon: "fromtally", label: "From Tally", on: bt === "import", go: () => goClient("books:import"), title: "Bring in a Day Book, the ledger masters or a trial balance exported from Tally" },
       { icon: "reports", label: "Reports", on: bt === "reports", go: () => goClient("books:reports") },
       { icon: "reports", label: "MIS", on: bt === "mis", go: () => goClient("books:mis"), title: "Management reports from the books" },
       // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)

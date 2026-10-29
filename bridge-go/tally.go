@@ -354,6 +354,7 @@ var requestClass = map[string]string{
 	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
 	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
 	dayHeadsID: "exception", ledIdsID: "undated",
+	vchBatchID: "exception", // 2.4.9: the group the older-entries fetch reads now, by its id always (batch249.go)
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
@@ -380,6 +381,13 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errDayHeadsRefused
+	case vchBatchID:
+		// 2.4.9 (the owner's approval of 29-Oct-2026): exactly the group the older-entries fetch is asking now, as built,
+		// under the 2 s stop; refused otherwise whatever ReadDays says (batch249.go)
+		if voucherBatchExact(tc, x) {
+			return nil
+		}
+		return errBatchRefused
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil
