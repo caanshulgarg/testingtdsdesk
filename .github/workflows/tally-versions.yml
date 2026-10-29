@@ -44,6 +44,9 @@ on:
       p72_only:
         description: 'proof72 only: the sections to run (comma list of section letters, e.g. b for the port screen); empty: all'
         default: ''
+      local_dist:
+        description: 'yes: no artifact (the account''s artifact storage full): each Windows job makes bridge-dist from the ref (its committed setup) and commits its own results to the run''s branch'
+        default: 'no'
       upg_from:
         description: 'upg: the published release installed first (2.3.3, 2.4.0 for 2.4.1''s gate, 2.4.1 for 2.4.2''s gate, 2.4.2 for 2.4.3''s gate, 2.4.3 for 2.4.4''s gate, 2.4.4 for 2.4.5''s gate, 2.4.5 for 2.4.6''s gate, 2.4.6 for 2.4.7''s gate, 2.4.7 for 2.4.8''s gate)'
         default: '2.3.3'
@@ -333,7 +336,7 @@ jobs:
           [ "$got" = 030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f ] || { echo "::error::2.4.8 setup SHA-256 $got"; exit 1; }
           echo "2.4.8 setup SHA-256 $got (from $c)"
       - uses: actions/upload-artifact@v4
-        continue-on-error: ${{ steps.mode.outputs.modes == 'batch' || steps.mode.outputs.modes == 'bdiff' }}
+        continue-on-error: ${{ steps.mode.outputs.modes == 'batch' || steps.mode.outputs.modes == 'bdiff' || inputs.local_dist == 'yes' }}
         with:
           name: bridge-dist
           path: bridge-go/dist/
@@ -375,7 +378,7 @@ jobs:
             .github
             bridge-go/addon
       - uses: actions/download-artifact@v4
-        if: matrix.mode != 'batch' && matrix.mode != 'bdiff'
+        if: matrix.mode != 'batch' && matrix.mode != 'bdiff' && inputs.local_dist != 'yes'
         with:
           name: bridge-dist
           path: bridge-dist
@@ -384,15 +387,16 @@ jobs:
       # harness's batch\zz_fcbatch_req_test.go, run once in a copy of the ref, never committed) and ZZ BIG TEST's entries
       # from its own generator, re-dated by dbm\redate.py with DBM_PROFILE=big100 (~30,000, then ~70,000 more)
       - uses: actions/checkout@v4
-        if: matrix.mode == 'batch' || matrix.mode == 'bdiff'
+        if: matrix.mode == 'batch' || matrix.mode == 'bdiff' || inputs.local_dist == 'yes'
         with:
           ref: ${{ needs.build.outputs.sha }}
           path: bref
           sparse-checkout: |
             bridge-go
             tests/fixtures/big
+            assets-test/bridge-go
       - uses: actions/setup-go@v5
-        if: matrix.mode == 'batch' || matrix.mode == 'bdiff'
+        if: matrix.mode == 'batch' || matrix.mode == 'bdiff' || inputs.local_dist == 'yes'
         with:
           go-version-file: bref/bridge-go/go.mod
           cache-dependency-path: bref/bridge-go/go.sum
@@ -416,6 +420,41 @@ jobs:
           Copy-Item bref/bridge-go/addon/FinComRecorder.tdl $d -ErrorAction SilentlyContinue
           "bridge source: ${{ needs.build.outputs.sha }}" | Set-Content (Join-Path $d 'bridge-source.txt')
           Get-ChildItem (Join-Path $d 'dbm') | Measure-Object Length -Sum | ForEach-Object { "dbm: $($_.Count) files, $([math]::Round($_.Sum / 1MB)) MB" }
+      # local_dist=yes (28/29-Oct-2026: the account's artifact storage quota full, every upload refused): the Windows job
+      # makes bridge-dist itself from the ref (the committed setup of its own version, checked against its .sha256; its
+      # add-on; the published release upg starts from; ZZ BIG TEST's entries for g245) and commits its own results
+      - name: Local bridge-dist (local_dist=yes)
+        if: inputs.local_dist == 'yes' && matrix.mode != 'batch' && matrix.mode != 'bdiff'
+        timeout-minutes: 30
+        run: |
+          $d = Join-Path $env:GITHUB_WORKSPACE 'bridge-dist'; New-Item -ItemType Directory -Force $d | Out-Null
+          $ver = [regex]::Match((Get-Content bref/bridge-go/util.go -Raw), 'var BridgeVersion = "([0-9.]+)"').Groups[1].Value
+          $f = "bref/assets-test/bridge-go/FinComBridge-Setup-$ver.exe"
+          if (-not (Test-Path $f)) { Write-Host "::error::no committed setup of $ver at the ref"; exit 1 }
+          $want = ((Get-Content "$f.sha256" -Raw).Trim() -split '\s+')[0].ToLower(); $got = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          if ($want -ne $got) { Write-Host "::error::committed setup SHA-256 $got, expected $want"; exit 1 }
+          Copy-Item $f $d; Copy-Item bref/bridge-go/addon/FinComRecorder.tdl $d
+          "setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-$ver.exe SHA-256 $got" | Set-Content (Join-Path $d 'setup-origin.txt')
+          "bridge source: ${{ needs.build.outputs.sha }}" | Set-Content (Join-Path $d 'bridge-source.txt')
+          Write-Host "local bridge-dist: $ver, SHA-256 $got"
+          if ($env:VMODE -eq 'upg' -and $env:UPG_FROM -eq '2.4.8') {
+            git -C bref fetch -q --depth 1 origin a9cbec7f8a2e43ba1a84c8752c49a94a38a70667
+            New-Item -ItemType Directory -Force (Join-Path $d 'old248') | Out-Null
+            $o = Join-Path $d 'old248\FinComBridge-Setup-2.4.8.exe'
+            cmd /c "git -C bref show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.4.8.exe > `"$o`""
+            cmd /c "git -C bref show FETCH_HEAD:bridge-go/addon/FinComRecorder.tdl > `"$(Join-Path $d 'old248\FinComRecorder.tdl')`""
+            $g8 = (Get-FileHash $o -Algorithm SHA256).Hash.ToLower()
+            if ($g8 -ne '030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f') { Write-Host "::error::2.4.8 setup SHA-256 $g8"; exit 1 }
+            Write-Host "2.4.8 setup SHA-256 $g8"
+          }
+          if ($env:VMODE -in 'g245', 'dbbig', 'proof72') {
+            $env:DBM_PROFILE = 'big'
+            $n = python .github/tally-spike/dbm/redate.py --total
+            python bref/tests/fixtures/big/make_big_company.py --vouchers $n --chunk 100000 --out (Join-Path $d 'dbmgen') | Out-Null
+            python .github/tally-spike/dbm/redate.py (Join-Path $d 'dbmgen') (Join-Path $d 'dbm')
+            Copy-Item (Join-Path $d 'dbmgen\big-masters.xml') (Join-Path $d 'dbm'); Remove-Item (Join-Path $d 'dbmgen') -Recurse -Force
+          }
+          Get-ChildItem $d -Recurse | Select-Object -First 20 | ForEach-Object { $_.FullName }
       - name: Desktop check
         run: |
           New-Item -ItemType Directory -Force $env:RES | Out-Null
@@ -538,9 +577,23 @@ jobs:
           git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} bdiff ${{ matrix.version }} (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
           $br = '${{ github.ref_name }}'
           for ($i = 0; $i -lt 6; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 15 }
+      - name: Results to the branch (local_dist=yes)
+        if: always() && inputs.local_dist == 'yes' && matrix.mode != 'batch' && matrix.mode != 'bdiff'
+        continue-on-error: true
+        run: |
+          $r = Join-Path $env:RES 'versions\results.txt'
+          $tag = "${{ matrix.version }}-${{ matrix.mode }}"
+          Get-ChildItem $env:RES -Recurse -File | Where-Object { $_.Length -gt 5MB } | ForEach-Object { "dropped (over 5 MB): $($_.Name) $($_.Length)" | Add-Content (Join-Path $env:RES 'dropped.txt'); Remove-Item $_.FullName }
+          $sum = "spike-results/versions/${{ github.run_id }}-$tag-summary.txt"
+          Get-Content $r -ErrorAction SilentlyContinue | Where-Object { $_ -match '^(PASS|FAIL|HARNESS|NOT REACHABLE|MEASURE)' } | ForEach-Object { "[$tag] $_" } | Set-Content $sum -Encoding UTF8
+          git config user.name "tally-versions"; git config user.email "tally-versions@users.noreply.github.com"
+          git add --sparse "spike-results/versions/${{ github.run_id }}-$tag" $sum
+          git commit -q -m "tally versions [skip ci]: results ${{ github.run_id }} $tag (bridge ${{ needs.build.outputs.sha }})" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`nClaude-Session: https://claude.ai/code/session_01LprHoXx2ACgDW2AjxNH8wN"
+          $br = '${{ github.ref_name }}'
+          for ($i = 0; $i -lt 6; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 15 }
       - name: Artifact
         if: always()
-        continue-on-error: ${{ matrix.mode == 'batch' || matrix.mode == 'bdiff' }}
+        continue-on-error: ${{ matrix.mode == 'batch' || matrix.mode == 'bdiff' || inputs.local_dist == 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
