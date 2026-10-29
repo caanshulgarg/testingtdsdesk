@@ -1,0 +1,55 @@
+[7.1-stockm] PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-29, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[7.1-stockm] PASS c2 port and company list: port 9000 answered 11.6 s after start, GET 1519 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 8 ms, 'FinCom Spike Co' in it: True
+[7.1-stockm] MEASURE ---- part S (600 items, 5973 entries in Tally)
+[7.1-stockm] MEASURE S A1 FinComStockItems all (MasterID > 0): worst 84.5 ms (each 84.5 / 39.4 / 36.2), 534221 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S A1 FinComStockItems chunk (0, 2000]: worst 41.7 ms (each 41.7), 534221 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S A2 FinComStockItemsGodown all: worst 56.4 ms (each 56.4 / 49.4 / 49.6), 716810 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S A3 FinComStockGroups: worst 4.3 ms (each 4.3 / 3.4 / 3.7), 6346 bytes, 1 items, ok True
+[7.1-stockm] MEASURE S A1 stored opening: 600 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 119041872.01
+[7.1-stockm] MEASURE S D1 Stock Summary (groups) 20260401-20260402: worst 230.3 ms (each 230.3 / 11.1 / 10.6), 2255 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE S D1X Stock Summary (every item) 20260401-20260402: worst 347.1 ms (each 347.1 / 277.4), 126892 bytes, 541 rows, ok True
+[7.1-stockm] MEASURE S D2 FinComStockClosing all items 20260401-20260402: worst 29.1 ms (each 26.8 / 29.1), 367596 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S D1 Stock Summary (groups) 20260401-20261031: worst 135.8 ms (each 135.8 / 13.2 / 11.9), 2255 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE S D1X Stock Summary (every item) 20260401-20261031: worst 320 ms (each 320 / 268.4), 138477 bytes, 590 rows, ok True
+[7.1-stockm] MEASURE S D2 FinComStockClosing all items 20260401-20261031: worst 26.2 ms (each 25.5 / 26.2), 368899 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S D1 Stock Summary (groups) 20260401-20270331: worst 125.1 ms (each 125.1 / 11.7 / 10.8), 2255 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE S D1X Stock Summary (every item) 20260401-20270331: worst 325.5 ms (each 325.5 / 256.6), 138189 bytes, 588 rows, ok True
+[7.1-stockm] MEASURE S D2 FinComStockClosing all items 20260401-20270331: worst 29.8 ms (each 28.4 / 29.8), 369075 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S D1 Stock Summary (groups) 20261001-20261031: worst 157.3 ms (each 157.3 / 14.1 / 14.2), 2255 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE S D1X Stock Summary (every item) 20261001-20261031: worst 357.2 ms (each 357.2 / 252.9), 138477 bytes, 590 rows, ok True
+[7.1-stockm] MEASURE S D2 FinComStockClosing all items 20261001-20261031: worst 30 ms (each 30 / 28.5), 370179 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 28.3 ms (each 28.3 / 27.4 / 26.9), 369075 bytes, 601 items, ok True
+[7.1-stockm] MEASURE S D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 5 ms (each 4.4 / 5 / 3.4), 2143 bytes, 2 items, ok True
+[7.1-stockm] MEASURE S D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 3.6 ms (each 3.6 / 3.5 / 3.5), 2143 bytes, 2 items, ok True
+[7.1-stockm] MEASURE ---- part L (3000 items, 39879 entries in Tally)
+[7.1-stockm] MEASURE L A1 FinComStockItems all (MasterID > 0): worst 423.8 ms (each 423.8 / 192.8 / 196.6), 2672329 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L A1 FinComStockItems chunk (0, 2000]: worst 120 ms (each 120), 1566435 bytes, 1760 items, ok True
+[7.1-stockm] MEASURE L A1 FinComStockItems chunk (2000, 4000]: worst 84.1 ms (each 84.1), 1107425 bytes, 1242 items, ok True
+[7.1-stockm] MEASURE L A2 FinComStockItemsGodown all: worst 299.6 ms (each 299.6 / 245 / 259.6), 3619638 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L A3 FinComStockGroups: worst 4.3 ms (each 4.3 / 3.9 / 3.3), 6351 bytes, 1 items, ok True
+[7.1-stockm] MEASURE L A1 stored opening: 3000 items read, 0 differ from what was made; opening stock (sum of OPENINGVALUE) 650194967.88
+[7.1-stockm] PASS s2 (a) stock item masters: the stored opening read back exactly as made: 3,000 items: 3000 read, 0 differ; A1 worst 423.8 ms at 3,000 items (S: 84.5 ms at 600)
+[7.1-stockm] MEASURE L D1 Stock Summary (groups) 20260401-20260402: worst 1189.6 ms (each 1189.6 / 17.5 / 15.9), 2255 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE L D1X Stock Summary (every item) 20260401-20260402: worst 1871.2 ms (each 1871.2 / 1269.1), 645726 bytes, 2751 rows, ok True
+[7.1-stockm] MEASURE L D2 FinComStockClosing all items 20260401-20260402: worst 134.4 ms (each 120 / 134.4), 1835426 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L D1 Stock Summary (groups) 20260401-20261031: worst 705 ms (each 705 / 17.4 / 15.4), 2265 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE L D1X Stock Summary (every item) 20260401-20261031: worst 1617.4 ms (each 1617.4 / 1312.5), 684868 bytes, 2914 rows, ok True
+[7.1-stockm] MEASURE L D2 FinComStockClosing all items 20260401-20261031: worst 141.1 ms (each 141.1 / 124.1), 1840702 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L D1 Stock Summary (groups) 20260401-20270331: worst 592.5 ms (each 592.5 / 18.7 / 18.3), 2265 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE L D1X Stock Summary (every item) 20260401-20270331: worst 1741.2 ms (each 1741.2 / 1310.3), 692274 bytes, 2942 rows, ok True
+[7.1-stockm] MEASURE L D2 FinComStockClosing all items 20260401-20270331: worst 126.8 ms (each 126.8 / 122.9), 1841889 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L D1 Stock Summary (groups) 20261001-20261031: worst 606.7 ms (each 606.7 / 17.4 / 15.2), 2265 bytes, 10 rows, ok True
+[7.1-stockm] MEASURE L D1X Stock Summary (every item) 20261001-20261031: worst 1837.3 ms (each 1837.3 / 1282.2), 684868 bytes, 2914 rows, ok True
+[7.1-stockm] MEASURE L D2 FinComStockClosing all items 20261001-20261031: worst 135.3 ms (each 135.3 / 135.1), 1846269 bytes, 3001 items, ok True
+[7.1-stockm] MEASURE L D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: worst 79 ms (each 76.1 / 78.7 / 79), 1080182 bytes, 1760 items, ok True
+[7.1-stockm] MEASURE L D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: worst 8.5 ms (each 8.5 / 7.2 / 7.1), 2148 bytes, 2 items, ok True
+[7.1-stockm] MEASURE L D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: worst 7.2 ms (each 6.6 / 7.2 / 6.5), 2148 bytes, 2 items, ok True
+[7.1-stockm] PASS s1 the stock test data made (items with opening, a year of inventory entries): masters S: 633 created, 0 errors; entries S: Credit Note 158, Debit Note 126, Purchase 1057, Sales 1512, Stock Journal 132 in 1.9 min; in Tally after S: 5973 entries (Credit Note 158, Debit Note 126, Journal 1, Purchase 1057, Sales 1512, Stock Journal 132); masters L: 2400 created, 0 errors; entries L: Credit Note 884, Debit Note 830, Purchase 5875, Sales 8493, Stock Journal 871 in 17.7 min; in Tally after L: 39879 entries (Credit Note 1042, Debit Note 956, Journal 1, Purchase 6932, Sales 10005, Stock Journal 1003)
+[7.1-stockm] MEASURE B1 FinComStockLedger (integrated): worst 6.7 ms (each 6.7 / 4.3 / 4.3), 2394 bytes, 1 items, ok True
+[7.1-stockm] MEASURE B2 FinComStockLedgerL whole list (integrated): worst 4.3 ms (each 4.3 / 4.2 / 4.2), 2394 bytes, 1 items, ok True
+[7.1-stockm] MEASURE B1 FinComStockLedger (not integrated): worst 5.5 ms (each 5.5 / 4.6 / 4.3), 2394 bytes, 1 items, ok True
+[7.1-stockm] MEASURE B2 FinComStockLedgerL whole list (not integrated): worst 4.7 ms (each 4.7 / 4.4 / 4.3), 2394 bytes, 1 items, ok True
+[7.1-stockm] MEASURE D1 Stock Summary (groups) 20260401-20270331 (not integrated): worst 19 ms (each 19 / 18.5 / 17.7), 2265 bytes, 10 rows, ok True
+[7.1-stockm] FAIL s3 (b) the Stock-in-Hand ledger: stored opening and closing values read back: made integrated: created 1, errors 0; integrated: opening '-250000.00', closing values 2; FinComLedgers today (integrated): 'SM Closing Stock' opening '-250000.00'; company ISINTEGRATED No: altered 1, errors 0; read back 'No'; altered not integrated: altered 1, errors 0; not integrated: opening '-250000.00', closing values: 20261031 -275000.00, 20270331 -300000.00; B1 worst 5.5 ms
+[7.1-stockm] PASS s4 (d) Tally's computed stock closing: times: measured (a figure, not a pass mark): worst at 3,000 items / 20,000 entries 1871.2 ms; D1 Stock Summary (groups) 20260401-20260402: 1189.6 ms; D1X Stock Summary (every item) 20260401-20260402: 1871.2 ms; D2 FinComStockClosing all items 20260401-20260402: 134.4 ms; D1 Stock Summary (groups) 20260401-20261031: 705 ms; D1X Stock Summary (every item) 20260401-20261031: 1617.4 ms; D2 FinComStockClosing all items 20260401-20261031: 141.1 ms; D1 Stock Summary (groups) 20260401-20270331: 592.5 ms; D1X Stock Summary (every item) 20260401-20270331: 1741.2 ms; D2 FinComStockClosing all items 20260401-20270331: 126.8 ms; D1 Stock Summary (groups) 20261001-20261031: 606.7 ms; D1X Stock Summary (every item) 20261001-20261031: 1837.3 ms; D2 FinComStockClosing all items 20261001-20261031: 135.3 ms; D2 FinComStockClosing chunk (0, 2000] 20260401-20270331: 79 ms; D3 FinComStockClosing one item (SM Item 0010, FIFO) 20260401-20270331: 8.5 ms; D3 FinComStockClosing one item (SM Item 0001, Avg. Cost) 20260401-20270331: 7.2 ms
+[7.1-stockm] PASS s5 one request at a time, Tally responding after each: 320 requests, at most 1 at Tally at once; Tally responding after each: True; over 2 s: none
