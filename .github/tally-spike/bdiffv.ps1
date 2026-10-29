@@ -82,6 +82,20 @@ try {
     $k = DbImp 'Vouchers' (TM $x) "stock journal $($sj.no)"; if ($k.c -eq 1) { $sjOk++ } else { $made["stock journal $($sj.no) refused"] = $k.line }
   }
   $made['stock journals'] = "$sjOk of 2"
+  # ---- 2.4.9 review R1-6: a payment with cost centres (CATEGORYENTRY in a group's answer), an optional payment and a
+  # cancelled one (created, then cancelled by its number)
+  $m = '<COSTCENTRE NAME="BD Centre A" ACTION="Create"><NAME.LIST><NAME>BD Centre A</NAME></NAME.LIST><CATEGORY>Primary Cost Category</CATEGORY></COSTCENTRE>' +
+    '<LEDGER NAME="BD Office Exp" ACTION="Create"><NAME.LIST><NAME>BD Office Exp</NAME></NAME.LIST><PARENT>Indirect Expenses</PARENT><ISCOSTCENTRESON>Yes</ISCOSTCENTRESON></LEDGER>'
+  $k = DbImp 'All Masters' (TM $m) 'cost centre and ledger'; $made['cost centre and ledger'] = "$($k.c) created, $($k.e) errors"
+  $pay = { param($no, $d, $amt, $more, $cc) '<VOUCHER VCHTYPE="Payment" ACTION="Create" OBJVIEW="Accounting Voucher View"><DATE>' + $d + '</DATE><EFFECTIVEDATE>' + $d + '</EFFECTIVEDATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME><VOUCHERNUMBER>' + $no + '</VOUCHERNUMBER><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW><NARRATION>' + $no + ' by XML</NARRATION>' + $more +
+      '<ALLLEDGERENTRIES.LIST><LEDGERNAME>BD Office Exp</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-' + $amt + '</AMOUNT>' +
+      $(if ($cc) { '<CATEGORYALLOCATIONS.LIST><CATEGORY>Primary Cost Category</CATEGORY><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><COSTCENTREALLOCATIONS.LIST><NAME>BD Centre A</NAME><AMOUNT>-' + $amt + '</AMOUNT></COSTCENTREALLOCATIONS.LIST></CATEGORYALLOCATIONS.LIST>' }) +
+      '</ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>' + $amt + '</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>' }
+  $k = DbImp 'Vouchers' (TM (& $pay 'BD-CC-1' '20260802' '1000.00' '' $true)) 'payment with cost centres'; $made['payment with cost centres'] = "created $($k.c)$(if ($k.line) { ': ' + $k.line })"
+  $k = DbImp 'Vouchers' (TM (& $pay 'BD-OPT-1' '20260802' '700.00' '<ISOPTIONAL>Yes</ISOPTIONAL>' $false)) 'optional payment'; $made['optional payment'] = "created $($k.c)$(if ($k.line) { ': ' + $k.line })"
+  $k = DbImp 'Vouchers' (TM (& $pay 'BD-CAN-1' '20260802' '300.00' '' $false)) 'payment to cancel'
+  $k2 = DbImp 'Vouchers' (TM '<VOUCHER DATE="20260802" TAGNAME="Voucher Number" TAGVALUE="BD-CAN-1" ACTION="Cancel" VCHTYPE="Payment"><NARRATION>BD-CAN-1 cancelled by XML</NARRATION></VOUCHER>') 'cancel the payment'
+  $made['cancelled payment'] = "created $($k.c), cancel: created $($k2.c) altered $($k2.a) errors $($k2.e)$(if ($k2.line) { ': ' + $k2.line })"
 } catch { Info "bdiff: test data stopped: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
 
 # ---- every day holding entries: Tally's own list (the harness's, untimed), then the groups and the entries alone

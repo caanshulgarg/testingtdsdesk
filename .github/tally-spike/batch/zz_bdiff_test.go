@@ -60,38 +60,20 @@ func TestFCBDiff(t *testing.T) {
 				continue
 			}
 			typ := tagValue(c, "VOUCHERTYPENAME")
-			payrollLearn("BDIFF CO", c)
-			if payrollEntry("BDIFF CO", typ) {
-				left++
-				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: a payroll entry", w.Form, w.File, mid, typ))
-				continue
+			if strings.EqualFold(tagValue(c, "ISCANCELLED"), "Yes") {
+				typ += " (cancelled)"
+			} else if strings.EqualFold(tagValue(c, "ISOPTIONAL"), "Yes") {
+				typ += " (optional)"
 			}
 			var want string
 			for _, ov := range reVchBlock.FindAllString(read("obj-"+mid+".xml"), -1) {
 				want, _ = fastStripWhy(cleanXML(ov))
 			}
-			// fetchVoucherBatch's own steps: an entry the group gives otherwise is left (a probe settles its lines with its
-			// own FinComVoucherObject answer, as pullFetchStep does)
-			cv := batchConvert(c)
-			keys, always := batchTOSLines(cv)
-			if always != "" {
+			// the bridge's own per-entry steps (fetchVoucherBatch: batchEntry): left for FinComVoucherObject, or kept
+			v, leave := batchEntry("BDIFF CO", c)
+			if leave != "" {
 				left++
-				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: %s", w.Form, w.File, mid, typ, always))
-				continue
-			}
-			if ok, unknown := batchTOSTake("BDIFF CO", keys); !ok {
-				if len(unknown) > 0 && want != "" {
-					batchTOSProbe("BDIFF CO", mid, unknown)
-					batchTOSLearn("BDIFF CO", mid, want)
-				}
-				left++
-				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: a line's type of supply (%s)", w.Form, w.File, mid, typ, strings.Join(keys, ", ")))
-				continue
-			}
-			v, why := fastStripWhy(cv)
-			if why != "" || v == "" {
-				left++
-				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: %s", w.Form, w.File, mid, typ, why))
+				det = append(det, fmt.Sprintf("%s %s: MasterID %s (%s) left for FinComVoucherObject: %s", w.Form, w.File, mid, typ, leave))
 				continue
 			}
 			if want == "" {
