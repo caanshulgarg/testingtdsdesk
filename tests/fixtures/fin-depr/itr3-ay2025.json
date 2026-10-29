@@ -1,0 +1,20 @@
+{
+  "ITR": {
+    "ITR3": {
+      "CreationInfo": {"SWVersionNo": "1.0", "SWCreatedBy": "SW00000000", "JSONCreatedBy": "SW00000000", "JSONCreationDate": "2025-07-30", "IntermediaryCity": "Pune", "Digest": "-"},
+      "Form_ITR3": {"FormName": "ITR-3", "Description": "For individuals and HUFs having income from profits and gains of business or profession (made-up sample)", "AssessmentYear": "2025", "SchemaVer": "Ver1.0", "FormVer": "Ver1.0"},
+      "PartA_GEN1": {"PersonalInfo": {"AssesseeName": {"FirstName": "Asha", "SurNameOrOrgName": "Sample (made-up)"}, "PAN": "ABCPS1234K"}},
+      "ScheduleDPM": {
+        "PlantMachinery": {
+          "Rate15": {"WDVFirstDay": 150000, "DepreciationAllowable": 22500, "WDVLastDay": 127500},
+          "Rate30": {"WDVFirstDay": 200000, "DepreciationAllowable": 60000, "WDVLastDay": 140000},
+          "Rate40": {"WDVFirstDay": 50000, "DepreciationAllowable": 20000, "WDVLastDay": 30000}
+        }
+      },
+      "ScheduleDOA": {
+        "Building": {"Rate10": {"WDVFirstDay": 1000000, "DepreciationAllowable": 100000, "WDVLastDay": 900000}},
+        "FurnitureFittings": {"Rate10": {"WDVFirstDay": 20000, "DepreciationAllowable": 2000, "WDVLastDay": 18000}}
+      }
+    }
+  }
+}

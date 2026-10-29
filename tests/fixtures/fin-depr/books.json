@@ -1,0 +1,365 @@
+{
+ "about": "Made-up books for tests/run_fin_depr.js and run_fin_depr_ui.py: a company with computers, furniture and a motor car (FY 2025-26); amounts with a debit positive",
+ "groups": {
+  "Equity Share Capital": "Capital Account",
+  "Profit & Loss A/c": "Reserves & Surplus",
+  "Deferred Tax Liability": "Provisions",
+  "Gratuity Payable": "Provisions",
+  "Leave Encashment Payable": "Provisions",
+  "Computers": "Fixed Assets",
+  "Accumulated Depreciation - Computers": "Fixed Assets",
+  "Furniture and Fixtures": "Fixed Assets",
+  "Accumulated Depreciation - Furniture": "Fixed Assets",
+  "Motor Car": "Fixed Assets",
+  "Accumulated Depreciation - Motor Car": "Fixed Assets",
+  "Northbank Current A/c": "Bank Accounts",
+  "Software Services": "Sales Accounts",
+  "Salaries": "Indirect Expenses",
+  "Depreciation": "Indirect Expenses",
+  "Gratuity Expense": "Indirect Expenses"
+ },
+ "open": {
+  "Equity Share Capital": -600000,
+  "Profit & Loss A/c": -538000,
+  "Deferred Tax Liability": -12000,
+  "Gratuity Payable": -60000,
+  "Leave Encashment Payable": -20000,
+  "Computers": 500000,
+  "Accumulated Depreciation - Computers": -300000,
+  "Furniture and Fixtures": 300000,
+  "Accumulated Depreciation - Furniture": -120000,
+  "Motor Car": 800000,
+  "Accumulated Depreciation - Motor Car": -350000,
+  "Northbank Current A/c": 400000
+ },
+ "vouchers": [
+  [
+   "20250615",
+   "Purchase",
+   "Laptop 1 (made-up)",
+   [
+    [
+     "Computers",
+     120000
+    ],
+    [
+     "Northbank Current A/c",
+     -120000
+    ]
+   ]
+  ],
+  [
+   "20251001",
+   "Purchase",
+   "Workstations (made-up)",
+   [
+    [
+     "Furniture and Fixtures",
+     50000
+    ],
+    [
+     "Northbank Current A/c",
+     -50000
+    ]
+   ]
+  ],
+  [
+   "20251115",
+   "Sales",
+   "Sale of the motor car (made-up)",
+   [
+    [
+     "Northbank Current A/c",
+     380000
+    ],
+    [
+     "Motor Car",
+     -380000
+    ]
+   ]
+  ],
+  [
+   "20260110",
+   "Purchase",
+   "Laptop 2 (made-up)",
+   [
+    [
+     "Computers",
+     90000
+    ],
+    [
+     "Northbank Current A/c",
+     -90000
+    ]
+   ]
+  ],
+  [
+   "20260331",
+   "Sales",
+   "Services for the year (made-up)",
+   [
+    [
+     "Northbank Current A/c",
+     1500000
+    ],
+    [
+     "Software Services",
+     -1500000
+    ]
+   ]
+  ],
+  [
+   "20260331",
+   "Payment",
+   "Salaries for the year (made-up)",
+   [
+    [
+     "Salaries",
+     900000
+    ],
+    [
+     "Northbank Current A/c",
+     -900000
+    ]
+   ]
+  ],
+  [
+   "20260331",
+   "Journal",
+   "Depreciation for the year as booked",
+   [
+    [
+     "Depreciation",
+     100000
+    ],
+    [
+     "Accumulated Depreciation - Computers",
+     -70000
+    ],
+    [
+     "Accumulated Depreciation - Furniture",
+     -30000
+    ]
+   ]
+  ],
+  [
+   "20260331",
+   "Journal",
+   "Gratuity provision for the year",
+   [
+    [
+     "Gratuity Expense",
+     15000
+    ],
+    [
+     "Gratuity Payable",
+     -15000
+    ]
+   ]
+  ]
+ ],
+ "fs": {
+  "map": {
+   "Computers": "8A",
+   "Accumulated Depreciation - Computers": "8C",
+   "Furniture and Fixtures": "8F",
+   "Accumulated Depreciation - Furniture": "8G",
+   "Motor Car": "8K",
+   "Accumulated Depreciation - Motor Car": "8L",
+   "Deferred Tax Liability": "31A"
+  },
+  "regime": "115BAA",
+  "inputs": {
+   "unit": 1,
+   "dec": 2
+  },
+  "pyBs": {
+   "2025": {
+    "versions": [
+     {
+      "v": 1,
+      "at": "2026-04-01T00:00:00Z",
+      "by": "test",
+      "file": "audited-bs-2025.xlsx",
+      "size": 0,
+      "sha256": "",
+      "src": "xlsx",
+      "unit": 1,
+      "usePy": false,
+      "lines": [
+       {
+        "label": "Share capital",
+        "note": null,
+        "amt": 600000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "3A",
+        "use": true
+       },
+       {
+        "label": "Reserves and surplus",
+        "note": null,
+        "amt": 538000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "4A",
+        "use": true
+       },
+       {
+        "label": "Long-term provisions",
+        "note": null,
+        "amt": 60000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "5A",
+        "use": true
+       },
+       {
+        "label": "Short-term provisions",
+        "note": null,
+        "amt": 20000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "5B",
+        "use": true
+       },
+       {
+        "label": "Property, plant and equipment",
+        "note": null,
+        "amt": 830000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "8A",
+        "use": true
+       },
+       {
+        "label": "Cash and bank balances",
+        "note": null,
+        "amt": 400000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "11A",
+        "use": true
+       },
+       {
+        "label": "Computers",
+        "note": 8,
+        "amt": 500000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Gross block",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Furniture and fixtures",
+        "note": 8,
+        "amt": 300000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Gross block",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Vehicles",
+        "note": 8,
+        "amt": 800000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Gross block",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Computers",
+        "note": 8,
+        "amt": 300000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Accumulated depreciation",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Furniture and fixtures",
+        "note": 8,
+        "amt": 120000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Accumulated depreciation",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Vehicles",
+        "note": 8,
+        "amt": 350000,
+        "py": null,
+        "face": false,
+        "head": "Property, plant and equipment",
+        "sub": "Accumulated depreciation",
+        "isHead": false,
+        "isTotal": false,
+        "code": "",
+        "use": false
+       },
+       {
+        "label": "Deferred tax liabilities (net)",
+        "note": null,
+        "amt": 12000,
+        "py": null,
+        "face": true,
+        "head": "",
+        "sub": "",
+        "isHead": false,
+        "isTotal": false,
+        "code": "31A",
+        "use": true
+       }
+      ]
+     }
+    ]
+   }
+  }
+ }
+}

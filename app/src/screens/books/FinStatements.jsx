@@ -31,6 +31,8 @@ import "./fin/fin.css";
 // the reports pack (ROUND 100): the Board's Report, the auditor's report, the MRL and their questionnaire, a lazy chunk
 // of its own opened from the header's "Reports" menu (the page keeps its seven tabs)
 const Reports = lazy(() => import("./fin/Reports.jsx"));
+// Fixed assets & deferred tax (owner, 29-Oct-2026): the Companies Act register, the income-tax blocks with last year's ITR, and deferred tax; a lazy chunk (fin/Depr.jsx)
+const Depr = lazy(() => import("./fin/Depr.jsx"));
 const REP_MENU = [["board", "Board's Report"], ["audit", "Auditor's Report"], ["mrl", "Management representation"], ["q", "Questionnaire"]];
 function downloadAll(kind, fy, o) {
   // the print window is opened by the click itself (a pop-up opened later is blocked), then filled
@@ -40,6 +42,7 @@ function downloadAll(kind, fy, o) {
 }
 
 export const FIN_TABS = [["bs", "Balance sheet"], ["pl", "Profit & loss"], ["cf", "Cash flow"], ["notes", "Notes"], ["comp", "Computation of income"], ["tb", "Trial balance & mapping"], ["checks", "Checks"]];
+FIN_TABS.push(["depr", "Fixed assets & deferred tax"]);
 
 function Seg({ label, value, list, onPick }) {
   return <div className="fin-seg" role="group" aria-label={label} data-fin-seg={label}><span>{label}</span>
@@ -86,6 +89,7 @@ function Body({ d, tab, fy, kind }) {
   if (tab === "comp") return <Comp d={d} fy={fy} kind={kind} />;
   if (tab === "tb") return <><PyBs d={d} fy={fy} kind={kind} /><Stock d={d} /><Tb d={d} fy={fy} kind={kind} /></>;
   if (tab === "checks") return <Checks d={d} />;
+  if (tab === "depr") return <Suspense fallback={<p className="note" data-fd-loading="">Preparing the fixed assets…</p>}><Depr d={d} /></Suspense>;
   return <BalanceSheet d={d} />;
 }
 

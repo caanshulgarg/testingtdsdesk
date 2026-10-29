@@ -1,0 +1,16 @@
+INDIAN INCOME TAX RETURN
+FORM ITR-6
+Assessment Year 2025-26
+PAN AABCW1234F
+Name Wren Systems Private Limited (made-up)
+Schedule DPM Depreciation on Plant and Machinery (other than assets on which full capital expenditure is allowable as deduction under any other section)
+1 Block of assets Plant and machinery
+2 Rate (%) 15 30 40 45
+3 Written down value on the first day of previous year 4,70,588 0 3,00,000 0
+14 Total depreciation 70,588 0 1,20,000 0
+17 Written down value on the last day of previous year 4,00,000 0 1,80,000 0
+Schedule DOA Depreciation on other assets
+1 Block of assets Building Furniture and fittings Intangible assets Ships
+2 Rate (%) 5 10 40 10 25 20
+17 Written down value on the last day of previous year 0 0 0 2,40,000 0 0
+Schedule DEP Summary of depreciation on assets

@@ -347,6 +347,8 @@ const FinSt = (() => {
       out.push(Object.assign(r, k.code && !K[k.code] ? {code: "", codeSrc: "none"} : k)); r.side = r.code ? CODES[r.code].side : "";
     });
     syn(BF, "4A", bfCy, bfPy);
+    // the register's depreciation, profit or loss on sale and the deferred tax (FinDepr, src/js/88-fin-depr.js), once used for the year: FinCom rows with their codes
+    if (typeof FinDepr === "object" && FinDepr.rowsFor) FinDepr.rowsFor(fy, P, out).forEach(z => { const r = syn(z.ledger, z.code, z.cy, 0, 0); if (r) r.depr = z.key; });
     if (!P.full) syn(P.spans ? "Profit for " + DMY(from) + " to " + DMY(Audit.dayBefore(fyFrom)) + " (in the balance at the beginning of the year)" : "Profit for " + DMY(P.fyFrom) + " to " + DMY(Audit.dayBefore(from)) + " (earlier in the year)", "4E", slCy, slPy);
     // last year's balance sheet as the PY column: its lines by code (FinPyBs.pyRows), in rupees, a debit positive
     if (pySrc === "upload") FinPyBs.pyRows(upl, kind).forEach(([code, v]) => { if (K[code]) syn("Last year's balance sheet: " + CODES[code].label, code, 0, v, 0); });
@@ -441,6 +443,7 @@ const FinSt = (() => {
     const ppeAdj = (f.ppeAdj || {})[periodKey(fy, PER)] || {};
     const ppe = {cy: grid(PPE, "cy", ppeAdj), py: pri ? pri.ppe.cy : Object.assign(grid(PPE, "py"), {partial: true})};
     const intg = {cy: grid(INT, "cy", ppeAdj), py: pri ? pri.intang.cy : Object.assign(grid(INT, "py"), {partial: true})};
+    const reg = typeof FinDepr === "object" && FinDepr.grids ? FinDepr.grids(fy, PER, unit, dec) : null; if (reg){ ppe.cy = reg.ppe; intg.cy = reg.int; }   // the register (FinDepr), when used
     // the notes, their lines rounded each, groups and totals summed
     const notes = {};
     NOTES.forEach(n => {
@@ -591,6 +594,7 @@ const FinSt = (() => {
     if (part) d.compNote = "The computation of income is for a full financial year. Choose Full year to see it.";
     d.checks = checks(d, {S1, LV, tol, unit, dec, line, G, OB, part: part && PER.cmp !== "fy"});
     if (T.upload) d.pyCheck = pyCheck(T, sections, BSL, kind);
+    if (typeof FinDepr === "object" && FinDepr.attach) FinDepr.attach(d);   // depreciation and deferred tax (d.depr)
     return d;
   }
   // last year's balance sheet (uploaded) against FinCom's opening balances, by head of the balance sheet, in rupees: each
@@ -639,6 +643,7 @@ const FinSt = (() => {
 
   // ---------- income-tax depreciation by block (opening WDV typed once, then carried forward) ----------
   function taxDep(fy, depth){
+    if (!depth && typeof FinDepr === "object" && FinDepr.taxDep){ const r = FinDepr.taxDep(fy); if (r) return r; }   // last year's ITR, the register's additions and sales (FinDepr)
     const b = S.books || {}, f = b.fs || {}, typed = (f.taxDep || {})[fy], {from, to} = fyDates(fy), kind = kindOf(), map = f.map || {};
     const earlier = Object.keys(f.taxDep || {}).some(y => y < fy);
     let open = {}, carried = false;
