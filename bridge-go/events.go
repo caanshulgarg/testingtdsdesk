@@ -113,6 +113,7 @@ func wakeOpen(company, source string) bool {
 // b. Update now: read now (not stopped by "Pause background reading"); company "" for every company open in Tally
 func wakeUpdate(company string) {
 	noteUse()
+	askLinksFor(company) // next-bridge-248: a company just linked in FinCom goes at the next push, not 5 minutes later
 	requestKeepNow()
 	r := runReq{kind: "now", why: "Update now"}
 	if company != "" {

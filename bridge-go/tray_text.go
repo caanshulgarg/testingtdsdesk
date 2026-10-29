@@ -97,7 +97,7 @@ func connectionReport(port int, ping, chk M) string {
 		if why == "" {
 			why = "TallyPrime is not running in your Windows login"
 		}
-		l = append(l, "Tally: NOT ANSWERING ("+why+"). Open TallyPrime with your company; in TallyPrime, F1 Help > Settings > Connectivity: set \"TallyPrime acts as\" to Both and the port to 9000.")
+		l = append(l, "Tally: NOT ANSWERING ("+why+"). Open TallyPrime with your company; in TallyPrime, F1 Help > Settings > Connectivity: set \"TallyPrime acts as\" to Both; any port works (FinCom finds it, or type it in FinCom: Use this port).")
 	}
 	c := obj(chk["cloud"])
 	switch {

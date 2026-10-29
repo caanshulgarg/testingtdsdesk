@@ -16,7 +16,7 @@
 #   green 3  BridgeVersion 2.1.7 with the owner's decision line naming 2.1.7 (round 13) -> passes check 4
 #   red 10   BridgeVersion 2.1.7 with an "allowed for 2.1.7 only" line WITHOUT the owner's decision words -> fails "owner's decision"
 #   red 11   an exception line naming two versions                    -> fails "names more than one version"
-#   green 5  BridgeVersion 2.4.7 (was 2.4.6) with the real decision line of docs/tally-allowlist.md (2.4.7: the owner's standing decision of 2026-10-06;
+#   green 5  BridgeVersion 2.4.8 (was 2.4.7) with the real decision line of docs/tally-allowlist.md (2.4.8: the owner's standing decision of 2026-10-06;
 #            "re-measured on 2026-10-08"; the 2.3.5, 2.3.4, 2.3.3, 2.3.2, 2.3.1 and 2.3.0 lines kept as history) -> passes
 #   red 14   the same line, but the last release row dated 2026-10-09 (after its "re-measured on") -> fails "before the last release"
 #   green 6  BridgeVersion 2.4.5 with "allowed for 2.4.5 by the owner's decision of 2026-10-21" (ROUND 102) -> passes check 4
@@ -147,9 +147,9 @@ expect "red 13: a standing line and an older decision line together name two ver
 # bridge 2.3.1 (the owner's decision of 06-Oct-2026), then 2.3.2 (the owner's standing decision, 2.3.1's line kept as
 # history: "as for 2.3.1: ..."): the real decision line, as docs/tally-allowlist.md carries it
 L231="$(grep -m1 '^First table:' "$HERE/../docs/tally-allowlist.md")"
-setup; withver 2.4.7; unmeasured "$L231
+setup; withver 2.4.8; unmeasured "$L231
 (re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
-expect "green 5: 2.4.7 with the real decision line (the owner's standing decision; 2.4.6's, 2.4.5's, 2.4.4's, 2.4.3's, 2.4.2's, 2.4.1's, 2.4.0's, 2.3.5's, 2.3.4's, 2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.4.7 by the owner's decision of 2026-10-06"
+expect "green 5: 2.4.8 with the real decision line (the owner's standing decision; 2.4.7's, 2.4.6's, 2.4.5's, 2.4.4's, 2.4.3's, 2.4.2's, 2.4.1's, 2.4.0's, 2.3.5's, 2.3.4's, 2.3.3's, 2.3.2's and 2.3.1's kept as history, re-measured on 2026-10-08) passes check 4" 0 "allowed for 2.4.8 by the owner's decision of 2026-10-06"
 
 # bridge 2.4.5 (ROUND 102, the owner's decisions of 21-Oct-2026): the owner's own words as a line of their own
 setup; withver 2.4.5; unmeasured "First table: not yet measured on NWS144; allowed for 2.4.5 by the owner's decision of 2026-10-21 (FinComDayHeads, its per-voucher-type filter, FinComLedgerIds).
@@ -160,7 +160,7 @@ setup; withver 2.4.6; unmeasured "First table: not yet measured on NWS144; allow
 re-measured on 2026-10-21 (no times)"
 expect "red 15: the 2.4.5 line does not carry over to 2.4.6" 1 "not 2.4.6"
 
-setup; withver 2.4.7; unmeasured "$L231
+setup; withver 2.4.8; unmeasured "$L231
 (re-measured on 2026-10-08 on real TallyPrime 3.0 to 7.1 (as for 2.3.4; no new times), for 2.3.5)"
 sed -i 's/| 9.9.8 | 2026-09-30 |/| 9.9.8 | 2026-10-09 |/' "$R/docs/RELEASE-CHECKLIST.md"; g add -A; g commit -qm "a later release row"
 expect "red 14: the line re-measured before the last release row's date" 1 "before the last release"

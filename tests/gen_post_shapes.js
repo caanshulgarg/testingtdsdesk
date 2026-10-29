@@ -11,7 +11,7 @@ const ORDER = JSON.parse(fs.readFileSync(path.join(SRC, "ORDER.json"), "utf8"));
 const js = ORDER.map(f => fs.readFileSync(path.join(SRC, f), "utf8")).join("\n");
 // the builders and what they call; every other name is a stub below
 const NAMES = ["xesc", "r2", "num", "amt", "toTallyDate", "fmtDate", "toDateObj", "MONTHS", "MONTHS3", "voucherXml", "vchNoFor", "remoteIdFor", "remoteIdTrial",
-  "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering"];
+  "bankVoucherXml", "ledgerMasterXml", "salesVoucherXml", "customerMasterXml", "GST_STATES", "stateOfGstin", "fpHash", "setAutoNumbering", "ledNm", "OWN_BANK"];
 const re = /\n(?:async function|function|const|let|var|class) ([A-Za-z_$][\w$]*)/g;
 const decl = []; let m;
 while ((m = re.exec(js))) decl.push({name: m[1], at: m.index});
@@ -27,6 +27,9 @@ const ctx = {console, Math, JSON, Date, Number, String, RegExp, Object, Array, S
   // the invoice's lines (salesLines works them out from the invoice and the company's ledgers): given here as they come out
   salesLines: v => v.lines};
 vm.createContext(ctx);
+// the shared name helpers ledNm calls (namesBreaks), as the app has them first (build.py NAMES_JS, without the export line); not hashed: they are
+// the cloud's and the app's one rule for Tally names, not a posting builder
+vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "server", "_shared", "names.js"), "utf8").replace(/^export .*$/m, ""), ctx);
 vm.runInContext(parts.filter((p, i) => NAMES[i] !== "setAutoNumbering").join("\n") + "\n;globalThis.__x = {" + NAMES.filter(n => n !== "setAutoNumbering").join(",") + "};\nglobalThis.__vt = " + vtSrc.replace(/;$/, "") + ";", ctx);
 const x = ctx.__x;
 const co = {name: "ZZ TEST", voucherType: "Purchase", billwise: true, createOptional: false, gstin: "27AAACZ1234Z1Z5"};

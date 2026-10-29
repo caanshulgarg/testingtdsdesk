@@ -366,7 +366,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		}
 		msg := err.Error()
 		if re(`Unable to connect|actively refused|No connection could be made|Connection refused`).MatchString(msg) {
-			msg = `Tally is not answering on this computer. In TallyPrime: F1 Help > Settings > Connectivity > set "TallyPrime acts as" to Both (or Server) and port 9000.`
+			msg = `Tally is not answering on this computer. In TallyPrime: F1 Help > Settings > Connectivity > set "TallyPrime acts as" to Both (or Server); any port works (FinCom finds it, or type it in FinCom: Use this port).`
 		}
 		writeLog("ERROR " + path + ": " + msg)
 		sendJSON(w, 502, M{"ok": false, "error": msg}, origin)
@@ -431,6 +431,20 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		return M{"ok": true, "companies": list}, nil
 	case "/diagnose":
 		return diagnosis(), nil
+	case "/ports/use":
+		// 2.4.8 (anyport.go): FinCom's "Use this port": the typed port tried once, kept only when it is this user's Tally
+		if err := needPost(r, "Use POST."); err != nil {
+			return nil, err
+		}
+		o, err := bodyObj(body)
+		if err != nil {
+			return nil, err
+		}
+		p, isNum := o["port"].(float64)
+		if !isNum || p < 0 || p > 65535 || p != float64(int(p)) {
+			p = -1 // not a whole number: refused in words, never taken as 0 (automatic)
+		}
+		return usePort(int(p))
 	case "/readtest":
 		// round 19 (review finding 1): the older reading test reads the last 30 days: refused with ReadDays off
 		if err := readsOffErr(); err != nil {

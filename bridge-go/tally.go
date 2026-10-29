@@ -302,7 +302,17 @@ type TC struct {
 	// 2.4.5 ROUND 104 (the owner's choice (a) of 22-Oct-2026): a shorter rest before the send than GentleMs (the period
 	// fetch at night while nobody is at Tally, daypull.go pullGentleMs); 0: the setting's. Never a longer one
 	gentleMs int
+	// 2.4.8 (anyport.go, review round 2): the typed port's one try: never the small check (a Tally that did not answer
+	// lately is refused at once, errTrialProbe), and a failure leaves no mark (stuck record, small check, busy spell): the
+	// port may not be a Tally the bridge uses at all
+	trial bool
+	// review round 3 (R3-4): the trial's port is not a Tally the bridge uses: only then does a failure leave no mark (a
+	// planned port, the real Tally, keeps the small check and the stuck record as any request)
+	unplanned bool
 }
+
+// 2.4.8 (anyport.go): the typed port's trial's yield, looked at right before the send (tallyRaw)
+type trialYieldKey struct{}
 
 // 2.4.5 ROUND 104: the rest before a send (tallyRaw): GentleMs, or the request's own shorter rest (TC.gentleMs)
 type gentleKey struct{}
@@ -511,6 +521,10 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		case <-time.After(time.Duration(ms) * time.Millisecond):
 		}
 	}
+	// 2.4.8 review round 4 (R4-2): the typed port's trial looks again after the rest, right before the send
+	if y, _ := ctx.Value(trialYieldKey{}).(func() bool); y != nil && y() {
+		return "", errPreempted
+	}
 	host := cfgS("TallyHost")
 	if host == "" {
 		host = "127.0.0.1"
@@ -605,8 +619,10 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 			slot.bound = true
 			writeLog(fmt.Sprintf("Tally %d did not answer an earlier request (%s, sent at %s) in %s: taken as not answering; the next request may go (the small check first)",
 				port, id, t0.Format("15:04:05"), abandonMax().Round(time.Second)))
-			setProbeFrom(port, gaveUp)
-			setTallyStuck(port)
+			if !slot.noMark { // review rounds 3-4 (R3-3, R4-1): a typed port that is not a Tally the bridge uses: no marks
+				setProbeFrom(port, gaveUp)
+				setTallyStuck(port)
+			}
 			return
 		}
 		// next-inflight: Tally finished it (answered, or closed it): Tally is free, no small check is owed. Within the 20 s wait
@@ -1005,6 +1021,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	if tc.gentleMs > 0 {
 		ctx = context.WithValue(ctx, gentleKey{}, tc.gentleMs)
 	}
+	if tc.trial && tc.yield != nil {
+		ctx = context.WithValue(ctx, trialYieldKey{}, tc.yield)
+	}
 	// 2.3.1 (inflight.go): a background read is not sent into a Tally still on an earlier request it was given up on
 	if tc.copier && !tc.person {
 		if err := earlierRefusal(port); err != nil {
@@ -1016,7 +1035,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		return "", err
 	}
 	// 2.3.1: a request given up while Tally is still on it keeps the lock until Tally answered or closed it
-	slot := &abandonSlot{}
+	slot := &abandonSlot{noMark: tc.trial && tc.unplanned}
 	ctx = context.WithValue(ctx, abandonKey{}, slot)
 	unlock := func() {
 		if slot.done != nil {
@@ -1050,6 +1069,10 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 	// 2.1.4 (02-Oct-2026, rebuilt): a Tally that did not answer keeps working on that request. Nothing else is sent
 	// until a tiny company-level request (the company's name and GUID) has answered; that check goes at most once a
 	// minute (TallyProbeEverySec, 60) and is the only request until it answers
+	if tc.trial && needProbe(port) {
+		unlock()
+		return "", errTrialProbe
+	}
 	if needProbe(port) {
 		co := html.UnescapeString(group(`<SVCURRENTCOMPANY>([^<]*)</SVCURRENTCOMPANY>`, x, 1))
 		praw, perr := freeProbe(ctx, port, co)
@@ -1062,6 +1085,11 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 			unlock()
 			return praw, nil
 		}
+	}
+	// review round 3 (R3-8): the typed port's trial looks again right before the send (given up meanwhile: nothing goes)
+	if tc.trial && tc.yield != nil && tc.yield() {
+		unlock()
+		return "", errBackoff
 	}
 	// 2.2.2: the recorder's hard stop, counted from the send itself (after any gentle wait: tallyRaw starts it)
 	stopAt := time.Duration(0)
@@ -1129,7 +1157,7 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		}
 	} else {
 		fail = err.Error()
-		if re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
+		if !(tc.trial && tc.unplanned) && re(`timed out|was closed|unexpected error occurred on a receive|forcibly closed`).MatchString(fail) {
 			// next-inflight: a request held as in flight (Tally still on it) owes no small check here: its end decides
 			// (finished: none; the long bound: the check first). One Tally closed is checked as before
 			if !held {
@@ -1337,7 +1365,7 @@ func probeHold(port int) error {
 		return nil
 	}
 	if next := p.last.Add(probeEvery()); nowFn().Before(next) {
-		return fmt.Errorf("Tally (port %d) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at %s)", port, next.Format("15:04:05"))
+		return &holdErr{fmt.Sprintf("Tally (port %d) is busy: it did not answer a request and may still be working on it; nothing is sent until it answers a small check (next at %s)", port, next.Format("15:04:05"))}
 	}
 	return nil
 }
