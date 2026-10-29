@@ -91,10 +91,13 @@ with sync_playwright() as p:
     pg.fill(TC + " input[data-tc-n]", "1"); pg.click(TC + " [data-tc-make]"); pg.wait_for_timeout(400)
     ok("This will add 1 test entry to ABC TRADERS PVT LTD. Continue?" in cbx(), "T. N = 1: 'This will add 1 test entry to ABC TRADERS PVT LTD. Continue?' (%s)" % cbx()[:140])
     pg.click('#confirmBox [data-cbx="no"]'); pg.wait_for_timeout(300)
-    # the posting company not confirmed: nothing
-    E("""() => { const c = CO(); c.choices.postTo = {value: "ABC TRADERS PVT LTD", state: "suggested"}; render(); }"""); pg.wait_for_timeout(300)
-    ok(pg.locator(TC).count() == 0, "T. the posting company only suggested, not confirmed: no box")
-    r = E("postTestCopies(S.coId, 'r1', 2)"); pg.wait_for_timeout(300)
+    # the posting company not confirmed: nothing. (The owner's decision of 26-Oct-2026, 21d5009c0: a client linked to one
+    # Tally company has it confirmed from the link on opening or posting; so the client here is not linked, as it would be
+    # with a company only suggested by name)
+    E("""() => { const c = CO(); TLight.st.cos = TLight.st.cos.filter((r) => r.client_id !== c.id); c.choices.postTo = {value: "ABC TRADERS PVT LTD", state: "suggested"}; render(); }"""); pg.wait_for_timeout(300)
+    ok(pg.locator(TC).count() == 0, "T. not linked, the posting company only suggested, not confirmed: no box")
+    # (a confirm asked here would wait for an answer: 5 s, then 'asked')
+    r = E("() => Promise.race([postTestCopies(S.coId, 'r1', 2), new Promise((res) => setTimeout(() => res({asked: true}), 5000))])"); pg.wait_for_timeout(300)
     ok(r and r.get("ok") is False and n_entries() == 2 and pg.locator(CB).count() == 0, "T. not confirmed: the function refuses (%s)" % r)
     ok(not errors, "no page errors %s" % errors[:2])
     br.close()
