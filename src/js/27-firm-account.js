@@ -764,7 +764,10 @@ function loadAuthProviders(){
   S.authProvidersAsked = true;
   fetch(c.url.replace(/\/+$/, "") + "/auth/v1/settings", {headers: {apikey: c.key}})
     .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-    .then(j => { const e = (j && j.external) || {}; S.authProviders = {google: e.google === true, azure: e.azure === true}; render(); }, () => { S.authProvidersAsked = false; });
+    .then(j => { const e = (j && j.external) || {}; S.authProviders = {google: e.google === true, azure: e.azure === true};
+      // how many buttons, for the next open's sign-in frame (app/index.html: data-boot-oauth), so the card does not grow
+      try { localStorage.setItem("fincom:auth-oauth", String(+S.authProviders.google + +S.authProviders.azure)); } catch (x){}
+      render(); }, () => { S.authProvidersAsked = false; });
 }
 // the register form's coupon (migration 120's coupon_redeem, source 'signup'): tried once, at the first sign-in with the
 // firm; what it says (applied, or why not) is told in a toast; not applied, it can be entered in Settings, Plan and credit

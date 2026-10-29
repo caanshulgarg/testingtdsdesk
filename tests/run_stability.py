@@ -323,12 +323,20 @@ try:
                 ok(lab["n"] == 5 and not lab["cut"] and not lab["over"] and "Compliance" in lab["words"], "%d px %s: the bottom bar's five words, none cut or overlapping (%s)" % (w, scheme, lab))
                 p2.screenshot(path=os.path.join(OUT, "phone-%d-%s.png" % (w, scheme)))
                 c2.close()
-        # the sign-in card: the frame's card as tall as the real one, so it does not grow when the form arrives
-        c2 = br.new_context(viewport={"width": 1440, "height": 900}); p2 = c2.new_page()
-        HOLD[0] = 2.0; p2.goto(URL, wait_until="commit"); p2.wait_for_timeout(1200)
-        bh = p2.evaluate("() => Math.round(document.querySelector('.boot-signin .signin-box').getBoundingClientRect().height)"); p2.wait_for_timeout(3000); HOLD[0] = 0
-        rh = p2.evaluate("() => Math.round(document.querySelector('#app .signin-box').getBoundingClientRect().height)")
-        ok(bh >= rh - 40, "the sign-in frame's card is about as tall as the real card (%d px, the card %d px)" % (bh, rh)); c2.close()
+        # the sign-in card: the frame's card as tall as the real one, so it does not grow when the form arrives. The real card
+        # has "Continue with Google" (and "or") when Supabase Auth has it on, as staging has (/auth/v1/settings, CI run
+        # 40855347982: 330 px against 422); the frame takes the providers this browser last heard of, Google before it heard
+        # (fincom:auth-oauth, src/js/27 loadAuthProviders). The project's answer is given here, never asked of a real one
+        for prov, seen, w in (({"google": True}, None, 1440), ({"google": True}, None, 390), ({"google": True, "azure": True}, "2", 1440), ({}, "0", 1440), ({}, "0", 390)):
+            c2 = br.new_context(viewport={"width": w, "height": 900}); p2 = c2.new_page()
+            ans = json.dumps({"external": dict({"google": False, "azure": False}, **prov)})
+            c2.route("**/auth/v1/settings", lambda r, *_, ans=ans: r.fulfill(status=200, content_type="application/json", body=ans))
+            if seen is not None: c2.add_init_script("try { localStorage.setItem('fincom:auth-oauth', %s); } catch (e) {}" % json.dumps(seen))
+            HOLD[0] = 2.0; p2.goto(URL, wait_until="commit"); p2.wait_for_timeout(1200)
+            bh = p2.evaluate("() => Math.round(document.querySelector('.boot-signin .signin-box').getBoundingClientRect().height)"); p2.wait_for_timeout(3000); HOLD[0] = 0
+            rh = p2.evaluate("() => Math.round(document.querySelector('#app .signin-box').getBoundingClientRect().height)")
+            kept = p2.evaluate("() => { try { return localStorage.getItem('fincom:auth-oauth'); } catch (e) { return null; } }")
+            ok(abs(bh - rh) <= 40 and kept == str(len(prov)), "%d px, providers %s (this browser had heard: %s): the sign-in frame's card is about as tall as the real card (%d px, the card %d px; kept %s)" % (w, sorted(prov) or "none", seen, bh, rh, kept)); c2.close()
         # offline: no update check (no console error), and the sign-in view says there is no internet
         c2 = br.new_context(viewport={"width": 1440, "height": 900}); p2 = c2.new_page()
         p2.goto(URL); p2.evaluate("() => localStorage.setItem('fincom.sw', 'on')"); p2.reload(); p2.wait_for_timeout(5000)
