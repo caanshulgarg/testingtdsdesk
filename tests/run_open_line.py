@@ -8,12 +8,14 @@ service worker on (as on the site), a browser on an emulated line:
      not fetched ahead (they come when their page is opened), nor kept by the service worker ahead: at most SLOW_AFTER
      requests and SLOW_AFTER_KB after the first page; build.json asked once for each load of the page
      (the page's own check), not twice;
-  2. a fast line: the other screens' files are fetched ahead after the first page, 2 at a time (with the worker's
-     one and the page's own, at most 4 script files at once);
+  2. a fast line: the other screens' files are fetched ahead after the first page, 2 screens at a time (with the
+     worker's one, at most 3 screens' own files at once; each screen's shared files come with it, never the 50 files at
+     once of before);
   3. a screen opened on the slow line still opens (its file fetched then).
 Prints the requests and kilobytes before and after the first page, by kind, for each line.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_open_line.py"""
-import os, sys, gzip, time, json, threading, functools, http.server, collections
+import os, re, sys, gzip, time, json, threading, functools, http.server, collections
+from urllib.parse import urlparse
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +28,25 @@ def ok(c, w):
     if not c: fails.append(w)
 
 LOG, LOCK = [], threading.Lock()
+# INFLIGHT: script files the server is sending at once (printed). SCREEN_FILES: the screens' own files (the files the
+# first file imports when a screen is opened: lazy.js's loaders). A screen fetched ahead brings its shared files with it
+# (LedgerBox, SheetPanel, …, asked by the browser together with the screen's file), so "two screens at a time" is
+# counted on the screens' own files, as the browser asks for them (ASKED, in run())
 INFLIGHT = {"n": 0, "max": 0}
+def screen_files():
+    """the files the first file imports on demand, less those another file imports outright (a screen's shared files:
+    Gst's FileApi, FiledCompare, GstApiCard come with it)"""
+    try:
+        entry = re.search(r'src="\./(assets/index-[^"]+\.js)"', open(os.path.join(SITE, "index.html")).read()).group(1)
+        lazy = set(re.findall(r'import\("\./([^"]+\.js)"\)', open(os.path.join(SITE, entry)).read()))
+        static = set()
+        for f in os.listdir(os.path.join(SITE, "assets")):
+            if f.endswith(".js") and "assets/" + f != entry:
+                static |= set(re.findall(r'(?:from|import)\s*"\./([^"]+\.js)"', open(os.path.join(SITE, "assets", f), errors="replace").read()))
+        return lazy - static
+    except Exception: return set()
+SCREEN_FILES = screen_files()
+ASKED, ASKED_MAX = {}, {"n": 0, "peak": []}
 TEXT = (".js", ".css", ".html", ".json", ".svg", ".txt", ".map", ".mjs", "/")
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -38,7 +58,11 @@ class Q(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         p = self.path.split("?")[0]
         full = self.translate_path(p if not p.endswith("/") else p + "index.html")
-        with LOCK: INFLIGHT["n"] += 1; INFLIGHT["max"] = max(INFLIGHT["max"], INFLIGHT["n"]) if "/assets/" in p and p.endswith(".js") else INFLIGHT["max"]
+        # only script files are counted in flight (styles, fonts and the page were counted too, and a script arriving among
+        # them was taken for 5 or 6 scripts at once: CI 40839005998, share 3)
+        js = "/assets/" in p and p.endswith(".js")
+        if js:
+            with LOCK: INFLIGHT["n"] += 1; INFLIGHT["max"] = max(INFLIGHT["max"], INFLIGHT["n"])
         try:
             if os.path.isfile(full) and full.endswith(TEXT[:-1]) and "gzip" in (self.headers.get("Accept-Encoding") or ""):
                 body = gzip.compress(open(full, "rb").read(), 6)
@@ -50,7 +74,8 @@ class Q(http.server.SimpleHTTPRequestHandler):
                 super().do_GET(); n = n0
             with LOCK: LOG.append((time.time(), p, n))
         finally:
-            with LOCK: INFLIGHT["n"] -= 1
+            if js:
+                with LOCK: INFLIGHT["n"] -= 1
 
 def kind(p):
     f = p.rsplit("/", 1)[-1]
@@ -59,8 +84,20 @@ def kind(p):
     return f.rsplit(".", 1)[-1] if "." in f else "other"
 
 def run(br, label, kbps, latency, after_s=40):
-    LOG.clear(); INFLIGHT["max"] = 0
+    LOG.clear(); INFLIGHT.update(max=0)
     ctx = br.new_context(viewport={"width": 1440, "height": 900})
+    # the screens' own files the BROWSER has asked for and not yet got (the server sees at most the browser's 6
+    # connections: a prefetch of every screen at once and one of two at a time look alike there). A file asked through
+    # the service worker shows twice (the page's and the worker's request): counted once, by name
+    ASKED.clear(); ASKED_MAX.update(n=0, peak=[])
+    def asked(r, d):
+        f = urlparse(r.url).path.rsplit("/", 1)[-1]
+        if f not in SCREEN_FILES: return
+        with LOCK:
+            ASKED[f] = ASKED.get(f, 0) + d
+            if ASKED[f] <= 0: ASKED.pop(f, None)
+            if len(ASKED) > ASKED_MAX["n"]: ASKED_MAX.update(n=len(ASKED), peak=sorted(ASKED))
+    ctx.on("request", lambda r: asked(r, 1)); ctx.on("requestfinished", lambda r: asked(r, -1)); ctx.on("requestfailed", lambda r: asked(r, -1))
     ctx.add_init_script("try { localStorage.setItem('fincom.sw', 'on'); } catch (e) {}")
     pg = ctx.new_page()
     cdp = ctx.new_cdp_session(pg)
@@ -73,7 +110,7 @@ def run(br, label, kbps, latency, after_s=40):
     pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })")
     pg.wait_for_function("() => !document.querySelector('[data-boot-part]') && !!document.querySelector('#app')", timeout=120000)
     t1 = time.time()
-    first = list(LOG); INFLIGHT["max"] = 0
+    first = list(LOG); INFLIGHT.update(max=0); ASKED_MAX.update(n=0, peak=[])
     pg.wait_for_timeout(after_s * 1000)
     after = LOG[len(first):]
     def summ(rows):
@@ -82,8 +119,8 @@ def run(br, label, kbps, latency, after_s=40):
         return {k: "%d / %d KB" % (c[k], b[k] // 1024) for k in sorted(c)}, len(rows), sum(n for _, _, n in rows) // 1024
     s1, n1, k1 = summ(first); s2, n2, k2 = summ(after)
     print("  %s: first page in %.1f s: %d requests, %d KB %s" % (label, t1 - t0, n1, k1, s1))
-    print("  %s: the %d s after it: %d requests, %d KB %s; most script files at once: %d" % (label, after_s, n2, k2, s2, INFLIGHT["max"]))
-    res = {"t": t1 - t0, "n1": n1, "k1": k1, "n2": n2, "k2": k2, "json": sum(1 for _, p, _ in LOG if p.endswith("build.json")), "pages": sum(1 for _, p, _ in LOG if kind(p) == "page"), "max": INFLIGHT["max"], "pg": pg, "ctx": ctx}
+    print("  %s: the %d s after it: %d requests, %d KB %s; most script files at once (served): %d; screens' own files asked and not yet come: %d" % (label, after_s, n2, k2, s2, INFLIGHT["max"], ASKED_MAX["n"]))
+    res = {"t": t1 - t0, "n1": n1, "k1": k1, "n2": n2, "k2": k2, "json": sum(1 for _, p, _ in LOG if p.endswith("build.json")), "pages": sum(1 for _, p, _ in LOG if kind(p) == "page"), "max": INFLIGHT["max"], "smax": ASKED_MAX["n"], "peak": ASKED_MAX["peak"], "pg": pg, "ctx": ctx}
     return res
 
 def main():
@@ -100,7 +137,8 @@ def main():
         slow["ctx"].close()
         fast = run(br, "fast line", 50000, 5, 25)
         ok(fast["n2"] >= 10, "fast line: the other screens are fetched ahead after the first page (%d requests)" % fast["n2"])
-        ok(fast["max"] <= 4, "fast line: 2 script files at once ahead, besides the page's own and the worker's one (%d)" % fast["max"])
+        ok(len(SCREEN_FILES) >= 10, "the screens' own files read from the build (%d)" % len(SCREEN_FILES))
+        ok(fast["smax"] <= 3, "fast line: 2 screens at once ahead, besides the worker's one (%d screens' files at once: %s)" % (fast["smax"], fast["peak"]))
         fast["ctx"].close()
         br.close()
     srv.shutdown()
