@@ -9,7 +9,7 @@ change.
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.4.9.exe |
-| Fingerprint | (filled in at the build) |
+| Fingerprint | SHA-256 `161adb967539a60e329b84765db926bb6c31acd9bcb52c205693eedc80642fc0` (FinComBridge-Setup-2.4.9.exe, built 29-Oct-2026 13:28 IST at the commit after e3f7dcb8f, bridge sources e16baaf86, POSTONLY=any); program FinComBridge-2.4.9.exe SHA-256 `6e501239f252b5dd8eb1dce7724fb4049af8a65766284e8b6091c09dcf2ccb4f` |
 | Replaces | 2.4.8 (kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 

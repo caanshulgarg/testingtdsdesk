@@ -1,7 +1,7 @@
 FINCOM 2.4.9 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.4.9.exe
-Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
+Fingerprint: SHA-256 161adb967539a60e329b84765db926bb6c31acd9bcb52c205693eedc80642fc0 (FinComBridge-Setup-2.4.9.exe, built 29-Oct-2026 13:28 IST; compare with the .sha256 file next to the setup)
 
 What 2.4.9 changes (the owner's approval of 29-Oct-2026, docs/bridge-2.4.9-forms-for-owner.md section 9; one request
 added, FinComVoucherBatch, for the older-entries fetch only; nothing else asked of Tally changed):
