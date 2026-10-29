@@ -107,6 +107,7 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return o
 	},
+	vchBatchID: pinOne(voucherBatchRebuild), // 2.4.9: one day, a..b or a list of at most 100 MasterIDs (batch249.go)
 	ledIdsID: pinOne(func(x string) string {
 		a, u := pinMasterRange(x)
 		if a < 0 || (u > 0 && u-a > 2000) {

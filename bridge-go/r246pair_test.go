@@ -548,16 +548,16 @@ func TestInstallerFinishOpensToConnect(t *testing.T) {
 // 2.4.5's decision kept as history, a dated line for 2.4.6 saying nothing was measured again; the test sheet names this
 // version's new steps
 func TestRelease246VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.4.7" { // 2.4.7 (r247pair_test.go): kept as history
+	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" // 2.4.5's table hash (docs/tally-allowlist.md at 69de7a79d)
-	if h := allowListHash(allowListRows()); h != table245 {
+	if h := allowListHash(allowRowsBefore249()); h != table245 {                        // 2.4.9 adds FinComVoucherBatch only (r249batch_test.go)
 		t.Fatalf("the allow-list's table changed since 2.4.5 (%s): 2.4.6 adds or changes no request", h)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
-	if !strings.Contains(al, "Table hash (SHA-256): "+table245) {
-		t.Fatal("the table hash in the doc is not 2.4.5's")
+	if !strings.Contains(al, "Table hash (SHA-256): "+allowListHash(allowListRows())) { // 2.4.9: the doc's hash is the whole table's (TestAllowListUnchanged)
+		t.Fatal("the table hash in the doc is not the table's")
 	}
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range []string{"as for 2.4.6: the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed", // 2.4.7: kept as history

@@ -17,6 +17,7 @@ package main
 // still on an earlier request, however the retry schedule stands.
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -42,7 +43,18 @@ type abandonSlot struct {
 	at    time.Time
 	bound bool          // ended by the long bound (Tally taken as not answering), set before done closes
 	took  time.Duration // Tally's time on it when it finished, set before done closes
+	// 2.4.8 review round 3 (R3-3): the typed port's trial on a port not in the plan: the long bound leaves no stuck record
+	noMark bool
 }
+
+// the bridge's own hold (probeHold): nothing was sent; the words as before, told apart by errors.Is(err, errProbeHold)
+var errProbeHold = errors.New("Tally is held until it answers a small check")
+
+type holdErr struct{ s string }
+
+func (e *holdErr) Error() string        { return e.s }
+func (e *holdErr) Is(target error) bool { return target == errProbeHold }
+
 type abandonKey struct{}
 
 var (

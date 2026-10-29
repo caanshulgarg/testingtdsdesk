@@ -425,7 +425,7 @@ func TestItems231TwoSecondRule(t *testing.T) {
 
 // --- 5. the version and the allow-list's decision line for 2.3.1
 func TestItems231VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.7" { // 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): kept as history
+	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText("../docs/tally-allowlist.md")

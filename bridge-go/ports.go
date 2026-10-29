@@ -169,10 +169,13 @@ func diagnosis() M {
 			byID[p.ID] = p
 		}
 		for _, c := range lis {
-			if c.Port < 9000 || c.Port > 9999 || owner[c.Port] != nil {
+			p, has := byID[c.Pid]
+			// 2.4.8 (anyport.go): a TallyPrime program's port counts whatever its number (TallyPrime on 4125 is not "not
+			// accepting connections"); other programs' ports only in 9000-9999, as before (a port Tally may want)
+			isTally := has && reTally.MatchString(p.Name)
+			if owner[c.Port] != nil || (!isTally && (c.Port < 9000 || c.Port > 9999)) || (isTally && knownNotTally(c.Port, c.Pid)) {
 				continue
 			}
-			p, has := byID[c.Pid]
 			o := M{"port": c.Port, "pid": c.Pid, "program": "", "session": -1, "user": ""}
 			if has {
 				o["program"], o["session"], o["user"] = p.Name, p.Session, users[p.Session]
@@ -272,11 +275,14 @@ func diagnosis() M {
 func portPlan() (string, []M) {
 	// ports set in the settings are tried first, then any other Tally of yours found now (it may have moved to another
 	// port since): a port is never only remembered. A 0 or an empty list means "find it"
+	// 2.4.8 (anyport.go): Tally's ports from Windows' listener table, whatever their number, without a port of a Tally
+	// program known to answer not as Tally
 	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
 		// 2.3.0: a port set by hand that Windows shows as another user's Tally (another session) is that user's: it is
 		// marked so, and skipped with OnlyMySession like any other user's Tally
 		found := map[int]M{}
-		for _, f := range tallyListeners() {
+		lis := tallyListeners()
+		for _, f := range lis {
 			found[toInt(f["port"])] = f
 		}
 		var l []M
@@ -285,21 +291,23 @@ func portPlan() (string, []M) {
 				l = append(l, f)
 				continue
 			}
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
 		}
-		for _, f := range tallyListeners() {
+		for _, f := range tallyHTTPListeners(lis) {
 			if !containsInt(ports, toInt(f["port"])) && f["mine"] == true {
 				l = append(l, f)
 			}
 		}
 		return "config", l
 	}
-	found := tallyListeners()
+	found := tallyHTTPListeners(tallyListeners())
 	if found == nil {
 		var l []M
+		// 2.4.8: Windows did not let the bridge list programs: the ports the tally.ini files name first, then FallbackPorts
 		ports, _ := cleanPorts(cfg("FallbackPorts"))
+		ports = mergePorts(tallyIniPorts(), ports)
 		for _, p := range ports {
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": nil, "program": ""})
+			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
 		}
 		return "fallback", l
 	}
@@ -455,7 +463,17 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
 			e["error"] = err.Error()
+		} else if notTallyAnswer(raw) {
+			// 2.4.8 (anyport.go): the port answers, but not as Tally (another listener of a Tally program, or another
+			// program on a port set by hand): not a Tally; a program's port is left out of the plan while it holds it
+			e["error"], e["notTally"] = "this port answers, but not as TallyPrime", true
+			if pid := toInt(pp["pid"]); pid != 0 {
+				noteNotTally(toInt(pp["port"]), pid)
+			}
 		} else {
+			if isTallyAnswer(raw) {
+				clearNotTally(toInt(pp["port"])) // review 2.4.8 (R1-3, R2-8): Tally's own answer ends an earlier mark
+			}
 			list := []any{}
 			for _, c := range xmlDoc(raw).All("COMPANY") {
 				name := nameOf(c)
@@ -769,6 +787,27 @@ func keepUserInTally() bool {
 		return false
 	}
 	return platFrontIsTally()
+}
+
+// review 2.4.8 (R1-5): a port the plan names without a Tally program Windows lists there (set by hand, or tally.ini's
+// in the fallback): false when Windows says the program listening there is another Windows user's (then skipped with
+// OnlyMySession like any other user's Tally), else nil (not known), as before
+func mineByWindows(port int) any {
+	if portOfOtherUser(port) {
+		return false
+	}
+	return nil
+}
+
+// a first, then b's ports not in a
+func mergePorts(a, b []int) []int {
+	out := append([]int{}, a...)
+	for _, p := range b {
+		if !containsInt(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func containsInt(a []int, x int) bool {

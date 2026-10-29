@@ -22,6 +22,9 @@ it holds a key; the cloud's tally_bridge_whose says neither mine nor elsewhere).
   9. TCloud.auto (opening FinCom, nothing pressed): a refused key is replaced by itself (lib/bridgeFollow.js)
  10. the connect panel's scan keeps the bridge it found for one scan the bridge missed (the code box stays)
  11. no sideways scroll at 1440 and 390; --shots DIR saves the steps at both widths
+ 13. next-tally-anyport (bridge 2.4.8): Use this port asks the bridge (POST /ports/use) and says its plain reason (another
+     Windows user's Tally, nothing listening, no answer in 2 s); a port the bridge keeps: Tally found there; Find it by
+     itself again: POST /ports/use {port: 0}; a 2.4.7 bridge: the page's pin only (5.), /ports/use never called
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_oneclick.py [--shots DIR]"""
 import hashlib, hmac, json, os, re, sys, threading, functools, http.server, time
 from urllib.parse import urlparse, parse_qs
@@ -44,7 +47,7 @@ OLDKEY = "fcd_" + "ee" * 24
 BR, INGEST = {}, ["https://qbocskaiewaxqcvaunzc.supabase.co/functions/v1/tally-ingest"]
 def bridge_reset(**kw):
     BR.clear(); BR.update({"on": True, "yours": True, "window": False, "tally": True, "open": [VMS, GSC], "log": [], "cloudKey": OLDKEY, "url": INGEST[0],
-        "beat": {"on": True, "last": "", "missedSince": "2026-10-28T10:00:00", "every": 30}, "hang": "", "user": "NW144\\anshul"}); BR.update(kw)
+        "beat": {"on": True, "last": "", "missedSince": "2026-10-28T10:00:00", "every": 30}, "hang": "", "user": "NW144\\anshul", "ver": "2.4.7", "tport": 9000, "ports": {}}); BR.update(kw)
 def mac(secret, msg): return hmac.new(secret.encode(), msg.encode(), hashlib.sha256).hexdigest()
 def on_bridge(route):
     req = route.request; u = urlparse(req.url); port = u.port; q = parse_qs(u.query); path = u.path
@@ -56,7 +59,7 @@ def on_bridge(route):
     send = lambda st, o: route.fulfill(status=st, headers=H, content_type="application/json", body=json.dumps(o))
     BR["log"].append((req.method, path, req.post_data or ""))
     if path == "/ping":
-        p = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.4.7", "impl": "go", "yours": BR["yours"]}
+        p = {"ok": True, "bridge": "FinCom Tally Bridge", "version": BR["ver"], "impl": "go", "yours": BR["yours"]}
         if BR["yours"]:
             p.update({"bridgeId": BID, "port": 9100}); n = q.get("n", [""])[0]
             if n and origin:
@@ -71,9 +74,17 @@ def on_bridge(route):
         return send(403, {"ok": False, "error": "That is not the code shown in the bridge window.", "needCode": True})
     if req.headers.get("x-bridge-key") != KEY: return send(401, {"ok": False, "error": "Wrong bridge key."})
     if path == "/status":
-        ses = [{"port": 9000, "ok": BR["tally"], "mine": True, "companies": [{"name": c} for c in (BR["open"] if BR["tally"] else [])], "error": "" if BR["tally"] else "Tally is not open (nothing listens on this port)"},
+        ses = [{"port": BR["tport"], "ok": BR["tally"], "mine": True, "companies": [{"name": c} for c in (BR["open"] if BR["tally"] else [])], "error": "" if BR["tally"] else "Tally is not open (nothing listens on this port)"},
                {"port": 9001, "ok": True, "mine": False, "skipped": True, "user": "ravi", "companies": []}]
-        return send(200, {"ok": True, "version": "2.4.7", "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": "auto", "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
+        return send(200, {"ok": True, "version": BR["ver"], "sessions": ses, "computer": "NWS144", "user": BR["user"], "mode": BR.get("mode", "auto"), "tally": {"state": "open" if BR["tally"] else "closed"}, "beat": BR["beat"]})
+    if path == "/ports/use" and req.method == "POST":
+        # bridge-go anyport.go: the typed port tried by the bridge; kept only when it is this user's TallyPrime
+        n = json.loads(req.post_data or "{}").get("port")
+        if n == 0: BR["tport"] = 9000; return send(200, {"ok": True, "port": 0, "auto": True})
+        r = BR["ports"].get(n)
+        if r: return send(200, {"ok": False, "port": n, "reason": r[0], "error": r[1]})
+        BR["tport"], BR["tally"] = n, True
+        return send(200, {"ok": True, "port": n, "companies": BR["open"], "user": BR["user"]})
     if path == "/diagnose": return send(200, {"ok": True, "findings": [{"level": "bad", "text": "Your TallyPrime is not running.", "fix": "Open TallyPrime."}], "tallies": [], "user": BR["user"], "mySession": 1})
     if path == "/cloudlink":
         if req.method == "POST":
@@ -265,6 +276,7 @@ def main():
         shot("5-no-tally")
         pg.fill("#app [data-oc-port-in]", "9123"); pg.click("#app [data-oc-port-use]")
         ok(wait("() => Bridge.cfg().port === 9123"), "5. Use this port: the page's Tally pin")
+        ok(not any(x[1] == "/ports/use" for x in BR["log"]), "5. a 2.4.7 bridge: /ports/use not called")
         ok(wait("() => /port 9123/.test((document.querySelector('#app [data-oc-say=find]') || {}).textContent || '')"), "5. its answer for that port (%s)" % txt("#app [data-oc-say=find]"))
         pg.click("#app [data-oc-port-auto]")
         ok(wait("() => !Bridge.cfg().port"), "5. Find it by itself again: the pin off")
@@ -272,6 +284,36 @@ def main():
         pg.click("#app [data-oc-get]")   # Refresh
         ok(wait("() => /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')"), "5. Tally opened, Refresh: Connected")
         ok("Tally open: 2 companies" in txt("#app [data-status-card]") and pg.locator("#app [data-oc-find]").count() == 0, "5. found in words; Find Tally gives way (%s)" % txt("#app [data-status-card]")[:120])
+        # 13. a 2.4.8 bridge: the typed port tried by the bridge itself (next-tally-anyport, in the smart card's port box)
+        OTHERU = "Port 9001 is the TallyPrime of ravi, another Windows user on this computer. FinCom Bridge uses only your own TallyPrime (anshul): open TallyPrime in your own login and use its port."
+        NOTHING = "Nothing is listening on port 9050 on this computer. Check that TallyPrime is open and the port in TallyPrime: F1 Help > Settings > Connectivity (TallyPrime acts as Both)."
+        SLOW = "Port 9070 did not answer within 2 seconds. If it is your TallyPrime, it may be busy (a message box or a long report open): close it in TallyPrime and try again."
+        bridge_reset(ver="2.4.8", tally=False, cloudKey="fcd_" + "0a" * 24, beat={"on": True, "last": time.strftime("%Y-%m-%dT%H:%M:%S"), "missedSince": "", "every": 30},
+                     ports={9001: ["otheruser", OTHERU], 9050: ["nothing", NOTHING], 9070: ["timeout", SLOW]})
+        open_tally(MINE)
+        pg.click("#app [data-oc-find]")
+        wait("() => !!document.querySelector('#app [data-oc-none]')")
+        pg.click("#app [data-oc-port-ask]")
+        for port, words in ((9001, OTHERU), (9050, NOTHING), (9070, SLOW)):
+            pg.fill("#app [data-oc-port-in]", str(port)); pg.click("#app [data-oc-port-use]")
+            ok(wait("() => { const e = document.querySelector('#app [data-oc-say=port]'); return !!e && e.textContent.indexOf(%s) >= 0; }" % json.dumps(words[:40])), "13. port %d refused in the bridge's plain words (%s)" % (port, txt("#app [data-oc-say=port]")))
+            ok(E("() => !Bridge.cfg().port") and pg.locator("#app [data-oc-none]").count() == 1, "13. port %d: nothing pinned, still none" % port)
+        shot("13-refused")
+        used = [json.loads(x[2] or "{}").get("port") for x in BR["log"] if x[1] == "/ports/use"]
+        ok(used == [9001, 9050, 9070], "13. each typed port asked of the bridge once (%s)" % used)
+        pg.fill("#app [data-oc-port-in]", "4125"); pg.click("#app [data-oc-port-use]")
+        ok(wait("() => Bridge.cfg().port === 4125 && /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')"), "13. port 4125 kept by the bridge: Tally found, Connected")
+        ok("Tally open: 2 companies" in txt("#app [data-status-card]"), "13. found on 4125, the page asks that Tally (%s)" % txt("#app [data-status-card]")[:120])
+        BR["tally"] = False; pg.click("#app [data-oc-get]")   # Refresh: Tally closed
+        wait("() => !!document.querySelector('#app [data-oc-find]')"); pg.click("#app [data-oc-find]")
+        ok(wait("() => !!document.querySelector('#app [data-oc-port-auto]')"), "13. Tally gone with a port set: Find it by itself again at hand")
+        pg.click("#app [data-oc-port-auto]")
+        ok(wait("() => !Bridge.cfg().port") and [json.loads(x[2] or "{}").get("port") for x in BR["log"] if x[1] == "/ports/use"][-1:] == [0], "13. Find it by itself again: the bridge automatic again (port 0), the pin off")
+        # review 2.4.8 (R1-8): another browser (no page pin) of a bridge that keeps a typed port: Find it by itself again shows
+        BR["mode"] = "config"; E("() => { Bridge.setCfg({port: 0}); }")
+        pg.click("#app [data-oc-find]"); wait("() => !!document.querySelector('#app [data-oc-none]')")
+        ok(wait("() => !!document.querySelector('#app [data-oc-port-auto]')", 5000), "13. the bridge keeps a port, this browser has no pin: Find it by itself again shown")
+        BR["mode"] = "auto"
         # 6. this browser not connected to the bridge: tray or code; the code connects and the firm key follows, one key
         bridge_reset(window=True)
         open_tally(DEAD, UNPAIRED)

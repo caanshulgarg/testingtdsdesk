@@ -164,6 +164,68 @@ func keptDirs() []string {
 	return o
 }
 
+// next-bridge-248 (28-Oct-2026, staging): a company linked in FinCom a moment ago waited up to CloudLinksSec before
+// anything of it went (its ledger list included). A company asked for by name (Update now: FinCom sends it right after a
+// link) that is not held as linked here makes the next push ask the cloud's links again, once
+var cloudLinksAgain atomic.Bool
+
+// what the last answer of the cloud's links said, readable without cloudMu (held for a whole push)
+var (
+	cloudLinksMu   sync.Mutex
+	cloudLinksHeld = map[string]bool{}
+)
+
+func holdLinks(m map[string]bool) {
+	c := map[string]bool{}
+	for k, v := range m {
+		c[k] = v
+	}
+	cloudLinksMu.Lock()
+	cloudLinksHeld = c
+	cloudLinksMu.Unlock()
+}
+
+// review 2.4.8 (R1-9, R2-5): one company makes the links be asked again at most once in 15 seconds (FinCom's Update now
+// after each posting to a company never linked does not re-ask the cloud at every push; a link a little later still is)
+var linksAskedFor = map[string]time.Time{}
+
+const linksAskEvery = 15 * time.Second
+
+func resetLinksAsked() {
+	cloudLinksMu.Lock()
+	linksAskedFor = map[string]time.Time{}
+	cloudLinksMu.Unlock()
+}
+
+func askLinksFor(company string) {
+	if strings.TrimSpace(company) == "" {
+		return
+	}
+	cloudLinksMu.Lock()
+	on := cloudLinksHeld[company]
+	again := !on && time.Since(linksAskedFor[company]) >= linksAskEvery
+	if again {
+		linksAskedFor[company] = time.Now()
+		for k, at := range linksAskedFor {
+			if time.Since(at) >= linksAskEvery {
+				delete(linksAskedFor, k)
+			}
+		}
+	}
+	cloudLinksMu.Unlock()
+	if again {
+		cloudLinksAgain.Store(true)
+	}
+}
+
+// under cloudMu (invokeCloudPush): the links are due when asked again, or every `every` seconds as before
+func cloudLinksDue(every float64) bool {
+	if cloudLinksAgain.Swap(false) {
+		return true
+	}
+	return time.Since(cloudLinksAt).Seconds() >= every
+}
+
 func updateCloudLinks() {
 	cos := []any{}
 	names := map[string]bool{}
@@ -199,6 +261,7 @@ func updateCloudLinks() {
 		cloudLinks[k] = truthy(v)
 	}
 	cloudLinksAt = time.Now()
+	holdLinks(cloudLinks)
 	// a company linked just now: everything kept for it goes
 	for k, on := range cloudLinks {
 		if on && !was[k] {
@@ -518,7 +581,7 @@ func invokeCloudPush() int {
 	}
 	cloudMu.Lock()
 	defer cloudMu.Unlock()
-	if time.Since(cloudLinksAt).Seconds() >= float64(keepNum("CloudLinksSec", 300)) {
+	if cloudLinksDue(float64(keepNum("CloudLinksSec", 300))) {
 		updateCloudLinks()
 	}
 	left := 0

@@ -536,16 +536,16 @@ var _ = sha256.New
 // the version; no request added or changed (the allow-list's table and hash as at 2.4.5 and 2.4.6); the decision line
 // names 2.4.7 by the owner's standing decision, 2.4.6's kept as history; the dated line; the test sheet's new steps
 func TestRelease247VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.4.7" {
+	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"
-	if h := allowListHash(allowListRows()); h != table245 {
+	if h := allowListHash(allowRowsBefore249()); h != table245 { // 2.4.9 adds FinComVoucherBatch only (r249batch_test.go)
 		t.Fatalf("the allow-list's table changed (%s): 2.4.7 adds or changes no request", h)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.4.7 by the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed",
+	for _, w := range []string{"as for 2.4.7: the owner's standing decision of 2026-10-06 (no request on the list and no request shape changed", // 2.4.8: kept as history
 		"as for 2.4.6: the owner's standing decision of 2026-10-06", "as for 2.4.5: the owner's decision of 2026-10-21"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
@@ -554,7 +554,7 @@ func TestRelease247VersionAllowListUnchanged(t *testing.T) {
 	if strings.Contains(al, "allowed for 2.4.6 by") || strings.Contains(al, "allowed for 2.4.5 by") {
 		t.Error("an earlier version's decision still worded as the current one")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-25 for 2\.4\.7: no request was measured again[^\n]*allowed for 2\.4\.7 by the owner's standing decision of 2026-10-06`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-25 for 2\.4\.7: no request was measured again[^\n]*2\.4\.7 allowed by the owner's standing decision of 2026-10-06`).MatchString(al) {
 		t.Error("no dated line for 2.4.7")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.4.7-test-sheet.txt"))

@@ -9,16 +9,18 @@
 //                           plain line, and a port to type only when asked (Set its port). Shown only while Tally is not found.
 //   Refresh                 the computers and companies read again (the cloud's wake and this browser's bridge); the
 //                           companies open now are the page's list, never a second list here
-// Nothing new is asked of the bridge or Tally: /ping, /status, /diagnose, /cloudlink and the RPCs FinCom already uses.
+// Nothing new is asked of the bridge or Tally: /ping, /status, /diagnose, /cloudlink and the RPCs FinCom already uses;
+// next-tally-anyport (bridge 2.4.8): Use this port asks a 2.4.8 bridge to try the port itself (POST /ports/use: the same
+// light company request, at most 2 s) and says its plain reason when it is not your own TallyPrime.
 import { useEffect, useState } from "react";
-import { connectNow, findTally, getCompanies, usePort, keyRefused, lookHere } from "../lib/tallyConnect.js";
+import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefused, lookHere } from "../lib/tallyConnect.js";
 import { FL } from "./TallyFirstLink.jsx";
 import "./tallyOneClick.css";
 
 // the card's state (module state, drawn with render())
-export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: 0 };
+export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: 0, p: null };
 // a fresh start (the tests, a sign-out): a click still running then answers to nobody (gen)
-export function resetOC() { Object.assign(OC, { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: (OC.gen || 0) + 1 }); }
+export function resetOC() { Object.assign(OC, { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: (OC.gen || 0) + 1, p: null }); }
 if (typeof window !== "undefined") window.FCOneClick = { OC, reset: resetOC };
 const redraw = () => { if (typeof render === "function") render(); };
 const set = (p) => { Object.assign(OC, p); redraw(); };
@@ -79,23 +81,29 @@ export function useLocalRead(on) {
 }
 export const Line = ({ r, hook }) => r && r.say ? <p className={"oc-say " + (r.st === "ok" || r.st === "found" ? "ok" : r.st === "code" ? "wait" : "bad")} data-oc-say={hook} data-oc-st={r.st} role="status">{(r.st === "ok" || r.st === "found" ? "✓ " : "") + r.say}</p> : null;
 
+// 2.4.8 (next-tally-anyport): a 2.4.8 bridge tries the typed port itself and keeps it only when it is your own TallyPrime
+// (its plain reason otherwise, OC.p); an older bridge: the page's pin as before (lib/tallyConnect.js typePort). Find it
+// by itself again also when the bridge itself keeps a port (its mode "config"), seen from another browser without the pin
 export function PortBox() {
   const [p, setP] = useState(String((typeof Bridge === "object" && Bridge.cfg().port) || ""));
-  const go = () => { if (!usePort(p)) return; run("f", findTally); };
+  const go = async () => { const r = await run("p", () => typePort(p)); if (r && (r.st === "ok" || r.st === "pinned")) run("f", findTally); };
+  const auto = async () => { setP(""); await run("p", () => typePort(0)); run("f", findTally); };
   return <div className="oc-port" data-oc-port="">
     <label htmlFor="ocPort">Tally’s port, if you know it (TallyPrime: F1 → Settings → Connectivity)</label>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
       <input id="ocPort" data-oc-port-in="" inputMode="numeric" maxLength={5} placeholder="9000" value={p} onChange={(e) => setP(e.target.value.replace(/\D/g, "").slice(0, 5))} />
-      <button className="btn small" data-oc-port-use="" disabled={!p || !!OC.busy} onClick={go}>Use this port</button>
-      {Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0 && <button className="linkbtn" data-oc-port-auto="" onClick={() => { setP(""); usePort(0); run("f", findTally); }}>Find it by itself again</button>}
-    </div></div>;
+      <button className="btn small" data-oc-port-use="" disabled={!p || !!OC.busy} onClick={go}>{OC.busy === "p" ? "Trying the port…" : "Use this port"}</button>
+      {(Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0 || (bridgeTakesPort() && Bridge.st && Bridge.st.mode === "config")) && <button className="linkbtn" data-oc-port-auto="" onClick={auto}>Find it by itself again</button>}
+    </div>
+    {OC.p && OC.p.st !== "pinned" && OC.p.st !== "ok" && <Line r={OC.p} hook="port" />}</div>;
 }
 
 // what Find Tally found: each Tally, its port, whose; none: the one line, and the port box only when asked
 export function Found({ f }) {
   if (!f) return null;
   const rows = [].concat(f.list || []).filter((x) => x.port);
-  const pinned = Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0;
+  // 2.4.8: a port kept by the bridge itself (its mode "config") counts as set, so "Find it by itself again" is at hand
+  const pinned = Number((typeof Bridge === "object" && Bridge.cfg().port) || 0) > 0 || (bridgeTakesPort() && !!Bridge.st && Bridge.st.mode === "config");
   return <>
     <Line r={f} hook="find" />
     {rows.length > 0 && <ul className="oc-list" data-oc-tallies="">{rows.map((x) => <li key={x.port} data-oc-tally={x.port}>
