@@ -122,6 +122,8 @@ alter table public.coupon_discounts enable row level security;
 revoke all on public.coupon_discounts from public, anon, authenticated;
 grant select on public.coupon_discounts to authenticated;
 grant select, insert, update on public.coupon_discounts to service_role;
+-- its identity's sequence too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.coupon_discounts_id_seq to service_role;
 drop policy if exists coupon_discounts_own on public.coupon_discounts;
 create policy coupon_discounts_own on public.coupon_discounts for select to authenticated using (firm_id = public.my_firm());
 
@@ -152,6 +154,8 @@ create index if not exists coupon_attempts_user on public.coupon_attempts (user_
 alter table public.coupon_attempts enable row level security;
 revoke all on public.coupon_attempts from public, anon, authenticated;
 grant select, insert on public.coupon_attempts to service_role;
+-- its identity's sequence too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.coupon_attempts_id_seq to service_role;
 
 -- ---------------------------------------------------------------- helpers
 -- rupees as people write them in India: 1,00,000 (paise kept when there are any)

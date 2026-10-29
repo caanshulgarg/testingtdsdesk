@@ -183,6 +183,8 @@ alter table public.price_items enable row level security;
 alter table public.price_list enable row level security;
 revoke all on public.price_items, public.price_list from public, anon, authenticated;
 grant select, insert, update on public.price_items, public.price_list to service_role;
+-- its identity's sequence too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.price_list_id_seq to service_role;
 
 insert into public.price_items (code, title, unit, kind, module_code, sort)
 select m.code, m.title, m.unit, case when m.billing = 'per_month' then 'monthly' when m.code in ('claude', 'vision') then 'ai' else 'usage' end, m.code, m.sort

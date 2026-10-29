@@ -68,6 +68,8 @@ create index if not exists console_audit_target on public.console_audit (target_
 alter table public.console_audit enable row level security;
 revoke all on public.console_audit from public, anon, authenticated;
 grant select, insert on public.console_audit to service_role;
+-- its identity's sequence too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.console_audit_id_seq to service_role;
 
 -- ---------------------------------------------------------------- guards
 -- the change history can only be added to

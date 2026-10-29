@@ -62,6 +62,8 @@ end $$;
 revoke all on public.tally_bridge_switches from public, anon, authenticated;
 grant select on public.tally_bridge_switches to authenticated;
 grant select, insert on public.tally_bridge_switches to service_role;
+-- its identity's sequence too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.tally_bridge_switches_id_seq to service_role;
 
 -- add-only: a row once written is never changed or removed
 create or replace function public.tally_bridge_switches_keep()

@@ -121,6 +121,8 @@ grant select on public.tally_post_register to authenticated;
 grant select on public.tally_post_register_history to authenticated;
 grant all on public.tally_post_register to service_role;
 grant all on public.tally_post_register_history to service_role;
+-- their identities' sequences too (Supabase gives nothing by default on new objects from 30-Oct-2026: run_migration_grants 4)
+grant usage, select on sequence public.tally_post_register_id_seq, public.tally_post_register_history_id_seq to service_role;
 
 -- never removed: a row of either table, and the history never changed
 create or replace function public.tally_post_register_keep() returns trigger language plpgsql security definer set search_path = public, pg_temp as $fn$
