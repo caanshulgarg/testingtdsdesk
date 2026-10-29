@@ -16,6 +16,10 @@
 # Each request 3 times; after each the company list under 2 s and Tally's window responding (DbLight).
 # Answers kept in captures\stock for the offline check of option (c) (FinCom's own valuation from opening + entries).
 . (Join-Path $PSScriptRoot 'dblib.ps1')
+# Mode stockx: the same, plus part X (5,000 items, 80,000 entries, ~3,30,000 item lines), and COLD times: before each
+# part is measured Tally is closed and started again (DbRestart), and each computed request (D2, D1, D1X) is first asked
+# alone in a freshly started Tally, so its time includes Tally working the stock out from nothing
+$cold = ($env:VMODE -eq 'stockx'); $parts = if ($cold) { @('S', 'L', 'X') } else { @('S', 'L') }; $bigP = $parts[-1]
 $S1 = 's1 the stock test data made (items with opening, a year of inventory entries)'
 $S2 = 's2 (a) stock item masters: the stored opening read back exactly as made'
 $S3 = 's3 (b) the Stock-in-Hand ledger: stored opening and closing values read back'
@@ -94,7 +98,7 @@ function OpenCheck([string]$body, $items) {
 $gen = Join-Path $env:RUNNER_TEMP 'stockgen'
 try {
   Say '---- stockm: test data generator'
-  $o = & python -I (Join-Path $PSScriptRoot 'stockm\gen.py') $gen 2>&1; Info "stockm: gen.py: $o"
+  $ga = @((Join-Path $PSScriptRoot 'stockm\gen.py'), $gen); if ($cold) { $ga += '--x' }; $o = & python -I @ga 2>&1; Info "stockm: gen.py: $o"
   $plan = Get-Content (Join-Path $gen 'plan.json') -Raw | ConvertFrom-Json
   $items = Get-Content (Join-Path $gen 'items.json') -Raw | ConvertFrom-Json
   # the company's inventory switches as Tally stores them (candidate field names; harness only)
@@ -105,7 +109,7 @@ try {
 } catch { Info "stockm: setup stopped: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
 
 $made = [ordered]@{}
-foreach ($part in 'S', 'L') {
+foreach ($part in $parts) {
   try {
     Say "---- stockm: part $part data"
     $k = Imp (Join-Path $gen "masters-$part.xml") 'All Masters' "masters $part"; $made["masters $part"] = "$($k.c) created, $($k.e) errors$(if ($k.line) { ': ' + $k.line })"
@@ -122,7 +126,15 @@ foreach ($part in 'S', 'L') {
     Info "stockm: $part made: $(($made.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" }) -join '; ')"
 
     Say "---- stockm: part $part measured"
-    $n = if ($part -eq 'S') { 600 } else { 3000 }
+    $n = @{ S = 600; L = 3000; X = 5000 }[$part]
+    if ($cold) {
+      foreach ($c in @(@('D2 FinComStockClosing all items', 'd2-itemclosing-all'), @('D1 Stock Summary (groups)', 'd1-stocksummary'), @('D1X Stock Summary (every item)', 'd1x-stocksummary-items'))) {
+        $up = DbRestart "cold-$part-$($c[1])"
+        $null = Ask "$part COLD $($c[0]) 20260401-20270331 (first request after Tally started; company up: $up)" (Q $c[1] '20260401' '20270331') '' 300000 1
+      }
+      $up = DbRestart "cold-$part"
+      Info "stockm: Tally started again before part $part is measured (company up: $up)"
+    }
     MLine "---- part $part ($n items, $($vc.nos.Count) entries in Tally)"
     # (a)
     $null = Ask "$part A1 FinComStockItems all (MasterID > 0)" (Q 'a1-items-tail') "a1-$part.xml"
@@ -133,7 +145,7 @@ foreach ($part in 'S', 'L') {
     $null = Ask "$part A3 FinComStockGroups" (Q 'a3-stockgroups')
     $oc = OpenCheck $a1 @($items | Select-Object -First $n)
     MLine ("{0} A1 stored opening: {1} items read, {2} differ from what was made{3}; opening stock (sum of OPENINGVALUE) {4}" -f $part, $oc.n, $oc.bad.Count, $(if ($oc.bad.Count) { ' (' + (($oc.bad | Where-Object { $_ }) -join '; ') + ')' }), $oc.sum)
-    if ($part -eq 'L') { SRes $S2 $(if ($oc.n -eq 3000 -and $oc.bad.Count -eq 0) { 'PASS' } else { 'FAIL' }) ("3,000 items: {0} read, {1} differ; A1 worst {2} ms at 3,000 items (S: {3} ms at 600)" -f $oc.n, $oc.bad.Count, $script:times["L A1 FinComStockItems all (MasterID > 0)"], $script:times["S A1 FinComStockItems all (MasterID > 0)"]) }
+    if ($part -eq $bigP) { SRes $S2 $(if ($oc.n -eq $n -and $oc.bad.Count -eq 0) { 'PASS' } else { 'FAIL' }) ("{5} items: {0} read, {1} differ; A1 worst {2} ms at {5} items (S: {3} ms at 600){4}" -f $oc.n, $oc.bad.Count, $script:times["$part A1 FinComStockItems all (MasterID > 0)"], $script:times["S A1 FinComStockItems all (MasterID > 0)"], '', $n) }
     # (d) at three dates from the year's start, and a month
     foreach ($p in @(@('20260401', '20260402'), @('20260401', '20261031'), @('20260401', '20270331'), @('20261001', '20261031'))) {
       $tag = "$($p[0])-$($p[1])"
@@ -189,9 +201,9 @@ try {
   SRes $S3 $(if ($ok) { 'PASS' } else { 'FAIL' }) (($bEv -join '; ') + "; B1 worst $($script:times['B1 FinComStockLedger (not integrated)']) ms")
 } catch { Info "stockm: (b) stopped: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))"; SRes $S3 'HARNESS' (($bEv -join '; ') + "; stopped: $($_.Exception.Message)") }
 
-$dk = @($script:times.Keys | Where-Object { $_ -like 'L D*' })
+$dk = @($script:times.Keys | Where-Object { $_ -like "$bigP D*" -or $_ -like "$bigP COLD*" })
 $dWorst = if ($dk.Count) { ($dk | ForEach-Object { $script:times[$_] } | Measure-Object -Maximum).Maximum } else { -1 }
-$dEv = ($dk | ForEach-Object { "$($_ -replace '^L ', ''): $($script:times[$_]) ms" }) -join '; '
-SRes $S4 'PASS' ("measured (a figure, not a pass mark): worst at 3,000 items / 20,000 entries {0} ms; {1}" -f $dWorst, $dEv)
+$dEv = ($dk | ForEach-Object { "$($_ -replace "^$bigP ", ''): $($script:times[$_]) ms" }) -join '; '
+SRes $S4 'PASS' ("measured (a figure, not a pass mark): worst at part {2} {0} ms; {1}" -f $dWorst, $dEv, $bigP)
 SRes $S5 $(if ($script:dbMaxInFlight -le 1 -and $script:allResp) { 'PASS' } else { 'FAIL' }) ("{0} requests, at most {1} at Tally at once; Tally responding after each: {2}; over 2 s: {3}" -f $script:dbSent, $script:dbMaxInFlight, $script:allResp, $(if ($script:over.Count) { $script:over -join '; ' } else { 'none' }))
 Remove-Item $gen -Recurse -Force -ErrorAction SilentlyContinue

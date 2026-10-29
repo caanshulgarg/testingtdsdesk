@@ -1,4 +1,4 @@
-"""python -I gen.py <out dir> [--moves]
+"""python -I gen.py <out dir> [--moves] [--x]
 
 Mode stockm (MEASURE ONLY, TEST DATA ONLY: a throwaway company in a GitHub runner's own Tally; never the owner's
 computer). A trading company's stock for FY 2026-27, deterministic (seeded), in two parts:
@@ -191,21 +191,27 @@ def main():
     itL = make_items(rng, 601, 3000)
     vS, seq = make_vouchers(rng, itS, 3000, "SMS", 0, moves)
     vL, seq = make_vouchers(rng, itL, 17000, "SML", seq, moves)
+    parts = [("S", itS, vS), ("L", itL, vL)]
+    if "--x" in sys.argv:
+        # part X (mode stockx): 2,000 more items (5,000 in all) and 60,000 more entries (80,000 in all) on them only
+        itX = make_items(rng, 3001, 5000)
+        vX, seq = make_vouchers(rng, itX, 60000, "SMX", seq, moves)
+        parts.append(("X", itX, vX))
     plan = {"days": [d8(d) for d in DAYS]}
-    for part, items, vs in (("S", itS, vS), ("L", itL, vL)):
+    for part, items, vs in parts:
         ms = masters_xml(items, part == "S")
         with open(os.path.join(dst, "masters-%s.xml" % part), "w", encoding="utf-8") as f:
             f.write("".join('<TALLYMESSAGE xmlns:UDF="TallyUDF">' + x + '</TALLYMESSAGE>' for x in ms))
         plan[part] = {"items": len(items), "files": write_part(dst, part, vs),
                       "entries": {k: len(v) for k, v in vs.items()}, "lines": sum(x.count("<STOCKITEMNAME>") for v in vs.values() for x in v)}
     with open(os.path.join(dst, "items.json"), "w") as f:
-        json.dump([[it["name"], it["method"], it["oq"], it["orate"], it["oval"]] for it in itS + itL], f)
+        json.dump([[it["name"], it["method"], it["oq"], it["orate"], it["oval"]] for p in parts for it in p[1]], f)
     with open(os.path.join(dst, "plan.json"), "w") as f:
         json.dump(plan, f, indent=1)
     if want_moves:
         with open(os.path.join(dst, "moves.json"), "w") as f:
-            json.dump({"items": itS + itL, "moves": moves}, f)
-    print(json.dumps({p: {k: v for k, v in plan[p].items() if k != "files"} for p in ("S", "L")}))
+            json.dump({"items": [it for p in parts for it in p[1]], "moves": moves, "order": {p[0]: list(p[2].keys()) for p in parts}}, f)
+    print(json.dumps({p[0]: {k: v for k, v in plan[p[0]].items() if k != "files"} for p in parts}))
 
 
 if __name__ == "__main__":

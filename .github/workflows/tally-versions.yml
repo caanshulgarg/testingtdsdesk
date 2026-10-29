@@ -75,7 +75,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="stockm bdiff batch proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="stockx stockm bdiff batch proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -83,8 +83,8 @@ jobs:
           inc=""; all=""
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
-            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; batch|bdiff) vs="7.1,3.0,4.1,5.1,6.2" ;; stockm) vs="3.0,4.1,5.1,6.2,7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; batch) t=345; c=300 ;; stockm) t=340; c=310 ;; bdiff) t=120; c=90 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; batch|bdiff) vs="7.1,3.0,4.1,5.1,6.2" ;; stockm|stockx) vs="3.0,4.1,5.1,6.2,7.1" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
+            case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; batch) t=345; c=300 ;; stockm|stockx) t=350; c=320 ;; bdiff) t=120; c=90 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
             # TallyPrime 7.2 (added 26-Oct-2026): asked here first (Linux, the first KB) so a release the download centre does not
             # have never takes a Windows job; resolvev.ps1 asks again on Windows and downloads it
             if echo ",$vs," | grep -q ',7.2,'; then
@@ -336,7 +336,7 @@ jobs:
           [ "$got" = 030f430355494e4618cf08591ecc9aab564fd6ef2df422873065afe39d28d83f ] || { echo "::error::2.4.8 setup SHA-256 $got"; exit 1; }
           echo "2.4.8 setup SHA-256 $got (from $c)"
       - uses: actions/upload-artifact@v4
-        continue-on-error: ${{ steps.mode.outputs.modes == 'batch' || steps.mode.outputs.modes == 'bdiff' || steps.mode.outputs.modes == 'stockm' || inputs.local_dist == 'yes' }}
+        continue-on-error: ${{ steps.mode.outputs.modes == 'batch' || steps.mode.outputs.modes == 'bdiff' || steps.mode.outputs.modes == 'stockm' || steps.mode.outputs.modes == 'stockx' || inputs.local_dist == 'yes' }}
         with:
           name: bridge-dist
           path: bridge-go/dist/
@@ -366,19 +366,19 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72' && matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm'
+        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72' && matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm' && matrix.mode != 'stockx'
         with:
           fetch-depth: 0
       # mhook / ledlist need only the harness and the add-on folder: the whole history took 47-60 min on 08-Oct-2026
       - uses: actions/checkout@v4
-        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72' || matrix.mode == 'batch' || matrix.mode == 'bdiff' || matrix.mode == 'stockm'
+        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72' || matrix.mode == 'batch' || matrix.mode == 'bdiff' || matrix.mode == 'stockm' || matrix.mode == 'stockx'
         with:
           fetch-depth: 1
           sparse-checkout: |
             .github
             bridge-go/addon
       - uses: actions/download-artifact@v4
-        if: matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm' && inputs.local_dist != 'yes'
+        if: matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm' && matrix.mode != 'stockx' && inputs.local_dist != 'yes'
         with:
           name: bridge-dist
           path: bridge-dist
@@ -424,7 +424,7 @@ jobs:
       # makes bridge-dist itself from the ref (the committed setup of its own version, checked against its .sha256; its
       # add-on; the published release upg starts from; ZZ BIG TEST's entries for g245) and commits its own results
       - name: Local bridge-dist (local_dist=yes)
-        if: inputs.local_dist == 'yes' && matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm'
+        if: inputs.local_dist == 'yes' && matrix.mode != 'batch' && matrix.mode != 'bdiff' && matrix.mode != 'stockm' && matrix.mode != 'stockx'
         timeout-minutes: 30
         run: |
           $d = Join-Path $env:GITHUB_WORKSPACE 'bridge-dist'; New-Item -ItemType Directory -Force $d | Out-Null
@@ -512,7 +512,7 @@ jobs:
           if ($env:VMODE -eq 'dbbig') { $want += @('i1 tally.ini as TallyPrime installs it (captured before the harness wrote its own)', 'i2 the add-on added to tally.ini (add only, backup, other TDL kept): loaded at Tally start, the other TDL too', 'i3 tally.ini with User TDL = No: what Tally does with an added User TDL = Yes', 'i4 idempotent and untouched by Tally: a second run changes nothing, Tally keeps the lines and their order', 'b1 big company made (about 30,000 entries, 20,000 ledgers)', 'b2 one day of the Day Book on the big company (D1, D5), and whether D5 moves Tally''s current date', 'b3 one day by the collection date forms on the big company', 'b4 a day split by voucher type on the big company', 'b5 the voucher count of a period (month, quarter, half-year, year)', 'b6 the ledger count at 20,000 and 50,000 ledgers', 'b7 one request at a time, 2 s stop, Tally''s window blocked time kept') }
           if ($env:VMODE -eq 'g245') { $want += @('g1 the installer added the add-on to tally.ini; Tally loads it and the client''s other TDL at start', 'g2 the year counted day by day, every day exactly Tally''s count', 'g3 the chosen part fetched: FinCom holds every entry Tally lists, only what it lacked asked', 'g4 no request over 2 s, one at a time, Tally''s window never blocked 2 s, Tally responding', 'g5 postings first during the fetch', 'g6 the exact ledger count and its progress', 'g7 User TDL = No left untouched and reported', 'g8 job files read while written: nothing lost, never missing', 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)', 'g10 the night pace: day after day, more than 3 days an answer, entries a minute measured', 'g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail') }
           if ($env:VMODE -eq 'proof72') { $want += @('p1 bridge 2.4.7 installed and connected: finds Tally, the company list, the ledger list', 'p2 a save on the screen reaches FinCom through the add-on', 'p3 a Payment posted by the bridge: CREATED and LASTVCHID', 'p4 tally.ini keys TallyPrime writes from its own port screen (port, acts as, ODBC)', 'p5 a port written into tally.ini with Tally closed is used at the next start', 'p6 two Tallys on one computer (the same install twice; a copy of the install on another port)', 'p7 company GUID after a rename and after a copy of the data folder', 'p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID)', 'p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company', 'p10 a batch of 3 with one missing ledger: Tally''s exact reply', 'p11 Tally''s window and requests during the run (window probe, the bridge''s requests at the proxy)', 'p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say') }
-          if ($env:VMODE -eq 'stockm') { $want += @('s1 the stock test data made (items with opening, a year of inventory entries)', 's2 (a) stock item masters: the stored opening read back exactly as made', 's3 (b) the Stock-in-Hand ledger: stored opening and closing values read back', 's4 (d) Tally''s computed stock closing: times', 's5 one request at a time, Tally responding after each') }
+          if ($env:VMODE -in 'stockm', 'stockx') { $want += @('s1 the stock test data made (items with opening, a year of inventory entries)', 's2 (a) stock item masters: the stored opening read back exactly as made', 's3 (b) the Stock-in-Hand ledger: stored opening and closing values read back', 's4 (d) Tally''s computed stock closing: times', 's5 one request at a time, Tally responding after each') }
           if ($env:VMODE -eq 'bdiff') { $want += @('d0 the test data made (tdsgst, TDS challan payments, payroll with salary payments, stock journals)', 'd2 FinComVoucherBatch on every day: exactly the entries asked, each under 2 s') }
           if ($env:VMODE -eq 'batch') { $want += @('v1 test data made (~30,000 entries; 50-item invoices and payroll entries of 100 and 500 employees on 31-Aug)', 'v2 one by one: FinComVoucherObject for every entry compared (the reference)', 'v3 the batch forms at ~30,000 entries: exactly the entries asked, every time', 'v4 the largest batch within 2 s (no window hold of 2 s) at ~30,000 entries', 'v5 the batch forms at ~1,00,000 entries: exactly the entries asked, every time', 'v6 the largest batch within 2 s (no window hold of 2 s) at ~1,00,000 entries', 'v7 the control (no date: the whole company looked at) and the rule: one request at a time, 2 s stop, Tally responding') }
           if ($env:VMODE -eq 'dbres') { $want += @('r1 missing days with Tally closed and reopened: resumed, every day fetched or marked upload, nothing twice', 'r2 missing days with a modal screen left open: no request held over 2 s unseen, finished after it closed', 'r3 missing days with Tally not answering: stopped at 2 s, waited, resumed', 'r4 the ledger read through close / modal / not answering: every ledger once, progress never back, count right', 'r5 Tally responsive at the end of every scenario') }
@@ -579,7 +579,7 @@ jobs:
           $br = '${{ github.ref_name }}'
           for ($i = 0; $i -lt 6; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 15 }
       - name: Results to the branch (local_dist=yes; stockm always)
-        if: always() && (inputs.local_dist == 'yes' || matrix.mode == 'stockm') && matrix.mode != 'batch' && matrix.mode != 'bdiff'
+        if: always() && (inputs.local_dist == 'yes' || matrix.mode == 'stockm' || matrix.mode == 'stockx') && matrix.mode != 'batch' && matrix.mode != 'bdiff'
         continue-on-error: true
         run: |
           $r = Join-Path $env:RES 'versions\results.txt'
@@ -594,7 +594,7 @@ jobs:
           for ($i = 0; $i -lt 6; $i++) { git pull -q --rebase origin $br; git push -q origin "HEAD:refs/heads/$br"; if ($LASTEXITCODE -eq 0) { break }; Start-Sleep 15 }
       - name: Artifact
         if: always()
-        continue-on-error: ${{ matrix.mode == 'batch' || matrix.mode == 'bdiff' || matrix.mode == 'stockm' || inputs.local_dist == 'yes' }}
+        continue-on-error: ${{ matrix.mode == 'batch' || matrix.mode == 'bdiff' || matrix.mode == 'stockm' || matrix.mode == 'stockx' || inputs.local_dist == 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: tally-${{ matrix.version }}-${{ matrix.mode }}-${{ github.run_id }}
