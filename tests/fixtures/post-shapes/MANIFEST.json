@@ -20,9 +20,11 @@
     "GST_STATES",
     "stateOfGstin",
     "fpHash",
-    "setAutoNumbering"
+    "setAutoNumbering",
+    "ledNm",
+    "OWN_BANK"
   ],
-  "sha256": "70792b675b0338e0e83a926f498208bd885f1b34c931c22da5311e8e5a551eba",
+  "sha256": "77ec97e7669690915b62c7be975f02f6b989c234e9ded7c053030693eccb61bc",
   "files": [
     "purchase-bill.xml",
     "journal.xml",
