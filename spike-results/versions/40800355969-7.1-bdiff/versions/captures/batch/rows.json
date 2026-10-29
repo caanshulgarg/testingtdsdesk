@@ -1,0 +1,362 @@
+[
+  {
+    "day": "20260401",
+    "form": "B5",
+    "n": 5,
+    "ms": 38.9,
+    "inTime": true,
+    "ok": true,
+    "got": 5,
+    "exact": true
+  },
+  {
+    "day": "20260401",
+    "form": "B4",
+    "n": 5,
+    "ms": 37.6,
+    "inTime": true,
+    "ok": true,
+    "got": 5,
+    "exact": true
+  },
+  {
+    "day": "20260402",
+    "form": "B5",
+    "n": 7,
+    "ms": 50.2,
+    "inTime": true,
+    "ok": true,
+    "got": 7,
+    "exact": true
+  },
+  {
+    "day": "20260402",
+    "form": "B4",
+    "n": 7,
+    "ms": 54.0,
+    "inTime": true,
+    "ok": true,
+    "got": 7,
+    "exact": true
+  },
+  {
+    "day": "20260501",
+    "form": "B5",
+    "n": 7,
+    "ms": 39.2,
+    "inTime": true,
+    "ok": true,
+    "got": 7,
+    "exact": true
+  },
+  {
+    "day": "20260501",
+    "form": "B4",
+    "n": 7,
+    "ms": 42.6,
+    "inTime": true,
+    "ok": true,
+    "got": 7,
+    "exact": true
+  },
+  {
+    "day": "20260502",
+    "form": "B5",
+    "n": 19,
+    "ms": 85.0,
+    "inTime": true,
+    "ok": true,
+    "got": 19,
+    "exact": true
+  },
+  {
+    "day": "20260502",
+    "form": "B4",
+    "n": 19,
+    "ms": 52.0,
+    "inTime": true,
+    "ok": true,
+    "got": 19,
+    "exact": true
+  },
+  {
+    "day": "20260531",
+    "form": "B5",
+    "n": 2,
+    "ms": 38.9,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260531",
+    "form": "B4",
+    "n": 2,
+    "ms": 41.9,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260601",
+    "form": "B5",
+    "n": 2,
+    "ms": 48.2,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260601",
+    "form": "B4",
+    "n": 2,
+    "ms": 39.9,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260602",
+    "form": "B5",
+    "n": 3,
+    "ms": 37.0,
+    "inTime": true,
+    "ok": true,
+    "got": 3,
+    "exact": true
+  },
+  {
+    "day": "20260602",
+    "form": "B4",
+    "n": 3,
+    "ms": 34.3,
+    "inTime": true,
+    "ok": true,
+    "got": 3,
+    "exact": true
+  },
+  {
+    "day": "20260701",
+    "form": "B5",
+    "n": 1,
+    "ms": 35.7,
+    "inTime": true,
+    "ok": true,
+    "got": 1,
+    "exact": true
+  },
+  {
+    "day": "20260701",
+    "form": "B4",
+    "n": 1,
+    "ms": 34.7,
+    "inTime": true,
+    "ok": true,
+    "got": 1,
+    "exact": true
+  },
+  {
+    "day": "20260702",
+    "form": "B5",
+    "n": 3,
+    "ms": 63.2,
+    "inTime": true,
+    "ok": true,
+    "got": 3,
+    "exact": true
+  },
+  {
+    "day": "20260702",
+    "form": "B4",
+    "n": 3,
+    "ms": 59.3,
+    "inTime": true,
+    "ok": true,
+    "got": 3,
+    "exact": true
+  },
+  {
+    "day": "20260802",
+    "form": "B5",
+    "n": 2,
+    "ms": 47.7,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260802",
+    "form": "B4",
+    "n": 2,
+    "ms": 43.4,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260902",
+    "form": "B5",
+    "n": 2,
+    "ms": 47.9,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20260902",
+    "form": "B4",
+    "n": 2,
+    "ms": 50.4,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261002",
+    "form": "B5",
+    "n": 2,
+    "ms": 49.5,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261002",
+    "form": "B4",
+    "n": 2,
+    "ms": 47.1,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261102",
+    "form": "B5",
+    "n": 2,
+    "ms": 55.3,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261102",
+    "form": "B4",
+    "n": 2,
+    "ms": 46.7,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261202",
+    "form": "B5",
+    "n": 2,
+    "ms": 39.9,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20261202",
+    "form": "B4",
+    "n": 2,
+    "ms": 45.0,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270102",
+    "form": "B5",
+    "n": 2,
+    "ms": 46.5,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270102",
+    "form": "B4",
+    "n": 2,
+    "ms": 45.0,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270202",
+    "form": "B5",
+    "n": 2,
+    "ms": 44.1,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270202",
+    "form": "B4",
+    "n": 2,
+    "ms": 41.1,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270302",
+    "form": "B5",
+    "n": 2,
+    "ms": 48.8,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270302",
+    "form": "B4",
+    "n": 2,
+    "ms": 46.0,
+    "inTime": true,
+    "ok": true,
+    "got": 2,
+    "exact": true
+  },
+  {
+    "day": "20270331",
+    "form": "B5",
+    "n": 1,
+    "ms": 47.3,
+    "inTime": true,
+    "ok": true,
+    "got": 1,
+    "exact": true
+  },
+  {
+    "day": "20270331",
+    "form": "B4",
+    "n": 1,
+    "ms": 46.3,
+    "inTime": true,
+    "ok": true,
+    "got": 1,
+    "exact": true
+  }
+]
