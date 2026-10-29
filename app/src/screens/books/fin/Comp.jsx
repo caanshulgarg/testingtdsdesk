@@ -50,13 +50,13 @@ function TaxDep({ c, fy }) {
   const typed = ((S.books.fs || {}).taxDep || {})[fy] || {};
   return <>
     <h5>Annexure 1: depreciation under section 32 (Income-tax Act)</h5>
-    <p className="note">{it.carried && !Object.keys(typed).length ? "Opening WDV carried from last year; type a figure to change it." : "Type each block’s opening WDV once; the next years carry it forward. Additions come from the entries, split at 30 September."}</p>
+    <p className="note">{it.depr ? "From the Fixed assets & deferred tax tab: the opening WDV from last year’s ITR (else typed), additions and sales from the register; under 180 days at half the rate." : it.carried && !Object.keys(typed).length ? "Opening WDV carried from last year; type a figure to change it." : "Type each block’s opening WDV once; the next years carry it forward. Additions come from the entries, split at 30 September."}</p>
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="itdep"><thead><tr><th>Block</th><th className="n">Opening WDV</th><th className="n">Added to 30-Sep</th><th className="n">Added after</th>
       <th className="n">Sold</th><th className="n">Depreciation</th><th className="n">Closing WDV</th></tr></thead>
-      <tbody>{FinSt.BLOCKS.map(([k, name]) => { const z = by[k] || { open: 0, addA: 0, addB: 0, sale: 0, dep: 0, close: 0 };
+      <tbody>{(it.depr ? it.blocks.map((b) => [b.key, b.name]) : FinSt.BLOCKS).map(([k, name]) => { const z = by[k] || { open: 0, addA: 0, addB: 0, sale: 0, dep: 0, close: 0 };
         return <tr key={k} data-fin-block={k}><td>{name}</td>
-          <td className="n"><CommitBox type="number" step="0.01" aria-label={"Opening WDV: " + name} value={typed[k] != null ? typed[k] : z.open || ""} placeholder="0.00"
-            onCommit={(v) => { FinSt.taxDepSet(fy, k, v === "" ? "" : +v); render(); }} /></td>
+          <td className="n">{it.depr && z.src === "itr" ? <span title={z.srcLabel}>{rs(z.open)}</span> : <CommitBox type="number" step="0.01" aria-label={"Opening WDV: " + name} value={typed[k] != null ? typed[k] : z.open || ""} placeholder="0.00"
+            onCommit={(v) => { if (it.depr) FinDepr.itOpenSet(fy, k, v); else FinSt.taxDepSet(fy, k, v === "" ? "" : +v); render(); }} />}</td>
           <td className="n">{rs(z.addA)}</td><td className="n">{rs(z.addB)}</td><td className="n">{rs(z.sale)}</td><td className="n">{rs(z.dep)}</td><td className="n">{rs(z.close)}</td></tr>; })}
         <tr className="sub"><td>Total</td><td colSpan={4} /><td className="n">{rs(it.total)}</td><td /></tr></tbody></table></div>
   </>;

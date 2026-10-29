@@ -1,0 +1,37 @@
+{
+  "ITR": {
+    "ITR6": {
+      "CreationInfo": {"SWVersionNo": "1.0", "SWCreatedBy": "SW00000000", "JSONCreatedBy": "SW00000000", "JSONCreationDate": "2025-10-25", "IntermediaryCity": "Bengaluru", "Digest": "-"},
+      "Form_ITR6": {"FormName": "ITR-6", "Description": "For Companies other than companies claiming exemption under section 11 (made-up sample)", "AssessmentYear": "2025", "SchemaVer": "Ver1.0", "FormVer": "Ver1.0"},
+      "PartA_GEN1": {"OrgFirmInfo": {"AssesseeName": {"SurNameOrOrgName": "Wren Systems Private Limited (made-up)"}, "PAN": "AABCW1234F"}},
+      "ScheduleDPM": {
+        "PlantMachinery": {
+          "Rate15": {"WDVFirstDay": 470588, "DepreciationAllowable": 70588, "WDVLastDay": 400000},
+          "Rate30": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0},
+          "Rate40": {"WDVFirstDay": 300000, "DepreciationAllowable": 120000, "WDVLastDay": 180000},
+          "Rate45": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0}
+        }
+      },
+      "ScheduleDOA": {
+        "Building": {
+          "Rate5": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0},
+          "Rate10": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0},
+          "Rate40": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0}
+        },
+        "FurnitureFittings": {"Rate10": {"WDVFirstDay": 266667, "DepreciationAllowable": 26667, "WDVLastDay": 240000}},
+        "IntangibleAssets": {"Rate25": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0}},
+        "Ships": {"Rate20": {"WDVFirstDay": 0, "DepreciationAllowable": 0, "WDVLastDay": 0}}
+      },
+      "ScheduleDEP": {
+        "SummaryFromDeprSch": {
+          "PlantMachinerySummary": {"DepreciationRate15": 70588, "DepreciationRate30": 0, "DepreciationRate40": 120000, "DepreciationRate45": 0, "TotalDepreciationPlantMach": 190588},
+          "BuildingSummary": {"DepreciationRate5": 0, "DepreciationRate10": 0, "DepreciationRate40": 0, "TotalDepreciationBuilding": 0},
+          "FurnitureSummary": {"DepreciationRate10": 26667},
+          "IntangibleAssetsSummary": {"DepreciationRate25": 0},
+          "ShipsSummary": {"DepreciationRate20": 0},
+          "TotalDepreciation": 217255
+        }
+      }
+    }
+  }
+}

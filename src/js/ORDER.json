@@ -93,6 +93,7 @@
   "92-tds-file.js",
   "93-tds-autoplace.js",
   "94-tds-remarks.js",
+ "88-fin-depr.js",
  "88-fin-statements.js",
  "88-fin-pybs.js",
  "90-autopost.js",
