@@ -118,7 +118,16 @@ try:
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500)
         if pg.evaluate("() => typeof signInNeeded === 'function' && typeof S === 'object' && !!S && !!S.firm && signInNeeded()"): pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(1200)
-        pg.evaluate(SETUP, [books, master, twobs, A.ME, A.FIRM, FNURL]); pg.wait_for_timeout(1200)
+        # the setup is started and then waited for: its render moves the page's hash while it runs, and an evaluate waiting
+        # on it can be told its context went away (seen 29-Oct-2026, tests/run_ask_fs_ui.py)
+        pg.evaluate("(a) => { window.__setup = 'running'; (" + SETUP + ")(a).then(() => { window.__setup = 'done'; }, (e) => { window.__setup = 'failed: ' + e; }); }", [books, master, twobs, A.ME, A.FIRM, FNURL])
+        for _ in range(240):
+            try: st = pg.evaluate("() => window.__setup")
+            except Exception: st = "running"
+            if st != "running": break
+            pg.wait_for_timeout(250)
+        ok(st == "done", "the page is set up with the made-up books (%s)" % st)
+        pg.wait_for_timeout(1200)
         pg.evaluate("S.books = window.__bk; ASST.loadSettings(true)"); pg.wait_for_timeout(800)
 
         # ---------- on by default (the owner's decision of 14-Oct-2026): the launcher is there; the owner can switch it off

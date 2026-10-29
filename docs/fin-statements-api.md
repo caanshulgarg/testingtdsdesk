@@ -248,7 +248,7 @@ opened at once, so the pop-up is not blocked); once loaded, the module's own obj
 |---|---|
 | `FinXlsx.download(fy, {unit, dec})` | saves "<client> Financial statements FY 2025-26.xlsx" (`saveFile`); returns the name |
 | `FinXlsx.make(fy, {unit, dec})` | `{buffer, name, cells: [{sheet, addr, f, v, src}], sheets}`; `src` is the path of the FinSt.build figure a cell is |
-| `FinPdf.open(fy, {unit, dec, includeTb}, win?)` | the print view (as `printView`, A4 portrait): Balance Sheet, P&L, Cash Flow, Notes (with the PPE schedules), Computation, each from a new page, signature blocks; the trial balance only with `includeTb` |
+| `FinPdf.open(fy, {unit, dec, includeTb, notes, period}, win?)` | the print view (as `printView`, A4 portrait): Balance Sheet, P&L, Cash Flow, Notes (with the PPE schedules), Computation, each from a new page, signature blocks; the trial balance only with `includeTb`; `notes: false` leaves the Notes out |
 | `FinPdf.html(fy, opt)` | the same pages as HTML (`section.fs-page[data-fs-page=bs/pl/cf/notes/comp/tb]`) |
 | `FinSt.ratios(d)` | companies: Schedule III ratios `{comps, list[{key, label, numL, denL, cy, py, variance}]}` on closing balances; 0 when the denominator is nil |
 
@@ -263,3 +263,19 @@ helper columns; Trial Balance K "Code means"; Inputs E8 the unit, short; the yea
 `=ROUND(value*<the unit they were worked in>/UNIT,DEC)`, so a unit typed on Inputs!E4 carries every figure (the checks stay
 0); the rounding Note 17 absorbs worked out on Profit-Loss J-L (not printed), the raw 17J beside Note 17 (Notes J-K); the
 Computation in rupees with Annexure 1 down the page; Accounting Ratios (companies) linked to the statements.
+
+## Ask FinCom's statements card (29-Oct-2026)
+
+A request in Ask FinCom for a balance sheet, the financial statements, a provisional or interim balance sheet, Schedule III,
+the notes, a P&L with the balance sheet or last year's figures (`server/assistant/fsask.ts`: the words, the From-To, the
+comparative, the notes, a file asked for, the period of the earlier question) is answered without the AI by the statements
+card, `app/src/parts/AssistantFs.jsx` (a lazy chunk with FinSt). The card works the figures out here, in the browser, with
+`built()` of `screens/books/fin/util.js` (the page's own memo of `FinSt.build`) for `FinSt.periodOf(fy, {preset: "custom",
+from, to, cmp})` in the page's unit and decimals, so its figures are the page's. It shows: the summary (funds, totals,
+revenue, income, expenses, profit before tax and for the period, with the comparative); what is missing (the checks that do
+not read 0, `d.period.pyNote`, `d.tb.warn`, the days `needDays` says the copy lacks, entries held only to an earlier day);
+for "profit is different from Tally" the profit as Tally adds it (the income and expense ledgers' movement, `FS.nature(l).rev`)
+beside the statements' profit, with the page's adjustments, stock, ledgers with no code and rounding; last year's balance
+sheet attached in the chat, read by the page's reader (`PyBs.jsx readFile`, FinPyBs) with what was read to confirm, and kept
+with `FinPyBs.save`; and "Open Financial statements" (`FinSt.periodSet` with the card's dates and comparative, then the page),
+Download Excel (`FinXlsx.download`) and Download PDF (`FinPdf.open`, the notes left out when asked).

@@ -40,6 +40,7 @@ export type ExtResult = {
   forModel?: string,         // what the model reads back (keep it short: totals; FinCom masks it)
   aiText?: string,           // AI-written narrative to show, marked "AI-drafted, review before use"
   error?: string,            // the tool could not run: said to the model, which tells the user
+  cards?: Record<string, unknown>[], // events for a card the panel works out itself (fs_build: the statements card, t "fs"; the figures are the page's, in the browser)
 };
 export type ExtTool = {
   name: string,              // snake_case, unique across all modules (prefix: audit_*, report_*)

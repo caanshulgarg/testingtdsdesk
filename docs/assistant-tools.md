@@ -83,7 +83,7 @@ Fixed assets & depreciation tab, run over the register the app keeps for the yea
 this year's opening), read by migration 81's `asst_dep_register` (SECURITY INVOKER, STABLE, row-level security). Tables:
 by Schedule II class, asset by asset, by income-tax block, the deferred tax working and the suggested journal entry (never
 posted); the Excel with live formulas. Without a register for the year it says so and points to the screen. The reports'
-`fs_build` and `tax_audit_draft` take the register's classes and blocks the same way (det.far, det.itBlocks, clause 18).
+`tax_audit_draft` takes the register's classes and blocks the same way (det.far, det.itBlocks, clause 18). `fs_build` (29-Oct-2026) no longer works the statements out here: it takes From, To, the comparative and the notes and gives the statements card, which works them out with the Financial statements page's own engine in the browser (docs/fin-statements-api.md, "Ask FinCom's statements card"); FinCom answers most requests for the statements with that card without the AI at all (`server/assistant/fsask.ts`).
 Tests: `server/assistant/tools/depreciation_test.ts` (to the paisa), `tests/run_dep_tool.py` (migration 81 on pg_stand, then
 the Deno test on what the function returned).
 ## Certificates (`tools/certificates.ts`, branch `certificates`)

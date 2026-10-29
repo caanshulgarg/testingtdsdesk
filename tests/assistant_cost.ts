@@ -31,8 +31,30 @@ const Q = {
   excel: "Excel of all deductees with PAN",
   notice: "Read this notice and prepare the reply",
 };
+// the owner's conversation of 29-Oct-2026 (a provisional balance sheet, assistant_log on staging): the questions, and for
+// "before" the tool calls the model made then, in its calls; "after" they are FinCom's statements card (no model)
+const OWNER: [string, B[][]][] = (() => {
+  const P = { from: "2025-04-01", to: "2025-09-30" }, FS = tool("fs_build", { client: null, from: P.from, to: P.to, compare: null, notes: null });
+  const find = (t: string) => tool("find_ledgers", { text: t, group: null, as_on: P.to });
+  const file = tool("make_file", { format: "xlsx", title: "Provisional profit and loss", file_name: "provisional", sections: [{ heading: "Profit and loss", text: "Provisional figures for the half year.", table_tool: "profit_and_loss", table_input_json: JSON.stringify(P) }] });
+  const long = (n: number) => text("Here is the provisional position for the half year. ".repeat(n));
+  return [
+    ["Build my MIS: I want to make provisional balance sheet from 1st April 2026 to 30th September 2026.", [[tool("build_mis", { definition_json: JSON.stringify({ name: "Provisional balance sheet", blocks: [] }), summary: "A provisional balance sheet" })], [long(20)]]],
+    ["please prepare balance sheet for 1st April 2026 to 30th September 2026..you have daybook.. I am attaching last year balance sheet also",
+      [[tool("books_held", {}), FS], [tool("profit_and_loss", P)], [find("capital"), find("reserves"), find("loan"), find("creditors"), find("debtors"), find("bank"), find("deposit")], [tool("cash_bank", { as_on: P.to })], [file], [long(60)]]],
+    ["I need proper schedule 3 balance sheet", [[FS], [long(40)]]],
+    ["profit is different from tally.. I need fs till 30th September.. last year figures also.. I have attached final balance sheet in the earlier message",
+      [[tool("profit_and_loss", P), tool("profit_and_loss", { from: "2024-04-01", to: "2024-09-30" })], [find("profit"), find("stock"), FS], [find("depreciation"), find("rent"), find("salary"), find("commission")],
+       [find("tax"), find("gst"), find("tds"), find("deposit")], [tool("books_held", {})], [file], [long(70)]]],
+    ["1st April 2026 to 3rd September 2026, give me Provencial Balance Sheet with P&L and notes and give me last year's figure as well.", [[tool("profit_and_loss", P)], [long(10)]]],
+    ["I need excel copy of this.", [[file], [long(15)]]],
+    ["I want the financial statement with Schedule 3.", [[FS], [long(40)]]],
+  ];
+})();
 const NIGHTJAR = { from: "2025-06-01", to: "2025-08-31", min_amount: 50000, max_amount: null, mode: "any", direction: "any", ledger: null, party: "Nightjar", voucher_type: null, narration: null, limit: null };
 function script(q: string): B[][] {
+  const own = OWNER.find(([oq]) => oq === q);
+  if (own) return own[1];
   const r = route(q, "2026-03-31") as any;
   if (r && r.tool) return [[tool(r.tool, r.input)], [text("Here is what the books show; the table is below with " + r.why + ".")]];
   if (q === Q.haiku) return [[tool("entries_filter", NIGHTJAR)], [text("Two entries with Nightjar over ₹50,000 in June to August 2025; the table is below.")]];
@@ -89,15 +111,15 @@ function claude(log: { q: string, model: string, effort: string, u: Usage }[], q
   } } } };
 }
 
-async function run(levers: Record<string, boolean>, q: string, client: string | null, attachments: B[] = []) {
+async function run(levers: Record<string, boolean>, q: string, client: string | null, attachments: B[] = [], extra: B = {}) {
   const log: { q: string, model: string, effort: string, u: Usage }[] = [];
   const h = handler({ env: (k) => ({ SUPABASE_URL: STAND, SUPABASE_SERVICE_ROLE_KEY: "service-key", SUPABASE_ANON_KEY: "anon-key" } as Record<string, string>)[k], fetch: (...a) => fetch(...a),
     anthropic: () => claude(log, q) as never, now: () => new Date("2026-10-13T10:00:00Z"), levers });
-  const res = await h(new Request("http://x/", { method: "POST", headers: { Authorization: "Bearer tok-" + ME, "Content-Type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, client_id: client, attachments }) }));
+  const res = await h(new Request("http://x/", { method: "POST", headers: { Authorization: "Bearer tok-" + ME, "Content-Type": "application/json" }, body: JSON.stringify({ action: "ask", question: q, client_id: client, attachments, ...extra }) }));
   const raw = await res.text();
   const done = raw.split("\n\n").filter((x) => x.startsWith("data: ")).map((x) => JSON.parse(x.slice(6))).find((e) => e.t === "done") || {};
   const usd = log.reduce((a, c) => a + costUsd(c.model, c.u), 0);
-  return { usd, calls: log.length, models: Array.from(new Set(log.map((c) => c.model.replace("claude-", "")))), route: done.cached ? "cache" : done.route, cacheRead: log.reduce((a, c) => a + (c.u.cache_read_input_tokens || 0), 0) };
+  return { usd, text: String(done.text || ""), calls: log.length, models: Array.from(new Set(log.map((c) => c.model.replace("claude-", "")))), route: done.cached ? "cache" : done.route, cacheRead: log.reduce((a, c) => a + (c.u.cache_read_input_tokens || 0), 0) };
 }
 
 const BEFORE = { router: false, haiku: false, slim: false, promptCache: false, opusOnly: true, answerCache: false };
@@ -126,4 +148,20 @@ for (const [i, [what, q, client, att]] of CASES.entries()) {
   const a = await run({ ...AFTER, answerCache: false }, q, client, att);
   Object.assign(out[i], { warm_before_inr: +(b.usd * 85).toFixed(2), warm_after_inr: +(a.usd * 85).toFixed(2) });
 }
+// the owner's conversation, question by question as the panel sent it (before: the conversation's last 8 exchanges, each
+// answer up to 4,000 characters, no statements card, every question with balance-sheet words to Opus; after: the levers on,
+// the statements card). The model's answers are the same both times
+const owner: Record<string, unknown>[] = [];
+for (const [mode, levers] of [["before", { fs: false, opusOnly: true, answerCache: false }], ["after", { answerCache: false }]] as [string, Record<string, boolean>][]) {
+  const hist: { role: string, content: string }[] = [];
+  let thread: B = {};
+  for (const [i, [q]] of OWNER.entries()) {
+    const r = await run(levers, q, "larkspur", [], { history: hist.slice(-16), thread });
+    if (mode === "before") owner.push({ q: q.slice(0, 60), before_inr: +(r.usd * 85).toFixed(2), before: r.models.join("+") + " x" + r.calls });
+    else Object.assign(owner[i], { after_inr: +(r.usd * 85).toFixed(2), after: r.calls ? r.models.join("+") + " x" + r.calls : r.route });
+    hist.push({ role: "user", content: q }, { role: "assistant", content: (r.text || "").slice(0, 4000) });
+    if (mode === "after") thread = { fs: { from: "2025-04-01", to: "2025-09-30", cmp: "same", notes: true } };
+  }
+}
+console.log(JSON.stringify(owner));
 console.log(JSON.stringify(out));

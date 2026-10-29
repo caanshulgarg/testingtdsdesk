@@ -46,6 +46,24 @@ Deno.test("the keyword router: the questions that keep coming up, with no model"
   eq((route("is March GST ready to file?", ANCHOR) as any).prefile.month, "2026-03", "a GST month's check");
 });
 
+// the owner's conversation of 29-Oct-2026 (a provisional balance sheet, 1-Apr to 30-Sep-2026): each of these is the
+// financial statements (fsask.ts), never the keyword router's profit and loss; the voice typo "Provencial" too
+const OWNER_FS = [
+  "Build my MIS: I want to make provisional balance sheet from 1st April 2026 to 30th September 2026.",
+  "please prepare balance sheet for 1st April 2026 to 30th September 2026..you have daybook.. I am attaching last year balance sheet also",
+  "I need proper schedule 3 balance sheet",
+  "profit is different from tally.. I need fs till 30th September.. last year figures also.. I have attached final balance sheet in the earlier message",
+  "1st April 2026 to 3rd September 2026, give me Provencial Balance Sheet with P&L and notes and give me last year's figure as well.",
+  "I want the financial statement with Schedule 3.",
+  "give me interim balance sheet", "P&L with BS for H1", "provisional P&L and balance sheet", "Provisional P&L with notes", "last year figures also",
+  "Schedule III financial statements for 2025-26", "notes to accounts for September",
+];
+Deno.test("the financial statements are never routed by their words to the profit and loss (owner, 29-Oct-2026)", () => {
+  for (const q of OWNER_FS) eq(route(q, "2026-10-26"), null, q);
+  // a plain profit and loss is still the book tool's, with no model
+  eq((route("profit and loss for 2025-26", ANCHOR) as any)?.tool, "profit_and_loss", "a plain P&L stays routed");
+});
+
 Deno.test("left to a model: why, how, advice, drafts, files, two things at once, notices", () => {
   for (const q of ["Why is GSTR-3B ITC different from 2B in August?", "Explain the TDS late payment interest", "Should we deduct TDS on this rent?", "Draft a reply to the ASMT-10",
     "Excel of all deductees with PAN", "What did we pay Rukmini in March and what was the reverse charge?", "Large bank payments in September, and anyone past a TDS threshold",
