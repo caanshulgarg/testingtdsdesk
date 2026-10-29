@@ -1,0 +1,26 @@
+INFO TallyPrime 4.1, mode bdiff, runner GitHub Actions 1000013566, 2026-10-29T04:03:21
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-29, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.2 s after start, GET 20 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dbm\req: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+PASS d0 the test data made (tdsgst, TDS challan payments, payroll with salary payments, stock journals): 80 entries in Tally (Credit Note 2, Debit Note 2, Journal 12, Payment 26, Payroll 12, Purchase 5, Receipt 1, Sales 18, Stock Journal 2); tdsgst masters company: 0 created, 0 errors; tdsgst masters vchtypes: 0 created, 0 errors; tdsgst masters natures: 8 created, 0 errors; tdsgst masters ledgers: 63 created, 0 errors; tdsgst entries: 39 of 39; TDS natures in Tally: 0 (used 'BD Nature 194J'); TDS challan payment BD-TDS-1: created 1; TDS challan payment BD-TDS-2: created 1; payg masters: 18 created, 0 errors; payg entries: 36 of 36; stock items: 4 created; stock journals: 2 of 2
+PASS d2 FinComVoucherBatch on every day: exactly the entries asked, each under 2 s: 36 group requests on 18 days (68 entries), exact 36; over 2 s: none; worst 62.1 ms
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.4.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 44673232 bytes, Last-Modified Tue, 12 Mar 2024 09:23:50 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.4.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe : 44673232 bytes in 5 s, SHA-256 8520B7C0A97BA364E10DE9CEA0AED2E609A7568A0516C89E332F50C781052055, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.4.1 product 1.1.4.1
+PASS d1 every entry of the groups as FinComVoucherObject gives it, through the bridge's own batch path: 79 entries compared over 36 group answers: 79 identical (Journal 21, Payment 52, Receipt 2, Stock Journal 4), 0 differ, 0 missing, 57 left for FinComVoucherObject (payroll, held by the strip, or a line a group gives otherwise: FinCom gets FinComVoucherObject's answer)
