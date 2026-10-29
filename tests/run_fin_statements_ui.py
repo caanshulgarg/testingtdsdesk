@@ -113,8 +113,9 @@ with sync_playwright() as p:
     ok(rev() == "12,200.00" and pg.evaluate("S.books.fs.inputs.unit") == 1000 and pg.evaluate("S.books.fs.inputs.dec") == 2, "thousands, 2 decimals: 12,200.00, kept for the client (%s)" % rev())
 
     print("A figure opens its note; a note's line its ledgers")
-    pg.click('#app table[data-fin-table="pl"] tr[data-fin-line="rev"] td.n button.fin-fig >> nth=0'); pg.wait_for_timeout(800)
-    ok(pg.locator('#app [data-fin-tab="notes"][aria-selected="true"]').count() == 1 and pg.locator('#app section.fin-note.on[data-fin-note="13"]').count() == 1, "revenue's figure opens Note 13 (Revenue from operations)")
+    # (29-Oct-2026: a figure opens its ledgers in the trial balance; the note's number opens the note)
+    pg.click('#app table[data-fin-table="pl"] tr[data-fin-line="rev"] td.no button.fin-fig'); pg.wait_for_timeout(800)
+    ok(pg.locator('#app [data-fin-tab="notes"][aria-selected="true"]').count() == 1 and pg.locator('#app section.fin-note.on[data-fin-note="13"]').count() == 1, "revenue's note number opens Note 13 (Revenue from operations)")
     pg.click('#app section[data-fin-note="13"] button[data-fin-tbline="13A"]'); pg.wait_for_timeout(800)
     keys = pg.locator('#app table[data-fin-table="tb"] tbody tr[data-key]').evaluate_all("xs => xs.map(x => x.dataset.key)")
     ok(pg.locator('#app [data-fin-tab="tb"][aria-selected="true"]').count() == 1 and keys == ["Software Services - Domestic", "Software Services - Export"] and pg.locator("#app [data-fin-tbfilter]").count() == 1,

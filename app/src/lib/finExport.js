@@ -475,9 +475,9 @@ function workbook(ExcelJS, d) {
       vis.forEach((l) => {
         const li = S.lines.indexOf(l), tp = l.id === "tpm" || l.id === "tpo";
         // trade payables as the workbooks show them: a caption with the note, then the two kinds of dues
-        if (tp && !tpCap) { tpCap = true; put("bs", "C" + br, "Trade payables"); if (l.no) put("bs", "E" + br, l.no, { al: "center" }); br++; }
+        if (tp && !tpCap) { tpCap = true; put("bs", "C" + br, "Trade payables"); if (l.no) put("bs", "E" + br, String(l.no), { al: "center" }); br++; }
         put("bs", "C" + br, tp ? "   - " + l.label.replace(/^Trade payables: o/, "O") : l.label, { wrap: tp });
-        if (l.no && !tp) put("bs", "E" + br, l.no, { al: "center" });
+        if (l.no && !tp) put("bs", "E" + br, String(l.no), { al: "center" });
         if (tp && l.label.length > 60) WS.bs.getRow(br).height = 30;
         ["cy", "py"].forEach((col) => put("bs", (col === "cy" ? "F" : "H") + br, { f: () => (bsRefs(l.id, col).length > 1 ? "ROUND(" + plus(bsRefs(l.id, col)) + ",DEC)" : plus(bsRefs(l.id, col))), v: l[col], src: ["bs", "sections", s, "lines", li, col] }, { nf }));
         (R.bs[l.id] = {}).cy = A(SH.bs, "F", br); R.bs[l.id].py = A(SH.bs, "H", br);
@@ -544,7 +544,7 @@ function workbook(ExcelJS, d) {
     if (x.head) { put("pl", "C" + x.row, x.head, { b: true }); return; }
     if (x.gap) return;
     const l = x.l, li = d.pl.lines.indexOf(l);
-    put("pl", "C" + x.row, l.label, { b: !!bold[l.key] }); if (l.no) put("pl", "E" + x.row, l.no, { al: "center" });
+    put("pl", "C" + x.row, l.label, { b: !!bold[l.key] }); if (l.no) put("pl", "E" + x.row, String(l.no), { al: "center" });
     ["cy", "py"].forEach((col) => put("pl", (col === "cy" ? "F" : "H") + x.row, { f: () => { const f = plF[l.key](col); return f === "0" ? "0" : f; }, v: l[col], src: ["pl", l.key, col] },
       { nf, b: !!bold[l.key], top: !!bold[l.key] && l.key !== "pat", dbl: l.key === "pat" }));
   });

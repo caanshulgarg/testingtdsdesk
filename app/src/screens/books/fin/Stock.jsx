@@ -23,6 +23,6 @@ export default function Stock({ d }) {
           <td className="n">{typeable ? <CommitBox type="number" step="0.01" aria-label={"Stock as on " + dmy(dt)} value={z.v == null ? "" : z.v} placeholder="not known"
             onCommit={(v) => { FinSt.stockSet(dt, v === "" ? null : +v); toast(v === "" ? "Stock as on " + dmy(dt) + " forgotten." : "Stock as on " + dmy(dt) + ": " + rs(+v) + ", kept."); render(); }} />
             : z.v == null ? "not known" : rs(z.v)}</td>
-          <td className={z.v == null ? "fin-bad" : "note"} data-fin-stocksrc="">{z.label}</td></tr>; })}</tbody></table></div>
+          <td className={z.v == null && any ? "fin-bad" : "note"} data-fin-stocksrc="">{z.label}</td></tr>; })}</tbody></table></div>
   </div>;
 }

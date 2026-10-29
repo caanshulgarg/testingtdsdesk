@@ -9,7 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import Tag from "../../../parts/Tag.jsx";
-import { rs, inr, st, setFin, codeGroups } from "./util.js";
+import { rs, inr, st, setFin, codeGroups, fig } from "./util.js";
 
 const isLent = (l) => FS.nature(l).path.some((g) => /^loans & advances \(asset\)$/i.test(String(g).trim()));
 function loanGiven(l, on) {
@@ -82,6 +82,8 @@ export function Tb({ d, kind, fy }) {
     <div className="fin-tools">
       <input type="search" id="finq" aria-label="Find a ledger" data-fk="finq" placeholder="Find a ledger or group" value={s.q || ""} onChange={(ev) => { st().q = ev.target.value; setAndShow("fin", st(), true); }} />
       {f && <span className="fin-chipf" data-fin-tbfilter="">{f.label}<button type="button" aria-label="Show every ledger" onClick={() => setFin({ tbF: null })}>×</button></span>}
+      {f && f.want && (() => { const w = f.want, tot = shown.reduce((a, r) => a + (+r.final || 0), 0), pres = w.sign * tot + (w.profit || 0), inUnit = pres / w.unit, same = Math.abs(inUnit - w.v) <= 0.5 * Math.pow(10, -w.dec) * Math.max(2, shown.length + 1);
+        return <span className={"note " + (same ? "fin-ok" : "fin-bad")} data-fin-tbtotal={pres.toFixed(2)} data-want={w.v} data-same={same ? 1 : 0}>{shown.length + " ledger" + (shown.length === 1 ? "" : "s") + ": " + inr(w.sign * tot) + (w.profit ? " + the year’s profit " + inr(w.profit) : "") + (same ? " = the figure " : " ≠ the figure ") + fig(w.v, w.dec) + (w.unit > 1 ? " (" + ({ 1000: "thousands", 100000: "lakhs", 10000000: "crores" })[w.unit] + ")" : "")}</span>; })()}
       <span className="note">{shown.length === rows.length ? rows.length + " ledgers" : shown.length + " of " + rows.length + " ledgers"}</span>
     </div>
     <div className="fin-box"><table className="fin-t fin-tb" data-statement="" data-fin-table="tb">
