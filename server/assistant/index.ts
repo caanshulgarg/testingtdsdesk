@@ -6,6 +6,8 @@
 //   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
 //   {action: "ledger_guess", client_id, ledgers: [{name, group, chain, open, taxType, nature, use, samples}], parties}
 //                                                                      the AI guess for ledgers the rules could not tell (ledgers.ts)
+//   {action: "fs_aimap", client_id, ledgers: [{name, group, bal}], lines: [{head, line, amt, code}], codes: [{code, label}]}
+//                                                                      the Financial statements' one-time AI mapping (fsmap.ts)
 // Who: the signed-in user's token, their two-step sign-in, an active member of a firm whose owner has not switched the
 // assistant off (assistant_settings; on by default: the owner's decision of 14-Oct-2026); a client must be one of that firm's
 // (read with the user's own token: row-level security decides). The book tools run with the user's token too. Claude's key
@@ -16,7 +18,7 @@
 // (asst_log_add); never an answer or a figure of the books.
 // The AI control centre (console phase 4, 27-Oct-2026): every request that may reach a model first asks the console's
 // switches (ai_allowed through ../_shared/ai_policy.ts) for its feature: "ask" -> "assistant" (and "mis_describe" when an
-// MIS is asked for), "ledger_guess" -> "ledger_check", "sheet_map" -> "sheet_map", "classify" -> "upload_classify";
+// MIS is asked for), "ledger_guess" -> "ledger_check", "sheet_map" -> "sheet_map", "classify" -> "upload_classify", "fs_aimap" -> "fs_aimap";
 // inside a turn a notice's and a certificate's model calls ask "notice" and "certificates" (agent.ts ctx.gate). Off ->
 // 403 kind "ai_off" with "AI for <feature> is switched off by FinCom" (in a turn: an error event of that kind).
 import Anthropic from "npm:@anthropic-ai/sdk@0.133.0";
@@ -31,7 +33,8 @@ import { DocSpec, makeFile, MIME, safeName } from "./files.ts";
 import { isSheetName, readSheetFile, renderSheetFile, SheetFile } from "./filetable.ts";
 import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } from "./sheetmap.ts";
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
-import { capWords, costUsd as priceUsd, HAIKU } from "./models.ts";
+import { capWords, costUsd as priceUsd, HAIKU, SONNET } from "./models.ts";
+import { aiMap } from "./fsmap.ts";
 import { misAsked } from "./mis.ts";
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
@@ -148,6 +151,37 @@ export function handler(deps: Deps) {
         sentry.report("assistant_ledger_guess", { message: "ledger guess failed " + (status || "") }, { kind: "ledger_guess", firm });
         return reply(502, { ok: false, kind: status === 429 ? "rate_limit" : "other", error: "AI could not be asked just now; the rules' guesses are shown." });
       }
+    }
+    // the one-time AI mapping of the Financial statements page (fsmap.ts): the ledgers' names, groups and balances, the
+    // audited balance sheet's lines and the code list (only those fields); a code and a reason per ledger back, no figure.
+    // FinCom's switch "fs_aimap" (migration 129); before its registry row is in, the assistant's own switch decides
+    if (action === "fs_aimap") {
+      if (!clientId) return reply(400, { ok: false, error: "Open a client first." });
+      if (!Array.isArray(body.ledgers) || !body.ledgers.length) return reply(400, { ok: false, error: "No ledgers were sent." });
+      let mp = await policy.aiAllowed(firm, "fs_aimap");
+      if (!mp.ok && mp.reason === "unregistered") mp = await policy.aiAllowed(firm, "assistant");
+      if (!mp.ok) { const no = refusal(mp); return reply(no.status, no.body); }
+      let mkey = "";
+      try { const k = (await rest("/rest/v1/platform_secrets?select=value&name=eq.claude_api_key", SERVICE)) as any[]; mkey = (k && k[0] && k[0].value) || ""; } catch { mkey = ""; }
+      if (!mkey) return reply(503, { ok: false, kind: "bad_key", error: "No Claude key is set on the platform yet. Ask the administrator." });
+      const model = mp.model || SONNET;
+      const r = await aiMap({
+        client: deps.anthropic ? deps.anthropic(mkey) : (new Anthropic({ apiKey: mkey, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]), model,
+        capTake: async () => { const c = await rpc("asst_cap_take", { p_firm: firm, p_n: 1 }, SERVICE); return { ok: !!c?.ok, why: String(c?.why || ""), cap_inr: Number(c?.cap_inr || 0), cap: Number(c?.cap || 0) }; },
+        costAdd: (usd, u) => rpc("asst_cost_add", { p_firm: firm, p_feature: "fs_aimap", p_cost_usd: usd, p_in: u.input_tokens || 0, p_out: u.output_tokens || 0, p_cache_read: u.cache_read_input_tokens || 0, p_cache_write: u.cache_creation_input_tokens || 0 }, SERVICE),
+      }, body);
+      if (r.state === "cap") return reply(429, { ok: false, kind: "cap", error: capWords(r.cap?.why, r.cap?.cap_inr || 0, r.cap?.cap || 0) });
+      if (r.state === "nothing") return reply(400, { ok: false, error: "No ledgers or codes were sent." });
+      // one log line: how many ledgers, the tokens, the cost (never a name or a figure)
+      try { await rpc("asst_log_add", { p_firm: firm, p_user: user.id, p_client: clientId, p_question: "financial statements AI mapping: " + r.asked + " ledgers" + (r.notSent ? " (" + r.notSent + " not sent)" : ""), p_tools: [],
+        p_in: r.usage.input_tokens || 0, p_out: r.usage.output_tokens || 0, p_calls: 1, p_ms: Date.now() - t0, p_feature: "fs_aimap", p_route: "fs_aimap", p_models: [model],
+        p_cache_read: r.usage.cache_read_input_tokens || 0, p_cache_write: r.usage.cache_creation_input_tokens || 0, p_cost_inr: r.inr, p_fell_through: false }, SERVICE); } catch { /* the proposals still stand */ }
+      if (r.state === "failed") {
+        sentry.report("fs_aimap", { message: "fs ai mapping failed" }, { kind: "fs_aimap", firm });
+        return reply(502, { ok: false, kind: "other", error: "AI could not map the ledgers just now. The rules' and last year's codes stay; try again in a moment.", cost: { usd: r.usd, inr: r.inr } });
+      }
+      if (r.state === "invalid") return reply(502, { ok: false, kind: "other", error: "AI's answer could not be read. The rules' and last year's codes stay; try again.", cost: { usd: r.usd, inr: r.inr } });
+      return reply(200, { ok: true, proposals: r.proposals, asked: r.asked, notSent: r.notSent, bad: r.bad, cost: { usd: Math.round(r.usd * 1e6) / 1e6, inr: r.inr } });
     }
     if (action !== "ask" && action !== "classify" && action !== "sheet_map") return reply(400, { ok: false, error: "Unknown request" });
     const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);

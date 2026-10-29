@@ -11,6 +11,7 @@ import Button from "../../../parts/Button.jsx";
 import { rs } from "./util.js";
 import { openTb } from "./Sheets.jsx";
 import { readFile, Lines } from "./PyBs.jsx";
+import AiMapSlot, { earlierMapping } from "./aimapSlot.jsx";
 
 const D2 = (iso) => { try { return fmtDate(String(iso).slice(0, 10)); } catch (e) { return String(iso).slice(0, 10); } };
 const codesOfKey = (k) => { const z = FinSt.PPE.concat(FinSt.INT).find((p) => p[2] === k); return z ? [z[2], z[3]].filter(Boolean) : k === "4A" ? ["4A", "4E"] : [k]; };
@@ -59,6 +60,7 @@ export default function Recon({ d, fy }) {
             ...(open[h.id] ? h.codes.map((z) => <tr key={h.id + z.key} className="l1" data-fin-rcode={z.key} data-v={z.diff}><td>{z.key + " " + z.label}</td><td className="n">{rs(z.aud)}</td>
               <td className="n"><button type="button" className="fin-fig" title="Open its ledgers in the trial balance" data-fin-rled={z.key} onClick={() => openTb(codesOfKey(z.key), "Audited balance sheet · " + z.label)}>{rs(z.fin)}</button></td>
               <td className={"n " + (z.diff ? "fin-bad" : "")}>{z.diff ? rs(z.diff) : "0"}</td></tr>) : [])])}</tbody></table></div>
+        {!earlierMapping(fy) && <AiMapSlot d={d} fy={fy} mode="close" />}
 
         {p.mapping.length > 0 && <div className="fin-rprops" data-fin-rmaps="">
           <div className="fin-rph"><b>{"Mapping changes (" + p.mapping.length + ")"}</b><Button className="btn small" data-fin-acceptall="map" onClick={() => act(() => FinRecon.acceptAll(fy, "map", by), "Mapping changes accepted.")}>Accept all mapping changes</Button></div>
