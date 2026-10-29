@@ -22,6 +22,12 @@ try:
     r = subprocess.run([DENO, "run", "--allow-net", "--allow-read", "--allow-env", "--allow-sys", "tests/assistant_cost.ts"], cwd=os.path.join(HERE, ".."), env=env, capture_output=True, text=True, timeout=600)
     if r.returncode: print(r.stdout[-3000:] + r.stderr[-3000:])
     rows = json.loads(r.stdout.strip().splitlines()[-1]) if r.returncode == 0 else []
+    owner = json.loads(r.stdout.strip().splitlines()[-2]) if r.returncode == 0 else []
+    # the owner's conversation of 29-Oct-2026 (a provisional balance sheet): every question is FinCom's statements card now
+    print("\n  %-62s %9s %9s   %-22s %s" % ("the owner's conversation, 29-Oct-2026 (Rs)", "before", "after", "before", "after"))
+    for x in owner: print("  %-62s %9.2f %9.2f   %-22s %s" % (x["q"], x["before_inr"], x["after_inr"], x["before"], x["after"]))
+    print("  %-62s %9.2f %9.2f" % ("all", sum(x["before_inr"] for x in owner), sum(x["after_inr"] for x in owner)))
+    ok(len(owner) == 7 and all(x["after_inr"] == 0 and x["after"] == "fs" for x in owner), "the owner's seven requests for the statements cost nothing after (the statements card, no model)")
     print("\n  %-44s %9s %9s %9s %9s   %-26s %s" % ("question (Rs)", "cold bef", "cold aft", "warm bef", "warm aft", "before", "after"))
     for x in rows: print("  %-44s %9.2f %9.2f %9s %9s   %-26s %s" % (x["what"], x["before_inr"], x["after_inr"], x.get("warm_before_inr", "-"), x.get("warm_after_inr", "-"), x["before"], x["after"]))
     tb, ta = sum(x["before_inr"] for x in rows), sum(x["after_inr"] for x in rows)

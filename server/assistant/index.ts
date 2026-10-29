@@ -1,6 +1,7 @@
 // fincom-assistant: FinCom Assistant's function (the owner's approval of AI in the app, 13-Oct-2026; never called by the
 // bridge or the Tally add-on). One POST per question; the answer streams back as server-sent events (agent.ts).
-//   {action: "ask", question, client_id | null, history: [{role, content}], attachments: [{path, name, type}], firm: {name, lines},
+//   {action: "ask", question, client_id | null, history: [{role, content}], thread: {fs: {from, to, cmp, notes} | null, files:
+//    [{path, name, type, kind, summary}]}, attachments: [{path, name, type}], firm: {name, lines},
 //    lang: the voice language chosen ("en-IN", "hi-IN", "hinglish", "mr-IN", …: agent.ts LANGS), a hint for the reply's language}
 //   {action: "report", client_id, question, note, tools, entries}      the "Wrong answer?" button
 //   {action: "sheet_map", client_id, head, rows, side}                  a register's new format: its columns (sheetmap.ts)
@@ -33,6 +34,7 @@ import { PARTY_FIELDS, PARTY_SYSTEM, parseSheetMap, sheetPrompt, SHEET_SYSTEM } 
 import { guessLedgers, LEDGER_GUESS_V } from "./ledgers.ts";
 import { capWords, costUsd as priceUsd, HAIKU } from "./models.ts";
 import { misAsked } from "./mis.ts";
+import { fsAsked, FsThread } from "./fsask.ts";
 import { aiPolicy, refusal } from "../_shared/ai_policy.ts";
 
 export type Env = (k: string) => string | undefined;
@@ -153,7 +155,7 @@ export function handler(deps: Deps) {
     const question = action === "classify" ? "(what is this upload: " + String(body.name || "a file").slice(0, 120) + ")" : action === "sheet_map" ? "sheet_map" : String(body.question || "").trim().slice(0, 4000);
     if (!question) return reply(400, { ok: false, error: "Type a question." });
     // FinCom's switches for this request's feature (and My MIS when one is asked for), before any key or model
-    for (const code of [action === "classify" ? "upload_classify" : action === "sheet_map" ? "sheet_map" : "assistant", ...(action === "ask" && misAsked(question) ? ["mis_describe"] : [])]) {
+    for (const code of [action === "classify" ? "upload_classify" : action === "sheet_map" ? "sheet_map" : "assistant", ...(action === "ask" && misAsked(question) && !fsAsked(question) ? ["mis_describe"] : [])]) {
       const p = await policy.aiAllowed(firm, code);
       if (!p.ok) { const no = refusal(p); return reply(no.status, no.body); }
     }
@@ -206,6 +208,18 @@ export function handler(deps: Deps) {
       if (!isUpload(path)) return reply(403, { ok: false, kind: "file", error: "That file is not one of your firm's uploads." });
       if (!uploads.some((u) => u.path === path)) uploads.push({ path, name: String(a?.name || path.split("/").pop() || "file").slice(0, 160), type: String(a?.type || "").slice(0, 120) });
     }
+    // the conversation so far, as the panel keeps it (owner, 29-Oct-2026: "no previous memory"): the statements shown last
+    // (their period, comparative and notes) and the files attached earlier with what FinCom found each to be. Only the
+    // firm's own files; words only (nothing here is read or sent as a file)
+    const th = body && typeof body.thread === "object" && body.thread ? body.thread : {};
+    const ymd = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+    const thread: FsThread = {
+      fs: th.fs && typeof th.fs === "object" && (ymd(th.fs.to) || ymd(th.fs.from)) ? { from: ymd(th.fs.from), to: ymd(th.fs.to), cmp: th.fs.cmp === "fy" ? "fy" : "same", notes: th.fs.notes !== false } : null,
+      files: (Array.isArray(th.files) ? th.files : []).filter((f: any) => f && typeof f.path === "string" && f.path.startsWith(firm + "/") && !f.path.includes("..")).slice(-10)
+        .map((f: any) => ({ path: String(f.path).slice(0, 300), name: String(f.name || String(f.path).split("/").pop() || "file").slice(0, 160), type: String(f.type || "").slice(0, 120), kind: String(f.kind || "").slice(0, 20), summary: String(f.summary || "").slice(0, 300) })),
+    };
+    // a file of the chat's uploads the thread does not list yet is listed by its name
+    for (const u of uploads) if (!thread.files!.some((f) => f.path === u.path)) thread.files!.push({ ...u, kind: "", summary: "" });
     // a file from the Upload asked about (it says its kind) is read as an attachment too; the certificate tool's files are not
     for (const a of (Array.isArray(body.attachments) ? body.attachments : []).filter((a: any) => !/\/uploads\//.test(String(a?.path || "")) || typeof a?.kind === "string").slice(0, 3)) {
       const path = String(a?.path || "");
@@ -337,7 +351,7 @@ export function handler(deps: Deps) {
         };
         const ctx: TurnCtx = {
           client: deps.anthropic ? deps.anthropic(key) : (new Anthropic({ apiKey: key, maxRetries: 1, timeout: 170_000 }) as unknown as TurnCtx["client"]),
-          question, lang: langOf(body.lang), history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })),
+          question, lang: langOf(body.lang), history: history.map((h: any) => ({ role: h.role, content: String(h.content || "") })), thread,
           attachments, sheets, uploadKind: (Array.isArray(body.attachments) && body.attachments[0] && typeof body.attachments[0].kind === "string") ? String(body.attachments[0].kind).slice(0, 20) : undefined,
           noticePath: (Array.isArray(body.attachments) && body.attachments[0] && body.attachments[0].kind && body.attachments[0].kind !== "notice") ? "" : noticePath, clientId, clientName, firmWide: !clientId, today, books, anchor, chatEffort: String(env("ASSISTANT_CHAT_EFFORT") || "medium"), levers: deps.levers,
           exec: (fn, args) => rpc(fn, args, jwt),

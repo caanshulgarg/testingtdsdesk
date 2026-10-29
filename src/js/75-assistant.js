@@ -58,7 +58,7 @@ const ASST = {
       await Cloud.fresh().catch(() => {});
       const c = Cloud.cfg(), s = Cloud.sess();
       const r = await fetch(this.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
+        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), thread: this.thread ? this.thread() : null, attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
       if (!r.ok || !String(r.headers.get("content-type") || "").includes("event-stream")){
         const j = await r.json().catch(() => ({}));
         throw Object.assign(new Error(j.error || ("The assistant could not be reached (" + r.status + ").")), {kind: j.kind || "other"});
@@ -275,7 +275,7 @@ const ASST = {
   async save(quiet){
     const a = this.st(), k = this.key(), cid = this.cid();
     const turns = this.turns().filter(t => t.done).map(t => ({q: t.q, at: t.at, text: t.text, labels: t.labels, results: t.results.map(r => ({tool: r.tool, title: r.title, columns: r.columns, rows: (r.rows || []).slice(0, 500), summary: r.summary, basis: r.basis, period: r.period, params: r.params})),
-      files: t.files, drafts: t.drafts, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, choices: t.choices || null, unchecked: t.unchecked, error: t.error}));
+      files: t.files, drafts: t.drafts, fs: t.fs || null, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, choices: t.choices || null, unchecked: t.unchecked, error: t.error}));
     if (!turns.length){ if (!quiet) toast("Nothing to save yet."); return; }
     const title = turns[0].q.slice(0, 120);
     try {

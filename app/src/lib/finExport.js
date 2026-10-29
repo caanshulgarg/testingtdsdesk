@@ -8,7 +8,8 @@
 //
 //   FinXlsx.download(fy, {unit, dec})      saves "<client> Financial statements FY 2025-26.xlsx"
 //   FinXlsx.make(fy, {unit, dec})          -> {buffer, name, cells: [{sheet, addr, v, src}], sheets} (the tests read it)
-//   FinPdf.open(fy, {unit, dec, includeTb}, win?)  opens the print view (win: a window opened already, e.g. by a stub)
+//   FinPdf.open(fy, {unit, dec, includeTb, notes}, win?)  opens the print view (win: a window opened already, e.g. by a stub;
+//                                          notes: false leaves the notes out)
 //   FinPdf.html(fy, {unit, dec, includeTb})        the same pages as HTML
 //   FinSt.ratios(d)                        Schedule III accounting ratios from the balance sheet and P&L (companies)
 import "./finGlobals.js";
@@ -950,7 +951,8 @@ export function pdfHtml(d, opt) {
       if (totals !== 1) t += row("Total", "", n.total.cy, n.total.py, "grand", false);
       t += "</tbody></table></div>";
     });
-    pages.push(["notes", "Notes forming part of the financial statements " + forWhat, t]);
+    // the notes off (Ask FinCom: "without the notes"): the statements alone; on by default
+    if (opt.notes !== false) pages.push(["notes", "Notes forming part of the financial statements " + forWhat, t]);
   }
   // Computation of income (rupees): a full financial year only
   if (d.comp) {

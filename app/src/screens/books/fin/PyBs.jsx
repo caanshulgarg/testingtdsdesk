@@ -13,7 +13,9 @@ import { rs, codeGroups } from "./util.js";
 const UNITS = [[1, "Rupees"], [1000, "Thousands"], [100000, "Lakhs"], [10000000, "Crores"]];
 const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 
-async function readFile(file, kind) {
+// the page's reader of last year's balance sheet (Excel, CSV or a PDF's text), also used by Ask FinCom's statements card
+// (app/src/parts/AssistantFs.jsx) for a balance sheet attached in the chat: the same code, the same lines and codes
+export async function readFile(file, kind) {
   const name = file.name || "file", low = name.toLowerCase(), buf = await file.arrayBuffer();
   let sha = ""; try { sha = hex(await crypto.subtle.digest("SHA-256", buf)); } catch (e) { /* an old browser: no checksum */ }
   let r, src;

@@ -15,6 +15,7 @@ import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
 import "./asst-upload.js";   // AUpload: the panel's Upload (window.AUpload, ASST.upload)
+import "./asst-memory.js";   // the conversation each question carries (ASST.history / ASST.thread) and the statements card's event
 import { useDismiss } from "./dismiss.js";
 import { AssistantLauncher } from "./AssistantLauncher.jsx";
 import { VoiceInput, SpeakButton, stopVoice } from "./AssistantVoice.jsx";
@@ -177,6 +178,9 @@ const Uploads = lazy(() => import("./AssistantUploads.jsx"));
 const Entries = lazy(() => import("./AssistantEntries.jsx"));
 // My MIS laid out from the person's words (build_mis, ROUND 105): a card with "Open in My MIS"
 const MisCard = lazy(() => import("./AssistantMis.jsx"));
+// the financial statements (owner, 29-Oct-2026): the statements card, worked out with the Financial statements page's own
+// engine here, in its own chunk with that engine (AssistantFs.jsx)
+const FsCard = lazy(() => import("./AssistantFs.jsx"));
 
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null), [src, setSrc] = useState(false);
@@ -204,6 +208,7 @@ function Turn({ t, latest }) {
     {t.choices && (t.choices.options || []).length > 0 && <div className="asst-card choices" data-asst-choices=""><p>{t.choices.prompt}</p>
       <div className="asst-choices">{t.choices.options.slice(0, 5).map((o) => <Button key={o.label} className="btn small" data-asst-choice={o.label} onClick={() => ASST.ask(o.q)}>{o.label}</Button>)}</div></div>}
     {(t.screens || []).map((s) => <div key={s.screen} className="asst-card screen" data-asst-screen={s.screen}><p>{s.why || "The assistant only reads, works out, drafts and exports."}</p><Button className="btn small" data-asst-screen-go={s.screen} onClick={() => ASST.screen(s.screen)}>{s.button || "Open " + s.label}</Button></div>)}
+    {t.fs && <Suspense fallback={<p className="note">Loading the statements…</p>}><FsCard t={t} /></Suspense>}
     {t.notice && <Notice t={t} />}
     {t.prefile && <section className="asst-card green" data-asst-prefile="">
       <header><span className="asst-src ok">FinCom's own checks ✓</span><b>Check before filing: {t.prefileRes ? PreFile.title(t.prefileRes) : t.prefile.form}</b>

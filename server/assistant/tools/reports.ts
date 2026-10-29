@@ -1,5 +1,6 @@
 // The Assistant's report tools (Step 3, docs/assistant-tools.md): fs_build, tax_audit_draft, cash_mis, dcf_model.
-// Every figure is worked out by FSX (src/js/78-reports.js), the same code the app's Reports screen runs, over the books read
+// fs_build gives the statements card (the Financial statements page's figures, worked out in the browser). For the others
+// every figure is worked out by FSX (src/js/78-reports.js), the same code the app's Reports screen runs, over the books read
 // by the read-only SQL of migration 79 (rpt_tb, rpt_saved, rpt_cash_entries). The model never supplies a figure; nothing
 // writes to the books. Each tool returns tables (label "books"), the files (Excel with live formulas, Word) and a short
 // summary for the model. Register in tools/index.ts: import { TOOLS as REPORTS } from "./reports.ts".
@@ -9,6 +10,7 @@ import "../../../src/js/78-reports.js";
 import "../../../src/js/80-assets.js";
 
 import type { ExtCtx, ExtResult, ExtTool, ToolTable } from "./types.ts";
+import { dmy } from "../fsask.ts";
 type Ctx = ExtCtx; type Result = ExtResult; type ReportTool = ExtTool;
 // deno-lint-ignore no-explicit-any
 const FSX: any = (globalThis as any).FSX;
@@ -64,24 +66,31 @@ const ARR = (d: string) => ({ type: ["array", "null"], items: { type: "number" }
 
 export const TOOLS: ReportTool[] = [
   {
+    // the statements of the Financial statements page (owner, 29-Oct-2026: "provisional balance sheet from 1st April 2026 to
+    // 30th September 2026 … not answered properly"): any From-To, the comparative and the notes. The page's engine (FinSt,
+    // src/js/88-fin-statements.js) runs in the browser on the books there, with the client's mapping, adjustments, stock and
+    // last year's balance sheet; so FinCom does not work the statements out here (the Reports screen's engine, FSX, gave
+    // other figures than the page): the tool gives the statements card (app/src/parts/AssistantFs.jsx), which works them out
+    // with the page's own code and opens the page or its Excel and PDF. The model never states a figure of the statements.
     name: "fs_build",
-    description: "Make the client's financial statements for a year in the firm's Schedule III format (company: Division I; firm, LLP or proprietor: the ICAI non-corporate format): balance sheet, profit and loss, notes, ratios, and the 27 checks run before output. Returns the totals, the failed checks and the files (Excel with every figure a live formula to the TB, Word). Use for 'balance sheet', 'final accounts', 'Schedule III', 'financial statements'.",
-    input_schema: strict({ client: S("the client (the one open when null)"), year: S("the financial year, e.g. 2025-26 (the last year ended when null)"), layout: { type: ["string", "null"], enum: ["company", "firm", "llp", "proprietor", null], description: "the layout (the one kept for the client when null)" } }),
-    task: "heavy", label: "books", words: /\b(balance sheet|final accounts|schedule iii|financial statements?|notes to (the )?accounts)\b/i,
-    async run(input, ctx) {
-      const fy = fyOf(input.year, ctx.today), got = await inputFor(ctx, fy, N(input.layout) as string | null);
-      if ("error" in got) return { error: got.error };
-      ctx.progress("Trial balance read: " + got.inp.tb.length + " ledgers");
-      const r = FSX.run(got.inp, { files: ["xlsx", "docx"] }), M = r.model, V = (n: string) => rs(M.nm[n] || 0);
-      ctx.progress("Statements and the 27 checks: done");
-      const face = (rows: any[], title: string, pl: boolean): ToolTable => ({ tool: "fs_build", title, columns: [{ k: "line", label: "Particulars" }, { k: "note", label: "Note" }, { k: "cy", label: pl ? M.D.cyYear : M.D.cyAsAt, t: "amount" }, { k: "py", label: pl ? M.D.pyYear : M.D.pyAsAt, t: "amount" }],
-        rows: rows.filter((z) => z.c[0] && !z.c[0].eps).map((z) => ({ line: z.t, note: z.note && z.note !== "-" ? String(M.noteNo[z.note] || "") : "", cy: rs(z.c[0].v), py: z.c[1] ? rs(z.c[1].v) : null })), basis: "FinCom's computation from the trial balance and the confirmed mapping (version " + r.mapping.version + ")", period: { from: got.from, to: got.to } });
-      const checks: ToolTable = { tool: "fs_build", title: "The 27 checks: what failed", columns: [{ k: "no", label: "Check", t: "int" }, { k: "title", label: "What is checked" }, { k: "level", label: "Level" }, { k: "item", label: "What to look at" }],
-        rows: r.checks.filter((c: any) => !c.ok).flatMap((c: any) => c.items.map((x: string) => ({ no: c.id, title: c.title, level: c.level === "warn" ? "warning" : "fail", item: x }))), summary: { checks: 27, failed: r.fails.length, warnings: r.warns.length } };
-      const base = safe(M.ent.name) + "-financial-statements-" + FSX.fyLabel(fy);
-      const files = [...await upload(ctx, r.files.xlsx, base + ".xlsx", "xlsx"), ...await upload(ctx, r.files.docx, base + ".docx", "docx")];
-      return { tables: [face(M.face2.bs, "Balance Sheet as at " + FSX.fyEnd(fy), false), face(M.face2.pl, "Statement of Profit and Loss for the year ended " + FSX.fyEnd(fy), true), checks], files,
-        forModel: FSX.summaryText(r.summary) + (r.fails.length ? " Failed: " + r.fails.map((c: any) => c.id + " " + c.title).join("; ") + "." : "") + " Total assets " + V("T_as_CY") + ", PAT " + V("T_pat_CY") + "." };
+    description: "Show the client's financial statements in the Schedule III format (company: Division I; firm, LLP or proprietor: the ICAI non-corporate format) for any period From-To: the balance sheet as on To, the profit and loss, cash flow and notes for the period, with a comparative (the same period last year by default, or the last full year). Use for any balance sheet, provisional or interim balance sheet, final accounts, Schedule III, notes to accounts, a P&L with the balance sheet, or last year's figures. FinCom works out every figure with its Financial statements page from the books, and shows a card with the summary, what is missing (ledgers with no code, stock not known, no previous year), Open Financial statements and the page's Download Excel and PDF. Never state a figure of the statements, and never build them from profit_and_loss, find_ledgers or other tools.",
+    input_schema: strict({ client: S("the client (the one open when null)"), from: S("YYYY-MM-DD, the first day of the period (the start of To's financial year when null)"), to: S("YYYY-MM-DD, the balance sheet date (null: the period chosen on the Financial statements page)"),
+      compare: { type: ["string", "null"], enum: ["same", "fy", null], description: "the comparative: the same period last year (same, the default) or the last full year (fy)" },
+      notes: { type: ["boolean", "null"], description: "with the notes (true when null)" } }),
+    task: "book", label: "books", words: /\b(balance sheet|final accounts|schedule iii|financial statements?|notes to (the )?accounts)\b/i,
+    // deno-lint-ignore require-await
+    async run(input, _ctx) {
+      const ok = (v: unknown) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+      let from = ok(input.from);
+      const to = ok(input.to);
+      if (from && !to) return { error: "give the balance sheet date (to) as well as from" };
+      if (to && !from) from = String(Number(to.slice(5, 7)) >= 4 ? Number(to.slice(0, 4)) : Number(to.slice(0, 4)) - 1) + "-04-01";
+      if (from && to && from > to) return { error: "from (" + from + ") is after to (" + to + ")" };
+      const fy = to ? String(Number(to.slice(5, 7)) >= 4 ? Number(to.slice(0, 4)) : Number(to.slice(0, 4)) - 1) : null;
+      const cmp = input.compare === "fy" ? "fy" : "same", notes = input.notes !== false, label = from && to ? dmy(from) + " to " + dmy(to) : "";
+      return { cards: [{ t: "fs", from, to, fy, cmp, notes, want: null, tallyDiff: false, pyAsked: false, carried: false, alt: null, label, via: "model" }],
+        forModel: "FinCom shows the statements card for " + (label || "the period chosen on the Financial statements page") + ", compared with " + (cmp === "fy" ? "the last full year" : "the same period last year") +
+          (notes ? ", with the notes" : ", without the notes") + ". FinCom works out every figure on its Financial statements page from the books in the user's browser: never state a figure of the statements. In one or two lines say what the card has: the summary, what is missing, Open Financial statements, Download Excel and PDF." };
     },
   },
   {

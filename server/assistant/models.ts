@@ -56,7 +56,8 @@ export function taskOf(question: string, hasAttachment: boolean, clientOpen: boo
   if (hasAttachment || /\b(notice|show cause|scn|asmt-?10|drc-?0?1a?|reg-?(17|31)|143\s*\(\s*[12]|148a?|133\s*\(\s*6|intimation|demand order|justification report|penalty u\/?s)\b/i.test(q)) return "notice";
   if (clientOpen && /\bwhat('s| is) due\b/i.test(q)) return "book";     // the client's own dues
   if (lawQuestion(q)) return "general";                    // the router's own rule (a due date, a rate, a return's date)
-  if (/\b(audit the books|tax audit report|3cd|schedule iii|schedule 3|dcf|valuation)\b/i.test(q)) return "heavy";
+  // (the statements, Schedule III, are FinCom's statements card: fsask.ts, no model; a question about the format is general)
+  if (/\b(audit the books|tax audit report|3cd|dcf|valuation)\b/i.test(q)) return "heavy";
   if (/\b(excel|xlsx|spreadsheet|word|docx|pdf|download|letter|file of)\b/i.test(q)) return "file";
   if (!clientOpen) return "general";
   // with a client open, a question about the law (rates, sections, due dates) and not the books is general
