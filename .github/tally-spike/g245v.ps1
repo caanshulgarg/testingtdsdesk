@@ -291,13 +291,15 @@ try {
   # group gives with no type of supply on 3.0 .. 6.2, On Account) is asked once in the group and once alone: counted apart
   # ("left by a group, read alone"), not as asked twice
   $script:objLeftN = 0
+  # run 40850921512 (6.2): a group cut for a posting, asked again, then left for FinComVoucherObject (B, B, O) is each
+  # allowance at once: the ask cut for the posting is set aside first, then a group-then-alone pair is "left"
   $objTwice = @($objReqs | Group-Object mid | Where-Object { $_.Count -gt 1 } | Where-Object {
-      $nB = @($_.Group | Where-Object { $_.id -eq 'FinComVoucherBatch' }).Count; $nO = @($_.Group | Where-Object { $_.id -eq 'FinComVoucherObject' }).Count
-      if ($nB -eq 1 -and $nO -eq 1 -and @($_.Group | Sort-Object { [int64]$_.t0 })[0].id -eq 'FinComVoucherBatch') { $script:objLeftN++; return $false }
-      $true } | Where-Object {
-      $g = @($_.Group | Sort-Object { [int64]$_.t0 }); $early = @($g | Select-Object -First ($g.Count - 1))
-      $cut = $imp -and @($early | Where-Object { [int64]$_.t0 -ge ($imp.s - 5000) -and [int64]$_.t0 -le ($imp.e + 5000) }).Count -gt 0 -and $g.Count -eq 2
-      if ($cut) { $script:objCutN++ }; -not $cut }).Count
+      $g = @($_.Group | Sort-Object { [int64]$_.t0 })
+      $cut = $imp -and [int64]$g[0].t0 -ge ($imp.s - 5000) -and [int64]$g[0].t0 -le ($imp.e + 5000)
+      if ($cut) { $script:objCutN++; $g = @($g | Select-Object -Skip 1) }
+      if ($g.Count -le 1) { return $false }
+      if ($g.Count -eq 2 -and $g[0].id -eq 'FinComVoucherBatch' -and $g[1].id -eq 'FinComVoucherObject') { $script:objLeftN++; return $false }
+      $true }).Count
   $objCut = [int]$script:objCutN
   $objNotWanted = @($objMids | Where-Object { $_ -notin $wantAll }).Count
   $missOk = @($missing | Where-Object { [int](Prop (Prop $gs 'entries_sent') $_) -ge [int]$script:g5Truth[$_] }).Count -eq $missing.Count
