@@ -75,9 +75,10 @@ change.
    batch249.go, batchFetchSHA): a change of FinComVoucherObject's fields never widens FinComVoucherBatch (the request is
    then not built, and the entries go one by one; round 3 L1).
 8. **Known limit** (round 3 L5, Low): on 3.0 .. 6.2 a GST line is told by its GST nature or taxability in the group's
-   answer. A line with neither, and no type of supply, is taken from the group; in the gate's data (bdiff, every entry
-   of the tdsgst, TDS, payroll and stock-journal companies on all five releases) every such entry taken is identical
-   to FinComVoucherObject's answer. A ledger whose GST details Tally works out only in the object export is not in that
+   answer. A line with neither, and no type of supply, is taken from the group. In the gate's field-by-field comparison
+   (bdiff run 40834628041 on 3.0, 4.1, 5.1, 6.2 and 7.1, at e16baaf86: the tdsgst, TDS challan, payroll, stock-journal,
+   cost-centre, optional and cancelled entries) every entry taken is identical to FinComVoucherObject's answer; the
+   answers of 7.1 and 3.0 (run 40815068422) are kept in testdata and compared by TestR249R1GateAnswersAsObject. A ledger whose GST details Tally works out only in the object export is not in that
    data; the field-by-field gate (bdiff) is run on each release before publishing.
 
 ## Measured (real TallyPrime, test data)
