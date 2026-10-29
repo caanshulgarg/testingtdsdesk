@@ -1,0 +1,101 @@
+[01:31:11] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-29, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-29, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dbm\req: company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, vchheads
+[db] tdsgst company: created 0, altered 1, errors 0, 38.8 ms
+[db] tdsgst vchtypes: created 0, altered 7, errors 0, 26.8 ms
+[db] tdsgst natures: created 8, altered 0, errors 0, 8.2 ms
+[db] tdsgst ledgers: created 63, altered 0, errors 0, 215 ms
+[db] tdsgst S01: created 1, altered 0, errors 0, 69.7 ms
+[db] tdsgst S02: created 1, altered 0, errors 0, 31.7 ms
+[db] tdsgst S03: created 1, altered 0, errors 0, 32.3 ms
+[db] tdsgst S04: created 1, altered 0, errors 0, 33.1 ms
+[db] tdsgst S05: created 1, altered 0, errors 0, 41.5 ms
+[db] tdsgst S06: created 1, altered 0, errors 0, 44.1 ms
+[db] tdsgst S07: created 1, altered 0, errors 0, 38 ms
+[db] tdsgst S08: created 1, altered 0, errors 0, 38.9 ms
+[db] tdsgst S09: created 1, altered 0, errors 0, 37 ms
+[db] tdsgst S10: created 1, altered 0, errors 0, 43.7 ms
+[db] tdsgst S11: created 1, altered 0, errors 0, 35.6 ms
+[db] tdsgst S12: created 1, altered 0, errors 0, 40.4 ms
+[db] tdsgst S13: created 1, altered 0, errors 0, 39.7 ms
+[db] tdsgst S14: created 1, altered 0, errors 0, 22.4 ms
+[db] tdsgst S15: created 1, altered 0, errors 0, 55 ms
+[db] tdsgst CN1: created 1, altered 0, errors 0, 54.1 ms
+[db] tdsgst CN2: created 1, altered 0, errors 0, 36.5 ms
+[db] tdsgst DN1: created 1, altered 0, errors 0, 34.5 ms
+[db] tdsgst RV1: created 1, altered 0, errors 0, 17.4 ms
+[db] tdsgst P01: created 1, altered 0, errors 0, 45.4 ms
+[db] tdsgst P02: created 1, altered 0, errors 0, 38.5 ms
+[db] tdsgst P03: created 1, altered 0, errors 0, 32.2 ms
+[db] tdsgst P04: created 1, altered 0, errors 0, 41.7 ms
+[db] tdsgst P05: created 1, altered 0, errors 0, 36.3 ms
+[db] tdsgst DN2: created 1, altered 0, errors 0, 67.8 ms
+[db] tdsgst T01: created 1, altered 0, errors 0, 26.9 ms
+[db] tdsgst T02: created 1, altered 0, errors 0, 23.4 ms
+[db] tdsgst T03: created 1, altered 0, errors 0, 21.5 ms
+[db] tdsgst T04: created 1, altered 0, errors 0, 32.1 ms
+[db] tdsgst T05: created 1, altered 0, errors 0, 41.3 ms
+[db] tdsgst T06: created 1, altered 0, errors 0, 22.2 ms
+[db] tdsgst T07: created 1, altered 0, errors 0, 15.6 ms
+[db] tdsgst T08: created 1, altered 0, errors 0, 15.5 ms
+[db] tdsgst T09: created 1, altered 0, errors 0, 14.5 ms
+[db] tdsgst T10: created 1, altered 0, errors 0, 16.3 ms
+[db] tdsgst T11: created 1, altered 0, errors 0, 17.9 ms
+[db] tdsgst TC1: created 1, altered 0, errors 0, 49 ms
+[db] tdsgst TC2: created 1, altered 0, errors 0, 60.7 ms
+[db] tdsgst S20: created 1, altered 0, errors 0, 59.6 ms
+[db] TDS challan payment BD-TDS-1: created 0, altered 0, errors 0, 14.6 ms; Tally said: TDS Rate &apos;Fees for Professional Services&apos; does not exist!
+[db] TDS challan payment BD-TDS-1 (no bank allocation): created 0, altered 0, errors 0, 15.1 ms; Tally said: TDS Rate &apos;Fees for Professional Services&apos; does not exist!
+[db] TDS challan payment BD-TDS-2: created 0, altered 0, errors 0, 14 ms; Tally said: TDS Rate &apos;Fees for Professional Services&apos; does not exist!
+[db] TDS challan payment BD-TDS-2 (no bank allocation): created 0, altered 0, errors 0, 11.9 ms; Tally said: TDS Rate &apos;Fees for Professional Services&apos; does not exist!
+[db] payg masters: created 18, altered 1, errors 0, 61.1 ms
+[db] payg entry: created 1, altered 0, errors 0, 16.5 ms
+[db] payg entry: created 1, altered 0, errors 0, 18 ms
+[db] payg entry: created 1, altered 0, errors 0, 19.4 ms
+[db] payg entry: created 1, altered 0, errors 0, 20.1 ms
+[db] payg entry: created 1, altered 0, errors 0, 25.4 ms
+[db] payg entry: created 1, altered 0, errors 0, 22.2 ms
+[db] payg entry: created 1, altered 0, errors 0, 26.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 25.3 ms
+[db] payg entry: created 1, altered 0, errors 0, 26.7 ms
+[db] payg entry: created 1, altered 0, errors 0, 28.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 28.9 ms
+[db] payg entry: created 1, altered 0, errors 0, 24.7 ms
+[db] payg entry: created 1, altered 0, errors 0, 25.6 ms
+[db] payg entry: created 1, altered 0, errors 0, 17.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 15.3 ms
+[db] payg entry: created 1, altered 0, errors 0, 20 ms
+[db] payg entry: created 1, altered 0, errors 0, 22.3 ms
+[db] payg entry: created 1, altered 0, errors 0, 18.7 ms
+[db] payg entry: created 1, altered 0, errors 0, 20.4 ms
+[db] payg entry: created 1, altered 0, errors 0, 28.5 ms
+[db] payg entry: created 1, altered 0, errors 0, 26.9 ms
+[db] payg entry: created 1, altered 0, errors 0, 25.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 24.5 ms
+[db] payg entry: created 1, altered 0, errors 0, 24 ms
+[db] payg entry: created 1, altered 0, errors 0, 26 ms
+[db] payg entry: created 1, altered 0, errors 0, 27.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 23.6 ms
+[db] payg entry: created 1, altered 0, errors 0, 30.9 ms
+[db] payg entry: created 1, altered 0, errors 0, 24.7 ms
+[db] payg entry: created 1, altered 0, errors 0, 24.4 ms
+[db] payg entry: created 1, altered 0, errors 0, 27.6 ms
+[db] payg entry: created 1, altered 0, errors 0, 47.2 ms
+[db] payg entry: created 1, altered 0, errors 0, 40.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 27.6 ms
+[db] payg entry: created 1, altered 0, errors 0, 26.8 ms
+[db] payg entry: created 1, altered 0, errors 0, 27.6 ms
+[db] stock items: created 4, altered 0, errors 0, 16.9 ms
+[db] stock journal BD-SJ-1: created 1, altered 0, errors 0, 14.9 ms
+[db] stock journal BD-SJ-2: created 1, altered 0, errors 0, 15.7 ms
+######## PASS d0 the test data made (tdsgst, TDS challan payments, payroll with salary payments, stock journals): 78 entries in Tally (Credit Note 2, Debit Note 2, Journal 12, Payment 24, Payroll 12, Purchase 5, Receipt 1, Sales 18, Stock Journal 2); tdsgst masters company: 0 created, 0 errors; tdsgst masters vchtypes: 0 created, 0 errors; tdsgst masters natures: 8 created, 0 errors; tdsgst masters ledgers: 63 created, 0 errors; tdsgst entries: 39 of 39; TDS challan payment BD-TDS-1: created 0: TDS Rate &apos;Fees for Professional Services&apos; does not exist!; TDS challan payment BD-TDS-2: created 0: TDS Rate &apos;Fees for Professional Services&apos; does not exist!; payg masters: 18 created, 0 errors; payg entries: 36 of 36; stock items: 4 created; stock journals: 2 of 2
+######## PASS d2 FinComVoucherBatch on every day: exactly the entries asked, each under 2 s: 36 group requests on 18 days (66 entries), exact 36; over 2 s: none; worst 56.9 ms
