@@ -8,10 +8,12 @@ added, FinComVoucherBatch, for the older-entries fetch only; nothing else asked 
 R1. Bringing older entries from Tally is much faster: the bridge asks Tally for up to 100 entries of the same day in
     one request (FinComVoucherBatch), instead of one entry at a time. Each request still stops at 2 seconds, only one
     at a time, only while Tally is idle, your postings first, and FinCom keeps only the approved fields.
-R2. If Tally is ever slow with a group (over 2 seconds), the bridge asks that day again in groups of half the size, and
-    then one by one, as before. If Tally's screen stops answering for 2 seconds, it stops reading older entries of that
-    company, as in 2.4.5.
-R3. Payroll entries are still read one by one (their employees first, up to 3 seconds).
+R2. If Tally is ever slow with a group (over 2 seconds), the bridge asks again in groups of half the size (50), once,
+    and then one by one, as before; the smaller size is kept for that company's next days. If Tally's screen stops
+    answering for 2 seconds, even just after a slow group, it stops reading older entries of that company, as in 2.4.5.
+R3. Payroll entries, entries with employees' pay heads, and (on TallyPrime 3.0 to 6.2) entries with a GST sales or
+    purchase line are still read one by one, exactly as 2.4.8 reads them: a group would not give their GST type of
+    supply the same way. On TallyPrime 7.1 those GST entries come in the groups too.
 Real-Tally gate: TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (a new request shape), with the upgrade from 2.4.8.
 
 CHECK 16 - OLDER ENTRIES, 100 AT A TIME (2.4.9)
