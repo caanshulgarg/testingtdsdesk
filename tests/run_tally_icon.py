@@ -14,8 +14,9 @@ to take action there only"; "I don't need NWS144... need only Tally... it should
      Download when no computer has FinCom. Esc and a click outside close it; the keyboard reaches it.
   4. Phone 390: the same single icon, no sideways scroll, the popover inside the screen.
   5. (next-bridge-follows-login) A company no client has, from a computer revoked or moved away to another login (IX
-     DESIGNS in firm ABC): not on the Tally page's list nor in the popover's list until "From a removed computer (n)" is
-     opened; a linked company of that computer stays, marked "computer moved".
+     DESIGNS in firm ABC): not on the Tally page's list nor in the popover's list; under Help & support › Every company
+     seen only once "From a removed computer (n)" is opened (the page of 28-Oct-2026); a linked company of that computer
+     stays, under Your linked clients, marked "computer moved".
 Options: --shots DIR saves the screens.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_icon.py"""
 import json, os, re, sys, threading, functools, http.server
@@ -229,15 +230,23 @@ def main():
         E(SETUP, [s5, "owner", ME, CLIENTS])
         E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1800)
         RW = lambda c: '#app [data-tco-list=firm] [data-tco-row="%s"]' % c
-        ok(pg.locator(RW("IX DESIGNS")).count() == 0 and pg.locator("#app [data-tco-show-gone]").inner_text() == "From a removed computer (1)",
-           "IX DESIGNS (not a client, its computer removed): not listed; 'From a removed computer (1)' (%s)" % pg.locator("#app [data-tco-show-gone]").all_inner_texts())
-        ok(pg.locator(RW("OLD CO")).count() == 1 and pg.locator(RW("OLD CO") + " [data-tco-moved]").inner_text() == "computer moved", "OLD CO (linked) stays, marked 'computer moved'")
-        ok(pg.locator(RW("SHARED CO")).count() == 1 and pg.locator(RW("SHARED CO") + " [data-tco-gone], " + RW("SHARED CO") + " [data-tco-moved]").count() == 0,
-           "SHARED CO: its computer key still in use (one bridge moved away, key not revoked): listed as usual")
+        RA = lambda c: '#app [data-tco-list=all] [data-tco-row="%s"]' % c
+        # the Tally page of 28-Oct-2026 (5b33fb387, e2fb8e710): the page's list is the companies open in Tally now and, quiet,
+        # the linked clients; a company seen earlier, not open and linked to no client, only under Help & support › Every
+        # company seen, where the removed computer's stay behind "From a removed computer (n)"
+        ok(pg.locator(RW("IX DESIGNS")).count() == 0 and pg.locator("#app [data-tco-list=firm] [data-tco-show-gone]").count() == 0,
+           "IX DESIGNS (not a client, its computer removed): not on the page's list")
+        ok(pg.locator(RW("OLD CO")).count() == 1 and pg.locator(RW("OLD CO") + " [data-tco-moved]").inner_text() == "computer moved", "OLD CO (linked) stays, under Your linked clients, marked 'computer moved'")
         shot(pg, "tally-page-removed-computer-closed", "#app [data-tco-list=firm]")
-        pg.click("#app [data-tco-show-gone]"); pg.wait_for_timeout(500)
-        ok(pg.locator(RW("IX DESIGNS")).count() == 1 and pg.locator(RW("IX DESIGNS") + " [data-tco-gone]").count() == 1, "opened: IX DESIGNS is listed, marked 'from a removed computer'")
-        shot(pg, "tally-page-removed-computer-open", "#app [data-tco-list=firm]")
+        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(800)
+        ok(pg.locator(RA("IX DESIGNS")).count() == 0 and pg.locator("#app [data-tco-list=all] [data-tco-show-gone]").inner_text() == "From a removed computer (1)",
+           "Every company seen: IX DESIGNS not listed; 'From a removed computer (1)' (%s)" % pg.locator("#app [data-tco-list=all] [data-tco-show-gone]").all_inner_texts())
+        ok(pg.locator(RA("SHARED CO")).count() == 1 and pg.locator(RA("SHARED CO") + " [data-tco-gone], " + RA("SHARED CO") + " [data-tco-moved]").count() == 0,
+           "SHARED CO: its computer key still in use (one bridge moved away, key not revoked): listed as usual under Every company seen")
+        pg.click("#app [data-tco-list=all] [data-tco-show-gone]"); pg.wait_for_timeout(500)
+        ok(pg.locator(RA("IX DESIGNS")).count() == 1 and pg.locator(RA("IX DESIGNS") + " [data-tco-gone]").count() == 1, "opened: IX DESIGNS is listed, marked 'from a removed computer'")
+        shot(pg, "tally-page-removed-computer-open", "#app [data-tco-list=all]")
+        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
         client_page(pg, CU); pop_open(pg)
         opts = E("(s) => [...document.querySelectorAll(s + ' [data-tally-pop-pick] option')].map(o => o.value)", POP)
         ok("IX DESIGNS" not in opts, "the Tally icon's Link list leaves it out (%s)" % opts)
