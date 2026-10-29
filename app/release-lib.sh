@@ -64,7 +64,10 @@ replace_folder() {  # $1 from (a directory), $2 the folder of main
 
 # commit $1/ only (or the folders $1 names, "review review-prev"), refuse anything outside, push main (or not, DRY=1)
 finish() {  # $1 folder(s), $2 commit message, $3 what to say once pushed
-  local f re=""; for f in $1; do [ ! -e "$f" ] || git add -A "$f"; re="$re|$f/"; done; re="^(${re#|})"   # a folder gone (git rm) is staged already
+  # each folder taken out of the index and added again, so every file is read for its content: replace_folder's tar keeps
+  # the files' times, and with core.checkStat=minimal (the owner's git) a file of the same size and second was taken for
+  # unchanged by `git add -A` (main 7099fe47f: review/build.json kept the previous build's id)
+  local f re=""; for f in $1; do git rm -r -q --cached --ignore-unmatch -- "$f" >/dev/null; [ ! -e "$f" ] || git add -A -- "$f"; re="$re|$f/"; done; re="^(${re#|})"
   if git diff --cached --quiet; then echo "Nothing to change: $1/ on main already is this."; return 0; fi
   git commit -qm "$2"
   git diff --stat=120 origin/main HEAD

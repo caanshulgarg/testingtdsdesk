@@ -172,6 +172,31 @@ try:
     ok(r.returncode != 0 and head() == c_R4, "a folder with a slash is refused")
     _, r = publish("status", "X", 0, check=False)
     ok(r.returncode != 0 and head() == c_R4, "status/ (the uptime job's) is not a preview folder")
+
+    print("6. the owner's git settings (core.checkStat minimal, core.trustctime false): a file changed only in its content is committed")
+    # main 7099fe47f (29-Oct-2026): promote-next.sh committed every file of next/ to review/ but review/build.json, which kept
+    # the build it replaced. replace_folder copies with tar, which keeps each file's time; the new build.json had the same
+    # size as the old one (build ids and stamps of the same length) and, both checked out in the same second, the same
+    # time; with checkStat minimal git looks at nothing else, so `git add -A` took the file for unchanged
+    OWN = os.path.join(T, "owner.gitconfig")
+    with open(OWN, "w") as h: h.write("[core]\n\tcheckStat = minimal\n\ttrustctime = false\n")
+    O2, M2 = os.path.join(T, "o2.git"), os.path.join(T, "m2")
+    sh(["git", "init", "-q", "--bare", "-b", "main", O2], T); sh(["git", "clone", "-q", O2, M2], T)
+    for d, bid in (("review", "mvst0myq-ea18ee"), ("next", "mvtf73y7-326d5c")):
+        os.makedirs(os.path.join(M2, d))
+        with open(os.path.join(M2, d, "build.json"), "w") as h: h.write(json.dumps({"build": bid, "stamp": "React · 29-Oct-2026 05:57"}))
+    t0 = int(time.time()) - 100
+    for d in ("review", "next"): os.utime(os.path.join(M2, d, "build.json"), (t0, t0))   # the same second, as one checkout makes them
+    sh(["git", "add", "-A"], M2); sh(["git", "commit", "-qm", "main"], M2); sh(["git", "push", "-q", "origin", "HEAD:main"], M2)
+    sh(["git", "fetch", "-q", "origin"], M2)
+    r = sh(["bash", "-c", '. "$1"; replace_folder next review; finish review "Promote" "done"', "-", os.path.join(APP, "release-lib.sh")], M2, {"GIT_CONFIG_GLOBAL": OWN, "DRY": "1"}, check=False)
+    got = sh(["git", "show", "HEAD:review/build.json"], M2, check=False).stdout
+    ok(r.returncode == 0 and "mvtf73y7-326d5c" in got, "review/build.json committed with the new build (%s) %s" % (got.strip()[:60], (r.stdout + r.stderr).strip()[-200:]))
+    # and the whole promote, on the owner's settings
+    F, _ = publish("next", "F", 0.2)
+    r = run("promote-next.sh", env={"GIT_CONFIG_GLOBAL": OWN}); c_F = head()
+    ok(r.returncode == 0 and build_at(c_F, "review") == F and {f: b for f, b in ls_tree(c_F, "review").items() if f not in ("last-good.json", "README.txt")} == ls_tree(c_F, "next"),
+       "promote on the owner's settings: review/ = F, every file next/'s (%s) %s" % (build_at(c_F, "review"), r.stderr.strip()[:200]))
 finally:
     shutil.rmtree(T, ignore_errors=True)
 print("\nall passed" if not fails else "\nFAILED: %d" % len(fails)); sys.exit(1 if fails else 0)
