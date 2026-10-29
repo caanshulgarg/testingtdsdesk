@@ -28,7 +28,10 @@ GONE = ["Bring older entries from Tally", "Counting the year in Tally", "Whole y
 def main():
     with sync_playwright() as p:
         srv, br, pg = U.start(p, 8455, SITE, errors=errors)
-        pg.on("console", lambda m: cons.append(m.text[:160]) if m.type == "error" else None)
+        # the Tally page reads this browser's FinCom Bridge first (825473bc6: /ping on 127.0.0.1:9100..9199, src/js/24); with
+        # no bridge on this machine the browser itself logs each refused ping: that is not the page's error
+        BRIDGE_PING = re.compile(r"^http://127\.0\.0\.1:91\d\d/ping\?")
+        pg.on("console", lambda m: cons.append(m.text[:160]) if m.type == "error" and not BRIDGE_PING.match((m.location or {}).get("url") or "") else None)
         E = pg.evaluate
         n = lambda sel: pg.locator(sel).count()
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
@@ -59,7 +62,10 @@ def main():
         E("""() => { const base = TCloud.rpc; window.__led = null; TCloud.rpc = async (fn, a) => {
             if (fn === 'tally_period_status') return {ok: true, pull: null, ledger: window.__led}; return base(fn, a); }; }""")
         s5 = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
-        pg.click(s5 + " [data-tco-act]"); pg.wait_for_timeout(800)
+        # the redesign of 28-Oct-2026 (5b33fb387): a company not linked has the picker itself, the likeliest client chosen
+        # ([data-tco-act=pick]); its Link button links it
+        ok(E("(s) => (document.querySelector(s + ' [data-tco-relink-pick]') || {}).value || ''", s5) == E("() => Object.values(S.companies).find(c => c.name === 'GB TEXCOAT').id"), "GB TEXCOAT: its own client chosen in the picker")
+        pg.click(s5 + " [data-tco-relink]"); pg.wait_for_timeout(800)
         E("() => { window.__led = {read: 312, of: 1240, done: false, at: new Date().toISOString(), round: 'r1'}; }")
         pg.wait_for_timeout(11500)
         ok(txt(s5 + " [data-tco-sync=running]").startswith("Reading ledgers from Tally: 312 of 1,240 (25%)"), "the first sync while reading: '312 of 1,240 (25%%)' (%s)" % txt(s5 + " [data-tco-sync]"))
