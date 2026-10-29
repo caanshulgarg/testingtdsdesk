@@ -75,7 +75,7 @@ export function Tb({ d, kind, fy }) {
   const SRC = [["", "All codes"], ["none", "Unmapped (" + n.none + ")"], ["suggested", "Suggested (" + n.suggested + ")"], ["hand", "By hand (" + n.hand + ")"]];
   return <section className="fin-sheet" data-fin-tb="">
     <header><h3>{"Trial balance and mapping, " + (T.period && !T.period.full ? T.period.range : FC.fyLabel(fy))}</h3><p data-fin-pysrc={T.pySrc}>{"In rupees, a debit positive" + (T.period && !T.period.full ? ": balance sheet ledgers as on " + T.period.asAt + ", income and expenses for the period" : "") + ". " + ({
-      copy: T.period && !T.period.full ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
+      copy: T.period && !T.period.full && T.period.cmp !== "fy" ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
       none: "No PY: the same period of last year is not in FinCom’s copy." }[T.pySrc] || "PY from the opening balances.")}</p></header>
     {unm >= 0.005 && <p className="fin-unmapped" data-fin-unmapped="">{"Unmapped balance " + inr(unm)}{s.src !== "none" && <button type="button" className="linkbtn" onClick={() => setFin({ src: "none", tbF: null })}>Show them</button>}</p>}
     <div className="fin-tools">
