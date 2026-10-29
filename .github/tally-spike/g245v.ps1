@@ -324,7 +324,9 @@ try {
   $maxL = [int](Prop $gs 'max_listed'); $nb = [int](Prop $gs 'night_beats'); $beatsF = [int](Prop $gs 'beats') - $b0
   $fetchMin = [math]::Round(($tFetchEnd - $tFetch) / 60000.0, 1)
   $eta200k = if ($perMin -gt 0) { [math]::Round(200000 / $perMin / 60.0, 1) } else { -1 }
-  Add-Content -Path $resultsFile -Encoding UTF8 -Value ('MEASURE g10 night pace: ' + ("{0} entries sent in {1} min of entry requests ({2} entries a minute; 2,00,000 entries would take about {3} h at this pace); requests at Tally in the fetch: {4}" -f (Nf $nEnt), [math]::Round($spanMin, 1), (Nf $perMin), $eta200k, ($pxF.Count)))
+  $eta100k = if ($perMin -gt 0) { [math]::Round(100000 / $perMin, 0) } else { -1 }
+  $nBatch = @($pxF | Where-Object { $_.id -eq 'FinComVoucherBatch' }).Count; $nObj = @($pxF | Where-Object { $_.id -eq 'FinComVoucherObject' }).Count
+  Add-Content -Path $resultsFile -Encoding UTF8 -Value ('MEASURE g10 night pace: ' + ("{0} entries sent in {1} min of entry requests ({2} entries a minute; 1,00,000 entries would take about {5} min, 2,00,000 about {3} h at this pace); requests at Tally in the fetch: {4} (FinComVoucherBatch {6}, FinComVoucherObject {7})" -f (Nf $nEnt), [math]::Round($spanMin, 1), (Nf $perMin), $eta200k, ($pxF.Count), $eta100k, $nBatch, $nObj))
   # ROUND 104: the owner's choice (a) of 22-Oct-2026 (the company list once a day, a lighter night step; no new request):
   # about 2-3 times the 165 entries a minute of run 39647340380, so at least 330; the faster form (b) waits for 2.4.6
   GRes $G10 $(if (-not $gs -or -not $objF.Count) { 'HARNESS' } elseif ($maxL -gt 3 -and $nb -gt 0 -and $perMin -ge 330 -and -not $over.Count -and $overlap -eq 0 -and -not $spBad.Count) { 'PASS' } else { 'FAIL' }) ("periodNight answered {0} time(s); at most {1} days in one answer; {2} beats in {3} min of fetch; {4} entries a minute ({5} entries over {6} min); the rules of g4 kept: over the limit {7}, overlapping {8}, window spells not allowed {9}" -f $nb, $maxL, $beatsF, $fetchMin, (Nf $perMin), (Nf $nEnt), [math]::Round($spanMin, 1), $over.Count, $overlap, $spBad.Count)
