@@ -838,6 +838,7 @@ func pullFetchStep(w *pullWork, port int) (bool, bool) {
 		writeLog(fmt.Sprintf("Older entries of %s: the entry with MasterID %s is no longer of %s in Tally; not sent (the day is counted again)", it.Company, mid, liveDay(it.Day)))
 	default:
 		w.got = append(w.got, x)
+		batchTOSLearn(it.Company, mid, x) // 2.4.9: what its group left unknown, settled by FinComVoucherObject's answer
 	}
 	pullNote(it, "fetch", w)
 	return true, true

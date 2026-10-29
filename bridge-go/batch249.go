@@ -29,9 +29,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"html"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -171,6 +173,154 @@ func batchConvert(v string) string {
 	return v
 }
 
+// 2.4.9's gate (tally-versions mode bdiff, run 40800355969, the tdsgst and payroll test companies): what a Voucher
+// collection gives otherwise than FinComVoucherObject's answer, found field by field. An entry showing it is not taken
+// from the group: FinComVoucherObject reads it one by one (FinCom gets exactly what 2.4.8 sends):
+//   - every release adds an "On Account" bill allocation with no name to a bill-wise party's line that has none
+//     (FinComVoucherObject's answer has no allocation there): such an entry is always read one by one;
+//   - TallyPrime 3.0 .. 6.2 leave a line's GST type of supply (GSTOVRDNTYPEOFSUPPLY) empty in a collection where the
+//     object export gives the one the ledger (or stock item) holds, "Goods" or "Services"; where neither holds one both
+//     are empty (ZZ BIG TEST, run 40750991113). So a line with a GST nature or taxability and no type of supply is taken
+//     from a group only for a ledger / stock item this bridge has seen FinComVoucherObject answer with no type of supply
+//     too: the first entry naming an unknown one is read one by one (FinComVoucherObject), which settles it for the company;
+//     the group's other entries naming it are asked again in the next group.
+
+// the lines of an entry with a GST nature or taxability and no type of supply, as "<list>|<name>" (the ledger's or the
+// stock item's name), and why the entry is to be read one by one whatever the lines ("" when not)
+func batchTOSLines(v string) (keys []string, always string) {
+	root := fastTree(v)
+	if root == nil {
+		return nil, ""
+	}
+	seen := map[string]bool{}
+	var walk func(e *fastEl)
+	walk = func(e *fastEl) {
+		if always != "" || !e.hasKids {
+			return
+		}
+		kid := map[string]string{}
+		has := map[string]bool{}
+		for _, k := range e.kids {
+			if !k.hasKids {
+				kid[k.name] = strings.Trim(html.UnescapeString(k.text), "\x04 \t\r\n")
+				has[k.name] = true
+			}
+		}
+		if e.name == "BILLALLOCATIONS.LIST" && strings.EqualFold(kid["BILLTYPE"], "On Account") && kid["NAME"] == "" {
+			always = "an On Account bill allocation with no name, as a group gives it"
+			return
+		}
+		if (kid["GSTOVRDNTAXABILITY"] != "" || kid["GSTOVRDNNATURE"] != "") && has["GSTOVRDNTYPEOFSUPPLY"] && kid["GSTOVRDNTYPEOFSUPPLY"] == "" {
+			name := kid["LEDGERNAME"]
+			if name == "" {
+				name = kid["STOCKITEMNAME"]
+			}
+			if k := strings.TrimSuffix(e.name, ".LIST") + "|" + strings.ToLower(name); !seen[k] {
+				seen[k] = true
+				keys = append(keys, k)
+			}
+		}
+		for _, k := range e.kids {
+			walk(k)
+		}
+	}
+	walk(root)
+	sort.Strings(keys)
+	return keys, always
+}
+
+// what this bridge has learned per company: "<list>|<name>" -> FinComVoucherObject also gives no type of supply (true)
+// or gives one (false)
+var batchTOS = struct {
+	mu    sync.Mutex
+	known map[string]bool
+	probe map[string][]string // company|MasterID -> the keys its one-by-one answer settles
+}{known: map[string]bool{}, probe: map[string][]string{}}
+
+func batchTOSKey(company, k string) string { return companyKey(company) + "|" + k }
+
+// the entry may be taken from the group: every line without a type of supply names a ledger / item known to have none
+// in FinComVoucherObject's answer too. probe: the keys still unknown (the entry is to be read one by one to learn them)
+func batchTOSTake(company string, keys []string) (ok bool, unknown []string) {
+	batchTOS.mu.Lock()
+	defer batchTOS.mu.Unlock()
+	ok = true
+	for _, k := range keys {
+		same, known := batchTOS.known[batchTOSKey(company, k)]
+		if !known {
+			unknown = append(unknown, k)
+			ok = false
+		} else if !same {
+			ok = false
+		}
+	}
+	return ok, unknown
+}
+
+func batchTOSProbe(company, mid string, keys []string) {
+	batchTOS.mu.Lock()
+	batchTOS.probe[companyKey(company)+"|"+mid] = keys
+	batchTOS.mu.Unlock()
+}
+
+func batchTOSProbing(company, mid string) bool {
+	batchTOS.mu.Lock()
+	defer batchTOS.mu.Unlock()
+	_, ok := batchTOS.probe[companyKey(company)+"|"+mid]
+	return ok
+}
+
+// FinComVoucherObject's kept answer for an entry read one by one: what it gives for the lines its group left unknown
+func batchTOSLearn(company, mid, kept string) {
+	batchTOS.mu.Lock()
+	defer batchTOS.mu.Unlock()
+	pk := companyKey(company) + "|" + mid
+	keys, ok := batchTOS.probe[pk]
+	if !ok {
+		return
+	}
+	delete(batchTOS.probe, pk)
+	root := fastTree(kept)
+	if root == nil {
+		return
+	}
+	got := map[string]string{}
+	var walk func(e *fastEl, path string)
+	walk = func(e *fastEl, path string) {
+		if !e.hasKids {
+			return
+		}
+		name, tos := "", ""
+		for _, k := range e.kids {
+			if !k.hasKids {
+				switch k.name {
+				case "LEDGERNAME", "STOCKITEMNAME":
+					name = strings.ToLower(strings.TrimSpace(html.UnescapeString(k.text)))
+				case "GSTOVRDNTYPEOFSUPPLY":
+					tos = strings.Trim(html.UnescapeString(k.text), "\x04 \t\r\n")
+				}
+			}
+		}
+		// the strip writes ALLLEDGERENTRIES for an entry's own lines whichever list Tally used
+		list := strings.TrimSuffix(e.name, ".LIST")
+		if list == "ALLLEDGERENTRIES" {
+			got["LEDGERENTRIES|"+name] += tos
+		}
+		got[list+"|"+name] += tos
+		for _, k := range e.kids {
+			walk(k, path)
+		}
+	}
+	walk(root, "")
+	for _, k := range keys {
+		v, seen := got[k]
+		if !seen {
+			continue // not settled by this answer
+		}
+		batchTOS.known[batchTOSKey(company, k)] = v == ""
+	}
+}
+
 // errBatchInexact: the answer was not exactly the entries asked (one missing, one more, one twice, another day): not used
 type batchInexactError struct{ why string }
 
@@ -257,7 +407,8 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 	for _, m := range mids {
 		asked[m] = true
 	}
-	out, single := map[string]string{}, map[string]bool{}
+	out, single, again := map[string]string{}, map[string]bool{}, map[string]bool{}
+	probing := map[string]bool{}
 	raw = reCmpInfo.ReplaceAllString(raw, "")
 	for _, b := range reVchBlock.FindAllString(raw, -1) {
 		c := cleanXML(b)
@@ -265,7 +416,7 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 		switch {
 		case mid == "" || !asked[mid]:
 			return nil, nil, batchInexactError{"an entry not asked (MasterID " + or(mid, "none") + ")"}
-		case out[mid] != "" || single[mid]:
+		case out[mid] != "" || single[mid] || again[mid]:
 			return nil, nil, batchInexactError{"MasterID " + mid + " twice"}
 		case normDate(tagValue(c, "DATE")) != day:
 			return nil, nil, batchInexactError{"MasterID " + mid + " dated " + or(normDate(tagValue(c, "DATE")), "no date")}
@@ -275,17 +426,36 @@ func fetchVoucherBatch(tc *TC, company string, port int, day string, mids []stri
 			single[mid] = true
 			continue
 		}
-		v, why := fastStripWhy(batchConvert(c))
+		cv := batchConvert(c)
+		keys, always := batchTOSLines(cv)
+		if always != "" {
+			single[mid] = true
+			continue
+		}
+		if ok, unknown := batchTOSTake(company, keys); !ok {
+			if len(unknown) > 0 && !probing[strings.Join(unknown, "\n")] {
+				// the first entry naming these unknown lines: read one by one, which settles them for the company
+				probing[strings.Join(unknown, "\n")] = true
+				batchTOSProbe(company, mid, unknown)
+				single[mid] = true
+			} else if len(unknown) > 0 {
+				again[mid] = true // asked again in the next group, once its probe has settled the lines
+			} else {
+				single[mid] = true // a line whose ledger / item FinComVoucherObject gives a type of supply for
+			}
+			continue
+		}
+		v, why := fastStripWhy(cv)
 		if why != "" || v == "" {
 			single[mid] = true
 			continue
 		}
 		out[mid] = v
 	}
-	if len(out)+len(single) != len(mids) {
+	if len(out)+len(single)+len(again) != len(mids) {
 		var miss []string
 		for _, m := range mids {
-			if out[m] == "" && !single[m] {
+			if out[m] == "" && !single[m] && !again[m] {
 				miss = append(miss, m)
 			}
 		}
@@ -305,6 +475,12 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	}
 	if w.batchN == 0 {
 		w.batchN = pullBatchMax()
+	}
+	// an entry read one by one to settle what a group left unknown goes before the next group
+	for _, m := range w.want {
+		if w.single[m] && batchTOSProbing(it.Company, m) {
+			return false, false, false
+		}
 	}
 	g, contiguous := batchGroup(w.want, w.heads, w.batchN, func(m string) bool { return w.single[m] || payrollEntry(it.Company, w.heads[m].Type) })
 	if len(g) < 2 {
@@ -366,13 +542,20 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 	w.asked += len(g)
 	w.batches++
 	in := map[string]bool{}
+	var probes []string
 	for _, m := range g {
 		if single[m] {
 			if w.single == nil {
 				w.single = map[string]bool{}
 			}
-			w.single[m] = true // left wanted: FinComVoucherObject reads it (a payroll entry, or one the strip would hold)
+			w.single[m] = true // left wanted: FinComVoucherObject reads it (a payroll entry, one the strip would hold, a probe)
+			if batchTOSProbing(it.Company, m) {
+				probes = append(probes, m)
+			}
 			continue
+		}
+		if got[m] == "" {
+			continue // asked again in the next group (its lines settled by a probe first)
 		}
 		in[m] = true
 		x, h := got[m], w.heads[m]
@@ -382,9 +565,14 @@ func pullBatchStep(w *pullWork, port int) (handled, sent, more bool) {
 		}
 		w.got = append(w.got, x)
 	}
-	rest := w.want[:0]
+	// the probes first (FinComVoucherObject reads them next), then the rest as they were
+	rest := append([]string{}, probes...)
+	isProbe := map[string]bool{}
+	for _, m := range probes {
+		isProbe[m] = true
+	}
 	for _, m := range w.want {
-		if !in[m] {
+		if !in[m] && !isProbe[m] {
 			rest = append(rest, m)
 		}
 	}

@@ -38,6 +38,15 @@ change.
      none held (TestR249ConverterMatchesObjectOnRealAnswers on a sample kept in testdata/batch249).
    - Each entry keeps the REMOTEID attribute Tally writes on a collection's VOUCHER, equal to its GUID (an approved
      field; FinCom's reader takes the GUID first).
+   - What a group gives otherwise than FinComVoucherObject (the gate's field-by-field comparison on the tdsgst and
+     payroll test companies, tally-versions mode bdiff, run 40800355969) is never taken from it:
+     - an "On Account" bill allocation with no name, which every release adds to a bill-wise party's line that has none:
+       that entry is read one by one;
+     - TallyPrime 3.0 .. 6.2 leave a line's GST type of supply empty in a group where FinComVoucherObject gives the one
+       the ledger or stock item holds ("Goods"). The first entry naming such a ledger is read one by one and its answer
+       settles the ledger for the company (kept in memory, per company): a ledger that holds none (ZZ BIG TEST's) has its
+       entries taken from groups; one that holds a type has its entries read one by one. On 7.1 groups give the type.
+       So on 3.0 .. 6.2, entries on GST ledgers set to Goods / Services go one by one, as in 2.4.8.
 3. **Checks on every group answer** (fetchVoucherBatch): every entry asked, none more, none twice, all dated the day;
    otherwise the answer is not used and the day goes one by one (one log line). Each entry's GUID is checked against the
    day's list as before.
