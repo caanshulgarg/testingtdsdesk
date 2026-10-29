@@ -234,8 +234,11 @@ with sync_playwright() as p:
             # half-way: a colleague changes a bill (a background change that has to show)
             if not half and time.time() - t0 > IDLE / 2 and name == "Bills":
                 half = True; idle_renders = pg.evaluate("window.__qw.renders")
+                # the page read OUTSIDE the lock: Playwright runs this test's route on this same thread while it waits for the
+                # page, and the route takes the lock for the stand-in's tables; a save or a read of the page's arriving
+                # during that wait waited for ever on the lock held here (CI 40898330057, share 9: 900 s, no output)
+                data = pg.evaluate("(cid) => JSON.parse(JSON.stringify(S.data[cid].entries.zzb1))", CID); data["x"]["invoiceNo"] = "ZZ/1-R"
                 with LOCK:
-                    data = pg.evaluate("(cid) => JSON.parse(JSON.stringify(S.data[cid].entries.zzb1))", CID); data["x"]["invoiceNo"] = "ZZ/1-R"
                     rec = {"kind": "entry", "id": "zzb1", "client_id": CID, "data": data, "deleted": False, "updated_at": now(), "updated_by": OTHER}
                     DB["records"][("entry", CID, "zzb1")] = rec
                 broadcast("records", rec)
