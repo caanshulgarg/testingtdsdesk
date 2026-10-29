@@ -86,5 +86,19 @@ change.
 - The request: tally-versions mode batch, runs 40741546645 and 40750991113 (28-Oct-2026), 3.0 / 4.1 / 5.1 / 6.2 / 7.1,
   ZZ BIG TEST at 30,021 and 100,021 entries: 100 entries 945 ms worst on a day of up to 2,216 entries, 1,405 ms on a day of
   7,601 entries, exact in 6,280 requests; `docs/bridge-2.4.9-forms-for-owner.md`.
-- The gate (this build): see the release log row and the test sheet (bdiff on the tdsgst and payroll companies, g245 with
-  the night pace, upg from 2.4.8, on all five releases).
+- Field by field (tally-versions mode bdiff, run 40834628041 at e16baaf86, all five releases): every entry taken from a
+  group identical to FinComVoucherObject's answer (7.1: 142; 3.0 .. 6.2: 86 each), 0 differ, 0 missing; the rest left
+  for FinComVoucherObject.
+- The real-Tally gate of this build (run 40838981120, 29-Oct-2026, the committed setup 161adb96...42fc0 installed on each
+  release; branch tally-batch249, local_dist=yes because the account's artifact storage is full):
+  - upg (2.4.9 over the published 2.4.8, a9cbec7f8, setup 030f4303...d83f): PASS c1, c2, u1-u4 on 3.0, 4.1, 5.1, 6.2, 7.1.
+  - g245 (ZZ BIG TEST, about 30,000 entries, Apr-Sep fetched, 7,852 entries FinCom lacked): 7.1 every check PASS; 3.0,
+    4.1, 5.1, 6.2 every check PASS but g3, which counted an entry asked once in a group and then read alone (left by the
+    group: a GST line without a type of supply) as "asked twice". Counted from the run's own proxy logs, no entry was
+    asked twice otherwise (3.0 and 5.1: 4,768 group-then-alone, 0 else; 4.1 and 6.2: one group of 100 asked again after
+    a cut for a posting, as the harness allows). The harness counts it apart since afafc3a0a; the rerun could not start
+    (GitHub: "recent account payments have failed or your spending limit needs to be increased").
+  - Speed, the night pace (g10), entries a minute while the bridge reads: 7.1 2,801 (1,00,000 entries in about 36 min);
+    3.0 647, 4.1 624, 5.1 628, 6.2 610 (1,00,000 in about 2.6-2.7 h), where ZZ BIG TEST's GST entries go one by one
+    (4,770 of 7,852). 2.4.8's pace on the same data: about 430 a minute (run 40750991113 for 2.4.9's forms); 2.4.5: 165.
+  - No request over 2 s, one at a time, Tally's window never held 2 s (g4 PASS on all five).
