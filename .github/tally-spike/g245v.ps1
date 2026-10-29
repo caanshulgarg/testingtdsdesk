@@ -287,7 +287,14 @@ try {
   # a MasterID whose earlier ask was within 5 s of the posting is not counted as asked twice (it is said in the evidence)
   $objReqs = @(foreach ($q in @($pxF | Where-Object { $_.id -in $EntryIds })) { foreach ($m in @(EntryMidsOf $q $gs)) { [pscustomobject]@{ id = $q.id; mid = $m; t0 = $q.t0; t1 = $q.t1 } } })
   $script:objCutN = 0
+  # 2.4.9: an entry a FinComVoucherBatch group left for FinComVoucherObject (by design: payroll, pay heads, a GST line the
+  # group gives with no type of supply on 3.0 .. 6.2, On Account) is asked once in the group and once alone: counted apart
+  # ("left by a group, read alone"), not as asked twice
+  $script:objLeftN = 0
   $objTwice = @($objReqs | Group-Object mid | Where-Object { $_.Count -gt 1 } | Where-Object {
+      $nB = @($_.Group | Where-Object { $_.id -eq 'FinComVoucherBatch' }).Count; $nO = @($_.Group | Where-Object { $_.id -eq 'FinComVoucherObject' }).Count
+      if ($nB -eq 1 -and $nO -eq 1 -and @($_.Group | Sort-Object { [int64]$_.t0 })[0].id -eq 'FinComVoucherBatch') { $script:objLeftN++; return $false }
+      $true } | Where-Object {
       $g = @($_.Group | Sort-Object { [int64]$_.t0 }); $early = @($g | Select-Object -First ($g.Count - 1))
       $cut = $imp -and @($early | Where-Object { [int64]$_.t0 -ge ($imp.s - 5000) -and [int64]$_.t0 -le ($imp.e + 5000) }).Count -gt 0 -and $g.Count -eq 2
       if ($cut) { $script:objCutN++ }; -not $cut }).Count
@@ -297,7 +304,7 @@ try {
   $listed = @((Prop $gs 'period_days_listed') | Where-Object { $_[2] -eq $true } | ForEach-Object { @($_[1]) })
   $outside = @($listed | Where-Object { $_ -notin $part } | Sort-Object -Unique)
   $badDates = @((Prop $gs 'bad_dates')).Count
-  GRes $G3 $(if (-not $gs) { 'HARNESS' } elseif (-not $notHeld.Count -and $x -eq $y -and $missOk -and -not $up5.Count -and $objTwice -eq 0 -and $objNotWanted -eq 0 -and -not $outside.Count -and $badDates -eq 0 -and $objMids.Count -ge $wantTotal) { 'PASS' } else { 'FAIL' }) ("Apr-Sep, {0} days, in {1} min: the progress line ends '{2}'; days not held in full or not as Tally: {3}; FinCom lacked {4} entries on {5}: all sent {6}; FinComVoucherObject asked {7} times ({8} wanted by FinCom; asked twice {9}, asked again after a cut for the posting {14}; not wanted {10}); days listed for the fetch outside the part {11}; entries with another date {12}; days to upload: {13}" -f $part.Count, [math]::Round(($tFetchEnd - $tFetch) / 60000, 1), $words, $(if ($notHeld.Count) { ($notHeld | Select-Object -First 6) -join '; ' } else { 'none' }), $wantTotal, ($missing -join ', '), $missOk, $objMids.Count, $wantAll.Count, $objTwice, $objNotWanted, $(if ($outside.Count) { $outside -join ',' } else { 'none' }), $badDates, $(if ($up5.Count) { $up5 -join ' | ' } else { 'none' }), $objCut)
+  GRes $G3 $(if (-not $gs) { 'HARNESS' } elseif (-not $notHeld.Count -and $x -eq $y -and $missOk -and -not $up5.Count -and $objTwice -eq 0 -and $objNotWanted -eq 0 -and -not $outside.Count -and $badDates -eq 0 -and $objMids.Count -ge $wantTotal) { 'PASS' } else { 'FAIL' }) ("Apr-Sep, {0} days, in {1} min: the progress line ends '{2}'; days not held in full or not as Tally: {3}; FinCom lacked {4} entries on {5}: all sent {6}; FinComVoucherObject asked {7} times ({8} wanted by FinCom; asked twice {9}, asked again after a cut for the posting {14}; left by a group, read alone {15}; not wanted {10}); days listed for the fetch outside the part {11}; entries with another date {12}; days to upload: {13}" -f $part.Count, [math]::Round(($tFetchEnd - $tFetch) / 60000, 1), $words, $(if ($notHeld.Count) { ($notHeld | Select-Object -First 6) -join '; ' } else { 'none' }), $wantTotal, ($missing -join ', '), $missOk, $objMids.Count, $wantAll.Count, $objTwice, $objNotWanted, $(if ($outside.Count) { $outside -join ',' } else { 'none' }), $badDates, $(if ($up5.Count) { $up5 -join ' | ' } else { 'none' }), $objCut, [int]$script:objLeftN)
 
   # ================================================================ g4 the 2 s rule, one at a time, no freeze
   $pxC = @($px | Where-Object { [int64]$_.t0 -ge $tCount -and [int64]$_.t0 -le $tFetchEnd -and $_.method -eq 'POST' } | Sort-Object { [int64]$_.t0 })
