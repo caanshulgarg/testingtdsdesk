@@ -55,6 +55,10 @@ var tallyAllowList = map[string]allowedReq{
 	// F2 one voucher type at a time when F1 is stopped at 2 s), and the ledger count for the step-5 bar (F3); daypull.go, ledcount.go
 	dayHeadsID: {purpose: "older entries for a period the person chose in FinCom (2.4.5), on a computer whose owner switched it on: the entry heads (GUID, MasterID, AlterID, date) of ONE day FinCom listed (SVFROMDATE = SVTODATE), each then asked by FinComVoucherObject; a day's list stopped at 2 s, or Tally's window held 2 s, stops the period for that company (ROUND 103; the by-type form is no longer sent); also the tray's read-only old-days test (a person's: three days of a past month); idle only, postings first, never the Day Book", maxSec: 1.08,
 		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661, at 30,009 entries: one day of 2,216 entries 376 ms worst (7.1); one voucher type of that day, 503 Purchase entries, 1,080 ms worst (4.1); window blocked 0.79 s at most)"},
+	// 2.4.9 (the owner's approval of 29-Oct-2026, docs/bridge-2.4.9-forms-for-owner.md): up to 100 older entries of ONE day
+	// in one request (batch249.go)
+	vchBatchID: {purpose: "older entries for a period the person chose in FinCom (2.4.9), on a computer whose owner switched it on, idle only: up to 100 entries of ONE day FinCom listed (SVFROMDATE = SVTODATE) in one request, by a run of that day's MasterIDs (a..b) or a list of them, after that day's FinComDayHeads; FETCH exactly FinComVoucherObject's approved fields, the ledger lines also under LEDGERENTRIES (an entry with items keeps those, any other its ALLLEDGERENTRIES), then FinComVoucherObject's strip (only approved fields kept, before anything is logged, stored or sent); payroll entries one by one; a group stopped at 2 s asked again in halves, then the day one by one; Tally's window held 2 s stops the period for that company", maxSec: 1.41,
+		measuredOn: "2026-10-28 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode batch, run 40750991113, at 30,021 and 100,021 entries: 100 entries of a day of up to 2,216 entries 945 ms worst (4.1), of a day of 7,601 entries 1,405 ms worst (6.2), window held 1.35 s at most; exactly the entries asked in 6,280 requests; every kept field identical to FinComVoucherObject's on 150 of 150 entries a release)"},
 	ledIdsID: {purpose: "the ledger count for Connect Tally's step-5 bar (2.4.5): the ledgers' MasterIDs only, the rows counted (no computed figure); in chunks of 2,000 MasterIDs when the one request is stopped at 2 s", maxSec: 0.41,
 		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661: 50,000 ledgers in one request 405 ms worst (3.0), each chunk of 2,000 MasterIDs 107 ms worst; exact on every release)"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
@@ -200,6 +204,7 @@ func allowListSamples() map[string]string {
 		empListID:            employeeChunkRequest(c, 0, 2000),
 		dayHeadsID:           dayHeadsRequest(c, a),
 		ledIdsID:             ledgerIdsRequest(c, 0, 0),
+		vchBatchID:           voucherBatchRangeRequest(c, a, 1, 100),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),
