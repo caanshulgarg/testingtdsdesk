@@ -61,7 +61,8 @@ def rpc(fn, a):
     if fn == "mfa_ok": return True
     if fn == "tally_ingest_ledgers_g": return {"ok": True, "ledgers": len(a.get("p_ledgers") or []), "groups": len(a.get("p_groups") or [])}
     if fn == "tally_year_openings": return {"ok": True, "moved": 0, "ledgers": 0, "twins": 0}
-    if fn == "tally_book_for": return next((c["book_id"] for c in T["tally_companies"] if c["firm_id"] == a["p_firm"] and c["company"] == a["p_company"]), None)
+    # as the real function (migration-2-hardening): a company with no client (a row the beat registered, 2a27435a2) has no book
+    if fn == "tally_book_for": return next((c.get("book_id") for c in T["tally_companies"] if c["firm_id"] == a["p_firm"] and c["company"] == a["p_company"] and c.get("client_id")), None)
     if fn == "tally_ingest_day":
         d = a["p_day"].replace("-", "")
         if FAIL.get(d, 0) > 0: FAIL[d] -= 1; raise RuntimeError("the database is busy (test)")
