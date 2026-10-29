@@ -10,7 +10,9 @@ import { useEffect, useRef, useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import Tag from "../../../parts/Tag.jsx";
 import { rs, inr, st, setFin, codeGroups, fig } from "./util.js";
+import AiMapSlot, { earlierMapping } from "./aimapSlot.jsx";
 
+const dmyIso = (iso) => { try { return fmtDate(String(iso || "").slice(0, 10)); } catch (e) { return String(iso || "").slice(0, 10); } };
 const isLent = (l) => FS.nature(l).path.some((g) => /^loans & advances \(asset\)$/i.test(String(g).trim()));
 function loanGiven(l, on) {
   const co = CO(); if (!co) return;
@@ -55,7 +57,7 @@ function CodeBtn({ r, kind, open, onOpen }) {
 }
 
 export function Tb({ d, kind, fy }) {
-  const s = st(), T = d.tb, rows = T.rows, f = s.tbF;
+  const s = st(), T = d.tb, rows = T.rows, f = s.tbF, mapBy = ((S.books || {}).fs || {}).mapBy || {};   // who chose a code (the AI mapping: "<user>, AI-assisted")
   const [pick, setPick] = useState(null);            // {ledger | "*bulk", at}
   const q = String(s.q || "").toLowerCase().trim();
   const shown = rows.filter((r) => (!f || f.codes.includes(r.code)) && (!s.src || (s.src === "none" ? !r.code : r.code && r.codeSrc === s.src)) && (!q || r.ledger.toLowerCase().includes(q) || String(r.group).toLowerCase().includes(q)));
@@ -77,6 +79,7 @@ export function Tb({ d, kind, fy }) {
     <header><h3>{"Trial balance and mapping, " + (T.period && !T.period.full ? T.period.range : FC.fyLabel(fy))}</h3><p data-fin-pysrc={T.pySrc}>{"In rupees, a debit positive" + (T.period && !T.period.full ? ": balance sheet ledgers as on " + T.period.asAt + ", income and expenses for the period" : "") + ". " + ({
       copy: T.period && !T.period.full && T.period.cmp !== "fy" ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
       none: "No PY: the same period of last year is not in FinCom’s copy." }[T.pySrc] || "PY from the opening balances.")}</p></header>
+    {earlierMapping(fy) && <AiMapSlot d={d} fy={fy} mode="new" />}
     {T.carried && <p className="note" data-fin-carried="">{T.carried.note + ": " + T.carried.list.map((a) => "Dr " + a.dr + " / Cr " + a.cr + " " + rs(a.amt)).join("; ") + ". Pass them in Tally, then tick it on last year’s Checks tab."}</p>}
     {unm >= 0.005 && <p className="fin-unmapped" data-fin-unmapped="">{"Unmapped balance " + inr(unm)}{s.src !== "none" && <button type="button" className="linkbtn" onClick={() => setFin({ src: "none", tbF: null })}>Show them</button>}</p>}
     <div className="fin-tools">
@@ -100,7 +103,8 @@ export function Tb({ d, kind, fy }) {
         <td className="code">{r.synthetic ? <span className="note">{r.code + " " + FinSt.CODES[r.code].label}</span> : <>
           <CodeBtn r={r} kind={kind} open={pick && pick.l === r.ledger} onOpen={(at) => setPick(pick && pick.l === r.ledger ? null : { l: r.ledger, at })} />
           {r.code && <Tag kind={r.codeSrc === "hand" ? "info" : "no"} className="fin-src" data-fin-srctag={r.codeSrc} title={r.why || undefined}>{r.codeSrc === "hand" ? "By hand" : "Suggested"}</Tag>}
-          {r.code && r.codeSrc === "suggested" && r.why && <span className="fin-why" data-fin-why={r.ledger}>{r.why}</span>}</>}</td>
+          {r.code && r.codeSrc === "suggested" && r.why && <span className="fin-why" data-fin-why={r.ledger}>{r.why}</span>}
+          {r.code && r.codeSrc === "hand" && mapBy[r.ledger] && mapBy[r.ledger].code === r.code && <span className="fin-why" data-fin-mapby={r.ledger}>{mapBy[r.ledger].by + ", " + dmyIso(mapBy[r.ledger].at)}</span>}</>}</td>
         {lent && <td>{!r.synthetic && isLent(r.ledger) && <input type="checkbox" aria-label={"Loan given (investing): " + r.ledger} checked={MIS.flowMark(r.ledger) === "loan_given"} onChange={(ev) => loanGiven(r.ledger, ev.target.checked)} />}</td>}
       </tr>)}
         {!shown.length && <tr><td colSpan={lent ? 9 : 8} className="note">No ledger here. <button type="button" className="linkbtn" onClick={() => setFin({ tbF: null, src: "", q: "" })}>Show every ledger</button></td></tr>}

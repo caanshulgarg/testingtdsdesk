@@ -9,6 +9,7 @@
 import { useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import { rs, codeGroups } from "./util.js";
+import AiMapSlot, { earlierMapping } from "./aimapSlot.jsx";
 
 const UNITS = [[1, "Rupees"], [1000, "Thousands"], [100000, "Lakhs"], [10000000, "Crores"]];
 const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -97,6 +98,7 @@ export default function PyBs({ d, fy, kind }) {
       <div className="fin-pybs-act"><Button className="btn small primary" data-fin-pybs-save="" onClick={keep}>Keep it</Button><Button className="btn small" onClick={() => setDraft(null)}>Cancel</Button></div>
     </div>}
     {v && !draft && show && <Lines lines={v.lines} kind={kind} />}
+    {v && !draft && !earlierMapping(fy) && <AiMapSlot d={d} fy={fy} mode="open" />}
   </div>;
 }
 
