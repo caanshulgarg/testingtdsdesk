@@ -10,7 +10,9 @@ against the stand-in for Supabase (fake_supabase.py), as run_main_bridge_server.
   2. MasterIDs: the one a Tally GUID carries ("<company GUID>-<MasterID in hex>"); else the latest recorder line of the
      book under that GUID; an entry with neither is not listed, only counted (unknown).
   3. capped: at most `limit` entries (500 at most whatever is asked), `more` when there were more.
-  4. read-only: no table changes but the computer's last_seen (every call's), no database function but tally_book_for.
+  4. read-only: no table changes but the computer's last_seen (every call's), no database function but tally_book_for
+     and tally_link_place_check (migration 110, c8ad8684c: data from another data location of the same company is
+     refused, as for selfcheck and recorder_lines; security definer, execute for service_role only, migrations 110/127).
   5. refused: a company not linked (409), no voucher type or no date (400).
   6. (2.4.0 review MEDIUM) the bridge's renumbering alerts ride on its beat (renumberAlerts: [{company, words, n, more,
      from, type, at}]): tally-ingest keeps them on the computer's beat (info.beat.renumberAlerts), cleaned (at most 20, the
@@ -88,7 +90,7 @@ try:
     ok(c == 200 and r.get("entries") == [], "1. the voucher type as Tally names it (%s)" % r.get("entries"))
     after = {t: v for t, v in F.T.items() if t != "tally_devices"}
     ok(after == before, "4. nothing in the database changed")
-    ok(set(F.ARGS) <= {"tally_book_for"}, "4. no database function but tally_book_for (%s)" % sorted(F.ARGS))
+    ok(set(F.ARGS) <= {"tally_book_for", "tally_link_place_check"}, "4. no database function but tally_book_for and the place check (%s)" % sorted(F.ARGS))
     c, r = call(dict(ASK, company="NOT LINKED"))
     ok(c == 409 and r.get("notLinked") is True, "5. a company not linked: 409 (%s %s)" % (c, r))
     c, r = call(dict(ASK, vtype=""))
