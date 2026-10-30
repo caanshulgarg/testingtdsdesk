@@ -397,9 +397,10 @@ const cardKey = (r) => "pc:" + r.device.id + "|" + String(r.user || "").toLowerC
 // The order is statusOf's (an older bridge, offline, stopped from FinCom, paused, Tally not open, reads only, a company
 // needing a fresh starting point, a slow company, a version to install by hand)
 function needOf(r, latest, owner, allStopped) {
-  const pc = pcWords(r), rd = r.read || { state: r.online ? "reading" : "offline", text: "" }, p = TCloud.pane;
+  // next-fix-tally-links2 (the owner, 29-Oct-2026: "no NWS144 type of thing"): never a computer's name or Windows login
+  const pc = "the Tally computer", rd = r.read || { state: r.online ? "reading" : "offline", text: "" }, p = TCloud.pane;
   if (!r.go || r.old) return { kind: "install", text: "Install FinCom Bridge" + (latest ? " " + latest : "") + " on " + pc + ": it replaces the older bridge by itself", act: "download" };
-  if (!r.online) return { kind: "offline", text: pc + " is not connected" + (r.at ? " since " + tallyHm(r.at) : "") + ". Sign in to Windows there as " + (r.user || "the Tally user") + ": FinCom Bridge starts by itself", act: "check" };
+  if (!r.online) return { kind: "offline", text: "The Tally computer is not connected" + (r.at ? " since " + tallyHm(r.at) : "") + ". Turn it on and sign in to Windows there: FinCom Bridge starts by itself", act: "check" };
   if (rd.state === "fincomstop") {
     if (allStopped) return null;
     const st = (TCloud.stopFor && TCloud.stopFor(r.device.id)) || {};
@@ -407,7 +408,7 @@ function needOf(r, latest, owner, allStopped) {
   }
   if (rd.state === "paused") return { kind: "paused", text: "Reading is paused on " + pc + ". To resume: " + RESUME_TRAY, act: "check" };
   if (r.tally !== "open" && r.tally !== "busy") return { kind: "tally", text: "Tally is not open on " + pc + ". Open TallyPrime and the company there", act: "check" };
-  if (!r.main) return { kind: "main", text: pc + " only reads: another bridge on this computer posts", act: owner ? "makeMain" : "", say: owner ? "" : "An owner of the firm can make it the main bridge." };
+  if (!r.main) return { kind: "main", text: "FinCom Bridge here only reads: another bridge on this computer posts", act: owner ? "makeMain" : "", say: owner ? "" : "An owner of the firm can make it the main bridge." };
   const base = (TCloud.baselines ? TCloud.baselines(r.device.id) : []).filter((x) => x.cur && x.cur.state === "needs_baseline");
   if (base.length) return { kind: "baseline", text: base[0].company + " needs a fresh starting point on " + pc + ": " + (base[0].cur.state_why || "no reason given"), act: owner && !p.noBaselineClear ? "baseline" : "", say: owner ? "" : "An owner of the firm clears it.", book: base[0].book, company: base[0].company };
   const bodies = r.recorderOff && typeof r.recorderOff.bodies === "object" && verAtLeast(r.version, "2.3.2") ? r.recorderOff.bodies : {};
@@ -662,7 +663,7 @@ function guideState(rows, latest) {
 function openWords(x) {
   const n = x.openNow.length;
   if (!n) return "No company is open in Tally right now.";
-  return nOf(n, "company", "companies") + " open in Tally on " + (x.pcs.length === 1 ? x.pcs[0].split(" · ")[0] : x.pcs.length + " computers") + ".";
+  return nOf(n, "company", "companies") + " open in Tally.";
 }
 const TICK = <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 function Step({ k, n, title, done, now, children }) {
@@ -725,7 +726,7 @@ function ConnectGuide({ x, m, connectStep }) {
   // next-tally-smart (the owner: "no step wizard once connected"): the steps only while no computer of the firm is heard
   // (a computer never connected); Connect another computer (step 1 asked again) shows them once more
   if (d.install && !((g.step || 0) > 0 && (g.step || 0) < 3 && g.at)) return null;
-  const now = GUIDE_KEYS.find((k) => !d[k]), owner = isOwner(), r = x.r, s = x.s, pc = r ? r.computer : "the Tally computer", user = (r && r.user) || "the Tally user";
+  const now = GUIDE_KEYS.find((k) => !d[k]), owner = isOwner(), r = x.r, s = x.s, pc = "the Tally computer";
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll(), stop = s && s.stopped ? ((TCloud.stopFor && TCloud.stopFor(r.device.id)) || {}) : null;
   const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
   return <section className="pane tguide tconnect tc3" data-connect-guide={now || "open"}>
@@ -733,7 +734,7 @@ function ConnectGuide({ x, m, connectStep }) {
       {d.install && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
     <ol className="tc3-steps">
       <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
-        {d.install ? <span className="note">{"Installed on " + (x.live.length === 1 ? pcWords(x.live[0]) : x.live.length + " computers") + ". "}
+        {d.install ? <span className="note">{"FinCom Bridge is installed. "}
             {g.step === 1 && g.at ? <><span>On another computer: </span><DownloadBtn m={m} primary /></> : null}</span>
           : <><span className="note">Download it, open it, then type the code it shows: below, step by step. FinCom finds it on this computer by itself.</span>
             {connectStep && <div data-guide-connect-slot="">{connectStep}</div>}</>}
@@ -744,7 +745,7 @@ function ConnectGuide({ x, m, connectStep }) {
       <Step k="open" n={3} title="Open your company in TallyPrime" done={d.open} now={now === "open"}>
         {d.open ? <span className="note" data-guide-open-count={x.openNow.length}>{openWords(x)}</span>
           : !d.install ? <span className="note">After step 1.</span>
-          : r && !r.online && !(Bridge.on() && Bridge.up()) ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows as " + user + ": it starts by itself."}</span>
+          : r && !r.online && !(Bridge.on() && Bridge.up()) ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows: it starts by itself."}</span>
           : <><LocalTally />{s && s.stopped && <p className="tc3-p" data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
               {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</p>}
             {s && s.paused && <p className="tc3-p" data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}</p>}
@@ -796,13 +797,19 @@ function thisComputer(rows) {
   const week = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const loc = TCloud.localRow ? TCloud.localRow() : null;
   // one computer may carry a bridge per Windows user (a shared server): the computers are the distinct devices
-  const pcs = new Set(week.map((r) => r.device.id)), one = pcs.size === 1 ? (week.find((r) => r.online && r.main) || week.find((r) => r.online) || week[0]) : null;
-  const me = (loc && week.find((r) => r.id === loc.id)) || (!localOn ? one : null);
-  return { local, localOn, me, week, many: pcs.size > 1 };
+  // next-fix-tally-links2 (the owner: "NWS144 ● online · NWS144 ○ offline since 17:49 — why showing this"): the firm's
+  // ONE state, never a row per computer: this browser's bridge, else the best one heard (online with Tally and a company
+  // open, then online, then the latest); an old or offline extra bridge is not said here (Help & support › Each computer)
+  const best = (xs) => xs.find((r) => r.online && r.main && (r.tally === "open" || r.tally === "busy") && (r.open || []).length) || xs.find((r) => r.online && (r.tally === "open" || r.tally === "busy"))
+    || xs.find((r) => r.online && r.main) || xs.find((r) => r.online) || xs[0] || null;
+  const me = (loc && week.find((r) => r.id === loc.id)) || (!localOn ? best(week) : null);
+  return { local, localOn, me, week, many: false };
 }
 // the scope of the page: "this" (this computer's Tally) or "all" (every computer): the switch only when the firm has more
 // than one computer and this browser is on one of them
 function scopeOf(tc) {
+  // next-fix-tally-links2: no This computer / All computers switch (it named the computers): the firm's one state
+  if (!tc.many) return { scope: "this", can: false };
   const can = tc.many && !!(tc.local || tc.me);
   if (!can) return { scope: tc.many ? "all" : "this", can };
   // this browser's bridge not among the firm's computers yet: every computer, until it is turned
@@ -817,8 +824,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   // the code typed (here or below) connected this browser to the bridge: the firm's key at once
   useEffect(() => { if (c && c.st === "code" && localOn && !b) doConnect(false); }, [c && c.st, localOn]);
   const firm = (S.firm && S.firm.firmName) || "your firm", connectedNow = !!(c && c.st === "ok");
-  const pc = local ? { computer: local.computer || (me && me.computer) || "This computer", user: shortUser(local.user) } : me;
-  const name = pc ? pcName(pc) : "This computer", ver = (local && local.version) || (me && me.version) || "";
+  const name = local ? "this computer" : "the Tally computer", ver = (local && local.version) || (me && me.version) || "";
   const s = me ? pcState(me, latest) : null;
   const openHere = local ? [].concat(local.open || []).map((o) => (o && o.name) || "").filter(Boolean) : (s ? s.open : []);
   const tallyUp = local ? !!local.tallyUp : !!(s && s.tallyOk);
@@ -841,7 +847,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
     need = "Reading stopped" + (st.stopped_by ? " by " + who(st.stopped_by) : "") + ": " + (s.rd.reason || st.reason || "no reason given");
     act = owner && !allStopped ? <button className="btn small primary" data-read-resume={me.device.id} onClick={() => TCloud.readResume(me)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null; }
   else if (s && s.paused) { word = "Paused"; lv = "warn"; kind = "paused"; need = "Reading is paused here. To resume: " + RESUME_TRAY + "."; }
-  else if (!tallyUp) { word = "Tally not open"; lv = "warn"; kind = "tally"; need = "Tally is not open on " + name.split(" · ")[0] + ". Open TallyPrime and your company" + (local ? ", then Find Tally." : "."); act = local ? findBtn : me ? <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button> : null; }
+  else if (!tallyUp) { word = "Tally not open"; lv = "warn"; kind = "tally"; need = "Tally is not open on " + name + ". Open TallyPrime and your company" + (local ? ", then Find Tally." : "."); act = local ? findBtn : me ? <button className="btn small" data-check-again="" onClick={checkAgain}>Check again</button> : null; }
   else if (!openHere.length) { word = "No company open"; lv = "warn"; kind = "noco"; need = "Tally is open, but no company is. Open your company in TallyPrime: it shows here within a minute."; }
   else if (n0 && n0.kind !== "tally" && n0.kind !== "main") { word = n0.kind === "version" ? "Update ready" : "Needs you"; lv = "warn"; kind = n0.kind; need = n0.text; act = <NeedAct r={me} n={n0} m={m} />; }
   else if (s && s.update) { word = "Connected"; lv = "ok"; kind = "update"; need = ""; }
@@ -857,7 +863,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   return <section className="pane tsc" data-status-card={kind || "ok"} data-scope={scope} data-all-good={calm ? "" : undefined} aria-label="This computer">
     <div className="tsc-top">
       <div className="tsc-name" data-tsc-name="" data-pc-lines={scope !== "all" && me ? "" : undefined} data-pc-line={scope !== "all" && me ? me.device.id : undefined} data-pc-state={scope !== "all" && me ? word.toLowerCase() : undefined}>{scope === "all" ? <b>All computers</b>
-        : <><b>{name}</b>{ver && <span className="note">{" · FinCom Bridge " + ver}</span>}</>}
+        : <><b>{"FinCom Bridge" + (ver ? " " + ver : "")}</b></>}
         {scope !== "all" && <span className={"tag " + lv} data-tsc-word="" data-connected-line="">{word}</span>}</div>
       <span className="tsc-right">
         {can && <span className="tsc-switch" role="group" aria-label="Which computers">
@@ -927,7 +933,7 @@ function needsItems() {
   if (allStopped) items.push(<li key="all" data-need="stopped-all" data-stopped-all="">
     <span>{"Reading stopped on all computers" + (stopAll && stopAll.stopped_by ? " by " + who(stopAll.stopped_by) : "") + ": " + ((stopAll && stopAll.reason) || "no reason given")}</span>
     {owner ? <button className="btn small primary" data-read-resume-all="" onClick={() => TCloud.readResume(null)}>Resume</button> : <span className="note">An owner of the firm can resume it.</span>}</li>);
-  (p.devices || []).filter((d) => !d.revoked && d.info && d.info.idRefused).forEach((d) => items.push(<li key={"refused-" + d.id} data-need="refused" data-id-refused={d.id}><span><b>{d.name}</b>{": " + d.info.idRefused.words}</span></li>));
+  (p.devices || []).filter((d) => !d.revoked && d.info && d.info.idRefused).forEach((d) => items.push(<li key={"refused-" + d.id} data-need="refused" data-id-refused={d.id}><span>{"A computer’s key: " + d.info.idRefused.words}</span></li>));
   return items;
 }
 function NeedsYou({ sources = null }) {

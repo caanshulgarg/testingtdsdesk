@@ -37,7 +37,7 @@ export function logStep(step, version, detail, again) {
     Promise.resolve(TCloud.rpc("tally_connect_step", { p_step: step, p_version: v, p_detail: detail ? String(detail).slice(0, 300) : null })).catch(() => {});
   } catch (e) { /* never in the way */ }
 }
-const pcWords = (b) => (b && b.computer ? b.computer + (b.user ? " (" + String(b.user).split("\\").pop() + ")" : "") : "this computer");
+const pcWords = (b) => "this computer";   // next-fix-tally-links2: never a computer's name or Windows login
 
 // /ping on every port of this user's range at once (nothing secret is sent): mine (with its proof window), another
 // Windows user's, or an older bridge that cannot prove itself

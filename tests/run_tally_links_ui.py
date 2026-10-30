@@ -16,6 +16,13 @@ EVENTS open, GB TEXCOAT and ABC TRADERS linked, ABC TRADERS not open, OLD CO see
   5. the status card, connected: "Set up again / another computer" opens the steps (folded until then)
   6. Client setup › Tally: the company, Change and Unlink
   7. phone 390: no sideways page scroll (the picker open too)
+v2 (the owner's live feedback, 29-Oct-2026: "NWS144 ● online · NWS144 ○ offline .. no NWS144 type of thing"; "I have 4
+clients.. but system is showing only 3.. I have unlinked the tally but clients also erased"):
+  8. "Your clients and their Tally company (N)": EVERY client of the firm (N = the firm's clients), a client not linked
+     says "Not linked to Tally" with "Link to Tally company…" (the same picker); Unlink says the client stays and keeps
+     its row, Not linked
+  9. no computer's name or Windows login anywhere on the Tally page's main area (Help & support aside) or in the top
+     bar's Tally popover, with two bridges, one of them offline; the card says one plain state
 Options: --shots DIR saves desktop 1440 light and dark and phone 390. Run on the React build:
 TDSDESK_SITE=../app/dist-test python3 run_tally_links_ui.py"""
 import json, os, re, sys, threading, functools, http.server
@@ -67,9 +74,12 @@ def main():
         ids = scene(pg)
         shot(pg, "desktop-1440-light")
         try:
-            print("== 1. Clients linked to Tally: always there, both clients")
-            ok(n(SEC) == 1 and txt(SEC + " [data-tlk-head]").startswith("Clients linked to Tally (2)"), "the section 'Clients linked to Tally (2)' (%s)" % txt(SEC + " [data-tlk-head]"))
-            ok(sorted(E("(s) => [...document.querySelectorAll(s + ' [data-tlk-row]')].map(r => r.getAttribute('data-tlk-client-name'))", SEC)) == ["ABC TRADERS", "GB TEXCOAT"], "one row per linked client: GB TEXCOAT and ABC TRADERS (whose company is not open)")
+            print("== 1. Your clients and their Tally company: every client")
+            nfirm = E("() => Object.values(S.companies).filter(c => c && !c.deleted).length")
+            ok(n(SEC) == 1 and txt(SEC + " [data-tlk-head]").startswith("Your clients and their Tally company (%d)" % nfirm) and nfirm == 3, "the section 'Your clients and their Tally company (%d)', the firm's count (%s)" % (nfirm, txt(SEC + " [data-tlk-head]")))
+            ok(sorted(E("(s) => [...document.querySelectorAll(s + ' [data-tlk-row]')].map(r => r.getAttribute('data-tlk-client-name'))", SEC)) == sorted(["ABC TRADERS", "GB TEXCOAT", "garg shekhar & company"]), "one row per client: GB TEXCOAT, ABC TRADERS (company not open) and garg shekhar & company (not linked)")
+            gs = ROW("garg shekhar & company")
+            ok("Not linked to Tally" in txt(gs) and n(gs + " [data-tlk-link]") == 1 and "Link to Tally company" in txt(gs + " [data-tlk-link]"), "a client not linked: 'Not linked to Tally' and 'Link to Tally company…' (%s)" % txt(gs))
             ok(E("() => { const o = document.querySelector('#app [data-tco-list=firm] .tco-rows'), s = document.querySelector('#app [data-tlk]'); return !!o && !!s && !!(o.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }"), "it comes under the companies open now")
             ab, gb = ROW("ABC TRADERS"), ROW("GB TEXCOAT")
             ok(txt(ab + " [data-tlk-side=client]").startswith("ABC TRADERS") and txt(ab + " [data-tlk-side=tally]") == "ABC TRADERS", "client on the left, its Tally company on the right (%s | %s)" % (txt(ab + " [data-tlk-side=client]"), txt(ab + " [data-tlk-side=tally]")))
@@ -110,15 +120,22 @@ def main():
             pg.click(ab + " [data-tlk-go]"); confirm(True); pg.wait_for_timeout(1500)
             to = [x for x in links() if x.get("p_client") == ids["ABC TRADERS"]]
             ok(len(to) == 1 and to[0].get("p_company") == "GB TEXCOAT" and n("#confirmBox [data-cbx=yes]:visible") == 0, "Yes: ONE link call, asked only once (%s)" % links())
-            ok(txt(ab + " [data-tlk-side=tally]") == "GB TEXCOAT" and n(ROW("GB TEXCOAT")) == 0, "ABC TRADERS shows GB TEXCOAT; GB TEXCOAT the client is no longer listed (%s)" % txt(SEC)[:200])
+            ok(txt(ab + " [data-tlk-side=tally]") == "GB TEXCOAT" and "Not linked to Tally" in txt(ROW("GB TEXCOAT")), "ABC TRADERS shows GB TEXCOAT; GB TEXCOAT the client stays, Not linked to Tally (%s)" % txt(SEC)[:300])
+            # a client not linked: Link to Tally company… opens the same picker and links in one call
+            scene(pg); E("() => { window.__calls = []; }")
+            pg.click(gs + " [data-tlk-link]"); pg.wait_for_timeout(400)
+            ok(n(gs + " [data-tlk-pick]") == 1, "Link to Tally company… opens the picker")
+            pg.select_option(gs + " [data-tlk-pick]", "VMS EVENTS"); pg.click(gs + " [data-tlk-go]"); pg.wait_for_timeout(1500)
+            ok([x for x in links() if x.get("p_client")] == [{"p_company": "VMS EVENTS", "p_client": ids["garg shekhar & company"]}] and txt(gs + " [data-tlk-side=tally]") == "VMS EVENTS", "linked in one call; the row shows VMS EVENTS (%s)" % links())
             print("== 3. Unlink: asked, then free")
             scene(pg); E("() => { window.__calls = []; }")
             pg.click(ab + " [data-tlk-more] summary"); pg.wait_for_timeout(250); pg.click(ab + " [data-tlk-unlink]")
             pg.wait_for_selector("#confirmBox [data-cbx=no]", state="visible", timeout=10000)
-            ok("Unlink" in txt("#confirmBox"), "Unlink asks first (%s)" % txt("#confirmBox")[:120])
+            ok("Unlink" in txt("#confirmBox") and "The client stays in FinCom; only the link to Tally is removed." in txt("#confirmBox"), "Unlink asks first, saying the client stays (%s)" % txt("#confirmBox")[:200])
             confirm(True); pg.wait_for_timeout(1200)
             ok(links() == [{"p_company": "ABC TRADERS", "p_client": None}], "one unlink call (%s)" % links())
-            ok(n(ab) == 0 and txt(SEC + " [data-tlk-head]").startswith("Clients linked to Tally (1)"), "the row goes; (1) (%s)" % txt(SEC + " [data-tlk-head]"))
+            ok(n(ab) == 1 and "Not linked to Tally" in txt(ab) and txt(SEC + " [data-tlk-head]").startswith("Your clients and their Tally company (3)") and E("(id) => !!S.companies[id] && !S.companies[id].deleted", ids["ABC TRADERS"]),
+               "the client stays: its row says Not linked to Tally; still (3) (%s | %s)" % (txt(ab), txt(SEC + " [data-tlk-head]")))
             print("== 4. the open companies' rows: Change Tally company… too")
             scene(pg)
             orow = '#app [data-tco-list=firm] [data-tco-row="GB TEXCOAT"]'
@@ -148,6 +165,24 @@ def main():
             if n(one + " [data-tally-one-unlink]"):
                 pg.click(one + " [data-tally-one-unlink]"); confirm(True); pg.wait_for_timeout(1200)
                 ok(links() == [{"p_company": "ABC TRADERS", "p_client": None}], "Unlink there: asked, then one unlink call (%s)" % links())
+        except Exception as e:
+            ok(False, "the steps ran through (%s)" % str(e).split("\n")[0])
+        try:
+            print("== 9. no computer names: two bridges on NWS144, one offline, and an offline LAPTOP")
+            old = T.dev(8, "NWS144", "oldlogin", at="ago:300", tally="closed", opened=(), version="2.4.7")
+            lap = T.dev(9, "LAPTOP", "ravi", at="ago:90", tally="closed", opened=(), version="2.4.7")
+            pg.evaluate(T.SETUP, [[d6, old, lap], cos, [], "owner", T.CLIENTS, True, T.HELD_ALL]); pg.wait_for_timeout(2500)
+            main = E("() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-advanced]').forEach(e => e.remove()); return a.innerText.replace(/\\s+/g, ' '); }")
+            hits = [w for w in ("NWS144", "LAPTOP", "anshul", "oldlogin", "ravi", "All computers", "This computer") if w in main]
+            ok(not hits, "the main area names no computer and no login (%s): %s" % (hits, main[:300]))
+            card = txt("#app [data-status-card]")
+            ok(card.startswith("FinCom Bridge 2.4.7") and "Connected" in card and n("#app [data-tsc-all], #app .tpc-one") == 0 and n("#app [data-scope-pick]") == 0, "the card: one plain state, no computer rows, no switch (%s)" % card[:160])
+            shot(pg, "desktop-1440-light-two-bridges")
+            if n("[data-tally-icon]"):
+                pg.click("[data-tally-icon]"); pg.wait_for_timeout(1200)
+                pop = txt(".tally-pop") or txt("[data-tally-pop-wait]")
+                ok(pop and not [w for w in ("NWS144", "LAPTOP", "anshul", "oldlogin", "ravi") if w in pop], "the top bar's Tally popover names no computer (%s)" % pop[:200])
+                pg.keyboard.press("Escape")
         except Exception as e:
             ok(False, "the steps ran through (%s)" % str(e).split("\n")[0])
         pg.close()

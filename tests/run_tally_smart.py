@@ -2,16 +2,16 @@
 Tally; remove earlier Tally opened but not opened currently; make the complete page smart"; "no suggestion to add clients";
 "I need visibility of which client a company is linked to"; "no false alarms at all"). Made-up computers and companies
 (run_tally_page_clean.py's stand-in cloud), on the React build:
-  1. ONE status card for this computer on top: "NWS144 · anshul · FinCom Bridge 2.4.7 · Connected", "Tally open: 2
+  1. ONE status card on top, no computer's name (next-fix-tally-links2): "FinCom Bridge 2.4.7 · Connected", "Tally open: 2
      companies"; no step wizard once a computer is connected (the four steps only when no computer is heard)
   2. the list is the companies OPEN in Tally now, the client on the LEFT and the Tally company on the RIGHT under the two
      headings; a company not linked has the picker itself ("Choose client", existing clients only, "+ New client with
      this name" small inside it) and never an "Add as client" suggestion; a linked one says "Linked to client: <name>"
   3. a company seen earlier, not open and not linked: NOT on the page (only under Help & support › Every company seen)
-  4. every linked client, its company open or not: one quiet row under "Clients linked to Tally (N)" (client · company ·
+  4. every linked client, its company open or not: one quiet row under "Your clients and their Tally company (N)" (every client;
      open now / not open in Tally now · last entry), nothing to fix; ⋯ Change Tally company… and Unlink
      (next-fix-tally-links, run_tally_links_ui.py)
-  5. one computer: nothing about other computers; two: the switch This computer / All computers
+  5. one computer or two: one plain state, never a row or a name per computer (next-fix-tally-links2)
   6. a problem is one plain line with one action (Tally not open; reading paused; offline), never an alert for nothing
   7. no element overlaps, no sideways scroll, at 1366, 1440 and 390, light and dark
 Options: --shots DIR saves the scenes. Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_smart.py"""
@@ -66,7 +66,7 @@ def main():
         print("== 1. one status card, no wizard")
         ids = scene([d6], cos, books=T.HELD_ALL)
         card = txt("#app [data-status-card]")
-        ok(n("#app [data-status-card]") == 1 and card.startswith("NWS144 · anshul · FinCom Bridge 2.4.7 Connected"), "one status card for this computer: name, version, Connected (%s)" % card[:90])
+        ok(n("#app [data-status-card]") == 1 and card.startswith("FinCom Bridge 2.4.7 Connected") and "NWS144" not in card and "anshul" not in card, "one status card: version, Connected, no computer's name (%s)" % card[:90])
         ok("Tally open: 2 companies" in card, "the card says Tally open: 2 companies (%s)" % card[:120])
         ok(n("#app [data-connect-step]") == 0 and n("#app [data-connect-guide]") == 0, "connected: no step wizard")
         ok(n("#app [data-oc-connect]") == 0 and n("#app [data-oc-find]") == 0 and n("#app [data-tsc-refresh]") == 1, "connected: no Connect / Find Tally button, only Refresh")
@@ -92,8 +92,8 @@ def main():
         print("== 3. closed + not linked: hidden; linked: Clients linked to Tally")
         ok("OLD CO" not in body(), "a company seen earlier, not open, not linked: not on the page")
         lc = "#app [data-tco-list=firm]"
-        ok(n(lc + " [data-tlk]") == 1 and txt(lc + " [data-tlk-head]") == "Clients linked to Tally (2)" and n(lc + " [data-tlk-row]") == 2 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1,
-           "Clients linked to Tally (2): GB TEXCOAT (open) and ABC TRADERS (not open), after the open ones (%s)" % txt(lc + " [data-tlk-head]"))
+        ok(n(lc + " [data-tlk]") == 1 and txt(lc + " [data-tlk-head]") == "Your clients and their Tally company (3)" and n(lc + " [data-tlk-row]") == 3 and n(lc + ' [data-linked-row="ABC TRADERS"]') == 1 and n(lc + " [data-linked-row]") == 1,
+           "Your clients and their Tally company (3): GB TEXCOAT (open), ABC TRADERS (not open), garg shekhar (not linked), after the open ones (%s)" % txt(lc + " [data-tlk-head]"))
         lt = txt(lc + ' [data-linked-row="ABC TRADERS"]')
         ok(txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tlk-side="client"]') == "ABC TRADERS" and txt(lc + ' [data-linked-row="ABC TRADERS"] [data-tlk-side="tally"]') == "ABC TRADERS" and "not open in Tally now" in txt(lc + ' [data-linked-row="ABC TRADERS"] [data-linked-meta]'), "its one line: client · company · not open in Tally now (%s)" % lt)
         ok(n(lc + " [data-linked-row] [data-tco-fix]") == 0 and "Open ABC TRADERS in TallyPrime" not in body() and n("#app [data-needs-you]") == 0 and "NWS144" not in lt, "nothing to fix for a company simply not open (no false alarm), no computer's name")
@@ -113,8 +113,8 @@ def main():
         print("== 5. two computers: the switch")
         lap = T.dev(8, "LAPTOP", "ravi", tally="closed", opened=(), version="2.4.7")
         scene([d6, lap], cos, books=T.HELD_ALL)
-        ok(n("#app [data-status-card]") == 1 and ("All computers" in txt("#app [data-status-card]")), "two computers, this browser on neither: the card says All computers (%s)" % txt("#app [data-status-card]")[:100])
-        ok(n("#app [data-pc-line]") == 2 and "LAPTOP" in txt("#app [data-status-card]"), "each computer on one short line")
+        ok(n("#app [data-status-card]") == 1 and "All computers" not in txt("#app [data-status-card]") and "Connected" in txt("#app [data-status-card]"), "two computers, this browser on neither: one plain state, Connected (%s)" % txt("#app [data-status-card]")[:100])
+        ok(n("#app .tpc-one, #app [data-scope-pick]") == 0 and "LAPTOP" not in body() and "NWS144" not in body(), "no line, name or switch per computer")
         ok(E("() => document.documentElement.scrollWidth <= window.innerWidth + 1"), "no sideways scroll")
         print("== 6. problems: one line, one action")
         scene([T.dev(9, "NWS144", "anshul", tally="closed", opened=(), version="2.4.7")], cos, books=T.HELD_ALL)

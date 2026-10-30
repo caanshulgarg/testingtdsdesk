@@ -251,7 +251,8 @@ export async function moveTo(r, co) {
 export const unlink = (r) => {
   const co = S.companies[r.client];
   return askConfirm({ title: "Unlink " + shown(r.company) + " from " + ((co && co.name) || "its client") + "?", ok: "Unlink", danger: true,
-    body: "<p>Its books stop coming to " + esc((co && co.name) || "the client") + ". The company stays in this list (Not linked), to link again in one click. Nothing in Tally changes.</p>" })
+    // next-fix-tally-links2 (the owner: "I have unlinked the tally but clients also erased"): said plainly
+    body: "<p><b>The client stays in FinCom; only the link to Tally is removed.</b> Its books stop coming to " + esc((co && co.name) || "the client") + " from " + esc(shown(r.company)) + " until it is linked again. Nothing in Tally changes.</p>" })
     .then((ok) => (ok ? linkClient(r.company, null) : false));
 };
 // Change Tally company… (next-fix-tally-links, 29-Oct-2026; the owner: "I am not able to see and change the tally
@@ -552,7 +553,7 @@ export function SyncLine({ cid, compact = false, words = false, bar = false }) {
 function Pill({ r, st, co, earlier, noLine = false }) {
   // Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): a company not linked says so neutrally
   if (!r.client) return <span className="tco-pill" data-tco-pill="notclient" data-tco-pill-text="Not linked">
-    <span className="tag">Not linked</span><span className="tco-why">{r.open ? " · open in Tally" + (st.computer ? " on " + st.computer.split(" · ")[0] : "") : " · not open in Tally now"}</span></span>;
+    <span className="tag">Not linked</span><span className="tco-why">{r.open ? " · open in Tally" : " · not open in Tally now"}</span></span>;
   if (earlier) return <span className="tco-pill" data-tco-pill="earlier" data-tco-pill-text={"Earlier year of " + earlier}>
     <span className="tag">Earlier year</span><span className="tco-why">{" · " + earlier + " is the newer year"}</span></span>;
   // next-link-record: a linked company says the client's one word (Linked / Waiting for Tally / Needs you) and its one line
@@ -581,7 +582,7 @@ function TwoPlaces({ co, company }) {
   // login and last entry (the owner: "no false alarms at all")
   const ps = LinkRec.realPlaces ? LinkRec.realPlaces(rec) : LinkRec.placesOf(rec), owner = isOwner(), N = ["①", "②", "③", "④"];
   const day = (d) => { const t = Date.parse(String(d || "") + "T00:00:00Z"); return t ? new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).replace(/ /g, "-") : ""; };
-  const where = (x) => [x.data_folder, x.computer, x.windows_user ? "login " + x.windows_user : "", x.last_entry ? "last entry " + day(x.last_entry) : ""].filter(Boolean).join(" · ");
+  const where = (x) => [x.data_folder, x.last_entry ? "last entry " + day(x.last_entry) : ""].filter(Boolean).join(" · ");
   const use = async (x) => { setBusy(x.data_loc); await LinkRec.choosePlace(rec, x.data_loc); setBusy(""); };
   return <div className="tco-under tco-two bk-warn" data-tco-two-places={rec.book_id} role="group" aria-label={shown(company) + " is open in two places"}>
     <p style={{ margin: "0 0 4px" }}><b>{shown(company) + " is open in two places with different data:"}</b></p>
@@ -665,7 +666,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const syncing = co && k && k.line && k.line.reading;
-  const pc = pcs ? (st.computer || "").split(" · ")[0] : "";
+  const pc = "";   // next-fix-tally-links2: no computer's name, not even under ⋯
   let client, acts = null;
   if (pend) client = <span className="tco-wait" data-tco-pending={pend.kind}>
     <button className="btn small" disabled>{pend.late ? "Not sent yet" : "Waiting…"}</button>
@@ -741,18 +742,34 @@ export function LinkedClients({ inList = null, here = null }) {
   useEffect(() => { booksLoad([...by.keys()]); });
   companyRows({ hidden: true }).forEach((r) => { const co = r.client && S.companies ? S.companies[r.client] : null; if (!co || co.deleted) return; if (!by.has(co.id)) by.set(co.id, []); by.get(co.id).push(r); });
   // a client with two companies linked (a new year beside the one before): its company first, then the other, each its row
-  const list = [].concat(...[...by.entries()].sort((a, b) => S.companies[a[0]].name.localeCompare(S.companies[b[0]].name)).map(([id, rs]) => {
+  // next-fix-tally-links2 (the owner: "I have 4 clients.. but system is showing only 3"): EVERY client of the firm, a client
+  // not linked with "Not linked to Tally" and Link to Tally company… (the same picker); the count is the firm's clients
+  const all = live().sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const list = [].concat(...all.map((c) => [c.id, by.get(c.id) || []]).map(([id, rs]) => {
+    if (!rs.length) return [{ co: S.companies[id], r: null, k: null, more: false, key: id, earlier: "" }];
     const co = S.companies[id], k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null;
     const r = rs.find((x) => k && k.company && x.company === k.company) || rs.find((x) => x.open) || rs[0];
     return [r].concat(rs.filter((x) => x !== r)).map((x, i) => ({ co, r: x, k, more: i > 0, key: id + "|" + x.company,
       // an earlier year of the client's company (the same business once the period is off): "Earlier year", never a problem
       earlier: (() => { const y = !x.open && rs.find((o) => o !== x && yearKey(o.company) === yearKey(x.company) && (o.open || String(o.seen) > String(x.seen))); return y ? shown(y.company) : ""; })() })); }));
-  return <div className="tlk" data-tlk="" data-tlk-n={list.length}>
-    <div className="tlk-head" data-tlk-head=""><b>{"Clients linked to Tally (" + by.size + ")"}</b></div>
-    {list.length === 0 ? <p className="note" data-tlk-empty="">No client is linked to a Tally company yet: choose the client beside its company above, while it is open in Tally.</p>
-      : <ul className="tco-rows">{list.map((x) => <LinkedClientRow key={x.key} {...x} here={here} open={chg === x.co.id + (x.more ? "|" + x.r.company : "")} onOpen={(on) => setChg(on ? x.co.id + (x.more ? "|" + x.r.company : "") : "")}
-        hooks={!!inList && !inList.has(coKey(x.r.company))} />)}</ul>}
+  const kOf = (x) => x.co.id + (x.more ? "|" + x.r.company : "");
+  return <div className="tlk" data-tlk="" data-tlk-n={all.length}>
+    <div className="tlk-head" data-tlk-head=""><b>{"Your clients and their Tally company (" + all.length + ")"}</b></div>
+    {all.length === 0 ? <p className="note" data-tlk-empty="">No client in FinCom yet: choose the client beside its company above, while it is open in Tally.</p>
+      : <ul className="tco-rows">{list.map((x) => x.r ? <LinkedClientRow key={x.key} {...x} here={here} open={chg === kOf(x)} onOpen={(on) => setChg(on ? kOf(x) : "")}
+        hooks={!!inList && !inList.has(coKey(x.r.company))} /> : <FreeClientRow key={x.key} co={x.co} open={chg === x.co.id} onOpen={(on) => setChg(on ? x.co.id : "")} />)}</ul>}
   </div>;
+}
+// a client not linked to a Tally company: it stays listed (an unlinked client is never "erased"), with the picker
+function FreeClientRow({ co, open, onOpen }) {
+  const may = canWrite();
+  return <li className="tco-row tco-quiet tlk-row" data-tlk-row={co.id} data-tlk-client-name={co.name} data-tlk-free="">
+    <div className="tco-client" data-tlk-side="client"><button className="linkbtn tco-client" data-tlk-client={co.id} title={"Open " + co.name} onClick={() => openCompany(co.id)}>{co.name}</button></div>
+    <span className="tco-arrow" aria-hidden="true">⟷</span>
+    <div className="tco-main" data-tlk-side="tally"><span className="note" data-tlk-state="">Not linked to Tally</span></div>
+    {may && !open && <div className="tco-line2"><span className="tco-act"><button className="btn small" data-tlk-link={co.id} onClick={() => onOpen(true)}>Link to Tally company…</button></span></div>}
+    {open && <div className="tco-under"><ChangePick co={co} cur="" onClose={() => onOpen(false)} /></div>}
+  </li>;
 }
 function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks }) {
   const may = canWrite(), st = r.st || tallyCoState(r.company);
