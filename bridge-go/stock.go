@@ -121,14 +121,15 @@ func stockSeenLoad() {
 	}
 }
 
-func stockSeenSave() {
+// the file's text (built under stock.mu; written after it is let go)
+func stockSeenText() string {
 	o := M{}
 	for k, v := range stock.seen {
 		if t, err := time.Parse(time.RFC3339Nano, v); err == nil && nowFn().Sub(t) < 2*time.Hour {
 			o[k] = v
 		}
 	}
-	_ = saveFile(sp("stock-clicks.json"), jsonText(o))
+	return jsonText(o)
 }
 
 // the answer's base for a click (every answer to FinCom carries these)
@@ -147,6 +148,13 @@ func stockTake(c stockClick) M {
 		out["why"] = "the click is older than an hour"
 		return out
 	}
+	// a bridge whose own Tally does not have the company open does not answer (on a shared computer every Windows user's
+	// bridge hears the click; the one with the company open answers it), and does not take the click
+	if _, why := pullPort(pullItem{Company: c.Company, CGUID: heldGUID(c.Company)}); why != "" {
+		liveSayOnce("stock|notopen|"+companyKey(c.Company)+"|"+c.At, "Stock of "+c.Company+" asked in FinCom: not answered here ("+why+")")
+		out["why"] = "not open here: " + why
+		return out
+	}
 	k := companyKey(c.Company) + "|" + c.From + "|" + c.To
 	stock.mu.Lock()
 	stockSeenLoad()
@@ -156,9 +164,10 @@ func stockTake(c stockClick) M {
 		return out
 	}
 	stock.seen[k] = c.At
-	stockSeenSave()
+	seenText := stockSeenText()
 	if stock.busy[companyKey(c.Company)] {
 		stock.mu.Unlock()
+		_ = saveFile(sp("stock-clicks.json"), seenText)
 		// answered at once (FinCom shows it; nothing is asked of Tally): the click in hand comes first
 		ans := stockBase(c)
 		ans["status"], ans["words"] = "busy", "not asked: Tally is being asked for this company's stock already; try again in a moment"
@@ -169,6 +178,7 @@ func stockTake(c stockClick) M {
 	stock.busy[companyKey(c.Company)] = true
 	delete(stock.stopped, companyKey(c.Company)) // the next click lifts a stop
 	stock.mu.Unlock()
+	_ = saveFile(sp("stock-clicks.json"), seenText)
 	defer func() {
 		stock.mu.Lock()
 		delete(stock.busy, companyKey(c.Company))

@@ -355,8 +355,8 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	}
 	// a company not open in this bridge's own Tally: not asked
 	a = stockTake(stockClick{Company: "OTHER CO", From: "20260401", To: "20260630", At: clickAt(5 * time.Second)})
-	if str(a["status"]) != "notopen" || stockClicks(f) != 2 {
-		t.Fatalf("the company not open in the own Tally: %v", a)
+	if str(a["status"]) != "" || truthy(a["ok"]) || !strings.Contains(str(a["why"]), "not open here") || stockClicks(f) != 2 || len(*told) != 4 { // nothing told for it (the ok, the busy, the posting busy, the ok after the posting)
+		t.Fatalf("the company not open in the own Tally: answered %v (%d asked, %d told)", a, stockClicks(f), len(*told))
 	}
 }
 

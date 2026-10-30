@@ -28,7 +28,7 @@ function keep(cid, from, to, read) {
   const f = S.books.fs = S.books.fs || {}, k = from + "-" + to, was = (f.stockTally || {})[k] || {};
   const figs = read.opening != null && read.closing != null && read.readAt ? { opening: +read.opening, closing: +read.closing, readAt: read.readAt } : { opening: was.opening, closing: was.closing, readAt: was.readAt };
   // gotAt: when this page took Tally's figures (this computer's clock, as a typed figure's): the later of the two is used
-  const gotAt = read.opening != null && read.closing != null && read.readAt ? new Date().toISOString() : was.gotAt;
+  const gotAt = read.status === "ok" && read.opening != null && read.closing != null && read.readAt ? new Date().toISOString() : was.gotAt;
   f.stockTally = Object.assign({}, f.stockTally, { [k]: Object.assign({}, figs, { gotAt, status: read.status || "", words: read.words || "" }) });
   if (typeof saveBooks === "function") saveBooks();
 }
@@ -46,7 +46,7 @@ export async function bringStock(cid, from, to, again, say) {
     try { rows = await Cloud.api("tally_stock_reads?select=status,words,opening,closing,read_at&book_id=eq." + encodeURIComponent(r.book) + "&period_from=eq." + Audit.iso(from) + "&period_to=eq." + Audit.iso(to)) || []; } catch (e) { continue; }
     const row = rows[0];
     // "not asked" from one bridge of a shared computer may be followed by Tally's figures from another: 6 s more
-    if (row && row.status !== "asked" && (row.status === "ok" || !["notopen", "busy"].includes(row.status) || ++notYet > 3)) { keep(cid, from, to, readOf(row)); say(""); return; }
+    if (row && row.status !== "asked" && (row.status === "ok" || !["notopen", "busy"].includes(row.status) || ++notYet >= 3 || i === TRIES - 1)) { keep(cid, from, to, readOf(row)); say(""); return; }
   }
   say("The Tally computer did not answer. Is FinCom Bridge running there, with Tally open? Type the stock or try again later.");
 }

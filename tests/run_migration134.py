@@ -118,7 +118,10 @@ try:
     answer(B, "2026-04-01", "2026-10-31", a4["at"], "notopen", words="not asked: the company is not open in this bridge's own Tally")
     r = answer(B, "2026-04-01", "2026-10-31", a4["at"], "ok", 1000, 2000, "2026-10-30T11:00:00Z")
     ok(r.get("ok") is True and row(B, "2026-04-01", "2026-10-31").get("closing") == "2000.00", "2. Tally's figures after a 'not open' answer to the same click (a shared computer's other bridge): taken")
-    ok(answer(B, "2026-04-01", "2026-10-31", a4["at"], "notopen", words="x").get("answered") is True and row(B, "2026-04-01", "2026-10-31").get("status") == "ok", "2. a 'not open' after Tally's figures: refused")
+    a5 = ask(B, "2026-04-01", "2026-10-31", again=True)
+    answer(B, "2026-04-01", "2026-10-31", a5["at"], "busy", words="x")
+    ok(answer(B, "2026-04-01", "2026-10-31", a5["at"], "slow", words="Tally took too long; type the stock or try again later").get("ok") is True and row(B, "2026-04-01", "2026-10-31").get("status") == "slow", "2. 'too long' from the bridge that asked, after a 'busy' to the same click: taken")
+    ok(answer(B, "2026-04-01", "2026-10-31", a4["at"], "notopen", words="x").get("unknown") is True and row(B, "2026-04-01", "2026-10-31").get("status") == "slow", "2. an earlier click's answer after a later one: refused")
 
     print("== 3. row security")
     sel = lambda uid, role: db.rows("set role %s; set fincom.uid = %s; select book_id::text from public.tally_stock_reads order by 1;" % (role, q(uid)))

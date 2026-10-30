@@ -3413,7 +3413,12 @@ async function stockWake(firm: string, body: any, userId = "") {
   const live = ((all || []) as any[]).filter((x: any) => !x.revoked), own = links.find((l: any) => String(l.company) === company)?.device_id || null;
   const isOpen = (d: any) => openOn(d).has(coName(company));
   const one = live.find((d: any) => d.id === own && isOpen(d)) || live.find(isOpen) || live.find((d: any) => d.id === own) || live.find((d: any) => !!userId && d.created_by === userId) || null;
-  if (!one) return reply(200, { ok: true, asked: false, noComputer: true, error: "No computer of the firm has this Tally company: open it in Tally on the computer with FinCom Bridge, then click again." });
+  if (!one) {
+    // no computer to ask: a kept answer is still given back (nothing is asked of Tally), else said at once
+    const { data: kept } = await db.from("tally_stock_reads").select("*").eq("book_id", book).eq("period_from", iso(from)).eq("period_to", iso(to)).maybeSingle();
+    if (kept && (kept as any).status === "ok" && !again) return reply(200, { ok: true, asked: false, cached: true, book, read: stockRead(kept) });
+    return reply(200, { ok: true, asked: false, noComputer: true, error: "No computer of the firm has this Tally company: open it in Tally on the computer with FinCom Bridge, then click again." });
+  }
   const { data: a, error } = await db.rpc("tally_stock_ask", { p_firm: firm, p_book: book, p_from: iso(from), p_to: iso(to), p_again: again, p_user: userId || null });
   if (error) {
     if (missingFn(String(error.message || ""))) { stockMissing = Date.now(); return reply(200, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." }); }

@@ -50,4 +50,34 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 10. (Low, cleanup) Test-only state in the production struct, an impossible fallback, duplicated date helpers. Fixed:
     removed; the cloud and the app use their existing iso helpers.
 
-ROUNDS_PLACEHOLDER
+## Round 2 (974c6cda0..13c461ee5): 9 findings, fixed in 06eb6f7a6 with tests (or recorded)
+
+1. (High) With "one answer per click", a shared computer's other Windows user's bridge (company not open) could answer
+   "not open" before the bridge that asks Tally. Fixed (with round 3's 1): a bridge whose own Tally does not have the
+   company open does not answer at all; the cloud also takes the answer of a bridge that asked Tally after a "not asked"
+   one. run_migration134.py 2.
+2. (Medium) Only the linked computer was woken even when off. Fixed: a computer with the company open first (the linked
+   one first among them), then the linked one, then the caller's own key.
+3. (Medium) The cloud rewrote the whole device record to drop an answered click (a race with the heartbeat). Fixed: the
+   cloud no longer writes it; the bridge keeps the clicks it took on disk (stock-clicks.json), so a restart never takes a
+   click twice. TestStock251OncePerPeriod.
+4. (Medium) A typed figure was compared with Tally's readAt (the Tally computer's clock). Fixed: with when the page took
+   Tally's figures (gotAt, the browser's clock as the typed figure's).
+5. (Low) A kept answer older than a typed figure shown but not used after a click. Fixed by 4: a click takes the figures now.
+6. (Low) No computer at all: the panel waited 40 s. Fixed: said at once, nothing recorded. run_stock_ingest.py A.
+7-9. (Cleanup) A stale comment, a regular expression compiled per answer, the answer's fields built twice: fixed.
+
+## Round 3 (13c461ee5..52660a3b5, medium effort): 8 findings
+
+1. (Medium) Beat copies of a click on a shared computer: see round 2's 1 (fixed: no answer from a bridge without the
+   company open; such a bridge does not take the click). TestStock251OneInFlightPostingsFirst.
+2. (Medium) A failed "Ask Tally again" stamped stale figures as just taken. Fixed: gotAt only for an ok answer.
+3. (Medium) No computer: a kept answer was no longer given back. Fixed. run_stock_ingest.py A.
+4. (Low) Only ok could follow "not asked". Fixed: ok, slow, none or failed (a bridge that asked Tally). run_migration134.py 2.
+5. (Low) The panel's extra wait could run out with an answer in hand. Fixed: the last poll keeps what is there.
+6. (Low) The clicks' file written under the lock. Fixed: written after it is let go.
+7. (Low, recorded) A bridge killed between taking a click and answering it does not take that click again after its
+   restart: the person clicks again (the panel says the computer did not answer). Kept: never two requests for one click.
+8. (Low, recorded) Two Windows users' bridges set to the same SyncDir share the clicks' file: not a supported set-up (each
+   user's bridge keeps its own folder).
+

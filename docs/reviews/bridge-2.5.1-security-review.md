@@ -40,4 +40,10 @@ Range: RANGE_PLACEHOLDER
 
 No High or Medium finding is open.
 
-ROUNDS_PLACEHOLDER
+## Rounds
+
+The code review's three rounds (docs/reviews/bridge-2.5.1-code-review.md) were asked the security questions too (who can
+make the bridge ask Tally, the narrow exceptions, row security and grants): nothing open in rounds 2 and 3 ("the
+exemptions match the guard on the older-entries batch read; row security, the grants and the service-role checks in
+migration 134 are sound"). Recorded: an answer is not tied to the computer woken (it needs the click's time, which only
+that computer's channel and beat carry; and the book's GUID, a computer that named the company, one answer per click).

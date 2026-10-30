@@ -20,8 +20,9 @@
 --     false, cached: true} when an answer is kept and again is not asked; {ask: false, pending: true} while a click is on
 --     its way (60 s); the row in each answer.
 --   tally_stock_answer(firm, book, from, to, at, status, opening, closing, read_at, ms, hold_ms, words): the bridge's
---     answer to that click (its time must be the row's, the row still waiting for it, or Tally's figures after a "not
---     asked" answer to it): kept; an answer to no click FinCom sent, or any other second answer, is refused.
+--     answer to that click (its time must be the row's, the row still waiting for it, or Tally's answer after a "not
+--     asked" answer to it from a bridge that asked Tally): kept; an answer to no click FinCom sent, or any other second
+--     answer, is refused.
 --
 -- Deploy: this file first, then tally-ingest (it answers "not set up yet" for a stock click until this has run), then the
 -- app. Tested on pg_stand: tests/run_migration134.py; tally-ingest: tests/run_stock_ingest.py.
@@ -103,9 +104,9 @@ begin
   if not found or r.click_at = '' or r.click_at <> coalesce(p_at, '') then
     return jsonb_build_object('ok', false, 'unknown', true, 'error', 'no such click from FinCom');
   end if;
-  -- one answer per click; only Tally's figures may follow a "not asked" answer to the same click (on a shared computer the
-  -- bridge of a Windows user without the company open answers at once, the one with it open a moment later)
-  if r.status <> 'asked' and not (p_status = 'ok' and r.status in ('notopen', 'busy')) then
+  -- one answer per click; only the answer of a bridge that asked Tally (ok, slow, none, failed) may follow a "not asked"
+  -- answer to the same click (on a shared computer another Windows user's bridge may answer first)
+  if r.status <> 'asked' and not (p_status in ('ok', 'slow', 'none', 'failed') and r.status in ('notopen', 'busy')) then
     return jsonb_build_object('ok', false, 'unknown', true, 'answered', true, 'error', 'this click was answered already');
   end if;
   if p_status = 'ok' then

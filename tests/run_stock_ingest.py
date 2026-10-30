@@ -56,7 +56,7 @@ def rpc(fn, a):
     if fn == "tally_stock_answer":
         r = ROWS.get((a["p_book"], a["p_from"], a["p_to"]))
         if not r or r["click_at"] != a["p_at"]: return {"ok": False, "unknown": True, "error": "no such click from FinCom"}
-        if r["status"] != "asked" and not (a["p_status"] == "ok" and r["status"] in ("notopen", "busy")): return {"ok": False, "unknown": True, "answered": True, "error": "this click was answered already"}
+        if r["status"] != "asked" and not (a["p_status"] in ("ok", "slow", "none", "failed") and r["status"] in ("notopen", "busy")): return {"ok": False, "unknown": True, "answered": True, "error": "this click was answered already"}
         if a["p_status"] == "ok": r.update(status="ok", opening=a["p_opening"], closing=a["p_closing"], read_at=a["p_read_at"])
         else: r.update(status=a["p_status"], words=a["p_words"])
         return {"ok": True}
@@ -150,6 +150,8 @@ try:
     n = len(FS.ARGS.get("tally_stock_ask") or [])
     c, r = click(**{"from": "20261101", "to": "20261130"})
     ok(r.get("noComputer") is True and len(FS.ARGS.get("tally_stock_ask") or []) == n, "A. no computer of the firm: said at once, nothing asked (%s)" % r)
+    c, r = click()
+    ok(r.get("cached") is True and (r.get("read") or {}).get("status") in ("ok", "slow"), "A. no computer: a kept answer still given back (%s)" % r) if (r.get("read") or {}).get("status") == "ok" else ok(r.get("noComputer") is True, "A. no computer and nothing kept: said (%s)" % r)
     for d in FS.T["tally_devices"]: d["revoked"] = False
     MISSING["on"] = True
     c, r = click(**{"from": "20261001"})

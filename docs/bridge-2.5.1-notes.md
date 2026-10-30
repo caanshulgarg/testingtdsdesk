@@ -52,6 +52,9 @@ period, whatever the Gateway's period.
 
 - The first click after Tally starts on a large company can take Tally over 2 s (cold); the panel then says so and the
   next click ("Ask Tally again") is answered from Tally's own cache in milliseconds.
+- A bridge whose own Tally does not have the company open does not answer a click (on a shared computer the bridge
+  that has it open does); with none open the panel says, after 40 s, that the computer did not answer.
+- A bridge stopped between taking a click and answering it does not take that click again: the person clicks again.
 - The click goes through FinCom's cloud only (as "Read the ledgers again" from another computer); the browser's local
   bridge is not asked directly.
 
