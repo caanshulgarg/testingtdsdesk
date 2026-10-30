@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..1d82e81d2
+Range: 25e694c0a..6e6c30032
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -115,5 +115,11 @@ fix): 9 findings.
 8. (Low) No test of a posting after the send. Added (1).
 9. (Low) The test hook read without the lock. Fixed: under stock.mu.
 
-After round 5: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only),
-8c49a469c (the self-test reads 2.5.2's decision line) and 1d82e81d2. The whole range was read last.
+## Round 6 (9839cd10b to 260f71c10, medium effort): the merge of staging-next (2.5.1, published)
+
+No code finding: 2.5.1's booksFrom (bridge and beat) and the stock feature both whole; the beat answers both; every version
+line names 2.5.2 with 2.5.1 as history; the release check's self-test and the real allow-list pass. Docs findings fixed in
+6e6c30032: the test sheet now carries 2.5.1's checks and the upgrade from 2.5.1; the notes say 2.5.1 is published; the
+allow-list's history lines apart; the table helper renamed (allowRowsBeforeStock).
+
+After round 6: 6e6c30032. The whole range was read last.
