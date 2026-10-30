@@ -22,7 +22,7 @@ has none; the request XML unchanged (the owner's decision of 30-Oct-2026); openi
 - Real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1 (tally-versions mode o251, run 41059404728, built from source at 7299e0e5e):
   o1-o6 PASS on all five (the release log has the run with the committed setup).
 
-## Round 1 (204d79d4f..e2f7f883a): 10 findings
+## Round 1 (204d79d4f to e2f7f883a): 10 findings
 
 1. (High, security) the cloud (or the sync folder's file) chose any date the three requests may carry, with ReadDays
    off too. Fixed in a8cae6f66 and 3968a9269: FinCom's day is a real date (1990 to a year after today) and is used only
