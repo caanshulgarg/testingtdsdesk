@@ -72,7 +72,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="openp proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="stockp openp proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -80,8 +80,8 @@ jobs:
           inc=""; all=""
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
-            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb|openp) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
-            case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb|openp|stockp) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
+            case $x in stockp) t=170; c=145 ;; hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
             # TallyPrime 7.2 (added 26-Oct-2026): asked here first (Linux, the first KB) so a release the download centre does not
             # have never takes a Windows job; resolvev.ps1 asks again on Windows and downloads it
             if echo ",$vs," | grep -q ',7.2,'; then
@@ -345,12 +345,12 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72'
+        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72' && matrix.mode != 'stockp'
         with:
           fetch-depth: 0
       # mhook / ledlist need only the harness and the add-on folder: the whole history took 47-60 min on 08-Oct-2026
       - uses: actions/checkout@v4
-        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72'
+        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72' || matrix.mode == 'stockp'
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -417,6 +417,7 @@ jobs:
           if ($env:VMODE -eq 'g245') { $want += @('g1 the installer added the add-on to tally.ini; Tally loads it and the client''s other TDL at start', 'g2 the year counted day by day, every day exactly Tally''s count', 'g3 the chosen part fetched: FinCom holds every entry Tally lists, only what it lacked asked', 'g4 no request over 2 s, one at a time, Tally''s window never blocked 2 s, Tally responding', 'g5 postings first during the fetch', 'g6 the exact ledger count and its progress', 'g7 User TDL = No left untouched and reported', 'g8 job files read while written: nothing lost, never missing', 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)', 'g10 the night pace: day after day, more than 3 days an answer, entries a minute measured', 'g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail') }
           if ($env:VMODE -eq 'proof72') { $want += @('p1 bridge 2.4.7 installed and connected: finds Tally, the company list, the ledger list', 'p2 a save on the screen reaches FinCom through the add-on', 'p3 a Payment posted by the bridge: CREATED and LASTVCHID', 'p4 tally.ini keys TallyPrime writes from its own port screen (port, acts as, ODBC)', 'p5 a port written into tally.ini with Tally closed is used at the next start', 'p6 two Tallys on one computer (the same install twice; a copy of the install on another port)', 'p7 company GUID after a rename and after a copy of the data folder', 'p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID)', 'p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company', 'p10 a batch of 3 with one missing ledger: Tally''s exact reply', 'p11 Tally''s window and requests during the run (window probe, the bridge''s requests at the proxy)', 'p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say') }
           if ($env:VMODE -eq 'dbres') { $want += @('r1 missing days with Tally closed and reopened: resumed, every day fetched or marked upload, nothing twice', 'r2 missing days with a modal screen left open: no request held over 2 s unseen, finished after it closed', 'r3 missing days with Tally not answering: stopped at 2 s, waited, resumed', 'r4 the ledger read through close / modal / not answering: every ledger once, progress never back, count right', 'r5 Tally responsive at the end of every scenario') }
+          if ($env:VMODE -eq 'stockp') { $want += @('p1 the stock test data made (items, godowns, batches, two years of inventory entries)', 'p2 stored opening (undated item masters) as made', 'p3 C1 Stock-in-Hand group, dated: equals Tally''s per-item total, each request 2 s or less, window not held', 'p4 dated answers the same whatever the Gateway''s period', 'p5 C2 stock groups, dated: times and totals', 'p6 one request at a time, Tally responding after each') }
           if ($env:VMODE -eq 'tdsm') { $want += @('m1 TDS masters made (natures with rates and threshold, duty ledger with nature, certificate, special rate)', 'm2 the ledger requests give the nature, the special rate and the certificate', 'm3 FinComTdsNatures, chunked, finds every nature with its section, rates and threshold', 'm4 the challan fields in FinComVoucherObject''s answer', 'm5 times on ZZ BIG TEST''s masters and at 20,000 ledgers (every 2.4.3 request under 2 s, Tally responding)') }
           if ($env:VMODE -eq 'gsttype') { $want += @('x1 the GST entries made in Tally', 'x2 the entry request answered for every entry (raw kept, timed)', 'x3 the blocked credit as Tally keeps it') }
           if ($env:VMODE -eq 'payg') { $want += @('w1 the payroll company made in Tally (masters and the 36 entries)', 'w2 FinComEmployees: only payroll rows reach FinCom, nothing personal', 'w3 the ledger list carries the pay-head fields', 'w4 every entry reaches FinCom; a salary payment keeps the employee and amount, never the bank details', 'w5 the payroll entry within 3 s, every other request within 2 s, Tally responding') }
