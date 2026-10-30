@@ -69,9 +69,18 @@ function Click([string]$from, [string]$to, [bool]$again = $false) {
   return $at
 }
 function NoClick { Remove-Item $clickFile -Force -ErrorAction SilentlyContinue }
+# the stub's lines as written (ConvertFrom-Json turns an ISO time into a DateTime: a click's time is matched in the raw text)
+function StubRaw([string]$kind, [string]$at) {
+  if (-not (Test-Path $stubLog)) { return , @() }
+  return , @(Get-Content $stubLog -Encoding UTF8 | Where-Object { $_.Contains('"kind": "' + $kind + '"') -and $_.Contains('"' + $at + '"') })
+}
 function WaitAnswer([string]$at, [int]$sec = 120) {
   $t = Get-Date
-  while (((Get-Date) - $t).TotalSeconds -lt $sec) { $a = @((StubReqs) | Where-Object { $_.kind -eq 'stock' -and "$($_.body.at)" -eq $at }) | Select-Object -First 1; if ($a) { NoClick; return $a.body }; Start-Sleep 1 }
+  while (((Get-Date) - $t).TotalSeconds -lt $sec) {
+    $l = @(StubRaw 'stock' $at | Where-Object { $_.Contains('"at": "' + $at + '"') }) | Select-Object -First 1
+    if ($l) { NoClick; return ($l | ConvertFrom-Json).body }
+    Start-Sleep 1
+  }
   NoClick; return $null
 }
 # Tally's stock summary: every item's own opening and closing value for the period, summed (asked on Tally's own port by
@@ -161,7 +170,7 @@ try {
   $imp = $null; $t = Get-Date
   while (((Get-Date) - $t).TotalSeconds -lt 90 -and -not $imp) {
     # the moment the bridge is handed the click (a beat answered with it): the posting from FinCom at once
-    if (@((StubReqs) | Where-Object { $_.kind -eq 'beat' -and $_.answer.stock -and "$($_.answer.stock.$co1.at)" -eq $at6 }).Count) {
+    if (@(StubRaw 'beat' $at6).Count) {
       $vx = '<VOUCHER VCHTYPE="Journal" ACTION="Create"><DATE>20261031</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>g251 posting with a stock click</NARRATION><ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-10.00</AMOUNT></ALLLEDGERENTRIES.LIST><ALLLEDGERENTRIES.LIST><LEDGERNAME>Spike Income</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>10.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>'
       $iS = NowMs; $ir = Bridge POST '/import' @{ company = $co1; vouchers = @(@{ id = "g251-$rel-$([guid]::NewGuid().ToString('N').Substring(0, 8))"; xml = $vx }) } 120; $iE = NowMs
       $imp = [pscustomobject]@{ s = $iS; e = $iE; ok = ($ir -and @($ir.results)[0].ok -eq $true) }
