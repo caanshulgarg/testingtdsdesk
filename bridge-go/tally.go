@@ -357,6 +357,9 @@ var requestClass = map[string]string{
 	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
 	dayHeadsID: "exception", ledIdsID: "undated",
 	vchBatchID: "exception", // 2.4.9: the group the older-entries fetch reads now, by its id always (batch249.go)
+	// 2.5.1 (the owner's decision of 30-Oct-2026): the stock for the period a person chose, by its id always, only while
+	// that click's request is in flight (stock.go)
+	stockID: "exception",
 	// 2.2.3: "Test fetching an entry" (measure-only, a person's): its dated forms and its undated ones
 	fetchTestB: "dated", fetchTestE: "dated", fetchTestD: "undated", fetchTestF: "undated",
 }
@@ -398,6 +401,13 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errLedgerPeriodRefused // review of 2.5.0: whoever asks and whatever ReadDays says (never readsOffErr: nil with ReadDays on)
+	case stockID:
+		// 2.5.1 (the owner's decision of 30-Oct-2026, a person's click only; stock.go): exactly the click's request, as built,
+		// while it is in flight, whatever ReadDays says; refused otherwise whoever asks
+		if stockAsking(x) {
+			return nil
+		}
+		return errStockRefused
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil
@@ -494,6 +504,8 @@ var (
 	// the connection closed before Tally's whole answer came (a message box mid-save, Tally closing)
 	errClosed = errors.New("The underlying connection was closed: An unexpected error occurred on a receive.")
 	// 2.2.2: a recorder read stopped at its hard limit (TC.limitMs)
+	// 2.5.1: the stock request outside a person's click (stock.go)
+	errStockRefused = errors.New("the stock is asked of Tally only for a person's click in FinCom; nothing was sent")
 	errRecorderStop = errors.New("Tally took longer than the recorder's limit; the bridge stopped waiting")
 )
 
@@ -1008,6 +1020,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		}
 		if errors.Is(err, errLedgerPeriodRefused) {
 			why = "it does not carry this company's books' first year as its period (2.5.0), whatever ReadDays says"
+		}
+		if errors.Is(err, errStockRefused) {
+			why = "the stock is asked only for a person's click in FinCom, exactly as built (2.5.1), whatever ReadDays says"
 		}
 		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: %s", port, tallyRequestID(x), why))
 		return "", err

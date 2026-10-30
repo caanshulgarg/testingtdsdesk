@@ -12,7 +12,7 @@ import (
 // decision kept as history; a dated "re-measured" line for 2.4.5; the table and its hash; every row measured; the notes and
 // the test sheet; migration 98 add-only with its own grants
 func TestRelease245VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.5.0" { // 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go): kept as history
+	if BridgeVersion != "2.5.1" { // 2.5.1 (stock251_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

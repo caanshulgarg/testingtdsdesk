@@ -62,6 +62,10 @@ var tallyAllowList = map[string]allowedReq{
 		measuredOn: "2026-10-28 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode batch, run 40750991113, at 30,021 and 100,021 entries: 100 entries of a day of up to 2,216 entries 945 ms worst (4.1), of a day of 7,601 entries 1,405 ms worst (6.2), window held 1.35 s at most; exactly the entries asked in 6,280 requests; every kept field identical to FinComVoucherObject's on 150 of 150 entries a release)"},
 	ledIdsID: {purpose: "the ledger count for Connect Tally's step-5 bar (2.4.5): the ledgers' MasterIDs only, the rows counted (no computed figure); in chunks of 2,000 MasterIDs when the one request is stopped at 2 s", maxSec: 0.41,
 		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661: 50,000 ledgers in one request 405 ms worst (3.0), each chunk of 2,000 MasterIDs 107 ms worst; exact on every release)"},
+	// 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock for the period a person chose, only on that person's click
+	// of "Bring stock from Tally" / "Ask Tally again" in FinCom (stock.go)
+	stockID: {purpose: "the stock for the period a person chose (2.5.1): Tally's Group collection, the reserved group Stock-in-Hand only (FILTERS $ReservedName), NAME, OPENINGBALANCE and CLOSINGBALANCE with SVFROMDATE / SVTODATE (yyyymmdd TYPE=\"Date\") the period; sent ONLY on a person's click in FinCom (no background read, no schedule, no retry), at most once per company and period (the answer kept; Ask Tally again asks once more), one request in flight, postings first, stopped at 2 s; over 2 s or Tally's window held 2 s: that company is not asked again until the next click, and FinCom says so; allowed for 2.5.1 by the owner's decision of 2026-10-30 (person's click only)", maxSec: 2.37,
+		measuredOn: "2026-10-30 (real TallyPrime 3.0 and 7.1; tally-versions mode stockp, run 41009967960 (tally-versions 51fe89998, results 960d5b047), 4,000 items with godowns and batches, 32,000 entries over two years: a period's first ask 1.37 s worst, window held 0.97 s; the first request after Tally started 2.37 s, window held 2.05 s (the bridge stops it at 2 s and says so); asked again 2 ms; the opening and closing equal Tally's per-item total for every period)"},
 	"TDSDeskLedgers":    {purpose: "ledger masters for FinCom's /ledgers, 2,000 MasterIDs a request at most, stored fields only"},
 	"TDSDeskGroups":     {purpose: "groups for FinCom's /ledgers (name, parent, GUID)"},
 	"TDSDeskNames":      {purpose: "ledger names and groups, 2,000 MasterIDs a request at most"},
@@ -205,6 +209,7 @@ func allowListSamples() map[string]string {
 		empListID:            employeeChunkRequest(c, 0, 2000),
 		dayHeadsID:           dayHeadsRequest(c, a),
 		ledIdsID:             ledgerIdsRequest(c, 0, 0),
+		stockID:              stockRequest(c, a, z), // 2.5.1 (stock.go)
 		vchBatchID:           voucherBatchRangeRequest(c, a, 1, 100),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),

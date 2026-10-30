@@ -583,3 +583,7 @@ run_migration125.py                   180
 # migration 130 (bridge 2.5.0, the owner's decision of 30-Oct-2026): openings only when they add up to nil, a dated read preferred
 run_migration130.py                   240
 run_openings_ingest.py                240
+# migration 134 (bridge 2.5.1, the owner's decision of 30-Oct-2026): the stock from Tally only on a person's click
+run_migration134.py                   180
+run_stock_ingest.py                   180
+run_fs_stock_tally_ui.py              240  TDSDESK_SITE=../app/dist-test

@@ -241,9 +241,26 @@ const FinSt = (() => {
   // figures typed in the old statements (b.fs.stock {open, close}). Opening stock at the start of the year is the stock as on
   // the day before it; at the start of the period, as on the day before From; closing stock, as on To.
   const isStockLed = l => FS.nature(l).path.some(g => /^stock-in-hand$/i.test(g));
+  // FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock brought from Tally on a person's click ("Bring
+  // stock from Tally" on the stock panel), kept per period in b.fs.stockTally {"<from>-<to>": {opening, closing, readAt,
+  // status, words}} as FinCom's cloud keeps it (tally_stock_reads): its opening is the stock as on the day before From, its
+  // closing as on To. Used before last year's balance sheet and a typed figure (they stay the fallback); the latest read wins
+  function stockFromTally(ymd, f){
+    let best = null;
+    Object.entries(f.stockTally || {}).forEach(([k, r]) => {
+      const m = /^(\d{8})-(\d{8})$/.exec(k); if (!m || !r || r.opening == null || r.closing == null || !r.readAt) return;
+      const v = Audit.dayBefore(m[1]) === ymd ? N(r.opening) : m[2] === ymd ? N(r.closing) : null;
+      if (v != null && (!best || String(r.readAt) > String(best.at))) best = {v: R2(v), at: r.readAt, from: m[1], to: m[2]};
+    });
+    if (!best) return null;
+    const when = typeof fmtDateTime === "function" ? fmtDateTime(best.at) : String(best.at);
+    return {v: best.v, src: "tallyread", at: best.at, label: "from Tally on " + when + " (its Stock-in-Hand, " + DMY(best.from) + " to " + DMY(best.to) + ")"};
+  }
   function stockOn(ymd, x){
     const f = x.f, st = x.st || {}, t = (f.stockAt || {})[ymd];
     if (x.integrated){ const at = x.balAt(ymd); return {v: R2(Object.keys(at).filter(isStockLed).reduce((s, l) => s - N(at[l]), 0)), src: "tally", label: "Tally: the Stock-in-hand ledgers"}; }
+    const fromTally = stockFromTally(ymd, f);
+    if (fromTally) return fromTally;
     if (ymd === x.fyOpen && x.upInv != null) return {v: x.upInv, src: "upload", label: "last year's balance sheet: Inventories (" + (x.upl.file || "uploaded") + ", version " + x.upl.v + ")"};
     if (t && t.v != null && t.v !== "") return {v: R2(N(t.v)), src: "typed", label: "typed by " + (t.by || "someone") + (t.at ? " on " + DMY(String(t.at).slice(0, 10).replace(/-/g, "")) : ""), by: t.by, at: t.at};
     if (ymd === x.fyOpen && N(st.open)) return {v: R2(N(st.open)), src: "typed", label: "typed in FinCom's statements (the year's opening stock)"};
@@ -314,7 +331,7 @@ const FinSt = (() => {
     const A = Audit.dayBefore(fyFrom), Bd = P.full ? A : Audit.dayBefore(from), Cd = to;
     const sx = {f, st: c.stock || {}, integrated, balAt: d => bal.at(d), fyOpen: A, fyClose: P.fyTo, upl, upInv: upInvOf(upl)};
     const sA = stockOn(A, sx), sB = Bd === A ? sA : stockOn(Bd, sx), sC = stockOn(Cd, sx);
-    const stock = {integrated, dates: {A, B: Bd, C: Cd}, A: sA, B: sB, C: sC, missing: [], upInv: sx.upInv};
+    const stock = {integrated, dates: {A, B: Bd, C: Cd}, A: sA, B: sB, C: sC, missing: [], upInv: sx.upInv, from, to, tally: (f.stockTally || {})[from + "-" + to] || null};
     if (!integrated && [sA, sB, sC].some(z => z.v != null)){
       [["Opening stock at the start of the year", A, sA]].concat(Bd !== A ? [["Opening stock at the start of the period", Bd, sB]] : [], [["Closing stock", Cd, sC]])
         .forEach(([w, dt, z]) => { if (z.v == null) stock.missing.push(w + " (as on " + DMY(dt) + ")"); });

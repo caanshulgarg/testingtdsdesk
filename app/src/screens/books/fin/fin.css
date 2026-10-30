@@ -152,6 +152,10 @@ table.fin-tb tfoot td { font-weight: 700; border-top: 1px solid var(--border-str
 .fin-pybs-head > div { flex: 1 1 280px; min-width: 0; }
 .fin-pybs-head p { margin: 2px 0 0; }
 .fin-pybs-head label.btn { cursor: pointer; }
+/* 2.5.1: the stock brought from Tally on a click (Stock.jsx) */
+.fin-stock-tally { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0; }
+.fin-stock-tally > span { flex: 1 1 260px; min-width: 0; overflow-wrap: anywhere; }
+.fin-stock-tally > p { flex: 1 1 100%; margin: 0; }
 .fin-pybs-confirm { margin-top: 10px; }
 .fin-pybs-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 0 8px; font-size: 13px; }
 .fin-pybs-opts select { width: auto; min-height: 28px; }

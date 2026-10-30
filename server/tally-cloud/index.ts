@@ -176,6 +176,11 @@
 //                                                    -> {ok, stored, stale, held, n, done} (parsed as a Day Book's entries,
 //                                                       each dated the day, through tally_period_entries); an entry whose
 //                                                       lines do not total zero marks the day to be uploaded by hand
+//   {kind:"stock", company, company_guid, from, to, at, status, opening?, closing?, readAt?, ms, holdMs, words?} -> {ok}:
+//                                                       FinCom Bridge 2.5.1 (migration 134): Tally's answer to that click (the
+//                                                       Stock-in-Hand group's opening and closing, a positive stock), or why not
+//                                                       (slow: "Tally took too long; type the stock or try again later", busy,
+//                                                       notopen, none, failed); kept per book and period (tally_stock_reads)
 //   {kind:"ledger_progress", company, company_guid, round, read, of, done, at} -> {ok}: Connect Tally's step 5, "312 of
 //                                                       1,240 ledgers" (tally_ledger_progress_save; the beat's ledgerProgress too)
 //   {kind:"make_main", bridge}                        -> this bridge (FinCom Bridge 2.x, its menu) is the main one: only it posts
@@ -191,6 +196,13 @@
 //   {kind:"wake", what:"ledgers", client}          -> (2.1.4) a bill's ledger chooser opened with a list older than the last
 //                                                       posting: the Tally computer is woken ("ledgers", {company, at}) to
 //                                                       read the ledger list; at most one a minute per company ({debounced})
+//   {kind:"wake", what:"stock", client, from, to, again?} -> (FinCom Bridge 2.5.1, migration 134; the owner's decision of
+//                                                       30-Oct-2026: the stock from Tally ONLY on a person's click of "Bring
+//                                                       stock from Tally" / "Ask Tally again") {asked, at} when the client's
+//                                                       Tally computer is woken ("stock", {company, from, to, at, again}; the
+//                                                       beat's answer carries it too, 10 minutes); {cached, read} when an
+//                                                       answer for the book and period is kept and again is not asked; {pending}
+//                                                       while a click is on its way (30 s). At most one request per period
 //   {kind:"month_days", book, month:"YYYYMM"}      -> (fast-firstopen, 25-Oct-2026) the month's day files as kept in
 //                                                       tally-days, in one binary answer (monthpack.js), for the first
 //                                                       opening of a client on a computer; a book of another firm: 404
@@ -3321,6 +3333,7 @@ function openOn(d: any) {
   return out;
 }
 async function wakeFor(firm: string, body: any, userId = "") {
+  if (body.what === "stock") return await stockWake(firm, body, userId);   // 2.5.1 (migration 134)
   const what = body.what === "open" ? "open" : body.what === "active" ? "active" : body.what === "ledgers" ? "ledgers" : "";
   if (!what) return reply(400, { ok: false, error: "Say what: open, active or ledgers." });
   const at = new Date().toISOString();
@@ -3367,6 +3380,73 @@ async function wakeFor(firm: string, body: any, userId = "") {
     if (d.wake_token) for (const c of cos) if (await broadcast("tb-" + d.wake_token, "open", { company: c, at })) woken++;
   }
   return reply(200, { ok: true, woken });
+}
+// FinCom Bridge 2.5.1 (migration 134; the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person
+// clicks "Bring stock from Tally" (again: "Ask Tally again") on the Financial statements' stock panel. The click is kept per
+// book and period (tally_stock_ask: at most one request per period; a kept answer is given back without asking Tally; a click
+// on its way is not doubled), then the computers that keep the client's Tally company are woken as for "ledgers" (its own,
+// one with it open, the caller's own keys): "stock" {company, from, to, at, again} on the channel, info.stock for the beat's
+// answer. The bridge asks Tally once (2 s at most) and answers {kind:"stock"} (stockAnswer)
+const stockD8 = (v: unknown) => { const x = String(v ?? ""); return /^\d{8}$/.test(x) && !isNaN(Date.parse(x.slice(0, 4) + "-" + x.slice(4, 6) + "-" + x.slice(6, 8))) ? x : ""; };
+const stockIso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
+function stockRead(r: any) {
+  if (!r || typeof r !== "object") return null;
+  const n = (v: unknown) => v === null || v === undefined || v === "" ? null : Number(v);
+  return { status: String(r.status || ""), words: String(r.words || ""), opening: n(r.opening), closing: n(r.closing), readAt: r.read_at || null, askedAt: r.asked_at || null,
+    from: String(r.period_from || "").replace(/-/g, ""), to: String(r.period_to || "").replace(/-/g, "") };
+}
+let stockMissing = 0;
+async function stockWake(firm: string, body: any, userId = "") {
+  const from = stockD8(body.from), to = stockD8(body.to), again = body.again === true;
+  if (!from || !to || from > to) return reply(400, { ok: false, error: "Say the period: from and to (yyyymmdd)." });
+  const { data: linked } = await db.from("tally_companies").select("company, device_id").eq("firm_id", firm).eq("client_id", String(body.client || ""));
+  const links = ((linked || []) as any[]).filter((r: any) => r.company);
+  if (!links.length) return reply(200, { ok: true, asked: false, notLinked: true, error: "This client is not linked to a Tally company yet." });
+  let company = "", book: string | null = null;
+  for (const l of links) { const b = await bookFor(firm, String(l.company)); if (b) { company = String(l.company); book = b; break; } }
+  if (!book) return reply(200, { ok: true, asked: false, noBook: true, error: "FinCom has no books from Tally for this client yet." });
+  if (Date.now() - stockMissing < 600000) return reply(200, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." });
+  const { data: a, error } = await db.rpc("tally_stock_ask", { p_firm: firm, p_book: book, p_from: stockIso(from), p_to: stockIso(to), p_again: again, p_user: userId || null });
+  if (error) {
+    if (missingFn(String(error.message || ""))) { stockMissing = Date.now(); return reply(200, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." }); }
+    throw new Error(error.message);
+  }
+  if (!a || a.ok !== true) return reply(400, { ok: false, error: String(a?.error || "The period could not be asked.") });
+  if (a.ask !== true) return reply(200, { ok: true, asked: false, cached: a.cached === true, pending: a.pending === true, book, read: stockRead(a.row) });
+  const at = String(a.at), ask = { from, to, at, again };
+  const { data: all } = await db.from("tally_devices").select("*").eq("firm_id", firm);
+  const dev = links.find((l: any) => String(l.company) === company)?.device_id || null;
+  let woken = 0, told = 0;
+  for (const d of ((all || []) as any[]).filter((x: any) => !x.revoked)) {
+    if (!(d.id === dev || (!!userId && d.created_by === userId) || openOn(d).has(coName(company)))) continue;
+    const prev = (d.info && typeof d.info === "object") ? d.info : {};
+    const st: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries((prev.stock && typeof prev.stock === "object") ? prev.stock : {})) if (Date.parse(String((v as any)?.at)) > Date.now() - 3600000) st[k] = v;
+    st[company] = ask;
+    const { error: ue } = await db.from("tally_devices").update({ info: { ...prev, stock: st, activityAt: new Date().toISOString() } }).eq("id", d.id);
+    if (!ue) told++;
+    if (d.wake_token && await broadcast("tb-" + d.wake_token, "stock", { company, ...ask })) woken++;
+  }
+  return reply(200, { ok: true, asked: true, at, book, woken, told, read: stockRead(a.row) });
+}
+// the bridge's answer to a click (kind "stock"): checked, then kept against that click (tally_stock_answer)
+async function stockAnswer(firm: string, book: string, body: any) {
+  const from = stockD8(body.from), to = stockD8(body.to), at = typeof body.at === "string" ? body.at.slice(0, 40) : "";
+  const status = String(body.status || ""), STATUSES = ["ok", "slow", "busy", "notopen", "none", "failed"];
+  if (!from || !to || !at || !STATUSES.includes(status)) return reply(400, { ok: false, error: "Not a stock answer FinCom takes." });
+  const fig = (v: unknown) => typeof v === "number" && isFinite(v) && Math.abs(v) < 1e15 ? Math.round(v * 100) / 100 : null;
+  const opening = fig(body.opening), closing = fig(body.closing), readAt = typeof body.readAt === "string" && !isNaN(Date.parse(body.readAt)) ? new Date(body.readAt).toISOString() : null;
+  if (status === "ok" && (opening === null || closing === null || !readAt)) return reply(400, { ok: false, error: "A stock answer without its figures." });
+  const int = (v: unknown) => Math.max(0, Math.min(600000, Math.floor(Number(v) || 0)));
+  const { data, error } = await db.rpc("tally_stock_answer", { p_firm: firm, p_book: book, p_from: stockIso(from), p_to: stockIso(to), p_at: at, p_status: status,
+    p_opening: status === "ok" ? opening : null, p_closing: status === "ok" ? closing : null, p_read_at: status === "ok" ? readAt : null, p_ms: int(body.ms), p_hold: int(body.holdMs),
+    p_words: typeof body.words === "string" ? body.words.slice(0, 300) : "" });
+  if (error) {
+    if (missingFn(String(error.message || ""))) return reply(409, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." });
+    throw new Error(error.message);
+  }
+  if (!data || data.ok !== true) return reply(409, { ok: false, unknown: data?.unknown === true, error: String(data?.error || "not taken") });
+  return reply(200, { ok: true });
 }
 async function broadcast(topic: string, event: string, payload: Record<string, unknown>) {
   try {
@@ -3715,6 +3795,13 @@ Deno.serve(sentry.wrap(async (req) => {
         // 2.1.4: ledger lists asked for in the last 10 minutes (the ledger chooser), the fallback for the wake-up channel
         const ledgers: Record<string, string> = {};
         for (const [k, v] of Object.entries((prevInfo.ledgers && typeof prevInfo.ledgers === "object") ? prevInfo.ledgers : {})) if (Date.parse(String(v)) > Date.now() - 600000) ledgers[k] = String(v);
+        // 2.5.1 (migration 134): a person's click for the stock in the last 10 minutes, the fallback for the wake-up channel
+        // (the bridge takes each click once, by its time)
+        const stock: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries((prevInfo.stock && typeof prevInfo.stock === "object") ? prevInfo.stock : {})) {
+          const x = v as any;
+          if (x && Date.parse(String(x.at)) > Date.now() - 600000) stock[k] = { from: String(x.from || ""), to: String(x.to || ""), at: String(x.at), again: x.again === true };
+        }
         const { data: lastJob } = await db.from("tally_post_jobs").select("updated_at").eq("device_id", dev.id).order("updated_at", { ascending: false }).limit(1);
         const activityAt = [prevInfo.activityAt, want, lastJob && lastJob[0] && lastJob[0].updated_at].filter((x) => x && !isNaN(Date.parse(String(x))))
           .map((x) => new Date(String(x)).toISOString()).sort().pop() || "";
@@ -3751,7 +3838,7 @@ Deno.serve(sentry.wrap(async (req) => {
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, periodNight ? 30 : 3) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
@@ -4123,6 +4210,17 @@ Deno.serve(sentry.wrap(async (req) => {
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (body.kind === "period_stop") return await periodStop(book, body);
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
+      }
+      case "stock": {
+        // FinCom Bridge 2.5.1 (migration 134): Tally's answer to a person's click for the stock (stockAnswer)
+        if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many calls in the last minute; try again in a minute." });
+        const book = await bookFor(firm, String(body.company || ""));
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
+        if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
+        const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
+        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
+        return await stockAnswer(firm, book, body);
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));

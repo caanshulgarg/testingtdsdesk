@@ -106,6 +106,16 @@ func driveEveryRequest(t *testing.T) *standTally {
 	pull.mu.Unlock()
 	must("a day's group", err)
 	applyPeriodDays(M{"periodDays": []any{}})
+	// 2.5.1: the stock, for a person's click in FinCom only (stock.go; the paths are driven in stock251_test.go)
+	stockReset()
+	noteCompanyGUID(zz, f.guid)
+	liveSeedOwnOpen(f.guid, zz)
+	f.mu.Lock()
+	f.stockGrp = [2]string{"-1000.00", "-2500.50"}
+	f.mu.Unlock()
+	if a := stockTake(stockClick{Company: zz, From: "20260401", To: "20260430", At: time.Now().UTC().Format(time.RFC3339Nano)}); str(a["status"]) != "ok" {
+		t.Fatalf("the stock for a click: %v", a)
+	}
 	_, err = invokeTally(recorderTC(nil), f.port, ledgerIdsRequest(zz, 0, 0), 5)
 	must("the ledger count", err)
 	// 2.2.0: the change numbers' report form (form b; the company check sends it when form a gives no numbers)
@@ -253,6 +263,11 @@ func computedFigure(x string) string {
 			return m[0]
 		}
 	}
+	// 2.5.1 (the owner's decision of 30-Oct-2026, a person's click only): the one narrow exception for a balance Tally works
+	// out, exactly FinComStockInHand as built (stockClickRead)
+	if stockClickRead(x) {
+		return ""
+	}
 	if m := reBalField.FindString(x); m != "" && (strings.Contains(x, "SVFROMDATE") || strings.Contains(x, "SVTODATE")) && !booksYearLedgerRead(x) {
 		return m + " with a period"
 	}
@@ -260,6 +275,14 @@ func computedFigure(x string) string {
 		return m
 	}
 	return ""
+}
+
+// 2.5.1 (stock.go): exactly the stock request as built for its company and period (the id FinComStockInHand, the Group
+// collection, the reserved group Stock-in-Hand only, NAME, OPENINGBALANCE, CLOSINGBALANCE, the period yyyymmdd TYPE="Date"
+// once, inside STATICVARIABLES): Tally's stock summary for that one group; any other id, field, filter or period is not it
+func stockClickRead(x string) bool {
+	return tallyRequestID(x) == stockID && stockExact(x) && strings.Count(x, "SVFROMDATE") == 2 && strings.Count(x, "SVTODATE") == 2 &&
+		strings.Count(x, "<COLLECTION ") == 1 && strings.Count(x, "<SYSTEM ") == 1
 }
 
 // 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the one narrow exemption from "no opening balance with a
