@@ -1,0 +1,35 @@
+INFO TallyPrime 5.1, mode g251, runner GitHub Actions 1000013948, 2026-10-30T11:23:09
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-30, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-30, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, names-chunk, names-tail, tagcheck, vchheads
+INFO g251: gen.py: {"items": 400, "y1": {"Purchase": 1019, "Debit Note": 134, "Sales": 1563, "Stock Journal": 144, "Credit Note": 137}, "y2": {"Sales": 145, "Credit Note": 21, "Purchase": 97, "Debit Note": 20, "Stock Journal": 17}, "expect": {"opening_total": 88977507.73, "batched_items": 100, "items_with_opening": 350, "opening_allocs": 539}}
+INFO g251 masters: company ISINTEGRATED: altered 1, errors 0; company ISINVENTORYON: altered 1, errors 0; company ISBATCHWISEON: altered 1, errors 0; masters: 435 created, 0 errors; entries y1: 2997 created, 0 errors; entries y2: 300 created, 0 errors
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.1.exe SHA-256 f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b; bridge source: 0141cc16b9e6bd965d8fc2b1dfb70c953e8ca655 Bridge 2.5.1 built: setup SHA-256 f5742820...0687b (program dff967bc...d28e), release log row, notes and test sheet fingerprint; not published
+INFO bridge on 127.0.0.1:9100, version 2.5.1, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO g251: window probe running True (beats 20), Tally pid 7396
+PASS s1 the committed setup installed: version 2.5.1: the bridge answers version 2.5.1; setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.1.exe SHA-256 f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b
+PASS s2 click only: nothing asks Tally for the stock by itself: 4 minutes with Update now and the bridge's own rounds: FinComStockInHand at Tally 0 time(s); 'Stock of' lines in the bridge's log 0; the requests Tally had:  x1; FinComCompany x2; FinComEmployees x2; FinComGroups x1; FinComLedgers x2; FinComTdsNatures x2; TDSDeskCompanies x2; TDSDeskCompanyInfo x1
+FAIL s3 a click: the stock equals Tally's stock summary, the request exactly C1: 20260401-20261031 no answer at the stub in 2 minutes; 20270401-20270630 no answer at the stub in 2 minutes
+FAIL s5 once per period: the kept answer; Ask Tally again asks once more: the same period clicked again: no answer, requests at Tally +0; Ask Tally again: no answer, requests at Tally +1
+HARNESS s6 one request in flight; postings first: requests started while another was at Tally: 0 of 13; the posting: ok -, its request reached Tally -1 ms after FinCom asked; the click's answer: none
+PASS s4 each stock request 2 s or less; no window hold beyond the click's request: 4 stock requests at Tally, worst 236 ms (236, 202, 25, 223); Tally's window: 0 holds of 250 ms or more in the run, the longest  ms; during the stock requests the longest 0 ms; holds of 2 s or more: 0; holds lasting beyond a stock request's answer: 0
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 2 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1

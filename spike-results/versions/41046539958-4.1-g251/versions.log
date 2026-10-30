@@ -1,0 +1,96 @@
+[11:23:36] ---- c1 install and open the company (TallyPrime 4.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15413896 bytes, 2026-10-30, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 11 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>4</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 4 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-30, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 11 ms, 'FinCom Spike Co' in it: True
+[11:24:09] ---- the stub cloud and the bridge
+[ledger Spike Income] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+InvalidOperation: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dblib.ps1:88
+Line |
+  88 |  …  '*.xml') { $script:RQ[$f.BaseName] = (Get-Content $f.FullName -Raw). …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | You cannot call a method on a null-valued expression.
+
+InvalidOperation: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dblib.ps1:88
+Line |
+  88 |  …  '*.xml') { $script:RQ[$f.BaseName] = (Get-Content $f.FullName -Raw). …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | You cannot call a method on a null-valued expression.
+
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, names-chunk, names-tail, tagcheck, vchheads
+[11:24:12] ---- g251 masters (before the bridge): the stock company
+  INFO g251: gen.py: {"items": 400, "y1": {"Purchase": 1019, "Debit Note": 134, "Sales": 1563, "Stock Journal": 144, "Credit Note": 137}, "y2": {"Sales": 145, "Credit Note": 21, "Purchase": 97, "Debit Note": 20, "Stock Journal": 17}, "expect": {"opening_total": 88977507.73, "batched_items": 100, "items_with_opening": 350, "opening_allocs": 539}}
+[db] company ISINTEGRATED Yes: created 0, altered 1, errors 0, 36 ms
+[db] company ISINVENTORYON Yes: created 0, altered 1, errors 0, 9.8 ms
+[db] company ISBATCHWISEON Yes: created 0, altered 1, errors 0, 8 ms
+[db] masters: created 435, altered 0, errors 0, 1293.2 ms
+[db] y1 v-y1-purchase-01.xml: created 250, altered 0, errors 0, 8592.2 ms
+[db] y1 v-y1-purchase-02.xml: created 250, altered 0, errors 0, 9238.4 ms
+[db] y1 v-y1-purchase-03.xml: created 250, altered 0, errors 0, 10003.6 ms
+[db] y1 v-y1-purchase-04.xml: created 250, altered 0, errors 0, 10356.5 ms
+[db] y1 v-y1-purchase-05.xml: created 19, altered 0, errors 0, 786.3 ms
+[db] y1 v-y1-debitnote-01.xml: created 134, altered 0, errors 0, 6100 ms
+[db] y1 v-y1-sales-01.xml: created 250, altered 0, errors 0, 10584.7 ms
+[db] y1 v-y1-sales-02.xml: created 250, altered 0, errors 0, 11045.1 ms
+[db] y1 v-y1-sales-03.xml: created 250, altered 0, errors 0, 13304.1 ms
+[db] y1 v-y1-sales-04.xml: created 250, altered 0, errors 0, 14315.1 ms
+[db] y1 v-y1-sales-05.xml: created 250, altered 0, errors 0, 13648.5 ms
+[db] y1 v-y1-sales-06.xml: created 250, altered 0, errors 0, 13251 ms
+[db] y1 v-y1-sales-07.xml: created 63, altered 0, errors 0, 3669.9 ms
+[db] y1 v-y1-stockjournal-01.xml: created 144, altered 0, errors 0, 2958.1 ms
+[db] y1 v-y1-creditnote-01.xml: created 137, altered 0, errors 0, 5224.6 ms
+[db] y2 v-y2-sales-01.xml: created 145, altered 0, errors 0, 8054.2 ms
+[db] y2 v-y2-creditnote-01.xml: created 21, altered 0, errors 0, 760 ms
+[db] y2 v-y2-purchase-01.xml: created 97, altered 0, errors 0, 5909.8 ms
+[db] y2 v-y2-debitnote-01.xml: created 20, altered 0, errors 0, 1334.2 ms
+[db] y2 v-y2-stockjournal-01.xml: created 17, altered 0, errors 0, 411.8 ms
+  INFO g251 masters: company ISINTEGRATED: altered 1, errors 0; company ISINVENTORYON: altered 1, errors 0; company ISBATCHWISEON: altered 1, errors 0; masters: 435 created, 0 errors; entries y1: 2997 created, 0 errors; entries y2: 300 created, 0 errors
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.1.exe SHA-256 f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b; bridge source: 0141cc16b9e6bd965d8fc2b1dfb70c953e8ca655 Bridge 2.5.1 built: setup SHA-256 f5742820...0687b (program dff967bc...d28e), release log row, notes and test sheet fingerprint; not published
+[11:26:45] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 1276)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.5.1, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-30 11:27:01  FinCom Bridge 2.5.1: started just for runnervmdaln5\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-30 11:27:01  FinCom Bridge 2.5.1, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-10-30 11:27:01  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-10-30 11:27:01  FinCom Bridge 2.5.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmdaln5\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-30 11:27:01  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-30 11:27:01  Recorder: re-scan of the add-on's files for 2.5.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-30 11:27:01  Check:  - 
+  bridge log: 2026-10-30 11:27:04  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-30 11:27:04  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-30 11:27:04  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-10-30 11:27:04  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-30 11:27:05  Company FinCom Spike Co: its Tally GUID ef548411-5280-4b1a-afd7-8d2b72d40da0 is held from now on
+  bridge log: 2026-10-30 11:27:05  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=3298, ALTMSTID=647 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-30 11:27:05  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=3298, ALTMSTID=647
+  bridge log: 2026-10-30 11:27:05  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=3298, ALTMSTID=647)
+  bridge log: 2026-10-30 11:27:05  Employees of FinCom Spike Co: Tally's master counter 647: the payroll list read (2 request(s), 0 row(s)); unchanged, nothing sent
+  INFO add-on: recorder files after start: none
+[11:27:47] ---- g251: the stock from Tally, on a click only
+  INFO g251: window probe running True (beats 19), Tally pid 2672
+######## PASS s1 the committed setup installed: version 2.5.1: the bridge answers version 2.5.1; setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.1.exe SHA-256 f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b
+  bridge log: 2026-10-30 11:27:49  Update from Tally asked for now
+  bridge log: 2026-10-30 11:27:49  Update from Tally: asked for now
+  bridge log: 2026-10-30 11:27:50  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-30 11:27:50  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-30 11:27:50  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-30 11:27:51  Keeping FinCom Spike Co: ledger list MasterID 1-2000, 28 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 11:27:51  Keeping FinCom Spike Co: ledger list MasterID 2001-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 11:27:51  Keeping FinCom Spike Co: the ledger list read (28 ledgers, 28 groups, 5 request(s)): 28 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-30 11:27:51  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=3298 ALTMSTID=647
+  bridge log: 2026-10-30 11:27:51  Cloud: FinCom Spike Co is linked in FinCom; sending its copy (0 days)
+  bridge log: 2026-10-30 11:27:51  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-30 11:27:51  Update from Tally: done (7 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+######## PASS s2 click only: nothing asks Tally for the stock by itself: 4 minutes with Update now and the bridge's own rounds: FinComStockInHand at Tally 0 time(s); 'Stock of' lines in the bridge's log 0; the requests Tally had:  x1; FinComCompany x2; FinComEmployees x2; FinComGroups x1; FinComLedgers x2; FinComTdsNatures x2; TDSDeskCompanies x2; TDSDeskCompanyInfo x1
+  bridge log: 2026-10-30 11:31:50  Stock of FinCom Spike Co (01-Apr-2026 to 31-Oct-2026), asked in FinCom: opening 88977507.73, closing 192438290.86, from Tally in 164 ms
+  bridge log: 2026-10-30 11:33:55  Stock of FinCom Spike Co (01-Apr-2027 to 30-Jun-2027), asked in FinCom: opening 266163620.59, closing 282217581.61, from Tally in 158 ms
+######## FAIL s3 a click: the stock equals Tally's stock summary, the request exactly C1: 20260401-20261031 no answer at the stub in 2 minutes; 20270401-20270630 no answer at the stub in 2 minutes
+######## FAIL s5 once per period: the kept answer; Ask Tally again asks once more: the same period clicked again: no answer, requests at Tally +0; Ask Tally again: no answer, requests at Tally +1
+######## HARNESS s6 one request in flight; postings first: requests started while another was at Tally: 0 of 13; the posting: ok -, its request reached Tally -1 ms after FinCom asked; the click's answer: none
+######## PASS s4 each stock request 2 s or less; no window hold beyond the click's request: 4 stock requests at Tally, worst 163 ms (163, 156, 27, 159); Tally's window: 0 holds of 250 ms or more in the run, the longest  ms; during the stock requests the longest 0 ms; holds of 2 s or more: 0; holds lasting beyond a stock request's answer: 0
