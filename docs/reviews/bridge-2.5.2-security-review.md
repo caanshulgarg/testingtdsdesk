@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort, with
 the security questions below), and the build session's own pass over each finding. They did not write the change.
 
-Range: 25e694c0a..f70e512a3
+Range: 25e694c0a..2149384fc
 
 ## What can make the bridge ask Tally for the stock
 

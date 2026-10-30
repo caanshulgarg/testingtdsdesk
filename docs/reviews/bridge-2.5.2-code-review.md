@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..f70e512a3
+Range: 25e694c0a..2149384fc
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -134,4 +134,4 @@ in cb0303b41 (once more whenever nothing reached Tally). Round 7 on it: 4 findin
 3. (Low) The busy words quoted a back-off. Fixed: "Tally is busy with a posting or another FinCom request".
 4. (Low) The retry's test could pass without retrying. Fixed: it counts the two tries.
 
-After round 7: f70e512a3. The whole range was read last.
+After round 7: f70e512a3, and 2149384fc (the withdrawn build's files removed, no code). The whole range was read last.
