@@ -32,14 +32,20 @@ function again(load, at, e) {
 
 const loaders = [];
 export function lazyModule(load) {
-  let mod = null, failed = null, p = null;
+  // asked: a screen has asked for this file (it is the page being opened). 30-Oct-2026 (Sentry FINCOM-APP-STAGING-1:
+  // Safari on the Bank tab, the Books file fetched AHEAD failed on the line, FinCom reloaded the Bank page by itself and
+  // then threw the error): a file only fetched ahead that does not come is not the page failing. A breadcrumb only
+  // (step "prefetch_failed"); no reload, no error, nothing said; the screen asks again when it is opened
+  let mod = null, failed = null, p = null, asked = false;
   const at = loaderFile(load);
   const get = () => p || (p = load().catch((e) => again(load, at, e)).then((m) => {
     mod = m; failed = null;
     // drawn again in full (the old screens' finishing touches too: the tables' funnels, the guide), as any change is
     try { if (window.S && S.firm && typeof window.render === "function") window.render(); } catch (e) { /* the next drawing shows it */ }
   }, (e) => {
-    failed = e; p = null;
+    p = null;
+    if (!asked) { tellChunk("prefetch_failed", failedFile(e, at && at.url)); return; }
+    failed = e;
     // 16-Oct-2026 (the owner's TDS page on Safari): say why in the console and report it (Sentry takes uncaught errors),
     // and reload FinCom once by itself (a browser holding an older copy of the program gets the new one). 18-Oct-2026:
     // once per BUILD (src/staleChunk.js), not once per tab: the guard of "fincom:lazy-reloaded" stopped the reload after
@@ -59,6 +65,7 @@ export function lazyModule(load) {
         createElement("button", { className: "linkbtn", onClick: () => { failed = null; location.reload(); } }, "Reload FinCom"), " · ",
         createElement("button", { className: "linkbtn", "data-clean-reload": "", onClick: () => { cleanReload(failedFile(failed, at && at.url)); } }, "Open without saved files"));
       // the thin bar under the top bar while it comes (stability batch 3)
+      asked = true;
       const p = get(); if (!p.tracked) { p.tracked = true; FinComNav.track(p); }
       throw p;
     }

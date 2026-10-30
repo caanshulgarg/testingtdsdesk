@@ -24,14 +24,21 @@ Deno.test("the four tools, strict schemas", () => {
   const strict = (s: any): boolean => s.type !== "object" || (s.additionalProperties === false && JSON.stringify(Object.keys(s.properties).sort()) === JSON.stringify([...s.required].sort()) && Object.values(s.properties).every(strict));
   assert(TOOLS.every((t) => strict(t.input_schema) && t.label === "books"), "every schema strict; label books");
 });
-Deno.test("fs_build: the app's figures to the paisa, and the files", async () => {
-  const r = await tool("fs_build").run({ client: null, year: "2025-26", layout: null }, ctx);
-  assert(!r.error, "built: " + (r.error || ""));
-  const bs = r.tables![0], total: any[] = bs.rows.filter((x: any) => x.line === "TOTAL");
-  assert(total.length === 2 && total.every((x: any) => Math.round(x.cy * 100) === fx.tas), "balance sheet totals " + total.map((x: any) => x.cy).join(" / ") + " = FSX in the app");
-  assert(r.tables![1].rows.some((x: any) => x.line === "Profit (Loss) for the Year" && Math.round(x.cy * 100) === fx.pat), "profit for the year = FSX in the app");
-  assert(r.tables![2].summary!.failed === fx.failed && fx.failed === 0, "the 27 checks: none failed");
-  assert(uploaded.some((n) => n.endsWith(".xlsx")) && uploaded.some((n) => n.endsWith(".docx")) && r.files!.length === 2, "Excel and Word uploaded");
+// fs_build (owner, 29-Oct-2026): the statements of the Financial statements page, for any From-To, with the comparative and
+// the notes; the figures are worked out by the page's own engine in the browser (the card, app/src/parts/AssistantFs.jsx),
+// so the tool gives the card and never a figure (the old figures came from the Reports screen's engine, not the page's)
+Deno.test("fs_build: the statements card for a period, the comparative and the notes; no figure, no file of another engine", async () => {
+  const r = await tool("fs_build").run({ client: null, from: "2026-04-01", to: "2026-09-30", compare: null, notes: null }, ctx);
+  assert(!r.error, "made: " + (r.error || ""));
+  const card: any = (r.cards || [])[0];
+  assert(card && card.t === "fs" && card.from === "2026-04-01" && card.to === "2026-09-30" && card.fy === "2026" && card.cmp === "same" && card.notes === true, "the card: " + JSON.stringify(card));
+  assert(!(r.tables || []).length && !(r.files || []).length, "no table or file worked out here");
+  assert(/never state a figure/i.test(r.forModel || "") && !/\d{1,3}(,\d{2,3})+/.test(r.forModel || ""), "the model is told: " + r.forModel);
+  const y = await tool("fs_build").run({ client: null, from: null, to: "2026-03-31", compare: "fy", notes: false }, ctx);
+  const c2: any = (y.cards || [])[0];
+  assert(c2.from === "2025-04-01" && c2.to === "2026-03-31" && c2.cmp === "fy" && c2.notes === false, "To alone: the year's start to To: " + JSON.stringify(c2));
+  const bad = await tool("fs_build").run({ client: null, from: "2026-09-30", to: "2026-04-01", compare: null, notes: null }, ctx);
+  assert(!!bad.error, "From after To refused: " + bad.error);
 });
 Deno.test("cash_mis: receipts less payments = the cash and bank movement", async () => {
   const r = await tool("cash_mis").run({ client: null, period: { from: "2025-04-01", to: "2026-03-31" } }, ctx);

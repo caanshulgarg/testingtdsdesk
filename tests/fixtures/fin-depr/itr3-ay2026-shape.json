@@ -1,0 +1,106 @@
+{
+ "ITR": {
+  "ITR3": {
+   "CreationInfo": {
+    "SWVersionNo": "1.0",
+    "SWCreatedBy": "SW00000000",
+    "JSONCreatedBy": "SW00000000",
+    "JSONCreationDate": "2026-10-20",
+    "IntermediaryCity": "Bengaluru",
+    "Digest": "-"
+   },
+   "Form_ITR3": {
+    "FormName": "ITR-3",
+    "Description": "Made-up sample in the shape of the e-filing portal's ITR-3 JSON (AY 2026-27); every figure invented",
+    "AssessmentYear": "2026",
+    "SchemaVer": "Ver1.0",
+    "FormVer": "Ver1.0"
+   },
+   "PartA_GEN1": {
+    "PersonalInfo": {
+     "AssesseeName": {
+      "FirstName": "Asha",
+      "SurNameOrOrgName": "Sample (made-up)"
+     },
+     "PAN": "ABCPS1234K"
+    }
+   },
+   "ScheduleDPM": {
+    "PlantMachinery": {
+     "Rate15": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 300000,
+       "Total": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodLessThan180days": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "AddlnDeprOnGT180DayAdditions": 0,
+       "AddlnDeprOnLessThan180DayAdditions": 0,
+       "AddlnDeprOnAssetLessThan180Days": 0,
+       "TotalDepreciation": 30000,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 270000
+      }
+     },
+     "Rate40": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 5000,
+       "Total": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodLessThan180days": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "AddlnDeprOnGT180DayAdditions": 0,
+       "AddlnDeprOnLessThan180DayAdditions": 0,
+       "AddlnDeprOnAssetLessThan180Days": 0,
+       "TotalDepreciation": 2000,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 3000
+      }
+     }
+    }
+   },
+   "ScheduleDOA": {
+    "Building": {
+     "Rate10": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 40000,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodLessThan180days": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 4000,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 36000
+      }
+     }
+    }
+   }
+  }
+ }
+}

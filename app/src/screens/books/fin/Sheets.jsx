@@ -1,33 +1,64 @@
 // The statements in the owner's workbook layout (Schedule III, or the ICAI format for a firm, LLP or proprietor):
 // Balance sheet, Profit & loss, Cash flow and Notes. Every figure is FinSt.build's (src/js/88), the value the Excel's
-// formula gives. A figure opens its note; a note's line opens its ledgers in the trial balance.
+// formula gives. A figure (owner, 29-Oct-2026: "every figure linked to the trial balance, smart") opens the trial balance
+// filtered to exactly its ledgers, their total shown against the figure; a note's number opens the note, a note's line its
+// ledgers too.
 import { Fragment, useEffect } from "react";
 import { fig, dmy, fyEnd, st, setFin } from "./util.js";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 export const openNote = (key) => setFin({ tab: "notes", note: key });
-export const openTb = (codes, label) => setFin({ tab: "tb", tbF: { codes, label }, src: "", q: "" });
+// want: the figure the ledgers make {v (in the unit), unit, dec, sign: +1 a debit (assets, expenses) / -1 a credit,
+// profit: rupees added to the ledgers' total (the year's profit in the surplus)}
+export const openTb = (codes, label, want) => setFin({ tab: "tb", tbF: { codes, label, want: want || null }, src: "", q: "" });
 
-function Fig({ v, dec, note, label }) {
+// the codes behind a statement's line: a balance sheet line's (FinSt.bsLineOf), a P&L line's notes
+const PLC = { rev: ["13"], oth: ["14"], inc: ["13", "14"], mat: ["40"], pur: ["41"], chg: ["42"], emp: ["15"], fin: ["16"], dep: ["dep"], exp: ["17"], exc: ["43"],
+  tot: ["40", "41", "42", "15", "16", "dep", "17"], pbe: ["13", "14", "40", "41", "42", "15", "16", "dep", "17"], pbt: ["13", "14", "40", "41", "42", "15", "16", "dep", "17", "43"],
+  cur: ["c:22A"], prior: ["c:22B"], def: ["c:22C"], tax: ["22"], pat: ["13", "14", "40", "41", "42", "15", "16", "dep", "17", "43", "22"] };
+const PL_INC = { rev: 1, oth: 1, inc: 1, pbe: 1, pbt: 1, pat: 1 };
+export function lineCodes(d, kind, key) {
+  const K = FinSt.codes(d.kind);
+  if (kind === "bs") return Object.keys(K).filter((c) => FinSt.bsLineOf(c) === key);
+  return (PLC[key] || []).flatMap((n) => n === "dep" ? ["8E", "34D"] : n.startsWith("c:") ? [n.slice(2)] : Object.keys(K).filter((c) => K[c].side === "PL" && K[c].note === n));
+}
+const patRs = (d) => -d.tb.rows.filter((r) => r.code && FinSt.CODES[r.code] && FinSt.CODES[r.code].side === "PL").reduce((s, r) => s + r.final, 0);
+function Fig({ d, v, dec, label, kind, id, col }) {
   const t = fig(v, dec);
-  if (!note || !t || t === "-") return <>{t}</>;
-  return <button type="button" className="fin-fig" data-fin-fig={note} title={"Open the note: " + label} onClick={() => openNote(note)}>{t}</button>;
+  if (col !== "cy" || !t || t === "-" || !d) return <>{t}</>;
+  const codes = lineCodes(d, kind, id); if (!codes.length) return <>{t}</>;
+  const sign = kind === "bs" ? FinSt.CODES[codes[0]].sign : PL_INC[id] ? -1 : 1;
+  const profit = kind === "bs" && (id === "rs" && d.kind === "co" || id === "sc" && d.kind !== "co") ? patRs(d) : 0;
+  return <button type="button" className="fin-fig" data-fin-fig={id} title={"Open its ledgers in the trial balance: " + label}
+    onClick={() => openTb(codes, label, { v, unit: d.inputs.unit, dec, sign, profit })}>{t}</button>;
 }
 
+// the period's words (FinSt.periodOf): the full year as before, a part of it by its dates
+const per = (d) => d.period || { full: true };
+const part = (d) => !per(d).full;
+const asAt = (d) => (part(d) ? per(d).asAt : dmy(fyEnd(d.fy)));
+const forWhat = (d) => (part(d) ? per(d).forWhat : "for the year ended " + dmy(fyEnd(d.fy)));
+
 export function Sheet({ d, title, children, sub }) {
-  const nm = (d.inputs && d.inputs.name) || "";
+  const nm = (d.inputs && d.inputs.name) || "", P = per(d);
   return <section className="fin-sheet" data-fin-sheet="">
-    <header><h3>{title}</h3><p>{[nm, d.inputs && d.inputs.cin ? "CIN " + d.inputs.cin : "", sub].filter(Boolean).join(" · ")}</p></header>
+    <header><h3 data-fin-title="">{title}</h3><p>{[nm, d.inputs && d.inputs.cin ? "CIN " + d.inputs.cin : "", sub].filter(Boolean).join(" · ")}</p></header>
     <p className="fin-unit" data-fin-unitline="">{d.inputs.unitLine}</p>
+    {P.spansNote && <p className="note" data-fin-spans="">{P.spansNote}</p>}
+    {P.cmpNote && <p className="note" data-fin-cmpnote="">{P.cmpNote}</p>}
+    {P.pyNote && <p className="note" data-fin-pynote="">{P.pyNote}</p>}
+    {d.tb.carried && <p className="note" data-fin-carried="">{d.tb.carried.note + ", dated " + FinSt.DMY(String(+d.fy) + "0331") + " and kept in FinCom; not in Tally."}</p>}
+    {(d.tb.warn || []).map((w) => <p key={w} className="note">{w}</p>)}
     {children}
   </section>;
 }
 
 function Head({ d, first = "Particulars", note = true, at = "As at " }) {
-  const fy = d.fy;
+  const fy = d.fy, P = per(d), pl = at !== "As at ";
+  const cy = part(d) ? (pl ? P.range : at + P.asAt) : at + dmy(fyEnd(fy)), py = part(d) ? (pl ? P.pyPlLabel : at + P.pyAsAt) : at + dmy(fyEnd(+fy - 1));
   return <>
     <colgroup><col />{note && <col style={{ width: 56 }} />}<col className="fig" /><col className="fig" /></colgroup>
-    <thead><tr><th>{first}</th>{note && <th className="no">Note</th>}<th className="n">{at + dmy(fyEnd(fy))}</th><th className="n">{at + dmy(fyEnd(+fy - 1))}</th></tr></thead>
+    <thead><tr><th>{first}</th>{note && <th className="no">Note</th>}<th className="n" data-fin-colcy="">{cy}</th><th className="n" data-fin-colpy="">{py}</th></tr></thead>
   </>;
 }
 const nz = (z) => (z.cy != null && Math.abs(z.cy) > 1e-9) || (z.py != null && Math.abs(z.py) > 1e-9);
@@ -35,7 +66,7 @@ const nz = (z) => (z.cy != null && Math.abs(z.cy) > 1e-9) || (z.py != null && Ma
 export function BalanceSheet({ d }) {
   const dec = d.inputs.dec, S2 = d.bs.sections, T = d.bs.total;
   const parts = [["I", "Equity and liabilities", ["EQ", "NCL", "CL"], T.eqL], ["II", "Assets", ["NCA", "CA"], T.assets]];
-  return <Sheet d={d} title={"Balance sheet as at " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Balance sheet as at " + asAt(d)}>
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="bs"><Head d={d} /><tbody>
       {parts.map(([r, label, secs, tot]) => <Fragment key={r}>
         <tr className="h1"><td colSpan={4}>{r + ". " + label}</td></tr>
@@ -44,7 +75,7 @@ export function BalanceSheet({ d }) {
           {S2[s].lines.filter(nz).map((z, j) => <tr key={z.id} className="l1" data-fin-line={z.id}>
             <td>{"(" + "abcdefgh"[j] + ") " + z.label}</td>
             <td className="no">{z.no ? <button type="button" className="fin-fig" onClick={() => openNote(z.note)}>{z.no}</button> : ""}</td>
-            <td className="n"><Fig v={z.cy} dec={dec} note={z.no ? z.note : ""} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} note={z.no ? z.note : ""} label={z.label} /></td></tr>)}
+            <td className="n"><Fig d={d} kind="bs" id={z.id} col="cy" v={z.cy} dec={dec} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} /></td></tr>)}
         </Fragment>)}
         <tr className="tot" data-fin-total={r}><td>Total</td><td className="no" /><td className="n">{fig(tot.cy, dec)}</td><td className="n">{fig(tot.py, dec)}</td></tr>
       </Fragment>)}
@@ -65,10 +96,10 @@ export function ProfitLoss({ d }) {
     const label = inExp || inTax ? z.label : ROMAN[r++] + ". " + z.label, note = z.no ? nk[z.no] : "";
     rows.push(<tr key={z.key} className={PL_BOLD[z.key] ? (z.key === "pat" ? "tot" : "sub") : inExp || inTax ? "l1" : ""} data-fin-line={z.key}>
       <td>{label}</td><td className="no">{z.no ? <button type="button" className="fin-fig" onClick={() => openNote(note)}>{z.no}</button> : ""}</td>
-      <td className="n"><Fig v={z.cy} dec={dec} note={note} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} note={note} label={z.label} /></td></tr>);
+      <td className="n"><Fig d={d} kind="pl" id={z.key} col="cy" v={z.cy} dec={dec} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} /></td></tr>);
   });
   const eps = d.pl.eps;
-  return <Sheet d={d} title={"Statement of profit and loss for the year ended " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Statement of profit and loss " + forWhat(d)}>
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="pl"><Head d={d} at="Year ended " /><tbody>
       {rows}
       {eps && <tr className="muted" data-fin-line="eps"><td>{ROMAN[r] + ". Earnings per equity share (in rupees, face value ₹" + (d.inputs.shares.face || 10) + "): basic and diluted"}</td><td className="no" />
@@ -81,8 +112,8 @@ const CF_HEAD = { pbt: "A. Cash flow from operating activities", dep: "Adjustmen
 const CF_SUB = { opBefore: 1, cashGen: 1, op: 1, inv: 1, fin: 1, net: 1 };
 export function CashFlow({ d }) {
   const dec = d.inputs.dec, cf = d.cf;
-  if (!cf.cy) return <Sheet d={d} title={"Cash flow statement for the year ended " + dmy(fyEnd(d.fy))}><p className="note">The cash flow needs last year’s balances, which are not in FinCom’s copy. Type last year’s audited trial balance in the Trial balance tab.</p></Sheet>;
-  return <Sheet d={d} title={"Cash flow statement for the year ended " + dmy(fyEnd(d.fy))} sub="Indirect method (AS 3)">
+  if (!cf.cy) return <Sheet d={d} title={"Cash flow statement " + forWhat(d)}><p className="note">The cash flow needs last year’s balances, which are not in FinCom’s copy. Type last year’s audited trial balance in the Trial balance tab.</p></Sheet>;
+  return <Sheet d={d} title={"Cash flow statement " + forWhat(d)} sub="Indirect method (AS 3)">
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="cf"><Head d={d} note={false} at="Year ended " /><tbody>
       {cf.lines.map((z) => {
         if (z.key === "diff") return null;
@@ -117,17 +148,17 @@ export function Notes({ d, onRegister }) {
     const el = document.getElementById("fin-note-" + s.note);
     if (el && el.scrollIntoView) el.scrollIntoView({ block: "start" });
   }, [s.note]);
-  return <Sheet d={d} title={"Notes to the financial statements for the year ended " + dmy(fyEnd(d.fy))}>
+  return <Sheet d={d} title={"Notes to the financial statements " + forWhat(d)}>
     <nav className="fin-notes-jump" aria-label="Notes">{d.notes.map((n) => <button key={n.key} type="button" data-fin-jump={n.key} onClick={() => setFin({ note: n.key })}>{n.no + " " + n.title}</button>)}</nav>
     {d.notes.map((n) => <section key={n.key} id={"fin-note-" + n.key} className={"fin-note" + (s.note === n.key ? " on" : "")} data-fin-note={n.key}>
       <h4>{"Note " + n.no + " · " + n.title}{(n.key === "8" || n.key === "34") && onRegister && <small><button type="button" className="linkbtn" onClick={onRegister}>Fixed asset register</button></small>}</h4>
       {(n.key === "8" || n.key === "34") ? <>
-        <Grid g={n.ppe.cy} dec={dec} label={"Year ended " + dmy(fyEnd(d.fy))} />
-        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>Previous year</summary><Grid g={n.ppe.py} dec={dec} label={"Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
-      </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} />
+        <Grid g={n.ppe.cy} dec={dec} label={part(d) ? per(d).range : "Year ended " + dmy(fyEnd(d.fy))} />
+        {n.ppe.py && !n.ppe.py.partial && n.ppe.py.rows.length > 0 && <details style={{ marginTop: 8 }}><summary className="note" style={{ cursor: "pointer" }}>{part(d) ? (per(d).cmp === "fy" ? "The last full year" : "The same period last year") : "Previous year"}</summary><Grid g={n.ppe.py} dec={dec} label={part(d) ? per(d).pyPlLabel : "Year ended " + dmy(fyEnd(+d.fy - 1))} /></details>}
+      </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} at={part(d) && n.st === "PL" ? "Period " : "As at "} />
         <tbody>{n.lines.map((z, i) => {
           const cs = codesOf(n, z), cls = z.head ? "h2" : z.total ? "sub" : "l1";
-          const lab = cs.length && !z.head ? <button type="button" className="fin-fig" data-fin-tbline={cs.join(",")} title="Open its ledgers in the trial balance" onClick={() => openTb(cs, "Note " + n.no + " · " + z.label)}>{z.label}</button> : z.label;
+          const lab = cs.length && !z.head ? <button type="button" className="fin-fig" data-fin-tbline={cs.join(",")} title="Open its ledgers in the trial balance" onClick={() => openTb(cs, "Note " + n.no + " · " + z.label, z.profit ? null : { v: z.cy, unit: d.inputs.unit, dec, sign: (FinSt.CODES[cs[0]] || {}).sign || 1, profit: z.total && (n.groups[z.group] || {}).profit ? patRs(d) : 0 })}>{z.label}</button> : z.label;
           return <tr key={i} className={cls}><td>{lab}{z.plug && (z.plug.cy || z.plug.py) ? <span className="note">{" (with rounding " + fig(z.plug.cy || z.plug.py, dec) + ")"}</span> : null}</td>
             <td className="n">{z.head ? "" : fig(z.cy, dec)}</td><td className="n">{z.head ? "" : fig(z.py, dec)}</td></tr>;
         })}

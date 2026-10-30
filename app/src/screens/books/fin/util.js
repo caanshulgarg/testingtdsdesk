@@ -27,15 +27,15 @@ export const fyEnd = (fy) => String(+fy + 1) + "0331";
 
 // the statements for a year in a unit, worked out once for each state of the books and of what the page keeps (b.fs)
 let memo = { key: "", d: null };
-export function built(b, fy, unit, dec) {
+export function built(b, fy, unit, dec, period) {
   const co = typeof CO === "function" ? CO() : null, firm = S.firm || {};
   // the reports' answers (b.fs.reports, ROUND 100) do not change the statements
   let fsTxt = ""; try { fsTxt = JSON.stringify(Object.assign({}, b.fs, { reports: undefined })); } catch (e) { fsTxt = String(Date.now()); }
-  const key = [b.cid, fy, unit, dec, (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
+  const key = [b.cid, fy, unit, dec, period ? period.from + "-" + period.to + "-" + period.cmp : "", (b.vouchers || []).length, (b.tb || {}).at || "", (b.tb || {}).from || "", Object.keys(b.under || {}).length, Object.keys(b.msme || {}).length, fsTxt,
     co ? [co.name, co.pan, co.cin, co.entity, co.address].join("|") : "", [firm.firmName, firm.frn, firm.partner, firm.mno].join("|")].join("\u0001");
   if (memo.key === key && memo.d) return memo.d;
   let d;
-  try { d = FinSt.build(fy, { unit, dec }); } catch (e) { d = { error: String((e && e.message) || e), fy }; if (typeof console === "object") console.error(e); }
+  try { d = FinSt.build(fy, { unit, dec, period }); } catch (e) { d = { error: String((e && e.message) || e), fy }; if (typeof console === "object") console.error(e); }
   memo = { key, d };
   return d;
 }
@@ -47,7 +47,7 @@ export function codeGroups(kind) {
   FinSt.NOTES.forEach((n) => {
     if (n.only && n.only !== kind) return;
     const list = [];
-    n.groups.forEach(([, , , cs]) => cs.forEach(([c]) => { if (K[c]) list.push([c, K[c].label]); }));
+    n.groups.forEach(([, , , cs]) => cs.forEach(([c]) => { if (K[c] && !K[c].sys) list.push([c, K[c].label]); }));
     if (n.key === "8" || n.key === "34") Object.values(K).filter((c) => c.note === n.key && c.ppe).forEach((c) => list.push([c.code, c.label]));
     if (n.key === "8") list.push(["8E", K["8E"].label]);
     if (n.key === "34") list.push(["34D", K["34D"].label]);

@@ -62,7 +62,9 @@ function claude() {
     { const first = (p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content)).pop()?.content as any[] || [];
       const att = first.filter((b) => b.type === "text" && /^\[The file /.test(String(b.text || "")));
       if (att.length) SEEN.push({ kind: "ask", model: p.model, fileText: att.map((b) => b.text).join(" ").slice(0, 600), masked: !att.some((b) => /07AAGCL4827M1Z3|AAGCL4827M/.test(b.text)) }); }
-    const q = String(((p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b: any) => b.type === "text")).pop()?.content as any[] || []).map((b: any) => b.text || "").join(" "));
+    // the question itself: FinCom's context lines before it ("[FinCom: today is …]", "[Files attached earlier …]") are not
+    // the question (a notice listed among the files is not a question about a notice)
+    const q = String(((p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b: any) => b.type === "text")).pop()?.content as any[] || []).map((b: any) => b.text || "").join(" ")).replace(/\[(FinCom: today is|Shown earlier in this conversation|Files attached earlier in this conversation)[^\n]*\]\n\n/g, "");
     const script = (SCRIPTS.find(([re]) => re.test(q)) || [null, [[text("I can help with the books, tax and notices.")]]])[1];
     const turns = (p.messages as any[]).filter((m) => m.role === "assistant" && Array.isArray(m.content)).length;   // this turn's (history is text)
     const step = script[turns] ?? [text("Done.")];

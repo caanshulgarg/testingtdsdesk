@@ -256,7 +256,7 @@ def main():
         client_page(gs, "cotally")
         one = txt("#app [data-tally-one]")
         ok(pg.locator("#app [data-tally-link], #app .tlink, #app [data-tally-link-choose], #app [data-tally-link-post]").count() == 0, "4. Client setup: no Tally card (no link, choose, post tick)")
-        ok(one.startswith("Tally: GARG SHEKHAR & COMPANY ● Linked") and one.endswith("Open in Tally page"), "4. Client setup: ONE line 'Tally: GARG SHEKHAR & COMPANY ● Linked · Open in Tally page' (%s)" % one)
+        ok(one.startswith("Tally: GARG SHEKHAR & COMPANY ● Linked") and one.endswith("Open in Tally page · Change · Unlink"), "4. Client setup: ONE line 'Tally: GARG SHEKHAR & COMPANY ● Linked · Open in Tally page · Change · Unlink' (%s)" % one)
         shot("4-client-setup-one-line-desktop-light", full=False)
         pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1300)
         ok(E("[S.view, S.homeTab]") == ["home", "tally"] and (row(GSC) or {}).get("focus"), "4. Open in Tally page: the Tally page, its row marked")
@@ -297,7 +297,7 @@ def main():
         # ---- 5./6. the actions: Add as client, Link to a client…, the ⋯ of a linked row, Sync now, Post entries here
         it = [x for x in menu(GSC) if not x.startswith("Upload older entries")]
         # Move here was a person's link: it allowed posting into that company too (the owner, 26-Oct-2026)
-        ok(it == ["Sync master", "Sync vouchers", "Stop posting here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
+        ok(it == ["Sync master", "Sync vouchers", "Stop posting here", "Change Tally company…", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "6. ⋯ of a linked company (%s)" % it)
         ok(E("(c) => { const k = S.companies[c], p = choiceGet(k, 'postTo'); return [k.postTo, p && p.state]; }", gs) == [GSC, "confirmed"], "6. linked by a person: it posts into that company (confirmed from the link)")
         pg.click(R(GSC) + " [data-tco-more] summary"); pg.wait_for_timeout(250); shot("menu-linked-desktop-light", full=False); E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
         E("() => { window.__calls = []; S.coId = null; }")

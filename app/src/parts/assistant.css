@@ -306,3 +306,14 @@ html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var
   .asst-askbar .asst-voice { margin-left: auto; }
   .asst-panel select.asst-lang { max-width: 84px; }
 }
+
+/* the statements card (AssistantFs.jsx): the summary table, what is missing, Tally, last year's balance sheet, the buttons */
+.asst-fs .asst-fs-box { overflow-x: auto; }
+.asst-fs-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.asst-fs-t th, .asst-fs-t td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.asst-fs-t th.n, .asst-fs-t td.n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.asst-fs-miss ul { margin: 4px 0 0; padding-left: 18px; }
+.asst-fs-miss li { margin: 2px 0; }
+.asst-fs-tally, .asst-fs-py { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.asst-fs-tally p, .asst-fs-py p, .asst-fs-miss p { margin: 0; }
+.asst-fs-act { display: flex; flex-wrap: wrap; gap: 6px; }

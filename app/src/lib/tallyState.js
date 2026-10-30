@@ -34,7 +34,10 @@ export function openOn(d) {
   const info = (d && d.info) || {};
   return [].concat((info.beat || {}).open || []).concat(...Object.values(info.bridges || {}).map((b) => [].concat((b && b.open) || []))).map(String).filter(Boolean);
 }
-export const pcOf = (d) => { const i = (d && d.info) || {}; return String(i.computer || (i.beat || {}).computer || (d && d.name) || "the Tally computer"); };
+// next-fix-tally-links2 (the owner, 29-Oct-2026: "I have said multiple times no NWS144 type of thing"): what the pages say
+// of a computer is never its name or Windows login; pcRawOf is the name, for Help & support only
+export const pcRawOf = (d) => { const i = (d && d.info) || {}; return String(i.computer || (i.beat || {}).computer || (d && d.name) || "the Tally computer"); };
+export const pcOf = (d) => "the Tally computer";
 // the computer is heard from (a beat in about the last two minutes)
 export function pcLive(d) { if (typeof devState !== "function") return false; const s = devState(d).bridge; return s === "online" || s === "reconnecting"; }
 // the rows FinCom keeps of a company (tally_companies)

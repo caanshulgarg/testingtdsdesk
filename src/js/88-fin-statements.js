@@ -23,7 +23,9 @@ const FinSt = (() => {
   const NOTES = [
     {key: "3", title: "Share capital", st: "BS", sign: -1, only: "co", groups: [["sc", "Issued, subscribed and fully paid up", "EQ", [["3A", "Equity shares, fully paid up"], ["3B", "Preference shares, fully paid up"]]]]},
     {key: "3", title: "Partners' capital accounts", st: "BS", sign: -1, only: "nc", groups: [["cap", "", "EQ", [["3P", "Capital accounts"], ["3Q", "Current accounts"], ["3R", "Less: drawings"]]]]},
-    {key: "4", title: "Reserves and surplus", st: "BS", sign: -1, groups: [["res", "", "EQ", [["4B", "Securities premium"], ["4C", "General reserve"], ["4D", "Other reserves"]]], ["sur", "Surplus in the statement of profit and loss", "EQ", [["4A", "Balance at the beginning of the year"]]]]},
+    {key: "4", title: "Reserves and surplus", st: "BS", sign: -1, groups: [["res", "", "EQ", [["4B", "Securities premium"], ["4C", "General reserve"], ["4D", "Other reserves"]]], ["sur", "Surplus in the statement of profit and loss", "EQ", [["4A", "Balance at the beginning of the year"],
+      // the profit of the year before the period chosen (statements for a part of the year): FinCom's own line, never a ledger's
+      ["4E", "Profit for the earlier part of the year", {sys: true}]]]]},
     {key: "30", title: "Long-term borrowings", st: "BS", sign: -1, groups: [["ltb", "", "NCL", [["30A", "Term loans from banks (secured)"], ["30B", "Loans from related parties and others"]]]]},
     {key: "31", title: "Deferred tax liabilities (net)", st: "BS", sign: -1, groups: [["dtl", "", "NCL", [["31A", "Deferred tax liabilities (net)"]]]]},
     {key: "32", title: "Other long-term liabilities", st: "BS", sign: -1, groups: [["oltl", "", "NCL", [["32A", "Other long-term liabilities"]]]]},
@@ -164,57 +166,195 @@ const FinSt = (() => {
     if (/^profit\s*&\s*loss a\/c$/i.test(String(l).trim())) return "4A";
     return refine(l, FS.place(l, -N(bal), kind, gp), gp, bal, kind);
   }
-  // the code of a ledger: by hand (b.fs.map: a code, an old line name read as its code, or "none"), else suggested
-  function codeOf(l, bal, kind, map){
+  // the code of a ledger: by hand (b.fs.map: a code, an old line name read as its code, or "none"), else suggested: from
+  // last year's balance sheet when one is uploaded (up: {ledger: {code, why}}, FinPyBs.suggestions), else by rule
+  function codeOf(l, bal, kind, map, up){
     kind = kind || kindOf(); map = map || (S.books.fs || {}).map || {};
     const h = map[l], K = codes(kind);
     if (h === "none") return {code: "", codeSrc: "none"};
     if (h && K[h]) return {code: h, codeSrc: "hand"};
     if (h && OLD.includes(h)) return {code: refine(l, h, Books.groupPath(l), bal, kind), codeSrc: "hand"};
+    if (up && up[l] && K[up[l].code]) return {code: up[l].code, codeSrc: "suggested", why: up[l].why};
     const s = suggest(l, null, bal, kind);
     return s && K[s] ? {code: s, codeSrc: "suggested"} : {code: "", codeSrc: "none"};
   }
 
+  // ---------- the period: the whole year, or a part of it (owner, 29-Oct-2026) ----------
+  // A part of the year: the P&L is the movements From -> To; the balance sheet is as on To (the year's opening + the
+  // movements to To). The profit of the year before From is FinCom's line 4E in the surplus ("Add: profit for 01-Apr to
+  // ..., earlier in the year"): the balance at the beginning of the year stays last year's audited closing, and the balance
+  // sheet ties. From may be in the previous financial year (a period across 31 March): the period belongs to To's year, its
+  // reserves start from that year's opening, and 4E takes out the profit From -> 31 March already in that opening.
+  // The comparative (cmp): "same" the same dates a year earlier (when FinCom's copy holds them), or "fy" the last full
+  // year (its P&L and cash flow, and the balance sheet as at the previous 31 March).
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const DMY = ymd => ymd.slice(6, 8) + "-" + MON[N(ymd.slice(4, 6)) - 1] + "-" + ymd.slice(0, 4);
+  const FYL = y => N(y) + "-" + String(N(y) + 1).slice(2);
+  const todayYmd = () => { const t = new Date(); return t.getFullYear() + String(t.getMonth() + 1).padStart(2, "0") + String(t.getDate()).padStart(2, "0"); };
+  const okYmd = s => /^\d{8}$/.test(String(s || ""));
+  // the same day a year earlier (29 February and month ends kept as month ends)
+  const lastDay = (y, m) => new Date(y, m, 0).getDate();
+  const yearBack = ymd => { const y = N(ymd.slice(0, 4)) - 1, m = N(ymd.slice(4, 6)), d = N(ymd.slice(6, 8)), end = d === lastDay(y + 1, m);
+    return y + ymd.slice(4, 6) + String(end ? lastDay(y, m) : Math.min(d, lastDay(y, m))).padStart(2, "0"); };
+  const PRESETS = [["fy", "Full year"], ["h1", "H1 Apr–Sep"], ["q1", "Q1 Apr–Jun"], ["q2", "Q2 Jul–Sep"], ["q3", "Q3 Oct–Dec"], ["q4", "Q4 Jan–Mar"],
+    ["m9", "9 months Apr–Dec"], ["ytd", "Year to date"], ["custom", "Custom"]];
+  function periods(fy, o){
+    const Y = String(N(fy)), Z = String(N(fy) + 1), fyTo = Z + "0331", t = (o && o.today) || todayYmd(), ytd = t < Y + "0401" || t > fyTo ? fyTo : t;
+    const D = {fy: [Y + "0401", fyTo], h1: [Y + "0401", Y + "0930"], q1: [Y + "0401", Y + "0630"], q2: [Y + "0701", Y + "0930"], q3: [Y + "1001", Y + "1231"], q4: [Z + "0101", fyTo],
+      m9: [Y + "0401", Y + "1231"], ytd: [Y + "0401", ytd], custom: [null, null]};
+    return PRESETS.map(([key, label]) => ({key, label, from: D[key][0], to: D[key][1]}));
+  }
+  // {preset, from, to, cmp} (or nothing: the full year) -> the period worked out for the year fy
+  function periodOf(fy, p, o){
+    fy = String(fy); if (p && p.fy === fy && p.resolved) return p;
+    const fyFrom = fy + "0401", fyTo = String(N(fy) + 1) + "0331", prevFrom = String(N(fy) - 1) + "0401", list = periods(fy, o);
+    let pre = list.find(z => z.key === ((p && p.preset) || "fy")) || list[0], from = pre.from, to = pre.to;
+    if (pre.key === "custom"){
+      from = okYmd(p.from) ? p.from : fyFrom; to = okYmd(p.to) ? p.to : fyTo;
+      // To within the year; From from the start of the previous year at the earliest. A range that does not end in this
+      // year is no range of this year: the full year
+      if (to > fyTo) to = fyTo;
+      if (from > to || to < fyFrom || from > fyTo){ from = fyFrom; to = fyTo; }
+      if (from < prevFrom) from = prevFrom;
+    }
+    const full = from === fyFrom && to === fyTo, cmp = !full && p && p.cmp === "fy" ? "fy" : "same", spans = from < fyFrom;
+    const pyFrom = cmp === "fy" ? prevFrom : yearBack(from), pyTo = cmp === "fy" ? Audit.dayBefore(fyFrom) : yearBack(to);
+    const range = DMY(from) + " to " + DMY(to), pyRange = DMY(pyFrom) + " to " + DMY(pyTo), pyYear = full || cmp === "fy";
+    if (full && pre.key !== "custom") pre = list[0];   // (Custom stays Custom, its dates shown, even when they make the whole year)
+    return {resolved: true, fy, key: pre.key, label: pre.label, from, to, full, cmp, spans, fyFrom, fyTo, pyFrom, pyTo, asAt: DMY(to), pyAsAt: DMY(pyTo), range, pyRange,
+      forWhat: full ? "for the year ended " + DMY(to) : "for the period " + range, pyForWhat: pyYear ? "for the year ended " + DMY(pyTo) : "for the period " + pyRange,
+      // the P&L's comparative column head: [words, dates]
+      pyPlHead: pyYear ? ["Year ended", DMY(pyTo)] : ["For the period", pyRange], pyPlLabel: pyYear ? "Year ended " + DMY(pyTo) : pyRange,
+      cmpNote: full ? "" : cmp === "fy" ? "Comparative: the last full year (the year ended " + DMY(pyTo) + "; the balance sheet as at " + DMY(pyTo) + ")."
+        : "Comparative: the same period last year (" + pyRange + "; the balance sheet as at " + DMY(pyTo) + ").",
+      spansNote: spans ? "The period spans two financial years (" + FYL(N(fy) - 1) + " and " + FYL(fy) + "): the reserves start from the balance at " + DMY(fyFrom) + ", and the profit from " + DMY(from) + " to " + DMY(Audit.dayBefore(fyFrom)) + ", already in it, is shown as its own line." : ""};
+  }
+  // what the adjustments of a period are kept under: the year for the full year, else "<fy>:<from>-<to>"
+  const periodKey = (fy, p) => { const P = periodOf(fy, p); return P.full ? String(fy) : P.fy + ":" + P.from + "-" + P.to; };
+  // the period chosen on the page, kept per client (b.fs.period, synced with the books)
+  const periodGet = fy => periodOf(fy, ((S.books || {}).fs || {}).period);
+
+  // ---------- stock (owner, 29-Oct-2026: "what about opening stock") ----------
+  // Stock as on a date, and where it comes from, never a figure made up: Tally's Stock-in-hand ledgers when the copy keeps
+  // them (the stock items' own values are not read into FinCom's copy), else, for the opening of the year, last year's
+  // balance sheet as uploaded (its Inventories), else typed by hand (b.fs.stockAt {ymd: {v, by, at}}), else the year's
+  // figures typed in the old statements (b.fs.stock {open, close}). Opening stock at the start of the year is the stock as on
+  // the day before it; at the start of the period, as on the day before From; closing stock, as on To.
+  const isStockLed = l => FS.nature(l).path.some(g => /^stock-in-hand$/i.test(g));
+  function stockOn(ymd, x){
+    const f = x.f, st = x.st || {}, t = (f.stockAt || {})[ymd];
+    if (x.integrated){ const at = x.balAt(ymd); return {v: R2(Object.keys(at).filter(isStockLed).reduce((s, l) => s - N(at[l]), 0)), src: "tally", label: "Tally: the Stock-in-hand ledgers"}; }
+    if (ymd === x.fyOpen && x.upInv != null) return {v: x.upInv, src: "upload", label: "last year's balance sheet: Inventories (" + (x.upl.file || "uploaded") + ", version " + x.upl.v + ")"};
+    if (t && t.v != null && t.v !== "") return {v: R2(N(t.v)), src: "typed", label: "typed by " + (t.by || "someone") + (t.at ? " on " + DMY(String(t.at).slice(0, 10).replace(/-/g, "")) : ""), by: t.by, at: t.at};
+    if (ymd === x.fyOpen && N(st.open)) return {v: R2(N(st.open)), src: "typed", label: "typed in FinCom's statements (the year's opening stock)"};
+    if (ymd === x.fyClose && N(st.close)) return {v: R2(N(st.close)), src: "typed", label: "typed in FinCom's statements (the year's closing stock)"};
+    return {v: null, src: "none", label: "not known: type it, or upload last year's balance sheet"};
+  }
+  const upInvOf = upl => { if (!upl) return null; const ls = (upl.lines || []).filter(z => z.use && z.code === "39A"); return ls.length ? R2(ls.reduce((s, z) => s + N(z.amt), 0) * (N(upl.unit) || 1)) : null; };
+
   // ---------- the trial balance ----------
   const fyDates = fy => ({from: fy + "0401", to: String(N(fy) + 1) + "0331"});
   const BF = "Profit and loss: balance brought forward in the income and expense ledgers";
-  function tb(fy){
-    const b = S.books || {}, c = FS.cfg(b), kind = c.kind === "co" ? "co" : "nc", {from, to} = fyDates(fy), f = b.fs || {};
-    const bal = Audit.balances(from, to);
+  const pyUpload = fy => (typeof FinPyBs === "object" && FinPyBs.latest) ? FinPyBs.latest(fy) : null;
+  function tb(fy, per){
+    const b = S.books || {}, c = FS.cfg(b), kind = c.kind === "co" ? "co" : "nc", f = b.fs || {}, P = periodOf(fy, per), {from, to} = P, fyFrom = P.fyFrom;
+    const bal = Audit.balances(from < fyFrom ? from : fyFrom, to);
     if (!bal.ok) return {error: bal.why, fy, from, to};
-    const close = bal.at(to), open = bal.at(Audit.dayBefore(from)), isRev = l => FS.nature(l).rev;
+    const close = bal.at(to), open = bal.at(Audit.dayBefore(fyFrom)), isRev = l => FS.nature(l).rev;
+    // the balances the day before the period begins (the year's opening for the full year)
+    const pOpen = P.full ? open : bal.at(Audit.dayBefore(from));
+    // last year's entries made to match its audited balance sheet (FinRecon: adjustments with carry, dated its 31 March)
+    // are in this year's opening balances, until they are passed in Tally (b.fs.recon[fy - 1].inTally)
+    const prevY = String(N(fy) - 1), inTally = y => !!(((f.recon || {})[y]) || {}).inTally;
+    const carried = inTally(prevY) ? [] : (((f.adj || {})[prevY]) || []).filter(a => a.carry && N(a.amt) && a.dr && a.cr);
+    const carry = m => carried.forEach(a => { m[a.dr] = R2(N(m[a.dr]) - N(a.amt)); m[a.cr] = R2(N(m[a.cr]) + N(a.amt)); });
+    carry(close); carry(open); if (pOpen !== open && !P.spans) carry(pOpen);
     const rows = {}, R = l => rows[l] = rows[l] || {ledger: l, group: Books.groupPath(l)[0] || "", py: 0, cy: 0, adj: 0};
-    const all = Array.from(new Set(Object.keys(close).concat(Object.keys(open))));
-    let bfCy = 0, bfPy = 0;
-    all.forEach(l => { const rv = isRev(l); R(l).cy = R2(rv ? -(N(close[l]) - N(open[l])) : -N(close[l])); if (rv) bfCy += -N(open[l]); });
-    // last year: typed or uploaded (b.fs.pyTb), else the previous year in FinCom's copy, else the opening balances only
-    const pyFrom = String(N(fy) - 1) + "0401", typed = (f.pyTb || {})[fy];
-    let pySrc = "opening";
-    if (typed && Object.keys(typed).length){ pySrc = "typed"; Object.entries(typed).forEach(([l, v]) => { R(l).py = R2(N(v)); }); }
-    else {
-      const pb = ((b.tb && b.tb.from <= pyFrom) || MIS.covered(pyFrom)) ? Audit.balances(pyFrom, Audit.dayBefore(from)) : null;
+    const all = Array.from(new Set(Object.keys(close).concat(Object.keys(open), Object.keys(pOpen))));
+    let bfCy = 0, bfPy = 0, slCy = 0, slPy = 0;
+    const openBs = {};   // each balance sheet ledger at the start of the year (a debit positive): last year's closing in FinCom
+    all.forEach(l => { const rv = isRev(l); R(l).cy = R2(rv ? -(N(close[l]) - N(pOpen[l])) : -N(close[l]));
+      if (rv){ bfCy += -N(open[l]); slCy += -(N(pOpen[l]) - N(open[l])); } else openBs[l] = R2(-N(open[l])); });
+    // last year: typed (b.fs.pyTb), else the previous year in FinCom's copy, else last year's balance sheet when one is
+    // uploaded (b.fs.pyBs), else the opening balances only. A part of the year compared with the same period: those dates
+    // a year earlier from the copy, or none; compared with the last full year: as the full year
+    const pyFrom = String(N(fy) - 1) + "0401", typed = (f.pyTb || {})[fy], upl = pyUpload(fy), same = !P.full && P.cmp !== "fy";
+    const copyFrom = same && P.pyFrom < pyFrom ? P.pyFrom : pyFrom, hasCopy = (b.tb && b.tb.from <= copyFrom) || MIS.covered(copyFrom);
+    let pySrc = "opening", pyBal = null;
+    if (same){
+      const pb = hasCopy ? Audit.balances(copyFrom, P.pyTo) : null;
       if (pb && pb.ok){
-        pySrc = "copy"; const pOpen = pb.at(Audit.dayBefore(pyFrom));
+        pySrc = "copy"; pyBal = pb; const pc = pb.at(P.pyTo), po = pb.at(Audit.dayBefore(pyFrom)), pp = pb.at(Audit.dayBefore(P.pyFrom));
+        Array.from(new Set(Object.keys(pc).concat(Object.keys(po), Object.keys(pp)))).forEach(l => { const rv = isRev(l); R(l).py = R2(rv ? -(N(pc[l]) - N(pp[l])) : -N(pc[l]));
+          if (rv){ bfPy += -N(po[l]); slPy += -(N(pp[l]) - N(po[l])); } });
+        (((f.adj || {})[periodKey(String(N(fy) - 1), {preset: "custom", from: P.pyFrom, to: P.pyTo})]) || []).forEach(a => { if (!N(a.amt)) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
+      } else pySrc = "none";
+    } else if (typed && Object.keys(typed).length){ pySrc = "typed"; Object.entries(typed).forEach(([l, v]) => { R(l).py = R2(N(v)); }); }
+    else {
+      const pb = hasCopy ? Audit.balances(pyFrom, Audit.dayBefore(fyFrom)) : null;
+      if (pb && pb.ok){
+        pySrc = "copy"; pyBal = pb; const pOpen = pb.at(Audit.dayBefore(pyFrom));
         Array.from(new Set(all.concat(Object.keys(pOpen)))).forEach(l => { const rv = isRev(l); R(l).py = R2(rv ? -(N(open[l]) - N(pOpen[l])) : -N(open[l])); if (rv) bfPy += -N(pOpen[l]); });
-        (((f.adj || {})[String(N(fy) - 1)]) || []).forEach(a => { if (!N(a.amt)) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
-      } else all.forEach(l => { if (isRev(l)) bfPy += -N(open[l]); else R(l).py = R2(-N(open[l])); });
+        (((f.adj || {})[String(N(fy) - 1)]) || []).forEach(a => { if (!N(a.amt) || (a.carry && !inTally(prevY))) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
+      } else if (upl && upl.usePy !== false) pySrc = "upload";
+      else all.forEach(l => { if (isRev(l)) bfPy += -N(open[l]); else R(l).py = R2(-N(open[l])); });
     }
+    // a third column, the balances at the start of the period (a part of the year: the cash flow and the PPE schedule
+    // start there; last year's balance sheet as the PY: the PPE schedule starts from FinCom's own gross block and depreciation)
+    const hasOp = !P.full || pySrc === "upload";
+    if (hasOp) Object.values(rows).forEach(r => { r.op = isRev(r.ledger) ? 0 : R2(-N(pOpen[r.ledger])); });
     const out = [], K = codes(kind);
-    const syn = (ledger, code, cy, py) => { if (Math.abs(cy) >= 0.005 || Math.abs(py) >= 0.005) out.push({ledger, group: "", py: R2(py), cy: R2(cy), adj: 0, final: R2(cy), code, codeSrc: "suggested", side: CODES[code].side, synthetic: true}); };
-    // FS's typed stock when Tally does not keep it: the closing stock, the change, and the opening stock carried in the surplus
-    const integrated = all.some(l => FS.nature(l).path.some(g => /^stock-in-hand$/i.test(g)) && Math.abs(N(close[l])) >= 1), st = c.stock || {};
-    if (!integrated && (N(st.open) || N(st.close))){ syn("Closing stock (as typed)", "39A", N(st.close), N(st.open)); syn("Changes in inventories (as typed)", "42A", N(st.open) - N(st.close), 0); syn("Opening stock in the surplus (as typed)", "4A", -N(st.open), -N(st.open)); }
-    // the adjustments (audit entries kept in FinCom, never posted to Tally)
-    const adj = (f.adj || {})[fy] || [];
+    const syn = (ledger, code, cy, py, op) => { if (!(Math.abs(cy) >= 0.005 || Math.abs(py) >= 0.005 || (hasOp && Math.abs(N(op == null ? cy : op)) >= 0.005))) return null;
+      const r = Object.assign({ledger, group: "", py: R2(py), cy: R2(cy), adj: 0, final: R2(cy), code, codeSrc: "suggested", side: CODES[code].side, synthetic: true}, hasOp ? {op: R2(op == null ? cy : op)} : {});
+      out.push(r); return r; };
+    // stock, when Tally does not keep it: the closing stock (39A), the change (42A: opening at the start of the period less
+    // closing), the opening stock of the year in the surplus (4A), and the change before the period in the profit earlier in
+    // the year (4E). A figure not known is nil, and the Checks tab says which is missing
+    const integrated = all.some(l => isStockLed(l) && Math.abs(N(close[l])) >= 1) || all.some(l => isStockLed(l) && Math.abs(N(open[l])) >= 1), warn = [];
+    const A = Audit.dayBefore(fyFrom), Bd = P.full ? A : Audit.dayBefore(from), Cd = to;
+    const sx = {f, st: c.stock || {}, integrated, balAt: d => bal.at(d), fyOpen: A, fyClose: P.fyTo, upl, upInv: upInvOf(upl)};
+    const sA = stockOn(A, sx), sB = Bd === A ? sA : stockOn(Bd, sx), sC = stockOn(Cd, sx);
+    const stock = {integrated, dates: {A, B: Bd, C: Cd}, A: sA, B: sB, C: sC, missing: [], upInv: sx.upInv};
+    if (!integrated && [sA, sB, sC].some(z => z.v != null)){
+      [["Opening stock at the start of the year", A, sA]].concat(Bd !== A ? [["Opening stock at the start of the period", Bd, sB]] : [], [["Closing stock", Cd, sC]])
+        .forEach(([w, dt, z]) => { if (z.v == null) stock.missing.push(w + " (as on " + DMY(dt) + ")"); });
+      const vA = N(sA.v), vB = N(sB.v), vC = N(sC.v);
+      // last year's column: the year (or the last full year): its closing stock is this year's opening (and its own
+      // opening, when known, gives its change); the same period last year: only when all three of its figures are known
+      let pyS = [0, 0, 0, 0];
+      if (pySrc !== "upload" && pySrc !== "none"){
+        if (!same){ const pA = stockOn(Audit.dayBefore(pyFrom), Object.assign({}, sx, {fyOpen: "", fyClose: "", integrated: false})); pyS = [vA, pA.v != null ? pA.v - vA : 0, -(pA.v != null ? pA.v : vA), 0]; }
+        else { const q = [Audit.dayBefore(pyFrom), Audit.dayBefore(P.pyFrom), P.pyTo].map(d => stockOn(d, Object.assign({}, sx, {fyOpen: "", fyClose: "", integrated: false})));
+          if (q.every(z => z.v != null)) pyS = [q[2].v, q[1].v - q[2].v, -q[0].v, -(q[1].v - q[0].v)]; }
+      }
+      const tag = (r, s) => { if (r) r.stk = s; };
+      tag(syn("Closing stock as on " + DMY(Cd), "39A", vC, pyS[0], vB), {cy: "C", op: "B"});
+      tag(syn("Changes in inventories (opening less closing stock)", "42A", vB - vC, pyS[1], 0), {cy: "B-C", op: "0"});
+      tag(syn("Opening stock in the surplus (as on " + DMY(A) + ")", "4A", -vA, pyS[2], -vA), {cy: "-A", op: "-A"});
+      if (Bd !== A) tag(syn("Stock change before the period (in the profit earlier in the year)", "4E", vA - vB, pyS[3], vA - vB), {cy: "A-B", op: "A-B"});
+    }
+    // the adjustments (audit entries kept in FinCom, never posted to Tally), for this period
+    // (entries made to match the audited balance sheet, once passed in Tally, are Tally's: not added again)
+    const adj = ((f.adj || {})[periodKey(fy, P)] || []).filter(a => !(a.carry && inTally(String(fy))));
     adj.forEach(a => { if (!N(a.amt) || !a.dr || !a.cr) return; R(a.dr).adj = R2(R(a.dr).adj + N(a.amt)); R(a.cr).adj = R2(R(a.cr).adj - N(a.amt)); });
+    // the codes last year's balance sheet suggests (never over a hand choice)
+    const up = upl && FinPyBs.suggestions ? FinPyBs.suggestions(upl, openBs, kind, f.map || {}) : null;
     Object.values(rows).sort((a, z) => a.ledger.localeCompare(z.ledger)).forEach(r => {
-      if (!r.cy && !r.py && !r.adj) return;
-      r.final = R2(r.cy + r.adj); const k = codeOf(r.ledger, r.final || r.py, kind, f.map || {});
+      if (!r.cy && !r.py && !r.adj && !r.op) return;
+      // the balance that tells a ledger's side: the year's closing, else last year's; with no last year in the PY column
+      // (an uploaded balance sheet, or a part of the year with none), its balance at the start of the year
+      r.final = R2(r.cy + r.adj); const k = codeOf(r.ledger, r.final || r.py || (hasOp ? N(openBs[r.ledger]) || N(r.op) : 0), kind, f.map || {}, up);
       out.push(Object.assign(r, k.code && !K[k.code] ? {code: "", codeSrc: "none"} : k)); r.side = r.code ? CODES[r.code].side : "";
     });
     syn(BF, "4A", bfCy, bfPy);
+    // the register's depreciation, profit or loss on sale and the deferred tax (FinDepr, src/js/88-fin-depr.js), once used for the year: FinCom rows with their codes
+    if (typeof FinDepr === "object" && FinDepr.rowsFor) FinDepr.rowsFor(fy, P, out).forEach(z => { const r = syn(z.ledger, z.code, z.cy, 0, 0); if (r) r.depr = z.key; });
+    if (!P.full) syn(P.spans ? "Profit for " + DMY(from) + " to " + DMY(Audit.dayBefore(fyFrom)) + " (in the balance at the beginning of the year)" : "Profit for " + DMY(P.fyFrom) + " to " + DMY(Audit.dayBefore(from)) + " (earlier in the year)", "4E", slCy, slPy);
+    // last year's balance sheet as the PY column: its lines by code (FinPyBs.pyRows), in rupees, a debit positive
+    if (pySrc === "upload") FinPyBs.pyRows(upl, kind).forEach(([code, v]) => { if (K[code]) syn("Last year's balance sheet: " + CODES[code].label, code, 0, v, 0); });
     depCredited(b, out, adj, from, to, kind, f.map || {});
-    return {fy, from, to, kind, entity: FS.entityOf().code, rows: out, pySrc, src: bal.src, adj};
+    return {fy, from, to, kind, entity: FS.entityOf().code, rows: out, pySrc, src: bal.src, adj, period: P, hasOp, openBs, bfOpen: R2(bfCy), upload: upl || null, warn, stock,
+      carried: carried.length ? {n: carried.length, list: carried, note: "Opening balances adjusted to the audited balance sheet (" + carried.length + " entr" + (carried.length > 1 ? "ies" : "y") + ")"} : null};
   }
   // depreciation credited straight to an asset (Tally's usual way: Dr Depreciation / Cr Laptops, no accumulated-
   // depreciation ledger): per gross-block row, depCrBook (the day book's entries of the year that debit a depreciation
@@ -240,6 +380,12 @@ const FinSt = (() => {
     out.forEach(r => { if (isGross(r.code)){ r.depCr = R2(N(all[r.ledger])); r.depCrBook = R2(N(book[r.ledger])); } });
   }
 
+  // the balance sheet's line (its id, as FinSt.build's bs.sections) a code is shown in; "" for the P&L
+  const BSID = {sc: ["3", ["sc", "cap"]], rs: ["4", ["res", "sur"]], ltb: ["30"], dtl: ["31"], oltl: ["32"], ltp: ["5", ["lt"]], stb: ["33"], tpm: ["6", ["msme"]], tpo: ["6", ["oth"]], ocl: ["7"], stp: ["5", ["st"]],
+    ppe: ["8", ["ppe"]], intang: ["34", ["int"]], cwip: ["35", ["cwip"]], iaud: ["35", ["iaud"]], nci: ["36"], dta: ["9"], ltla: ["38", ["la"]], onca: ["38", ["onca"]], ci: ["37"], inv: ["39"], tr: ["10"], cash: ["11"],
+    stla: ["12", ["la"]], oca: ["12", ["oca"]]};
+  function bsLineOf(code){ const c = CODES[code]; if (!c || c.side !== "BS") return ""; const e = Object.entries(BSID).find(([, [k, gs]]) => k === c.note && (!gs || gs.includes(c.group))); return e ? e[0] : ""; }
+
   // ---------- inputs ----------
   function inputs(co, firm){
     const b = S.books || {}, t = (b.fs || {}).inputs || {}, kind = kindOf(), e = FS.entityOf(co).code;
@@ -256,18 +402,24 @@ const FinSt = (() => {
   // ---------- the statements ----------
   function build(fy, opt){
     opt = opt || {};
-    const T = tb(fy);
+    const PER = periodOf(fy, opt.period), T = tb(fy, PER);
     if (T.error) return {error: T.error, fy};
     const inp = inputs(), unit = UNITS[opt.unit] ? N(opt.unit) : inp.unit, dec = opt.dec === 0 || opt.dec === 2 ? opt.dec : inp.dec, kind = T.kind, K = codes(kind);
     const b = S.books, f = b.fs || {}, e = T.entity;
-    const SU = {cy: {}, py: {}};
+    // the balances the cash flow starts from (OB): last year's column for the full year, the start of the period for a part
+    // of it; the PPE schedule's opening (PB): the same, but FinCom's own gross block and depreciation when the PY column is
+    // an uploaded balance sheet (it holds the net block only)
+    const OB = PER.full ? "py" : "op", PB = T.hasOp ? "op" : "py", part = !PER.full, YP = part ? "period" : "year";
+    const SU = {cy: {}, py: {}, op: {}};
     const DC = {};   // depreciation credited straight to the assets, by gross code, in the unit (TB column L / UNIT)
-    T.rows.forEach(r => { if (!r.code) return; SU.cy[r.code] = (SU.cy[r.code] || 0) + r.final / unit; SU.py[r.code] = (SU.py[r.code] || 0) + r.py / unit; if (r.depCr) DC[r.code] = (DC[r.code] || 0) + r.depCr / unit; });
+    T.rows.forEach(r => { if (!r.code) return; SU.cy[r.code] = (SU.cy[r.code] || 0) + r.final / unit; SU.py[r.code] = (SU.py[r.code] || 0) + r.py / unit; if (T.hasOp) SU.op[r.code] = (SU.op[r.code] || 0) + N(r.op) / unit;
+      if (r.depCr) DC[r.code] = (DC[r.code] || 0) + r.depCr / unit; });
     const S1 = (col, code) => SU[col][code] || 0, LV = (col, code, sign) => RND(sign * S1(col, code), dec), SUM = a => RND(a.reduce((s, v) => s + N(v), 0), dec);
     const nUsed = Object.keys(SU.cy).filter(k => Math.abs(SU.cy[k]) > 1e-9 || Math.abs(SU.py[k]) > 1e-9).length;
     const tol = RND(0.5 * Math.pow(10, -dec) * Math.max(2, nUsed + 2), dec + 1);
-    // the prior year worked out the same way, for last year's cash flow and PPE schedule (values, as the workbooks type them)
-    const prior = !opt.inner && T.pySrc !== "opening" ? build(String(N(fy) - 1), {unit, dec, inner: true}) : null, pri = prior && !prior.error ? prior : null;
+    // the prior year (or the same part of it) worked out the same way, for last year's cash flow and PPE schedule (values,
+    // as the workbooks type them)
+    const prior = !opt.inner && !["opening", "none", "upload"].includes(T.pySrc) ? build(String(N(fy) - 1), {unit, dec, inner: true, period: part ? {preset: "custom", from: PER.pyFrom, to: PER.pyTo} : undefined}) : null, pri = prior && !prior.error ? prior : null;
     // the PPE and intangibles schedules
     const grid = (list, col, adjs) => {
       const rows = [];
@@ -275,7 +427,7 @@ const FinSt = (() => {
         if (col === "cy"){
           // the depreciation credited straight to the asset (dc) is added back to the gross block and to the
           // accumulated depreciation: the charge shows, the additions are not net of it, the net block is the TB's
-          const dc = DC[g] || 0, D = LV("py", g, 1), G = RND(S1("cy", g) + dc, dec), H = a ? LV("py", a, -1) : 0, Kc = RND((a ? -S1("cy", a) : 0) + dc, dec), x = (adjs || {})[g] || {};
+          const dc = DC[g] || 0, D = LV(PB, g, 1), G = RND(S1("cy", g) + dc, dec), H = a ? LV(PB, a, -1) : 0, Kc = RND((a ? -S1("cy", a) : 0) + dc, dec), x = (adjs || {})[g] || {};
           const sale = RND(N(x.sale) / unit, dec), J = -RND(N(x.dep) / unit, dec);
           if (!D && !G && !H && !Kc) return;
           const E = RND(Math.max(0, G - D) + sale, dec), F = RND(-(Math.max(0, D - G) + sale), dec), I = RND(Kc - H - J, dec);
@@ -288,9 +440,10 @@ const FinSt = (() => {
       const total = {}; "DEFGHIJKLM".split("").forEach(k => { total[k] = rows.some(r => r[k] != null) ? SUM(rows.map(r => r[k])) : null; });
       return {rows, total};
     };
-    const ppeAdj = (f.ppeAdj || {})[fy] || {};
+    const ppeAdj = (f.ppeAdj || {})[periodKey(fy, PER)] || {};
     const ppe = {cy: grid(PPE, "cy", ppeAdj), py: pri ? pri.ppe.cy : Object.assign(grid(PPE, "py"), {partial: true})};
     const intg = {cy: grid(INT, "cy", ppeAdj), py: pri ? pri.intang.cy : Object.assign(grid(INT, "py"), {partial: true})};
+    const reg = typeof FinDepr === "object" && FinDepr.grids ? FinDepr.grids(fy, PER, unit, dec) : null; if (reg){ ppe.cy = reg.ppe; intg.cy = reg.int; }   // the register (FinDepr), when used
     // the notes, their lines rounded each, groups and totals summed
     const notes = {};
     NOTES.forEach(n => {
@@ -298,13 +451,16 @@ const FinSt = (() => {
       const o = {key: n.key, title: n.title, st: n.st, groups: {}, lines: [], total: {cy: 0, py: 0}, nonote: !!n.nonote};
       if (n.key === "3" && kind === "nc") o.title = e === "F" ? "Partners' capital accounts" : e === "P" ? "Proprietor's capital account" : "Owners' capital accounts";
       n.groups.forEach(([g, head, sec, cs]) => {
-        const ls = cs.filter(([code]) => K[code]).map(([code, label]) => ({label: kind === "nc" && code === "4A" ? "Balance in profit and loss account" : label, code, group: g, cy: LV("cy", code, n.sign), py: LV("py", code, n.sign)}));
-        o.groups[g] = {head, sec, cy: SUM(ls.map(z => z.cy)), py: SUM(ls.map(z => z.py)), lines: ls};
+        const lab = (code, label) => kind === "nc" && code === "4A" ? "Balance in profit and loss account"
+          : code === "4E" ? (PER.spans ? "Profit for " + DMY(PER.from) + " to " + DMY(Audit.dayBefore(PER.fyFrom)) + ", already in the balance at the beginning of the year"
+            : "Add: profit for " + DMY(PER.fyFrom) + " to " + DMY(part ? Audit.dayBefore(PER.from) : PER.fyFrom) + " (earlier in the year)") : label;
+        const ls = cs.filter(([code]) => K[code]).map(([code, label]) => Object.assign({label: lab(code, label), code, group: g, cy: LV("cy", code, n.sign), py: LV("py", code, n.sign)}, part ? {op: LV("op", code, n.sign)} : {}));
+        o.groups[g] = Object.assign({head, sec, cy: SUM(ls.map(z => z.cy)), py: SUM(ls.map(z => z.py)), lines: ls}, part ? {op: SUM(ls.map(z => z.op))} : {});
       });
       notes[n.key] = o;
     });
-    notes["8"].groups.ppe = {head: "", sec: "NCA", cy: N(ppe.cy.total.M), py: N(ppe.py.total.M), lines: []};
-    notes["34"].groups.int = {head: "", sec: "NCA", cy: N(intg.cy.total.M), py: N(intg.py.total.M), lines: []};
+    notes["8"].groups.ppe = Object.assign({head: "", sec: "NCA", cy: N(ppe.cy.total.M), py: N(ppe.py.total.M), lines: []}, part ? {op: N(ppe.cy.total.L)} : {});
+    notes["34"].groups.int = Object.assign({head: "", sec: "NCA", cy: N(intg.cy.total.M), py: N(intg.py.total.M), lines: []}, part ? {op: N(intg.cy.total.L)} : {});
     const G = (k, g, col) => N(((notes[k] || {}).groups[g] || {})[col]), NT = (k, col) => Object.values((notes[k] || {groups: {}}).groups).reduce((s, z) => s + N(z[col]), 0);
     const line = (k, code, col) => { const z = (((notes[k] || {}).groups) || {}); for (const g in z){ const x = z[g].lines.find(y => y.code === code); if (x) return x[col]; } return 0; };
     // profit and loss before the rounding put in Note 17
@@ -341,18 +497,18 @@ const FinSt = (() => {
       if (kind === "co"){ const g = notes["4"].groups.sur; g.profit = g.profit || {}; g.profit[col] = pat; g[col] = RND(g[col] + pat, dec); }
       else { const g = notes["3"].groups.cap; g.profit = g.profit || {}; g.profit[col] = pat; g[col] = RND(g[col] + pat, dec); }
     });
-    Object.values(notes).forEach(n => { n.total = {cy: SUM(Object.values(n.groups).map(z => z.cy)), py: SUM(Object.values(n.groups).map(z => z.py))}; });
+    Object.values(notes).forEach(n => { n.total = Object.assign({cy: SUM(Object.values(n.groups).map(z => z.cy)), py: SUM(Object.values(n.groups).map(z => z.py))}, part ? {op: SUM(Object.values(n.groups).map(z => z.op))} : {}); });
     // the lines each note shows: a head per group, its lines with a figure, the profit, subtotals when there are groups
-    const PRES = {"3": kind === "co" ? null : ["cap", "Add: profit for the year"], "4": kind === "co" ? ["sur", "Add: profit for the year"] : null};
+    const PRES = {"3": kind === "co" ? null : ["cap", "Add: profit for the " + YP], "4": kind === "co" ? ["sur", "Add: profit for the " + YP] : null};
     Object.values(notes).forEach(n => {
       const gs = Object.entries(n.groups), many = gs.filter(([, z]) => z.lines.some(y => y.cy || y.py)).length > 1;
       gs.forEach(([g, z]) => {
         const ls = z.lines.filter(y => y.cy || y.py || (y.plug && (y.plug.cy || y.plug.py)));
-        const pr = PRES[n.key] && PRES[n.key][0] === g ? {label: PRES[n.key][1], code: "", group: g, cy: z.profit.cy, py: z.profit.py, profit: true} : null;
+        const pr = PRES[n.key] && PRES[n.key][0] === g ? {label: PRES[n.key][1], code: "", group: g, cy: z.profit.cy, py: z.profit.py, profit: true, ...(part ? {op: 0} : {})} : null;
         if (!ls.length && !pr) return;
         if (z.head) n.lines.push({label: z.head, head: true, group: g});
         n.lines.push(...ls); if (pr) n.lines.push(pr);
-        if (many || pr) n.lines.push({label: pr && n.key === "4" ? "Balance at the end of the year" : "Total " + (z.head ? z.head.replace(/^\([a-z]\)\s*/, "").toLowerCase() : n.title.toLowerCase()), total: true, group: g, cy: z.cy, py: z.py});
+        if (many || pr) n.lines.push({label: pr && n.key === "4" ? "Balance at the end of the " + YP : "Total " + (z.head ? z.head.replace(/^\([a-z]\)\s*/, "").toLowerCase() : n.title.toLowerCase()), total: true, group: g, cy: z.cy, py: z.py, ...(part ? {op: z.op} : {})});
       });
     });
     // the balance sheet
@@ -387,7 +543,7 @@ const FinSt = (() => {
     const PLL = [["rev", "Revenue from operations", "13"], ["oth", "Other income", "14"], ["inc", "Total income", ""], ["mat", "Cost of materials consumed", "40"], ["pur", "Purchases of stock-in-trade", "41"],
       ["chg", "Changes in inventories of finished goods, work-in-progress and stock-in-trade", "42"], ["emp", "Employee benefits expense", "15"], ["fin", "Finance costs", "16"], ["dep", "Depreciation and amortisation expense", "8"],
       ["exp", "Other expenses", "17"], ["tot", "Total expenses", ""], ["pbe", "Profit before exceptional items and tax", ""], ["exc", "Exceptional items", "43"], ["pbt", "Profit before tax", ""],
-      ["cur", "Current tax", ""], ["prior", "Tax relating to earlier years", ""], ["def", "Deferred tax charge / (credit)", ""], ["tax", "Total tax expense", ""], ["pat", "Profit for the year", ""]];
+      ["cur", "Current tax", ""], ["prior", "Tax relating to earlier years", ""], ["def", "Deferred tax charge / (credit)", ""], ["tax", "Total tax expense", ""], ["pat", "Profit for the " + YP, ""]];
     const plOut = {lines: PLL.map(([k, label, nk]) => ({key: k, label, no: noOf[nk] || null, cy: P.cy[k], py: P.py[k]}))};
     PLL.forEach(([k]) => { plOut[k] = {cy: P.cy[k], py: P.py[k]}; });
     // EPS from the trial balance in rupees, as the workbooks do: the profit / the number of shares
@@ -398,7 +554,7 @@ const FinSt = (() => {
     const cf = {lines: [], cy: cashFlow("cy"), py: pri ? pri.cf.cy : null};
     function cashFlow(col){
       const o = col === "cy" ? "py" : null; if (!o) return null;
-      const d2 = (k, g) => g ? RND(G(k, g, "cy") - G(k, g, "py"), dec) : RND(NT(k, "cy") - NT(k, "py"), dec), Ln = (k, code, c2) => line(k, code, c2 || "cy"), dl = (k, code) => RND(line(k, code, "cy") - line(k, code, "py"), dec);
+      const d2 = (k, g) => g ? RND(G(k, g, "cy") - G(k, g, OB), dec) : RND(NT(k, "cy") - NT(k, OB), dec), Ln = (k, code, c2) => line(k, code, c2 || "cy"), dl = (k, code) => RND(line(k, code, "cy") - line(k, code, OB), dec);
       const p = P.cy, gr = ppe.cy.total, ig = intg.cy.total;
       const x = {pbt: p.pbt, dep: p.dep, finc: p.fin, psale: RND(-Ln("14", "14B") + Ln("17", "17T"), dec), intinc: RND(-(Ln("14", "14A") + Ln("14", "14D")), dec)};
       x.opBefore = SUM([x.pbt, x.dep, x.finc, x.psale, x.intinc]);
@@ -412,10 +568,10 @@ const FinSt = (() => {
       x.obb = RND(-d2("11", "obb"), dec); x.invest = RND(-(d2("36") + d2("37")), dec); x.intRec = RND(Ln("14", "14A") + Ln("14", "14D") - dl("12", "12E"), dec);
       x.inv = SUM([x.capex, x.sale, x.obb, x.invest, x.intRec]);
       x.equity = kind === "co" ? RND(d2("3") + d2("4", "res"), dec) : RND(d2("3") - p.pat + d2("4"), dec);
-      x.surplus = kind === "co" ? RND(line("4", "4A", "cy") - G("4", "sur", "py"), dec) : 0;
+      x.surplus = kind === "co" ? RND(line("4", "4A", "cy") + line("4", "4E", "cy") - G("4", "sur", OB), dec) : 0;
       x.borrow = RND(d2("30") + d2("33"), dec); x.finPaid = RND(-p.fin, dec);
       x.fin = SUM([x.equity, x.surplus, x.borrow, x.finPaid]);
-      x.net = SUM([x.op, x.inv, x.fin]); x.open = G("11", "cce", "py"); x.close = RND(x.open + x.net, dec); x.perNote = G("11", "cce", "cy"); x.diff = RND(x.close - x.perNote, dec);
+      x.net = SUM([x.op, x.inv, x.fin]); x.open = G("11", "cce", OB); x.close = RND(x.open + x.net, dec); x.perNote = G("11", "cce", "cy"); x.diff = RND(x.close - x.perNote, dec);
       return x;
     }
     const CFL = [["pbt", "Profit before tax"], ["dep", "Depreciation and amortisation"], ["finc", "Finance costs"], ["psale", "(Profit) / loss on sale of assets"], ["intinc", "Interest income"],
@@ -425,15 +581,35 @@ const FinSt = (() => {
       ["op", "A. Net cash from operating activities"], ["capex", "Purchase of property, plant and equipment and intangible assets"], ["sale", "Proceeds from sale of fixed assets"], ["obb", "Investment in bank deposits"],
       ["invest", "Purchase of investments (net)"], ["intRec", "Interest received"], ["inv", "B. Net cash used in investing activities"], ["equity", kind === "co" ? "Proceeds from issue of shares" : "Capital introduced / (withdrawn), net"],
       ["surplus", "Dividends and other movements in surplus"], ["borrow", "Proceeds from / (repayment of) borrowings, net"], ["finPaid", "Finance costs paid"], ["fin", "C. Net cash from financing activities"],
-      ["net", "Net increase / (decrease) in cash and cash equivalents (A + B + C)"], ["open", "Cash and cash equivalents at the beginning of the year"], ["close", "Cash and cash equivalents at the end of the year"],
+      ["net", "Net increase / (decrease) in cash and cash equivalents (A + B + C)"], ["open", "Cash and cash equivalents at the beginning of the " + YP], ["close", "Cash and cash equivalents at the end of the " + YP],
       ["perNote", "Cash and cash equivalents as per Note " + (noOf["11"] || 11)], ["diff", "Difference (should be nil)"]];
     cf.lines = CFL.map(([k, label]) => ({key: k, label, cy: cf.cy ? cf.cy[k] : null, py: cf.py ? cf.py[k] : null}));
     const d = {fy, kind, entity: e, inputs: Object.assign({}, inp, {unit, dec, tol, unitLine: "(All amounts in " + (UNITS[unit] || "Rupees") + ", unless otherwise stated)"}), tb: T, notes: noteList, noteOf: noOf,
-      bs, pl: plOut, cf, ppe, intang: intg, plug, prior: pri ? {fy: pri.fy} : null};
+      bs, pl: plOut, cf, ppe, intang: intg, plug, prior: pri ? {fy: pri.fy} : null,
+      period: Object.assign({}, PER, {pyNote: part && T.pySrc === "none" ? "The same period of last year is not in FinCom's copy of the books, so the comparative column is blank (choose Compare with: Last full year for last year's figures)." : ""}), stock: T.stock};
     if (opt.inner) return d;
-    d.comp = comp(d);
-    d.checks = checks(d, {S1, LV, tol, unit, dec, line, G});
+    // the computation of income is for a full financial year (its additions and deductions, 43B, 40A(7), the tax
+    // depreciation and the tax itself are worked out for a year); for a part of the year a line says so
+    d.comp = part ? null : comp(d);
+    if (part) d.compNote = "The computation of income is for a full financial year. Choose Full year to see it.";
+    d.checks = checks(d, {S1, LV, tol, unit, dec, line, G, OB, part: part && PER.cmp !== "fy"});
+    if (T.upload) d.pyCheck = pyCheck(T, sections, BSL, kind);
+    if (typeof FinDepr === "object" && FinDepr.attach) FinDepr.attach(d);   // depreciation and deferred tax (d.depr)
     return d;
+  }
+  // last year's balance sheet (uploaded) against FinCom's opening balances, by head of the balance sheet, in rupees: each
+  // ledger's balance at the start of the year by its code (hand, suggested or by rule), the lines of the upload used
+  function pyCheck(T, sections, BSL, kind){
+    const up = T.upload, u = N(up.unit) || 1, K = codes(kind), byHead = {}, add = (id, k, v) => { (byHead[id] = byHead[id] || {up: 0, fc: 0})[k] += v; };
+    const code = {}; T.rows.forEach(r => { if (!r.synthetic) code[r.ledger] = r.code; });
+    Object.entries(T.openBs).forEach(([l, v]) => { const c = code[l] !== undefined ? code[l] : codeOf(l, v, kind).code, id = bsLineOf(c); if (id && K[c]) add(id, "fc", CODES[c].sign * v); });
+    if (T.bfOpen) add("rs", "fc", -T.bfOpen);
+    (up.lines || []).forEach(z => { if (!z.use || !K[z.code]) return; const id = bsLineOf(z.code); if (id) add(id, "up", N(z.amt) * u); });
+    const label = {}; BSL.forEach(([, , ls]) => ls.forEach(([id, l]) => { label[id] = l; }));
+    const rows = [];
+    BSL.forEach(([s2, , ls]) => ls.forEach(([id]) => { const x = byHead[id]; if (!x || (Math.abs(x.up) < 0.005 && Math.abs(x.fc) < 0.005)) return;
+      const dif = R2(x.up - x.fc); rows.push({id, sec: s2, label: label[id], up: R2(x.up), fc: R2(x.fc), diff: Math.abs(dif) <= Math.max(0.005, u / 2) ? 0 : dif}); }));
+    return {rows, bad: rows.filter(z => z.diff).length, unit: u, file: up.file || "", v: up.v};
   }
 
   // ---------- the checks: each must read 0 ----------
@@ -445,22 +621,29 @@ const FinSt = (() => {
     out.push({key: "tbCy", label: "Trial balance total (CY, Rs)", value: (v => Math.abs(v) < 0.011 ? 0 : v)(R2(d.tb.rows.reduce((s, r) => s + r.final, 0)))});
     out.push({key: "tbPy", label: "Trial balance total (PY, Rs)", value: (v => Math.abs(v) < 0.011 ? 0 : v)(R2(d.tb.rows.reduce((s, r) => s + r.py, 0)))});
     add("unmapped", "Balance of ledgers without a code (CY + PY)", d.tb.rows.filter(r => !r.code).reduce((s, r) => s + Math.abs(r.final) / unit + Math.abs(r.py) / unit, 0), 0.5 * Math.pow(10, -dec) - 1e-9);
-    if (d.kind === "co"){ const n4 = d.notes.find(n => n.key === "4"), sur = n4 ? n4.groups.sur : null;
+    // (a part of the year: last year's column is the same period, not the closing the year opened with)
+    if (d.kind === "co" && !h.part){ const n4 = d.notes.find(n => n.key === "4"), sur = n4 ? n4.groups.sur : null;
       add("surplus", "Opening surplus (CY) - closing surplus (PY)", sur ? (sur.lines.find(y => y.code === "4A") || {cy: 0}).cy - sur.py : 0); }
     const grid = d.ppe.cy.total, ig = d.intang.cy.total, chg = N(grid.I) + N(ig.I);
     add("ppeDep", "Depreciation: schedule (Notes 8 and 34) - trial balance", chg - (LV("cy", "8E", 1) + LV("cy", "34D", 1)));
     add("ppeNet", "Net block: schedule - trial balance (CY)", N(grid.M) + N(ig.M) - RND(PPE.concat(INT).reduce((s, c2) => s + h.S1("cy", c2[2]) + (c2[3] ? h.S1("cy", c2[3]) : 0), 0), dec));
     add("cfCy", "Cash flow difference (CY)", d.cf.cy ? d.cf.cy.diff : 0);
     if (d.cf.py) add("cfPy", "Cash flow difference (PY)", d.cf.py.diff);
-    add("deferredTax", "Deferred tax in P&L - movement in deferred tax (Notes 9 and 31)", d.pl.def.cy - (RND(h.G("31", "dtl", "cy") - h.G("31", "dtl", "py"), dec) - RND(h.G("9", "dta", "cy") - h.G("9", "dta", "py"), dec)));
-    const cp = (d.comp.checks.find(c2 => c2.key === "pbt") || {}).value;
-    out.push({key: "compPbt", label: "Computation: PBT - profit and loss", value: cp || 0});
+    add("deferredTax", "Deferred tax in P&L - movement in deferred tax (Notes 9 and 31)", d.pl.def.cy - (RND(h.G("31", "dtl", "cy") - h.G("31", "dtl", h.OB), dec) - RND(h.G("9", "dta", "cy") - h.G("9", "dta", h.OB), dec)));
+    if (d.comp){ const cp = (d.comp.checks.find(c2 => c2.key === "pbt") || {}).value;
+      out.push({key: "compPbt", label: "Computation: PBT - profit and loss", value: cp || 0}); }
     out.push({key: "unit", label: "Presentation unit is Rupees, thousands, lakhs or crores", value: UNITS[unit] ? 0 : 1});
+    // stock: each figure the statements need known; the opening stock against last year's closing stock (its balance sheet)
+    const sk = d.stock || {};
+    if (sk.missing && sk.missing.length) out.push({key: "stockMissing", label: "Stock not known: " + sk.missing.join("; "), value: sk.missing.length});
+    if (d.tb.upload && (sk.upInv != null || (sk.A && sk.A.v))){ const v = R2(N(sk.A && sk.A.v) - N(sk.upInv));
+      out.push({key: "stockOpen", label: "Opening stock vs last year's closing stock (last year's balance sheet), Rs", value: Math.abs(v) < 0.011 ? 0 : v}); }
     return out;
   }
 
   // ---------- income-tax depreciation by block (opening WDV typed once, then carried forward) ----------
   function taxDep(fy, depth){
+    if (!depth && typeof FinDepr === "object" && FinDepr.taxDep){ const r = FinDepr.taxDep(fy); if (r) return r; }   // last year's ITR, the register's additions and sales (FinDepr)
     const b = S.books || {}, f = b.fs || {}, typed = (f.taxDep || {})[fy], {from, to} = fyDates(fy), kind = kindOf(), map = f.map || {};
     const earlier = Object.keys(f.taxDep || {}).some(y => y < fy);
     let open = {}, carried = false;
@@ -572,18 +755,37 @@ const FinSt = (() => {
     Object.entries(f.map).forEach(([l, v]) => { if (OLD.includes(v)){ const c = refine(l, v, Books.groupPath(l), 0, kind); if (c){ f.map[l] = c; n++; } } });
     if (n) save(); return n;
   }
-  function adjAdd(fy, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).concat([{dr: a.dr, cr: a.cr, amt: R2(N(a.amt)), narr: a.narr || ""}]); save(); }
+  // (an entry may carry more: id, date, kind, by, at, recon / carry for the entries matching the audited balance sheet)
+  function adjAdd(fy, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).concat([Object.assign({}, a, {dr: a.dr, cr: a.cr, amt: R2(N(a.amt)), narr: a.narr || ""})]); save(); }
+  function adjDelId(fy, id){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).filter(a => a.id !== id); save(); }
   function adjSet(fy, i, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); const l = (f.adj[fy] || []).slice(); if (!l[i]) return; l[i] = Object.assign({}, l[i], a, a.amt != null ? {amt: R2(N(a.amt))} : {}); f.adj[fy] = l; save(); }
   function adjDel(fy, i){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).filter((_, j) => j !== i); save(); }
   function compEdit(fy, key, v, why){ const f = fsOf(); f.compEdits = Object.assign({}, f.compEdits); const e = Object.assign({}, f.compEdits[fy]); if (v == null || v === "") delete e[key]; else e[key] = {v: N(v), why: why || ""}; f.compEdits[fy] = e; save(); }
   function regimeSet(v){ fsOf().regime = v; save(); }
   function inputsSet(o){ const f = fsOf(); f.inputs = Object.assign({}, f.inputs, o); save(); }
   function taxDepSet(fy, block, wdv){ const f = fsOf(); f.taxDep = Object.assign({}, f.taxDep); f.taxDep[fy] = Object.assign({}, f.taxDep[fy]); if (wdv === "" || wdv == null) delete f.taxDep[fy][block]; else f.taxDep[fy][block] = R2(N(wdv)); save(); }
+  // the period (and the comparative chosen, cmp "same" / "fy") kept per client; a preset drops custom dates
+  function periodSet(p){
+    const f = fsOf(), x = Object.assign({}, f.period, p || {});
+    if (!x.preset) x.preset = "fy";
+    if (x.preset !== "custom"){ delete x.from; delete x.to; }
+    if (x.cmp !== "fy") delete x.cmp;
+    if (x.preset === "fy" && !x.cmp) delete f.period; else f.period = x;
+    save();
+  }
+  // stock typed by hand, as on a date (null: forgotten), with who typed it and when
+  function stockSet(ymd, v){
+    const f = fsOf(); f.stockAt = Object.assign({}, f.stockAt);
+    if (v == null || v === "") delete f.stockAt[ymd];
+    else f.stockAt[ymd] = {v: R2(N(v)), by: (typeof Cloud === "object" && Cloud.st && Cloud.st.email) || (typeof S === "object" && S.firm && (S.firm.partner || S.firm.firmName)) || "this computer", at: new Date().toISOString()};
+    save();
+  }
   function pyTbSet(fy, led){ const f = fsOf(); f.pyTb = Object.assign({}, f.pyTb); if (led) f.pyTb[fy] = led; else delete f.pyTb[fy]; save(); }
   function ppeAdjSet(fy, code, o){ const f = fsOf(); f.ppeAdj = Object.assign({}, f.ppeAdj); f.ppeAdj[fy] = Object.assign({}, f.ppeAdj[fy], {[code]: o}); save(); }
 
   return {CODES, NOTES, PPE, INT, BLOCKS, UNITS, RND, codes, suggest, refine, codeOf, tb, build, inputs, regime, taxDep, taxOn, comp, checks,
-    mapSet, migrate, adjAdd, adjSet, adjDel, compEdit, regimeSet, inputsSet, taxDepSet, pyTbSet, ppeAdjSet};
+    mapSet, migrate, adjAdd, adjSet, adjDel, adjDelId, compEdit, regimeSet, inputsSet, taxDepSet, pyTbSet, ppeAdjSet,
+    periods, periodOf, periodKey, periodGet, periodSet, stockSet, bsLineOf, DMY, yearBack};
 })();
 
 if (typeof globalThis === "object") Object.assign(globalThis, {FinSt});

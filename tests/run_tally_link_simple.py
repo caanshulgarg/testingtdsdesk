@@ -182,7 +182,7 @@ def main():
         # ---- 3. Disconnected: linked, the computer has Tally closed (FRONTDESK keeps it; no other computer has it open)
         scene(LINKED(D3), devs=[dev(1, "NWS144", "anshul", opened=()), DEVS[1], DEVS[2]])
         line = one_line("Waiting for Tally", "3. waiting")
-        ok("— Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and line.endswith("Open in Tally page"), "3. the line: Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK (%s)" % line)
+        ok("— Open GARG SHEKHAR in TallyPrime on FRONTDESK" in line and line.endswith("Open in Tally page · Change · Unlink"), "3. the line: Waiting for Tally — Open GARG SHEKHAR in TallyPrime on FRONTDESK (%s)" % line)
         to_row()
         # next-tally-smart: a linked company not open now is one quiet line under Your linked clients (no false alarm)
         LR = R("GARG SHEKHAR") + "[data-linked-row]"
@@ -193,7 +193,7 @@ def main():
         # ---- 4. Connected
         scene(LINKED(D1))
         line = one_line("Linked", "4. reading")
-        ok(line == "Tally: GARG SHEKHAR ● Linked · Open in Tally page", "4. Linked: the company, Open in Tally page (%s)" % line)
+        ok(line == "Tally: GARG SHEKHAR ● Linked · Open in Tally page · Change · Unlink", "4. Linked: the company, Open in Tally page, Change and Unlink (next-fix-tally-links) (%s)" % line)
         no_port("4. Client setup → Tally")
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no name box, no 'Posting allowed to' card")
         to_row()

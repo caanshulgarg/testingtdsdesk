@@ -196,7 +196,7 @@ def main():
         items = E("(co) => [...document.querySelectorAll('#app [data-tco-row=\"' + co + '\"] .bk-menu-list button')].map(b => b.innerText.split('\\n')[0])", VMS)
         # VMS was added as a client from its row (a person's link): that allowed posting into it too (the owner, 26-Oct-2026:
         # linking also allows posting, src/js/97-postto-link.js), so ⋯ offers Stop posting here (Post entries here once stopped)
-        ok(items == ["Sync master", "Sync vouchers", "Stop posting here", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "4. ⋯: Sync master, Sync vouchers, Stop posting here (linked by a person: posting allowed), Link to another client, Unlink, …; no Day Book while this year's days are in (%s)" % items)
+        ok(items == ["Sync master", "Sync vouchers", "Stop posting here", "Change Tally company…", "Link to another client", "Unlink", "What is in the cloud?", "Read the kept day books again", "Open client"], "4. ⋯: Sync master, Sync vouchers, Stop posting here (linked by a person: posting allowed), Link to another client, Unlink, …; no Day Book while this year's days are in (%s)" % items)
         pg.click('#app [data-tco-row="%s"] [data-tco-not-this]' % VMS); pg.wait_for_timeout(300)
         pg.select_option('#app [data-tco-row="%s"] [data-tco-relink-pick]' % VMS, gs)
         E("() => { window.__calls = []; }")
@@ -244,7 +244,7 @@ def main():
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", gs); pg.wait_for_timeout(1200)
         # next-tally-one-page: Client setup has ONE line (no card); Sync now is on the Tally page's row
         line = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
-        ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page"),
+        ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page · Change · Unlink"),
            "6. the client's one line: the same pill words, Open in Tally page (%s)" % line)
         # next-tally-icon (27-Oct-2026): the header's one Tally icon says the same word, in plain words (no computer)
         sign = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? b.getAttribute('aria-label') : ''; }")

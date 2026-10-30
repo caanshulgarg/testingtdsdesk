@@ -189,7 +189,7 @@ def main():
         gd = "#app [data-connect-guide]"
         # next-tally-smart: a computer connected: no steps; ONE status card for it ("NWS144 · anshul · FinCom Bridge 2.4.1 · Paused")
         card = re.sub(r"\s+", " ", txt("#app [data-status-card]"))
-        ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1 and card.startswith("NWS144 · anshul") and "Paused" in card,
+        ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1 and card.startswith("FinCom Bridge 2.4.1") and "Paused" in card and "NWS144" not in card and "anshul" not in card,
            "a computer connected: no steps; the one status card, Paused (%s)" % card[:120])
         # the owner, 28-Oct-2026 ("show only currently opened Tally"): VMS EVENTS was seen once, not open, not linked: not on the
         # page; under Help & support › Every company seen, Not linked · not open in Tally now, the picker (Task D: no Add as client)
@@ -217,7 +217,7 @@ def main():
         # Reading: one row a company the beat reports
         rd = lambda: E("() => [...document.querySelectorAll('#app [data-reading] [data-reading-row]')].map(e => [e.getAttribute('data-reading-row'), e.getAttribute('data-reading-kind'), [...e.querySelectorAll('td')].map(t => t.innerText.trim())])")
         ok(txt("#app [data-reading-head]") == "Reading: 0 companies live, 0 waiting for Tally, 0 stopped, 1 paused" and rd() and rd()[0][0] == "GB TEXCOAT" and "Paused" in rd()[0][2]
-           and "10-Oct 10:28" in rd()[0][2] and "NWS144 (anshul)" in rd()[0][2], "Reading: paused, the company, the computer, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
+           and "10-Oct 10:28" in rd()[0][2] and not any("NWS144" in t for t in rd()[0][2]), "Reading: paused, the company, no computer name, the last entry 10-Oct 10:28 (%s | %s)" % (txt("#app [data-reading-head]"), rd()))
         ok("While paused, FinCom does not read Tally in the background" in txt("#app [data-reading]"), "Reading: what a pause stops, said once there")
         ok(n("#app [data-reading][data-folded]") == 1 and n('#app [data-show-all="reading"]') == 0, "Reading: folded; its one row (paused) above the fold, so no Show all")
         # 3. the clients' table is gone (24-Oct-2026: the list is the one place); a client not linked: the list for it
@@ -254,7 +254,7 @@ def main():
             scene([d], cos if cos is not None else companies(linked=(), d=d["id"])); return d["id"]
         card = lambda: re.sub(r"\s+", " ", txt("#app [data-status-card]"))
         d = guide_scene(dev(2, "NWS144", "anshul", at="ago:90", tally="closed", opened=()))
-        ok(steps() == [] and n("#app [data-tsc-need=offline]") == 1 and "NWS144 (anshul) is not connected" in card(), "offline: no steps; the card says it is not connected (%s)" % card()[:140])
+        ok(steps() == [] and n("#app [data-tsc-need=offline]") == 1 and "The Tally computer is not connected" in card() and "NWS144" not in card(), "offline: no steps; the card says it is not connected (%s)" % card()[:140])
         d = guide_scene(dev(3, "NWS144", "anshul", tally="open", opened=()))
         ok(steps() == [] and "Reading is paused" not in page() and n("#app [data-tsc-need=noco]") == 1 and "Open your company in TallyPrime" in card(), "Tally answering, no company: open your company (%s)" % card()[:140])
         d = guide_scene(dev(4, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), beat={"paused": True}))
@@ -284,7 +284,7 @@ def main():
         d6 = dev(7, "NWS144", "anshul", tally="open", opened=("GB TEXCOAT",), version="2.4.4")
         d = d6["id"]; scene([d6], companies(linked=("GB TEXCOAT", "ABC TRADERS", "garg shekhar & company"), seen=(), d=d6["id"]), books=HELD_ALL)
         gl = card()
-        ok(n("#app [data-connect-step]") == 0 and gl.startswith("NWS144 · anshul · FinCom Bridge 2.4.4 Connected"), "linked, all well: no steps; the card 'NWS144 · anshul · FinCom Bridge 2.4.4 · Connected' (%s)" % gl[:120])
+        ok(n("#app [data-connect-step]") == 0 and gl.startswith("FinCom Bridge 2.4.4 Connected") and "NWS144" not in gl, "linked, all well: no steps; the card 'FinCom Bridge 2.4.4 · Connected', no computer name (next-fix-tally-links2) (%s)" % gl[:120])
         ok(n("#app [data-all-good]") == 1 and n("#app [data-needs-you]") == 0, "nothing needs him: All good, no Needs you")
         ok("Update to" not in gl and n("#app [data-tsc-need]") == 0, "all well: no update, no problem line (%s)" % gl[:120])
         pg.wait_for_timeout(1500)
@@ -444,7 +444,7 @@ def main():
         rows = rscene(live3, today)
         ok(txt("#app [data-reading-head]") == "Reading: 1 company live, 2 waiting for Tally, 0 stopped", "Reading: the one line on top (%s)" % txt("#app [data-reading-head]"))
         k = {r[0]: r for r in rows}
-        ok(k.get("GB TEXCOAT", [0, 0, []])[1] == "live" and "Reading live" in k["GB TEXCOAT"][2] and re.match(r"\d\d-[A-Z][a-z]{2} \d\d:\d\d", k["GB TEXCOAT"][2][3]), "Reading live, its last entry (%s)" % k.get("GB TEXCOAT"))
+        ok(k.get("GB TEXCOAT", [0, 0, []])[1] == "live" and "Reading live" in k["GB TEXCOAT"][2] and re.match(r"\d\d-[A-Z][a-z]{2} \d\d:\d\d", k["GB TEXCOAT"][2][2]), "Reading live, its last entry (%s)" % k.get("GB TEXCOAT"))
         ok("Waiting: Tally company not open" in k.get("ABC TRADERS", [0, 0, []])[2] and "10-Oct 10:28" in k["ABC TRADERS"][2], "Waiting: Tally company not open, last entry from its last read (%s)" % k.get("ABC TRADERS"))
         heads = E("() => [...document.querySelectorAll('#app [data-reading] thead th')].map(e => e.innerText.trim())")
         ok("Received today" in heads and k["GB TEXCOAT"][2][heads.index("Received today")] == "4", "Received today: from Sync activity's lines this page holds (%s %s)" % (heads, k["GB TEXCOAT"][2]))

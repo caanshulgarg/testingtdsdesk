@@ -41,7 +41,7 @@ export function linkWord(co, company) {
   const row = rows.find((r) => r && String(r.client_id || "") === String(co.id) && r.device_id && sameCo(r.company, name)) || (typeof tallyRowOf === "function" ? tallyRowOf(co, rows) : null);
   const devs = tallyDevs(), devId = (row && row.device_id) || (rec && rec.device_id) || "";
   const dev = devs.find((d) => d.id === devId) || devs.find((d) => openOn(d).some((n) => sameCo(n, name))) || null;
-  const pc = (rec && rec.computer) || (dev ? pcOf(dev).split(" · ")[0] : "") || "its computer";
+  const pc = rec || dev ? pcOf(dev) : "its computer";   // (never a computer's name: next-fix-tally-links2)
   const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen };
   const open = "Open " + name + " in TallyPrime on " + pc;
   // the same company in two places (a copied data folder keeps the GUID): nothing from the other place is applied

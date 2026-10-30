@@ -165,7 +165,11 @@ with sync_playwright() as p:
     print("(ii) the Books file fails every time")
     ST.update({"mode": {BOOKS: "fail"}, "hits": {}, "served": []})
     ctx, pg, loads, sink = scene(br)
-    pg.goto(URL)
+    # 30-Oct-2026: the Books page opened (a file only fetched ahead that does not come is not the page failing any more:
+    # run_prefetch_quiet.py)
+    open_app(pg)
+    try: pg.evaluate(GO_BOOKS)
+    except Exception: pass
     note = ""
     for _ in range(150):
         try: note = pg.evaluate("sessionStorage.getItem('heal:note') || ''")
