@@ -28,7 +28,8 @@ type allowedReq struct {
 
 // the ids allowed, and why
 var tallyAllowList = map[string]allowedReq{
-	"TDSDeskCompanies":   {purpose: "the companies loaded in Tally (name, books' period, GUID)"},
+	"TDSDeskCompanies": {purpose: "the companies loaded in Tally (name, books' period, GUID; 2.5.0: BOOKSFROM, the books' beginning, the ledger reads' period)", maxSec: 0.024,
+		measuredOn: "2026-10-30 (2.5.0, real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode g250, run 41016133667: 24 ms worst (6.2, 7.1))"},
 	"TDSDeskCompanyInfo": {purpose: "one company's GSTIN and PAN, once when it is first seen", aux: []string{"TDSDeskUnused"}},
 	"FinComCompany":      {purpose: "the company check: one company's name, GUID and highest AlterIDs (also the small check after a timeout)"},
 	cnReportID:           {purpose: "the company's change numbers (2.2.0, form b): a report over the one company, its name, GUID, AltVchId and AltMstId", aux: []string{"FinComCNCos"}},
@@ -36,14 +37,14 @@ var tallyAllowList = map[string]allowedReq{
 	"Day Book":           {purpose: "the day book of one company for one month at most (Update now, the nightly run, a FinCom read)"},
 	"TDSDeskVchHeads":    {purpose: "voucher heads (Optional ones too) of one company for one month at most, no ledger lines"},
 	"TDSDeskKeepList":    {purpose: "one month's entries as GUID, AlterID and date only (the copy's check)"},
-	ledListID: {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates; 2.4.4: a pay head's PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL)", maxSec: 0.28,
-		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: a chunk of 2,000 MasterIDs 278 ms worst (3.0), the same chunk with 2.4.3's fields 218 ms; 2.4.3's tdsm runs 38164963591 and 38187902681: 316 ms worst with 2.4.3's fields)"},
+	ledListID: {purpose: "the ledger list, 2,000 MasterIDs a request at most, stored master fields only (2.3.1: the party's deductee type too; 2.4.3: a TDS ledger's nature of payment, a party's special rate and lower-deduction certificates; 2.4.4: a pay head's PAYTYPE, PAYSTATTYPE, ITCOMPONENT, FORPAYROLL) (2.5.0, the owner's decision of 30-Oct-2026: the books' first year as the period, SVFROMDATE = the company's BOOKSFROM and SVTODATE a year on less a day, TYPE=\"Date\", so the stored OPENINGBALANCE comes as at the books' beginning; never sent undated)", maxSec: 0.28,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: a chunk of 2,000 MasterIDs 278 ms worst (3.0), the same chunk with 2.4.3's fields 218 ms; 2.4.3's tdsm runs 38164963591 and 38187902681: 316 ms worst with 2.4.3's fields); 2026-10-30 (2.5.0, the request with the books' first year, real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode g250, run 41016133667, the Gateway's period and date in a later year: 94-96 chunks of 5 MasterIDs as the bridge read them 32 ms worst (7.1), the 2,000-MasterID chunk 9.3 ms, every opening as at the books' beginning; the undated 20,000-ledger worst above kept as the worst case)"},
 	// 2.3.1 (the owner's decision of 06-Oct-2026, masters): the ledgers changed since the master counter last moved, and
 	// one ledger an entry names that FinCom does not have (ledchanges.go)
-	ledChangesID: {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only", maxSec: 0.24,
-		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: every window of 200 AlterIDs, 237 ms worst (3.0))"},
-	ledByNameID: {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only", maxSec: 0.038,
-		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: 38 ms worst (3.0))"},
+	ledChangesID: {purpose: "the ledgers created or altered since Tally's master counter last moved (2.3.1): AlterID above the last number, 200 AlterIDs a request at most, the ledger list's stored master fields only (2.5.0, the owner's decision of 30-Oct-2026: the books' first year as the period, SVFROMDATE = the company's BOOKSFROM and SVTODATE a year on less a day, TYPE=\"Date\", so the stored OPENINGBALANCE comes as at the books' beginning; never sent undated)", maxSec: 0.24,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: every window of 200 AlterIDs, 237 ms worst (3.0)); 2026-10-30 (2.5.0, the request with the books' first year, real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode g250, run 41016133667, the Gateway's period and date in a later year: one window of AlterIDs 7.1 ms worst (7.1); the undated 20,000-ledger worst above kept as the worst case)"},
+	ledByNameID: {purpose: "one ledger an entry uses that FinCom does not have, by its name (2.3.1), fetched before the entry is applied: the ledger list's stored master fields only (2.5.0, the owner's decision of 30-Oct-2026: the books' first year as the period, SVFROMDATE = the company's BOOKSFROM and SVTODATE a year on less a day, TYPE=\"Date\", so the stored OPENINGBALANCE comes as at the books' beginning; never sent undated)", maxSec: 0.038,
+		measuredOn: "2026-10-12 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode paym, run 38263695475, at 20,000 ledgers and 2,000 employees: 38 ms worst (3.0)); 2026-10-30 (2.5.0, the request with the books' first year, real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode g250, run 41016133667, the Gateway's period and date in a later year: one ledger by its name 7.0 ms worst (7.1); the undated 20,000-ledger worst above kept as the worst case)"},
 	grpListID: {purpose: "the group list, stored master fields only"},
 	// 2.4.3 (the owner's approval of 11-Oct-2026, (b)): the natures of payment (tdsnatures.go)
 	natListID: {purpose: "the TDS natures of payment (2.4.3): Tally's TDSRate masters, each one's section, rates and thresholds by the date they apply from, 5,000 MasterIDs a request at most, stored master fields only", maxSec: 0.006,
@@ -196,9 +197,9 @@ func allowListSamples() map[string]string {
 		"Day Book":           dayBookRequest(c, a, z),
 		"TDSDeskVchHeads":    vchHeadsRequest(c, a, z),
 		"TDSDeskKeepList":    keepListRequest(c, a, z, 0),
-		ledListID:            ledgerChunkRequest(c, 0, 2000),
-		ledChangesID:         ledgerChangesRequest(c, 0, 200),
-		ledByNameID:          ledgerByNameRequest(c, "SAMPLE LEDGER"),
+		ledListID:            ledgerChunkRequestAt(c, "20250401", 0, 2000), // 2.5.0: books from 1-Apr-2025 (booksfrom.go)
+		ledChangesID:         ledgerChangesRequestAt(c, "20250401", 0, 200),
+		ledByNameID:          ledgerByNameRequestAt(c, "20250401", "SAMPLE LEDGER"),
 		grpListID:            groupListRequest(c),
 		natListID:            natureChunkRequest(c, 0, 5000),
 		empListID:            employeeChunkRequest(c, 0, 2000),

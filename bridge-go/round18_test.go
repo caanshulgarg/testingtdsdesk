@@ -605,7 +605,7 @@ func TestInstallerRecorderAndAddonFolders(t *testing.T) {
 	if es, _ := addonFiles.ReadDir("addon"); len(es) == 0 {
 		t.Error("no .tdl built into the exe")
 	}
-	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go); 2.3.1: the entry request also fetches the ledger lines under an invoice's items
+	if BridgeVersion != "2.5.0" { // 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go); 2.3.1: the entry request also fetches the ledger lines under an invoice's items
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 }

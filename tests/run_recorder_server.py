@@ -977,7 +977,7 @@ try:
     nd = led("New Party D") or {}
     ok(c == 200 and r.get("ok") is True and r.get("updated") == 1 and nd.get("gstin") == "29AAACN9999B1Z5" and nd.get("alter_id") == 84 and nd.get("tds_deductee_type") == "",
        "2.3.1 deductee type: a database without migration 57's column: the ledger kept current without it, nothing fails (%s; %s)" % (r, nd))
-    FS.NO_COL.clear()
+    FS.NO_COL.pop("tally_ledgers", None)
     # bridge 2.4.3 (migration 73): the 12th to 14th columns, a ledger's nature of payment, special rate and lower-deduction
     # certificates: stored when sent (blank clears), an 11-column row leaves them as they are; a database without 73's
     # columns: the ledger kept current without them, nothing fails
@@ -1001,7 +1001,7 @@ try:
     nd = led("New Party D") or {}
     ok(c == 200 and r.get("ok") is True and nd.get("gstin") == "07AAACN9999B1Z5" and nd.get("alter_id") == 88 and nd.get("tds_nature") == "",
        "2.4.3: a database without migration 73's columns: the ledger kept current without them, nothing fails (%s; %s)" % (r, nd))
-    FS.NO_COL.clear()
+    FS.NO_COL.pop("tally_ledgers", None)
     # bridge 2.3.1 (the owner's decision of 06-Oct-2026, migration 59): a ledger renamed in Tally and fetched for an unknown
     # name. The ledger fetched by name (FinComLedgerByName) has the Tally GUID of a ledger FinCom holds under another name: the
     # held entry is applied under FinCom's ledger (its lines mapped from the new name, never a second ledger), the new name

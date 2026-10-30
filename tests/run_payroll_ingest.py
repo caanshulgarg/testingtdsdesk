@@ -89,7 +89,7 @@ try:
     FS.NO_COL["tally_ledgers"] = {"pay_type", "pay_stat_type", "it_component", "for_payroll"}
     c, r = lch([["lg-new", 504, 9, "FC HRA", "Indirect Expenses", "0", "", "", 0, "", "", "", "", [], "Earnings for Employees", "", "House Rent Allowance", "Yes"]]); d = led("FC HRA")
     ok(c == 200 and r.get("ok") is True and d.get("alter_id") == 9 and "pay_type" not in d, "a database without 74's columns: the ledger kept current without them (%s %s)" % (r, d))
-    FS.NO_COL.clear()
+    FS.NO_COL.pop("tally_ledgers", None)
 
     print("== 3. the Day Book path: Tally's full export of the salary payment and the payroll")
     days = []

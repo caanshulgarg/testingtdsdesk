@@ -70,9 +70,10 @@ func led231Rows(b M) map[string][]any {
 
 // --- 1. the two requests as built: exact XML, read only, the full list's fields, one AlterID span or one name
 func TestLed231Requests(t *testing.T) {
+	noteBooksFrom("SAMPLE CO", "20250401") // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
 	ch := ledgerChangesRequest("SAMPLE CO", 5, 205)
 	want := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComLedgerChanges</ID></HEADER>` +
-		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>` +
+		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY>` + r250Period + `</STATICVARIABLES><TDL><TDLMESSAGE>` +
 		`<COLLECTION NAME="FinComLedgerChanges" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE` + ledFetch243Added + ledFetch244Added + `</FETCH>` +
 		`<FILTERS>FinComLedgerChangesOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComLedgerChangesOnly">$AlterID &gt; 5 AND $AlterID &lt;= 205</SYSTEM>` +
 		`</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
@@ -81,7 +82,7 @@ func TestLed231Requests(t *testing.T) {
 	}
 	bn := ledgerByNameRequest("SAMPLE CO", "New Party & Co")
 	wantN := `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComLedgerByName</ID></HEADER>` +
-		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY></STATICVARIABLES><TDL><TDLMESSAGE>` +
+		`<BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>SAMPLE CO</SVCURRENTCOMPANY>` + r250Period + `</STATICVARIABLES><TDL><TDLMESSAGE>` +
 		`<COLLECTION NAME="FinComLedgerByName" ISMODIFY="No"><TYPE>Ledger</TYPE><FETCH>GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE` + ledFetch243Added + ledFetch244Added + `</FETCH>` +
 		`<FILTERS>FinComLedgerByNameOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComLedgerByNameOnly">$Name = &#34;New Party &amp; Co&#34;</SYSTEM>` +
 		`</TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
@@ -93,14 +94,14 @@ func TestLed231Requests(t *testing.T) {
 		if group(`<FETCH>([^<]*)</FETCH>`, x, 1) != ledFetch || group(`<FETCH>([^<]*)</FETCH>`, ledgerChunkRequest("SAMPLE CO", 0, 2000), 1) != ledFetch {
 			t.Fatalf("not the full list's fields: %s", x)
 		}
-		if !strings.Contains(x, "<TALLYREQUEST>Export</TALLYREQUEST>") || strings.Count(x, "<COLLECTION ") != 1 || !strings.Contains(x, `ISMODIFY="No"`) || isImportRequest(x) || requestDated(x) {
+		if !strings.Contains(x, "<TALLYREQUEST>Export</TALLYREQUEST>") || strings.Count(x, "<COLLECTION ") != 1 || !strings.Contains(x, `ISMODIFY="No"`) || isImportRequest(x) || !booksYearLedgerRead(x) { // 2.5.0: the books' first year, nothing else dated
 			t.Fatalf("not a read of one collection: %s", x)
 		}
 		if err := checkAllowed(x); err != nil {
 			t.Fatalf("refused: %v", err)
 		}
-		if requestClass[tallyRequestID(x)] != "undated" {
-			t.Fatalf("%s is not an undated request", tallyRequestID(x))
+		if requestClass[tallyRequestID(x)] != "ledgerPeriod" { // 2.5.0 (booksfrom.go)
+			t.Fatalf("%s is not a request with the books' first year", tallyRequestID(x))
 		}
 	}
 	// a name that cannot go in a TDL string is never asked; a request changed by one character is refused (the pin)
@@ -297,7 +298,7 @@ func TestLed231TwoSecondStop(t *testing.T) {
 	wantMu.Unlock()
 	t0 := time.Now()
 	n, err := ledChangesCheck(zz)
-	if el := time.Since(t0); err == nil || n != 0 || el > 3500*time.Millisecond || logLines("FinComLedgerChanges took 2.0s and failed") != 1 {
+	if el := time.Since(t0); err == nil || n != 0 || el > 3500*time.Millisecond || logLines("FinComLedgerChanges 20260401-20270331 took 2.0s and failed") != 1 { // 2.5.0: the log names the period it carries
 		t.Fatalf("not stopped at 2 s: %d %v after %s %v", n, err, el, f.ids())
 	}
 	if m, _ := ledChangesAfter(zz, b220CoGUID); m != 5 || len(c.ledChanges) != 0 {
@@ -531,6 +532,7 @@ func TestLed231DecisionLine(t *testing.T) {
 // number (one full span) and one asked by its name; each answered well inside the 2-second rule
 func TestLed231StandTimes(t *testing.T) {
 	_, f, _ := led231Bridge(t)
+	_, _ = findCompanyPort(zz, 0) // 2.5.0: the company list read, BOOKSFROM held (booksfrom.go)
 	f.mu.Lock()
 	for i := 0; i < 1995; i++ {
 		f.addLedLocked(fmt.Sprintf("Party %04d", i), "Sundry Debtors", "0.00")

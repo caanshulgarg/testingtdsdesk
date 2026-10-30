@@ -18,6 +18,7 @@ func sendable(x string) bool {
 }
 
 func TestEveryIdPinned(t *testing.T) {
+	noteBooksFrom(zz, "20260401") // 2.5.0: the company list said when the books begin (booksfrom.go)
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	samples := allowListSamples()

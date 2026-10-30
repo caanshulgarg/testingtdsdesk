@@ -48,6 +48,9 @@ func noComputedFields(t *testing.T, f *standTally) int {
 		}
 		// the export format ($$SysName:XML) is the only Tally function any request names; the stored opening the only "balance"
 		plain := strings.NewReplacer("OPENINGBALANCE", "", "$$SysName:XML", "").Replace(b)
+		if booksYearLedgerRead(b) { // 2.5.0: the books' first year, the one period the ledger list carries (booksfrom.go)
+			plain = strings.Replace(plain, ledgerPeriodVars(pinLedgerFrom(b)), "", 1)
+		}
 		if c := computed.FindString(plain); c != "" {
 			t.Fatalf("request %d (%s) asks for something Tally computes (%q): %s", i, id, c, cut(b, 400))
 		}

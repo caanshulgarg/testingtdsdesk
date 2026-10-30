@@ -483,9 +483,11 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				inf := getCoInfo(tc, name, toInt(pp["port"]))
 				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
 				if pp["mine"] != false {
+					noteBooksFrom(name, nt(c, "BOOKSFROM")) // 2.5.0: the ledger reads' period, from this user's own Tally only (booksfrom.go)
 					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
 				}
-				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"])})
+				list = append(list, M{"name": name, "from": nt(c, "STARTINGFROM"), "to": nt(c, "ENDINGAT"), "guid": nt(c, "GUID"), "gstin": str(inf["gstin"]), "pan": str(inf["pan"]),
+					"booksFrom": normDate(nt(c, "BOOKSFROM"))})
 			}
 			e["ok"] = true
 			e["companies"] = list
@@ -821,7 +823,8 @@ func containsInt(a []int, x int) bool {
 
 // the list of companies loaded in Tally (name, books' period, GUID)
 func companiesRequest() string {
-	return collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID", "", "")
+	// 2.5.0 (the owner's decision of 30-Oct-2026): BOOKSFROM too, the books' beginning the ledger reads take as their period
+	return collectionRequest("TDSDeskCompanies", "Company", "NAME,STARTINGFROM,ENDINGAT,GUID,BOOKSFROM", "", "")
 }
 
 // one company's GSTIN and PAN (the company's own master fields)

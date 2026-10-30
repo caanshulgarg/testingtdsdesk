@@ -95,7 +95,7 @@ func newStandIn(t *testing.T, ledgers int) *standIn {
 		out := "<ENVELOPE></ENVELOPE>"
 		switch id {
 		case "TDSDeskCompanies":
-			out = `<ENVELOPE><COLLECTION><COMPANY NAME="` + zz + `"><NAME>` + zz + `</NAME><STARTINGFROM>20260401</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><GUID>g-1</GUID></COMPANY></COLLECTION></ENVELOPE>`
+			out = `<ENVELOPE><COLLECTION><COMPANY NAME="` + zz + `"><NAME>` + zz + `</NAME><STARTINGFROM>20260401</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><BOOKSFROM>20260401</BOOKSFROM><GUID>g-1</GUID></COMPANY></COLLECTION></ENVELOPE>`
 		case "TDSDeskKeepCo":
 			out = `<ENVELOPE><COMPANY><NAME>` + zz + `</NAME><ALTVCHID>5</ALTVCHID><ALTMSTID>3</ALTMSTID></COMPANY></ENVELOPE>`
 		case "TDSDeskNames":
@@ -124,6 +124,9 @@ func newStandIn(t *testing.T, ledgers int) *standIn {
 func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	waitIdle(t)
 	dir := t.TempDir()
+	booksFromMu.Lock()
+	booksFromHeld, booksFromSaid, booksFromAsk = map[string]string{}, map[string]bool{}, map[string]time.Time{} // 2.5.0: each company's books-from, per test
+	booksFromMu.Unlock()
 	oldC, oldH := ConfigPath, Home
 	t.Cleanup(func() { waitIdle(t); ConfigPath, Home = oldC, oldH; nowFn = time.Now; loadConfigRO() })
 	ConfigPath, Home = filepath.Join(dir, "tds-bridge.config.json"), dir

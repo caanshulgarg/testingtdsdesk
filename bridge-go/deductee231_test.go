@@ -16,6 +16,7 @@ import (
 
 // the three ledger requests ask the one stored field more, the same FETCH, and pass the allow-list
 func TestDeductee231Requests(t *testing.T) {
+	noteBooksFrom("SAMPLE CO", "20250401")                                                                               // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
 	if !strings.HasSuffix(ledFetch242, ", LEDSTATENAME, TDSDEDUCTEETYPE") || !strings.HasPrefix(ledFetch, ledFetch242) { // 2.4.3: the TDS settings after it (tdsmasters243_test.go)
 		t.Fatalf("the ledger fields: %s", ledFetch)
 	}

@@ -346,10 +346,12 @@ var requestClass = map[string]string{
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
-	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
+	ledListID: "ledgerPeriod", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
-	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
+	// 2.3.1 (masters); 2.5.0 (the owner's decision of 30-Oct-2026): the three ledger requests carry exactly the books' first
+	// year of their company and nothing else dated (booksfrom.go); never undated
+	ledChangesID: "ledgerPeriod", ledByNameID: "ledgerPeriod",
 	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
 	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
 	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
@@ -388,6 +390,14 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errBatchRefused
+	case ledListID, ledChangesID, ledByNameID:
+		// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the narrow ReadDays exemption for exactly these three:
+		// as built, with exactly SVFROMDATE = the company's books-from and SVTODATE = a year on less a day (TYPE="Date"),
+		// whatever ReadDays says; any other period, or none, is refused whoever asks
+		if ledgerPeriodExact(x) {
+			return nil
+		}
+		return errLedgerPeriodRefused // review of 2.5.0: whoever asks and whatever ReadDays says (never readsOffErr: nil with ReadDays on)
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil
@@ -995,6 +1005,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		why := "it carries a period and reading old entries is off (ReadDays)"
 		if tallyRequestID(x) == vchByNumberID {
 			why = or(voucherByNumberWhy(x), "it is not exactly as the bridge builds it")
+		}
+		if errors.Is(err, errLedgerPeriodRefused) {
+			why = "it does not carry this company's books' first year as its period (2.5.0), whatever ReadDays says"
 		}
 		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: %s", port, tallyRequestID(x), why))
 		return "", err

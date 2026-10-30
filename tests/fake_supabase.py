@@ -32,7 +32,9 @@ FAIL_DAY = {}             # day -> n: the next n calls queuing a day file of tha
 NO_FN = set()             # functions this database does not have yet (an older cloud): PostgREST's 404 PGRST202
 FAIL_SELECT = {}          # table -> {message, code}: a GET answers this PostgREST error (bridge 2.3.1 Lows: errors are logged)
 MAX_URL = [0]             # > 0: a request whose path and query are longer answers 414 (a gateway's URL limit; the refetch chunks)
-NO_COL = {}               # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
+# migration 130 (bridge 2.5.0): by default a database before it (tally_openings_held not there); run_openings_ingest.py
+# removes this to stand for one with it
+NO_COL = {"tally_openings_held": {"id"}}   # table -> {column}: a database without these columns (a migration not run): a GET selecting one answers
                           # 42703, a POST carrying one PGRST204, as PostgREST does (bridge 2.3.1: 57's tally_ledgers.tds_deductee_type)
 HONOR_LIMIT = [False]     # True: order=col.asc|desc and limit=n are applied to a GET (off by default: as before)
 LEASE7_MISSING = [False]  # migration 55 not run: the 7-argument tally_lease_take (p_purpose) is not there (PGRST202 for that call only)

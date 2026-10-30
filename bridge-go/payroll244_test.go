@@ -136,6 +136,8 @@ func TestPay244EmployeeRowsReal(t *testing.T) {
 
 // --- 2. the pay-head fields on the ledger reads
 func TestPay244LedgerPayFields(t *testing.T) {
+	noteBooksFrom("SAMPLE CO", "20250401") // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
+	noteBooksFrom("FinCom Spike Co", "20260401")
 	if ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added {
 		t.Fatalf("ledFetch: %s", ledFetch)
 	}

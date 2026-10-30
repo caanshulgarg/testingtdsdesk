@@ -641,13 +641,15 @@ type keepRun struct {
 	kind     string   // light (a client opened in FinCom, or after a posting), now (Update now), nightly, ledgers (the ledger list only)
 	only     []string // these companies only (none: every company open in Tally)
 	caughtUp bool
-	light    bool
-	force    bool
-	once     bool
-	allDone  bool
-	told     map[string]bool
-	id       string           // this run (a round of slices resumes within it)
-	alter    map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
+	// 2.5.0 (booksfrom.go): a company whose ledger read was held for want of its books-from: not marked read
+	booksHeld map[string]bool
+	light     bool
+	force     bool
+	once      bool
+	allDone   bool
+	told      map[string]bool
+	id        string           // this run (a round of slices resumes within it)
+	alter     map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
 }
 type keepBack struct {
 	n     int
@@ -1336,7 +1338,9 @@ func keepWorker(r runReq) {
 			switch {
 			case err == nil:
 				clearBgBackoff(o.port)
-				markRead(o.name)
+				if !k.booksHeld[o.name] {
+					markRead(o.name) // 2.5.0: a ledger read held for want of books-from is not a read
+				}
 				if k.caughtUp {
 					upToDate[o.name] = true
 				}

@@ -33,7 +33,9 @@ func r19Dated(f *standTally, n0 int) []string {
 	defer f.mu.Unlock()
 	var out []string
 	for i := n0; i < len(f.bodies); i++ {
-		if strings.Contains(f.bodies[i], "<SVFROMDATE") || strings.Contains(f.bodies[i], "<SVTODATE") {
+		// 2.5.0 (the owner's decision of 30-Oct-2026): the three ledger requests with the books' first year are the one
+		// exemption (booksfrom.go); any other period counts
+		if (strings.Contains(f.bodies[i], "<SVFROMDATE") || strings.Contains(f.bodies[i], "<SVTODATE")) && !booksYearLedgerRead(f.bodies[i]) {
 			out = append(out, f.reqs[i])
 		}
 	}

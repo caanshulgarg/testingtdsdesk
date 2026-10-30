@@ -13,7 +13,7 @@ import (
 // item with the owner's words where they are recorded; and the cloud's 63 and 67 carrying ONE combined
 // tally_recorder_line (whichever runs last leaves the same function)
 func TestRelease240VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): this release's decisions kept as history
+	if BridgeVersion != "2.5.0" { // 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): this release's decisions kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
