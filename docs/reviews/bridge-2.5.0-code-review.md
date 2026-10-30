@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort for
 rounds 1 to 3, medium for round 4). They had only the repository and the range; they did not write the change.
 
-Range: fc79ae4c9..035230859
+Range: fc79ae4c9..cf37ef684
 
 Scope: bridge-go/booksfrom.go (new), ledgers.go, ledchanges.go, tally.go (requestClass, datedRefused), pinned.go,
 ports.go (TDSDeskCompanies' BOOKSFROM), recorder_live.go, keep.go, allowlist.go and the tests (r250dated_test.go and the
@@ -84,4 +84,8 @@ and decision line, the beat fixture's table hash, and TestR250VersionAllowList: 
 - Round 2.6 (two own Tallys, same company name, different books-from): known limit, in the notes.
 - Round 3.1: separate task (pre-existing).
 
-Range reviewed in all (rounds 1 to 4 and the data commit after them): fc79ae4c9..035230859
+After 035230859 only the build (assets-test: the setup, its .sha256 and the program, made by build.sh from those
+sources), docs and the release check's self-test (bridge-go/release_check_test.sh, green 5 reads 2.5.0's decision
+line) changed.
+
+Range reviewed in all (rounds 1 to 4, the data commit, the build and the self-test after them): fc79ae4c9..cf37ef684
