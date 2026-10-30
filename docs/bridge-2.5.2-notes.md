@@ -13,7 +13,7 @@ name.)
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.5.2.exe |
-| Fingerprint | filled in at the build (compare with the .sha256 file next to the setup) |
+| Fingerprint | `c5ca62fb3a8ee2bc2da70990ca8be368db33f5dc1a03cbd512502bc759e3ff7b` (FinComBridge-Setup-2.5.2.exe, built 30-Oct-2026 at the commit after bab50f836, bridge sources f70e512a3 with 2.5.1 merged, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.2.exe SHA-256 985d2a983309b32bf3975490a87bb0d8f9bbec9037fe78d2eb06898febeb4071 |
 | Replaces | 2.5.1 (the openings fix, published; kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 
