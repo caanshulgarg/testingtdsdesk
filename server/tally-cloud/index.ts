@@ -165,8 +165,9 @@
 //                                                       and the bridge does not ask again that night; at most 30 calls a minute
 //                                                       from one computer (429)
 //   FinCom Bridge 2.5.1: the beat's answer carries booksFrom {company: yyyymmdd}, FinCom's first day of the book of each
-//   company open in Tally ("" when FinCom has none yet; left out when no open company is linked): the period of the three
-//   ledger requests (Tally's own BOOKSFROM only when FinCom has none), so openingsAt is the book's from_date (booksFromFor)
+//   company open in Tally ("" when FinCom has none yet, or the computer's company has another GUID than the book's; left
+//   out when no open company is linked): the period of the three ledger requests (Tally's own BOOKSFROM only when FinCom
+//   has none), so openingsAt is the book's from_date (booksFromFor)
 //   FinCom Bridge 2.4.5 (ROUND 102, migration 98): older entries only for a period the person chose in FinCom (tally_period_pulls).
 //   The beat's answer carries periodDays [{company, company_guid, day: yyyymmdd, fetch, types}] (at most 3 days in all, 30
 //   outside the computer's office hours with periodNight true (ROUND 103: 20:00-08:00 IST and Sunday by default); the
@@ -1625,33 +1626,42 @@ let openMissing = 0;
 const CHECK_TYPES = ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra"];
 const chosenOf = (d: any) => typeof d?.chosenAt === "string" && !isNaN(Date.parse(d.chosenAt)) ? { chosenAt: d.chosenAt.slice(0, 60) } : {};
 // FinCom Bridge 2.5.1 (book 3d36a836, 30-Oct-2026): FinCom's first day of the book of each company the beat says open in
-// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet), {company: day}; at most 50 companies, each book's
-// day kept a minute. The bridge dates its three ledger requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName)
-// from it, and from Tally's own BOOKSFROM only when FinCom has none: a Tally whose books begin a year before FinCom's copy
-// never sends openings as at that earlier day. null when no open company is linked to a book
-const fromMemo = new Map<string, { d: string; t: number }>();
+// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet), {company: day}; at most 200 companies, the books
+// and their days read in one query each (review of 2.5.1). The bridge dates its three ledger requests (FinComLedgers,
+// FinComLedgerChanges, FinComLedgerByName) from it when it is a year of Tally's own books, and from Tally's own BOOKSFROM
+// only when FinCom has none: a Tally whose books begin a year before FinCom's copy never sends openings as at that
+// earlier day. Review of 2.5.1 (as review 245 R3): a computer whose company of that name has another GUID than the book's
+// recorded one (a restored or test copy) is answered "" (never the book's day). null when no open company is linked
 async function booksFromFor(firm: string, body: any): Promise<Record<string, string> | null> {
-  const out: Record<string, string> = {};
-  const names = new Set<string>();
+  const open = new Map<string, string>();
   for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
     const name = typeof c?.name === "string" ? c.name.trim().slice(0, 200) : "";
-    if (name && c?.open === true) names.add(name);
+    if (name && c?.open === true && !open.has(name)) open.set(name, typeof c?.guid === "string" ? c.guid.trim().slice(0, 100) : "");
   }
-  for (const name of [...names].slice(0, 50)) {
+  const bookOf = new Map<string, string>();
+  for (const name of open.keys()) {
     let book: string | null = null;
-    try { book = await bookForBeat(firm, name); } catch { book = null; }
-    if (!book) continue;
-    const m = fromMemo.get(book);
-    if (m && Date.now() - m.t < 60000) { out[name] = m.d; continue; }
-    const { data, error } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
-    if (error) { console.log("tally-ingest beat: the book's first day not read:", book, String(error.message || "").slice(0, 160)); continue; }   // left out: the bridge keeps the day it has
-    const f = data?.from_date ? String(data.from_date).slice(0, 10) : "";
-    const d = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.replace(/-/g, "") : "";
-    if (fromMemo.size > 5000) fromMemo.clear();
-    fromMemo.set(book, { d, t: Date.now() });
-    out[name] = d;
+    try { book = await bookForBeat(firm, name); } catch { book = null; }     // memoised five minutes (bookForBeat)
+    if (book) bookOf.set(name, book);
   }
-  return Object.keys(out).length ? out : null;
+  if (!bookOf.size) return null;
+  const books = [...new Set(bookOf.values())];
+  const { data: bk, error } = await db.from("tally_books").select("book_id, from_date").in("book_id", books);
+  if (error) { console.log("tally-ingest beat: the books' first days not read:", String(error.message || "").slice(0, 160)); return null; }   // left out: the bridge keeps the day it has
+  const { data: cur, error: ce } = await db.from("tally_sync_cursor").select("book_id, company_guid").in("book_id", books);
+  if (ce) { console.log("tally-ingest beat: the books' company GUIDs not read:", String(ce.message || "").slice(0, 160)); return null; }
+  const dayOf = new Map<string, string>(), guidOf = new Map<string, string>();
+  for (const r of (bk || []) as any[]) {
+    const f = r?.from_date ? String(r.from_date).slice(0, 10) : "";
+    dayOf.set(String(r.book_id), /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.replace(/-/g, "") : "");
+  }
+  for (const r of (cur || []) as any[]) { const g = typeof r?.company_guid === "string" ? r.company_guid.trim() : ""; if (g) guidOf.set(String(r.book_id), g.toLowerCase()); }
+  const out: Record<string, string> = {};
+  for (const [name, book] of bookOf) {
+    const rec = guidOf.get(book) || "", beatGuid = (open.get(name) || "").toLowerCase();
+    out[name] = rec && beatGuid && rec !== beatGuid ? "" : (dayOf.get(book) ?? "");
+  }
+  return out;
 }
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];

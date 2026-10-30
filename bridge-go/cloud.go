@@ -781,7 +781,6 @@ func beatOnce() {
 	}
 	if r.code == 200 && r.json != nil {
 		applyTrialTools(r.json) // round 21: the owner's "Trial tools on this computer" (absent: off)
-		applyBooksFrom(r.json)  // 2.5.1: FinCom's first day of its book of each open company, the ledger requests' period (booksfrom.go)
 		if testMode() && !truthy(r.json["shadow"]) {
 			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
 				writeLog("Test mode: FinCom's cloud does not keep a test bridge apart yet, so nothing is sent to it (only the heartbeat)")
@@ -795,6 +794,7 @@ func beatOnce() {
 		}
 		shadowOK.Store(true)
 		applyReadControl(r.json)    // FinCom's stop or resume of reading on this computer
+		applyBooksFrom(r.json)      // 2.5.1: FinCom's first day of its book of each open company, the ledger requests' period (booksfrom.go)
 		applyRelease(r.json)        // the version this computer may take (update.go)
 		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
 		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again

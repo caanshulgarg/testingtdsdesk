@@ -18,7 +18,8 @@ opening balances through the guards. The migration's functions are stood in for 
      or settled, the notes say so; ledger_changes: no opening changed, a new ledger at nil); as at from_date: taken
      through 130's guards;
   H. the beat's answer names, for each company open in Tally, FinCom's first day of its book (booksFrom {company:
-     yyyymmdd}; "" when FinCom has none yet, the bridge then uses Tally's own BOOKSFROM).
+     yyyymmdd}; "" when FinCom has none yet, the bridge then uses Tally's own BOOKSFROM; "" for a company of that name
+     with another GUID than the book's recorded one).
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, re
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -197,6 +198,11 @@ try:
     ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401", "NODATE CO": ""}, "H. booksFrom: the book's from_date as yyyymmdd; \"\" when FinCom has none; closed and unlinked companies left out (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": [], "companies": []})
     ok(c == 200 and not r.get("booksFrom"), "H. no open company: no booksFrom (%s)" % r.get("booksFrom"))
+    FS.T.setdefault("tally_sync_cursor", []).append({"book_id": BA, "company_guid": "CG-A"})
+    c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-a"}]})
+    ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401"}, "H. the book's recorded GUID (any case): its day (%s)" % r.get("booksFrom"))
+    c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-restored-copy"}]})
+    ok(c == 200 and r.get("booksFrom") == {"LOAN CO": ""}, "H. a company of that name with another GUID (a restored or test copy): \"\", never the book's day (%s)" % r.get("booksFrom"))
     print("== F. a cloud without migration 130")
     FS.NO_COL["tally_openings_held"] = {"id"}
     time.sleep(0.1)

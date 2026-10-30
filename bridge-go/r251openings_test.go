@@ -16,6 +16,7 @@ package main
 //   5. the beat itself: booksFrom in the heartbeat's answer is taken (beatOnce), one log line naming both days.
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,9 +54,13 @@ func TestR251FinComFirstDayDatesTheLedgerRequests(t *testing.T) {
 		if err := datedRefused(fin, x); err != nil {
 			t.Fatalf("%s refused with ReadDays off: %v", id, err)
 		}
-		// the same request dated from Tally's own books-from is not this company's period any more: refused
-		if y := strings.Replace(x, r251Period, r251TallyPeriod, 1); datedRefused(fin, y) == nil {
-			t.Fatalf("%s dated from Tally's books-from let through with ReadDays off", id)
+		// review of 2.5.1: the same request dated from Tally's own books-from (a request built a moment before FinCom's
+		// day arrived) is still the company's own books' first year: not refused; any other year is
+		if y := strings.Replace(x, r251Period, r251TallyPeriod, 1); datedRefused(fin, y) != nil {
+			t.Fatalf("%s dated from Tally's books-from refused: %v", id, datedRefused(fin, y))
+		}
+		if y := strings.Replace(x, r251Period, `<SVFROMDATE TYPE="Date">20260401</SVFROMDATE><SVTODATE TYPE="Date">20270331</SVTODATE>`, 1); datedRefused(fin, y) == nil {
+			t.Fatalf("%s dated from a year that is neither FinCom's nor Tally's let through with ReadDays off", id)
 		}
 	}
 	// the ledger list read: every chunk dated 2025, openingsAt 20250401
@@ -84,7 +89,8 @@ func TestR251FinComFirstDayDatesTheLedgerRequests(t *testing.T) {
 	}
 	// a ledger asked by name (the beat's ledgersWanted) goes as ledger_changes with openingsAt 20250401
 	noteCompanyGUID(zz, b220CoGUID)
-	ledWantedRun(M{"ledgersWanted": []any{M{"company": zz, "company_guid": b220CoGUID, "name": "Customer A"}}})
+	f.addLed("R251 Wanted Party", "Sundry Debtors", "0.00") // a name no other test asked for (asked once in 10 minutes per name)
+	ledWantedRun(M{"ledgersWanted": []any{M{"company": zz, "company_guid": b220CoGUID, "name": "R251 Wanted Party"}}})
 	if f.n(ledByNameID) != 1 || !strings.Contains(f.bodiesOf(ledByNameID)[0], r251Period) {
 		t.Fatalf("the ledger by name: %v", f.ids())
 	}
@@ -111,7 +117,7 @@ func TestR251NoFinComDayUsesTallyBooksFrom(t *testing.T) {
 		t.Fatalf("openingsAt: %v", c.ledList)
 	}
 	// a malformed day from the cloud is never used
-	for _, bad := range []any{"2025-04-01", "20251301", "2025040", 20250401, "20250401<", nil} {
+	for _, bad := range []any{"2025-04-01", "20251301", "20250230", "2025040", 20250401, "20250401<", nil, "19890401", nowFn().AddDate(1, 1, 0).Format("20060102")} {
 		applyBooksFrom(M{"booksFrom": M{zz: bad}})
 		if booksFromOf(zz) != "20240401" {
 			t.Fatalf("%v taken: %q", bad, booksFromOf(zz))
@@ -218,6 +224,45 @@ func TestR251BeatAnswerBooksFrom(t *testing.T) {
 	beatOnce()
 	if booksFromOf(zz) != "20240401" {
 		t.Fatalf("\"\" in the beat not taken: %q", booksFromOf(zz))
+	}
+}
+
+// --- 7. review of 2.5.1: FinCom's day is used only as the first day of a year of Tally's own books (on or after Tally's
+// books-from, the same day and month); otherwise the ledgers are held (one log line naming both days), never read as at
+// FinCom's day nor Tally's; Tally's books-from not known: held as 2.5.0
+func TestR251FinComDayMustBeAYearOfTallysBooks(t *testing.T) {
+	f, _ := r251Bridge(t)
+	for _, bad := range []string{"20230401", "20251001"} {
+		applyBooksFrom(M{"booksFrom": M{zz: bad}})
+		if booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
+			t.Fatalf("%s used: %q", bad, booksFromOf(zz))
+		}
+		k := newRun("ledgers", "r251-7"+bad)
+		if err := k.step(zz, f.port, ""); err != nil {
+			t.Fatal(err)
+		}
+		if !k.booksHeld[zz] || f.n(ledListID)+f.n(ledChangesID)+f.n(ledByNameID) != 0 {
+			t.Fatalf("%s: not held: %v", bad, f.ids())
+		}
+		if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); !errors.Is(err, errBooksFromUnknown) {
+			t.Fatalf("%s: a chunk not held: %v", bad, err)
+		}
+		if n := logLines("Ledgers of " + zz + " not read: FinCom's books of this company begin on " + dayWords(bad) + ", which is not the first day of a year of Tally's books (Tally's books begin on 1-Apr-2024)"); n != 1 {
+			t.Fatalf("%s: said %d times", bad, n)
+		}
+	}
+	// two years on: a year of Tally's books
+	applyBooksFrom(M{"booksFrom": M{zz: "20260401"}})
+	if booksFromOf(zz) != "20260401" {
+		t.Fatalf("two years on: %q", booksFromOf(zz))
+	}
+	// Tally's books-from not known (its company list answers without it): held with 2.5.0's words, FinCom's day or not
+	f.mu.Lock()
+	f.booksFrom = "-"
+	f.mu.Unlock()
+	openCompaniesWith(fin, true)
+	if tallyBooksFromOf(zz) != "" || booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
+		t.Fatalf("read with Tally's books-from not known: %q", booksFromOf(zz))
 	}
 }
 
