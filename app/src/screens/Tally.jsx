@@ -97,8 +97,8 @@ function paneFresh() { if (TCloud.on() && !TCloud.pane.err) TCloud.paneTick(); }
 // one line a computer (02-Oct-2026): the computer, the Windows user, the version, and the state with what to do
 const vnum = (v) => String(v || "0").split(".").map((x) => Number(x) || 0).reduce((a, x) => a * 1000 + x, 0);
 function lineState(r, latest, owner) {
-  if (!r.go || r.old) return { text: "Needs FinCom Bridge", cls: "bad", act: "Install FinCom Bridge below on " + r.computer + ": it replaces this one by itself." };
-  if (!r.online) return { text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : ""), cls: "bad", act: "On " + r.computer + ", sign in to Windows as " + (r.user || "the Tally user") + ": FinCom Bridge starts by itself. Its icon near the clock: right-click → Test connection." };
+  if (!r.go || r.old) return { text: "Needs FinCom Bridge", cls: "bad", act: "Install FinCom Bridge below on the Tally computer: it replaces this one by itself." };
+  if (!r.online) return { text: "Offline" + (r.at ? " since " + fmtDateTime(r.at) : ""), cls: "bad", act: "On the Tally computer, sign in to Windows: FinCom Bridge starts by itself. Its icon near the clock: right-click → Test connection." };
   if (!r.main) return { text: "Online · reads only", cls: "warn", act: owner ? "Another bridge posts on this computer." : "Another bridge posts on this computer; an owner of the firm can make this the main bridge.", makeMain: owner };
   // the owner's rule of 05-Oct-2026 (migration 54): a new version goes to every computer by itself, unless an owner held it
   // (or withdrew it) or rolled the bridges back
@@ -106,10 +106,10 @@ function lineState(r, latest, owner) {
     const p = TCloud.pane, rel = (p.releases || []).find((x) => x.version === latest), stopped = !!(p.rollback || (rel && (rel.held_at || rel.withdrawn_at)));
     return { text: "Online · update ready", cls: "warn", act: p.releases && !p.noControl
       ? (stopped ? "Version " + latest + " is held back on the owner's word (under More)." : "It updates itself to version " + latest + " (each bridge checks every few hours).")
-      : "Download FinCom Bridge " + latest + " under More and run it on " + r.computer + "." };
+      : "Download FinCom Bridge " + latest + " under More and run it on the Tally computer." };
   }
   if (r.tally === "busy") return { text: "Online · Tally busy", cls: "warn", act: "It carries on when Tally is free." };
-  if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on " + r.computer + "." };
+  if (r.tally !== "open") return { text: "Online · Tally not open", cls: "warn", act: "Open TallyPrime and the company on the Tally computer." };
   return { text: "Online · Tally open", cls: "ok", act: r.open.length ? r.open.join(", ") : "" };
 }
 // plan item 14 (All clients → Tally): with each computer, its reading state (Reading / Paused / 2.3.1: "Tally did not
@@ -253,7 +253,7 @@ function RecorderSource({ r, owner }) {
   const words = (TCloud.RECORDER_SOURCES.find(([k]) => k === v) || [])[1];
   if (!owner) return <span className="note" data-recorder-source="">{"Changes come from: " + words}</span>;
   return <span className="note" data-recorder-source="">{"Changes come from: "}
-    <select data-recorder-source-pick="" aria-label={"Where the changes on " + r.computer + " come from"} value={v} disabled={!!(p.ctl && p.ctl.busy)}
+    <select data-recorder-source-pick="" aria-label={"Where the changes on the Tally computer come from"} value={v} disabled={!!(p.ctl && p.ctl.busy)}
       onChange={(ev) => TCloud.recorderSource(d, ev.target.value)}>
       {TCloud.RECORDER_SOURCES.map(([k, w]) => <option key={k} value={k}>{w}</option>)}</select></span>;
 }
@@ -381,8 +381,9 @@ const ROW = { alignItems: "center", gap: 8, flexWrap: "wrap", margin: "4px 0" };
 // ---------------------------------------------------------------------------------------------------------------------
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
 // "NWS144 · anshul" (the card's name) and "NWS144 (anshul)" (in a sentence)
-const pcName = (r) => r.computer + (r.user ? " · " + r.user : "");
-const pcWords = (r) => r.computer + (r.user ? " (" + r.user + ")" : "");
+// next-fix-tally-links2: never a computer's name or Windows login on the page
+const pcName = (r) => "FinCom Bridge" + (r && r.version ? " " + r.version : "");
+const pcWords = (r) => "the Tally computer";
 // "2 min ago (14:03 IST)"; older than a day: the date and time
 const whenWords = (at) => { const a = agoWords(at); if (!a) return ""; return /^on /.test(a) ? a.slice(3) : a + " (" + tallyHm(at) + ")"; };
 // one card a computer and Windows user: the main bridge of that user, else the newest (as before)
@@ -512,7 +513,7 @@ function readingRows(cards) {
     cos.forEach((c) => {
       const stopWhy = rd.state === "fincomstop" ? (rd.reason || "no reason given") : rs.by === "self" ? (rs.reason || "Tally did not answer in time") : "";
       const waiting = Number(c.waiting) || 0;
-      const [lv, state, kind] = !r.online ? ["bad", "Waiting: " + r.computer + " is offline", "waiting"]
+      const [lv, state, kind] = !r.online ? ["bad", "Waiting: the Tally computer is offline", "waiting"]
         : stopWhy ? ["bad", "Stopped: " + stopWhy, "stopped"]
         : r.paused || rd.state === "paused" ? ["warn", "Paused", "paused"]
         : !c.open ? ["warn", "Waiting: Tally company not open", "waiting"]
@@ -564,7 +565,6 @@ function ReadingView({ cards }) {
     {shown.length > 0 && <ListTable name="tallyReading" className="data" rows={shown} rowKey={(x) => x.key} unit={["company", "companies"]} rowProps={(x) => ({ "data-reading-row": x.c.name, "data-reading-kind": x.kind })}
       cols={[
         { k: "co", role: "party", label: "Company", v: (x) => x.c.name, cell: (x) => x.c.name },
-        { k: "pc", role: "party", label: "Computer", v: (x) => pcWords(x.r), cell: (x) => pcWords(x.r) },
         { k: "st", role: "status", label: "State", v: (x) => x.state, cell: (x) => <span className={"tag " + x.lv} data-reading-state="">{x.state}</span> },
         { k: "last", label: "Last entry received", v: (x) => x.last, cell: (x) => x.last ? shortWhen(x.last) : <span className="note">{"—"}</span> },
         today && { k: "today", label: "Received today", v: (x) => x.today || 0, cell: (x) => String(x.today || 0) },
@@ -604,7 +604,7 @@ const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
 function portState(rows, me) {
   const mine = me ? lc(me.user) : "";
   const L = typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.st && Bridge.st.state === "ok" && (!me || !Bridge.st.user || lc(Bridge.st.user) === mine) ? Bridge.st : null;
-  const pc = me ? me.computer : (L && L.computer) || "this computer", user = me ? me.user || "" : (L && L.user) || "";
+  const pc = me ? "the Tally computer" : "this computer", user = me ? me.user || "" : (L && L.user) || "";
   if (!me && !L) return { state: "wait", pc, user };
   if (me && !me.online && !L) return { state: "offline", pc, user };
   const seen = new Set(), other = new Map(), add = (p, who) => { p = Number(p) || 0; if (p <= 0) return; seen.add(p); if (who != null && !other.has(p)) other.set(p, who); };
@@ -1087,9 +1087,7 @@ export function BridgesHeard() {
       empty="No bridge has been heard from yet. Install FinCom Bridge on the computer with TallyPrime: Connect, above, shows how."
       cols={[
         { k: "at", role: "date", label: "Last seen", v: (r) => r.at || "", cell: (r) => <>{r.at ? fmtDateTime(r.at) : "—"}<div className="nr">{r.online ? <span className="ok">online</span> : <span className="bad">offline</span>}</div></> },
-        { k: "pc", role: "party", label: "Computer", v: (r) => r.computer || "", cell: (r) => <>{r.computer}<div className="nr">{r.device.name}</div></> },
         { k: "mode", role: "status", label: "Mode", v: (r) => (r.main ? "Main" : "Test"), cell: (r) => (r.main ? <span className="tag ok">Main: reads and posts</span> : <span className="tag warn">Test: reads only</span>) },
-        { k: "user", label: "Windows user", v: (r) => r.user || "", cell: (r) => r.user || "—" },
         { k: "ver", label: "Bridge", v: (r) => r.version || "", cell: (r) => <>{r.go && !r.old ? "FinCom Bridge " + (r.version || "?") : "Older bridge"}{r.runMode && <div className="nr">{RUN[r.runMode] || r.runMode}</div>}</> },
         { k: "tally", label: "Tally", v: (r) => TSTATE[r.tally] || r.tally || "", cell: (r) => TSTATE[r.tally] || r.tally },
         { k: "open", label: "Companies open", cell: (r) => (r.open.length ? r.open.join(", ") : <span className="note">none</span>) },
