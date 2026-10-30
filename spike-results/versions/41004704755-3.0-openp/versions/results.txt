@@ -1,0 +1,31 @@
+INFO TallyPrime 3.0, mode openp, runner GitHub Actions 1000013820, 2026-10-30T04:57:36
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-30, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-30, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO openp: the request from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\ledreq (Written by a go test at ea9473d6b655a40dd6dca022449fb7c050d82ee3 (the gate's ref): ledgerChunkRequest, groupListRequest, ledgerChangesRequest, ledgerByNameRequest, natureChunkRequest, employeeChunkRequest); SHA-256 79CD99EA5D90
+PASS openp o1 the company's year: books from 20260401; year 2 20270401-20280331; entries on 20260402, 20270102 (year 1) and 20270402 (year 2)
+PASS openp o2 made by XML: ledgers created 5 of 5 (<RESPONSE> <CREATED>5</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>0</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> ), entries created 4 of 4 (<RESPONSE> <CREATED>4</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>5</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> </RESPONSE> )
+PASS openp o3 the request as built, the session in its own period (7.3 ms): OP Party Billwise 1000 (at books-from); OP Party Plain 1000 (at books-from); OP Cash Two -500 (at books-from); OP Loan Given 0 (at books-from); OP Expense 0 (same either way)
+INFO openp o4 the same request with year 2's SVFROMDATE/SVTODATE added (harness only) (6.7 ms): OP Party Billwise 1300 (at year 2); OP Party Plain 1200 (at year 2); OP Cash Two 200 (at year 2); OP Loan Given -700 (at year 2); OP Expense 0 (same either way)
+INFO openp o5b the company list after the period change (STARTINGFROM, ENDINGAT, BOOKSFROM): ENDINGAT=20270402, STARTINGFROM=20260401, BOOKSFROM=20260401
+INFO openp o5 the session's period set to 1-4-2027..31-3-2028 by keys (Alt+F2; screenshots openp-*), then the request as built (8.2 ms): OP Party Billwise 1000 (at books-from); OP Party Plain 1000 (at books-from); OP Cash Two -500 (at books-from); OP Loan Given 0 (at books-from); OP Expense 0 (same either way)
+INFO openp o7 Tally's current date set to 2-4-2027 by keys (F2; screenshots openp-f2-date, openp-date-set), then the request as built (8.4 ms): OP Party Billwise 1300 (at year 2); OP Party Plain 1200 (at year 2); OP Cash Two 200 (at year 2); OP Loan Given -700 (at year 2); OP Expense 0 (same either way); the company list then: ENDINGAT=20270402, STARTINGFROM=20260401, BOOKSFROM=20260401
+INFO openp o6 OPENINGBALANCE follows the session's period: YES (o3 at books-from 4, at year 2 0; o4 at year 2 4 of 5; o5 at year 2 0 of 5; o7 at year 2 4 of 5)
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43440848 bytes, Last-Modified Sun, 11 Jun 2023 01:53:23 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 43465936 bytes, Last-Modified Mon, 15 May 2023 04:03:04 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.3.0 from https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe : 43440848 bytes in 1 s, SHA-256 AF4172465A987F1F9FBDA87137EB40DEDAE8478A69FD08D87374C9A38BC81310, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.3.0 product 1.1.3.0
