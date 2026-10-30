@@ -358,13 +358,14 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	stock.mu.Lock()
 	stock.wait = func() time.Duration { return 5 * time.Second }
 	stock.mu.Unlock()
-	first := true
+	first, tries := true, 0
 	stock.mu.Lock()
 	stock.beforeSend = func() {
+		tries++
 		if first {
 			first = false
 			importsInFlight.Add(1)
-			go func() { time.Sleep(60 * time.Millisecond); importsInFlight.Add(-1) }() // over before the click looks again
+			go func() { time.Sleep(300 * time.Millisecond); importsInFlight.Add(-1) }()
 		}
 	}
 	stock.mu.Unlock()
@@ -372,8 +373,8 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	stock.mu.Lock()
 	stock.beforeSend = nil
 	stock.mu.Unlock()
-	if str(a["status"]) != "ok" || stockClicks(f) != 3 {
-		t.Fatalf("a posting during the click's turn: %v (%d asked)", a, stockClicks(f))
+	if str(a["status"]) != "ok" || stockClicks(f) != 3 || tries != 2 {
+		t.Fatalf("a posting during the click's turn: %v (%d asked, %d tries)", a, stockClicks(f), tries)
 	}
 	// a company not open in this bridge's own Tally: not asked
 	a = stockTake(stockClick{Company: "OTHER CO", From: "20260401", To: "20260630", At: clickAt(5 * time.Second)})
@@ -547,5 +548,21 @@ func TestStock251PostingAfterSendNeverTwice(t *testing.T) {
 	time.Sleep(1200 * time.Millisecond)
 	if n := stockClicks(f); n != 1 {
 		t.Fatalf("the click's request went to Tally %d times (answer %v)", n, a)
+	}
+}
+
+// --- 5c. another FinCom Bridge wants to post to the company (this bridge's read lease given up): the click is answered
+// busy and never sent ahead of that posting
+func TestStock251LeaseYieldNoRetry(t *testing.T) {
+	f, c, _ := stockBridge(t)
+	c.mu.Lock()
+	c.held = true // the cloud: another bridge holds / wants the company for a posting
+	c.mu.Unlock()
+	leaseMu.Lock()
+	leases[zz], leasePurp[zz], leaseAsked[zz] = time.Now().Add(time.Minute), "read", time.Time{}
+	leaseMu.Unlock()
+	a := stockTake(stockClick{Company: zz, From: "20260401", To: "20261031", At: clickAt(0)})
+	if str(a["status"]) != "busy" || stockClicks(f) != 0 {
+		t.Fatalf("after giving way to another bridge's posting: %v (%d asked)", a, stockClicks(f))
 	}
 }

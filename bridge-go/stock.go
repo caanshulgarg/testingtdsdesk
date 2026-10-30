@@ -244,7 +244,8 @@ func stockAnswer(c stockClick, k string) M {
 	var raw string
 	var err error
 	for try := 0; ; try++ {
-		for postingGoing() {
+		// postings first; on the second try FinCom's own request that preempted the click goes first too
+		for postingGoing() || (try > 0 && userWaiting(port)) {
 			if time.Now().After(until) {
 				return say("busy", "not asked: Tally is busy with a posting; try again in a moment")
 			}
@@ -263,6 +264,7 @@ func stockAnswer(c stockClick, k string) M {
 			hook()
 		}
 		held = windowHoldFn()
+		leaseBefore := leaseHeldForRead(c.Company)
 		sent := false
 		tc := &TC{copier: true, limitMs: 2000, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
 		raw, err = invokeTally(tc, port, x, 5)
@@ -270,7 +272,10 @@ func stockAnswer(c stockClick, k string) M {
 		// errBackoff): when the request never reached Tally (sentOut), the click waits for postings and goes once more, at
 		// most once, within its 20 s; never sent twice (gate run 41091446805: preempted by the posting, which had already
 		// ended when looked at)
-		if try == 0 && !sent && gaveWay(err) && time.Now().Before(until) {
+		// (a read lease given up to another FinCom Bridge that wants to post: that posting goes first, and this click is
+		// answered busy, never sent ahead of it)
+		yieldedLease := leaseBefore && !leaseHeldForRead(c.Company)
+		if try == 0 && !sent && gaveWay(err) && !yieldedLease && time.Now().Before(until) {
 			_ = held(time.Now()) // the window watch ended
 			stock.mu.Lock()
 			delete(stock.asks, x)
@@ -299,7 +304,9 @@ func stockAnswer(c stockClick, k string) M {
 		stock.mu.Unlock()
 		writeLog("Stock of " + c.Company + ": " + what + "; nothing more is asked of this company until the next click in FinCom")
 		return say("slow", stockSlowWords)
-	case err != nil && (gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped)):
+	case err != nil && gaveWay(err):
+		return say("busy", "not asked: Tally is busy with a posting or another FinCom request; try again in a moment")
+	case err != nil && (errors.Is(err, errRetryWait) || errors.Is(err, errReadStopped)):
 		return say("busy", "not asked: "+cutRunes(err.Error(), 160))
 	case err != nil:
 		return say("failed", "Tally did not answer ("+cutRunes(err.Error(), 160)+"); try again later")
@@ -369,4 +376,12 @@ func stockSend(ans M) {
 	if why != "" {
 		writeLog("Stock of " + str(ans["company"]) + ": the answer was not taken by FinCom (" + cutRunes(why, 120) + "); click again in FinCom")
 	}
+}
+
+// this bridge holds the company's lease for a read now (leaseYieldNow gives it up to another bridge that wants to post)
+func leaseHeldForRead(company string) bool {
+	leaseMu.Lock()
+	defer leaseMu.Unlock()
+	u, held := leases[company]
+	return held && time.Until(u) > 0 && leasePurp[company] == "read"
 }
