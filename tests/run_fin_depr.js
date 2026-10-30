@@ -115,6 +115,18 @@ try {
   ok(/assessment year 2025-26/.test(R.warn || ""), "a return for another year: said so");
   R = FD.readItrText(read("itr6-ay2025.txt"), "2025");
   ok(R.src === "pdf" && R.form === "ITR-6" && R.pan === "AABCW1234F" && R.blocks.pm15 === 400000 && R.blocks.c40 === 180000 && R.blocks.f10 === 240000 && !R.why, "the ITR's PDF text: Schedule DPM and DOA's last-day WDV read (4,00,000; 1,80,000; 2,40,000)");
+  // the portal's real shape (AY 2026-27): Schedule… › PlantMachinery / Building / … › RateNN › DepreciationDetail ›
+  // WDVFirstDay … WDVLastDay; DOA's Land with no rate (not a block); and the PDF's layout of the same schedules (Land's
+  // "nil" column first in DOA; ITR-6's last-day label on a line of its own, its figures on the next behind the row number)
+  const nz = o => JSON.stringify(Object.fromEntries(Object.entries(o).filter(([, v]) => v).sort()));
+  [["itr6", {pm15: 195500, c40: 31250, f10: 72000}, {pm15: 210000, c40: 50000, f10: 80000}], ["itr3", {pm15: 270000, c40: 3000, b10: 36000}, {pm15: 300000, c40: 5000, b10: 40000}]].forEach(([f, last, first]) => {
+    const J = JSON.parse(read(f + "-ay2026-shape.json")), T = read(f + "-ay2026-layout.txt");
+    const j6 = FD.readItrJson(J, "2026"), t6 = FD.readItrText(T, "2026"), j5 = FD.readItrJson(J, "2025"), t5 = FD.readItrText(T, "2025");
+    ok(nz(j6.blocks) === nz(last) && j6.found.every(x => /› DepreciationDetail$/.test(x.path)) && !j6.found.some(x => /Land/.test(x.path)), f + " JSON (real nesting): closing WDV " + nz(j6.blocks) + "; Land, with no rate, is no block");
+    ok(nz(t6.blocks) === nz(j6.blocks) && !t6.why, f + " PDF layout: the same closing WDV as the JSON " + nz(t6.blocks));
+    ok(nz(j5.blocks) === nz(first) && nz(t5.blocks) === nz(first), f + " for the year before (AY 2026-27's first day = the opening of 2025-26): JSON " + nz(j5.blocks) + ", PDF " + nz(t5.blocks));
+    ok(t6.form === j6.form && t6.ay === "2026", f + " PDF: " + t6.form + ", AY " + t6.ay);
+  });
   R = FD.readItrText("   \n  \n", "2025");
   ok(/no text to read/.test(R.why), "a PDF with no text (a scan): said plainly, not guessed");
   R = FD.readItrText("FORM ITR-6\nAssessment Year 2025-26\nPart A-BS balance sheet as on 31st March 2025 lots of other words here to read", "2025");

@@ -275,8 +275,11 @@ opening, its additions) unless its cost is given.
 pm30 30%, c40 40% (computers, software, other plant and machinery at 40%), i25 25%, s20 20%. Days used = 31 March - put to
 use + 1; under 180: half the rate. `dep = ROUND(MAX(0, open + addA - sale) x r + MAX(0, addB + MIN(0, open + addA - sale)) x r/2, 0)`;
 a negative block: STCG, no depreciation (s. 50(1)); a block that ceases (every asset sold, changeable): STCL, nil (s. 50(2)).
-Opening: last year's ITR (JSON: `ITR.ITRn.ScheduleDPM` / `ScheduleDOA`, each `RateNN` object's `WDVLastDay`, or
-`WDVFirstDay` when the return is this year's own; PDF: the row "written down value on the last day of the previous year"),
+Opening: last year's ITR (JSON, as the portal gives it (checked on real ITR-3 / ITR-6 for AY 2026-27):
+`ITR.ITRn.ScheduleDPM.PlantMachinery.RateNN.DepreciationDetail.WDVLastDay`, DOA's `Building` / `FurnitureFittings` /
+`IntangibleAssets` / `Ships` the same, DOA's `Land` (no rate) not a block; `WDVFirstDay` when the return is this year's own.
+PDF: the columns from each schedule's "Rate (%)" row (DOA's first column, `nil`, is land), the row "written down value on
+the last (or first) day of the previous year", the last as many figures as columns),
 else typed, else typed on the Computation tab, else last year's closing in FinCom. A part of the year: an estimate, the year's
 depreciation x days so far / days in the year.
 

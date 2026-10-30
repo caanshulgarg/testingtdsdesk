@@ -136,6 +136,12 @@ const FinDepr = (() => {
   }
 
   // ---------- last year's ITR ----------
+  // The real shape (the owner's ITR-3 and ITR-6 for AY 2026-27, 30-Oct-2026; tests/fixtures/fin-depr/*-ay2026-shape.json copy
+  // it with made-up figures): ITR.ITRn.ScheduleDPM.PlantMachinery.Rate15|Rate30|Rate40|Rate45.DepreciationDetail.{WDVFirstDay,
+  // AdditionsGrThan180Days, ..., TotalDepreciation, CapGainUs50, WDVLastDay}; ScheduleDOA.Building.Rate5|Rate10|Rate40,
+  // FurnitureFittings.Rate10, IntangibleAssets.Rate25, Ships.Rate20, each .DepreciationDetail; ScheduleDOA.Land.
+  // DepreciationDetail with no rate (land: no block, not read). A form lists only the rates it uses (an ITR-3 may have
+  // Rate15 and Rate40 only). Before that, as first written:
   // The return as downloaded from the e-filing portal (JSON): {"ITR": {"ITR6": {"Form_ITR6": {FormName, AssessmentYear},
   // "ScheduleDPM": {...}, "ScheduleDOA": {...}, "ScheduleDEP": {...}}}} (ITR-3, ITR-5, ITR-7 the same under ITR3 / ITR5 / ITR7).
   // Read: in Schedule DPM (plant and machinery) and Schedule DOA (other assets), each rate's object holding WDVLastDay (the
@@ -183,35 +189,49 @@ const FinDepr = (() => {
     out.field = useFirst ? "WDVFirstDay" : "WDVLastDay";
     return out;
   }
-  // the PDF's text (pdf.js text layer, a line per row): the row "written down value on the last day of the previous year"
-  // in Schedule DPM (columns 15%, 30%, 40%, 45%) and Schedule DOA (buildings 5%, 10%, 40%; furniture 10%; intangibles 25%;
-  // ships 20%). A scan has no text: said plainly, never guessed.
-  const AMT = /^\(?-?(\d{1,3}(,\d{2,3})+|\d+)(\.\d{1,2})?\)?$/;
+  // the PDF's text (pdf.js text layer, a line per row, as the app reads it: getPdf + pageTextLines). Read against the
+  // portal's PDFs of ITR-3 and ITR-6 for AY 2026-27 (owner, 30-Oct-2026; fixtures copy their layout with made-up figures):
+  //   Schedule DPM: "2 Rate (%) 15 30 40 45", then "21 Written down value on the last day of previous year a b c d";
+  //     in ITR-6 the label is a line of its own and the figures come on the next line behind the row number
+  //     ("21 a b c d"), followed by the formula "(6+ 9 - 15 )";
+  //   Schedule DOA: "2 Rate (%) nil 5 10 40 10 25 20": Land first (nil: no block), then buildings 5 / 10 / 40, furniture
+  //     10, intangibles 25, ships 20; "18 Written down value on the last day of previous a b c d e f g".
+  // The columns come from the schedule's own Rate row; the figures are the last as many numbers on the row (a row
+  // number in front never counts; a formula in brackets is left out). Last year's return (AY = the year) gives its last
+  // day; this year's own (AY = the year + 1) its first day ("3 / 3a Written down value on the first day"), as the JSON.
+  // A scan has no text: said plainly, never guessed.
+  const AMT = /^-?(\d{1,3}(,\d{2,3})+|\d+)(\.\d{1,2})?$/;
+  const DPM_RATE = {15: "pm15", 30: "pm30", 40: "c40", 45: "c40"}, DOA_ORDER = ["b5", "b10", "b40", "f10", "i25", "s20"];
   function readItrText(text, fy){
     const out = {src: "pdf", form: "", ay: "", pan: "", blocks: {}, found: [], why: ""};
     const ls = String(text || "").split(/\r?\n/).map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
     if (ls.join("").replace(/\W/g, "").length < 40) return Object.assign(out, {why: "This PDF has no text to read (a scanned copy?): FinCom cannot read it and sends it nowhere. Upload the JSON from the e-filing portal, or type the opening WDV."});
     const all = ls.join(" "), fm = /\bITR[- ]?([3567])\b/i.exec(all), ay = /assessment\s+year\s*:?\s*(20\d{2})\s*-\s*(\d{2})/i.exec(all), pan = /\b([A-Z]{5}\d{4}[A-Z])\b/.exec(all);
     out.form = fm ? "ITR-" + fm[1] : ""; out.ay = ay ? ay[1] : ""; out.pan = pan ? pan[1] : "";
-    const nums = s => s.split(" ").filter(t => AMT.test(t)).map(t => N(t.replace(/[(),]/g, "")) * (/^\(/.test(t) ? -1 : 1));
-    const take = (re, order) => {
+    const useFirst = !!(fy && out.ay && N(out.ay) === N(fy) + 1);
+    if (fy && out.ay && N(out.ay) !== N(fy) && !useFirst) out.warn = "This return is for assessment year " + out.ay + "-" + String(N(out.ay) + 1).slice(2) + "; the opening of " + fy + "-" + String(N(fy) + 1).slice(2) + " is the closing of the return for assessment year " + fy + "-" + String(N(fy) + 1).slice(2) + ".";
+    const nums = s => String(s).replace(/\([^)]*\)/g, " ").split(" ").filter(t => AMT.test(t)).map(t => N(t.replace(/,/g, "")));
+    const ROW = useFirst ? /written\s+down\s+value\s+on\s+the\s+first\s+day|wdv\s+on\s+the\s+first\s+day/i : /written\s+down\s+value\s+on\s+the\s+last\s+day|wdv\s+on\s+the\s+last\s+day/i;
+    const take = (re, dpm) => {
       const i = ls.findIndex(s => re.test(s)); if (i < 0) return false;
-      for (let j = i + 1; j < Math.min(ls.length, i + 120); j++){
-        if (/schedule\s*(d[a-z]{2}|bp|cg)\b/i.test(ls[j]) && !re.test(ls[j])) break;
-        if (/written\s+down\s+value\s+on\s+the\s+last\s+day|wdv\s+on\s+the\s+last\s+day/i.test(ls[j])){
-          let v = nums(ls[j]);
-          if (!v.length && ls[j + 1]) v = nums(ls[j + 1]);
-          // a leading row number (e.g. "15 Written down value ...") is not a figure
-          if (/^\d{1,2}\b/.test(ls[j]) && v.length > order.length) v = v.slice(1);
-          v.slice(0, order.length).forEach((x, n) => { if (!order[n]) return; out.blocks[order[n]] = R2(N(out.blocks[order[n]]) + x); out.found.push({block: order[n], path: ls[i] + " › " + ls[j].slice(0, 60), field: "last day", v: x}); });
-          return v.length > 0;
-        }
-      }
-      return false;
+      let end = ls.length; for (let j = i + 1; j < ls.length; j++){ if (/^schedule\s*-?\s*[a-z]/i.test(ls[j])){ end = j; break; } }
+      const sec = ls.slice(i, end);
+      // the columns, from the Rate row: a rate, or nil (land: no block)
+      const rr = sec.find(s => /\brate\s*\(\s*%\s*\)/i.test(s)), toks = rr ? rr.replace(/^.*?\(\s*%\s*\)/, "").trim().split(" ").filter(t => /^(nil|\d{1,2}(\.\d+)?)$/i.test(t)) : [];
+      let cols;
+      if (toks.length){ let n = 0; cols = toks.map(t => /^nil$/i.test(t) ? null : dpm ? DPM_RATE[N(t)] || null : DOA_ORDER[n++] || null); }
+      else cols = dpm ? ["pm15", "pm30", "c40", "c40"] : DOA_ORDER.slice();
+      const j = sec.findIndex(s => ROW.test(s)); if (j < 0) return false;
+      let v = nums(sec[j].replace(ROW, " "));
+      if (v.length < cols.length && sec[j + 1]) v = nums(sec[j + 1]);
+      if (v.length < cols.length) return false;
+      v = v.slice(v.length - cols.length);
+      v.forEach((x, n) => { const k = cols[n]; if (!k) return; out.blocks[k] = R2(N(out.blocks[k]) + x); out.found.push({block: k, path: sec[0].slice(0, 40) + " › " + sec[j].slice(0, 60), field: useFirst ? "first day" : "last day", v: x}); });
+      return true;
     };
-    const a = take(/schedule\s*dpm/i, ["pm15", "pm30", "c40", "c40"]), b = take(/schedule\s*doa/i, ["b5", "b10", "b40", "f10", "i25", "s20"]);
-    if (!a && !b) out.why = "FinCom could not find the closing written down value (Schedule DPM / DOA, \"written down value on the last day of the previous year\") in this PDF's text. Upload the JSON from the e-filing portal, or type the opening WDV.";
-    out.field = "WDVLastDay";
+    const a = take(/^schedule\s*-?\s*dpm\b/i, true), b = take(/^schedule\s*-?\s*doa\b/i, false);
+    if (!a && !b) out.why = "FinCom could not find the " + (useFirst ? "opening" : "closing") + " written down value (Schedule DPM / DOA, \"written down value on the " + (useFirst ? "first" : "last") + " day of the previous year\") in this PDF's text. Upload the JSON from the e-filing portal, or type the opening WDV.";
+    out.field = useFirst ? "WDVFirstDay" : "WDVLastDay";
     return out;
   }
 

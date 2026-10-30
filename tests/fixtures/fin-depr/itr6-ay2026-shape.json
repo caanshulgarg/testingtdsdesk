@@ -1,0 +1,253 @@
+{
+ "ITR": {
+  "ITR6": {
+   "CreationInfo": {
+    "SWVersionNo": "1.0",
+    "SWCreatedBy": "SW00000000",
+    "JSONCreatedBy": "SW00000000",
+    "JSONCreationDate": "2026-10-20",
+    "IntermediaryCity": "Bengaluru",
+    "Digest": "-"
+   },
+   "Form_ITR6": {
+    "FormName": "ITR-6",
+    "Description": "Made-up sample in the shape of the e-filing portal's ITR-6 JSON (AY 2026-27); every figure invented",
+    "AssessmentYear": "2026",
+    "SchemaVer": "Ver1.0",
+    "FormVer": "Ver1.0"
+   },
+   "PartA_GEN1": {
+    "OrgFirmInfo": {
+     "AssesseeName": {
+      "SurNameOrOrgName": "Wren Systems Private Limited (made-up)"
+     },
+     "PAN": "AABCW1234F"
+    }
+   },
+   "ScheduleDPM": {
+    "PlantMachinery": {
+     "Rate15": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 210000,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "AddlnDeprOnGT180DayAdditions": 0,
+       "AddlnDeprDuringYearAdditions": 0,
+       "AddlnDeprOnLessThan180DayAdditions": 0,
+       "TotalDepreciation": 14500,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 195500
+      }
+     },
+     "Rate30": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "AddlnDeprOnGT180DayAdditions": 0,
+       "AddlnDeprDuringYearAdditions": 0,
+       "AddlnDeprOnLessThan180DayAdditions": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     },
+     "Rate40": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 50000,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "AddlnDeprOnGT180DayAdditions": 0,
+       "AddlnDeprDuringYearAdditions": 0,
+       "AddlnDeprOnLessThan180DayAdditions": 0,
+       "TotalDepreciation": 18750,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 31250
+      }
+     },
+     "Rate45": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     }
+    }
+   },
+   "ScheduleDOA": {
+    "Land": {
+     "DepreciationDetail": {
+      "WDVFirstDay": 100000,
+      "WDVLastDay": 100000
+     }
+    },
+    "Building": {
+     "Rate5": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     },
+     "Rate10": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     },
+     "Rate40": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     }
+    },
+    "FurnitureFittings": {
+     "Rate10": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 80000,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 8000,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 72000
+      }
+     }
+    },
+    "IntangibleAssets": {
+     "Rate25": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     }
+    },
+    "Ships": {
+     "Rate20": {
+      "DepreciationDetail": {
+       "WDVFirstDay": 0,
+       "AdditionsGrThan180Days": 0,
+       "RealizationTotalPeriod": 0,
+       "FullRateDeprAmt": 0,
+       "AdditionsLessThan180Days": 0,
+       "RealizationPeriodDuringYear": 0,
+       "HalfRateDeprAmt": 0,
+       "DepreciationAtFullRate": 0,
+       "DepreciationAtHalfRate": 0,
+       "TotalDepreciation": 0,
+       "DepDisAllowUs38_2": 0,
+       "NetAggregateDepreciation": 0,
+       "ProportionateAggDepreciation": 0,
+       "ExpdrOnTrforSaleAsset": 0,
+       "CapGainUs50": 0,
+       "WDVLastDay": 0
+      }
+     }
+    }
+   }
+  }
+ }
+}

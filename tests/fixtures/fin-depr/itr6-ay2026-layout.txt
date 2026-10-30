@@ -1,0 +1,36 @@
+INDIAN INCOME TAX RETURN
+FORM ITR-6 (made-up sample: the layout of the e-filing portal's ITR-6 PDF, AY 2026-27; every figure invented)
+Assessment Year 2026-27
+PAN AABCW1234F
+Name Wren Systems Private Limited (made-up)
+SCHEDULE DPM - DEPRECIATION ON PLANT AND MACHINERY(OTHER THAN ASSETS ON WHICH FULL CAPITAL EXPENDITURE IS
+ALLOWABLE AS DEDUCTION UNDER ANY OTHER SECTION)
+1 Block of assets Plant and machinery
+2 Rate (%) 15 30 40 45
+(i) (ii) (iii) (iv)
+3 Written down value on the first day of previous year 2,10,000 0 50,000 0
+18 the event of succession, amalgamation, demerger 0 0 0 0
+etc. (out of column 17)
+Expenditure incurred in connection with transfer of
+19 0 0 0 0
+asset/ assets
+Capital gains/ loss under section 50 (5 + 8 -3-4 -7 -
+20 0 0 0 0
+19) (enter negative only if block ceases to exist)
+Written down value on the last day of previous year
+21 1,95,500 0 31,250 0
+(6+ 9 - 15 ) (enter 0, if result is negative)
+SCHEDULE DOA - DEPRECIATION ON OTHER ASSETS(OTHER THAN ASSETS ON WHICH FULL CAPITAL EXPENDITURE IS ALLOWABLE AS
+DEDUCTION)
+1 Block of assets Land Building (not including land) Furniture Intangible Ships
+and Assets
+Fittings
+2 Rate (%) nil 5 10 40 10 25 20
+(i) (ii) (iii) (iv) (v) (vi) (vii)
+3 Written down value on the first day of previous year 1,00,000 0 0 0 80,000 0 0
+18 Written down value on the last day of previous 1,00,000 0 0 0 72,000 0 0
+year* (6+ 9 -12) (enter 0, if result is negative)
+SCHEDULE DEP - Summary of depreciation on assets (other than assets on which full capital expenditure is allowable as deduction
+Block entitled for depreciation @ 15 per cent ( Schedule DPM -
+3 Furniture and fittings (Schedule DOA- 14v or 15v as applicable) 3 8,000
+SCHEDULE DCG - DEEMED CAPITAL GAIN ON SALE OF DEPRECIABLE ASSETS
