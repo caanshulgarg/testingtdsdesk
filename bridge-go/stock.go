@@ -74,6 +74,9 @@ var stock = struct {
 	wait    func() time.Duration // how long a click waits for a posting to end (tests: shorter)
 }{asks: map[string]bool{}, busy: map[string]bool{}, cache: map[string]M{}, seen: map[string]string{}, stopped: map[string]string{}}
 
+// tests: called right before each send (a posting arriving then)
+var stockBeforeSend func()
+
 func stockReset() {
 	stock.mu.Lock()
 	defer stock.mu.Unlock()
@@ -236,23 +239,41 @@ func stockAnswer(c stockClick, k string) M {
 	if stock.wait != nil {
 		wait = stock.wait()
 	}
-	for until := time.Now().Add(wait); postingGoing(); {
-		if time.Now().After(until) {
-			return say("busy", "not asked: Tally is busy with a posting; try again in a moment")
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if err := earlierRefusal(port); err != nil {
-		return say("busy", "not asked: Tally is still on an earlier request; try again in a moment")
-	}
+	until := time.Now().Add(wait)
 	x := stockRequest(c.Company, c.From, c.To)
-	stock.mu.Lock()
-	stock.asks[x] = true
-	stock.mu.Unlock()
 	held := windowHoldFn()
 	var took float64
-	tc := &TC{copier: true, limitMs: 2000, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
-	raw, err := invokeTally(tc, port, x, 5)
+	var raw string
+	var err error
+	for {
+		for postingGoing() {
+			if time.Now().After(until) {
+				return say("busy", "not asked: Tally is busy with a posting; try again in a moment")
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if err := earlierRefusal(port); err != nil {
+			return say("busy", "not asked: Tally is still on an earlier request; try again in a moment")
+		}
+		stock.mu.Lock()
+		stock.asks[x] = true
+		stock.mu.Unlock()
+		if stockBeforeSend != nil {
+			stockBeforeSend()
+		}
+		held = windowHoldFn()
+		tc := &TC{copier: true, limitMs: 2000, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
+		raw, err = invokeTally(tc, port, x, 5)
+		// a posting that came while the click waited for Tally's lock goes first: nothing reached Tally, so the click waits
+		// for it again (the same 20 s), never sent twice
+		if took == 0 && gaveWay(err) && postingGoing() && time.Now().Before(until) {
+			stock.mu.Lock()
+			delete(stock.asks, x)
+			stock.mu.Unlock()
+			continue
+		}
+		break
+	}
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	stock.mu.Lock()
 	delete(stock.asks, x)

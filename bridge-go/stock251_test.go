@@ -353,9 +353,28 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	if str(a["status"]) != "ok" || stockClicks(f) != 2 {
 		t.Fatalf("after the posting: %v", a)
 	}
+	// a posting that comes while the click takes Tally's lock: it goes first (nothing of the click reached Tally), then the
+	// click goes, once (gate run 41056427541 answered "busy" here)
+	stock.mu.Lock()
+	stock.wait = func() time.Duration { return 5 * time.Second }
+	stock.mu.Unlock()
+	first := true
+	stockBeforeSend = func() {
+		if first {
+			first = false
+			importsInFlight.Add(1)
+			go func() { time.Sleep(300 * time.Millisecond); importsInFlight.Add(-1) }()
+		}
+	}
+	t.Cleanup(func() { stockBeforeSend = nil })
+	a = stockTake(stockClick{Company: zz, From: "20260401", To: "20260731", At: clickAt(4500 * time.Millisecond)})
+	stockBeforeSend = nil
+	if str(a["status"]) != "ok" || stockClicks(f) != 3 {
+		t.Fatalf("a posting during the click's turn: %v (%d asked)", a, stockClicks(f))
+	}
 	// a company not open in this bridge's own Tally: not asked
 	a = stockTake(stockClick{Company: "OTHER CO", From: "20260401", To: "20260630", At: clickAt(5 * time.Second)})
-	if str(a["status"]) != "" || truthy(a["ok"]) || !strings.Contains(str(a["why"]), "not open here") || stockClicks(f) != 2 || len(*told) != 4 { // nothing told for it (the ok, the busy, the posting busy, the ok after the posting)
+	if str(a["status"]) != "" || truthy(a["ok"]) || !strings.Contains(str(a["why"]), "not open here") || stockClicks(f) != 3 || len(*told) != 5 { // nothing told for it (the ok, the busy, the posting busy, the ok after the posting)
 		t.Fatalf("the company not open in the own Tally: answered %v (%d asked, %d told)", a, stockClicks(f), len(*told))
 	}
 }
