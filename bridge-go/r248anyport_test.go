@@ -359,7 +359,7 @@ func TestTypedPortOwnUserOnly(t *testing.T) {
 // 2.4.8 adds and changes no Tally request: the allow-list table as 2.4.5's, the decision line names 2.4.8 with 2.4.7's
 // kept as history, a dated line for 2.4.8; the test sheet names this version's new steps
 func TestRelease248VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.4.9" { // 2.4.9 (r249batch_test.go): kept as history
+	if BridgeVersion != "2.5.0" { // 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"

@@ -116,8 +116,8 @@ func (b *bigTally) handle(w http.ResponseWriter, r *http.Request, id, body strin
 		return true
 	case strings.Contains(body, "<TYPE>Company</TYPE>"):
 		sr.rows = 1
-		fmt.Fprintf(&out, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>big-guid</GUID><STARTINGFROM>%s</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`,
-			zz, zz, bigFrom, bigLedgers+bigVouchers, bigLedgers+40)
+		fmt.Fprintf(&out, `<COMPANY NAME="%s"><NAME>%s</NAME><GUID>big-guid</GUID><STARTINGFROM>%s</STARTINGFROM><ENDINGAT>20270331</ENDINGAT><BOOKSFROM>%s</BOOKSFROM><ALTVCHID>%d</ALTVCHID><ALTMSTID>%d</ALTMSTID></COMPANY>`,
+			zz, zz, bigFrom, bigFrom, bigLedgers+bigVouchers, bigLedgers+40)
 	case isLedger:
 		var after, upto int64 = 0, 1 << 62
 		if m := reMidRange.FindStringSubmatch(body); m != nil {

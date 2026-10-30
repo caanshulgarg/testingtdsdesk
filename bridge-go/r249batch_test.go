@@ -437,7 +437,7 @@ func TestR249PullSettingOff(t *testing.T) {
 // the allow-list's rows without 2.4.9's FinComVoucherBatch: 2.4.5's table (2.4.6 .. 2.4.8 added or changed no request)
 func allowRowsBefore249() string {
 	var o []string
-	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
+	for _, l := range strings.SplitAfter(allowRowsBefore250(), "\n") { // 2.5.0 changed four rows (r250dated_test.go)
 		if !strings.HasPrefix(l, "| "+vchBatchID+" |") {
 			o = append(o, l)
 		}
@@ -448,7 +448,7 @@ func allowRowsBefore249() string {
 // 2.4.9: the version; one request added (FinComVoucherBatch: the table changed by that row only); the decision line names
 // 2.4.9 by the owner's decision of 2026-10-29 with the measured times, 2.4.8's kept as history; the dated line; the sheet
 func TestR249VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.4.9" {
+	if BridgeVersion != "2.5.0" { // 2.5.0 (r250dated_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore249()); h != "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" {
@@ -460,7 +460,7 @@ func TestR249VersionAllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.4.9 by the owner's decision of 2026-10-29", "FinComVoucherBatch (shape " + shapeOf(allowListSamples()[vchBatchID]) + ")",
+	for _, w := range []string{"as for 2.4.9: the owner's decision of 2026-10-29", "FinComVoucherBatch (shape " + shapeOf(allowListSamples()[vchBatchID]) + ")",
 		"0.95 s worst", "1.41 s", "as for 2.4.8: the owner's standing decision of 2026-10-06"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
@@ -469,7 +469,7 @@ func TestR249VersionAllowList(t *testing.T) {
 	if strings.Contains(al, "allowed for 2.4.8 by") {
 		t.Error("2.4.8's decision still worded as the current one")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-29 for 2\.4\.9: FinComVoucherBatch[^\n]*allowed for 2\.4\.9 by the owner's decision of 2026-10-29`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-29 for 2\.4\.9: FinComVoucherBatch[^\n]*2\.4\.9 allowed by the owner's decision of 2026-10-29`).MatchString(al) {
 		t.Error("no dated line for 2.4.9")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.4.9-test-sheet.txt"))

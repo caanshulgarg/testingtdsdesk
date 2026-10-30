@@ -580,3 +580,6 @@ run_migration123.py                   180
 run_console_contracts.py              240
 # migration 125 (integ-console): a switched-off company's records and uploads refused, the status columns the console's, coupons on a paused firm, firm_signals
 run_migration125.py                   180
+# migration 130 (bridge 2.5.0, the owner's decision of 30-Oct-2026): openings only when they add up to nil, a dated read preferred
+run_migration130.py                   240
+run_openings_ingest.py                240

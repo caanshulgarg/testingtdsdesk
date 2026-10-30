@@ -2082,7 +2082,11 @@ func byDateAfter(byDate map[string][]*change, dates []string, di int) []*change 
 
 // one ledger by its MasterID: the ledger list's request with a one-ID range
 func fetchLedgerByMaster(tc *TC, company string, port int, mid int64) (string, error) {
-	raw, err := invokeTally(tc, port, ledgerChunkRequest(company, mid-1, mid), liveBodySec())
+	bf, err := booksFromForRead(tc, company) // 2.5.0: never undated (booksfrom.go)
+	if err != nil {
+		return "", err
+	}
+	raw, err := invokeTally(tc, port, ledgerChunkRequestAt(company, bf, mid-1, mid), liveBodySec())
 	if err != nil {
 		return "", err
 	}

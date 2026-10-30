@@ -346,10 +346,12 @@ var requestClass = map[string]string{
 	"TDSDeskKeepList":  "keepAbove",
 	"Import":           "import",
 	"TDSDeskCompanies": "undated", "TDSDeskCompanyInfo": "undated", "FinComCompany": "undated", "FinComFree": "undated",
-	ledListID: "undated", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
+	ledListID: "ledgerPeriod", grpListID: "undated", "TDSDeskLedgers": "undated", "TDSDeskGroups": "undated", "TDSDeskNames": "undated",
 	"TDSDeskGroupNames": "undated", "FinComMeasureNames": "undated", "FinComMeasureLedF": "undated", "FinComMeasureLedO": "undated",
 	editLogProbeID: "undated", cnReportID: "undated",
-	ledChangesID: "undated", ledByNameID: "undated", // 2.3.1 (masters): no period, ever
+	// 2.3.1 (masters); 2.5.0 (the owner's decision of 30-Oct-2026): the three ledger requests carry exactly the books' first
+	// year of their company and nothing else dated (booksfrom.go); never undated
+	ledChangesID: "ledgerPeriod", ledByNameID: "ledgerPeriod",
 	natListID: "undated", // 2.4.3: the natures of payment, masters, no period
 	empListID: "undated", // 2.4.4: the payroll's employees, masters, no period
 	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
@@ -388,6 +390,14 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errBatchRefused
+	case ledListID, ledChangesID, ledByNameID:
+		// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the narrow ReadDays exemption for exactly these three:
+		// as built, with exactly SVFROMDATE = the company's books-from and SVTODATE = a year on less a day (TYPE="Date"),
+		// whatever ReadDays says; any other period, or none, is refused whoever asks
+		if ledgerPeriodExact(x) {
+			return nil
+		}
+		return readsOffErr()
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil

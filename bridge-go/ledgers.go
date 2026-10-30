@@ -70,8 +70,17 @@ func ledChunkMin() int     { return minI(ledChunkDefault(), keepNum("LedgerChunk
 func ledChunkSec() int     { return keepNum("LedgerChunkSec", 20) }
 
 // the requests
+// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): with the books' first year as the period, so Tally gives
+// OPENINGBALANCE as at the books' beginning; "" when the company's books-from is not known (never sent undated)
 func ledgerChunkRequest(company string, after, upto int64) string {
-	return fcCollection(ledListID, company, "", "Ledger", ledFetch, masterRange(after, upto))
+	return ledgerChunkRequestAt(company, booksFromOf(company), after, upto)
+}
+func ledgerChunkRequestAt(company, booksFrom string, after, upto int64) string {
+	sv := ledgerPeriodVars(booksFrom)
+	if sv == "" {
+		return ""
+	}
+	return fcCollection(ledListID, company, sv, "Ledger", ledFetch, masterRange(after, upto))
 }
 func groupListRequest(company string) string {
 	return fcCollection(grpListID, company, "", "Group", grpFetch, "")
@@ -108,7 +117,11 @@ func digits(s string) int64    { return toI64(re(`\D`).ReplaceAllString(s, "")) 
 // one chunk of the ledger list: the ledgers whose MasterID is in (after, upto] (upto 0: no upper end), and the
 // highest MasterID among them
 func readLedgerChunk(tc *TC, company string, port int, after, upto int64) ([]ledRow, int64, error) {
-	raw, err := invokeTally(tc, port, ledgerChunkRequest(company, after, upto), ledChunkSec())
+	bf, err := booksFromForRead(tc, company)
+	if err != nil {
+		return nil, 0, err
+	}
+	raw, err := invokeTally(tc, port, ledgerChunkRequestAt(company, bf, after, upto), ledChunkSec())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -263,6 +276,39 @@ func diffLedgers(held, read map[string]ledRow) ledDiff {
 	return d
 }
 
+// 2.5.0: every ledger read, as changed (an opening that differs from the one held marked so); new, renamed and gone as
+// diffLedgers found them
+func diffAll(held, read map[string]ledRow, d ledDiff) ledDiff {
+	in := map[string]bool{}
+	for _, r := range d.rows {
+		in[r.guid] = true
+	}
+	var gs []string
+	for g := range read {
+		if !in[g] {
+			gs = append(gs, g)
+		}
+	}
+	sort.Strings(gs)
+	for _, g := range gs {
+		d.rows = append(d.rows, read[g])
+		if h, ok := held[g]; ok && h.open != read[g].open {
+			d.openChg[g] = true
+		}
+	}
+	return d
+}
+
+// 2.5.0: the date the outbox's openings are as at (the books' beginning, yyyymmdd), sent with every batch as openingsAt
+func setLedOutOpeningsAt(dir, bf string) {
+	o := readObjFile(ledOutFile(dir))
+	if o == nil {
+		return
+	}
+	o["openingsAt"] = bf
+	_ = saveFile(ledOutFile(dir), jsonText(o))
+}
+
 // --- the outbox: {rows: {guid: [mid, alter, name, parent, open, gstin, pan, openChanged]}, renamed: {guid: [from, to]},
 // groups: [[name, parent]], round, rowsRead, seen: [guid, ...], complete: true}. Only a complete round merges here (a
 // ledger that hangs Tally is named in it mid-round by addPoison, with complete unset: sent once the round completes).
@@ -330,7 +376,19 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if str(st["ledRun"]) == k.id {
 		return true, nil // read in this run already
 	}
+	// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the ledgers are read with the books' first year as the
+	// period. Books-from not known: the read is held (one log line, the company list read again), never sent undated
+	bf, herr := booksFromForRead(k.tc, company)
+	if herr != nil {
+		k.caughtUp = true
+		return false, nil
+	}
 	ls := obj(st["led"])
+	// a round begun on another basis (by a bridge before 2.5.0, undated, or with another books-from) starts again: one
+	// round's openings are all as at the same date
+	if ls != nil && str(ls["openingsAt"]) != bf {
+		ls = nil
+	}
 	if t, ok := parseTime(str(ls["started"])); ls == nil || !ok || time.Since(t) > time.Duration(keepNum("LedgerResumeHours", 6))*time.Hour {
 		// a chunk halved after a timeout stays so for the rest of its round; the next round starts at twice that, back
 		// towards the full chunk
@@ -338,7 +396,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		if size < ledChunkMin() || size > ledChunkDefault() {
 			size = ledChunkDefault()
 		}
-		ls = M{"started": nowS(), "after": 0, "size": size, "empty": 0, "groups": false, "n": 0, "reqs": 0, "round": newLedRound()}
+		ls = M{"started": nowS(), "after": 0, "size": size, "empty": 0, "groups": false, "n": 0, "reqs": 0, "round": newLedRound(), "openingsAt": bf}
 		_ = os.Remove(ledReadFile(dir))
 		st["led"] = ls
 		save()
@@ -483,6 +541,11 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	}
 	sort.Strings(seen)
 	d := diffLedgers(held, read)
+	// 2.5.0: the held list read on another basis (undated, by a bridge before 2.5.0, or another books-from): every ledger
+	// goes to FinCom's cloud with this round's openings, as at the books' beginning (the cloud prefers a dated round's)
+	if str(st["ledOpeningsAt"]) != bf {
+		d = diffAll(held, read, d)
+	}
 	var groups [][2]string
 	for _, x := range arr(readJSONFile(filepath.Join(dir, "group-list.json"))) {
 		a := arr(x)
@@ -507,6 +570,8 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	saveLedList(dir, read)
 	delete(st, "ledGone") // the second-look bookkeeping of 2.1.4: the cloud holds many gone at once now
 	mergeLedOut(dir, d, groups, round, seen, natOfRound(ls))
+	setLedOutOpeningsAt(dir, bf)
+	st["ledOpeningsAt"] = bf
 	_ = os.Remove(ledReadFile(dir))
 	writeLog(fmt.Sprintf("Keeping %s: the ledger list read (%d ledgers, %d groups, %d request(s)): %d new, %d changed, %d renamed, %d gone",
 		company, len(read), len(groups), toInt(ls["reqs"]), d.added, len(d.rows)-d.added, len(d.renamed), len(d.gone)))
@@ -594,6 +659,9 @@ func pushLedgerList(company, dir string) error {
 		}
 		body := M{"kind": "ledger_list", "company": company, "ledgers": led, "last": last,
 			"round": str(o["round"]), "complete": true, "rowsRead": toInt(o["rowsRead"]), "seen": toAny(sb)}
+		if oa := str(o["openingsAt"]); isTallyDate(oa) {
+			body["openingsAt"] = oa // 2.5.0: the openings are as at the books' beginning (a dated read; booksfrom.go)
+		}
 		if first {
 			rl := []any{}
 			for g, v := range ren {

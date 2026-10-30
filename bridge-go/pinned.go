@@ -31,6 +31,16 @@ func pinDates(x string) (string, string) {
 	return a, z
 }
 
+// 2.5.0: the books-from a ledger request carries, when its SVTODATE is a year on less a day; "" otherwise (rebuilt as
+// nothing: refused)
+func pinLedgerFrom(x string) string {
+	a, z := pinDates(x)
+	if !isTallyDate(a) || z != booksYearEnd(a) {
+		return ""
+	}
+	return a
+}
+
 func pinNum(x, pattern string) int64 { return toI64(group(pattern, x, 1)) }
 
 // the MasterID range of a ledger request: (after, upto], upto 0 when there is none
@@ -75,16 +85,21 @@ var requestRebuild = map[string]func(x string) []string{
 		n := pinNum(x, `\$AlterID &gt; (\d+)`)
 		return []string{keepListRequest(pinCo(x), a, z, n), keepListAboveRequest(pinCo(x), n)}
 	},
-	ledListID: pinOne(func(x string) string { a, u := pinMasterRange(x); return ledgerChunkRequest(pinCo(x), a, u) }),
+	// 2.5.0: the three ledger requests rebuilt with the period they carry (pinLedgerFrom: the books' first year only);
+	// whether it is the company's own books-from is datedRefused's (tally.go, booksfrom.go)
+	ledListID: pinOne(func(x string) string {
+		a, u := pinMasterRange(x)
+		return ledgerChunkRequestAt(pinCo(x), pinLedgerFrom(x), a, u)
+	}),
 	// 2.3.1 (masters): an AlterID span with both ends, and one ledger by its name
 	ledChangesID: func(x string) []string {
 		m := regexp.MustCompile(`\$AlterID &gt; (\d+) AND \$AlterID &lt;= (\d+)</SYSTEM>`).FindStringSubmatch(x)
 		if m == nil {
 			return nil
 		}
-		return []string{ledgerChangesRequest(pinCo(x), toI64(m[1]), toI64(m[2]))}
+		return []string{ledgerChangesRequestAt(pinCo(x), pinLedgerFrom(x), toI64(m[1]), toI64(m[2]))}
 	},
-	ledByNameID: pinOne(func(x string) string { return ledgerByNameRequest(pinCo(x), pinQuoted(x, "$Name")) }),
+	ledByNameID: pinOne(func(x string) string { return ledgerByNameRequestAt(pinCo(x), pinLedgerFrom(x), pinQuoted(x, "$Name")) }),
 	grpListID:   pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
 	natListID:   pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),
 	empListID: pinOne(func(x string) string {

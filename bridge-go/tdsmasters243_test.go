@@ -24,6 +24,7 @@ var ledFetch243Added = ", TDSRATENAME, TDSDEDUCTEEISSPECIALRATE, TDSDEDUCTEESPEC
 // the ledger requests: 2.4.2's fields byte for byte, then exactly these; the natures request: its fields; all on the list,
 // pinned to their builders, nothing computed
 func TestTDS243Requests(t *testing.T) {
+	noteBooksFrom("SAMPLE CO", "20250401") // 2.5.0: the company list said its books begin on 1-Apr-2025 (booksfrom.go)
 	if ledFetch242 != "GUID, MASTERID, ALTERID, NAME, PARENT, OPENINGBALANCE, PARTYGSTIN, INCOMETAXNUMBER, LEDGSTREGDETAILS.LIST, LEDSTATENAME, TDSDEDUCTEETYPE" ||
 		ledFetch != ledFetch242+ledFetch243Added+ledFetch244Added { // 2.4.4: the pay-head fields after (payroll244_test.go)
 		t.Fatalf("the ledger fields: %s", ledFetch)

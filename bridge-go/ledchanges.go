@@ -49,18 +49,36 @@ func ledChangesSec() int       { return keepNum("LedgerChangesSec", 5) }
 
 // the ledgers whose AlterID is in (after, upto]: the full list's fields; "" when the span is not one (upto above after)
 func ledgerChangesRequest(company string, after, upto int64) string {
+	return ledgerChangesRequestAt(company, booksFromOf(company), after, upto)
+}
+
+// 2.5.0: with the books' first year from booksFrom (booksfrom.go); "" when it is not a date
+func ledgerChangesRequestAt(company, booksFrom string, after, upto int64) string {
 	if after < 0 || upto <= after {
 		return ""
 	}
-	return fcCollection(ledChangesID, company, "", "Ledger", ledFetch, alterRange(after, upto))
+	sv := ledgerPeriodVars(booksFrom)
+	if sv == "" {
+		return ""
+	}
+	return fcCollection(ledChangesID, company, sv, "Ledger", ledFetch, alterRange(after, upto))
 }
 
 // the one ledger of that name: the full list's fields; "" when the name cannot go in a TDL string
 func ledgerByNameRequest(company, name string) string {
+	return ledgerByNameRequestAt(company, booksFromOf(company), name)
+}
+
+// 2.5.0: with the books' first year from booksFrom (booksfrom.go); "" when it is not a date
+func ledgerByNameRequestAt(company, booksFrom, name string) string {
 	if !ledNameOK(name) {
 		return ""
 	}
-	return fcCollection(ledByNameID, company, "", "Ledger", ledFetch, `$Name = "`+name+`"`)
+	sv := ledgerPeriodVars(booksFrom)
+	if sv == "" {
+		return ""
+	}
+	return fcCollection(ledByNameID, company, sv, "Ledger", ledFetch, `$Name = "`+name+`"`)
 }
 
 func ledNameOK(s string) bool {
@@ -215,6 +233,9 @@ func ledChangesCheckOn(company string, preferred int) (int, error) {
 func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int64, int, error) {
 	var rows []ledRow
 	a, reqs := after, 0
+	if _, err := booksFromForRead(recorderTC(nil), company); err != nil {
+		return rows, a, reqs, err // 2.5.0: held, never undated (booksfrom.go); the number stays
+	}
 	for reqs < ledChangesMaxReqs() && a < m {
 		if postingGoing() {
 			return rows, a, reqs, errBackoff
@@ -259,6 +280,9 @@ func ledSend(company, guid string, rows []ledRow, why string, after, upto int64)
 			led = append(led, append(append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...), r.payArr()...)) // 2.4.3: the TDS master fields; 2.4.4: the pay-head fields
 		}
 		body := M{"kind": "ledger_changes", "company": company, "company_guid": guid, "ledgers": led, "why": why}
+		if bf := booksFromOf(company); bf != "" {
+			body["openingsAt"] = bf // 2.5.0: read with the books' first year as the period (booksfrom.go)
+		}
 		if why == "counter" {
 			body["after"], body["upto"] = after, upto
 		}
@@ -377,6 +401,10 @@ func ledWantedRun(j M) {
 			}
 			if postingGoing() {
 				unmark()
+				break
+			}
+			if _, err := booksFromForRead(recorderTC(nil), w.company); err != nil {
+				unmark() // 2.5.0: held, never undated (booksfrom.go); asked again once Tally says when the books begin
 				break
 			}
 			raw, err := invokeTally(recorderTC(nil), port, ledgerByNameRequest(w.company, name), ledChangesSec())

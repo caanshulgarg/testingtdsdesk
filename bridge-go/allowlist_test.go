@@ -253,13 +253,26 @@ func computedFigure(x string) string {
 			return m[0]
 		}
 	}
-	if m := reBalField.FindString(x); m != "" && (strings.Contains(x, "SVFROMDATE") || strings.Contains(x, "SVTODATE")) {
+	if m := reBalField.FindString(x); m != "" && (strings.Contains(x, "SVFROMDATE") || strings.Contains(x, "SVTODATE")) && !booksYearLedgerRead(x) {
 		return m + " with a period"
 	}
 	if m := regexp.MustCompile(`(?i)closing\s*balance`).FindString(x); m != "" {
 		return m
 	}
 	return ""
+}
+
+// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the one narrow exemption from "no opening balance with a
+// period": the three ledger requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName), their stored
+// OPENINGBALANCE with exactly the books' first year (SVFROMDATE TYPE="Date" a date, SVTODATE TYPE="Date" a year on
+// less a day, once each, inside STATICVARIABLES) and no other balance: Tally gives the opening as at the books' beginning
+func booksYearLedgerRead(x string) bool {
+	if !ledgerPeriodIDs[tallyRequestID(x)] || regexp.MustCompile(`(?i)closing\s*balance`).MatchString(x) {
+		return false
+	}
+	a := pinLedgerFrom(x)
+	return a != "" && strings.Count(x, "SVFROMDATE") == 2 && strings.Count(x, "SVTODATE") == 2 &&
+		strings.Contains(x, ledgerPeriodVars(a)+"</STATICVARIABLES>") && !regexp.MustCompile(`\$\$Date|\$Date\b`).MatchString(x)
 }
 
 func TestNoComputedFigure(t *testing.T) {

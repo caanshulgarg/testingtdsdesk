@@ -161,6 +161,7 @@ func TestPostingRuleAndPinAgree(t *testing.T) {
 
 // --- R6-2: the refusal names the bridge
 func TestPinRefusalWords(t *testing.T) {
+	noteBooksFrom(zz, "20260401") // 2.5.0: the company list said when the books begin (booksfrom.go)
 	err := checkAllowed(strings.Replace(ledgerChunkRequest(zz, 0, 2000), "<TYPE>Ledger</TYPE>", "<TYPE>Voucher</TYPE>", 1))
 	if err == nil || !strings.HasPrefix(err.Error(), "FinCom Bridge refused to send this (it is not a request FinCom builds): ") || !strings.HasSuffix(err.Error(), "; nothing was sent to Tally") {
 		t.Fatalf("the words: %v", err)

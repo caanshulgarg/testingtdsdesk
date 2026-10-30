@@ -68,6 +68,7 @@ type standTally struct {
 	headsAllDays bool                                                               // 2.4.5: FinComDayHeads answered with every day's entries (the date not applied)
 	batchAll     bool                                                               // 2.4.9: FinComVoucherBatch answered with every entry of the day (the filter not applied)
 	coName       string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
+	booksFrom    string                                                             // 2.5.0: BOOKSFROM as this Tally gives it ("" : 20260401; "-": none)
 	grp          [][2]string
 	mid          int64 // the last MasterID given
 	// fault 1 (03-Oct-2026, NWS144): how this Tally stores and answers
@@ -169,7 +170,8 @@ func (f *standTally) noBalance(t *testing.T) {
 		if m := reBalance.FindString(b); m != "" {
 			t.Fatalf("request %d (%s) asks Tally for a balance (%q): %s", i, f.reqs[i], m, cut(b, 300))
 		}
-		if strings.Contains(strings.ToUpper(b), "OPENINGBALANCE") && strings.Contains(b, "SVFROMDATE") {
+		// 2.5.0 (the owner's decision of 30-Oct-2026): the three ledger requests with exactly the books' first year only
+		if strings.Contains(strings.ToUpper(b), "OPENINGBALANCE") && strings.Contains(b, "SVFROMDATE") && !booksYearLedgerRead(b) {
 			t.Fatalf("request %d (%s) asks for an opening with a period", i, f.reqs[i])
 		}
 	}
@@ -311,7 +313,7 @@ func newStandTally(t *testing.T) *standTally {
 			}
 		}
 		f.mu.Lock()
-		behave, coName := f.behave, f.coName
+		behave, coName, booksFrom := f.behave, f.coName, f.booksFrom
 		f.mu.Unlock()
 		if behave != nil && behave(w, r, id, body) {
 			return
@@ -350,8 +352,12 @@ func newStandTally(t *testing.T) *standTally {
 				_, _ = w.Write([]byte(o.String()))
 				return
 			}
-			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
-				standField("STARTINGFROM", "Date", "20260401"), standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
+			bfx := "" // 2.5.0: BOOKSFROM, when asked for (as a real Tally writes it: a Date field)
+			if strings.Contains(body, "BOOKSFROM") && booksFrom != "-" {
+				bfx = standField("BOOKSFROM", "Date", or(booksFrom, "20260401"))
+			}
+			fmt.Fprintf(&o, `<COMPANY NAME="%s" RESERVEDNAME="">%s%s%s%s%s%s</COMPANY>`, esc(coName), standField("NAME", "String", esc(coName)), standField("GUID", "String", f.guid),
+				standField("STARTINGFROM", "Date", "20260401"), bfx, standField("ALTVCHID", "Number", v), standField("ALTMSTID", "Number", m))
 		case "FinComLedgers", "FinComLedgerChanges", "FinComLedgerByName":
 			// 2.3.1 (masters): the ledgers with an AlterID in (after, upto], or the one ledger of that name, the same fields
 			var after, upto int64 = 0, -1
