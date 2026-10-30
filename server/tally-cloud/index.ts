@@ -2860,6 +2860,7 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
   // correct file must be able to replace wrong stored openings). Else the stored openings stay, the ledgers and groups are
   // taken at nil (applyGroups), the incoming openings are held and one alert says so (one a day for the same difference)
   let heldOut: { held: number; words: string; g: any } | null = null;
+  let masterHeld: { held: number; words: string } | null = null;
   if (await has130()) {
     const sum = new Map<string, number>();
     for (const l of led) sum.set(l[0], Math.round(((sum.get(l[0]) || 0) + Number(l[2])) * 100) / 100);
@@ -2875,9 +2876,15 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
       const words = "Opening balances from " + src + " do not add up to nil: " + inrText(total) + ". The opening balances FinCom had stay; the ledgers and groups are taken.";
       console.log("tally-ingest ledgers: openings held", book, JSON.stringify({ held: id, difference: total, source: from?.source }));
       heldOut = { held: id, words, g };
-      // a trial balance uploaded as opening balances is refused with the words; a masters list and the bridge's trial
-      // balance go on to their GSTIN and PAN below (their openings held)
+      // a trial balance uploaded as opening balances is refused with the words; the bridge's trial balance goes on to its
+      // GSTIN and PAN below (its openings held); a masters list (review of 2.5.0, round 4) goes through as before with the
+      // openings FinCom holds in place of its own, so its ledgers, the ones it no longer lists and its record are taken
       if (from?.source === "upload_ledgers" && !declare?.complete) return reply(409, { ok: false, held: id, refused: "nil", error: words, ...g });
+      if (declare?.complete) {
+        const have = new Map((await selectIn("name, open, open_sent", book, "name", led.map((l: any) => l[0]))).map((r: any) => [String(r.name), r]));
+        for (const l of led) { const h: any = have.get(l[0]); l[2] = String(h ? Number(h.open_sent ?? h.open ?? 0) : 0); }
+        heldOut = null; masterHeld = { held: id, words };
+      }
     }
   }
   // migration-33: the list is add-only (a ledger missing from it marked deleted, never removed) and kept with who sent it;
@@ -2901,7 +2908,7 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
     const r = await db.rpc("tally_ingest_ledger_ids", { p_book: book, p_ids: ids });
     idsOut = r.error ? { idsError: /tally_ingest_ledger_ids|does not exist|schema cache/i.test(r.error.message) ? "migration-28 not applied" : r.error.message } : { ids: r.data?.ids };
   }
-  return reply(200, { ok: true, ...data, ...(idsOut || {}) });
+  return reply(200, { ok: true, ...data, ...(idsOut || {}), ...(masterHeld ? { held: masterHeld.held, kept: masterHeld.words } : {}) });
 }
 // ---------- fast-sync (migration-13): the work done by the server, from a queue (pgmq tally_work), so it finishes even
 // when the browser that handed it over is closed. A piece is {job, firm, book, days:[{day, gz}]} (a part of a day book),

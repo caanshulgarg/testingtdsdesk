@@ -157,7 +157,10 @@ try:
     ok(c == 200 and len(FS.ARGS.get("tally_ingest_ledgers_g") or []) == n_g + 1, "E. a correct trial balance (its own total nil) is taken though the book holds a wrong opening it leaves out (%s)" % r)
     n_g = len(FS.ARGS.get("tally_ingest_ledgers_g") or [])
     c, r = call({"kind": "upload_ledgers", "client": "c3", "from": "20250401", "openAsOn": "20250331", "complete": True, "count": 2, "ledgers": [["Cash", "Cash-in-Hand", "-150"], ["Stale Party", "Sundry Debtors", "-999"]]}, device=False)
-    ok(c == 200 and len(FS.ARGS.get("tally_ingest_ledgers_g") or []) == n_g and r.get("held") and "a ledger masters file uploaded" in r.get("kept", ""), "E. a masters upload (complete) whose openings do not add up: held, its GSTIN and PAN still taken, 200 (%s)" % r)
+    gl = (FS.ARGS.get("tally_ingest_ledgers_g") or [{}])[-1]
+    ok(c == 200 and len(FS.ARGS.get("tally_ingest_ledgers_g") or []) == n_g + 1 and r.get("held") and "a ledger masters file uploaded" in r.get("kept", "")
+       and sorted(gl.get("p_ledgers") or []) == [["Cash", "Cash-in-Hand", "-100"], ["Stale Party", "Sundry Debtors", "-999"]] and gl.get("p_complete") is True,
+       "E. a masters upload (complete) whose openings do not add up: held; the list still taken (complete), with the openings FinCom holds (%s; %s)" % (r, gl.get("p_ledgers")))
     n_g = len(FS.ARGS.get("tally_ingest_ledgers_g") or [])
     c, r = call({"kind": "upload_ledgers", "client": "c3", "from": "20250401", "openAsOn": "20250331", "complete": True, "count": 3, "ledgers": [["Cash", "Cash-in-Hand", "-100"], ["Capital", "Capital Account", "1099"], ["Stale Party", "Sundry Debtors", "-999"]]}, device=False)
     ok(c == 200 and len(FS.ARGS.get("tally_ingest_ledgers_g") or []) == n_g + 1 and not r.get("held"), "E. a masters upload that adds up: taken as before (%s)" % r)

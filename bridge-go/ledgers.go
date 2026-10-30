@@ -312,16 +312,16 @@ func diffAll(held, read map[string]ledRow, d ledDiff) ledDiff {
 func ledResendFile(dir string) string { return filepath.Join(dir, "ledger-resend.json") }
 
 // 2.5.0: the date the outbox's openings are as at (the books' beginning, yyyymmdd), sent with every batch as openingsAt
-func setLedOutOpeningsAt(dir, bf string, resent bool) {
+func setLedOutOpeningsAt(dir, bf string, whole bool) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		return
 	}
 	o["openingsAt"] = bf
-	if resent {
-		o["resent"] = true // review of 2.5.0: this round is the whole list again after a held one; held again, not again
-	} else {
-		delete(o, "resent")
+	if whole {
+		// review of 2.5.0: the outbox holds a whole list (every ledger); held, it is not sent whole again. Kept until the
+		// outbox goes, whatever plain rounds merge into it meanwhile
+		o["whole"] = true
 	}
 	_ = saveFile(ledOutFile(dir), jsonText(o))
 }
@@ -473,8 +473,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		// review of 2.5.0: the company's books-from changed since the round began (Tally's Books beginning from corrected):
 		// the round starts again at the next turn, every chunk with the new one
 		if now := booksFromOf(company); now == "" {
-			// the company list answered without BOOKSFROM for a while: this turn stops; the round goes on from its last
-			// chunk once Tally says it again (review of 2.5.0, round 3)
+			// the company list answered without BOOKSFROM for a while: this turn stops (said once, the list read again);
+			// the round goes on from its last chunk once Tally says it again (review of 2.5.0, rounds 3 and 4)
+			_ = holdLedgerRead(k.tc, company)
+			if k.booksHeld == nil {
+				k.booksHeld = map[string]bool{}
+			}
+			k.booksHeld[company] = true
+			k.caughtUp = true
 			return false, nil
 		} else if now != bf {
 			delete(st, "led")
@@ -741,12 +747,12 @@ func pushLedgerList(company, dir string) error {
 		if last {
 			_ = os.Remove(ledOutFile(dir))
 			writeLog(fmt.Sprintf("Cloud: %s: the ledger list sent (%s)%s", company, ledSentNote(r.json), shadowNote(r)))
-			if r.json != nil && str(r.json["openings"]) == "held" && !truthy(o["resent"]) {
+			if r.json != nil && str(r.json["openings"]) == "held" && !truthy(o["whole"]) {
 				// 2.5.0 (migration 130): FinCom held the round's openings (not adding up to nil): every ledger again next round
 				_ = saveFile(ledResendFile(dir), jsonText(M{"at": nowS(), "round": str(o["round"])}))
 				writeLog("Cloud: " + company + ": FinCom kept its opening balances, as the ones read do not add up to nil; every ledger goes again with the next read")
 			} else if r.json != nil && str(r.json["openings"]) == "held" {
-				writeLog("Cloud: " + company + ": FinCom kept its opening balances again, as Tally's own do not add up to nil; changes go as usual (FinCom's Tally page says so)")
+				writeLog("Cloud: " + company + ": FinCom kept its opening balances, as the whole list's do not add up to nil in Tally either; changes go as usual (FinCom's Tally page says so)")
 			}
 			delete(ledPushAfter, company)
 			return nil
