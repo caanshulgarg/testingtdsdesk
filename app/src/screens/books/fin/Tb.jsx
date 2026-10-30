@@ -9,8 +9,10 @@
 import { useEffect, useRef, useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import Tag from "../../../parts/Tag.jsx";
-import { rs, inr, st, setFin, codeGroups } from "./util.js";
+import { rs, inr, st, setFin, codeGroups, fig } from "./util.js";
+import AiMapSlot, { earlierMapping } from "./aimapSlot.jsx";
 
+const dmyIso = (iso) => { try { return fmtDate(String(iso || "").slice(0, 10)); } catch (e) { return String(iso || "").slice(0, 10); } };
 const isLent = (l) => FS.nature(l).path.some((g) => /^loans & advances \(asset\)$/i.test(String(g).trim()));
 function loanGiven(l, on) {
   const co = CO(); if (!co) return;
@@ -55,7 +57,7 @@ function CodeBtn({ r, kind, open, onOpen }) {
 }
 
 export function Tb({ d, kind, fy }) {
-  const s = st(), T = d.tb, rows = T.rows, f = s.tbF;
+  const s = st(), T = d.tb, rows = T.rows, f = s.tbF, mapBy = ((S.books || {}).fs || {}).mapBy || {};   // who chose a code (the AI mapping: "<user>, AI-assisted")
   const [pick, setPick] = useState(null);            // {ledger | "*bulk", at}
   const q = String(s.q || "").toLowerCase().trim();
   const shown = rows.filter((r) => (!f || f.codes.includes(r.code)) && (!s.src || (s.src === "none" ? !r.code : r.code && r.codeSrc === s.src)) && (!q || r.ledger.toLowerCase().includes(q) || String(r.group).toLowerCase().includes(q)));
@@ -77,10 +79,14 @@ export function Tb({ d, kind, fy }) {
     <header><h3>{"Trial balance and mapping, " + (T.period && !T.period.full ? T.period.range : FC.fyLabel(fy))}</h3><p data-fin-pysrc={T.pySrc}>{"In rupees, a debit positive" + (T.period && !T.period.full ? ": balance sheet ledgers as on " + T.period.asAt + ", income and expenses for the period" : "") + ". " + ({
       copy: T.period && !T.period.full && T.period.cmp !== "fy" ? "PY: the same period last year, from FinCom’s copy." : "PY from last year in FinCom’s copy.", typed: "PY as typed.", upload: "PY from last year’s balance sheet, as uploaded.",
       none: "No PY: the same period of last year is not in FinCom’s copy." }[T.pySrc] || "PY from the opening balances.")}</p></header>
+    {earlierMapping(fy) && <AiMapSlot d={d} fy={fy} mode="new" />}
+    {T.carried && <p className="note" data-fin-carried="">{T.carried.note + ": " + T.carried.list.map((a) => "Dr " + a.dr + " / Cr " + a.cr + " " + rs(a.amt)).join("; ") + ". Pass them in Tally, then tick it on last year’s Checks tab."}</p>}
     {unm >= 0.005 && <p className="fin-unmapped" data-fin-unmapped="">{"Unmapped balance " + inr(unm)}{s.src !== "none" && <button type="button" className="linkbtn" onClick={() => setFin({ src: "none", tbF: null })}>Show them</button>}</p>}
     <div className="fin-tools">
       <input type="search" id="finq" aria-label="Find a ledger" data-fk="finq" placeholder="Find a ledger or group" value={s.q || ""} onChange={(ev) => { st().q = ev.target.value; setAndShow("fin", st(), true); }} />
       {f && <span className="fin-chipf" data-fin-tbfilter="">{f.label}<button type="button" aria-label="Show every ledger" onClick={() => setFin({ tbF: null })}>×</button></span>}
+      {f && f.want && (() => { const w = f.want, tot = shown.reduce((a, r) => a + (+r.final || 0), 0), pres = w.sign * tot + (w.profit || 0), inUnit = pres / w.unit, same = Math.abs(inUnit - w.v) <= 0.5 * Math.pow(10, -w.dec) * Math.max(2, shown.length + 1);
+        return <span className={"note " + (same ? "fin-ok" : "fin-bad")} data-fin-tbtotal={pres.toFixed(2)} data-want={w.v} data-same={same ? 1 : 0}>{shown.length + " ledger" + (shown.length === 1 ? "" : "s") + ": " + inr(w.sign * tot) + (w.profit ? " + the year’s profit " + inr(w.profit) : "") + (same ? " = the figure " : " ≠ the figure ") + fig(w.v, w.dec) + (w.unit > 1 ? " (" + ({ 1000: "thousands", 100000: "lakhs", 10000000: "crores" })[w.unit] + ")" : "")}</span>; })()}
       <span className="note">{shown.length === rows.length ? rows.length + " ledgers" : shown.length + " of " + rows.length + " ledgers"}</span>
     </div>
     <div className="fin-box"><table className="fin-t fin-tb" data-statement="" data-fin-table="tb">
@@ -97,7 +103,8 @@ export function Tb({ d, kind, fy }) {
         <td className="code">{r.synthetic ? <span className="note">{r.code + " " + FinSt.CODES[r.code].label}</span> : <>
           <CodeBtn r={r} kind={kind} open={pick && pick.l === r.ledger} onOpen={(at) => setPick(pick && pick.l === r.ledger ? null : { l: r.ledger, at })} />
           {r.code && <Tag kind={r.codeSrc === "hand" ? "info" : "no"} className="fin-src" data-fin-srctag={r.codeSrc} title={r.why || undefined}>{r.codeSrc === "hand" ? "By hand" : "Suggested"}</Tag>}
-          {r.code && r.codeSrc === "suggested" && r.why && <span className="fin-why" data-fin-why={r.ledger}>{r.why}</span>}</>}</td>
+          {r.code && r.codeSrc === "suggested" && r.why && <span className="fin-why" data-fin-why={r.ledger}>{r.why}</span>}
+          {r.code && r.codeSrc === "hand" && mapBy[r.ledger] && mapBy[r.ledger].code === r.code && <span className="fin-why" data-fin-mapby={r.ledger}>{mapBy[r.ledger].by + ", " + dmyIso(mapBy[r.ledger].at)}</span>}</>}</td>
         {lent && <td>{!r.synthetic && isLent(r.ledger) && <input type="checkbox" aria-label={"Loan given (investing): " + r.ledger} checked={MIS.flowMark(r.ledger) === "loan_given"} onChange={(ev) => loanGiven(r.ledger, ev.target.checked)} />}</td>}
       </tr>)}
         {!shown.length && <tr><td colSpan={lent ? 9 : 8} className="note">No ledger here. <button type="button" className="linkbtn" onClick={() => setFin({ tbF: null, src: "", q: "" })}>Show every ledger</button></td></tr>}
@@ -129,7 +136,7 @@ function Adjustments({ d, fy }) {
     <summary>{"Adjustments" + (list.length ? " (" + list.length + ")" : "")}</summary>
     <p className="note">{"Audit entries for these statements only (" + pl + "); FinCom never posts them to Tally."}</p>
     {list.length > 0 && <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="adj"><thead><tr><th>Debit</th><th>Credit</th><th className="n">Amount</th><th>Narration</th><th /></tr></thead>
-      <tbody>{list.map((a, i) => <tr key={i} data-fin-adjrow={i}><td>{a.dr}</td><td>{a.cr}</td><td className="n">{rs(a.amt)}</td><td>{a.narr}</td>
+      <tbody>{list.map((a, i) => <tr key={i} data-fin-adjrow={i}><td>{a.dr}</td><td>{a.cr}</td><td className="n">{rs(a.amt)}</td><td>{a.narr}{a.recon ? <span className="fin-why">{"matches the audited balance sheet · " + (a.by || "") + " · undo it from the Checks tab’s history"}</span> : null}</td>
         <td><button type="button" className="linkbtn" onClick={() => { FinSt.adjDel(pk, i); toast("Adjustment removed."); render(); }}>Remove</button></td></tr>)}</tbody></table></div>}
     <datalist id="finLedgers">{led.map((l) => <option key={l} value={l} />)}</datalist>
     <div className="fin-adj-add">

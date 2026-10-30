@@ -263,6 +263,12 @@ const FinSt = (() => {
     const close = bal.at(to), open = bal.at(Audit.dayBefore(fyFrom)), isRev = l => FS.nature(l).rev;
     // the balances the day before the period begins (the year's opening for the full year)
     const pOpen = P.full ? open : bal.at(Audit.dayBefore(from));
+    // last year's entries made to match its audited balance sheet (FinRecon: adjustments with carry, dated its 31 March)
+    // are in this year's opening balances, until they are passed in Tally (b.fs.recon[fy - 1].inTally)
+    const prevY = String(N(fy) - 1), inTally = y => !!(((f.recon || {})[y]) || {}).inTally;
+    const carried = inTally(prevY) ? [] : (((f.adj || {})[prevY]) || []).filter(a => a.carry && N(a.amt) && a.dr && a.cr);
+    const carry = m => carried.forEach(a => { m[a.dr] = R2(N(m[a.dr]) - N(a.amt)); m[a.cr] = R2(N(m[a.cr]) + N(a.amt)); });
+    carry(close); carry(open); if (pOpen !== open && !P.spans) carry(pOpen);
     const rows = {}, R = l => rows[l] = rows[l] || {ledger: l, group: Books.groupPath(l)[0] || "", py: 0, cy: 0, adj: 0};
     const all = Array.from(new Set(Object.keys(close).concat(Object.keys(open), Object.keys(pOpen))));
     let bfCy = 0, bfPy = 0, slCy = 0, slPy = 0;
@@ -289,7 +295,7 @@ const FinSt = (() => {
       if (pb && pb.ok){
         pySrc = "copy"; pyBal = pb; const pOpen = pb.at(Audit.dayBefore(pyFrom));
         Array.from(new Set(all.concat(Object.keys(pOpen)))).forEach(l => { const rv = isRev(l); R(l).py = R2(rv ? -(N(open[l]) - N(pOpen[l])) : -N(open[l])); if (rv) bfPy += -N(pOpen[l]); });
-        (((f.adj || {})[String(N(fy) - 1)]) || []).forEach(a => { if (!N(a.amt)) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
+        (((f.adj || {})[String(N(fy) - 1)]) || []).forEach(a => { if (!N(a.amt) || (a.carry && !inTally(prevY))) return; R(a.dr).py = R2(R(a.dr).py + N(a.amt)); R(a.cr).py = R2(R(a.cr).py - N(a.amt)); });
       } else if (upl && upl.usePy !== false) pySrc = "upload";
       else all.forEach(l => { if (isRev(l)) bfPy += -N(open[l]); else R(l).py = R2(-N(open[l])); });
     }
@@ -328,7 +334,8 @@ const FinSt = (() => {
       if (Bd !== A) tag(syn("Stock change before the period (in the profit earlier in the year)", "4E", vA - vB, pyS[3], vA - vB), {cy: "A-B", op: "A-B"});
     }
     // the adjustments (audit entries kept in FinCom, never posted to Tally), for this period
-    const adj = (f.adj || {})[periodKey(fy, P)] || [];
+    // (entries made to match the audited balance sheet, once passed in Tally, are Tally's: not added again)
+    const adj = ((f.adj || {})[periodKey(fy, P)] || []).filter(a => !(a.carry && inTally(String(fy))));
     adj.forEach(a => { if (!N(a.amt) || !a.dr || !a.cr) return; R(a.dr).adj = R2(R(a.dr).adj + N(a.amt)); R(a.cr).adj = R2(R(a.cr).adj - N(a.amt)); });
     // the codes last year's balance sheet suggests (never over a hand choice)
     const up = upl && FinPyBs.suggestions ? FinPyBs.suggestions(upl, openBs, kind, f.map || {}) : null;
@@ -340,11 +347,14 @@ const FinSt = (() => {
       out.push(Object.assign(r, k.code && !K[k.code] ? {code: "", codeSrc: "none"} : k)); r.side = r.code ? CODES[r.code].side : "";
     });
     syn(BF, "4A", bfCy, bfPy);
+    // the register's depreciation, profit or loss on sale and the deferred tax (FinDepr, src/js/88-fin-depr.js), once used for the year: FinCom rows with their codes
+    if (typeof FinDepr === "object" && FinDepr.rowsFor) FinDepr.rowsFor(fy, P, out).forEach(z => { const r = syn(z.ledger, z.code, z.cy, 0, 0); if (r) r.depr = z.key; });
     if (!P.full) syn(P.spans ? "Profit for " + DMY(from) + " to " + DMY(Audit.dayBefore(fyFrom)) + " (in the balance at the beginning of the year)" : "Profit for " + DMY(P.fyFrom) + " to " + DMY(Audit.dayBefore(from)) + " (earlier in the year)", "4E", slCy, slPy);
     // last year's balance sheet as the PY column: its lines by code (FinPyBs.pyRows), in rupees, a debit positive
     if (pySrc === "upload") FinPyBs.pyRows(upl, kind).forEach(([code, v]) => { if (K[code]) syn("Last year's balance sheet: " + CODES[code].label, code, 0, v, 0); });
     depCredited(b, out, adj, from, to, kind, f.map || {});
-    return {fy, from, to, kind, entity: FS.entityOf().code, rows: out, pySrc, src: bal.src, adj, period: P, hasOp, openBs, bfOpen: R2(bfCy), upload: upl || null, warn, stock};
+    return {fy, from, to, kind, entity: FS.entityOf().code, rows: out, pySrc, src: bal.src, adj, period: P, hasOp, openBs, bfOpen: R2(bfCy), upload: upl || null, warn, stock,
+      carried: carried.length ? {n: carried.length, list: carried, note: "Opening balances adjusted to the audited balance sheet (" + carried.length + " entr" + (carried.length > 1 ? "ies" : "y") + ")"} : null};
   }
   // depreciation credited straight to an asset (Tally's usual way: Dr Depreciation / Cr Laptops, no accumulated-
   // depreciation ledger): per gross-block row, depCrBook (the day book's entries of the year that debit a depreciation
@@ -433,6 +443,7 @@ const FinSt = (() => {
     const ppeAdj = (f.ppeAdj || {})[periodKey(fy, PER)] || {};
     const ppe = {cy: grid(PPE, "cy", ppeAdj), py: pri ? pri.ppe.cy : Object.assign(grid(PPE, "py"), {partial: true})};
     const intg = {cy: grid(INT, "cy", ppeAdj), py: pri ? pri.intang.cy : Object.assign(grid(INT, "py"), {partial: true})};
+    const reg = typeof FinDepr === "object" && FinDepr.grids ? FinDepr.grids(fy, PER, unit, dec) : null; if (reg){ ppe.cy = reg.ppe; intg.cy = reg.int; }   // the register (FinDepr), when used
     // the notes, their lines rounded each, groups and totals summed
     const notes = {};
     NOTES.forEach(n => {
@@ -583,6 +594,7 @@ const FinSt = (() => {
     if (part) d.compNote = "The computation of income is for a full financial year. Choose Full year to see it.";
     d.checks = checks(d, {S1, LV, tol, unit, dec, line, G, OB, part: part && PER.cmp !== "fy"});
     if (T.upload) d.pyCheck = pyCheck(T, sections, BSL, kind);
+    if (typeof FinDepr === "object" && FinDepr.attach) FinDepr.attach(d);   // depreciation and deferred tax (d.depr)
     return d;
   }
   // last year's balance sheet (uploaded) against FinCom's opening balances, by head of the balance sheet, in rupees: each
@@ -631,6 +643,7 @@ const FinSt = (() => {
 
   // ---------- income-tax depreciation by block (opening WDV typed once, then carried forward) ----------
   function taxDep(fy, depth){
+    if (!depth && typeof FinDepr === "object" && FinDepr.taxDep){ const r = FinDepr.taxDep(fy); if (r) return r; }   // last year's ITR, the register's additions and sales (FinDepr)
     const b = S.books || {}, f = b.fs || {}, typed = (f.taxDep || {})[fy], {from, to} = fyDates(fy), kind = kindOf(), map = f.map || {};
     const earlier = Object.keys(f.taxDep || {}).some(y => y < fy);
     let open = {}, carried = false;
@@ -742,7 +755,9 @@ const FinSt = (() => {
     Object.entries(f.map).forEach(([l, v]) => { if (OLD.includes(v)){ const c = refine(l, v, Books.groupPath(l), 0, kind); if (c){ f.map[l] = c; n++; } } });
     if (n) save(); return n;
   }
-  function adjAdd(fy, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).concat([{dr: a.dr, cr: a.cr, amt: R2(N(a.amt)), narr: a.narr || ""}]); save(); }
+  // (an entry may carry more: id, date, kind, by, at, recon / carry for the entries matching the audited balance sheet)
+  function adjAdd(fy, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).concat([Object.assign({}, a, {dr: a.dr, cr: a.cr, amt: R2(N(a.amt)), narr: a.narr || ""})]); save(); }
+  function adjDelId(fy, id){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).filter(a => a.id !== id); save(); }
   function adjSet(fy, i, a){ const f = fsOf(); f.adj = Object.assign({}, f.adj); const l = (f.adj[fy] || []).slice(); if (!l[i]) return; l[i] = Object.assign({}, l[i], a, a.amt != null ? {amt: R2(N(a.amt))} : {}); f.adj[fy] = l; save(); }
   function adjDel(fy, i){ const f = fsOf(); f.adj = Object.assign({}, f.adj); f.adj[fy] = (f.adj[fy] || []).filter((_, j) => j !== i); save(); }
   function compEdit(fy, key, v, why){ const f = fsOf(); f.compEdits = Object.assign({}, f.compEdits); const e = Object.assign({}, f.compEdits[fy]); if (v == null || v === "") delete e[key]; else e[key] = {v: N(v), why: why || ""}; f.compEdits[fy] = e; save(); }
@@ -769,7 +784,7 @@ const FinSt = (() => {
   function ppeAdjSet(fy, code, o){ const f = fsOf(); f.ppeAdj = Object.assign({}, f.ppeAdj); f.ppeAdj[fy] = Object.assign({}, f.ppeAdj[fy], {[code]: o}); save(); }
 
   return {CODES, NOTES, PPE, INT, BLOCKS, UNITS, RND, codes, suggest, refine, codeOf, tb, build, inputs, regime, taxDep, taxOn, comp, checks,
-    mapSet, migrate, adjAdd, adjSet, adjDel, compEdit, regimeSet, inputsSet, taxDepSet, pyTbSet, ppeAdjSet,
+    mapSet, migrate, adjAdd, adjSet, adjDel, adjDelId, compEdit, regimeSet, inputsSet, taxDepSet, pyTbSet, ppeAdjSet,
     periods, periodOf, periodKey, periodGet, periodSet, stockSet, bsLineOf, DMY, yearBack};
 })();
 

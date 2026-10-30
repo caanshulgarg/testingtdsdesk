@@ -237,6 +237,65 @@ Not derived from the workbooks (left to the Inputs or a value): the gratuity spl
 actuarial sheet: code 5E or 5A by hand), deferred tax working (the TB's 9A / 31A / 22C, checked), ageing schedules,
 PY cash flow when FinCom has no year before (blank), interest u/s 234B/234C, MAT (115JB), 40(b) limits for a firm.
 
+## Depreciation and deferred tax (`FinDepr`, src/js/88-fin-depr.js; owner, 29-Oct-2026)
+
+Lazy with the page (`finGlobals.js`). Screen: the tab "Fixed assets & deferred tax" (`fin/Depr.jsx`, its own chunk, under
+More). Excel / PDF: `app/src/lib/finDeprExport.js` (imported by `finExport.js`). Tests: `tests/run_fin_depr.js` (hand-worked
+figures), `tests/run_fin_depr_ui.py` (the tab, the statements, LibreOffice). Nothing changes for a client until the tab is
+started (`b.fs.depr` exists); the statements take the register / the deferred tax only when ticked for the year (`use`).
+
+| Call | Returns |
+|---|---|
+| `FinDepr.caItems(items, cfgOf, {y0, from, to, diy})` | the Companies Act register for a period: `{items[...], classes{cls: gO gA gD gC dO dep dD dC nO nC gain}, total}` |
+| `FinDepr.itBlocks({fy, to?, blocks{k: {open}}, adds[{block, put, amt}], sales[{block, date, value}], ceased{k}})` | section 32 by block: `[{key, rate, open, addA, addB, sale, total, ceased, stcg, dep, close}]` |
+| `FinDepr.readItrJson(obj, fy)` / `readItrText(text, fy)` | last year's ITR: `{form, ay, pan, blocks{k: wdv}, found[{block, path, field, v}], why, warn}` |
+| `FinDepr.yearCA(fy, 0, from, to)`, `yearIT(fy, to?)`, `dtOf(fy, P, rows)` | the year from the books (memoised) |
+| `FinDepr.rowsFor(fy, P, out)` | FinCom rows of the trial balance (`row.depr`): the register's depreciation less the books' (8E / 34D against the class's depreciation code), profit / loss on sale (14B / 17T), deferred tax (22C against 31A / 9A) |
+| `FinDepr.grids(fy, P, unit, dec)` | the PPE / intangibles schedules from the register (`fromRegister: true`) |
+| `FinDepr.taxDep(fy)` | `FinSt.taxDep`'s shape (Annexure 1), once the tab is in use |
+| `FinDepr.attach(d)` | `d.depr = {ca, it, itP, dt, use, canPost, postNote, sources, rows}` |
+| changes | `start()`, `cfgSet(cls, {method, life, res, block})`, `openSet(fy, cls, {gross, acc})`, `itOpenSet(fy, block, wdv)`, `ceasedSet(fy, block, bool)`, `saleSet(fy, key, cost)`, `putSet(fy, key, ymd)`, `useSet(fy, {ca, dt})`, `dtRateSet(rate)`, `itrSave(fy, read)` |
+
+Hooks in FinSt (one line each): `tb` adds `rowsFor`'s rows (synthetic, with their codes); `build` replaces the CY PPE grids
+with `grids` and puts `d.depr` (`attach`); `taxDep` returns `FinDepr.taxDep` when there is one.
+
+**Companies Act.** Classes are FinSt's PPE / INT classes. Defaults (Schedule II, Part C; residual 5%, Part A para 3(i)):
+computers WDV 3 years, office equipment 5, furniture 10, plant and machinery 15, vehicles 8, buildings 60 (RCC, non-factory),
+land none, leasehold improvements SLM 10, software SLM 5 with nil residual (AS 26). Per item (a class's opening lot, split
+when part of it is sold; each addition): annual = SLM `cost x (1 - res) / life`, WDV `(cost - acc) x (1 - res^(1/life))`;
+`depTo(T) = ROUND(MIN(cost - cost x res - acc, annual x days(T) / days in the year), 2)`, days from the later of 1 April and
+the put-to-use date to T or the day before the sale; the period's charge `depTo(To) - depTo(From - 1)`. Opening (owner's
+order): last year's audited balance sheet (FinPyBs lines: gross block / accumulated depreciation by class; a net block only is
+taken as cost), else last year's register, else typed, else FinCom's opening balances (said so). Additions: debits to a
+class's gross ledgers against a party, bank or cash; sales: credits to them, the sale value the consideration (the other
+side's debits); the books' own depreciation: entries with an 8E / 34D ledger. A sale takes the whole ledger (its share of the
+opening, its additions) unless its cost is given.
+
+**Income-tax Act.** Blocks (Appendix I, Income-tax Rules, from AY 2018-19): b5 5%, b10 10%, b40 40%, f10 10%, pm15 15%,
+pm30 30%, c40 40% (computers, software, other plant and machinery at 40%), i25 25%, s20 20%. Days used = 31 March - put to
+use + 1; under 180: half the rate. `dep = ROUND(MAX(0, open + addA - sale) x r + MAX(0, addB + MIN(0, open + addA - sale)) x r/2, 0)`;
+a negative block: STCG, no depreciation (s. 50(1)); a block that ceases (every asset sold, changeable): STCL, nil (s. 50(2)).
+Opening: last year's ITR (JSON, as the portal gives it (checked on real ITR-3 / ITR-6 for AY 2026-27):
+`ITR.ITRn.ScheduleDPM.PlantMachinery.RateNN.DepreciationDetail.WDVLastDay`, DOA's `Building` / `FurnitureFittings` /
+`IntangibleAssets` / `Ships` the same, DOA's `Land` (no rate) not a block; `WDVFirstDay` when the return is this year's own.
+PDF: the columns from each schedule's "Rate (%)" row (DOA's first column, `nil`, is land), the row "written down value on
+the last (or first) day of the previous year", the last as many figures as columns),
+else typed, else typed on the Computation tab, else last year's closing in FinCom. A part of the year: an estimate, the year's
+depreciation x days so far / days in the year.
+
+**Deferred tax.** Timing differences at To: the register's net block (depreciable classes) less the blocks' WDV; provisions
+5A + 5E (40A(7)) and 5B + 5C (43B(f)); 43B(h) MSME dues; the Computation's 43B statutory dues. Rate: 115BAA 25.168%, normal
+26% (31.2% when turnover is above Rs 400 crore), firm / slab 31.2%, or given. `closing = ROUND(total x rate / 100, 0)`; last
+year's from the uploaded balance sheet (31A / 9A), else the books' opening; the FinCom rows bring the books to the closing
+(a liability in Note 31, an asset in Note 9). MAT: not relevant under 115BAA (s. 115JB(5A)); otherwise a note says it is not
+worked. Periods that do not start on 1 April are shown on the tab only.
+
+**Workbook** (only with `d.depr`): sheets "FA - Companies Act" (class settings in yellow, the class summary by SUMIFS of the
+items, booked and FinCom-row columns; the items with their day counts and `ROUND(MIN(...),2)` depreciation), "FA - Income tax"
+(the blocks, their additions and sales lists), "Deferred tax" (rate from Inputs' Tax regime, the provisions by SUMIFS on the
+Trial Balance). The Trial Balance's FinCom rows (D) and, when the register is used, the PPE rows read them. PDF: a line under
+the PPE note (Schedule II), the deferred tax components under Note 31 / 9.
+
 ## Downloads (stage 2B): `FinXlsx`, `FinPdf`
 
 `app/src/lib/finExport.js`, a lazy chunk (nothing in legacy.js). `app/src/main.jsx` puts `window.loadFinExport()` and small
@@ -248,7 +307,7 @@ opened at once, so the pop-up is not blocked); once loaded, the module's own obj
 |---|---|
 | `FinXlsx.download(fy, {unit, dec})` | saves "<client> Financial statements FY 2025-26.xlsx" (`saveFile`); returns the name |
 | `FinXlsx.make(fy, {unit, dec})` | `{buffer, name, cells: [{sheet, addr, f, v, src}], sheets}`; `src` is the path of the FinSt.build figure a cell is |
-| `FinPdf.open(fy, {unit, dec, includeTb}, win?)` | the print view (as `printView`, A4 portrait): Balance Sheet, P&L, Cash Flow, Notes (with the PPE schedules), Computation, each from a new page, signature blocks; the trial balance only with `includeTb` |
+| `FinPdf.open(fy, {unit, dec, includeTb, notes, period}, win?)` | the print view (as `printView`, A4 portrait): Balance Sheet, P&L, Cash Flow, Notes (with the PPE schedules), Computation, each from a new page, signature blocks; the trial balance only with `includeTb`; `notes: false` leaves the Notes out |
 | `FinPdf.html(fy, opt)` | the same pages as HTML (`section.fs-page[data-fs-page=bs/pl/cf/notes/comp/tb]`) |
 | `FinSt.ratios(d)` | companies: Schedule III ratios `{comps, list[{key, label, numL, denL, cy, py, variance}]}` on closing balances; 0 when the denominator is nil |
 
@@ -263,3 +322,19 @@ helper columns; Trial Balance K "Code means"; Inputs E8 the unit, short; the yea
 `=ROUND(value*<the unit they were worked in>/UNIT,DEC)`, so a unit typed on Inputs!E4 carries every figure (the checks stay
 0); the rounding Note 17 absorbs worked out on Profit-Loss J-L (not printed), the raw 17J beside Note 17 (Notes J-K); the
 Computation in rupees with Annexure 1 down the page; Accounting Ratios (companies) linked to the statements.
+
+## Ask FinCom's statements card (29-Oct-2026)
+
+A request in Ask FinCom for a balance sheet, the financial statements, a provisional or interim balance sheet, Schedule III,
+the notes, a P&L with the balance sheet or last year's figures (`server/assistant/fsask.ts`: the words, the From-To, the
+comparative, the notes, a file asked for, the period of the earlier question) is answered without the AI by the statements
+card, `app/src/parts/AssistantFs.jsx` (a lazy chunk with FinSt). The card works the figures out here, in the browser, with
+`built()` of `screens/books/fin/util.js` (the page's own memo of `FinSt.build`) for `FinSt.periodOf(fy, {preset: "custom",
+from, to, cmp})` in the page's unit and decimals, so its figures are the page's. It shows: the summary (funds, totals,
+revenue, income, expenses, profit before tax and for the period, with the comparative); what is missing (the checks that do
+not read 0, `d.period.pyNote`, `d.tb.warn`, the days `needDays` says the copy lacks, entries held only to an earlier day);
+for "profit is different from Tally" the profit as Tally adds it (the income and expense ledgers' movement, `FS.nature(l).rev`)
+beside the statements' profit, with the page's adjustments, stock, ledgers with no code and rounding; last year's balance
+sheet attached in the chat, read by the page's reader (`PyBs.jsx readFile`, FinPyBs) with what was read to confirm, and kept
+with `FinPyBs.save`; and "Open Financial statements" (`FinSt.periodSet` with the card's dates and comparative, then the page),
+Download Excel (`FinXlsx.download`) and Download PDF (`FinPdf.open`, the notes left out when asked).

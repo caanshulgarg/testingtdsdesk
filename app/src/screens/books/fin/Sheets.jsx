@@ -1,17 +1,36 @@
 // The statements in the owner's workbook layout (Schedule III, or the ICAI format for a firm, LLP or proprietor):
 // Balance sheet, Profit & loss, Cash flow and Notes. Every figure is FinSt.build's (src/js/88), the value the Excel's
-// formula gives. A figure opens its note; a note's line opens its ledgers in the trial balance.
+// formula gives. A figure (owner, 29-Oct-2026: "every figure linked to the trial balance, smart") opens the trial balance
+// filtered to exactly its ledgers, their total shown against the figure; a note's number opens the note, a note's line its
+// ledgers too.
 import { Fragment, useEffect } from "react";
 import { fig, dmy, fyEnd, st, setFin } from "./util.js";
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 export const openNote = (key) => setFin({ tab: "notes", note: key });
-export const openTb = (codes, label) => setFin({ tab: "tb", tbF: { codes, label }, src: "", q: "" });
+// want: the figure the ledgers make {v (in the unit), unit, dec, sign: +1 a debit (assets, expenses) / -1 a credit,
+// profit: rupees added to the ledgers' total (the year's profit in the surplus)}
+export const openTb = (codes, label, want) => setFin({ tab: "tb", tbF: { codes, label, want: want || null }, src: "", q: "" });
 
-function Fig({ v, dec, note, label }) {
+// the codes behind a statement's line: a balance sheet line's (FinSt.bsLineOf), a P&L line's notes
+const PLC = { rev: ["13"], oth: ["14"], inc: ["13", "14"], mat: ["40"], pur: ["41"], chg: ["42"], emp: ["15"], fin: ["16"], dep: ["dep"], exp: ["17"], exc: ["43"],
+  tot: ["40", "41", "42", "15", "16", "dep", "17"], pbe: ["13", "14", "40", "41", "42", "15", "16", "dep", "17"], pbt: ["13", "14", "40", "41", "42", "15", "16", "dep", "17", "43"],
+  cur: ["c:22A"], prior: ["c:22B"], def: ["c:22C"], tax: ["22"], pat: ["13", "14", "40", "41", "42", "15", "16", "dep", "17", "43", "22"] };
+const PL_INC = { rev: 1, oth: 1, inc: 1, pbe: 1, pbt: 1, pat: 1 };
+export function lineCodes(d, kind, key) {
+  const K = FinSt.codes(d.kind);
+  if (kind === "bs") return Object.keys(K).filter((c) => FinSt.bsLineOf(c) === key);
+  return (PLC[key] || []).flatMap((n) => n === "dep" ? ["8E", "34D"] : n.startsWith("c:") ? [n.slice(2)] : Object.keys(K).filter((c) => K[c].side === "PL" && K[c].note === n));
+}
+const patRs = (d) => -d.tb.rows.filter((r) => r.code && FinSt.CODES[r.code] && FinSt.CODES[r.code].side === "PL").reduce((s, r) => s + r.final, 0);
+function Fig({ d, v, dec, label, kind, id, col }) {
   const t = fig(v, dec);
-  if (!note || !t || t === "-") return <>{t}</>;
-  return <button type="button" className="fin-fig" data-fin-fig={note} title={"Open the note: " + label} onClick={() => openNote(note)}>{t}</button>;
+  if (col !== "cy" || !t || t === "-" || !d) return <>{t}</>;
+  const codes = lineCodes(d, kind, id); if (!codes.length) return <>{t}</>;
+  const sign = kind === "bs" ? FinSt.CODES[codes[0]].sign : PL_INC[id] ? -1 : 1;
+  const profit = kind === "bs" && (id === "rs" && d.kind === "co" || id === "sc" && d.kind !== "co") ? patRs(d) : 0;
+  return <button type="button" className="fin-fig" data-fin-fig={id} title={"Open its ledgers in the trial balance: " + label}
+    onClick={() => openTb(codes, label, { v, unit: d.inputs.unit, dec, sign, profit })}>{t}</button>;
 }
 
 // the period's words (FinSt.periodOf): the full year as before, a part of it by its dates
@@ -28,6 +47,7 @@ export function Sheet({ d, title, children, sub }) {
     {P.spansNote && <p className="note" data-fin-spans="">{P.spansNote}</p>}
     {P.cmpNote && <p className="note" data-fin-cmpnote="">{P.cmpNote}</p>}
     {P.pyNote && <p className="note" data-fin-pynote="">{P.pyNote}</p>}
+    {d.tb.carried && <p className="note" data-fin-carried="">{d.tb.carried.note + ", dated " + FinSt.DMY(String(+d.fy) + "0331") + " and kept in FinCom; not in Tally."}</p>}
     {(d.tb.warn || []).map((w) => <p key={w} className="note">{w}</p>)}
     {children}
   </section>;
@@ -55,7 +75,7 @@ export function BalanceSheet({ d }) {
           {S2[s].lines.filter(nz).map((z, j) => <tr key={z.id} className="l1" data-fin-line={z.id}>
             <td>{"(" + "abcdefgh"[j] + ") " + z.label}</td>
             <td className="no">{z.no ? <button type="button" className="fin-fig" onClick={() => openNote(z.note)}>{z.no}</button> : ""}</td>
-            <td className="n"><Fig v={z.cy} dec={dec} note={z.no ? z.note : ""} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} note={z.no ? z.note : ""} label={z.label} /></td></tr>)}
+            <td className="n"><Fig d={d} kind="bs" id={z.id} col="cy" v={z.cy} dec={dec} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} /></td></tr>)}
         </Fragment>)}
         <tr className="tot" data-fin-total={r}><td>Total</td><td className="no" /><td className="n">{fig(tot.cy, dec)}</td><td className="n">{fig(tot.py, dec)}</td></tr>
       </Fragment>)}
@@ -76,7 +96,7 @@ export function ProfitLoss({ d }) {
     const label = inExp || inTax ? z.label : ROMAN[r++] + ". " + z.label, note = z.no ? nk[z.no] : "";
     rows.push(<tr key={z.key} className={PL_BOLD[z.key] ? (z.key === "pat" ? "tot" : "sub") : inExp || inTax ? "l1" : ""} data-fin-line={z.key}>
       <td>{label}</td><td className="no">{z.no ? <button type="button" className="fin-fig" onClick={() => openNote(note)}>{z.no}</button> : ""}</td>
-      <td className="n"><Fig v={z.cy} dec={dec} note={note} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} note={note} label={z.label} /></td></tr>);
+      <td className="n"><Fig d={d} kind="pl" id={z.key} col="cy" v={z.cy} dec={dec} label={z.label} /></td><td className="n"><Fig v={z.py} dec={dec} /></td></tr>);
   });
   const eps = d.pl.eps;
   return <Sheet d={d} title={"Statement of profit and loss " + forWhat(d)}>
@@ -138,7 +158,7 @@ export function Notes({ d, onRegister }) {
       </> : <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table={"note-" + n.key}><Head d={d} note={false} at={part(d) && n.st === "PL" ? "Period " : "As at "} />
         <tbody>{n.lines.map((z, i) => {
           const cs = codesOf(n, z), cls = z.head ? "h2" : z.total ? "sub" : "l1";
-          const lab = cs.length && !z.head ? <button type="button" className="fin-fig" data-fin-tbline={cs.join(",")} title="Open its ledgers in the trial balance" onClick={() => openTb(cs, "Note " + n.no + " · " + z.label)}>{z.label}</button> : z.label;
+          const lab = cs.length && !z.head ? <button type="button" className="fin-fig" data-fin-tbline={cs.join(",")} title="Open its ledgers in the trial balance" onClick={() => openTb(cs, "Note " + n.no + " · " + z.label, z.profit ? null : { v: z.cy, unit: d.inputs.unit, dec, sign: (FinSt.CODES[cs[0]] || {}).sign || 1, profit: z.total && (n.groups[z.group] || {}).profit ? patRs(d) : 0 })}>{z.label}</button> : z.label;
           return <tr key={i} className={cls}><td>{lab}{z.plug && (z.plug.cy || z.plug.py) ? <span className="note">{" (with rounding " + fig(z.plug.cy || z.plug.py, dec) + ")"}</span> : null}</td>
             <td className="n">{z.head ? "" : fig(z.cy, dec)}</td><td className="n">{z.head ? "" : fig(z.py, dec)}</td></tr>;
         })}

@@ -767,3 +767,95 @@ Deno.test("AI control centre: Ask FinCom (and My MIS) switched off by FinCom: re
   const m = await ask(new MockClaude([]), { question: "Build my MIS: a monthly P&L with last year beside it", client_id: CLIENT }, ME, sentryStand(), fincomOff(["mis_describe"]));
   eq([m.status, JSON.parse(m.raw).error], [403, "AI for My MIS described is switched off by FinCom."], "My MIS refused on its own switch");
 });
+
+// ---- the owner's report of 29-Oct-2026 (Impetus, a provisional balance sheet for 1-Apr to 30-Sep-2026): "despite giving
+// clear instruction it has not answered properly … no previous memory … I had to ask every time". Each request for the
+// statements is FinCom's statements card (fsask.ts; the figures are the Financial statements page's, worked out in the
+// browser): no model, no cost; the period from the words or from the earlier question; last year's balance sheet attached
+// earlier in the conversation handed to the card; the voice slip offered as a choice. A question that does reach the model
+// carries the conversation (bounded) and the files attached earlier, after the cached system prompt.
+const FS_OWNER = [
+  "Build my MIS: I want to make provisional balance sheet from 1st April 2026 to 30th September 2026.",
+  "please prepare balance sheet for 1st April 2026 to 30th September 2026..you have daybook.. I am attaching last year balance sheet also",
+  "I need proper schedule 3 balance sheet",
+  "profit is different from tally.. I need fs till 30th September.. last year figures also.. I have attached final balance sheet in the earlier message",
+  "1st April 2026 to 3rd September 2026, give me Provencial Balance Sheet with P&L and notes and give me last year's figure as well.",
+  "I need excel copy of this.",
+  "I want the financial statement with Schedule 3.",
+];
+const PY_UP = { path: FIRM + "/" + CLIENT + "/uploads/mvtbgrjq-Impetus-Balance-Sheet-F.y.-2025-26.pdf", name: "Impetus Balance Sheet F.y. 2025-26.pdf", type: "application/pdf", kind: "other",
+  summary: "Audited financial statements of the company for FY 2025-26 (balance sheet as at March 31, 2026, P&L, notes)." };
+const H1 = { from: "2026-04-01", to: "2026-09-30", cmp: "same", notes: true };
+Deno.test("the financial statements (owner, 29-Oct-2026): the statements card for every request, no model, no cost; the period carried; last year's file; the voice slip", async () => {
+  const c = new MockClaude([]);
+  const history: { role: string, content: string }[] = [];
+  let thread: Record<string, unknown> = { fs: null, files: [] };
+  const got: any[] = [];
+  for (const [i, q] of FS_OWNER.entries()) {
+    const uploads = i >= 1 ? [PY_UP] : [];
+    const r = await ask(c, { question: q, client_id: CLIENT, history, thread: { ...thread, files: uploads }, uploads });
+    const fs = ofType(r.events, "fs")[0];
+    assert(fs && r.done, "turn " + (i + 1) + ": the statements card (" + q + "): " + r.raw.slice(0, 300));
+    eq([r.done.route, r.done.usage.calls], ["fs", 0], "turn " + (i + 1) + ": FinCom's own answer, no model call");
+    assert(!ofType(r.events, "result").some((x) => x.tool === "profit_and_loss"), "turn " + (i + 1) + ": never the profit and loss alone");
+    assert(!/₹\s?\d/.test(r.done.text), "turn " + (i + 1) + ": no figure in FinCom's line: " + r.done.text);
+    got.push({ fs, done: r.done, events: r.events });
+    history.push({ role: "user", content: q }, { role: "assistant", content: r.done.text });
+    thread = { fs: { from: fs.from, to: fs.to, cmp: fs.cmp, notes: fs.notes } };
+  }
+  eq([c.calls.length, c.routerCalls.length], [0, 0], "no model called in the whole conversation");
+  eq([got[0].fs.from, got[0].fs.to, got[0].fs.fy, got[0].fs.cmp, got[0].fs.notes, got[0].fs.client], ["2026-04-01", "2026-09-30", "2026", "same", true, CLIENT], "1: provisional BS 1-Apr to 30-Sep-2026 (not My MIS)");
+  eq([got[1].fs.py?.path, got[1].fs.py?.name], [PY_UP.path, PY_UP.name], "2: last year's balance sheet attached, handed to the card");
+  eq([got[2].fs.from, got[2].fs.to, got[2].fs.carried], ["2026-04-01", "2026-09-30", true], "3: 'proper schedule 3 balance sheet': the earlier period");
+  eq([got[3].fs.to, got[3].fs.tallyDiff, got[3].fs.py?.name], ["2026-09-30", true, PY_UP.name], "4: 'fs till 30th September', Tally's profit, the file of the earlier message");
+  assert(got[3].done.text.includes(PY_UP.name) && got[3].done.text.includes("Tally"), "4: the line names the file and Tally: " + got[3].done.text);
+  eq([got[4].fs.to, got[4].fs.alt?.to], ["2026-09-03", "2026-09-30"], "5: 3rd September as heard, 30th offered");
+  const ch = ofType(got[4].events, "choices")[0];
+  assert(ch && ch.options.length === 2 && ch.options.some((o: any) => /30-Sep-2026/.test(o.label)), "5: a button for each date: " + JSON.stringify(ch));
+  eq([got[5].fs.want, got[5].fs.carried, got[5].fs.to], ["xlsx", true, "2026-09-03"], "6: 'excel copy of this': the statements just shown, Excel");
+  eq([got[6].fs.carried, got[6].fs.notes], [true, true], "7: 'the financial statement with Schedule 3': the same period");
+  const log = await svc("/rest/v1/assistant_log?select=route,cost_inr,tools,calls&question=eq." + encodeURIComponent(FS_OWNER[3]));
+  eq([log[0]?.route, Number(log[0]?.cost_inr), log[0]?.calls, log[0]?.tools], ["fs", 0, 0, ["fs_build"]], "logged: the statements, ₹0");
+});
+
+Deno.test("memory: a question that reaches the model carries the conversation (bounded, oldest dropped) and the files attached earlier, after the cached prompt", async () => {
+  const c = new MockClaude([[text("The rent is higher because of the new office from July.")]]);
+  const long = "x".repeat(5000);
+  const history = Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: (i % 2 ? "answer " : "question ") + i + " " + long }));
+  history.push({ role: "user", content: "please prepare balance sheet for 1st April 2026 to 30th September 2026" }, { role: "assistant", content: "Financial statements … [Shown: the statements card, 01-Apr-2026 to 30-Sep-2026, compared with the same period last year]" });
+  const r = await ask(c, { question: "Why is the office rent in the earlier message so high?", client_id: CLIENT, history, uploads: [PY_UP], thread: { fs: H1, files: [PY_UP] } });
+  assert(r.done && c.calls.length === 1, "answered by the model: " + r.raw.slice(0, 300));
+  const p: any = c.calls[0], msgs: any[] = p.messages, last = msgs[msgs.length - 1];
+  assert(p.system[0].cache_control?.ttl === "1h" && Array.isArray(p.tools) && p.tools.length > 0, "the frozen prefix first: the tools and the system prompt, cached for an hour");
+  const before = msgs.slice(0, -1), chars = before.reduce((a: number, m: any) => a + String(typeof m.content === "string" ? m.content : JSON.stringify(m.content)).length, 0);
+  assert(before.length >= 2 && before.length <= 12, "the conversation: the last turns, at most 12 messages (" + before.length + ")");
+  assert(before.every((m: any) => String(m.content).length <= 1600) && chars <= 10000, "each message cut, the whole bounded (" + chars + " characters)");
+  assert(String(before[before.length - 1].content).includes("statements card"), "the newest turns kept, with what was shown");
+  assert(before[0].role === "user", "the conversation starts with a question");
+  const lastText = (last.content as any[]).map((b) => b.text || "").join("\n");
+  assert(lastText.includes("Impetus Balance Sheet F.y. 2025-26.pdf") && lastText.includes("Audited financial statements"), "the files attached earlier, with what FinCom found them to be: " + lastText.slice(0, 600));
+  assert(lastText.includes("01-Apr-2026 to 30-Sep-2026"), "the statements shown earlier in this conversation: " + lastText.slice(0, 600));
+  assert(lastText.endsWith("Why is the office rent in the earlier message so high?"), "the question last");
+});
+
+Deno.test("fs_build from the model: the statements card with From, To and the comparative; no figure for the model to state", async () => {
+  const c = new MockClaude([[tool("fs_build", { client: null, from: "2026-04-01", to: "2026-09-30", compare: "fy", notes: false })], [text("The statements for 01-Apr-2026 to 30-Sep-2026 are in the card below.")]]);
+  const r = await ask(c, { question: "Help me get the half-yearly accounts ready for the bank meeting", client_id: CLIENT });
+  const fs = ofType(r.events, "fs")[0];
+  assert(fs, "the card: " + r.raw.slice(0, 400));
+  eq([fs.from, fs.to, fs.cmp, fs.notes, fs.fy], ["2026-04-01", "2026-09-30", "fy", false, "2026"], "the period, the comparative and the notes as the model gave them");
+  const res = (c.calls[1] as any).messages.slice(-1)[0].content[0];
+  assert(/never state a figure/i.test(String(res.content)) && !res.is_error, "the model is told the card has the figures: " + String(res.content));
+  assert(r.done.labels.includes("books"), "FinCom's books");
+});
+
+Deno.test("the statements asked with last year's balance sheet attached to the question: the card reads it, no model reads the PDF", async () => {
+  const pdf = await Deno.readFile(new URL("../../tests/fixtures/assistant/asmt10-notice.pdf", import.meta.url));   // any PDF: only its path matters here
+  const path = FIRM + "/" + CLIENT + "/uploads/fsq-Audited-Balance-Sheet-2025-26.pdf";
+  await (await fetch(STAND + "/storage/v1/object/assistant-files/" + path, { method: "POST", headers: { Authorization: "Bearer tok-" + ME, "Content-Type": "application/pdf" }, body: pdf })).text();
+  const c = new MockClaude([]);
+  const r = await ask(c, { question: "prepare provisional balance sheet till 30th September with last year figures from this", client_id: CLIENT,
+    attachments: [{ path, name: "Audited Balance Sheet 2025-26.pdf", type: "application/pdf", kind: "other" }] });
+  const fs = ofType(r.events, "fs")[0];
+  eq([!!fs, fs?.py?.path, c.calls.length + c.routerCalls.length], [true, path, 0], "the statements card with the attached file as last year's; no model");
+});

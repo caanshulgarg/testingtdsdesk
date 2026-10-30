@@ -1,0 +1,210 @@
+{
+  "_": "A made-up audited balance sheet of Larkspur Analytics Private Limited as at 31 March 2026 for the one-time AI mapping (tests/run_fs_aimap_ui.py). Every name and figure is invented. Against FinCom's figures from tests/fixtures/fin-statements/company.json it differs ONLY in the mapping: Willow Labs (90,000, a debtor in the books) is shown as a loan to a related party. Once that ledger is mapped there, every head agrees.",
+  "title": "Larkspur Analytics Private Limited (made-up)",
+  "what": "Balance Sheet as at 31 March 2026",
+  "unit": "(All amounts in Rupees, unless otherwise stated)",
+  "head": [
+    "Particulars",
+    "Note",
+    "As at 31 March 2026",
+    "As at 31 March 2025"
+  ],
+  "rows": [
+    [
+      "I. EQUITY AND LIABILITIES"
+    ],
+    [
+      "(1) Shareholders' funds"
+    ],
+    [
+      "(a) Share capital",
+      3,
+      100000,
+      100000
+    ],
+    [
+      "(b) Reserves and surplus",
+      4,
+      7142100.05,
+      4531000
+    ],
+    [
+      "(2) Non-current liabilities"
+    ],
+    [
+      "(a) Long-term provisions",
+      5,
+      360000,
+      300000
+    ],
+    [
+      "(3) Current liabilities"
+    ],
+    [
+      "(a) Trade payables",
+      6
+    ],
+    [
+      "- Total outstanding dues of micro and small enterprises",
+      "",
+      55000,
+      40000
+    ],
+    [
+      "- Total outstanding dues of creditors other than micro and small enterprises",
+      "",
+      222000.5,
+      145000
+    ],
+    [
+      "(b) Other current liabilities",
+      7,
+      463700,
+      825000
+    ],
+    [
+      "(c) Short-term provisions",
+      5,
+      245000,
+      200000
+    ],
+    [
+      "TOTAL",
+      "",
+      8587800.55,
+      6141000
+    ],
+    [
+      "II. ASSETS"
+    ],
+    [
+      "(1) Non-current assets"
+    ],
+    [
+      "(a) Property, plant and equipment",
+      8,
+      545000,
+      520000
+    ],
+    [
+      "(b) Deferred tax assets (net)",
+      9,
+      97000,
+      85000
+    ],
+    [
+      "(c) Long-term loans and advances",
+      10,
+      150000,
+      150000
+    ],
+    [
+      "(2) Current assets"
+    ],
+    [
+      "(a) Trade receivables",
+      11,
+      3100000.75,
+      2650000
+    ],
+    [
+      "(b) Cash and bank balances",
+      12,
+      4000299.8,
+      2198000
+    ],
+    [
+      "(c) Short-term loans and advances",
+      13,
+      683000,
+      530000
+    ],
+    [
+      "(d) Other current assets",
+      13,
+      12500,
+      8000
+    ],
+    [
+      "TOTAL",
+      "",
+      8587800.55,
+      6141000
+    ],
+    [
+      "Note 7 Other current liabilities"
+    ],
+    [
+      "Employee related payables",
+      "",
+      275000,
+      250000
+    ],
+    [
+      "Statutory dues (TDS, GST, PF)",
+      "",
+      168700,
+      145000
+    ],
+    [
+      "Advances from customers",
+      "",
+      20000,
+      10000
+    ],
+    [
+      "Note 8 Property, plant and equipment (net block)"
+    ],
+    [
+      "Computers",
+      "",
+      330000,
+      300000
+    ],
+    [
+      "Office equipment",
+      "",
+      120000,
+      140000
+    ],
+    [
+      "Furniture and fixtures",
+      "",
+      95000,
+      80000
+    ],
+    [
+      "Note 13 Short-term loans and advances"
+    ],
+    [
+      "Advance income tax and TDS (net of provision)",
+      "",
+      460000,
+      420000
+    ],
+    [
+      "Prepaid expenses",
+      "",
+      52000,
+      40000
+    ],
+    [
+      "Balances with government authorities (GST)",
+      "",
+      75000,
+      60000
+    ],
+    [
+      "Loans and advances to employees",
+      "",
+      6000,
+      10000
+    ],
+    [
+      "Loans and advances to related parties",
+      "",
+      90000,
+      0
+    ]
+  ]
+}

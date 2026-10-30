@@ -1,0 +1,49 @@
+INDIAN INCOME TAX RETURN
+FORM ITR-3 (made-up sample: the layout of the e-filing portal's ITR-3 PDF, AY 2026-27; every figure invented)
+Assessment Year 2026-27
+PAN ABCPS1234K
+Name Asha Sample (made-up)
+10 Adjusted Profit and loss (6 + 9) 10 1,00,000
+i 12i 36,000
+6 of Schedule-DEP)
+Depreciation allowable under section 32(1)(i) (Make your own
+SCHEDULE DPM - DEPRECIATION ON PLANT AND MACHINERY (OTHER THAN ASSETS ON WHICH FULL CAPITAL EXPENDITURE IS
+ALLOWABLE AS DEDUCTION UNDER ANY OTHER SECTION)
+1 Block of assets Plant and Machinery
+2 Rate (%) 15 30 40 45
+(i) (ii) (iii) (iv)
+3a Written down value on the first day of previous year 3,00,000 0 5,000 0
+3b Adjustment as per second proviso to sub section 3 0 0 0 0
+of section 115BAC(Refer to Rule 5)
+3 Total (3a+3b) 3,00,000 0 5,000 0
+4 Additions for a period of 180 days or more in the 0 0 0
+180 days
+15 Total Depreciation (10+11+12+13+14) 30,000 0 2,000 0
+16 Depreciation disallowed under section 38(2) of the 0 0 0 0
+19) (Enter negative only if block ceases to exist)
+21 Written down value on the last day of previous year 2,70,000 0 3,000 0
+(6+ 9 -15) (enter 0 if result is negative)
+SCHEDULE DOA - DEPRECIATION ON OTHER ASSETS(OTHER THAN ASSETS ON WHICH FULL CAPITAL EXPENDITURE IS ALLOWABLE AS
+DEDUCTION)
+1 Block of assets Land Building (not including land) Furniture Intangible Ships
+and Assets
+Fittings
+2 Rate (%) nil 5 10 40 10 25 20
+(i) (ii) (iii) (iv) (v) (vi) (vii)
+Acknowledgement Number : 000000000000000 Date of Filing : 28-Oct-2026*
+3 Written down value on the first day of previous year 0 0 40,000 0 0 0 0
+4 Additions for a period of 180 days or more in the 0 0 0 0 0 0
+11 Depreciation on 9 at half rate 0 0 0 0 0 0
+12 Total depreciation (10+11) 0 4,000 0 0 0 0
+13 Depreciation disallowed under section 38(2) of the 0 0 0 0 0 0
+16) (enter negative only if block ceases to exist)
+18 Written down value on the last day of previous 0 0 36,000 0 0 0 0
+year* (6+ 9 -12) (enter 0, if result is negative)
+SCHEDULE DEP - SUMMARY OF DEPRECIATION ON ASSETS (OTHER THAN ASSETS ON WHICH FULL CAPITAL EXPENDITURE IS
+ALLOWABLE AS DEDUCTION UNDER ANY OTHER SECTION)
+1 Plant and machinery
+Block entitled for depreciation @ 15 per cent (Schedule DPM –
+a 1a 30,000
+Block entitled for depreciation @ 40 per cent (Schedule DPM –
+c 1c 2,000
+6 Total depreciation (1e+2d+3+4+5) 6 36,000

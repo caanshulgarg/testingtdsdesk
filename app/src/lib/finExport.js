@@ -8,10 +8,13 @@
 //
 //   FinXlsx.download(fy, {unit, dec})      saves "<client> Financial statements FY 2025-26.xlsx"
 //   FinXlsx.make(fy, {unit, dec})          -> {buffer, name, cells: [{sheet, addr, v, src}], sheets} (the tests read it)
-//   FinPdf.open(fy, {unit, dec, includeTb}, win?)  opens the print view (win: a window opened already, e.g. by a stub)
+//   FinPdf.open(fy, {unit, dec, includeTb, notes}, win?)  opens the print view (win: a window opened already, e.g. by a stub;
+//                                          notes: false leaves the notes out)
 //   FinPdf.html(fy, {unit, dec, includeTb})        the same pages as HTML
 //   FinSt.ratios(d)                        Schedule III accounting ratios from the balance sheet and P&L (companies)
 import "./finGlobals.js";
+// depreciation and deferred tax: their sheets and PDF notes, when the client uses that tab (d.depr)
+import { FinDeprX as DX } from "./finDeprExport.js";
 
 const G = globalThis;
 const FS = () => G.FinSt;
@@ -220,7 +223,7 @@ function workbook(ExcelJS, d) {
   T.forEach((x, i) => {
     const rr = t0 + i; R.tbRow[x.ledger] = rr;
     put("tb", "A" + rr, x.ledger); put("tb", "B" + rr, x.group || "");
-    put("tb", "C" + rr, x.py, { nf: NF2 }); put("tb", "D" + rr, x.stk ? { f: stkF(x.stk.cy), v: x.cy, src: ["tb", "rows", i, "cy"] } : x.cy, { nf: NF2 });
+    put("tb", "C" + rr, x.py, { nf: NF2 }); put("tb", "D" + rr, x.stk ? { f: stkF(x.stk.cy), v: x.cy, src: ["tb", "rows", i, "cy"] } : x.depr ? DX.tbCell(x, i) : x.cy, { nf: NF2 });
     const crit = /[*?~]|^[=<>]/.test(x.ledger) ? null : "$A" + rr;
     const adjF = crit ? "SUMIF(JV!$B:$B," + crit + ",JV!$D:$D)-SUMIF(JV!$C:$C," + crit + ",JV!$D:$D)"
       : "SUMPRODUCT((JV!$B$" + jv0 + ":$B$" + jvN + "=$A" + rr + ")*JV!$D$" + jv0 + ":$D$" + jvN + ")-SUMPRODUCT((JV!$C$" + jv0 + ":$C$" + jvN + "=$A" + rr + ")*JV!$D$" + jv0 + ":$D$" + jvN + ")";
@@ -294,7 +297,7 @@ function workbook(ExcelJS, d) {
         const path = (k2) => ["ppeRow", key, col, i, k2];
         if (col === "cy") {
           const adj = adjs[x.g] || {}, S = N(adj.sale) ? "+ROUND(" + N(adj.sale) + "/UNIT,DEC)" : "";
-          const f = {
+          const f = gr.fromRegister ? DX.ppeF(x, sp) : {
             D: "ROUND(" + (PBc === "op" ? SO : SP)(x.g) + ",DEC)", G: "ROUND(" + SC(x.g) + "+" + SD(x.g) + ",DEC)",
             E: "ROUND(MAX(0," + sp("G") + "-" + sp("D") + ")" + S + ",DEC)", F: "ROUND(-(MAX(0," + sp("D") + "-" + sp("G") + ")" + S + "),DEC)",
             H: x.a ? "ROUND(-" + (PBc === "op" ? SO : SP)(x.a) + ",DEC)" : "0", K: "ROUND(" + (x.a ? "-" + SC(x.a) + "+" : "") + SD(x.g) + ",DEC)",
@@ -475,9 +478,9 @@ function workbook(ExcelJS, d) {
       vis.forEach((l) => {
         const li = S.lines.indexOf(l), tp = l.id === "tpm" || l.id === "tpo";
         // trade payables as the workbooks show them: a caption with the note, then the two kinds of dues
-        if (tp && !tpCap) { tpCap = true; put("bs", "C" + br, "Trade payables"); if (l.no) put("bs", "E" + br, l.no, { al: "center" }); br++; }
+        if (tp && !tpCap) { tpCap = true; put("bs", "C" + br, "Trade payables"); if (l.no) put("bs", "E" + br, String(l.no), { al: "center" }); br++; }
         put("bs", "C" + br, tp ? "   - " + l.label.replace(/^Trade payables: o/, "O") : l.label, { wrap: tp });
-        if (l.no && !tp) put("bs", "E" + br, l.no, { al: "center" });
+        if (l.no && !tp) put("bs", "E" + br, String(l.no), { al: "center" });
         if (tp && l.label.length > 60) WS.bs.getRow(br).height = 30;
         ["cy", "py"].forEach((col) => put("bs", (col === "cy" ? "F" : "H") + br, { f: () => (bsRefs(l.id, col).length > 1 ? "ROUND(" + plus(bsRefs(l.id, col)) + ",DEC)" : plus(bsRefs(l.id, col))), v: l[col], src: ["bs", "sections", s, "lines", li, col] }, { nf }));
         (R.bs[l.id] = {}).cy = A(SH.bs, "F", br); R.bs[l.id].py = A(SH.bs, "H", br);
@@ -544,7 +547,7 @@ function workbook(ExcelJS, d) {
     if (x.head) { put("pl", "C" + x.row, x.head, { b: true }); return; }
     if (x.gap) return;
     const l = x.l, li = d.pl.lines.indexOf(l);
-    put("pl", "C" + x.row, l.label, { b: !!bold[l.key] }); if (l.no) put("pl", "E" + x.row, l.no, { al: "center" });
+    put("pl", "C" + x.row, l.label, { b: !!bold[l.key] }); if (l.no) put("pl", "E" + x.row, String(l.no), { al: "center" });
     ["cy", "py"].forEach((col) => put("pl", (col === "cy" ? "F" : "H") + x.row, { f: () => { const f = plF[l.key](col); return f === "0" ? "0" : f; }, v: l[col], src: ["pl", l.key, col] },
       { nf, b: !!bold[l.key], top: !!bold[l.key] && l.key !== "pat", dbl: l.key === "pat" }));
   });
@@ -753,10 +756,10 @@ function workbook(ExcelJS, d) {
     });
     const base = at.open + "+" + at.addA + "-" + at.sale;
     put("comp", "C" + kr, "      Depreciation");
-    put("comp", "E" + kr, { f: "ROUND(MAX(0," + base + ")*" + at.rate + "+MAX(0," + at.addB + "+MIN(0," + base + "))*" + at.rate + "/2,0)", v: b2.dep, src: ["comp", "itdep", "blocks", i, "dep"] }, { nf: NF2 });
+    put("comp", "E" + kr, { f: itd.depr ? DX.itRef(i, "J") : "ROUND(MAX(0," + base + ")*" + at.rate + "+MAX(0," + at.addB + "+MIN(0," + base + "))*" + at.rate + "/2,0)", v: b2.dep, src: ["comp", "itdep", "blocks", i, "dep"] }, { nf: NF2 });
     depCells.push("E" + kr); const dc = "$E$" + kr; kr++;
     put("comp", "C" + kr, "      Closing written-down value", { i: true });
-    put("comp", "D" + kr, { f: "ROUND(MAX(0," + at.open + "+" + at.addA + "+" + at.addB + "-" + at.sale + "-" + dc + "),2)", v: b2.close, src: ["comp", "itdep", "blocks", i, "close"] }, { nf: NF2, i: true, top: true });
+    put("comp", "D" + kr, { f: itd.depr ? DX.itRef(i, "K") : "ROUND(MAX(0," + at.open + "+" + at.addA + "+" + at.addB + "-" + at.sale + "-" + dc + "),2)", v: b2.close, src: ["comp", "itdep", "blocks", i, "close"] }, { nf: NF2, i: true, top: true });
     kr += 2;
   });
   put("comp", "C" + kr, "Total depreciation as per the Income-tax Act", { b: true });
@@ -813,15 +816,17 @@ function workbook(ExcelJS, d) {
     page("ar", "A1:H" + (c0 + Object.keys(ra.comps).length + 1), true, true);
   }
 
+  // the sheets of depreciation and deferred tax (FA - Companies Act, FA - Income tax, Deferred tax), when in use
+  if (d.depr) DX.sheets({ d, put, IN, TBc, widths, ws: (k) => WS[k], add: (k, name) => { WS[k] = wb.addWorksheet(name, { views: [{ showGridLines: false }], properties: { defaultRowHeight: 15 } }); order.push(k); } });
   // every formula, now that each sheet is laid out
   pend.forEach(({ k, addr, c, val }) => {
     let f = typeof val.f === "function" ? val.f() : val.f;
     f = String(f).replace(/^=/, "");
     const v = typeof val.v === "number" ? (Object.is(val.v, -0) ? 0 : val.v) : val.v;
     c.value = { formula: f, result: v };
-    cells.push({ sheet: SH[k], addr, f, v, src: val.src || null });
+    cells.push({ sheet: SH[k] || WS[k].name, addr, f, v, src: val.src || null });
   });
-  return { wb, cells, sheets: order.map((k) => SH[k]) };
+  return { wb, cells, sheets: order.map((k) => SH[k] || WS[k].name) };
 }
 
 function built(fy, opt) {
@@ -831,7 +836,29 @@ function built(fy, opt) {
 }
 const fileBase = (d) => String(d.inputs.name || "Client").replace(/[\\/:*?"<>|]+/g, " ").trim() + " Financial statements " + (d.period && !d.period.full ? d.period.range : "FY " + fyLabel(d.fy));
 
+// the entries accepted to match the audited balance sheet (FinRecon.journal), as journal vouchers for Tally: one row a
+// voucher, the date, the ledgers and the amount (FinCom never posts them)
+async function journalBook(fy) {
+  const ExcelJS = await ensureExcelJs(), rows = G.FinRecon ? G.FinRecon.journal(fy) : [];
+  const wb = new ExcelJS.Workbook(); wb.creator = "FinCom";
+  const ws = wb.addWorksheet("Journal");
+  const name = (G.FinSt.inputs().name || "Client").replace(/[\\/:*?"<>|]+/g, " ").trim();
+  ws.addRow([name + ": journal entries to match the audited balance sheet (" + (rows[0] ? rows[0].date : "") + "), to pass in Tally"]).font = { bold: true };
+  ws.addRow(["Date", "Voucher type", "Debit ledger", "Credit ledger", "Amount (Rs)", "Narration"]).font = { bold: true };
+  rows.forEach((r) => { const x = ws.addRow([r.date, r.type, r.dr, r.cr, r.amt, r.narr]); x.getCell(5).numFmt = "#,##0.00"; });
+  [12, 12, 40, 40, 16, 70].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  return { buffer: await wb.xlsx.writeBuffer(), name: name + " Journal entries for Tally " + (rows[0] ? rows[0].date : "") + ".xlsx", rows };
+}
+
 export const FinXlsx = {
+  journalMake: journalBook,
+  async journal(fy) {
+    const x = await journalBook(fy);
+    const blob = new Blob([x.buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    if (typeof G.saveFile === "function") await G.saveFile(x.name, blob);
+    else { const a = document.createElement("a"), u = URL.createObjectURL(blob); a.href = u; a.download = x.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
+    return x.name;
+  },
   async make(fy, opt) {
     const ExcelJS = await ensureExcelJs(), d = built(fy, opt || {});
     const { wb, cells, sheets } = workbook(ExcelJS, d);
@@ -932,6 +959,7 @@ export function pdfHtml(d, opt) {
         if (gr.rows.length) g += '<tr class="grand"><td>Total</td>' + "DEFGHIJKLM".split("").map((c) => '<td class="n">' + (gr.total[c] == null ? "" : M(gr.total[c])) + "</td>").join("") + "</tr>";
         else g += '<tr><td colspan="11"><i>Nil</i></td></tr>';
         g += "</tbody></table>";
+        if (col === "cy" && gr.fromRegister) g += DX.pdfPpe(d, H);
         // depreciation credited straight to the asset ledgers (no accumulated-depreciation ledger): said under the grid
         const dcs = col === "cy" ? gr.rows.filter((x) => x.dc) : [];
         if (dcs.length) g += '<p style="font-size:9pt;margin:4px 0" data-fs-depcr=""><i>Depreciation of ' + M(dcs.reduce((s, x) => s + x.dc, 0)) + " (" + H(dcs.map((x) => x.label).join(", ")) + ") was credited directly to the asset in the books; it is shown as the charge for the year and added back to the gross block.</i></p>";
@@ -948,9 +976,10 @@ export function pdfHtml(d, opt) {
         else t += row(l.label, "", l.cy, l.py, l.total ? (totals === 1 ? "grand" : "tot") : "", false);
       });
       if (totals !== 1) t += row("Total", "", n.total.cy, n.total.py, "grand", false);
-      t += "</tbody></table></div>";
+      t += "</tbody></table>" + (n.key === "31" || n.key === "9" ? DX.pdfDt(d, M, H, n.key) : "") + "</div>";
     });
-    pages.push(["notes", "Notes forming part of the financial statements " + forWhat, t]);
+    // the notes off (Ask FinCom: "without the notes"): the statements alone; on by default
+    if (opt.notes !== false) pages.push(["notes", "Notes forming part of the financial statements " + forWhat, t]);
   }
   // Computation of income (rupees): a full financial year only
   if (d.comp) {

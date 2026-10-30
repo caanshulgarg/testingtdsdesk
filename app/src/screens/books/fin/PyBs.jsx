@@ -9,11 +9,14 @@
 import { useState } from "react";
 import Button from "../../../parts/Button.jsx";
 import { rs, codeGroups } from "./util.js";
+import AiMapSlot, { earlierMapping } from "./aimapSlot.jsx";
 
 const UNITS = [[1, "Rupees"], [1000, "Thousands"], [100000, "Lakhs"], [10000000, "Crores"]];
 const hex = (buf) => Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 
-async function readFile(file, kind) {
+// the page's reader of last year's balance sheet (Excel, CSV or a PDF's text), also used by Ask FinCom's statements card
+// (app/src/parts/AssistantFs.jsx) for a balance sheet attached in the chat: the same code, the same lines and codes
+export async function readFile(file, kind) {
   const name = file.name || "file", low = name.toLowerCase(), buf = await file.arrayBuffer();
   let sha = ""; try { sha = hex(await crypto.subtle.digest("SHA-256", buf)); } catch (e) { /* an old browser: no checksum */ }
   let r, src;
@@ -34,7 +37,7 @@ async function readFile(file, kind) {
   return FinPyBs.prepare(Object.assign(r, { file: name, size: file.size, sha256: sha, src }), kind);
 }
 
-function Lines({ lines, kind, edit, onLine }) {
+export function Lines({ lines, kind, edit, onLine }) {
   const groups = codeGroups(kind).map(([g, list]) => [g, list.filter(([c]) => FinSt.CODES[c] && FinSt.CODES[c].side === "BS" && !FinSt.CODES[c].sys)]).filter(([, l]) => l.length);
   return <div className="fin-box"><table className="fin-t fin-pyt" data-statement="" data-fin-table="pybs">
     <thead><tr><th>Head / note line</th><th className="no">Note</th><th className="n">Amount</th><th>Code</th><th>Used</th></tr></thead>
@@ -95,6 +98,7 @@ export default function PyBs({ d, fy, kind }) {
       <div className="fin-pybs-act"><Button className="btn small primary" data-fin-pybs-save="" onClick={keep}>Keep it</Button><Button className="btn small" onClick={() => setDraft(null)}>Cancel</Button></div>
     </div>}
     {v && !draft && show && <Lines lines={v.lines} kind={kind} />}
+    {v && !draft && !earlierMapping(fy) && <AiMapSlot d={d} fy={fy} mode="open" />}
   </div>;
 }
 
