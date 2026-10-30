@@ -846,7 +846,7 @@ func beatOnce() {
 		if o := obj(r.json["ledgers"]); len(o) > 0 {
 			go ledgersFromBeat(o)
 		}
-		// 2.5.1: a person's click for the stock (the fallback for the wake-up channel; each click taken once, stock.go)
+		// 2.5.2: a person's click for the stock (the fallback for the wake-up channel; each click taken once, stock.go)
 		if o := obj(r.json["stock"]); len(o) > 0 {
 			stockFromBeat(o)
 		}
@@ -1535,7 +1535,7 @@ func wakeEvent(ev string, inner M) {
 		}
 		go wakeLedgers(co, "the ledger chooser opened in FinCom", false)
 	case "stock":
-		// 2.5.1 (the owner's decision of 30-Oct-2026): "Bring stock from Tally" clicked in FinCom (stock.go)
+		// 2.5.2 (the owner's decision of 30-Oct-2026): "Bring stock from Tally" clicked in FinCom (stock.go)
 		co := str(inner["company"])
 		writeLog("Woken by FinCom: the stock of " + co + " asked (a click on the Financial statements)")
 		go stockTake(stockClickOf(co, inner))

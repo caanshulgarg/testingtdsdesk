@@ -177,7 +177,7 @@
 //                                                       each dated the day, through tally_period_entries); an entry whose
 //                                                       lines do not total zero marks the day to be uploaded by hand
 //   {kind:"stock", company, company_guid, from, to, at, status, opening?, closing?, readAt?, ms, holdMs, words?} -> {ok}:
-//                                                       FinCom Bridge 2.5.1 (migration 134): Tally's answer to that click (the
+//                                                       FinCom Bridge 2.5.2 (migration 134): Tally's answer to that click (the
 //                                                       Stock-in-Hand group's opening and closing, a positive stock), or why not
 //                                                       (slow: "Tally took too long; type the stock or try again later", busy,
 //                                                       notopen, none, failed); kept per book and period (tally_stock_reads)
@@ -196,7 +196,7 @@
 //   {kind:"wake", what:"ledgers", client}          -> (2.1.4) a bill's ledger chooser opened with a list older than the last
 //                                                       posting: the Tally computer is woken ("ledgers", {company, at}) to
 //                                                       read the ledger list; at most one a minute per company ({debounced})
-//   {kind:"wake", what:"stock", client, from, to, again?} -> (FinCom Bridge 2.5.1, migration 134; the owner's decision of
+//   {kind:"wake", what:"stock", client, from, to, again?} -> (FinCom Bridge 2.5.2, migration 134; the owner's decision of
 //                                                       30-Oct-2026: the stock from Tally ONLY on a person's click of "Bring
 //                                                       stock from Tally" / "Ask Tally again") {asked, at} when the client's
 //                                                       Tally computer is woken ("stock", {company, from, to, at, again}; the
@@ -3333,7 +3333,7 @@ function openOn(d: any) {
   return out;
 }
 async function wakeFor(firm: string, body: any, userId = "") {
-  if (body.what === "stock") return await stockWake(firm, body, userId);   // 2.5.1 (migration 134)
+  if (body.what === "stock") return await stockWake(firm, body, userId);   // 2.5.2 (migration 134)
   const what = body.what === "open" ? "open" : body.what === "active" ? "active" : body.what === "ledgers" ? "ledgers" : "";
   if (!what) return reply(400, { ok: false, error: "Say what: open, active or ledgers." });
   const at = new Date().toISOString();
@@ -3381,7 +3381,7 @@ async function wakeFor(firm: string, body: any, userId = "") {
   }
   return reply(200, { ok: true, woken });
 }
-// FinCom Bridge 2.5.1 (migration 134; the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person
+// FinCom Bridge 2.5.2 (migration 134; the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person
 // clicks "Bring stock from Tally" (again: "Ask Tally again") on the Financial statements' stock panel. The click is kept per
 // book and period (tally_stock_ask: at most one request per period; a kept answer is given back without asking Tally; a click
 // on its way, 60 s, is not doubled), then ONE computer is woken: one whose bridge says the company is open, the company's
@@ -3806,7 +3806,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // 2.1.4: ledger lists asked for in the last 10 minutes (the ledger chooser), the fallback for the wake-up channel
         const ledgers: Record<string, string> = {};
         for (const [k, v] of Object.entries((prevInfo.ledgers && typeof prevInfo.ledgers === "object") ? prevInfo.ledgers : {})) if (Date.parse(String(v)) > Date.now() - 600000) ledgers[k] = String(v);
-        // 2.5.1 (migration 134): a person's click for the stock in the last 10 minutes, the fallback for the wake-up channel
+        // 2.5.2 (migration 134): a person's click for the stock in the last 10 minutes, the fallback for the wake-up channel
         // (the bridge takes each click once, by its time)
         const stock: Record<string, unknown> = {};
         for (const [k, v] of Object.entries((prevInfo.stock && typeof prevInfo.stock === "object") ? prevInfo.stock : {})) {
@@ -4223,7 +4223,7 @@ Deno.serve(sentry.wrap(async (req) => {
         return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
       }
       case "stock": {
-        // FinCom Bridge 2.5.1 (migration 134): Tally's answer to a person's click for the stock (stockAnswer)
+        // FinCom Bridge 2.5.2 (migration 134): Tally's answer to a person's click for the stock (stockAnswer)
         if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many calls in the last minute; try again in a minute." });
         const book = await bookFor(firm, String(body.company || ""));
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });

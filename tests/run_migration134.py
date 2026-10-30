@@ -1,4 +1,4 @@
-"""python3 run_migration134.py - migration-134-stock-from-tally (30-Oct-2026, with FinCom Bridge 2.5.1; the owner's decision of
+"""python3 run_migration134.py - migration-134-stock-from-tally (30-Oct-2026, with FinCom Bridge 2.5.2; the owner's decision of
 30-Oct-2026, "1": the stock from Tally only when a person clicks). On a throwaway PostgreSQL (pg_stand, port 31340; never a
 real database). Written before the file. Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only (no delete from / drop / truncate / alter table other than the

@@ -1,4 +1,4 @@
-# Code review: FinCom Bridge 2.5.1 (the stock from Tally only on a person's click; cloud migration 134; the stock panel)
+# Code review: FinCom Bridge 2.5.2 (the stock from Tally only on a person's click; cloud migration 134; the stock panel)
 
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
@@ -7,7 +7,7 @@ Range: 25e694c0a..af92f295b
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
-and the driven click; the version tests moved to 2.5.1); server/tally-cloud/index.ts (stockWake, stockAnswer, the beat's
+and the driven click; the version tests moved to 2.5.2); server/tally-cloud/index.ts (stockWake, stockAnswer, the beat's
 "stock") and migration-134-stock-from-tally.sql; src/js/88-fin-statements.js (stockFromTally, stockOn);
 app/src/screens/books/fin/Stock.jsx; tests/run_migration134.py, tests/run_stock_ingest.py, tests/run_fs_stock_tally_ui.py.
 Checked against the owner's decision of 30-Oct-2026 ("1": C1 exactly; a person's click only; once per company and period;
@@ -98,4 +98,4 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 8. (Answered) The "not answered here" line is the log's only (liveSayOnce writes no notice).
 
 After round 4: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only),
-8c49a469c (the self-test reads 2.5.1's decision line) and af92f295b. The whole range was read last: af92f295b is the commit built.
+8c49a469c (the self-test reads 2.5.2's decision line) and af92f295b. The whole range was read last: af92f295b is the commit built.

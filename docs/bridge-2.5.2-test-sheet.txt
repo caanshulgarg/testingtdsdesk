@@ -1,9 +1,9 @@
-FINCOM 2.5.1 - TEST SHEET (NWS144, staging)
+FINCOM 2.5.2 - TEST SHEET (NWS144, staging)
 
-File:        FinComBridge-Setup-2.5.1.exe
-Fingerprint: SHA-256 f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b (FinComBridge-Setup-2.5.1.exe, built 30-Oct-2026 at the commit after 3b2bc2992, bridge sources af92f295b, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.1.exe SHA-256 dff967bc4963193a01d88399429b0ccc4e64572e6de375eb6eb4ca36dd85d28e
+File:        FinComBridge-Setup-2.5.2.exe
+Fingerprint: SHA-256 (filled in at the build; compare with the .sha256 file next to the setup)
 
-What 2.5.1 changes (the owner's decision of 30-Oct-2026, "1": the stock from Tally ONLY when a person clicks; one request
+What 2.5.2 changes (the owner's decision of 30-Oct-2026, "1": the stock from Tally ONLY when a person clicks; one request
 added, FinComStockInHand, exactly as measured; nothing else asked of Tally changed):
 R1. On Financial statements > Trial balance & mapping > Stock, "Bring stock from Tally" asks this computer's Tally once
     for the period on the page: Tally's own Stock-in-Hand figure (its stock summary), opening and closing.
@@ -14,7 +14,7 @@ R4. Tally over 2 s (or its window not answering for 2 s): "Tally took too long; 
 Real-Tally gate: TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (one request added), the committed setup.
 Deploy order (the owner): migration-134-stock-from-tally.sql, then tally-ingest, then the app, then the setup.
 
-CHECK 22 - THE STOCK FROM TALLY, ON A CLICK (2.5.1)
+CHECK 22 - THE STOCK FROM TALLY, ON A CLICK (2.5.2)
    In TallyPrime, open a company that keeps stock (items with opening stock and purchases / sales). In FinCom, open its
    client: Financial statements > Trial balance & mapping, the period of the year you want. On the Stock panel click
    "Bring stock from Tally". Leave Tally alone.
@@ -23,13 +23,13 @@ CHECK 22 - THE STOCK FROM TALLY, ON A CLICK (2.5.1)
    value). The statements' changes in inventories and the balance sheet's inventories use them. In the bridge's log
    (right-click the FinCom icon > Show log) one line "Stock of <company> ... from Tally in N ms".
 
-CHECK 23 - ONCE PER PERIOD; NOTHING BY ITSELF (2.5.1)
+CHECK 23 - ONCE PER PERIOD; NOTHING BY ITSELF (2.5.2)
    Leave FinCom and Tally open for 10 minutes; open and close the Financial statements; click "Bring stock from Tally"
    again for the same period (the button now reads "Ask Tally again" once an answer is kept: do not click it yet).
    You should see: the log has no new "Stock of" line in those 10 minutes (nothing is asked by itself); the same figures
    and time are shown. Now click "Ask Tally again": exactly one new "Stock of" line, the time shown moves.
 
-CHECK 24 - TALLY TOO SLOW (2.5.1)
+CHECK 24 - TALLY TOO SLOW (2.5.2)
    Restart TallyPrime with a large company that keeps stock (the first request after a start can take Tally over 2 s),
    then click "Bring stock from Tally" at once.
    You should see: either the figures (Tally answered within 2 s) or "Tally took too long; type the stock or try again

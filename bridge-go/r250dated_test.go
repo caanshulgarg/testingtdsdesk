@@ -336,7 +336,7 @@ var allowRows249 = map[string]string{
 
 func allowRowsBefore250() string {
 	var o []string
-	for _, l := range strings.SplitAfter(allowRowsBefore251(), "\n") { // 2.5.1 added one row (stock251_test.go)
+	for _, l := range strings.SplitAfter(allowRowsBefore251(), "\n") { // 2.5.2 added one row (stock251_test.go)
 		id := strings.TrimSpace(strings.SplitN(strings.TrimPrefix(l, "| "), " |", 2)[0])
 		if w, ok := allowRows249[id]; ok && strings.HasPrefix(l, "| "+id+" |") {
 			l = w
@@ -435,7 +435,7 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 // 2.5.0: the version; four rows changed (the table otherwise 2.4.9's); the decision line names 2.5.0 by the owner's
 // decision of 2026-10-30 with the three shapes, 2.4.9's kept as history; the dated line; the test sheet
 func TestR250VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.1" { // 2.5.1 (stock251_test.go): kept as history
+	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore250()); h != "8962b5cdd4868e09696bef97780b196198a2fb9d7f79293ace32d799b6dfa79b" {

@@ -1,4 +1,4 @@
-// FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally, ONLY when a person clicks "Bring
+// FinCom Bridge 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally, ONLY when a person clicks "Bring
 // stock from Tally" (or "Ask Tally again") on the Financial statements' stock panel in FinCom.
 //
 // The one request, C1 "FinComStockInHand", exactly as measured on 30-Oct-2026 (tally-versions mode stockp, run

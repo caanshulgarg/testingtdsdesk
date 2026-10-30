@@ -1,6 +1,6 @@
 package main
 
-// FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person clicks "Bring
+// FinCom Bridge 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person clicks "Bring
 // stock from Tally" on the Financial statements' stock panel (stock.go). Written before the code:
 //   1. the request is exactly C1 "FinComStockInHand" as measured (tally-versions stockp, run 41009967960);
 //   2. click only: no background path sends it; the dated guard lets it through only while a click's request is in flight;
@@ -458,12 +458,12 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	// the decision line, and the class
 	a := tallyAllowList[stockID]
 	if !strings.Contains(a.purpose, "allowed for "+BridgeVersion+" by the owner's decision of 2026-10-30 (person's click only)") || a.measureOnly || a.maxSec <= 0 ||
-		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.1" {
+		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.2" {
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
 }
 
-// the allow-list's rows without 2.5.1's FinComStockInHand: 2.5.0's table
+// the allow-list's rows without 2.5.2's FinComStockInHand: 2.5.0's table
 func allowRowsBefore251() string {
 	var o []string
 	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
@@ -474,10 +474,10 @@ func allowRowsBefore251() string {
 	return strings.Join(o, "")
 }
 
-// --- 8. 2.5.1: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.1 by the owner's
+// --- 8. 2.5.2: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.2 by the owner's
 // decision of 2026-10-30 (person's click only), 2.5.0's kept as history; the dated line; the test sheet
 func TestStock251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.1" {
+	if BridgeVersion != "2.5.2" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore251()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {
@@ -485,17 +485,17 @@ func TestStock251VersionAllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.1 by the owner's decision of 2026-10-30 (person's click only)", "FinComStockInHand " + shapeOf(allowListSamples()[stockID]),
+	for _, w := range []string{"allowed for 2.5.2 by the owner's decision of 2026-10-30 (person's click only)", "FinComStockInHand " + shapeOf(allowListSamples()[stockID]),
 		"run 41009967960", "as for 2.5.0: the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if !strings.Contains(al, "(re-measured on 2026-10-30 for 2.5.1: FinComStockInHand") {
-		t.Error("no dated line for 2.5.1")
+	if !strings.Contains(al, "(re-measured on 2026-10-30 for 2.5.2: FinComStockInHand") {
+		t.Error("no dated line for 2.5.2")
 	}
-	sheet := readText(filepath.Join("..", "docs", "bridge-2.5.1-test-sheet.txt"))
-	for _, w := range []string{"2.5.1", "Bring stock from Tally", "Ask Tally again", stockSlowWords, "stock summary"} {
+	sheet := readText(filepath.Join("..", "docs", "bridge-2.5.2-test-sheet.txt"))
+	for _, w := range []string{"2.5.2", "Bring stock from Tally", "Ask Tally again", stockSlowWords, "stock summary"} {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the test sheet does not say %q", w)
 		}

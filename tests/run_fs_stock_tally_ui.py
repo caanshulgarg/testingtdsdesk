@@ -1,4 +1,4 @@
-"""python3 run_fs_stock_tally_ui.py - FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY
+"""python3 run_fs_stock_tally_ui.py - FinCom Bridge 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY
 when a person clicks "Bring stock from Tally" on the Financial statements' stock panel (Trial balance & mapping). On the
 React build (app/dist-test, or TDSDESK_SITE), the made-up books of tests/fixtures/fin-statements (as run_fs_period_ui.py),
 FinCom's cloud stood in for in the page (TCloud.on, TCloudUp.post, Cloud.api; nothing leaves the page). Written before the

@@ -6,7 +6,7 @@
 // Checks tab asks for it. The P&L's changes in inventories are the opening stock at the start of the period less the closing
 // stock; the balance sheet shows the closing.
 //
-// FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): "Bring stock from Tally" asks the client's Tally computer,
+// FinCom Bridge 2.5.2 (the owner's decision of 30-Oct-2026, "1"): "Bring stock from Tally" asks the client's Tally computer,
 // through FinCom's cloud (tally-ingest {kind:"wake", what:"stock"}, migration 134), for Tally's own Stock-in-Hand figure for
 // the period on the page, ONCE: the answer is kept per book and period (tally_stock_reads, and here in b.fs.stockTally) and
 // shown "Opening stock ₹X · Closing stock ₹Y · from Tally at 15:42 IST"; a click for a period with an answer kept brings that

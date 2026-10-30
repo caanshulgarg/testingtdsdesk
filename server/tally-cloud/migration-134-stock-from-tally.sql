@@ -1,4 +1,4 @@
--- Migration 134 (30-Oct-2026, branch bridge-stock-2411, with FinCom Bridge 2.5.1; NOT run on staging: the owner reads it
+-- Migration 134 (30-Oct-2026, branch bridge-stock-2411, with FinCom Bridge 2.5.2; NOT run on staging: the owner reads it
 -- and runs it). The stock from Tally, only when a person clicks (the owner's decision of 30-Oct-2026, "1").
 --
 -- On the Financial statements' stock panel a person clicks "Bring stock from Tally" (or "Ask Tally again"): tally-ingest

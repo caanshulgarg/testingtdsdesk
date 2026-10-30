@@ -106,7 +106,7 @@ func driveEveryRequest(t *testing.T) *standTally {
 	pull.mu.Unlock()
 	must("a day's group", err)
 	applyPeriodDays(M{"periodDays": []any{}})
-	// 2.5.1: the stock, for a person's click in FinCom only (stock.go; the paths are driven in stock251_test.go)
+	// 2.5.2: the stock, for a person's click in FinCom only (stock.go; the paths are driven in stock251_test.go)
 	stockReset()
 	noteCompanyGUID(zz, f.guid)
 	liveSeedOwnOpen(f.guid, zz)
@@ -263,7 +263,7 @@ func computedFigure(x string) string {
 			return m[0]
 		}
 	}
-	// 2.5.1 (the owner's decision of 30-Oct-2026, a person's click only): the one narrow exception for a balance Tally works
+	// 2.5.2 (the owner's decision of 30-Oct-2026, a person's click only): the one narrow exception for a balance Tally works
 	// out, exactly FinComStockInHand as built (stockClickRead)
 	if stockClickRead(x) {
 		return ""
@@ -277,7 +277,7 @@ func computedFigure(x string) string {
 	return ""
 }
 
-// 2.5.1 (stock.go): exactly the stock request as built for its company and period (the id FinComStockInHand, the Group
+// 2.5.2 (stock.go): exactly the stock request as built for its company and period (the id FinComStockInHand, the Group
 // collection, the reserved group Stock-in-Hand only, NAME, OPENINGBALANCE, CLOSINGBALANCE, the period yyyymmdd TYPE="Date"
 // once, inside STATICVARIABLES): Tally's stock summary for that one group; any other id, field, filter or period is not it
 func stockClickRead(x string) bool {

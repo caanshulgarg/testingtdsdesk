@@ -1,4 +1,4 @@
-# Security review: FinCom Bridge 2.5.1 (the stock from Tally only on a person's click; cloud migration 134)
+# Security review: FinCom Bridge 2.5.2 (the stock from Tally only on a person's click; cloud migration 134)
 
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort, with
 the security questions below), and the build session's own pass over each finding. They did not write the change.
@@ -42,7 +42,7 @@ No High or Medium finding is open.
 
 ## Rounds
 
-The code review's four rounds (docs/reviews/bridge-2.5.1-code-review.md) were asked the security questions too (who can
+The code review's four rounds (docs/reviews/bridge-2.5.2-code-review.md) were asked the security questions too (who can
 make the bridge ask Tally, the narrow exceptions, row security and grants): nothing open in rounds 2 to 4 ("the
 exemptions match the guard on the older-entries batch read; row security, the grants and the service-role checks in
 migration 134 are sound"). Recorded: an answer is not tied to the computer woken (it needs the click's time, which only

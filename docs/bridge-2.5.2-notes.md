@@ -1,4 +1,4 @@
-# FinCom Bridge 2.5.1 (branch bridge-stock-2411, from bridge-dated-ledgers 25e694c0a, bridge 2.5.0)
+# FinCom Bridge 2.5.2 (branch bridge-stock-2411, from bridge-dated-ledgers 25e694c0a, bridge 2.5.0)
 
 The owner's decision of 30-Oct-2026 ("1"): the stock from Tally ONLY when a person clicks, with the request measured on
 30-Oct-2026 (tally-versions mode stockp, tally-versions 51fe89998, results 960d5b047, run 41009967960), C1
@@ -6,19 +6,20 @@ The owner's decision of 30-Oct-2026 ("1"): the stock from Tally ONLY when a pers
 
 `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComStockInHand</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY><SVFROMDATE TYPE="Date">{from}</SVFROMDATE><SVTODATE TYPE="Date">{to}</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FinComStockInHand" ISMODIFY="No"><TYPE>Group</TYPE><FETCH>NAME, OPENINGBALANCE, CLOSINGBALANCE</FETCH><FILTERS>FinComStockInHandOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComStockInHandOnly">$ReservedName = &#34;Stock-in-Hand&#34;</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
 
-Version: 2.5.1. (The plan said 2.4.11 after 2.4.10; the base branch bridge-dated-ledgers had become 2.5.0 by the time this
-work started, so the next number is 2.5.1; the branch keeps its planned name.)
+Version: 2.5.2. (The plan said 2.4.11; the base bridge-dated-ledgers became 2.5.0, and the coordinator gave 2.5.1 to the
+live fix of the ledger openings, branch bridge-251-openings, merged here before the build; the branch keeps its planned
+name.)
 
 | | |
 |---|---|
-| Setup file | FinComBridge-Setup-2.5.1.exe |
-| Fingerprint | `f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b` (FinComBridge-Setup-2.5.1.exe, built 30-Oct-2026 at the commit after 3b2bc2992, bridge sources af92f295b, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.1.exe SHA-256 dff967bc4963193a01d88399429b0ccc4e64572e6de375eb6eb4ca36dd85d28e |
-| Replaces | 2.5.0 (not published) / 2.4.9 (published) |
+| Setup file | FinComBridge-Setup-2.5.2.exe |
+| Fingerprint | filled in at the build (compare with the .sha256 file next to the setup) |
+| Replaces | 2.5.1 (the openings fix; not published) / 2.4.9 (published) |
 | Published | not published |
 
-## What is in 2.5.1
+## What is in 2.5.2
 
-1. One request added, FinComStockInHand (bridge-go/stock.go), built exactly as above; on the allow-list "allowed for 2.5.1
+1. One request added, FinComStockInHand (bridge-go/stock.go), built exactly as above; on the allow-list "allowed for 2.5.2
    by the owner's decision of 2026-10-30 (person's click only)"; pinned to its builder (one byte more is refused).
 2. Sent ONLY for a person's click of "Bring stock from Tally" / "Ask Tally again" on the Financial statements' stock panel:
    FinCom's cloud wakes ONE computer, one whose bridge has the company open, the company's own first ("stock" {company, from, to, at, again} on its channel; its

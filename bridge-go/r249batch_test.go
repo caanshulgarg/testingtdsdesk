@@ -448,7 +448,7 @@ func allowRowsBefore249() string {
 // 2.4.9: the version; one request added (FinComVoucherBatch: the table changed by that row only); the decision line names
 // 2.4.9 by the owner's decision of 2026-10-29 with the measured times, 2.4.8's kept as history; the dated line; the sheet
 func TestR249VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.1" { // 2.5.1 (stock251_test.go); 2.5.0 (r250dated_test.go): kept as history
+	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go); 2.5.0 (r250dated_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore249()); h != "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391" {

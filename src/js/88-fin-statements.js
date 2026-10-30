@@ -241,7 +241,7 @@ const FinSt = (() => {
   // figures typed in the old statements (b.fs.stock {open, close}). Opening stock at the start of the year is the stock as on
   // the day before it; at the start of the period, as on the day before From; closing stock, as on To.
   const isStockLed = l => FS.nature(l).path.some(g => /^stock-in-hand$/i.test(g));
-  // FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock brought from Tally on a person's click ("Bring
+  // FinCom Bridge 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock brought from Tally on a person's click ("Bring
   // stock from Tally" on the stock panel), kept per period in b.fs.stockTally {"<from>-<to>": {opening, closing, readAt,
   // status, words, gotAt}} as FinCom's cloud keeps it (tally_stock_reads; gotAt: when the page took it, by the clock a
   // typed figure's time uses): its opening is the stock as on the day before From, its closing as on To. Used before last year's balance sheet and a typed figure (they stay the fallback), except a figure

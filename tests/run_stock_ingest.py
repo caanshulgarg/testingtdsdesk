@@ -1,4 +1,4 @@
-"""python3 run_stock_ingest.py - FinCom Bridge 2.5.1 / migration 134 (the owner's decision of 30-Oct-2026, "1": the stock from
+"""python3 run_stock_ingest.py - FinCom Bridge 2.5.2 / migration 134 (the owner's decision of 30-Oct-2026, "1": the stock from
 Tally ONLY when a person clicks): tally-ingest (server/tally-cloud/index.ts under Deno, against the stand-in for Supabase,
 fake_supabase.py; never a real database). The migration's two functions are stood in for here as the SQL does them
 (tests/run_migration134.py tests the SQL itself on pg_stand). Written before the code. Checks:
@@ -25,18 +25,18 @@ def ok(c, w):
     if not c: fails.append(w)
 FIRM, BOOK = "99999999-9999-9999-9999-999999999251", "11111111-1111-1111-1111-111111111251"
 DEV, KEY, CG = "d1000000-0000-0000-0000-000000000251", "fcd_" + "f" * 48, "a2f776bd-4a48-4f7d-9c73-48a8f087b251"
-GO = {"id": "go-aaaaaa251251", "computer": "PC-S", "user": "user-s", "mode": "main", "runMode": "user", "version": "2.5.1"}
+GO = {"id": "go-aaaaaa251251", "computer": "PC-S", "user": "user-s", "mode": "main", "runMode": "user", "version": "2.5.2"}
 FS.USERS["tok-staff"] = {"id": "u-staff", "email": "staff@zz.test"}
 FS.T["members"] += [{"user_id": "u-staff", "firm_id": FIRM, "role": "staff", "active": True}]
 FS.T["clients"] += [{"id": "c1", "firm_id": FIRM, "name": "STOCK CO", "tally_name": "STOCK CO", "gstin": "", "deleted": False}, {"id": "c2", "firm_id": FIRM, "name": "LONE CO", "deleted": False}]
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "STOCK CO", "client_id": "c1", "book_id": BOOK, "device_id": DEV, "last_seen": "2026-10-30T00:00:00Z"}]
 FS.T["tally_books"] += [{"book_id": BOOK, "firm_id": FIRM, "client_id": "c1", "company": "STOCK CO", "from_date": "2026-04-01", "open_as_on": "2026-03-31"}]
 FS.T["tally_devices"].append({"id": DEV, "firm_id": FIRM, "name": "NWS144", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False,
-                              "info": {"beat": {"open": ["STOCK CO"], "companies": [{"name": "STOCK CO", "open": True, "guid": CG}]}, "bridges": {"go-aaaaaa251251": {"open": ["STOCK CO"]}}}, "version": "2.5.1", "wake_token": "tok251"})
+                              "info": {"beat": {"open": ["STOCK CO"], "companies": [{"name": "STOCK CO", "open": True, "guid": CG}]}, "bridges": {"go-aaaaaa251251": {"open": ["STOCK CO"]}}}, "version": "2.5.2", "wake_token": "tok251"})
 # another of the firm's computers: the clicking person's own key, with the company open too (one click wakes ONE computer)
 DEV2, KEY2 = "d2000000-0000-0000-0000-000000000251", "fcd_" + "9" * 48
 FS.T["tally_devices"].append({"id": DEV2, "firm_id": FIRM, "name": "OFFICE", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "created_by": "u-staff",
-                              "info": {"beat": {"open": ["STOCK CO"]}, "bridges": {"go-other": {"open": ["STOCK CO"]}}}, "version": "2.5.1", "wake_token": "tok251b"})
+                              "info": {"beat": {"open": ["STOCK CO"]}, "bridges": {"go-other": {"open": ["STOCK CO"]}}}, "version": "2.5.2", "wake_token": "tok251b"})
 FS.T["tally_sync_cursor"] = [{"book_id": BOOK, "company_guid": CG}]
 # the migration's functions, as the SQL does them (run_migration134.py)
 ROWS, MISSING = {}, {"on": False}
@@ -69,7 +69,7 @@ log = []
 threading.Thread(target=lambda: [log.append(l) for l in fn.stdout], daemon=True).start()
 def call(body, device=True):
     h = {"Content-Type": "application/json"}
-    if device: h["x-fincom-device"] = KEY; body = dict({"version": "2.5.1", "bridge": GO}, **body)
+    if device: h["x-fincom-device"] = KEY; body = dict({"version": "2.5.2", "bridge": GO}, **body)
     else: h["Authorization"] = "Bearer tok-staff"
     rq = urllib.request.Request("http://127.0.0.1:8000/", data=json.dumps(body).encode(), headers=h)
     try: r = urllib.request.urlopen(rq, timeout=60); return r.status, json.loads(r.read() or b"{}")

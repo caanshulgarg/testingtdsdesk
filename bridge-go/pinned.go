@@ -100,7 +100,7 @@ var requestRebuild = map[string]func(x string) []string{
 		return []string{ledgerChangesRequestAt(pinCo(x), pinLedgerFrom(x), toI64(m[1]), toI64(m[2]))}
 	},
 	ledByNameID: pinOne(func(x string) string { return ledgerByNameRequestAt(pinCo(x), pinLedgerFrom(x), pinQuoted(x, "$Name")) }),
-	// 2.5.1: the stock for a period (stock.go): rebuilt from its company and period
+	// 2.5.2: the stock for a period (stock.go): rebuilt from its company and period
 	stockID:   pinOne(func(x string) string { a, z := pinDates(x); return stockRequest(pinCo(x), a, z) }),
 	grpListID: pinOne(func(x string) string { return groupListRequest(pinCo(x)) }),
 	natListID: pinOne(func(x string) string { a, u := pinMasterRange(x); return natureChunkRequest(pinCo(x), a, u) }),

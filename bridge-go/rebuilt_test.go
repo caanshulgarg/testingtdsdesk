@@ -69,7 +69,7 @@ type standTally struct {
 	batchAll     bool                                                               // 2.4.9: FinComVoucherBatch answered with every entry of the day (the filter not applied)
 	coName       string                                                             // the company's name as this Tally gives it ("" : ZZ TEST)
 	booksFrom    string                                                             // 2.5.0: BOOKSFROM as this Tally gives it ("" : 20260401; "-": none)
-	stockGrp     [2]string                                                          // 2.5.1: the Stock-in-Hand group's OPENINGBALANCE and CLOSINGBALANCE as this Tally gives them for any period ("": none)
+	stockGrp     [2]string                                                          // 2.5.2: the Stock-in-Hand group's OPENINGBALANCE and CLOSINGBALANCE as this Tally gives them for any period ("": none)
 	grp          [][2]string
 	mid          int64 // the last MasterID given
 	// fault 1 (03-Oct-2026, NWS144): how this Tally stores and answers
@@ -502,7 +502,7 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
-		case stockID: // 2.5.1: the Stock-in-Hand group (Tally's own figures; the stand gives the same for any period)
+		case stockID: // 2.5.2: the Stock-in-Hand group (Tally's own figures; the stand gives the same for any period)
 			if f.stockGrp[0] != "" || f.stockGrp[1] != "" {
 				fmt.Fprintf(&o, `<GROUP NAME="Stock-in-Hand" RESERVEDNAME="Stock-in-Hand"><CLOSINGBALANCE TYPE="Amount">%s</CLOSINGBALANCE><OPENINGBALANCE TYPE="Amount">%s</OPENINGBALANCE><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Stock-in-Hand</NAME></NAME.LIST></LANGUAGENAME.LIST></GROUP>`, f.stockGrp[1], f.stockGrp[0])
 			}

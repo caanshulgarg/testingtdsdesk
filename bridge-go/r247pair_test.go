@@ -536,7 +536,7 @@ var _ = sha256.New
 // the version; no request added or changed (the allow-list's table and hash as at 2.4.5 and 2.4.6); the decision line
 // names 2.4.7 by the owner's standing decision, 2.4.6's kept as history; the dated line; the test sheet's new steps
 func TestRelease247VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.5.1" { // 2.5.1 (stock251_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go): kept as history
+	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"
