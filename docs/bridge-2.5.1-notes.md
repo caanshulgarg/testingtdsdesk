@@ -12,7 +12,7 @@ work started, so the next number is 2.5.1; the branch keeps its planned name.)
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.5.1.exe |
-| Fingerprint | filled in at the build (compare with the .sha256 file next to the setup) |
+| Fingerprint | `f57428205fd276b37bf173a04f09f428006c711c85cc4a45522892cee5e0687b` (FinComBridge-Setup-2.5.1.exe, built 30-Oct-2026 at the commit after 3b2bc2992, bridge sources af92f295b, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.1.exe SHA-256 dff967bc4963193a01d88399429b0ccc4e64572e6de375eb6eb4ca36dd85d28e |
 | Replaces | 2.5.0 (not published) / 2.4.9 (published) |
 | Published | not published |
 
