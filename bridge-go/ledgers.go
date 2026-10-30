@@ -472,10 +472,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		}
 		// review of 2.5.0: the company's books-from changed since the round began (Tally's Books beginning from corrected):
 		// the round starts again at the next turn, every chunk with the new one
-		if now := booksFromOf(company); now != bf {
+		if now := booksFromOf(company); now == "" {
+			// the company list answered without BOOKSFROM for a while: this turn stops; the round goes on from its last
+			// chunk once Tally says it again (review of 2.5.0, round 3)
+			return false, nil
+		} else if now != bf {
 			delete(st, "led")
 			save()
-			writeLog("Keeping " + company + ": Tally now says the books begin on " + or(now, "(not said)") + ", not " + bf + "; the ledger list is read again from the first ledger")
+			writeLog("Keeping " + company + ": Tally now says the books begin on " + now + ", not " + bf + "; the ledger list is read again from the first ledger")
 			return false, nil
 		}
 		t1 := time.Now()
@@ -574,7 +578,8 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// goes to FinCom's cloud with this round's openings, as at the books' beginning (the cloud prefers a dated round's)
 	// (review: a round whose openings FinCom's cloud held, as not adding up to nil, is sent whole again next time)
 	resend := exists(ledResendFile(dir))
-	if str(st["ledOpeningsAt"]) != bf || resend {
+	whole := str(st["ledOpeningsAt"]) != bf || resend
+	if whole {
 		d = diffAll(held, read, d)
 	}
 	var groups [][2]string
@@ -601,7 +606,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	saveLedList(dir, read)
 	delete(st, "ledGone") // the second-look bookkeeping of 2.1.4: the cloud holds many gone at once now
 	mergeLedOut(dir, d, groups, round, seen, natOfRound(ls))
-	setLedOutOpeningsAt(dir, bf, resend)
+	setLedOutOpeningsAt(dir, bf, whole) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
 	st["ledOpeningsAt"] = bf
 	if resend {
 		_ = os.Remove(ledResendFile(dir))

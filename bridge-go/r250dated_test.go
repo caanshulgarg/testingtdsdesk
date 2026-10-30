@@ -218,6 +218,7 @@ func TestR250ReadDaysExemptionOnlyThree(t *testing.T) {
 	}
 	// review of 2.5.0: with ReadDays ON too, a ledger request without exactly the books' first year is refused
 	setCfg("ReadDays", true)
+	defer setCfg("ReadDays", false)
 	for _, y := range []string{fcCollection(ledListID, zz, "", "Ledger", ledFetch, masterRange(0, 2000)), ledgerChunkRequestAt(zz, "20260401", 0, 2000)} {
 		if err := datedRefused(fin, y); err != errLedgerPeriodRefused {
 			t.Fatalf("with ReadDays on, a ledger request with another period or none: %v", err)
@@ -358,56 +359,58 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 	coCache = was
 	coMu.Unlock()
 	dir := syncFolder(zz)
-	if err := newRun("ledgers", "r250-r1").step(zz, f.port, ""); err != nil {
-		t.Fatal(err)
+	next := func(id string) {
+		t.Helper()
+		st := readKeepState(dir)
+		delete(st, "ledRun")
+		saveKeepState(dir, st)
+		if err := newRun("ledgers", id).step(zz, f.port, ""); err != nil {
+			t.Fatal(err)
+		}
 	}
+	// the first dated round goes whole (every ledger); held (Tally's own openings do not add up): not whole again
+	next("r250-r1")
+	c.mu.Lock()
+	c.ledListOut = M{"openings": "held"}
+	c.mu.Unlock()
+	if err := pushLedgerList(zz, dir); err != nil || exists(ledResendFile(dir)) {
+		t.Fatalf("a whole round held is marked to go whole again (%v)", err)
+	}
+	c.mu.Lock()
+	c.ledListOut = nil
+	c.mu.Unlock()
+	// a plain round (one ledger changed) held: the next round sends every ledger
+	led231Alter(f, "Cash", func(l *tLed) { l.open = "-1500.00" })
+	next("r250-r1b")
 	c.mu.Lock()
 	c.ledListOut = M{"openings": "held"}
 	c.mu.Unlock()
 	if err := pushLedgerList(zz, dir); err != nil || !exists(ledResendFile(dir)) {
-		t.Fatalf("FinCom held the openings: the next round is not marked to send every ledger (%v)", err)
+		t.Fatalf("FinCom held a plain round's openings: the next round is not marked to send every ledger (%v)", err)
 	}
 	c.mu.Lock()
 	c.ledListOut = nil
 	n0 := len(c.ledList)
 	c.mu.Unlock()
-	st := readKeepState(dir)
-	delete(st, "ledRun")
-	saveKeepState(dir, st)
-	if err := newRun("ledgers", "r250-r2").step(zz, f.port, ""); err != nil {
-		t.Fatal(err)
-	}
+	next("r250-r2")
 	_ = pushLedgerList(zz, dir)
-	if len(c.ledList) == n0 || len(arr(c.ledList[n0]["ledgers"])) != 3 || exists(ledResendFile(dir)) {
+	if len(c.ledList) == n0 || len(arr(c.ledList[n0]["ledgers"])) != 3 || exists(ledResendFile(dir)) { // the three ledgers whole
 		t.Fatalf("the round after a held one: %v", c.ledList[n0:])
 	}
-	// held again (Tally's own openings do not add up): the whole list is not sent a third time
-	if exists(ledResendFile(dir)) {
-		t.Fatal("the resend round left its mark")
-	}
+	// held again (Tally's own openings do not add up): that whole round is not sent whole a third time
 	c.mu.Lock()
 	c.ledListOut = M{"openings": "held"}
 	c.mu.Unlock()
-	st = readKeepState(dir)
-	delete(st, "ledRun")
-	saveKeepState(dir, st)
 	f.addLed("Another", "Sundry Debtors", "5.00")
-	if err := newRun("ledgers", "r250-r2b").step(zz, f.port, ""); err != nil {
-		t.Fatal(err)
-	}
+	next("r250-r2b")
 	_ = pushLedgerList(zz, dir)
 	c.mu.Lock()
 	c.ledListOut = nil
 	c.mu.Unlock()
 	if !exists(ledResendFile(dir)) {
-		t.Fatal("a held round after a plain one is not marked to go whole again")
+		t.Fatal("a held plain round is not marked to go whole again")
 	}
-	st = readKeepState(dir)
-	delete(st, "ledRun")
-	saveKeepState(dir, st)
-	if err := newRun("ledgers", "r250-r2c").step(zz, f.port, ""); err != nil {
-		t.Fatal(err)
-	}
+	next("r250-r2c")
 	c.mu.Lock()
 	c.ledListOut = M{"openings": "held"}
 	c.mu.Unlock()
@@ -420,12 +423,7 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 	}
 	// and the one after that sends only what changed (nothing)
 	n1 := len(c.ledList)
-	st = readKeepState(dir)
-	delete(st, "ledRun")
-	saveKeepState(dir, st)
-	if err := newRun("ledgers", "r250-r3").step(zz, f.port, ""); err != nil {
-		t.Fatal(err)
-	}
+	next("r250-r3")
 	_ = pushLedgerList(zz, dir)
 	if len(c.ledList) == n1 || len(arr(c.ledList[n1]["ledgers"])) != 0 {
 		t.Fatalf("an unchanged round after the resend: %v", c.ledList[n1:])

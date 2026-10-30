@@ -1006,6 +1006,9 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		if tallyRequestID(x) == vchByNumberID {
 			why = or(voucherByNumberWhy(x), "it is not exactly as the bridge builds it")
 		}
+		if errors.Is(err, errLedgerPeriodRefused) {
+			why = "it does not carry this company's books' first year as its period (2.5.0), whatever ReadDays says"
+		}
 		writeLog(fmt.Sprintf("Tally %d: %s refused before sending: %s", port, tallyRequestID(x), why))
 		return "", err
 	}
