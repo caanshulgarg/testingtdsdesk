@@ -1,7 +1,7 @@
 FINCOM 2.5.0 - TEST SHEET (NWS144, staging)
 
 File:        FinComBridge-Setup-2.5.0.exe
-Fingerprint: SHA-256 f8ef14ba540676a05d2de594c094ebbffcde40aa078b210002c38bfa689dae54 (FinComBridge-Setup-2.5.0.exe, built 30-Oct-2026 13:41 IST at the commit after 071d946f3, bridge sources c27ae6558, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.0.exe SHA-256 2766f048e33f2a91b47dd262b25f8ec806181104838b32872acbc838fdf131c5
+Fingerprint: SHA-256 f8ef14ba540676a05d2de594c094ebbffcde40aa078b210002c38bfa689dae54 (FinComBridge-Setup-2.5.0.exe, built 30-Oct-2026 13:41 IST at the commit after 3a8240ef2, bridge sources 035230859, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.0.exe SHA-256 2766f048e33f2a91b47dd262b25f8ec806181104838b32872acbc838fdf131c5
 
 What 2.5.0 changes (the owner's decision of 30-Oct-2026; the three ledger requests carry the books' first year as their
 period, the company list asks when the books begin; nothing else asked of Tally changed):

@@ -6,7 +6,7 @@ asked explicitly). They did not write the change. Checked against the owner's st
 Tally except where the owner decided; reading is prospective only (ReadDays) except the owner's narrow exceptions; no
 computer names in words a firm sees; add-only SQL with explicit grants; no AI.
 
-Range: fc79ae4c9..c27ae6558
+Range: fc79ae4c9..035230859
 
 ## Threats looked at
 

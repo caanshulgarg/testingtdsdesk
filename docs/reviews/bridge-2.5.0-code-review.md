@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort for
 rounds 1 to 3, medium for round 4). They had only the repository and the range; they did not write the change.
 
-Range: fc79ae4c9..c27ae6558
+Range: fc79ae4c9..035230859
 
 Scope: bridge-go/booksfrom.go (new), ledgers.go, ledchanges.go, tally.go (requestClass, datedRefused), pinned.go,
 ports.go (TDSDeskCompanies' BOOKSFROM), recorder_live.go, keep.go, allowlist.go and the tests (r250dated_test.go and the
@@ -19,7 +19,7 @@ BOOKSFROM in the company list, nothing else changed; the narrow ReadDays exempti
 - `python3 tests/run_migration130.py` (pg_stand, PostgreSQL 16) and `python3 tests/run_openings_ingest.py` (tally-ingest
   under Deno against fake_supabase.py): PASSED after each round.
 
-## Round 1 (fc79ae4c9..5498369b2): 10 findings, all fixed in 94cce5ab2 with tests
+## Round 1 (fc79ae4c9..e4db262b1): 10 findings, all fixed in 9cb9fdd0b with tests
 
 1. (High) the candidate kept stale stored openings of ledgers a trial balance leaves out, so a correct file could never
    replace wrong openings. Fixed: a trial balance is judged by its own total (a trial balance lists every ledger with a
@@ -38,7 +38,7 @@ BOOKSFROM in the company list, nothing else changed; the narrow ReadDays exempti
 9. (Medium, security) the new table's sequence not revoked from anon/authenticated. Fixed (revoke all on sequence).
 10. (Low) the book's sum asked on every undated ledger_changes call. Fixed: only when an opening would change.
 
-## Round 2 (5498369b2..94cce5ab2): 10 findings; fixed in 8b154b0ad except where said
+## Round 2 (e4db262b1..9cb9fdd0b): 10 findings; fixed in 8784c4586 except where said
 
 1. (High) masters upload held on a book whose openings do not tie: see round 3/4 (final: judged as any list, a held
    masters list still taken whole with the openings FinCom holds).
@@ -56,7 +56,7 @@ BOOKSFROM in the company list, nothing else changed; the narrow ReadDays exempti
 8. (Medium) a list that changes no opening judged. Fixed (changed > 0 gate).
 9, 10. (Low) wrappers kept for the tests (they build with the company's held books-from); duplicate `mine` check merged.
 
-## Round 3 (94cce5ab2..8b154b0ad): 7 findings; fixed in dac0681bd except where said
+## Round 3 (9cb9fdd0b..8784c4586): 7 findings; fixed in 7f9b529ba except where said
 
 1. (High, pre-existing, out of 2.5.0's scope) FinComVoucherObject, FinComVoucherByNumber, FinComSlice and the undated
    TDSDeskKeepList fall back to readsOffErr() too. Not changed in 2.5.0 (the owner's decision changes nothing else); the
@@ -66,7 +66,7 @@ BOOKSFROM in the company list, nothing else changed; the narrow ReadDays exempti
 5. (Medium) a first whole round held queued another whole one. Fixed: any whole list held is not sent whole again.
 6. (Low) refusal log words. Fixed. 7. (Low) test restored ReadDays only on success. Fixed (defer).
 
-## Round 4 (8b154b0ad..dac0681bd): 4 findings, fixed in 4fd46cbc2
+## Round 4 (8784c4586..7f9b529ba): 4 findings, fixed in 9945dcefc
 
 1. (Medium) the whole-list mark lost when a plain round merged into an unsent outbox. Fixed: kept until the outbox goes.
 2. (Medium) a held masters list skipped the list ingest (deletion marks, record). Fixed: taken whole with the openings
@@ -76,7 +76,7 @@ BOOKSFROM in the company list, nothing else changed; the narrow ReadDays exempti
 
 ## After round 4
 
-c27ae6558 adds only the measured times (allowlist.go's maxSec and measuredOn strings for four rows), the doc table
+035230859 adds only the measured times (allowlist.go's maxSec and measuredOn strings for four rows), the doc table
 and decision line, the beat fixture's table hash, and TestR250VersionAllowList: data and a test, no logic.
 
 ## Open
@@ -84,4 +84,4 @@ and decision line, the beat fixture's table hash, and TestR250VersionAllowList: 
 - Round 2.6 (two own Tallys, same company name, different books-from): known limit, in the notes.
 - Round 3.1: separate task (pre-existing).
 
-Range reviewed in all (rounds 1 to 4 and the data commit after them): fc79ae4c9..c27ae6558
+Range reviewed in all (rounds 1 to 4 and the data commit after them): fc79ae4c9..035230859
