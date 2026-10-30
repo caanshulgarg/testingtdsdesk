@@ -1,0 +1,112 @@
+INFO TallyPrime 7.1, mode stockp, runner GitHub Actions 1000013824, 2026-10-30T05:52:59
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 18405568 bytes, 2026-10-30, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 7 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-30, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 11.1 s after start, GET 1028 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, tagcheck, vchheads
+INFO stockp: requests c1-stockinhand, c1n-stockinhand-byname, c1u-stockinhand-undated, c2-stockgroups, c2u-stockgroups-undated, r1-itemclosing-all, r2-items-stored
+INFO stockp: window probe running True (beats 20), Tally pid 7312
+INFO stockp: gen.py: {"items": 4000, "y1": {"Purchase": 10557, "Sales": 14995, "Debit Note": 1423, "Credit Note": 1522, "Stock Journal": 1455}, "y2": {"Purchase": 684, "Sales": 1020, "Debit Note": 103, "Credit Note": 93, "Stock Journal": 100}, "expect": {"opening_total": 908443072.58, "batched_items": 1000, "items_with_opening": 3409, "opening_allocs": 5181}}
+INFO stockp: company ISINTEGRATED=Yes: altered 1, errors 0; read back 'Yes'
+INFO stockp: company ISINVENTORYON=Yes: altered 1, errors 0; read back 'Yes'
+INFO stockp: company USEMULTIPLEGODOWNS=Yes: altered 1, errors 0; read back ''
+INFO stockp: company ISMULTIGODOWNON=Yes: altered 1, errors 0; read back 'No'
+INFO stockp: company ISMULTIGODOWN=Yes: altered 1, errors 0; read back ''
+INFO stockp: company USEBATCHES=Yes: altered 1, errors 0; read back ''
+INFO stockp: company ISBATCHWISEON=Yes: altered 1, errors 0; read back 'Yes'
+INFO stockp: company ISMAINTAINBATCHES=Yes: altered 1, errors 0; read back ''
+HARNESS p1 the stock test data made (items, godowns, batches, two years of inventory entries): masters: 4035 created, 0 errors; entries y1: 29952 created, 0 errors in 34.4 min; entries y2: 2000 created, 0 errors in 2.8 min; entries in Tally: 29954; expected opening at books-beginning 908443072.58 (3409 items, 5181 godown/batch allocations, 1000 batch-wise items)
+MEASURE G1 r2-items-stored undated: 890.8 ms, 4552916 bytes, 4000 items, stored opening total 908443072.58, godowns SP Godown B/Main Location/SP Godown C, batch names 1069
+PASS p2 stored opening (undated item masters) as made: 4000 items read, stored opening 908443072.58 (made 908443072.58); godowns in the allocations: SP Godown B, Main Location, SP Godown C; batch names 1069; 890.8 ms
+INFO stockp: G1 c1-stockinhand: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 c1-stockinhand 20260401-20260401 (COLD: first request after Tally started): 2923.6 ms, window held 2743 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G1 c1-stockinhand 20260401-20260401 (again): 2.8 ms, window held 0 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48
+MEASURE G1 c1-stockinhand 20260401-20261031 (first ask of this period): 1733.8 ms, window held 1323 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20260401-20261031 (again): 2.5 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20261001-20261031 (first ask of this period): 1516.1 ms, window held 1333 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20261001-20261031 (again): 2.3 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20260401-20270331 (first ask of this period): 2.2 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G1 c1-stockinhand 20260401-20270331 (again): 2.2 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G1 c1-stockinhand 20270401-20270630 (first ask of this period): 2.3 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1-stockinhand 20270401-20270630 (again): 2.2 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1u-stockinhand-undated undated (undated): 1111.8 ms, window held 962 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1n-stockinhand-byname 20260401-20270331 (filter by name): 2.4 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+INFO stockp: G1 c2-stockgroups: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 c2-stockgroups 20260401-20260401 (COLD: first request after Tally started): 2966.6 ms, window held 2745 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46; OVER 2 s
+MEASURE G1 c2-stockgroups 20260401-20260401 (again): 3.8 ms, window held 0 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46
+MEASURE G1 c2-stockgroups 20260401-20261031 (first ask of this period): 1706.4 ms, window held 1327 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20260401-20261031 (again): 3.9 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20261001-20261031 (first ask of this period): 1581.5 ms, window held 1339 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20261001-20261031 (again): 4.5 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20260401-20270331 (first ask of this period): 4.4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G1 c2-stockgroups 20260401-20270331 (again): 4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G1 c2-stockgroups 20270401-20270630 (first ask of this period): 4.3 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G1 c2-stockgroups 20270401-20270630 (again): 3.6 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G1 c2u-stockgroups-undated undated (undated): 1219.3 ms, window held 964 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+INFO stockp: G1 r1-itemclosing-all: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 r1-itemclosing-all 20260401-20260401 (COLD: first request after Tally started): 3203.4 ms, window held 3095 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G1 r1-itemclosing-all 20260401-20260401 (again): 138.4 ms, window held 0 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48
+MEASURE G1 r1-itemclosing-all 20260401-20261031 (first ask of this period): 1808.7 ms, window held 1680 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20260401-20261031 (again): 145.3 ms, window held 0 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20261001-20261031 (first ask of this period): 1549.2 ms, window held 1333 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20261001-20261031 (again): 148.8 ms, window held 0 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20260401-20270331 (first ask of this period): 141.9 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G1 r1-itemclosing-all 20260401-20270331 (again): 143.5 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G1 r1-itemclosing-all 20270401-20270630 (first ask of this period): 138.1 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+MEASURE G1 r1-itemclosing-all 20270401-20270630 (again): 149 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+INFO stockp: G2 c1-stockinhand: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 c1-stockinhand 20260401-20260401 (COLD: first request after Tally started): 2914.9 ms, window held 2729 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G2 c1-stockinhand 20260401-20260401 (again): 2.3 ms, window held 0 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48
+MEASURE G2 c1-stockinhand 20260401-20261031 (first ask of this period): 1635.5 ms, window held 1330 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20260401-20261031 (again): 2.4 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20261001-20261031 (first ask of this period): 1503.1 ms, window held 1323 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20261001-20261031 (again): 2.4 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20260401-20270331 (first ask of this period): 2.2 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G2 c1-stockinhand 20260401-20270331 (again): 2.4 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G2 c1-stockinhand 20270401-20270630 (first ask of this period): 2.4 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1-stockinhand 20270401-20270630 (again): 2.3 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1u-stockinhand-undated undated (undated): 1135.4 ms, window held 957 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1n-stockinhand-byname 20260401-20270331 (filter by name): 2.3 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+INFO stockp: G2 c2-stockgroups: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 c2-stockgroups 20260401-20260401 (COLD: first request after Tally started): 2841 ms, window held 2386 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46; OVER 2 s
+MEASURE G2 c2-stockgroups 20260401-20260401 (again): 3.8 ms, window held 0 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46
+MEASURE G2 c2-stockgroups 20260401-20261031 (first ask of this period): 1694.8 ms, window held 1340 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20260401-20261031 (again): 4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20261001-20261031 (first ask of this period): 1525.8 ms, window held 1322 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20261001-20261031 (again): 3.7 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20260401-20270331 (first ask of this period): 3.8 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G2 c2-stockgroups 20260401-20270331 (again): 3.8 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G2 c2-stockgroups 20270401-20270630 (first ask of this period): 3.8 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G2 c2-stockgroups 20270401-20270630 (again): 3.6 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G2 c2u-stockgroups-undated undated (undated): 1149.8 ms, window held 972 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+INFO stockp: G2 r1-itemclosing-all: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 r1-itemclosing-all 20260401-20260401 (COLD: first request after Tally started): 3131.2 ms, window held 2755 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G2 r1-itemclosing-all 20260401-20260401 (again): 139.3 ms, window held 0 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48
+MEASURE G2 r1-itemclosing-all 20260401-20261031 (first ask of this period): 1827 ms, window held 1663 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20260401-20261031 (again): 150.8 ms, window held 0 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20261001-20261031 (first ask of this period): 1512.9 ms, window held 1345 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20261001-20261031 (again): 164.2 ms, window held 0 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20260401-20270331 (first ask of this period): 157.2 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G2 r1-itemclosing-all 20260401-20270331 (again): 142.9 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G2 r1-itemclosing-all 20270401-20270630 (first ask of this period): 140.5 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+MEASURE G2 r1-itemclosing-all 20270401-20270630 (again): 153.6 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+FAIL p3 C1 Stock-in-Hand group, dated: equals Tally's per-item total, each request 2 s or less, window not held: worst 2923.6 ms, longest window hold 2743 ms; books-beginning opening -908443072.58 (made 908443072.58); G1 20260401-20260401 C1 -908443072.58/-972783122.48 vs items -908443072.58/-972783122.48 same; G1 20260401-20261031 C1 -908443072.58/-2182130465.82 vs items -908443072.58/-2182130465.82 same; G1 20261001-20261031 C1 -1958855539.13/-2182130465.82 vs items -1958855539.13/-2182130465.82 same; G1 20260401-20270331 C1 -908443072.58/-2916795425.2 vs items -908443072.58/-2916795425.20 same; G1 20270401-20270630 C1 -2916795425.2/-3020918916.67 vs items -2916795425.20/-3020918916.67 same; G2 20260401-20260401 C1 -908443072.58/-972783122.48 vs items -908443072.58/-972783122.48 same; G2 20260401-20261031 C1 -908443072.58/-2182130465.82 vs items -908443072.58/-2182130465.82 same; G2 20261001-20261031 C1 -1958855539.13/-2182130465.82 vs items -1958855539.13/-2182130465.82 same; G2 20260401-20270331 C1 -908443072.58/-2916795425.2 vs items -908443072.58/-2916795425.20 same; G2 20270401-20270630 C1 -2916795425.2/-3020918916.67 vs items -2916795425.20/-3020918916.67 same
+PASS p4 dated answers the same whatever the Gateway's period: dated: all the same in G1 and G2; undated (for comparison, the Gateway's period): G1 c1u-stockinhand-undated: -2916795425.2/-3020918916.67; G1 c2u-stockgroups-undated: -2889634466.39/-2992329555.65; G2 c1u-stockinhand-undated: -2916795425.2/-3020918916.67; G2 c2u-stockgroups-undated: -2889634466.39/-2992329555.65
+PASS p5 C2 stock groups, dated: times and totals: measured: worst 2966.6 ms, longest window hold 2745 ms; G1 totals of the top-level groups (items under Primary are in none): 20260401-20260401 -900122468.73/-963495489.46 (10 stockgroups (10 summed)); 20260401-20261031 -900122468.73/-2161122477.40 (10 stockgroups (10 summed)); 20261001-20261031 -1940240107.27/-2161122477.40 (10 stockgroups (10 summed)); 20260401-20270331 -900122468.73/-2889634466.39 (10 stockgroups (10 summed)); 20270401-20270630 -2889634466.39/-2992329555.65 (10 stockgroups (10 summed))
+PASS p6 one request at a time, Tally responding after each: 296 requests, at most 1 at Tally at once; Tally responding after each: True; c1-stockinhand worst 2923.6 ms (cold worst 2923.6 ms), hold 2743 ms, 1905 bytes; c2-stockgroups worst 2966.6 ms (cold worst 2966.6 ms), hold 2745 ms, 5891 bytes; r1-itemclosing-all worst 3203.4 ms (cold worst 3203.4 ms), hold 3095 ms, 2470178 bytes
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: AVAILABLE 72090376 bytes, Last-Modified Thu, 25 Jun 2026 10:18:19 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.7.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe : 72090376 bytes in 1 s, SHA-256 B849B1FB5A93D03C8FABDAEC4447FDCFDF27A5D6C93E3C207BBB320263AB663F, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.7.1 product 1.1.7.1

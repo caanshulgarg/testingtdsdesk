@@ -1,0 +1,317 @@
+[05:53:01] ---- c1 install and open the company (TallyPrime 3.0)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 11457160 bytes, 2026-10-30, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 5 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>3</PRODMAJORREL><PRODMINORREL>0</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 3 PRODMINORREL 0 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-30, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 14 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, ledlist-chunk, ledlist-tail, names-chunk, names-tail, tagcheck, vchheads
+[05:53:33] ---- stockp: stock figures from Tally, the lightest request
+  INFO stockp: requests c1-stockinhand, c1n-stockinhand-byname, c1u-stockinhand-undated, c2-stockgroups, c2u-stockgroups-undated, r1-itemclosing-all, r2-items-stored
+  INFO stockp: window probe running True (beats 20), Tally pid 7996
+  INFO stockp: gen.py: {"items": 4000, "y1": {"Purchase": 10557, "Sales": 14995, "Debit Note": 1423, "Credit Note": 1522, "Stock Journal": 1455}, "y2": {"Purchase": 684, "Sales": 1020, "Debit Note": 103, "Credit Note": 93, "Stock Journal": 100}, "expect": {"opening_total": 908443072.58, "batched_items": 1000, "items_with_opening": 3409, "opening_allocs": 5181}}
+[db] company ISINTEGRATED Yes: created 0, altered 1, errors 0, 28.7 ms
+  INFO stockp: company ISINTEGRATED=Yes: altered 1, errors 0; read back 'Yes'
+[db] company ISINVENTORYON Yes: created 0, altered 1, errors 0, 6.4 ms
+  INFO stockp: company ISINVENTORYON=Yes: altered 1, errors 0; read back 'Yes'
+[db] company USEMULTIPLEGODOWNS Yes: created 0, altered 1, errors 0, 5.5 ms
+  INFO stockp: company USEMULTIPLEGODOWNS=Yes: altered 1, errors 0; read back ''
+[db] company ISMULTIGODOWNON Yes: created 0, altered 1, errors 0, 5.8 ms
+  INFO stockp: company ISMULTIGODOWNON=Yes: altered 1, errors 0; read back 'No'
+[db] company ISMULTIGODOWN Yes: created 0, altered 1, errors 0, 5.6 ms
+  INFO stockp: company ISMULTIGODOWN=Yes: altered 1, errors 0; read back ''
+[db] company USEBATCHES Yes: created 0, altered 1, errors 0, 5.6 ms
+  INFO stockp: company USEBATCHES=Yes: altered 1, errors 0; read back ''
+[db] company ISBATCHWISEON Yes: created 0, altered 1, errors 0, 5.6 ms
+  INFO stockp: company ISBATCHWISEON=Yes: altered 1, errors 0; read back 'Yes'
+[db] company ISMAINTAINBATCHES Yes: created 0, altered 1, errors 0, 5.5 ms
+  INFO stockp: company ISMAINTAINBATCHES=Yes: altered 1, errors 0; read back ''
+[db] masters: created 4035, altered 0, errors 0, 9064.9 ms
+[db] y1 v-y1-purchase-01.xml: created 250, altered 0, errors 0, 5152.8 ms
+[db] y1 v-y1-purchase-02.xml: created 250, altered 0, errors 0, 5898.1 ms
+[db] y1 v-y1-purchase-03.xml: created 250, altered 0, errors 0, 6426.3 ms
+[db] y1 v-y1-purchase-04.xml: created 250, altered 0, errors 0, 6929.7 ms
+[db] y1 v-y1-purchase-05.xml: created 250, altered 0, errors 0, 8596.5 ms
+[db] y1 v-y1-purchase-06.xml: created 250, altered 0, errors 0, 9670.6 ms
+[db] y1 v-y1-purchase-07.xml: created 250, altered 0, errors 0, 9684.6 ms
+[db] y1 v-y1-purchase-08.xml: created 250, altered 0, errors 0, 9354.9 ms
+[db] y1 v-y1-purchase-09.xml: created 250, altered 0, errors 0, 9736.7 ms
+[db] y1 v-y1-purchase-10.xml: created 250, altered 0, errors 0, 10306 ms
+[db] y1 v-y1-purchase-11.xml: created 250, altered 0, errors 0, 10965.7 ms
+[db] y1 v-y1-purchase-12.xml: created 250, altered 0, errors 0, 9543.7 ms
+[db] y1 v-y1-purchase-13.xml: created 250, altered 0, errors 0, 8927 ms
+[db] y1 v-y1-purchase-14.xml: created 250, altered 0, errors 0, 9044.8 ms
+[db] y1 v-y1-purchase-15.xml: created 250, altered 0, errors 0, 8738.8 ms
+[db] y1 v-y1-purchase-16.xml: created 250, altered 0, errors 0, 8712 ms
+[db] y1 v-y1-purchase-17.xml: created 250, altered 0, errors 0, 8422.4 ms
+[db] y1 v-y1-purchase-18.xml: created 250, altered 0, errors 0, 10005.2 ms
+[db] y1 v-y1-purchase-19.xml: created 250, altered 0, errors 0, 9587.6 ms
+[db] y1 v-y1-purchase-20.xml: created 250, altered 0, errors 0, 10896.2 ms
+[db] y1 v-y1-purchase-21.xml: created 250, altered 0, errors 0, 11489.6 ms
+[db] y1 v-y1-purchase-22.xml: created 250, altered 0, errors 0, 11483.3 ms
+[db] y1 v-y1-purchase-23.xml: created 250, altered 0, errors 0, 11943.7 ms
+[db] y1 v-y1-purchase-24.xml: created 250, altered 0, errors 0, 12359 ms
+[db] y1 v-y1-purchase-25.xml: created 250, altered 0, errors 0, 12067.7 ms
+[db] y1 v-y1-purchase-26.xml: created 250, altered 0, errors 0, 11433.7 ms
+[db] y1 v-y1-purchase-27.xml: created 250, altered 0, errors 0, 11447.9 ms
+[db] y1 v-y1-purchase-28.xml: created 250, altered 0, errors 0, 11922.3 ms
+[db] y1 v-y1-purchase-29.xml: created 250, altered 0, errors 0, 10790.5 ms
+[db] y1 v-y1-purchase-30.xml: created 250, altered 0, errors 0, 10231 ms
+[db] y1 v-y1-purchase-31.xml: created 250, altered 0, errors 0, 9776 ms
+[db] y1 v-y1-purchase-32.xml: created 250, altered 0, errors 0, 9481.1 ms
+[db] y1 v-y1-purchase-33.xml: created 250, altered 0, errors 0, 9548.9 ms
+[db] y1 v-y1-purchase-34.xml: created 250, altered 0, errors 0, 10585.9 ms
+[db] y1 v-y1-purchase-35.xml: created 250, altered 0, errors 0, 9687.4 ms
+[db] y1 v-y1-purchase-36.xml: created 250, altered 0, errors 0, 9571.9 ms
+[db] y1 v-y1-purchase-37.xml: created 250, altered 0, errors 0, 9724.3 ms
+[db] y1 v-y1-purchase-38.xml: created 250, altered 0, errors 0, 9619.3 ms
+[db] y1 v-y1-purchase-39.xml: created 250, altered 0, errors 0, 10493.1 ms
+[db] y1 v-y1-purchase-40.xml: created 250, altered 0, errors 0, 10307.4 ms
+[db] y1 v-y1-purchase-41.xml: created 250, altered 0, errors 0, 9851.7 ms
+[db] y1 v-y1-purchase-42.xml: created 250, altered 0, errors 0, 10114.4 ms
+[db] y1 v-y1-purchase-43.xml: created 57, altered 0, errors 0, 2352.8 ms
+[db] y1 v-y1-sales-01.xml: created 250, altered 0, errors 0, 9997.2 ms
+[db] y1 v-y1-sales-02.xml: created 250, altered 0, errors 0, 10164.5 ms
+[db] y1 v-y1-sales-03.xml: created 250, altered 0, errors 0, 11172.9 ms
+[db] y1 v-y1-sales-04.xml: created 250, altered 0, errors 0, 11482.1 ms
+[db] y1 v-y1-sales-05.xml: created 250, altered 0, errors 0, 11113 ms
+[db] y1 v-y1-sales-06.xml: created 250, altered 0, errors 0, 10866 ms
+[db] y1 v-y1-sales-07.xml: created 250, altered 0, errors 0, 11225.1 ms
+[db] y1 v-y1-sales-08.xml: created 250, altered 0, errors 0, 10730.6 ms
+[db] y1 v-y1-sales-09.xml: created 250, altered 0, errors 0, 11920.7 ms
+[db] y1 v-y1-sales-10.xml: created 250, altered 0, errors 0, 11097.9 ms
+[db] y1 v-y1-sales-11.xml: created 250, altered 0, errors 0, 11282.3 ms
+[db] y1 v-y1-sales-12.xml: created 250, altered 0, errors 0, 11470.6 ms
+[db] y1 v-y1-sales-13.xml: created 250, altered 0, errors 0, 11262.2 ms
+[db] y1 v-y1-sales-14.xml: created 250, altered 0, errors 0, 10953.6 ms
+[db] y1 v-y1-sales-15.xml: created 250, altered 0, errors 0, 11151.3 ms
+[db] y1 v-y1-sales-16.xml: created 250, altered 0, errors 0, 11627.4 ms
+[db] y1 v-y1-sales-17.xml: created 250, altered 0, errors 0, 11268.8 ms
+[db] y1 v-y1-sales-18.xml: created 250, altered 0, errors 0, 10898 ms
+[db] y1 v-y1-sales-19.xml: created 250, altered 0, errors 0, 10706.3 ms
+[db] y1 v-y1-sales-20.xml: created 250, altered 0, errors 0, 11435.5 ms
+[db] y1 v-y1-sales-21.xml: created 250, altered 0, errors 0, 11119.9 ms
+[db] y1 v-y1-sales-22.xml: created 250, altered 0, errors 0, 10705.2 ms
+[db] y1 v-y1-sales-23.xml: created 250, altered 0, errors 0, 11269.8 ms
+[db] y1 v-y1-sales-24.xml: created 250, altered 0, errors 0, 11064.5 ms
+[db] y1 v-y1-sales-25.xml: created 250, altered 0, errors 0, 11239.5 ms
+[db] y1 v-y1-sales-26.xml: created 250, altered 0, errors 0, 11151.4 ms
+[db] y1 v-y1-sales-27.xml: created 250, altered 0, errors 0, 11337.8 ms
+[db] y1 v-y1-sales-28.xml: created 250, altered 0, errors 0, 11664.9 ms
+[db] y1 v-y1-sales-29.xml: created 250, altered 0, errors 0, 11103 ms
+[db] y1 v-y1-sales-30.xml: created 250, altered 0, errors 0, 11637.8 ms
+[db] y1 v-y1-sales-31.xml: created 250, altered 0, errors 0, 11378.7 ms
+[db] y1 v-y1-sales-32.xml: created 250, altered 0, errors 0, 11275.3 ms
+[db] y1 v-y1-sales-33.xml: created 250, altered 0, errors 0, 11518.4 ms
+[db] y1 v-y1-sales-34.xml: created 250, altered 0, errors 0, 11613.9 ms
+[db] y1 v-y1-sales-35.xml: created 250, altered 0, errors 0, 11069.8 ms
+[db] y1 v-y1-sales-36.xml: created 250, altered 0, errors 0, 11481.4 ms
+[db] y1 v-y1-sales-37.xml: created 250, altered 0, errors 0, 11431.8 ms
+[db] y1 v-y1-sales-38.xml: created 250, altered 0, errors 0, 11772 ms
+[db] y1 v-y1-sales-39.xml: created 250, altered 0, errors 0, 11672.1 ms
+[db] y1 v-y1-sales-40.xml: created 250, altered 0, errors 0, 11612.6 ms
+[db] y1 v-y1-sales-41.xml: created 250, altered 0, errors 0, 11712.9 ms
+[db] y1 v-y1-sales-42.xml: created 250, altered 0, errors 0, 11625.7 ms
+[db] y1 v-y1-sales-43.xml: created 250, altered 0, errors 0, 11760.9 ms
+[db] y1 v-y1-sales-44.xml: created 250, altered 0, errors 0, 11432 ms
+[db] y1 v-y1-sales-45.xml: created 250, altered 0, errors 0, 11937.1 ms
+[db] y1 v-y1-sales-46.xml: created 250, altered 0, errors 0, 11610.3 ms
+[db] y1 v-y1-sales-47.xml: created 250, altered 0, errors 0, 11752.2 ms
+[db] y1 v-y1-sales-48.xml: created 250, altered 0, errors 0, 12014.1 ms
+[db] y1 v-y1-sales-49.xml: created 250, altered 0, errors 0, 12077.6 ms
+[db] y1 v-y1-sales-50.xml: created 250, altered 0, errors 0, 12016.7 ms
+[db] y1 v-y1-sales-51.xml: created 250, altered 0, errors 0, 11684.8 ms
+[db] y1 v-y1-sales-52.xml: created 250, altered 0, errors 0, 12099.9 ms
+[db] y1 v-y1-sales-53.xml: created 250, altered 0, errors 0, 12051.2 ms
+[db] y1 v-y1-sales-54.xml: created 250, altered 0, errors 0, 12604.8 ms
+[db] y1 v-y1-sales-55.xml: created 250, altered 0, errors 0, 11812.3 ms
+[db] y1 v-y1-sales-56.xml: created 250, altered 0, errors 0, 12872.3 ms
+[db] y1 v-y1-sales-57.xml: created 250, altered 0, errors 0, 12765 ms
+[db] y1 v-y1-sales-58.xml: created 250, altered 0, errors 0, 12511.2 ms
+[db] y1 v-y1-sales-59.xml: created 250, altered 0, errors 0, 12648 ms
+[db] y1 v-y1-sales-60.xml: created 245, altered 0, errors 0, 12195.8 ms
+[db] y1 v-y1-debitnote-01.xml: created 250, altered 0, errors 0, 11436.3 ms
+[db] y1 v-y1-debitnote-02.xml: created 250, altered 0, errors 0, 11924.7 ms
+[db] y1 v-y1-debitnote-03.xml: created 250, altered 0, errors 0, 11753.3 ms
+[db] y1 v-y1-debitnote-04.xml: created 250, altered 0, errors 0, 12250 ms
+[db] y1 v-y1-debitnote-05.xml: created 250, altered 0, errors 0, 12962.4 ms
+[db] y1 v-y1-debitnote-06.xml: created 173, altered 0, errors 0, 8179.1 ms
+[db] y1 v-y1-creditnote-01.xml: created 250, altered 0, errors 0, 8549.6 ms
+[db] y1 v-y1-creditnote-02.xml: created 250, altered 0, errors 0, 8655.7 ms
+[db] y1 v-y1-creditnote-03.xml: created 250, altered 0, errors 0, 8685.6 ms
+[db] y1 v-y1-creditnote-04.xml: created 250, altered 0, errors 0, 8479.4 ms
+[db] y1 v-y1-creditnote-05.xml: created 250, altered 0, errors 0, 8902.5 ms
+[db] y1 v-y1-creditnote-06.xml: created 250, altered 0, errors 0, 8646.2 ms
+[db] y1 v-y1-creditnote-07.xml: created 22, altered 0, errors 0, 874.9 ms
+[db] y1 v-y1-stockjournal-01.xml: created 250, altered 0, errors 0, 6553.8 ms
+[db] y1 v-y1-stockjournal-02.xml: created 250, altered 0, errors 0, 6625.5 ms
+[db] y1 v-y1-stockjournal-03.xml: created 250, altered 0, errors 0, 6642.8 ms
+[db] y1 v-y1-stockjournal-04.xml: created 250, altered 0, errors 0, 6808.6 ms
+[db] y1 v-y1-stockjournal-05.xml: created 250, altered 0, errors 0, 6875.4 ms
+[db] y1 v-y1-stockjournal-06.xml: created 205, altered 0, errors 0, 5480.3 ms
+[db] y2 v-y2-purchase-01.xml: created 250, altered 0, errors 0, 12074.8 ms
+[db] y2 v-y2-purchase-02.xml: created 250, altered 0, errors 0, 12183.8 ms
+[db] y2 v-y2-purchase-03.xml: created 184, altered 0, errors 0, 10244 ms
+[db] y2 v-y2-sales-01.xml: created 250, altered 0, errors 0, 15594.3 ms
+[db] y2 v-y2-sales-02.xml: created 250, altered 0, errors 0, 15978.7 ms
+[db] y2 v-y2-sales-03.xml: created 250, altered 0, errors 0, 15368.2 ms
+[db] y2 v-y2-sales-04.xml: created 250, altered 0, errors 0, 15594.2 ms
+[db] y2 v-y2-sales-05.xml: created 20, altered 0, errors 0, 1292.3 ms
+[db] y2 v-y2-debitnote-01.xml: created 103, altered 0, errors 0, 6437.8 ms
+[db] y2 v-y2-creditnote-01.xml: created 93, altered 0, errors 0, 4191.4 ms
+[db] y2 v-y2-stockjournal-01.xml: created 100, altered 0, errors 0, 3420.9 ms
+######## HARNESS p1 the stock test data made (items, godowns, batches, two years of inventory entries): masters: 4035 created, 0 errors; entries y1: 29952 created, 0 errors in 21.1 min; entries y2: 2000 created, 0 errors in 1.9 min; entries in Tally: 29954; expected opening at books-beginning 908443072.58 (3409 items, 5181 godown/batch allocations, 1000 batch-wise items)
+MEASURE G1 r2-items-stored undated: 679.8 ms, 4552912 bytes, 4000 items, stored opening total 908443072.58, godowns SP Godown C/Main Location/SP Godown B, batch names 1069
+######## PASS p2 stored opening (undated item masters) as made: 4000 items read, stored opening 908443072.58 (made 908443072.58); godowns in the allocations: SP Godown C, Main Location, SP Godown B; batch names 1069; 679.8 ms
+[06:16:52] db: Tally (pid 7996) closed
+[06:16:52] db: Tally started (pid 8616), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G1-c1-stockinhand-started (1024x768)
+  INFO stockp: G1 c1-stockinhand: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 c1-stockinhand 20260401-20260401 (COLD: first request after Tally started): 2374 ms, window held 2051 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G1 c1-stockinhand 20260401-20260401 (again): 1.7 ms, window held 0 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48
+MEASURE G1 c1-stockinhand 20260401-20261031 (first ask of this period): 1370 ms, window held 974 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20260401-20261031 (again): 1.7 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20261001-20261031 (first ask of this period): 1226.3 ms, window held 968 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20261001-20261031 (again): 1.7 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G1 c1-stockinhand 20260401-20270331 (first ask of this period): 1.6 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G1 c1-stockinhand 20260401-20270331 (again): 1.6 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G1 c1-stockinhand 20270401-20270630 (first ask of this period): 1.6 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1-stockinhand 20270401-20270630 (again): 1.6 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1u-stockinhand-undated undated (undated): 897.1 ms, window held 625 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G1 c1n-stockinhand-byname 20260401-20270331 (filter by name): 1.8 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+[06:17:32] db: Tally (pid 8616) closed
+[06:17:32] db: Tally started (pid 9028), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G1-c2-stockgroups-started (1024x768)
+  INFO stockp: G1 c2-stockgroups: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 c2-stockgroups 20260401-20260401 (COLD: first request after Tally started): 2340.1 ms, window held 2042 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46; OVER 2 s
+MEASURE G1 c2-stockgroups 20260401-20260401 (again): 2.4 ms, window held 0 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46
+MEASURE G1 c2-stockgroups 20260401-20261031 (first ask of this period): 1316.7 ms, window held 956 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20260401-20261031 (again): 2.4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20261001-20261031 (first ask of this period): 1202.5 ms, window held 958 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20261001-20261031 (again): 2.8 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G1 c2-stockgroups 20260401-20270331 (first ask of this period): 2.6 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G1 c2-stockgroups 20260401-20270331 (again): 2.5 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G1 c2-stockgroups 20270401-20270630 (first ask of this period): 2.4 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G1 c2-stockgroups 20270401-20270630 (again): 2.5 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G1 c2u-stockgroups-undated undated (undated): 907.8 ms, window held 612 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+[06:18:12] db: Tally (pid 9028) closed
+[06:18:12] db: Tally started (pid 5484), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G1-r1-itemclosing-all-started (1024x768)
+  INFO stockp: G1 r1-itemclosing-all: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G1 r1-itemclosing-all 20260401-20260401 (COLD: first request after Tally started): 2542.9 ms, window held 2418 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G1 r1-itemclosing-all 20260401-20260401 (again): 119.8 ms, window held 0 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48
+MEASURE G1 r1-itemclosing-all 20260401-20261031 (first ask of this period): 1483.4 ms, window held 1328 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20260401-20261031 (again): 120.5 ms, window held 0 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20261001-20261031 (first ask of this period): 1246.1 ms, window held 967 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20261001-20261031 (again): 150.7 ms, window held 0 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G1 r1-itemclosing-all 20260401-20270331 (first ask of this period): 117.8 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G1 r1-itemclosing-all 20260401-20270331 (again): 135.8 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G1 r1-itemclosing-all 20270401-20270630 (first ask of this period): 119.2 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+MEASURE G1 r1-itemclosing-all 20270401-20270630 (again): 134 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+[06:18:54] db: Tally (pid 5484) closed
+[06:18:54] db: Tally started (pid 2728), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G2-c1-stockinhand-started (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] 'n' -> Tally 'TallyPrime:9000'
+[keys] '%{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-altf2 (1024x768)
+[keys] '1-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '31-3-2028{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-period (1024x768)
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-f2-date (1024x768)
+[keys] '2-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-date-set (1024x768)
+  INFO stockp: G2 c1-stockinhand: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 c1-stockinhand 20260401-20260401 (COLD: first request after Tally started): 2304.3 ms, window held 2044 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G2 c1-stockinhand 20260401-20260401 (again): 1.8 ms, window held 0 ms, 1903 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -972783122.48
+MEASURE G2 c1-stockinhand 20260401-20261031 (first ask of this period): 1315.4 ms, window held 964 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20260401-20261031 (again): 1.6 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20261001-20261031 (first ask of this period): 1173.2 ms, window held 972 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20261001-20261031 (again): 1.6 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -1958855539.13, closing -2182130465.82
+MEASURE G2 c1-stockinhand 20260401-20270331 (first ask of this period): 1.3 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G2 c1-stockinhand 20260401-20270331 (again): 1.3 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+MEASURE G2 c1-stockinhand 20270401-20270630 (first ask of this period): 1.2 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1-stockinhand 20270401-20270630 (again): 1.2 ms, window held 0 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1u-stockinhand-undated undated (undated): 850.6 ms, window held 605 ms, 1905 bytes, 2 groups 'Stock-in-Hand'; opening -2916795425.2, closing -3020918916.67
+MEASURE G2 c1n-stockinhand-byname 20260401-20270331 (filter by name): 1.6 ms, window held 0 ms, 1904 bytes, 2 groups 'Stock-in-Hand'; opening -908443072.58, closing -2916795425.2
+[06:20:08] db: Tally (pid 2728) closed
+[06:20:08] db: Tally started (pid 9304), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G2-c2-stockgroups-started (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] 'n' -> Tally 'TallyPrime:9000'
+[keys] '%{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-altf2 (1024x768)
+[keys] '1-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '31-3-2028{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-period (1024x768)
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-f2-date (1024x768)
+[keys] '2-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-date-set (1024x768)
+  INFO stockp: G2 c2-stockgroups: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 c2-stockgroups 20260401-20260401 (COLD: first request after Tally started): 2236.6 ms, window held 2043 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46; OVER 2 s
+MEASURE G2 c2-stockgroups 20260401-20260401 (again): 2.4 ms, window held 0 ms, 5873 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -963495489.46
+MEASURE G2 c2-stockgroups 20260401-20261031 (first ask of this period): 1316 ms, window held 969 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20260401-20261031 (again): 2.4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20261001-20261031 (first ask of this period): 1182 ms, window held 975 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20261001-20261031 (again): 2.6 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -1940240107.27, closing -2161122477.40
+MEASURE G2 c2-stockgroups 20260401-20270331 (first ask of this period): 2.4 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G2 c2-stockgroups 20260401-20270331 (again): 2.5 ms, window held 0 ms, 5881 bytes, 10 stockgroups (10 summed); opening -900122468.73, closing -2889634466.39
+MEASURE G2 c2-stockgroups 20270401-20270630 (first ask of this period): 2.4 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G2 c2-stockgroups 20270401-20270630 (again): 2 ms, window held 0 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+MEASURE G2 c2u-stockgroups-undated undated (undated): 910.6 ms, window held 611 ms, 5891 bytes, 10 stockgroups (10 summed); opening -2889634466.39, closing -2992329555.65
+[06:21:22] db: Tally (pid 9304) closed
+[06:21:22] db: Tally started (pid 3096), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-stockp-G2-r1-itemclosing-all-started (1024x768)
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] '{ESC}' -> Tally 'TallyPrime:9000'
+[keys] 'n' -> Tally 'TallyPrime:9000'
+[keys] '%{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-altf2 (1024x768)
+[keys] '1-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '31-3-2028{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-gw-period (1024x768)
+[keys] '{F2}' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-f2-date (1024x768)
+[keys] '2-4-2027{ENTER}' -> Tally 'TallyPrime:9000'
+[keys] '^a' -> Tally 'TallyPrime:9000'
+[shot] v-stockp-date-set (1024x768)
+  INFO stockp: G2 r1-itemclosing-all: Tally started again (company up: True); the company's period now: ENDINGAT=20270602, STARTINGFROM=20260401, BOOKSFROM=20260401
+MEASURE G2 r1-itemclosing-all 20260401-20260401 (COLD: first request after Tally started): 2461.9 ms, window held 2373 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48; OVER 2 s
+MEASURE G2 r1-itemclosing-all 20260401-20260401 (again): 119.1 ms, window held 0 ms, 2446284 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -972783122.48
+MEASURE G2 r1-itemclosing-all 20260401-20261031 (first ask of this period): 1424 ms, window held 1323 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20260401-20261031 (again): 118.1 ms, window held 0 ms, 2457180 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20261001-20261031 (first ask of this period): 1186.1 ms, window held 962 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20261001-20261031 (again): 119.7 ms, window held 0 ms, 2466536 bytes, 4000 stockitems (4000 summed); opening -1958855539.13, closing -2182130465.82
+MEASURE G2 r1-itemclosing-all 20260401-20270331 (first ask of this period): 134 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G2 r1-itemclosing-all 20260401-20270331 (again): 118.5 ms, window held 0 ms, 2458744 bytes, 4000 stockitems (4000 summed); opening -908443072.58, closing -2916795425.20
+MEASURE G2 r1-itemclosing-all 20270401-20270630 (first ask of this period): 118.3 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+MEASURE G2 r1-itemclosing-all 20270401-20270630 (again): 119.7 ms, window held 0 ms, 2470178 bytes, 4000 stockitems (4000 summed); opening -2916795425.20, closing -3020918916.67
+######## FAIL p3 C1 Stock-in-Hand group, dated: equals Tally's per-item total, each request 2 s or less, window not held: worst 2374 ms, longest window hold 2051 ms; books-beginning opening -908443072.58 (made 908443072.58); G1 20260401-20260401 C1 -908443072.58/-972783122.48 vs items -908443072.58/-972783122.48 same; G1 20260401-20261031 C1 -908443072.58/-2182130465.82 vs items -908443072.58/-2182130465.82 same; G1 20261001-20261031 C1 -1958855539.13/-2182130465.82 vs items -1958855539.13/-2182130465.82 same; G1 20260401-20270331 C1 -908443072.58/-2916795425.2 vs items -908443072.58/-2916795425.20 same; G1 20270401-20270630 C1 -2916795425.2/-3020918916.67 vs items -2916795425.20/-3020918916.67 same; G2 20260401-20260401 C1 -908443072.58/-972783122.48 vs items -908443072.58/-972783122.48 same; G2 20260401-20261031 C1 -908443072.58/-2182130465.82 vs items -908443072.58/-2182130465.82 same; G2 20261001-20261031 C1 -1958855539.13/-2182130465.82 vs items -1958855539.13/-2182130465.82 same; G2 20260401-20270331 C1 -908443072.58/-2916795425.2 vs items -908443072.58/-2916795425.20 same; G2 20270401-20270630 C1 -2916795425.2/-3020918916.67 vs items -2916795425.20/-3020918916.67 same
+######## PASS p4 dated answers the same whatever the Gateway's period: dated: all the same in G1 and G2; undated (for comparison, the Gateway's period): G1 c1u-stockinhand-undated: -2916795425.2/-3020918916.67; G1 c2u-stockgroups-undated: -2889634466.39/-2992329555.65; G2 c1u-stockinhand-undated: -2916795425.2/-3020918916.67; G2 c2u-stockgroups-undated: -2889634466.39/-2992329555.65
+######## PASS p5 C2 stock groups, dated: times and totals: measured: worst 2340.1 ms, longest window hold 2043 ms; G1 totals of the top-level groups (items under Primary are in none): 20260401-20260401 -900122468.73/-963495489.46 (10 stockgroups (10 summed)); 20260401-20261031 -900122468.73/-2161122477.40 (10 stockgroups (10 summed)); 20261001-20261031 -1940240107.27/-2161122477.40 (10 stockgroups (10 summed)); 20260401-20270331 -900122468.73/-2889634466.39 (10 stockgroups (10 summed)); 20270401-20270630 -2889634466.39/-2992329555.65 (10 stockgroups (10 summed))
+######## PASS p6 one request at a time, Tally responding after each: 296 requests, at most 1 at Tally at once; Tally responding after each: True; c1-stockinhand worst 2374 ms (cold worst 2374 ms), hold 2051 ms, 1905 bytes; c2-stockgroups worst 2340.1 ms (cold worst 2340.1 ms), hold 2043 ms, 5891 bytes; r1-itemclosing-all worst 2542.9 ms (cold worst 2542.9 ms), hold 2418 ms, 2470178 bytes
