@@ -359,16 +359,19 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	stock.wait = func() time.Duration { return 5 * time.Second }
 	stock.mu.Unlock()
 	first := true
-	stockBeforeSend = func() {
+	stock.mu.Lock()
+	stock.beforeSend = func() {
 		if first {
 			first = false
 			importsInFlight.Add(1)
 			go func() { time.Sleep(300 * time.Millisecond); importsInFlight.Add(-1) }()
 		}
 	}
-	t.Cleanup(func() { stockBeforeSend = nil })
+	stock.mu.Unlock()
 	a = stockTake(stockClick{Company: zz, From: "20260401", To: "20260731", At: clickAt(4500 * time.Millisecond)})
-	stockBeforeSend = nil
+	stock.mu.Lock()
+	stock.beforeSend = nil
+	stock.mu.Unlock()
 	if str(a["status"]) != "ok" || stockClicks(f) != 3 {
 		t.Fatalf("a posting during the click's turn: %v (%d asked)", a, stockClicks(f))
 	}
@@ -518,5 +521,31 @@ func TestStock251VersionAllowList(t *testing.T) {
 		if !strings.Contains(sheet, w) {
 			t.Errorf("the test sheet does not say %q", w)
 		}
+	}
+}
+
+// --- 5b. a posting that comes while the click's request is AT Tally (sent): never sent again for the same click
+func TestStock251PostingAfterSendNeverTwice(t *testing.T) {
+	f, _, _ := stockBridge(t)
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == stockID {
+			return 800 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	done := make(chan M, 1)
+	go func() { done <- stockTake(stockClick{Company: zz, From: "20260401", To: "20260831", At: clickAt(0)}) }()
+	for i := 0; i < 100 && stockClicks(f) == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if r := postOne(t, "stk1", finVoucher("stk1", fgParty, "STK-1", today(), "4.00")); r["ok"] != true {
+		t.Fatalf("the posting: %v", r)
+	}
+	a := <-done
+	time.Sleep(1200 * time.Millisecond)
+	if n := stockClicks(f); n != 1 {
+		t.Fatalf("the click's request went to Tally %d times (answer %v)", n, a)
 	}
 }

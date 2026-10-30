@@ -65,17 +65,15 @@ func stockExact(x string) bool {
 }
 
 var stock = struct {
-	mu      sync.Mutex
-	asks    map[string]bool      // the requests of the clicks in flight (the dated guard's exemption)
-	busy    map[string]bool      // company key -> a click being handled
-	cache   map[string]M         // company key|from|to -> Tally's answer
-	seen    map[string]string    // company key|from|to -> the last click (its time) taken
-	stopped map[string]string    // company key -> why the last click stopped (cleared by the next click; the log and the beat's state)
-	wait    func() time.Duration // how long a click waits for a posting to end (tests: shorter)
+	mu         sync.Mutex
+	asks       map[string]bool      // the requests of the clicks in flight (the dated guard's exemption)
+	busy       map[string]bool      // company key -> a click being handled
+	cache      map[string]M         // company key|from|to -> Tally's answer
+	seen       map[string]string    // company key|from|to -> the last click (its time) taken
+	stopped    map[string]string    // company key -> why the last click stopped (cleared by the next click; the log and the beat's state)
+	wait       func() time.Duration // how long a click waits for a posting to end (tests: shorter)
+	beforeSend func()               // tests: called right before each send (a posting arriving then)
 }{asks: map[string]bool{}, busy: map[string]bool{}, cache: map[string]M{}, seen: map[string]string{}, stopped: map[string]string{}}
-
-// tests: called right before each send (a posting arriving then)
-var stockBeforeSend func()
 
 func stockReset() {
 	stock.mu.Lock()
@@ -241,11 +239,11 @@ func stockAnswer(c stockClick, k string) M {
 	}
 	until := time.Now().Add(wait)
 	x := stockRequest(c.Company, c.From, c.To)
-	held := windowHoldFn()
+	var held func(time.Time) int
 	var took float64
 	var raw string
 	var err error
-	for {
+	for try := 0; ; try++ {
 		for postingGoing() {
 			if time.Now().After(until) {
 				return say("busy", "not asked: Tally is busy with a posting; try again in a moment")
@@ -258,15 +256,20 @@ func stockAnswer(c stockClick, k string) M {
 		stock.mu.Lock()
 		stock.asks[x] = true
 		stock.mu.Unlock()
-		if stockBeforeSend != nil {
-			stockBeforeSend()
+		stock.mu.Lock()
+		hook := stock.beforeSend
+		stock.mu.Unlock()
+		if hook != nil {
+			hook()
 		}
 		held = windowHoldFn()
-		tc := &TC{copier: true, limitMs: 2000, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
+		sent := false
+		tc := &TC{copier: true, limitMs: 2000, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
 		raw, err = invokeTally(tc, port, x, 5)
-		// a posting that came while the click waited for Tally's lock goes first: nothing reached Tally, so the click waits
-		// for it again (the same 20 s), never sent twice
-		if took == 0 && gaveWay(err) && postingGoing() && time.Now().Before(until) {
+		// a posting that came while the click took Tally's lock goes first: when the request never reached Tally (sentOut),
+		// the click waits for the posting and goes once more, at most once, within its 20 s; never sent twice
+		if try == 0 && !sent && gaveWay(err) && postingGoing() && time.Now().Before(until) {
+			_ = held(time.Now()) // the window watch ended
 			stock.mu.Lock()
 			delete(stock.asks, x)
 			stock.mu.Unlock()
