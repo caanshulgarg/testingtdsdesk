@@ -71,8 +71,8 @@ function Click([string]$from, [string]$to, [bool]$again = $false) {
 function NoClick { Remove-Item $clickFile -Force -ErrorAction SilentlyContinue }
 # the stub's lines as written (ConvertFrom-Json turns an ISO time into a DateTime: a click's time is matched in the raw text)
 function StubRaw([string]$kind, [string]$at) {
-  if (-not (Test-Path $stubLog)) { return , @() }
-  return , @(Get-Content $stubLog -Encoding UTF8 | Where-Object { $_.Contains('"kind": "' + $kind + '"') -and $_.Contains('"' + $at + '"') })
+  if (-not (Test-Path $stubLog)) { return }
+  Get-Content $stubLog -Encoding UTF8 | Where-Object { $_.Contains('"kind": "' + $kind + '"') -and $_.Contains('"' + $at + '"') }
 }
 function WaitAnswer([string]$at, [int]$sec = 120) {
   $t = Get-Date
