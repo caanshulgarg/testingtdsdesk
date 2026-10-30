@@ -1,0 +1,35 @@
+[3.0-g250] PASS c1 install and open the company: installed tally.exe 11457160 bytes, 2026-10-30, FileVersion 1.1.3.0, ProductVersion 1.1.3.0, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[3.0-g250] PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 17 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[3.0-g250] HARNESS e1 2.5.0 installed over 2.4.9: the version and the settings carried: no result: the harness stopped or timed out (checks step: success)
+[3.0-g250] HARNESS e2 the Gateway in a later year: every opening as at the books' beginning: no result: the harness stopped or timed out (checks step: success)
+[3.0-g250] HARNESS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: no result: the harness stopped or timed out (checks step: success)
+[3.0-g250] HARNESS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: no result: the harness stopped or timed out (checks step: success)
+[3.0-g250] HARNESS e5 one request in flight; postings first during the ledger read: no result: the harness stopped or timed out (checks step: success)
+[4.1-g250] PASS c1 install and open the company: installed tally.exe 15413896 bytes, 2026-10-30, FileVersion 1.1.4.1, ProductVersion 1.1.4.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[4.1-g250] PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[4.1-g250] HARNESS e1 2.5.0 installed over 2.4.9: the version and the settings carried: no result: the harness stopped or timed out (checks step: success)
+[4.1-g250] HARNESS e2 the Gateway in a later year: every opening as at the books' beginning: no result: the harness stopped or timed out (checks step: success)
+[4.1-g250] HARNESS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: no result: the harness stopped or timed out (checks step: success)
+[4.1-g250] HARNESS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: no result: the harness stopped or timed out (checks step: success)
+[4.1-g250] HARNESS e5 one request in flight; postings first during the ledger read: no result: the harness stopped or timed out (checks step: success)
+[5.1-g250] PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-30, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[5.1-g250] PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 16 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[5.1-g250] HARNESS e1 2.5.0 installed over 2.4.9: the version and the settings carried: no result: the harness stopped or timed out (checks step: success)
+[5.1-g250] HARNESS e2 the Gateway in a later year: every opening as at the books' beginning: no result: the harness stopped or timed out (checks step: success)
+[5.1-g250] HARNESS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: no result: the harness stopped or timed out (checks step: success)
+[5.1-g250] HARNESS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: no result: the harness stopped or timed out (checks step: success)
+[5.1-g250] HARNESS e5 one request in flight; postings first during the ledger read: no result: the harness stopped or timed out (checks step: success)
+[6.2-g250] PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-30, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[6.2-g250] PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[6.2-g250] HARNESS e1 2.5.0 installed over 2.4.9: the version and the settings carried: no result: the harness stopped or timed out (checks step: success)
+[6.2-g250] HARNESS e2 the Gateway in a later year: every opening as at the books' beginning: no result: the harness stopped or timed out (checks step: success)
+[6.2-g250] HARNESS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: no result: the harness stopped or timed out (checks step: success)
+[6.2-g250] HARNESS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: no result: the harness stopped or timed out (checks step: success)
+[6.2-g250] HARNESS e5 one request in flight; postings first during the ledger read: no result: the harness stopped or timed out (checks step: success)
+[7.1-g250] PASS c1 install and open the company: installed tally.exe 18405568 bytes, 2026-10-30, FileVersion 1.1.7.1, ProductVersion 1.1.7.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+[7.1-g250] PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 17 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[7.1-g250] HARNESS e1 2.5.0 installed over 2.4.9: the version and the settings carried: no result: the harness stopped or timed out (checks step: success)
+[7.1-g250] HARNESS e2 the Gateway in a later year: every opening as at the books' beginning: no result: the harness stopped or timed out (checks step: success)
+[7.1-g250] HARNESS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: no result: the harness stopped or timed out (checks step: success)
+[7.1-g250] HARNESS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: no result: the harness stopped or timed out (checks step: success)
+[7.1-g250] HARNESS e5 one request in flight; postings first during the ledger read: no result: the harness stopped or timed out (checks step: success)
