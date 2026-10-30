@@ -108,9 +108,15 @@ Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o5 the session
 # the request as built and the company list's STARTINGFROM / ENDINGAT
 $d7 = ([datetime]::ParseExact($d2, 'yyyyMMdd', $null)).ToString('d-M-yyyy')
 KeysTo '{ESC}' 2; KeysTo '{ESC}' 2; KeysTo 'n' 2
+# run 41001374962: the date typed but not accepted (Enter left the field; Esc cancelled). Now: at the Gateway the period
+# itself (Alt+F2: Change Period, From and To, Ctrl+A), then the current date (F2, Ctrl+A); the Gateway shot shows both
+KeysTo '%{F2}' 3 'openp-gw-altf2'
+KeysTo ($f2 + '{ENTER}') 2
+KeysTo ($t2 + '{ENTER}') 2
+KeysTo '^a' 4 'openp-gw-period'
 KeysTo '{F2}' 3 'openp-f2-date'
-KeysTo ($d7 + '{ENTER}') 4 'openp-date-set'
-KeysTo '{ESC}' 2
+KeysTo ($d7 + '{ENTER}') 2
+KeysTo '^a' 4 'openp-date-set'
 $r7 = Reading 'o7 current date in year 2' (Openings $asBuilt)
 $cx7 = OPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>OPCo7</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="OPCo7" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME,STARTINGFROM,ENDINGAT,BOOKSFROM</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
 Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o7 Tally's current date set to {0} by keys (F2; screenshots openp-f2-date, openp-date-set), then the request as built ({1} ms): {2}; the company list then: {3}" -f $d7, $r7.ms, $r7.text, ((([regex]::Matches($cx7.body, '<(STARTINGFROM|ENDINGAT|BOOKSFROM)[^>]*>\s*([^<]*)<') | ForEach-Object { $_.Groups[1].Value + '=' + $_.Groups[2].Value.Trim() }) -join ', ')))
