@@ -822,6 +822,17 @@ function bankClick(t){
     case "bankRangeClear": { const b = B(); b.from = ""; b.to = ""; b.f = {}; b.sel.clear(); render(); return true; }
     case "bankBulkPost": { const ids = b.rows.filter(r => b.sel.has(r.id) && r.state === "ready").map(r => r.id); b.sel.clear(); postBankToTally(ids); return true; }
     case "bankReportOk": b.postReport = null; render(); return true;
+    // 30-Oct-2026 (src/js/96): Check with Tally for lines of a partly made batch; post the ones not found again; or, when
+    // FinCom cannot read those days, post them again with the FinCom Bridge looking in Tally for each first
+    case "bankCheckReview": b.postReport = null; bankCheckReview(); return true;
+    case "bankReviewCheckOk": b.reviewCheck = null; render(); return true;
+    case "bankReviewPostMissing": { const ids = ((b.reviewCheck || {}).missing || []).filter(id => (b.rows.find(r => r.id === id) || {}).state === "ready"); b.reviewCheck = null; if (ids.length) postBankToTally(ids); else render(); return true; }
+    case "bankReviewPostAgain": {
+      const now = new Date().toISOString(), me = (typeof postMyName === "function" ? postMyName() : "") || "FinCom";
+      const rows = b.rows.filter(r => r.state === "ready" && r.postReview);
+      rows.forEach(r => { r.release = {at: now, by: me, why: "Posted again by " + me + ": FinCom could not read these days, so the FinCom Bridge looks in Tally for the line just before it posts it"}; });
+      b.reviewCheck = null; saveBank({rows: true}); if (rows.length) postBankToTally(rows.map(r => r.id)); else render(); return true;
+    }
     case "bankFocusOff": b.focus = null; render(); return true;
     case "goneBack": goneBack(); return true;
     case "balHide": { const st = curStmt(); if (st){ st.tallyBalHidden = st.tallyBal ? st.tallyBal.at : "none"; saveBank({stmts: true}); render(); } return true; }

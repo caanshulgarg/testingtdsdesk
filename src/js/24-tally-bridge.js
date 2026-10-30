@@ -235,7 +235,8 @@ const Bridge = {
     out = await this.postChecked(payload, onProgress, after);
     out.results = [].concat(out.results || []).concat(refused);
     words(out);
-    if (cloudOn && typeof PostRecord === "object") await PostRecord.save(coP, payload, out);
+    // 30-Oct-2026 (Fingate): the record of a posting made straight to the bridge, said when it could not be kept
+    if (cloudOn && typeof PostRecord === "object"){ out.recorded = await PostRecord.save(coP, payload, out); if (out.recorded === false) out.recordWhy = PostRecord.why || ""; }
     return out;
   },
   async postChecked(payload, onProgress, onChecked){
@@ -1193,6 +1194,9 @@ async function postBankToTally(ids){
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)
     if (isOwnBank(r, r.ledger)){ dropOwnBank(r); failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: OWN_BANK}); return false; }
+    // 30-Oct-2026: a line of a batch Tally made only partly waits for Check with Tally (src/js/96); it is listed with
+    // Tally's words, and goes again only once released (not found in Tally, or "post again" with the bridge looking first)
+    if (r.postReview && !r.release){ failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError || "Needs a check with Tally", review: true}); return false; }
     const need = [r.ledger].concat(r.tdsAtPay ? [r.tdsLedger || bankLedgers(co).tds] : []);
     const miss = need.find(n => !exactLedger(n));
     if (miss !== undefined){
@@ -1207,7 +1211,7 @@ async function postBankToTally(ids){
   });
   if (!rows.length){
     b.busy = "";
-    b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed, dismiss: "bankReportOk"};
+    b.postReport = {at: Date.now(), posted: 0, skipped, movedBack, failed, review: failed.filter(f => f.review).length, dismiss: "bankReportOk"};
     saveBank({rows: true});
     toast(skipped ? "Those entries are already in Tally; nothing new to post." : "Nothing to post.");
     render(); return;
@@ -1219,7 +1223,10 @@ async function postBankToTally(ids){
     const j = await Bridge.post({company: tname, client: co.id, ledger: acc.ledger,
       masters: masters.map(l => ({id: "led:" + l.name, xml: ledgerMasterXml(l)})),
       // round 15: bank: true tells bridge 2.1.8 to batch these by its bank-lines-per-request setting (bills carry nothing)
-      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
+      vouchers: rows.map(r => ({id: r.id, xml: bankVoucherXml(r, acc, co), bank: true})),
+      // 30-Oct-2026: lines a check with Tally released (src/js/96): the bridge on this computer lets each go once more
+      // (it looks in Tally for it first); the cloud's queue judges releases itself
+      released: rows.filter(r => r.release && r.release.at).map(r => ({id: r.id, at: r.release.at, by: r.release.by || "", why: r.release.why || ""}))}, pj => { b.busy = postingLine(pj, tname); refreshBusy(); },
       chk => bankAfterCheck(b.cid, st.id, chk, tname));
     // B14: stopped by the check of the company this client may post to: nothing sent, the lines stay ready
     if (j.notAllowed){
@@ -1260,10 +1267,16 @@ async function postBankToTally(ids){
       } else if (x && x.ok){
         ok++; bankPosted(b.cid, r, x, tname, now); posted.push(r);
         if (x.optional) optionalN++;
+      } else if (x && typeof bankInReview === "function" && bankInReview(x)){
+        // a batch Tally made only partly (or no answer): Tally's words and counts kept on the line, for Check with Tally
+        delete r.release; bankReviewMark(r, x, x.jobId || jobId);
+        failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError, review: true});
       } else {
+        if (x && !x.alreadySent) delete r.release;
         r.postError = plainMsg(x && x.message) || "Tally did not confirm this entry.";
         failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError});
       }
+      if (x && (x.ok || postAlready(x))) { delete r.release; delete r.postReview; }
     });
     learnRows(posted, "sent");
     // the page reloaded the statement while Tally worked (a sync from FinCom's cloud): the answers go onto the lines shown
@@ -1280,13 +1293,15 @@ async function postBankToTally(ids){
       const live = B() && B().cid === b.cid && B().cur === st.id ? B() : b, heldIds = new Set(held.map(r => r.id));
       already = typeof bankSentHeal === "function" ? await bankSentHeal(b.cid, live.rows, tname, heldIds) : {n: 0, rows: []};
       const done = new Set(already.rows.map(r => r.id));
-      live.rows.filter(r => heldIds.has(r.id) && !done.has(r.id)).forEach(r => failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError}));
+      live.rows.filter(r => heldIds.has(r.id) && !done.has(r.id)).forEach(r => failed.push({id: r.id, what: fmtDate(r.date) + " " + (r.dec.name || "") + " " + INR.format(r.debit || r.credit), msg: r.postError, review: !!r.postReview}));
       if (live !== b) held.forEach(r => { if (!done.has(r.id) && r.postError) { const q = live.rows.find(z => z.id === r.id); if (q && q.state === "ready" && !q.postError) q.postError = r.postError; } });
       saveBank({rows: true, posted: true});
     }
     const aN = already ? already.n : 0;
     b.postReport = {at: Date.now(), posted: ok, skipped, movedBack, failed, dismiss: "bankReportOk", company: tname, optional: optionalN, noPreCheck: !heavy, checking: !!j.checking, checkNote,
-      already: aN, alreadyLine: aN ? bankAlreadyLine(already) : ""};
+      already: aN, alreadyLine: aN ? bankAlreadyLine(already) : "", review: failed.filter(f => f.review).length,
+      // the posting went straight to the bridge and FinCom's cloud did not keep its record: said, never quiet
+      unrecorded: j.recorded === false ? (j.recordWhy || "FinCom's cloud did not keep a record of this posting.") : ""};
     if (B() && B() !== b && B().cid === b.cid) B().postReport = b.postReport;
     toast(aN && !ok && !failed.length ? bankAlreadyLine(already) : ok + " posted to Tally" + (skipped ? ", " + skipped + " were already there" : "") + (aN ? ", " + aN + " already in Tally (marked as posted)" : "") + (failed.length ? ", " + failed.length + " not posted" : "") + ".");
     if (!failed.length && !b.rows.some(r => r.state === "ready")) b.filter = "done";

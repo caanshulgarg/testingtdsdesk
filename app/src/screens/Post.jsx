@@ -291,6 +291,9 @@ function RowActs({ co, x, canPost }) {
     // marked as sent here once (a released entry, a Tally file): Tally is read live first, then posted (PostCheck.repost)
     else if (bill && e.status === "approved") out.push(held(e.id, co.id) ? <Wait key="w" /> : <button key="p" className="btn small" data-post-again="" onClick={() => PostCheck.repost(co, e)}>Post again</button>);
   }
+  // 30-Oct-2026: a bank line posted straight to the bridge, not in Tally (src/js/62): to its line on the Bank page, where
+  // Check with Tally settles a partly made batch
+  if (a && a.kind === "bankLine") out.push(<button key="bl" className="btn small" data-open-bank="" data-bank-line-act={a.label} onClick={() => txnGo("bank", x.id)}>{a.label === "Check with Tally" ? "Check with Tally on the Bank page" : "Open the bank line"}</button>);
   if (a && a.kind === "cancel") out.push(<button key="c" className="btn small" data-cancel-post="" onClick={async () => { try { await TCloud.rpc("tally_post_cancel", { p_id: job.id }); toast("Cancelled; nothing is sent to Tally."); } catch (err) { toast(String((err && err.message) || err)); } CloudJobs.load(true); }}>Cancel</button>);
   if (a && a.kind === "restore" && bill && e.status === "deleted") out.push(<button key="rs" className="btn small" data-restore="" onClick={() => billRestore(e.id)}>Restore the bill</button>);
   if (a && a.kind === "ledger" && x.miss && x.miss.length) out.push(<LedgerPick key="l" name={x.miss[0].ledger} role={x.miss[0].role} />);
