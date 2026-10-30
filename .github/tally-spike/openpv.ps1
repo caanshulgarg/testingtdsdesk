@@ -38,7 +38,7 @@ $d2 = ([datetime]::ParseExact($y2from, 'yyyyMMdd', $null)).AddDays(1).ToString('
 Add-Content -Path $resultsFile -Encoding UTF8 -Value "PASS openp o1 the company's year: books from $bf; year 2 $y2from-$y2to; entries on $d1a, $d1b (year 1) and $d2 (year 2)"
 # o2: the ledgers and entries (amounts: Tally's sign, a credit positive in OPENINGBALANCE and ISDEEMEDPOSITIVE No)
 function Led([string]$n, [string]$grp, [string]$open, [bool]$bill) {
-  $x = '<LEDGER NAME="' + $n + '" ACTION="Create"><NAME.LIST><NAME>' + $n + '</NAME></NAME.LIST><PARENT>' + $grp + '</PARENT><ISBILLWISEON>' + $(if ($bill) { 'Yes' } else { 'No' }) + '</ISBILLWISEON>'
+  $x = '<LEDGER NAME="' + $n + '" ACTION="Create"><NAME.LIST><NAME>' + $n + '</NAME></NAME.LIST><PARENT>' + (OE $grp) + '</PARENT><ISBILLWISEON>' + $(if ($bill) { 'Yes' } else { 'No' }) + '</ISBILLWISEON>'
   if ($open) { $x += '<OPENINGBALANCE>' + $open + '</OPENINGBALANCE>' }
   if ($bill -and $open) { $x += '<BILLALLOCATIONS.LIST><NAME>OB-1</NAME><BILLDATE>' + $bf + '</BILLDATE><OPENINGBALANCE>' + $open + '</OPENINGBALANCE><BILLTYPE>New Ref</BILLTYPE></BILLALLOCATIONS.LIST>' }
   return $x + '</LEDGER>'
@@ -54,9 +54,11 @@ function Jv([string]$d, [string]$dr, [string]$cr, [int]$amt, [string]$bill) {
 }
 $vx = OPost ('<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>' + (OE $co1) + '</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA><TALLYMESSAGE xmlns:UDF="TallyUDF">' + `
   (Jv $d1a 'OP Expense' 'OP Party Billwise' 300 'J-1') + (Jv $d1b 'OP Expense' 'OP Party Plain' 200 '') + (Jv $d1a 'OP Loan Given' 'OP Cash Two' 700 '') + (Jv $d2 'OP Expense' 'OP Party Plain' 50 '') + '</TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>')
+Set-Content (Join-Path $out 'openp-masters-answer.xml') $mk.body -Encoding UTF8; Set-Content (Join-Path $out 'openp-entries-answer.xml') $vx.body -Encoding UTF8
 $created = [regex]::Match($mk.body, '<CREATED>(\d+)').Groups[1].Value; $vcreated = [regex]::Match($vx.body, '<CREATED>(\d+)').Groups[1].Value
 $o2 = if ($created -eq '5' -and $vcreated -eq '4') { 'PASS' } else { 'HARNESS' }
-Add-Content -Path $resultsFile -Encoding UTF8 -Value "$o2 openp o2 made by XML: ledgers created $created of 5, entries created $vcreated of 4 ($($vx.body -replace '\s+', ' ' | Select-Object -First 1))"
+Add-Content -Path $resultsFile -Encoding UTF8 -Value "$o2 openp o2 made by XML: ledgers created $created of 5 ($($mk.body -replace '\s+', ' ')), entries created $vcreated of 4 ($($vx.body -replace '\s+', ' '))"
+if ($o2 -ne 'PASS') { return }
 # the expected figures: at the books' beginning, and at year 2's start (Tally's sign: Cr positive)
 $want = [ordered]@{
   'OP Party Billwise' = @(1000, 1300); 'OP Party Plain' = @(1000, 1200); 'OP Cash Two' = @(-500, 200); 'OP Loan Given' = @(0, -700); 'OP Expense' = @(0, 0)
@@ -81,7 +83,7 @@ function Reading($label, $res) {
 }
 # o3: as built
 $r3 = Reading 'o3 as built' (Openings $asBuilt)
-Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} openp o3 the request as built, the session in its own period ({1} ms): {2}" -f $(if ($r3.y2 -eq 0 -and $r3.other -eq 0) { 'PASS' } else { 'FAIL' }), $r3.ms, $r3.text)
+Add-Content -Path $resultsFile -Encoding UTF8 -Value ("{0} openp o3 the request as built, the session in its own period ({1} ms): {2}" -f $(if ($r3.text -match 'absent') { 'HARNESS' } elseif ($r3.y2 -eq 0 -and $r3.other -eq 0) { 'PASS' } else { 'FAIL' }), $r3.ms, $r3.text)
 # o4: the same with year 2's period in its static variables (as if the session were in year 2)
 $withP = $asBuilt.Replace('</STATICVARIABLES>', '<SVFROMDATE TYPE="Date">' + $y2from + '</SVFROMDATE><SVTODATE TYPE="Date">' + $y2to + '</SVTODATE></STATICVARIABLES>')
 $r4 = Reading 'o4 year 2 period' (Openings $withP)
