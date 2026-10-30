@@ -33,7 +33,7 @@ function UndoSnack() {
 }
 
 const SEV = { bad: "Needs action", warn: "Attention", info: "Information" };
-// many ledgers missing from one read of Tally (migration 129): Confirm deleted / Keep, in a file of its own (fetched when shown)
+// many ledgers missing from one read of Tally (migration 131): Confirm / Keep, in a file of its own (fetched when shown)
 export const LedgerDrop = lazy(() => import("./LedgerDrop.jsx"));
 
 function Item({ x }) {

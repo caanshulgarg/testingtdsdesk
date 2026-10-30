@@ -667,7 +667,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const syncing = co && k && k.line && k.line.reading;
-  // migration 130: many of this client's ledgers missing from one read of Tally: asked here too (Confirm / Keep)
+  // migration 131: many of this client's ledgers missing from one read of Tally: asked here too (Confirm / Keep)
   const drop = co && typeof Rec === "object" && Rec.clientAlerts ? Rec.clientAlerts(co.id).find((x) => x.kind === "summary" && x.data && x.data.what === "ledger_drop" && x.data.state === "pending") : null;
   const pc = "";   // next-fix-tally-links2: no computer's name, not even under ⋯
   let client, acts = null;

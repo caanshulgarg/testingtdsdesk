@@ -1,29 +1,29 @@
-"""python3 run_migration129.py - migration-129-ledger-drop-guard (29-Oct-2026, next-fix-ledger-drop; NOT run on staging).
-Staging that day, book 3d36a836 (IMPETUS INSURANCE BROKERS PRIVATE LIMITED): Ranjeet's bridge (2.4.7) read 440 ledgers at
-08:30 UTC; Anshul's (2.4.8, the same shared data folder) read 404 at 13:42. The cloud held the 36 missing for "a second
-read", and the second read was the same bridge 2 minutes later (round 13d701ce...): all 36 marked deleted, quietly.
-The owner's rule: FinCom never quietly marks many ledgers gone. On a throwaway PostgreSQL (pg_stand) with the ledger-list
-functions as staging runs them (32 -> 33 -> 35 -> staging's first 34 -> 36b -> 37 -> 36, run_migration36.py's stand
-without the made-up books) and tally_alerts as migration 47 makes it:
-  0. the file: one transaction, lock_timeout 10 s, add-only, names no real database; md5
-  1. RED (36 alone): the staging case, rounds as on 29-Oct: the second read from the same bridge 2 minutes later marks
-     all 36 (what happened)
-  2. 129 runs twice; nothing deleted
-  3. the staging case again: nothing marked; ONE alert row in the bell's table (kind summary, data.what ledger_drop) with
-     the owner's words; asked again by the same bridge: still nothing marked, still one alert
-  4. a second read from another computer that sees them all: the hold cleared, the alert closed, nothing marked
-  5. the same bridge 30 minutes later, the same names missing: marked (and the alert says so); another computer with the
-     same names missing: marked; another computer with other names missing: nothing marked, still one alert
+"""python3 run_migration131.py - migration-131-ledger-drop-guard (30-Oct-2026, next-fix-ledger-drop; NOT run on staging).
+Staging 29-Oct, book 3d36a836 (IMPETUS INSURANCE BROKERS PRIVATE LIMITED): one bridge read 440 ledgers at 08:30 UTC;
+another on the same computer read 404 at 13:42. The cloud held the 36 missing for "a second read", and the second read was
+the same bridge 2 minutes later (round 13d701ce...): all 36 marked deleted, quietly. (The owner has since said they were
+deleted in Tally; they stay marked.) The owner's rule: FinCom never quietly marks many ledgers gone; they wait "to
+confirm" with the list. On a throwaway PostgreSQL (pg_stand) with the ledger-list functions as staging runs them
+(32 -> 33 -> 35 -> staging's first 34 -> 36b -> 37 -> 36) and tally_alerts as migration 47 makes it:
+  0. the file: one transaction, lock_timeout 10 s, add-only, explicit grants, names no real database; md5
+  1. RED (36 alone): the staging case: the same bridge 2 minutes later marks all 36, no alert, no Confirm / Keep
+  2. 131 runs twice; nothing deleted
+  3. the staging case again: nothing marked; ONE alert row in the bell's table (kind summary, data.what ledger_drop,
+     data.names the 36) in plain words, no computer's name; asked again: still nothing marked, still one alert
+  4. a read that lists them all again: the hold cleared, the alert closed, nothing marked
+  5. no read marks them: the same bridge 35 minutes later, another computer, the same 36 missing: still asked; other names
+     missing: asked again (one alert); some listed again, a few still missing: still asked, not marked
   6. small numbers keep today's rule: up to greatest(10, 5% of the live ledgers) marked at once; 11 of 100 asked
-  7. the owner's Confirm marks them (the guard still keeps a ledger with entries); Keep keeps them and the same names
-     missing again ask nothing more; a ledger seen again and then missing again is asked again
-  8. who may: Confirm / Keep an active owner of the firm only; the drops readable by the firm's members only; the
-     ledger-list functions the service role only"""
+  7. Confirm marks them (the guard still keeps a ledger with entries; the person on each mark); Keep keeps them and the
+     same names missing again ask nothing more; a ledger seen again and then missing again is asked again
+  9. an uploaded Master.xml declared complete (tally_ingest_ledgers_list): the same rule (34 marked them on a second list)
+  8. who may: Confirm / Keep the firm's active owner or staff (as the ledger actions); not a viewer, another firm, one who
+     left; the drops readable by the firm's members only; the ledger-list functions the service role only"""
 import os, re, sys, json, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-M129 = os.path.join(SQLDIR, "migration-129-ledger-drop-guard.sql")
+M131 = os.path.join(SQLDIR, "migration-131-ledger-drop-guard.sql")
 M = {n: os.path.join(SQLDIR, f) for n, f in [(32, "migration-32-sync-safety.sql"), (33, "migration-33-ledger-lists.sql"), (35, "migration-35-bridge-control.sql"),
                                               (36, "migration-36-ledger-rename.sql"), ("36b", "migration-36b-post-acceptance.sql"), (37, "migration-37-follow-ups.sql")]}
 M[34] = os.path.join(HERE, "fixtures", "migration-34-as-run-on-staging.sql")
@@ -64,6 +64,7 @@ grant all on public.tally_alerts to service_role; grant usage on all sequences i
 
 F, F2 = "99999999-9999-9999-9999-999999999999", "88888888-8888-8888-8888-888888888888"
 OWNER, STAFF, OTHER, GONE = "55555555-5555-5555-5555-555555555555", "44444444-4444-4444-4444-444444444444", "33333333-3333-3333-3333-333333333333", "22222222-2222-2222-2222-222222222222"
+VIEWER = "66666666-6666-6666-6666-666666666666"
 # the two bridges on NWS144 (staging's ids), and a laptop
 ANSHUL, RANJEET, LAPTOP = "3648622b-c39d-43ec-9cae-27a353e3dbb6", "1742f6fe-ef9b-45a3-add3-3932cb1946e8", "d3000000-0000-0000-0000-000000000003"
 GO_A, GO_R, GO_L = "go-6b1ba45fbb1d", "go-1418f6cb202d", "go-777777777777"
@@ -80,7 +81,7 @@ OTHERS = ["Party %03d" % i for i in range(404)]
 ALL = OTHERS + GONE36
 GUID = {n: "g-%04d" % i for i, n in enumerate(ALL)}
 
-db = pg_stand.start(int(os.environ.get("PG129_PORT") or 31129))
+db = pg_stand.start(int(os.environ.get("PG131_PORT") or 31131))
 def psql_text(text):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres",
                            "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=text, capture_output=True, text=True)
@@ -116,9 +117,9 @@ def read(book, dev, bridge, seen, ago=0.0, complete=True, names=None):
 gone = lambda b: int(one("select count(*) from tally_ledgers where book_id = %s and deleted_at is not null" % q(b)))
 alerts = lambda b: db.rows("select id, kind, client_id, device_id::text, words, data::text, read_at, read_by::text from tally_alerts where book_id = %s order by id" % q(b))
 unread = lambda b: [a for a in alerts(b) if not a["read_at"]]
-drops = lambda b: db.rows("select id::text, state, cardinality(names) n, round_id, coalesce(second_round, '') second_round, alert_id::text from tally_ledger_drops where book_id = %s order by created_at, id" % q(b)) if one("select to_regclass('public.tally_ledger_drops')") else []
+drops = lambda b: db.rows("select id::text, state, cardinality(names) n, round_id, alert_id::text from tally_ledger_drops where book_id = %s order by created_at, id" % q(b)) if one("select to_regclass('public.tally_ledger_drops')") else []
 SEEN404 = OTHERS
-WORDS = (CO + ": Tally on NWS144 · anshul lists 404 ledgers, 36 fewer than before (Advertisement and Promotion, Battery, CGST, …). "
+WORDS = (CO + ": Tally lists 404 ledgers, 36 fewer than before (Advertisement and Promotion, Battery, CGST, …). "
          "If they were deleted in Tally, press Confirm; otherwise nothing changes.")
 def staging_case(b):
     """29-Oct-2026: Ranjeet 08:30 (440), Anshul 13:42 (404), Anshul 13:44 (404): returns the last round's answer"""
@@ -126,17 +127,18 @@ def staging_case(b):
     read(b, ANSHUL, GO_A, SEEN404, ago=2)
     return read(b, ANSHUL, GO_A, SEEN404, ago=0)
 try:
-    text = open(M129).read() if os.path.exists(M129) else ""
-    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M129), hashlib.md5(text.encode()).hexdigest() if text else "-", len(text.encode())))
+    text = open(M131).read() if os.path.exists(M131) else ""
+    print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M131), hashlib.md5(text.encode()).hexdigest() if text else "-", len(text.encode())))
     print("== 0. the file")
     code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
     ok(bool(text) and re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
     ok(bool(text) and "delete from" not in code and not re.search(r"\b(drop|truncate)\s+(table|view|function|policy|column|index|schema|trigger|constraint)\b", code) and not re.search(r"\btruncate\b", code), "add-only (no drop, delete or truncate)")
     ok(bool(text) and not re.search(r"supabase\.co|https?://|qbocskai|nrtczu|project[_ ]ref", text.lower()), "names no real database")
-    ok(bool(text) and sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == ["tally_ledger_drop_confirm", "tally_ledger_drop_keep", "tally_ledger_drop_words", "tally_ledgers_mark_gone"],
-       "functions: tally_ledgers_mark_gone (replaced, the same arguments); tally_ledger_drop_words, tally_ledger_drop_confirm, tally_ledger_drop_keep (new)")
+    ok(bool(text) and sorted(set(re.findall(r"create or replace function public\.(\w+)\(", code))) == ["tally_ingest_ledgers_list", "tally_ledger_drop_confirm", "tally_ledger_drop_decide", "tally_ledger_drop_keep", "tally_ledger_drop_words", "tally_ledgers_mark_gone"],
+       "functions: tally_ledgers_mark_gone, tally_ingest_ledgers_list (replaced, the same arguments); tally_ledger_drop_decide, _words, _confirm, _keep (new)")
     ok(bool(text) and re.search(r"grant execute on function public\.tally_ledger_drop_confirm\(uuid\), public\.tally_ledger_drop_keep\(uuid\) to authenticated, service_role", text) is not None
        and re.search(r"grant execute on function public\.tally_ledgers_mark_gone\(uuid, text\)[^;]* to service_role;", text) is not None, "explicit grants in the file")
+    ok(bool(text) and "grant select on public.tally_ledger_drops to authenticated;" in text and "grant select, insert, update on public.tally_ledger_drops to service_role;" in text, "the new table's grants explicit")
 
     # the stand: the cloud as staging has it (run_migration36's order)
     db.sql(SCHEMA33); db.sql(EXTRA)
@@ -148,8 +150,8 @@ try:
     for n in (35, 34, "36b", 37, 36):
         r = psql_text(open(M[n]).read()); ok(r.returncode == 0, "migration-%s runs %s" % (n, (r.stderr or "").strip()[-300:] if r.returncode else ""))
     db.sql(ALERTS)
-    db.sql("insert into members (user_id, firm_id, name, role, active) values (%s, %s, 'Anshul', 'owner', true), (%s, %s, 'Ranjeet', 'staff', true), (%s, %s, 'Else', 'owner', true), (%s, %s, 'Left', 'owner', false);"
-           % (q(OWNER), q(F), q(STAFF), q(F), q(OTHER), q(F2), q(GONE), q(F)))
+    db.sql("insert into members (user_id, firm_id, name, role, active) values (%s, %s, 'Anshul', 'owner', true), (%s, %s, 'Ranjeet', 'staff', true), (%s, %s, 'Else', 'owner', true), (%s, %s, 'Left', 'owner', false), (%s, %s, 'Looks', 'viewer', true);"
+           % (q(OWNER), q(F), q(STAFF), q(F), q(OTHER), q(F2), q(GONE), q(F), q(VIEWER), q(F)))
     db.sql("insert into tally_devices (id, firm_id, name, key_hash, version, info) values (%s, %s, 'NWS144 · NW144\\anshul', 'h1', '2.4.8', %s), (%s, %s, 'NWS144 · NW144\\Ranjeet', 'h2', '2.4.7', %s), (%s, %s, 'LAPTOP', 'h3', '2.4.8', '{}');"
            % (q(ANSHUL), q(F), js({"computer": "NWS144", "user": "NW144\\anshul"}), q(RANJEET), q(F), js({"computer": "NWS144", "user": "NW144\\Ranjeet"}), q(LAPTOP), q(F)))
     db.sql("grant usage on schema public, auth to authenticated, anon, service_role;")
@@ -160,7 +162,7 @@ try:
     ok(gone(b0) == 36 and r.get("marked") == 36, "RED: the second read 2 minutes later from the same bridge marks all 36 (%s)" % r.get("note"))
     ok(not one("select to_regclass('public.tally_alerts')") or not alerts(b0), "RED: and no alert says so")
     ok(int(one("select count(*) from pg_proc where proname = 'tally_ledger_drop_confirm'")) == 0, "RED: no way for the owner to confirm or keep")
-    if not text: raise SystemExit("migration-129 is not written yet")
+    if not text: raise SystemExit("migration-131 is not written yet")
 
     print("== 2. runs twice")
     TABLES = ["tally_ledgers", "tally_ledger_marks", "tally_ledger_rounds", "tally_alerts", "tally_books"]
@@ -185,7 +187,7 @@ try:
     ok(len(alerts(b1)) == 1 and len(a) == 1, "ONE alert row (%d)" % len(alerts(b1)))
     a = a[0] if a else {}; ad = json.loads(a.get("data") or "{}")
     ok(a.get("kind") == "summary" and ad.get("what") == "ledger_drop" and a.get("client_id") == "cmvt6vru3cbitc", "in the bell's table: kind summary, data.what ledger_drop, the client (%s %s)" % (a.get("kind"), ad.get("what")))
-    ok(a.get("words") == WORDS, "the owner's words:\n         %s\n    want %s" % (a.get("words"), WORDS))
+    ok(a.get("words") == WORDS and not re.search(r"NWS144|anshul|Ranjeet|LAPTOP|computer|bridge", a.get("words") or "", re.I), "plain words, no computer's name:\n         %s\n    want %s" % (a.get("words"), WORDS))
     ok(sorted(ad.get("names") or []) == sorted(GONE36) and ad.get("count") == 36 and ad.get("listed") == 404 and ad.get("state") == "pending", "data: the 36 names, count 36, listed 404, pending")
     d = drops(b1)
     ok(len(d) == 1 and d[0]["state"] == "pending" and d[0]["n"] == "36" and d[0]["alert_id"] == a.get("id") and ad.get("drop") == d[0]["id"], "one pending drop, tied to the alert (%s)" % d)
@@ -200,26 +202,23 @@ try:
     ok(gone(b1) == 0 and drops(b1)[0]["state"] == "cleared" and not unread(b1), "Ranjeet's bridge reads 440: the hold cleared, the alert closed, nothing marked (%s)" % r.get("note"))
     ok(json.loads(alerts(b1)[0]["data"]).get("state") == "cleared", "the alert row says cleared")
 
-    print("== 5. the second read decides")
+    print("== 5. no read marks them: only Confirm")
     b2 = new_book()
     read(b2, RANJEET, GO_R, ALL, ago=314); read(b2, ANSHUL, GO_A, SEEN404, ago=40)
-    r = read(b2, ANSHUL, GO_A, SEEN404, ago=31)
-    ok(gone(b2) == 0, "9 minutes later, the same bridge: nothing (%s)" % r.get("note"))
     r = read(b2, ANSHUL, GO_A, SEEN404, ago=5)
-    ok(gone(b2) == 36 and r.get("marked") == 36, "35 minutes after the first, the same bridge, the same 36 missing: marked (%s)" % r.get("note"))
-    d = drops(b2); a = alerts(b2)
-    ok(len(d) == 1 and d[0]["state"] == "marked" and d[0]["second_round"] == r["round"] and len(a) == 1 and not a[0]["read_at"] and json.loads(a[0]["data"]).get("state") == "marked"
-       and "marked" in a[0]["words"].lower(), "the drop 'marked' by the second read; the one alert says so, unread (%s)" % (a[0]["words"] if a else ""))
-    ok(int(one("select count(*) from tally_ledger_marks where book_id = %s and action = 'marked' and reason like '%%twice%%'" % q(b2))) == 36, "each mark says it was missing twice")
+    ok(gone(b2) == 0 and r.get("marked") == 0 and drops(b2)[0]["state"] == "pending" and len(unread(b2)) == 1, "35 minutes later, the same bridge, the same 36 missing: still nothing marked, still asked (%s)" % r.get("note"))
+    r = read(b2, LAPTOP, GO_L, SEEN404, ago=1)
+    ok(gone(b2) == 0 and len(drops(b2)) == 1 and len(alerts(b2)) == 1 and len(unread(b2)) == 1, "another computer, the same 36 missing: still nothing marked, one alert (%s)" % r.get("note"))
     b3 = new_book()
     read(b3, ANSHUL, GO_A, SEEN404, ago=3)
-    r = read(b3, LAPTOP, GO_L, SEEN404, ago=1)
-    ok(gone(b3) == 36 and drops(b3)[0]["state"] == "marked", "another computer 2 minutes later, the same 36 missing: marked (%s)" % r.get("note"))
+    r = read(b3, LAPTOP, GO_L, ALL[:-5], ago=1)
+    ok(gone(b3) == 0 and [x["state"] for x in drops(b3)] == ["superseded", "pending"] and len(unread(b3)) == 1 and json.loads(unread(b3)[0]["data"]).get("count") == 5,
+       "31 listed again, 5 still missing: not marked though few, still asked (5) (%s)" % r.get("note"))
     b4 = new_book()
     read(b4, ANSHUL, GO_A, SEEN404, ago=3)
     r = read(b4, LAPTOP, GO_L, SEEN404 + GONE36[:6], ago=1)
     ok(gone(b4) == 0 and [x["state"] for x in drops(b4)] == ["superseded", "pending"] and len(alerts(b4)) == 1 and len(unread(b4)) == 1, "another computer, other names missing (30): nothing marked, the hold renewed, still one alert (%s)" % r.get("note"))
-    ok(json.loads(unread(b4)[0]["data"]).get("count") == 30 and "30 fewer" in unread(b4)[0]["words"] and "LAPTOP" in unread(b4)[0]["words"], "the alert now says 30 and the laptop (%s)" % unread(b4)[0]["words"][:120])
+    ok(json.loads(unread(b4)[0]["data"]).get("count") == 30 and "30 fewer" in unread(b4)[0]["words"] and "LAPTOP" not in unread(b4)[0]["words"], "the alert now says 30, no computer's name (%s)" % unread(b4)[0]["words"][:120])
     b4b = new_book()
     read(b4b, ANSHUL, GO_A, SEEN404, ago=3)
     r = read(b4b, ANSHUL, GO_A, SEEN404, ago=1, complete=False)
@@ -237,22 +236,22 @@ try:
     r = read(b7, ANSHUL, GO_A, small[:-11], ago=1)
     ok(gone(b7) == 0 and len(unread(b7)) == 1, "11 of 100: nothing marked, the owner asked (the old floor was 25) (%s)" % r.get("note"))
 
-    print("== 7. the owner's Confirm and Keep")
+    print("== 7. Confirm and Keep")
     d1 = new_book()
     read(d1, ANSHUL, GO_A, SEEN404, ago=1)
     db.sql("insert into tally_ledger_day (book_id, firm_id, ledger, day, amount, dr, cr, n) values (%s, %s, 'SGST', '2026-10-01', 100, 100, 0, 1)" % (q(d1), q(F)))
     did = drops(d1)[0]["id"]
-    r = rpc(STAFF, "select tally_ledger_drop_confirm(%s)::text" % q(did))
-    ok("_error" in r and "owner" in r["_error"] and gone(d1) == 0, "staff cannot confirm (%s)" % r.get("_error", "")[-80:])
+    r = rpc(VIEWER, "select tally_ledger_drop_confirm(%s)::text" % q(did))
+    ok("_error" in r and "owner or staff" in r["_error"] and gone(d1) == 0, "a viewer cannot confirm (%s)" % r.get("_error", "")[-80:])
     r = rpc(OTHER, "select tally_ledger_drop_confirm(%s)::text" % q(did))
     ok("_error" in r and gone(d1) == 0, "another firm's owner cannot (%s)" % r.get("_error", "")[-80:])
     r = rpc(GONE, "select tally_ledger_drop_confirm(%s)::text" % q(did))
-    ok("_error" in r and gone(d1) == 0, "an owner no longer active cannot")
-    r = rpc(OWNER, "select tally_ledger_drop_confirm(%s)::text" % q(did))
-    ok(r.get("ok") and r.get("marked") == 35 and r.get("kept") == 1 and gone(d1) == 35, "the owner confirms: 35 marked, SGST (has entries) kept by the guard (%s)" % r)
+    ok("_error" in r and gone(d1) == 0, "one who left the firm cannot")
+    r = rpc(STAFF, "select tally_ledger_drop_confirm(%s)::text" % q(did))
+    ok(r.get("ok") and r.get("marked") == 35 and r.get("kept") == 1 and gone(d1) == 35, "staff confirms: 35 marked, SGST (has entries) kept by the guard (%s)" % r)
     a = alerts(d1)[0]
-    ok(a["read_at"] and a["read_by"] == OWNER and json.loads(a["data"]).get("state") == "confirmed" and drops(d1)[0]["state"] == "confirmed", "the alert read by him, the drop confirmed")
-    ok(int(one("select count(*) from tally_ledger_marks where book_id = %s and action = 'marked' and by_user = %s and reason like '%%confirmed by the owner%%'" % (q(d1), q(OWNER)))) == 35, "each mark names him")
+    ok(a["read_at"] and a["read_by"] == STAFF and json.loads(a["data"]).get("state") == "confirmed" and drops(d1)[0]["state"] == "confirmed" and "as confirmed" in a["words"], "the alert read by him, the drop confirmed (%s)" % a["words"])
+    ok(int(one("select count(*) from tally_ledger_marks where book_id = %s and action = 'marked' and by_user = %s and reason like '%%confirmed in FinCom%%'" % (q(d1), q(STAFF)))) == 35, "each mark names him")
     r = rpc(OWNER, "select tally_ledger_drop_confirm(%s)::text" % q(did))
     ok(r.get("ok") and r.get("already") == "confirmed" and gone(d1) == 35, "asked twice: nothing more (%s)" % r)
     k1 = new_book()
@@ -267,8 +266,30 @@ try:
     read(k1, RANJEET, GO_R, ALL, ago=-41)
     r = read(k1, ANSHUL, GO_A, SEEN404, ago=-42)
     ok(gone(k1) == 0 and len(unread(k1)) == 1 and drops(k1)[-1]["state"] == "pending", "seen again, then missing again: asked again (%s)" % r.get("note"))
+    r = rpc(VIEWER, "select tally_ledger_drop_keep(%s)::text" % q(drops(k1)[-1]["id"]))
+    ok("_error" in r and drops(k1)[-1]["state"] == "pending", "a viewer cannot Keep either")
     r = rpc(STAFF, "select tally_ledger_drop_keep(%s)::text" % q(drops(k1)[-1]["id"]))
-    ok("_error" in r and drops(k1)[-1]["state"] == "pending", "staff cannot Keep either")
+    ok(r.get("ok") and drops(k1)[-1]["state"] == "kept" and gone(k1) == 0, "staff can Keep (%s)" % r)
+
+    print("== 9. an uploaded list (Master.xml, declared complete): the same rule")
+    def upload(book, names, complete=True):
+        leds = [[n, "Sundry Creditors", "0"] for n in names]
+        return j("tally_ingest_ledgers_list(%s, '2026-04-01', '2026-03-31', %s, %s, %s, %d)" % (q(book), js(leds), js({"source": "upload_ledgers", "by": OWNER, "file": "Master.xml"}),
+                 "true" if complete else "false", len(leds)))
+    u1 = new_book()
+    r = upload(u1, SEEN404)
+    ok(gone(u1) == 0 and len(unread(u1)) == 1 and r.get("pending") and r.get("held") == 36, "an upload missing 36 of 440: nothing marked, asked (%s)" % r.get("note"))
+    ok(unread(u1)[0]["words"] == WORDS, "the same plain words (%s)" % unread(u1)[0]["words"][:100])
+    r = upload(u1, SEEN404)
+    ok(gone(u1) == 0 and len(alerts(u1)) == 1 and len(unread(u1)) == 1, "the same upload again (34's 'second read'): still nothing marked, one alert (%s)" % r.get("note"))
+    r = rpc(OWNER, "select tally_ledger_drop_confirm(%s)::text" % q(drops(u1)[0]["id"]))
+    ok(r.get("marked") == 36 and gone(u1) == 36, "Confirm marks them (%s)" % r)
+    u2 = new_book()
+    r = upload(u2, ALL[:-20])
+    ok(gone(u2) == 20 and not alerts(u2), "an upload missing 20 of 440 (within 5%%): marked at once, as before (%s)" % r.get("note"))
+    u3 = new_book()
+    r = upload(u3, SEEN404, complete=False)
+    ok(gone(u3) == 0 and not alerts(u3), "an upload not declared complete: nothing marked, nothing asked, as before (%s)" % r.get("note"))
 
     print("== 8. who may")
     good, n_ = as_role("authenticated", STAFF, "select count(*) from tally_ledger_drops")
@@ -281,12 +302,13 @@ try:
     ok(not good, "the drops are kept, never deleted (%s)" % out.strip()[-80:])
     priv = lambda role, fn: one("select has_function_privilege(%s, %s, 'execute')::text" % (q(role), q(fn)))
     for fn in ("public.tally_ledger_drop_confirm(uuid)", "public.tally_ledger_drop_keep(uuid)"):
-        ok(priv("authenticated", fn) == "true" and priv("anon", fn) == "false" and priv("service_role", fn) == "true", fn + ": members (an owner check inside) and the service role; not anon")
-    for fn in ("public.tally_ledgers_mark_gone(uuid,text)", "public.tally_ledger_drop_words(uuid)"):
+        ok(priv("authenticated", fn) == "true" and priv("anon", fn) == "false" and priv("service_role", fn) == "true", fn + ": members (an owner-or-staff check inside) and the service role; not anon")
+    for fn in ("public.tally_ledgers_mark_gone(uuid,text)", "public.tally_ledger_drop_words(uuid)", "public.tally_ledger_drop_decide(uuid,text[],integer,integer,text,uuid,text,timestamptz)",
+               "public.tally_ingest_ledgers_list(uuid,date,date,jsonb,jsonb,boolean,integer)"):
         ok(priv("authenticated", fn) == "false" and priv("anon", fn) == "false" and priv("service_role", fn) == "true", fn + ": the service role only")
     r = rpc(OWNER, "select tally_ledgers_mark_gone(%s, 'x')::text" % q(d1))
     ok("_error" in r, "a member cannot call tally_ledgers_mark_gone")
-    for fn in ("tally_ledgers_mark_gone", "tally_ledger_drop_words", "tally_ledger_drop_confirm", "tally_ledger_drop_keep"):
+    for fn in ("tally_ledgers_mark_gone", "tally_ledger_drop_words", "tally_ledger_drop_confirm", "tally_ledger_drop_keep", "tally_ledger_drop_decide"):
         row = db.rows("select prosecdef::text s, coalesce(array_to_string(proconfig, ','), '') c from pg_proc where proname = %s and pronamespace = 'public'::regnamespace" % q(fn))
         ok(row and all(x["s"] == "true" and x["c"].replace(" ", "") == "search_path=public,pg_temp" for x in row), "%s: security definer, search_path public, pg_temp" % fn)
 finally:

@@ -1495,6 +1495,13 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
       out.deleted = Math.max(0, Math.floor(Number(data?.marked) || 0));
       out.deletesHeld = Math.max(0, Math.floor(Number(data?.held) || 0));
       if (data?.note) notes.push("round " + round + ": " + String(data.note).slice(0, 300));
+      // migration 131: too many missing at once are not marked; they wait "to confirm" (one alert in the bell and on the
+      // Tally page: Confirm / Keep). Said in the reply (toConfirm: the hold) and the log, so the bridge's round is not
+      // taken as having marked them
+      if (data?.pending) {
+        (out as Record<string, unknown>).toConfirm = String(data.pending).slice(0, 40);
+        console.log("tally-ingest ledger_list: held to confirm", book, round, out.deletesHeld);
+      }
     }
   }
   // round 64: the list's time on the book (tally_books.ledgers_at), as the trial balance's "ledgers" call sets it, on the
