@@ -90,11 +90,19 @@ $r4 = Reading 'o4 year 2 period' (Openings $withP)
 Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o4 the same request with year 2's SVFROMDATE/SVTODATE added (harness only) ({0} ms): {1}" -f $r4.ms, $r4.text)
 # o5: the session's period moved to year 2 by keys (Alt+F2: From, To), then the request as built
 $f2 = ([datetime]::ParseExact($y2from, 'yyyyMMdd', $null)).ToString('d-M-yyyy'); $t2 = ([datetime]::ParseExact($y2to, 'yyyyMMdd', $null)).ToString('d-M-yyyy')
+# run 40998805368: at the Gateway Alt+F2 is not offered (F2: Period greyed) and the keys opened Group Creation. The period is
+# changed inside a report: Go To (Alt+G) Balance Sheet, then Alt+F2 (From, To), then back to the Gateway; Tally keeps the
+# period for the session
+KeysTo '{ESC}' 2; KeysTo '{ESC}' 2; KeysTo 'n' 2
+KeysTo '%g' 2; KeysTo 'Balance Sheet{ENTER}' 4 'openp-bs'
 KeysTo '%{F2}' 3 'openp-altf2'
-KeysTo ('^a' + $f2 + '{ENTER}') 2
-KeysTo ('^a' + $t2 + '{ENTER}') 3 'openp-period-set'
-KeysTo '^a' 3
+KeysTo ($f2 + '{ENTER}') 2
+KeysTo ($t2 + '{ENTER}') 4 'openp-period-set'
+KeysTo '{ESC}' 3 'openp-back'
 $r5 = Reading 'o5 session in year 2' (Openings $asBuilt)
+# the period the session reports now (Company STARTINGFROM / ENDINGAT, as the bridge's company list asks them)
+$cx5 = OPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>OPCo5</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="OPCo5" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME,STARTINGFROM,ENDINGAT,BOOKSFROM</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+Info ("openp o5b the company list after the period change (STARTINGFROM, ENDINGAT, BOOKSFROM): " + (([regex]::Matches($cx5.body, '<(STARTINGFROM|ENDINGAT|BOOKSFROM)[^>]*>\s*([^<]*)<') | ForEach-Object { $_.Groups[1].Value + '=' + $_.Groups[2].Value.Trim() }) -join ', '))
 Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o5 the session's period set to {0}..{1} by keys (Alt+F2; screenshots openp-*), then the request as built ({2} ms): {3}" -f $f2, $t2, $r5.ms, $r5.text)
 # o6: the reading
 $depends = ($r4.y2 -gt 0) -or ($r5.y2 -gt 0)
