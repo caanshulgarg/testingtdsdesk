@@ -104,7 +104,17 @@ $r5 = Reading 'o5 session in year 2' (Openings $asBuilt)
 $cx5 = OPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>OPCo5</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="OPCo5" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME,STARTINGFROM,ENDINGAT,BOOKSFROM</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
 Info ("openp o5b the company list after the period change (STARTINGFROM, ENDINGAT, BOOKSFROM): " + (([regex]::Matches($cx5.body, '<(STARTINGFROM|ENDINGAT|BOOKSFROM)[^>]*>\s*([^<]*)<') | ForEach-Object { $_.Groups[1].Value + '=' + $_.Groups[2].Value.Trim() }) -join ', '))
 Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o5 the session's period set to {0}..{1} by keys (Alt+F2; screenshots openp-*), then the request as built ({2} ms): {3}" -f $f2, $t2, $r5.ms, $r5.text)
+# o7: Tally's current date moved into year 2 (F2 at the Gateway: Change Date), the session's period left as it is; then
+# the request as built and the company list's STARTINGFROM / ENDINGAT
+$d7 = ([datetime]::ParseExact($d2, 'yyyyMMdd', $null)).ToString('d-M-yyyy')
+KeysTo '{ESC}' 2; KeysTo '{ESC}' 2; KeysTo 'n' 2
+KeysTo '{F2}' 3 'openp-f2-date'
+KeysTo ($d7 + '{ENTER}') 4 'openp-date-set'
+KeysTo '{ESC}' 2
+$r7 = Reading 'o7 current date in year 2' (Openings $asBuilt)
+$cx7 = OPost ('<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>OPCo7</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="OPCo7" ISMODIFY="No"><TYPE>Company</TYPE><FETCH>NAME,STARTINGFROM,ENDINGAT,BOOKSFROM</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>')
+Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o7 Tally's current date set to {0} by keys (F2; screenshots openp-f2-date, openp-date-set), then the request as built ({1} ms): {2}; the company list then: {3}" -f $d7, $r7.ms, $r7.text, ((([regex]::Matches($cx7.body, '<(STARTINGFROM|ENDINGAT|BOOKSFROM)[^>]*>\s*([^<]*)<') | ForEach-Object { $_.Groups[1].Value + '=' + $_.Groups[2].Value.Trim() }) -join ', ')))
 # o6: the reading
-$depends = ($r4.y2 -gt 0) -or ($r5.y2 -gt 0)
-Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o6 OPENINGBALANCE follows the session's period: {0} (o3 at books-from {1}, at year 2 {2}; o4 at year 2 {3} of {5}; o5 at year 2 {4} of {5})" -f $(if ($depends) { 'YES' } else { 'NO' }), $r3.books, $r3.y2, $r4.y2, $r5.y2, $want.Count)
+$depends = ($r4.y2 -gt 0) -or ($r5.y2 -gt 0) -or ($r7.y2 -gt 0)
+Add-Content -Path $resultsFile -Encoding UTF8 -Value ("INFO openp o6 OPENINGBALANCE follows the session's period: {0} (o3 at books-from {1}, at year 2 {2}; o4 at year 2 {3} of {5}; o5 at year 2 {4} of {5}; o7 at year 2 {6} of {5})" -f $(if ($depends) { 'YES' } else { 'NO' }), $r3.books, $r3.y2, $r4.y2, $r5.y2, $want.Count, $r7.y2)
 Set-Content (Join-Path $out 'openp-request-as-built.xml') $asBuilt -Encoding UTF8
