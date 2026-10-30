@@ -7,7 +7,7 @@ The owner's decision of 30-Oct-2026 ("1"): the stock from Tally ONLY when a pers
 `<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>FinComStockInHand</ID></HEADER><BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT><SVCURRENTCOMPANY>{company}</SVCURRENTCOMPANY><SVFROMDATE TYPE="Date">{from}</SVFROMDATE><SVTODATE TYPE="Date">{to}</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME="FinComStockInHand" ISMODIFY="No"><TYPE>Group</TYPE><FETCH>NAME, OPENINGBALANCE, CLOSINGBALANCE</FETCH><FILTERS>FinComStockInHandOnly</FILTERS></COLLECTION><SYSTEM TYPE="Formulae" NAME="FinComStockInHandOnly">$ReservedName = &#34;Stock-in-Hand&#34;</SYSTEM></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>`
 
 Version: 2.5.2. (The plan said 2.4.11; the base bridge-dated-ledgers became 2.5.0, and the coordinator gave 2.5.1 to the
-live fix of the ledger openings, branch bridge-251-openings, merged here before the build; the branch keeps its planned
+live fix of the ledger openings, branch bridge-251-openings, to be merged here before the build; the branch keeps its planned
 name.)
 
 | | |

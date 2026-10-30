@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..af92f295b
+Range: 25e694c0a..1d82e81d2
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -97,5 +97,23 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 7. (Low) The open-company look ran before the "taken already" check. Fixed: the click's time first.
 8. (Answered) The "not answered here" line is the log's only (liveSayOnce writes no notice).
 
-After round 4: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only),
-8c49a469c (the self-test reads 2.5.2's decision line) and af92f295b. The whole range was read last: af92f295b is the commit built.
+## The real-Tally gate's finding and round 5 (af92f295b to 1d82e81d2, medium effort)
+
+The gate (tally-versions g251, run 41056427541, the 2.5.1-numbered build of af92f295b): s1-s5 PASS on all five releases;
+s6 FAIL: a click whose turn at Tally's lock was taken by a posting answered "busy". Fixed in 6e605eb6b: the click waits for
+the posting and goes once more. Round 5 on that and the renumbering to 2.5.2 (the coordinator: 2.5.1 is the live openings
+fix): 9 findings.
+
+1. (High) "Nothing reached Tally" was judged by the time taken; a posting preempting the read after it was sent left it
+   0, so the request could go twice. Fixed: by sentOut (set at the send), and at most one more try.
+   TestStock251PostingAfterSendNeverTwice.
+2. (Medium) A window watch left running per click. Fixed: made right before each send, ended before trying again.
+3. (Low) The 20 s bound checked only between tries. Fixed by 1 (one more try at most).
+4. (Low) A background back-off could be taken for a posting. Fixed by 1 (one more try at most, only while a posting goes).
+5-7. (Recorded) The openings fix (bridge-251-openings) not merged yet, its decision line not yet in the history, the
+   self-test's line: done when it is merged, before the 2.5.2 build.
+8. (Low) No test of a posting after the send. Added (1).
+9. (Low) The test hook read without the lock. Fixed: under stock.mu.
+
+After round 5: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only),
+8c49a469c (the self-test reads 2.5.2's decision line) and 1d82e81d2. The whole range was read last.
