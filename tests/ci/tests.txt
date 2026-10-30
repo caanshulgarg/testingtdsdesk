@@ -474,6 +474,9 @@ run_2b_automatch_ui.py                300  TDSDESK_SITE=../app/dist-test
 # replaced reloads FinCom once (src/staleChunk.js), the screen opens; files gone for good reload once, never a loop
 run_stale_chunk.py                    120  TDSDESK_SITE=../app/dist-test
 run_chunk_heal.py                     240  TDSDESK_SITE=../app/dist-test
+# 30-Oct-2026 (Sentry FINCOM-APP-STAGING-1 again, Safari on the Bank tab): a screen's file fetched AHEAD that does not come
+# is not the page failing: a breadcrumb only, no reload, no error; opening the screen runs the usual heal
+run_prefetch_quiet.py                 120  TDSDESK_SITE=../app/dist-test
 # FinCom Bridge 2.4.5 (ROUND 102): older entries for a period the person chooses (migration 98, tally-ingest, the page)
 run_migration98.py                    300
 run_period_ingest.py                  180

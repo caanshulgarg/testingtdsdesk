@@ -55,7 +55,7 @@ export function failedFile(e, hint) {
   return "";
 }
 
-// to Sentry (src/sentry.js; kept in main.jsx until it starts): a breadcrumb and the tag. step: retry | healed | refresh | preload_error | clean_reload |
+// to Sentry (src/sentry.js; kept in main.jsx until it starts): a breadcrumb and the tag. step: retry | healed | refresh | preload_error | prefetch_failed | clean_reload |
 // failed | after_refresh
 export function tellChunk(step, file, more) {
   const data = { file: file || "unknown" };
