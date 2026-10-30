@@ -292,7 +292,7 @@ func TestR251VersionAllowList(t *testing.T) {
 	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
-	if h := allowListHash(allowRowsBefore251()); !strings.HasPrefix(h, "0ed4d3e21f6f") { // 2.5.2 added FinComStockInHand
+	if h := allowListHash(allowRowsBeforeStock()); !strings.HasPrefix(h, "0ed4d3e21f6f") { // 2.5.2 added FinComStockInHand
 		t.Fatalf("a row of the table changed (%s): 2.5.1 changes no request", h)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

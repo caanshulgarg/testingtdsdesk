@@ -486,7 +486,7 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 }
 
 // the allow-list's rows without 2.5.2's FinComStockInHand: 2.5.0's table
-func allowRowsBefore251() string {
+func allowRowsBeforeStock() string {
 	var o []string
 	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
 		if !strings.HasPrefix(l, "| "+stockID+" |") {
@@ -502,7 +502,7 @@ func TestStock251VersionAllowList(t *testing.T) {
 	if BridgeVersion != "2.5.2" {
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
-	if h := allowListHash(allowRowsBefore251()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {
+	if h := allowListHash(allowRowsBeforeStock()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {
 		t.Fatalf("a row other than FinComStockInHand changed (%s)", h)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

@@ -14,7 +14,7 @@ name.)
 |---|---|
 | Setup file | FinComBridge-Setup-2.5.2.exe |
 | Fingerprint | filled in at the build (compare with the .sha256 file next to the setup) |
-| Replaces | 2.5.1 (the openings fix; not published) / 2.4.9 (published) |
+| Replaces | 2.5.1 (the openings fix, published; kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 
 ## What is in 2.5.2

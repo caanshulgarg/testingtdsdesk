@@ -336,7 +336,7 @@ var allowRows249 = map[string]string{
 
 func allowRowsBefore250() string {
 	var o []string
-	for _, l := range strings.SplitAfter(allowRowsBefore251(), "\n") { // 2.5.2 added one row (stock251_test.go)
+	for _, l := range strings.SplitAfter(allowRowsBeforeStock(), "\n") { // 2.5.2 added one row (stock251_test.go)
 		id := strings.TrimSpace(strings.SplitN(strings.TrimPrefix(l, "| "), " |", 2)[0])
 		if w, ok := allowRows249[id]; ok && strings.HasPrefix(l, "| "+id+" |") {
 			l = w

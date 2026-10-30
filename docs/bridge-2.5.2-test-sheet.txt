@@ -11,10 +11,10 @@ R2. The panel then says "Opening stock Rs X . Closing stock Rs Y . from Tally at
     figure typed, or last year's balance sheet, is still used when Tally was not asked or could not answer.
 R3. Nothing asks Tally for the stock by itself: no background read, no schedule, no retry. "Ask Tally again" asks once more.
 R4. Tally over 2 s (or its window not answering for 2 s): "Tally took too long; type the stock or try again later".
-Real-Tally gate: TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (one request added), the committed setup.
+Real-Tally gate: TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1 (one request added), the committed setup, with the upgrade from 2.5.1.
 Deploy order (the owner): migration-134-stock-from-tally.sql, then tally-ingest, then the app, then the setup.
 
-CHECK 22 - THE STOCK FROM TALLY, ON A CLICK (2.5.2)
+CHECK 25 - THE STOCK FROM TALLY, ON A CLICK (2.5.2)
    In TallyPrime, open a company that keeps stock (items with opening stock and purchases / sales). In FinCom, open its
    client: Financial statements > Trial balance & mapping, the period of the year you want. On the Stock panel click
    "Bring stock from Tally". Leave Tally alone.
@@ -23,21 +23,46 @@ CHECK 22 - THE STOCK FROM TALLY, ON A CLICK (2.5.2)
    value). The statements' changes in inventories and the balance sheet's inventories use them. In the bridge's log
    (right-click the FinCom icon > Show log) one line "Stock of <company> ... from Tally in N ms".
 
-CHECK 23 - ONCE PER PERIOD; NOTHING BY ITSELF (2.5.2)
+CHECK 26 - ONCE PER PERIOD; NOTHING BY ITSELF (2.5.2)
    Leave FinCom and Tally open for 10 minutes; open and close the Financial statements; click "Bring stock from Tally"
    again for the same period (the button now reads "Ask Tally again" once an answer is kept: do not click it yet).
    You should see: the log has no new "Stock of" line in those 10 minutes (nothing is asked by itself); the same figures
    and time are shown. Now click "Ask Tally again": exactly one new "Stock of" line, the time shown moves.
 
-CHECK 24 - TALLY TOO SLOW (2.5.2)
+CHECK 27 - TALLY TOO SLOW (2.5.2)
    Restart TallyPrime with a large company that keeps stock (the first request after a start can take Tally over 2 s),
    then click "Bring stock from Tally" at once.
    You should see: either the figures (Tally answered within 2 s) or "Tally took too long; type the stock or try again
    later"; never a frozen Tally; the log says "stopped at 2 s" or "window did not answer"; nothing more is asked until
    you click again. Type the stock in the panel: it is used.
 
-The checks of 2.5.0 follow, unchanged.
+CHECK 28 - THE UPGRADE (2.5.2 over 2.5.1)
+   Install 2.5.2 over 2.5.1 by hand.
+   You should see: FinCom's Tally page shows version 2.5.2 within a minute; the ledger reads go on as at FinCom's first day
+   of the book as with 2.5.1 (CHECK 22); nothing asks Tally for the stock until you click (the log has no "Stock of" line);
+   nothing else changes.
 
+The checks of 2.5.1 follow, unchanged.
+
+CHECK 22 - OPENINGS AS AT FINCOM'S FIRST DAY (2.5.1; a company whose Tally books begin a year before FinCom's copy)
+   Install 2.5.1. In FinCom: Books > From Tally > Update now (or Read the ledgers again) for that company.
+   You should see: the log says "Ledgers of <company> are read as at 1-Apr-2025, FinCom's first day of its books of this
+   company (Tally's books begin on 1-Apr-2024)" once; the opening balances in FinCom's trial balance are those of FinCom's
+   first day (compare with Tally's Trial Balance as on the day before FinCom's books begin, i.e. 31-Mar-2025); they add
+   up to nil; the Tally page's notes have no "not taken" line for this read.
+
+CHECK 23 - THE UPGRADE (2.5.1 over 2.5.0)
+   Install 2.5.1 over 2.5.0 by hand.
+   You should see: FinCom's Tally page shows version 2.5.1 within a minute; within a heartbeat the next ledger read goes
+   as at FinCom's first day and sends every ledger once; a 2.5.0 read in between is not taken by FinCom (its notes say
+   "openings as at 2024-04-01 not taken: FinCom's books of this company begin on 2025-04-01"); nothing else changes.
+
+CHECK 24 - A COMPANY WITHOUT FINCOM'S FIRST DAY (2.5.1)
+   A company linked in FinCom whose books FinCom has not been given a first day for (a new link before its first
+   opening balances): Update now.
+   You should see: its ledgers are read as at the day Tally's books begin, as 2.5.0 did (CHECK 19).
+
+The checks of 2.5.0 follow, unchanged.
 
 CHECK 19 - OPENINGS AS AT THE BOOKS' BEGINNING (2.5.0)
    In Tally, change the period (Alt+F2) and the date (F2) at the Gateway to next year. In FinCom: Books > From Tally >
