@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..8c49a469c
+Range: 25e694c0a..af92f295b
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -82,5 +82,20 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
    user's bridge keeps its own folder).
 
 
-After round 3: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only) and
-8c49a469c (the self-test reads 2.5.1's decision line). The whole range was read last: 8c49a469c is the commit built.
+## Round 4 (52660a3b5..8c49a469c, medium effort): 8 findings, fixed in af92f295b with tests (or answered)
+
+1. (Medium) The clicks' file written by two goroutines at once. Fixed: one writer at a time, the newest map each time.
+2. (Medium) The cloud could still wake a computer without the company open, whose bridge no longer answers. Fixed: only a
+   computer whose bridge says the company is open is woken; else said at once ("No computer has this company open in Tally
+   just now"), a kept answer still given back. run_stock_ingest.py A.
+3. (Medium) An "Ask Tally again" to such a computer left the row "asked". Fixed by 2.
+4. (Low) An answer given back again (cached) re-stamped its time over a later typed figure. Fixed: the same answer keeps
+   its first time.
+5. (Low) A failure could replace "busy" on the same click. Fixed: after "busy" only Tally's figures; after "not open" any
+   answer of a bridge that asked Tally. run_migration134.py 2.
+6. (Low) The no-computer test passed either way. Fixed: a kept period and an unkept one, each checked.
+7. (Low) The open-company look ran before the "taken already" check. Fixed: the click's time first.
+8. (Answered) The "not answered here" line is the log's only (liveSayOnce writes no notice).
+
+After round 4: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only),
+8c49a469c (the self-test reads 2.5.1's decision line) and af92f295b. The whole range was read last: af92f295b is the commit built.
