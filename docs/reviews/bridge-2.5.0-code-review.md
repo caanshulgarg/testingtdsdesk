@@ -83,3 +83,5 @@ and decision line, the beat fixture's table hash, and TestR250VersionAllowList: 
 
 - Round 2.6 (two own Tallys, same company name, different books-from): known limit, in the notes.
 - Round 3.1: separate task (pre-existing).
+
+Range reviewed in all (rounds 1 to 4 and the data commit after them): fc79ae4c9..c27ae6558
