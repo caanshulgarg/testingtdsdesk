@@ -17,7 +17,7 @@
 #   s6 one request in flight; postings first: a posting made with a click reaches Tally at once
 # A step the harness could not do is HARNESS, never PASS.
 if (-not (Get-Command TStop -ErrorAction SilentlyContinue)) { . (Join-Path $PSScriptRoot 'dblib.ps1') }
-$S1 = 's1 the committed setup installed: its own version'
+$S1 = 's1 the committed setup installed over the published 2.5.1: its own version, the settings carried'
 $S2 = 's2 click only: nothing asks Tally for the stock by itself'
 $S3 = 's3 a click: the stock equals Tally''s stock summary, the request exactly C1'
 $S4 = 's4 each stock request 2 s or less; no window hold beyond the click''s request'
@@ -126,11 +126,20 @@ Info "g251: window probe running $($script:frzOk) (beats $($script:frz.beats)), 
 $tStart = NowMs
 try {
   NoClick
-  # ---- s1
-  $st1 = Bridge GET '/status' $null 10
+  # ---- s1: the published 2.5.1 runs (flowv.ps1 installed it); the gate's setup goes over it
+  $st0 = Bridge GET '/status' $null 10
+  $cfg0 = Get-Content "$h1\tds-bridge.config.json" -Raw | ConvertFrom-Json
   $origin = "$(Get-Content (Join-Path $env:BRIDGE_DIST 'setup-origin.txt') -ErrorAction SilentlyContinue)"
   $vWant = [regex]::Match($origin, 'FinComBridge-Setup-([0-9.]+)\.exe').Groups[1].Value
-  GRes $S1 $(if ($st1 -and $vWant -and "$($st1.version)" -eq $vWant -and $origin -match '^setup origin: COMMITTED ') { 'PASS' } else { 'FAIL' }) ("the bridge answers version {0}; {1}" -f $(if ($st1) { $st1.version } else { '(no answer)' }), $origin)
+  $setupNew = Get-ChildItem $env:BRIDGE_DIST -Filter "FinComBridge-Setup-$vWant.exe" | Select-Object -First 1
+  $p = Start-Process -FilePath $setupNew.FullName -ArgumentList '/S', '/CURRENTUSER', '/MODE=sole' -PassThru; $null = $p.Handle
+  if (-not $p.WaitForExit(300000)) { Write-Host 'the gate setup did not end' }
+  Start-Sleep 20
+  $cfg1n = Get-Content "$h1\tds-bridge.config.json" -Raw | ConvertFrom-Json; $bport = [int]$cfg1n.Port; $bkey = "$($cfg1n.Key)"
+  $st1 = $null; for ($i = 0; $i -lt 30 -and -not $st1; $i++) { $st1 = Bridge GET '/status' $null 10; if (-not $st1) { Start-Sleep 3 } }
+  Snap 'g251-upgraded'
+  GRes $S1 $(if ($st0 -and "$($st0.version)" -eq '2.5.1' -and $st1 -and $vWant -and "$($st1.version)" -eq $vWant -and $origin -match '^setup origin: COMMITTED ' -and $cfg1n.Port -eq $cfg0.Port -and "$($cfg1n.Key)" -eq "$($cfg0.Key)" -and "$($cfg1n.TallyHost)" -eq "$($cfg0.TallyHost)" -and "$($cfg1n.CloudBeatSec)" -eq "$($cfg0.CloudBeatSec)") { 'PASS' } else { 'FAIL' }) ("before: {0}; the setup {1} ended {2}; after: {3}; port {4} -> {5}; key carried {6}; TallyHost {7} -> {8}; {9}" -f $(if ($st0) { "version $($st0.version)" } else { 'no answer' }), $setupNew.Name, $p.ExitCode, $(if ($st1) { "version $($st1.version)" } else { 'no answer' }), $cfg0.Port, $cfg1n.Port, ("$($cfg1n.Key)" -eq "$($cfg0.Key)"), $cfg0.TallyHost, $cfg1n.TallyHost, $origin)
+  Start-Sleep 30
   # ---- s2: nothing by itself (the bridge's first rounds, Update now, 4 minutes of beats)
   $null = Bridge POST '/keep' @{ company = $co1; now = $true } 60
   Start-Sleep 240
