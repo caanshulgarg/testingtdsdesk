@@ -1,4 +1,4 @@
-# Mode g251 (2.5.1's gate, the owner's decision of 30-Oct-2026, "1": the stock from Tally ONLY when a person clicks; TEST
+# Mode g251 (the stock release's gate (2.5.2), the owner's decision of 30-Oct-2026, "1": the stock from Tally ONLY when a person clicks; TEST
 # DATA ONLY, a throwaway company in this runner's own Tally). The committed setup at the ref (2.5.1) is installed; stubg.py
 # is FinCom's cloud (its beat answer carries a person's click, "stock": {company: {from, to, at, again}}, only when this
 # script writes the click file, as tally-ingest does for a click in FinCom); proxy235.py stands between the bridge and Tally
@@ -6,7 +6,7 @@
 # for the whole run: every hold with its time. Dot-sourced by flowv.ps1:
 #   $g251Phase = 'masters' (before the bridge starts): the company's inventory on, stockp/gen.py's company at a smaller scale
 #     (400 items, godowns, batches; 3,000 entries in year 1, 300 in year 2)
-#   $g251Phase = 'run' (the gate's 2.5.1 running): then
+#   $g251Phase = 'run' (the gate's setup running): then
 #   s1 the committed setup installed: the version 2.5.1
 #   s2 click only: Update now and the bridge's own rounds for 4 minutes send no FinComStockInHand
 #   s3 a click: the stock answer equals Tally's stock summary (every item's own opening and closing, summed: the harness's
@@ -17,7 +17,7 @@
 #   s6 one request in flight; postings first: a posting made with a click reaches Tally at once
 # A step the harness could not do is HARNESS, never PASS.
 if (-not (Get-Command TStop -ErrorAction SilentlyContinue)) { . (Join-Path $PSScriptRoot 'dblib.ps1') }
-$S1 = 's1 the committed setup installed: version 2.5.1'
+$S1 = 's1 the committed setup installed: its own version'
 $S2 = 's2 click only: nothing asks Tally for the stock by itself'
 $S3 = 's3 a click: the stock equals Tally''s stock summary, the request exactly C1'
 $S4 = 's4 each stock request 2 s or less; no window hold beyond the click''s request'
@@ -129,7 +129,8 @@ try {
   # ---- s1
   $st1 = Bridge GET '/status' $null 10
   $origin = "$(Get-Content (Join-Path $env:BRIDGE_DIST 'setup-origin.txt') -ErrorAction SilentlyContinue)"
-  GRes $S1 $(if ($st1 -and "$($st1.version)" -eq '2.5.1' -and $origin -match '^setup origin: COMMITTED .*FinComBridge-Setup-2\.5\.1\.exe') { 'PASS' } else { 'FAIL' }) ("the bridge answers version {0}; {1}" -f $(if ($st1) { $st1.version } else { '(no answer)' }), $origin)
+  $vWant = [regex]::Match($origin, 'FinComBridge-Setup-([0-9.]+)\.exe').Groups[1].Value
+  GRes $S1 $(if ($st1 -and $vWant -and "$($st1.version)" -eq $vWant -and $origin -match '^setup origin: COMMITTED ') { 'PASS' } else { 'FAIL' }) ("the bridge answers version {0}; {1}" -f $(if ($st1) { $st1.version } else { '(no answer)' }), $origin)
   # ---- s2: nothing by itself (the bridge's first rounds, Update now, 4 minutes of beats)
   $null = Bridge POST '/keep' @{ company = $co1; now = $true } 60
   Start-Sleep 240
