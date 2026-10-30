@@ -14,7 +14,7 @@ import (
 // request shape changed) with 2.4.0's decision kept as history; the table and its hash unchanged (TestAllowListUnchanged);
 // the add-on unchanged from 2.4.0 (no dp= line); the notes and the test sheet
 func TestRelease241VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): 2.4.1's decision kept as history
+	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): 2.4.1's decision kept as history
 
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}

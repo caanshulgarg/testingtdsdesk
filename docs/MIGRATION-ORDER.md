@@ -603,3 +603,39 @@ used just now" and uses nothing up. Add-only, one transaction, `lock_timeout` 10
 (a firm reads its own redemptions and discounts; the rest service role only); `coupon_redeem(text, text)` for signed-in
 people; `coupon_discount_apply` and `console_coupon*` for the service role only. Tested on pg_stand:
 `tests/run_migration120.py` (RED_WITHOUT_120=1 fails).
+
+## 133: books from Tally with a time left, and an upload checked against Tally
+
+**133, fetch check** (30-Oct-2026, branch `next-fetch-eta-check`; **NOT run on staging**: the owner runs it):
+`server/tally-cloud/migration-133-fetch-check.sql` runs after 98 (tally_period_*, tally_devices.period_fetch) and 57
+(tally_ingest_entries with five arguments, tally_ingest_delete). The owner's decision of 30-Oct-2026 (supersedes the
+26-Oct "upload only"): older entries brought from Tally with a progress bar and its timing, and a Day Book upload checked
+day by day against Tally's own day lists and corrected to Tally (added, updated, or soft-deleted with history; never a row
+deleted, nothing sent to Tally). No new Tally request: the days go through the existing older-entries path. Add-only, one
+transaction, `lock_timeout` 10 s, safe twice. Tables `tally_check_runs`, `tally_check_days`, `tally_fetch_log` (RLS on,
+service_role only, explicit grants and the log's sequence); `tally_check_queue / next / heads / entries / stop` and
+`tally_period_entries_logged` for the service role only; `tally_check_status`, `tally_check_resume`,
+`tally_period_cancel`, `tally_today_from_tally`, `tally_fetch_summary` for signed-in people (the firm's own books); helpers
+for nobody. Deploy order: 133, then the tally-ingest of the same branch (without 133 it goes on as before). Tested on
+pg_stand: `tests/run_migration133.py` (RED_WITHOUT_133=1 fails); tally-ingest: `tests/run_fetch_check_ingest.py`.
+
+## 135: Check for changes in Tally (one button)
+
+**135, check changes** (30-Oct-2026, branch `next-check-changes`; **NOT run on staging**: the owner runs it; 134 is taken by
+the stock-from-Tally branch): `server/tally-cloud/migration-135-check-changes.sql` runs after 133 (tally_check_runs,
+tally_check_days, tally_fetch_log) and 98 (tally_period_*). The owner, 30-Oct-2026: "there should be a button 'check any
+change'.. if there is any change then it should do it". The press queues the chosen period's days (cut to the days the
+books hold, never after today, at most 400) for 133's day check; FinCom's copy is corrected to Tally by 133's own functions
+(added, updated, soft-deleted with history after two whole-day lists a minute apart). No new Tally request. Add-only, one
+transaction, `lock_timeout` 10 s, safe twice. The owner again, 16:30 ("why don't we automatically bring only those days
+instead of all"): the From Tally tab's missing days are queued by themselves for the same check
+(`tally_fill_request(text, date[])`, owner or staff; never a day done in the last 6 hours), and "Bring books from Tally"
+Start sets aside the days FinCom already holds (`tally_period_choose_lean(uuid, date, text)`; days written to 98's
+`tally_period_days` as counted and done, noted in `tally_period_skips`). Tables `tally_check_asks`, `tally_period_skips`
+(RLS on, service_role only, explicit grants); `tally_check_request(text, date, date)`, `tally_fill_request`,
+`tally_period_choose_lean` (owner or staff of the firm) and `tally_check_ask_status(text)` (the firm's members: also each
+book's missing days, the year in days and the Tally computer's office hours) for signed-in people; `tally_check_next_open(uuid, integer)` for the service role only (133's next, except a
+"Bring books from Tally" stopped before the press no longer holds the check); `tally_check_ask_of`, `tally_book_fetch_of`, `tally_period_skip_held` for nobody. Deploy order:
+135, then the tally-ingest of the same branch (without 135 it asks 133's tally_check_next as before). Tested on pg_stand:
+`tests/run_migration135.py` (RED_WITHOUT_135=1 fails); tally-ingest: `tests/run_fetch_check_ingest.py`; the page:
+`tests/run_check_changes_ui.py`.

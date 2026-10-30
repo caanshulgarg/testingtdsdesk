@@ -538,13 +538,15 @@ try:
     # migration-36 (03-Oct-2026, round 4 item 6): the batch is recorded first (counts), the rows upserted, and only THEN
     # the GUIDs seen are stamped (tally_ledger_round_seen) - so a first round on a copy whose rows had no GUID yet stamps
     # every row and tally_ledgers_mark_gone (last batch) finds nothing unseen. SEQ: each RPC with its place among the calls
-    NO34 = {"on": False}; NO36 = {"on": False}; real_rpc = F.rpc; SEQ = []
+    NO34 = {"on": False}; NO36 = {"on": False}; HOLD131 = {"on": False}; real_rpc = F.rpc; SEQ = []
     def rpc34(fn, a):
         if fn in ("tally_ledger_round_batch", "tally_ledgers_mark_gone", "tally_ledger_rename", "tally_ledger_round_seen"):
             F.ARGS.setdefault(fn, []).append(a); SEQ.append((fn, len(F.CALLS) - 1))
             if NO34["on"] or (NO36["on"] and fn == "tally_ledger_round_seen"): raise RuntimeError("Could not find the function public.%s(...) in the schema cache" % fn)
             if fn == "tally_ledger_round_batch": return {"ok": True, "round": a["p_round"], "batches": 1, "rows": a["p_rows"], "seen": len(a.get("p_seen") or [])}
             if fn == "tally_ledger_round_seen": return {"ok": True, "stamped": len(a.get("p_seen") or [])}
+            if fn == "tally_ledgers_mark_gone" and HOLD131["on"]: return {"ok": True, "marked": 0, "held": 36, "gone": 36, "pending": "d0000000-0000-0000-0000-000000000131", "alert": 7,
+                                                                           "note": "36 not seen, more than 22 at once: nothing marked; asked to confirm (alert 7)"}
             if fn == "tally_ledgers_mark_gone": return {"ok": True, "marked": 2, "held": 1, "gone": 3, "note": "1 kept by the guard (entries or an opening)"}
             return {"ok": True, "renamed": True, "from": a["p_from"], "to": a["p_to"]}
         return real_rpc(fn, a)
@@ -587,6 +589,18 @@ try:
     c, r = lst({"round": "r-1b", "complete": True, "rowsRead": 3, "last": True, "seen": ["g3"], "ledgers": [row("g3", "Gamma")]})
     ok(c == 200 and r.get("ok") and any("migration-36" in n for n in r.get("notes", [])) and len(F.ARGS["tally_ledgers_mark_gone"]) == 2, "a cloud with 34 but without 36: the batch still goes through (34's batch stamps as before), 'migration-36 not applied' said (%s)" % r.get("notes"))
     NO36["on"] = False
+    # migration 131 (next-fix-ledger-drop): many missing at once are held to confirm; tally-ingest says so (toConfirm), marks nothing itself
+    HOLD131["on"] = True
+    n_mg, n_rb, n_rs = len(F.ARGS["tally_ledgers_mark_gone"]), len(F.ARGS["tally_ledger_round_batch"]), len(F.ARGS["tally_ledger_round_seen"])
+    c, r = lst({"round": "r-131x", "complete": True, "rowsRead": 404, "last": True, "seen": ["g3"], "ledgers": [row("g3", "Gamma")]})
+    ok(c == 200 and r.get("deleted") == 0 and r.get("deletesHeld") == 36 and r.get("toConfirm") == "d0000000-0000-0000-0000-000000000131" and len(F.ARGS["tally_ledgers_mark_gone"]) == n_mg + 1
+       and any("asked to confirm" in n for n in r.get("notes", [])) and len(patched()) == n0,
+       "migration 131: a round with many missing: nothing marked, held to confirm, said in the reply (toConfirm) (%s)" % {k: r.get(k) for k in ("deleted", "deletesHeld", "toConfirm")})
+    HOLD131["on"] = False
+    c, r = lst({"round": "r-131", "complete": True, "rowsRead": 3, "last": True, "seen": ["g3"], "ledgers": [row("g3", "Gamma")]})
+    ok(c == 200 and "toConfirm" not in r and r.get("deleted") == 2, "a round with a few missing: no toConfirm, marked as before")
+    # the counts the checks below expect, as before these two rounds
+    del F.ARGS["tally_ledgers_mark_gone"][n_mg:], F.ARGS["tally_ledger_round_batch"][n_rb:], F.ARGS["tally_ledger_round_seen"][n_rs:]
     n_seen = len(F.ARGS["tally_ledger_round_seen"])
     c, r = call({"kind": "ledger_list", "version": "2.1.4", "bridge": main, "company": "ZZ CO", "last": True, "ledgers": [row("g1", "Alpha")], "deleted": [["g7", "Gone One"]]})
     sent["ok"] += c == 200

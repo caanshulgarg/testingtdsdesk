@@ -145,14 +145,14 @@ def main():
             ok(state() == "stuck" and w.startswith(want) and pg.locator(R(VMS) + " [data-tco-sync-again]").count() == 1 and pg.locator(R(VMS) + " .tco-bar").count() == 0,
                "5. %s: '%s', Try again, no bar (%s)" % (name, want, w))
             return c
-        cid = stalled([SV.dev(opened=(GSC,))], VMS + " is not open in Tally on NWS144: open it in TallyPrime", "the company not open")
+        cid = stalled([SV.dev(opened=(GSC,))], VMS + " is not open in Tally on the Tally computer: open it in TallyPrime", "the company not open")
         shot("5-stuck-not-open")
-        stalled([SV.dev(opened=(), tally="closed")], "Tally is not open on NWS144", "Tally closed")
-        stalled([SV.dev(at="ago:45")], "FinCom Bridge on NWS144 is offline", "the computer offline")
+        stalled([SV.dev(opened=(), tally="closed")], "Tally is not open on the Tally computer", "Tally closed")
+        stalled([SV.dev(at="ago:45")], "FinCom Bridge on the Tally computer is offline", "the computer offline")
         d = SV.dev(); d["info"]["beat"]["paused"] = True
-        stalled([d], "Reading is paused on NWS144", "reading paused")
+        stalled([d], "Reading is paused on the Tally computer", "reading paused")
         d = SV.dev(); d["info"]["beat"]["tallyState"] = "busy"
-        stalled([d], "Tally is busy on NWS144", "Tally busy")
+        stalled([d], "Tally is busy on the Tally computer", "Tally busy")
         # no count for 3 minutes, the beat says nothing wrong: stuck all the same (never a bar that runs for ever)
         scene(lp=None)
         E("() => { Object.values(S.companies).filter(c => c.tallyName === '%s').forEach(c => { c.deleted = true; }); render(); }" % VMS); pg.wait_for_timeout(400)

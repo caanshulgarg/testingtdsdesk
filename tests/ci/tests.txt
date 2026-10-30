@@ -62,6 +62,7 @@ run_fin_statements.js                 120
 run_fin_depr.js                       120
 run_fin_depr_ui.py                    450  TDSDESK_SITE=../app/dist-test @libreoffice  # needs LibreOffice (the depreciation workbooks recalculated), dealt with run_fin_xlsx.py
 run_fs_more_menu.py                   180  TDSDESK_SITE=../app/dist-test
+run_tab_refresh.py                    750  TDSDESK_SITE=../app/dist-test
 run_fin_xlsx.py                       180  @libreoffice  # needs LibreOffice: tagged, so run_ci.sh deals it to one share with run_mis_xlsx.py and ci.yml installs libreoffice-calc there only
 run_fin_statements_ui.py              300  TDSDESK_SITE=../app/dist-test
 run_fs_period.js                      120
@@ -580,6 +581,8 @@ run_migration123.py                   180
 run_console_contracts.py              240
 # migration 125 (integ-console): a switched-off company's records and uploads refused, the status columns the console's, coupons on a paused firm, firm_signals
 run_migration125.py                   180
+run_migration132.py                   240
+run_bank_partial_post.py              240  TDSDESK_SITE=../app/dist-test
 # migration 130 (bridge 2.5.0, the owner's decision of 30-Oct-2026): openings only when they add up to nil, a dated read preferred
 run_migration130.py                   240
 run_openings_ingest.py                240

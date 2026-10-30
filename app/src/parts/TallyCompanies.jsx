@@ -25,15 +25,21 @@
 //     next-tally-linknow (28-Oct-2026): a company OPEN in Tally is registered and linked at the click (tally-ingest
 //     "link_now"); only a company no computer has open now waits for its computer this way.
 // Nothing new is asked of the bridge, the cloud or Tally: the same RPCs, wake and reads as before.
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import LinkStatus from "./LinkStatus.jsx";
+import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
+// 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
+// received from Tally today
+import { OlderLine, TodayLine } from "./TallyFetch.jsx";
+// 30-Oct-2026 (the owner): the client's row has the one button "Check for changes in Tally", its progress and its result
+import CheckChanges from "./TallyCheck.jsx";
 // next-tally-linknow: the companies being sent to FinCom and linked now (coKey: true), for the rows' words
 export const SENDING = {};
 
@@ -666,6 +672,8 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
   };
   const close = (fn) => (ev) => { const d = ev.currentTarget.closest("details"); if (d) d.open = false; fn(); };
   const syncing = co && k && k.line && k.line.reading;
+  // migration 131: many of this client's ledgers missing from one read of Tally: asked here too (Confirm / Keep)
+  const drop = co && typeof Rec === "object" && Rec.clientAlerts ? Rec.clientAlerts(co.id).find((x) => x.kind === "summary" && x.data && x.data.what === "ledger_drop" && x.data.state === "pending") : null;
   const pc = "";   // next-fix-tally-links2: no computer's name, not even under ⋯
   let client, acts = null;
   if (pend) client = <span className="tco-wait" data-tco-pending={pend.kind}>
@@ -721,6 +729,7 @@ export function CompanyRow({ r, rows = null, forCo = null, focus = false, onDone
     {pend && <div className={"tco-under note" + (pend.late ? " bad" : "")} data-tco-pending-say="">{pend.late ? "Not sent to FinCom in 10 minutes: keep " + shown(r.company) + " open in TallyPrime, with FinCom Bridge running. Your click is still kept."
       : "Waiting for the Tally computer to send " + shown(r.company) + " to FinCom; " + (pend.kind === "add" ? "it is added" : "it is linked") + " by itself then (usually within two minutes)."}</div>}
     {err && !co && <div className="tco-under note bad" data-tco-err="">{"Could not link it: " + err}</div>}
+    {drop && <div className="tco-under" data-tco-ledger-drop={co.id}><Suspense fallback={null}><LedgerDrop x={drop} where="row" /></Suspense></div>}
     {co && !earlier && <TwoPlaces co={co} company={r.company} />}
     {co && <div className="tco-under"><SyncLine cid={co.id} bar /><CloudSays cid={co.id} /></div>}
     {pick && <div className="tco-under"><Pick r={r} co={co} pre={co ? "" : ((yr || tw || {}).id || "")} onClose={() => setPick(false)} /></div>}
@@ -799,6 +808,7 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
         </div></details></span>}
     </div>
     <div className="tco-under"><SyncLine cid={co.id} bar /></div>
+    {!more && <div className="tco-under" data-tfx-row={co.id}><OlderLine cid={co.id} onOpen={() => openFromTally(co.id)} /><TodayLine cid={co.id} /><CheckChanges cid={co.id} where="row" /></div>}
     {open && <div className="tco-under"><ChangePick co={co} cur={r.company} onClose={() => onOpen(false)} /></div>}
   </li>;
 }

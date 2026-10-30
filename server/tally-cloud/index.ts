@@ -164,6 +164,10 @@
 //                                                       (tally_selfcheck_record). Without migration 65 both answer 503 {notReady}
 //                                                       and the bridge does not ask again that night; at most 30 calls a minute
 //                                                       from one computer (429)
+//   FinCom Bridge 2.5.1: the beat's answer carries booksFrom {company: yyyymmdd}, FinCom's first day of the book of each
+//   company open in Tally ("" when FinCom has none yet, or the computer's company has another GUID than the book's; left
+//   out when no open company is linked, or the beat carries no GUID for a book with a recorded one): the period of the three ledger requests (Tally's own BOOKSFROM only when FinCom
+//   has none), so openingsAt is the book's from_date (booksFromFor)
 //   FinCom Bridge 2.4.5 (ROUND 102, migration 98): older entries only for a period the person chose in FinCom (tally_period_pulls).
 //   The beat's answer carries periodDays [{company, company_guid, day: yyyymmdd, fetch, types}] (at most 3 days in all, 30
 //   outside the computer's office hours with periodNight true (ROUND 103: 20:00-08:00 IST and Sunday by default); the
@@ -1494,13 +1498,22 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const g130 = await has130();
   const openingsAt = openingsAtOf(body);
   const stRound = round || ("single-" + crypto.randomUUID());
-  if (g130) {
+  // 30-Oct-2026 (book 3d36a836): 2.5.0 read the openings as at the Tally company's own books-from (1-Apr-2024) while
+  // FinCom's copy of the book begins later (1-Apr-2025): openings as at another day are never taken (they would leave
+  // out the year between); the stored stay, said in the notes, until a read as at the copy's own first day
+  let openDateWrong = false;
+  if (g130 && openingsAt) {
+    const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
+    const from = bk?.from_date ? String(bk.from_date).slice(0, 10) : null;
+    if (from && from !== openingsAt) { openDateWrong = true; notes.push("openings as at " + openingsAt + " not taken: FinCom's books of this company begin on " + from + "; the stored openings stay"); }
+  }
+  if (g130 && !openDateWrong) {
     const cands = rows.filter((r: any) => openingsAt || !have.has(r.name) || r.oc).map((r: any) => [r.name, r.open] as [string, number]);
     if (cands.length) {
       const { error } = await db.rpc("tally_openings_stage", { p_book: book, p_round: stRound, p_source: OPEN_SRC.round, p_openings_at: openingsAt, p_rows: cands });
       if (error) throw new Error(error.message);
     }
-  } else if (openingsAt) notes.push("openings as at " + openingsAt + " taken without the guards: migration 130 is not applied");
+  } else if (openingsAt && !g130) notes.push("openings as at " + openingsAt + " taken without the guards: migration 130 is not applied");
   const fresh = rows.filter((r: any) => !have.has(r.name)).map((r: any) => ({ ...base(r), open: g130 ? 0 : r.open, open_sent: g130 ? 0 : r.open }));
   const opened = g130 ? [] : rows.filter((r: any) => have.has(r.name) && r.oc).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
   const plain = rows.filter((r: any) => have.has(r.name) && (g130 || !r.oc)).map(base);
@@ -1543,11 +1556,18 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
       out.deleted = Math.max(0, Math.floor(Number(data?.marked) || 0));
       out.deletesHeld = Math.max(0, Math.floor(Number(data?.held) || 0));
       if (data?.note) notes.push("round " + round + ": " + String(data.note).slice(0, 300));
+      // migration 131: too many missing at once are not marked; they wait "to confirm" (one alert in the bell and on the
+      // Tally page: Confirm / Keep). Said in the reply (toConfirm: the hold) and the log, so the bridge's round is not
+      // taken as having marked them
+      if (data?.pending) {
+        (out as Record<string, unknown>).toConfirm = String(data.pending).slice(0, 40);
+        console.log("tally-ingest ledger_list: held to confirm", book, round, out.deletesHeld);
+      }
     }
   }
   // migration 130: the round's openings settled on its last batch (a complete round; a call with no round at once):
   // taken when they add up to nil and the round may change them; else held, with one alert, or kept
-  if (g130 && (!round || (body.last === true && complete))) {
+  if (g130 && !openDateWrong && (!round || (body.last === true && complete))) {
     const { data, error } = await db.rpc("tally_openings_settle", { p_book: book, p_round: stRound, p_source: OPEN_SRC.round, p_openings_at: openingsAt });
     if (error) throw new Error(error.message);
     (out as any).openings = data?.settled ?? null;
@@ -1610,6 +1630,65 @@ async function periodGate(device: string): Promise<boolean> {
     return false;
   }
 }
+// migration 133: a cloud without it says nothing of the upload check (asked again after 10 minutes)
+let checkMissing = 0;
+// migration 135: a cloud without it hands the check's days out by 133's tally_check_next (asked again after 10 minutes)
+let openMissing = 0;
+// a split of a day being checked: Tally's six standard voucher types (the check's days carry no list of the book's own)
+const CHECK_TYPES = ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra"];
+const chosenOf = (d: any) => typeof d?.chosenAt === "string" && !isNaN(Date.parse(d.chosenAt)) ? { chosenAt: d.chosenAt.slice(0, 60) } : {};
+// FinCom Bridge 2.5.1 (book 3d36a836, 30-Oct-2026): FinCom's first day of the book of each company the beat says open in
+// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet), {company: day}; at most 200 companies. The
+// bridge dates its three ledger requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName) from it when it is on
+// or after Tally's own books-from, and from Tally's BOOKSFROM only when FinCom has none: a Tally whose books begin a year
+// before FinCom's copy never sends openings as at that earlier day. Review of 2.5.1: (R1, as review 245 R3) a computer
+// whose company of that name has another GUID than the book's recorded one (a restored or test copy) is answered "";
+// one whose beat carries no GUID yet, for a book with a recorded GUID, is left out (the bridge keeps the day it has);
+// (R2) the books' days and GUIDs read in one query each, both at once, each book's kept five minutes. null when no open
+// company is linked
+const fromMemo = new Map<string, { d: string; g: string; t: number }>();
+async function booksFromFor(firm: string, body: any): Promise<Record<string, string> | null> {
+  const open = new Map<string, string>();
+  for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
+    const name = typeof c?.name === "string" ? c.name.trim().slice(0, 200) : "";
+    if (name && c?.open === true && !open.has(name)) open.set(name, typeof c?.guid === "string" ? c.guid.trim().slice(0, 100).toLowerCase() : "");
+  }
+  // review round 3: the books looked up 20 at a time (bookForBeat, memoised five minutes); an open company with no book
+  // (not linked, or no longer) is answered "" (the bridge forgets a day it held for it)
+  const bookOf = new Map<string, string>(), none: string[] = [];
+  const names = [...open.keys()];
+  for (let i = 0; i < names.length; i += 20) {
+    const part = names.slice(i, i + 20);
+    const got = await Promise.all(part.map(async (name) => { try { return await bookForBeat(firm, name); } catch { return undefined; } }));
+    part.forEach((name, k) => { const b = got[k]; if (b) bookOf.set(name, b); else if (b === null) none.push(name); });
+  }
+  if (!bookOf.size && !none.length) return null;
+  const now = Date.now();
+  const ask = [...new Set(bookOf.values())].filter((b) => { const m = fromMemo.get(b); return !m || now - m.t >= 300000; });
+  if (ask.length) {
+    const [{ data: bk, error }, { data: cur, error: ce }] = await Promise.all([
+      db.from("tally_books").select("book_id, from_date").in("book_id", ask),
+      db.from("tally_sync_cursor").select("book_id, company_guid").in("book_id", ask)]);
+    if (error || ce) { console.log("tally-ingest beat: the books' first days not read:", String((error || ce)?.message || "").slice(0, 160)); return null; }   // left out: the bridge keeps the day it has
+    const dayOf = new Map<string, string>(), guidOf = new Map<string, string>();
+    for (const r of (bk || []) as any[]) {
+      const f = r?.from_date ? String(r.from_date).slice(0, 10) : "";
+      dayOf.set(String(r.book_id), /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.replace(/-/g, "") : "");
+    }
+    for (const r of (cur || []) as any[]) { const g = typeof r?.company_guid === "string" ? r.company_guid.trim().toLowerCase() : ""; if (g) guidOf.set(String(r.book_id), g); }
+    if (fromMemo.size > 5000) fromMemo.clear();
+    for (const b of ask) fromMemo.set(b, { d: dayOf.get(b) ?? "", g: guidOf.get(b) ?? "", t: now });
+  }
+  const out: Record<string, string> = {};
+  for (const name of none) out[name] = "";
+  for (const [name, book] of bookOf) {
+    const m = fromMemo.get(book), beatGuid = open.get(name) || "";
+    if (!m) continue;
+    if (m.g && !beatGuid) continue;                    // the computer's company not known by its GUID yet: left out
+    out[name] = m.g && beatGuid !== m.g ? "" : m.d;    // another company of that name: "", never the book's day
+  }
+  return Object.keys(out).length ? out : null;
+}
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1655,7 +1734,36 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3)
         if (!isDay(String(d?.day || ""))) continue;
         // review 245 R1: "&", "<" and ">" pass (the bridge escapes the request); never a quote mark or a control character
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
-        out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types });
+        // 30-Oct-2026 (migration 133): the choice time travels with the day (the bridge's stop names it; without it a stop
+        // never reached FinCom, so the page could not say "stopped", and only a fresh choice clears the bridge's stop)
+        out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types, ...chosenOf(d) });
+      }
+      // 30-Oct-2026 (the owner: an upload that differs from Tally is found and corrected; migration 133): the uploaded days
+      // to check against Tally, in the room left of the answer, through the same older-entries path (no new Tally request)
+      if (out.length < max && Date.now() - checkMissing >= 600000) {
+        // (asked for the room left plus this company's days already listed, so a day of both never leaves the room empty)
+        // 30-Oct-2026 (migration 135, the owner's "Check for changes in Tally"): tally_check_next_open, 133's own rule except
+        // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
+        // 133's tally_check_next as before (asked again after 10 minutes)
+        const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length) };
+        let got: any = null;
+        if (Date.now() - openMissing >= 600000) {
+          got = await db.rpc("tally_check_next_open", cArgs);
+          if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
+        }
+        if (!got) got = await db.rpc("tally_check_next", cArgs);
+        const { data: cd, error: ce } = got;
+        if (ce) {
+          if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
+          else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }
+        } else {
+          for (const d of Array.isArray(cd) ? cd as any[] : []) {
+            if (out.length >= max) break;
+            const day = String(d?.day || "");
+            if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d) });
+          }
+        }
       }
     }
   } catch (e) {
@@ -1696,7 +1804,22 @@ async function periodHeads(book: string, body: any) {
   // exactly four columns a head: the GUID, MasterID, AlterID and voucher type (anything more is never passed on)
   const heads = raw.filter((h: unknown) => Array.isArray(h) && typeof h[0] === "string" && h[0].length > 0 && h[0].length <= 100)
     .map((h: any[]) => [h[0], Math.max(0, Math.floor(Number(h[1]) || 0)), Math.max(0, Math.floor(Number(h[2]) || 0)), typeof h[3] === "string" ? h[3].slice(0, 100) : ""]);
-  const { data, error } = await db.rpc("tally_period_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: body?.via === "split" ? "split" : "day" });
+  // 30-Oct-2026 (migration 133): a day of an upload being checked against Tally: the check's want (entries Tally has that
+  // the upload lacks or holds at another AlterID; FinCom's entries Tally no longer lists are removed on a second whole list),
+  // with the period's own count kept as well when the day is one of the period chosen
+  const via = body?.via === "split" ? "split" : "day";
+  const { data: ck, error: ce } = await db.rpc("tally_check_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
+  if (ce && !missingFn(String(ce.message || ""))) return periodError(ce);
+  if (!ce && (ck as any)?.mine === true) {
+    const c = ck as any;
+    if (c.ok !== true) return reply(200, { ok: false, error: String(c.error || "not kept") });
+    const { data: pd, error: pe } = await db.rpc("tally_period_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
+    const per = !pe && (pd as any)?.ok === true ? pd as any : null;
+    const want = [...new Set([...(Array.isArray(c.want) ? c.want : []), ...(body?.fetch === true && per && Array.isArray(per.want) ? per.want : [])].map(String))];
+    const n = Number(c.n) || heads.length;
+    return reply(200, { ok: true, n, held: Math.max(0, n - want.length), done: c.done === true && (!per || per.done === true), want });
+  }
+  const { data, error } = await db.rpc("tally_period_heads", { p_book: book, p_day: iso(day), p_heads: heads, p_via: via });
   if (error) return periodError(error);
   const d = (data || {}) as any;
   if (d.ok !== true) return reply(200, { ok: false, error: String(d.error || "not kept") });
@@ -1719,6 +1842,9 @@ async function periodStop(book: string, body: any) {
   if (!chosen) return reply(400, { ok: false, error: "no choice" });
   const { data, error } = await db.rpc("tally_period_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300), p_chosen_at: chosen });
   if (error) return periodError(error);
+  // migration 133: the upload check stops with it (one rule: Tally is not asked again until the person presses Resume)
+  const { error: ce } = await db.rpc("tally_check_stop", { p_book: book, p_day: iso(day), p_why: why, p_words: s(body?.words, 300), p_chosen_at: chosen });
+  if (ce && !missingFn(String(ce.message || ""))) fail("check_stop", ce);
   console.log("tally-ingest period_stop: older entries stopped by the bridge", book, day, why);
   return reply(200, { ok: !!(data as any)?.ok });
 }
@@ -1727,6 +1853,11 @@ async function periodStop(book: string, body: any) {
 // whose ledger lines total zero (else not stored, and the day is to be uploaded by hand), then tally_period_entries
 const MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const PERIOD_ENTRY_WORDS = (d: string) => "FinCom could not read " + d.slice(6, 8) + "-" + MONS[Number(d.slice(4, 6)) - 1] + "-" + d.slice(0, 4) + " from Tally. Please upload that day's Day Book.";
+// migration 133: 98's tally_period_entries with each entry it brings in logged ("Today from Tally"); a cloud without 133: 98's
+async function periodEntriesRpc(args: Record<string, unknown>) {
+  const r = await db.rpc("tally_period_entries_logged", args);
+  return r.error && missingFn(String(r.error.message || "")) ? await db.rpc("tally_period_entries", args) : r;
+}
 async function periodEntries(book: string, body: any) {
   const day = String(body?.day || "");
   if (!isDay(day)) return reply(400, { ok: false, error: "not a day" });
@@ -1754,7 +1885,20 @@ async function periodEntries(book: string, body: any) {
     good.push({ ...v, day: iso(day), full: body?.full === true });
   }
   const keep = new Set(good.map((v) => v.guid));
-  const { data, error } = await db.rpc("tally_period_entries", { p_book: book, p_day: iso(day), p_vouchers: good, p_lines: lines.filter((l: any[]) => keep.has(l[0])), p_seen: seen, p_gone: gone });
+  const pArgs = { p_book: book, p_day: iso(day), p_vouchers: good, p_lines: lines.filter((l: any[]) => keep.has(l[0])), p_seen: seen, p_gone: gone };
+  // 30-Oct-2026 (migration 133): a day of an upload being checked: FinCom's copy corrected to Tally (added / updated), the
+  // answer the check's; the period's count of the day kept as well when it is one of the period chosen
+  const { data: ck, error: ce } = await db.rpc("tally_check_entries", { p_book: book, p_day: iso(day), p_vouchers: good, p_lines: pArgs.p_lines, p_seen: seen });
+  if (ce && !missingFn(String(ce.message || ""))) return periodError(ce);
+  if (!ce && (ck as any)?.mine === true) {
+    const c = ck as any;
+    if (c.ok === true && !c.locked) await periodEntriesRpc(pArgs);     // (a day not of the period: refused there in words, nothing done)
+    if (bad.length) console.log("tally-ingest period_entries (upload check): " + bad.length + " entr" + (bad.length === 1 ? "y" : "ies") + " not taken (lines do not total zero)", book, day);
+    if (c.ok !== true) return reply(200, { ok: false, locked: c.locked === true, error: String(c.error || "not stored") });
+    if (c.locked === true) return reply(200, { ok: true, stored: 0, locked: true, upload: String(c.upload || PERIOD_ENTRY_WORDS(day)) });
+    return reply(200, { ok: true, stored: c.stored, added: c.added, updated: c.updated, done: c.done === true, ...(bad.length ? { notTaken: bad.length } : {}) });
+  }
+  const { data, error } = await periodEntriesRpc(pArgs);
   if (error) return periodError(error);
   const d = (data || {}) as any;
   if (bad.length) {
@@ -1885,7 +2029,11 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   // ledger is added at nil and a changed opening left; what was sent is kept (tally_openings_held, stage kept)
   // (review of 2.5.0: the book's sum is asked only when an opening would change, once a call)
   let keepOpenV: boolean | null = null;
-  const keepOpenFor = async () => keepOpenV ??= !openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies;
+  // 30-Oct-2026: changes read as at another day than FinCom's first day of the book never change an opening
+  // (2.5.1: the words name both days, and the kept openings are recorded with the day they were read as at)
+  let bookFrom = "";
+  const wrongDay = async () => { const at = openingsAtOf(body); if (!at || !(await has130())) return false; const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle(); bookFrom = bk?.from_date ? String(bk.from_date).slice(0, 10) : ""; return !!bookFrom && bookFrom !== at; };
+  const keepOpenFor = async () => keepOpenV ??= (await wrongDay()) || (!openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies);
   const keptOpen: [string, number][] = [];
   for (const r of rows) {
     const g = r.guid ? byGuid.get(r.guid) : undefined;
@@ -1974,8 +2122,10 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     else for (const a of aliases) kept.push(("entries using '" + a.tally_name + "' are applied under '" + a.fincom_name + "' (FinCom's name, not renamed)").slice(0, 300));
   }
   if (keptOpen.length) {
-    await openingsHold(book, OPEN_SRC.changes, null, null, keptOpen, "kept", 0);
-    kept.push((keptOpen.length + " opening(s) not taken: an undated read never changes openings that add up to nil (FinCom Bridge 2.5.0 reads them as at the books' beginning)").slice(0, 300));
+    const at = openingsAtOf(body);
+    await openingsHold(book, OPEN_SRC.changes, null, at || null, keptOpen, "kept", 0);
+    kept.push((at ? keptOpen.length + " opening(s) as at " + at + " not taken: FinCom's books of this company begin on " + bookFrom
+      : keptOpen.length + " opening(s) not taken: an undated read never changes openings that add up to nil (FinCom Bridge 2.5.0 reads them as at the books' beginning)").slice(0, 300));
   }
   if (fresh.length || opened.length) {
     const { error } = await db.rpc("tally_year_openings", { p_book: book });
@@ -2694,9 +2844,22 @@ async function selfCheck(dev: any, firm: string, book: string, body: any) {
   return reply(200, data);
 }
 // a few days of the day book (each gzipped), into a book: stored, and read into entries, lines and ready totals
-async function ingestDays(firm: string, book: string, daysIn: unknown) {
+async function ingestDays(firm: string, book: string, daysIn: unknown, check = false) {
   const r = await ingestDaysRaw(firm, book, daysIn);
+  if (check && !r.error) await checkQueue(book, r.done);
   return r.error ? reply(400, { ok: false, error: r.error }) : reply(200, { ok: true, done: r.done, bad: r.bad, ...(r.locked.length ? { locked: r.locked } : {}) });
+}
+// 30-Oct-2026 (the owner: "if anyone uploads any books and there is any difference.. it should find out the difference in
+// tally and correct it"; migration 133): the days of a person's upload, once read into FinCom, are queued to be checked
+// against Tally's own day lists by the Tally computer (idle only, the older-entries path). Never fails the upload; a cloud
+// without 133: nothing queued
+async function checkQueue(book: string, days: string[]) {
+  const ds = (days || []).filter(isDay);
+  if (!ds.length) return;
+  try {
+    const { error } = await db.rpc("tally_check_queue", { p_book: book, p_days: ds.map(iso), p_source: "upload" });
+    if (error && !missingFn(String(error.message || ""))) fail("check_queue", error);
+  } catch (e) { fail("check_queue", e); }
 }
 // migration 44 (review M3): a day of a month the owner locked is refused by tally_ingest_day (nothing stored, nothing
 // marked). It is answered under `locked` [{day, why}], never under `done`, and logged as kept, not applied: the file stays
@@ -2954,6 +3117,7 @@ async function workPiece(m: any) {
   if (Array.isArray(m.days)) {
     const r = await ingestDaysRaw(firm, book, m.days);
     if (r.error) throw new Error(r.error);
+    await checkQueue(book, r.done);     // migration 133: the upload's days checked against Tally
     await jobStep(job, r.done.length + r.bad.length, r.bad);
   } else if (/^\d{6}$/.test(String(m.month || ""))) {
     const r = await reparseMonthRaw(firm, book, m.month);
@@ -3612,7 +3776,7 @@ async function userUpload(req: Request, auth: string) {
       return !!me && me.role === "owner";
     });
     if (q) return q;
-    if (body.kind === "upload_days") return await ingestDays(firm, book, body.days);
+    if (body.kind === "upload_days") return await ingestDays(firm, book, body.days, true);
     // migration-34: a person's list marks missing ledgers only when the app declares it complete with the count it parsed
     // (a Master.xml; the app's trial-balance upload never declares it)
     if (body.kind === "upload_ledgers") return await ingestLedgers(book, body, undefined, { source: "upload_ledgers", by: user.id },
@@ -3848,8 +4012,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, periodNight ? 30 : 3) : null;
         await ledgerProgressFromBeat(firm, dev, b);
+        // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
+        let booksFrom: Record<string, string> | null = null;
+        try { booksFrom = await booksFromFor(firm, b); } catch (e) { console.log("tally-ingest beat: the books' first days not worked out:", String((e as Error)?.message || e).slice(0, 200)); }
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {

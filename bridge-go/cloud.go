@@ -794,6 +794,7 @@ func beatOnce() {
 		}
 		shadowOK.Store(true)
 		applyReadControl(r.json)    // FinCom's stop or resume of reading on this computer
+		applyBooksFrom(r.json)      // 2.5.1: FinCom's first day of its book of each open company, the ledger requests' period (booksfrom.go)
 		applyRelease(r.json)        // the version this computer may take (update.go)
 		applyCloudSettings(r.json)  // round 15: PostOnly and the batch sizes set in FinCom
 		applyAutoUpdateOn(r.json)   // review S4: the owner turns automatic updates on again

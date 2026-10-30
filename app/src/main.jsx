@@ -23,6 +23,8 @@ import { Gst9c } from "./screens/gst/Annual.jsx";
 import { watchFresh } from "./fresh.js";
 import { preloadScreens, lineSlow } from "./screens/lazy.js";
 import "./nav.js";
+// every tab row keeps its tab over a Refresh (…?t= in the address; parts/tabKeep.js)
+import "./parts/tabKeep.js";
 // calls (stage 1, 23-Oct-2026): the way in only; the call screen is its own file, fetched when a call is opened
 import { guestLink, startGuest, joinHash, memberHere, takeJoin } from "./calls/launch.js";
 // t70: FinCom's corrections of a TDS return (the corrected Excel brought back), read by TDS.allRowsNow (src/js/09)

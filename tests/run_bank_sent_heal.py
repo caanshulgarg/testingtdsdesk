@@ -150,8 +150,10 @@ with sync_playwright() as p:
     E("() => { B().postReport = null; window.__T.mode = 'whole'; }")
     E("() => postBankToTally()"); pg.wait_for_timeout(1200)
     R = rows(); rp = rep()
-    ok(all(r["st"] == "ready" for r in R) and len(E("window.__T.imports")) == n_imp2 and len(rp["failed"]) == 41 and not rp["already"] and "already sent from this computer" in rp["failed"][0],
-       "(4) pressed again: held back by the guard, still not marked (Tally did not take that batch whole), nothing sent (%s)" % rp["failed"][:1])
+    # 30-Oct-2026 (run_bank_partial_post.py): the lines keep Tally's own words and wait for Check with Tally, never only
+    # the guard's "already sent from this computer"
+    ok(all(r["st"] == "ready" for r in R) and len(E("window.__T.imports")) == n_imp2 and len(rp["failed"]) == 41 and not rp["already"] and "Tally made 40 of the 41" in rp["failed"][0] and "already sent from this computer" not in rp["failed"][0],
+       "(4) pressed again: not sent, still not marked (Tally did not take that batch whole), with Tally's words (%s)" % rp["failed"][:1])
     bankheal_open = E("(async () => { bankHealOpen.done = {}; return await bankHealOpen(); })()")
     ok(bankheal_open == 0 and all(r["st"] == "ready" for r in rows()), "(4) and opening the page does not mark them either")
 

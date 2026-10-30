@@ -251,8 +251,14 @@ const AlertHub = {
           fix: "Ask that Windows user to install FinCom Bridge again (it makes an id of its own), or release this bridge's identity on the Tally page.",
           details: x.words || "", act: {label: "Mark read", run: () => TCloud.bridgeAlertRead(x)}}));
       }
+      // ---- many ledgers missing from one read of Tally (migration 131, 30-Oct-2026): nothing is marked until the owner
+      // or staff answers (Confirm / Keep: app/src/parts/LedgerDrop.jsx). Asked: "bad", no Clear (never hidden quietly);
+      // any other state unread: information, Mark read
+      const drop = x => x.kind === "summary" && x.data && x.data.what === "ledger_drop";
+      unread.filter(drop).forEach(x => { const ask = x.data.state === "pending"; out.push({key: "ledgers:" + x.id, fp: ask ? "" : AlertClear.fp(["ledgers:" + x.id + ":" + x.data.state]),
+        sev: ask ? "bad" : "info", cid: x.client_id || "", text: x.words, fix: "", at: x.at, selfClear: ask, alert: ask ? null : x, drop: ask ? x : null}); });
       // ---- what cannot clear itself: the daily summary, until read
-      unread.filter(x => x.kind === "summary").forEach(x => out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
+      unread.filter(x => x.kind === "summary" && !drop(x)).forEach(x => out.push({key: "alert:" + x.id, fp: AlertClear.fp(["alert:" + x.id]), sev: "info", cid: x.client_id || "", text: x.words || "The day's summary.", fix: "", details: x.at ? "At " + fmtDateTime(x.at) : "", at: x.at, selfClear: false, alert: x}));
     }
     // ---- the app's own warnings
     const a = S.account, bal = a && a.firm ? num(a.firm.balance) : 0, warnAt = a && a.firm ? num(a.firm.warn_at) : 0;

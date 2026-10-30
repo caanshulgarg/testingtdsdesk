@@ -485,7 +485,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		} else if now != bf {
 			delete(st, "led")
 			save()
-			writeLog("Keeping " + company + ": Tally now says the books begin on " + now + ", not " + bf + "; the ledger list is read again from the first ledger")
+			writeLog("Keeping " + company + ": the ledgers are now read as at " + now + " (FinCom's first day of the book, else Tally's books-from), not " + bf + "; the ledger list is read again from the first ledger")
 			return false, nil
 		}
 		t1 := time.Now()

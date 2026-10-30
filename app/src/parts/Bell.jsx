@@ -7,7 +7,7 @@
 // slim line of the pages (ClearBtn, exported). What is cleared is kept per person (AlertClear, src/js/63-alerts.js: the
 // cloud, migration 68; this browser when not signed in) and never shown again; it changes no data. After a Clear, for a
 // few seconds: "Cleared N notifications · Undo" (UndoSnack).
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "./Button.jsx";
 import { useDismiss } from "./dismiss.js";
@@ -33,6 +33,8 @@ function UndoSnack() {
 }
 
 const SEV = { bad: "Needs action", warn: "Attention", info: "Information" };
+// many ledgers missing from one read of Tally (migration 131): Confirm / Keep, in a file of its own (fetched when shown)
+export const LedgerDrop = lazy(() => import("./LedgerDrop.jsx"));
 
 function Item({ x }) {
   const [open, setOpen] = useState(false);
@@ -41,6 +43,7 @@ function Item({ x }) {
     <div className="al-body">
       <div data-alert-text="">{x.text}</div>
       {x.fix && <div className="al-fix" data-alert-fix="">{x.fix}</div>}
+      {x.drop && <Suspense fallback={null}><LedgerDrop x={x.drop} /></Suspense>}
       <div className="al-acts">
         {x.act && <Button className="btn small" data-alert-act="" onClick={() => { S.alertsOpen = false; x.act.run(); }}>{x.act.label}</Button>}
         {!x.selfClear && x.alert && <button className="linkbtn" data-alert-read="" onClick={() => AlertHub.read(x)}>Mark read</button>}
@@ -99,6 +102,7 @@ export function AlertLine({ cid, skip }) {
     <span className="al-dot" aria-hidden="true" />
     <span className="al-line-text">{x.text + (x.fix ? " " + x.fix : "")}</span>
     {x.act && <Button className="btn small" data-alert-act="" onClick={() => x.act.run()}>{x.act.label}</Button>}
+    {x.drop && <button className="linkbtn" data-alert-line-drop="" onClick={() => { S.alertsOpen = true; render(); }}>Confirm or keep</button>}
     {all.length > 1 && <button className="linkbtn" onClick={() => { S.alertsOpen = true; render(); }}>{"+" + (all.length - 1) + " more"}</button>}
     <ClearBtn x={x} />
   </div>;
