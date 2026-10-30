@@ -1482,7 +1482,16 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   const g130 = await has130();
   const openingsAt = openingsAtOf(body);
   const stRound = round || ("single-" + crypto.randomUUID());
-  if (g130) {
+  // 30-Oct-2026 (book 3d36a836): 2.5.0 read the openings as at the Tally company's own books-from (1-Apr-2024) while
+  // FinCom's copy of the book begins later (1-Apr-2025): openings as at another day are never taken (they would leave
+  // out the year between); the stored stay, said in the notes, until a read as at the copy's own first day
+  let openDateWrong = false;
+  if (g130 && openingsAt) {
+    const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
+    const from = bk?.from_date ? String(bk.from_date).slice(0, 10) : null;
+    if (from && from !== openingsAt) { openDateWrong = true; notes.push("openings as at " + openingsAt + " not taken: FinCom's books of this company begin on " + from + "; the stored openings stay"); }
+  }
+  if (g130 && !openDateWrong) {
     const cands = rows.filter((r: any) => openingsAt || !have.has(r.name) || r.oc).map((r: any) => [r.name, r.open] as [string, number]);
     if (cands.length) {
       const { error } = await db.rpc("tally_openings_stage", { p_book: book, p_round: stRound, p_source: OPEN_SRC.round, p_openings_at: openingsAt, p_rows: cands });
@@ -1542,7 +1551,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
   }
   // migration 130: the round's openings settled on its last batch (a complete round; a call with no round at once):
   // taken when they add up to nil and the round may change them; else held, with one alert, or kept
-  if (g130 && (!round || (body.last === true && complete))) {
+  if (g130 && !openDateWrong && (!round || (body.last === true && complete))) {
     const { data, error } = await db.rpc("tally_openings_settle", { p_book: book, p_round: stRound, p_source: OPEN_SRC.round, p_openings_at: openingsAt });
     if (error) throw new Error(error.message);
     (out as any).openings = data?.settled ?? null;
@@ -1952,7 +1961,9 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   // ledger is added at nil and a changed opening left; what was sent is kept (tally_openings_held, stage kept)
   // (review of 2.5.0: the book's sum is asked only when an opening would change, once a call)
   let keepOpenV: boolean | null = null;
-  const keepOpenFor = async () => keepOpenV ??= !openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies;
+  // 30-Oct-2026: changes read as at another day than FinCom's first day of the book never change an opening
+  const wrongDay = async () => { const at = openingsAtOf(body); if (!at || !(await has130())) return false; const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle(); return !!bk?.from_date && String(bk.from_date).slice(0, 10) !== at; };
+  const keepOpenFor = async () => keepOpenV ??= (await wrongDay()) || (!openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies);
   const keptOpen: [string, number][] = [];
   for (const r of rows) {
     const g = r.guid ? byGuid.get(r.guid) : undefined;
