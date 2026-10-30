@@ -1,0 +1,22 @@
+2026-10-30 15:03:00  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 62e822b1…): asking Tally by MasterID
+2026-10-30 15:03:01  Recorder: Receipt 1 of 02-Oct-2026 (MasterID 3, line 62e822b1…): taken: Tally's GUID 7ea66627-4bb7-4218-bac4-25c28b17d879-00000003, AlterID 3
+2026-10-30 15:03:01  Renumbering: made Receipt 1 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-30 15:03:42  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line dac26a21…): asking Tally by MasterID
+2026-10-30 15:03:43  Recorder: Receipt 2 of 02-Oct-2026 (MasterID 4, line dac26a21…): taken: Tally's GUID 7ea66627-4bb7-4218-bac4-25c28b17d879-00000004, AlterID 4
+2026-10-30 15:03:43  Renumbering: made Receipt 2 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
+2026-10-30 15:03:55  Stopping: asked to (setup or uninstall)
+2026-10-30 15:03:59  FinCom Bridge 2.5.1: started just for runnervmdaln5\runneradmin (no service); it keeps the bridge and its icon running
+2026-10-30 15:03:59  FinCom Bridge 2.5.1, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+2026-10-30 15:03:59  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+2026-10-30 15:03:59  FinCom Bridge 2.5.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmdaln5\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+2026-10-30 15:03:59  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+2026-10-30 15:03:59  Recorder: re-scan of the add-on's files for 2.5.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+2026-10-30 15:03:59  Check:  - 
+2026-10-30 15:04:02  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+2026-10-30 15:04:02  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+2026-10-30 15:04:02  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=4, ALTMSTID=211
+2026-10-30 15:04:02  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=2; now ALTVCHID=4, ALTMSTID=211
+2026-10-30 15:05:20  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line bea7387e…): asking Tally by MasterID
+2026-10-30 15:05:20  Recorder: entry fetch of FinCom Spike Co: answered in 33 ms
+2026-10-30 15:05:20  Recorder: Receipt 3 of 02-Oct-2026 (MasterID 5, line bea7387e…): taken: Tally's GUID 7ea66627-4bb7-4218-bac4-25c28b17d879-00000005, AlterID 5
+2026-10-30 15:05:20  Renumbering: made Receipt 3 of 02-Oct-2026 in FinCom Spike Co: FinCom holds 0 later Receipt entries; each is read again from Tally to see whether Tally renumbered it
