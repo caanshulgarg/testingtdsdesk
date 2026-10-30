@@ -41,6 +41,8 @@ def rpc(name, a):
         return {"ok": True}
     return real(name, a)
 FS.rpc = rpc
+# (a cloud with 98 and without 133: the upload check and the logged entries are not there; run_fetch_check_ingest.py has them)
+FS.NO_FN.update(["tally_period_entries_logged", "tally_check_next", "tally_check_heads", "tally_check_entries", "tally_check_stop", "tally_check_queue"])
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "BIG CO", "client_id": "c1", "book_id": BOOK}, {"firm_id": FIRM, "company": "SECOND CO", "client_id": "c2", "book_id": BOOK2}]
 FS.T["tally_devices"].append({"id": DA, "firm_id": FIRM, "name": "PC-A", "key_hash": hashlib.sha256(KA.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.4.5"})
 FS.T["tally_books"] += [{"book_id": BOOK, "firm_id": FIRM, "client_id": "c1", "company": "BIG CO", "from_date": "2025-04-01", "open_as_on": "2025-03-31"},

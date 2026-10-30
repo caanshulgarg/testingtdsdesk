@@ -19,6 +19,8 @@ import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLin
 import { OC, doConnect, doFind, doRefresh, useRefusedCheck, useHereProbe, useLocalRead, Line, Found } from "../parts/TallyOneClick.jsx";
 import { coKey, openOn } from "../lib/tallyState.js";
 import { beatFresh } from "../lib/tallyConnect.js";
+// 30-Oct-2026 (the owner): what FinCom received from Tally today, per company, and the books being brought from Tally
+import { TodayStatus } from "../parts/TallyFetch.jsx";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -882,6 +884,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
       {/* the owner's port step (26-Oct-2026), here once a computer is connected: only while his Tally is not answering on a
           port of its own (not found, or the same port as another Windows user's) */}
       {((kind === "tally" && ps.state === "set") || kind === "port") && <div className="tsc-port" data-connect-step="port" data-port-step=""><b>Set Tally’s port</b><PortStep ps={ps} installed /></div>}
+      {TCloud.on() && setupOk && <TodayStatus />}
       {s && s.update && !s.stopped && kind !== "version" && <p className="tsc-line note" data-tsc-update="">{"A newer FinCom Bridge is ready for this computer. "}<UpdateBtn m={m} /></p>}
     </>}
     {/* the clicks' answers, in plain words (each once; a line goes when the next click answers) */}

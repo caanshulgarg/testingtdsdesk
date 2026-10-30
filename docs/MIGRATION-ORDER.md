@@ -602,3 +602,18 @@ used just now" and uses nothing up. Add-only, one transaction, `lock_timeout` 10
 (a firm reads its own redemptions and discounts; the rest service role only); `coupon_redeem(text, text)` for signed-in
 people; `coupon_discount_apply` and `console_coupon*` for the service role only. Tested on pg_stand:
 `tests/run_migration120.py` (RED_WITHOUT_120=1 fails).
+
+## 133: books from Tally with a time left, and an upload checked against Tally
+
+**133, fetch check** (30-Oct-2026, branch `next-fetch-eta-check`; **NOT run on staging**: the owner runs it):
+`server/tally-cloud/migration-133-fetch-check.sql` runs after 98 (tally_period_*, tally_devices.period_fetch) and 57
+(tally_ingest_entries with five arguments, tally_ingest_delete). The owner's decision of 30-Oct-2026 (supersedes the
+26-Oct "upload only"): older entries brought from Tally with a progress bar and its timing, and a Day Book upload checked
+day by day against Tally's own day lists and corrected to Tally (added, updated, or soft-deleted with history; never a row
+deleted, nothing sent to Tally). No new Tally request: the days go through the existing older-entries path. Add-only, one
+transaction, `lock_timeout` 10 s, safe twice. Tables `tally_check_runs`, `tally_check_days`, `tally_fetch_log` (RLS on,
+service_role only, explicit grants and the log's sequence); `tally_check_queue / next / heads / entries / stop` and
+`tally_period_entries_logged` for the service role only; `tally_check_status`, `tally_check_resume`,
+`tally_period_cancel`, `tally_today_from_tally`, `tally_fetch_summary` for signed-in people (the firm's own books); helpers
+for nobody. Deploy order: 133, then the tally-ingest of the same branch (without 133 it goes on as before). Tested on
+pg_stand: `tests/run_migration133.py` (RED_WITHOUT_133=1 fails); tally-ingest: `tests/run_fetch_check_ingest.py`.
