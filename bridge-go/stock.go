@@ -266,9 +266,11 @@ func stockAnswer(c stockClick, k string) M {
 		sent := false
 		tc := &TC{copier: true, limitMs: 2000, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
 		raw, err = invokeTally(tc, port, x, 5)
-		// a posting that came while the click took Tally's lock goes first: when the request never reached Tally (sentOut),
-		// the click waits for the posting and goes once more, at most once, within its 20 s; never sent twice
-		if try == 0 && !sent && gaveWay(err) && postingGoing() && time.Now().Before(until) {
+		// a posting or FinCom's own request that came while the click took Tally's lock goes first (errPreempted,
+		// errBackoff): when the request never reached Tally (sentOut), the click waits for postings and goes once more, at
+		// most once, within its 20 s; never sent twice (gate run 41091446805: preempted by the posting, which had already
+		// ended when looked at)
+		if try == 0 && !sent && gaveWay(err) && time.Now().Before(until) {
 			_ = held(time.Now()) // the window watch ended
 			stock.mu.Lock()
 			delete(stock.asks, x)

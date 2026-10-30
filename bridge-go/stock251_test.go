@@ -364,7 +364,7 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 		if first {
 			first = false
 			importsInFlight.Add(1)
-			go func() { time.Sleep(300 * time.Millisecond); importsInFlight.Add(-1) }()
+			go func() { time.Sleep(60 * time.Millisecond); importsInFlight.Add(-1) }() // over before the click looks again
 		}
 	}
 	stock.mu.Unlock()
