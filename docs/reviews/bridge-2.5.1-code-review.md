@@ -21,7 +21,7 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 - `python3 tests/run_migration134.py` (pg_stand, PostgreSQL 16; RED_WITHOUT_134=1 fails), `python3 tests/run_stock_ingest.py`
   (tally-ingest under Deno against fake_supabase.py), `python3 tests/run_fs_stock_tally_ui.py` (Playwright on app/dist-test).
 
-## Round 1 (25e694c0a..974c6cda0): 10 findings, all fixed with tests
+## Round 1 (25e694c0a to 974c6cda0): 10 findings, all fixed with tests
 
 1. (High) A click for a company already being answered was marked taken and then dropped with no answer; the cloud's 30 s
    "on its way" window was shorter than the bridge's 30 s posting wait. Fixed: such a click is answered "busy" at once
@@ -50,7 +50,7 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 10. (Low, cleanup) Test-only state in the production struct, an impossible fallback, duplicated date helpers. Fixed:
     removed; the cloud and the app use their existing iso helpers.
 
-## Round 2 (974c6cda0..13c461ee5): 9 findings, fixed in 06eb6f7a6 with tests (or recorded)
+## Round 2 (974c6cda0 to 13c461ee5): 9 findings, fixed in 06eb6f7a6 with tests (or recorded)
 
 1. (High) With "one answer per click", a shared computer's other Windows user's bridge (company not open) could answer
    "not open" before the bridge that asks Tally. Fixed (with round 3's 1): a bridge whose own Tally does not have the
@@ -67,7 +67,7 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 6. (Low) No computer at all: the panel waited 40 s. Fixed: said at once, nothing recorded. run_stock_ingest.py A.
 7-9. (Cleanup) A stale comment, a regular expression compiled per answer, the answer's fields built twice: fixed.
 
-## Round 3 (13c461ee5..52660a3b5, medium effort): 8 findings
+## Round 3 (13c461ee5 to 52660a3b5, medium effort): 8 findings
 
 1. (Medium) Beat copies of a click on a shared computer: see round 2's 1 (fixed: no answer from a bridge without the
    company open; such a bridge does not take the click). TestStock251OneInFlightPostingsFirst.
@@ -82,7 +82,7 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
    user's bridge keeps its own folder).
 
 
-## Round 4 (52660a3b5..8c49a469c, medium effort): 8 findings, fixed in af92f295b with tests (or answered)
+## Round 4 (52660a3b5 to 8c49a469c, medium effort): 8 findings, fixed in af92f295b with tests (or answered)
 
 1. (Medium) The clicks' file written by two goroutines at once. Fixed: one writer at a time, the newest map each time.
 2. (Medium) The cloud could still wake a computer without the company open, whose bridge no longer answers. Fixed: only a
