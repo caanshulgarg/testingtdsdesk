@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..6e6c30032
+Range: 25e694c0a..f70e512a3
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -122,4 +122,16 @@ line names 2.5.2 with 2.5.1 as history; the release check's self-test and the re
 6e6c30032: the test sheet now carries 2.5.1's checks and the upgrade from 2.5.1; the notes say 2.5.1 is published; the
 allow-list's history lines apart; the table helper renamed (allowRowsBeforeStock).
 
-After round 6: 6e6c30032. The whole range was read last.
+## The gate on the 2.5.2 build (tally-versions g251, run 41091446805) and round 7 (894f05350 to f70e512a3, medium effort)
+
+s1-s5 PASS on all five releases (2.5.2 installed over the published 2.5.1, its settings carried; the stock equal to
+Tally's stock summary, exactly C1; 248 ms worst, no window hold); s6 PASS on 4.1 and 7.1, FAIL on 3.0, 5.1, 6.2: the
+click was preempted by FinCom's posting (errPreempted) and, the posting already over when looked at, answered busy. Fixed
+in cb0303b41 (once more whenever nothing reached Tally). Round 7 on it: 4 findings, fixed in f70e512a3 with tests:
+1. (High) After giving its read lease to another bridge that wants to post, the click would go ahead of that posting.
+   Fixed: then answered busy, never sent. TestStock251LeaseYieldNoRetry.
+2. (Medium) The second try could wait for FinCom's own requests without a bound. Fixed: it waits for them within its 20 s.
+3. (Low) The busy words quoted a back-off. Fixed: "Tally is busy with a posting or another FinCom request".
+4. (Low) The retry's test could pass without retrying. Fixed: it counts the two tries.
+
+After round 7: f70e512a3. The whole range was read last.
