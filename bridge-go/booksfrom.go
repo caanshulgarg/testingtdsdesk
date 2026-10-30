@@ -25,6 +25,10 @@ import (
 
 var errBooksFromUnknown = errors.New("Tally has not said when this company's books begin: its ledgers are not read until it does")
 
+// a ledger request that does not carry exactly its company's books' first year (or none): never sent, whoever asks and
+// whatever ReadDays says
+var errLedgerPeriodRefused = errors.New("the ledger request does not carry this company's books' first year as its period; nothing was sent to Tally")
+
 var (
 	booksFromMu   sync.Mutex
 	booksFromHeld = map[string]string{}    // companyKey -> yyyymmdd, from the company list (TDSDeskCompanies' BOOKSFROM)

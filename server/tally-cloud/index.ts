@@ -2864,17 +2864,20 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
     const sum = new Map<string, number>();
     for (const l of led) sum.set(l[0], Math.round(((sum.get(l[0]) || 0) + Number(l[2])) * 100) / 100);
     const inc = [...sum.entries()] as [string, number][];
+    // review of 2.5.0, round 2: a list that changes no stored opening is not judged; nor the app's masters upload (declared
+    // complete: its rows carry the openings FinCom already holds, src/js/58-ledgers.js, not openings from Tally)
+    const c = declare?.complete ? null : await openingsCandidate(book, inc);
     const total = Math.round(inc.reduce((a, x) => a + x[1], 0) * 100) / 100;
-    if (Math.abs(total) > 1) {
-      const src = from?.source === "upload_ledgers" ? (from?.file ? "the trial balance file " + String(from.file).slice(0, 80) : (declare?.complete ? "a ledger masters file uploaded" : "a trial balance uploaded")) : "the bridge's trial balance";
+    if (c && c.changed > 0 && Math.abs(total) > 1) {
+      const src = from?.source === "upload_ledgers" ? (from?.file ? "the trial balance file " + String(from.file).slice(0, 80) : "a trial balance uploaded") : "the bridge's trial balance";
       const g = await applyGroups(String(firm || bk?.firm_id), book, led.map((l: any) => [l[0], l[1]]), body.groups);
       const id = Number(await openingsHold(book, src, null, iso(body.openAsOn), inc, "held", total));
       const words = "Opening balances from " + src + " do not add up to nil: " + inrText(total) + ". The opening balances FinCom had stay; the ledgers and groups are taken.";
       console.log("tally-ingest ledgers: openings held", book, JSON.stringify({ held: id, difference: total, source: from?.source }));
       heldOut = { held: id, words, g };
-      // a trial balance uploaded as opening balances is refused with the words; a masters list and the bridge's trial
-      // balance go on to their GSTIN and PAN below (their openings held)
-      if (from?.source === "upload_ledgers" && !declare?.complete) return reply(409, { ok: false, held: id, refused: "nil", error: words, ...g });
+      // a trial balance uploaded as opening balances is refused with the words; the bridge's trial balance goes on to its
+      // GSTIN and PAN below (its openings held)
+      if (from?.source === "upload_ledgers") return reply(409, { ok: false, held: id, refused: "nil", error: words, ...g });
     }
   }
   // migration-33: the list is add-only (a ledger missing from it marked deleted, never removed) and kept with who sent it;

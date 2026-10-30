@@ -397,7 +397,7 @@ func datedRefused(tc *TC, x string) error {
 		if ledgerPeriodExact(x) {
 			return nil
 		}
-		return readsOffErr()
+		return errLedgerPeriodRefused // review of 2.5.0: whoever asks and whatever ReadDays says (never readsOffErr: nil with ReadDays on)
 	case sliceID:
 		if sliceExact(x) { // source C's month slice in the kept form, its values checked (recorder_probes.go)
 			return nil

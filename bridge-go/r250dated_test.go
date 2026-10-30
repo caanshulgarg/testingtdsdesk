@@ -216,6 +216,14 @@ func TestR250ReadDaysExemptionOnlyThree(t *testing.T) {
 			}
 		}
 	}
+	// review of 2.5.0: with ReadDays ON too, a ledger request without exactly the books' first year is refused
+	setCfg("ReadDays", true)
+	for _, y := range []string{fcCollection(ledListID, zz, "", "Ledger", ledFetch, masterRange(0, 2000)), ledgerChunkRequestAt(zz, "20260401", 0, 2000)} {
+		if err := datedRefused(fin, y); err != errLedgerPeriodRefused {
+			t.Fatalf("with ReadDays on, a ledger request with another period or none: %v", err)
+		}
+	}
+	setCfg("ReadDays", false)
 	// every other request carrying the same period keeps the rule it had: refused with ReadDays off
 	keep := map[string]bool{vchObjectID: true, sliceID: true, vchByNumberID: true, dayHeadsID: true, vchBatchID: true, "TDSDeskKeepList": true, "Import": true}
 	for id, x := range allowListSamples() {
@@ -373,8 +381,48 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 	if len(c.ledList) == n0 || len(arr(c.ledList[n0]["ledgers"])) != 3 || exists(ledResendFile(dir)) {
 		t.Fatalf("the round after a held one: %v", c.ledList[n0:])
 	}
+	// held again (Tally's own openings do not add up): the whole list is not sent a third time
+	if exists(ledResendFile(dir)) {
+		t.Fatal("the resend round left its mark")
+	}
+	c.mu.Lock()
+	c.ledListOut = M{"openings": "held"}
+	c.mu.Unlock()
+	st = readKeepState(dir)
+	delete(st, "ledRun")
+	saveKeepState(dir, st)
+	f.addLed("Another", "Sundry Debtors", "5.00")
+	if err := newRun("ledgers", "r250-r2b").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = pushLedgerList(zz, dir)
+	c.mu.Lock()
+	c.ledListOut = nil
+	c.mu.Unlock()
+	if !exists(ledResendFile(dir)) {
+		t.Fatal("a held round after a plain one is not marked to go whole again")
+	}
+	st = readKeepState(dir)
+	delete(st, "ledRun")
+	saveKeepState(dir, st)
+	if err := newRun("ledgers", "r250-r2c").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.ledListOut = M{"openings": "held"}
+	c.mu.Unlock()
+	_ = pushLedgerList(zz, dir)
+	c.mu.Lock()
+	c.ledListOut = nil
+	c.mu.Unlock()
+	if exists(ledResendFile(dir)) {
+		t.Fatal("a resend round held again marks yet another resend (it would never stop)")
+	}
 	// and the one after that sends only what changed (nothing)
 	n1 := len(c.ledList)
+	st = readKeepState(dir)
+	delete(st, "ledRun")
+	saveKeepState(dir, st)
 	if err := newRun("ledgers", "r250-r3").step(zz, f.port, ""); err != nil {
 		t.Fatal(err)
 	}

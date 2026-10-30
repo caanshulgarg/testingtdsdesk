@@ -162,7 +162,7 @@ func ownPortErr(what, company, guid string) (int, error) {
 
 // --- 1. after the light check: the ledgers changed since the last number (the number of ledgers sent)
 func ledChangesAfterLightCheck(company string, port int) {
-	if n, err := ledChangesCheckOn(company, port); err != nil && !gaveWay(err) {
+	if n, err := ledChangesCheckOn(company, port); err != nil && !gaveWay(err) && !errors.Is(err, errBooksFromUnknown) { // 2.5.0: held, said once (booksfrom.go)
 		writeLog("Ledger changes for " + company + ": " + cutRunes(err.Error(), 200))
 	} else if n > 0 {
 		writeLog(fmt.Sprintf("Ledger changes for %s: %d ledger(s) created or altered in Tally sent to FinCom", company, n))
