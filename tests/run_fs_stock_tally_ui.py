@@ -107,7 +107,7 @@ with sync_playwright() as p:
     words = "Tally took too long; type the stock or try again later"
     pg.evaluate("""(a) => { window.__plan.post = {ok: true, asked: true, at: 'x', book: a.b, read: {status: 'asked'}}; window.__plan.rows = [{status: 'slow', words: a.w, opening: null, closing: null, read_at: null}]; }""", {"b": BOOK, "w": words})
     pg.locator(bar + " button[data-fin-stockask]").click()
-    pg.wait_for_selector(bar + " [data-fin-stockmsg]", timeout=15000)
+    pg.wait_for_function("(w) => ((document.querySelector('#app [data-fin-stockmsg]') || {}).textContent || '').trim() === w", arg=words, timeout=15000)
     ok(pg.inner_text(bar + " [data-fin-stockmsg]").strip() == words, "the owner's words: %s" % pg.inner_text(bar + " [data-fin-stockmsg]"))
     box = pg.locator('#app [data-fin-stockpanel] input[aria-label="Stock as on 31-Dec-2025"]')
     ok(box.count() == 1, "the closing as on 31-Dec-2025 can be typed (no figure from Tally)")
