@@ -21,7 +21,7 @@ work started, so the next number is 2.5.1; the branch keeps its planned name.)
 1. One request added, FinComStockInHand (bridge-go/stock.go), built exactly as above; on the allow-list "allowed for 2.5.1
    by the owner's decision of 2026-10-30 (person's click only)"; pinned to its builder (one byte more is refused).
 2. Sent ONLY for a person's click of "Bring stock from Tally" / "Ask Tally again" on the Financial statements' stock panel:
-   FinCom's cloud wakes ONE computer, the company's own ("stock" {company, from, to, at, again} on its channel; its
+   FinCom's cloud wakes ONE computer, one whose bridge has the company open, the company's own first ("stock" {company, from, to, at, again} on its channel; its
    heartbeat's answer carries the same click for 10 minutes, until answered); each click taken once by its time; a click
    while another of the same company is being answered gets "busy" at once. Nothing else in the bridge sends it: no background
    read, no schedule, no retry loop.
@@ -53,7 +53,8 @@ period, whatever the Gateway's period.
 - The first click after Tally starts on a large company can take Tally over 2 s (cold); the panel then says so and the
   next click ("Ask Tally again") is answered from Tally's own cache in milliseconds.
 - A bridge whose own Tally does not have the company open does not answer a click (on a shared computer the bridge
-  that has it open does); with none open the panel says, after 40 s, that the computer did not answer.
+  that has it open does); FinCom wakes only a computer whose bridge says the company is open, and with none says so at
+  once (a kept answer is still given back).
 - A bridge stopped between taking a click and answering it does not take that click again: the person clicks again.
 - The click goes through FinCom's cloud only (as "Read the ledgers again" from another computer); the browser's local
   bridge is not asked directly.
