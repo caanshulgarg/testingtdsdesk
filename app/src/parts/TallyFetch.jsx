@@ -20,20 +20,20 @@
 import { useEffect, useRef, useState } from "react";
 import "./tallyCompanies.css";
 
-const nf = (n) => Number(n || 0).toLocaleString("en-IN");
+export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const day8 = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? Number(s.slice(6, 8)) + "-" + MON[Number(s.slice(4, 6)) - 1] : ""; };
-const dayLong = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? s.slice(6, 8) + "-" + MON[Number(s.slice(4, 6)) - 1] + "-" + s.slice(0, 4) : ""; };
+export const day8 = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? Number(s.slice(6, 8)) + "-" + MON[Number(s.slice(4, 6)) - 1] : ""; };
+export const dayLong = (d) => { const s = String(d || "").replace(/-/g, ""); return s.length === 8 ? s.slice(6, 8) + "-" + MON[Number(s.slice(4, 6)) - 1] + "-" + s.slice(0, 4) : ""; };
 // a time of day as every page says it: India's time, "10:42 IST", whatever this computer's clock
 export const hm = (at) => { const t = Date.parse(at || ""); return t ? new Date(t + 5.5 * 3600e3).toISOString().slice(11, 16) + " IST" : ""; };
-function fyNow() { const t = new Date(Date.now() + 5.5 * 3600e3); return t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); }
+export function fyNow() { const t = new Date(Date.now() + 5.5 * 3600e3); return t.getUTCFullYear() - (t.getUTCMonth() < 3 ? 1 : 0); }
 const fyOfDate = (d) => { const s = String(d || "").replace(/-/g, ""); if (s.length < 6) return 0; const y = Number(s.slice(0, 4)), m = Number(s.slice(4, 6)); return m < 4 ? y - 1 : y; };
 export const fyLabel = (y) => "FY " + y + "-" + String(y + 1).slice(2);
-const plural = (n, one, many) => nf(n) + " " + (Number(n) === 1 ? one : many);
-const rpc = (fn, args) => (typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(fn, args) : Promise.reject(new Error("no cloud")));
-const missing = (e) => /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((e && e.message) || e));
+export const plural = (n, one, many) => nf(n) + " " + (Number(n) === 1 ? one : many);
+export const rpc = (fn, args) => (typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(fn, args) : Promise.reject(new Error("no cloud")));
+export const missing = (e) => /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((e && e.message) || e));
 // owner or staff change it; a member who may only look sees it (as the Tally page's rows)
-const may = () => (typeof S === "object" && S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
+export const may = () => (typeof S === "object" && S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const owner = () => !!(typeof S === "object" && S.account && S.account.me && S.account.me.role === "owner");
 const redraw = () => { if (typeof render === "function") render(); };
 
@@ -58,7 +58,39 @@ export function bookSum(cid) {
   return (bk && books.find((x) => x.book === bk.book)) || books.filter((x) => x.client === cid).sort((a, b) => String(b.from || "").localeCompare(String(a.from || "")))[0] || null;
 }
 // (read again at once from outside, e.g. after the person's own change elsewhere on the page)
-if (typeof window === "object") window.tfxRefresh = () => summary(true);
+if (typeof window === "object") window.tfxRefresh = () => { askStatus(true); return summary(true); };
+// 30-Oct-2026 (migration 135): the firm's presses of "Check for changes in Tally" and each book's other lines (the missing
+// days being brought, the year chosen in days, the Tally computer's office hours): one call, read again every 30 s (every
+// 10 s while something goes), at once with the summary (tfxRefresh); a cloud without 135: nothing of them
+const ASK = { at: 0, busy: false, asks: null, books: null, off: false };
+export function askStatus(force = false) {
+  if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || ASK.off) return null;
+  const going = (ASK.asks || []).some((k) => k.state !== "done") || (ASK.books || []).some((x) => x.fill && x.fill.waiting > 0);
+  if (!ASK.busy && (force || Date.now() - ASK.at > (going ? 10000 : 30000))) {
+    ASK.busy = true;
+    rpc("tally_check_ask_status", { p_client: null }).then((r) => { if (r && r.ok && Array.isArray(r.asks)) { ASK.asks = r.asks; ASK.books = Array.isArray(r.books) ? r.books : []; } },
+      (e) => { if (missing(e)) ASK.off = true; }).finally(() => { ASK.at = Date.now(); ASK.busy = false; redraw(); });
+  }
+  return ASK.asks;
+}
+export const askOff = () => ASK.off;
+// a book's other lines (fill, lean, hours) by its id, or the client's
+export function bookFetch(cid, book) { askStatus(); const l = ASK.books || []; return l.find((x) => x.book === book) || l.find((x) => x.client === cid) || null; }
+// the honest pace (the owner, 30-Oct-2026, 16:30): office hours, a few days at a time while Tally is free; outside them up
+// to 30 days at a time ("" when the hours are not known)
+const hh = (h) => String(h).padStart(2, "0") + ":00";
+export function nightNow(h, now = Date.now()) {
+  if (!h) return false;
+  const t = new Date(now + 5.5 * 3600e3), hr = t.getUTCHours(), from = Number(h.from), to = Number(h.to);
+  if (h.sunday !== false && t.getUTCDay() === 0) return true;
+  if (from === to) return false;
+  return from < to ? hr >= from && hr < to : hr >= from || hr < to;
+}
+export function paceWords(h) {
+  if (!h || h.from == null || h.to == null) return "";
+  return nightNow(h) ? "Night pace (" + hh(h.from) + "–" + hh(h.to) + "): up to 30 days at a time."
+    : "Office hours pace: a few days at a time, only while Tally is free; faster from " + hh(h.from) + " (up to 30 days at a time).";
+}
 // keep the summary fresh while something is going on (a period being read, an upload being checked)
 function useLive(on) {
   const [, tick] = useState(0);
@@ -74,7 +106,7 @@ export function etaWords(min) {
   return "about " + h + " h" + (mm ? " " + mm + " min" : "");
 }
 const fyOf8 = (d8) => Number(String(d8 || "").slice(0, 4)) || 0;
-const partWords = (p) => fyLabel(fyOf8(p.fy)) + (p.part === "h1" ? " Apr–Sep" : p.part === "h2" ? " Oct–Mar" : "");
+export const partWords = (p) => fyLabel(fyOf8(p.fy)) + (p.part === "h1" ? " Apr–Sep" : p.part === "h2" ? " Oct–Mar" : "");
 export function pctOf(p) {
   if (!p) return 0;
   if (p.counting) return Number(p.yearDays) > 0 ? Math.min(99, Math.round((Number(p.countedDays) * 100) / Number(p.yearDays))) : 0;
@@ -111,7 +143,7 @@ function Bar({ p, label }) {
   return <div className="tco-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pc} data-tfx-pct={pc}>
     <i className="det" style={{ width: Math.max(2, pc) + "%" }} /></div>;
 }
-function TurnOn({ b, onDone }) {
+export function TurnOn({ b, onDone }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const off = ((b && b.devices) || []).filter((d) => !d.fetchOn);
   if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return null;
@@ -137,13 +169,19 @@ export default function OlderEntries({ cid }) {
   const act = (fn, args, what) => { const bk = book; setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); },
       () => { if (cur.current === bk) setErr("FinCom’s cloud did not answer; try again in a minute."); }).finally(() => setBusy("")); };
-  const start = () => act("tally_period_choose", { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, "start");
+  // 30-Oct-2026, 16:30 (the owner): Start walks only the days FinCom lacks (tally_period_choose_lean, migration 135: the days
+  // FinCom already holds set aside); a cloud without 135: 98's tally_period_choose as before
+  const start = () => { const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book; setBusy("start"); setErr("");
+    rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
+      .then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); askStatus(true); },
+        () => { if (cur.current === bk) setErr("FinCom’s cloud did not answer; try again in a minute."); }).finally(() => setBusy("")); };
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");
   const stop = () => act("tally_period_cancel", { p_book: book }, "stop");
   // the bridge stopped it (Tally busy): Resume is a fresh choice of the same period (the bridge reads the company again)
   const resumeStopped = () => act("tally_period_choose", { p_book: book, p_fy_start: fyOf8(p.fy) + "-04-01", p_part: p.part || "year" }, "resume");
   const going = !!(p && same && p.state === "going" && !p.done), paused = !!(p && same && p.state === "paused"), stoppedT = !!(p && same && p.state === "stopped" && !(p.stopped && p.stopped.why === "person"));
   const why = p ? whyWords(p, b) : "";
+  const bf = bookFetch(cid, book), lean = p && bf && bf.lean && fyOf8(bf.lean.fy) === fyOf8(p.fy) ? bf.lean : null, pace = paceWords(bf && bf.hours);
   return <section className="dash-card tfx-older" data-older-entries="books" style={{ marginBottom: 12 }}>
     <h3>Bring books from Tally</h3>
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -158,6 +196,9 @@ export default function OlderEntries({ cid }) {
     {p && <div className="tco-sync" data-older-progress={p.done ? "done" : p.counting ? "counting" : "fetching"} data-older-state={p.state} role="status" style={{ marginTop: 8 }}>
       {!p.done && <Bar p={p} label={"Bringing " + partWords(p) + " from Tally"} />}
       <span data-older-words="" className={p.done ? "ok" : ""}>{partWords(p) + ": " + pullWords(p)}</span></div>}
+    {lean && <p className="note" data-older-lean="" style={{ margin: "4px 0 0" }}>{nf(lean.days) + " days: " + nf(lean.already) + " already in FinCom, " + nf(lean.toBring) + " to bring" +
+      (Number(lean.upload) ? ", " + nf(lean.upload) + " to upload by hand" : "") + "."}</p>}
+    {p && p.state === "going" && !p.done && pace && <p className="note" data-older-pace={nightNow(bf && bf.hours) ? "night" : "day"} style={{ margin: "4px 0 0" }}>{pace}</p>}
     {why && <p className={"note" + (p.state === "stopped" ? " bad" : "")} data-older-why={p.state} style={{ margin: "6px 0 0" }}>{why}
       {p.state === "going" && <TurnOn b={b} />}</p>}
     {err && <p className="note bad" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}

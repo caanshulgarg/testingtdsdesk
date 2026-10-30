@@ -1607,6 +1607,8 @@ async function periodGate(device: string): Promise<boolean> {
 }
 // migration 133: a cloud without it says nothing of the upload check (asked again after 10 minutes)
 let checkMissing = 0;
+// migration 135: a cloud without it hands the check's days out by 133's tally_check_next (asked again after 10 minutes)
+let openMissing = 0;
 // a split of a day being checked: Tally's six standard voucher types (the check's days carry no list of the book's own)
 const CHECK_TYPES = ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra"];
 const chosenOf = (d: any) => typeof d?.chosenAt === "string" && !isNaN(Date.parse(d.chosenAt)) ? { chosenAt: d.chosenAt.slice(0, 60) } : {};
@@ -1663,7 +1665,17 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3)
       // to check against Tally, in the room left of the answer, through the same older-entries path (no new Tally request)
       if (out.length < max && Date.now() - checkMissing >= 600000) {
         // (asked for the room left plus this company's days already listed, so a day of both never leaves the room empty)
-        const { data: cd, error: ce } = await db.rpc("tally_check_next", { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length) });
+        // 30-Oct-2026 (migration 135, the owner's "Check for changes in Tally"): tally_check_next_open, 133's own rule except
+        // that a "Bring books from Tally" stopped before the person's press no longer holds the check; a cloud without 135:
+        // 133's tally_check_next as before (asked again after 10 minutes)
+        const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length) };
+        let got: any = null;
+        if (Date.now() - openMissing >= 600000) {
+          got = await db.rpc("tally_check_next_open", cArgs);
+          if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
+        }
+        if (!got) got = await db.rpc("tally_check_next", cArgs);
+        const { data: cd, error: ce } = got;
         if (ce) {
           if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
           else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }

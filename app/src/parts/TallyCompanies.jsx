@@ -38,6 +38,8 @@ import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
+// 30-Oct-2026 (the owner): the client's row has the one button "Check for changes in Tally", its progress and its result
+import CheckChanges from "./TallyCheck.jsx";
 // next-tally-linknow: the companies being sent to FinCom and linked now (coKey: true), for the rows' words
 export const SENDING = {};
 
@@ -806,7 +808,7 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
         </div></details></span>}
     </div>
     <div className="tco-under"><SyncLine cid={co.id} bar /></div>
-    {!more && <div className="tco-under" data-tfx-row={co.id}><OlderLine cid={co.id} onOpen={() => openFromTally(co.id)} /><TodayLine cid={co.id} /></div>}
+    {!more && <div className="tco-under" data-tfx-row={co.id}><OlderLine cid={co.id} onOpen={() => openFromTally(co.id)} /><TodayLine cid={co.id} /><CheckChanges cid={co.id} where="row" /></div>}
     {open && <div className="tco-under"><ChangePick co={co} cur={r.company} onClose={() => onOpen(false)} /></div>}
   </li>;
 }

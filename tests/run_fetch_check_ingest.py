@@ -41,7 +41,7 @@ def rpc(name, a):
         FS.ARGS.setdefault(name, []).append(a)
         if name in FS.NO_FN: raise LookupError("PGRST202")
         if name in ("tally_period_next", "tally_period_next_paced"): return NEXT.get(a["p_book"], [])[: a["p_max"]]
-        if name == "tally_check_next": return CHECK.get(a["p_book"], [])[: a["p_max"]]
+        if name in ("tally_check_next", "tally_check_next_open"): return CHECK.get(a["p_book"], [])[: a["p_max"]]
         if name == "tally_period_gate": return True
         if name == "tally_check_heads":
             if a["p_day"].replace("-", "") not in CHECKDAYS: return {"ok": True, "mine": False}
@@ -102,7 +102,7 @@ try:
     dev.update(period_night_from=(h0 + 2) % 24, period_night_to=(h0 + 4) % 24, period_night_sunday=False)
     print("== 1. the beat")
     c, r = call(beat)
-    ok(c == 200 and r.get("periodDays") == [] and not FS.ARGS.get("tally_check_next"), "1. the switch off: no days, the check not asked (%s)" % r.get("periodDays"))
+    ok(c == 200 and r.get("periodDays") == [] and not FS.ARGS.get("tally_check_next") and not FS.ARGS.get("tally_check_next_open"), "1. the switch off: no days, the check not asked (%s)" % r.get("periodDays"))
     dev["period_fetch"] = True
     c, r = call(beat)
     pd = r.get("periodDays") or []
@@ -110,14 +110,19 @@ try:
     ok(pd and pd[0].get("day") == "20250830" and pd[0].get("chosenAt") == CA, "1. the period's day first, with its choice time (%s)" % (pd[:1],))
     ok([x.get("day") for x in pd] == ["20250830", "20250712", "20250711"] and all(x.get("fetch") is True and x.get("chosenAt") == CA for x in pd[1:]), "1. then the upload's days to check, a day never twice (%s)" % [x.get("day") for x in pd])
     ok(pd[1:] and all(x.get("types") == TYPES6 and x.get("company") == "MADE UP CO" and x.get("company_guid") == CG for x in pd[1:]), "1. the check's days: the six standard types, the company and its GUID (%s)" % (pd[1:2],))
-    ca = next((x for x in FS.ARGS.get("tally_check_next") or [] if x.get("p_book") == BOOK), {})
+    ca = next((x for x in FS.ARGS.get("tally_check_next_open") or [] if x.get("p_book") == BOOK), {})
     ok(ca.get("p_book") == BOOK and ca.get("p_max") == 3, "1. the check asked for the room left plus the company's days already listed (%s)" % ca)
+    ok(not FS.ARGS.get("tally_check_next"), "1. (migration 135) the check's days by tally_check_next_open, not 133's tally_check_next")
     c, r = call(dict(beat, paused=True))
     ok(c == 200 and r.get("periodDays") == [], "1. paused: none")
+    FS.NO_FN.add("tally_check_next_open")
+    c, r = call(beat)
+    ok(c == 200 and [x.get("day") for x in r.get("periodDays") or []] == ["20250830", "20250712", "20250711"] and (FS.ARGS.get("tally_check_next") or [{}])[-1].get("p_book") == BOOK,
+       "1. a cloud without 135: the check's days by 133's tally_check_next as before (%s)" % [x.get("day") for x in r.get("periodDays") or []])
     FS.NO_FN.add("tally_check_next")
     c, r = call(beat)
     ok(c == 200 and [x.get("day") for x in r.get("periodDays") or []] == ["20250830"] and r.get("ok") is True, "1. a cloud without 133: the period's days as before (%s)" % r.get("periodDays"))
-    FS.NO_FN.discard("tally_check_next")
+    FS.NO_FN.discard("tally_check_next"); FS.NO_FN.discard("tally_check_next_open")
 
     print("== 2. period_heads")
     heads = [[CG + "-00000001", 1, 5001, "Sales", "PRIVATE"], [CG + "-00000007", 7, 5007, "Sales"], [CG + "-00000009", 9, 5009, "Receipt"]]
