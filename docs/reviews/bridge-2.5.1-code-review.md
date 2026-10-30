@@ -1,9 +1,9 @@
 # Code review: FinCom Bridge 2.5.1 (the ledger requests dated from FinCom's first day of the book)
 
-Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers: high effort for
+Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers; the range ends at the release check's self-test commit 4d7cc006d, a test script only; high effort for
 rounds 1 and 2, medium for round 3). They had only the repository and the range; they did not write the change.
 
-Range: 204d79d4f..c20efc3da
+Range: 204d79d4f..4d7cc006d
 
 Scope: bridge-go/booksfrom.go (FinCom's day: applyBooksFrom, finComDay, booksFromPair, booksFromAllowed,
 ledgerPeriodExact), cloud.go (applyBooksFrom in the beat), ledgers.go (the round-restart words), the tests

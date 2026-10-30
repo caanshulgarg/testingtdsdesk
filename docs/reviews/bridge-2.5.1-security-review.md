@@ -6,7 +6,7 @@ less; one request in flight; postings first; only the exact approved shapes reac
 except where the owner decided; reading is prospective only (ReadDays) except the owner's narrow exceptions; no computer
 names in words a firm sees; no AI.
 
-Range: 204d79d4f..c20efc3da
+Range: 204d79d4f..4d7cc006d
 
 ## Threats looked at
 
