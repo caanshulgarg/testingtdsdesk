@@ -14,7 +14,9 @@ sys.path.insert(0, HERE)
 import fake_tally
 from playwright.sync_api import sync_playwright
 fake_tally.start()
-H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "site-test"))); H.log_message = lambda *a: None
+# the React test build (app/dist-test), as CI runs it (tests/ci/tests.txt): the bank page's states, its Upload and the
+# checks' banners are React (#app is React since 53a7ccf43); the single-page site-test/ never draws them
+H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))); H.log_message = lambda *a: None
 srv = http.server.ThreadingHTTPServer(("localhost", 8133), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 os.environ["TDSBRIDGE_FAKE"] = _os.path.join(BRUN, "fake.json")
 json.dump({"TallyTimeoutSec": 20}, open(_os.path.join(BRUN, "tds-bridge.config.json"), "w"))
