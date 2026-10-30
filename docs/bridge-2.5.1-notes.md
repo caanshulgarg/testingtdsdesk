@@ -8,7 +8,7 @@ no request shape changed, the allow-list table and its hash unchanged.
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.5.1.exe |
-| Fingerprint | filled in at the build |
+| Fingerprint | `457fb1b5b527eb0181d5ab1d2db59748970c37d8c84e5826d69708ef06807e44` (FinComBridge-Setup-2.5.1.exe, built 30-Oct-2026 20:09 IST at the commit after 7fd0b7048, bridge sources 4d7cc006d, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.1.exe SHA-256 b74ed3a2618c35c54940fdbec8ba4e344f213ac6ab10ade34d94a29bc42c299b |
 | Replaces | 2.5.0 (kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 
