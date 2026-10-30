@@ -3384,8 +3384,8 @@ async function wakeFor(firm: string, body: any, userId = "") {
 // FinCom Bridge 2.5.1 (migration 134; the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person
 // clicks "Bring stock from Tally" (again: "Ask Tally again") on the Financial statements' stock panel. The click is kept per
 // book and period (tally_stock_ask: at most one request per period; a kept answer is given back without asking Tally; a click
-// on its way, 60 s, is not doubled), then ONE computer is woken: one that has the company open, the company's own
-// (tally_companies.device_id) first among them, else the company's own, else the caller's own key: "stock" {company, from,
+// on its way, 60 s, is not doubled), then ONE computer is woken: one whose bridge says the company is open, the company's
+// own (tally_companies.device_id) first among them: "stock" {company, from,
 // to, at, again} on its channel, info.stock for its beat's answer (10 minutes; the bridge keeps the clicks it took on
 // disk, so it never takes one twice). Its bridge asks Tally once (2 s at most) and answers {kind:"stock"} (stockAnswer).
 // No computer at all: said at once, nothing recorded
@@ -3412,12 +3412,13 @@ async function stockWake(firm: string, body: any, userId = "") {
   const { data: all } = await db.from("tally_devices").select("*").eq("firm_id", firm);
   const live = ((all || []) as any[]).filter((x: any) => !x.revoked), own = links.find((l: any) => String(l.company) === company)?.device_id || null;
   const isOpen = (d: any) => openOn(d).has(coName(company));
-  const one = live.find((d: any) => d.id === own && isOpen(d)) || live.find(isOpen) || live.find((d: any) => d.id === own) || live.find((d: any) => !!userId && d.created_by === userId) || null;
+  // only a computer whose bridge says the company is open (a bridge without it open does not answer a click)
+  const one = live.find((d: any) => d.id === own && isOpen(d)) || live.find(isOpen) || null;
   if (!one) {
     // no computer to ask: a kept answer is still given back (nothing is asked of Tally), else said at once
     const { data: kept } = await db.from("tally_stock_reads").select("*").eq("book_id", book).eq("period_from", iso(from)).eq("period_to", iso(to)).maybeSingle();
     if (kept && (kept as any).status === "ok" && !again) return reply(200, { ok: true, asked: false, cached: true, book, read: stockRead(kept) });
-    return reply(200, { ok: true, asked: false, noComputer: true, error: "No computer of the firm has this Tally company: open it in Tally on the computer with FinCom Bridge, then click again." });
+    return reply(200, { ok: true, asked: false, noComputer: true, error: "No computer has this company open in Tally just now: open it in Tally on the computer with FinCom Bridge, then click again." });
   }
   const { data: a, error } = await db.rpc("tally_stock_ask", { p_firm: firm, p_book: book, p_from: iso(from), p_to: iso(to), p_again: again, p_user: userId || null });
   if (error) {

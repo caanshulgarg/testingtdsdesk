@@ -104,9 +104,10 @@ begin
   if not found or r.click_at = '' or r.click_at <> coalesce(p_at, '') then
     return jsonb_build_object('ok', false, 'unknown', true, 'error', 'no such click from FinCom');
   end if;
-  -- one answer per click; only the answer of a bridge that asked Tally (ok, slow, none, failed) may follow a "not asked"
-  -- answer to the same click (on a shared computer another Windows user's bridge may answer first)
-  if r.status <> 'asked' and not (p_status in ('ok', 'slow', 'none', 'failed') and r.status in ('notopen', 'busy')) then
+  -- one answer per click; only the answer of a bridge that asked Tally (ok, slow, none, failed) may follow a "not open"
+  -- answer to the same click, and only Tally's figures a "busy" one (on a shared computer another Windows user's bridge may
+  -- answer first)
+  if r.status <> 'asked' and not (p_status in ('ok', 'slow', 'none', 'failed') and r.status = 'notopen') and not (p_status = 'ok' and r.status = 'busy') then
     return jsonb_build_object('ok', false, 'unknown', true, 'answered', true, 'error', 'this click was answered already');
   end if;
   if p_status = 'ok' then

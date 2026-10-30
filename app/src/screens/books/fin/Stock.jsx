@@ -28,7 +28,8 @@ function keep(cid, from, to, read) {
   const f = S.books.fs = S.books.fs || {}, k = from + "-" + to, was = (f.stockTally || {})[k] || {};
   const figs = read.opening != null && read.closing != null && read.readAt ? { opening: +read.opening, closing: +read.closing, readAt: read.readAt } : { opening: was.opening, closing: was.closing, readAt: was.readAt };
   // gotAt: when this page took Tally's figures (this computer's clock, as a typed figure's): the later of the two is used
-  const gotAt = read.status === "ok" && read.opening != null && read.closing != null && read.readAt ? new Date().toISOString() : was.gotAt;
+  // (the same answer given back again keeps its first time: a figure typed after it still wins)
+  const gotAt = read.status === "ok" && read.opening != null && read.closing != null && read.readAt && read.readAt !== was.readAt ? new Date().toISOString() : was.gotAt;
   f.stockTally = Object.assign({}, f.stockTally, { [k]: Object.assign({}, figs, { gotAt, status: read.status || "", words: read.words || "" }) });
   if (typeof saveBooks === "function") saveBooks();
 }

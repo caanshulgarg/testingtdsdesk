@@ -32,11 +32,11 @@ FS.T["clients"] += [{"id": "c1", "firm_id": FIRM, "name": "STOCK CO", "tally_nam
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": "STOCK CO", "client_id": "c1", "book_id": BOOK, "device_id": DEV, "last_seen": "2026-10-30T00:00:00Z"}]
 FS.T["tally_books"] += [{"book_id": BOOK, "firm_id": FIRM, "client_id": "c1", "company": "STOCK CO", "from_date": "2026-04-01", "open_as_on": "2026-03-31"}]
 FS.T["tally_devices"].append({"id": DEV, "firm_id": FIRM, "name": "NWS144", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False,
-                              "info": {"beat": {"open": ["STOCK CO"], "companies": [{"name": "STOCK CO", "open": True, "guid": CG}]}}, "version": "2.5.1", "wake_token": "tok251"})
+                              "info": {"beat": {"open": ["STOCK CO"], "companies": [{"name": "STOCK CO", "open": True, "guid": CG}]}, "bridges": {"go-aaaaaa251251": {"open": ["STOCK CO"]}}}, "version": "2.5.1", "wake_token": "tok251"})
 # another of the firm's computers: the clicking person's own key, with the company open too (one click wakes ONE computer)
 DEV2, KEY2 = "d2000000-0000-0000-0000-000000000251", "fcd_" + "9" * 48
 FS.T["tally_devices"].append({"id": DEV2, "firm_id": FIRM, "name": "OFFICE", "key_hash": hashlib.sha256(KEY2.encode()).hexdigest(), "revoked": False, "created_by": "u-staff",
-                              "info": {"beat": {"open": ["STOCK CO"]}}, "version": "2.5.1", "wake_token": "tok251b"})
+                              "info": {"beat": {"open": ["STOCK CO"]}, "bridges": {"go-other": {"open": ["STOCK CO"]}}}, "version": "2.5.1", "wake_token": "tok251b"})
 FS.T["tally_sync_cursor"] = [{"book_id": BOOK, "company_guid": CG}]
 # the migration's functions, as the SQL does them (run_migration134.py)
 ROWS, MISSING = {}, {"on": False}
@@ -150,8 +150,15 @@ try:
     n = len(FS.ARGS.get("tally_stock_ask") or [])
     c, r = click(**{"from": "20261101", "to": "20261130"})
     ok(r.get("noComputer") is True and len(FS.ARGS.get("tally_stock_ask") or []) == n, "A. no computer of the firm: said at once, nothing asked (%s)" % r)
-    c, r = click()
-    ok(r.get("cached") is True and (r.get("read") or {}).get("status") in ("ok", "slow"), "A. no computer: a kept answer still given back (%s)" % r) if (r.get("read") or {}).get("status") == "ok" else ok(r.get("noComputer") is True, "A. no computer and nothing kept: said (%s)" % r)
+    ROWS[(BOOK, "2026-12-01", "2026-12-31")] = {"status": "ok", "click_at": "x", "asked_at": now(), "period_from": "2026-12-01", "period_to": "2026-12-31", "opening": 5, "closing": 6, "read_at": "2026-10-30T10:00:00Z"}
+    FS.T["tally_stock_reads"] = [{"book_id": BOOK, "period_from": "2026-12-01", "period_to": "2026-12-31", "status": "ok", "words": "", "opening": 5, "closing": 6, "read_at": "2026-10-30T10:00:00Z"}]
+    c, r = click(**{"from": "20261201", "to": "20261231"})
+    ok(r.get("cached") is True and (r.get("read") or {}).get("opening") == 5, "A. no computer: a kept answer still given back (%s)" % r)
+    d1 = next(d for d in FS.T["tally_devices"] if d["id"] == DEV); d1["revoked"] = False; was_info = d1["info"]; d1["info"] = {"beat": {"open": []}, "bridges": {"go-aaaaaa251251": {"open": []}}}; d2x = next(d for d in FS.T["tally_devices"] if d["id"] == DEV2); d2x["revoked"] = True
+    n = len(FS.ARGS.get("tally_stock_ask") or [])
+    c, r = click(**{"from": "20261101", "to": "20261130"})
+    ok(r.get("noComputer") is True and len(FS.ARGS.get("tally_stock_ask") or []) == n and not [m for m in wakes() if m["payload"].get("from") == "20261101"], "A. the company's own computer without it open: not woken, said at once (%s)" % r)
+    d1["info"] = was_info; d2x["revoked"] = False
     for d in FS.T["tally_devices"]: d["revoked"] = False
     MISSING["on"] = True
     c, r = click(**{"from": "20261001"})
