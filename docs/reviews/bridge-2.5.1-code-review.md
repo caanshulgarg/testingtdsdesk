@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: RANGE_PLACEHOLDER
+Range: 25e694c0a..8c49a469c
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -21,7 +21,7 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 - `python3 tests/run_migration134.py` (pg_stand, PostgreSQL 16; RED_WITHOUT_134=1 fails), `python3 tests/run_stock_ingest.py`
   (tally-ingest under Deno against fake_supabase.py), `python3 tests/run_fs_stock_tally_ui.py` (Playwright on app/dist-test).
 
-## Round 1 (origin/bridge-dated-ledgers..974c6cda0): 10 findings, all fixed with tests
+## Round 1 (25e694c0a..974c6cda0): 10 findings, all fixed with tests
 
 1. (High) A click for a company already being answered was marked taken and then dropped with no answer; the cloud's 30 s
    "on its way" window was shorter than the bridge's 30 s posting wait. Fixed: such a click is answered "busy" at once
@@ -81,3 +81,6 @@ line; the narrow computed-figure and ReadDays exceptions for exactly this id).
 8. (Low, recorded) Two Windows users' bridges set to the same SyncDir share the clicks' file: not a supported set-up (each
    user's bridge keeps its own folder).
 
+
+After round 3: the merge of bridge-dated-ledgers 186067897 (docs and the release check's self-test of 2.5.0 only) and
+8c49a469c (the self-test reads 2.5.1's decision line). The whole range was read last: 8c49a469c is the commit built.
