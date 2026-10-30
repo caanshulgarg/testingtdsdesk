@@ -254,6 +254,13 @@ func TestStock251OncePerPeriod(t *testing.T) {
 	if b := stockTake(stockClick{Company: zz, From: "20260401", To: "20261031", At: at}); !truthy(b["seen"]) || stockClicks(f) != 1 || len(*got) != 1 {
 		t.Fatalf("the same click again: %v (%d asked)", b, stockClicks(f))
 	}
+	// the bridge started again (the memory gone, the clicks on disk): the heartbeat's copy of the same click not taken
+	stock.mu.Lock()
+	stock.seen = map[string]string{}
+	stock.mu.Unlock()
+	if b := stockTake(stockClick{Company: zz, From: "20260401", To: "20261031", At: at}); !truthy(b["seen"]) || stockClicks(f) != 1 {
+		t.Fatalf("the same click after a restart: %v (%d asked)", b, stockClicks(f))
+	}
 	// another click for the same period: the kept answer, nothing asked of Tally
 	b := stockTake(stockClick{Company: zz, From: "20260401", To: "20261031", At: clickAt(time.Second)})
 	if str(b["status"]) != "ok" || !truthy(b["cached"]) || b["opening"] != a["opening"] || b["readAt"] != a["readAt"] || stockClicks(f) != 1 {
@@ -281,8 +288,8 @@ func TestStock251OncePerPeriod(t *testing.T) {
 	if len(*got) != 4 { // the first, the kept, Ask Tally again, another period (the same click twice: once)
 		t.Fatalf("FinCom got %d answers", len(*got))
 	}
-	// a click older than 10 minutes, or not a click FinCom sends: dropped
-	for _, k := range []stockClick{{Company: zz, From: "20260401", To: "20260430", At: clickAt(-11 * time.Minute)}, {Company: zz, From: "20260431", To: "20260501", At: clickAt(0)}, {From: "20260401", To: "20260430", At: clickAt(0)}} {
+	// a click older than an hour, or not a click FinCom sends: dropped
+	for _, k := range []stockClick{{Company: zz, From: "20260401", To: "20260430", At: clickAt(-61 * time.Minute)}, {Company: zz, From: "20260431", To: "20260501", At: clickAt(0)}, {From: "20260401", To: "20260430", At: clickAt(0)}} {
 		if r := stockTake(k); truthy(r["ok"]) || stockClicks(f) != 3 {
 			t.Fatalf("taken: %v", r)
 		}

@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad",
+    "hash": "e5199a6cbac01495dab6dfd6de4393b40599b6ae06ab67bb49a34a0b3f9ad69b",
     "measured": false
   },
   "autoUpdate": true,
@@ -109,6 +109,6 @@
   "tallyState": "open",
   "trialTools": false,
   "updating": false,
-  "version": "2.5.0",
+  "version": "2.5.1",
   "windowsUser": ""
 }

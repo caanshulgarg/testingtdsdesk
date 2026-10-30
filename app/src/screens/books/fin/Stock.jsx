@@ -27,7 +27,9 @@ function keep(cid, from, to, read) {
   if (!read || !S.books || S.books.cid !== cid) return;
   const f = S.books.fs = S.books.fs || {}, k = from + "-" + to, was = (f.stockTally || {})[k] || {};
   const figs = read.opening != null && read.closing != null && read.readAt ? { opening: +read.opening, closing: +read.closing, readAt: read.readAt } : { opening: was.opening, closing: was.closing, readAt: was.readAt };
-  f.stockTally = Object.assign({}, f.stockTally, { [k]: Object.assign({}, figs, { status: read.status || "", words: read.words || "" }) });
+  // gotAt: when this page took Tally's figures (this computer's clock, as a typed figure's): the later of the two is used
+  const gotAt = read.opening != null && read.closing != null && read.readAt ? new Date().toISOString() : was.gotAt;
+  f.stockTally = Object.assign({}, f.stockTally, { [k]: Object.assign({}, figs, { gotAt, status: read.status || "", words: read.words || "" }) });
   if (typeof saveBooks === "function") saveBooks();
 }
 const readOf = (r) => r && { status: String(r.status || ""), words: String(r.words || ""), opening: r.opening == null ? null : +r.opening, closing: r.closing == null ? null : +r.closing, readAt: r.read_at || null };
@@ -37,12 +39,14 @@ export async function bringStock(cid, from, to, again, say) {
   if (!r.asked && !r.pending) { if (r.read) keep(cid, from, to, r.read); say(r.read ? "" : r.error || "FinCom could not ask Tally just now."); return; }
   // asked now, or by an earlier click still on its way (pending): the answer looked for in the cloud (Tally is not asked here)
   say(r.pending ? "Tally is being asked already; its answer comes here." : "Asking Tally…");
+  let notYet = 0;
   for (let i = 0; i < TRIES; i++) {
     await new Promise((ok) => setTimeout(ok, WAIT_MS));
     let rows = [];
     try { rows = await Cloud.api("tally_stock_reads?select=status,words,opening,closing,read_at&book_id=eq." + encodeURIComponent(r.book) + "&period_from=eq." + Audit.iso(from) + "&period_to=eq." + Audit.iso(to)) || []; } catch (e) { continue; }
     const row = rows[0];
-    if (row && row.status !== "asked") { keep(cid, from, to, readOf(row)); say(""); return; }
+    // "not asked" from one bridge of a shared computer may be followed by Tally's figures from another: 6 s more
+    if (row && row.status !== "asked" && (row.status === "ok" || !["notopen", "busy"].includes(row.status) || ++notYet > 3)) { keep(cid, from, to, readOf(row)); say(""); return; }
   }
   say("The Tally computer did not answer. Is FinCom Bridge running there, with Tally open? Type the stock or try again later.");
 }

@@ -4,7 +4,7 @@ fake_supabase.py; never a real database). The migration's two functions are stoo
 (tests/run_migration134.py tests the SQL itself on pg_stand). Written before the code. Checks:
   A. the click ({kind:"wake", what:"stock", client, from, to}) from a signed-in member: tally_stock_ask with the book and the
      period; ONE computer, the company's own, woken on its own channel ("stock", {company, from, to, at, again}) and the
-     click kept in its record for the heartbeat (cleared once answered); the answer {asked, at};
+     click kept in its record for the heartbeat; the answer {asked, at}; no computer at all: said at once, nothing asked;
   B. a second click while it is on its way (60 s): nothing woken; a kept answer: {cached, read} with the figures, nothing woken;
      "Ask Tally again" (again): woken once more with again;
   C. the bridge's answer ({kind:"stock"}) reaches tally_stock_answer with the click's time, the figures as numbers, the
@@ -56,7 +56,7 @@ def rpc(fn, a):
     if fn == "tally_stock_answer":
         r = ROWS.get((a["p_book"], a["p_from"], a["p_to"]))
         if not r or r["click_at"] != a["p_at"]: return {"ok": False, "unknown": True, "error": "no such click from FinCom"}
-        if r["status"] != "asked": return {"ok": False, "unknown": True, "answered": True, "error": "this click was answered already"}
+        if r["status"] != "asked" and not (a["p_status"] == "ok" and r["status"] in ("notopen", "busy")): return {"ok": False, "unknown": True, "answered": True, "error": "this click was answered already"}
         if a["p_status"] == "ok": r.update(status="ok", opening=a["p_opening"], closing=a["p_closing"], read_at=a["p_read_at"])
         else: r.update(status=a["p_status"], words=a["p_words"])
         return {"ok": True}
@@ -113,7 +113,6 @@ try:
     a = (FS.ARGS.get("tally_stock_answer") or [{}])[-1]
     ok(c == 200 and a.get("p_at") == at1 and a.get("p_opening") == 908443072.58 and a.get("p_closing") == 2182130465.82 and a.get("p_status") == "ok" and a.get("p_read_at", "").startswith("2026-10-30T10:12:00")
        and a.get("p_ms") == 412 and a.get("p_hold") == 160 and a.get("p_from") == "2026-04-01", "C. taken against the click, the figures as numbers (%s; %s)" % (r, a))
-    ok("STOCK CO" not in (info().get("stock") or {}), "C. answered: the click no longer carried by the computer's beat (%s)" % info().get("stock"))
     c, r = call(dict(ans, status="slow", opening=None, closing=None, readAt=None, words="late"))
     ok(c == 409 and r.get("unknown") is True, "C. a second answer to the same click: refused (%s)" % r)
     c, r = call(dict(ans, at="2026-01-01T00:00:00.000000Z"))
@@ -131,8 +130,6 @@ try:
 
     print("== D. the heartbeat")
     beat = {"kind": "beat", "tally": True, "open": ["STOCK CO"], "companies": [{"name": "STOCK CO", "open": True, "guid": CG}]}
-    c, r = call(beat)
-    ok(c == 200 and "stock" not in r, "D. an answered click: not in the beat (%s)" % r.get("stock"))
     c, r = click(again=True); at3 = r.get("at")
     c, r = call(beat)
     ok(c == 200 and at3 and (r.get("stock") or {}).get("STOCK CO", {}).get("at") == at3 and r["stock"]["STOCK CO"].get("again") is True, "D. the beat carries a click not yet answered (%s)" % r.get("stock"))
@@ -149,6 +146,11 @@ try:
     n = len(FS.ARGS.get("tally_stock_ask") or [])
     c, r = click(client="c2")
     ok(c == 200 and r.get("notLinked") is True and len(FS.ARGS.get("tally_stock_ask") or []) == n, "E. a client not linked: said, nothing asked (%s)" % r)
+    for d in FS.T["tally_devices"]: d["revoked"] = True
+    n = len(FS.ARGS.get("tally_stock_ask") or [])
+    c, r = click(**{"from": "20261101", "to": "20261130"})
+    ok(r.get("noComputer") is True and len(FS.ARGS.get("tally_stock_ask") or []) == n, "A. no computer of the firm: said at once, nothing asked (%s)" % r)
+    for d in FS.T["tally_devices"]: d["revoked"] = False
     MISSING["on"] = True
     c, r = click(**{"from": "20261001"})
     ok(r.get("notSetUp") is True and "not set up" in r.get("error", ""), "E. a cloud without migration 134: not set up yet (%s)" % r)

@@ -110,7 +110,33 @@ func stockFromBeat(m M) {
 	}
 }
 
-// a click taken once (by its time), and only when it is fresh (10 minutes)
+// the clicks taken, kept on disk (stock-clicks.json in the sync folder): a bridge started again never takes a click twice
+// (FinCom's beat carries a click for 10 minutes)
+func stockSeenLoad() {
+	if len(stock.seen) > 0 {
+		return
+	}
+	for k, v := range parseObj(readText(sp("stock-clicks.json"))) {
+		stock.seen[k] = str(v)
+	}
+}
+
+func stockSeenSave() {
+	o := M{}
+	for k, v := range stock.seen {
+		if t, err := time.Parse(time.RFC3339Nano, v); err == nil && nowFn().Sub(t) < 2*time.Hour {
+			o[k] = v
+		}
+	}
+	_ = saveFile(sp("stock-clicks.json"), jsonText(o))
+}
+
+// the answer's base for a click (every answer to FinCom carries these)
+func stockBase(c stockClick) M {
+	return M{"kind": "stock", "company": c.Company, "company_guid": heldGUID(c.Company), "from": c.From, "to": c.To, "at": c.At, "again": c.Again}
+}
+
+// a click taken once (by its time, kept on disk), and only when it is less than an hour old by this computer's clock
 func stockTake(c stockClick) M {
 	out := M{"ok": false, "company": c.Company, "from": c.From, "to": c.To}
 	if c.Company == "" || !stockPeriodOK(c.From, c.To) || c.At == "" {
@@ -123,17 +149,19 @@ func stockTake(c stockClick) M {
 	}
 	k := companyKey(c.Company) + "|" + c.From + "|" + c.To
 	stock.mu.Lock()
+	stockSeenLoad()
 	if c.At <= stock.seen[k] {
 		stock.mu.Unlock()
 		out["why"], out["seen"] = "this click was taken already", true
 		return out
 	}
 	stock.seen[k] = c.At
+	stockSeenSave()
 	if stock.busy[companyKey(c.Company)] {
 		stock.mu.Unlock()
 		// answered at once (FinCom shows it; nothing is asked of Tally): the click in hand comes first
-		ans := M{"kind": "stock", "company": c.Company, "company_guid": heldGUID(c.Company), "from": c.From, "to": c.To, "at": c.At, "again": c.Again,
-			"status": "busy", "words": "not asked: Tally is being asked for this company's stock already; try again in a moment"}
+		ans := stockBase(c)
+		ans["status"], ans["words"] = "busy", "not asked: Tally is being asked for this company's stock already; try again in a moment"
 		stockSend(ans)
 		out["why"] = "a click for this company is being answered"
 		return out
@@ -153,7 +181,7 @@ func stockTake(c stockClick) M {
 
 // the answer for one click: the kept one, or Tally's (one request), or why not
 func stockAnswer(c stockClick, k string) M {
-	ans := M{"kind": "stock", "company": c.Company, "company_guid": heldGUID(c.Company), "from": c.From, "to": c.To, "at": c.At, "again": c.Again}
+	ans := stockBase(c)
 	say := func(status, words string) M {
 		ans["status"], ans["words"] = status, words
 		writeLog("Stock of " + c.Company + " (" + liveDay(c.From) + " to " + liveDay(c.To) + "), asked in FinCom: " + words)
@@ -234,6 +262,11 @@ func stockAnswer(c stockClick, k string) M {
 	return ans
 }
 
+var reStockBal = map[string]*regexp.Regexp{
+	"OPENINGBALANCE": regexp.MustCompile(`<OPENINGBALANCE\b[^>/]*>([^<]*)</OPENINGBALANCE>`),
+	"CLOSINGBALANCE": regexp.MustCompile(`<CLOSINGBALANCE\b[^>/]*>([^<]*)</CLOSINGBALANCE>`),
+}
+
 var reStockGroup = regexp.MustCompile(`(?s)<GROUP\b[^>]*\bRESERVEDNAME="Stock-in-Hand"[^>]*>(.*?)</GROUP>`)
 
 // the stock as FinCom shows it: Tally's Stock-in-Hand group's opening and closing balance, a debit (Tally's minus) as a
@@ -245,7 +278,7 @@ func stockFigures(raw string) (opening, closing float64, ok bool) {
 		return 0, 0, false
 	}
 	num := func(tag string) (float64, bool) {
-		el := regexp.MustCompile(`<` + tag + `\b[^>/]*>([^<]*)</` + tag + `>`).FindStringSubmatch(m[0][1])
+		el := reStockBal[tag].FindStringSubmatch(m[0][1])
 		if el == nil {
 			return 0, false // not in the answer (or <TAG/>): no figure, never a nil stock
 		}
