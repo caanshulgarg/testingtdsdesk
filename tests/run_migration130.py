@@ -156,6 +156,9 @@ try:
     h = j("select tally_openings_hold(%s, 'the trial balance file TB.xml', null, '2025-03-31', %s, 'held', -12800000)::text" % (q(B3), js([["Cash", -12800000]])))
     A3 = alerts(B3)
     ok(isinstance(h, int) and len(A3) == 1 and A3[0]["words"] == "Opening balances from the trial balance file TB.xml do not add up to nil: 1,28,00,000.00 Dr" and led(B3)["Cash"] == (-100, -100), "6. an upload held: its source's words, one alert, nothing stored changed (%s)" % A3)
+    j("select tally_openings_hold(%s, 'the trial balance file TB.xml', null, '2025-03-31', %s, 'held', -12800000)::text" % (q(B3), js([["Cash", -12800000]])))
+    ok(len(alerts(B3)) == 1 and len(held(B3)) >= 2, "6. the same file again: held again, no second alert that day (%d alerts)" % len(alerts(B3)))
+    ok(db.one("select has_sequence_privilege('authenticated', 'public.tally_openings_held_id_seq', 'usage') or has_sequence_privilege('anon', 'public.tally_openings_held_id_seq', 'update')") in ("f", "false"), "0. the table's sequence: nothing for anon or authenticated")
     ok("stage is held or kept" in str(j("select tally_openings_hold(%s, 'x', null, null, '[]'::jsonb, 'applied', 0)::text" % q(B3))), "6. stage must be held or kept")
     ok("no such book" in str(j("select tally_openings_stage('00000000-0000-0000-0000-00000000dead', 'r', 'x', null, '[]'::jsonb)::text")), "6. a book that is not there: refused")
     for fn, args in (("tally_openings_stage", "%s, 'r', 'x', null, '[]'::jsonb" % q(B)), ("tally_openings_settle", "%s, 'r', 'x', null" % q(B)), ("tally_openings_candidate", "%s, '[]'::jsonb" % q(B)),

@@ -20,6 +20,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const r250Period = `<SVFROMDATE TYPE="Date">20250401</SVFROMDATE><SVTODATE TYPE="Date">20260331</SVTODATE>`
@@ -101,12 +102,24 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 	f, _ := r250Bridge(t, "-")
 	const said = "not read: Tally has not said when its books begin; the company list is read again and the ledgers wait until it does"
 	for i := 0; i < 3; i++ {
+		// a minute on since the last re-read (the once-a-minute clock of the re-read only; the bridge's other clocks as they are)
+		booksFromMu.Lock()
+		for k, v := range booksFromAsk {
+			booksFromAsk[k] = v.Add(-2 * time.Minute)
+		}
+		booksFromMu.Unlock()
 		c0 := f.n("TDSDeskCompanies")
-		if err := newRun("ledgers", "r250-h"+string(rune('a'+i))).step(zz, f.port, ""); err != nil {
+		k := newRun("ledgers", "r250-h"+string(rune('a'+i)))
+		if err := k.step(zz, f.port, ""); err != nil {
 			t.Fatal(err)
 		}
-		if f.n("TDSDeskCompanies") <= c0 {
-			t.Fatalf("round %d: the company list was not read again", i)
+		if f.n("TDSDeskCompanies") <= c0 || !k.booksHeld[zz] {
+			t.Fatalf("round %d: the company list was not read again (or the company not marked held)", i)
+		}
+		// within the minute: held again, the company list not read again (review: not on every held chunk or ledger)
+		c1 := f.n("TDSDeskCompanies")
+		if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); err == nil || f.n("TDSDeskCompanies") != c1 {
+			t.Fatalf("round %d: a held chunk read the company list again within the minute: %v", i, err)
 		}
 	}
 	if f.n(ledListID)+f.n(ledChangesID)+f.n(ledByNameID) != 0 {
@@ -134,6 +147,9 @@ func TestR250BooksFromUnknownHeld(t *testing.T) {
 	f.mu.Lock()
 	f.booksFrom = "20250401"
 	f.mu.Unlock()
+	booksFromMu.Lock()
+	booksFromAsk = map[string]time.Time{}
+	booksFromMu.Unlock()
 	if err := newRun("ledgers", "r250-hz").step(zz, f.port, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -317,4 +333,53 @@ func allowRowsBefore250() string {
 		o = append(o, l)
 	}
 	return strings.Join(o, "")
+}
+
+// --- review of 2.5.0: books-from only from this user's own Tally; a round FinCom's cloud held goes whole again
+func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
+	f, c := r250Bridge(t, "20250401")
+	// another Windows user's Tally naming the same company with other books: never this user's period
+	coMu.Lock()
+	was := coCache
+	coCache = []M{{"port": 9999, "ok": true, "mine": false, "companies": []any{M{"name": zz, "booksFrom": "20240401"}}}}
+	coMu.Unlock()
+	if booksFromOf(zz) != "" {
+		t.Fatalf("books-from taken from another user's Tally: %q", booksFromOf(zz))
+	}
+	coMu.Lock()
+	coCache = was
+	coMu.Unlock()
+	dir := syncFolder(zz)
+	if err := newRun("ledgers", "r250-r1").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.ledListOut = M{"openings": "held"}
+	c.mu.Unlock()
+	if err := pushLedgerList(zz, dir); err != nil || !exists(ledResendFile(dir)) {
+		t.Fatalf("FinCom held the openings: the next round is not marked to send every ledger (%v)", err)
+	}
+	c.mu.Lock()
+	c.ledListOut = nil
+	n0 := len(c.ledList)
+	c.mu.Unlock()
+	st := readKeepState(dir)
+	delete(st, "ledRun")
+	saveKeepState(dir, st)
+	if err := newRun("ledgers", "r250-r2").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = pushLedgerList(zz, dir)
+	if len(c.ledList) == n0 || len(arr(c.ledList[n0]["ledgers"])) != 3 || exists(ledResendFile(dir)) {
+		t.Fatalf("the round after a held one: %v", c.ledList[n0:])
+	}
+	// and the one after that sends only what changed (nothing)
+	n1 := len(c.ledList)
+	if err := newRun("ledgers", "r250-r3").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = pushLedgerList(zz, dir)
+	if len(c.ledList) == n1 || len(arr(c.ledList[n1]["ledgers"])) != 0 {
+		t.Fatalf("an unchanged round after the resend: %v", c.ledList[n1:])
+	}
 }

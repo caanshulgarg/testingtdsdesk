@@ -121,7 +121,16 @@ func readLedgerChunk(tc *TC, company string, port int, after, upto int64) ([]led
 	if err != nil {
 		return nil, 0, err
 	}
-	raw, err := invokeTally(tc, port, ledgerChunkRequestAt(company, bf, after, upto), ledChunkSec())
+	return readLedgerChunkAt(tc, company, bf, port, after, upto)
+}
+
+// 2.5.0: one chunk with the books-from the caller fixed (a round reads every chunk with the same period)
+func readLedgerChunkAt(tc *TC, company, bf string, port int, after, upto int64) ([]ledRow, int64, error) {
+	x := ledgerChunkRequestAt(company, bf, after, upto)
+	if x == "" {
+		return nil, 0, errBooksFromUnknown
+	}
+	raw, err := invokeTally(tc, port, x, ledChunkSec())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -299,6 +308,9 @@ func diffAll(held, read map[string]ledRow, d ledDiff) ledDiff {
 	return d
 }
 
+// 2.5.0 (review): FinCom's cloud held a round's openings (they did not add up to nil): the next round sends every ledger
+func ledResendFile(dir string) string { return filepath.Join(dir, "ledger-resend.json") }
+
 // 2.5.0: the date the outbox's openings are as at (the books' beginning, yyyymmdd), sent with every batch as openingsAt
 func setLedOutOpeningsAt(dir, bf string) {
 	o := readObjFile(ledOutFile(dir))
@@ -380,6 +392,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// period. Books-from not known: the read is held (one log line, the company list read again), never sent undated
 	bf, herr := booksFromForRead(k.tc, company)
 	if herr != nil {
+		if k.booksHeld == nil {
+			k.booksHeld = map[string]bool{}
+		}
+		k.booksHeld[company] = true
 		k.caughtUp = true
 		return false, nil
 	}
@@ -450,7 +466,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			upto, tail = p-1, false
 		}
 		t1 := time.Now()
-		rows, top, err := readLedgerChunk(k.tc, company, port, after, upto)
+		rows, top, err := readLedgerChunkAt(k.tc, company, bf, port, after, upto) // the round's own books-from (review)
 		if err != nil {
 			if gaveWay(err) || !tallyNoAnswer(err) {
 				// not sent (refused, held, reading stopped), stopped for FinCom, or an answer that could not be read:
@@ -543,7 +559,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	d := diffLedgers(held, read)
 	// 2.5.0: the held list read on another basis (undated, by a bridge before 2.5.0, or another books-from): every ledger
 	// goes to FinCom's cloud with this round's openings, as at the books' beginning (the cloud prefers a dated round's)
-	if str(st["ledOpeningsAt"]) != bf {
+	// (review: a round whose openings FinCom's cloud held, as not adding up to nil, is sent whole again next time)
+	resend := exists(ledResendFile(dir))
+	if str(st["ledOpeningsAt"]) != bf || resend {
 		d = diffAll(held, read, d)
 	}
 	var groups [][2]string
@@ -572,6 +590,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	mergeLedOut(dir, d, groups, round, seen, natOfRound(ls))
 	setLedOutOpeningsAt(dir, bf)
 	st["ledOpeningsAt"] = bf
+	if resend {
+		_ = os.Remove(ledResendFile(dir))
+	}
 	_ = os.Remove(ledReadFile(dir))
 	writeLog(fmt.Sprintf("Keeping %s: the ledger list read (%d ledgers, %d groups, %d request(s)): %d new, %d changed, %d renamed, %d gone",
 		company, len(read), len(groups), toInt(ls["reqs"]), d.added, len(d.rows)-d.added, len(d.renamed), len(d.gone)))
@@ -702,6 +723,11 @@ func pushLedgerList(company, dir string) error {
 		if last {
 			_ = os.Remove(ledOutFile(dir))
 			writeLog(fmt.Sprintf("Cloud: %s: the ledger list sent (%s)%s", company, ledSentNote(r.json), shadowNote(r)))
+			if r.json != nil && str(r.json["openings"]) == "held" {
+				// 2.5.0 (migration 130): FinCom held the round's openings (not adding up to nil): every ledger again next round
+				_ = saveFile(ledResendFile(dir), jsonText(M{"at": nowS(), "round": str(o["round"])}))
+				writeLog("Cloud: " + company + ": FinCom kept its opening balances, as the ones read do not add up to nil; every ledger goes again with the next read")
+			}
 			delete(ledPushAfter, company)
 			return nil
 		}

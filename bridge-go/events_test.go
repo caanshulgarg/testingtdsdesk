@@ -125,7 +125,7 @@ func bridgeFor(t *testing.T, s *standIn, extra string) string {
 	waitIdle(t)
 	dir := t.TempDir()
 	booksFromMu.Lock()
-	booksFromHeld, booksFromSaid = map[string]string{}, map[string]bool{} // 2.5.0: each company's books-from, per test
+	booksFromHeld, booksFromSaid, booksFromAsk = map[string]string{}, map[string]bool{}, map[string]time.Time{} // 2.5.0: each company's books-from, per test
 	booksFromMu.Unlock()
 	oldC, oldH := ConfigPath, Home
 	t.Cleanup(func() { waitIdle(t); ConfigPath, Home = oldC, oldH; nowFn = time.Now; loadConfigRO() })

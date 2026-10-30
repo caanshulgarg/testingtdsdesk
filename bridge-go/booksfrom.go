@@ -27,8 +27,9 @@ var errBooksFromUnknown = errors.New("Tally has not said when this company's boo
 
 var (
 	booksFromMu   sync.Mutex
-	booksFromHeld = map[string]string{} // companyKey -> yyyymmdd, from the company list (TDSDeskCompanies' BOOKSFROM)
-	booksFromSaid = map[string]bool{}   // companyKey -> the held read already said in the log (one line until it is known)
+	booksFromHeld = map[string]string{}    // companyKey -> yyyymmdd, from the company list (TDSDeskCompanies' BOOKSFROM)
+	booksFromSaid = map[string]bool{}      // companyKey -> the held read already said in the log (one line until it is known)
+	booksFromAsk  = map[string]time.Time{} // companyKey -> when the company list was last read again for it (once a minute)
 )
 
 // BOOKSFROM as the company list gave it: kept when it is a date, forgotten when Tally gave none (a list that answered
@@ -69,6 +70,9 @@ func booksFromOf(company string) string {
 		c = sessionsFromFile(filepath.Join(syncDir(), "open-companies.json"))
 	}
 	for _, s := range c {
+		if s["mine"] == false {
+			continue // another Windows user's Tally: never the period of this user's reads
+		}
 		for _, co := range sessCompanies(s) {
 			if sameCompany(str(co["name"]), company) {
 				if b := normDate(str(co["booksFrom"])); isTallyDate(b) {
@@ -138,7 +142,16 @@ func holdLedgerRead(tc *TC, company string) error {
 	if tc == nil {
 		tc = fin
 	}
-	openCompaniesWith(tc, true)
+	// the company list read again at most once a minute for a company (review: not on every held chunk or ledger)
+	booksFromMu.Lock()
+	again := booksFromAsk[k].IsZero() || nowFn().Sub(booksFromAsk[k]) >= time.Minute || nowFn().Before(booksFromAsk[k])
+	if again {
+		booksFromAsk[k] = nowFn()
+	}
+	booksFromMu.Unlock()
+	if again {
+		openCompaniesWith(tc, true)
+	}
 	return errBooksFromUnknown
 }
 

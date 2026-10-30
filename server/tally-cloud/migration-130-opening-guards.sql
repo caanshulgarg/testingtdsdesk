@@ -5,8 +5,9 @@
 -- start of the Gateway's CURRENT period (2026-27) and the cloud took them as the books' openings (2025-26): the openings no
 -- longer added up to nil (a Rs 3.19 cr difference). Bridge 2.5.0 reads them dated (the books' first year) and says so
 -- (openingsAt); this file is the cloud's side, three guards (tally-ingest calls them):
---   (a) after a complete ledger round, a trial-balance list ("ledgers") or a trial balance uploaded as opening balances
---       ("upload_ledgers"): when the book's openings would not add up to nil (beyond Rs 1), the stored openings are NOT
+--   (a) after a complete ledger round (the book's openings with the round's in place), a trial-balance list ("ledgers") or
+--       a trial balance uploaded as opening balances ("upload_ledgers": the file's own total, a trial balance leaving out
+--       the ledgers with a nil balance): when they would not add up to nil (beyond Rs 1), the stored openings are NOT
 --       overwritten: the previous stay, the incoming are kept as held (tally_openings_held), and one tally_alerts row says
 --       "Opening balances from <source> do not add up to nil: <difference>" (no computer names in the words);
 --   (b) a trial balance used as opening balances whose date is not the day before the books begin is refused (tally-ingest,
@@ -24,7 +25,8 @@
 --   tally_inr(n): an amount in Indian digit groups with Dr / Cr ("1,28,00,000.00 Dr"; Tally's sign: a debit is negative).
 --   tally_openings_candidate(book, rows): the book's openings now (sum, whether they tie) and with rows [[name, opening]]
 --     in place of their ledgers' (the sum, how many would change).
---   tally_openings_hold(book, source, round, openings_at, rows, stage, diff): one held row; for 'held' one alert.
+--   tally_openings_hold(book, source, round, openings_at, rows, stage, diff): one held row; for 'held' one alert (one a
+--     day for the same source and difference).
 --   tally_openings_stage(book, round, source, openings_at, rows): a round's batch of openings, pending.
 --   tally_openings_settle(book, round, source, openings_at): the round's pending openings, on its last batch: applied
 --     (open and open_sent, then tally_year_openings) when they add up to nil and (c) allows; else held (and the alert) or
@@ -55,6 +57,7 @@ create index if not exists tally_openings_held_round on public.tally_openings_he
 alter table public.tally_openings_held enable row level security;
 revoke all on public.tally_openings_held from public, anon, authenticated;
 grant select, insert, update on public.tally_openings_held to service_role;
+revoke all on sequence public.tally_openings_held_id_seq from public, anon, authenticated;
 grant usage, select on sequence public.tally_openings_held_id_seq to service_role;
 
 -- ---------------------------------------------------------------- 2. an amount in words' figures
@@ -109,10 +112,11 @@ begin
   returning id into hid;
   if p_stage = 'held' then
     words := 'Opening balances from ' || src || ' do not add up to nil: ' || tally_inr(p_diff);
-    -- one row per held set (tally_alerts_once is per firm, kind, book, device and day: the held row's own id stands in for
-    -- the device, as migration 122's notices do); the firm's members read it in the bell
+    -- one row a day for the same source and difference (tally_alerts_once is per firm, kind, book, device and day: a
+    -- digest of the source and the difference stands in for the device, as migration 122's notices do); a retry of the
+    -- same file adds none; the firm's members read it in the bell
     insert into tally_alerts (firm_id, client_id, book_id, device_id, kind, day, words, data)
-    values (f, cl, p_book, md5('tally_openings_held:' || hid)::uuid, 'summary', (now() at time zone 'Asia/Kolkata')::date, words,
+    values (f, cl, p_book, md5('tally_openings_held:' || p_book || ':' || src || ':' || coalesce(p_diff, 0)::text)::uuid, 'summary', (now() at time zone 'Asia/Kolkata')::date, words,
             jsonb_build_object('openingsHeld', hid, 'difference', p_diff, 'source', src, 'round', p_round, 'openingsAt', p_openings_at))
     on conflict do nothing;
   end if;

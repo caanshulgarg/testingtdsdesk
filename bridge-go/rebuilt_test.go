@@ -675,6 +675,7 @@ type standCloud struct {
 	// 2.3.1 (masters): every ledger_changes body, and how it is answered (nil: 200 {ok, added})
 	ledChanges []M
 	ledChReply func(b M) (int, M)
+	ledListOut M // 2.5.0: added to a ledger_list's answer (openings: held)
 	// 2.4.4: every "employees" body, and how it is answered (nil: 200 {ok})
 	empPosts []M
 	empReply func(b M) (int, M)
@@ -760,6 +761,9 @@ func newStandCloud(t *testing.T) *standCloud {
 		case "ledger_list":
 			c.ledList = append(c.ledList, o)
 			out["added"], out["renamed"], out["deleted"] = len(arr(o["ledgers"])), len(arr(o["renamed"])), 0
+			for k, v := range c.ledListOut {
+				out[k] = v
+			}
 		case "ledger_changes":
 			// 2.3.1 (masters): the ledgers created or altered since the master counter last moved, or asked for an entry
 			c.ledChanges = append(c.ledChanges, o)

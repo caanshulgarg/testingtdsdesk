@@ -1871,15 +1871,18 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   const aliases: Record<string, unknown>[] = [];
   // migration 130 (c): a book whose stored openings tie takes no opening from an undated read (a bridge before 2.5.0): a new
   // ledger is added at nil and a changed opening left; what was sent is kept (tally_openings_held, stage kept)
-  const keepOpen = !openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies;
+  // (review of 2.5.0: the book's sum is asked only when an opening would change, once a call)
+  let keepOpenV: boolean | null = null;
+  const keepOpenFor = async () => keepOpenV ??= !openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies;
   const keptOpen: [string, number][] = [];
   for (const r of rows) {
     const g = r.guid ? byGuid.get(r.guid) : undefined;
     let have = g || byName.get(r.name);
     if (!have) {
       const c = chain(r.parent);
+      const keepOpen = r.open !== 0 && await keepOpenFor();
       const o: Record<string, unknown> = { book_id: book, firm_id: firm, name: r.name, parent: r.parent, chain: c, primary_group: c.length ? c[c.length - 1] : "", open: keepOpen ? 0 : r.open, open_sent: keepOpen ? 0 : r.open };
-      if (keepOpen && r.open !== 0) keptOpen.push([r.name, r.open]);
+      if (keepOpen) keptOpen.push([r.name, r.open]);
       if (m28) { o.gstin = r.gstin || null; o.pan = r.pan || null; }
       if (m40 && r.state) o.state = r.state;
       if (m57 && r.dtype !== null) o[DTYPE] = r.dtype;
@@ -1935,7 +1938,7 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     if (m74 && r.pay) Object.assign(o, r.pay);
     if (m32) { o.alter_id = r.alter; if (!have.tally_guid && r.guid && !byGuid.has(r.guid)) o.tally_guid = r.guid; }
     const was = have.open_sent ?? have.open, sent = was === null || was === undefined ? null : Math.round(Number(was) * 100) / 100;
-    if ((sent === null || sent !== r.open) && keepOpen) { keptOpen.push([have.name, r.open]); plain.push(o); }
+    if ((sent === null || sent !== r.open) && await keepOpenFor()) { keptOpen.push([have.name, r.open]); plain.push(o); }
     else if (sent === null || sent !== r.open) opened.push({ ...o, open: r.open, open_sent: r.open });
     else plain.push(o);
   }
@@ -2852,20 +2855,26 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
   // the groups (bridge 1.14.7 on): [[name, parent]]; a primary group's parent is empty. Without them the groups kept
   // before stay as they are
   const groups = cleanPairs(body.groups, 20000);
-  // migration 130 (a): the book's openings with these in place must add up to nil (within Rs 1); else the stored openings
-  // stay, the ledgers and groups are taken at nil (applyGroups), the incoming openings are held and one alert says so
+  // migration 130 (a): a trial balance (or masters list) used as the opening balances must itself add up to nil (within
+  // Rs 1): a trial balance leaves out the ledgers with a nil balance, so its own total is the books' (review of 2.5.0: a
+  // correct file must be able to replace wrong stored openings). Else the stored openings stay, the ledgers and groups are
+  // taken at nil (applyGroups), the incoming openings are held and one alert says so (one a day for the same difference)
+  let heldOut: { held: number; words: string; g: any } | null = null;
   if (await has130()) {
     const sum = new Map<string, number>();
     for (const l of led) sum.set(l[0], Math.round(((sum.get(l[0]) || 0) + Number(l[2])) * 100) / 100);
     const inc = [...sum.entries()] as [string, number][];
-    const c = await openingsCandidate(book, inc);
-    if (c.changed > 0 && !c.candidateTies) {
-      const src = from?.source === "upload_ledgers" ? (from?.file ? "the trial balance file " + String(from.file).slice(0, 80) : "a trial balance uploaded") : "the bridge's trial balance";
+    const total = Math.round(inc.reduce((a, x) => a + x[1], 0) * 100) / 100;
+    if (Math.abs(total) > 1) {
+      const src = from?.source === "upload_ledgers" ? (from?.file ? "the trial balance file " + String(from.file).slice(0, 80) : (declare?.complete ? "a ledger masters file uploaded" : "a trial balance uploaded")) : "the bridge's trial balance";
       const g = await applyGroups(String(firm || bk?.firm_id), book, led.map((l: any) => [l[0], l[1]]), body.groups);
-      const id = await openingsHold(book, src, null, iso(body.openAsOn), inc, "held", Number(c.candidate));
-      const words = "Opening balances from " + src + " do not add up to nil: " + inrText(Number(c.candidate)) + ". The opening balances FinCom had stay; the ledgers and groups are taken.";
-      console.log("tally-ingest ledgers: openings held", book, JSON.stringify({ held: id, difference: c.candidate, source: from?.source }));
-      return from?.source === "upload_ledgers" ? reply(409, { ok: false, held: id, refused: "nil", error: words, ...g }) : reply(200, { ok: true, held: id, kept: words, ...g });
+      const id = Number(await openingsHold(book, src, null, iso(body.openAsOn), inc, "held", total));
+      const words = "Opening balances from " + src + " do not add up to nil: " + inrText(total) + ". The opening balances FinCom had stay; the ledgers and groups are taken.";
+      console.log("tally-ingest ledgers: openings held", book, JSON.stringify({ held: id, difference: total, source: from?.source }));
+      heldOut = { held: id, words, g };
+      // a trial balance uploaded as opening balances is refused with the words; a masters list and the bridge's trial
+      // balance go on to their GSTIN and PAN below (their openings held)
+      if (from?.source === "upload_ledgers" && !declare?.complete) return reply(409, { ok: false, held: id, refused: "nil", error: words, ...g });
     }
   }
   // migration-33: the list is add-only (a ledger missing from it marked deleted, never removed) and kept with who sent it;
@@ -2874,8 +2883,9 @@ async function ingestLedgers(book: string, body: any, firm?: string, from?: List
   const list = { source: "full list", ...(from || {}), file: from?.file || (typeof body.file === "string" ? body.file.slice(0, 200) : undefined) };
   // migration-34: a list declared complete goes with p_complete and p_count (a cloud without 34 takes it undeclared: nothing marked)
   let data: any = null, error: any = null;
-  if (declare?.complete) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list, p_complete: true, p_count: declare.count }));
-  if (!declare?.complete || (error && /p_complete|p_count|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message))) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list }));
+  if (heldOut) data = { ok: true, held: heldOut.held, kept: heldOut.words, ...heldOut.g };
+  else if (declare?.complete) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list, p_complete: true, p_count: declare.count }));
+  if (!heldOut && (!declare?.complete || (error && /p_complete|p_count|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message)))) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", { ...args, p_list: list }));
   if (error && /p_list|tally_ingest_ledgers_g|could not find|does not exist|schema cache/i.test(error.message)) ({ data, error } = await db.rpc("tally_ingest_ledgers_g", args));
   if (error) throw new Error(error.message);
   // FinCom Bridge 2.1.2 on: each ledger's GSTIN and PAN ([name, group, opening, gstin, pan]), for matching a bill's supplier

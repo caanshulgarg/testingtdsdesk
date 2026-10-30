@@ -481,8 +481,10 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 					continue
 				}
 				inf := getCoInfo(tc, name, toInt(pp["port"]))
-				noteCompanyGUID(name, nt(c, "GUID"))    // the first GUID seen is held; another one is noted, never taken
-				noteBooksFrom(name, nt(c, "BOOKSFROM")) // 2.5.0: the ledger reads' period (booksfrom.go)
+				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
+				if pp["mine"] != false {
+					noteBooksFrom(name, nt(c, "BOOKSFROM")) // 2.5.0: the ledger reads' period, from this user's own Tally only (booksfrom.go)
+				}
 				if pp["mine"] != false {
 					ownOpen[liveOwnKey(nt(c, "GUID"), name)], ownOpen[liveOwnKey("", name)] = name, name
 				}

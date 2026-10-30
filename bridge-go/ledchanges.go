@@ -214,12 +214,16 @@ func ledChangesCheckOn(company string, preferred int) (int, error) {
 		liveSayOnce("ledch|"+key+"|"+why, "Ledger changes for "+company+": not asked: "+why)
 		return 0, nil
 	}
-	rows, reached, reqs, err := ledAskChanges(company, key, port, after, m)
+	bf, herr := booksFromForRead(recorderTC(nil), company)
+	if herr != nil {
+		return 0, herr // 2.5.0: held, never undated (booksfrom.go); the number stays
+	}
+	rows, reached, reqs, err := ledAskChangesAt(company, bf, port, after, m)
 	if reached <= after {
 		return 0, err
 	}
 	if len(rows) > 0 {
-		if serr := ledSend(company, guid, rows, "counter", after, reached); serr != nil {
+		if serr := ledSend(company, guid, bf, rows, "counter", after, reached); serr != nil {
 			return 0, serr // the number stays: asked and sent again at the next check
 		}
 	}
@@ -230,12 +234,10 @@ func ledChangesCheckOn(company string, preferred int) (int, error) {
 }
 
 // the ledgers with an AlterID in (after, m], 200 AlterIDs a request, 10 requests at most; how far it got
-func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int64, int, error) {
+// 2.5.0: with one books-from for the whole ask (the rows then go with it as openingsAt)
+func ledAskChangesAt(company, bf string, port int, after, m int64) ([]ledRow, int64, int, error) {
 	var rows []ledRow
 	a, reqs := after, 0
-	if _, err := booksFromForRead(recorderTC(nil), company); err != nil {
-		return rows, a, reqs, err // 2.5.0: held, never undated (booksfrom.go); the number stays
-	}
 	for reqs < ledChangesMaxReqs() && a < m {
 		if postingGoing() {
 			return rows, a, reqs, errBackoff
@@ -246,7 +248,7 @@ func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int
 		}
 		// 2.3.1 (the owner's last change): stopped at 2 s or not answered: the number stays and the shared retry schedule
 		// (retry.go) asks again by itself; never switched off
-		raw, err := invokeTally(recorderTC(nil), port, ledgerChangesRequest(company, a, upto), ledChangesSec())
+		raw, err := invokeTally(recorderTC(nil), port, ledgerChangesRequestAt(company, bf, a, upto), ledChangesSec()) // one books-from for the whole ask
 		reqs++
 		if err != nil {
 			return rows, a, reqs, err
@@ -271,7 +273,8 @@ func ledAskChanges(company, key string, port int, after, m int64) ([]ledRow, int
 // to FinCom's cloud: tally-ingest "ledger_changes", the ledger list's rows [guid, MasterID, AlterID, name, parent,
 // opening, GSTIN, PAN, openingChanged (0: FinCom compares with the opening it was sent), state, deductee type], 500 a call; nil only when
 // every call was taken
-func ledSend(company, guid string, rows []ledRow, why string, after, upto int64) error {
+// 2.5.0: bf, the books-from the rows were read with, goes as openingsAt
+func ledSend(company, guid, bf string, rows []ledRow, why string, after, upto int64) error {
 	sort.Slice(rows, func(i, j int) bool { return rows[i].alter < rows[j].alter })
 	for len(rows) > 0 {
 		n := minI(500, len(rows))
@@ -280,7 +283,7 @@ func ledSend(company, guid string, rows []ledRow, why string, after, upto int64)
 			led = append(led, append(append([]any{r.guid, r.mid, r.alter, r.name, r.parent, r.open, r.gstin, r.pan, 0, r.state, r.dtype}, ledTDSCols(r.nature, r.special, r.ldc)...), r.payArr()...)) // 2.4.3: the TDS master fields; 2.4.4: the pay-head fields
 		}
 		body := M{"kind": "ledger_changes", "company": company, "company_guid": guid, "ledgers": led, "why": why}
-		if bf := booksFromOf(company); bf != "" {
+		if isTallyDate(bf) {
 			body["openingsAt"] = bf // 2.5.0: read with the books' first year as the period (booksfrom.go)
 		}
 		if why == "counter" {
@@ -379,6 +382,7 @@ func ledWantedRun(j M) {
 		}
 		var got []ledRow
 		var asked []string
+		wbf := "" // 2.5.0: the books-from these ledgers are read with (one for the company's whole pass)
 		for _, name := range names[w] {
 			k := key + "|" + strings.ToLower(name)
 			ledWantMu.Lock()
@@ -403,11 +407,15 @@ func ledWantedRun(j M) {
 				unmark()
 				break
 			}
-			if _, err := booksFromForRead(recorderTC(nil), w.company); err != nil {
-				unmark() // 2.5.0: held, never undated (booksfrom.go); asked again once Tally says when the books begin
-				break
+			if wbf == "" {
+				b, err := booksFromForRead(recorderTC(nil), w.company)
+				if err != nil {
+					unmark() // 2.5.0: held, never undated (booksfrom.go); asked again once Tally says when the books begin
+					break
+				}
+				wbf = b
 			}
-			raw, err := invokeTally(recorderTC(nil), port, ledgerByNameRequest(w.company, name), ledChangesSec())
+			raw, err := invokeTally(recorderTC(nil), port, ledgerByNameRequestAt(w.company, wbf, name), ledChangesSec())
 			// 2.3.1: stopped at 2 s, not answered, or waiting for the retry schedule: asked again by itself (retry.go)
 			if gaveWay(err) || errors.Is(err, errRetryWait) || errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
 				unmark()
@@ -437,7 +445,7 @@ func ledWantedRun(j M) {
 		if len(got) == 0 {
 			continue
 		}
-		if err := ledSend(w.company, w.guid, got, "wanted", 0, 0); err != nil {
+		if err := ledSend(w.company, w.guid, wbf, got, "wanted", 0, 0); err != nil {
 			writeLog("Ledgers FinCom waits for in " + w.company + ": " + err.Error())
 			ledWantMu.Lock()
 			for _, name := range asked {
