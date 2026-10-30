@@ -45,6 +45,7 @@ next(b for b in FS.T["tally_books"] if b["book_id"] == BE).update(from_date=None
 FS.T["tally_devices"].append({"id": DEV, "firm_id": FIRM, "name": "NWS144", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.5.0", "wake_token": None})
 FS.T.setdefault("tally_ledgers", []); FS.T.setdefault("tally_groups", []); FS.T.setdefault("tally_ledger_aliases", []); FS.T.setdefault("tally_vouchers", [])
 FS.T["tally_openings_held"] = []
+FS.T.setdefault("tally_sync_cursor", []).append({"book_id": BA, "company_guid": "CG-A"})   # H: the book's recorded company GUID
 FS.NO_COL.pop("tally_openings_held", None)        # a cloud with migration 130
 HELD, ALERTS = [], []
 def L(book, name=None):
@@ -198,11 +199,12 @@ try:
     ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401", "NODATE CO": ""}, "H. booksFrom: the book's from_date as yyyymmdd; \"\" when FinCom has none; closed and unlinked companies left out (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": [], "companies": []})
     ok(c == 200 and not r.get("booksFrom"), "H. no open company: no booksFrom (%s)" % r.get("booksFrom"))
-    FS.T.setdefault("tally_sync_cursor", []).append({"book_id": BA, "company_guid": "CG-A"})
     c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-a"}]})
     ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401"}, "H. the book's recorded GUID (any case): its day (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-restored-copy"}]})
     ok(c == 200 and r.get("booksFrom") == {"LOAN CO": ""}, "H. a company of that name with another GUID (a restored or test copy): \"\", never the book's day (%s)" % r.get("booksFrom"))
+    c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True}]})
+    ok(c == 200 and not r.get("booksFrom"), "H. no GUID in the beat yet for a book with a recorded GUID: left out, the bridge keeps its day (%s)" % r.get("booksFrom"))
     print("== F. a cloud without migration 130")
     FS.NO_COL["tally_openings_held"] = {"id"}
     time.sleep(0.1)

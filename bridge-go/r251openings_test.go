@@ -17,6 +17,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -227,34 +228,44 @@ func TestR251BeatAnswerBooksFrom(t *testing.T) {
 	}
 }
 
-// --- 7. review of 2.5.1: FinCom's day is used only as the first day of a year of Tally's own books (on or after Tally's
-// books-from, the same day and month); otherwise the ledgers are held (one log line naming both days), never read as at
-// FinCom's day nor Tally's; Tally's books-from not known: held as 2.5.0
-func TestR251FinComDayMustBeAYearOfTallysBooks(t *testing.T) {
-	f, _ := r251Bridge(t)
-	for _, bad := range []string{"20230401", "20251001"} {
-		applyBooksFrom(M{"booksFrom": M{zz: bad}})
-		if booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
-			t.Fatalf("%s used: %q", bad, booksFromOf(zz))
-		}
-		k := newRun("ledgers", "r251-7"+bad)
-		if err := k.step(zz, f.port, ""); err != nil {
-			t.Fatal(err)
-		}
-		if !k.booksHeld[zz] || f.n(ledListID)+f.n(ledChangesID)+f.n(ledByNameID) != 0 {
-			t.Fatalf("%s: not held: %v", bad, f.ids())
-		}
-		if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); !errors.Is(err, errBooksFromUnknown) {
-			t.Fatalf("%s: a chunk not held: %v", bad, err)
-		}
-		if n := logLines("Ledgers of " + zz + " not read: FinCom's books of this company begin on " + dayWords(bad) + ", which is not the first day of a year of Tally's books (Tally's books begin on 1-Apr-2024)"); n != 1 {
-			t.Fatalf("%s: said %d times", bad, n)
-		}
+// --- 7. review of 2.5.1 (rounds 1 and 2): FinCom's day is used when it is on or after the day Tally's own books begin
+// (any day and month: Tally's books may begin mid-year); FinCom's day before Tally's books: Tally's (as 2.5.0; the
+// ledgers, names, GSTIN and TDS fields still read; the cloud keeps its openings), one log line naming both; Tally's
+// books-from not known: held as 2.5.0; a name that is not a company of this Tally is never kept
+func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
+	f, c := r251Bridge(t)
+	applyBooksFrom(M{"booksFrom": M{zz: "20230401"}})
+	if booksFromOf(zz) != "20240401" || !strings.Contains(ledgerChunkRequest(zz, 0, 2000), r251TallyPeriod) {
+		t.Fatalf("FinCom's day before Tally's books: %q", booksFromOf(zz))
 	}
-	// two years on: a year of Tally's books
-	applyBooksFrom(M{"booksFrom": M{zz: "20260401"}})
-	if booksFromOf(zz) != "20260401" {
-		t.Fatalf("two years on: %q", booksFromOf(zz))
+	const before = "Ledgers of " + zz + " are read as at 1-Apr-2024, when Tally's books begin: FinCom's books of this company begin on 1-Apr-2023, before them, so FinCom keeps its opening balances until the two agree"
+	applyBooksFrom(M{"booksFrom": M{zz: "20230401"}})
+	if n := logLines(before); n != 1 {
+		t.Fatalf("said %d times", n)
+	}
+	if err := newRun("ledgers", "r251-7a").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = pushLedgerList(zz, syncFolder(zz))
+	if f.n(ledListID) == 0 || len(c.ledList) == 0 || str(c.ledList[0]["openingsAt"]) != "20240401" {
+		t.Fatalf("the ledgers not read as at Tally's books-from: %v %v", f.ids(), c.ledList)
+	}
+	// a mid-year day after Tally's books begin: used
+	applyBooksFrom(M{"booksFrom": M{zz: "20251001"}})
+	if booksFromOf(zz) != "20251001" || !strings.Contains(ledgerChunkRequest(zz, 0, 2000), `<SVFROMDATE TYPE="Date">20251001</SVFROMDATE><SVTODATE TYPE="Date">20260930</SVTODATE>`) {
+		t.Fatalf("a mid-year day: %q", booksFromOf(zz))
+	}
+	// names that are not companies of this Tally: never kept
+	junk := M{}
+	for i := 0; i < 200; i++ {
+		junk[fmt.Sprintf("Not A Company %d", i)] = "20250401"
+	}
+	applyBooksFrom(M{"booksFrom": junk})
+	booksFromMu.Lock()
+	n := len(finComFromHeld)
+	booksFromMu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d days kept", n)
 	}
 	// Tally's books-from not known (its company list answers without it): held with 2.5.0's words, FinCom's day or not
 	f.mu.Lock()
@@ -263,6 +274,9 @@ func TestR251FinComDayMustBeAYearOfTallysBooks(t *testing.T) {
 	openCompaniesWith(fin, true)
 	if tallyBooksFromOf(zz) != "" || booksFromOf(zz) != "" || ledgerChunkRequest(zz, 0, 2000) != "" {
 		t.Fatalf("read with Tally's books-from not known: %q", booksFromOf(zz))
+	}
+	if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); !errors.Is(err, errBooksFromUnknown) {
+		t.Fatalf("a chunk not held: %v", err)
 	}
 }
 

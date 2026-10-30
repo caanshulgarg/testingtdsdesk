@@ -26,10 +26,11 @@ from_date.
 1. Bridge (bridge-go/booksfrom.go): the books-from of the three ledger requests is FinCom's first day of its book of the
    company, named in each heartbeat answer as `booksFrom: {company: yyyymmdd}`; Tally's BOOKSFROM only when FinCom has
    none (`""`, or no answer naming the company yet). `openingsAt` is the date used. The day is checked as a real
-   yyyymmdd date (1990 to a year after today); anything else is never used. FinCom's day is used only when it is the
-   first day of a year of Tally's own books of the company (on or after Tally's BOOKSFROM, the same day and month); when
-   it is not, or Tally has not said when its books begin, the ledgers are not read (one log line naming both days),
-   never read as at either day. It is kept in the sync folder (`fincom-books-from.json`), so a restart
+   yyyymmdd date (1990 to a year after today); anything else is never used. FinCom's day is used when it is on or after
+   the day Tally's own books of the company begin (Tally's BOOKSFROM); FinCom's day before it: Tally's, as 2.5.0 (the
+   ledgers, their names, GSTIN, PAN and TDS fields still read; the cloud guard keeps FinCom's openings), one log line
+   naming both days. Tally's books-from not known: the read is held, as 2.5.0. A day is kept only for a company of this
+   Windows user's own Tally whose books-from Tally has said. It is kept in the sync folder (`fincom-books-from.json`), so a restart
    uses it before the first heartbeat; `""` forgets it; an answer without `booksFrom` (a cloud before 2.5.1) changes
    nothing. When FinCom's day is not Tally's, one log line names both. A round begun with another date starts again
    with FinCom's (2.5.0's `openingsAt` check), and the first round with it sends every ledger.
@@ -38,8 +39,9 @@ from_date.
    arrived is not refused); any other period, or none, is refused as in 2.5.0.
 3. Cloud (server/tally-cloud/index.ts): the beat's answer carries `booksFrom` for each company the beat says open in
    Tally whose book FinCom knows (`tally_books.from_date` as yyyymmdd, `""` when none; at most 200; the books' days and
-   GUIDs read in one query each); `""` for a company of that name whose GUID is not the book's recorded one (a restored
-   or test copy, as review 245 R3). The guard of 204d79d4f: its notes no longer also say "taken without the guards" for a refused read, and a
+   GUIDs read in one query each, both at once, each book's kept five minutes); `""` for a company of that name whose GUID
+   is not the book's recorded one (a restored or test copy, as review 245 R3); left out while the beat carries no GUID
+   for a book with a recorded one. The guard of 204d79d4f: its notes no longer also say "taken without the guards" for a refused read, and a
    ledger_changes call as at another day says "<n> opening(s) as at <day> not taken: FinCom's books of this company
    begin on <from_date>" (recorded with that day) instead of the undated read's words.
 
@@ -48,8 +50,11 @@ from_date.
 - A 2.5.1 that starts with no FinCom day kept (the first start after the upgrade) may read once as at Tally's day before
   the first heartbeat answer (about 3 s after the start); the cloud guard refuses those openings with a note, and the
   next round goes as at FinCom's day (the round starts again when the date changes).
-- When FinCom's first day is before the Tally company's own books-from, or not on its day and month, the ledgers of that
-  company are not read until the two agree (one log line); FinCom's Tally page shows the stored openings meanwhile.
+- When FinCom's first day is before the Tally company's own books-from, the ledgers are read as at Tally's books-from
+  (2.5.0's rule) and the cloud guard keeps FinCom's openings (its notes say so) until the two agree.
+- FinCom's first day in a later year of Tally's books makes Tally give the openings of that year (the balances carried
+  from the earlier years): the owner's decision for 2.5.1; timed by the real-Tally gate o251 (one earlier year of
+  entries); a company with many earlier years is not measured.
 - Two of the same Windows user's Tallys with a company of the same name and different books: as 2.5.0.
 
 ## Deploy order (the owner)

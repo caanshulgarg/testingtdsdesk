@@ -25,7 +25,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,10 +33,6 @@ import (
 )
 
 var errBooksFromUnknown = errors.New("Tally has not said when this company's books begin: its ledgers are not read until it does")
-
-// 2.5.1 (review): FinCom's first day not a whole number of years on from Tally's own books-from (or Tally's not known):
-// the ledgers are not read (one log line), never read as at that day nor as at Tally's
-var errFinComDayRefused = fmt.Errorf("%w (FinCom's first day of the book is not a year of Tally's books of this company)", errBooksFromUnknown)
 
 // a ledger request that does not carry exactly its company's books' first year (or none): never sent, whoever asks and
 // whatever ReadDays says
@@ -102,18 +97,17 @@ func finComBooksFrom(company string) string {
 }
 
 // the beat's answer: booksFrom {company: yyyymmdd | ""}. A day is kept (and saved), "" forgets the company's day, a
-// company not named keeps what it had, and an answer without booksFrom changes nothing. When FinCom's day is not
-// Tally's, one log line names both (again only when FinCom's day changes)
+// company not named keeps what it had, and an answer without booksFrom changes nothing. Review of 2.5.1: a day is kept
+// only for a company of this user's own Tally whose books-from Tally has said (so names that are not companies here
+// never fill the list); when FinCom's day is not Tally's, one log line names both (again when either day changes)
 func applyBooksFrom(j M) {
 	m, ok := j["booksFrom"].(map[string]any)
 	if !ok {
 		return
 	}
-	type said struct{ company, day string }
-	var tell []said
-	booksFromMu.Lock()
-	finComFromLoad()
-	changed, n := false, 0
+	type cand struct{ key, name, day, tally string }
+	var cs []cand
+	n := 0
 	for co, v := range m {
 		if n++; n > 200 {
 			break
@@ -127,22 +121,35 @@ func applyBooksFrom(j M) {
 			if s, isStr := v.(string); !isStr || s != "" {
 				continue // not a day: never used, the day held stays
 			}
-			if _, had := finComFromHeld[k]; had {
-				delete(finComFromHeld, k)
-				delete(finComFromSaid, k)
+		}
+		// Tally's own books-from of the company (outside the lock: tallyBooksFromOf takes it)
+		cs = append(cs, cand{k, strings.Join(strings.Fields(co), " "), day, tallyBooksFromOf(co)}) // one line: no line break from the answer
+	}
+	var tell []cand
+	booksFromMu.Lock()
+	finComFromLoad()
+	changed := false
+	for _, c := range cs {
+		if c.day == "" {
+			if _, had := finComFromHeld[c.key]; had {
+				delete(finComFromHeld, c.key)
+				delete(finComFromSaid, c.key)
 				changed = true
 			}
 			continue
 		}
-		if _, had := finComFromHeld[k]; !had && len(finComFromHeld) >= 1000 {
-			continue // at most 1,000 companies kept (the cloud names only the companies open in Tally)
+		if c.tally == "" {
+			continue // not a company of this Tally with its books-from said (yet): named again at the next heartbeat
 		}
-		if finComFromHeld[k] != day {
-			finComFromHeld[k], changed = day, true
+		if _, had := finComFromHeld[c.key]; !had && len(finComFromHeld) >= 1000 {
+			continue // at most 1,000 companies kept
 		}
-		if finComFromSaid[k] != day {
-			finComFromSaid[k] = day                                               // looked at once per day named (review: not every beat)
-			tell = append(tell, said{strings.Join(strings.Fields(co), " "), day}) // one line: no line break from the answer
+		if finComFromHeld[c.key] != c.day {
+			finComFromHeld[c.key], changed = c.day, true
+		}
+		if c.day != c.tally && finComFromSaid[c.key] != c.day+"|"+c.tally {
+			finComFromSaid[c.key] = c.day + "|" + c.tally
+			tell = append(tell, c)
 		}
 	}
 	var text []byte
@@ -155,18 +162,20 @@ func applyBooksFrom(j M) {
 			writeLog("FinCom's first days of the books not kept on disk (" + err.Error() + "); they are named again at the next heartbeat")
 		}
 	}
-	for _, s := range tell {
-		if t := tallyBooksFromOf(s.company); t != "" && t != s.day && finComDayFits(s.day, t) {
-			writeLog("Ledgers of " + s.company + " are read as at " + dayWords(s.day) + ", FinCom's first day of its books of this company (Tally's books begin on " + dayWords(t) + ")")
+	for _, c := range tell {
+		if finComDayFits(c.day, c.tally) {
+			writeLog("Ledgers of " + c.name + " are read as at " + dayWords(c.day) + ", FinCom's first day of its books of this company (Tally's books begin on " + dayWords(c.tally) + ")")
+		} else {
+			writeLog("Ledgers of " + c.name + " are read as at " + dayWords(c.tally) + ", when Tally's books begin: FinCom's books of this company begin on " + dayWords(c.day) + ", before them, so FinCom keeps its opening balances until the two agree")
 		}
 	}
 }
 
-// 2.5.1 (review): FinCom's day is used only when it is the first day of a year of Tally's own books of the company: on
-// or after Tally's books-from, the same day and month (a whole number of years on). The period of a ledger read is then
-// always one of the company's own books' years, as 2.5.0's rule; FinCom's day never moves it elsewhere
+// 2.5.1 (review): FinCom's day is used when it is on or after the day Tally's own books of the company begin (Tally can
+// give openings only from its books' beginning on); FinCom's day before it: Tally's, as 2.5.0, and the cloud keeps its
+// openings (they are not as at its first day)
 func finComDayFits(fc, tally string) bool {
-	return isTallyDate(fc) && isTallyDate(tally) && fc >= tally && fc[4:] == tally[4:]
+	return isTallyDate(fc) && isTallyDate(tally) && fc >= tally
 }
 
 func dayWords(d string) string {
@@ -198,46 +207,37 @@ func noteBooksFrom(company, v string) {
 // 2.5.1: the books-from the three ledger requests carry: FinCom's first day of its book of the company, else Tally's own
 // (tallyBooksFromOf); "" when neither is known
 //
-// Review of 2.5.1: FinCom's day that does not fit Tally's books (finComDayFits), or with Tally's books-from not known:
-// "" (the read is held, said once: holdLedgerRead), never Tally's day instead
+// Review of 2.5.1: FinCom's day only on or after Tally's (finComDayFits), else Tally's; Tally's books-from not known: ""
+// (the read is held, 2.5.0's rule)
 func booksFromOf(company string) string {
+	d, _ := booksFromPair(company)
+	return d
+}
+
+// the day in use and Tally's own (each "" when not known); Tally's books-from read once
+func booksFromPair(company string) (string, string) {
 	t := tallyBooksFromOf(company)
-	if d := finComBooksFrom(company); d != "" {
-		if finComDayFits(d, t) {
-			return d
-		}
-		return ""
+	if t == "" {
+		return "", ""
 	}
-	return t
+	if d := finComBooksFrom(company); d != "" && finComDayFits(d, t) {
+		return d, t
+	}
+	return t, t
 }
 
 // the books' first days a ledger request of the company may carry (ledgerPeriodExact): the one in use, and Tally's own
-// (review of 2.5.1: a request built a moment before FinCom's day arrived is not refused; Tally's books-from is the
-// company's own books' first year, 2.5.0's rule)
+// (review of 2.5.1: a request built a moment before FinCom's day arrived is not refused; Tally's books-from is 2.5.0's
+// rule, the company's own books' first year)
 func booksFromAllowed(company string) []string {
-	var o []string
-	for _, d := range []string{booksFromOf(company), tallyBooksFromOf(company)} {
-		if d != "" && (len(o) == 0 || o[0] != d) {
-			o = append(o, d)
-		}
-	}
-	return o
-}
-
-// why FinCom's day is not used for the company ("" when it is, or FinCom has none)
-func finComDayWhy(company string) string {
-	d := finComBooksFrom(company)
+	d, t := booksFromPair(company)
 	if d == "" {
-		return ""
+		return nil
 	}
-	t := tallyBooksFromOf(company)
-	if t == "" {
-		return "" // Tally has not said when its books begin: 2.5.0's held read and words
+	if d == t {
+		return []string{d}
 	}
-	if finComDayFits(d, t) {
-		return ""
-	}
-	return "FinCom's books of this company begin on " + dayWords(d) + ", which is not the first day of a year of Tally's books (Tally's books begin on " + dayWords(t) + "); the ledgers wait until the two agree"
+	return []string{d, t}
 }
 
 // Tally's own books-from of the company (yyyymmdd); "" when not known. Held from the company list this run; after a
@@ -327,17 +327,6 @@ func ledgerPeriodExact(x string) bool {
 // company list read again (that read itself is the one request; postings still go first through the one gate)
 func holdLedgerRead(tc *TC, company string) error {
 	k := companyKey(company)
-	// 2.5.1 (review): FinCom's day does not fit Tally's books: said once per reason, the company list not read again
-	if why := finComDayWhy(company); why != "" {
-		booksFromMu.Lock()
-		said := booksFromSaid[k+"|fc|"+why]
-		booksFromSaid[k+"|fc|"+why] = true
-		booksFromMu.Unlock()
-		if !said {
-			writeLog("Ledgers of " + company + " not read: " + why)
-		}
-		return errFinComDayRefused
-	}
 	booksFromMu.Lock()
 	said := booksFromSaid[k]
 	booksFromSaid[k] = true
