@@ -1,0 +1,2 @@
+2026-10-30 12:55:13  Stock of FinCom Spike Co (01-Apr-2026 to 31-Oct-2026), asked in FinCom: opening 88977507.73, closing 192438290.86, from Tally in 172 ms
+2026-10-30 12:55:18  Stock of FinCom Spike Co (01-Apr-2027 to 30-Jun-2027), asked in FinCom: opening 266163620.59, closing 282217581.61, from Tally in 175 ms
