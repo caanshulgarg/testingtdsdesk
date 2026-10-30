@@ -41,7 +41,7 @@ function bankJobOf(r){
   return m ? m[1] : "";
 }
 async function bankSentHeal(cid, rows, tname, ids){
-  const out = {n: 0, at: "", batchEnd: "", rows: [], refused: []};
+  const out = {n: 0, at: "", batchEnd: "", rows: [], refused: [], review: []};
   const b = B();
   if (!b || b.cid !== cid || typeof Bridge !== "object" || !Bridge.on() || !Bridge.up()) return out;
   const todo = [].concat(rows || []).filter(r => r.state === "ready" && (!ids || ids.has(r.id)) && bankJobOf(r));
@@ -70,6 +70,9 @@ async function bankSentHeal(cid, rows, tname, ids){
     const sp = x && !x.ok && x.needsReview ? bankPartialSplit(j.results, rowOf).get(String(r.id)) : null;
     if (sp && sp.refused){ r.postError = sp.refused; delete r.postJob; out.refused.push(r); continue; }
     if (sp && sp.taken) x = sp.taken;
+    // 30-Oct-2026 (Fingate, job 488f8f64: Tally created 8 of 50 and 16 of 37): a line of a batch Tally made only partly
+    // keeps Tally's own words and the batch's counts, never the guard's "already sent from this computer"
+    if (x && !postTaken(x) && bankInReview(x)){ bankReviewMark(r, x, job); out.review.push(r); continue; }
     if (!x || !postTaken(x)) continue;
     const guess = sp ? sp.guess : bankBatchGuesses(j.results).get(String(r.id));
     const at = x.sentAt || j.finishedAt || j.updatedAt || new Date().toISOString();
@@ -79,7 +82,97 @@ async function bankSentHeal(cid, rows, tname, ids){
     if (+x.batchEnd > +(out.batchEnd || 0)) out.batchEnd = String(x.batchEnd);
   }
   if (out.n){ learnRows(out.rows, "sent"); saveBank({rows: true, posted: true}); }
-  else if (out.refused.length) saveBank({rows: true});
+  else if (out.refused.length || out.review.length) saveBank({rows: true});
+  return out;
+}
+// ---------- a batch Tally made only partly (owner, 30-Oct-2026, Fingate Advisory Services) ----------
+// Bridge 2.4.9 sends bank lines 50 to a request. Tally's reply to a request counts what it made (CREATED, LASTVCHID) and
+// gives its line errors, never WHICH voucher it refused; so every line of a request where it made fewer than it was sent
+// needs review (the bridge's rule A2), and the bridge keeps them all on its record as sent (its resend guard). Before
+// this, the page put Tally's words on the line once, and the next Post replaced them with the guard's "already sent
+// from this computer on …", and the line sat "ready" for ever: 87 lines of one statement (24 of them in Tally, 63 not)
+// with no word of Tally's left. Now each such line keeps r.postReview {job, created, n, batchEnd, at, words}, its
+// postError says what Tally said, and Check with Tally (bankCheckReview) settles it from a read of the bank ledger.
+function bankInReview(x){ return !!(x && (x.needsReview === true || x.outcomeUnknown === true || (x.ok === false && x.accepted === true))); }
+function bankReviewWords(x){
+  const n = num(x.batchN), made = num(x.created) + num(x.altered);
+  const tw = [].concat(x.lineError || []).map(e => plainMsg(e)).filter(Boolean);
+  const said = tw.length ? tw.join("; ") : plainMsg(x.message || "") || "no reason given";
+  if (x.outcomeUnknown) return "Sent to Tally, and no answer came, so FinCom cannot tell whether Tally made it. Tally said: " + said + ". Press Check with Tally.";
+  return "Tally made " + made + " of the " + n + " lines sent together" + (x.batchEnd ? " (Tally ids up to " + x.batchEnd + ")" : "") +
+    " and does not say which. Tally said: " + said + ". Press Check with Tally to find which of them are in Tally.";
+}
+function bankReviewMark(r, x, job){
+  r.postReview = {job: String(job || x.jobId || x.sentJob || r.postJob || ""), created: num(x.created) + num(x.altered), n: num(x.batchN), batchEnd: String(x.batchEnd || ""),
+    at: x.sentAt || "", words: [].concat(x.lineError || []).map(e => plainMsg(e)).filter(Boolean).concat(x.lineError && x.lineError.length ? [] : [plainMsg(x.message || "")]).filter(Boolean).slice(0, 5)};
+  if (r.postReview.job) r.postJob = r.postReview.job;
+  r.postError = bankReviewWords(x);
+}
+// Check with Tally for the open statement: the bank ledger read for the lines' dates (the bridge here, else FinCom's
+// copy). Only a read that holds those days settles anything (copyNotCovered: "not checked", never "not in Tally"):
+//   found (FinCom's tag in the narration; else the one entry of that amount on that day): posted, with Tally's voucher;
+//   not found: released for the FinCom Bridge (its record lets it go once more) and back to Post, with why. The bridge
+//   still looks in Tally for each line just before it posts it, so nothing goes twice.
+// Which lines: those in review (a partly made batch, no answer), or every line marked posted (opts.all). -> {found,
+// missing, notCovered, error}
+async function bankCheckReview(opts){
+  opts = opts || {};
+  const b = B(), co = b && CO(b.cid), st = b && curStmt();
+  const out = {found: [], missing: [], notCovered: false, error: ""};
+  if (!st) return out;
+  const acc = (co.bankAccounts || []).find(a => a.id === st.acctId), ledger = acc && exactLedger(acc.ledger);
+  if (!ledger){ out.error = "Choose the Tally ledger for this bank account first."; toast(out.error); return out; }
+  const rows = b.rows.filter(r => opts.all ? ["sent", "intally"].includes(r.state) || (r.state === "ready" && (r.postReview || bankJobOf(r))) : r.state === "ready" && (r.postReview || bankJobOf(r)));
+  if (!rows.length){ toast("No lines wait for a check with Tally."); return out; }
+  const ds = rows.map(r => r.date).filter(Boolean).sort(), from = addDays(ds[0], -15), to = addDays(ds[ds.length - 1], 15);
+  const tname = (typeof tallyCoName === "function" ? tallyCoName(co) : "") || co.tallyName || co.name;
+  b.busy = "Reading " + ledger + " from Tally for " + fmtDate(from) + " to " + fmtDate(to) + "…"; render();
+  let j;
+  try { j = await tallyCall(co, ledgerLinesUrl(tname, ledger, from, to), null, 600000); }
+  catch (e){ b.busy = ""; out.error = "Tally could not be read (" + ((e && e.message) || e) + "); nothing was changed."; b.reviewCheck = Object.assign({at: Date.now()}, out); render(); return out; }
+  b.busy = "";
+  if (copyNotCovered(j) || !Array.isArray(j && j.vouchers)){
+    out.notCovered = true;
+    b.reviewCheck = Object.assign({at: Date.now(), ledger, n: rows.length}, out);
+    render(); return out;
+  }
+  const now = new Date().toISOString(), me = (typeof postMyName === "function" ? postMyName() : "") || (Cloud.st && Cloud.st.email) || "";
+  const vs = [].concat(j.vouchers || []).filter(v => !/^yes$/i.test(v.cancelled || "")).map(v => {
+    const be = [].concat(v.entries || []).find(e => norm(e.ledger) === norm(ledger));
+    return be ? {v, date: tallyToIso(v.date), eff: r2(-(parseFloat(String(be.amount).replace(/,/g, "")) || 0)), tag: ((String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i) || [])[1] || "").toLowerCase()} : null;
+  }).filter(Boolean);
+  const used = new Set();
+  // FinCom's tag first, for every line; then amount and day, only where exactly one untagged entry fits
+  const hit = new Map();
+  rows.forEach(r => { const t = fpHash(r.fp || r.id).toLowerCase(), k = vs.findIndex((x, i) => !used.has(i) && x.tag === t); if (k >= 0){ used.add(k); hit.set(r.id, vs[k]); } });
+  rows.forEach(r => {
+    if (hit.has(r.id)) return;
+    const c = vs.map((x, i) => i).filter(i => !used.has(i) && !vs[i].tag && vs[i].date === r.date && Math.abs(vs[i].eff - bankEffect(r)) < 0.01);
+    const same = rows.filter(q => !hit.has(q.id) && q.date === r.date && Math.abs(bankEffect(q) - bankEffect(r)) < 0.01).length;
+    if (c.length === 1 && same === 1){ used.add(c[0]); hit.set(r.id, vs[c[0]]); }
+  });
+  rows.forEach(r => {
+    const x = hit.get(r.id);
+    if (x){
+      if (["sent", "intally"].includes(r.state)) return;
+      const v = x.v;
+      bankPosted(b.cid, r, {ok: true, verified: true, guid: v.guid || "", masterId: v.masterId || v.masterid || "", vchType: v.type || "", vchDate: v.date || "", vchNumber: v.number || "", jobId: (r.postReview && r.postReview.job) || r.postJob || ""}, tname, now, {by: me});
+      if (r.tally && v.number) r.tally.number = String(v.number);
+      r.tallyHow = "found in " + ledger + " at a check with Tally on " + fmtDate(now.slice(0, 10)) + (v.number ? " (" + (v.type || "voucher") + " no. " + v.number + ")" : "");
+      delete r.postReview; delete r.release;
+      out.found.push(r);
+    } else {
+      const was = r.postReview && r.postReview.words && r.postReview.words.length ? " (Tally had said: " + r.postReview.words.join("; ") + ")" : "";
+      if (["sent", "intally"].includes(r.state)){ r.state = "ready"; r.tally = null; r.postedVia = ""; if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; }
+      r.release = {at: now, by: me || "FinCom", why: "Not in " + ledger + " at a check with Tally on " + fmtDate(now.slice(0, 10))};
+      r.postError = "Not in Tally: " + ledger + " read on " + fmtDate(now.slice(0, 10)) + " for " + fmtDate(from) + " to " + fmtDate(to) + " has no entry for this line" + was + ". Post it again: the FinCom Bridge looks in Tally for it once more just before it posts it.";
+      out.missing.push(r);
+    }
+  });
+  if (out.found.length) learnRows(out.found, "sent");
+  saveBank({rows: true, posted: true});
+  b.reviewCheck = {at: Date.now(), ledger, from, to, n: rows.length, found: out.found.map(r => r.id), missing: out.missing.map(r => r.id), notCovered: false, error: ""};
+  render();
   return out;
 }
 // 26-Oct-2026 (ITSEasy, 19-Feb-2026 receipt of 1,500 to "Software"): one request of 41, Tally created 40 (ids up to
@@ -136,5 +229,5 @@ async function bankHealOpen(){
   if (h.n && B() === b){ b.postReport = {at: Date.now(), posted: 0, skipped: 0, movedBack: 0, failed: [], already: h.n, alreadyLine: bankAlreadyLine(h), dismiss: "bankReportOk"}; render(); }
   return h.n;
 }
-if (typeof globalThis === "object") Object.assign(globalThis, {bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen});
+if (typeof globalThis === "object") Object.assign(globalThis, {bankPartialSplit, bankBatchGuesses, bankJobAnswers, bankJobOf, bankSentHeal, bankAlreadyLine, bankHealOpen, bankInReview, bankReviewWords, bankReviewMark, bankCheckReview});
 /* @react-lazy: end */

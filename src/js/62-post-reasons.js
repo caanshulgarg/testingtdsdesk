@@ -522,6 +522,17 @@ function postEntryRows(cid){
     if (st.code === 6 && typeof PostCheck === "object"){ const v = PostCheck.view(e); st = Object.assign({}, st, {todo: v.text + ". " + st.todo, check: v.state}); }
     out.push({key: "local:" + e.id, id: String(e.id), kind: "bill", e, job: null, r: null, it: null, ids: null, marks: [], st, d: postDetailsOf(cid, e.id, e, "bill", null, null), miss});
   });
+  // 30-Oct-2026 (Fingate): a bank line posted straight to the bridge that no posting of the cloud names (no record kept),
+  // not in Tally: on Errors with what Tally said, never only on the Bank page. Review (a batch Tally made only partly,
+  // no answer) is 6; anything else Tally or the bridge refused is 7
+  if (b) b.rows.forEach(r => {
+    if (seen.has(String(r.id)) || r.state !== "ready" || !r.postError) return;
+    const review = !!r.postReview || /already sent from this computer/.test(r.postError);
+    const st = Object.assign({code: review ? 6 : 7, words: POST_STATUS[review ? 6 : 7].words, tab: "errors", todo: r.postError,
+      action: {kind: "bankLine", label: review ? "Check with Tally" : "Open the bank line"}, reason: {id: review ? "review" : "refused", reason: r.postError, fix: ""}},
+      r.postReview ? {id: {ids: [], batchEnd: r.postReview.batchEnd || ""}, posted: r.postReview.at || ""} : {});
+    out.push({key: "bank:" + r.id, id: String(r.id), kind: "bank", e: r, job: null, r: null, it: null, ids: null, marks: [], st, d: postDetailsOf(cid, r.id, r, "bank", null, null)});
+  });
   if (needPay.length) setTimeout(() => PostPayloads.load([...new Set(needPay)]), 0);
   // newest first: the moment it was posted or sent, else the bill's date
   const when = x => String((x.st && x.st.posted) || (x.job && (x.job.updated_at || x.job.created_at)) || (x.e && x.e.exportedAt) || x.d.date || "");

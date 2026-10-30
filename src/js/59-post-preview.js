@@ -185,23 +185,35 @@ const PostRecord = {
   clean(r){ const o = {}; ["id", "ok", "kind", "message", "verified", "vchNumber", "vchType", "guid", "masterId", "vchDate", "optional", "altered", "created", "existed", "pendingCheck", "already", "checkFailed", "vchNo",
     // bridge 2.1.8 (round 15): Tally's reply counted it, its exact voucher id or the batch's last id, and what needs review
     "byReply", "vchId", "batchEnd", "batchN", "company", "sentAt", "secondsReq", "needsReview", "accepted", "exceptions", "ignored", "errors", "lineError", "lastVchId"].forEach(k => { if (r[k] !== undefined) o[k] = r[k]; }); if (o.message) o.message = String(o.message).slice(0, 400); return o; },
+  // 30-Oct-2026 (Fingate, staging): tally_post_record was never installed (migration 27; 132 adds it), so every posting
+  // made straight to a bridge went unrecorded and this said nothing. Now: why (the words for the page) when not kept
+  why: "",
+  NOT_THERE: "FinCom's cloud cannot keep a record of postings made straight to the FinCom Bridge yet (its database lacks tally_post_record, migration 132). The lines keep their own state on this page.",
   async save(co, payload, out){
-    if (this.missing || !co || !out || typeof TCloud !== "object" || !TCloud.on()) return false;
+    this.why = "";
+    if (this.missing){ this.why = this.NOT_THERE; return false; }
+    if (!co || !out || typeof TCloud !== "object" || !TCloud.on()) return false;
     const uuidOk = s => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s || ""));
     const id = out.recId || (out.job && uuidOk(out.job.id) ? out.job.id : CloudPost.uuid());
     out.recId = id;
-    const vids = [].concat(payload.vouchers || []).map(v => v.id), res = [].concat(out.results || []).map(r => this.clean(r));
+    // an entry the bridge's resend guard held back was not sent now: it is no new posting of it (its record is the
+    // posting that sent it), so it is left out; a posting of nothing but those records nothing
+    const held = new Set([].concat(out.results || []).filter(r => r && r.alreadySent === true).map(r => String(r.id)));
+    const vids = [].concat(payload.vouchers || []).map(v => v.id).filter(v => !held.has(String(v))), res = [].concat(out.results || []).filter(r => r && !held.has(String(r.id))).map(r => this.clean(r));
+    if (!vids.length && !res.length) return true;
     const vres = res.filter(r => vids.includes(r.id)), okN = vres.filter(r => r.ok || postAlready(r)).length, unread = vres.filter(r => r.ok && !postTaken(r)).length;
     const status = vres.length && okN === vids.length ? "done" : (!vids.length && res.every(r => r.ok) ? "done" : "failed");
     const how = "sent straight to FinCom Bridge" + (Bridge.st.version ? " " + Bridge.st.version : "") + (Bridge.st.computer ? " on " + Bridge.st.computer : " on this computer");
     const message = (vids.length ? okN + " of " + vids.length + " in Tally" + (unread ? " (" + unread + " not yet read back)" : "") : res.length + " ledger" + (res.length === 1 ? "" : "s")) + ", " + how;
     try {
       const r = await TCloud.rpc("tally_post_record", {p_id: id, p_client: co.id, p_company: out.company || payload.company || "", p_status: status, p_results: res, p_entry_ids: vids, p_message: message});
-      if (r && r.ok === false) return false;
+      if (r && r.ok === false){ this.why = "FinCom's cloud did not keep a record of this posting: " + plainMsg(r.error || "refused") + "."; return false; }
       if (typeof CloudJobs === "object") CloudJobs.load(true);
       return true;
     } catch (e){
-      if (/tally_post_record|does not exist|schema cache|PGRST202|404/i.test(String((e && e.message) || e))) this.missing = true;
+      const m = String((e && e.message) || e);
+      if (/tally_post_record|does not exist|schema cache|PGRST202|404/i.test(m)){ this.missing = true; this.why = this.NOT_THERE; }
+      else this.why = "FinCom's cloud did not keep a record of this posting (" + plainMsg(m) + ").";
       return false;
     }
   }

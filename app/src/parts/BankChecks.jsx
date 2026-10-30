@@ -165,6 +165,19 @@ export function FixBanner() {
     <div className="row" style={{ gap: 8, marginTop: 8 }}><span className="note">Read those pages again:</span><Btn act="fixFree">Free</Btn><Btn act="fixGoogle" disabled={!googleReady()}>Google OCR</Btn><Btn act="fixClaude" className="btn small primary" disabled={!claudeReady()}>Claude</Btn></div></div>;
 }
 
+// 30-Oct-2026 (src/js/96 bankCheckReview): what Check with Tally found for the lines of a partly made batch
+export function ReviewCheck({ rc }) {
+  if (!rc) return null;
+  const ok = <Btn act="bankReviewCheckOk" className="linkbtn">Dismiss</Btn>;
+  if (rc.error) return <div className="bk-alert bad" data-review-check="error">{rc.error}{" "}{ok}</div>;
+  if (rc.notCovered) return <div className="bk-alert" data-review-check="not-covered"><b>{"Not checked: " + rc.ledger + " cannot be read for these days."}</b>{" FinCom's copy of Tally does not hold them and reading entries from Tally is off on this computer, so FinCom cannot say which of the " + rc.n + " lines are in Tally. "}
+    {"Post them again: the FinCom Bridge looks in Tally for each line just before it posts it, so a line already there is marked posted, not posted twice."}
+    <div style={{ marginTop: 6 }}><Btn act="bankReviewPostAgain" className="btn small primary" data-review-post-again="">{"Post the " + rc.n + " again"}</Btn>{" "}{ok}</div></div>;
+  const f = (rc.found || []).length, m = (rc.missing || []).length;
+  return <div className={"bk-alert" + (m ? " bad" : "")} data-review-check="done"><b>{"Checked with Tally (" + rc.ledger + ", " + fmtDate(rc.from) + " to " + fmtDate(rc.to) + "):"}</b>{" " + f + " in Tally, marked posted · " + m + " not in Tally"}
+    {m > 0 && <div style={{ marginTop: 6 }}><Btn act="bankReviewPostMissing" className="btn small primary" data-review-post-missing="">{"Post the " + m + " not in Tally"}</Btn>{" "}<FocusBtn title="not in Tally at the check" ids={rc.missing} label="Show them" /></div>}
+    {" "}{ok}</div>;
+}
 // what the last posting to Tally did
 export function PostReport({ rep }) {
   if (!rep) return null;
@@ -187,8 +200,12 @@ export function PostReport({ rep }) {
   if (rep.skipped) bits.push(rep.skipped + " already in Tally (not posted again)");
   if (rep.failed && rep.failed.length) bits.push(rep.failed.length + " not posted");
   if (rep.movedBack) bits.push(rep.movedBack + " moved back to review (ledger not in Tally)");
+  // 30-Oct-2026 (Fingate): lines of a batch Tally made only partly, and a posting FinCom's cloud did not record: said
+  if (rep.review) bits.push(rep.review + " wait for a check with Tally (Tally made only part of a batch and does not say which)");
   const failed = rep.failed || [];
-  return <div className={"bk-alert" + (failed.length ? " bad" : "")}><b>{"Tally, " + fmtTime(rep.at) + ":"}</b>{" " + bits.join(" · ")}
+  return <div className={"bk-alert" + (failed.length ? " bad" : "")} data-bank-report=""><b>{"Tally, " + fmtTime(rep.at) + ":"}</b>{" " + bits.join(" · ")}
+    {rep.unrecorded && <div className="note" data-post-unrecorded="">{rep.unrecorded}</div>}
+    {rep.review > 0 && <div style={{ marginTop: 6 }}><Btn act="bankCheckReview" className="btn small primary" data-check-review="">Check with Tally</Btn></div>}
     {failed.length > 0 && <><ul style={{ margin: "6px 0 0" }}>{failed.slice(0, 20).map((f, i) => <li key={i}>{f.what + " — " + f.msg}</li>)}</ul>
       {failed.length > 20 && <div className="note">{"and " + (failed.length - 20) + " more"}</div>}
       {S.tab === "bank" && <FocusBtn title="not posted in the last posting" ids={failed.map((f) => f.id).filter(Boolean)} label="Show the lines not posted" />}</>}

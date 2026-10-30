@@ -17,7 +17,7 @@ import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, k
 import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import "../parts/bank/bankSmart.css";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
-import { PostReport, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
+import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import Loading from "../parts/Loading.jsx";
@@ -351,6 +351,7 @@ export default function Bank() {
     {b.moved && <div className="bk-alert"><b>{b.moved.file}</b> is a statement of {b.moved.name} (account ··{b.moved.last4}), so it was filed there.{" "}
       <button className="linkbtn" onClick={() => bankAct("bankOpenMoved")}>Open {b.moved.name}</button> <button className="linkbtn" onClick={() => bankAct("bankDismissMoved")}>Dismiss</button></div>}
     <PostReport rep={b.postReport} />
+    <ReviewCheck rc={b.reviewCheck} />
     <FixBanner />
     {b.lastFail && <LastFail f={b.lastFail} />}
     <LedgerSetup co={co} />
