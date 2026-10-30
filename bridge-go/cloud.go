@@ -781,6 +781,7 @@ func beatOnce() {
 	}
 	if r.code == 200 && r.json != nil {
 		applyTrialTools(r.json) // round 21: the owner's "Trial tools on this computer" (absent: off)
+		applyBooksFrom(r.json)  // 2.5.1: FinCom's first day of its book of each open company, the ledger requests' period (booksfrom.go)
 		if testMode() && !truthy(r.json["shadow"]) {
 			if shadowOK.Swap(false) || beatMissedSince().IsZero() {
 				writeLog("Test mode: FinCom's cloud does not keep a test bridge apart yet, so nothing is sent to it (only the heartbeat)")

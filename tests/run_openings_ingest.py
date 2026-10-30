@@ -13,6 +13,12 @@ opening balances through the guards. The migration's functions are stood in for 
      refused with plain words, nothing called; (a) one that does not add up to nil: ledgers and groups taken at nil
      (applyGroups), the openings held, one alert, 409 with the words; one that adds up: tally_ingest_ledgers_g as before;
   F. a cloud without migration 130: everything as before (openings straight in), said in the notes for a dated round.
+  G. bridge 2.5.1 (book 3d36a836, 30-Oct-2026: 2.5.0 sent openings as at Tally's own books-from, a year before FinCom's
+     copy begins): openings read as at another day than the book's from_date are never taken (ledger_list: nothing staged
+     or settled, the notes say so; ledger_changes: no opening changed, a new ledger at nil); as at from_date: taken
+     through 130's guards;
+  H. the beat's answer names, for each company open in Tally, FinCom's first day of its book (booksFrom {company:
+     yyyymmdd}; "" when FinCom has none yet, the bridge then uses Tally's own BOOKSFROM).
 Needs Deno (DENO, default: the deno on the PATH or /opt/deno/deno)."""
 import os, sys, json, time, hashlib, subprocess, urllib.request, urllib.error, shutil, threading, re
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -25,15 +31,16 @@ def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 FIRM = "99999999-9999-9999-9999-999999999130"
-BA, BB, BC, BD = ("11111111-1111-1111-1111-11111111013%d" % i for i in range(4))
+BA, BB, BC, BD, BE = ("11111111-1111-1111-1111-11111111013%d" % i for i in range(5))
 DEV, KEY = "d1000000-0000-0000-0000-000000000130", "fcd_" + "e" * 48
 GO = {"id": "go-aaaaaa250250", "computer": "PC-G5", "user": "user-g5", "mode": "main", "runMode": "user", "version": "2.5.0"}
 FS.USERS["tok-owner"] = {"id": "u-owner", "email": "owner@zz.test"}
 FS.T["members"] += [{"user_id": "u-owner", "firm_id": FIRM, "role": "owner", "active": True}]
-NAMES = {BA: "LOAN CO", BB: "TIED CO", BC: "FRESH CO", BD: "UPLOAD CO"}
+NAMES = {BA: "LOAN CO", BB: "TIED CO", BC: "FRESH CO", BD: "UPLOAD CO", BE: "NODATE CO"}
 FS.T["clients"] += [{"id": "c%d" % i, "firm_id": FIRM, "name": n, "tally_name": n, "gstin": "", "deleted": False} for i, n in enumerate(NAMES.values())]
 FS.T["tally_companies"] += [{"firm_id": FIRM, "company": n, "client_id": "c%d" % i, "book_id": b, "device_id": DEV, "last_seen": "2026-10-30T00:00:00Z"} for i, (b, n) in enumerate(NAMES.items())]
 FS.T["tally_books"] += [{"book_id": b, "firm_id": FIRM, "client_id": "c%d" % i, "company": n, "from_date": "2025-04-01", "open_as_on": "2025-03-31", "ledgers_at": None} for i, (b, n) in enumerate(NAMES.items())]
+next(b for b in FS.T["tally_books"] if b["book_id"] == BE).update(from_date=None, open_as_on=None)   # H: FinCom has no first day yet
 FS.T["tally_devices"].append({"id": DEV, "firm_id": FIRM, "name": "NWS144", "key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "revoked": False, "info": {}, "version": "2.5.0", "wake_token": None})
 FS.T.setdefault("tally_ledgers", []); FS.T.setdefault("tally_groups", []); FS.T.setdefault("tally_ledger_aliases", []); FS.T.setdefault("tally_vouchers", [])
 FS.T["tally_openings_held"] = []
@@ -166,6 +173,30 @@ try:
     ok(c == 200 and len(FS.ARGS.get("tally_ingest_ledgers_g") or []) == n_g + 1 and not r.get("held"), "E. a masters upload that adds up: taken as before (%s)" % r)
     c, r = call({"kind": "ledgers", "company": "UPLOAD CO", "from": "20250401", "openAsOn": "20250331", "ledgers": [["Cash", "Cash-in-Hand", "-300"]], "groups": []})
     ok(c == 200 and r.get("held") and "the bridge's trial balance" in r.get("kept", "") and ALERTS[-1]["words"].startswith("Opening balances from the bridge's trial balance"), "E. the bridge's trial-balance list: held the same way, answered 200 (%s)" % r)
+    print("== G. (2.5.1) openings read as at another day than FinCom's first day of the book")
+    seed(BA, [("Cash", "Cash-in-Hand", -631000), ("Capital", "Capital Account", 631000)])
+    n_st, n_se = len(FS.ARGS.get("tally_openings_stage") or []), len(FS.ARGS.get("tally_openings_settle") or [])
+    c, r = lst("LOAN CO", "w-1", [row("1", "Cash", "Cash-in-Hand", "-100"), row("3", "Capital", "Capital Account", "100"), row("8", "Year Before Party", "Sundry Debtors", "-7")], True, "20240401")
+    ok(c == 200 and len(FS.ARGS.get("tally_openings_stage") or []) == n_st and len(FS.ARGS.get("tally_openings_settle") or []) == n_se and r.get("openings") is None
+       and L(BA)["Cash"] == (-631000, -631000) and L(BA)["Capital"] == (631000, 631000) and L(BA)["Year Before Party"] == (0, 0),
+       "G. as at 2024-04-01 on a book from 2025-04-01: nothing staged or settled, the openings stay, a new ledger at nil (%s; %s)" % (L(BA), r.get("openings")))
+    ok(any("openings as at 2024-04-01 not taken: FinCom's books of this company begin on 2025-04-01" in n for n in r.get("notes", [])) and not any("without the guards" in n for n in r.get("notes", [])), "G. the notes say so, and only so (%s)" % r.get("notes"))
+    c, r = call({"kind": "ledger_changes", "company": "LOAN CO", "company_guid": "", "why": "counter", "openingsAt": "20240401", "ledgers": [row("1", "Cash", "Cash-in-Hand", "-555"), row("6", "Changed Year Party", "Sundry Debtors", "-9")]})
+    ok(c == 200 and L(BA)["Cash"] == (-631000, -631000) and L(BA)["Changed Year Party"] == (0, 0) and r.get("kept") == ["2 opening(s) as at 2024-04-01 not taken: FinCom's books of this company begin on 2025-04-01"]
+       and HELD[-1]["stage"] == "kept" and HELD[-1]["p_openings_at"] == "2024-04-01", "G. ledger_changes as at another day: no opening changed, a new ledger at nil, the words name both days (%s; %s)" % (L(BA), r))
+    c, r = lst("LOAN CO", "w-2", [row("1", "Cash", "Cash-in-Hand", "-100"), row("3", "Capital", "Capital Account", "107"), row("8", "Year Before Party", "Sundry Debtors", "-7")], True, "20250401")
+    se = FS.ARGS.get("tally_openings_settle") or []
+    ok(c == 200 and len(se) == n_se + 1 and se[-1]["p_openings_at"] == "2025-04-01" and r.get("openings") == "applied"
+       and L(BA)["Cash"] == (-100, -100) and L(BA)["Capital"] == (107, 107) and L(BA)["Year Before Party"] == (-7, -7), "G. as at the book's from_date: taken through 130's guards (%s; %s)" % (L(BA), r.get("openings")))
+    c, r = lst("LOAN CO", "w-3", [row("1", "Cash", "Cash-in-Hand", "-100"), row("3", "Capital", "Capital Account", "999")], True, "20250401")
+    ok(c == 200 and r.get("openings") == "held" and L(BA)["Capital"] == (107, 107), "G. as at from_date but not adding up to nil: held by 130's guards (%s)" % r.get("openings"))
+    c, r = call({"kind": "ledger_changes", "company": "LOAN CO", "company_guid": "", "why": "counter", "openingsAt": "20250401", "ledgers": [row("1", "Cash", "Cash-in-Hand", "-93")]})
+    ok(c == 200 and L(BA)["Cash"] == (-93, -93), "G. ledger_changes as at from_date: taken (%s)" % (L(BA),))
+    print("== H. (2.5.1) the beat names FinCom's first day of each open company's book")
+    c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO", "NODATE CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-a"}, {"name": "NODATE CO", "open": True, "guid": "cg-e"}, {"name": "TIED CO", "open": False}, {"name": "NOT LINKED CO", "open": True}]})
+    ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401", "NODATE CO": ""}, "H. booksFrom: the book's from_date as yyyymmdd; \"\" when FinCom has none; closed and unlinked companies left out (%s)" % r.get("booksFrom"))
+    c, r = call({"kind": "beat", "tally": True, "open": [], "companies": []})
+    ok(c == 200 and not r.get("booksFrom"), "H. no open company: no booksFrom (%s)" % r.get("booksFrom"))
     print("== F. a cloud without migration 130")
     FS.NO_COL["tally_openings_held"] = {"id"}
     time.sleep(0.1)

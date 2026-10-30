@@ -435,7 +435,7 @@ func TestR250OwnTallyAndResendAfterHeld(t *testing.T) {
 // 2.5.0: the version; four rows changed (the table otherwise 2.4.9's); the decision line names 2.5.0 by the owner's
 // decision of 2026-10-30 with the three shapes, 2.4.9's kept as history; the dated line; the test sheet
 func TestR250VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.0" {
+	if BridgeVersion != "2.5.1" { // 2.5.1 (r251openings_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBefore250()); h != "8962b5cdd4868e09696bef97780b196198a2fb9d7f79293ace32d799b6dfa79b" {
@@ -443,7 +443,7 @@ func TestR250VersionAllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.0 by the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29",
+	for _, w := range []string{"as for 2.5.0: the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29",
 		`<SVFROMDATE TYPE="Date">{books-from yyyymmdd}</SVFROMDATE><SVTODATE TYPE="Date">{books-from + 1 year - 1 day}</SVTODATE>`,
 		"nothing else in any request changes", "runs 41002898108 (7.1) and 41004704755 (3.0)", "run 41016133667",
 		"FinComLedgers " + shapeOf(allowListSamples()[ledListID]), "FinComLedgerChanges " + shapeOf(allowListSamples()[ledChangesID]),
@@ -455,7 +455,7 @@ func TestR250VersionAllowList(t *testing.T) {
 	if strings.Contains(line, "allowed for 2.4.9 by") {
 		t.Error("2.4.9's decision still worded as the current one")
 	}
-	if !regexp.MustCompile(`re-measured on 2026-10-30 for 2\.5\.0: [^\n]*allowed for 2\.5\.0 by the owner's decision of 2026-10-30`).MatchString(al) {
+	if !regexp.MustCompile(`re-measured on 2026-10-30 for 2\.5\.0: [^\n]*2\.5\.0 allowed by the owner's decision of 2026-10-30`).MatchString(al) {
 		t.Error("no dated line for 2.5.0")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.5.0-test-sheet.txt"))

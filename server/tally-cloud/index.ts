@@ -164,6 +164,9 @@
 //                                                       (tally_selfcheck_record). Without migration 65 both answer 503 {notReady}
 //                                                       and the bridge does not ask again that night; at most 30 calls a minute
 //                                                       from one computer (429)
+//   FinCom Bridge 2.5.1: the beat's answer carries booksFrom {company: yyyymmdd}, FinCom's first day of the book of each
+//   company open in Tally ("" when FinCom has none yet; left out when no open company is linked): the period of the three
+//   ledger requests (Tally's own BOOKSFROM only when FinCom has none), so openingsAt is the book's from_date (booksFromFor)
 //   FinCom Bridge 2.4.5 (ROUND 102, migration 98): older entries only for a period the person chose in FinCom (tally_period_pulls).
 //   The beat's answer carries periodDays [{company, company_guid, day: yyyymmdd, fetch, types}] (at most 3 days in all, 30
 //   outside the computer's office hours with periodNight true (ROUND 103: 20:00-08:00 IST and Sunday by default); the
@@ -1497,7 +1500,7 @@ async function applyLedgerList(firm: string, book: string, body: any, dev?: any,
       const { error } = await db.rpc("tally_openings_stage", { p_book: book, p_round: stRound, p_source: OPEN_SRC.round, p_openings_at: openingsAt, p_rows: cands });
       if (error) throw new Error(error.message);
     }
-  } else if (openingsAt) notes.push("openings as at " + openingsAt + " taken without the guards: migration 130 is not applied");
+  } else if (openingsAt && !g130) notes.push("openings as at " + openingsAt + " taken without the guards: migration 130 is not applied");
   const fresh = rows.filter((r: any) => !have.has(r.name)).map((r: any) => ({ ...base(r), open: g130 ? 0 : r.open, open_sent: g130 ? 0 : r.open }));
   const opened = g130 ? [] : rows.filter((r: any) => have.has(r.name) && r.oc).map((r: any) => ({ ...base(r), open: r.open, open_sent: r.open }));
   const plain = rows.filter((r: any) => have.has(r.name) && (g130 || !r.oc)).map(base);
@@ -1621,6 +1624,35 @@ let openMissing = 0;
 // a split of a day being checked: Tally's six standard voucher types (the check's days carry no list of the book's own)
 const CHECK_TYPES = ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra"];
 const chosenOf = (d: any) => typeof d?.chosenAt === "string" && !isNaN(Date.parse(d.chosenAt)) ? { chosenAt: d.chosenAt.slice(0, 60) } : {};
+// FinCom Bridge 2.5.1 (book 3d36a836, 30-Oct-2026): FinCom's first day of the book of each company the beat says open in
+// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet), {company: day}; at most 50 companies, each book's
+// day kept a minute. The bridge dates its three ledger requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName)
+// from it, and from Tally's own BOOKSFROM only when FinCom has none: a Tally whose books begin a year before FinCom's copy
+// never sends openings as at that earlier day. null when no open company is linked to a book
+const fromMemo = new Map<string, { d: string; t: number }>();
+async function booksFromFor(firm: string, body: any): Promise<Record<string, string> | null> {
+  const out: Record<string, string> = {};
+  const names = new Set<string>();
+  for (const c of (Array.isArray(body?.companies) ? body.companies : []).slice(0, 200) as any[]) {
+    const name = typeof c?.name === "string" ? c.name.trim().slice(0, 200) : "";
+    if (name && c?.open === true) names.add(name);
+  }
+  for (const name of [...names].slice(0, 50)) {
+    let book: string | null = null;
+    try { book = await bookForBeat(firm, name); } catch { book = null; }
+    if (!book) continue;
+    const m = fromMemo.get(book);
+    if (m && Date.now() - m.t < 60000) { out[name] = m.d; continue; }
+    const { data, error } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle();
+    if (error) { console.log("tally-ingest beat: the book's first day not read:", book, String(error.message || "").slice(0, 160)); continue; }   // left out: the bridge keeps the day it has
+    const f = data?.from_date ? String(data.from_date).slice(0, 10) : "";
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.replace(/-/g, "") : "";
+    if (fromMemo.size > 5000) fromMemo.clear();
+    fromMemo.set(book, { d, t: Date.now() });
+    out[name] = d;
+  }
+  return Object.keys(out).length ? out : null;
+}
 async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
@@ -1962,7 +1994,9 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
   // (review of 2.5.0: the book's sum is asked only when an opening would change, once a call)
   let keepOpenV: boolean | null = null;
   // 30-Oct-2026: changes read as at another day than FinCom's first day of the book never change an opening
-  const wrongDay = async () => { const at = openingsAtOf(body); if (!at || !(await has130())) return false; const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle(); return !!bk?.from_date && String(bk.from_date).slice(0, 10) !== at; };
+  // (2.5.1: the words name both days, and the kept openings are recorded with the day they were read as at)
+  let bookFrom = "";
+  const wrongDay = async () => { const at = openingsAtOf(body); if (!at || !(await has130())) return false; const { data: bk } = await db.from("tally_books").select("from_date").eq("book_id", book).maybeSingle(); bookFrom = bk?.from_date ? String(bk.from_date).slice(0, 10) : ""; return !!bookFrom && bookFrom !== at; };
   const keepOpenFor = async () => keepOpenV ??= (await wrongDay()) || (!openingsAtOf(body) && await has130() && (await openingsCandidate(book, [])).storedTies);
   const keptOpen: [string, number][] = [];
   for (const r of rows) {
@@ -2052,8 +2086,10 @@ async function applyLedgerChanges(firm: string, book: string, body: any) {
     else for (const a of aliases) kept.push(("entries using '" + a.tally_name + "' are applied under '" + a.fincom_name + "' (FinCom's name, not renamed)").slice(0, 300));
   }
   if (keptOpen.length) {
-    await openingsHold(book, OPEN_SRC.changes, null, null, keptOpen, "kept", 0);
-    kept.push((keptOpen.length + " opening(s) not taken: an undated read never changes openings that add up to nil (FinCom Bridge 2.5.0 reads them as at the books' beginning)").slice(0, 300));
+    const at = openingsAtOf(body);
+    await openingsHold(book, OPEN_SRC.changes, null, at || null, keptOpen, "kept", 0);
+    kept.push((at ? keptOpen.length + " opening(s) as at " + at + " not taken: FinCom's books of this company begin on " + bookFrom
+      : keptOpen.length + " opening(s) not taken: an undated read never changes openings that add up to nil (FinCom Bridge 2.5.0 reads them as at the books' beginning)").slice(0, 300));
   }
   if (fresh.length || opened.length) {
     const { error } = await db.rpc("tally_year_openings", { p_book: book });
@@ -3854,8 +3890,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // review 245 R15 (L5): at most one list of days every 5 s a computer (an empty list while stopped is never held)
         const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, periodNight ? 30 : 3) : null;
         await ledgerProgressFromBeat(firm, dev, b);
+        // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
+        let booksFrom: Record<string, string> | null = null;
+        try { booksFrom = await booksFromFor(firm, b); } catch (e) { console.log("tally-ingest beat: the books' first days not worked out:", String((e as Error)?.message || e).slice(0, 200)); }
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
-        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
+        return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }
       case "make_main": return await makeMain(dev, bridgeOf(dev, body, false).id);
       case "posts_take": {
