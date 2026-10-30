@@ -47,6 +47,12 @@ class H(BaseHTTPRequestHandler):
                     with open(LOG + '.stock.json', encoding='utf-8') as f: out['stock'] = json.load(f)
                 except Exception:
                     pass
+                # mode o251 (2.5.1's gate, openings): FinCom's first day of the book per company, as tally-ingest names it
+                # from tally_books.from_date (the harness writes <log>.booksfrom.json: {company: yyyymmdd | ""})
+                try:
+                    with open(LOG + '.booksfrom.json', encoding='utf-8') as f: out['booksFrom'] = json.load(f)
+                except Exception:
+                    pass
             elif kind == 'hello':
                 out = {'ok': True, 'firm': 'Spike', 'device': 'runner'}
             elif kind == 'companies':
