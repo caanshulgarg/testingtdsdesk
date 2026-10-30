@@ -72,7 +72,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="openp proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -80,7 +80,7 @@ jobs:
           inc=""; all=""
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
-            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
+            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb|openp) vs="3.0,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
             case $x in hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
             # TallyPrime 7.2 (added 26-Oct-2026): asked here first (Linux, the first KB) so a release the download centre does not
             # have never takes a Windows job; resolvev.ps1 asks again on Windows and downloads it
