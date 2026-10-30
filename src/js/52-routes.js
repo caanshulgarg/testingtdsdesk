@@ -5,7 +5,7 @@
 // The address is kept after the # (#/c/<client>/bill/<id>): the site is plain files, so a path like /c/… would not be
 // found on refresh. The page state (S) stays the only truth: the address is written from it after each drawing, and
 // read into it when the address changes (Back, Forward, a link opened, Refresh).
-//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15]  #/help  #/settings[/<section>]  (#/people, #/plan: Settings' sections)
+//   #/clients  #/today  #/compliance  #/inbox  #/tally[/bridge-1.15|/activity|/sent]  #/help  #/settings[/<section>]  (#/people, #/plan: Settings' sections)
 //   #/c/<client>/dash | inbox | upload | txn/<kind> | books/<tab> | purchase/review | purchase/<filter> | bill/<id>
 //                | bank | sales | post/<kind> | done/<kind> | setup/<section>
 const Route = {
@@ -16,6 +16,8 @@ const Route = {
       // 02-Oct-2026: #/tally/bridge-1.15, the hidden way back to bridge 1.15.0's setup (linked from nowhere)
       if (S.homeTab !== "tally") S.tallyOld = false;
       else if (S.tallyOld) return "#/tally/bridge-1.15";
+      // the Tally page's Sync activity and Everything sent (its tab row shows only on them): #/tally/activity, #/tally/sent
+      else if (S.tallyTab === "activity" || S.tallyTab === "sent") return "#/tally/" + S.tallyTab;
       // zoho-books (13-Oct-2026): the Integrations page and each integration's own page (#/integrations/zoho)
       if (S.homeTab === "integrations") return "#/integrations" + (S.integPage ? "/" + encodeURIComponent(S.integPage) : "");
       return "#/" + (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(S.homeTab) ? S.homeTab : "clients");
@@ -44,6 +46,8 @@ const Route = {
   // (round 46; the old …/certs opens checks/rates, a return's old …/summary its entries), …/books/tds/all; #/c/<client>/books/gst/07/202603/r1/summary, …/gst/07/202603/year
   booksMore(){
     const t = booksTab(), e = (x) => encodeURIComponent(x || "");
+    // a report open on the Reports page (its tab row of reports shows only then): …/books/reports/<mis|3cd|dcf>
+    if (t === "reports") return S.rxView && S.rxView !== "fs" ? "/" + e(S.rxView) : "";
     if (t === "tds"){
       const v = S.tdsView || "";
       if (v === "years") return "/all";
@@ -111,7 +115,7 @@ const Route = {
     if (typeof Smart === "object"){ try { Smart.remember(h); Smart.dropReturn(h); setTimeout(() => Smart.onbWatch(), 0); } catch (e){} }
     // ui-tidy (13-Oct-2026): a detail open beside the page (DetailDrawer) is kept after the page's address (…?d=<kind>:<id>), so
     // Refresh opens it again and Back closes it; it belongs to the page it was opened on
-    const full = h + this.detailSuffix(h);
+    const full = h + this.tabSuffix(h) + this.detailSuffix(h);
     if (full === location.hash){ this.replaceNext = false; return; }
     try {
       const st = S.detail ? {fcDetail: 1} : null;
@@ -125,11 +129,14 @@ const Route = {
     if (S.detail && S.detail.at !== h) S.detail = null;
     return S.detail ? "?d=" + encodeURIComponent(S.detail.k + ":" + S.detail.id) : "";
   },
-  full(){ const h = this.of(); return h + this.detailSuffix(h); },
+  // the tabs picked on the page (…?t=<row>:<tab>; app/src/parts/tabKeep.js), so Refresh opens the same tabs
+  tabSuffix(h){ return typeof window !== "undefined" && window.FCTabs ? window.FCTabs.suffix(h) : ""; },
+  full(){ const h = this.of(); return h + this.tabSuffix(h) + this.detailSuffix(h); },
   // the address into the page: from Back/Forward, a link, or a refresh
   async apply(h){
     const dm = String(h || "").match(/\?d=([^?#]*)$/), dv = dm ? (() => { try { return decodeURIComponent(dm[1]); } catch (e){ return dm[1]; } })() : "";
     h = String(h || "").replace(/\?d=[^?#]*$/, "");
+    const tm = h.match(/\?t=([^?#]*)$/), tv = tm ? tm[1] : ""; h = h.replace(/\?t=[^?#]*$/, "");
     S.detail = null;
     const p = String(h || "").replace(/^#\/?/, "").split("/").map(x => { try { return decodeURIComponent(x); } catch (e){ return x; } });
     if (!p[0]) return false;
@@ -148,7 +155,7 @@ const Route = {
         else if (what === "from-tally"){ S.tab = "books"; S.booksTab = arg === "ledgers" ? "ledgers" : "import"; }
         else if (what === "inbox") S.tab = "clientInbox";
         else if (what === "txn"){ S.tab = "txn"; if (arg) S.txnTab = arg; }
-        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
+        else if (what === "books"){ S.tab = "books"; if (arg) S.booksTab = arg; if (arg === "reports") S.rxView = p[4] || null; if (arg && p.length > 4) this.booksApply(arg, p.slice(4)); }
         else if (what === "setup" && isSetupTab(arg)) S.tab = arg;
         else if (what === "bank"){ S.tab = "bank"; if (!S.bank || S.bank.cid !== S.coId) loadBank(S.coId).then(() => render()); }
         else if (what === "sales") S.tab = "sales";
@@ -172,12 +179,13 @@ const Route = {
         if (qs.get("grant")) S.zohoGrant = qs.get("grant");
         if (qs.get("zoho")) S.zohoBack = qs.get("zoho");
       }
-      else if (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; }
+      else if (["clients", "today", "compliance", "inbox", "tally", "help", "meetings"].includes(p[0])){ S.view = "home"; S.homeTab = p[0]; S.step = null; S.tallyOld = p[0] === "tally" && p[1] === "bridge-1.15"; if (p[0] === "tally") S.tallyTab = p[1] === "activity" || p[1] === "sent" ? p[1] : "computers"; }
       else return false;
       return true;
     } finally {
       // the detail named in the address, over the page it was opened on
       if (dv && dv.indexOf(":") > 0){ const i = dv.indexOf(":"); S.detail = {k: dv.slice(0, i), id: dv.slice(i + 1), at: this.of()}; }
+      if (typeof window !== "undefined" && window.FCTabs) window.FCTabs.want(tv, this.of());
       this.applying = false;
       this.replaceNext = true;       // the address already says where we are
       render();
