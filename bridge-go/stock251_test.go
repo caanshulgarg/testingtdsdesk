@@ -508,7 +508,7 @@ func TestStock251VersionAllowList(t *testing.T) {
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
 	for _, w := range []string{"allowed for 2.5.2 by the owner's decision of 2026-10-30 (person's click only)", "FinComStockInHand " + shapeOf(allowListSamples()[stockID]),
-		"run 41009967960", "as for 2.5.0: the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29"} {
+		"run 41009967960", "as for 2.5.1: the owner's decision of 2026-10-30", "as for 2.5.0: the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)
 		}

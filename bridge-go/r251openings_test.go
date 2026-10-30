@@ -289,15 +289,15 @@ func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
 // the owner's decision of 2026-10-30 (the same dated form, only the date's source changed), 2.5.0's kept as history; the
 // dated line; the test sheet
 func TestR251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.1" {
+	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
-	if h := allowListHash(allowListRows()); !strings.HasPrefix(h, "0ed4d3e21f6f") {
+	if h := allowListHash(allowRowsBefore251()); !strings.HasPrefix(h, "0ed4d3e21f6f") { // 2.5.2 added FinComStockInHand
 		t.Fatalf("a row of the table changed (%s): 2.5.1 changes no request", h)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.1 by the owner's decision of 2026-10-30", "as for 2.5.0: the owner's decision of 2026-10-30",
+	for _, w := range []string{"as for 2.5.1: the owner's decision of 2026-10-30", "as for 2.5.0: the owner's decision of 2026-10-30",
 		"FinCom's first day of its book of the company (tally_books.from_date", "BOOKSFROM from TDSDeskCompanies only when FinCom has none",
 		"FinComLedgers " + shapeOf(allowListSamples()[ledListID]), "FinComLedgerChanges " + shapeOf(allowListSamples()[ledChangesID]),
 		"FinComLedgerByName " + shapeOf(allowListSamples()[ledByNameID]), "TDSDeskCompanies " + shapeOf(allowListSamples()["TDSDeskCompanies"])} {
@@ -305,10 +305,10 @@ func TestR251VersionAllowList(t *testing.T) {
 			t.Errorf("the decision line does not say %q", w)
 		}
 	}
-	if strings.Contains(al, "allowed for 2.5.0 by") {
-		t.Error("2.5.0's decision still worded as the current one")
+	if strings.Contains(al, "allowed for 2.5.0 by") || strings.Contains(line, "allowed for 2.5.1 by") {
+		t.Error("an earlier decision still worded as the current one")
 	}
-	if !strings.Contains(al, "(re-measured on 2026-10-30 for 2.5.1: ") || !strings.Contains(al, "allowed for 2.5.1 by the owner's decision of 2026-10-30: no request on the list and no request shape changed)") {
+	if !strings.Contains(al, "(re-measured on 2026-10-30 for 2.5.1: ") || !strings.Contains(al, "2.5.1 allowed by the owner's decision of 2026-10-30: no request on the list and no request shape changed)") {
 		t.Error("no dated line for 2.5.1")
 	}
 	sheet := readText(filepath.Join("..", "docs", "bridge-2.5.1-test-sheet.txt"))
