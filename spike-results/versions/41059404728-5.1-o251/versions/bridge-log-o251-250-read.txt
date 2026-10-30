@@ -1,0 +1,56 @@
+2026-10-30 13:16:06  Update from Tally asked for now
+2026-10-30 13:16:06  Update from Tally: asked for now
+2026-10-30 13:16:06  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+2026-10-30 13:16:07  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+2026-10-30 13:16:07  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 1-5, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 6-10, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 11-15, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 16-20, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 21-25, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 26-30, 1 ledger(s) (0.2s); saved
+2026-10-30 13:16:10  Keeping FinCom Spike Co: ledger list MasterID 31-35, 1 ledger(s) (0.2s); saved
+2026-10-30 13:16:10  Keeping FinCom Spike Co: ledger list MasterID 36-40, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 41-45, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 46-50, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 51-55, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 56-60, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 61-65, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 66-70, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:13  Keeping FinCom Spike Co: ledger list MasterID 71-75, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:13  Keeping FinCom Spike Co: ledger list MasterID 76-80, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 81-85, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 86-90, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 91-95, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 96-100, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 101-105, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 106-110, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:16  Keeping FinCom Spike Co: ledger list MasterID 111-115, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:16  Keeping FinCom Spike Co: ledger list MasterID 116-120, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 121-125, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 126-130, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 131-135, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 136-140, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 141-145, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 146-150, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:19  Keeping FinCom Spike Co: ledger list MasterID 151-155, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:19  Keeping FinCom Spike Co: ledger list MasterID 156-160, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 161-165, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 166-170, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 171-175, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 176-180, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 181-185, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 186-190, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:22  Keeping FinCom Spike Co: ledger list MasterID 191-195, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:22  Keeping FinCom Spike Co: ledger list MasterID 196-200, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 201-205, 2 ledger(s) (0.2s); saved
+2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 206-210, 5 ledger(s) (0.2s); saved
+2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 211-215, 5 ledger(s) (0.2s); saved
+2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 216-220, 5 ledger(s) (0.2s); saved
+2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 221-225, 5 ledger(s) (0.2s); saved
+2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 226-230, 2 ledger(s) (0.2s); saved
+2026-10-30 13:16:25  Keeping FinCom Spike Co: ledger list MasterID 231-end, 0 ledger(s) (0.2s); saved
+2026-10-30 13:16:25  Keeping FinCom Spike Co: the ledger list read (26 ledgers, 28 groups, 50 request(s)): 26 new, 0 changed, 0 renamed, 0 gone
+2026-10-30 13:16:25  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=6 ALTMSTID=229
+2026-10-30 13:16:25  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+2026-10-30 13:16:25  Update from Tally: done (52 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)

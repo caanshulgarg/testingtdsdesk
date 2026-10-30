@@ -1,0 +1,231 @@
+[13:11:15] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-10-30, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 7 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-10-30, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 18 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+[13:11:48] ---- the stub cloud and the bridge
+[ledger Spike Income] 14 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[13:11:51] ---- o251 masters (before the bridge)
+[o251 ledgers] 68 ms: <RESPONSE><CREATED>20</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+[o251 entries] 84 ms: <RESPONSE><CREATED>5</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>6</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO o251 masters: Tally's books from 20260401; FinCom's first day named by the stub 20270401; ledgers created 20 of 20 (errors 0); entries created 5 of 5
+  INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.5.1.exe SHA-256 1d0dcdadb649b459586f9a37d30adbe2dbfa3d9f75c2f3412b457558af66087c; bridge source: e2f7f883a341ba356135c68499c588b42f423783 Bridge 2.5.1: the allow-list's decision line names 2.5.1 (no request added or changed), notes and test sheet
+[13:11:53] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 3728)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.5.0, allowImport True, readOnly '', testMode False
+  bridge log: 2026-10-30 13:12:00  FinCom Bridge 2.5.0: started just for runnervmdaln5\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-30 13:12:00  FinCom Bridge 2.5.0, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-10-30 13:12:00  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-10-30 13:12:00  FinCom Bridge 2.5.0 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmdaln5\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-30 13:12:00  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-30 13:12:00  Recorder: re-scan of the add-on's files for 2.5.0: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-30 13:12:00  Check:  - 
+  bridge log: 2026-10-30 13:12:03  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-10-30 13:12:03  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-30 13:12:03  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-10-30 13:12:03  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-30 13:12:03  Company FinCom Spike Co: its Tally GUID 917ee686-8346-4ef2-9806-cc689af97bfc is held from now on
+  bridge log: 2026-10-30 13:12:04  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=6, ALTMSTID=229 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-10-30 13:12:04  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=6, ALTMSTID=229
+  bridge log: 2026-10-30 13:12:04  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=6, ALTMSTID=229)
+  bridge log: 2026-10-30 13:12:04  Employees of FinCom Spike Co: Tally's master counter 229: the payroll list read (2 request(s), 0 row(s)); unchanged, nothing sent
+  INFO add-on: recorder files after start: none
+[13:12:46] ---- o251: 2.5.0 reads as at Tally's books-from, then 2.5.1 over it reads as at FinCom's first day
+  INFO o251: Tally's export as at FinCom's first day 20270401: O5 Debtor -54800, O5 Bank -37500, O5 Cash -17000, O5 Creditor 35000, O5 Sales 0, O5 Rent 0; as at Tally's books-from 20260401: O5 Debtor -50000; the balance-sheet ledgers year 1 moved, not as worked out: none
+  bridge log: 2026-10-30 13:16:06  Update from Tally asked for now
+  bridge log: 2026-10-30 13:16:06  Update from Tally: asked for now
+  bridge log: 2026-10-30 13:16:06  Keeping FinCom Spike Co in step: its day book from 20260401 is read at Update now (and the nightly run), a month a request
+  bridge log: 2026-10-30 13:16:07  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-30 13:16:07  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 1-5, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 6-10, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:08  Keeping FinCom Spike Co: ledger list MasterID 11-15, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 16-20, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 21-25, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:09  Keeping FinCom Spike Co: ledger list MasterID 26-30, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:10  Keeping FinCom Spike Co: ledger list MasterID 31-35, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:10  Keeping FinCom Spike Co: ledger list MasterID 36-40, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 41-45, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 46-50, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:11  Keeping FinCom Spike Co: ledger list MasterID 51-55, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 56-60, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 61-65, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:12  Keeping FinCom Spike Co: ledger list MasterID 66-70, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:13  Keeping FinCom Spike Co: ledger list MasterID 71-75, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:13  Keeping FinCom Spike Co: ledger list MasterID 76-80, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 81-85, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 86-90, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:14  Keeping FinCom Spike Co: ledger list MasterID 91-95, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 96-100, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 101-105, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:15  Keeping FinCom Spike Co: ledger list MasterID 106-110, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:16  Keeping FinCom Spike Co: ledger list MasterID 111-115, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:16  Keeping FinCom Spike Co: ledger list MasterID 116-120, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 121-125, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 126-130, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:17  Keeping FinCom Spike Co: ledger list MasterID 131-135, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 136-140, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 141-145, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:18  Keeping FinCom Spike Co: ledger list MasterID 146-150, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:19  Keeping FinCom Spike Co: ledger list MasterID 151-155, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:19  Keeping FinCom Spike Co: ledger list MasterID 156-160, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 161-165, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 166-170, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:20  Keeping FinCom Spike Co: ledger list MasterID 171-175, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 176-180, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 181-185, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:21  Keeping FinCom Spike Co: ledger list MasterID 186-190, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:22  Keeping FinCom Spike Co: ledger list MasterID 191-195, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:22  Keeping FinCom Spike Co: ledger list MasterID 196-200, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 201-205, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 206-210, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:23  Keeping FinCom Spike Co: ledger list MasterID 211-215, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 216-220, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 221-225, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:24  Keeping FinCom Spike Co: ledger list MasterID 226-230, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:25  Keeping FinCom Spike Co: ledger list MasterID 231-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:25  Keeping FinCom Spike Co: the ledger list read (26 ledgers, 28 groups, 50 request(s)): 26 new, 0 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-30 13:16:25  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=6 ALTMSTID=229
+  bridge log: 2026-10-30 13:16:25  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-30 13:16:25  Update from Tally: done (52 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+  INFO o251: 2.5.0's round 539bc40730db2f9290b87b4d8d37cacf: 26 rows, openingsAt '20260401' (Tally's books-from; FinCom's first day 20270401: the fault of book 3d36a836); openings other than Tally's at FinCom's first day: O5 Debtor -50000.00; O5 Cash -10000.00; O5 Creditor "Quoted" Ltd 30000.00; O5 Bank -40000.00
+######## PASS o1 2.5.1 installed over 2.5.0: the version and the settings carried: the setup FinComBridge-Setup-2.5.1.exe ended 0; after: version 2.5.1; port 9100 -> 9100; key carried True; TallyHost 127.0.0.2 -> 127.0.0.2
+  bridge log: 2026-10-30 13:16:27  Stopping: asked to (setup or uninstall)
+  bridge log: 2026-10-30 13:16:31  FinCom Bridge 2.5.1: started just for runnervmdaln5\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-10-30 13:16:31  FinCom Bridge 2.5.1, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-10-30 13:16:31  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-10-30 13:16:31  FinCom Bridge 2.5.1 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmdaln5\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-10-30 13:16:31  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-10-30 13:16:31  Recorder: re-scan of the add-on's files for 2.5.1: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-10-30 13:16:31  Check:  - 
+  bridge log: 2026-10-30 13:16:31  Cloud: FinCom Spike Co is linked in FinCom; sending its copy (0 days)
+  bridge log: 2026-10-30 13:16:34  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-10-30 13:16:34  Ledgers of FinCom Spike Co are read as at 1-Apr-2027, FinCom's first day of its books of this company (Tally's books begin on 1-Apr-2026)
+  bridge log: 2026-10-30 13:16:34  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-10-30 13:16:34  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=6, ALTMSTID=229
+  bridge log: 2026-10-30 13:16:34  Light check of FinCom Spike Co: unchanged starting point ALTVCHID=6; now ALTVCHID=6, ALTMSTID=229
+  bridge log: 2026-10-30 13:16:52  Update from Tally asked for now
+  bridge log: 2026-10-30 13:16:52  Update from Tally: asked for now
+  bridge log: 2026-10-30 13:16:53  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-30 13:16:53  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-30 13:16:53  Keeping FinCom Spike Co: ledger list MasterID 1-5, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:54  Keeping FinCom Spike Co: ledger list MasterID 6-10, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:54  Keeping FinCom Spike Co: ledger list MasterID 11-15, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:54  Keeping FinCom Spike Co: ledger list MasterID 16-20, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:55  Keeping FinCom Spike Co: ledger list MasterID 21-25, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:55  Keeping FinCom Spike Co: ledger list MasterID 26-30, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:56  Keeping FinCom Spike Co: ledger list MasterID 31-35, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:56  Keeping FinCom Spike Co: ledger list MasterID 36-40, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:56  Keeping FinCom Spike Co: ledger list MasterID 41-45, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:57  Keeping FinCom Spike Co: ledger list MasterID 46-50, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:57  Keeping FinCom Spike Co: ledger list MasterID 51-55, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:57  Keeping FinCom Spike Co: ledger list MasterID 56-60, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:58  Keeping FinCom Spike Co: ledger list MasterID 61-65, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:58  Keeping FinCom Spike Co: ledger list MasterID 66-70, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:58  Keeping FinCom Spike Co: ledger list MasterID 71-75, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:59  Keeping FinCom Spike Co: ledger list MasterID 76-80, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:16:59  Keeping FinCom Spike Co: ledger list MasterID 81-85, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:00  Keeping FinCom Spike Co: ledger list MasterID 86-90, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:00  Keeping FinCom Spike Co: ledger list MasterID 91-95, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:00  Keeping FinCom Spike Co: ledger list MasterID 96-100, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:01  Keeping FinCom Spike Co: ledger list MasterID 101-105, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:01  Keeping FinCom Spike Co: ledger list MasterID 106-110, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:01  Keeping FinCom Spike Co: ledger list MasterID 111-115, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:02  Keeping FinCom Spike Co: ledger list MasterID 116-120, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:02  Keeping FinCom Spike Co: ledger list MasterID 121-125, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:03  Keeping FinCom Spike Co: ledger list MasterID 126-130, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:03  Keeping FinCom Spike Co: ledger list MasterID 131-135, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:03  Keeping FinCom Spike Co: ledger list MasterID 136-140, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:04  Keeping FinCom Spike Co: ledger list MasterID 141-145, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:04  Keeping FinCom Spike Co: ledger list MasterID 146-150, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:04  Keeping FinCom Spike Co: ledger list MasterID 151-155, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:05  Keeping FinCom Spike Co: ledger list MasterID 156-160, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:05  Keeping FinCom Spike Co: ledger list MasterID 161-165, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:06  Keeping FinCom Spike Co: ledger list MasterID 166-170, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:06  Keeping FinCom Spike Co: ledger list MasterID 171-175, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:06  Keeping FinCom Spike Co: ledger list MasterID 176-180, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:07  Keeping FinCom Spike Co: ledger list MasterID 181-185, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:07  Keeping FinCom Spike Co: ledger list MasterID 186-190, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:07  Keeping FinCom Spike Co: ledger list MasterID 191-195, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:08  Keeping FinCom Spike Co: ledger list MasterID 196-200, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:08  Keeping FinCom Spike Co: ledger list MasterID 201-205, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:09  Keeping FinCom Spike Co: ledger list MasterID 206-210, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:09  Keeping FinCom Spike Co: ledger list MasterID 211-215, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:09  Keeping FinCom Spike Co: ledger list MasterID 216-220, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:10  Keeping FinCom Spike Co: ledger list MasterID 221-225, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:10  Keeping FinCom Spike Co: ledger list MasterID 226-230, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:10  Keeping FinCom Spike Co: ledger list MasterID 231-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:17:11  Keeping FinCom Spike Co: the ledger list read (26 ledgers, 28 groups, 50 request(s)): 0 new, 26 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-30 13:17:11  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=6 ALTMSTID=229
+  bridge log: 2026-10-30 13:17:11  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-30 13:17:11  Update from Tally: done (52 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+######## PASS o2 Tally's books a year before FinCom's: every opening equals Tally's at FinCom's first day: 2.5.1's round 75c7f7ff72d1d249800438c79fc1f2de: openingsAt '20270401' (FinCom's first day 20270401; Tally's books-from 20260401); rows sent 26 of Tally's 26 ledgers; openings not Tally's at FinCom's first day: none; e.g. O5 Debtor -54800.00 (at Tally's books-from -50000), O5 Bank -37500.00, O5 Cash -17000.00; rounds of 2.5.1 before it as at another day: none
+######## PASS o3 every ledger read: zero-opening unused, quote and double-space names, every primary group: Tally lists 26 ledgers, the round sent 26; missing: none; groups seen 19 of 19; the quote, double-space and zero-opening unused ledgers: O5 Creditor "Quoted" Ltd sent, opening 35000.00; O5 R  K Service Station sent, opening 0.00; O5 Unused Zero sent, opening 0.00
+  bridge log: 2026-10-30 13:20:32  Update from Tally asked for now
+  bridge log: 2026-10-30 13:20:32  Update from Tally: asked for now
+  bridge log: 2026-10-30 13:20:33  Keeping FinCom Spike Co: natures of payment MasterID 1-5000, 0 (0.2s)
+  bridge log: 2026-10-30 13:20:33  Keeping FinCom Spike Co: natures of payment MasterID 5001-end, 0 (0.2s)
+  bridge log: 2026-10-30 13:20:33  Keeping FinCom Spike Co: ledger list MasterID 1-5, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:34      Tally replied: <RESPONSE> <CREATED>1</CREATED> <ALTERED>0</ALTERED> <DELETED>0</DELETED> <LASTVCHID>7</LASTVCHID> <LASTMID>0</LASTMID> <COMBINED>0</COMBINED> <IGNORED>0</IGNORED> <ERRORS>0</ERRORS> <CANCELLED>0</CANCELLED> <EXCEPTIONS>0</EXCEPTIONS> </RESPONSE> 
+  bridge log: 2026-10-30 13:20:34    request 1 of 1: 1 voucher in 0.2 s (created 1, altered 0, exceptions 0, ignored 0, last Tally id 7)
+  bridge log: 2026-10-30 13:20:34  Import into 'FinCom Spike Co': 1 of 1 posted by Tally's reply
+  bridge log: 2026-10-30 13:20:38  Keeping FinCom Spike Co: ledger list MasterID 6-10, 0 ledger(s) (4.6s); saved
+  bridge log: 2026-10-30 13:20:41  Keeping FinCom Spike Co: ledger list MasterID 11-15, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:41  Keeping FinCom Spike Co: ledger list MasterID 16-20, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:41  Keeping FinCom Spike Co: ledger list MasterID 21-25, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:42  Keeping FinCom Spike Co: ledger list MasterID 26-30, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:42  Keeping FinCom Spike Co: ledger list MasterID 31-35, 1 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:43  Keeping FinCom Spike Co: ledger list MasterID 36-40, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:43  Keeping FinCom Spike Co: ledger list MasterID 41-45, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:43  Keeping FinCom Spike Co: ledger list MasterID 46-50, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:44  Keeping FinCom Spike Co: ledger list MasterID 51-55, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:44  Keeping FinCom Spike Co: ledger list MasterID 56-60, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:44  Keeping FinCom Spike Co: ledger list MasterID 61-65, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:45  Keeping FinCom Spike Co: ledger list MasterID 66-70, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:45  Keeping FinCom Spike Co: ledger list MasterID 71-75, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:46  Keeping FinCom Spike Co: ledger list MasterID 76-80, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:46  Keeping FinCom Spike Co: ledger list MasterID 81-85, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:46  Keeping FinCom Spike Co: ledger list MasterID 86-90, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:47  Keeping FinCom Spike Co: ledger list MasterID 91-95, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:47  Keeping FinCom Spike Co: ledger list MasterID 96-100, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:47  Keeping FinCom Spike Co: ledger list MasterID 101-105, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:48  Keeping FinCom Spike Co: ledger list MasterID 106-110, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:48  Keeping FinCom Spike Co: ledger list MasterID 111-115, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:49  Keeping FinCom Spike Co: ledger list MasterID 116-120, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:49  Keeping FinCom Spike Co: ledger list MasterID 121-125, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:49  Keeping FinCom Spike Co: ledger list MasterID 126-130, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:50  Keeping FinCom Spike Co: ledger list MasterID 131-135, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:50  Keeping FinCom Spike Co: ledger list MasterID 136-140, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:50  Keeping FinCom Spike Co: ledger list MasterID 141-145, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:51  Keeping FinCom Spike Co: ledger list MasterID 146-150, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:51  Keeping FinCom Spike Co: ledger list MasterID 151-155, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:52  Keeping FinCom Spike Co: ledger list MasterID 156-160, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:52  Keeping FinCom Spike Co: ledger list MasterID 161-165, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:52  Keeping FinCom Spike Co: ledger list MasterID 166-170, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:58  Keeping FinCom Spike Co: ledger list MasterID 171-175, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:58  Keeping FinCom Spike Co: ledger list MasterID 176-180, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:58  Keeping FinCom Spike Co: ledger list MasterID 181-185, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:59  Keeping FinCom Spike Co: ledger list MasterID 186-190, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:20:59  Keeping FinCom Spike Co: ledger list MasterID 191-195, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:00  Keeping FinCom Spike Co: ledger list MasterID 196-200, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:00  Keeping FinCom Spike Co: ledger list MasterID 201-205, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:00  Keeping FinCom Spike Co: ledger list MasterID 206-210, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:01  Keeping FinCom Spike Co: ledger list MasterID 211-215, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:01  Keeping FinCom Spike Co: ledger list MasterID 216-220, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:01  Keeping FinCom Spike Co: ledger list MasterID 221-225, 5 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:02  Keeping FinCom Spike Co: ledger list MasterID 226-230, 2 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:02  Keeping FinCom Spike Co: ledger list MasterID 231-end, 0 ledger(s) (0.2s); saved
+  bridge log: 2026-10-30 13:21:02  Keeping FinCom Spike Co: the ledger list read (26 ledgers, 28 groups, 50 request(s)): 0 new, 26 changed, 0 renamed, 0 gone
+  bridge log: 2026-10-30 13:21:02  Keeping FinCom Spike Co: Reading old entries is off (prospective only); FinComCompany ALTVCHID=6 ALTMSTID=229
+  bridge log: 2026-10-30 13:21:02  Cloud: FinCom Spike Co: the ledger list sent (0 added, 0 renamed, 0 deleted)
+  bridge log: 2026-10-30 13:21:02  Update from Tally: done (54 request(s) to Tally); the bridge is idle again (next: the nightly catch-up at 19:00, or Update now)
+######## PASS o4 FinCom with no first day: every opening as at Tally's books' beginning: round ab4a058717150f2480e7756e69c28819 with FinCom's booksFrom "": openingsAt '20260401' (BOOKSFROM 20260401); rows sent 26 of Tally's 26 (the date changed: every ledger); openings not as at Tally's books' beginning: none; e.g. O5 Debtor -50000.00, O5 Bank -40000.00
+######## PASS o5 each request within 2 s, the ledger requests carrying exactly the first year of the date in use: 2.5.1's requests at Tally: 107 (FinComLedgers x94 worst 29 ms; TDSDeskCompanies x2 worst 13 ms); over 2 s: none; ledger requests: 47 with FinCom's first year, 47 with Tally's (0 of them before FinCom's booksFrom became ""), with neither or the wrong one: 0 (bodies not kept: 0); the ref's requests asked here with FinCom's first day: ledlist-chunk-250 8.5 ms, the period exact, 26 ledger(s); ledlist-tail-250 6.4 ms, the period exact, 26 ledger(s); ledchanges-250 9.2 ms, the period exact, 26 ledger(s); ledbyname-250 4.5 ms, the period exact, 1 ledger(s)
+######## PASS o6 one request in flight; postings first during the ledger read: requests started while another was at Tally: 0 of 107; the posting: ok True, 361 ms in all; its request reached Tally 325 ms after FinCom asked, ledger requests started before it in that time: 0
+  INFO o251 bridge log: 2026-10-30 13:16:34  Ledgers of FinCom Spike Co are read as at 1-Apr-2027, FinCom's first day of its books of this company (Tally's books begin on 1-Apr-2026)
