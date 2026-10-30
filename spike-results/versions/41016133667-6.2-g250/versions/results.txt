@@ -1,0 +1,33 @@
+INFO TallyPrime 6.2, mode g250, runner GitHub Actions 1000013844, 2026-10-30T07:04:29
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 17026752 bytes, 2026-10-30, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 6 PRODMINORREL 2 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 17026752 bytes, 2026-10-30, FileVersion 1.1.6.2, ProductVersion 1.1.6.2, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 19 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 7 ms, 'FinCom Spike Co' in it: True
+INFO g250 masters: books from 20260401; ledgers created 20 of 20 (errors 0); entries created 5 of 5
+INFO setup origin: BUILT from source dist/FinComBridge-Setup-2.5.0.exe SHA-256 dd05aa9a60e6a76f9a2dca556feb2a3c25b9ce6b5e968da72b1fff1f56f7a65d; bridge source: 94cce5ab2ba165c3a1d02aedbb07fb9ef07dd779 Bridge 2.5.0 review round 1 fixes (with their tests): one books-from per round, ask and send; own Tally only; a held round sent whole again; re-read once a minute; a held read not marked read; cloud: a trial balance judged by its own total, one alert a day per difference, the sequence closed, the book's sum asked only when an opening would change
+INFO bridge on 127.0.0.1:9100, version 2.4.9, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO g250: with the Gateway in 1-4-2027..31-3-2028 (date 2-4-2027), the undated request (2.4.9's) gives G5 Debtor's opening as '-54800.00' (books' beginning -50000.00; year 2's start -54800.00)
+INFO g250: 2.4.9's round 367f5b4f3c366b810af143f51030c7f7: 26 rows, openingsAt ''; openings not as at the books' beginning: G5 Bank -37500.00; G5 Creditor "Quoted" Ltd 35000.00; G5 Debtor -54800.00; G5 Cash -17000.00
+PASS e1 2.5.0 installed over 2.4.9: the version and the settings carried: the setup FinComBridge-Setup-2.5.0.exe ended 0; after: version 2.5.0; port 9100 -> 9100; key carried True; TallyHost 127.0.0.2 -> 127.0.0.2
+PASS e2 the Gateway in a later year: every opening as at the books' beginning: 2.5.0's round fd756613d4ab7fd8cf93da5589de6d34: openingsAt '20260401' (BOOKSFROM 20260401); rows sent 26 of Tally's 26 ledgers (the first dated round: every ledger); openings not as at the books' beginning: none; e.g. G5 Debtor -50000.00, G5 Bank -40000.00
+PASS e3 every ledger read: zero-opening unused, quote and double-space names, every primary group: Tally lists 26 ledgers, the round sent 26; missing: none; groups seen 19 of 19; the quote, double-space and zero-opening unused ledgers: G5 Creditor "Quoted" Ltd sent, opening 30000.00; G5 R  K Service Station sent, opening 0.00; G5 Unused Zero sent, opening 0.00
+PASS e4 each request within 2 s, the ledger requests carrying exactly the books' first year: 2.5.0's requests at Tally: 109 (FinComLedgers x96 worst 31 ms; TDSDeskCompanies x2 worst 24 ms); over 2 s: none; ledger requests without exactly the books' first year: 0 of 96 (bodies not kept: 0); the ref's requests asked here: ledlist-chunk-250 8.2 ms, the period exact, 26 ledger(s); ledlist-tail-250 7 ms, the period exact, 26 ledger(s); ledchanges-250 6.6 ms, the period exact, 26 ledger(s); ledbyname-250 6.7 ms, the period exact, 1 ledger(s)
+PASS e5 one request in flight; postings first during the ledger read: requests started while another was at Tally: 0 of 109; the posting: ok True, 362 ms in all; its request reached Tally 325 ms after FinCom asked, ledger requests started before it in that time: 0
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.6.2_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 47408904 bytes, Last-Modified Mon, 25 Aug 2025 17:39:02 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 5.1: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe (45651144 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.6.2 from https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe : 47408904 bytes in 1 s, SHA-256 41D25C157D20F9796BA216F9777DBCE332B8CC0F0020A233EB65AE33AF1F25DA, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.6.2 product 1.1.6.2
