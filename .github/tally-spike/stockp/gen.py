@@ -39,6 +39,9 @@ SUPP = ["SP Supplier %02d" % i for i in range(1, 11)]
 CUST = ["SP Customer %02d" % i for i in range(1, 11)]
 PER_FILE = 250
 N_ITEMS, N_PRIMARY, N_Y1, N_Y2 = 4000, 40, 30000, 2000
+# mode g251 (2.5.1's gate): a smaller company of the same shape, STOCKP_SCALE="<items>,<year 1 entries>,<year 2 entries>"
+if os.environ.get("STOCKP_SCALE"):
+    N_ITEMS, N_Y1, N_Y2 = (int(x) for x in os.environ["STOCKP_SCALE"].split(","))
 
 
 def esc(s):

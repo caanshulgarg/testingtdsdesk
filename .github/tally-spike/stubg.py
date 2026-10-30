@@ -41,6 +41,12 @@ class H(BaseHTTPRequestHandler):
                 out = {'ok': True, 'updateNow': False, 'posts': 0, 'trialTools': True, 'recorderSource': 'both'}
                 rf = list(HELD.values())[:20]
                 if rf: out['refetch'] = rf
+                # mode g251 (2.5.1's gate): a person's click for the stock, as tally-ingest hands it on (the harness writes
+                # <log>.stock.json for the click and removes it once answered)
+                try:
+                    with open(LOG + '.stock.json', encoding='utf-8') as f: out['stock'] = json.load(f)
+                except Exception:
+                    pass
             elif kind == 'hello':
                 out = {'ok': True, 'firm': 'Spike', 'device': 'runner'}
             elif kind == 'companies':
