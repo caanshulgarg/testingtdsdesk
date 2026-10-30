@@ -4,13 +4,13 @@ The owner's decision of 30-Oct-2026 ("Ok" to this exact proposal): inside the ST
 requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName)
 `<SVFROMDATE TYPE="Date">{books-from yyyymmdd}</SVFROMDATE><SVTODATE TYPE="Date">{books-from + 1 year - 1 day}</SVTODATE>`,
 and BOOKSFROM added to the company list (TDSDeskCompanies) so the bridge knows books-from. Nothing else in any request
-changes. With it, migration 130 (cloud guards for opening balances) and tally-ingest. Includes fix-ledger-impetus's test
-(b8edcd26f, an IMPETUS-like ledger list read whole).
+changes. With it, migration 130 (cloud guards for opening balances) and tally-ingest. Includes the unreleased ledger-list
+test b8edcd26f (zero-opening unused ledgers among others, read whole).
 
 | | |
 |---|---|
 | Setup file | FinComBridge-Setup-2.5.0.exe |
-| Fingerprint | @@FP@@ |
+| Fingerprint | `f8ef14ba540676a05d2de594c094ebbffcde40aa078b210002c38bfa689dae54` (FinComBridge-Setup-2.5.0.exe, built 30-Oct-2026 13:41 IST at the commit after 071d946f3, bridge sources c27ae6558, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.0.exe SHA-256 2766f048e33f2a91b47dd262b25f8ec806181104838b32872acbc838fdf131c5 |
 | Replaces | 2.4.9 (kept on the computer, so the tray can roll back to it) |
 | Published | not published |
 
