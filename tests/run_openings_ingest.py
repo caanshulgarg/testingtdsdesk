@@ -72,6 +72,9 @@ def hold(a):
 real = FS.rpc
 def rpc(fn, a):
     if fn.startswith("tally_openings_"): FS.ARGS.setdefault(fn, []).append(a)
+    if fn == "tally_book_for":   # as the SQL (migration-2-hardening.sql): null for a company not linked to a client
+        c = next((c for c in FS.T["tally_companies"] if c["firm_id"] == a["p_firm"] and c["company"] == a["p_company"]), None)
+        return c["book_id"] if c and c.get("client_id") and c.get("book_id") else None
     if fn == "tally_openings_candidate": return cand(a["p_book"], a["p_rows"])
     if fn == "tally_openings_hold": return hold(a)
     if fn == "tally_openings_stage": HELD.append(dict(a, stage="pending")); return len(HELD)
@@ -196,7 +199,7 @@ try:
     ok(c == 200 and L(BA)["Cash"] == (-93, -93), "G. ledger_changes as at from_date: taken (%s)" % (L(BA),))
     print("== H. (2.5.1) the beat names FinCom's first day of each open company's book")
     c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO", "NODATE CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-a"}, {"name": "NODATE CO", "open": True, "guid": "cg-e"}, {"name": "TIED CO", "open": False}, {"name": "NOT LINKED CO", "open": True}]})
-    ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401", "NODATE CO": ""}, "H. booksFrom: the book's from_date as yyyymmdd; \"\" when FinCom has none; closed and unlinked companies left out (%s)" % r.get("booksFrom"))
+    ok(c == 200 and r.get("booksFrom") == {"LOAN CO": "20250401", "NODATE CO": "", "NOT LINKED CO": ""}, "H. booksFrom: the book's from_date as yyyymmdd; \"\" when FinCom has none or the company is not linked; closed companies left out (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": [], "companies": []})
     ok(c == 200 and not r.get("booksFrom"), "H. no open company: no booksFrom (%s)" % r.get("booksFrom"))
     c, r = call({"kind": "beat", "tally": True, "open": ["LOAN CO"], "companies": [{"name": "LOAN CO", "open": True, "guid": "cg-a"}]})

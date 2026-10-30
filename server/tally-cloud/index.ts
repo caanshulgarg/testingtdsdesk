@@ -1641,13 +1641,16 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
     const name = typeof c?.name === "string" ? c.name.trim().slice(0, 200) : "";
     if (name && c?.open === true && !open.has(name)) open.set(name, typeof c?.guid === "string" ? c.guid.trim().slice(0, 100).toLowerCase() : "");
   }
-  const bookOf = new Map<string, string>();
-  for (const name of open.keys()) {
-    let book: string | null = null;
-    try { book = await bookForBeat(firm, name); } catch { book = null; }     // memoised five minutes (bookForBeat)
-    if (book) bookOf.set(name, book);
+  // review round 3: the books looked up 20 at a time (bookForBeat, memoised five minutes); an open company with no book
+  // (not linked, or no longer) is answered "" (the bridge forgets a day it held for it)
+  const bookOf = new Map<string, string>(), none: string[] = [];
+  const names = [...open.keys()];
+  for (let i = 0; i < names.length; i += 20) {
+    const part = names.slice(i, i + 20);
+    const got = await Promise.all(part.map(async (name) => { try { return await bookForBeat(firm, name); } catch { return undefined; } }));
+    part.forEach((name, k) => { const b = got[k]; if (b) bookOf.set(name, b); else if (b === null) none.push(name); });
   }
-  if (!bookOf.size) return null;
+  if (!bookOf.size && !none.length) return null;
   const now = Date.now();
   const ask = [...new Set(bookOf.values())].filter((b) => { const m = fromMemo.get(b); return !m || now - m.t >= 300000; });
   if (ask.length) {
@@ -1665,6 +1668,7 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
     for (const b of ask) fromMemo.set(b, { d: dayOf.get(b) ?? "", g: guidOf.get(b) ?? "", t: now });
   }
   const out: Record<string, string> = {};
+  for (const name of none) out[name] = "";
   for (const [name, book] of bookOf) {
     const m = fromMemo.get(book), beatGuid = open.get(name) || "";
     if (!m) continue;

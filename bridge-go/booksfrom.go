@@ -99,7 +99,8 @@ func finComBooksFrom(company string) string {
 // the beat's answer: booksFrom {company: yyyymmdd | ""}. A day is kept (and saved), "" forgets the company's day, a
 // company not named keeps what it had, and an answer without booksFrom changes nothing. Review of 2.5.1: a day is kept
 // only for a company of this user's own Tally whose books-from Tally has said (so names that are not companies here
-// never fill the list); when FinCom's day is not Tally's, one log line names both (again when either day changes)
+// never fill the list; a company already held takes the new day whenever it comes, review round 3); when FinCom's day
+// is not Tally's, one log line names both (again when either day changes)
 func applyBooksFrom(j M) {
 	m, ok := j["booksFrom"].(map[string]any)
 	if !ok {
@@ -138,7 +139,7 @@ func applyBooksFrom(j M) {
 			}
 			continue
 		}
-		if c.tally == "" {
+		if _, had := finComFromHeld[c.key]; !had && c.tally == "" {
 			continue // not a company of this Tally with its books-from said (yet): named again at the next heartbeat
 		}
 		if _, had := finComFromHeld[c.key]; !had && len(finComFromHeld) >= 1000 {
@@ -147,7 +148,7 @@ func applyBooksFrom(j M) {
 		if finComFromHeld[c.key] != c.day {
 			finComFromHeld[c.key], changed = c.day, true
 		}
-		if c.day != c.tally && finComFromSaid[c.key] != c.day+"|"+c.tally {
+		if c.tally != "" && c.day != c.tally && finComFromSaid[c.key] != c.day+"|"+c.tally {
 			finComFromSaid[c.key] = c.day + "|" + c.tally
 			tell = append(tell, c)
 		}

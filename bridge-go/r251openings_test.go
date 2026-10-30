@@ -278,6 +278,11 @@ func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
 	if _, _, err := readLedgerChunk(fin, zz, f.port, 0, 2000); !errors.Is(err, errBooksFromUnknown) {
 		t.Fatalf("a chunk not held: %v", err)
 	}
+	// review round 3: a company already held takes FinCom's new day even before Tally says its books-from again
+	applyBooksFrom(M{"booksFrom": M{zz: "20250401"}})
+	if finComBooksFrom(zz) != "20250401" {
+		t.Fatalf("the held day not replaced: %q", finComBooksFrom(zz))
+	}
 }
 
 // --- 6. the version; no row changed and no request added (the table hash is 2.5.0's); the decision line names 2.5.1 by
