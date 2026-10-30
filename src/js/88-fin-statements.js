@@ -244,7 +244,8 @@ const FinSt = (() => {
   // FinCom Bridge 2.5.1 (the owner's decision of 30-Oct-2026, "1"): the stock brought from Tally on a person's click ("Bring
   // stock from Tally" on the stock panel), kept per period in b.fs.stockTally {"<from>-<to>": {opening, closing, readAt,
   // status, words}} as FinCom's cloud keeps it (tally_stock_reads): its opening is the stock as on the day before From, its
-  // closing as on To. Used before last year's balance sheet and a typed figure (they stay the fallback); the latest read wins
+  // closing as on To. Used before last year's balance sheet and a typed figure (they stay the fallback), except a figure
+  // typed after Tally's answer (the person's later word); the latest read wins
   function stockFromTally(ymd, f){
     let best = null;
     Object.entries(f.stockTally || {}).forEach(([k, r]) => {
@@ -259,10 +260,12 @@ const FinSt = (() => {
   function stockOn(ymd, x){
     const f = x.f, st = x.st || {}, t = (f.stockAt || {})[ymd];
     if (x.integrated){ const at = x.balAt(ymd); return {v: R2(Object.keys(at).filter(isStockLed).reduce((s, l) => s - N(at[l]), 0)), src: "tally", label: "Tally: the Stock-in-hand ledgers"}; }
-    const fromTally = stockFromTally(ymd, f);
-    if (fromTally) return fromTally;
+    const fromTally = stockFromTally(ymd, f), typedLater = t && t.v != null && t.v !== "" && fromTally && t.at && Date.parse(t.at) > Date.parse(fromTally.at);
+    if (fromTally && !typedLater) return fromTally;
+    const typed = () => ({v: R2(N(t.v)), src: "typed", label: "typed by " + (t.by || "someone") + (t.at ? " on " + DMY(String(t.at).slice(0, 10).replace(/-/g, "")) : ""), by: t.by, at: t.at});
+    if (typedLater) return typed();
     if (ymd === x.fyOpen && x.upInv != null) return {v: x.upInv, src: "upload", label: "last year's balance sheet: Inventories (" + (x.upl.file || "uploaded") + ", version " + x.upl.v + ")"};
-    if (t && t.v != null && t.v !== "") return {v: R2(N(t.v)), src: "typed", label: "typed by " + (t.by || "someone") + (t.at ? " on " + DMY(String(t.at).slice(0, 10).replace(/-/g, "")) : ""), by: t.by, at: t.at};
+    if (t && t.v != null && t.v !== "") return typed();
     if (ymd === x.fyOpen && N(st.open)) return {v: R2(N(st.open)), src: "typed", label: "typed in FinCom's statements (the year's opening stock)"};
     if (ymd === x.fyClose && N(st.close)) return {v: R2(N(st.close)), src: "typed", label: "typed in FinCom's statements (the year's closing stock)"};
     return {v: null, src: "none", label: "not known: type it, or upload last year's balance sheet"};

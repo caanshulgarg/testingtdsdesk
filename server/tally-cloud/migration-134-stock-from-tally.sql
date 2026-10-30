@@ -6,7 +6,7 @@
 -- Tally once (FinComStockInHand: the Stock-in-Hand group's opening and closing for the period, 2 s at most) and sends the
 -- answer ({kind:"stock", ...}), kept here per book and period. The panel reads it: "Opening stock Rs X . Closing stock
 -- Rs Y . from Tally at 15:42". At most one request per book and period: a kept answer is shown again without asking
--- Tally; "Ask Tally again" asks once more; a click while one is on its way (30 s) asks nothing more.
+-- Tally; "Ask Tally again" asks once more; a click while one is on its way (60 s) asks nothing more.
 --
 -- ADD-ONLY: one new table and two new functions; no table altered, nothing dropped, no row deleted; safe to run twice; one
 -- transaction, lock_timeout 10 s. Grants explicit: service_role (tally-ingest) reads and writes the table and runs the two
@@ -18,9 +18,10 @@
 --     answer's figures and time.
 --   tally_stock_ask(firm, book, from, to, again, user): the click: {ask: true, at} when the bridge is to be woken; {ask:
 --     false, cached: true} when an answer is kept and again is not asked; {ask: false, pending: true} while a click is on
---     its way (30 s); the row in each answer.
+--     its way (60 s); the row in each answer.
 --   tally_stock_answer(firm, book, from, to, at, status, opening, closing, read_at, ms, hold_ms, words): the bridge's
---     answer to that click (its time must be the row's): kept; an answer to no click FinCom sent is refused.
+--     answer to that click (its time must be the row's, the row still waiting for it): kept; an answer to no click FinCom
+--     sent, or a second answer to the same click, is refused.
 --
 -- Deploy: this file first, then tally-ingest (it answers "not set up yet" for a stock click until this has run), then the
 -- app. Tested on pg_stand: tests/run_migration134.py; tally-ingest: tests/run_stock_ingest.py.
@@ -74,7 +75,7 @@ begin
   if r.status = 'ok' and not coalesce(p_again, false) then
     return jsonb_build_object('ok', true, 'ask', false, 'cached', true, 'row', to_jsonb(r));
   end if;
-  if r.click_at <> '' and r.status = 'asked' and r.asked_at > now() - interval '30 seconds' then
+  if r.click_at <> '' and r.status = 'asked' and r.asked_at > now() - interval '60 seconds' then
     return jsonb_build_object('ok', true, 'ask', false, 'pending', true, 'row', to_jsonb(r));
   end if;
   at := to_char(clock_timestamp() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"');
@@ -101,6 +102,9 @@ begin
   select * into r from public.tally_stock_reads where book_id = p_book and firm_id = p_firm and period_from = p_from and period_to = p_to for update;
   if not found or r.click_at = '' or r.click_at <> coalesce(p_at, '') then
     return jsonb_build_object('ok', false, 'unknown', true, 'error', 'no such click from FinCom');
+  end if;
+  if r.status <> 'asked' then
+    return jsonb_build_object('ok', false, 'unknown', true, 'answered', true, 'error', 'this click was answered already');
   end if;
   if p_status = 'ok' then
     update public.tally_stock_reads set status = 'ok', words = '', opening = round(p_opening, 2), closing = round(p_closing, 2), read_at = p_read_at,

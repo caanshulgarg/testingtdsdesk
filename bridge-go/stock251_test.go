@@ -13,6 +13,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -128,20 +129,26 @@ func TestStock251ClickOnly(t *testing.T) {
 		}
 	}
 	setCfg("ReadDays", false)
-	// in flight: exactly that request passes; another period or company does not
+	// in flight: exactly that request passes, and only under the 2 s stop; another period or company does not
 	stock.mu.Lock()
-	stock.ask = x
+	stock.asks[x] = true
 	stock.mu.Unlock()
-	if datedRefused(fin, x) != nil {
+	click := &TC{copier: true, limitMs: 2000}
+	if datedRefused(click, x) != nil {
 		t.Fatal("the click's own request refused while in flight")
 	}
+	for why, tc := range map[string]*TC{"FinCom's own (no stop)": fin, "a person's (no stop)": {person: true, copier: true, limitMs: 2000}, "no stop": {copier: true}, "a longer stop": {copier: true, limitMs: 3000}} {
+		if datedRefused(tc, x) == nil {
+			t.Fatalf("the click's request passes for %s", why)
+		}
+	}
 	for _, y := range []string{stockRequest(zz, "20260401", "20260430"), stockRequest("OTHER CO", "20260401", "20261031")} {
-		if datedRefused(fin, y) == nil {
+		if datedRefused(click, y) == nil {
 			t.Fatalf("another request passes while a click's is in flight: %s", y)
 		}
 	}
 	stock.mu.Lock()
-	stock.ask = ""
+	delete(stock.asks, x)
 	stock.mu.Unlock()
 	if logLines("FinComStockInHand refused before sending: the stock is asked only for a person's click") == 0 {
 		t.Fatal("the refusal is not in the log")
@@ -284,7 +291,7 @@ func TestStock251OncePerPeriod(t *testing.T) {
 
 // --- 5. one request in flight; postings first
 func TestStock251OneInFlightPostingsFirst(t *testing.T) {
-	f, _, _ := stockBridge(t)
+	f, _, told := stockBridge(t)
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
 		if id == stockID {
@@ -306,6 +313,11 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	wg.Wait()
 	if stockClicks(f) != 1 || str(res[0]["status"]) != "ok" || !strings.Contains(str(res[1]["why"]), "being answered") {
 		t.Fatalf("two clicks at once: %v / %v (%d asked)", res[0], res[1], stockClicks(f))
+	}
+	// the second click is answered at once ("busy"), never left without an answer
+	waitFor(t, func() bool { return len(*told) == 2 })
+	if b := (*told)[0]; str(b["status"]) != "busy" || !strings.Contains(str(b["words"]), "already") || str(b["at"]) == "" {
+		t.Fatalf("the second click's answer: %v", b)
 	}
 	f.mu.Lock()
 	mx := f.maxFlight
@@ -405,9 +417,11 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 		t.Fatalf("Tally's answer read as %v %v %v", o, c, ok)
 	}
 	for why, x := range map[string]string{
-		"no group":     "<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>",
-		"two groups":   strings.Replace(string(raw), "</COLLECTION>", `<GROUP NAME="X" RESERVEDNAME="Stock-in-Hand"><OPENINGBALANCE>1</OPENINGBALANCE></GROUP></COLLECTION>`, 1),
-		"not a number": strings.Replace(string(raw), "-908443072.58", "abc", 1),
+		"no group":          "<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>",
+		"two groups":        strings.Replace(string(raw), "</COLLECTION>", `<GROUP NAME="X" RESERVEDNAME="Stock-in-Hand"><OPENINGBALANCE>1</OPENINGBALANCE></GROUP></COLLECTION>`, 1),
+		"not a number":      strings.Replace(string(raw), "-908443072.58", "abc", 1),
+		"no closing":        regexp.MustCompile(`<CLOSINGBALANCE[^>]*>[^<]*</CLOSINGBALANCE>`).ReplaceAllString(string(raw), ""),
+		"<CLOSINGBALANCE/>": regexp.MustCompile(`<CLOSINGBALANCE[^>]*>[^<]*</CLOSINGBALANCE>`).ReplaceAllString(string(raw), "<CLOSINGBALANCE/>"),
 	} {
 		if _, _, ok := stockFigures(x); ok {
 			t.Errorf("%s: read", why)

@@ -404,7 +404,7 @@ func datedRefused(tc *TC, x string) error {
 	case stockID:
 		// 2.5.1 (the owner's decision of 30-Oct-2026, a person's click only; stock.go): exactly the click's request, as built,
 		// while it is in flight, whatever ReadDays says; refused otherwise whoever asks
-		if stockAsking(x) {
+		if stockAsking(tc, x) {
 			return nil
 		}
 		return errStockRefused

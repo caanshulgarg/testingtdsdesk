@@ -9,9 +9,10 @@ code. Checks:
      "Opening stock ₹X · Closing stock ₹Y · from Tally at HH:MM IST", the rows' source says "from Tally", the figures are
      used (the P&L's changes in inventories, the balance sheet's inventories), kept for the client (b.fs.stockTally);
   3. the button then reads "Ask Tally again" and sends again:true, once per click; a kept answer the cloud gives back
-     (cached) is shown without waiting;
+     (cached) is shown without waiting; a figure typed after Tally's answer is used over it;
   4. Tally too slow: the owner's words "Tally took too long; type the stock or try again later"; with no figures from
-     Tally, the typed figure is used (the fallback); the computer never answering: said plainly after the wait;
+     Tally, the typed figure is used (the fallback); a click already on its way (pending) waits for its answer; the
+     computer never answering: said plainly after the wait;
   5. a phone (390 wide): the bar wraps, the page never scrolls sideways.
 Screenshots go to TDSDESK_OUT (tests/out)/fs-stock-tally."""
 import os, re, sys, json, shutil, subprocess, threading, functools, http.server
@@ -92,6 +93,14 @@ with sync_playwright() as p:
     sc = stock_calls()
     ok(len(sc) == 2 and sc[1]["again"] is True and "Closing stock ₹11,82,000.00" in pg.inner_text(bar), "Ask Tally again: one more click, again true; the answer shown (%s)" % sc[1:])
 
+    # a figure typed after Tally's answer: the person's later word is used (the cell stays typeable)
+    box = pg.locator('#app [data-fin-stockpanel] input[aria-label="Stock as on 30-Sep-2025"]')
+    ok(box.count() == 1, "the closing from Tally can still be typed over")
+    box.fill("1190000"); box.press("Tab"); pg.wait_for_timeout(1000)
+    srcC = pg.inner_text('#app [data-fin-stockpanel] tr[data-fin-stock="20250930"] [data-fin-stocksrc]')
+    ok(srcC.startswith("typed by ") and pg.evaluate("() => FinSt.build('2025', {unit: 1, dec: 2, period: {preset: 'h1'}}).stock.C.v") == 1190000, "typed after Tally's answer: used (%s)" % srcC)
+    ok("Closing stock ₹11,82,000.00" in pg.inner_text(bar), "Tally's answer still shown on the bar")
+
     print("4. Tally too slow; the typed fallback; no answer")
     pg.select_option("#app [data-fin-preset]", "q3"); pg.wait_for_timeout(900); tab("tb")
     ok(pg.locator(bar + " button[data-fin-stockask]").inner_text().strip() == "Bring stock from Tally", "another period: its own button")
@@ -105,6 +114,11 @@ with sync_playwright() as p:
     box.fill("1250000"); box.press("Tab"); pg.wait_for_timeout(1000)
     srcC = pg.inner_text('#app [data-fin-stockpanel] tr[data-fin-stock="20251231"] [data-fin-stocksrc]')
     ok(srcC.startswith("typed by "), "the typed figure used: %s" % srcC)
+    # a click on its way already (pending): its answer looked for, then shown
+    pg.evaluate("""(b) => { window.__plan.post = {ok: true, asked: false, pending: true, book: b, read: {status: 'asked'}}; window.__plan.rows = [{status: 'asked'}, {status: 'ok', words: '', opening: 1000, closing: 2000, read_at: new Date().toISOString()}]; }""", BOOK)
+    pg.locator(bar + " button[data-fin-stockask]").click()
+    pg.wait_for_selector(bar + " [data-fin-stockread]", timeout=15000)
+    ok("Closing stock ₹2,000.00" in pg.inner_text(bar), "pending: the earlier click's answer shown when it comes (%s)" % pg.inner_text(bar))
     pg.evaluate("""(b) => { window.__plan.post = {ok: true, asked: true, at: 'y', book: b, read: {status: 'asked'}}; window.__plan.rows = [{status: 'asked'}]; }""", BOOK)
     pg.evaluate("() => { const st = window.setTimeout; window.setTimeout = (f, ms, ...a) => st(f, Math.min(ms || 0, 20), ...a); }")   # the 40 s wait, quickly
     pg.locator(bar + " button[data-fin-stockask]").click()

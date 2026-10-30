@@ -3384,11 +3384,13 @@ async function wakeFor(firm: string, body: any, userId = "") {
 // FinCom Bridge 2.5.1 (migration 134; the owner's decision of 30-Oct-2026, "1"): the stock from Tally ONLY when a person
 // clicks "Bring stock from Tally" (again: "Ask Tally again") on the Financial statements' stock panel. The click is kept per
 // book and period (tally_stock_ask: at most one request per period; a kept answer is given back without asking Tally; a click
-// on its way is not doubled), then the computers that keep the client's Tally company are woken as for "ledgers" (its own,
-// one with it open, the caller's own keys): "stock" {company, from, to, at, again} on the channel, info.stock for the beat's
-// answer. The bridge asks Tally once (2 s at most) and answers {kind:"stock"} (stockAnswer)
-const stockD8 = (v: unknown) => { const x = String(v ?? ""); return /^\d{8}$/.test(x) && !isNaN(Date.parse(x.slice(0, 4) + "-" + x.slice(4, 6) + "-" + x.slice(6, 8))) ? x : ""; };
-const stockIso = (d: string) => d.slice(0, 4) + "-" + d.slice(4, 6) + "-" + d.slice(6, 8);
+// on its way, 60 s, is not doubled), then ONE computer is woken: the company's own (tally_companies.device_id), else one
+// that has it open, else the caller's own key: "stock" {company, from, to, at, again} on its channel, info.stock for its
+// beat's answer (cleared when the answer comes). Its bridge asks Tally once (2 s at most) and answers {kind:"stock"}
+// (stockAnswer)
+// a real day (20260230 is not one: the day must come back the same from the calendar)
+const stockD8 = (v: unknown) => { const x = String(v ?? ""); if (!isDay(x)) return ""; const t = new Date(Date.UTC(+x.slice(0, 4), +x.slice(4, 6) - 1, +x.slice(6, 8)));
+  return t.toISOString().slice(0, 10) === iso(x) ? x : ""; };
 function stockRead(r: any) {
   if (!r || typeof r !== "object") return null;
   const n = (v: unknown) => v === null || v === undefined || v === "" ? null : Number(v);
@@ -3406,7 +3408,7 @@ async function stockWake(firm: string, body: any, userId = "") {
   for (const l of links) { const b = await bookFor(firm, String(l.company)); if (b) { company = String(l.company); book = b; break; } }
   if (!book) return reply(200, { ok: true, asked: false, noBook: true, error: "FinCom has no books from Tally for this client yet." });
   if (Date.now() - stockMissing < 600000) return reply(200, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." });
-  const { data: a, error } = await db.rpc("tally_stock_ask", { p_firm: firm, p_book: book, p_from: stockIso(from), p_to: stockIso(to), p_again: again, p_user: userId || null });
+  const { data: a, error } = await db.rpc("tally_stock_ask", { p_firm: firm, p_book: book, p_from: iso(from), p_to: iso(to), p_again: again, p_user: userId || null });
   if (error) {
     if (missingFn(String(error.message || ""))) { stockMissing = Date.now(); return reply(200, { ok: false, notSetUp: true, error: "Bringing the stock from Tally is not set up in FinCom's cloud yet." }); }
     throw new Error(error.message);
@@ -3415,10 +3417,10 @@ async function stockWake(firm: string, body: any, userId = "") {
   if (a.ask !== true) return reply(200, { ok: true, asked: false, cached: a.cached === true, pending: a.pending === true, book, read: stockRead(a.row) });
   const at = String(a.at), ask = { from, to, at, again };
   const { data: all } = await db.from("tally_devices").select("*").eq("firm_id", firm);
-  const dev = links.find((l: any) => String(l.company) === company)?.device_id || null;
+  const live = ((all || []) as any[]).filter((x: any) => !x.revoked), own = links.find((l: any) => String(l.company) === company)?.device_id || null;
+  const one = live.find((d: any) => d.id === own) || live.find((d: any) => openOn(d).has(coName(company))) || live.find((d: any) => !!userId && d.created_by === userId) || null;
   let woken = 0, told = 0;
-  for (const d of ((all || []) as any[]).filter((x: any) => !x.revoked)) {
-    if (!(d.id === dev || (!!userId && d.created_by === userId) || openOn(d).has(coName(company)))) continue;
+  for (const d of one ? [one] : []) {
     const prev = (d.info && typeof d.info === "object") ? d.info : {};
     const st: Record<string, unknown> = {};
     for (const [k, v] of Object.entries((prev.stock && typeof prev.stock === "object") ? prev.stock : {})) if (Date.parse(String((v as any)?.at)) > Date.now() - 3600000) st[k] = v;
@@ -3430,7 +3432,7 @@ async function stockWake(firm: string, body: any, userId = "") {
   return reply(200, { ok: true, asked: true, at, book, woken, told, read: stockRead(a.row) });
 }
 // the bridge's answer to a click (kind "stock"): checked, then kept against that click (tally_stock_answer)
-async function stockAnswer(firm: string, book: string, body: any) {
+async function stockAnswer(firm: string, book: string, body: any, dev: any) {
   const from = stockD8(body.from), to = stockD8(body.to), at = typeof body.at === "string" ? body.at.slice(0, 40) : "";
   const status = String(body.status || ""), STATUSES = ["ok", "slow", "busy", "notopen", "none", "failed"];
   if (!from || !to || !at || !STATUSES.includes(status)) return reply(400, { ok: false, error: "Not a stock answer FinCom takes." });
@@ -3438,7 +3440,7 @@ async function stockAnswer(firm: string, book: string, body: any) {
   const opening = fig(body.opening), closing = fig(body.closing), readAt = typeof body.readAt === "string" && !isNaN(Date.parse(body.readAt)) ? new Date(body.readAt).toISOString() : null;
   if (status === "ok" && (opening === null || closing === null || !readAt)) return reply(400, { ok: false, error: "A stock answer without its figures." });
   const int = (v: unknown) => Math.max(0, Math.min(600000, Math.floor(Number(v) || 0)));
-  const { data, error } = await db.rpc("tally_stock_answer", { p_firm: firm, p_book: book, p_from: stockIso(from), p_to: stockIso(to), p_at: at, p_status: status,
+  const { data, error } = await db.rpc("tally_stock_answer", { p_firm: firm, p_book: book, p_from: iso(from), p_to: iso(to), p_at: at, p_status: status,
     p_opening: status === "ok" ? opening : null, p_closing: status === "ok" ? closing : null, p_read_at: status === "ok" ? readAt : null, p_ms: int(body.ms), p_hold: int(body.holdMs),
     p_words: typeof body.words === "string" ? body.words.slice(0, 300) : "" });
   if (error) {
@@ -3446,6 +3448,13 @@ async function stockAnswer(firm: string, book: string, body: any) {
     throw new Error(error.message);
   }
   if (!data || data.ok !== true) return reply(409, { ok: false, unknown: data?.unknown === true, error: String(data?.error || "not taken") });
+  // answered: the click no longer carried by this computer's beat (a bridge started again never asks it twice)
+  try {
+    const { data: d } = await db.from("tally_devices").select("id, info").eq("id", dev.id).maybeSingle();
+    const info = (d?.info && typeof d.info === "object") ? d.info : {}, st = (info.stock && typeof info.stock === "object") ? { ...info.stock } : {};
+    const k = Object.keys(st).find((c) => String((st[c] as any)?.at) === at);
+    if (k) { delete st[k]; await db.from("tally_devices").update({ info: { ...info, stock: st } }).eq("id", dev.id); }
+  } catch { /* the beat drops it after 10 minutes anyway */ }
   return reply(200, { ok: true });
 }
 async function broadcast(topic: string, event: string, payload: Record<string, unknown>) {
@@ -4220,7 +4229,7 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!(await deviceNamed(dev, book, String(body.company || "")))) return reply(403, { ok: false, notMine: true, error: "This computer has not named this Tally company in its own heartbeat; FinCom answers it only for its own companies." });
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
-        return await stockAnswer(firm, book, body);
+        return await stockAnswer(firm, book, body, dev);
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));

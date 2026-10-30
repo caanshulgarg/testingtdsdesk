@@ -4,11 +4,11 @@ real database). Written before the file. Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only (no delete from / drop / truncate / alter table other than the
      new table's row security), names no real database; runs twice; explicit grants: the table service_role reads and
      writes, authenticated reads (its firm's rows only, row security), anon nothing; both functions service_role only.
-  1. the click: the first asks (ask true, its time); a second click while it is on its way (30 s) asks nothing; another
+  1. the click: the first asks (ask true, its time); a second click while it is on its way (60 s) asks nothing; another
      period is its own; another firm's book is refused.
   2. the answer: only to the click FinCom sent (its time); ok keeps the figures and the time; a click for the same period
      afterwards is answered from the kept row (cached), again asks once more; a failure (slow) keeps the last figures and
-     time, with the owner's words; an ok without figures, an unknown status, refused.
+     time, with the owner's words; an ok without figures, an unknown status, a second answer to the same click, refused.
   3. row security: a member reads the firm's rows only; anon reads nothing; a member cannot write.
 RED_WITHOUT_134=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, subprocess, shutil
@@ -101,6 +101,7 @@ try:
     ok("not an answer" in str(answer(B, "2026-04-01", "2026-10-31", at1, "great").get("error")), "2. an unknown status: refused")
     r = answer(B, "2026-04-01", "2026-10-31", at1, "ok", 908443072.584, 2182130465.82, "2026-10-30T10:12:00Z")
     R = row(B, "2026-04-01", "2026-10-31")
+    ok(answer(B, "2026-04-01", "2026-10-31", at1, "slow", words="late").get("answered") is True and row(B, "2026-04-01", "2026-10-31").get("status") == "ok", "2. a second answer to the same click: refused, the first kept")
     ok(r.get("ok") is True and R.get("status") == "ok" and R["opening"] == "908443072.58" and R["closing"] == "2182130465.82" and R["read_at"].startswith("2026-10-30 10:12:00"), "2. ok: the figures and the time kept (%s)" % R)
     c = ask(B, "2026-04-01", "2026-10-31")
     ok(c.get("ask") is False and c.get("cached") is True and (c.get("row") or {}).get("opening") == 908443072.58, "2. the same period again: the kept answer, Tally not asked (%s)" % c)

@@ -11,19 +11,20 @@
 // the period on the page, ONCE: the answer is kept per book and period (tally_stock_reads, and here in b.fs.stockTally) and
 // shown "Opening stock ₹X · Closing stock ₹Y · from Tally at 15:42 IST"; a click for a period with an answer kept brings that
 // answer back without asking Tally; "Ask Tally again" asks once more. Nothing asks Tally by itself. Tally over 2 s: "Tally
-// took too long; type the stock or try again later" (the typed figure, or last year's balance sheet, is used meanwhile).
+// took too long; type the stock or try again later" (the typed figure, or last year's balance sheet, is used meanwhile). A
+// figure typed after Tally's answer is used over it (FinSt's stockOn: the later of the two).
 import { useState } from "react";
 import CommitBox from "../../../parts/CommitBox.jsx";
 import Button from "../../../parts/Button.jsx";
 import { rs, dmy, inr } from "./util.js";
 
-const iso = (d8) => d8.slice(0, 4) + "-" + d8.slice(4, 6) + "-" + d8.slice(6, 8);
 const cloudOn = () => typeof TCloud === "object" && TCloud.on && TCloud.on() && typeof TCloudUp === "object";
 const WAIT_MS = 2000, TRIES = 20;   // the answer looked for in FinCom's cloud every 2 s, 40 s at most (Tally itself is asked once)
 
-// the answer as the cloud keeps it -> b.fs.stockTally[from-to] (only an answer with Tally's figures replaces the figures)
-function keep(from, to, read) {
-  if (!read || !S.books) return;
+// the answer as the cloud keeps it -> b.fs.stockTally[from-to] of the client clicked for (only an answer with Tally's figures
+// replaces the figures). Another client open by then: not kept here (FinCom's cloud keeps it; the next click gives it back)
+function keep(cid, from, to, read) {
+  if (!read || !S.books || S.books.cid !== cid) return;
   const f = S.books.fs = S.books.fs || {}, k = from + "-" + to, was = (f.stockTally || {})[k] || {};
   const figs = read.opening != null && read.closing != null && read.readAt ? { opening: +read.opening, closing: +read.closing, readAt: read.readAt } : { opening: was.opening, closing: was.closing, readAt: was.readAt };
   f.stockTally = Object.assign({}, f.stockTally, { [k]: Object.assign({}, figs, { status: read.status || "", words: read.words || "" }) });
@@ -32,16 +33,16 @@ function keep(from, to, read) {
 const readOf = (r) => r && { status: String(r.status || ""), words: String(r.words || ""), opening: r.opening == null ? null : +r.opening, closing: r.closing == null ? null : +r.closing, readAt: r.read_at || null };
 
 export async function bringStock(cid, from, to, again, say) {
-  const r = await TCloudUp.post({ kind: "wake", what: "stock", from, to, again: !!again }, { client: cid });
-  if (r.ok === false || (!r.asked && !r.read)) { say(r.error || "FinCom could not ask Tally just now."); return; }
-  if (!r.asked) { keep(from, to, r.read); say(r.pending ? "Tally is being asked already; the answer comes here." : ""); return; }
-  say("Asking Tally…");
+  const r = await TCloudUp.post({ kind: "wake", what: "stock", from, to, again: !!again }, { client: cid });   // (it throws on ok: false)
+  if (!r.asked && !r.pending) { if (r.read) keep(cid, from, to, r.read); say(r.read ? "" : r.error || "FinCom could not ask Tally just now."); return; }
+  // asked now, or by an earlier click still on its way (pending): the answer looked for in the cloud (Tally is not asked here)
+  say(r.pending ? "Tally is being asked already; its answer comes here." : "Asking Tally…");
   for (let i = 0; i < TRIES; i++) {
     await new Promise((ok) => setTimeout(ok, WAIT_MS));
     let rows = [];
-    try { rows = await Cloud.api("tally_stock_reads?select=status,words,opening,closing,read_at&book_id=eq." + encodeURIComponent(r.book) + "&period_from=eq." + iso(from) + "&period_to=eq." + iso(to)) || []; } catch (e) { continue; }
+    try { rows = await Cloud.api("tally_stock_reads?select=status,words,opening,closing,read_at&book_id=eq." + encodeURIComponent(r.book) + "&period_from=eq." + Audit.iso(from) + "&period_to=eq." + Audit.iso(to)) || []; } catch (e) { continue; }
     const row = rows[0];
-    if (row && row.status !== "asked") { keep(from, to, readOf(row)); say(""); return; }
+    if (row && row.status !== "asked") { keep(cid, from, to, readOf(row)); say(""); return; }
   }
   say("The Tally computer did not answer. Is FinCom Bridge running there, with Tally open? Type the stock or try again later.");
 }
@@ -79,7 +80,7 @@ export default function Stock({ d }) {
     {!s.integrated && s.from && s.to ? <TallyBar s={s} /> : null}
     <div className="fin-box"><table className="fin-t" data-statement="" data-fin-table="stock"><colgroup><col /><col style={{ width: 170 }} /><col /></colgroup>
       <thead><tr><th>Stock</th><th className="n">Amount (₹)</th><th>Where it comes from</th></tr></thead>
-      <tbody>{rows.map(([k, label]) => { const z = s[k], dt = s.dates[k], typeable = !s.integrated && z.src !== "upload" && z.src !== "tallyread";
+      <tbody>{rows.map(([k, label]) => { const z = s[k], dt = s.dates[k], typeable = !s.integrated && z.src !== "upload";
         return <tr key={k} data-fin-stock={dt} data-src={z.src}><td>{label + " (as on " + dmy(dt) + ")"}</td>
           <td className="n">{typeable ? <CommitBox type="number" step="0.01" aria-label={"Stock as on " + dmy(dt)} value={z.v == null ? "" : z.v} placeholder="not known"
             onCommit={(v) => { FinSt.stockSet(dt, v === "" ? null : +v); toast(v === "" ? "Stock as on " + dmy(dt) + " forgotten." : "Stock as on " + dmy(dt) + ": " + rs(+v) + ", kept."); render(); }} />

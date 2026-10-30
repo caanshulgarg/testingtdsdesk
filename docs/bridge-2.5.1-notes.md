@@ -21,23 +21,25 @@ work started, so the next number is 2.5.1; the branch keeps its planned name.)
 1. One request added, FinComStockInHand (bridge-go/stock.go), built exactly as above; on the allow-list "allowed for 2.5.1
    by the owner's decision of 2026-10-30 (person's click only)"; pinned to its builder (one byte more is refused).
 2. Sent ONLY for a person's click of "Bring stock from Tally" / "Ask Tally again" on the Financial statements' stock panel:
-   FinCom's cloud wakes the computer ("stock" {company, from, to, at, again} on its channel; the heartbeat's answer carries
-   the same click for 10 minutes); each click taken once by its time. Nothing else in the bridge sends it: no background
+   FinCom's cloud wakes ONE computer, the company's own ("stock" {company, from, to, at, again} on its channel; its
+   heartbeat's answer carries the same click for 10 minutes, until answered); each click taken once by its time; a click
+   while another of the same company is being answered gets "busy" at once. Nothing else in the bridge sends it: no background
    read, no schedule, no retry loop.
 3. At most one request per company and period: the answer is kept (in the bridge, and per book and period in FinCom's cloud,
    tally_stock_reads); a click for a kept period gets the kept answer; "Ask Tally again" asks once more.
 4. A hard 2 s stop from the send; one request in flight (the one Tally lock); postings first (a posting going: the click
-   waits for it, 30 s at most, nothing sent meanwhile); only this Windows user's own Tally with the company open.
+   waits for it, 20 s at most, nothing sent meanwhile); only this Windows user's own Tally with the company open.
 5. Over 2 s, or Tally's window held 2 s or more while the request was at Tally: nothing more is asked of that company until
    the next click, and FinCom shows "Tally took too long; type the stock or try again later".
 6. The no-computed-figure test's narrow exception and the ReadDays / dated-request exemption are for exactly this id, as
    built, and the exemption only while a click's request is in flight; any other period, company or byte is refused before
    anything is sent, whoever asks and whatever ReadDays says.
 7. Cloud (migration 134, tally-ingest): {kind:"wake", what:"stock", client, from, to, again} from a signed-in member;
-   {kind:"stock"} from the bridge, taken only against the click FinCom sent (its time), the company's GUID the book's.
+   {kind:"stock"} from the bridge, taken only against the click FinCom sent (its time; once), the company's GUID the
+   book's; a click on its way (60 s) is not doubled.
 8. App: the stock panel's bar "Opening stock ₹X · Closing stock ₹Y · from Tally at 15:42 IST"; the figures used by the
-   statements before last year's balance sheet and a typed figure (those stay the fallback); kept for the client
-   (b.fs.stockTally).
+   statements before last year's balance sheet and a typed figure (those stay the fallback; a figure typed after Tally's
+   answer is used over it); kept for the client (b.fs.stockTally).
 
 ## Measured (the allow-list row)
 

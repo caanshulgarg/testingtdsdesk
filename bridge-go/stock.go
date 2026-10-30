@@ -8,17 +8,20 @@
 //
 // The rules (each with its test, stock251_test.go):
 //   - sent only for a person's click: FinCom's cloud wakes this computer ("stock", {company, from, to, at, again}) or the
-//     heartbeat's answer carries the same click; each click (its time, at) is taken once, a click older than 10 minutes
-//     is dropped; nothing in the bridge sends it otherwise (no background read, no schedule, no retry loop);
+//     heartbeat's answer carries the same click (FinCom stops carrying it once answered); each click (its time, at) is
+//     taken once, a click older than an hour by this computer's clock is dropped; a click while another of the same
+//     company is being answered is answered "busy" at once; nothing in the bridge sends the request otherwise (no
+//     background read, no schedule, no retry loop);
 //   - at most one request per company and period: the answer is kept (here, and in FinCom's cloud) and a click for the
 //     same period sends the kept answer; "Ask Tally again" (again) asks Tally once more;
 //   - a hard 2 s stop from the send (the recorder's stop, tc.limitMs); one request in flight (the one Tally lock), postings
-//     first (a posting going: the click waits for it, 30 s at most, then says Tally is busy); the request goes only to this
+//     first (a posting going: the click waits for it, 20 s at most, then says Tally is busy); the request goes only to this
 //     Windows user's own Tally with the company open;
 //   - stopped at 2 s, or Tally's window held 2 s or more while it was at Tally: nothing more is asked of that company and
 //     FinCom is told in plain words ("Tally took too long; type the stock or try again later") until the next click;
 //   - the ReadDays / dated-request guard lets exactly this request through only while a click's request is in flight
-//     (stockAsking, tally.go datedRefused); any other period, company or byte is refused before anything is sent.
+//     (stockAsking, tally.go datedRefused), and only under the 2 s stop; any other period, company or byte is refused
+//     before anything is sent.
 package main
 
 import (
@@ -63,28 +66,29 @@ func stockExact(x string) bool {
 
 var stock = struct {
 	mu      sync.Mutex
-	ask     string               // the request of the click in flight (the dated guard's exemption), "" otherwise
+	asks    map[string]bool      // the requests of the clicks in flight (the dated guard's exemption)
 	busy    map[string]bool      // company key -> a click being handled
 	cache   map[string]M         // company key|from|to -> Tally's answer
 	seen    map[string]string    // company key|from|to -> the last click (its time) taken
-	stopped map[string]string    // company key -> why it stopped (until the next click)
-	sent    []M                  // the last answers sent to FinCom (the tests; never more than 20)
-	tallyN  map[string]int       // company key|from|to -> requests sent to Tally (the tests)
-	cloud   func(body M) error   // sends the answer to FinCom (tests: a stand-in)
+	stopped map[string]string    // company key -> why the last click stopped (cleared by the next click; the log and the beat's state)
 	wait    func() time.Duration // how long a click waits for a posting to end (tests: shorter)
-}{busy: map[string]bool{}, cache: map[string]M{}, seen: map[string]string{}, stopped: map[string]string{}, tallyN: map[string]int{}}
+}{asks: map[string]bool{}, busy: map[string]bool{}, cache: map[string]M{}, seen: map[string]string{}, stopped: map[string]string{}}
 
 func stockReset() {
 	stock.mu.Lock()
 	defer stock.mu.Unlock()
-	stock.ask, stock.busy, stock.cache, stock.seen, stock.stopped, stock.sent, stock.tallyN = "", map[string]bool{}, map[string]M{}, map[string]string{}, map[string]string{}, nil, map[string]int{}
+	stock.asks, stock.busy, stock.cache, stock.seen, stock.stopped = map[string]bool{}, map[string]bool{}, map[string]M{}, map[string]string{}, map[string]string{}
 }
 
-// tally.go datedRefused: this request goes only while a click's request is in flight, and only that exact request
-func stockAsking(x string) bool {
+// tally.go datedRefused: this request goes only while a click's request for it is in flight, exactly as built, under the
+// 2 s stop (a copier read with its hard stop, never a person's request, which has none)
+func stockAsking(tc *TC, x string) bool {
+	if tc == nil || !tc.copier || tc.person || tc.limitMs <= 0 || tc.limitMs > 2000 {
+		return false
+	}
 	stock.mu.Lock()
 	defer stock.mu.Unlock()
-	return stock.ask != "" && x == stock.ask && stockExact(x)
+	return stock.asks[x] && stockExact(x)
 }
 
 // a click as FinCom sends it (the wake-up channel's payload, or one entry of the heartbeat's "stock")
@@ -113,8 +117,8 @@ func stockTake(c stockClick) M {
 		out["why"] = "not a click FinCom sends (a company, a period and its time)"
 		return out
 	}
-	if t, err := time.Parse(time.RFC3339Nano, c.At); err != nil || nowFn().Sub(t) > 10*time.Minute {
-		out["why"] = "the click is older than 10 minutes"
+	if t, err := time.Parse(time.RFC3339Nano, c.At); err != nil || nowFn().Sub(t) > time.Hour {
+		out["why"] = "the click is older than an hour"
 		return out
 	}
 	k := companyKey(c.Company) + "|" + c.From + "|" + c.To
@@ -127,6 +131,10 @@ func stockTake(c stockClick) M {
 	stock.seen[k] = c.At
 	if stock.busy[companyKey(c.Company)] {
 		stock.mu.Unlock()
+		// answered at once (FinCom shows it; nothing is asked of Tally): the click in hand comes first
+		ans := M{"kind": "stock", "company": c.Company, "company_guid": heldGUID(c.Company), "from": c.From, "to": c.To, "at": c.At, "again": c.Again,
+			"status": "busy", "words": "not asked: Tally is being asked for this company's stock already; try again in a moment"}
+		stockSend(ans)
 		out["why"] = "a click for this company is being answered"
 		return out
 	}
@@ -166,8 +174,9 @@ func stockAnswer(c stockClick, k string) M {
 	if why != "" {
 		return say("notopen", "not asked: "+why)
 	}
-	// postings first: a posting going is waited for (nothing is sent meanwhile), 30 s at most
-	wait := 30 * time.Second
+	// postings first: a posting going is waited for (nothing is sent meanwhile), 20 s at most (FinCom's cloud holds a click
+	// on its way for 60 s)
+	wait := 20 * time.Second
 	if stock.wait != nil {
 		wait = stock.wait()
 	}
@@ -182,25 +191,20 @@ func stockAnswer(c stockClick, k string) M {
 	}
 	x := stockRequest(c.Company, c.From, c.To)
 	stock.mu.Lock()
-	stock.ask = x
-	stock.tallyN[k]++
+	stock.asks[x] = true
 	stock.mu.Unlock()
 	held := windowHoldFn()
 	var took float64
 	tc := &TC{copier: true, limitMs: 2000, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
-	t0 := time.Now()
 	raw, err := invokeTally(tc, port, x, 5)
 	holdMs := held(time.Now().Add(-time.Duration(took * float64(time.Second))))
 	stock.mu.Lock()
-	stock.ask = ""
+	delete(stock.asks, x)
 	stock.mu.Unlock()
 	if took == 0 {
 		holdMs = 0 // nothing reached Tally
 	}
 	ms := int(math.Round(took * 1000))
-	if ms == 0 && err == nil {
-		ms = int(time.Since(t0).Milliseconds())
-	}
 	ans["ms"], ans["holdMs"] = ms, holdMs
 	switch {
 	case errors.Is(err, errRecorderStop) || (err == nil && ms > 2000) || holdMs >= 2000:
@@ -241,9 +245,13 @@ func stockFigures(raw string) (opening, closing float64, ok bool) {
 		return 0, 0, false
 	}
 	num := func(tag string) (float64, bool) {
-		v := strings.TrimSpace(group(`<`+tag+`[^>]*>([^<]*)</`+tag+`>`, m[0][1], 1))
+		el := regexp.MustCompile(`<` + tag + `\b[^>/]*>([^<]*)</` + tag + `>`).FindStringSubmatch(m[0][1])
+		if el == nil {
+			return 0, false // not in the answer (or <TAG/>): no figure, never a nil stock
+		}
+		v := strings.TrimSpace(el[1])
 		if v == "" {
-			return 0, true // Tally leaves a nil balance empty
+			return 0, true // Tally writes a nil balance as an empty element
 		}
 		f, err := strconv.ParseFloat(strings.ReplaceAll(v, ",", ""), 64)
 		return f, err == nil
@@ -259,30 +267,19 @@ func stockFigures(raw string) (opening, closing float64, ok bool) {
 
 // the answer to FinCom (one call; its failure is said in the log, never sent again by itself)
 func stockSend(ans M) {
-	stock.mu.Lock()
-	stock.sent = append(stock.sent, ans)
-	if len(stock.sent) > 20 {
-		stock.sent = stock.sent[len(stock.sent)-20:]
-	}
-	send := stock.cloud
-	stock.mu.Unlock()
-	if send == nil {
-		send = func(body M) error {
-			if !cloudOn() {
-				return errors.New("FinCom's cloud is not set up on this computer")
-			}
-			b := M{}
-			for k, v := range body {
-				b[k] = v
-			}
-			r := invokeCloud(b, 15)
-			if r.code != 200 {
-				return errors.New(or(r.err, fmt.Sprint("HTTP ", r.code)))
-			}
-			return nil
+	why := ""
+	if !cloudOn() {
+		why = "FinCom's cloud is not set up on this computer"
+	} else {
+		b := M{}
+		for k, v := range ans {
+			b[k] = v
+		}
+		if r := invokeCloud(b, 15); r.code != 200 {
+			why = or(r.err, fmt.Sprint("HTTP ", r.code))
 		}
 	}
-	if err := send(ans); err != nil {
-		writeLog("Stock of " + str(ans["company"]) + ": the answer was not taken by FinCom (" + cutRunes(err.Error(), 120) + "); click again in FinCom")
+	if why != "" {
+		writeLog("Stock of " + str(ans["company"]) + ": the answer was not taken by FinCom (" + cutRunes(why, 120) + "); click again in FinCom")
 	}
 }
