@@ -62,5 +62,17 @@ ok(tallyYearKey("Salesify Marketing LLP 2026-27") === tallyYearKey("SALESIFY MAR
 ok(tallyYearKey("VMS EVENTS PRIVATE LIMITED (2024-25)") === tallyYearKey("VMS Events Pvt Ltd FY 2025-26"), "'FY 2025-26' too");
 ok(tallyYearKey("Company 21") !== tallyYearKey("Company") && tallyYearKey("Alpha 123 Traders") === "alpha 123 traders", "a number that is not a year stays");
 ok(!sameTallyName("Salesify Marketing LLP 2026-27", "Salesify Marketing LLP"), "tallyNameKey unchanged: FinCom does not link a bare-year company by itself");
+// 6. a split company's date (31-Oct-2026; the owner: "this is different tally and splitted.. I need to connect to April 2018
+// tally only.. I should have option to choose"): taken off to compare and suggest, never to link by itself
+const POST = { id: "c-kestrel", name: "Kestrel Advisory Private Limited", gstin: "" };
+[["Kestrel Advisory Private Limited 01 Apr 2018"], ["Kestrel Advisory Private Limited (from 1-Apr-2018)"], ["Kestrel Advisory Private Limited 2024-25"],
+ ["Kestrel Advisory Private Limited (2024-25)"], ["Kestrel Advisory Private Limited from 01-04-2018"], ["Kestrel Advisory Private Limited - 1st April 2018"]].forEach(([n]) =>
+  ok(clientNameFromTally(n) === "Kestrel Advisory Private Limited", "the split's date off: " + JSON.stringify(n) + " -> " + JSON.stringify(clientNameFromTally(n))));
+["Studio 2020 Pvt Ltd", "Hotel 24-7 Services", "Garg Shekhar & Company", "Route 66 Traders"].forEach((n) => ok(clientNameFromTally(n) === n, "a name with a number kept whole: " + JSON.stringify(n)));
+const sp = similarClients(clientNameFromTally("Kestrel Advisory Private Limited 01 Apr 2018"), "", [POST, GS]);
+ok(sp.length === 1 && sp[0].client.id === POST.id && sp[0].why === "same", "the client of that name is found for the split company (" + JSON.stringify(sp.map((x) => x.why)) + ")");
+ok(autoLinkFor({ name: "Kestrel Advisory Private Limited 01 Apr 2018", gstin: "" }, [POST], []) === null, "a split company is never linked by itself (a person chooses which split)");
+ok(!sameTallyName("Kestrel Advisory Private Limited 01 Apr 2018", "Kestrel Advisory Private Limited"), "the splits stay different companies to tallyNameKey");
+
 console.log(fails ? "\n" + fails + " failed" : "\nall passed");
 process.exit(fails ? 1 : 0);

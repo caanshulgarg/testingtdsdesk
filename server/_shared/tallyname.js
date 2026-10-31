@@ -115,10 +115,15 @@ function similarClients(name, gstin, clients) {
 }
 
 // a client's name from a Tally company's: the period taken off ("SALESIFY MARKETING LLP - (from 1-Apr-25)" →
-// "SALESIFY MARKETING LLP")
+// "SALESIFY MARKETING LLP"). 31-Oct-2026 (the owner: "this is different tally and splitted.. I need to connect to April 2018
+// tally only.. I should have option to choose"): a split company's bare date or year range too ("<company> 01 Apr 2018",
+// "X 2024-25", "X from 1-Apr-2018"), so the client of that name is found and offered. Used
+// to compare and to suggest only: the link always names the Tally company in full (each split is its own company), and
+// tallyNameKey (what is linked by itself) is unchanged.
+const TN_DATE = /\s*[-–—:,]?\s*(?:(?:from|fy|f\.y\.?|w\.?e\.?f\.?)\s*[:.\-]?\s*)?(?:\d{1,2}(?:st|nd|rd|th)?[-\/. ]+(?:\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?[-\/. ]+(?:19|20)?\d{2}|(?:19|20)\d{2}\s*[-–\/]\s*(?:19|20)?\d{2})\s*$/i;
 function clientNameFromTally(company) {
   let t = String(company || "").trim();
-  for (let i = 0; i < 3; i++) { const u = t.replace(TN_PERIOD, "").replace(TN_TAIL, "").trim(); if (u === t) break; t = u; }
+  for (let i = 0; i < 3; i++) { const u = t.replace(TN_PERIOD, "").replace(TN_TAIL, "").replace(TN_DATE, "").trim(); if (u === t) break; t = u; }
   return t || String(company || "").trim();
 }
 export { tallyNameKey, sameTallyName, tallyYearKey, autoLinkFor, nameScore, suggestFor, similarClients, clientNameFromTally };

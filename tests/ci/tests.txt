@@ -586,3 +586,7 @@ run_bank_partial_post.py              240  TDSDESK_SITE=../app/dist-test
 # migration 130 (bridge 2.5.0, the owner's decision of 30-Oct-2026): openings only when they add up to nil, a dated read preferred
 run_migration130.py                   240
 run_openings_ingest.py                240
+# next-posterity (31-Oct-2026): an ICICI "DETAILED STATEMENT" PDF read whole (a made-up statement in its layouts); a split
+# Tally company ("<name> 01 Apr 2018") offers the client of its name, and Client setup chooses the client's Tally company
+run_bank_icici_detailed.py            120  TDSDESK_SITE=../app/dist-test
+run_tally_split_choice.py             180  TDSDESK_SITE=../app/dist-test
