@@ -1,5 +1,5 @@
 {
- "checked": "2026-10-31T05:51:21Z",
+ "checked": "2026-10-31T12:40:30Z",
  "every_minutes": 5,
  "watch_since": "2026-10-12T07:03:37Z",
  "site": "https://staging.fincom.live",
@@ -18,9 +18,9 @@
   },
   "bridge": {
    "name": "Tally connection service",
-   "ok": true,
-   "note": "",
-   "since": "2026-10-28T13:03:05Z"
+   "ok": false,
+   "note": "latest.json answered 404",
+   "since": "2026-10-31T12:40:30Z"
   }
  },
  "incidents": [
@@ -28,7 +28,12 @@
    "service": "bridge",
    "start": "2026-10-28T05:49:45Z",
    "end": "2026-10-28T13:03:05Z"
+  },
+  {
+   "service": "bridge",
+   "start": "2026-10-31T12:40:30Z",
+   "end": null
   }
  ],
- "fail_streak": 0
+ "fail_streak": 1
 }
