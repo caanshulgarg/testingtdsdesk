@@ -1,5 +1,5 @@
 {
- "checked": "2026-10-31T12:40:30Z",
+ "checked": "2026-10-31T21:40:46Z",
  "every_minutes": 5,
  "watch_since": "2026-10-12T07:03:37Z",
  "site": "https://staging.fincom.live",
@@ -35,5 +35,5 @@
    "end": null
   }
  ],
- "fail_streak": 1
+ "fail_streak": 2
 }
