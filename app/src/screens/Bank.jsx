@@ -337,10 +337,27 @@ function MoreMenu({ tc }) {
   );
 }
 
+// FINCOM-APP-STAGING-D (31-Oct-2026): lines kept without their reading (no id, dec or state: the lines a repair of the
+// statement added before 01-Nov-2026, src/js/21 spliceMissing) are read here as they load, never an error on the page;
+// they wait under To do with their suggestions and are kept so (here and in the cloud copy)
+export function healRows(b) {
+  let n = 0;
+  (b.rows || []).forEach((r, i) => {
+    if (!r || (r.id && r.dec && r.state)) return;
+    if (!r.id) r.id = (b.cur || "st") + "-h" + i + "-" + String(r.fp || "").replace(/[^A-Za-z0-9]/g, "").slice(-8);
+    if (!r.dec) r.dec = decodeNarr(String(r.narr || ""), (CO(b.cid) || {}).name || "");
+    if (!r.state) Object.assign(r, { state: "attention", ledger: r.ledger || "", userSet: false });
+    n++;
+  });
+  if (n) setTimeout(() => { if (B() !== b) return; try { suggestAll(b.rows, true); } catch (e) {} saveBank({ rows: true }); render(); }, 0);
+  return n;
+}
+
 export default function Bank() {
   const b = B(), co = CO();
   if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" page="table" />; }
   if (b.loading) return <Loading what="bank statements" page="table" />;
+  healRows(b);
   setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();

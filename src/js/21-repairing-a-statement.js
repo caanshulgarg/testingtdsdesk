@@ -52,7 +52,7 @@ function spliceMissing(rows, found, accId, keys, opening){
       have.add(fp); c.fp = fp; return true;
     });
     if (!middle.length) continue;
-    out.splice(i, 0, ...middle.map(c => Object.assign({}, c)));
+    out.splice(i, 0, ...middle);
     added.push(...middle);
   }
   return {rows: out, added};
