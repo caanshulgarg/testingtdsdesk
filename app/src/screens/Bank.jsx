@@ -15,6 +15,7 @@ import { useRef, useEffect, useLayoutEffect, useState } from "react";
 import SmartBar from "../parts/bank/SmartBar.jsx";
 import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, kbKey, kbChange, splitSave, splitClear, ledgersFromBooks } from "../parts/bank/smart.js";
 import HeadFilter from "../parts/bank/HeadFilter.jsx";
+import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
@@ -128,6 +129,7 @@ function bankCols(b, rows, nSel) {
       return <div className={"bs-narr" + (open ? " open" : "")} title={r.narr}>
         <div className={"pn" + (party ? "" : " solo")}>{party || r.narr}</div>
         <div className="l2">{sub && <span className="md">{sub}</span>}{sub && party && <span className="sep" aria-hidden="true"> · </span>}{party && <span className="nr">{r.narr}</span>}</div>
+        {goneOpen(r) && <div className="bs-gone" data-gone={r.id}>⚠ {goneLine(r)}</div>}
         <button type="button" className="linkbtn bs-narr-more" data-narr-more="" aria-expanded={open ? "true" : "false"} title={open ? "Show less" : "Show all of the narration"}
           onClick={(ev) => { ev.stopPropagation(); b.narrOpen = { ...(b.narrOpen || {}), [r.id]: !open }; render(); }}>{open ? "Less" : "More"}</button></div>; } },
     { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
@@ -358,6 +360,9 @@ export default function Bank() {
   if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" page="table" />; }
   if (b.loading) return <Loading what="bank statements" page="table" />;
   healRows(b);
+  // lines posted to Tally from a statement since deleted (parts/bank/goneSent.js): marked as they come in, said once
+  const gm = markGone(b);
+  if (gm.n) setTimeout(() => { saveBank({ rows: true }); toast(goneToast(gm)); }, 0);
   setTimeout(() => TallyProof.checkBank(co.id).catch(() => {}), 0);
   ensureFileInputs();
   const st = curStmt();
@@ -411,7 +416,7 @@ export default function Bank() {
                 {b.stmts.slice().reverse().map((s) => <option key={s.id} value={s.id}>{stmtLabel(s)}</option>)}</select>
             : <h2 className="bk-title">{accLedger || st.bank}</h2>}
           {accSure && <BankLedger co={CO()} acc={accFull} compact />}
-          <div className="bk-sub">{st.bank}{st.acct ? " · A/c " + st.acct : ""} · {fmtDate(st.from)} to {fmtDate(st.to)} · {b.rows.length} entries</div>
+          <div className="bk-sub">{st.bank}{st.acct ? " · A/c " + st.acct : ""} · {fmtDate(st.from)} to {fmtDate(st.to)} · {b.rows.length} entries{goneCount(b) > 0 && <span className="bs-gone-n" data-gone-n=""> · ⚠ {goneCount(b)} posted before</span>}</div>
         </div>
         <div className="bk-check" title={st.badRows ? undefined : "Every line agrees with its running balance" + (st.summaryOk ? ", and opening + deposits − withdrawals = closing" : "")}>
           {st.badRows ? <span className="bad">✖ {st.badRows} entries do not agree with the running balance — check them before posting</span>

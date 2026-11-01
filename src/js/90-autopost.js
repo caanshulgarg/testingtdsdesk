@@ -476,7 +476,8 @@ const AutoPost = {
             billId: m.billId || null, billRef: m.billRef || "", tdsAtPay: m.tdsAtPay || 0, tdsLedger: m.tdsLedger || "", chip: this.chipWords(m), tip: this.tipWords(m), why: why || ""};
         });
         res.waiting += b.rows.filter(r => ["attention", "suggested", "ready"].includes(r.state) && !r.autoHold && !r.auto).length;
-        const due = b.rows.filter(r => r.autoHold && !r.auto && ["attention", "suggested", "ready"].includes(r.state) && Date.parse(r.autoHold.until) <= Date.now());
+        // never a line posted before from a deleted statement until a person says post again (app/src/parts/bank/goneSent.js)
+        const due = b.rows.filter(r => r.autoHold && !r.auto && !(r.goneSent && !r.goneSent.ok) && ["attention", "suggested", "ready"].includes(r.state) && Date.parse(r.autoHold.until) <= Date.now());
         res.held += b.rows.filter(r => r.autoHold && !r.auto && Date.parse(r.autoHold.until) > Date.now()).length;
         saveBank({rows: true});
         if (due.length && via) res.bank = await this.postBank(cid, due, res);

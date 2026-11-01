@@ -591,3 +591,4 @@ run_openings_ingest.py                240
 run_bank_icici_detailed.py            120  TDSDESK_SITE=../app/dist-test
 run_tally_split_choice.py             180  TDSDESK_SITE=../app/dist-test
 run_bank_dec_heal.py                  120  TDSDESK_SITE=../app/dist-test
+run_bank_deleted_reupload.py          150  TDSDESK_SITE=../app/dist-test

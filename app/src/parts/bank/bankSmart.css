@@ -212,3 +212,6 @@
 #app .bk-smart .bs-fchip .bs-fx:hover { color: var(--foreground, var(--ink)); background: var(--surface, var(--sheet)); }
 #app .bs-hfpop .cp-foot:first-child { border-top: 0; }
 #app .bs-hfpop { white-space: normal; font-weight: 400; text-align: left; color: var(--foreground, var(--ink)); }
+/* a line posted to Tally from a statement since deleted (parts/bank/goneSent.js, 01-Nov-2026) */
+#app .bs-gone { font-size: 11.5px; line-height: 1.35; color: var(--warn, #b45309); font-weight: 600; white-space: normal; }
+#app .bs-gone-n { color: var(--warn, #b45309); font-weight: 600; }

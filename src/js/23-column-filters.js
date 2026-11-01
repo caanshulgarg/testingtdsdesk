@@ -523,10 +523,11 @@ async function deleteStatement(sid){
   const keys = Object.keys(b.keys).filter(k => b.keys[k] === sid);
   await Trash.put(b.cid, "statement", (acc.ledger || st.bank) + " " + fmtDate(st.from) + " to " + fmtDate(st.to) + " (" + st.n + " rows)", {st, keys, rows}, ans.reason);
   keys.forEach(k => { delete b.keys[k]; });
+  rows.forEach(r => { if (r.state === "sent" && r.fp) (b.hist.gone = b.hist.gone || {})[r.fp] = r.sentAt || "?"; });
   b.stmts = b.stmts.filter(x => x.id !== sid);
   if (typeof Cloud === "object") Cloud.delete("bank_stmt", b.cid, b.cid + ":" + sid, ans.reason || "statement deleted");
   b.stmtsTrash = null;
-  saveBank({stmts: true, keys: true});
+  saveBank({stmts: true, keys: true, hist: true});
   if (b.cur === sid){ clearTimeout(bankSaveTimer); bankSaveTimer = null; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; }
   toast("Statement deleted. More \u2192 Restore a deleted statement puts it back.");
   if (!b.cur && b.stmts.length) await openStatement(b.stmts[b.stmts.length - 1].id); else render();
@@ -588,7 +589,7 @@ async function deleteAllStatements(){
   clearTimeout(bankSaveTimer); bankSaveTimer = null;
   for (const st of b.stmts) await BankDB.del("stmt:" + b.cid + ":" + st.id);
   b.stmts = []; b.keys = {}; b.cur = null; b.rows = []; b.sel.clear(); b.sticky.clear(); b.undo = null; b.lastFail = null;
-  if (ans.check){ b.rules = []; b.newLed = b.newLed.filter(l => l.sent); b.books = {}; b.hist = {rows: {}}; b.histVer++; }
+  if (ans.check){ b.rules = []; b.newLed = b.newLed.filter(l => l.sent); b.books = {}; b.hist = {rows: {}, gone: b.hist.gone}; b.histVer++; }
   saveBank({stmts: true, keys: true, rules: true, newLed: true, books: true, hist: true});
   toast("All bank statements deleted" + (ans.check ? ", with rules and bank books" : "") + ".");
   render();
@@ -599,7 +600,7 @@ async function clearHistory(){
   const ans = await askConfirm({title: "Forget the learnt history?", danger: true, ok: "Forget history",
     body: n + " past decisions are forgotten. Rows already filled keep their ledgers; saved rules stay."});
   if (!ans) return;
-  b.hist = {rows: {}}; b.histVer++;
+  b.hist = {rows: {}, gone: b.hist.gone}; b.histVer++;
   saveBank({hist: true});
   toast("History forgotten.");
   render();
