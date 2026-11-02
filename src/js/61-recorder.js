@@ -347,7 +347,7 @@ const Rec = {
         g.n += Math.max(0, Number(a.n) || 0); g.more = g.more || a.more === true;
       });
     });
-    return [...by.values()].sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
+    return [...by.values()].filter(g => !(this.renOk && this.renOk(g))).sort((a, b) => a.company.localeCompare(b.company)).map(g => Object.assign(g, {
       text: g.company + " \u00b7 " + fmtDate(g.day) + ": " + (g.more ? "more than " : "") + g.n + (g.n === 1 && !g.more ? " entry" : " entries") +
         " may have been renumbered in Tally (an entry was inserted or deleted there) and could not be read again \u2014 upload the Day Book from " + fmtDate(g.day)}));
   },
