@@ -176,7 +176,7 @@ def main():
         scene(cos())
         card(s1[0])
         t4 = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
-        ok(t4 == "Tally: ◐ Not linked · Choose on Tally page" and pg.locator("#app [data-tally-link]").count() == 0, "4. not linked: one line, 'Choose on Tally page', no card (%r)" % t4)
+        ok(t4 == "Tally: ◐ Not linked · Choose Tally company… · Choose on Tally page" and pg.locator("#app [data-tally-link]").count() == 0, "4. not linked: one line, 'Choose on Tally page', no card (%r)" % t4)
         rows = tally_list(s1[0])
         ok(rows and rows[0][0] == VMS and rows[1][0] == SAL and rows[1][1] == "name" and "same name" in rows[1][2], "4. every company, open first, Salesify's marked 'same name' (%s)" % [(r[0], r[1]) for r in rows])
         ok(rows and "last seen 20-Oct" in rows[1][2] and "NWS144" not in rows[1][2] and rows[1][3] == "Link to Salesify Marketing LLP", "4. 'last seen 20-Oct', no computer's name, Link to Salesify Marketing LLP (%s)" % (rows and rows[1]))

@@ -14,7 +14,7 @@ EVENTS open, GB TEXCOAT and ABC TRADERS linked, ABC TRADERS not open, OLD CO see
   3. Unlink: asked, then the company is free (one unlink call) and the row goes
   4. the open companies' rows of a linked company: Change Tally company… beside Link to another client in ⋯
   5. the status card, connected: "Set up again / another computer" opens the steps (folded until then)
-  6. Client setup › Tally: the company, Change and Unlink
+  6. Client setup › Tally: the company, Change (31-Oct-2026: the picker opens right there) and Unlink
   7. phone 390: no sideways page scroll (the picker open too)
 v2 (the owner's live feedback, 29-Oct-2026: "NWS144 ● online · NWS144 ○ offline .. no NWS144 type of thing"; "I have 4
 clients.. but system is showing only 3.. I have unlinked the tally but clients also erased"):
@@ -158,8 +158,11 @@ def main():
             ok(n(one) == 1 and "ABC TRADERS" in txt(one + " [data-tally-one-company]"), "the client's Tally company is shown (%s)" % txt(one))
             ok(n(one + " [data-tally-one-change]") == 1 and n(one + " [data-tally-one-unlink]") == 1, "Change and Unlink (%s)" % txt(one))
             if n(one + " [data-tally-one-change]"):
+                # 31-Oct-2026 (the owner: "I should have option to choose"): Change opens the Tally page's picker right here
                 pg.click(one + " [data-tally-one-change]"); pg.wait_for_timeout(1500)
-                ok(E("S.homeTab") == "tally" and n(ROW("ABC TRADERS") + " [data-tlk-pick]") == 1, "Change opens the Tally page with its picker open")
+                box = '#app [data-tlk-pick-box="%s"]' % ids["ABC TRADERS"]
+                ok(E("S.view + '|' + S.tab") == "company|cotally" and n(box + " [data-tlk-pick]") == 1 and "ABC TRADERS" not in E("(s) => [...document.querySelectorAll(s + ' option')].map(o => o.value)", box),
+                   "Change opens the picker here, on Client setup (not its own company) (%s)" % txt(box))
             E("(id) => { Promise.resolve((S.coId = id, S.view = 'company')).then(() => { S.step = null; S.tab = 'cotally'; render(); }); }", ids["ABC TRADERS"]); pg.wait_for_timeout(1200)
             E("() => { window.__calls = []; }")
             if n(one + " [data-tally-one-unlink]"):

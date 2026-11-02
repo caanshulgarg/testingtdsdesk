@@ -51,6 +51,11 @@ const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 const yearKey = (n) => (typeof tallyYearKey === "function" ? tallyYearKey(n) : coKey(n));
+// 31-Oct-2026 (the owner: "this is different tally and splitted.. I need to connect to April 2018 tally only.. I should have
+// option to choose"): a Tally company's name without its period or a split's date ("… 01 Apr 2018", "… 2024-25"), to
+// compare with clients' names only; the link always names the Tally company in full (each split is its own company)
+const baseName = (n) => (typeof clientNameFromTally === "function" ? clientNameFromTally(shown(n)) : shown(n));
+export const baseKey = (n) => (typeof tallyNameKey === "function" ? tallyNameKey(baseName(n)) : coKey(baseName(n)));
 
 // ---------- what FinCom holds of a client's books (the cloud's book, tally_status; its ledgers' count, tally_ledgers)
 export const d8Of = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
@@ -161,13 +166,15 @@ export function companyRows(opts) {
   if (!(opts && opts.gone)) rows = rows.filter((r) => !r.gone);
   return rows.sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)) || a.company.localeCompare(b.company));
 }
-// a client of the same name (the period off) or the same GSTIN, already in FinCom: the row links to it, never a second one
-export function twinOf(r) {
+// a client of the same name (the period or a split's date off) or the same GSTIN, already in FinCom: offered first, never a
+// second one made in one click. strict: the name as Tally has it (only a bracketed period off), as before 31-Oct-2026
+export function twinOf(r, strict) {
   if (typeof similarClients !== "function") return null;
-  const name = typeof clientNameFromTally === "function" ? clientNameFromTally(r.company) : r.company;
-  const t = similarClients(name, r.gstin || "", live()).find((d) => d.why === "same" || d.why === "gstin");
+  const t = similarClients(strict ? r.company : baseName(r.company), r.gstin || "", live()).find((d) => d.why === "same" || d.why === "gstin");
   return t ? t.client : null;
 }
+// the clients alike (the same GSTIN or name first, then names much alike), best first
+export const alikeOf = (r) => (typeof similarClients === "function" ? similarClients(baseName(r.company), r.gstin || "", live()).map((d) => d.client) : []);
 // a newer (or older) year of a company already linked: the same business once the period is off (Suvit: a split or a
 // year's copy of a company), its client already chosen
 export function yearOf(r, rows) {
@@ -179,7 +186,7 @@ export function yearOf(r, rows) {
 }
 // the clients ranked for a company: the same GSTIN, the same name, then alike, then the rest by name
 function rankClients(r, skip) {
-  const g = String(r.gstin || "").toUpperCase(), nm = (c) => (typeof sameTallyName === "function" && sameTallyName(c.name, r.company) ? 2 : typeof nameScore === "function" ? nameScore(c.name, r.company) : 0);
+  const b = baseName(r.company), g = String(r.gstin || "").toUpperCase(), nm = (c) => (typeof sameTallyName === "function" && sameTallyName(c.name, b) ? 2 : typeof nameScore === "function" ? nameScore(c.name, b) : 0);
   return live().filter((c) => c.id !== skip).map((c) => ({ c, s: (g && String(c.gstin || "").toUpperCase() === g ? 3 : 0) + nm(c) }))
     .sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name)).map((x) => x.c);
 }
@@ -213,9 +220,10 @@ export async function linkClient(company, cid, opts) {
 // Add as client: made with the company's name and GSTIN, linked, the first sync started; the page stays (Suvit's list).
 // Returns the client's id, or "" when nothing was added.
 export async function addAsClient(r) {
-  const tw = twinOf(r);
+  const tw = twinOf(r, true);
   if (tw) return (await linkTo(r, tw)) ? tw.id : "";
-  const name = typeof clientNameFromTally === "function" ? clientNameFromTally(shown(r.company)) : shown(r.company);
+  // a split of a client's company added as a client of its own (asked first: addNew) keeps Tally's full name
+  const name = twinOf(r) ? shown(r.company) : baseName(r.company);
   const g = String(r.gstin || "").trim().toUpperCase(), gstin = g && typeof gstinValid === "function" && gstinValid(g) ? g : "";
   const co = newCompany({ name, gstin, tallyName: r.company, turnover10cr: false });
   S.companies[co.id] = co; S.data[co.id] = { parties: {}, entries: {}, loaded: true };
@@ -226,6 +234,13 @@ export async function addAsClient(r) {
   if (!ok) { toast(name + " was added; link it to " + shown(r.company) + " from its row."); return co.id; }
   firstSync(co.id, r.company);
   return co.id;
+}
+// "+ New client" / "Add as new client": a client of the same name once the split's date is off is asked about first
+export async function addNew(r) {
+  const tw = !twinOf(r, true) && twinOf(r);
+  if (tw && !(await askConfirm({ title: "Add " + shown(r.company) + " as a separate client?", ok: "Add a separate client",
+    body: "<p><b>" + esc(tw.name) + "</b> is already in FinCom. <b>" + esc(shown(r.company)) + "</b> is a separate company in Tally (a split or another year). To keep one client, choose " + esc(tw.name) + " and Link instead.</p>" }))) return "";
+  return addAsClient(r);
 }
 // Link (to a client already in FinCom). The client linked to another company: a newer year of it is linked beside it
 // (opts.keep); any other company is asked first (it moves). A company linked to another client moves only with opts.move.
@@ -285,13 +300,16 @@ export function ChangePick({ co, cur = "", onClose }) {
   const rows = companyRows({ hidden: true }).filter((r) => coKey(r.company) !== coKey(cur));
   const label = (r) => { const o = r.client && r.client !== co.id ? S.companies[r.client] : null;
     return shown(r.nowName || r.company) + (o ? " — linked to " + o.name : r.client && r.client !== co.id ? " — linked to another client" : "") + (!r.open && r.seen ? " · last seen " + seenWords(r.seen) : ""); };
-  const opt = (r) => <option key={r.company} value={r.company}>{label(r)}</option>, open = rows.filter((r) => r.open), rest = rows.filter((r) => !r.open);
+  // 31-Oct-2026: the companies of this client's name or GSTIN (its splits and years: each its own Tally company) first
+  const mk = baseKey(co.name), g = String(co.gstin || "").toUpperCase(), mine = (r) => (!!mk && baseKey(r.company) === mk) || (!!g && String(r.gstin || "").toUpperCase() === g);
+  const opt = (r) => <option key={r.company} value={r.company}>{label(r)}</option>, same = rows.filter(mine), open = rows.filter((r) => r.open && !mine(r)), rest = rows.filter((r) => !r.open && !mine(r));
   const go = async () => { const r = rows.find((x) => x.company === pick); if (!r) return; setBusy(true); let ok = false;
     try { ok = await changeTo(co, r); } finally { setBusy(false); } if (ok && onClose) onClose(); };
   return <div className="tco-relink tlk-pick" data-tlk-pick-box={co.id}>
     <span className="note">{"Tally company for " + co.name + ":"}</span>
     <select data-tlk-pick="" aria-label={"The Tally company for " + co.name} value={pick} onChange={(ev) => setPick(ev.target.value)}>
       <option value="">Choose a Tally company…</option>
+      {same.length > 0 && <optgroup label={"Named like " + co.name} data-tlk-same={same.length}>{same.map(opt)}</optgroup>}
       {open.length > 0 && <optgroup label="Open in Tally now">{open.map(opt)}</optgroup>}
       {rest.length > 0 && <optgroup label="Seen earlier">{rest.map(opt)}</optgroup>}</select>
     <button className="btn small primary" data-tlk-go="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(pick)] ? "Sending to FinCom…" : "Linking…") : "Link"}</button>
@@ -622,7 +640,7 @@ export function Pick({ r, co, onClose, pre = "", inline = false }) {
       <option value="">{inline ? "Choose client" : "Choose a client…"}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
     <button className={"btn small" + (inline ? "" : " primary")} data-tco-relink="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(r.company)] ? "Sending to FinCom…" : "Linking…") : co ? "Move" : "Link"}</button>
     {!inline && <button className="linkbtn" data-tco-relink-cancel="" onClick={onClose}>Cancel</button>}
-    {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addAsClient(r); } finally { setBusy(false); } if (id && onClose) onClose(); }}>+ New client with this name</button>}</div>;
+    {!co && <button className="linkbtn tco-new" data-tco-add-new={r.company} disabled={busy} onClick={async () => { setBusy(true); let id = ""; try { id = await addNew(r); } finally { setBusy(false); } if (id && onClose) onClose(); }}>+ New client with this name</button>}</div>;
 }
 // the ⋯ of a linked company (the same items wherever the company is listed: the companies open now; Clients linked to Tally has its own two: Change Tally company…, Unlink):
 // Sync master, Sync vouchers, Post entries here, Link to another client, Unlink, the Day Book while days are missing, what

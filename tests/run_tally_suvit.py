@@ -244,7 +244,7 @@ def main():
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", gs); pg.wait_for_timeout(1200)
         # next-tally-one-page: Client setup has ONE line (no card); Sync now is on the Tally page's row
         line = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
-        ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page · Change · Unlink"),
+        ok(line.startswith("Tally: " + SAL + " ◐ Waiting for Tally") and "Open " + SAL + " in TallyPrime on NWS144" in line and line.endswith("Open in Tally page · Change Tally company… · Unlink"),
            "6. the client's one line: the same pill words, Open in Tally page (%s)" % line)
         # next-tally-icon (27-Oct-2026): the header's one Tally icon says the same word, in plain words (no computer)
         sign = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? b.getAttribute('aria-label') : ''; }")
@@ -260,7 +260,7 @@ def main():
         s1 = E("window.__ids.S1")
         E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'cotally'; render(); }", s1); pg.wait_for_timeout(1500)
         t6 = re.sub(r"\s+", " ", txt("#app [data-tally-one]"))
-        ok(t6 == "Tally: ◐ Not linked · Choose on Tally page", "6. not linked: 'Choose on Tally page' (%s)" % t6)
+        ok(t6 == "Tally: ◐ Not linked · Choose Tally company… · Choose on Tally page", "6. not linked: 'Choose on Tally page' (%s)" % t6)
         pg.click("#app [data-tally-one-go]"); pg.wait_for_timeout(1400)
         cr = [[r["co"], r["act"]] for r in rows()]
         ok([SAL, "Link to Salesify Marketing LLP"] in cr and all(a.startswith("Link to Salesify") or l == GSC for l, a in cr), "6. the Tally page's list for it: each company 'Link to Salesify Marketing LLP' (%s)" % cr)

@@ -148,8 +148,9 @@ def main():
         # ---- 1. Not linked: one line; Choose on Tally page lists the companies, the same GSTIN on top, with Link to <client>
         scene(SEEN); pg.wait_for_timeout(600)
         line = one_line("Not linked", "1. not linked")
-        ok(line == "Tally: ◐ Not linked · Choose on Tally page" and pg.locator("#app [data-tally-one] select, #app [data-tally-one] input").count() == 0,
-           "1. not linked: said; no box to type or pick in (%s)" % line)
+        # 31-Oct-2026: "Choose Tally company…" opens the Tally page's picker on Client setup (closed until clicked)
+        ok(line == "Tally: ◐ Not linked · Choose Tally company… · Choose on Tally page" and pg.locator("#app [data-tally-one] select, #app [data-tally-one] input, #app [data-tlk-pick]").count() == 0,
+           "1. not linked: said; no box to type or pick in until Choose Tally company… (%s)" % line)
         ok(pg.locator("#app [data-tally-link-post], #app [data-tco-post-here]").count() == 0, "1. no posting choice before the client is linked")
         no_port("1. Client setup, not linked")
         shot(pg, "card-1-not-linked-desktop-light")
@@ -193,7 +194,7 @@ def main():
         # ---- 4. Connected
         scene(LINKED(D1))
         line = one_line("Linked", "4. reading")
-        ok(line == "Tally: GARG SHEKHAR ● Linked · Open in Tally page · Change · Unlink", "4. Linked: the company, Open in Tally page, Change and Unlink (next-fix-tally-links) (%s)" % line)
+        ok(line == "Tally: GARG SHEKHAR ● Linked · Open in Tally page · Change Tally company… · Unlink", "4. Linked: the company, Open in Tally page, Change and Unlink (next-fix-tally-links) (%s)" % line)
         no_port("4. Client setup → Tally")
         ok(pg.locator('#app input[aria-label="Company name in Tally"]').count() == 0 and "Posting allowed to company" not in txt("#app"), "4. Client setup → Tally: no name box, no 'Posting allowed to' card")
         to_row()

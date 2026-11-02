@@ -590,3 +590,9 @@ run_openings_ingest.py                240
 run_migration134.py                   180
 run_stock_ingest.py                   180
 run_fs_stock_tally_ui.py              240  TDSDESK_SITE=../app/dist-test
+# next-posterity (31-Oct-2026): an ICICI "DETAILED STATEMENT" PDF read whole (a made-up statement in its layouts); a split
+# Tally company ("<name> 01 Apr 2018") offers the client of its name, and Client setup chooses the client's Tally company
+run_bank_icici_detailed.py            120  TDSDESK_SITE=../app/dist-test
+run_tally_split_choice.py             180  TDSDESK_SITE=../app/dist-test
+run_bank_dec_heal.py                  120  TDSDESK_SITE=../app/dist-test
+run_bank_deleted_reupload.py          150  TDSDESK_SITE=../app/dist-test

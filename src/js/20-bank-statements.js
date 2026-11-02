@@ -254,11 +254,14 @@ function statementMeta(lines){
   const meta = {};
   const ac = txt.match(/(?:a\/?c|account)\s*(?:no|number|num)?\.?\s*[:\-]?\s*([0-9Xx*]{6,20})/i);
   if (ac) meta.acct = ac[1].toUpperCase();
-  const ifsc = txt.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/);
-  if (ifsc) meta.ifsc = ifsc[1];
+  // ICICI's "DETAILED STATEMENT" heading: "Transactions List - -<COMPANY> (INR) - <account>"; it wins over an IFSC in a narration
+  const icici = txt.match(/transactions?\s+list\s*-.*\([A-Z]{3}\)\s*-\s*(\d{9,18})/i);
+  if (icici) meta.acct = icici[1];
+  const ifsc = txt.toUpperCase().match(/IFSC(?:\s*CODE)?\s*[:\-]?\s*([A-Z]{4}0[A-Z0-9]{6})\b/) || txt.toUpperCase().match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/);
+  if (ifsc && !(icici && ifsc[1].slice(0, 4) !== "ICIC")) meta.ifsc = ifsc[1];
   const byIfsc = meta.ifsc && BANK_NAMES.find(b => b[0] === meta.ifsc.slice(0, 4));
   const byName = BANK_NAMES.find(b => new RegExp("\\b" + b[1].replace(/ /g, "\\s*"), "i").test(txt));
-  meta.bank = byIfsc ? byIfsc[1] : byName ? byName[1] : "";
+  meta.bank = icici ? "ICICI Bank" : byIfsc ? byIfsc[1] : byName ? byName[1] : "";
   const per = txt.match(/(?:from|period)\s*[:\-]?\s*(\S+)\s*(?:to|-)\s*(\S+)/i);
   if (per){ meta.from = bankDate(per[1]); meta.to = bankDate(per[2]); }
   const ob = txt.match(/(?:opening\s*bal(?:ance)?|bal(?:ance)?\s*(?:brought|b\/)\s*f(?:or)?w?(?:ar)?d?|b\/f\s*bal(?:ance)?)[^0-9\-]{0,20}(-?[\d,]+\.\d{2})\s*(dr|cr)?/i);
@@ -553,6 +556,7 @@ function parseByLines(pages){
     lines.sort((a, b) => b.y - a.y);
     const leftLimit = minX + (pageW - minX) * 0.45, rightStart = minX + (pageW - minX) * 0.4;
     const isMoney = t => t.x > rightStart && MONEY_TOKEN.test(fixOcrNumber(t.s).replace(/\s/g, ""));
+    const dTok = s => DATE_TOKEN.test(s.replace(/\s+\d{1,2}:\d{2}(:\d{2})?(\s*[ap]m)?$/i, ""));
     const dayMon = (toks, i) => /^\d{1,2}$/.test(toks[i].s) && toks[i + 1] && /^(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?,?$/i.test(toks[i + 1].s) && !(toks[i + 2] && /^\d{2,4}$/.test(toks[i + 2].s));
     // a date wrapped in its cell: "02 Sep" with "2026" on the line below
     lines.forEach((l, li) => {
@@ -593,31 +597,34 @@ function parseByLines(pages){
       for (let i = 0; i < toks.length && toks[i].x < leftLimit; i++){
         const one = bankDate(toks[i].s);
         const three = i + 2 < toks.length ? bankDate(toks[i].s + " " + toks[i + 1].s + " " + toks[i + 2].s) : "";
-        if (one && (DATE_TOKEN.test(toks[i].s) || /^\d{1,2}\s+[a-z]{3,9}\.?,?\s+\d{2,4}$/i.test(toks[i].s))){ date = one; dateEnd = i; break; }
+        if (one && (dTok(toks[i].s) || /^\d{1,2}\s+[a-z]{3,9}\.?,?\s+\d{2,4}$/i.test(toks[i].s))){ date = one; dateEnd = i; break; }
         if (three && /^\d{1,2}$/.test(toks[i].s) && /^\d{2,4}$/.test(toks[i + 2].s)){ date = three; dateEnd = i + 2; break; }
       }
       const money = toks.map((t, i) => ({t, i, v: isMoney(t) ? bankAmount(fixOcrNumber(t.s)) : null})).filter(m => m.v !== null);
       if (date && money.length && money[money.length - 1].t.x > minX + (pageW - minX) * 0.6){
         const firstMoney = money[0].i;
-        const narr = toks.filter((t, i) => i > dateEnd && i < firstMoney && !DATE_TOKEN.test(t.s) && !TIME_TOKEN.test(t.s)).map(t => t.s).join(" ");
-        const bal = money[money.length - 1];
+        const narr = toks.filter((t, i) => i > dateEnd && i < firstMoney && !dTok(t.s) && !TIME_TOKEN.test(t.s) && !/^(-|cr|dr)$/i.test(t.s)).map(t => t.s).join(" ");
+        const bal = money[money.length - 1], cd = toks.find((t, i) => i > dateEnd && i < bal.i && /^(cr|dr)$/i.test(t.s));
         const after = toks[bal.i + 1];
         let balance = bal.v;
         if (after && /^dr\.?$/i.test(after.s)) balance = -Math.abs(balance);
         const amts = money.slice(0, -1).filter(m => Math.abs(m.v) > 0);
-        const row = {y: l.y, date, narr, amts, balance, balRight: bal.t.x + bal.t.w, drcr: toks.slice(firstMoney).map(t => t.s).join(" "), page: pi, cont: []};
+        const row = {y: l.y, date, narr, amts, balance, cd: cd ? cd.s.toLowerCase() : "", pi, cont: []};
         row.page = curPage; txLines.push(row); rows.push(row); last = row;
       } else if (!date && !money.length){
         const text = toks.filter(t => !TIME_TOKEN.test(t.s)).map(t => t.s).join(" ");
         if (!rows.length && !txLines.length) meta.push(text);
         l.contText = text;
-      } else if (!rows.length) meta.push(toks.map(t => t.s).join(" "));
+      } else {
+        if (!rows.length) meta.push(toks.map(t => t.s).join(" "));
+        if (date && !money.length){ l.dated = 1; l.contText = toks.filter((t, i) => i > dateEnd && !dTok(t.s) && !TIME_TOKEN.test(t.s)).map(t => t.s).join(" "); }
+      }
     });
     // attach narration lines: to the transaction at or above (top-aligned), or the nearest one (centred)
     const conts = lines.filter(l => l.contText && txLines.length);
     const centred = conts.some(l => l.y > txLines[0].y + 2 && txLines.length > 1 && l.y < txLines[0].y + (txLines[0].y - txLines[1].y) / 2);
     lines.forEach(l => {
-      if (!l.contText || /^page\s*\d+|statement\s*summary|end\s*of|opening\s*balance|closing\s*balance|^total|generated|this\s*is\s*a\s*(computer|system)/i.test(l.contText)) return;
+      if (!l.contText || (l.dated && !centred) || /^page\s*\d+|statement\s*summary|end\s*of|opening\s*balance|closing\s*balance|^total|generated|this\s*is\s*a\s*(computer|system)/i.test(l.contText)) return;
       let target = null;
       if (centred){
         let bd = 1e9; txLines.forEach(t => { const d = Math.abs(t.y - l.y); if (d < bd){ bd = d; target = t; } });
@@ -645,7 +652,7 @@ function parseByLines(pages){
         if (Math.abs(r2(prevBal + amt) - bal) <= 0.011){ dir = "cr"; r.balance = bal; break; }
       }
     }
-    if (!dir && /\bdr\b/i.test(r.drcr) && !/\bcr\b/i.test(r.drcr.replace(/cr\s*$/i, ""))) dir = "";
+    if (!dir) dir = r.cd;
     r.dir = dir; r.amt = amt;
     if (dir && r.amts.length){ const e = r.amts[r.amts.length - 1].t; (dir === "dr" ? drEdges : crEdges).push(e.x + e.w); }
     prevBal = r.balance;
@@ -658,7 +665,7 @@ function parseByLines(pages){
       r.dir = Math.abs(x - drE) <= Math.abs(x - crE) ? "dr" : "cr";
     }
     if (!r.dir && r.amts.length){ const t = r.amts[r.amts.length - 1].t.s; r.dir = /cr/i.test(t) ? "cr" : "dr"; }
-    const narr = [r.narr].concat(r.cont.map(c => c.text)).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const up = c => c.page === r.pi && c.y > r.y + 2, narr = r.cont.filter(up).map(c => c.text).concat(r.narr, r.cont.filter(c => !up(c)).map(c => c.text)).filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
     out.push({date: r.date, valueDate: "", narr, ref: "", page: r.page || curPage, debit: r.dir === "dr" ? r.amt : 0, credit: r.dir === "cr" ? r.amt : 0, balance: r.balance, noAmt: !r.amt});
   });
   // a missing amount may be filled from the balance change; a printed amount is never replaced

@@ -1082,7 +1082,7 @@ function postingLine(pj, tname){
 function refreshBusy(){ softRender(); }
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st) return;
+  if (!st || typeof bankGoneAsk == "function" && (ids = await bankGoneAsk(b, ids)) === false) return;
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   // round 17a: a line a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again

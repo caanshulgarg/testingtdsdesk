@@ -16,8 +16,8 @@
 import { useEffect, useRef, useState } from "react";
 import "../../../src/js/98-link-record.js";
 import "./LinkStatus.jsx";
-import { tallyDevs, mayLink, coKey, tallyCoState } from "../lib/tallyState.js";
-import { companyRows, linkTo } from "./TallyCompanies.jsx";
+import { tallyDevs, mayLink, tallyCoState } from "../lib/tallyState.js";
+import { companyRows, linkTo, baseKey } from "./TallyCompanies.jsx";
 import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
@@ -41,14 +41,15 @@ function Download() {
 
 // Link to Tally company: the companies seen that are no client's, the same GSTIN (then the same name) first
 function LinkPick({ co, run }) {
-  const g = String(co.gstin || "").trim().toUpperCase(), k = coKey(co.tallyName || co.name);
+  // 31-Oct-2026: a split's date or the period off ("… 01 Apr 2018"): the client's splits and years first, each in full
+  const g = String(co.gstin || "").trim().toUpperCase(), k = baseKey(co.tallyName || co.name), kn = baseKey(co.name);
   // next-fix-clientremove: a client restored is offered the companies it held before it was removed (tally_link_history,
   // migration 128) first, then the same GSTIN, then the same name
   const [hist, setHist] = useState(null);
   useEffect(() => { let on = true; if (typeof Cloud === "object" && Cloud.on && Cloud.on() && co.id)
     Promise.resolve(Cloud.api("tally_link_history?select=company_name&client_id=eq." + encodeURIComponent(co.id) + "&order=at.desc&limit=5")).then((r) => on && setHist([].concat(r || []).map((x) => x.company_name)), () => {});
     return () => { on = false; }; }, [co.id]);
-  const score = (r) => ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : coKey(r.company) === k ? 1 : 0);
+  const score = (r) => ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : [k, kn].includes(baseKey(r.company)) ? 1 : 0);
   const rows = companyRows().filter((r) => r.reported && !r.client).sort((a, b) => score(b) - score(a));
   const [pick, setPick] = useState("");
   const sel = pick || (rows[0] ? rows[0].company : "");
