@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..86fa20546
+Range: 25e694c0a..d638e429d
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -150,4 +150,5 @@ repeated, so Tally is asked at most once per click. Round 8 on it: read with the
    whether the click went before the whole posting ended, and fails with stockQuiet 0 (checked).
 Tests: TestStock251OneInFlightPostingsFirst (a posting of two requests with a gap; preempted twice, 3 tries, asked once).
 
-After round 8: 86fa20546 (the withdrawn build's files removed, no code).
+After round 8: 86fa20546 (the withdrawn build's files removed, no code) and d638e429d (tests only: two tests that took
+October 2026 as the month failed from 01-Nov-2026, on staging-next too; the month now taken from the clock), read.
