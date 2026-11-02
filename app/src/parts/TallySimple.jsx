@@ -27,6 +27,9 @@ function countLedgers(rows) {
 import { rpc, missing, bookSum, askStatus, summary } from "./TallyFetch.jsx";
 import { periodOf, daysOf } from "./TallyCheck.jsx";
 import "./tallySimple.css";
+// "Open in Tally right now?" with no FinCom Bridge reachable from this browser: Connect is the page's own local connect
+// (Connect this computer: doConnect, its answer in OC.c), nothing new
+import { OC, doConnect, Line } from "./TallyOneClick.jsx";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
@@ -203,6 +206,13 @@ function Differences({ row }) {
       {Number(r.n) > (r.rows || []).length && <p className="note">{"Showing the largest " + (r.rows || []).length + " of " + r.n + "."}</p>}</>}
   </div>;
 }
+// the column's Connect (this computer's FinCom Bridge not reachable from this browser): the local connect flow, its answer
+// under the one pressed
+function LocalConnect() {
+  const [mine, setMine] = useState(false), busy = OC.busy === "c";
+  return <div><button type="button" className="linkbtn tsm-small" data-tsm-local-connect="" disabled={!!OC.busy} onClick={() => { setMine(true); doConnect(false); }}>{busy && mine ? "Connecting…" : "Connect"}</button>
+    {mine && !busy && OC.c && <Line r={OC.c} hook="tsm-local" />}</div>;
+}
 function Row({ row }) {
   const [list, setList] = useState(false);
   const linkedRow = row.kind === "client";
@@ -211,7 +221,7 @@ function Row({ row }) {
     <td className="tsm-td tsm-client" data-tsm-col="client" data-label="Client">{linkedRow ? <button type="button" className="linkbtn tsm-client-name" data-tsm-client={row.cid} onClick={() => openCompany(row.cid)}>{row.client}</button>
       : <span className="tsm-client-none">Not chosen yet</span>}</td>
     <Cell k="c" label="Connected to Tally?" x={row.c} />
-    <Cell k="o" label="Open in Tally right now?" x={row.o} />
+    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.connect && <LocalConnect />}</Cell>
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}
       <OpenLine row={row} list={list} onList={() => setList(!list)} />

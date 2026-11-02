@@ -15,6 +15,11 @@ companies and computers only (run_tally_page_clean.py's stand-in cloud; nothing 
      received · 6 min left" with its bar), what to do (one button at most, else "Nothing."), a company that no client has.
      The header says "N clients are fine. M need you." from the same rows. Check Tally now asks each connected client's
      day check (tally_check_request).
+  3b. "Open in Tally right now?" is THIS browser's computer only (next-tally-local-open; the owner: "show me open in the
+     tally where it is opened not on any other computer"): FinCom Bridge here answers and the company is open here → Yes;
+     answers, not open here → No, "Not open in Tally on this computer"; no bridge reachable from this browser → —, "FinCom
+     Bridge is not connected on this computer" and Connect (the local connect flow); another computer's bridge having the
+     company open never makes it Yes. The header and the filter "Not open in Tally" follow the same meaning.
   4. opening balances (migration 138): same (green), differ (amber: N ledgers, ₹X in total; Use Tally's / Keep FinCom's;
      See differences: Ledger | FinCom amount | Tally amount | Difference), do not balance; Use Tally's refused in words
      when not dated the books' first day; the choices call tally_openings_decide; the filter "Opening balances differ".
@@ -76,6 +81,18 @@ EXTRA = """([sum, open, rows, changes, heldSt]) => {
   if (window.tfxRefresh) window.tfxRefresh();
   render();
 }"""
+
+# this browser's FinCom Bridge (made-up key; nothing is sent anywhere): open = the companies Tally has open on THIS
+# computer, as the bridge's own minute check last said (Bridge.st.open); None = no bridge reachable from this browser
+LOCAL = """(open) => {
+  const B = window.__bridge0 = window.__bridge0 || {on: Bridge.on, up: Bridge.up, cfg: Bridge.cfg, refresh: Bridge.refresh};
+  if (open === null) { Object.assign(Bridge, B); Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: ''}; }
+  else { const c = {url: 'http://127.0.0.1:9103', key: 'made-up-key', follow: false, port: 0};
+    Bridge.cfg = () => c; Bridge.on = () => true; Bridge.up = () => true; Bridge.refresh = async () => Bridge.st;
+    Bridge.st = {state: 'ok', sessions: [], tallyUp: true, version: '2.5.2', at: Date.now(), mode: 'auto', open: open.map(n => ({name: n, port: 9000, mine: true}))}; }
+  render();
+}"""
+NOT_HERE, NO_BRIDGE = "Not open in Tally on this computer", "FinCom Bridge is not connected on this computer"
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(T.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -185,7 +202,8 @@ def main():
         HELD136 = [{"book": "bk-" + BRIGHT, "client": BRIGHT, "company": BRIGHT, "held": 5, "from": "20261012", "to": "20261013", "check": {"state": "checking", "total": 2, "done": 1, "waiting": 1, "etaMin": 2}, "fetchOn": True, "renumber": []}]
         ids = scene([d], cos, [ACME, BRIGHT, CORAL, DELTA, EVER, IRIS, GAMMA, HAZEL], books=books, lines=HELD, sum_=SUM, open_=OPEN, rows=DIFFS, changes=CHG, held=HELD136,
                     ledgers={"bk-" + ACME: [{"name": "L%d" % i} for i in range(412)], "bk-" + BRIGHT: [{"name": "L%d" % i} for i in range(286)], "bk-" + IRIS: [{"name": "L%d" % i} for i in range(40)]})
-        pg.wait_for_timeout(2500)
+        HERE = [ACME, CORAL, IRIS, HAZEL, ZETA]     # open in Tally on THIS computer (and on the firm's computer d)
+        E(LOCAL, HERE); pg.wait_for_timeout(2500)
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
@@ -194,7 +212,7 @@ def main():
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
         ok(re.match(r"Till today \d\d:\d\d$", txt(cell(ACME, "e") + " [data-tsm-note]") or ""), "3. entries: Till today <time> (%s)" % txt(cell(ACME, "e")))
-        ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]").startswith("Last opened today"), "3. %s: not open now, Last opened … (%s)" % (BRIGHT, txt(cell(BRIGHT, "o"))))
+        ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_HERE, "3. %s: not open on this computer: No, %s (%s)" % (BRIGHT, NOT_HERE, txt(cell(BRIGHT, "o"))))
         ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(cell(BRIGHT, "do") + ' [data-tsm-act="upload"]') == "Upload Day Book"
            and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.",
            "3. held lines (migration 136): All entries received? No, the period, the row's button Upload Day Book (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
@@ -216,6 +234,36 @@ def main():
         cr = calls("tally_check_request")
         ok(sorted(x["p_client"] for x in cr) == sorted(ids[c] for c in (ACME, BRIGHT, CORAL, IRIS, HAZEL)) and all(x["p_from"] == "2026-04-01" for x in cr), "3. Check Tally now: each connected client's day check, this year so far (%s)" % cr)
         shot("tally-1440-light")
+
+        print("== 3b. Open in Tally right now? on THIS computer only")
+        def col_o(): return E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => [r.getAttribute('data-tsm-row'), (r.querySelector('[data-tsm-col=o] [data-tsm-word]') || {}).textContent || '']))")
+        def fcount(k): return int(pg.get_attribute('#app [data-tsm-filter="%s"]' % k, "data-tsm-count"))
+        def say_ok():
+            nd, fn = n("#app [data-tsm-table] tr[data-tsm-need]"), n("#app [data-tsm-table] tr[data-tsm-fine]")
+            return txt("#app [data-tsm-say]") == "%s %s" % ("1 client is fine." if fn == 1 else "%d clients are fine." % fn, "1 needs you." if nd == 1 else "%d need you." % nd)
+        connected = [ACME, BRIGHT, CORAL, IRIS, GAMMA, HAZEL]
+        ok(word(ACME, "o") == "Yes" and txt(cell(ACME, "o") + " [data-tsm-note]") == "" and n(cell(ACME, "o") + " [data-tsm-local-connect]") == 0, "3b. the bridge here answers, %s open here: Yes (%s)" % (ACME, txt(cell(ACME, "o"))))
+        ok(fcount("closed") == 2 and say_ok(), "3b. Not open in Tally: the 2 connected clients not open here (%d); the header from the same rows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        # another computer's bridge (d, the firm's) has every company open; THIS computer's bridge has none open
+        E(LOCAL, []); pg.wait_for_timeout(1200)
+        o = col_o()
+        ok(o[ACME] == "No" and txt(cell(ACME, "o") + " [data-tsm-note]") == NOT_HERE, "3b. open on another computer only: %s is No, %s (%s)" % (ACME, NOT_HERE, txt(cell(ACME, "o"))))
+        ok("Yes" not in o.values() and all(o[c] == "No" for c in connected) and o[ZETA] == "No", "3b. no row says Yes for another computer's Tally (%s)" % o)
+        ok(fcount("closed") == len(connected) + 1 and say_ok(), "3b. Not open in Tally counts this computer only (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        ok(txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally." and word(ACME, "c") == "Yes", "3b. what to do and Connected to Tally? stay as they were (%s)" % txt(cell(GAMMA, "do")))
+        # no FinCom Bridge reachable from this browser (the firm's other computer still has them all open)
+        E(LOCAL, None); pg.wait_for_timeout(1200)
+        o = col_o()
+        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == NO_BRIDGE and txt(cell(ACME, "o") + " [data-tsm-local-connect]") == "Connect", "3b. no bridge here: —, %s, Connect (%s)" % (NO_BRIDGE, txt(cell(ACME, "o"))))
+        ok("Yes" not in o.values() and all(o[c] == "—" for c in connected), "3b. no bridge here: no Yes from another computer (%s)" % o)
+        ok(fcount("closed") == 0 and say_ok(), "3b. no bridge here: nothing counted as Not open in Tally (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        ok(word(DELTA, "o") == "—" and n(cell(DELTA, "o") + " [data-tsm-local-connect]") == 0, "3b. a client not connected keeps its plain — (no Connect there)")
+        pg.click(cell(ACME, "o") + " [data-tsm-local-connect]")
+        try: pg.wait_for_selector(cell(ACME, "o") + " [data-oc-say]", timeout=20000)
+        except Exception: pass
+        ok(n(cell(ACME, "o") + " [data-oc-say]") == 1 and n(cell(BRIGHT, "o") + " [data-oc-say]") == 0, "3b. Connect runs this computer's connect, its answer under that row only (%s)" % txt(cell(ACME, "o")))
+        E(LOCAL, HERE); pg.wait_for_timeout(1200)
+        ok(word(ACME, "o") == "Yes" and word(BRIGHT, "o") == "No" and n("#app [data-tsm-local-connect]") == 0, "3b. the bridge here again: Yes / No, no Connect")
 
         print("== 4. opening balances")
         ok(pg.get_attribute(cell(ACME, "l") + " [data-tsm-open]", "data-tsm-open") == "same" and txt(cell(ACME, "l") + " [data-tsm-open-words]") == "Opening balances: same as Tally", "4. same: green, same as Tally")

@@ -6,7 +6,7 @@
 //   Client · Connected to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
 import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
-import { tallyCoState, seenWords, coKey, lastEntry } from "./tallyState.js";
+import { seenWords, coKey, lastEntry } from "./tallyState.js";
 import { bookSum, bookFetch, pctOf, etaWords } from "../parts/TallyFetch.jsx";
 import { needDays } from "./needDays.js";
 // migration 136 (next-held-settle): a client's held lines, one period, with the Day Book upload preset to it
@@ -105,6 +105,29 @@ export function openingsOf(cid) {
 }
 const iso = (x) => { const s = d8(x); return s.length === 8 ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; };
 
+// ---------- "Open in Tally right now?" on THIS computer only (next-tally-local-open; the owner, 02-Nov-2026: "show me
+// open in the tally where it is opened not on any other computer.. I want true status of that particular browser").
+// What FinCom Bridge on this computer last said (Bridge.st.open, read by the bridge's own minute check, /status: nothing
+// new is asked of the bridge or Tally); never another computer's bridge (those stay under For support). Postings still go
+// through FinCom's cloud to whichever bridge holds the company: only this column's meaning (and the header and filters
+// made from it) is this computer's.
+//   "yes" open here · "no" the bridge here answers, the company is not open here · "none" no bridge reachable from this
+//   browser · "checking" this browser holds a bridge key whose state is not read yet
+export const NOT_HERE = "Not open in Tally on this computer", NO_BRIDGE = "FinCom Bridge is not connected on this computer";
+export function localOpen(company) {
+  try {
+    if (typeof Bridge !== "object" || Bridge.blocked() || !Bridge.on()) return "none";
+    const st = Bridge.st || {};
+    if (st.state !== "ok") return st.state === "off" && !st.error ? "checking" : "none";
+    const k = coKey(company);
+    // (another Windows user's Tally on this computer, when the bridge says so, is not this browser's)
+    return [].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => String(x.name || ""))
+      .some((n) => coKey(n) === k || !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
+  } catch (e) { return "none"; }
+}
+const openCell = (h) => h === "yes" ? { w: YES, note: "" } : h === "no" ? { w: NO, note: NOT_HERE }
+  : h === "checking" ? { w: DASH, note: "Checking FinCom Bridge on this computer…" } : { w: DASH, note: NO_BRIDGE, connect: true };
+
 // one client's row
 function clientRow(co, all, opts) {
   const cid = co.id, k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, company = (k && k.company) || "";
@@ -121,9 +144,10 @@ function clientRow(co, all, opts) {
     return row;
   }
   // connected
-  const st = tallyCoState(company), open = st.state === "connected";
+  // open: on THIS computer (localOpen), never another computer's bridge
+  const here = localOpen(company), open = here === "yes";
   row.c = { w: YES, note: "Tally company: " + shown(company) };
-  row.o = open ? { w: YES, note: "" } : st.state === "unseen" ? { w: NOTYET, note: "" } : { w: NO, note: st.seen ? "Last opened " + seenWords(st.seen) : "" };
+  row.o = openCell(here);
   // ledgers: the first sync going (its bar), stuck (its reason, Try again), held (the count), not yet
   const x = firstSyncOf(cid), running = !!(x && !x.end && !x.err && !x.late), stuck = !!(x && !x.end && (x.err || x.late));
   const n = Math.max(ledgersOf(cid), ledN(cid), (x && x.led > 0 && x.led) || 0), held = ledgersHeld(cid) || !!(x && x.end);
@@ -182,7 +206,7 @@ function clientRow(co, all, opts) {
 function companyRow(r, all) {
   const best = bestFor(r, all);
   return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best,
-    c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: { w: YES, note: "" }, l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
+    c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company)), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
     act: { kind: "choose", label: best ? "Connect" : "Choose the client" }, todo: best ? "Connect it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
