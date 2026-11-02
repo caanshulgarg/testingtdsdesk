@@ -35,6 +35,9 @@ import (
 	"time"
 )
 
+// how long Tally must stay free of postings and FinCom requests before a click that gave way goes again
+var stockQuiet = 1 * time.Second
+
 const stockID = "FinComStockInHand"
 
 // the plain words FinCom shows when Tally overran the stop (the owner's words)
@@ -244,12 +247,29 @@ func stockAnswer(c stockClick, k string) M {
 	var raw string
 	var err error
 	for try := 0; ; try++ {
-		// postings first; on the second try FinCom's own request that preempted the click goes first too
-		for postingGoing() || (try > 0 && userWaiting(port)) {
+		// postings first; after a click gave way, it waits until the posting (or FinCom's own request) has fully
+		// finished: nothing going and nobody waiting for Tally for stockQuiet together, so it does not land between two
+		// requests of the same posting (gate run 41107758884 s6 on 4.1 and 7.1: preempted a second time)
+		var quietFrom time.Time
+		for {
+			busy := postingGoing() || (try > 0 && userWaiting(port))
+			if !busy && try == 0 {
+				break
+			}
+			if !busy {
+				if quietFrom.IsZero() {
+					quietFrom = time.Now()
+				}
+				if time.Since(quietFrom) >= stockQuiet {
+					break
+				}
+			} else {
+				quietFrom = time.Time{}
+			}
 			if time.Now().After(until) {
 				return say("busy", "not asked: Tally is busy with a posting; try again in a moment")
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 		if err := earlierRefusal(port); err != nil {
 			return say("busy", "not asked: Tally is still on an earlier request; try again in a moment")
@@ -269,13 +289,13 @@ func stockAnswer(c stockClick, k string) M {
 		tc := &TC{copier: true, limitMs: 2000, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
 		raw, err = invokeTally(tc, port, x, 5)
 		// a posting or FinCom's own request that came while the click took Tally's lock goes first (errPreempted,
-		// errBackoff): when the request never reached Tally (sentOut), the click waits for postings and goes once more, at
-		// most once, within its 20 s; never sent twice (gate run 41091446805: preempted by the posting, which had already
-		// ended when looked at)
+		// errBackoff): when the request never reached Tally (sentOut), the click waits until the posting has fully
+		// finished and goes again, within its 20 s; it is sent to Tally at most once, since a try that reached Tally
+		// is never repeated (gate runs 41091446805, 41107758884)
 		// (a read lease given up to another FinCom Bridge that wants to post: that posting goes first, and this click is
 		// answered busy, never sent ahead of it)
 		yieldedLease := leaseBefore && !leaseHeldForRead(c.Company)
-		if try == 0 && !sent && gaveWay(err) && !yieldedLease && time.Now().Before(until) {
+		if !sent && gaveWay(err) && !yieldedLease && time.Now().Before(until) {
 			_ = held(time.Now()) // the window watch ended
 			stock.mu.Lock()
 			delete(stock.asks, x)

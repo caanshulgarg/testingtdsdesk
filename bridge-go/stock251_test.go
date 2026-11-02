@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -376,9 +377,60 @@ func TestStock251OneInFlightPostingsFirst(t *testing.T) {
 	if str(a["status"]) != "ok" || stockClicks(f) != 3 || tries != 2 {
 		t.Fatalf("a posting during the click's turn: %v (%d asked, %d tries)", a, stockClicks(f), tries)
 	}
+	// a posting of two requests with a short gap between them: the click that gave way waits until the whole posting
+	// has finished, not just its first request (gate run 41107758884 s6 on 4.1 and 7.1)
+	first, tries = true, 0
+	var gapSent bool
+	var postingDone atomic.Bool
+	stock.mu.Lock()
+	stock.beforeSend = func() {
+		tries++
+		if !first && !postingDone.Load() {
+			gapSent = true
+		}
+		if first {
+			first = false
+			importsInFlight.Add(1)
+			go func() {
+				time.Sleep(300 * time.Millisecond)
+				importsInFlight.Add(-1)
+				time.Sleep(250 * time.Millisecond)
+				importsInFlight.Add(1)
+				time.Sleep(300 * time.Millisecond)
+				postingDone.Store(true)
+				importsInFlight.Add(-1)
+			}()
+		}
+	}
+	stock.mu.Unlock()
+	a = stockTake(stockClick{Company: zz, From: "20260401", To: "20260831", At: clickAt(4600 * time.Millisecond)})
+	stock.mu.Lock()
+	stock.beforeSend = nil
+	stock.mu.Unlock()
+	if str(a["status"]) != "ok" || stockClicks(f) != 4 || tries != 2 || gapSent {
+		t.Fatalf("a posting of two requests: %v (%d asked, %d tries, sent in the gap %v)", a, stockClicks(f), tries, gapSent)
+	}
+	// preempted twice (a second posting comes as the click goes again): it waits again and goes, still asked once
+	tries = 0
+	stock.mu.Lock()
+	stock.beforeSend = func() {
+		tries++
+		if tries <= 2 {
+			importsInFlight.Add(1)
+			go func() { time.Sleep(200 * time.Millisecond); importsInFlight.Add(-1) }()
+		}
+	}
+	stock.mu.Unlock()
+	a = stockTake(stockClick{Company: zz, From: "20260401", To: "20260930", At: clickAt(4700 * time.Millisecond)})
+	stock.mu.Lock()
+	stock.beforeSend = nil
+	stock.mu.Unlock()
+	if str(a["status"]) != "ok" || stockClicks(f) != 5 || tries != 3 {
+		t.Fatalf("preempted twice: %v (%d asked, %d tries)", a, stockClicks(f), tries)
+	}
 	// a company not open in this bridge's own Tally: not asked
 	a = stockTake(stockClick{Company: "OTHER CO", From: "20260401", To: "20260630", At: clickAt(5 * time.Second)})
-	if str(a["status"]) != "" || truthy(a["ok"]) || !strings.Contains(str(a["why"]), "not open here") || stockClicks(f) != 3 || len(*told) != 5 { // nothing told for it (the ok, the busy, the posting busy, the ok after the posting)
+	if str(a["status"]) != "" || truthy(a["ok"]) || !strings.Contains(str(a["why"]), "not open here") || stockClicks(f) != 5 || len(*told) != 7 { // nothing told for it (the ok, the busy, the posting busy, the ok after the posting, the three oks after giving way)
 		t.Fatalf("the company not open in the own Tally: answered %v (%d asked, %d told)", a, stockClicks(f), len(*told))
 	}
 }
