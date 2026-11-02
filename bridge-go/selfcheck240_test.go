@@ -99,6 +99,10 @@ func TestSelfCheckInSlicesAcrossNights(t *testing.T) {
 	led231Numbers(t, f)
 	ym := startPointMonth(zz)
 	saveDateForm(zz, formPlain, ym, 1)
+	// the night at the end of the starting point's month (the starting point takes the real day; scBridge's 06-Oct-2026
+	// night is before it from November 2026 on)
+	last := fromTallyDate(monthEnd(ym))
+	scAt(t, time.Date(last.Year(), last.Month(), last.Day(), 23, 30, 0, 0, time.Local))
 	r, err := selfCheckStart(zz, f.port)
 	if err != nil || r == nil || r.stopped != "" {
 		t.Fatalf("not checked (want a slice): %+v %v", r, err)

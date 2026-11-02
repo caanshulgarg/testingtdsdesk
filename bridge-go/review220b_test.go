@@ -40,7 +40,9 @@ func TestSourceCBounded(t *testing.T) {
 	laterBy(t, 2*time.Minute)
 	_, _ = liveSourceC(zz, f.port)
 	// 2.2.2: the hard stop at 2 s comes before the request's own limit of 5 s
-	if logLines("FinComSlice 20261001-20261031 took 2.0s and failed") != 1 || logLines("(FinComSlice, try 1); trying again by itself at") != 1 {
+	// the month of the entries (today's; it was "20261001-20261031" while written in October 2026)
+	ym := time.Now().Format("200601")
+	if logLines("FinComSlice "+ym+"01-"+monthEnd(ym)+" took 2.0s and failed") != 1 || logLines("(FinComSlice, try 1); trying again by itself at") != 1 {
 		t.Fatalf("the request's limit: %s", readText(logFile()))
 	}
 }
