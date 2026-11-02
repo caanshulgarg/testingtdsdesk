@@ -22,6 +22,8 @@ Checks:
   6. a renumbering alert on a computer's beat queues its days; tally_held_status says it is checked once every day from
      its first day to its own is listed whole after it.
   7. tally_held_status: the firm's members see the held lines, their days and the check's progress; another firm nothing.
+  8. (137, after 136 ran on staging) the check is 'off' unless a computer with "read older entries" on was seen in the last
+     10 minutes; why: 'offline' (on, not connected) or 'switch' (on nowhere).
 RED_WITHOUT_136=1: the same checks without the file (they fail)."""
 import os, re, sys, json, hashlib, subprocess, datetime
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -37,6 +39,7 @@ FILES = [os.path.join(SQLDIR, f) for f in ("migration-32-sync-safety.sql", "migr
                                            "migration-67-recorder-renumbered.sql", "migration-92-settle-unnamed-deletes.sql", "migration-98-period-pull.sql", "migration-133-fetch-check.sql")]
 M135 = os.path.join(SQLDIR, "migration-135-check-changes.sql")
 M = os.environ.get("M136_FILE") or os.path.join(SQLDIR, "migration-136-held-settle.sql")
+M137 = os.path.join(SQLDIR, "migration-137-held-status-online.sql")
 RED = os.environ.get("RED_WITHOUT_136") == "1"
 fails = []
 def ok(c, w):
@@ -125,7 +128,7 @@ try:
         if r.returncode: ok(False, "%s runs: %s" % (os.path.basename(path), r.stderr[-300:])); raise SystemExit("cannot go on")
     db.sql("""alter table tally_devices add column if not exists info jsonb not null default '{}'::jsonb; alter table tally_devices add column if not exists revoked boolean not null default false;
       create table if not exists tally_companies (firm_id uuid, company text, client_id text, gstin text, device_id uuid, last_seen timestamptz, book_id uuid, primary key (firm_id, company));
-      insert into tally_devices (id, firm_id, name, key_hash, info, period_fetch) values (%s, %s, 'MADEUP-PC1', 'kh136', '{}'::jsonb, true) on conflict do nothing;
+      insert into tally_devices (id, firm_id, name, key_hash, info, period_fetch, last_seen) values (%s, %s, 'MADEUP-PC1', 'kh136', '{}'::jsonb, true, now()) on conflict do nothing;
       insert into tally_companies (firm_id, company, client_id, device_id, book_id) values (%s, 'MADE UP CO', 'c1', %s, %s) on conflict do nothing;""" % (q(DV), q(F), q(F), q(DV), q(B)))
     r = psql_text(open(M135).read())
     if r.returncode: ok(False, "135 runs: %s" % r.stderr[-300:]); raise SystemExit("cannot go on")
@@ -147,6 +150,14 @@ try:
         for i in (1, 2):
             r = psql_text(text)
             ok(r.returncode == 0, "136 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
+        t137 = open(M137).read()
+        print("  md5 of %s: %s" % (os.path.basename(M137), hashlib.md5(t137.encode()).hexdigest()))
+        c137 = "\n".join(l.split("--")[0] for l in t137.lower().splitlines())
+        ok("delete from" not in c137 and not re.search(r"\b(drop|truncate|alter\s+table|create\s+table)\b", c137) and sorted(set(re.findall(r"create or replace function public\.(\w+)", t137))) == ["tally_held_status"],
+           "8. 137: only 136's tally_held_status replaced; no table, no drop")
+        for i in (1, 2):
+            r = psql_text(t137)
+            ok(r.returncode == 0, "137 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
     l = line("o-alt")
     ok(l.get("state") == "duplicate" and "checked against Tally" in l.get("why", "") and "AlterID 18" in l.get("why", ""), "1. the altered line Tally listed at FinCom's AlterID after it arrived: settled when 136 runs (%s)" % l)
     ok(line("o-del").get("state") == "held", "1. the GUID-less delete: not yet (one list only)")
@@ -225,6 +236,14 @@ try:
     ok(s7.get("held") == 1 and s7.get("entries") == 1 and s7.get("from") == D8(4) and s7.get("company") == "MADE UP CO" and s7.get("client") == "c1", "7. the held lines left: one, day 4 (%s)" % {k: s7.get(k) for k in ("held", "entries", "deletes", "from", "to")})
     ck = s7.get("check") or {}
     ok(ck.get("total", 0) >= 5 and ck.get("waiting") == 2 and ck.get("state") == "checking" and s7.get("fetchOn") is True, "7. the check's progress: days 4 and 5 (queued by its lines before the upload) waiting (%s)" % ck)
+    db.sql("update tally_devices set last_seen = now() - interval '2 days' where id = %s" % q(DV))
+    c8 = STAT().get("check") or {}
+    ok(c8.get("state") == "off" and c8.get("why") == "offline" and STAT().get("fetchOn") is False, "8. the computer with the switch on not connected: off, offline (%s)" % c8)
+    db.sql("update tally_devices set period_fetch = false where id = %s" % q(DV))
+    c8 = STAT().get("check") or {}
+    ok(c8.get("state") == "off" and c8.get("why") == "switch", "8. the switch on nowhere: off, switch (%s)" % c8)
+    db.sql("update tally_devices set period_fetch = true, last_seen = now() where id = %s" % q(DV))
+    ok((STAT().get("check") or {}).get("state") == "checking", "8. connected again: checking")
     ok(STAT(VIEWER).get("held") == 1, "7. a viewer of the firm sees it")
     ok(STAT(OTHER) == {}, "7. another firm sees nothing")
     ok("not allowed" in str(j("select tally_held_status(null)::text", None, "anon")) or "permission" in str(j("select tally_held_status(null)::text", None, "anon")), "7. anon cannot")

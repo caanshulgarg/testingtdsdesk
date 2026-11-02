@@ -74,7 +74,7 @@ export function heldWords(b) {
   const pct = c.total > 0 ? Math.round((100 * c.done) / c.total) : 0;
   const how = c.state === "checking" || c.state === "queued" ? "FinCom is checking them with Tally now (" + pct + "%" + (c.etaMin ? " · about " + c.etaMin + " min" : "") + ") — or " + up
     : c.state === "stopped" ? "FinCom stopped checking them with Tally" + (c.words ? " (" + c.words + ")" : "") + " — " + up
-    : c.state === "off" ? "FinCom checks them by itself once reading older entries is on for the Tally computer — or " + up
+    : c.state === "off" ? (c.why === "offline" ? "FinCom checks them by itself once the Tally computer that reads older entries is connected" : "FinCom checks them by itself once reading older entries is on for the Tally computer") + " — or " + up
     : up.charAt(0).toUpperCase() + up.slice(1);
   const text = b.company + ": " + (n === 1 ? "1 change" : n + " changes") + " saved in Tally " + (d0 === d1 ? "on " + short(d0) : "between " + short(d0) + " and " + short(d1)) +
     (n === 1 ? " is" : " are") + " not yet in FinCom. " + how;
