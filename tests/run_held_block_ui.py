@@ -40,9 +40,9 @@ def ra(frm="20261006"):
     return {"company": CO, "words": "19 entries may have been renumbered in " + CO + "; upload the Day Book from 06-Oct-2026", "n": 19, "more": False, "from": frm, "type": "Sales", "at": "2026-10-30T16:22:12"}
 def withAlerts(alerts):
     d = dev(recording=True); d["info"]["beat"]["renumberAlerts"] = alerts; return d
-def status(state="checking", total=10, done=4, eta=3, words=None, checked=False, held=5, fetch=True, frm="20261005"):
+def status(state="checking", total=10, done=4, eta=3, words=None, checked=False, held=5, fetch=True, frm="20261005", why=None):
     return {"ok": True, "books": [{"book": "b1", "client": "G", "company": CO, "held": held, "deletes": 3, "entries": 2, "from": frm, "to": "20261007", "days": [],
-            "check": {"total": total, "done": done, "waiting": total - done, "upload": 0, "etaMin": eta, "state": state, "words": words}, "fetchOn": fetch,
+            "check": {"total": total, "done": done, "waiting": total - done, "upload": 0, "etaMin": eta, "state": state, "words": words, "why": why}, "fetchOn": fetch,
             "renumber": [{"from": "20261006", "at": "2026-10-30T10:52:12+00:00", "n": 19, "more": False, "checked": checked}]}]}
 HELD = """(st) => { window.__held = st; const cid = Object.values(S.companies).find(x => x.name === "GARG SHEKHAR & COMPANY").id;
   window.__held.books.forEach(b => b.client = cid);
@@ -82,9 +82,12 @@ with sync_playwright() as p:
     scene([withAlerts([ra()])], LINES, status("stopped", words="FinCom stopped reading from Tally: Tally was busy."))
     t3 = (E(BLOCK) or [{}])[0].get("text", "")
     ok("FinCom stopped checking them with Tally (FinCom stopped reading from Tally: Tally was busy.) — upload one Day Book for 05-Oct-2026" in t3, "3. stopped: said, the upload offered (%s)" % t3)
-    scene([withAlerts([ra()])], LINES, status("off", fetch=False))
+    scene([withAlerts([ra()])], LINES, status("off", fetch=False, why="switch"))
     t3 = (E(BLOCK) or [{}])[0].get("text", "")
     ok("once reading older entries is on for the Tally computer — or upload one Day Book" in t3, "3. reading older entries off: said (%s)" % t3)
+    scene([withAlerts([ra()])], LINES, status("off", fetch=False, why="offline"))
+    t3 = (E(BLOCK) or [{}])[0].get("text", "")
+    ok("once the Tally computer that reads older entries is connected — or upload one Day Book" in t3, "3. that computer not connected: said, not 'checking' (%s)" % t3)
     # ---- 4. settled live: counts down, then gone
     scene([withAlerts([ra()])], LINES, status())
     E(HELD, status(held=3, done=8, frm="20261006")); E("() => { const r = Rec.act.rows.find(x => x.id === 1); Rec.lineIn(Object.assign({}, r, {state: 'applied'})); Rec.lineIn(Object.assign({}, Rec.act.rows.find(x => x.id === 2), {state: 'applied'})); }"); pg.wait_for_timeout(1200)
