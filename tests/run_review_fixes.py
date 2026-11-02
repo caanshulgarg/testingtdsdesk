@@ -102,7 +102,7 @@ with sync_playwright() as p:
     ok(pg.evaluate("(cid) => (gstinMatch({gstin: ' 09aanfg3202d1zr '}) || {}).id === cid", cid), "6. a Tally company's GSTIN matches the client's, whatever the case or spaces")
     pg.evaluate("""(cid) => { TCloud.rpc = async () => ({}); Cloud.api = async (q) => /tally_devices/.test(q) ? [] : [];
       TCloud.restAll = async () => [{company: "GARG SHEKHAR & COMPANY", client_id: cid, gstin: "09AANFG3202D1ZR", last_seen: new Date().toISOString(), linked_at: new Date().toISOString()}];
-      TCloud.pane.devices = null; S.view = "home"; S.tallyGuide = {}; navHome("tally"); }""", cid); pg.wait_for_timeout(1500)
+      TCloud.pane.devices = null; S.view = "home"; S.tallyGuide = {}; S.tallyMore = {support: true}; navHome("tally"); }""", cid); pg.wait_for_timeout(1500)
     # 24-Oct-2026 (next-tally-one-page): which client each company is: the Tally page's Companies in Tally (the one place)
     r6 = pg.evaluate("""() => { const r = document.querySelector('#app [data-tco-list=firm] [data-tco-row="GARG SHEKHAR & COMPANY"]'); return r ? [r.getAttribute('data-tco-linked'), (r.querySelector('[data-tco-client]') || {}).textContent || ''] : null; }""")
     ok(r6 and r6[0] == cid and r6[1].startswith("Testing AAD"),

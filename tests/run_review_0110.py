@@ -84,7 +84,7 @@ with sync_playwright() as p:
       TCloud.refreshPane = async () => {}; TCloud.status = async () => [{book: 'bk1', from: '2025-04-01'}];
       TCloud.restAll = async (q) => q.startsWith('tally_groups') ? Array.from({length: 28}, (_, i) => ({name: 'G' + i})) : Array.from({length: 300}, (_, i) => ({parent: i < 290 ? 'Sundry Debtors' : ''}));
       TLight.st.cos = TCloud.pane.companies; TLight.st.at = Date.now(); TLight.refresh = () => Promise.resolve();   // the companies as set here, not read again
-      window.__allAsked = []; TCloud.rpc = async (f, a) => { window.__asked = [f, a]; window.__allAsked.push([f, a]); return {ok: true}; }; Bridge.on = () => false; S.tallyGuide = {}; navHome('tally'); }""", cid)
+      window.__allAsked = []; TCloud.rpc = async (f, a) => { window.__asked = [f, a]; window.__allAsked.push([f, a]); return {ok: true}; }; Bridge.on = () => false; S.tallyGuide = {}; S.tallyMore = {support: true}; navHome('tally'); }""", cid)
     pg.wait_for_timeout(1200)
     # 24-Oct-2026 (next-tally-one-page): the support tools are on the company's row of the Tally page (⋯): Sync master is
     # the "Send ledgers and groups now"; What is in the cloud? says the groups and the ledgers with a group

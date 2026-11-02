@@ -85,7 +85,7 @@ SETUP = """([devs, stops, companies, role, lines]) => {
   TLight.st.at = 0; TLight.st.devs = window.__devs.filter(d => !d.revoked); TLight.st.cos = window.__companies; TLight.st.stops = window.__stops;
   Rec.act = {};
   document.body.classList.add("is-test"); S.firm.firmName = S.firm.firmName || "Test Firm";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyGuide = {};
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {support: true}; S.tallyGuide = {};
   return c.id;
 }"""
 def rline(i, day, why):
@@ -172,7 +172,7 @@ def main():
         # ---- 2b. not linked, nothing seen yet: Companies in Tally reads the cloud again by itself
         E("(c) => { S.companies[c].tallyName = 'NEW CO'; }", cid)
         scene([], devs=[dev(1, "NWS144", "anshul", opened=()), dev(2, "LAPTOP", "ravi", opened=())])
-        E("(c) => openConnectTally(4, c)", cid); pg.wait_for_timeout(1500)
+        E("(c) => (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), openConnectTally)(4, c)", cid); pg.wait_for_timeout(1500)
         ok("No company seen in Tally yet" in txt("#app [data-tco-list=firm]"), "2b. nothing seen: open your company in TallyPrime (%s)" % txt("#app [data-tco-list=firm]"))
         E("""() => { window.__companies.push({company: 'NEW CO', client_id: null, device_id: '%s', gstin: '', last_seen: new Date().toISOString()});
             const d = window.__devs.find(x => x.id === '%s'); d.info.beat.open.push('NEW CO'); Object.values(d.info.bridges).forEach(b => b.open.push('NEW CO')); }""" % (D1, D1))
@@ -259,19 +259,19 @@ def main():
         # ---- 9. the Tally page: Companies in Tally, each company with its client or Add as client; a client not linked: the
         # list for it with "Link to <client>"; a computer's card names no client; no port outside Details
         E("() => { const o = newCompany({name: 'ZZ Other', gstin: ''}); S.companies[o.id] = o; S.data[o.id] = {parties: {}, entries: {}, loaded: true}; o.stats = {}; window.__zz = o.id; }")
-        scene(LINKED(D1)); E("() => { S.tallyFocus = ''; S.tallyGuide = {}; navHome('tally'); }"); pg.wait_for_timeout(1800)
+        scene(LINKED(D1)); E("() => { S.tallyFocus = ''; S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1800)
         rows = E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), [r.getAttribute('data-tco-state'), r.getAttribute('data-tco-linked'), r.innerText.replace(/\\s+/g, ' ')]]))")
         ok(rows.get("GARG SHEKHAR", [""])[0] == "connected" and rows["GARG SHEKHAR"][1] == cid and "Link Co" in rows["GARG SHEKHAR"][2] and "Sync now" in rows["GARG SHEKHAR"][2],
            "9. Companies in Tally: GARG SHEKHAR, Connected, its client Link Co, Sync now (%s)" % rows.get("GARG SHEKHAR"))
         ok("Choose client" in rows.get("ABC LTD", ["", "", ""])[2] and pg.locator(R("ABC LTD") + " select[data-tco-act=pick]").count() == 1 and "Add as client" not in rows.get("ABC LTD", ["", "", ""])[2], "9. ABC LTD (open on LAPTOP, no client): the client picker, no Add as client (Task D) (%s)" % rows.get("ABC LTD"))
         zz = E("window.__zz")
-        E("(z) => openConnectTally(4, z)", zz); pg.wait_for_timeout(900)
+        E("(z) => (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), openConnectTally)(4, z)", zz); pg.wait_for_timeout(900)
         ok(pg.locator('#app [data-tco-for="%s"]' % zz).count() == 1 and txt(R("ABC LTD") + " [data-tco-act]") == "Link to ZZ Other" and txt(R("GARG SHEKHAR") + " [data-tco-act]") == "Move here",
            "9. a client not linked (ZZ Other): 'Link to ZZ Other', and GARG SHEKHAR (Link Co's) 'Move here' (%s)" % txt("#app [data-tco-list=firm]")[:200])
-        E("() => { S.tallyGuide = {}; S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+        E("() => { S.tallyGuide = {}; S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(600)
         ok(pg.locator("#app [data-card-seen]").count() == 0 and pg.locator("#app [data-tally-clients]").count() == 0, "9. Help & support: no 'Seen, not linked', no clients' table")
         no_port("9. the Tally page")
-        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(400)
+        E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(400)
         shot(pg, "tally-page-desktop-light")
         # a change of company from the list: ABC LTD ⋯ Link to a client… → Link Co (asked: it moves from GARG SHEKHAR)
         n0 = len(calls("tally_company_link"))
@@ -286,7 +286,7 @@ def main():
         # this computer's Tallys (Details): no linking there
         E("""() => { Bridge.cfg = () => ({url: 'http://localhost:1', key: 'k', follow: false, port: 0}); Bridge.blocked = () => false; Bridge.on = () => true; Bridge.up = () => true;
               Object.assign(Bridge.st, {state: 'ok', version: '2.4.1', mode: 'auto', user: 'anshul', tallyUp: true, at: Date.now(), open: [{name: 'QQ ELSEWHERE'}],
-              sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'QQ ELSEWHERE'}]}, {port: 9001, skipped: true, ok: false, companies: []}]}); S.tallyMore = {page: true}; render(); }""")
+              sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'QQ ELSEWHERE'}]}, {port: 9001, skipped: true, ok: false, companies: []}]}); S.tallyMore = {support: true, page: true}; render(); }""")
         pg.wait_for_timeout(700)
         ok("Use this Tally" in txt("#app [data-bridge-more]"), "9. Details: the Tallys with Use this Tally")
 
@@ -325,7 +325,7 @@ def main():
                         qs(comp); wide("line " + nm)
                         el = q.locator("#app [data-books-source]")
                         if el.count(): el.screenshot(path=os.path.join(SHOTS, "line-%d-%s-%s-%s.png" % (n, nm, tag, scheme)))
-                    q.evaluate("() => { S.tallyFocus = ''; navHome('tally'); }"); q.wait_for_timeout(1800)
+                    q.evaluate("() => { S.tallyFocus = ''; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); q.wait_for_timeout(1800)
                     wide("Tally page")
                     q.screenshot(path=os.path.join(SHOTS, "tally-page-%s-%s.png" % (tag, scheme)), full_page=True)
                     q.close()

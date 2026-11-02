@@ -639,3 +639,18 @@ book's missing days, the year in days and the Tally computer's office hours) for
 135, then the tally-ingest of the same branch (without 135 it asks 133's tally_check_next as before). Tested on pg_stand:
 `tests/run_migration135.py` (RED_WITHOUT_135=1 fails); tally-ingest: `tests/run_fetch_check_ingest.py`; the page:
 `tests/run_check_changes_ui.py`.
+
+## 138: opening balances on the simple Tally page (one function)
+
+**138, openings decide** (first numbered 137; held lines' 137 is `migration-137-held-status-online.sql`) (02-Nov-2026, branch `next-tally-simple`; **RUN on staging** 02-Nov-2026 (apply_migration
+`migration_137_openings_decide`, recorded again as `migration_138_openings_decide`), file md5 `5c3d6239270df12ffde540e965565a2b` (as first applied, numbered 137: `d9656601b1010cacd78c5941c27887d3`; only the header comment differs), read back: `md5(prosrc)` of
+`tally_openings_decide` `46a7348b5fb22fe2e00566c5f61f292f`, equal to pg_stand's; SECURITY DEFINER, `search_path=public, pg_temp`;
+execute for authenticated and service_role, none for anon; 136 and 137 are held lines'): `server/tally-cloud/migration-138-openings-decide.sql`
+runs after 130 (tally_openings_held, tally_inr) and needs `tally_opening_repairs` (on staging since 30-Oct-2026). ONE new
+function, `tally_openings_decide(uuid, text)`: 'status' (any member; every book of the firm), 'list' (one book's
+differences: ledger, FinCom amount, Tally amount, difference), 'use' (owner or staff: Tally's held openings applied only when
+dated the books' first day, every ledger in FinCom, no income or expense ledger, and they still tie within Rs 1; each change
+written to tally_opening_repairs; tally_books.ledgers_at moved on) and 'keep' (owner or staff: the held rows marked
+"Dismissed by <user> at <time> IST (Keep FinCom's)", stage kept). No table made or altered, no row deleted; one transaction,
+lock_timeout 10 s, safe twice; the change takes 130's per-book advisory lock. Tested on pg_stand: `tests/run_migration138.py`
+(RED_WITHOUT_138=1 fails); the page: `tests/run_tally_simple.py`. No tally-ingest change.

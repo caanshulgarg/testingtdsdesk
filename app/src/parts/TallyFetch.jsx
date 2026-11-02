@@ -41,7 +41,8 @@ const redraw = () => { if (typeof render === "function") render(); };
 const SUM = { at: 0, busy: false, books: null, off: false };
 export function summary(force = false) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || SUM.off) return null;
-  if (!SUM.busy && (force || Date.now() - SUM.at > 30000)) {
+  // (a hidden tab reads nothing by itself: pollOk, src/js; a press still reads at once)
+  if (!SUM.busy && (force || (Date.now() - SUM.at > 30000 && (typeof pollOk !== "function" || pollOk())))) {
     SUM.busy = true;
     rpc("tally_fetch_summary", { p_book: null }).then((r) => { if (r && r.ok && Array.isArray(r.books)) SUM.books = r.books; },
       (e) => { if (missing(e)) SUM.off = true; }).finally(() => { SUM.at = Date.now(); SUM.busy = false; redraw(); });
@@ -66,7 +67,7 @@ const ASK = { at: 0, busy: false, asks: null, books: null, off: false };
 export function askStatus(force = false) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || ASK.off) return null;
   const going = (ASK.asks || []).some((k) => k.state !== "done") || (ASK.books || []).some((x) => x.fill && x.fill.waiting > 0);
-  if (!ASK.busy && (force || Date.now() - ASK.at > (going ? 10000 : 30000))) {
+  if (!ASK.busy && (force || (Date.now() - ASK.at > (going ? 10000 : 30000) && (typeof pollOk !== "function" || pollOk())))) {
     ASK.busy = true;
     rpc("tally_check_ask_status", { p_client: null }).then((r) => { if (r && r.ok && Array.isArray(r.asks)) { ASK.asks = r.asks; ASK.books = Array.isArray(r.books) ? r.books : []; } },
       (e) => { if (missing(e)) ASK.off = true; }).finally(() => { ASK.at = Date.now(); ASK.busy = false; redraw(); });

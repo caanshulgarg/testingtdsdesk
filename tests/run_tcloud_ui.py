@@ -206,7 +206,7 @@ with sync_playwright() as p:
     # 23-Oct-2026 (next-tally-suvit): the pointer lands on Companies in Tally; for the client chosen (c_new), CO's row says
     # "Link to New Client Pvt Ltd"
     ok(pg.evaluate("S.homeTab") == "tally" and pg.locator('#app [data-tco-list=firm] [data-tco-row="%s"]' % CO).count() == 1, "the pointer lands on Companies in Tally, %s listed" % CO)
-    pg.evaluate("() => openConnectTally(4, 'c_new')"); pg.wait_for_timeout(900)
+    pg.evaluate("() => (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), openConnectTally)(4, 'c_new')"); pg.wait_for_timeout(900)
     pg.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=link]' % CO); pg.wait_for_timeout(1200)
     ok(calls["link"] and calls["link"][-1] == {"p_company": CO, "p_client": "c_new"}, "a company is linked to the client chosen: " + json.dumps(calls["link"][-1:]))
     # ---------- the computer with Tally connects itself, and links the open client's company, with nothing pressed

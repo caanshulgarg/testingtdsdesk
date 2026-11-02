@@ -64,7 +64,7 @@ with sync_playwright() as p:
     E = lambda js, *a: pg.evaluate(js, *a)
     # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
     # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold: opened first
-    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(2)]
+    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(3)]   # next-tally-simple: For support, then its folds
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     hmIn = lambda text, m: any(hm(x) in text for x in (m, m + 1))

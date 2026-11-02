@@ -106,7 +106,7 @@ def main():
         by_name = lambda n: E("(n) => Object.values(S.companies).filter(x => !x.deleted && x.name === n).map(x => x.id)", n)
 
         def tally_list(cid=""):
-            E("(c) => { S.view = 'home'; if (c) openConnectTally(4, c); else { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); } }", cid); pg.wait_for_timeout(1300)
+            E("(c) => { S.view = 'home'; if (c) (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), openConnectTally)(4, c); else { S.tallyGuide = {}; S.tallyFocus = ''; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); } }", cid); pg.wait_for_timeout(1300)
             return E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.getAttribute('data-why'), r.innerText.replace(/\\s+/g, ' '), ((r.querySelector('[data-tco-act]') || {}).innerText || '').trim()])")
         R = lambda co: '#app [data-tco-list=firm] [data-tco-row="%s"]' % co
 
@@ -150,7 +150,7 @@ def main():
         # under Help & support › Every company seen (to link or take off the list); no computer's name on a row
         ok([r[0] for r in rows] == [VMS], "1. Open in Tally now: the open company only (%s)" % [r[0] for r in rows])
         ok(rows and "NWS144" not in rows[0][2] and "open in Tally" in rows[0][2], "1. open in Tally, no computer's name (%s)" % [r[2] for r in rows])
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(700)
         RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
         ok("last seen 20-Oct" in txt(RA(SAL)), "1. Help & support › Every company seen: Salesify, last seen 20-Oct (%s)" % txt(RA(SAL))[:120])
         n0 = len(calls())
@@ -191,7 +191,7 @@ def main():
         pg.click(R(VMS) + " [data-tco-more] summary"); pg.wait_for_timeout(250)
         ok(pg.locator(R(VMS) + " [data-tco-not-this]").count() == 1 and pg.locator(R(VMS) + " [data-tco-unlink]").count() == 1, "5. ⋯ Link to another client, Unlink on the wrong company's row")
         E("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)   # next-tally-smart: not open, not linked: under Help & support › Every company seen
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(700)   # next-tally-smart: not open, not linked: under Help & support › Every company seen
         RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
         ok(pg.locator(RA(SAL) + " select[data-tco-act=pick]").count() == 1 and E("(s) => document.querySelector(s + ' [data-tco-act]').getAttribute('data-tco-pre')", RA(SAL)) == s1[0], "5. the right company: the picker with Salesify Marketing LLP chosen")
         n0 = len(calls())
@@ -244,7 +244,7 @@ def main():
                 q.evaluate("() => { const c = newCompany({name: 'Salesify Marketing LLP', gstin: '06AEVFS5010H1ZV'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
                 for nm, comp, act in (("list-for-client", cos(), "for"), ("list", cos(vms_client="S1"), "page"), ("list-waiting", cos(sal_client="S1"), "page")):
                     q.evaluate(SETUP, [[dev()], comp]); q.wait_for_timeout(300)
-                    q.evaluate("(a) => { S.view = 'home'; if (a === 'for') openConnectTally(4, window.__ids.S1); else { S.tallyGuide = {}; navHome('tally'); } }", act); q.wait_for_timeout(1200)
+                    q.evaluate("(a) => { S.view = 'home'; if (a === 'for') (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), openConnectTally)(4, window.__ids.S1); else { S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); } }", act); q.wait_for_timeout(1200)
                     x = q.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
                     ok(x <= 1, "8. %s %s %s: no sideways scroll (%d px)" % (tag, scheme, nm, x))
                     if SHOTS: q.screenshot(path=os.path.join(SHOTS, "%s-%s-%s.png" % (nm, tag, scheme)), full_page=True)

@@ -122,7 +122,7 @@ SETUP = """async ([st, role, email, clients]) => {
   TCloud.pane = {devices: null, companies: null, busy: '', err: '', at: 0, stops: []};
   TLight.st.at = 0; TLight.st.busy = false; TLight.st.p = null; TLight.st.cos = []; TLight.st.devs = []; TLight.st.loaded = false;
   if (typeof Rec === 'object') Rec.act = {rows: [], at: Date.now()};
-  S.tallyOld = false; S.tallyTab = 'computers'; S.tallyMore = {}; S.tallyFocus = ''; S.tallyGuide = {};
+  S.tallyOld = false; S.tallyTab = 'computers'; S.tallyMore = {support: true}; S.tallyFocus = ''; S.tallyGuide = {};
   await TLight.refresh();
   // the books FinCom's cloud keeps for each linked client (a posting goes through the cloud for a client it keeps)
   window.__links.filter(l => l.state === 'linked').forEach(l => { TCloud.st[l.client_id] = {at: Date.now(), books: [{from: '2025-04-01', book: l.book_id, company: l.company_name}]}; });
@@ -170,7 +170,7 @@ def main():
         T = lambda pg, sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         R = lambda co: '#app [data-tco-list=firm] [data-tco-row="%s"]' % co
         def tally_page(pg):
-            pg.evaluate("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1500)
+            pg.evaluate("() => { S.coId = null; S.view = 'home'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1500)
         def client_page(pg, cid):
             pg.evaluate("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid); pg.wait_for_timeout(1500)
         # next-tally-icon: the client's one word is the header's Tally icon; its popover says the line and the action

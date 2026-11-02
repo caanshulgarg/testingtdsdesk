@@ -220,7 +220,8 @@ def main():
         ok(E("() => S.view === 'tally' || /tally/.test(location.hash)") or pg.locator("#app [data-connect-guide]").count() == 1, "1. Connect Tally opens the Tally page")
         # ---- 2. step 1: Download · Open it · Type its code; waiting
         ok(pg.locator("#app [data-firstlink]").count() == 1, "2. Connect this computer is on the Tally page, under the three steps (not under Help & support)")
-        ok(pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "2. step 1: the one Download button")
+        # 02-Nov-2026 (next-tally-simple): the panel is under Connect a company to Tally's step 1, whose one button downloads
+        ok(pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "2. step 1: the one Download button")
         steps = [txt('#app [data-fl-step="%s"] b' % k) for k in ("download", "open", "code")]
         ok(steps == ["Download FinCom Bridge", "Open it and press Next until Finish", "Type its code here"], "2. the three sub-steps in plain words (%s)" % steps)
         ok("Windows protected your PC" in txt("#app [data-fl-step=download]") and "More info" in txt("#app [data-fl-step=download]"), "2. the SmartScreen words, where the download is")
@@ -232,7 +233,7 @@ def main():
         pg.click("#app [data-fl-help] summary"); pg.wait_for_timeout(200)
         ok("Remote Desktop" in txt("#app [data-fl-help]") and "Allow" in txt("#app [data-fl-help]"), "2. the fixes are plain words")
         ok(pg.locator("#app [data-fl-code]").count() == 0, "2. no code box before the bridge is found")
-        ok(pg.locator("#app [data-connect-step=install]:not([data-done])").count() == 1, "2. Connect Tally's step 1 is not done yet")
+        ok(pg.locator('#app [data-tsm-step="1"][data-now]:not([data-done])').count() == 1, "2. Connect Tally's step 1 is not done yet")
         shot("02-waiting"); check_narrow("waiting")
         # ---- 6. another Windows user's bridge; an older bridge
         bridge_reset(yours=False)
@@ -284,9 +285,13 @@ def main():
         # ---- 8. the cloud hears it: step 1 ticks, the companies, Add as client
         E("([d, c]) => { window.__devs = window.__fix(d); window.__companies = window.__fix(c); }", [[dev()], cos()])
         # next-tally-smart: a computer heard: the steps give way to the one status card (never a wizard once connected)
-        try: pg.wait_for_function("() => !document.querySelector('#app [data-connect-step]') && /Connected/.test((document.querySelector('#app [data-tsc-word]') || {}).textContent || '')", timeout=12000); heard = True
+        # next-tally-simple: the box moves on by itself to step 3 (a company open that no client has); the computer's card is
+        # under For support
+        try: pg.wait_for_function("() => !!document.querySelector('#app [data-tsm-guide=\"3\"]')", timeout=12000); heard = True
         except Exception: heard = False
-        ok(heard, "8. the cloud hears the bridge: the steps give way, the card says Connected (%s)" % txt("#app [data-status-card]")[:100])
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(800)
+        heard = heard and pg.locator("#app [data-connect-step]").count() == 0 and "Connected" in txt("#app [data-tsc-word]")
+        ok(heard, "8. the cloud hears the bridge: the box moves on to step 3, the card (For support) says Connected (%s)" % txt("#app [data-status-card]")[:100])
         ok(pg.locator("#app [data-firstlink]").count() == 0, "8. Connect this computer gives way")
         ok("Tally open: 2 companies" in txt("#app [data-status-card]"), "8. the card: 'Tally open: 2 companies' (%s)" % txt("#app [data-status-card]")[:120])
         rows = E("() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.querySelectorAll('select[data-tco-act=pick]').length, r.innerText])")

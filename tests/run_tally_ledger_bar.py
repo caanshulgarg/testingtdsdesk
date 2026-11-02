@@ -64,7 +64,7 @@ def main():
         def add_vms():
             # Task D: + New client inside the client picker. next-tally-smart: a company not open now is under Help & support ›
             # Every company seen (the open ones are the page's list)
-            if not pg.locator(R(VMS)).count(): E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+            if not pg.locator(R(VMS)).count(): E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(600)
             RR = R(VMS) if pg.locator(R(VMS)).count() else '#app [data-tco-list=all] [data-tco-row="%s"]' % VMS
             pg.click(RR + " [data-tco-add-new]"); pg.wait_for_timeout(1200)
             ids = E("(n) => Object.values(S.companies).filter(c => !c.deleted && c.tallyName === n).map(c => c.id)", VMS)

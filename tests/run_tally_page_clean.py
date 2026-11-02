@@ -137,7 +137,7 @@ SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
   TLight.st.at = Date.now(); TLight.st.devs = window.__devs.filter(d => !d.revoked); TLight.st.cos = window.__companies; TLight.st.stops = [];
   Rec.act = {rows: window.__lines, at: Date.now()};
   document.body.classList.add("is-test"); S.firm.firmName = "ABC";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {support: true}; S.tsm = null; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
   return ids;
 }"""
 OWNER_HOOKS = ["data-read-stop", "data-read-resume", "data-read-stop-all", "data-read-resume-all", "data-release-hold", "data-release-unhold", "data-release-rollback",
@@ -176,10 +176,11 @@ def main():
         ids = scene([PAUSED, OLD], companies(), DAYBOOK)
         G = ids["garg shekhar & company"]
         body = page()
-        ok(n("#app [data-advanced]") == 1 and n("#app [data-advanced] [data-bridge-more]") == 0 and "Help & support" in body, "one Help & support fold, closed")
+        ok(n("#app [data-advanced]") == 1 and n("#app [data-advanced] [data-bridge-more]") == 0 and "Every support tool" in body, "one support fold (Every support tool, under For support), closed")
         inside = [s for s in FOLD if n("#app " + s)]
         ok(not inside, "fold closed: install, this browser's connect, history, versions, every bridge, clients' lines all inside it (%s)" % inside)
-        ok(not [w for w in ["127.0.0.1", "PowerShell", "Fingerprint", "Every bridge FinCom has heard from", "Connection history", "Roll back", "Hold version", "Stop reading on all computers", "Bridge key", "6-digit"] if w in body],
+        # (next-tally-simple: the computers' line has Download FinCom Bridge and its fingerprint when a bridge is older)
+        ok(not [w for w in ["127.0.0.1", "PowerShell", "Every bridge FinCom has heard from", "Connection history", "Roll back", "Hold version", "Stop reading on all computers", "Bridge key", "6-digit"] if w in body],
            "fold closed: none of its words on the page")
         ok(n("#app [data-tally-tab]") == 0 and "Sync activity" not in body and "Everything sent" not in body, "no tabs on the page: Sync activity and Everything sent are in the fold")
         ok("in three steps" not in body and n("#app [data-tally-guide]") == 0, "no old three-steps guide (%s)" % [l for l in body.split("\n") if "three steps" in l])

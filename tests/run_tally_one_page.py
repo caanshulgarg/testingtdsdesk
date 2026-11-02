@@ -121,7 +121,7 @@ def main():
         def scene(companies, devs=None, books=None, ledn=None):
             E(SETUP, [DEVS() if devs is None else devs, companies, books or {}, ledn or {}]); pg.wait_for_timeout(300)
         def tally_page(guide=None):
-            E("(g) => { S.tallyGuide = g || {}; S.tallyFocus = ''; S.tallyTab = 'computers'; S.view = 'home'; navHome('tally'); }", guide); pg.wait_for_timeout(1300)
+            E("(g) => { S.tallyGuide = g || {}; S.tallyFocus = ''; S.tallyTab = 'computers'; S.view = 'home'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }", guide); pg.wait_for_timeout(1300)
         def rows(hook="firm"):
             return E("""(h) => [...document.querySelectorAll('#app [data-tco-list=' + h + '] [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), st: r.getAttribute('data-tco-state'),
                 pill: r.querySelector('[data-tco-pill]').getAttribute('data-tco-pill'), ptext: r.querySelector('[data-tco-pill]').getAttribute('data-tco-pill-text'),
@@ -167,7 +167,7 @@ def main():
         # next-tally-smart (28-Oct-2026): not open and not linked now, it leaves the page's list for Help & support › Every
         # company seen (nothing deleted), with the client picker
         ok(row(SAL) is None, "1. after Unlink (not open): off the page's list")
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(700)
         RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
         r = next((x for x in rows("all") if x["co"] == SAL), None)
         ok(r is not None and r["linked"] == "" and r["pill"] == "notclient", "1. it STAYS under Every company seen, marked Not linked (%s)" % (r and r["text"][:120]))
@@ -177,7 +177,7 @@ def main():
         shot("1-after-unlink-desktop-light")
         E("() => { window.__calls = []; }")
         pg.click(RA(SAL) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
-        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(400)
+        E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(400)
         ok(links() == [["tally_company_link", {"p_company": SAL, "p_client": s1}]], "1. linked again in ONE click, not open in Tally (%s)" % links())
         r = row(SAL)
         ok(r and r["linked"] == s1 and r["pill"] == "notopen", "1. the row is linked to Salesify Marketing LLP again (%s)" % (r and r["ptext"]))
@@ -322,10 +322,10 @@ def main():
         vm = E("() => Object.values(S.companies).filter(c => !c.deleted && c.name === 'VMS EVENTS PRIVATE LIMITED').map(c => c.id)")
         ok(len(vm) == 1 and E("() => Object.values(S.companies).filter(c => !c.deleted).length") == n0 + 1 and links() == [["tally_company_link", {"p_company": VMS, "p_client": vm[0]}]],
            "5. + New client with this name (inside Link to client…): one client (the period off its name), linked once (%s)" % links())
-        E("() => { window.__calls = []; S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)   # next-tally-smart: not open, not linked: under Help & support
+        E("() => { window.__calls = []; S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(600)   # next-tally-smart: not open, not linked: under Help & support
         RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
         pg.select_option(RA(OLD) + " [data-tco-relink-pick]", ta); pg.click(RA(OLD) + " [data-tco-relink]"); pg.wait_for_timeout(1200)
-        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
+        E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(300)
         ok(links() == [["tally_company_link", {"p_company": OLD, "p_client": ta}]], "5. the picker (Every company seen): linked to the client chosen (%s)" % links())
         # an open company unlinked stays, at the top
         E("() => { window.__calls = []; }")
@@ -338,7 +338,7 @@ def main():
         scene(cos(new=True, sp=True))
         tally_page()
         # next-tally-smart: companies not open and not linked live under Help & support › Every company seen (the same rows)
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(700)
         RA = lambda co: '#app [data-tco-list=all] [data-tco-row="%s"]' % co
         rowA = lambda co: next((x for x in rows("all") if x["co"] == co), None)
         def moreA(co, item):
@@ -356,7 +356,7 @@ def main():
         ok(rowA(OLD) is not None, "6. Show hidden: back in view")
         moreA(OLD, "[data-tco-unhide]"); pg.click("#app [data-tco-show-hidden]") if pg.locator("#app [data-tco-show-hidden]").count() else None; pg.wait_for_timeout(300)
         ok(rowA(OLD) is not None and E("() => S.firm.tallyHidden.length") == 0, "6. Show again: back in the list")
-        E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(300)
+        E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(300)
 
         # ---- 7. no link yet: the three steps
         scene(cos(sal=None, gsc=None))
@@ -371,7 +371,7 @@ def main():
                 q = open_page(w, h, scheme)
                 q.evaluate(SETUP, [DEVS(), cos(new=False, sp=True), {}, {}]); q.wait_for_timeout(300)
                 for nm in ("tally-page", "menu", "client-setup", "books-from-tally"):
-                    if nm == "tally-page": q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1300)
+                    if nm == "tally-page": q.evaluate("() => { S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); q.wait_for_timeout(1300)
                     elif nm == "menu": q.click('#app [data-tco-row="%s"] [data-tco-more] summary' % GSC); q.wait_for_timeout(300)
                     else: q.evaluate("([c, t]) => { S.view = 'company'; return Promise.resolve(openCompany(c)).then(() => { S.tab = t === 'books-from-tally' ? 'books' : 'cotally'; S.booksTab = 'import'; render(); }); }", [q.evaluate("window.__ids.GS"), nm]); q.wait_for_timeout(1300)
                     x = q.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
@@ -380,7 +380,7 @@ def main():
                     if nm == "menu": q.evaluate("() => document.querySelectorAll('#app details[open]').forEach(d => d.open = false)")
                 if SHOTS:
                     # the unlinked, not-open company with Link to (the 24-Oct case), on this size and theme
-                    q.evaluate(SETUP, [DEVS(), cos(sal=None, new=False), {}, {}]); q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1300)
+                    q.evaluate(SETUP, [DEVS(), cos(sal=None, new=False), {}, {}]); q.evaluate("() => { S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); q.wait_for_timeout(1300)
                     q.screenshot(path=os.path.join(SHOTS, "tally-page-unlinked-not-open-%s-%s.png" % (tag, scheme)), full_page=True)
                     q.evaluate("() => { S.view = 'company'; return Promise.resolve(openCompany(window.__ids.TA)).then(() => { S.tab = 'cotally'; render(); }); }"); q.wait_for_timeout(1200)
                     q.screenshot(path=os.path.join(SHOTS, "client-setup-not-linked-%s-%s.png" % (tag, scheme)), full_page=False)

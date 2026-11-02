@@ -93,7 +93,7 @@ with sync_playwright() as p:
     # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
     # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold, so the toggles are
     # pressed twice: the fold first, then each card's Details
-    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(2)]
+    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(3)]   # next-tally-simple: For support, then its folds
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     line = lambda d: txt('#app [data-computer="%s"]' % d)
     E(SETUP, [DEVS, STOPS, [], "owner"]); pg.wait_for_timeout(600)
@@ -101,7 +101,7 @@ with sync_playwright() as p:
     side = pg.locator('#side button[aria-label="Tally"]')
     ok(E("S.view") == "home" and E("S.homeTab") == "clients" and side.count() >= 1, "All clients has Tally in its menu")
     side.first.click(); pg.wait_for_timeout(1500); more()
-    ok(E("S.homeTab") == "tally" and E("location.hash") == "#/tally" and pg.locator("#app [data-computers]").count() == 1, "All clients -> Tally: the page with one line a computer (%s)" % E("location.hash"))
+    ok(E("S.homeTab") == "tally" and E("location.hash") == "#/tally" and pg.locator("#app [data-tsm-pcs]").count() == 1, "All clients -> Tally: the page with its one line of the computers (%s)" % E("location.hash"))
     ok(pg.locator("#app [data-computer]").count() == 5, "one line a computer (%d)" % pg.locator("#app [data-computer]").count())
     hm = lambda m: E("(m) => tallyHm(Date.now() - m * 60000)", m)
     # the fixture times were set when the page loaded; if the minute turned since, the line shows the earlier minute

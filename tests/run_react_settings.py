@@ -95,7 +95,7 @@ with sync_playwright() as p:
     # company linked, a computer removed (asked first)
     pg.evaluate("""() => { Bridge.refresh = () => Promise.resolve(); window.startBridgePolling = () => {}; window.bridgeTick = () => {}; Bridge.setCfg({key: '', port: 0, follow: false});
       const cid = S.coId; Bridge.st = {state: 'ok', version: '1.14.3', at: Date.now(), mode: 'auto', tallyUp: true, sessions: [{port: 9000, ok: true, mine: true, companies: [{name: 'ACME LTD'}]}, {port: 9001, ok: true, mine: false, companies: []}], open: []};
-      S.view = 'home'; S.homeTab = 'tally'; S.tallyMore = {page: true}; render(); }"""); pg.wait_for_timeout(400)
+      S.view = 'home'; S.homeTab = 'tally'; S.tallyMore = {support: true, page: true}; render(); }"""); pg.wait_for_timeout(400)
     # 15-Oct-2026: this browser's own bridge connect is only under the Tally page's Advanced (for support), opened here
     ok("Connect this browser to FinCom Bridge" in pg.inner_text("#app") and "Tally" in pg.inner_text("#cobar h2"), "the Tally page, with the steps to connect this browser")
     k = pg.locator('input[aria-label="Bridge key"]'); k.fill("abc123"); k.press("Tab"); pg.wait_for_timeout(300)

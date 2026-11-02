@@ -102,7 +102,7 @@ def main():
         # label at the Post button (when there is something to post), Tally's state the header's one icon
         ok(n("#app [data-post-line]") == 0 and n("header.top [data-tally-icon]") == 1, "Post to Tally: no Tally status line; the header's one Tally icon")
         E("() => { S.tallyFocus = ''; navHome('tally'); }"); pg.wait_for_timeout(1500)
-        ok(n("#app [data-status-card], #app [data-connect-guide]") == 1 and n("#app [data-tco-list=firm]") == 1, "the Tally page: kept, its status card (or the steps) and the companies' list")
+        ok(n("#app [data-tally-simple] [data-tsm-guide]") == 1 and n("#app [data-tally-simple] [data-tsm-table]") == 1, "the Tally page: kept, Connect a company to Tally and the one table")
         ok(not errors, "no page errors %s" % errors[:2])
         br.close()
     srv.shutdown()

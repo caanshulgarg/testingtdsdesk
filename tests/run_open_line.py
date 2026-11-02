@@ -96,7 +96,7 @@ def main():
         # 3. a screen opened there still opens
         pg = slow["pg"]; n0 = len(LOG)
         pg.evaluate("() => navHome('tally')"); pg.wait_for_timeout(15000)
-        ok(pg.locator("#app [data-connect-guide], #app [data-pc-line], #app [data-tco-list]").count() > 0, "slow line: the Tally page opens when asked (its file then: %d requests)" % (len(LOG) - n0))
+        ok(pg.locator("#app [data-tally-simple], #app [data-connect-guide], #app [data-pc-line], #app [data-tco-list]").count() > 0, "slow line: the Tally page opens when asked (its file then: %d requests)" % (len(LOG) - n0))
         slow["ctx"].close()
         fast = run(br, "fast line", 50000, 5, 25)
         ok(fast["n2"] >= 10, "fast line: the other screens are fetched ahead after the first page (%d requests)" % fast["n2"])

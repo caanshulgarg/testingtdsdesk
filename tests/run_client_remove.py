@@ -69,7 +69,7 @@ def main():
             pg.evaluate(GONE, OLD)
             pg.evaluate("() => { TCloud.refreshPane = async () => {}; }")
         def tally_page(pg):
-            pg.evaluate("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1500)
+            pg.evaluate("() => { S.coId = null; S.view = 'home'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1500)
         def client_page(pg, cid):
             pg.evaluate("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", cid); pg.wait_for_timeout(1500)
         def pop(pg):

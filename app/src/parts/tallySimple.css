@@ -1,0 +1,97 @@
+/* The simple Tally page (next-tally-simple): the theme's tokens only, so light and dark both follow the computer's
+   setting. Yes green, No amber, Not yet blue, — grey (one colour per meaning, as everywhere). On a phone the table's rows
+   become cards, each answer under its question; the page never scrolls sideways. */
+#app .tsm { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+#app .tsm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel, 12px); min-width: 0; }
+#app .tsm-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+#app .tsm-head-words { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#app .tsm-title { margin: 0; font-size: 24px; font-weight: 700; }
+#app .tsm-say { font-size: 16px; }
+#app .tsm-fine { color: var(--success); }
+#app .tsm-need { color: var(--warning); }
+#app .tsm-check { min-height: 44px; padding: 0 20px; font-size: 15px; }
+/* the guided box */
+#app .tsm-guide { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+#app .tsm-guide-small { padding: 10px 18px; }
+#app .tsm-guide-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+#app .tsm-guide-title { font-size: 17px; }
+#app .tsm-guide-links { display: inline-flex; gap: 14px; }
+#app .tsm-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+#app .tsm-step { border: 2px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+#app .tsm-step.now { border-color: var(--accent); background: var(--accent-subtle); }
+#app .tsm-step.done { border-color: color-mix(in srgb, var(--success) 35%, var(--border)); }
+#app .tsm-step-top { display: flex; align-items: center; gap: 8px; }
+#app .tsm-mark { width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+  background: var(--surface-muted); color: var(--text-secondary); }
+#app .tsm-step.now .tsm-mark { background: var(--accent); color: var(--accent-foreground); }
+#app .tsm-step.done .tsm-mark { background: var(--success); color: var(--surface); }
+#app .tsm-step-title { font-weight: 600; font-size: 15px; }
+#app .tsm-step-text { font-size: 13px; color: var(--text-secondary); }
+#app .tsm-now { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; border-top: 1px solid var(--border-subtle); padding-top: 12px; }
+#app .tsm-now-text { flex: 1 1 300px; font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+#app .tsm-now-act .btn, #app .tsm-strip .btn { min-height: 40px; }
+#app .tsm-pick { margin-top: 4px; }
+#app .tsm-guide-panel { border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+/* the strip */
+#app .tsm-strip { background: var(--accent-subtle); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); border-radius: var(--radius-panel, 12px);
+  padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+#app .tsm-strip-words { font-size: 15px; min-width: 0; overflow-wrap: anywhere; }
+#app .tsm-strip-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+#app .tsm-strip .tsm-pick { flex: 1 1 100%; }
+/* the table */
+#app .tsm-table { overflow: hidden; }
+#app .tsm-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+#app .tsm-search { flex: 1 1 200px; max-width: 300px; min-width: 0; }
+#app .tsm-search input { width: 100%; min-height: 38px; box-sizing: border-box; }
+#app .tsm-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+#app .tsm-filter { min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
+#app .tsm-filter.on { background: var(--foreground); color: var(--surface); border-color: var(--foreground); }
+#app .tsm-none { padding: 20px 16px; color: var(--text-secondary); }
+#app .tsm-scroll { overflow-x: auto; }
+#app .tsm-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+#app .tsm-grid th { text-align: left; padding: 12px 10px; font-size: 13px; font-weight: 600; color: var(--text-secondary); background: var(--surface-muted); white-space: nowrap; }
+#app .tsm-grid th:first-child, #app .tsm-grid td:first-child { padding-left: 16px; }
+#app .tsm-td { padding: 14px 10px; border-top: 1px solid var(--border-subtle); vertical-align: top; min-width: 0; overflow-wrap: anywhere; }
+#app .tsm-tr.tsm-focus > td { background: var(--accent-subtle); }
+#app .tsm-client { font-weight: 600; min-width: 140px; }
+#app .tsm-client-name { font-weight: 600; text-align: left; white-space: normal; }
+#app .tsm-client-none { color: var(--text-secondary); font-weight: 500; font-style: italic; }
+#app .tsm-word { display: inline-block; padding: 3px 11px; border-radius: 999px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+#app .tsm-word.yes { background: var(--ok-soft); color: var(--success); }
+#app .tsm-word.no { background: var(--warn-soft); color: var(--warning); }
+#app .tsm-word.notyet { background: var(--info-soft); color: var(--info); }
+#app .tsm-word.dash { background: var(--surface-muted); color: var(--text-secondary); }
+#app .tsm-note { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+#app .tsm-change { font-size: 13px; color: var(--info); font-weight: 600; margin-top: 2px; }
+#app .tsm-small { font-size: 13px; margin-top: 4px; }
+#app .tsm-bar { margin-top: 6px; width: 170px; max-width: 100%; height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
+#app .tsm-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+#app .tsm-do .btn { white-space: nowrap; }
+#app .tsm-todo { font-size: 13.5px; color: var(--text-secondary); margin-top: 4px; }
+/* the computers */
+#app .tsm-pcs { padding: 14px 18px; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+#app .tsm-pcs-words { font-size: 15px; }
+#app .tsm-pcs-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
+#app .tsm-sha { font-size: 11.5px; max-width: 100%; overflow-wrap: anywhere; word-break: break-all; }
+#app .tsm-sha code { user-select: all; }
+/* a phone: each row a card, each answer under its question */
+@media (max-width: 760px) {
+  #app .tsm-grid thead { display: none; }
+  #app .tsm-grid, #app .tsm-grid tbody, #app .tsm-grid tr, #app .tsm-grid td { display: block; width: auto; }
+  #app .tsm-grid tr { border-top: 1px solid var(--border); padding: 10px 14px; }
+  #app .tsm-grid tbody tr:first-child { border-top: 0; }
+  #app .tsm-grid td, #app .tsm-grid td:first-child { padding: 6px 0; border-top: 0; text-align: left; }
+  #app .tsm-grid td:not(.tsm-client)::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 3px; }
+  #app .tsm-client { font-size: 16px; }
+  #app .tsm-search { max-width: none; flex-basis: 100%; }
+  #app .tsm-filter { min-height: 34px; padding: 0 10px; font-size: 13px; }
+}
+/* opening balances (migration 137) */
+#app .tsm-open { font-size: 13px; margin-top: 4px; font-weight: 600; }
+#app .tsm-open.same { color: var(--success); }
+#app .tsm-open.warn { color: var(--warning); }
+#app .tsm-open .tsm-note, #app .tsm-open .linkbtn { font-weight: 500; }
+#app .tsm-open-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+#app .tsm-diffs { max-height: 360px; overflow: auto; }
+#app .tsm-diff-grid { width: 100%; font-size: 13px; }
+#app .tsm-diff-grid .n { text-align: right; white-space: nowrap; }

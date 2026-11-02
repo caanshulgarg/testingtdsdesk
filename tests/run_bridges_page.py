@@ -50,8 +50,10 @@ with sync_playwright() as p:
     # 2.3.5: the three steps lead, step 1 with the download; the install card (fingerprint, link, PowerShell, the help when
     # Windows blocks it) is under the page's More
     # 15-Oct-2026: Connect Tally (the one place to connect), step 1 with the download
-    GD = '#app [data-connect-guide] [data-connect-step="install"] [data-bridge-download]'
-    ok(pg.locator(card).count() == 0 and pg.locator(GD).count() == 1 and pg.inner_text(GD) == "Download FinCom Bridge 2.1.1", "1. the steps: Install FinCom Bridge, with its download")
+    # 02-Nov-2026 (next-tally-simple): Connect a company to Tally, step 1 with Download FinCom Bridge; the rest under For support
+    GD = '#app [data-tsm-guide="1"] [data-tsm-download]'
+    ok(pg.locator(card).count() == 0 and pg.locator(GD).count() == 1 and pg.inner_text(GD) == "Download FinCom Bridge", "1. the steps: Install FinCom Bridge, with its download")
+    E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(500)
     pg.click("#app [data-bridge-details]"); pg.wait_for_timeout(500)
     ok(pg.locator(card).count() == 1, "1. one FinCom Bridge card, under More")
     ok(pg.locator(card + " a.btn, " + card + " button").count() == 1 and pg.inner_text(card + " [data-bridge-download]") == "Download FinCom Bridge 2.1.1",
@@ -63,7 +65,7 @@ with sync_playwright() as p:
     ok("without an administrator" in pg.inner_text(card), "4. it says: just for you, without an administrator")
     # 5. FinCom Bridge heard from: one line, the rest under More
     E(SETUP, NWS_NEW); pg.wait_for_timeout(1200)
-    E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)   # fold Advanced (for support) again
+    E("() => { S.tallyMore = {support: true}; render(); }"); pg.wait_for_timeout(500)   # fold Advanced (for support) again
     # 15-Oct-2026 (the calm page): one line a computer on the page; its card (Details) under Advanced
     # 24-Oct-2026 (next-tally-one-page): no company linked yet, so the three steps lead (no computers' line); the
     # computer's facts are on its card under Help & support
@@ -83,7 +85,7 @@ with sync_playwright() as p:
     ok("is not connected since" in st and "Sign in to Windows there as anshul" in st and "FinCom Bridge starts by itself" in st, "5. offline: since when, and what to do (%s)" % st.replace("\n", " "))
     # 1.15.0 still main beside a 2.1.0 test install, and a computer with only 1.15.0
     E(SETUP, NWS_BOTH); pg.wait_for_timeout(1200)
-    E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(500)   # the computers' cards: under Advanced
+    E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(500)   # the computers' cards: under Advanced
     lines = pg.locator("#app [data-bridge-line]")
     # 2.3.5: the card names the computer and the bridge; its status line says the problem and the one fix
     l1 = pg.inner_text('#app [data-computer]:has([data-bridge-line="go-3fa9c1d2e4b7"])'); l2 = pg.inner_text('#app [data-computer]:has([data-bridge-line="v1"])')

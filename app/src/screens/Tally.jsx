@@ -21,6 +21,8 @@ import { coKey, openOn } from "../lib/tallyState.js";
 import { beatFresh } from "../lib/tallyConnect.js";
 // 30-Oct-2026 (the owner): what FinCom received from Tally today, per company, and the books being brought from Tally
 import { TodayStatus } from "../parts/TallyFetch.jsx";
+// 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
+import SimpleTally from "../parts/TallySimple.jsx";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -712,14 +714,14 @@ function useGuideRefresh() {
   // speed round (27-Oct-2026): the computers' beats (what a step and the open companies come from) every 30 s, and nothing
   // while the tab is hidden; the rest of the page every 5 minutes, and once each time the page is opened (paneOpen)
   useEffect(() => { TCloud.paneOpen(); const t = setInterval(() => {
-    if (!document.querySelector("#app [data-tco-list]") || !TCloud.on() || TCloud.pane.busy) return;
+    if (!document.querySelector("#app [data-tally-simple], #app [data-tco-list]") || !TCloud.on() || TCloud.pane.busy) return;
     const typing = document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
     if (typing) return;
     TCloud.paneTick();
   }, GUIDE_REFRESH_MS); return () => clearInterval(t); }, []);
 }
 function GuideRefresh() { useGuideRefresh(); return null; }
-function ConnectGuide({ x, m, connectStep }) {
+function ConnectGuide({ x, m, connectStep, noPanel = false }) {
   const p = TCloud.pane, g = S.tallyGuide || {}, d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
   useEffect(() => { if (!g.at) return; const t = setTimeout(() => { const k = STEP_OF[(g.step || 0) - 1];
     const e = (k && !d[k] && document.querySelector('#app [data-connect-step="' + k + '"]')) || ((g.step || 0) >= 3 ? document.querySelector("#app [data-tco-list=firm]") : null) || document.querySelector("#app [data-connect-guide]");
@@ -762,7 +764,7 @@ function ConnectGuide({ x, m, connectStep }) {
     </ol>
     {/* next-tally-firstlink: until a bridge of the firm is heard (or Connect another computer, this browser not connected
         yet): Download, Open it, Type its code, watched live on this computer (parts/TallyFirstLink.jsx) */}
-    {(!d.install || (g.step === 1 && g.at && !Bridge.on())) && <ConnectThisComputer download={<DownloadBtn m={m} primary />} linked={d.install && Bridge.on()} />}
+    {!noPanel && (!d.install || (g.step === 1 && g.at && !Bridge.on())) && <ConnectThisComputer download={<DownloadBtn m={m} primary />} linked={d.install && Bridge.on()} />}
     {!all && d.install && <button className="btn small" data-check-again="" style={{ marginTop: 8 }} onClick={checkAgain}>Check again</button>}
   </section>;
 }
@@ -817,14 +819,22 @@ function scopeOf(tc) {
   // this browser's bridge not among the firm's computers yet: every computer, until it is turned
   return { scope: S.tallyScope ? (S.tallyScope === "all" ? "all" : "this") : tc.me ? "this" : "all", can };
 }
-function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
+// this computer's watch (a refused key, a bridge here, its state, the code typed connecting the firm's key at once): run
+// by the page always (next-tally-simple: the card itself is under For support), and by the card; each read is throttled
+function useThisWatch(rows) {
   useRefusedCheck();
-  const tc = thisComputer(rows), { local, me, week } = tc, { scope, can } = scopeOf(tc);
-  useHereProbe(!tc.local && !tc.localOn && week.length > 0);
+  const tc = thisComputer(rows);
+  useHereProbe(!tc.local && !tc.localOn && tc.week.length > 0);
   useLocalRead(tc.localOn && !tc.local);
-  const c = OC.c, f = OC.f, b = OC.busy, owner = isOwner(), localOn = typeof Bridge === "object" && Bridge.on();
+  const c = OC.c, b = OC.busy, localOn = typeof Bridge === "object" && Bridge.on();
   // the code typed (here or below) connected this browser to the bridge: the firm's key at once
   useEffect(() => { if (c && c.st === "code" && localOn && !b) doConnect(false); }, [c && c.st, localOn]);
+  return tc;
+}
+function ThisWatch({ rows }) { useThisWatch(rows); return null; }
+function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
+  const tc = useThisWatch(rows), { local, me, week } = tc, { scope, can } = scopeOf(tc);
+  const c = OC.c, f = OC.f, b = OC.busy, owner = isOwner();
   const firm = (S.firm && S.firm.firmName) || "your firm", connectedNow = !!(c && c.st === "ok");
   const name = local ? "this computer" : "the Tally computer", ver = (local && local.version) || (me && me.version) || "";
   const s = me ? pcState(me, latest) : null;
@@ -1037,12 +1047,16 @@ function BridgeLines({ cards, latest, m, focusDev }) {
 // before), activity, each computer heard this week (a bridge not heard for 7 days is only counted here, and listed in
 // Every bridge), versions, this browser's own bridge, install on another computer. The outdated "Clients' Tally" lines
 // ("reads only when needed… nightly catch-up", wrong since 2.2) are gone: Update now is on each client's pages.
+// next-tally-simple (02-Nov-2026): the page before the simple one lives under ONE closed "For support" (ForSupport, below):
+// this computer's card with its connect, Find Tally and port, the steps with the port, the companies open in Tally with their
+// ⋯, every client's Tally company with Change and Unlink, and this fold ("Every support tool") as before; the computers'
+// names live only there
 function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
   const owner = isOwner(), open = moreOpen("page");
   const allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
   const H = ({ children, id }) => <h4 className="tadv-h" data-help-part={id} style={{ margin: "16px 0 6px" }}>{children}</h4>;
   return <div className="pane tadvanced" data-page-more="" data-advanced="" style={{ padding: "8px 16px" }}>
-    <MoreToggle k="page" data-bridge-details="" label="Help & support" less="Hide help & support" />
+    <MoreToggle k="page" data-bridge-details="" label="Every support tool" less="Hide the support tools" />
     {open && <div data-bridge-more="" style={{ marginTop: 6 }}>
       {cards.length > 0 && <ReadingView cards={cards} />}
       {/* round 89: deductions on challans the server does not have, after fetching the challans again (54-live-sync.js heal) */}
@@ -1070,6 +1084,14 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
       <BridgeDownload m={m} again={rows.length > 0} />
     </div>}
   </div>;
+}
+// For support (next-tally-simple): closed by default (S.tallyMore.support, kept while FinCom is open)
+function ForSupport({ children }) {
+  const open = moreOpen("support");
+  return <section className="pane tsupport" data-for-support="" data-support-open={open ? "" : undefined} style={{ padding: "8px 16px" }}>
+    <MoreToggle k="support" data-support-toggle="" label="For support" less="Hide For support" />
+    {open && <div className="tsupport-body" data-support-body="" style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>}
+  </section>;
 }
 // review of 02-Oct-2026: every bridge FinCom has heard from (TCloud.bridgesHeard), which one is the main one, and a
 // button to make a bridge in test mode the main one (owners)
@@ -1308,20 +1330,31 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   // connect is only under Advanced (for support)
   if (!TCloud.on()) return <><div className="pane tguide" data-connect-guide="signin"><h3 style={{ margin: "0 0 4px" }}>Connect Tally</h3>
     <p className="note" style={{ margin: 0 }}>Sign in to the firm account first: Tally is connected through FinCom’s cloud, for every computer.</p></div>
-    <PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></>;
+    <ForSupport><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), ctl = TCloud.pane.ctl || {};
   const gx = guideState(rows, latest), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
-  // next-tally-smart: ONE status card for this computer; the four steps only for a computer never connected; the companies
-  // OPEN in Tally now; Clients linked to Tally (every linked client, open or not); Needs you only when something stands; Help & support (closed)
+  // next-tally-simple (02-Nov-2026, the owner's approved design): the simple page (the header, Connect a company to Tally,
+  // the strip, the one table, the computers in one line; parts/TallySimple.jsx), Needs you only when something stands (reading
+  // stopped on all computers, a computer key refused), then For support (closed) with everything of the page before it
+  const liveW = week.filter((r) => r.go && !r.old), devs = (xs) => new Set(xs.map((r) => r.device.id)).size;
+  const pcs = { connected: devs(liveW.filter((r) => r.online)), away: devs(liveW.filter((r) => !r.online && !liveW.some((x) => x.online && x.device.id === r.device.id))),
+    older: week.filter((r) => !r.go || r.old || (latest && vnum(latest) > vnum(r.version))).length };
+  const set = setupOf(m);
+  const dl = set ? <a className="btn" data-tsm-download="" href={set.href} download={set.file}>Download FinCom Bridge</a> : <DownloadBtn m={m} />;
+  const panel = <ConnectThisComputer download={<span className="note">Use Download FinCom Bridge above.</span>} linked={gx.done.install && Bridge.on()} />;
   return <>
     <GuideRefresh />
-    {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={!gx.done.install || !!((S.tallyGuide || {}).step === 1 && (S.tallyGuide || {}).at && !Bridge.on())} />}
-    <ConnectGuide x={gx} m={m} connectStep={connectStep} />
-    <OpenCompanies rows={rows} />
+    {!Bridge.blocked() && <ThisWatch rows={rows} />}
+    <SimpleTally installed={gx.done.install} ready={TCloud.pane.devices != null || !!TCloud.pane.err} pcs={pcs} download={dl} sha={set ? set.sha : ""} checkAgain={checkAgain} connectPanel={panel} />
     {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     <NeedsYou sources={sourcesSlot} />
-    <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
+    <ForSupport>
+      {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={false} />}
+      <ConnectGuide x={gx} m={m} connectStep={connectStep} noPanel />
+      <OpenCompanies rows={rows} />
+      <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
+    </ForSupport>
   </>;
 }

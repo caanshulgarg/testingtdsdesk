@@ -502,7 +502,9 @@ function timeLeft(x, of) {
 // today's later changes of a client's ledgers (read at most every 5 minutes): {changed, renamed}
 const IST_DAY = () => { const t = new Date(Date.now() + 5.5 * 3600e3); return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate()) - 5.5 * 3600e3).toISOString(); };
 const CHG = {};
-function ledgerChanges(cid) {
+// read again at the next drawing (the simple Tally page's tests start each scene afresh)
+export const ledgerChangesForget = () => { Object.keys(CHG).forEach((k) => delete CHG[k]); };
+export function ledgerChanges(cid) {
   const bk = ledBook(cid), k = cid + "|" + ((bk && bk.book) || ""), c = CHG[k];
   if (!bk || !bk.book || typeof Cloud !== "object" || !Cloud.api) return null;
   if (!c || (!c.busy && Date.now() - c.at > 5 * 60000)) {

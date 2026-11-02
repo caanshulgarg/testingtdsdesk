@@ -53,7 +53,7 @@ with sync_playwright() as p:
           Cloud.api = async (p) => { if (/^tally_selfchecks/.test(p)){ window.__w.asked.push(p); if (window.__w.scMissing) throw new Error('relation "public.tally_selfchecks" does not exist (42P01)'); return JSON.parse(JSON.stringify(window.__w.sc)); } return api(p); };
           TCloud.restAll = async (u) => Cloud.api(u); }""", [rows, missing_table])
         # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold
-        E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
+        E("() => { S.tallyMore = {support: true, page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
         E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
     def more():
         E("() => document.querySelectorAll('#app [data-computer] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)

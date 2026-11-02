@@ -156,7 +156,8 @@ with sync_playwright() as p:
     pg.evaluate("() => { location.hash = '#/c/' + S.coId + '/dash'; }"); pg.wait_for_timeout(200)
     press("tallyConnect"); pg.wait_for_timeout(600)
     ok(pg.evaluate("[S.view, S.homeTab]") == ["home", "tally"], "Connect this computer: the Tally page (%s)" % pg.evaluate("[S.view, S.homeTab]"))
-    ok(pg.locator("#app [data-connect-guide]").count() > 0, "with Connect Tally, the install and connect steps, on it")
+    # 02-Nov-2026 (next-tally-simple): Connect a company to Tally at step 1, with Connect this computer (its install and code)
+    ok(pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() > 0, "with Connect a company to Tally at step 1: the install and connect steps, on it")
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid)
 
     # 7. the same computer, two Windows users: anshul's bridge here is not Ranjeet's

@@ -74,7 +74,7 @@ SETUP = """([devs, companies]) => {
   TLight.st.at = Date.now(); TLight.st.devs = window.__devs.filter(d => !d.revoked); TLight.st.cos = window.__companies; TLight.st.stops = [];
   Rec.act = {rows: [], at: Date.now()};
   document.body.classList.add("is-test"); S.firm.firmName = "ABC";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {support: true}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
 }"""
 STEP = '#app [data-connect-step="port"]'
 

@@ -171,7 +171,7 @@ def main():
                 pg.screenshot(path=os.path.join(SHOTS, "%s-%s.png" % (name, "desktop" if w > 800 else "phone")), full_page=True)
             pg.set_viewport_size({"width": 1440, "height": 900})
         def open_tally(whose, pair=PAIRED, devs=None):
-            E(SETUP, [whose, devs if devs is not None else [OTHER]]); E(pair); E("() => { navHome('tally'); }"); pg.wait_for_timeout(900)
+            E(SETUP, [whose, devs if devs is not None else [OTHER]]); E(pair); E("() => { (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(900)
 
         # 1. a refused key seen on opening the page
         bridge_reset()
@@ -333,9 +333,10 @@ def main():
         # connect); the way is Help & support › Connect another computer, the steps with the download
         pg.wait_for_timeout(3000)
         ok(pg.locator("#app [data-oc-connect]").count() == 0, "7. no bridge here: no Connect this computer on the card")
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.click("#app [data-guide-again]"); pg.wait_for_timeout(600)
-        ok(pg.locator("#app [data-firstlink] [data-bridge-download]").count() == 1, "7. Connect another computer: the steps with the download")
-        E("() => { S.tallyGuide = {}; S.tallyMore = {}; render(); }")
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.click("#app [data-guide-again]"); pg.wait_for_timeout(600)
+        # next-tally-simple: Connect another computer opens Connect a company to Tally at step 1: its download, the steps under it
+        ok(pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "7. Connect another computer: the steps with the download")
+        E("() => { S.tallyGuide = {}; S.tallyMore = {support: true}; render(); }")
         bridge_reset(yours=False); open_tally(DEAD, UNPAIRED)
         ok(wait("() => !!document.querySelector('#app [data-oc-connect][data-oc-here=other]')"), "7. another Windows user's bridge found here: Connect this computer offered")
         pg.click("#app [data-oc-connect]")

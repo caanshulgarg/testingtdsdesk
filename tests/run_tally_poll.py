@@ -78,7 +78,7 @@ SETUP = """([devs, clients]) => {
   TCloud.pane.devices = null; TCloud.pane.companies = null; TCloud.pane.at = 0; TCloud.pane.err = "";
   TLight.st.at = 0;
   document.body.classList.add("is-test"); S.firm.firmName = "ABC";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {support: true}; S.tallyFocus = ""; S.tallyGuide = {}; S.coId = null; navHome("tally");
   return ids;
 }"""
 HIDE = """(h) => {

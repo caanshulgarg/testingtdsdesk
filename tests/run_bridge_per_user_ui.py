@@ -100,7 +100,7 @@ with sync_playwright() as p:
     E = lambda js, *a: pg.evaluate(js, *a)
     # FinCom 2.3.5, the simpler Tally page: the rest of a computer's card (and of the page) is under More; open them all
     # 15-Oct-2026 (the calm page): the computers' cards are inside the one "Advanced (for support)" fold: opened first
-    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(2)]
+    more = lambda: [(pg.evaluate("() => document.querySelectorAll('#app [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"), pg.wait_for_timeout(500)) for _ in range(3)]
     txt = lambda sel: pg.inner_text(sel).replace("\n", " ").strip() if pg.locator(sel).count() else ""
     def tally_page(prefs, links, role, me, balerts=None, devs=None, local=None, stops=None):
         E(SETUP, [devs or DEVS, prefs, links, MEMBERS, role, me, balerts or [], local, stops or []]); pg.wait_for_timeout(500)

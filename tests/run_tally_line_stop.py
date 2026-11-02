@@ -68,7 +68,7 @@ with sync_playwright() as p:
     refresh()
     l = E("(id) => tallyLine(S.companies[id])", cid)
     ok(l and l["state"] == "stopped" and l["text"] in ["Reading stopped by Anshul at %s: Tally hangs on the bank ledger" % hm(m) for m in (40, 41)], "tallyLine: state stopped, 'Reading stopped by <name> at <time>: <reason>' (%s)" % l)
-    E("() => { S.homeTab = 'tally'; S.tallyMore = {page: true}; navHome('tally'); }")  # the Tally redesign: the clients' lines are under the page's Details; pg.wait_for_timeout(1200)
+    E("() => { S.homeTab = 'tally'; S.tallyMore = {support: true, page: true}; navHome('tally'); }")  # the Tally redesign: the clients' lines are under the page's Details; pg.wait_for_timeout(1200)
     # round 66: the outdated "Clients' Tally" lines on the Tally page are gone; the client's own line (the top bar's Tally
     # panel) says the stop, with Resume (owner)
     def cl(c):   # the client's own line, in the top bar's Tally panel
@@ -97,14 +97,14 @@ with sync_playwright() as p:
     # ---- a stop for all computers: Resume resumes all
     E("""() => { window.__stops = [{id: 8, device_id: null, action: "stop", reason: "Bridge update", stopped_at: new Date(Date.now() - 2 * 60000).toISOString(), stopped_by: "u-neha", cleared_at: null, cleared_by: null}]; delete window.__dev.info.readStop; }""")
     refresh()
-    E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
+    E("() => { S.tallyMore = {support: true, page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
     ok(any(("Reading stopped by neha@fincom.in at %s: Bridge update" % hm(m)) in cl(cid) for m in (2, 3)), "a stop for all computers: said with who and when (%s)" % cl(cid))
     E("() => { window.__rpc = []; }"); pg.click("[data-panel-tally-line] [data-read-resume-line]"); pg.wait_for_timeout(600)
     ok(["tally_read_resume", {"p_device": None}] in E("window.__rpc"), "Resume on an all-computers stop -> tally_read_resume(null)")
     # ---- a member: the words, no Resume; Update now refused the same way
     cid, oid = E(SETUP, ["member"]); pg.wait_for_timeout(600)
     E("""() => { window.__stops = [{id: 7, device_id: window.__dev.id, action: "stop", reason: "Tally hangs on the bank ledger", stopped_at: new Date(Date.now() - 40 * 60000).toISOString(), stopped_by: "u-anshul", cleared_at: null, cleared_by: null}]; }""")
-    refresh(); E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
+    refresh(); E("() => { S.tallyMore = {support: true, page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
     ok("Reading stopped by Anshul" in cl(cid) and pg.locator("[data-panel-tally-line] [data-read-resume-line], [data-panel-tally-line] [data-update-now]").count() == 0, "a member: the words, no Resume, no Update now (%s)" % cl(cid))
     # ---- no tally_read_stops rows readable (before migration-35): the beat's readStop alone, without a name
     E("""() => { Cloud.api = async (p) => { if (/^tally_devices/.test(p)) return [JSON.parse(JSON.stringify(window.__dev))]; if (/^tally_read_stops/.test(p)) throw new Error("relation public.tally_read_stops does not exist"); return []; };

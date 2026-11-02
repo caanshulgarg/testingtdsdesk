@@ -227,7 +227,7 @@ def main():
         s5["cos"][0]["client_id"] = CA
         s5["cos"] += [dict(row("IX DESIGNS", "b-ix"), device_id=D2), dict(row("OLD CO", "b-old", CE), device_id=D2), dict(row("SHARED CO", "b-sh"), device_id=D3)]
         E(SETUP, [s5, "owner", ME, CLIENTS])
-        E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(1800)
+        E("() => { S.coId = null; S.view = 'home'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1800)
         RW = lambda c: '#app [data-tco-list=firm] [data-tco-row="%s"]' % c
         ok(pg.locator(RW("IX DESIGNS")).count() == 0 and pg.locator("#app [data-tco-show-gone]").inner_text() == "From a removed computer (1)",
            "IX DESIGNS (not a client, its computer removed): not listed; 'From a removed computer (1)' (%s)" % pg.locator("#app [data-tco-show-gone]").all_inner_texts())

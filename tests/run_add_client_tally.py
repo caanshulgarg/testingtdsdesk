@@ -35,13 +35,17 @@ with sync_playwright() as p:
     # 24-Oct-2026 (next-tally-one-page): Add client picks no Tally company; its one button opens the Tally page's list
     ok(pg.locator("#app [data-tco-list=add]").count() == 0 and pg.locator("#app [data-add-tally-go]").count() == 1, "Add client: no Pick from Tally; 'Add it from the Tally page'")
     pg.click("#app [data-add-tally-go]"); pg.wait_for_timeout(1200)
-    rows = pg.evaluate("[...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tco-state')])")
+    # 02-Nov-2026 (next-tally-simple): the Tally page's one table: a row a client, and a row for each company open in Tally
+    # that no client has ("Not chosen yet", Choose the client: the picker, + New client with this name inside it)
+    rows = pg.evaluate("[...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => [r.getAttribute('data-tsm-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tsm-kind')])")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
-    ok(zz and zz[0][2] == "connected" and "Not linked" in zz[0][1] and "Choose client" in zz[0][1] and "Add as client" not in zz[0][1], "the Tally page: ZZ TEST, open in Tally on this computer, Not linked, the client picker (Task D) (%s)" % (zz and zz[0][1]))
-    gs = [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"]
-    ok(gs and "Testing AAD" in gs[0][1] and "Add as client" not in gs[0][1], "GARG SHEKHAR & COMPANY is listed with its client Testing AAD, not offered to add (%s)" % (gs and gs[0][1]))
-    pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-act=pick]'); pg.wait_for_timeout(250)   # Task D: + New client inside Link to client…
-    pg.click('#app [data-tco-list=firm] [data-tco-row="ZZ TEST"] [data-tco-add-new]'); pg.wait_for_timeout(1500)
+    ok(zz and zz[0][2] == "company" and "Not chosen yet" in zz[0][1] and "Open in Tally: “ZZ TEST”" in zz[0][1] and "Choose the client" in zz[0][1] and "Add as client" not in zz[0][1],
+       "the Tally page: ZZ TEST, open in Tally, no client yet, Choose the client (no Add as client) (%s)" % (zz and zz[0][1]))
+    gs = [r for r in rows if r[0] == "Testing AAD"]
+    ok(gs and "Tally company: GARG SHEKHAR & COMPANY" in gs[0][1] and "Add as client" not in gs[0][1] and not [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"],
+       "GARG SHEKHAR & COMPANY is its client Testing AAD's row, not offered to add (%s)" % (gs and gs[0][1]))
+    pg.click('#app [data-tsm-row="ZZ TEST"] [data-tsm-act=choose]'); pg.wait_for_timeout(250)   # Task D: + New client inside the picker
+    pg.click('#app [data-tsm-row="ZZ TEST"] [data-tco-add-new]'); pg.wait_for_timeout(1500)
     r = pg.evaluate("(() => { const c = Object.values(S.companies).find(x => x.name === 'ZZ TEST'); return {postTo: c.postTo || '', tally: c.tallyName, id: c.id, calls: window.__calls, home: S.homeTab}; })()")
     # the owner, 26-Oct-2026: linking a client to its Tally company also allows posting into it (postToOnLink)
     ok(r["tally"] == "ZZ TEST" and r["home"] == "tally" and r["postTo"] == "ZZ TEST", "added (the page stays on the list): Tally name ZZ TEST; posting allowed into it by the link (%s)" % {k: r[k] for k in ("tally", "home", "postTo")})

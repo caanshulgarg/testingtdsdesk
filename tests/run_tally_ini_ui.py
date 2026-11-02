@@ -41,7 +41,7 @@ with sync_playwright() as p:
           Cloud.api = async (p) => { if (/^tally_devices\\?select=id,period_fetch/.test(p)) { if (missing) throw new Error('column tally_devices.period_fetch does not exist (42703)'); return [Object.assign({id: d1, period_fetch: window.__pf}, window.__night || {})]; } return api(p); };
           TCloud.control = async (fn, args, done) => { window.__ctl.push([fn, args]); if (fn === 'tally_device_period_fetch') window.__pf = !!args.p_on;
             if (fn === 'tally_device_period_night') window.__night = {period_night_from: args.p_from, period_night_to: args.p_to, period_night_sunday: args.p_sunday}; }; }""", [pf, missing, D1, night])
-        E("() => { S.tallyMore = {page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
+        E("() => { S.tallyMore = {support: true, page: true}; navHome('tally'); }"); pg.wait_for_timeout(1200)
         E("() => TCloud.refreshPane()"); pg.wait_for_timeout(1200)
         E("() => document.querySelectorAll('#app [data-computer] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
     lines = lambda: E("() => [...document.querySelectorAll('#app [data-computer] [data-card-more] [data-tally-ini]')].map(e => ({state: e.getAttribute('data-tally-ini'), words: e.innerText.trim()}))")

@@ -81,8 +81,8 @@ with sync_playwright() as p:
     cid = E(SETUP, ["owner", DEVS, LINES, ""]); pg.wait_for_timeout(300)
     E("() => navHome('tally')"); pg.wait_for_timeout(1500)
     # 15-Oct-2026 (the calm page): Sync activity and Everything sent open from the one Advanced (for support) fold
-    ok(pg.locator("#app [data-tally-tab]").count() == 0 and pg.locator("#app [data-pc-lines]").count() == 1 and pg.locator("#app [data-sync-activity]").count() == 0, "the Tally page first: one line a computer, no tabs")
-    E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(500)
+    ok(pg.locator("#app [data-tally-tab]").count() == 0 and pg.locator("#app [data-tsm-pcs]").count() == 1 and pg.locator("#app [data-sync-activity]").count() == 0, "the Tally page first: one line a computer, no tabs")
+    E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(500)
     tabs = pg.locator("#app [data-advanced] [data-tally-tab]")
     ok([tabs.nth(i).inner_text().strip() for i in range(tabs.count())] == ["Sync activity", "Everything sent"], "Advanced: Sync activity, Everything sent (%s)" % [tabs.nth(i).inner_text() for i in range(tabs.count())])
     pg.click('#app [data-tally-tab="sent"]'); pg.wait_for_timeout(600)

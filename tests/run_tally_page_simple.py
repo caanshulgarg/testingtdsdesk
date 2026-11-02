@@ -64,7 +64,7 @@ SETUP = """([devs, stops, companies, role]) => {
   S.account = Object.assign(S.account || {}, {me: Object.assign((S.account || {}).me || {}, {role})});
   TCloud.pane.devices = null; TCloud.pane.at = 0; TCloud.pane.err = "";
   document.body.classList.add("is-test"); S.firm.firmName = S.firm.firmName || "Test Firm";
-  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {}; S.tallyGuide = {}; navHome("tally");
+  S.tallyOld = false; S.tallyTab = "computers"; S.tallyMore = {support: true}; S.tallyGuide = {}; navHome("tally");
 }"""
 # Sync activity's flow (the owner: "in tally sync there is a yellow field coming all the time"): lines Tally sent, as
 # tally_recorder_lines keeps them. ENDED: the bridge gave up, a person must upload that day's Day Book; FRESH: still
@@ -161,7 +161,7 @@ def main():
         # "Advanced (for support)" fold; fold=True opens it, as a person does
         def scene(devs, companies, role="owner", stops=STOPS, fold=True):
             E(SETUP, [devs, stops, companies, role]); pg.wait_for_timeout(300)
-            if fold: E("() => { S.tallyMore = {page: true}; render(); }")
+            if fold: E("() => { S.tallyMore = {support: true, page: true}; render(); }")
             pg.wait_for_timeout(1500)
         def shot(name):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=True)
@@ -179,8 +179,11 @@ def main():
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
         # 24-Oct-2026 (next-tally-firstlink, fd7efe4e4): step 1's download is in Connect this computer under the steps
         # (Download, Open it, Type its code), as run_tally_page_clean and run_tally_suvit read it
-        dl = g + ' [data-firstlink] [data-fl-step="download"] [data-bridge-download]'
-        ok(pg.locator(dl).count() == 1 and "2.3.4" in txt(dl), "guide: step 1 has the download, in Connect this computer (%s)" % txt(g + ' [data-connect-step="install"]')[:120])
+        # 02-Nov-2026 (next-tally-simple): the guide above is the former one, under For support (its port step there); the page's
+        # own box, Connect a company to Tally, has step 1's one download and Connect this computer under it
+        dl = '#app [data-tsm-guide="1"] [data-tsm-download]'
+        ok(pg.locator(dl).count() == 1 and "2.3.4" in (pg.get_attribute(dl, "href") or "") and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1,
+           "guide: step 1 has the download, Connect this computer under it (%s)" % txt('#app [data-tsm-guide]')[:120])
         ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
         shot("guide-empty")
         # this browser's own bridge connect (the 6-digit code) is only under Advanced (for support)
@@ -310,7 +313,7 @@ def main():
             TCloud.rpc = async (fn, a) => fn === "tally_status" ? (await new Promise(r => setTimeout(r, 5)), [{book: "bk-" + a.p_client, company: "X", from: "2026-04-01", openAsOn: "2026-03-31", ledgersAt: new Date().toISOString(), days: 150, to: today, state: {}}]) : rpc(fn, a);
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
         ok(pg.locator("#app [data-status-card]").count() == 1 and pg.locator("#app [data-connect-step]").count() == 0, "every client linked: the status card, no steps")
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(400)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-advanced] [data-guide-again]").count() == 1, "Help & support: 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
         ok(pg.locator("#app [data-connect-step]").count() == 4 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")

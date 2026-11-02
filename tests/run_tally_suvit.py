@@ -105,7 +105,7 @@ def main():
         def scene(companies, devs=None, books=None, ledn=None):
             E(SETUP, [[dev(), dev(D2, "LAPTOP", at="ago:42", opened=())] if devs is None else devs, companies, books or {}, ledn or {}]); pg.wait_for_timeout(300)
         def tally_page():
-            E("() => { S.tallyGuide = {}; S.tallyTab = 'computers'; navHome('tally'); }"); pg.wait_for_timeout(1200)
+            E("() => { S.tallyGuide = {}; S.tallyTab = 'computers'; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); pg.wait_for_timeout(1200)
         def rows():
             return E("""() => [...document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]')].map(r => ({co: r.getAttribute('data-tco-row'), st: r.getAttribute('data-tco-state'),
                 pill: r.querySelector('[data-tco-pill]').innerText.replace(/\\s+/g, ' ').trim(), text: r.innerText.replace(/\\s+/g, ' '), act: (r.querySelector('[data-tco-act]') || {}).innerText || '', pre: (r.querySelector('[data-tco-pre]') || {getAttribute: () => ''}).getAttribute('data-tco-pre') || '',
@@ -128,10 +128,10 @@ def main():
         # linked, are not on the page; they are under Help & support › Every company seen
         ok([r["co"] for r in rs][2:] == [] and "Salesify" not in txt("#app") and OLD not in txt("#app"), "1. the ones seen before (not open, not linked): not on the page (%s)" % [r["co"] for r in rs])
         ok(row(VMS)["st"] == "connected" and row(VMS)["pill"] == "Not linked · open in Tally", "1. VMS EVENTS open, not linked: Not linked · open in Tally (Task D: neutral words; no computer's name) (%s)" % row(VMS)["pill"])
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(600)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(600)
         allrows = lambda: E("""() => Object.fromEntries([...document.querySelectorAll('#app [data-tco-list=all] [data-tco-row]')].map(r => [r.getAttribute('data-tco-row'), {pill: r.querySelector('[data-tco-pill]').innerText.replace(/\\s+/g, ' ').trim(), text: r.innerText.replace(/\\s+/g, ' '), act: (r.querySelector('select[data-tco-act=pick]') || {}).tagName || ''}]))""")
         ok(allrows().get(SAL, {}).get("pill") == "Not linked · not open in Tally now" and allrows()[SAL]["act"] == "SELECT", "1. Help & support › Every company seen: Salesify, not linked, not open, the picker (%s)" % allrows().get(SAL))
-        E("() => { S.tallyMore = {}; render(); }")
+        E("() => { S.tallyMore = {support: true}; render(); }")
         scene(cos(sal="GS", old="GS")); tally_page()
         # next-tally-smart: a linked company not open now is one quiet line under Your linked clients (no false alarm)
         lrow = lambda co: txt('#app [data-tco-list=firm] [data-linked-row="%s"]' % co).replace("\n", " ")
@@ -218,7 +218,7 @@ def main():
         scene(cos(), devs=[])
         tally_page()
         g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", False], ["port", False], ["open", False], ["add", False]] and pg.locator("#app [data-firstlink] [data-fl-step=download] [data-bridge-download]").count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
+        ok(g == [["install", False], ["port", False], ["open", False], ["add", False]] and pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
         scene(cos(), devs=[dev(opened=(), tally="closed")]); tally_page()
         ok(pg.locator("#app [data-connect-step=open]").count() == 0 and "Tally not open" in txt("#app [data-pc-lines]"), "5. bridge on, Tally closed: the card says Tally not open (%s)" % txt("#app [data-pc-lines]").replace("\n", " "))
         scene(cos(vms="GS"), devs=[dev()]); tally_page()
@@ -231,12 +231,12 @@ def main():
         scene(cos(extra=many)); tally_page()
         # next-tally-smart: the 12 seen earlier (not open, not linked) are under Help & support › Every company seen, with the search box
         ok(pg.locator("#app [data-tco-list=firm] [data-tco-q]").count() == 0 and E("() => document.querySelectorAll('#app [data-tco-list=firm] [data-tco-row]').length") == 2, "1. the page: the two open companies only, no search box")
-        E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(700)
+        E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(700)
         ok(pg.locator("#app [data-tco-list=all] [data-tco-q]").count() == 1, "1. 16 companies seen: a search box in Every company seen")
         pg.fill("#app [data-tco-list=all] [data-tco-q]", "co 07"); pg.wait_for_timeout(300)
         found = E("() => [...document.querySelectorAll('#app [data-tco-list=all] [data-tco-row]')].map(r => r.getAttribute('data-tco-row'))")
         ok(found == ["CO 07 TRADERS"], "1. the search finds one (%s)" % found)
-        E("() => { S.tallyMore = {}; render(); }")
+        E("() => { S.tallyMore = {support: true}; render(); }")
 
         # ---- 6. the same pill everywhere
         scene(cos(sal="GS"))
@@ -285,7 +285,7 @@ def main():
                 q.evaluate("() => { const c = newCompany({name: 'Salesify Marketing LLP'}); S.companies[c.id] = c; S.data[c.id] = {parties: {}, entries: {}, loaded: true}; c.stats = {}; window.__ids.S1 = c.id; }")
                 for nm, comp, act in (("tally-page-list", cos(sal="S1"), "page"), ("guide-3-steps", cos(), "page"), ("client-card", cos(sal="S1"), "card")):
                     q.evaluate(SETUP, [[dev(), dev(D2, "LAPTOP", at="ago:42", opened=())], comp, {}, {}]); q.wait_for_timeout(300)
-                    if act == "page": q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1300)
+                    if act == "page": q.evaluate("() => { S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); q.wait_for_timeout(1300)
                     elif act == "add": q.evaluate("() => { navHome('clients'); doAct('addCo'); }"); q.wait_for_timeout(1300)
                     else: q.evaluate("() => { openCompany(window.__ids.S1); S.view = 'company'; S.tab = 'cotally'; render(); }"); q.wait_for_timeout(1300)
                     x = q.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")
@@ -294,7 +294,7 @@ def main():
                         q.screenshot(path=os.path.join(SHOTS, "%s-%s-%s.png" % (nm, tag, scheme)), full_page=act != "card")
                 if SHOTS:
                     # after Add as client: the progress, on this size and theme
-                    q.evaluate(SETUP, [[dev()], cos(), {}, {}]); q.evaluate("() => { S.tallyGuide = {}; navHome('tally'); }"); q.wait_for_timeout(1200)
+                    q.evaluate(SETUP, [[dev()], cos(), {}, {}]); q.evaluate("() => { S.tallyGuide = {}; (S.tallyMore = Object.assign({}, S.tallyMore, {support: true}), navHome('tally')); }"); q.wait_for_timeout(1200)
                     q.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-act=pick]' % VMS); q.wait_for_timeout(250)
                     q.click('#app [data-tco-list=firm] [data-tco-row="%s"] [data-tco-add-new]' % VMS); q.wait_for_timeout(1500)
                     q.screenshot(path=os.path.join(SHOTS, "after-add-progress-%s-%s.png" % (tag, scheme)), full_page=True)

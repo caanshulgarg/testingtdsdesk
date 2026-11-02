@@ -45,7 +45,7 @@ SPY = """() => {
   if (!TCloud.__spied) { TCloud.__spied = 1; const m = TCloud.refreshPane.bind(TCloud); TCloud.refreshPane = function(){ fx('refreshPane', ''); return m(); }; }
 }"""
 STATE = """() => { const yes = document.querySelector('#confirmBox [data-cbx="yes"]'); const vis = (e) => { if (!e) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }; return {view: S.view, home: S.homeTab, ttab: S.tallyTab, tab: S.tab, co: S.coId, step: S.step || '', guide: JSON.stringify(S.tallyGuide || {}),
-  more: JSON.stringify(S.tallyMore || {}), panel: !!S.tallyPanel, pop: !!document.querySelector('[data-tally-pop]'), popmsg: ((document.querySelector('[data-tally-pop-msg]') || {}).innerText || ''), set: S.settingsTab || '', hash: location.hash, confirm: vis(yes), selects: [...document.querySelectorAll('select')].map(x => x.value).join('|') + '/' + [...document.querySelectorAll('input[type=checkbox]')].map(x => x.checked ? 1 : 0).join(''),
+  more: JSON.stringify(S.tallyMore || {}), tsm: JSON.stringify(S.tsm || {}), panel: !!S.tallyPanel, pop: !!document.querySelector('[data-tally-pop]'), popmsg: ((document.querySelector('[data-tally-pop-msg]') || {}).innerText || ''), set: S.settingsTab || '', hash: location.hash, confirm: vis(yes), selects: [...document.querySelectorAll('select')].map(x => x.value).join('|') + '/' + [...document.querySelectorAll('input[type=checkbox]')].map(x => x.checked ? 1 : 0).join(''),
   calls: (window.__calls || []).length, wakes: (window.__wakes || []).length, reads: window.__reads || 0, fx: (window.__fx || []).length,
   text: (document.querySelector('#app') || document.body).innerText.length + ':' + ((document.querySelector('#app') || document.body).innerText.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7)),
   details: [...document.querySelectorAll('details')].filter(d => d.open).length}; }"""
@@ -56,7 +56,7 @@ LIST = """(scope) => { const root = document.querySelector(scope); if (!root) re
   const name = (e) => { const d = [...e.attributes].map(a => a.name).filter(n => n.startsWith('data-') && !['data-state', 'data-level', 'data-arc', 'data-click-me'].includes(n));
     const t = (e.innerText || e.getAttribute('aria-label') || '').replace(/[\u25b2\u25bc]/g, '').replace(/\\s+/g, ' ').trim().slice(0, 50);
     return e.tagName.toLowerCase() + (d.length ? '[' + d[0] + (e.getAttribute(d[0]) ? '=' + e.getAttribute(d[0]).slice(0, 40) : '') + ']' : '') + ' ' + JSON.stringify(t); };
-  const seen = {}; return els.map(e => { const n = name(e); seen[n] = (seen[n] || 0) + 1; return {name: n, nth: seen[n] - 1, tag: e.tagName, here: e.getAttribute('aria-selected') === 'true', dl: e.hasAttribute('download') || /FinComBridge-Setup/.test(e.getAttribute('href') || ''),
+  const seen = {}; return els.map(e => { const n = name(e); seen[n] = (seen[n] || 0) + 1; return {name: n, nth: seen[n] - 1, tag: e.tagName, here: e.getAttribute('aria-selected') === 'true' || e.getAttribute('aria-pressed') === 'true', dl: e.hasAttribute('download') || /FinComBridge-Setup/.test(e.getAttribute('href') || ''),
     href: e.getAttribute('href') || '', disabled: !!e.disabled, file: !!e.querySelector('input[type=file]'), options: e.tagName === 'SELECT' ? [...e.options].map(o => o.value) : []}; }); }"""
 FIND = """([scope, name, nth]) => { const root = document.querySelector(scope); if (!root) return false;
   const els = [...root.querySelectorAll('button, a[href], select, input[type=checkbox], summary, label.btn')].filter(e => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e);
@@ -127,7 +127,7 @@ def main():
         # the places: how to get there from a fresh scene, and the part of the page whose controls are clicked
         G = lambda: ids["garg shekhar & company"]; T = lambda: ids["GB TEXCOAT"]
         def at_tally(): pass
-        def at_fold(): E("() => { S.tallyMore = {page: true}; render(); }"); pg.wait_for_timeout(500); E("() => document.querySelectorAll('#app [data-advanced] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
+        def at_fold(): E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(500); E("() => document.querySelectorAll('#app [data-advanced] [data-more-toggle][aria-expanded=\"false\"]').forEach(b => b.click())"); pg.wait_for_timeout(500)
         def at_client(cid, tab):
             def go():
                 E("([c, t]) => { S.tallyGuide = {}; openCompany(c); S.view = 'company'; S.tab = t; S.step = null; render(); }", [cid(), tab]); pg.wait_for_timeout(900)
@@ -219,7 +219,7 @@ def main():
                             pg.wait_for_timeout(900)
                         a = E(STATE); calls = E("window.__calls || []")[calls0:]; fx = E("window.__fx || []")[fx0:]
                         a["asked"] = asked
-                        changed = [k for k in ("view", "home", "ttab", "tab", "co", "step", "guide", "more", "panel", "pop", "popmsg", "set", "hash", "details", "selects") if a[k] != b[k]]
+                        changed = [k for k in ("view", "home", "ttab", "tab", "co", "step", "guide", "more", "tsm", "panel", "pop", "popmsg", "set", "hash", "details", "selects") if a[k] != b[k]]
                         what = []
                         if changed: what.append("changed " + ",".join(changed))
                         if asked: what.append("asked first")
