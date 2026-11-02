@@ -202,15 +202,24 @@ try:
         for name, js in PAGES:
             E("() => { if (typeof toastHide === 'function') toastHide(); window.scrollTo(0, 0); }"); W(300)
             t0 = E("(js) => { const t = window.__st.reset(); new Function(js)(); return t; }", js); W(1600)
-            m = state(pg); c, worst = cls(m, t0)
-            ok(c <= 0.01, "%s: layout shift %.4f <= 0.01 %s" % (name, c, worst))
+            m = state(pg)
+            # spacious layout (01-Nov-2026, the owner's approved draft): the Bank page alone swaps the sidebar for its 72 px
+            # rail, so going to Bank and leaving it moves the page's column (div.mainwrap) once, by design; nothing else may move
+            rail = name in ("Bank", "Sales")
+            if rail:
+                moved = [x for x in m["shifts"] if x["t"] >= t0 and x.get("src") == ["div.mainwrap"]]
+                ok(len(moved) <= 1, "%s: the page's column moves once, for the Bank page's rail (%s)" % (name, moved))
+                m = dict(m, shifts=[x for x in m["shifts"] if x not in moved])
+            c, worst = cls(m, t0)
+            ok(c <= 0.01, "%s: layout shift %.4f <= 0.01%s %s" % (name, c, " (besides the rail's)" if rail else "", worst))
             s = E(SLOTS); spots[name] = s
             pg.screenshot(path=os.path.join(OUT, "page-%s.png" % name.replace(" ", "_")))
             if name.startswith("Today"): firm_date = s["date"]
             if name == "Overview": client_date = s["date"]
         base = spots["Today"]
         for k in ("bell", "tally", "firm", "header"):
-            vals = {n: tuple(v[k] or ()) for n, v in spots.items()}
+            # the header starts after the Bank page's rail (spacious layout); its right side, the bell, Tally and the firm, stay put
+            vals = {n: tuple(v[k] or ()) for n, v in spots.items() if not (k == "header" and n == "Bank")}
             ok(len(set(vals.values())) == 1, "the %s in the same place on every page (%s)" % (k, sorted(set(vals.values()))))
         ok(firm_date and client_date and firm_date[1] == client_date[1], "the sidebar's date line at the same height on a firm page and a client's (%s, %s)" % (firm_date, client_date))
         ok(pg.locator("#cobar nav.sbar").count() == 0, "no status tabs in the header (they are at the top of the page)")

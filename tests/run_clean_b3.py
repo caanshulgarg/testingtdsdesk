@@ -166,12 +166,15 @@ try:
         ok(pg.locator("#app nav.statebar [data-post-tab]").count() >= 2 and pg.locator("#app .post-tabs").count() == 0, "Post to Tally: its lists are states on Purchase's one row, no second row of chips")
 
         print("2. one content width")
-        lefts = {n: w["left"] for n, w in widths.items()}; rights = {n: w["right"] for n, w in widths.items()}
+        # spacious layout (01-Nov-2026, the owner's approved draft): the Bank page alone has the 72 px slim rail in place of the
+        # sidebar, so its body starts further left (and its right edge is the same); every other page as before
+        lefts = {n: w["left"] for n, w in widths.items() if n != "bank"}; rights = {n: w["right"] for n, w in widths.items()}
         ok(len(set(lefts.values())) == 1 and len(set(rights.values())) == 1, "the body starts and ends in the same place on every page (%s, %s)" % (sorted(set(lefts.values())), sorted(set(rights.values()))))
+        if "bank" in widths: ok(widths["bank"]["left"] < min(lefts.values()), "Bank: the body starts after the slim rail, further left (%d)" % widths["bank"]["left"])
         short = {n: (w["far"], w["right"]) for n, w in widths.items() if w["far"] and w["far"] < w["right"] - 4 and n not in ("help",)}
         ok(not short, "every page's content runs the full width (%s)" % short)
         ok(widths["from-tally"]["far"] >= widths["from-tally"]["right"] - 4, "From Tally: full width, as every other page (%d of %d)" % (widths["from-tally"]["far"], widths["from-tally"]["right"]))
-        ok(len(set(w["head"] for w in widths.values())) == 1, "the header starts in the same place on every page")
+        ok(len(set(w["head"] for n, w in widths.items() if n != "bank")) == 1, "the header starts in the same place on every page (Bank: after its slim rail)")
 
         print("3. the tables")
         go(CL("S.filter = 'draft'; goClient('bills');"))
@@ -296,7 +299,8 @@ try:
         for name, js in PAGES:
             if name in ("help",): continue
             go4(js, 900); ww[name] = E4(WIDTH)
-        ok(len(set(w["left"] for w in ww.values())) == 1 and len(set(w["right"] for w in ww.values())) == 1, "1920 px: the body starts and ends in the same place on every page")
+        # (at 1920 the body is centred in its column, so the Bank page's, beside a narrower rail, sits a little further left at both ends)
+        ok(len(set(w["left"] for n, w in ww.items() if n != "bank")) == 1 and len(set(w["right"] for n, w in ww.items() if n != "bank")) == 1, "1920 px: the body starts and ends in the same place on every page (Bank: beside its slim rail)")
         short = {n: (w["far"], w["right"]) for n, w in ww.items() if w["far"] and w["far"] < w["right"] - 4}
         ok(not short, "1920 px: every page's content runs the full width (%s)" % short)
         wide.close()

@@ -50,7 +50,12 @@ try:
         cid = E("S.coId")
         side = lambda: E("[...document.querySelectorAll('#side .side-link')].filter(e => e.offsetParent !== null).map(e => e.dataset.side || e.innerText.trim())")
         groups = lambda: E("[...document.querySelectorAll('#side .side-group')].map(e => e.innerText.trim())")
-        lit = lambda: E("[...document.querySelectorAll('#side .side-link[aria-current=page]')].filter(e => e.offsetParent !== null).map(e => e.dataset.side)")
+        # the Bank page has the slim rail (spacious layout, 01-Nov-2026; parts/bank/Rail.jsx): its Bank item is the one lit, and
+        # the full menu opens from its Menu button
+        lit = lambda: E("(() => { const s = [...document.querySelectorAll('#side .side-link[aria-current=page]')].filter(e => e.offsetParent !== null).map(e => e.dataset.side); if (s.length) return s; return [...document.querySelectorAll('.bkr [data-rail][aria-current=page]')].filter(e => e.offsetParent !== null).map(e => e.getAttribute('aria-label')); })()")
+        def side_click(label):
+            if E("document.documentElement.classList.contains('bk-rail') && !document.documentElement.classList.contains('bk-rail-menu')"): pg.click('.bkr [data-rail-menu]'); W(250)
+            pg.click('#side .side-link[data-side="%s"]' % label)
         title = lambda: pg.inner_text("#cobar .tbar-title h2").strip()
         def hash_go(h, wait=1300):
             E("(h) => { location.hash = h; }", h); W(wait)
@@ -63,7 +68,7 @@ try:
         E("navHome('inbox')"); W(600)
         ok(lit() == ["Today"], "the firm's Inbox (opened from Today's To read) lights Today")
         for label, want_hash, want_title in [("Compliance", "#/compliance", "Compliance"), ("Clients", "#/clients", "Clients"), ("Tally", "#/tally", "Tally"), ("Integrations", "#/integrations", "Integrations"), ("Settings", "#/settings", "Settings"), ("Help", "#/help", "Help"), ("Today", "#/today", "Today")]:
-            pg.click('#side .side-link[data-side="%s"]' % label); W(900)
+            side_click(label); W(900)
             ok(E("location.hash") == want_hash and title() == want_title and lit() == [label], "%s: %s, titled %s, lit (%s, %s, %s)" % (label, want_hash, want_title, E("location.hash"), title(), lit()))
         # People and Plan and credit: Settings' sections, and the firm menu's
         E("navHome('today')"); W(400)
@@ -90,9 +95,9 @@ try:
         titles = {"Overview": "Overview", "Purchase": "Purchase", "Bank": "Bank", "Sales": "Sales", "Transactions": "Transactions",
                   "TDS": "TDS", "GST": "GST", "Reconciliations": "Reconciliations", "From Tally": "From Tally", "Reports": "Reports", "MIS": "MIS", "My MIS": "My MIS", "Statements": "Financial statements", "Audit": "Audit", "Look up": "Look up", "Letters": "Letters", "Client setup": "Client setup"}
         for label, t in titles.items():
-            pg.click('#side .side-link[data-side="%s"]' % label); W(1100)
+            side_click(label); W(1100)
             ok(title() == t and lit() == [label], "%s: titled %s and lit (%s, %s)" % (label, t, title(), lit()))
-        pg.click('#side .side-link[data-side="TDS"]'); W(900)
+        side_click("TDS"); W(900)
         ok(pg.locator('#app nav[aria-label="Books"]').count() == 0 and pg.locator('#app nav[aria-label="From Tally"]').count() == 0, "TDS: no row of book tabs (the sidebar is the way)")
         print("3. the TDS and GST ledgers on the TDS and GST pages (ledger-confirm, 14-Oct-2026); the tie-out a tab of Audit")
         pg.click('#cobar [data-topbar-inbox]'); W(1000)
@@ -102,7 +107,7 @@ try:
         ok(pg.locator('#app nav[aria-label="From Tally"] button[data-books-tab="ledgers"]').count() == 0, "From Tally: no Tally ledgers tab")
         E("() => booksTabGo('ledgers')"); W(900)
         ok(E("booksTab()") == "tds" and E("S.tdsView") == "ledgers" and title() == "TDS" and lit() == ["TDS"] and E("location.hash").endswith("/books/tds/ledgers/all"), "the Tally ledgers: the TDS page's Ledgers, its own address (%s)" % [E("booksTab()"), E("S.tdsView"), title(), lit(), E("location.hash")])
-        pg.click('#side .side-link[data-side="Audit"]'); W(900)
+        side_click("Audit"); W(900)
         at = E("[...document.querySelectorAll('#app nav[aria-label=\"Audit\"] button')].map(b => b.innerText.trim())")
         ok(at[-1:] == ["Tie-out with Tally"], "Audit's tabs end with Tie-out with Tally (%s)" % at)
         pg.click('#app nav[aria-label="Audit"] button[data-audit-tab="tieout"]'); W(900)

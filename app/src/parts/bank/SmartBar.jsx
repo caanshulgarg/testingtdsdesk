@@ -3,6 +3,7 @@
 // not); what is shown counted and added up; tick all of it; make a rule from it. The logic is ./smart.js.
 import { useEffect } from "react";
 import LedgerBox from "../LedgerBox.jsx";
+import { Density, ActiveChips } from "./Spacious.jsx";
 import { CHIPS, chipCounts, chipsOn, toggleChip, setF, setRange, setSugOnly, clearAll, smartOn, selectAll, ruleStart, rulePreviewNow, ruleSave, KEYS_HELP, headChips, headClear } from "./smart.js";
 
 const DIRS = [["", "All"], ["out", "Out"], ["in", "In"]];
@@ -28,7 +29,6 @@ function RuleForm({ form }) {
 export default function SmartBar({ rows, base, grouped }) {
   const b = B(), f = b.f || {}, on = chipsOn(b), n = chipCounts(b, base);
   const out = r2(rows.reduce((a, r) => a + num(r.debit), 0)), inn = r2(rows.reduce((a, r) => a + num(r.credit), 0));
-  const pickable = rows.filter((r) => r.state !== "sent"), allPicked = pickable.length > 0 && pickable.every((r) => b.sel.has(r.id));
   const commit = (fn) => ({ onKeyDown: (ev) => { if (ev.key === "Enter") fn(ev.target.value); }, onBlur: (ev) => fn(ev.target.value) });
   const filtered = smartOn(b);
   // More filters closes on a click outside it or Esc, as the page's other menus (round 3 C, 14-Oct-2026)
@@ -41,10 +41,11 @@ export default function SmartBar({ rows, base, grouped }) {
     <div className="bs-line">
       <input type="search" className="bk-search bs-search" autoComplete="off" placeholder="Search Particulars, amount, ledger" aria-label="Search the statement" value={b.q} onChange={(ev) => bankSearch(ev.target.value)} />
       <span className="bs-seg" role="group" aria-label="Withdrawals or deposits">{DIRS.map(([k, w]) => <button key={k} type="button" data-dir={k} aria-pressed={(f.dir || "") === k} onClick={() => setF("dir", k)}>{w}</button>)}</span>
-      <label className="bs-tog"><input type="checkbox" data-f-unassigned="" checked={f.led === "none"} onChange={(ev) => setF("led", ev.target.checked ? "none" : "")} /> Unassigned only</label>
-      <label className="bs-tog"><input type="checkbox" data-f-sugg="" checked={!!b.sugOnly} onChange={(ev) => setSugOnly(ev.target.checked)} /> Suggestions to accept</label>
-      <details className="bs-more" data-f-more=""><summary className="btn small">More filters{(b.from || b.to || f.min || f.max || f.led === "set") ? " •" : ""}</summary>
+      <details className="bs-more" data-f-more=""><summary className="btn small" title="More filters: unassigned, suggestions, dates, amounts, ledger">Filters{(b.from || b.to || f.min || f.max || f.led || b.sugOnly) ? " •" : ""}</summary>
+        {/* spacious layout: Unassigned only and Suggestions to accept are here; when on, each is a chip in the row */}
         <div className="bs-pop">
+          <label className="bs-tog bsp-wide"><input type="checkbox" data-f-unassigned="" checked={f.led === "none"} onChange={(ev) => setF("led", ev.target.checked ? "none" : "")} /> Unassigned only</label>
+          <label className="bs-tog bsp-wide"><input type="checkbox" data-f-sugg="" checked={!!b.sugOnly} onChange={(ev) => setSugOnly(ev.target.checked)} /> Suggestions to accept</label>
           <label>Date from <input type="date" data-f-from="" defaultValue={b.from || ""} key={"fr" + (b.from || "")} {...commit((v) => v !== (b.from || "") && setRange("from", v))} /></label>
           <label>to <input type="date" data-f-to="" defaultValue={b.to || ""} key={"to" + (b.to || "")} {...commit((v) => v !== (b.to || "") && setRange("to", v))} /></label>
           <label>Amount from <input type="number" min="0" data-f-min="" defaultValue={f.min || ""} key={"mn" + (f.min || "")} {...commit((v) => v !== String(f.min || "") && setF("min", v))} /></label>
@@ -52,19 +53,21 @@ export default function SmartBar({ rows, base, grouped }) {
           <label>Ledger <select data-f-led="" value={f.led || ""} onChange={(ev) => setF("led", ev.target.value)}><option value="">any</option><option value="none">not chosen yet</option><option value="set">chosen</option></select></label>
         </div></details>
       {tabOk() && <label className="bs-tog"><input type="checkbox" checked={!!grouped} onChange={(ev) => bankSetGrouped(ev.target.checked)} /> Group by party</label>}
-      <span className="bs-gap" />
-      {pickable.length > 0 && <button className="linkbtn" data-f-selall="" onClick={() => selectAll(pickable, !allPicked)}>{allPicked ? "Untick all" : "Select all " + pickable.length}</button>}
-      {filtered && <button className="linkbtn" data-f-clear="" onClick={clearAll}>Clear filters</button>}
-      {filtered && !b.ruleForm && <button className="linkbtn" data-f-rule="" title="Make a rule from this filter: lines containing these words go to one ledger, now and in future statements" onClick={ruleStart}>Rule from filter</button>}
-    </div>
+      {/* spacious layout (01-Nov-2026): one row. The quick chips and what is filtered (removable chips) scroll sideways
+          within the row when they do not fit */}
     <div className="bs-chips" role="group" aria-label="Quick filters on Particulars">
       {CHIPS.filter((c) => n[c[0]] > 0 || on.includes(c[0])).map((c) => <button key={c[0]} type="button" className="bs-chip" data-chip={c[0]} aria-pressed={on.includes(c[0])} onClick={() => toggleChip(c[0])}>
         <span title={c[0] === "ATM" ? "ATM and cash" : c[0] === "Card" ? "POS and card" : c[0] === "NACH" ? "NACH, ACH, ECS: EMIs and mandates" : undefined}>{c[1]}</span> <span className="bs-chip-n" data-chip-n="">{n[c[0]]}</span></button>)}
       {/* what the column headers' filters hold (25-Oct-2026: the filters are in the headers again), each removable */}
       {headChips(b).map((c, i) => <span key={c.k + i} className="bs-chip bs-fchip" data-fchip={c.k} aria-pressed="true">{c.w}
         <button type="button" className="bs-fx" aria-label={"Remove the filter " + c.w} onClick={() => headClear(c.k, c.old)}>✕</button></span>)}
+      <ActiveChips />
+    </div>
       <span className="bs-keys" data-kb-help="" title={KEYS_HELP} tabIndex={0} aria-label={KEYS_HELP}>⌨</span>
-      <span className="bs-count" data-f-count=""><b>{rows.length}</b> of {b.rows.length} · out {money(out)} · in {money(inn)}</span>
+      <span className="bs-count" data-f-count="" title={"Out " + money(out) + " · in " + money(inn)}><b>{rows.length}</b> of {b.rows.length}<span className="bsp-sum"> · out {money(out)} · in {money(inn)}</span></span>
+      {filtered && <button className="linkbtn" data-f-clear="" onClick={clearAll}>Clear filters</button>}
+      {filtered && !b.ruleForm && <button className="linkbtn" data-f-rule="" title="Make a rule from this filter: lines containing these words go to one ledger, now and in future statements" onClick={ruleStart}>Rule from filter</button>}
+      <Density />
     </div>
     {b.ruleForm && <RuleForm form={b.ruleForm} />}
   </div>;

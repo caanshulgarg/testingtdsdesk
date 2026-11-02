@@ -33,16 +33,25 @@ H = functools.partial(Quiet, directory=os.environ.get("TDSDESK_SITE", os.path.jo
 srv = http.server.ThreadingHTTPServer(("localhost", 8163), H); threading.Thread(target=srv.serve_forever, daemon=True).start()
 OUT = os.environ.get("TDSDESK_OUT", "out"); os.makedirs(OUT, exist_ok=True); fails, errors = [], []
 SETUP = open(os.path.join(HERE, "fixtures", "bank-smart", "statement300.js")).read()
+
+# spacious layout (01-Nov-2026): "Unassigned only" and "Suggestions to accept" are in the Filters pop-up (shown as chips when on)
+def tog(pg, which, on):
+    if not pg.evaluate("() => !!document.querySelector('#app details[data-f-more][open]')"): pg.click('#app [data-f-more] summary'); pg.wait_for_timeout(150)
+    (pg.check if on else pg.uncheck)('#app input[data-f-%s]' % which); pg.wait_for_timeout(150)
+    pg.click('#app [data-f-more] summary'); pg.wait_for_timeout(100)
+
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 
 # what is on screen: rows wholly in view and not under anything (the app's header, the bar at the foot)
+# spacious layout (01-Nov-2026): the page's own box is laid out as rows of the page (display: contents), so the header area
+# is measured from the statement's header line; the table's box fills the window, so nothing scrolls away
 MEASURE = """() => {
   const vh = innerHeight, vw = innerWidth, rows = [...document.querySelectorAll('#app table.bk-table tbody tr')];
   const seen = (r) => { const b = r.getBoundingClientRect(); if (b.height <= 0 || b.top < 0 || b.bottom > vh) return false; const c = r.cells[1] || r.cells[0], x = c.getBoundingClientRect().left + 6;
     const a = document.elementFromPoint(x, b.top + 3), z = document.elementFromPoint(x, b.bottom - 3); return !!(a && z && r.contains(a) && r.contains(z)); };
-  const wrap = document.querySelector('#app .bk-tablewrap'), bk = document.querySelector('#app .bk'), first = rows[0];
+  const wrap = document.querySelector('#app .bk-tablewrap'), bk = document.querySelector('#app .bk-head') || document.querySelector('#app .bk'), first = rows[0];
   const hs = rows.slice(0, 60).map(r => r.getBoundingClientRect().height).sort((a, b) => a - b);
   const led = document.querySelector('#app table.bk-table tbody tr td.lg'), ac = document.querySelector('#app table.bk-table tbody tr td.ac');
   return {rows: rows.filter(seen).length, median: hs.length ? Math.round(hs[Math.floor(hs.length / 2)]) : 0, head: bk && document.querySelector('#app table.bk-table thead') ? Math.round(document.querySelector('#app table.bk-table thead').getBoundingClientRect().top - bk.getBoundingClientRect().top) : 999,
@@ -64,7 +73,10 @@ with sync_playwright() as pw:
     br = pw.chromium.launch()
     # ---- 1. density ----
     # 25-Oct-2026: a line of about 40 px (was 32: "size has become too short"), so fewer in view: 12 or more at 1366x768
-    for (w, h, want) in [(1366, 768, 12), (1440, 900, 15)]:
+    # spacious layout (01-Nov-2026, the owner's approved draft: "about 14 table rows visible" at 1440x900): the header, the
+    # filters and the totals stay in view (nothing scrolls away while working), so Comfortable shows 10 or more at 1366x768
+    # and 14 or more at 1440x900; Compact (30 px lines) shows the 12 or more at 1366x768 asked for on 25-Oct-2026
+    for (w, h, want, dense) in [(1366, 768, 10, 12), (1440, 900, 14, 17)]:
         pg, n = open_page(br, {"width": w, "height": h})
         top = pg.evaluate(MEASURE)
         pg.evaluate(TO_TABLE); pg.wait_for_timeout(400); m = pg.evaluate(MEASURE)
@@ -72,6 +84,9 @@ with sync_playwright() as pw:
         ok(m["rows"] >= want, "%dx%d: %d rows wholly in view while working (wanted >= %d; %d at the top of the page)" % (w, h, m["rows"], want, top["rows"]))
         ok(36 <= m["median"] <= 46, "%dx%d: a row is about 40 px (%d)" % (w, h, m["median"]))
         ok(top["head"] <= 150, "%dx%d: the page's header area (the statement, its figures, the filters) above the table: %d px (<= 150)" % (w, h, top["head"]))
+        pg.click("#app [data-bank-density]"); pg.wait_for_timeout(400); md = pg.evaluate(MEASURE)
+        ok(md["rows"] >= dense and md["median"] <= 32, "%dx%d, Compact: %d rows wholly in view (wanted >= %d), %d px each" % (w, h, md["rows"], dense, md["median"]))
+        pg.click("#app [data-bank-density]"); pg.wait_for_timeout(400)
         ok(top["inner"] <= 1 and top["page"] <= 0 and top["ledIn"] and top["acIn"], "%dx%d: no sideways scroll; the Ledger and the buttons in view (inner %d, page %d)" % (w, h, top["inner"], top["page"]))
         if w == 1366:
             ok(top["cols"][:8] == ["Date", "Particulars", "Withdrawal", "Deposit", "Balance", "Status", "Ledger", "Type"], "the columns: %s" % top["cols"])
@@ -127,13 +142,13 @@ with sync_playwright() as pw:
     pg.fill('#app input[data-f-from]', "2026-06-01"); pg.fill('#app input[data-f-to]', "2026-06-30"); pg.press('#app input[data-f-to]', "Enter"); pg.wait_for_timeout(400)
     ok(pg.evaluate("(ids) => ids.length > 0 && ids.every(id => bankRow(id).date >= '2026-06-01' && bankRow(id).date <= '2026-06-30')", shown()), "dates in June only (%s)" % count_text())
     pg.click('#app [data-f-clear]'); pg.wait_for_timeout(400)
-    pg.check('#app input[data-f-unassigned]'); pg.wait_for_timeout(400)
+    tog(pg, 'unassigned', True); pg.wait_for_timeout(400)
     un = pg.evaluate("B().rows.filter(r => !r.ledger).length")
     ok(un > 0 and re.search(r"\b%d of 300\b" % un, count_text()) and pg.evaluate("(ids) => ids.every(id => !bankRow(id).ledger)", shown()), "Unassigned only: the %d lines with no ledger" % un)
-    pg.uncheck('#app input[data-f-unassigned]'); pg.check('#app input[data-f-sugg]'); pg.wait_for_timeout(400)
+    tog(pg, 'unassigned', False); tog(pg, 'sugg', True); pg.wait_for_timeout(400)
     sg = pg.evaluate("B().rows.filter(r => r.state === 'suggested').length")
     ok(sg > 0 and re.search(r"\b%d of 300\b" % sg, count_text()), "Suggestions to accept: the %d suggested lines (%s)" % (sg, count_text()))
-    pg.uncheck('#app input[data-f-sugg]'); pg.wait_for_timeout(300)
+    tog(pg, 'sugg', False); pg.wait_for_timeout(300)
 
     # ---- 6. party read from the narration, accepted in one click ----
     ok(pg.evaluate("B().rows.filter(r => /sharmastationery@/.test(r.narr)).every(r => r.dec.name === 'SHARMA STATIONERY' && r.ledger === 'SHARMA STATIONERY')"),
@@ -229,7 +244,7 @@ with sync_playwright() as pw:
     # ---- 5. the keyboard ----
     pg.evaluate("() => { bankTabGo('review'); }"); pg.wait_for_timeout(400)
     if pg.locator('#app [data-f-clear]').count(): pg.click('#app [data-f-clear]'); pg.wait_for_timeout(300)
-    pg.check('#app input[data-f-unassigned]'); pg.wait_for_timeout(400)
+    tog(pg, 'unassigned', True); pg.wait_for_timeout(400)
     pg.focus('#app [data-bank-grid]'); pg.keyboard.press("ArrowDown"); pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(200)
     ids = shown(); on = pg.evaluate("() => { const tr = document.querySelector('#app tr.kb-on'); return tr && tr.dataset.rid; }")
     ok(on == ids[1], "↓ ↓: the second line is the current one (%s)" % on)
@@ -247,12 +262,12 @@ with sync_playwright() as pw:
     pg.keyboard.press(" "); pg.wait_for_timeout(200)
     ok(pg.evaluate("B().sel.has('%s')" % nxt[0]), "Space ticks the current line")
     pg.keyboard.press(" "); pg.wait_for_timeout(200)
-    pg.uncheck('#app input[data-f-unassigned]'); pg.check('#app input[data-f-sugg]'); pg.wait_for_timeout(400)
+    tog(pg, 'unassigned', False); tog(pg, 'sugg', True); pg.wait_for_timeout(400)
     pg.focus('#app [data-bank-grid]'); pg.keyboard.press("ArrowDown"); pg.wait_for_timeout(150)
     sid = pg.evaluate("() => document.querySelector('#app tr.kb-on').dataset.rid")
     pg.keyboard.press("a"); pg.wait_for_timeout(400)
     ok(pg.evaluate("bankRow('%s').state" % sid) == "ready", "A accepts the current line's suggestion")
-    pg.uncheck('#app input[data-f-sugg]')
+    tog(pg, 'sugg', False)
     ok(pg.locator('#app [data-kb-help]').count() == 1, "the keys are listed on the page")
     ok(not errors, "no page errors" + ("" if not errors else ": " + errors[0]))
     pg.close()
@@ -300,7 +315,7 @@ with sync_playwright() as pw:
             ok(m["page"] <= 0 and m["inner"] <= 1, "%s: no sideways scroll (%d, %d)" % (tag, m["page"], m["inner"]))
             if w == 1366 and fx == "icici":
                 pg.evaluate(TO_TABLE); pg.wait_for_timeout(400); mm = pg.evaluate(MEASURE)
-                ok(mm["rows"] >= 12, "1366x768, the ICICI statement: %d lines in view while working (>= 12)" % mm["rows"])
+                ok(mm["rows"] >= 10, "1366x768, the ICICI statement: %d lines in view while working (>= 10; the header and totals stay in view)" % mm["rows"])
                 pg.screenshot(path=OUT + "/bank-icici-1366.png")
             pg.close()
 

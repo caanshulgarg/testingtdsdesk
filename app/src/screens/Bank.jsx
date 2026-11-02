@@ -17,6 +17,8 @@ import { smartRows, selectAll, setVtype, vtypeOf, VTYPES, bulkVtype, bulkNarr, k
 import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
+import Rail from "../parts/bank/Rail.jsx";
+import { Drawer, Density, ActiveChips, useSpacious, rowOpen, rowTally, denseOn, bankParty, BST, fill } from "../parts/bank/Spacious.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
@@ -34,7 +36,6 @@ import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
 
-const MODE_NAME = { ATM: "ATM cash withdrawal", CASH: "Cash deposit", CHARGES: "Bank charges", INTEREST: "Interest credit" };
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
   done: "Nothing posted to Tally yet. Post the lines under Ready to post.", ignored: "No line ignored. A line you set aside with ✕ waits here, with Restore." };
@@ -45,23 +46,9 @@ function RowLedger({ r }) {
   const b = B(), tip = r.why || undefined;
   if (!["attention", "suggested", "ready"].includes(r.state)) {
     const canUndo = r.state === "sent" && r.tally && r.tally.guid && live();
-    // with no Tally ledger chosen for the account, a line is not said to be gone from Tally (review of 02-Oct-2026)
-    const noLed = !bankLedgerReady(CO(), accountFor(curStmt() || {}));
-    // round 15 (B1): bridge 2.1.8 said Tally's voucher id (or the batch's last id) when the line went: that, with the
-    // company, the time in IST and who pressed Post; an older line as before
-    // migration 111: FinCom's posting register says whether the line is in Tally (src/js/98); without it, the mark kept on the line
-    const rg = typeof postRegMark === "function" && !r.goneFromTally ? postRegMark(b.cid, r.id) : undefined, regLine = typeof postRegLine === "function" ? postRegLine(b.cid, r.id) : "";
-    const mark = rg !== undefined ? rg : r.state === "sent" && !r.goneFromTally && typeof postMarkOf === "function" ? postMarkOf(r) : null, words = mark ? postMarkWords(mark) : "";
-    const matched = r.state === "sent" && typeof postMatched === "function" ? postMatched(r.id, b.cid) : null;
-    const status = r.goneFromTally && noLed ? "Not found in Tally · choose this account’s Tally ledger to check and post"
-      : r.goneFromTally ? "Not in Tally any more (deleted there?) · " + (r.state === "intally" ? "was found when reconciling" : "posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : ""))
-      : words ? words + (r.checking ? " · checking in Tally…" : "")
-      : regLine ? regLine
-      // round 17a: posted by Tally's reply (bridge 2.1.8 does not read back) and no id came with it: posted, not "not found"
-      : r.state === "sent" && r.postByReply === true && !bankMatched(r) ? "Posted to Tally (Tally's reply) · " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "")
-      : r.state === "sent" && !bankMatched(r) ? (r.postedVia === "bridge" ? "Sent to Tally " : "In a Tally file ") + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.checking ? " · checking in Tally…" : " · not found in Tally yet")
-      : r.state === "sent" ? "In Tally · posted " + (r.sentAt ? shortDate(r.sentAt.slice(0, 10)) : "") + (r.tally && r.tally.number ? " · voucher " + r.tally.number : "")
-      : r.state === "intally" ? "Already in Tally" + (r.tallyRef ? ": " + r.tallyRef : "") + (r.tallyHow ? " (" + r.tallyHow + ")" : "") : "Ignored";
+    // the words (round 15 B1, round 17a, migration 111: the posting register) are parts/bank/Spacious.jsx rowTally, shared
+    // with the line's drawer
+    const { status, words, rg, regLine, mark, matched } = rowTally(r);
     return <><span className="lgtext">{r.ledger || "—"}</span><span className="src muted" data-posted-line={words ? "" : undefined} data-reg={rg ? rg.register : regLine ? "line" : undefined} data-batch-n={mark && mark.batchN || undefined}>{status}
       {matched && <> <span className="tag ok" data-matched="">Matched with Tally</span></>}
       {canUndo && !isAuto(r) && <> <button className="linkbtn" onClick={() => bankRowAct("unpost", r.id)}>Take it back</button></>}</span>
@@ -105,8 +92,6 @@ function RowActions({ r }) {
 }
 
 // the statement's lines (spec K6: date, number, party, amount, status, then the rest, in ListTable.jsx's order)
-const BST = { attention: ["warn", "No ledger"], suggested: ["warn", "Suggested"], ready: ["ok", "Ready to post"], sent: ["ok", "In Tally"], intally: ["no", "Already in Tally"], ignored: ["no", "Ignored"] };
-const bankParty = (r) => MODE_NAME[r.dec.mode] || r.dec.name || r.dec.upi || "";
 function bankCols(b, rows, nSel) {
   const pickable = rows.filter((r) => r.state !== "sent"), total = pickable.length;
   const flag = (r) => r.balOk === false ? <> <span className="flag bad" title="This entry does not agree with the running balance">!</span></>
@@ -115,7 +100,9 @@ function bankCols(b, rows, nSel) {
     // the head's tick: every line the filters show (not only the ones drawn)
     { k: "pick", role: "pick", cls: "ck", head: <input type="checkbox" aria-label="Select all" disabled={!total} title={total ? "Select all" : "No entry to select: every one shown is sent"} checked={!!nSel && nSel === total} onChange={(ev) => selectAll(pickable, ev.target.checked)} />,
       cell: (r) => <input type="checkbox" aria-label="Select" checked={b.sel.has(r.id)} disabled={r.state === "sent"} onChange={() => {}} onClick={(ev) => bankToggleRow(r.id, ev.target.checked, ev.shiftKey)} /> },
-    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }), cell: (r) => shortDate(r.date) },
+    { k: "date", role: "date", label: "Date", cls: "dt", filter: <ColFunnel t="bank" k="date" label="Date" />, v: (r) => r.date || "", td: (r) => ({ title: fmtDate(r.date) }),
+      // spacious layout: the date opens the line's details (the drawer), by keyboard too
+      cell: (r) => <button type="button" className="bs-dt" data-row-open={r.id} aria-label={"Details of the line of " + fmtDate(r.date)} onClick={() => { const b = B(); b.drawer = b.drawer === r.id ? null : r.id; render(); }}>{shortDate(r.date)}</button> },
     // the whole narration, two lines at most (all of it on hover), the party read from it first and the mode and reference
     // in small letters (24-Oct-2026: one line of 60 letters and a second of the narration cut short, 69 px a row)
     // 25-Oct-2026 (the owner: "size has become too short"; party, mode, reference and narration ran together): the party in
@@ -190,6 +177,8 @@ function markClipped(g) {
 }
 
 function wheelToTop(ev, g) {
+  // the spacious layout (parts/bank/spacious.css): the page fits the window and the box is already in place
+  if (document.documentElement.classList.contains("bk-spacious") && window.innerWidth > 600) return;
   if (ev.ctrlKey || ev.deltaY <= 0 || Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return;
   const box = ev.target && ev.target.closest && ev.target.closest(".bk-tablewrap");
   if (!box || !g.contains(box) || !/(auto|scroll)/.test(getComputedStyle(box).overflowY) || box.scrollHeight <= box.clientHeight + 1) return;
@@ -199,6 +188,18 @@ function wheelToTop(ev, g) {
   const se = document.scrollingElement || document.documentElement, y = se.scrollTop;
   window.scrollBy(0, Math.min(gap, ev.deltaY * (ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? window.innerHeight : 1)));
   if (se.scrollTop !== y) ev.preventDefault();
+}
+
+// the table's totals row (spacious layout: kept at the foot of the table's box, spacious.css): how many lines, the
+// statement's opening and closing, and "Select all" of the lines shown (was in the filter bar); the withdrawals and
+// deposits of the lines shown are added up under their columns
+function FootNote({ b, all }) {
+  const st = curStmt() || {}, n = all.length, pickable = all.filter((r) => r.state !== "sent"), allPicked = pickable.length > 0 && pickable.every((r) => b.sel.has(r.id));
+  return <span className="bsp-foot" data-bank-totals="">
+    <b>{n + " " + (n === 1 ? "entry" : "entries")}</b>{b.rows.length !== n ? " of " + b.rows.length : ""}
+    <span className="bsp-oc-f"> · Opening <b>{st.opening !== undefined ? money(st.opening) : "—"}</b> · Closing <b>{st.closing !== undefined ? money(st.closing) : "—"}</b></span>
+    {pickable.length > 0 && <> · <button className="linkbtn" data-f-selall="" onClick={() => selectAll(pickable, !allPicked)}>{allPicked ? "Untick all" : "Select all " + pickable.length}</button></>}
+  </span>;
 }
 
 function Table({ tab, all }) {
@@ -215,9 +216,10 @@ function Table({ tab, all }) {
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
-    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more}
+    <ListTable name="bank" className="bk-table gf-off" keepHead resize freeze={2} cols={bankCols(b, all, nSel)} rows={all} rowKey={(r) => r.id} unit={["entry", "entries"]} of={b.rows.length} limit={b.limit} more={more} footNote={<FootNote b={b} all={all} />}
       after={(r) => (b.splitOpen === r.id && ["attention", "suggested", "ready"].includes(r.state) ? <SplitEditor r={r} /> : null)}
-      rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : ""), "data-rid": r.id })}
+      rowProps={(r) => ({ className: "st-" + r.state + (b.sel.has(r.id) ? " picked" : "") + (b.kbRow === r.id ? " kb-on" : "") + (b.drawer === r.id ? " dr-on" : ""), "data-rid": r.id,
+        onClick: (ev) => { if (ev.target.closest("td.pt, td.dt")) rowOpen(ev, r.id); } })}
       empty={bankRangeOn() || (b.chips || []).length || b.sugOnly ? <>Nothing matches these filters. <button className="linkbtn" onClick={() => { b.chips = []; b.sugOnly = false; colChipAll("bank"); }}>Clear all filters</button> to see every entry.</> : EMPTY[tab] || "Nothing here. Use Upload statement at the top right to add one."} />
   </div>;
 }
@@ -355,7 +357,22 @@ export function healRows(b) {
   return n;
 }
 
+// spacious layout (01-Nov-2026): the slim rail (parts/bank/Rail.jsx) on the Bank page, whatever the page shows
 export default function Bank() {
+  return <><Rail /><BankPage /></>;
+}
+// the statement open: the spacious layout on (html.bk-spacious, parts/bank/Spacious.jsx)
+function SpaceOn() { useSpacious(); return null; }
+
+// Save: the statement's lines kept now (they are kept by themselves a moment after each change; this does it at once and
+// says so), and sent to the firm account when signed in
+function saveNow() {
+  saveBank({ rows: true, hist: true, stmts: true });
+  if (typeof cloudSoon === "function") setTimeout(cloudSoon, 950);
+  toast(typeof Cloud === "object" && Cloud.on() ? "Saved on this computer; sending to the firm account." : "Saved on this computer.");
+}
+
+function BankPage() {
   const b = B(), co = CO();
   if (!b || b.cid !== co.id) { loadBank(co.id); return <Loading what="bank statements" page="table" />; }
   if (b.loading) return <Loading what="bank statements" page="table" />;
@@ -402,20 +419,26 @@ export default function Bank() {
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
   const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
+  if (b.dense === undefined) b.dense = denseOn();
+  // posting (moved from the bar at the foot to the header, spacious layout): waits until the account's ledger is confirmed
+  const noLed = !bankLedgerReady(CO(), acc), whyLed = noLed ? bankLedgerWhy(CO(), acc) : "";
   return <>
-    <div className="bk bk-smart">
+    <SpaceOn />
+    <div className={"bk bk-smart bk-space" + (b.dense ? " bk-dense" : "")} data-density={b.dense ? "compact" : "comfortable"}>
       {/* upload-pages (14-Oct-2026): the states are the page's one row of states (parts/StateBar.jsx); the rules are not a
           state, so they open from their own button. 24-Oct-2026: the search and Group by party are in the filter bar */}
       {tab === "rules" && <div className="bk-bar"><button className="btn small" data-bank-rules-back="" onClick={() => bankTabGo("review")}>← Back to the statement</button></div>}
       {/* one line (24-Oct-2026: a card of about 100 px and a line of checks under it): the account and its period, the check
           of the running balance, the four figures, the buttons */}
-      <div className="bk-head bs-head">
+      <div className="bk-head bs-head" data-bank-head="">
         <div className="bk-id">
+          <span className="bsp-client" data-bank-client="" title={co.name}>{co.name}</span>
           {b.stmts.length > 1
             ? <select className="bk-stmtsel" aria-label="Statement" value={b.cur} onChange={(ev) => openStatement(ev.target.value)}>
                 {b.stmts.slice().reverse().map((s) => <option key={s.id} value={s.id}>{stmtLabel(s)}</option>)}</select>
             : <h2 className="bk-title">{accLedger || st.bank}</h2>}
           {accSure && <BankLedger co={CO()} acc={accFull} compact />}
+          <span className="bsp-period" data-bank-period="">{fmtDate(st.from)} – {fmtDate(st.to)}</span>
           <div className="bk-sub">{st.bank}{st.acct ? " · A/c " + st.acct : ""} · {fmtDate(st.from)} to {fmtDate(st.to)} · {b.rows.length} entries{goneCount(b) > 0 && <span className="bs-gone-n" data-gone-n=""> · ⚠ {goneCount(b)} posted before</span>}</div>
         </div>
         <div className="bk-check" title={st.badRows ? undefined : "Every line agrees with its running balance" + (st.summaryOk ? ", and opening + deposits − withdrawals = closing" : "")}>
@@ -426,25 +449,34 @@ export default function Bank() {
           {book && <> <span className="muted">· {book.live ? "Checked against Tally " + fmtDateTime(book.importedAt) : "Matched with the Tally bank book"}</span></>}
         </div>
         <dl className="bk-figs">
-          <div><dt>Opening</dt><dd>{st.opening !== undefined ? money(st.opening) : "—"}</dd></div>
-          <div><dt>Withdrawals</dt><dd>{sum("debit")}</dd></div><div><dt>Deposits</dt><dd>{sum("credit")}</dd></div>
-          <div><dt>Closing</dt><dd>{st.closing !== undefined ? money(st.closing) : "—"}</dd></div>
+          <div className="bsp-oc"><dt>Opening</dt><dd>{st.opening !== undefined ? money(st.opening) : "—"}</dd></div>
+          <div data-bank-dr=""><dt>Withdrawals (Dr)</dt><dd>{sum("debit")}</dd></div><div data-bank-cr=""><dt>Deposits (Cr)</dt><dd>{sum("credit")}</dd></div>
+          <div className="bsp-oc"><dt>Closing</dt><dd>{st.closing !== undefined ? money(st.closing) : "—"}</dd></div>
         </dl>
-        <div className="bk-actions"><button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
+        <div className="bk-actions">
+          <button className="btn small" data-bank-save="" title="Keep the statement's changes now (they are also kept by themselves)" onClick={saveNow}>Save</button>
+          {canPostTally(CO()) ? <button className="btn small primary" data-bank-post="" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
+            : <button className="btn small primary" data-bank-post="" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
+          <button className="btn small" data-bank-rules="" aria-pressed={tab === "rules"} onClick={() => bankTabGo("rules")}>Rules</button><button className="btn small" onClick={() => bankAct("bankSettings")}>Settings</button><MoreMenu tc={tc} /></div>
       </div>
-      {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
-      <Recon />
-      {!accSure && <BankLedger co={CO()} acc={accFull} />}
-      {top}
-      <Gone /><DupFind /><BankFocus />
-      {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
-      {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
-        <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
+      {/* what needs saying about the statement, between its header and the row of tabs and filters (spacious.css orders the
+          page: header, these, the tabs and filters in one row, then the lines) */}
+      <div className="bsp-pre">
+        {accLedger && (Bridge.on() || st.tallyBal) && <BankBalance st={st} />}
+        <Recon />
+        {!accSure && <BankLedger co={CO()} acc={accFull} />}
+        {top}
+        <Gone /><DupFind /><BankFocus />
+        {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
+        {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}
+          <button className="btn small primary" onClick={() => bankAct("ruleFromBulk")}>Yes, make the rule</button><button className="linkbtn" onClick={() => bankAct("ruleNoThanks")}>No thanks</button></div>}
+      </div>
+      {tab !== "rules" && <SmartBar rows={shown} base={view} grouped={b.grouped} />}
       {b.q.trim() && tab !== "rules" && <Found key={b.q} shown={shown} />}
       {tab !== "rules" && <AutoFilter kind="bank" all={b.rows} />}
-      {tab !== "rules" && <SmartBar rows={shown} base={view} grouped={b.grouped} />}
       {tab === "rules" ? <RulesPanel /> : tab === "review" && b.grouped && apView("bank") !== "auto" ? <Groups /> : <Table tab={tab} all={shown} />}
       {tab !== "rules" && apView("bank") === "auto" && <RunLine />}
+      {tab !== "rules" && <Drawer rows={shown} />}
     </div>
     {b.showSettings && <BankSettings />}
   </>;
@@ -454,6 +486,15 @@ export default function Bank() {
 // change, with Undo
 export function BankBar() {
   const b = B();
+  // the table's box ends where this bar starts (spacious layout): measured again whenever the bar is drawn or changes size
+  const barRef = useRef(null);
+  useLayoutEffect(() => { fill(); });
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver !== "function") return undefined;
+    const o = new ResizeObserver(() => fill()); o.observe(el);
+    return () => o.disconnect();
+  });
   if (!b || b.loading || !curStmt()) return null;
   const tc = tabCounts(bankRangeRows()), nsel = b.sel.size;
   // review of 02-Oct-2026: with no Tally ledger chosen for this bank account nothing can be posted, and nothing can be
@@ -489,8 +530,7 @@ export function BankBar() {
     right = <>
       {tc.suggested > 0 && <button className="btn" onClick={() => bankAct("bankAcceptAll")}>Confirm all suggestions ({tc.suggested})</button>}
       {canPostTally(CO()) && postThroughWords(CO()) && <span className="note" data-post-through="">{postThroughWords(CO())}</span>}
-      {canPostTally(CO()) ? <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankPost")}>Post to Tally ({tc.post})</button>
-        : <button className="btn primary" disabled={!tc.post || noLed} title={noLed ? whyLed : undefined} onClick={() => bankAct("bankXml")}>Create Tally file ({tc.post})</button>}
+      {/* Post to Tally / Create Tally file: in the page's header line (spacious layout, 01-Nov-2026) */}
     </>;
   }
   const u = !nsel && b.undo;
@@ -498,7 +538,7 @@ export function BankBar() {
     ? <>{u.label} → <b>{u.ledger}</b>{u.others ? " · also " + entries(u.others) + " of this party" : ""}{u.ruleKeys && u.ruleKeys.length ? " · remembered" : ""}</>
     : u.what === "clear" && u.n > 1 ? "All decisions cleared" : entries(u.n) + " " + ({ accept: "confirmed", ignore: "ignored", restore: "restored", clear: "cleared", unready: "moved back to review", vtype: "given a voucher type", narr: "given a narration", split: "split changed" }[u.what] || "changed"));
   return (
-    <div className="actionbar bk-actionbar bs-bankbar">
+    <div ref={barRef} className="actionbar bk-actionbar bs-bankbar">
       {u && <div className="bk-snack"><span>{said}</span><button className="linkbtn" onClick={() => bankAct("bankUndo")}>Undo</button>
         {u.ruleKeys && u.ruleKeys.length > 0 && <button className="linkbtn" onClick={() => bankAct("bankForget")}>Don’t remember</button>}
         <button className="icon" aria-label="Close" onClick={() => bankAct("bankUndoOk")}>✕</button></div>}

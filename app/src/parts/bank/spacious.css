@@ -1,0 +1,130 @@
+/* The bank page's spacious layout (Spacious.jsx; the owner's approved draft, 01-Nov-2026). While a statement is open
+   (html.bk-spacious), on a computer:
+     1. the page's header in one line: the client, the account and its Tally ledger, the period, Dr / Cr, Save, Post;
+     2. the status tabs (the app's state bar, drawn before the page) beside the search and filters, in one row: the page
+        is laid out as one wrapping row of boxes (#app a flex box; the page's own box "display: contents"), each box the
+        full width except the tabs and the filters, which share a line; "order" puts the header first;
+     3. the table as tall as the window leaves (--bk-fill, Spacious.jsx), its header row and Date column frozen, its totals
+        pinned at its foot;
+     4. a line's details in a drawer on the right; the totals of the page pinned at the foot (the bar);
+     5. Comfortable (40 px lines) or Compact (30 px).
+   Phones (600 px and less) keep FinCom's cards; only the header, the drawer and the totals are laid out for them. */
+@media (min-width: 601px) {
+  /* the top bar on this page: the title and the breadcrumb on one line */
+  html.bk-spacious header.top .wrap { padding-top: 5px; padding-bottom: 5px; row-gap: 0; }
+  html.bk-spacious header.top .toprow { margin: 0; }
+  html.bk-spacious header.top .tbar-title { flex-direction: row; align-items: baseline; gap: 14px; }
+  html.bk-spacious header.top .tbar-title h2 { font-size: 20px; }
+  html.bk-spacious header.top .headrow { padding-bottom: 2px; }
+
+  /* the page fits the window: the table's box scrolls, not the page (the bar's room is taken from the box, Spacious.jsx) */
+  html.bk-spacious #app, html.bk-spacious .mainwrap { padding-bottom: 0 !important; }
+  html.bk-spacious #app { padding-top: 2px; }
+  html.bk-spacious header.top nav.tabs:empty { display: none; }
+  html.bk-spacious #app { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 0; }
+  html.bk-spacious #app > :not(.react-host), html.bk-spacious #app > .react-host > * { flex: 0 0 100%; min-width: 0; order: 0; box-sizing: border-box; }
+  html.bk-spacious #app > .react-host > .bk-space { display: contents; }
+  html.bk-spacious #app > .react-host > .bk-space > * { flex: 0 0 100%; min-width: 0; order: 4; box-sizing: border-box; }
+  html.bk-spacious #app > .react-host > .bk-space > .bk-bar { order: 1; }
+  html.bk-spacious #app > .react-host > .bk-space > .bk-head { order: 1; }
+  html.bk-spacious #app > .react-host > .bk-space > .bsp-pre { order: 2; }
+  html.bk-spacious #app > .react-host > .sbar-band { order: 3; flex: 0 1 auto; position: static; margin: 0; padding: 2px 0; }
+  html.bk-spacious #app > .react-host > .bk-space > .bs-bar { order: 3; flex: 1 1 0; min-width: 420px; margin: 2px 0; }
+  html.bk-spacious #app > .react-host > .bk-space ~ * { order: 9; }
+  html.bk-spacious #app .sbar-band nav.sbar { display: flex; align-items: center; gap: 8px; }
+  html.bk-spacious #app .sbar-band [role="tablist"] { padding: 3px; margin: 0 !important; }
+  html.bk-spacious #app .sbar-band [role="tab"] { height: 30px !important; min-height: 0 !important; }
+
+  /* 1. the header: one line */
+  html.bk-spacious #app .bk-space .bs-head { gap: 14px; padding: 5px 12px; margin: 4px 0 2px; min-height: 42px; box-sizing: border-box; }
+  html.bk-spacious #app .bk-space .bs-head .bk-id { display: flex !important; flex-wrap: nowrap; overflow: hidden; align-items: baseline; gap: 10px; flex: 0 1 auto; min-width: 0; }
+  html.bk-spacious #app .bk-space .bs-head .bk-id > * { flex: none; }
+  html.bk-spacious #app .bk-space .bs-head .bk-id > .bk-sub { flex: 0 1 auto; min-width: 60px; }
+  html.bk-spacious #app .bk-space .bsp-period { font-size: 13px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  html.bk-spacious #app .bk-space .bsp-client { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--text-secondary, var(--muted)); }
+  html.bk-spacious #app .bk-space .bsp-client::after { content: "›"; margin-left: 10px; color: var(--text-muted, var(--muted)); font-weight: 400; }
+  html.bk-spacious #app .bk-space .bs-head .bk-check { flex: 1 1 0; min-width: 0; }
+  html.bk-spacious #app .bk-space .bs-head .bk-figs { flex: none; }
+  html.bk-spacious #app .bk-space .bs-head [data-bank-dr] dd { color: var(--bad, #b3261e); }
+  html.bk-spacious #app .bk-space .bs-head [data-bank-cr] dd { color: var(--ok, #1d7a46); }
+  html.bk-spacious #app .bk-space .bs-head .bk-actions { display: flex; align-items: center; gap: 6px; }
+  html.bk-spacious #app .bk-space .bs-head .bk-actions .btn { white-space: nowrap; }
+  /* why Post waits: on the button's tip here, and said with its way out in the bar at the foot */
+  html.bk-spacious #app .bk-space .bs-head .why-note { display: none; }
+  html.bk-spacious #app .bk-space .bs-head .bk-id > .bk-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 240px; }
+  html.bk-spacious #app .bk-space .bs-head .bk-id > .bk-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* 2. the filters: one row */
+  #app .bk-space .bs-bar { gap: 0; }
+  #app .bk-space .bs-bar > .bs-line { flex-wrap: wrap; gap: 6px 8px; }
+  #app .bk-space .bs-line > * { flex: none; }
+  #app .bk-space .bs-search { width: 150px; }
+  #app .bk-space .bs-seg button { padding: 0 8px; }
+  html.bk-spacious #app .sbar-band [role="tab"] { padding-left: 10px; padding-right: 10px; }
+  /* the shown lines' totals are at the foot (the bar); here for screen readers and the count's tip */
+  #app .bk-space .bs-count .bsp-sum { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #app .bk-space .bs-line > .bs-chips { flex: 1 1 0; min-width: 60px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding: 1px 0; }
+  #app .bk-space .bs-line > .bs-keys, #app .bk-space .bs-line > .bs-count { margin-left: 0; }
+  #app .bk-space .bsp-achips { display: inline-flex; gap: 5px; flex: none; }
+  #app .bk-space .bs-tog { font-size: 12.5px; }
+  #app .bk-space .bs-pop .bsp-wide { grid-column: 1 / -1; }
+
+  /* 3. the table: the window's width and height */
+  #app .bk-space .bk-tablewrap { height: var(--bk-fill, auto); max-height: none; }
+  #app .bk-space table.bk-table:not(.cards) th.pt { min-width: 300px; }
+  html.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > tfoot td { position: sticky; bottom: 0; z-index: 3; background: var(--surface, var(--sheet)); box-shadow: inset 0 1px 0 var(--border, var(--rule)); }
+  #app .bk-space table.bk-table.lt:not(.cards) > tbody > tr > td.pt, #app .bk-space table.bk-table.lt:not(.cards) > tbody > tr > td.dt { cursor: pointer; }
+  #app .bk-space table.bk-table > tbody > tr.dr-on > td { background: color-mix(in oklab, var(--accent) 8%, var(--surface)) !important; }
+
+  /* Comfortable: lines of 40 px (the owner's "about 40", 25-Oct-2026), the totals row low */
+  html.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > tbody > tr > td { height: 38px; }
+  html.bk-spacious #app .bk-space table.bk-table.lt.lt:not(.cards) > tfoot td { padding-top: 4px; padding-bottom: 4px; }
+  /* 5. Compact: 30 px lines, the particulars' second line on hover and in the drawer */
+  html.bk-spacious #app .bk-dense table.bk-table.lt.lt:not(.cards) > tbody > tr > td { height: 30px; padding-top: 1px; padding-bottom: 1px; }
+  html.bk-spacious #app .bk-dense table.bk-table:not(.cards) > tbody > tr { contain-intrinsic-size: auto 30px; }
+  html.bk-spacious #app .bk-dense .bs-narr .l2 { display: none; }
+  html.bk-spacious #app .bk-dense .bs-narr .pn.solo { -webkit-line-clamp: 1; line-clamp: 1; }
+  html.bk-spacious #app .bk-dense .bs-led .lgbox, html.bk-spacious #app .bk-dense .bs-vt, html.bk-spacious #app .bk-dense .bs-led .bs-ok, html.bk-spacious #app .bk-dense td.ac .btn { height: 24px; }
+  html.bk-spacious #app .bk-dense td.lg .src { display: none; }
+  html.bk-spacious #app .bk-dense td.lg .bs-led + .src.bad { display: block; }
+}
+/* the date: a button that opens the line's details */
+#app .bk-space .bs-dt { border: 0; padding: 0; margin: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; white-space: nowrap; }
+#app .bk-space .bs-dt:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+#app .bk-space .bs-dt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* 4. the drawer */
+.bsp-drawer { position: fixed; z-index: 50; right: 0; top: calc(var(--head-h, 56px) + 6px); bottom: calc(var(--bottom-banner-h, 0px) + 92px); width: 380px; max-width: calc(100vw - 96px);
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface-raised, var(--surface)); color: var(--foreground); border: 1px solid var(--border); border-right: 0; border-radius: 12px 0 0 12px;
+  box-shadow: -8px 0 24px rgb(0 0 0 / .14); font-size: 13px; outline: none; }
+.bsp-dr-head { display: flex; align-items: center; gap: 6px; }
+.bsp-dr-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.bsp-dr-head .icon { width: 28px; height: 28px; min-width: 0; padding: 0; }
+.bsp-gap { flex: 1 1 0; }
+.bsp-party { font-weight: 600; font-size: 14px; }
+.bsp-narr { line-height: 1.5; color: var(--text-secondary, var(--muted)); overflow-wrap: anywhere; }
+.bsp-gone { margin: 0; color: var(--warn, #b45309); font-weight: 600; }
+.bsp-grid { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 7px 10px; margin: 0; align-items: baseline; }
+.bsp-grid dt { color: var(--text-muted, var(--muted)); }
+.bsp-grid dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.bsp-grid .lgbox, .bsp-grid .bs-vt { width: 100%; height: 30px; box-sizing: border-box; }
+.bsp-hist { display: grid; gap: 3px; padding-top: 8px; border-top: 1px solid var(--border-subtle, var(--border)); color: var(--text-secondary, var(--muted)); font-size: 12.5px; }
+.bsp-hist b { color: var(--foreground); }
+.bsp-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle, var(--border)); }
+
+/* the totals row at the foot of the table (Bank.jsx FootNote) */
+#app .bk-space .bsp-foot { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#app .bk-space .bsp-foot .linkbtn { font-size: inherit; }
+#app .actionbar.bs-bankbar { flex-wrap: wrap !important; row-gap: 4px; }
+#app .actionbar.bs-bankbar > .ab-left { flex: 0 1 auto; min-width: 0; }
+#app .actionbar.bs-bankbar > .ab-left:empty { display: none; }
+
+@media (max-width: 600px) {
+  #app .bk-space .bsp-period { display: none; }
+  .bsp-dens { display: none !important; }
+  html.bk-spacious #app .bk-space .bsp-client { display: block; font-size: 12.5px; color: var(--text-muted, var(--muted)); }
+  html.bk-spacious #app .bk-space .bs-head .bk-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .bsp-drawer { left: 0; right: 0; top: 18vh; bottom: 0; width: auto; max-width: none; border-radius: 16px 16px 0 0; border-right: 1px solid var(--border); z-index: 75; }
+}
+@media (min-width: 601px) and (max-width: 1599px) { html.bk-spacious #app .bk-space .bs-head .bk-figs .bsp-oc { display: none; } }
