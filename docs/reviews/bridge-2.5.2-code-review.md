@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..d638e429d
+Range: 25e694c0a..c38cea73f
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -152,3 +152,20 @@ Tests: TestStock251OneInFlightPostingsFirst (a posting of two requests with a ga
 
 After round 8: 86fa20546 (the withdrawn build's files removed, no code) and d638e429d (tests only: two tests that took
 October 2026 as the month failed from 01-Nov-2026, on staging-next too; the month now taken from the clock), read.
+
+## The gate on the third 2.5.2 build (run 41393411255) and round 9 (0c40d3fef to c38cea73f, medium effort)
+
+s1-s5 PASS on all five releases; s6 PASS on 5.1, 6.2, 7.1, FAIL on 3.0 and 4.1: the click's request was already at Tally
+(it answered in 154 ms at the proxy) when the posting came; the posting stopped it (the rule for background reads) and the
+click, having sent, could not go again, so it answered busy and Tally's answer was lost. A stopped request keeps Tally's
+lock until Tally has answered it anyway (holdUntilAnswered), so the posting gained nothing. Fixed in b83912702 and
+d2b6778f3: the click's request (2 s hard stop) is not stopped once sent (TC.whole; the port's cancel left unset), and it
+is not sent while FinCom's request waits for Tally (userWaiting right before the send: it gives way, not sent, and goes
+again after the quiet). The merge of staging-next ee904a4b3 (8d9e608cd: migration 136, Ask FinCom) brings no bridge or
+tally-ingest change. Round 9 on it: 0 High, 0 Medium:
+1. (Low) A posting can now wait up to the click's 2 s hard stop behind a click already at Tally. As before (it waited
+   for the stopped request to be answered); recorded.
+2. (Low) A bridge stopping while the click is at Tally waits for it (at most 2 s). Recorded.
+Tests: TestStock251PostingAfterSendNeverTwice now asserts the click's answer is ok, one request at Tally at a time.
+
+After round 9: c38cea73f (the withdrawn build's files removed, no code). No High or Medium finding is open.
