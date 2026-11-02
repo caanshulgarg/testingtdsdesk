@@ -178,12 +178,12 @@ try:
         ok(not re.search(r"₹\s?\d", t.get("text") or ""), "1: FinCom's line has no figure: " + (t.get("text") or "")[:160])
         shot(pg, "01-provisional-bs")
 
-        # ---------- 2. last year's balance sheet uploaded on the panel, then the request naming it
+        # ---------- 2. last year's balance sheet attached in the question box (a chip), then the request naming it, sent with it
         pg.evaluate("(csv) => AUpload.add([new File([csv], 'Larkspur Balance Sheet 2024-25.csv', {type: 'text/csv'})])", CSV)
         for _ in range(60):
-            if pg.evaluate("() => AUpload.list().some((u) => u.state === 'ready' || u.state === 'failed')"): break
+            if pg.evaluate("() => AUpload.pending().some((u) => (u.state === 'ready' && u.kind) || u.state === 'failed')"): break
             pg.wait_for_timeout(250)
-        up = pg.evaluate("() => AUpload.list().map((u) => ({path: u.path, state: u.state, kind: u.kind, summary: u.summary}))")
+        up = pg.evaluate("() => AUpload.pending().map((u) => ({path: u.path, state: u.state, kind: u.kind, summary: u.summary}))")
         ok(up and up[-1]["state"] == "ready" and "/uploads/" in (up[-1]["path"] or ""), "2: the upload is kept in the firm's folder (%s)" % up)
         t = ask(pg, Q2)
         ok(t.get("fs") and (t["fs"].get("py") or {}).get("path") == up[-1]["path"], "2: the card offers the balance sheet just attached (%s)" % (t.get("fs") or {}).get("py"))

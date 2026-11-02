@@ -21,8 +21,13 @@ const AUpload = window.AUpload = {
   CERT: /\bthis\s+is\s+to\s+certify\b|\bwe\s+(hereby\s+)?certify\b|\bcertificate\b[^\n]{0,60}\b(format|template)\b|\bUDIN\b/i,
   BLANK: /_{4,}|\.{6,}|\[[A-Za-z][A-Za-z .\/]{1,30}\]|\{\{[^}]{1,40}\}\}|<<[^>]{1,40}>>|\bXX+\b/g,
 
+  // files per message: the server reads the first 3 attached to a question into the AI (server/assistant/index.ts)
+  LIMIT: 3,
   st(){ const a = ASST.st(); a.uploads = a.uploads || []; return a; },
-  list(){ const k = ASST.key(), a = this.st(); return a.uploads.filter(u => u.key === k); },
+  // the files of the earlier Upload, shown as their own items in the thread (sessions before 02-Nov-2026): none are added now
+  list(){ const k = ASST.key(), a = this.st(); return a.uploads.filter(u => u.key === k && !u.chip); },
+  // the files in the question box, not sent yet (the owner, 31-Oct-2026: "it should work like Claude")
+  pending(){ const k = ASST.key(), a = this.st(); return a.uploads.filter(u => u.key === k && u.chip && !u.sent); },
   ext(f){ return (String(f.name || "").toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || ""; },
   isSheet(f){ return /^(xlsx|xls|xlsm|csv)$/.test(this.ext(f)) || /spreadsheet|ms-excel|text\/csv/.test(f.type || ""); },
   isWord(f){ return this.ext(f) === "docx" || /wordprocessingml/.test(f.type || ""); },
@@ -175,52 +180,101 @@ const AUpload = window.AUpload = {
     }
   },
 
-  // ---------------- the Upload: store, tell, offer ----------------
-  async add(files){
+  // ---------------- the question box's files: chips, sent with the question as one message ----------------
+  // Chosen, dropped or pasted, each file is a chip in the box (its name, size, the upload's progress, ×): read here, told by
+  // FinCom's rules, stored in the firm's private folder; nothing is in the conversation until Send. Up to LIMIT a message.
+  add(files){
     const a = this.st(), cid = ASST.cid();
     files = Array.from(files || []).filter(Boolean);
     if (!files.length) return;
-    if (!Cloud.on()){ toast("Sign in to the firm account to upload."); return; }
-    const co = (cid && CO(cid)) || {};   // firm-wide (no client open): kept under <firm>/_firm/uploads/
-    a.uploading = true; ASST.draw();
-    for (const file of files.slice(0, 20)){
-      const u = {id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: ASST.key(), cid, name: file.name, size: file.size, type: file.type || "", file,
-        state: "reading", kind: "", by: "", summary: "", acts: [], done: {}, at: new Date().toISOString()};
-      a.uploads.push(u); ASST.draw();
-      try {
-        if (file.size > this.MAX) throw new Error("it is larger than 20 MB");
-        if (!file.size) throw new Error("it is empty");
-        const r = await this.read(file);
-        u.excerpt = String(r.text || "").slice(0, 20000);
-        const k = this.rules(file, r, co);
-        if (k){ Object.assign(u, k, {by: "rules"}); }
-        // stored in the firm's private folder: a notice where notices go (the notice flow as before), anything else in uploads/
-        u.path = await this.store(file, cid, k && k.kind === "notice" ? "notices" : "uploads");
-        if (!k){
-          if (!r.pdf && !r.image && !String(r.text || "").trim()) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
-          else { u.state = "asking"; ASST.draw(); Object.assign(u, await this.classify(u, r)); }
-        }
-        // every file of the Upload but a notice is also given to the certificate tool (its formats, signed statements and
-        // letterheads are read from the conversation's uploads: ASST.ups(), sent with each question; branch certificates)
-        if (u.kind !== "notice" && u.path && !ASST.ups().some(x => x.path === u.path)) ASST.ups().push({path: u.path, name: u.name, type: u.type || ""});
-        u.acts = this.actions(u);
-        u.state = "ready";
-        this.record(u).catch(() => {});
-      } catch (e){ u.state = "failed"; u.error = (e && e.message) || String(e); }
-      ASST.draw();
+    if (!Cloud.on()){ toast("Sign in to the firm account to attach files."); return; }
+    const room = this.LIMIT - this.pending().length;
+    if (room <= 0 || files.length > room) toast("Up to " + this.LIMIT + " files a message: " + (room <= 0 ? "send these first, or take one off." : "the first " + room + " " + (room === 1 ? "is" : "are") + " attached."));
+    for (const file of files.slice(0, Math.max(0, room))){
+      const u = {id: "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key: ASST.key(), cid, chip: true, name: file.name, size: file.size, type: file.type || "", file,
+        state: "uploading", progress: 0, kind: "", by: "", summary: "", acts: [], done: {}, at: new Date().toISOString()};
+      try { if (isImage(file) && URL.createObjectURL) u.thumb = URL.createObjectURL(file); } catch (e){}
+      a.uploads.push(u);
+      this.run(u);
     }
-    a.uploading = false; ASST.draw();
-    // one notice uploaded alone: ready to ask, as the Notice button did
-    const ready = this.list().filter(u => u.state === "ready"), last = ready[ready.length - 1];
-    if (files.length === 1 && last && last.kind === "notice" && last.name === files[0].name) this.act(last, "notice", {quiet: true});
+    ASST.draw();
+    setTimeout(() => { const el = document.getElementById("asstQ"); if (el && document.activeElement !== el) el.focus({preventScroll: true}); }, 30);
   },
-  async store(file, cid, folder){
+  async run(u){
+    const co = (u.cid && CO(u.cid)) || {}, file = u.file;
+    Object.assign(u, {state: "uploading", progress: 0, error: ""}); ASST.draw();
+    try {
+      if (file.size > this.MAX) throw new Error("larger than 20 MB");
+      if (!file.size) throw new Error("the file is empty");
+      const r = await this.read(file);
+      u.excerpt = String(r.text || "").slice(0, 20000); u.pdf = r.pdf;
+      const k = this.rules(file, r, co);
+      if (k) Object.assign(u, k, {by: "rules"});
+      else if (!r.pdf && !r.image && !String(r.text || "").trim()) Object.assign(u, {kind: "other", by: "rules", summary: "FinCom could not read this file" + (r.err ? " (" + r.err + ")" : "") + "."});
+      u.path = await this.store(file, u.cid, k && k.kind === "notice" ? "notices" : "uploads", p => { u.progress = p; ASST.draw(); });
+      if (u.dropped) return;
+      u.state = "ready"; u.acts = u.kind ? this.actions(u) : [];
+      ASST.draw();
+      // what the rules could not tell: the AI's one line, in the background (Send does not wait for it); the buttons under
+      // the answer follow when it comes
+      if (!u.kind){ Object.assign(u, {kind: "other"}, await this.classify(u, r)); u.acts = this.actions(u); }
+      this.record(u).catch(() => {});
+    } catch (e){ u.state = "failed"; u.error = (e && e.message) || String(e); }
+    ASST.draw();
+  },
+  retry(u){ if (u && u.state === "failed") this.run(u); },
+  drop(u){ const a = this.st(); u.dropped = true; a.uploads = a.uploads.filter(x => x !== u); try { if (u.thumb && !u.sent) URL.revokeObjectURL(u.thumb); } catch (e){} ASST.draw(); },
+  // Send: the files in the box go with the question (75-assistant.js ask). null with none, false while one is not ready
+  prep(q){
+    const a = ASST.st(), list = this.pending();
+    if (!list.length) return null;
+    if (a.busy) return false;
+    if (list.some(u => u.state === "uploading")){ toast("Wait for the files to upload, then send."); return false; }
+    if (list.some(u => u.state === "failed")){ toast("A file was not uploaded: Retry it, or take it off with ×."); return false; }
+    const notice = list.find(u => u.kind === "notice");
+    q = q || (notice && list.length === 1 ? "Read this notice: what does it ask, by when, and check it against the books. Then draft a reply." : list.length === 1 ? "Read this file" : "Read these files");
+    list.forEach(u => { u.sent = true; if (u.kind !== "notice" && !ASST.ups().some(x => x.path === u.path)) ASST.ups().push({path: u.path, name: u.name, type: u.type || ""}); });
+    // read into the AI: a notice first (the notice flow keys on the first file), each with its kind; a Word file as its text
+    const att = list.slice().sort((x, y) => (y.kind === "notice") - (x.kind === "notice")).map(u => {
+      const x = {path: u.path, name: u.name, type: u.type || (u.pdf ? "application/pdf" : ""), kind: u.kind || "other"};
+      if (!/^(application\/pdf|image\/(png|jpeg|webp|gif))$/.test(x.type) && !u.pdf) x.text = u.excerpt || "";
+      return x;
+    });
+    const fx = {q, files: list, att};
+    // two statements attached and a comparison asked for: FinCom compares them line by line itself (asst-compare.js), the AI
+    // explains; the files alone are read, not the client's books (else "compare these balance sheets" is the books' own card)
+    const pdfs = list.filter(u => u.pdf);
+    if (pdfs.length >= 2 && CMP_WORDS.test(q)){
+      fx.noBooks = true;
+      fx.cmp = async (turn) => {
+        turn.tools.push({name: "compare_statements", label: "Comparing the two statements line by line"}); turn.toolAt = 0; ASST.draw();
+        try {
+          const m = await import("./asst-compare.js"), r = await m.compareFiles(pdfs[0], pdfs[1]);
+          if (r.result){ turn.results.push(r.result); fx.sendQ = (q + "\n\n" + r.brief).slice(0, 3990); }
+          else turn.warn = {message: r.why};
+        } catch (e){ turn.warn = {message: "FinCom could not compare the statements itself just now (" + ((e && e.message) || e) + "); the AI reads both."}; }
+        ASST.draw();
+      };
+    }
+    return fx;
+  },
+  // into the firm's private bucket; the upload's progress (0..1) to onProgress (XMLHttpRequest: fetch tells no progress)
+  async store(file, cid, folder, onProgress){
     await Cloud.fresh().catch(() => {});
     const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name || "file").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
     const path = Cloud.st.firm + "/" + (cid || "_firm") + "/" + folder + "/" + Date.now().toString(36) + "-" + name;
-    const r = await fetch(String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/"),
-      {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": file.type || "application/octet-stream"}, body: file});
-    if (!r.ok) throw new Error("it could not be stored (" + r.status + ")");
+    const url = String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/");
+    const status = await new Promise((ok, no) => {
+      const x = new XMLHttpRequest();
+      x.open("POST", url);
+      x.setRequestHeader("apikey", c.key); x.setRequestHeader("Authorization", "Bearer " + s.access_token); x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      if (onProgress && x.upload) x.upload.onprogress = (e) => { if (e.lengthComputable && e.total) onProgress(Math.min(1, e.loaded / e.total)); };
+      x.onload = () => ok(x.status); x.onerror = () => no(new Error("the connection failed")); x.ontimeout = () => no(new Error("the upload took too long"));
+      x.timeout = 120000;
+      x.send(file);
+    });
+    if (status < 200 || status >= 300) throw new Error("it could not be stored (" + status + ")");
+    if (onProgress) onProgress(1);
     return path;
   },
   // the AI, only when the rules could not tell: a PDF or a picture as it is, anything else as the text FinCom read (masked
@@ -288,6 +342,9 @@ const AUpload = window.AUpload = {
   },
   remove(u){ const a = this.st(); a.uploads = a.uploads.filter(x => x !== u); ASST.draw(); }
 };
+// "compare", "differences", "vs": a comparison of the files asked for
+const CMP_WORDS = /\b(compare|comparison|compared|comparing|differences?|differ|vs\.?|versus|reconcile|changed?|changes)\b/i;
 ASST.upload = files => AUpload.add(files);
+ASST.prep = function (q){ return AUpload.prep(q); };
 
 export default AUpload;

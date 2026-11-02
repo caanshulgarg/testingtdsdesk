@@ -110,8 +110,9 @@ try:
         ok(pg.locator("[data-asst-suggest], .asst-empty button").count() == 0, "no suggested questions (the owner, 19-Oct-2026)")
         pg.locator(".asst-askbar input[type=file][multiple]").set_input_files([os.path.join(TMP, f) for f in ("birchwood-signed-2024-25.pdf", "birchwood-signed-2025-26.pdf", "letterhead.png")])
         t0 = time.time()
-        while time.time() - t0 < 20 and pg.evaluate("ASST.ups().length") < 3: pg.wait_for_timeout(200)
-        ok(pg.evaluate("ASST.ups().length") == 3 and pg.locator("[data-asst-ups] .chip").count() == 3, "three files uploaded to <firm>/_firm/uploads/ and listed under the question box")
+        while time.time() - t0 < 20 and pg.evaluate("AUpload.pending().filter(u => u.state === 'ready' && u.kind).length") < 3: pg.wait_for_timeout(200)
+        ok(pg.evaluate("AUpload.pending().filter(u => u.state === 'ready' && /_firm\\/uploads\\//.test(u.path)).length") == 3 and pg.locator("[data-asst-chips] [data-asst-chip]").count() == 3,
+           "three files uploaded to <firm>/_firm/uploads/, as chips in the question box (sent with the first question)")
         shot(pg, "cert-01-uploaded")
 
         q1 = "Turnover certificate for 2024-25 and 2025-26 and net worth as on 31-Mar-2026 for Larkspur and Birchwood Traders"

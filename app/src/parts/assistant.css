@@ -317,3 +317,26 @@ html { scroll-padding-bottom: max(calc(150px + var(--bottom-banner-h, 0px)), var
 .asst-fs-tally, .asst-fs-py { border-top: 1px solid var(--border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .asst-fs-tally p, .asst-fs-py p, .asst-fs-miss p { margin: 0; }
 .asst-fs-act { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* files attached like Claude's (the owner, 31-Oct-2026): chips inside the question box until Send, then under the question */
+.asst-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; min-width: 0; }
+.asst-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; max-width: min(260px, 100%); min-width: 0; padding: 5px 6px 5px 5px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); color: var(--foreground); font: inherit; text-align: left; overflow: hidden; }
+.asst-chip.failed { border-color: color-mix(in oklab, var(--danger) 50%, var(--border)); background: color-mix(in oklab, var(--danger) 6%, var(--surface)); }
+.asst-chip-thumb { width: 32px; height: 32px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; background: var(--surface); }
+.asst-chip-ico { width: 32px; height: 32px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; background: color-mix(in oklab, var(--accent) 12%, var(--surface)); color: var(--accent); }
+.asst-chip-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.asst-chip-txt b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asst-chip-txt small { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asst-chip.failed .asst-chip-txt small { color: var(--danger); white-space: normal; }
+.asst-chip-x, .asst-chip-btn { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 3px; border: 0; background: transparent; color: var(--text-secondary); border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; }
+.asst-chip-x { width: 22px; height: 22px; }
+.asst-chip-btn { padding: 2px 6px; color: var(--accent); }
+.asst-chip-x:hover, .asst-chip-btn:hover { background: color-mix(in oklab, var(--foreground) 8%, transparent); color: var(--foreground); }
+.asst-chip-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--accent); transition: width .2s ease; }
+.asst-chips.sent { padding: 2px 0 0; }
+.asst-chips.sent .asst-chip { cursor: pointer; background: var(--surface); }
+.asst-chips.sent .asst-chip:hover { border-color: var(--border-strong); }
+.asst-body > .asst-dropzone { grid-auto-flow: row; align-content: center; gap: 6px; background: color-mix(in oklab, var(--accent) 10%, var(--surface)); color: var(--foreground); }
+.asst-body > .asst-dropzone b { font-size: 16px; }
+.asst-fileacts { display: flex; flex-direction: column; gap: 8px; margin: 4px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.asst-fileact p { margin: 0 0 4px; overflow-wrap: anywhere; }

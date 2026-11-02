@@ -10,6 +10,8 @@ const text = (t: string, extra: Block = {}): Block => ({ type: "text", text: t, 
 const SCRIPTS: [RegExp, (Block[] | ((p: any) => Block[]))[]][] = [
   // first: the Upload's "Ask about it" (the file's text names Rukmini, whom another script answers about)
   [/Summarise it/, [[text("A rent agreement (made-up): the godown is let for eleven months at ₹20,000 a month.")]]],
+  // two financial statements attached and compared (asst-compare.js gives the differences with the question)
+  [/Compare these two financial statements/, [[text("The final statements carry ₹1,50,000.00 more of trade receivables and a new short-term borrowing of ₹2,00,000.00; the profit is ₹84,000.00 lower (made-up).")]]],
   [/194C/, [[tool("tds_missed", { from: null, to: null, section: "194C" })],
     [text("One supplier crossed the 194C limit with no TDS in the books: ₹40,000.00 of freight in February 2026. TDS of ₹400.00 is due, and 30% of the expense (₹12,000.00) is exposed to disallowance under section 40(a)(ia) until it is deducted and paid.")]]],
   [/Cash payments over 10,000/i, [[tool("entries_filter", { from: "2025-09-01", to: "2025-09-30", min_amount: 10000, max_amount: null, mode: "cash", direction: "payment", ledger: null, party: null, voucher_type: null, narration: null, limit: null })],
@@ -65,6 +67,9 @@ function claude() {
     // the question itself: FinCom's context lines before it ("[FinCom: today is …]", "[Files attached earlier …]") are not
     // the question (a notice listed among the files is not a question about a notice)
     const q = String(((p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content) && m.content.some((b: any) => b.type === "text")).pop()?.content as any[] || []).map((b: any) => b.text || "").join(" ")).replace(/\[(FinCom: today is|Shown earlier in this conversation|Files attached earlier in this conversation)[^\n]*\]\n\n/g, "");
+    { const last = (p.messages as any[]).filter((m) => m.role === "user" && Array.isArray(m.content)).pop()?.content as any[] || [];
+      const docs = last.filter((b) => b.type === "document").length;
+      if (docs) SEEN.push({ kind: "docs", docs, model: p.model, q: q.slice(0, 1500) }); }
     const script = (SCRIPTS.find(([re]) => re.test(q)) || [null, [[text("I can help with the books, tax and notices.")]]])[1];
     const turns = (p.messages as any[]).filter((m) => m.role === "assistant" && Array.isArray(m.content)).length;   // this turn's (history is text)
     const step = script[turns] ?? [text("Done.")];
