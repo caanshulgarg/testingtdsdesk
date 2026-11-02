@@ -286,7 +286,7 @@ func stockAnswer(c stockClick, k string) M {
 		held = windowHoldFn()
 		leaseBefore := leaseHeldForRead(c.Company)
 		sent := false
-		tc := &TC{copier: true, limitMs: 2000, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
+		tc := &TC{copier: true, limitMs: 2000, whole: true, sentOut: &sent, timed: func(sec float64) { took += sec }, yield: func() bool { return postingGoing() }}
 		raw, err = invokeTally(tc, port, x, 5)
 		// a posting or FinCom's own request that came while the click took Tally's lock goes first (errPreempted,
 		// errBackoff): when the request never reached Tally (sentOut), the click waits until the posting has fully

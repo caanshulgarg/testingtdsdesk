@@ -290,6 +290,10 @@ type TC struct {
 	// bridge stops waiting after this many milliseconds (a context deadline from the send). Never for a posting (Import), a
 	// person's read or the light company check FinComCompany (they never set it)
 	limitMs int
+	// 2.5.2 (the stock on a person's click, gate run 41393411255 s6 on 3.0 and 4.1): once sent, the request is not stopped
+	// for FinCom's request. A stopped request keeps Tally's lock until Tally has answered it anyway (holdUntilAnswered), so
+	// the posting waits the same; the click keeps Tally's answer instead of losing it. Only with limitMs (2 s hard stop)
+	whole bool
 	// 2.2.2 second review (L-B): the light company check and the open-company list (tiny): not held by the cool-down after
 	// a recorder read's stop (the probe and busy rules still apply)
 	light bool
@@ -843,6 +847,9 @@ func enterTallyLock(tc *TC, port int, cancel context.CancelFunc, post bool) (fun
 	}
 	g.mu.Lock()
 	g.copier, g.cancel = tc.copier, cancel
+	if tc.whole && tc.limitMs > 0 && tc.limitMs <= 2000 {
+		g.cancel = nil // FinCom's request waits for it (at most its 2 s hard stop), as for a request already given up
+	}
 	g.mu.Unlock()
 	unlockOther := lockSharedMutex(port) // beside bridge 1.15.0 in the same Windows session: its own lock too
 	return func() {

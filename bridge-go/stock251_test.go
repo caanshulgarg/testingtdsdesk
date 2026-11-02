@@ -601,6 +601,14 @@ func TestStock251PostingAfterSendNeverTwice(t *testing.T) {
 	if n := stockClicks(f); n != 1 {
 		t.Fatalf("the click's request went to Tally %d times (answer %v)", n, a)
 	}
+	// the click keeps Tally's answer (gate run 41393411255 s6 on 3.0 and 4.1 answered "busy": the posting stopped the
+	// request at Tally); the posting went after it, one request at a time
+	f.mu.Lock()
+	mx := f.maxFlight
+	f.mu.Unlock()
+	if str(a["status"]) != "ok" || mx != 1 {
+		t.Fatalf("the click with a posting coming while it is at Tally: %v (%d at Tally at once)", a, mx)
+	}
 }
 
 // --- 5c. another FinCom Bridge wants to post to the company (this bridge's read lease given up): the click is answered
