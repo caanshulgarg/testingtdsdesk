@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort, with
 the security questions below), and the build session's own pass over each finding. They did not write the change.
 
-Range: 25e694c0a..2149384fc
+Range: 25e694c0a..86fa20546
 
 ## What can make the bridge ask Tally for the stock
 
@@ -42,8 +42,13 @@ No High or Medium finding is open.
 
 ## Rounds
 
-The code review's seven rounds (docs/reviews/bridge-2.5.2-code-review.md) were asked the security questions too (who can
-make the bridge ask Tally, the narrow exceptions, row security and grants): nothing open in rounds 2 to 7 ("the
+The code review's eight rounds (docs/reviews/bridge-2.5.2-code-review.md) were asked the security questions too (who can
+make the bridge ask Tally, the narrow exceptions, row security and grants): nothing open in rounds 2 to 8 ("the
 exemptions match the guard on the older-entries batch read; row security, the grants and the service-role checks in
 migration 134 are sound"). Recorded: an answer is not tied to the computer woken (it needs the click's time, which only
 that computer's channel and beat carry; and the book's GUID, a computer that named the company, one answer per click).
+
+Round 8 (6572cd505 to 86fa20546: the wait after giving way, and the merge of staging-next 7dd88d92d): the click still
+needs a person's click, the 2 s stop and one in flight; it is sent to Tally at most once (a try that reached Tally is
+never repeated) and waits behind every posting and FinCom request; no new request, no cloud or migration change of its
+own (tally-ingest takes staging-next's tallyname.js). Nothing open.

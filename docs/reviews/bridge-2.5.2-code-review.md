@@ -3,7 +3,7 @@
 Reviewer: independent review sessions run with Claude Code (the code-review tool's forked reviewers, high effort). They
 had only the repository and the range; they did not write the change.
 
-Range: 25e694c0a..2149384fc
+Range: 25e694c0a..86fa20546
 
 Scope: bridge-go/stock.go (new), tally.go (requestClass, datedRefused, errStockRefused), pinned.go, cloud.go (the "stock"
 wake and the beat's "stock"), allowlist.go and the tests (stock251_test.go; allowlist_test.go's computed-figure exception
@@ -135,3 +135,19 @@ in cb0303b41 (once more whenever nothing reached Tally). Round 7 on it: 4 findin
 4. (Low) The retry's test could pass without retrying. Fixed: it counts the two tries.
 
 After round 7: f70e512a3, and 2149384fc (the withdrawn build's files removed, no code). The whole range was read last.
+
+## The gate on the rebuilt 2.5.2 (run 41107758884) and round 8 (6572cd505 to 86fa20546, medium effort)
+
+s1-s5 PASS on all five releases; s6 FAIL on 4.1 and 7.1: the click went again in the gap between two requests of one
+posting, was preempted a second time and answered busy. The merge of staging-next 7dd88d92d (219eb0679) brings no bridge
+change; tally-ingest gains only server/_shared/tallyname.js's split-company names (staging-next's own). Fixed in
+c2de46353: after giving way the click waits until Tally has had no posting and no FinCom request waiting for 1 s together
+(stockQuiet), and goes again as often as it gives way within its 20 s; a try that reached Tally (sentOut) is never
+repeated, so Tally is asked at most once per click. Round 8 on it: read with the rest of stockAnswer; 0 High, 0 Medium:
+1. (Low) The first try still goes as soon as no posting is going (no quiet): kept, a click with nothing going answers at
+   once; only a click that gave way waits for the quiet.
+2. (Low) The two-request posting test could pass with the click sent in the gap. Fixed before the commit: it records
+   whether the click went before the whole posting ended, and fails with stockQuiet 0 (checked).
+Tests: TestStock251OneInFlightPostingsFirst (a posting of two requests with a gap; preempted twice, 3 tries, asked once).
+
+After round 8: 86fa20546 (the withdrawn build's files removed, no code).
