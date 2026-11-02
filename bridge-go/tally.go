@@ -1134,6 +1134,11 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 		unlock()
 		return "", errBackoff
 	}
+	// 2.5.2: a request not stopped once sent (the stock click) is not sent while FinCom's request waits: postings first
+	if tc.whole && userWaiting(port) {
+		unlock()
+		return "", errPreempted
+	}
 	// 2.2.2: the recorder's hard stop, counted from the send itself (after any gentle wait: tallyRaw starts it)
 	stopAt := time.Duration(0)
 	if tc.limitMs > 0 && tc.copier && !tc.person && !isImportRequest(x) && !isPostingRequest(x) {
