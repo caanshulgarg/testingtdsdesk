@@ -321,17 +321,19 @@ def main():
         ok(pg.locator("#app [data-sync-waiting]").count() == 0, "ended lines: no 'waiting over 2 minutes' box")
         nd = "#app [data-sync-needs]"
         ok(pg.locator(nd).count() == 1 and "warn" in (pg.get_attribute(nd, "class") or ""), "ended lines: one 'Needs you' box, yellow")
-        groups = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-needs-group]')].map(g => [g.getAttribute('data-needs-group'), g.querySelector('[data-needs-text]').innerText.trim(), g.querySelectorAll('button:not([data-alert-clear])').length, g.querySelectorAll('[data-alert-clear]').length])")
-        want = {"GARG SHEKHAR · 07-Oct-2026: 3 entries could not be read from Tally — upload the Day Book for 07-Oct-2026",
-                "GARG SHEKHAR · 06-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 06-Oct-2026",
-                "ABC LTD · 07-Oct-2026: 1 entry could not be read from Tally — upload the Day Book for 07-Oct-2026"}
-        ok(len(groups) == 3 and {g[1] for g in groups} == want, "one plain sentence per company and day (%s)" % [g[1] for g in groups])
-        ok(all(g[2] == 1 and g[3] == 1 for g in groups) and pg.locator(nd + " [data-needs-daybook]").count() == 3, "each group: ONE action, the Day Book upload (besides its Clear, 08-Oct-2026: hides the notification only)")
-        ok(txt(nd + " [data-needs-daybook]") == "Upload the Day Book for 07-Oct-2026" or "Upload the Day Book for" in txt(nd + " [data-needs-daybook]"), "the action says which day (%s)" % txt(nd + " [data-needs-daybook]"))
+        # 02-Nov-2026 (migration 136; the owner: "an option to update the Day Book from there only, and after the update it
+        # should close the error"): ONE block per company (parts/HeldBlock.jsx) instead of a row per day, with ONE upload for
+        # the period, "Show days" folding the day rows, and why it happens
+        blocks = E("() => [...document.querySelectorAll('#app [data-sync-needs] [data-held-block]')].map(g => [g.getAttribute('data-held-block'), g.querySelector('[data-held-text]').innerText.trim(), g.querySelectorAll('button:not([data-alert-clear])').length, g.querySelectorAll('[data-alert-clear]').length, g.querySelectorAll('[data-held-day]').length])")
+        want = {"GARG SHEKHAR: 4 changes saved in Tally between 06-Oct and 07-Oct are not yet in FinCom. Upload one Day Book for 06-Oct-2026 to 07-Oct-2026",
+                "ABC LTD: 1 change saved in Tally on 07-Oct is not yet in FinCom. Upload one Day Book for 07-Oct-2026"}
+        ok(len(blocks) == 2 and {g[1] for g in blocks} == want and pg.locator(nd + " [data-needs-group]").count() == 0, "one plain block per company, no row per day (%s)" % [g[1] for g in blocks])
+        ok(all(g[2] == 1 and g[3] == 1 for g in blocks) and pg.locator(nd + " [data-held-upload]").count() == 2, "each block: ONE action, Upload Day Book (besides its Clear, 08-Oct-2026: hides the notification only)")
+        ok(sorted(g[4] for g in blocks) == [1, 2] and pg.locator(nd + " [data-held-why]").count() == 2 and "Tally saved changes FinCom had not read yet" in txt(nd + " [data-held-why]"), "Show days folds the day rows; one line says why")
         ok(pg.locator("#app [data-sync-fetching]").count() == 0, "ended lines: nothing 'being fetched'")
         shot("sync-needs-you")
-        pg.click(nd + ' [data-needs-group^="daybook|GARG SHEKHAR|2026-10-06"] [data-needs-daybook]'); pg.wait_for_timeout(1500)
-        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-06", "2026-10-06"], "the action opens the client's Day Book upload for that day (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
+        pg.click(nd + ' [data-held-block="GARG SHEKHAR"] [data-held-upload]'); pg.wait_for_timeout(1500)
+        ok(E("[S.view, S.coId, S.dbFrom, S.dbTo]") == ["company", cid, "2026-10-06", "2026-10-07"], "the action opens the client's Day Book upload for the period (%s)" % E("[S.view, S.coId, S.dbFrom, S.dbTo]"))
         # a fresh line (still being fetched): quiet, no yellow, no 'Needs you'
         E(SYNC, FRESH); pg.wait_for_timeout(1800)
         fe = "#app [data-sync-fetching]"

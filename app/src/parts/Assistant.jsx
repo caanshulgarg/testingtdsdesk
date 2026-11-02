@@ -8,9 +8,9 @@
 // A figure the AI stated that the books give differently is shown as FinCom's, with the AI's struck out. Under the
 // answer: the tables (amounts right-aligned, dates opening the entry), Copy, Export to Excel, files, drafts, a notice's
 // fields with "Add to due list", and "Wrong answer?". Earlier questions of the session below. Ctrl+J opens it anywhere.
-import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Drawer, DrawerContent } from "@/registry/components/drawer/drawer";
-import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus, Info, ChevronDown, User } from "lucide-react";
+import { Sparkles, Paperclip, Copy, FileSpreadsheet, ThumbsDown, Download, ExternalLink, Send, Save, History, Plus, Info, ChevronDown, User, FileText, X, RotateCw } from "lucide-react";
 import Button from "./Button.jsx";
 import { PreFileList } from "./PreFile.jsx";
 import "./assistant.css";
@@ -40,6 +40,8 @@ const LABELS = {
   entries: ["warn", "entries drafted by AI from your words – check before posting"],
   // an MIS laid out from the person's words (ROUND 105): the layout only; FinCom works out every figure from the books
   mis: ["neutral", "a layout drafted by AI from your words – every figure worked out by FinCom from the books"],
+  // two financial statements attached and compared by FinCom line by line (asst-compare.js): the files' figures, not the books
+  compare: ["neutral", "the two statements you attached – compared line by line by FinCom, figures as printed"],
 };
 const money = (v) => (v == null || v === "" ? "" : INR.format(r2(num(v))));
 const isNum = (t) => t === "amount" || t === "int" || t === "pct";
@@ -182,6 +184,36 @@ const MisCard = lazy(() => import("./AssistantMis.jsx"));
 // engine here, in its own chunk with that engine (AssistantFs.jsx)
 const FsCard = lazy(() => import("./AssistantFs.jsx"));
 
+// a file's chip (the owner, 31-Oct-2026: "it should work like Claude"): in the question box (its upload's progress, ×, Retry)
+// and, once sent, under the question it went with (a click opens it). A picture shows itself small.
+const kb = (n) => (n == null ? "" : n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + " KB" : (n / 1024 / 1024).toFixed(1) + " MB");
+const extOf = (n) => ((String(n || "").match(/\.([a-z0-9]{1,5})$/i) || [])[1] || "file").toUpperCase();
+function ChipIcon({ f }) {
+  if (f.thumb) return <img className="asst-chip-thumb" src={f.thumb} alt="" />;
+  const sheet = /\.(xlsx|xls|csv)$/i.test(f.name || "");
+  return <span className="asst-chip-ico" data-ext={extOf(f.name)} aria-hidden="true">{sheet ? <FileSpreadsheet size={16} /> : <FileText size={16} />}</span>;
+}
+function SentChips({ t }) {
+  const list = t.filesIn || (t.attach && t.attach.name ? [t.attach] : []);
+  if (!list.length) return null;
+  return <div className="asst-chips sent" data-asst-sent-files="">{list.map((f, i) => <button type="button" key={f.path || i} className="asst-chip" data-asst-sent-chip={f.name} title={"Open " + f.name}
+    onClick={() => (f.file && typeof saveFile === "function" ? saveFile(f.name, f.file) : f.path ? ASST.download(f) : null)}>
+    <ChipIcon f={f} /><span className="asst-chip-txt"><b>{f.name}</b><small>{[extOf(f.name), kb(f.size)].filter(Boolean).join(" · ")}</small></span></button>)}</div>;
+}
+function BoxChip({ u }) {
+  const pct = Math.round((u.progress || 0) * 100);
+  return <span className={"asst-chip " + u.state} data-asst-chip={u.state} data-name={u.name} role="group" aria-label={u.name}>
+    <ChipIcon f={u} />
+    <span className="asst-chip-txt"><b title={u.name}>{u.name}</b>
+      <small>{u.state === "uploading" ? "Uploading… " + pct + "%" : u.state === "failed" ? "Not uploaded: " + u.error : [extOf(u.name), kb(u.size)].join(" · ")}</small></span>
+    {u.state === "failed" && <button type="button" className="asst-chip-btn" data-asst-chip-retry="" title="Upload it again" aria-label={"Retry " + u.name} onClick={() => AUpload.retry(u)}><RotateCw size={13} aria-hidden="true" /> Retry</button>}
+    <button type="button" className="asst-chip-x" data-asst-chip-x="" title="Remove" aria-label={"Remove " + u.name} onClick={() => AUpload.drop(u)}><X size={13} aria-hidden="true" /></button>
+    {u.state === "uploading" && <i className="asst-chip-bar" style={{ width: Math.max(4, pct) + "%" }} aria-hidden="true" />}
+  </span>;
+}
+// the next steps for the files sent with a question (Add to Purchase / Bank / Sales …), under its answer
+const FileActs = lazy(() => import("./AssistantUploads.jsx").then((m) => ({ default: m.FileActs })));
+
 function Turn({ t, latest }) {
   const [rep, setRep] = useState(null), [src, setSrc] = useState(false);
   const verdicts = (t.verdicts || []).filter((v) => v.status === "mismatch");
@@ -193,7 +225,8 @@ function Turn({ t, latest }) {
   return <article className={"asst-turn" + (latest ? " latest" : "") + (t.done ? "" : " streaming")} data-asst-turn={t.id} aria-busy={!t.done}>
     <header className="asst-qhead" data-asst-qhead="">
       <span className="asst-who"><span className="asst-av" aria-hidden="true"><User size={12} strokeWidth={2.4} /></span><span>You</span>{t.at && <time dateTime={t.at} className="asst-time">{when(t.at)}</time>}</span>
-      <p className="asst-q" data-asst-q="">{t.q}{t.attach && <span className="note"> · {t.attach.name}</span>}</p>
+      <p className="asst-q" data-asst-q="">{t.q}</p>
+      <SentChips t={t} />
     </header>
     <div className="asst-a" data-asst-answer="">
     <div className="asst-who asst-fincom" aria-hidden="true"><span className="asst-mark"><Sparkles size={12} strokeWidth={2.4} /></span><span>FinCom</span></div>
@@ -224,6 +257,7 @@ function Turn({ t, latest }) {
       <pre>{d.body}</pre></section>)}
     {(t.files || []).map((f) => <div key={f.id} className={"asst-file" + (f.pack ? " pack" : "")} data-asst-file={f.kind}><Download size={14} /><button className="linkbtn" onClick={() => ASST.download(f)}>{f.pack ? "Download reply pack" : f.name}</button>{f.pack && <span className="note"> ({(f.contents || []).length} files: the reply in Word and PDF, the annexures, the index)</span>}
       <span className="note">{f.kind.toUpperCase()} · kept until {f.expires ? dmy(String(f.expires).slice(0, 10)) : "30 days"}</span></div>)}
+    {t.done && (t.filesIn || []).some((u) => (u.acts || []).some((x) => x.id !== "ask" && x.id !== "notice")) && <Suspense fallback={null}><FileActs t={t} /></Suspense>}
     {((t.citations || {}).dropped || []).length > 0 && <p className="asst-dropped" data-asst-dropped="">Removed: {t.citations.dropped.map((c) => "No. " + c.no + " of " + dmy(c.date)).join(", ")} - not in the entries the AI read.</p>}
     {t.done && <div className="asst-foot">
     {(t.labels || []).length > 0 && <p className="note asst-source" data-asst-source={(t.labels || []).join(" ")}>
@@ -270,6 +304,9 @@ function asstDraftFile(d, kind) {
   saveFile(String(d.title || "draft").replace(/[^A-Za-z0-9]+/g, "-") + ".doc", new Blob(["<html><head><meta charset=\"utf-8\"></head><body>" + html + "</body></html>"], { type: "application/msword" }));
 }
 
+// a drag that carries files (not a piece of text or a link dragged across the panel)
+const hasFiles = (e) => { const ty = e.dataTransfer && e.dataTransfer.types; return !!ty && Array.from(ty).includes("Files"); };
+
 // the launcher lives in the first file (AssistantLauncher.jsx); this panel is loaded the first time it opens (App.jsx)
 export { AssistantLauncher };
 
@@ -277,7 +314,7 @@ const ASST_REF = { get current() { return document.querySelector('[data-overlay=
 export default function Assistant() {
   const a = ASST.st();
   // a click outside or Esc closes it (app/src/parts/dismiss.js); what was typed stays in ASST's state as a draft
-  useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")) });
+  useDismiss(!!a.open, ASST_REF, () => ASST.close(), { also: () => Array.from(document.querySelectorAll("[data-asst-launch]")), esc: !a.dragOver });
   const file = useRef(null), upl = useRef(null);
   const co = S.view === "company" ? CO() : null;
   const cid = ASST.cid();
@@ -312,15 +349,24 @@ export default function Assistant() {
   // the question box keeps the cursor: after Ask (Enter, the button, "Which one?") it stays in the box, so the next
   // question can be typed straight away (it was greyed out while FinCom answered, which threw the cursor out of it).
   // Voice typing stops first: a word heard after Ask never lands in the next question (AssistantVoice.jsx).
+  const box0 = AUpload.pending(), boxWait = box0.some((u) => u.state !== "ready");
+  // Esc while files are dragged over the panel takes the overlay away (and does not close the panel: esc above)
+  useEffect(() => {
+    if (!a.dragOver) return undefined;
+    const esc = (e) => { if (e.key === "Escape") { e.stopImmediatePropagation(); e.preventDefault(); a.dragOver = false; ASST.draw(); } };
+    window.addEventListener("keydown", esc, true);
+    return () => window.removeEventListener("keydown", esc, true);
+  }, [a.dragOver]);
   const ask = (q) => { stopVoice(); ASST.ask(q); const b = box.current; if (b && document.activeElement !== b) b.focus({ preventScroll: true }); };
   return <>
     <Drawer open={!!a.open} onOpenChange={(o) => { if (!o) ASST.close(); }} modal={false}>
       <DrawerContent className="asst-panel" data-overlay="asst" title="FinCom Assistant" closeLabel="Close" aria-describedby={undefined} onInteractOutside={(ev) => ev.preventDefault()} onEscapeKeyDown={(ev) => ev.preventDefault()}>
         {a.open && <div className={"asst-body" + (a.dragOver ? " drag" : "")} data-asst-panel=""
-          onDragOver={(e) => { e.preventDefault(); if (!a.dragOver) { a.dragOver = true; ASST.draw(); } }}
+          onDragOver={(e) => { if (!hasFiles(e)) return; e.preventDefault(); if (!a.dragOver) { a.dragOver = true; ASST.draw(); } }}
           onDragLeave={(e) => { if (e.currentTarget.contains(e.relatedTarget)) return; a.dragOver = false; ASST.draw(); }}
-          onDrop={(e) => { e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
-          {a.dragOver && <div className="asst-dropzone" data-asst-dropzone="">Drop the files to upload them for {co ? co.name : "the whole firm"}</div>}
+          onDrop={(e) => { if (!hasFiles(e)) return; e.preventDefault(); a.dragOver = false; ASST.upload(Array.from(e.dataTransfer.files || [])); }}>
+          {a.dragOver && <div className="asst-dropzone" data-asst-dropzone=""><Paperclip size={22} aria-hidden="true" /><b>Drop files here</b>
+            <span className="note">They go in the question box{co && cid ? " for " + co.name : ""}: up to {AUpload.LIMIT} a message (PDF, picture, Excel, CSV, Word)</span></div>}
           <div className="asst-scope" data-asst-head="">
             {co ? <div className="seg" role="tablist" aria-label="What to ask about">
               <button role="tab" aria-selected={a.scope === "client"} className={a.scope === "client" ? "on" : ""} title={co.name} onClick={() => ASST.setScope("client")}>{co.name}</button>
@@ -348,17 +394,18 @@ export default function Assistant() {
           </div>
           </div>
           <form className="asst-ask" onSubmit={(e) => { e.preventDefault(); ask(); }}>
-            {ASST.ups().length > 0 && <div className="asst-ups" data-asst-ups="">{ASST.ups().map((u) => <span key={u.path} className="chip"><Paperclip size={12} aria-hidden="true" /> {u.name} <button type="button" className="linkbtn" aria-label={"Take off " + u.name} onClick={() => ASST.unUpload(u.path)}>×</button></span>)}</div>}
+            {box0.length > 0 && <div className="asst-chips" data-asst-chips="" aria-label={"Files to send with the question (" + box0.length + " of " + AUpload.LIMIT + ")"}>{box0.map((u) => <BoxChip key={u.id} u={u} />)}</div>}
             <label htmlFor="asstQ" className="sr-only">Your question</label>
             <textarea id="asstQ" ref={box} rows={1} value={a.q} placeholder={cid ? "Ask about " + co.name + "'s books, tax, or a notice…" : "Ask a tax or accounting question…"}
-              aria-describedby="asstHint" onChange={(e) => { a.q = e.target.value; ASST.draw(); }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} />
+              aria-describedby="asstHint" onChange={(e) => { a.q = e.target.value; ASST.draw(); }}
+              onPaste={(e) => { const fs = Array.from((e.clipboardData && e.clipboardData.files) || []); if (fs.length) { e.preventDefault(); ASST.upload(fs); } }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(); } }} />
             <div className="asst-askbar">
               {<><input ref={file} type="file" multiple accept={AUpload.ACCEPT} hidden data-asst-upload-input="" onChange={(e) => { const fs = Array.from(e.target.files || []); e.target.value = ""; ASST.upload(fs); }} />
-                <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title="Upload files: a notice, bills, a bank statement, 26AS or AIS, a register, a certificate format or any other document (PDF, picture, Excel, CSV, Word). Or drop them on the panel." onClick={() => file.current && file.current.click()} disabled={a.uploading} aria-label="Upload files"><Paperclip size={15} aria-hidden="true" /> {a.uploading ? "Reading…" : "Upload"}</button>
+                <button type="button" className="asst-act asst-upbtn" data-asst-upload-btn="" data-asst-upload="" title={"Attach files to the question: a notice, bills, a bank statement, 26AS or AIS, a register, financial statements or any other document (PDF, picture, Excel, CSV, Word), up to " + AUpload.LIMIT + " a message. Or drop or paste them."} onClick={() => file.current && file.current.click()} disabled={box0.length >= AUpload.LIMIT} aria-label="Attach files"><Paperclip size={15} aria-hidden="true" /> Attach</button>
                 {a.attach && <span className="note asst-attached" data-asst-attached=""><Paperclip size={13} /> {a.attach.name} <button type="button" className="linkbtn" title="Do not attach" onClick={() => { a.attach = null; ASST.draw(); }}>×</button></span>}</>}
               <VoiceInput a={a} client={ASST.cid()} onText={(s) => { a.q = s; ASST.draw(); }} />
               <span className="asst-hint" id="asstHint">{a.busy ? "FinCom is answering… you can type the next question" : <><kbd>Enter</kbd> to ask · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line</>}</span>
-              <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || !String(a.q || "").trim()} title={a.busy ? "FinCom is answering the last question" : !String(a.q || "").trim() ? "Type a question first" : "Ask (Enter)"}>
+              <Button type="submit" className="btn small primary asst-send" data-busy={a.busy ? "" : undefined} disabled={a.busy || boxWait || (!String(a.q || "").trim() && !box0.length)} title={a.busy ? "FinCom is answering the last question" : boxWait ? "Wait for the files to upload (or take off the one not uploaded)" : !String(a.q || "").trim() && !box0.length ? "Type a question first" : "Ask (Enter)"}>
                 {a.busy ? <span className="asst-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />} Ask</Button>
             </div>
           </form>

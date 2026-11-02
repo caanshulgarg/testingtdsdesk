@@ -298,8 +298,12 @@ try:
         shot(pg, "04-blue")
         pg.evaluate("ASST.setScope('client')"); pg.wait_for_timeout(300)
         # ---------- a notice
-        pg.set_input_files(".asst-askbar input[type=file]", os.path.join(HERE, "fixtures", "assistant", "asmt10-notice.pdf")); pg.wait_for_timeout(1500)
-        ok(pg.evaluate("!!(ASST.st().attach && /notices\\//.test(ASST.st().attach.path))"), "the notice is stored in the firm's private folder (…/notices/)")
+        pg.set_input_files(".asst-askbar input[type=file]", os.path.join(HERE, "fixtures", "assistant", "asmt10-notice.pdf"))
+        for _ in range(60):
+            if pg.evaluate("AUpload.pending().some(u => u.state === 'ready')"): break
+            pg.wait_for_timeout(250)
+        ok(pg.evaluate("AUpload.pending().length === 1 && AUpload.pending()[0].kind === 'notice' && /notices\\//.test(AUpload.pending()[0].path)") and pg.locator("[data-asst-chips] [data-asst-chip=ready]").count() == 1,
+           "the notice is a chip in the question box, stored in the firm's private folder (…/notices/)")
         tasks0 = db.one("select count(*) from client_due_tasks")
         t = ask(pg, "Please read this notice and draft a reply")
         n = t.get("notice") or {}
@@ -325,17 +329,39 @@ try:
         pg.fill(".asst-filed input", "AA0711260045678"); pg.click('.asst-filed button'); pg.wait_for_timeout(900)
         ok(db.one("select status || ' ' || ack_no from assistant_notices order by created_at desc limit 1") == "filed AA0711260045678", "marked filed with the acknowledgement (FinCom filed nothing)")
         shot(pg, "05b-notice-filed", "[data-asst-notice]")
-        # ---------- one Upload (the owner's request of 14-Oct-2026): several files of every kind at once, each told by
-        # FinCom's rules (the AI only for the two the rules cannot tell), with its next steps; nothing done by itself
+        # ---------- files attached like Claude's (the owner, 31-Oct-2026; one Upload of 14-Oct-2026 before it): chips in the
+        # question box, up to 3 a message, each told by FinCom's rules (the AI only for the two the rules cannot tell);
+        # nothing in the conversation until Send; the next steps as buttons under the answer; nothing done by itself
         import make_uploads
         fx = make_uploads.make(os.path.join(OUT, "uploads"))
-        ok(pg.locator("[data-asst-upload-btn]").count() == 1 and "Upload" in pg.inner_text("[data-asst-upload-btn]") and pg.locator("text=Notice").filter(has=pg.locator("svg")).count() == 0, "the panel has Upload (no Notice button)")
+        ok(pg.locator("[data-asst-upload-btn]").count() == 1 and "Attach" in pg.inner_text("[data-asst-upload-btn]") and pg.locator("text=Notice").filter(has=pg.locator("svg")).count() == 0, "the panel has Attach (no Notice button)")
         rows0, stmts0, jobs0 = db.one("select count(*) from assistant_uploads"), pg.evaluate("(S.bank && S.bank.stmts || []).length"), pg.evaluate("(S.jobs || []).length")
-        pg.set_input_files("[data-asst-upload-input]", list(fx.values()))
-        for _ in range(120):
-            if pg.evaluate("AUpload.list().filter(u => u.state === 'ready' || u.state === 'failed').length") >= 10: break
-            pg.wait_for_timeout(250)
-        ups = {u["name"]: u for u in pg.evaluate("AUpload.list().map(u => ({name: u.name, state: u.state, kind: u.kind, by: u.by, side: u.side || '', summary: u.summary, path: u.path || '', acts: u.acts.map(a => a.id + (a.disabled ? '!' : ''))}))")}
+        CHIPS = "AUpload.pending().map(u => ({name: u.name, state: u.state, kind: u.kind, by: u.by, side: u.side || '', summary: u.summary, path: u.path || '', acts: u.acts.map(a => a.id + (a.disabled ? '!' : ''))}))"
+        ups = {}
+        def attach(names, settle=None):
+            n0 = pg.locator("[data-asst-turn]").count()
+            pg.set_input_files("[data-asst-upload-input]", [fx[n] for n in names])
+            for _ in range(160):
+                if pg.evaluate("AUpload.pending().length === %d && AUpload.pending().every(u => u.state !== 'uploading' && (u.kind || u.state === 'failed'))" % len(names)) and (not settle or pg.evaluate(settle)): break
+                pg.wait_for_timeout(250)
+            got = {u["name"]: u for u in pg.evaluate(CHIPS)}
+            ups.update(got)
+            ok(pg.locator("[data-asst-chips] [data-asst-chip]").count() == len(names) and pg.locator("[data-asst-turn]").count() == n0, "%s: chips in the question box, nothing in the conversation" % ", ".join(names))
+            return got
+        AI_DONE = "AUpload.pending().every(u => u.by)"
+        attach(["bill.pdf", "sales-register.xlsx", "bank-statement.csv"])
+        # a fourth file: refused (the server reads the first 3 of a message)
+        pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
+        pg.set_input_files("[data-asst-upload-input]", [fx["26as.txt"]]); pg.wait_for_timeout(400)
+        ok(pg.evaluate("AUpload.pending().length") == 3 and any("Up to 3 files" in x for x in pg.evaluate("window.__toasts")), "a fourth file in one message is refused, said so")
+        tA = ask(pg, "What are these files?")
+        ok(len(tA.get("filesIn") or []) == 3 and pg.locator(".asst-turn.latest [data-asst-sent-chip]").count() == 3 and pg.locator("[data-asst-chips] [data-asst-chip]").count() == 0, "Send: one message with the 3 files' chips; the box is empty")
+        attach(["26as.txt", "certificate-format.docx", "gstr2b-032026.json"])
+        pg.click('[data-asst-chip][data-name="gstr2b-032026.json"] [data-asst-chip-x]'); pg.wait_for_timeout(200)
+        ok(pg.evaluate("AUpload.pending().map(u => u.name)") == ["26as.txt", "certificate-format.docx"], "a file taken off with × before sending")
+        tB = ask(pg, "Keep these two")
+        attach(["agreement.docx", "photo.png", "notice-copy.pdf"], AI_DONE)
+        for n in ("photo.png", "notice-copy.pdf"): pg.click('[data-asst-chip][data-name="%s"] [data-asst-chip-x]' % n); pg.wait_for_timeout(150)
         print("    " + json.dumps({k: [v["kind"], v["by"], v["acts"]] for k, v in ups.items()}))
         want = {"bill.pdf": ("bill", "rules", ["purchase", "ask"]), "sales-register.xlsx": ("register", "rules", ["importP", "importS", "ask"]), "bank-statement.csv": ("bank", "rules", ["bank"]),
                 "26as.txt": ("as26", "rules", ["as26"]), "certificate-format.docx": ("certificate", "rules", ["keep", "ask"]), "agreement.docx": ("other", "ai", ["ask"]), "photo.png": ("bill", "ai", ["purchase", "sales", "ask"]),
@@ -347,56 +373,75 @@ try:
         ok("HDFC Bank" in ups["bank-statement.csv"]["summary"] and "6789" in ups["bank-statement.csv"]["summary"], "the statement's line: the bank and the account's last digits (%s)" % ups["bank-statement.csv"]["summary"])
         ok("4 rows" in ups["sales-register.xlsx"]["summary"] and "2025-26" in ups["26as.txt"]["summary"] and "blank" in ups["certificate-format.docx"]["summary"], "the register, 26AS and certificate lines %s" % [ups["sales-register.xlsx"]["summary"], ups["26as.txt"]["summary"], ups["certificate-format.docx"]["summary"]])
         ok("GSTR-2B" in ups["gstr2b-032026.json"]["summary"] and "3 invoices" in ups["gstr2b-032026.json"]["summary"] and "03-2026" in ups["gstr2b-032026.json"]["summary"], "the GSTR-2B file: a register to import (%s)" % ups["gstr2b-032026.json"]["summary"])
-        ok(pg.locator('[data-name="gstr2b-032026.json"] [data-asst-act="importP"]').count() == 1, "GSTR-2B: Import in Purchase (the upload pages' import), offered, not done")
-        ok("ASMT-10" in ups["notice-copy.pdf"]["summary"] and "/notices/" in ups["notice-copy.pdf"]["path"], "the notice in the batch: the notice flow (stored with the notices; Read the notice and draft a reply)")
-        ok(pg.evaluate("ASST.st().attach == null || !/notice-copy/.test(ASST.st().attach.name || '')"), "in a batch, the notice is not attached by itself")
+        ok("ASMT-10" in ups["notice-copy.pdf"]["summary"] and "/notices/" in ups["notice-copy.pdf"]["path"], "the notice among the files: stored with the notices")
         ok(all("/uploads/" in u["path"] for n, u in ups.items() if u["kind"] != "notice"), "the others are stored in the firm's private folder (…/uploads/)")
-        seen = json.load(__import__("urllib.request").request.urlopen(FNURL + "/__seen"))
-        cl = [x for x in seen if x["kind"] == "classify"]
-        ok(len(cl) == 2 and sum(1 for x in cl if x["image"]) == 1 and any("RENT AGREEMENT" in x["text"] for x in cl), "the AI was asked about 2 files only: the picture as it is, the Word file as its text")
-        ok(db.one("select count(*) from assistant_uploads") == str(int(rows0) + 9) and db.one("select count(*) from assistant_uploads where action is not null") == "0", "each upload is recorded; no step taken")
-        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 and pg.evaluate("(S.jobs || []).length") == jobs0, "nothing was added to Bank or Purchase by itself")
-        ok(pg.locator("[data-asst-uploads] [data-asst-kind]").count() >= 9, "each file shows its kind, its line and its buttons")
-        shot(pg, "05c-uploads")
-        # a step, on the click: the certificate format kept; the statement added to Bank for review
-        pg.click('[data-name="certificate-format.docx"] [data-asst-act="keep"]'); pg.wait_for_timeout(600)
-        ok(db.one("select action from assistant_uploads where name = 'certificate-format.docx'") == "keep", "Use for a certificate: on the click, recorded")
-        ok(pg.evaluate("ASST.ups().some(x => /certificate-format/.test(x.name)) && !ASST.ups().some(x => /notice/.test(x.name))"), "the certificate format (and the other files, not the notices) go to the certificate tool with the next question (ASST.ups)")
-        # the stand-in has no credit ledger (charge_usage): the reading is not charged here; on staging it is, as on Bank
-        pg.evaluate("() => { window.charge = async () => true; }")
-        pg.evaluate("() => { window.__toasts = []; const t0 = window.toast; window.toast = (m, ...r) => { window.__toasts.push(String(m)); return t0(m, ...r); }; }")
-        pg.click('[data-name="bank-statement.csv"] [data-asst-act="bank"]')
-        for _ in range(60):
-            if pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count(): break
-            pg.wait_for_timeout(250)
-        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 + 1 and pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count() == 1, "Add to Bank for review: the statement is in Bank, for review (%s)" % [stmts0, pg.evaluate("(S.bank && S.bank.stmts || []).length"), pg.inner_text('[data-name="bank-statement.csv"]')[:300], pg.evaluate("window.__toasts || []"), pg.evaluate("[S.view, S.coId, S.bank && S.bank.cid, S.bank && S.bank.busy, S.bank && S.bank.lastFail, S.bank && S.bank.moved, S.creditStop || null]")])
-        pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
-        # Ask about it: the Word file's text goes with the question (masked), to the file model, not the notice one
-        pg.click('[data-name="agreement.docx"] [data-asst-act="ask"]'); pg.wait_for_timeout(300)
-        ok(pg.evaluate("ASST.st().attach && ASST.st().attach.kind === 'other' && /RENT AGREEMENT/.test(ASST.st().attach.text || '')"), "Ask about it: the file is attached to the next question")
+        # the next steps: buttons under the answer of the message the file went with (not a card of its own in the thread)
+        A = pg.locator('[data-asst-turn="%s"]' % tA["id"]); B = pg.locator('[data-asst-turn="%s"]' % tB["id"])
+        ok(A.locator('[data-asst-fileacts] [data-name="bill.pdf"] [data-asst-act="purchase"]').count() == 1 and A.locator('[data-name="sales-register.xlsx"] [data-asst-act="importS"]').count() == 1 and A.locator('[data-name="bank-statement.csv"] [data-asst-act="bank"]').count() == 1
+           and B.locator('[data-name="certificate-format.docx"] [data-asst-act="keep"]').count() == 1 and B.locator('[data-name="26as.txt"] [data-asst-act="as26"]').count() == 1 and pg.locator("[data-asst-uploads]").count() == 0,
+           "each file's next steps are buttons under the answer it went with (Add to Purchase / Import in Sales / Add to Bank; Use for a certificate)")
+        shot(pg, "05c-uploads", '[data-asst-turn="%s"]' % tA["id"])
+        # Ask about it: the question itself now; the Word file's text goes with it (masked), to the file model, not the notice one
         t = ask(pg, "What is in agreement.docx? Summarise it.")
         seen = json.load(__import__("urllib.request").request.urlopen(FNURL + "/__seen"))
         last = [x for x in seen if x["kind"] == "ask"][-1:]
         ok("20,000" in t["text"] and last and "RENT AGREEMENT" in last[0]["fileText"] and last[0]["model"] == "claude-sonnet-5-5", "the answer about the file (the model had its text; Sonnet, not the notice model) %s" % [t["text"][:200], last])
-        ok(not t.get("notice"), "it is not read as a notice")
-        # dropped on the panel: the same as Upload
-        n0 = pg.evaluate("AUpload.list().length")
-        pg.evaluate("""() => { const dt = new DataTransfer(); dt.items.add(new File(["Statement of Account\\nHDFC Bank\\nAccount No: 50100999988887\\nIFSC: HDFC0001234\\n\\nDate,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance\\n02/03/2026,NEFT CR MARIGOLD,N1,02/03/2026,,1000.00,2000.00\\n"], "march.csv", {type: "text/csv"}));
-          const el = document.querySelector("[data-asst-panel]"); el.dispatchEvent(new DragEvent("dragover", {bubbles: true, cancelable: true, dataTransfer: dt})); el.dispatchEvent(new DragEvent("drop", {bubbles: true, cancelable: true, dataTransfer: dt})); }""")
+        ok(not t.get("notice") and [f["name"] for f in t.get("filesIn") or []] == ["agreement.docx"], "it is not read as a notice; the message carries the one file")
+        cl = [x for x in seen if x["kind"] == "classify"]
+        ok(len(cl) == 2 and sum(1 for x in cl if x["image"]) == 1 and any("RENT AGREEMENT" in x["text"] for x in cl), "the AI was asked what a file is for 2 files only: the picture as it is, the Word file as its text")
+        ok(db.one("select count(*) from assistant_uploads") == str(int(rows0) + 9) and db.one("select count(*) from assistant_uploads where action is not null") == "0", "each upload is recorded; no step taken")
+        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 and pg.evaluate("(S.jobs || []).length") == jobs0, "nothing was added to Bank or Purchase by itself")
+        # a step, on the click: the certificate format kept; the statement added to Bank for review
+        B.locator('[data-name="certificate-format.docx"] [data-asst-act="keep"]').click(); pg.wait_for_timeout(600)
+        ok(db.one("select action from assistant_uploads where name = 'certificate-format.docx'") == "keep", "Use for a certificate: on the click, recorded")
+        ok(pg.evaluate("ASST.ups().some(x => /certificate-format/.test(x.name)) && !ASST.ups().some(x => /notice/.test(x.name))"), "the files sent (not the notices) go to the certificate tool with the later questions (ASST.ups)")
+        pg.evaluate("ASST.st().q = ''; ASST.draw()")
+        # the stand-in has no credit ledger (charge_usage): the reading is not charged here; on staging it is, as on Bank
+        pg.evaluate("() => { window.charge = async () => true; }")
+        A.locator('[data-name="bank-statement.csv"] [data-asst-act="bank"]').click()
         for _ in range(60):
-            if pg.evaluate("AUpload.list().length") > n0 and pg.evaluate("AUpload.list().slice(-1)[0].state") == "ready": break
+            if pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count(): break
             pg.wait_for_timeout(250)
-        ok(pg.evaluate("AUpload.list().slice(-1)[0].name") == "march.csv" and pg.evaluate("AUpload.list().slice(-1)[0].kind") == "bank", "a file dropped on the panel is uploaded and told (a bank statement)")
-        shot(pg, "05d-dropped")
-        # Import in Sales: the sales register opens in the Sales page's own import (upload pages), for review; nothing posted
+        ok(pg.evaluate("(S.bank && S.bank.stmts || []).length") == stmts0 + 1 and pg.locator('[data-name="bank-statement.csv"] [data-asst-done="bank"]').count() == 1, "Add to Bank for review: the statement is in Bank, for review (%s)" % [stmts0, pg.evaluate("(S.bank && S.bank.stmts || []).length"), pg.evaluate("window.__toasts || []"), pg.evaluate("[S.view, S.coId, S.bank && S.bank.cid, S.bank && S.bank.busy, S.bank && S.bank.lastFail, S.bank && S.bank.moved, S.creditStop || null]")])
         pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
-        pg.click('[data-name="sales-register.xlsx"] [data-asst-act="importS"]')
+        # dropped on the panel: "Drop files here", then a chip in the box (nothing in the conversation)
+        n0 = pg.locator("[data-asst-turn]").count()
+        DROP = """(kind) => { const dt = new DataTransfer(); dt.items.add(new File(["Statement of Account\\nHDFC Bank\\nAccount No: 50100999988887\\nIFSC: HDFC0001234\\n\\nDate,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance\\n02/03/2026,NEFT CR MARIGOLD,N1,02/03/2026,,1000.00,2000.00\\n"], "march.csv", {type: "text/csv"}));
+          const el = document.querySelector("[data-asst-panel]"); el.dispatchEvent(new DragEvent(kind, {bubbles: true, cancelable: true, dataTransfer: dt})); }"""
+        pg.evaluate(DROP, "dragover"); pg.wait_for_timeout(200)
+        ok(pg.locator("[data-asst-dropzone]").count() == 1 and "Drop files here" in pg.inner_text("[data-asst-dropzone]"), "files dragged over the panel: 'Drop files here'")
+        shot(pg, "05d-drop-overlay")
+        pg.evaluate(DROP, "drop")
+        for _ in range(60):
+            if pg.evaluate("AUpload.pending().some(u => u.name === 'march.csv' && u.state === 'ready')"): break
+            pg.wait_for_timeout(250)
+        ok(pg.evaluate("AUpload.pending().map(u => [u.name, u.kind])") == [["march.csv", "bank"]] and pg.locator("[data-asst-turn]").count() == n0, "a file dropped on the panel is a chip in the box, told (a bank statement); nothing in the conversation")
+        shot(pg, "05d-dropped")
+        pg.click('[data-asst-chip][data-name="march.csv"] [data-asst-chip-x]'); pg.wait_for_timeout(200)
+        # Import in Sales: the sales register opens in the Sales page's own import (upload pages), for review; nothing posted
+        A.locator('[data-name="sales-register.xlsx"] [data-asst-act="importS"]').click()
         for _ in range(60):
             if pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count(): break
             pg.wait_for_timeout(250)
         ok(pg.locator('[data-name="sales-register.xlsx"] [data-asst-done="importS"]').count() == 1 and pg.evaluate("typeof SheetImport === 'object' && S.view === 'company'"), "Import in Sales: the register goes to the Sales page's import, for review")
         pg.evaluate("SheetImport.close()"); pg.wait_for_timeout(300)
         pg.evaluate("ASST.open()"); pg.wait_for_timeout(400)
+        # ---------- two financial statements attached and compared (02-Nov-2026): FinCom's differences, line by line, with the
+        # question; the files alone are read (no client_id), so the books' own statements card does not answer instead
+        from make_fs import fs_pdf
+        fsa, fsb = os.path.join(OUT, "uploads", "Example FS draft.pdf"), os.path.join(OUT, "uploads", "Example FS final.pdf"); fs_pdf(fsa, "draft"); fs_pdf(fsb, "final")
+        pg.set_input_files("[data-asst-upload-input]", [fsa, fsb])
+        for _ in range(120):
+            if pg.evaluate("AUpload.pending().length === 2 && AUpload.pending().every(u => u.state === 'ready')"): break
+            pg.wait_for_timeout(250)
+        t = ask(pg, "Compare these two financial statements")
+        seen = json.load(__import__("urllib.request").request.urlopen(FNURL + "/__seen"))
+        d = [x for x in seen if x["kind"] == "docs"][-1:]
+        cmp = [r for r in t.get("results") or [] if r.get("tool") == "compare_statements"]
+        ok(d and d[0]["docs"] == 2 and "Trade receivables" in d[0]["q"] and "1,50,000" in d[0]["q"], "compare: the AI was given both PDFs and FinCom's differences (%s)" % (d[0] if d else seen[-2:]))
+        ok(not t.get("fs") and cmp and any(r["line"].endswith("Trade receivables") and r["d"] == 150000 for r in cmp[0]["rows"]) and "1,50,000.00" in t.get("text", ""),
+           "compare: FinCom's table of the differences under the answer; not the books' statements card (%s)" % [bool(t.get("fs")), len(cmp[0]["rows"]) if cmp else None, t.get("text", "")[:120]])
+        shot(pg, "05e-compare")
         # ---------- a file
         t = ask(pg, "An Excel of TDS by deductee with PANs")
         ok(len(t["files"]) == 1 and t["files"][0]["kind"] == "xlsx" and pg.locator('[data-asst-file="xlsx"]').count() == 1, "the Excel file is listed in the chat")

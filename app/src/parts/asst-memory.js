@@ -27,6 +27,7 @@ export function shownOf(t) {
   (t.files || []).forEach((f) => parts.push("file " + f.name));
   (t.drafts || []).forEach((d) => parts.push("draft " + d.title));
   if (t.attach && t.attach.name) parts.push("attached " + t.attach.name);
+  (t.filesIn || []).forEach((f) => parts.push("attached " + f.name));
   return parts.length ? " [Shown: " + parts.join("; ").slice(0, SHOWN_MAX) + "]" : "";
 }
 
@@ -43,7 +44,7 @@ export function installMemory(A) {
     const fs = last ? { from: last.fs.from || null, to: last.fs.to || null, cmp: last.fs.cmp === "fy" ? "fy" : "same", notes: last.fs.notes !== false } : null;
     const files = [], seen = new Set();
     const add = (f) => { if (!f || !f.path || seen.has(f.path)) return; seen.add(f.path); files.push({ path: f.path, name: String(f.name || "").slice(0, 160), type: f.type || "", kind: f.kind || "", summary: String(f.summary || "").slice(0, 300) }); };
-    list.forEach((t) => add(t.attach));
+    list.forEach((t) => { add(t.attach); (t.filesIn || []).forEach(add); });
     try { (typeof AUpload === "object" && AUpload.list ? AUpload.list() : []).filter((u) => u.path && u.state === "ready").forEach(add); } catch (e) { /* the Upload not loaded */ }
     (this.ups ? this.ups() : []).forEach(add);
     return { fs, files: files.slice(-10) };

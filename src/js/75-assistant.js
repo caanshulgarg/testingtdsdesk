@@ -45,10 +45,15 @@ const ASST = {
   async ask(q){
     const a = this.st();
     q = String(q == null ? a.q : q).trim();
-    if (!q || a.busy) return;
+    if (a.busy) return;
     if (!Cloud.on()){ toast("Sign in to the firm account to use the assistant."); return; }
+    // the files in the question box go with it as one message (asst-upload.js): {q, files, att, cmp}, false while one is uploading
+    const fx = this.prep ? this.prep(q) : null;
+    if (fx === false) return;
+    if (fx) q = fx.q;
+    if (!q) return;
     const turn = {id: "t" + Date.now().toString(36), q, at: new Date().toISOString(), cid: this.cid(), live: "", text: "", labels: [], results: [], slices: [], tools: [], files: [], drafts: [],
-      notice: null, screens: [], verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null, done: false, attach: a.attach};
+      notice: null, screens: [], verdicts: [], links: [], unchecked: [], citations: {ok: [], dropped: []}, error: null, done: false, attach: a.attach, filesIn: fx ? fx.files : null};
     const list = this.turns(); list.push(turn);
     a.q = ""; a.busy = true; const attach = a.attach; a.attach = null; this.draw();
     this.keepCursor();
@@ -56,9 +61,10 @@ const ASST = {
     const tick = () => { const n = Date.now(); if (n - last > 70){ last = n; this.draw(); } };
     try {
       await Cloud.fresh().catch(() => {});
+      if (fx && fx.cmp) await fx.cmp(turn);   // two statements compared line by line first (asst-compare.js)
       const c = Cloud.cfg(), s = Cloud.sess();
       const r = await fetch(this.url(), {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": "application/json"},
-        body: JSON.stringify({action: "ask", question: q, client_id: turn.cid, history: this.history(), thread: this.thread ? this.thread() : null, attachments: attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
+        body: JSON.stringify({action: "ask", question: (fx && fx.sendQ) || q, client_id: fx && fx.noBooks ? null : turn.cid, history: this.history(), thread: this.thread ? this.thread() : null, attachments: fx ? fx.att : attach ? [attach] : [], uploads: this.ups(), firm: this.letterhead(), lang: a.lang || "en-IN"})});
       if (!r.ok || !String(r.headers.get("content-type") || "").includes("event-stream")){
         const j = await r.json().catch(() => ({}));
         throw Object.assign(new Error(j.error || ("The assistant could not be reached (" + r.status + ").")), {kind: j.kind || "other"});
@@ -199,50 +205,11 @@ const ASST = {
       saveFile(f.name, await r.blob());
     } catch (e){ toast("Could not download: " + (e && e.message)); }
   },
-  // a notice: into the firm's private bucket (<firm>/<client>/notices/...), then attached to the next question
-  async attach(file){
-    const a = this.st(), cid = this.cid();
-    if (!file) return;
-    if (!cid){ toast("Open the client the notice is for first."); return; }
-    if (!/pdf|png|jpe?g|webp/i.test(file.type || file.name)){ toast("A notice must be a PDF or a picture."); return; }
-    if (file.size > 20 * 1024 * 1024){ toast("The notice is larger than 20 MB."); return; }
-    a.uploading = true; this.draw();
-    try {
-      await Cloud.fresh().catch(() => {});
-      const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name || "notice").replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
-      const path = Cloud.st.firm + "/" + cid + "/notices/" + Date.now().toString(36) + "-" + name;
-      const r = await fetch(String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/"),
-        {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": file.type || "application/pdf"}, body: file});
-      if (!r.ok) throw new Error("upload " + r.status);
-      a.attach = {path, name: file.name, type: file.type || "application/pdf"};
-      if (!a.q) a.q = "Read this notice: what does it ask, by when, and check it against the books. Then draft a reply.";
-    } catch (e){ toast("The notice could not be stored: " + (e && e.message)); }
-    a.uploading = false; this.draw();
-  },
   // files for the assistant to read in this conversation (a signed balance sheet, a certificate format, a letterhead):
   // into the firm's private bucket (<firm>/<client or _firm>/uploads/...), sent with every question of the conversation;
   // the tool reads them, the model is not sent them as they are
   ups(){ const a = this.st(), k = this.key(); a.upsBy = a.upsBy || {}; return a.upsBy[k] = a.upsBy[k] || []; },
-  async upload(files){
-    const a = this.st(), cid = this.cid(), list = Array.from(files || []);
-    if (!list.length) return;
-    if (!Cloud.on()){ toast("Sign in to the firm account to upload."); return; }
-    a.uploading = true; this.draw();
-    for (const file of list.slice(0, 20)){
-      if (!/\.(pdf|xlsx|xls|docx|png|jpe?g)$/i.test(file.name || "")){ toast(file.name + ": upload a PDF, Excel, Word or picture file."); continue; }
-      if (file.size > 20 * 1024 * 1024){ toast(file.name + " is larger than 20 MB."); continue; }
-      try {
-        await Cloud.fresh().catch(() => {});
-        const c = Cloud.cfg(), s = Cloud.sess(), name = String(file.name).replace(/[^A-Za-z0-9._-]+/g, "-").slice(-80);
-        const path = Cloud.st.firm + "/" + (cid || "_firm") + "/uploads/" + Date.now().toString(36) + "-" + name;
-        const r = await fetch(String(c.url).replace(/\/+$/, "") + "/storage/v1/object/assistant-files/" + path.split("/").map(encodeURIComponent).join("/"),
-          {method: "POST", headers: {apikey: c.key, Authorization: "Bearer " + s.access_token, "Content-Type": file.type || "application/octet-stream"}, body: file});
-        if (!r.ok) throw new Error("upload " + r.status);
-        this.ups().push({path, name: file.name, type: file.type || ""});
-      } catch (e){ toast(file.name + " could not be stored: " + (e && e.message)); }
-    }
-    a.uploading = false; this.draw();
-  },
+  // the files themselves are chosen, dropped or pasted into the question box (app/src/parts/asst-upload.js, ASST.upload/prep)
   unUpload(path){ const l = this.ups(), i = l.findIndex(x => x.path === path); if (i >= 0) l.splice(i, 1); this.draw(); },
   // the notice's reply date on the client's due list: only when the user clicks
   async addTask(t){
@@ -275,7 +242,7 @@ const ASST = {
   async save(quiet){
     const a = this.st(), k = this.key(), cid = this.cid();
     const turns = this.turns().filter(t => t.done).map(t => ({q: t.q, at: t.at, text: t.text, labels: t.labels, results: t.results.map(r => ({tool: r.tool, title: r.title, columns: r.columns, rows: (r.rows || []).slice(0, 500), summary: r.summary, basis: r.basis, period: r.period, params: r.params})),
-      files: t.files, drafts: t.drafts, fs: t.fs || null, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, choices: t.choices || null, unchecked: t.unchecked, error: t.error}));
+      files: t.files, filesIn: t.filesIn ? t.filesIn.map(f => ({path: f.path, name: f.name, type: f.type, size: f.size, kind: f.kind})) : undefined, attach: t.attach ? {path: t.attach.path, name: t.attach.name} : undefined, drafts: t.drafts, fs: t.fs || null, notice: t.notice, noticeId: t.noticeId, checklist: t.checklist, annexures: t.annexures, cases: t.cases, verdicts: t.verdicts, links: t.links, citations: t.citations, screens: t.screens, choices: t.choices || null, unchecked: t.unchecked, error: t.error}));
     if (!turns.length){ if (!quiet) toast("Nothing to save yet."); return; }
     const title = turns[0].q.slice(0, 120);
     try {

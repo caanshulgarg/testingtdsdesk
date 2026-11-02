@@ -6,6 +6,7 @@ import Msg from "../parts/Msg.jsx";
 import ListTable from "../parts/ListTable.jsx";
 import { ClearBtn } from "../parts/Bell.jsx";
 import NeedAction from "../parts/NeedAction.jsx";
+import HeldBlock, { foldHeld } from "../parts/HeldBlock.jsx";
 
 const FILTERS = [["all", "All"], ["waiting", "Waiting"], ["held", "Held"], ["mismatch", "Mismatch"], ["today", "Today"]];
 // round 20 (d.4): "queued": the cloud queued the line (over 50 at once); its drain fills the state later
@@ -22,16 +23,20 @@ const n = (k) => k + (k === 1 ? " entry" : " entries");
 // Clear (08-Oct-2026): each "Needs you" group and the "being fetched" note has a Clear; cleared (by this person: their
 // lines, AlertClear in src/js/63-alerts.js) they are not shown again, until another line comes. The table below keeps
 // every line, with its Apply now: clearing hides the notification only, it never applies or releases a line.
-function SyncFlow({ flow, canApply, busy }) {
+// 02-Nov-2026 (migration 136; the owner: "an option to update the Day Book from there only, and after the update it should
+// close the error"): a company's day groups folded into ONE block (parts/HeldBlock.jsx)
+function SyncFlow({ flow: all, canApply, busy }) {
+  const flow = foldHeld(all), blocks = flow.blocks;
   const AC = typeof AlertClear === "object" ? AlertClear : null;
   const needs = flow.needs.map((g) => ({ g, clr: AC ? AC.item("needs:" + g.key, g.lines.map((r) => AlertHub.lineAtom(r)), g.text) : null })).filter(({ clr }) => !clr || !AC.cleared(clr));
   const fclr = AC && flow.fetching.length ? AC.item("fetching:" + (S.syncClient || "all"), flow.fetching.map(({ r }) => AlertHub.lineAtom(r)), n(flow.fetching.length) + " being fetched from Tally") : null;
   const fetching = fclr && AC.cleared(fclr) ? [] : flow.fetching;
-  if (!needs.length && !fetching.length) return null;
+  if (!needs.length && !fetching.length && !blocks.length) return null;
   const reasons = [...new Set(fetching.map((w) => w.why).filter((w) => / is offline$|^Tally not open on /.test(w)))];
   return <>
-    {needs.length > 0 && <div className="bk-alert warn" data-sync-needs="" style={{ margin: "0 0 8px" }}>
+    {needs.length + blocks.length > 0 && <div className="bk-alert warn" data-sync-needs="" style={{ margin: "0 0 8px" }}>
       <b>Needs you</b>
+      {blocks.map((b) => <HeldBlock key={b.key} b={b} canApply={canApply} />)}
       {needs.map(({ g, clr }) => <div key={g.key} data-needs-group={g.key} style={{ margin: "6px 0 0" }}>
         <span data-needs-text="">{g.text}</span>{" "}
         <NeedAction g={g} canApply={canApply} busy={busy} />
