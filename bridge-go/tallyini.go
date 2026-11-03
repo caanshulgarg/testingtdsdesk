@@ -298,7 +298,7 @@ func tallyIniApply(path, addon string) (M, error) {
 	}
 	e["added"] = toAny(added)
 	if cstate == connectEnabled {
-		e["connect"] = connectEnabled
+		e["connect"], e["connectAt"] = connectEnabled, e["at"]
 	}
 	return e, nil
 }
@@ -372,8 +372,11 @@ func tallyIniStep(log func(string)) []M {
 		return out // nothing found: nothing kept
 	}
 	iniSt.mu.Lock()
+	_ = tallyIniListLocked() // the results kept from before (the setup's own step, an earlier start)
 	for _, e := range out {
-		iniSt.files[strings.ToLower(filepath.Clean(str(e["path"])))] = e
+		k := strings.ToLower(filepath.Clean(str(e["path"])))
+		keepConnectEnabled(e, iniSt.files[k])
+		iniSt.files[k] = e
 	}
 	all := tallyIniListLocked()
 	iniSt.mu.Unlock()

@@ -188,3 +188,33 @@ func TestR253ConnectFindsRestartedTallyAtOnce(t *testing.T) {
 		t.Fatal("Tally asked again although nothing changed")
 	}
 }
+
+// the setup switches the connection on, then the bridge's own first start runs the step again and finds it on: the beat
+// still says "enabled; Tally needs one restart" (gate g253 n2 on TallyPrime 7.1 found "already"), for 24 hours
+func TestR253IniEnabledKeptAcrossSecondStep(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, "")
+	_, p := r253Ini(t, "[Tally]\r\nUser TDL = Yes\r\nClient Server = None\r\nServerPort = 9000\r\n")
+	iniSt.mu.Lock()
+	iniSt.files = map[string]M{}
+	iniSt.mu.Unlock()
+	first := tallyIniStep(func(string) {})
+	if len(first) != 1 || str(first[0]["connect"]) != connectEnabled {
+		t.Fatalf("the setup's step: %v", first)
+	}
+	tallyIniStep(func(string) {}) // the bridge's first start
+	b := tallyIniBeat()
+	if len(b) != 1 || str(obj(b[0])["connect"]) != connectEnabled || tallyConnectSay("no Tally running in this login", b) != connectSay {
+		t.Fatalf("after the second step: %v", b)
+	}
+	if !strings.Contains(r253Read(t, p), "Client Server = Both") {
+		t.Fatal("the file")
+	}
+	old := nowFn
+	nowFn = func() time.Time { return time.Now().Add(25 * time.Hour) }
+	defer func() { nowFn = old }()
+	tallyIniStep(func(string) {})
+	if b := tallyIniBeat(); str(obj(b[0])["connect"]) != connectAlready {
+		t.Fatalf("a day later: %v", b)
+	}
+}

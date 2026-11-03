@@ -199,6 +199,23 @@ func isNoWrite(err error) bool {
 	return err != nil && (errors.Is(err, os.ErrPermission) || strings.Contains(strings.ToLower(err.Error()), "access is denied"))
 }
 
+// the setup switched the connection on, and the bridge's own first start finds it on ("already"): the file's state
+// stays "enabled; Tally needs one restart" (with the time it was switched on) for 24 hours, so the beat still says it
+// until Tally has been restarted and answers (gate g253 n2 on TallyPrime 7.1)
+func keepConnectEnabled(e, prev M) {
+	if prev == nil || str(e["connect"]) != connectAlready || str(prev["connect"]) != connectEnabled {
+		return
+	}
+	at, err := time.Parse(time.RFC3339, or(str(prev["connectAt"]), str(prev["at"])))
+	if err != nil || nowFn().Sub(at) >= 24*time.Hour {
+		return
+	}
+	e["connect"], e["connectAt"] = connectEnabled, at.Format(time.RFC3339)
+	if p := prev["serverPort"]; p != nil && e["serverPort"] == nil {
+		e["serverPort"] = p
+	}
+}
+
 // the beat's words for the person: while one of the tally.ini files was switched on in the last 24 hours and none of
 // the user's Tallys answers yet ("" otherwise)
 func tallyConnectSay(why string, ini []any) string {
@@ -210,7 +227,7 @@ func tallyConnectSay(why string, ini []any) string {
 		if str(o["connect"]) != connectEnabled {
 			continue
 		}
-		if at, err := time.Parse(time.RFC3339, str(o["at"])); err == nil && nowFn().Sub(at) < 24*time.Hour {
+		if at, err := time.Parse(time.RFC3339, or(str(o["connectAt"]), str(o["at"]))); err == nil && nowFn().Sub(at) < 24*time.Hour {
 			return connectSay
 		}
 	}

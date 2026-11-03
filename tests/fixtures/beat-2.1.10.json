@@ -72,56 +72,6 @@
       "reason": "closed",
       "skipped": false,
       "state": "closed"
-    },
-    {
-      "error": "Tally is not open (nothing listens on this port)",
-      "n": 0,
-      "ok": false,
-      "owner": "unknown",
-      "port": 9000,
-      "reason": "closed",
-      "skipped": false,
-      "state": "closed"
-    },
-    {
-      "error": "Tally is not open (nothing listens on this port)",
-      "n": 0,
-      "ok": false,
-      "owner": "unknown",
-      "port": 9000,
-      "reason": "closed",
-      "skipped": false,
-      "state": "closed"
-    },
-    {
-      "error": "Tally is not open (nothing listens on this port)",
-      "n": 0,
-      "ok": false,
-      "owner": "unknown",
-      "port": 9000,
-      "reason": "closed",
-      "skipped": false,
-      "state": "closed"
-    },
-    {
-      "error": "Tally is not open (nothing listens on this port)",
-      "n": 0,
-      "ok": false,
-      "owner": "unknown",
-      "port": 9000,
-      "reason": "closed",
-      "skipped": false,
-      "state": "closed"
-    },
-    {
-      "error": "Tally is not open (nothing listens on this port)",
-      "n": 0,
-      "ok": false,
-      "owner": "unknown",
-      "port": 9000,
-      "reason": "closed",
-      "skipped": false,
-      "state": "closed"
     }
   ],
   "postBatchBank": 50,
