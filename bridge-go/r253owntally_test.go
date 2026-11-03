@@ -43,6 +43,7 @@ func r253Server(t *testing.T, procs, listeners string, iniPorts ...int) {
 	t.Cleanup(func() { tallyIniDirsFn, otherBridgeClaimFn, askAfreshFn = old, oldClaim, oldAsk })
 	resetIniPorts()
 	resetOtherUser()
+	askAfreshAt.Store(0) // the once-a-minute guard, as at a bridge's start
 	setCfg("TallyPorts", "auto")
 	setCfg("OnlyMySession", true)
 	coMu.Lock()

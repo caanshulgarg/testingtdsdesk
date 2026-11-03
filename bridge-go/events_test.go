@@ -221,7 +221,8 @@ func TestTallyOpenAsksNothing(t *testing.T) {
 	}
 	tallyStandInClosed = false
 	forgetTallyOpen()
-	if st := openCompaniesCached(); len(st) != 1 || str(st[0]["tallyState"]) != "open" {
+	// 2.5.3: tally.ini's ports and 9000 are in the list too (nothing listening there: closed, nothing sent)
+	if st := openCompaniesCached(); len(st) < 1 || toInt(st[0]["port"]) != s.port || str(st[0]["tallyState"]) != "open" {
 		t.Fatalf("cached companies: %v", st)
 	}
 	if n := s.count(""); n != 0 {

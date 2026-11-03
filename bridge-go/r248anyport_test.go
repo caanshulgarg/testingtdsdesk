@@ -274,22 +274,38 @@ func TestTypedPortRefused(t *testing.T) {
 	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser || !strings.Contains(str(res["error"]), "another Windows user") {
 		t.Fatalf("by Windows user: %v", res)
 	}
-	// a process the bridge may not open (another user's, as a non-administrator): refused too; Windows not saying its
-	// session: refused as not known (R5-1)
+	// a process the bridge may not open, and Windows not saying its session. 2.5.3 (the owner's rule: skipped only when
+	// positively another user's): the owner unknown, tried and kept when it answers as Tally, unless another FinCom Bridge
+	// of this computer uses it
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
-	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useUnknown {
+	oldC := otherBridgeClaimFn
+	t.Cleanup(func() { otherBridgeClaimFn = oldC })
+	otherBridgeClaimFn = func(int) string { return "ravi" }
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser || !strings.Contains(str(res["error"]), "ravi") {
+		t.Fatalf("unopenable process, session not known, another bridge uses it: %v", res)
+	}
+	otherBridgeClaimFn = func(int) string { return "" }
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); res["ok"] != true {
 		t.Fatalf("unopenable process, session not known: %v", res)
 	}
+	setCfg("TallyPorts", "auto")
+	theirs.mu.Lock()
+	theirs.reqs = nil
+	theirs.mu.Unlock()
 	fakeWindows(t, []fakeProc{{20, 2, "java", ""}}, [][2]int{{theirs.port, 20}})
 	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useOtherUser {
 		t.Fatalf("unopenable process in another session: %v", res)
 	}
 	fakeWindows(t, nil, nil)
-	// Windows could not say
+	// Windows could not say. 2.5.3: the owner unknown, tried and kept when it answers as Tally (no other bridge uses it)
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, errors.New("GetExtendedTcpTable: denied") }
-	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); str(res["reason"]) != useUnknown {
+	if res := postUse(t, fmt.Sprintf(`{"port": %d}`, theirs.port)); res["ok"] != true {
 		t.Fatalf("unknown: %v", res)
 	}
+	setCfg("TallyPorts", "auto")
+	theirs.mu.Lock()
+	theirs.reqs = nil
+	theirs.mu.Unlock()
 	if len(theirs.ids()) != 0 {
 		t.Fatalf("another user's Tally was asked: %v", theirs.ids())
 	}

@@ -361,10 +361,9 @@ func portPlan() (string, []M) {
 		}
 	}
 	more := mergePorts(tallyIniPorts(), []int{9000})
-	if lis == nil {
-		if mode == "auto" {
-			mode = "fallback"
-		}
+	if lis == nil && mode == "auto" {
+		// Windows did not let the bridge list programs (and no port is set by hand): FallbackPorts too, as before
+		mode = "fallback"
 		fb, _ := cleanPorts(cfg("FallbackPorts"))
 		more = mergePorts(more, fb)
 	}
