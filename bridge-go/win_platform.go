@@ -163,8 +163,24 @@ type wtsProcessInfo struct {
 	UserSid     uintptr
 }
 
-// every process's session by the Remote Desktop service; nil when it does not say
+// every process's session by the Remote Desktop service; nil when it does not say. Kept 5 s (the plan is made often)
+var (
+	wtsMu   sync.Mutex
+	wtsAt   time.Time
+	wtsLast map[uint32]uint32
+)
+
 func wtsProcessSessions() map[uint32]uint32 {
+	wtsMu.Lock()
+	defer wtsMu.Unlock()
+	if !wtsAt.IsZero() && time.Since(wtsAt) < 5*time.Second {
+		return wtsLast
+	}
+	wtsAt, wtsLast = time.Now(), wtsProcessSessionsNow()
+	return wtsLast
+}
+
+func wtsProcessSessionsNow() map[uint32]uint32 {
 	var p *wtsProcessInfo
 	var n uint32
 	r, _, _ := procWTSEnumProcesses.Call(0, 0, 1, uintptr(unsafe.Pointer(&p)), uintptr(unsafe.Pointer(&n)))

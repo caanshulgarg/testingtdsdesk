@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -127,6 +128,12 @@ type bridgeClaim struct {
 // the other bridge keeps the Tally: its own Tally always; of two bridges that only found it, the lower bridge port
 func claimWins(c bridgeClaim, ownPort int) bool {
 	return !c.unknown || c.port < ownPort
+}
+
+// Tally is on this computer (TallyHost empty, 127.0.0.1 or localhost): only then can another bridge here share it
+func tallyHostLocal() bool {
+	h := strings.ToLower(cfgS("TallyHost"))
+	return h == "" || h == "127.0.0.1" || h == "localhost" || strings.HasPrefix(h, "127.")
 }
 
 // the user of another FinCom Bridge on this computer that keeps the Tally on this port, or "" (a hook for the tests)

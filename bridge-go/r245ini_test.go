@@ -138,7 +138,7 @@ func TestR245TallyIniApplyAndStep(t *testing.T) {
 	want := strings.ReplaceAll(pd+`\FinCom\addon\FinComRecorder.tdl`, "/", "/")
 	b1, _ := os.ReadFile(filepath.Join(d1, "tally.ini"))
 	// 2.5.3: TallyPrime's connection switched on in the same write (iniconnect253.go)
-	if string(b1) != orig+"TDL = "+want+"\r\nClient Server = Both\r\nServer Port = 9000\r\n" {
+	if string(b1) != orig+"TDL = "+want+"\r\nClient Server = Both\r\nServerPort = 9000\r\n" {
 		t.Fatalf("d1: %q", b1)
 	}
 	if bak, _ := os.ReadFile(filepath.Join(d1, "tally.ini.fincom-bak")); string(bak) != orig {
@@ -146,7 +146,7 @@ func TestR245TallyIniApplyAndStep(t *testing.T) {
 	}
 	// User TDL = No: FinCom's add-on is not added (the client's own choice); 2.5.3: TallyPrime's connection is still
 	// switched on (the owner's approval of 03-Nov-2026), with the backup first
-	if b2, _ := os.ReadFile(filepath.Join(d2, "tally.ini")); string(b2) != "[Tally]\r\nUser TDL = No\r\nClient Server = Both\r\nServer Port = 9001\r\n" || !exists(filepath.Join(d2, "tally.ini.fincom-bak")) {
+	if b2, _ := os.ReadFile(filepath.Join(d2, "tally.ini")); string(b2) != "[Tally]\r\nUser TDL = No\r\nClient Server = Both\r\nServerPort = 9001\r\n" || !exists(filepath.Join(d2, "tally.ini.fincom-bak")) {
 		t.Fatalf("User TDL = No: %q", b2)
 	}
 	if b3, _ := os.ReadFile(target); string(b3) != "[Tally]\r\n" {

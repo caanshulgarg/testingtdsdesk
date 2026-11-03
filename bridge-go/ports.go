@@ -511,7 +511,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			continue
 		}
 		// 2.5.3: a Tally whose owner is unknown: left to another FinCom Bridge of this computer that already uses it
-		if pp["mine"] == nil {
+		if pp["mine"] == nil && tallyHostLocal() {
 			if who := otherBridgeClaimFn(toInt(pp["port"])); who != "" {
 				e["skipped"], e["reason"] = true, "another bridge"
 				e["error"] = "owner unknown; the FinCom Bridge of " + who + " on this computer uses this Tally"

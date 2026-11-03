@@ -5,7 +5,7 @@
 //
 //	Client Server = Both   ("TallyPrime acts as": None or Client becomes Both; Server or Both left as it is; the line
 //	                        added at the end of the [Tally] section when there is none)
-//	Server Port = <n>      (kept when the file names one; else added: 9000 when free, else the first free port of
+//	ServerPort = <n>       (kept when the file names one; else added: 9000 when free, else the first free port of
 //	                        9001..9999 outside FinCom Bridge's own 9100..9199, free meaning no other tally.ini names it
 //	                        and nothing listens on it now)
 //
@@ -129,7 +129,7 @@ func iniConnect(raw []byte, used func(int) bool) ([]byte, string, int, []string)
 	}
 	if port == 0 {
 		port = freeTallyPort(used)
-		add = append(add, fmt.Sprintf("Server Port = %d", port))
+		add = append(add, fmt.Sprintf("ServerPort = %d", port)) // TallyPrime's own spelling (proof72 p4)
 	}
 	if len(changed) == 0 && len(add) == 0 {
 		return raw, connectAlready, port, nil

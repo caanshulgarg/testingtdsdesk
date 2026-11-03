@@ -76,7 +76,7 @@ func TestR253IniClientNoPort(t *testing.T) {
 		t.Fatalf("apply: %v %v", e, err)
 	}
 	got := r253Read(t, p)
-	if !strings.Contains(got, "Client Server = Both\n") || !strings.Contains(got, "Server Port = 9000\n[Other]\nServer Port = 1234\n") {
+	if !strings.Contains(got, "Client Server = Both\n") || !strings.Contains(got, "ServerPort = 9000\n[Other]\nServer Port = 1234\n") {
 		t.Fatalf("file:\n%s", got)
 	}
 }
@@ -141,7 +141,7 @@ func TestR253IniPortClash(t *testing.T) {
 	if err != nil || str(e["connect"]) != connectEnabled || toInt(e["serverPort"]) != 9002 {
 		t.Fatalf("apply: %v %v", e, err)
 	}
-	if got := r253Read(t, p); !strings.Contains(got, "Server Port = 9002\r\n") || !strings.Contains(got, "Client Server = Both\r\n") {
+	if got := r253Read(t, p); !strings.Contains(got, "ServerPort = 9002\r\n") || !strings.Contains(got, "Client Server = Both\r\n") {
 		t.Fatalf("file:\n%s", got)
 	}
 	// FinCom Bridge's own range is never given to Tally
