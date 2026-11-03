@@ -22,6 +22,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 )
 
@@ -227,7 +228,8 @@ func askAfreshNow() {
 }
 
 func askAfreshBg() {
-	if !askBgRunning.CompareAndSwap(false, true) {
+	// under go test the background ask is the test's own (askAfreshFn): never one left running past a test
+	if testing.Testing() || !askBgRunning.CompareAndSwap(false, true) {
 		return
 	}
 	go func() {
