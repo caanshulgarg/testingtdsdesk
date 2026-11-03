@@ -85,9 +85,24 @@ empty), so the cloud would allow it. Hemant's bridge (and every staging bridge) 
 by hand, until the owner decides to sign and publish latest.json.sig (connector/publish.py's key, from the vault). Not
 changed here. A follow-up: let tally-ingest keep autoUpdate, rolledBack and the last update message from the beat.
 
-## Gates
+## Gates (reduced, the owner's request of 03-Nov-2026)
 
-(filled in as they end)
+| | |
+|---|---|
+| Setup | FinComBridge-Setup-2.5.3.exe, SHA-256 `5c971505d704599bb55f61d88221b770b102c24f6f200aadee808fb24a90d9a7`; program FinComBridge-2.5.3.exe `46a4cd608e87cf1636ccd67dd9d5c01850a53f0553637a4ac7e756791f2264a0`; built at 421e323d6 (bridge sources dec738975). The first 2.5.3 build (setup 84e2f8aa...dc22) was withdrawn unpublished after its gate's n2 |
+| New tests | r253owntally_test.go, r253iniconnect_test.go (failed on 2.5.2's code first: the "Tally of Windows session 0" skip, the stale 1817 entry, the missing tally.ini port), r253session_windows_test.go |
+| go test ./... | release-check.sh steps 1-6 passed at e31f22f03 (FORCE_REBUILD=1, never published): go vet Linux and Windows, go test ./..., size test, allow-list tests, go mod tidy, allow-list, reviews, test sheet |
+| Windows CI | FinCom Bridge on Windows 41621441988 at e31f22f03: Windows go tests, build, setup install tests on windows-2025 and windows-2022, all green (the build commit 421e323d6 changes only the committed setup and docs) |
+| Real Tally 7.1 + install over 2.5.2 | tally-versions g253, run 41624834556, the committed setup: c1, c2, n1 (installed over the published 2.5.2: version, port, key, settings carried), n2 (tally.ini Client Server = None switched to Both by the setup, ServerPort and every other line unchanged; the beat says "enabled; Tally needs one restart"), n3 (Tally restarted once: serves; Connect found the company 10.3 s after it was up), n4 (beat: reason open, no tallyWhy), n5 (worst 24 ms, one in flight): all PASS. Earlier runs: 41612077771 and 41621468074 (from source) |
+| Not run (reduced gates) | the CI app shares (tests/ci), an independent review session |
+| After publishing (background) | tally-versions g253 on TallyPrime 3.0, 4.1, 5.1, 6.2: run 41628510829 (results to be added here) |
+
+## Published
+
+Staging only, 03-Nov-2026: tally-ingest v71 (rollback v70); staging-next fast-forwarded to 421e323d6; next/ (main
+c13d43622, build mw0lyix5-853a70) then promoted to review/ (main 17e9f3703); review/assets/bridge-go/latest.json names
+2.5.3, the same blob as next/ (f5d48b1c). The local render of main's next/ files: FinCom's sign-in page, no page error.
+Rollback of the page: app/rollback-review.sh.
 
 ## Deploy order
 
