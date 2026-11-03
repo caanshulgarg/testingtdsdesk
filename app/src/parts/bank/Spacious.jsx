@@ -77,7 +77,7 @@ export function useSpacious() {
   // what stands above the table (the header, the notices, the tabs and filters, which can wrap) changing height: measured again
   useEffect(() => {
     if (typeof ResizeObserver !== "function") return undefined;
-    const ro = new ResizeObserver(() => fill());
+    const ro = new ResizeObserver(fillSoon);
     document.querySelectorAll("#app .bk-space > :not(.bs-grid), #app > .react-host > .sbar-band").forEach((el) => ro.observe(el));
     // and a row coming or going (the search's "set them all to", a notice): the page's box is observed for its children
     const box = document.querySelector("#app .bk-space"), mo = box && typeof MutationObserver === "function" ? new MutationObserver(() => requestAnimationFrame(fill)) : null;
@@ -87,11 +87,21 @@ export function useSpacious() {
   useEffect(() => {
     const on = () => fill();
     window.addEventListener("resize", on);
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(on) : null;
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(fillSoon) : null;
     const top = document.querySelector("header.top"); if (ro && top) ro.observe(top);
     const app = document.getElementById("app"); if (ro && app) ro.observe(app);
     return () => { window.removeEventListener("resize", on); if (ro) ro.disconnect(); };
   }, []);
+}
+// a ResizeObserver's callback never sets --bk-fill itself (Sentry FINCOM-APP-STAGING-E, 02/03-Nov-2026, Safari): --bk-fill
+// sets the table box's height, which changes #app's, which is watched too, in the same frame: the browser then reports
+// "ResizeObserver loop completed with undelivered notifications." to window.onerror. fill() runs in the next frame instead,
+// once however many observers ask
+let fillFrame = 0;
+export function fillSoon() {
+  if (fillFrame) return;
+  const go = () => { fillFrame = 0; try { fill(); } catch (e) { /* the layout is only measured: never in the way */ } };
+  fillFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(go) : setTimeout(go, 16);
 }
 export function fill() {
   const box = document.querySelector("#app .bk-space .bk-tablewrap");

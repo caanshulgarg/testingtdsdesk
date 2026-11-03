@@ -6,7 +6,7 @@
 //   Client · Connected to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
 import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
-import { seenWords, coKey, lastEntry } from "./tallyState.js";
+import { seenWords, coKey, lastEntry, tallyDevs } from "./tallyState.js";
 import { bookSum, bookFetch, pctOf, etaWords } from "../parts/TallyFetch.jsx";
 import { needDays } from "./needDays.js";
 // migration 136 (next-held-settle): a client's held lines, one period, with the Day Book upload preset to it
@@ -46,8 +46,6 @@ export function missingWords(need) {
 export function bestFor(r, all) {
   return twinOf(r) || yearOf(r, all) || alikeOf(r)[0] || null;
 }
-// the companies open in Tally now that no client has (each its own row, the strip and step 3)
-export const openUnlinked = (all) => all.filter((r) => r.open && !r.client);
 // the page's own count of a client's ledgers (FinCom's cloud, tally_ledgers counted), by book: a later read of the client's
 // books (TCloud.status) replaces TCloud.st[cid] and its count with it
 export const LEDN = {}, ASKED_N = new Set();
@@ -105,28 +103,89 @@ export function openingsOf(cid) {
 }
 const iso = (x) => { const s = d8(x); return s.length === 8 ? s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8) : ""; };
 
-// ---------- "Open in Tally right now?" on THIS computer only (next-tally-local-open; the owner, 02-Nov-2026: "show me
-// open in the tally where it is opened not on any other computer.. I want true status of that particular browser").
-// What FinCom Bridge on this computer last said (Bridge.st.open, read by the bridge's own minute check, /status: nothing
-// new is asked of the bridge or Tally); never another computer's bridge (those stay under For support). Postings still go
-// through FinCom's cloud to whichever bridge holds the company: only this column's meaning (and the header and filters
-// made from it) is this computer's.
-//   "yes" open here · "no" the bridge here answers, the company is not open here · "none" no bridge reachable from this
-//   browser · "checking" this browser holds a bridge key whose state is not read yet
-export const NOT_HERE = "Not open in Tally on this computer", NO_BRIDGE = "FinCom Bridge is not connected on this computer";
-export function localOpen(company) {
-  try {
-    if (typeof Bridge !== "object" || Bridge.blocked() || !Bridge.on()) return "none";
-    const st = Bridge.st || {};
-    if (st.state !== "ok") return st.state === "off" && !st.error ? "checking" : "none";
-    const k = coKey(company);
-    // (another Windows user's Tally on this computer, when the bridge says so, is not this browser's)
-    return [].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => String(x.name || ""))
-      .some((n) => coKey(n) === k || !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
-  } catch (e) { return "none"; }
+// ---------- "Open in Tally right now?" in THIS FinCom user's own Tally only (next-tally-own-login; the owner, 03-Nov-2026:
+// on the shared cloud server each Windows login runs its own FinCom Bridge and its own Tally: each person's FinCom
+// shows the Tally that person has opened in their own cloud login; 02-Nov-2026's next-tally-local-open trusted whatever bridge
+// answered on 127.0.0.1, which on a shared server is every login's address). This user's own bridge, in this order:
+//   (a) the bridge this browser paired with (Bridge.cfg: its key and bridge id), when the firm's computers list it;
+//   (b) the bridge the signed-in member is linked to (tally_member_bridges, migration 54: TCloud.pane.links).
+// tally_devices.created_by is not used: one person often makes every login's computer key (the owner did, on the shared
+// server), so it names no Windows login. What the bridge says:
+//   (c) the local bridge's own reply (Bridge.st.open, its minute check) ONLY when it is that same bridge: its Windows user
+//       is the own bridge's (when both are known), else its proven id is the own bridge's id; another login's never counts;
+//   else the cloud copy of the own bridge's beat (tally_devices.info.bridges[id].open / info.beat.open, every 30 s), so
+//   the page also works from a browser on another computer (the owner's laptop).
+// No own bridge: "—", "Your FinCom Bridge is not set up." and Set it up (the pairing steps), never another login's state.
+// The header, the filters, the strip and the guided box are made from the same answer; For support still lists every
+// bridge, and postings still go through FinCom's cloud to whichever bridge holds the company (unchanged).
+//   ownState(): {state: "ok", from: "here" | "beat", names: Map coKey -> name} | {state: "checking" | "away" | "none"}
+export const NOT_MINE = "Not open in your Tally", AWAY = "Your FinCom Bridge is not connected now", NOT_SET = "Your FinCom Bridge is not set up.";
+const lc = (s) => String(s || "").trim().toLowerCase();
+// "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not
+const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
+const fresh = (at) => !!at && Date.now() - Date.parse(at) < 3 * 60000;
+// every bridge on the firm's computers (revoked ones left out by tallyDevs): {dev, id, user, open, at}
+function bridgesOf() {
+  const out = [];
+  tallyDevs().forEach((d) => {
+    const info = d.info || {}, beat = info.beat || {}, br = info.bridges || {}, ids = Object.keys(br);
+    ids.forEach((id) => {
+      const b = br[id] || {}, user = b.user || (ids.length === 1 ? info.user || beat.windowsUser : "") || "";
+      // the computer's beat is this bridge's when it is the only one there, the main one, or of the same Windows user
+      const beatMine = ids.length === 1 || d.main_bridge === id || sameUser(beat.windowsUser, user) === true;
+      const at = [b.at || "", beatMine ? beat.at || "" : ""].sort().pop();
+      const open = Array.isArray(b.open) ? b.open : beatMine ? [].concat(beat.open || []) : [];
+      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at });
+    });
+  });
+  return out;
 }
-const openCell = (h) => h === "yes" ? { w: YES, note: "" } : h === "no" ? { w: NO, note: NOT_HERE }
-  : h === "checking" ? { w: DASH, note: "Checking FinCom Bridge on this computer…" } : { w: DASH, note: NO_BRIDGE, connect: true };
+const cfgOf = () => { try { return (typeof Bridge === "object" && Bridge.cfg && Bridge.cfg()) || {}; } catch (e) { return {}; } };
+export function ownBridge() {
+  const all = bridgesOf(), c = cfgOf();
+  // (a) paired in this browser
+  const a = c.key && c.bridgeId ? all.find((b) => b.id === c.bridgeId) : null;
+  if (a) return Object.assign({ how: "paired" }, a);
+  // (b) linked to the signed-in member
+  const me = typeof TCloud === "object" && TCloud.me ? TCloud.me() : "";
+  const l = me && ((typeof TCloud === "object" && TCloud.pane && TCloud.pane.links) || []).find((x) => x && x.user_id === me && x.bridge_id);
+  const b = l ? all.find((x) => x.id === l.bridge_id && (!l.device_id || x.dev.id === l.device_id)) : null;
+  return b ? Object.assign({ how: "linked" }, b) : null;
+}
+// (c) the bridge answering this browser, when it is the own bridge (else null)
+function hereIfOwn(own) {
+  try {
+    if (typeof Bridge !== "object" || Bridge.blocked() || !Bridge.on()) return null;
+    const st = Bridge.st || {};
+    if (st.state !== "ok") return null;
+    const u = sameUser(st.user, own.user), id = !!cfgOf().bridgeId && cfgOf().bridgeId === own.id;
+    return u === true || (u === null && id) ? st : null;
+  } catch (e) { return null; }
+}
+export function ownState() {
+  const own = ownBridge();
+  if (!own) return { state: "none" };
+  const st = hereIfOwn(own);
+  // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
+  const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
+  if (st) return { state: "ok", from: "here", own, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) };
+  if (fresh(own.at)) return { state: "ok", from: "beat", own, names: by(own.open) };
+  // this browser holds the own bridge's key, its first answer not read yet
+  const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
+  if (c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
+  return { state: "away", own };
+}
+// "yes" | "no" | "checking" | "away" | "none" for a company (own: ownState(), read once for the whole table)
+export function localOpen(company, own) {
+  const o = own || ownState();
+  if (o.state !== "ok") return o.state;
+  const k = coKey(company);
+  return o.names.has(k) || [...o.names.values()].some((n) => !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
+}
+const openCell = (h) => h === "yes" ? { w: YES, note: "" } : h === "no" ? { w: NO, note: NOT_MINE }
+  : h === "checking" ? { w: DASH, note: "Checking your FinCom Bridge…" } : h === "away" ? { w: DASH, note: AWAY, connect: true } : { w: DASH, note: NOT_SET, setup: true };
+// the companies open in THIS user's own Tally that no client has (each its own row, the strip and step 3)
+export const openUnlinked = (all, own) => { const o = own || ownState(); return o.state === "ok" ? all.filter((r) => !r.client && o.names.has(coKey(r.company))) : []; };
 
 // one client's row
 function clientRow(co, all, opts) {
@@ -144,8 +203,8 @@ function clientRow(co, all, opts) {
     return row;
   }
   // connected
-  // open: on THIS computer (localOpen), never another computer's bridge
-  const here = localOpen(company), open = here === "yes";
+  // open: in this user's own Tally (localOpen), never another login's bridge
+  const here = localOpen(company, opts.own), open = here === "yes";
   row.c = { w: YES, note: "Tally company: " + shown(company) };
   row.o = openCell(here);
   // ledgers: the first sync going (its bar), stuck (its reason, Try again), held (the count), not yet
@@ -203,20 +262,21 @@ function clientRow(co, all, opts) {
   return row;
 }
 // a company open in Tally that no client has: choose its client (the likeliest chosen first)
-function companyRow(r, all) {
+function companyRow(r, all, own) {
   const best = bestFor(r, all);
   return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best,
-    c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company)), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
+    c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company, own)), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
     act: { kind: "choose", label: best ? "Connect" : "Choose the client" }, todo: best ? "Connect it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")
 export function tableRows(opts) {
-  opts = opts || {};
+  opts = Object.assign({}, opts);
+  opts.own = opts.own || ownState();
   const all = companyRows(), cs = live().sort((a, b) => String(a.name).localeCompare(String(b.name)));
   const rows = cs.map((co) => clientRow(co, all, opts));
   const found = new Set(rows.filter((x) => x.found).map((x) => coKey(x.found)));
-  openUnlinked(all).filter((r) => !found.has(coKey(r.company))).forEach((r) => rows.push(companyRow(r, all)));
+  openUnlinked(all, opts.own).filter((r) => !found.has(coKey(r.company))).forEach((r) => rows.push(companyRow(r, all, opts.own)));
   rows.forEach((x) => {
     // opening balances that differ or do not balance: said in the row's What to do when nothing else is asked there
     if (x.open && x.open.state !== "same" && !x.act && /^Nothing/.test(x.todo || ""))
@@ -273,4 +333,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

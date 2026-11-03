@@ -18,7 +18,7 @@ import HeadFilter from "../parts/bank/HeadFilter.jsx";
 import { markGone, goneOpen, goneLine, goneCount, goneToast } from "../parts/bank/goneSent.js";
 import "../parts/bank/bankSmart.css";
 import Rail from "../parts/bank/Rail.jsx";
-import { Drawer, Density, ActiveChips, useSpacious, rowOpen, rowTally, denseOn, bankParty, BST, fill } from "../parts/bank/Spacious.jsx";
+import { Drawer, Density, ActiveChips, useSpacious, rowOpen, rowTally, denseOn, bankParty, BST, fill, fillSoon } from "../parts/bank/Spacious.jsx";
 import { BankSettings, RulesPanel } from "../parts/BankSettings.jsx";
 import { PostReport, ReviewCheck, FixBanner, BankBalance, Recon, Gone, DupFind, BankFocus } from "../parts/BankChecks.jsx";
 import { ColFunnel } from "../parts/ColHead.jsx";
@@ -212,7 +212,7 @@ function Table({ tab, all }) {
   // the lines scroll in their own box (bankSmart.css): a scroll down over the box first brings the box up under the app's
   // header, then scrolls the lines, so it reads as one scroll; going up, the lines first, then the page
   useEffect(() => { const g = grid.current; if (!g) return; const w = (ev) => wheelToTop(ev, g); g.addEventListener("wheel", w, { passive: false }); return () => g.removeEventListener("wheel", w); }, []);
-  useEffect(() => { const g = grid.current; if (!g || typeof ResizeObserver !== "function") return; const o = new ResizeObserver(() => markClipped(g)); o.observe(g); return () => o.disconnect(); }, []);
+  useEffect(() => { const g = grid.current; if (!g || typeof ResizeObserver !== "function") return; const o = new ResizeObserver(() => requestAnimationFrame(() => markClipped(g))); o.observe(g); return () => o.disconnect(); }, []);
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
   return <div className="bs-grid" ref={grid} tabIndex={0} data-bank-grid="" aria-label="Bank statement lines: arrow keys move, Enter sets the ledger" onKeyDown={(ev) => kbKey(ev, grid.current)}>
@@ -492,7 +492,7 @@ export function BankBar() {
   useEffect(() => {
     const el = barRef.current;
     if (!el || typeof ResizeObserver !== "function") return undefined;
-    const o = new ResizeObserver(() => fill()); o.observe(el);
+    const o = new ResizeObserver(fillSoon); o.observe(el);   // the next frame (fillSoon: FINCOM-APP-STAGING-E)
     return () => o.disconnect();
   });
   if (!b || b.loading || !curStmt()) return null;
