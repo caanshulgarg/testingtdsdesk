@@ -95,7 +95,7 @@ changed here. A follow-up: let tally-ingest keep autoUpdate, rolledBack and the 
 | Windows CI | FinCom Bridge on Windows 41621441988 at e31f22f03: Windows go tests, build, setup install tests on windows-2025 and windows-2022, all green (the build commit 421e323d6 changes only the committed setup and docs) |
 | Real Tally 7.1 + install over 2.5.2 | tally-versions g253, run 41624834556, the committed setup: c1, c2, n1 (installed over the published 2.5.2: version, port, key, settings carried), n2 (tally.ini Client Server = None switched to Both by the setup, ServerPort and every other line unchanged; the beat says "enabled; Tally needs one restart"), n3 (Tally restarted once: serves; Connect found the company 10.3 s after it was up), n4 (beat: reason open, no tallyWhy), n5 (worst 24 ms, one in flight): all PASS. Earlier runs: 41612077771 and 41621468074 (from source) |
 | Not run (reduced gates) | the CI app shares (tests/ci), an independent review session |
-| After publishing (background) | tally-versions g253 on TallyPrime 3.0, 4.1, 5.1, 6.2: run 41628510829 (results to be added here) |
+| After publishing (background) | tally-versions g253 on TallyPrime 3.0, 4.1, 5.1, 6.2 with the published setup: run 41628510829, c1, c2, n1-n5 all PASS on all four (28 of 28; worst request 26 ms). Windows CI 41624835187 at the build commit 421e323d6: green |
 
 ## Published
 
