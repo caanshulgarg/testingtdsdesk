@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "d4662b4d52597678901e745dc8d45356fe3eb54251b05744097f12e044595b45",
+    "hash": "b38b75ee0b19a234245073f4a851414480617c3f065b821fee29230c159f06b8",
     "measured": false
   },
   "autoUpdate": true,
@@ -57,9 +57,71 @@
       "error": "",
       "n": 1,
       "ok": true,
+      "owner": "unknown",
       "port": 9000,
+      "reason": "open",
       "skipped": false,
       "state": "open"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
+    },
+    {
+      "error": "Tally is not open (nothing listens on this port)",
+      "n": 0,
+      "ok": false,
+      "owner": "unknown",
+      "port": 9000,
+      "reason": "closed",
+      "skipped": false,
+      "state": "closed"
     }
   ],
   "postBatchBank": 50,
@@ -103,12 +165,14 @@
     }
   },
   "tally": true,
+  "tallyConnectSay": "",
   "tallyIni": [],
   "tallyPort": 9000,
   "tallyRetry": null,
   "tallyState": "open",
+  "tallyWhy": "",
   "trialTools": false,
   "updating": false,
-  "version": "2.5.2",
+  "version": "2.5.3",
   "windowsUser": ""
 }
