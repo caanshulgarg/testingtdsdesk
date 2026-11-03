@@ -72,7 +72,7 @@ jobs:
         run: |
           m="${{ inputs.mode }}"; [ -n "$m" ] || m=$(head -1 harness/.github/tally-spike/versions-mode.txt 2>/dev/null | tr -d '[:space:]')
           [ "$m" = gate240 ] && m="s235,tds240,renum,bankb,selfck,mhook,ledlist,upg"
-          known="o251 g251 g250 stockp openp proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
+          known="g253 o251 g251 g250 stockp openp proof72 g245 dbm dbres dbbig payg paym payroll tdsm tdsch gsttype tdsgst full mhook ledlist dpath dsrc share big hang hang2 hang3 hang4 bank bankb renum s235 tds240 selfck upg quick"
           v="${{ inputs.versions }}"; v=$(echo "$v" | tr -d '[:space:]')
           modes=""; for x in $(echo "$m" | tr ',' ' '); do case " $known " in *" $x "*) modes="$modes $x" ;; *) echo "::warning::unknown mode $x: quick"; modes="$modes quick" ;; esac; done
           [ -n "$modes" ] || modes=quick
@@ -80,8 +80,8 @@ jobs:
           inc=""; all=""
           for x in $modes; do
             # a mode's own releases when none are given: ledlist / renum / s235 / bankb were 3.0 and 7.1; the gate gives versions
-            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb|openp|stockp) vs="3.0,7.1" ;; g250|g251|o251) vs="3.0,4.1,5.1,6.2,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
-            case $x in stockp) t=170; c=145 ;; g250|g251) t=130; c=105 ;; o251) t=150; c=125 ;; hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
+            if [ -n "$v" ]; then vs="$v"; elif echo "$m" | grep -q ','; then vs="3.0,4.1,5.1,6.2,7.1,7.2"; else case $x in ledlist|renum|s235|bankb|openp|stockp) vs="3.0,7.1" ;; g250|g251|o251|g253) vs="3.0,4.1,5.1,6.2,7.1" ;; tdsgst|tdsch|payroll) vs="7.1" ;; proof72) vs="7.1,7.2" ;; *) vs="3.0,4.1,5.1,6.2,7.1,7.2" ;; esac; fi
+            case $x in stockp) t=170; c=145 ;; g250|g251|g253) t=130; c=105 ;; o251) t=150; c=125 ;; hang2|mhook) t=220; c=190 ;; paym|dbm|dbres) t=170; c=145 ;; dbbig) t=240; c=215 ;; g245) t=300; c=270 ;; proof72) t=200; c=170 ;; tdsgst|tdsch|payroll|payg) t=150; c=125 ;; ledlist|share|big|hang|hang3|bank|bankb|renum|s235|tds240|selfck|upg|dpath|dsrc|gsttype|tdsm) t=130; c=105 ;; *) t=75; c=40 ;; esac
             # TallyPrime 7.2 (added 26-Oct-2026): asked here first (Linux, the first KB) so a release the download centre does not
             # have never takes a Windows job; resolvev.ps1 asks again on Windows and downloads it
             if echo ",$vs," | grep -q ',7.2,'; then
@@ -323,6 +323,16 @@ jobs:
           [ "$got" = 69aa6b742c74ec470c85b6f0b316580cf4741b0d54e81400418bfcd5c3448799 ] || { echo "::error::2.4.7 setup SHA-256 $got"; exit 1; }
           echo "2.4.7 setup SHA-256 $got"
       # g250 (2.5.0's gate) and upg_from=2.4.9: the published 2.4.9 (committed at 8e620899, setup SHA-256 161adb96...0fc0) and its add-on
+      # g253 (2.5.3's gate): the published 2.5.2 (staging-next 29dbfbe6b, setup SHA-256 648b5187...3e07) first
+      - name: Bridge 2.5.2 (g253)
+        if: contains(steps.mode.outputs.modes, 'g253')
+        run: |
+          git fetch -q --depth 1 origin 29dbfbe6b92037f6767e96b3e597b20062231f77
+          mkdir -p bridge-go/dist/old252
+          git show FETCH_HEAD:assets-test/bridge-go/FinComBridge-Setup-2.5.2.exe > bridge-go/dist/old252/FinComBridge-Setup-2.5.2.exe
+          got=$(sha256sum bridge-go/dist/old252/FinComBridge-Setup-2.5.2.exe | awk '{print $1}')
+          [ "$got" = 648b5187128fc3d6f003fbcc7afa0dc87b849eb1655a0b400d978005439e3e07 ] || { echo "::error::2.5.2 setup SHA-256 $got"; exit 1; }
+          echo "2.5.2 setup SHA-256 $got"
       # g251 (the stock release's gate): the published 2.5.1 (staging-next c793d0cfe, setup SHA-256 457fb1b5...7e44) first
       - name: Bridge 2.5.1 (g251)
         if: contains(steps.mode.outputs.modes, 'g251')
@@ -384,12 +394,12 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72' && matrix.mode != 'stockp' && matrix.mode != 'g251' && matrix.mode != 'o251'
+        if: matrix.mode != 'mhook' && matrix.mode != 'ledlist' && matrix.mode != 'payroll' && matrix.mode != 'paym' && matrix.mode != 'dbm' && matrix.mode != 'dbres' && matrix.mode != 'dbbig' && matrix.mode != 'g245' && matrix.mode != 'proof72' && matrix.mode != 'stockp' && matrix.mode != 'g251' && matrix.mode != 'o251' && matrix.mode != 'g253'
         with:
           fetch-depth: 0
       # mhook / ledlist need only the harness and the add-on folder: the whole history took 47-60 min on 08-Oct-2026
       - uses: actions/checkout@v4
-        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72' || matrix.mode == 'stockp' || matrix.mode == 'g251' || matrix.mode == 'o251'
+        if: matrix.mode == 'mhook' || matrix.mode == 'ledlist' || matrix.mode == 'payroll' || matrix.mode == 'paym' || matrix.mode == 'dbm' || matrix.mode == 'dbres' || matrix.mode == 'dbbig' || matrix.mode == 'g245' || matrix.mode == 'proof72' || matrix.mode == 'stockp' || matrix.mode == 'g251' || matrix.mode == 'o251' || matrix.mode == 'g253'
         with:
           fetch-depth: 1
           sparse-checkout: |
@@ -457,6 +467,7 @@ jobs:
           if ($env:VMODE -eq 'dbbig') { $want += @('i1 tally.ini as TallyPrime installs it (captured before the harness wrote its own)', 'i2 the add-on added to tally.ini (add only, backup, other TDL kept): loaded at Tally start, the other TDL too', 'i3 tally.ini with User TDL = No: what Tally does with an added User TDL = Yes', 'i4 idempotent and untouched by Tally: a second run changes nothing, Tally keeps the lines and their order', 'b1 big company made (about 30,000 entries, 20,000 ledgers)', 'b2 one day of the Day Book on the big company (D1, D5), and whether D5 moves Tally''s current date', 'b3 one day by the collection date forms on the big company', 'b4 a day split by voucher type on the big company', 'b5 the voucher count of a period (month, quarter, half-year, year)', 'b6 the ledger count at 20,000 and 50,000 ledgers', 'b7 one request at a time, 2 s stop, Tally''s window blocked time kept') }
           if ($env:VMODE -eq 'g250') { $want += @('e1 2.5.0 installed over 2.4.9: the version and the settings carried', 'e2 the Gateway in a later year: every opening as at the books'' beginning', 'e3 every ledger read: zero-opening unused, quote and double-space names, every primary group', 'e4 each request within 2 s, the ledger requests carrying exactly the books'' first year', 'e5 one request in flight; postings first during the ledger read') }
           if ($env:VMODE -eq 'o251') { $want += @('o1 2.5.1 installed over 2.5.0: the version and the settings carried', 'o2 Tally''s books a year before FinCom''s: every opening equals Tally''s at FinCom''s first day', 'o3 every ledger read: zero-opening unused, quote and double-space names, every primary group', 'o4 FinCom with no first day: every opening as at Tally''s books'' beginning', 'o5 each request within 2 s, the ledger requests carrying exactly the first year of the date in use', 'o6 one request in flight; postings first during the ledger read') }
+          if ($env:VMODE -eq 'g253') { $want += @('n1 the committed setup installed over the published 2.5.2: its own version, the settings carried', 'n2 tally.ini Client Server = None: switched to Both by the setup, ServerPort and every other line unchanged', 'n3 Tally restarted once: it serves, and Connect finds the company within 15 s', 'n4 the heartbeat: the port open with its reason, no tallyWhy, the tally.ini state', 'n5 each background request 2 s or less; one request in flight') }
           if ($env:VMODE -eq 'g251') { $want += @('s1 the committed setup installed over the published 2.5.1: its own version, the settings carried', 's2 click only: nothing asks Tally for the stock by itself', 's3 a click: the stock equals Tally''s stock summary, the request exactly C1', 's4 each stock request 2 s or less; no window hold beyond the click''s request', 's5 once per period: the kept answer; Ask Tally again asks once more', 's6 one request in flight; postings first') }
           if ($env:VMODE -eq 'g245') { $want += @('g1 the installer added the add-on to tally.ini; Tally loads it and the client''s other TDL at start', 'g2 the year counted day by day, every day exactly Tally''s count', 'g3 the chosen part fetched: FinCom holds every entry Tally lists, only what it lacked asked', 'g4 no request over 2 s, one at a time, Tally''s window never blocked 2 s, Tally responding', 'g5 postings first during the fetch', 'g6 the exact ledger count and its progress', 'g7 User TDL = No left untouched and reported', 'g8 job files read while written: nothing lost, never missing', 'g9 a day''s list held over 2 s stops reading older entries of the company (freeze safety)', 'g10 the night pace: day after day, more than 3 days an answer, entries a minute measured', 'g11 the payroll month in the period: employees first, payroll entries within 3 s, pay heads per employee, no bank detail') }
           if ($env:VMODE -eq 'proof72') { $want += @('p1 bridge 2.4.7 installed and connected: finds Tally, the company list, the ledger list', 'p2 a save on the screen reaches FinCom through the add-on', 'p3 a Payment posted by the bridge: CREATED and LASTVCHID', 'p4 tally.ini keys TallyPrime writes from its own port screen (port, acts as, ODBC)', 'p5 a port written into tally.ini with Tally closed is used at the next start', 'p6 two Tallys on one computer (the same install twice; a copy of the install on another port)', 'p7 company GUID after a rename and after a copy of the data folder', 'p8 the FinCom ID on a voucher after an edit on the screen (narration tag, REMOTEID)', 'p9 lookups by FinCom ID, GUID and MasterID: times (2 s stop) on the small and the ~30,000-entry company', 'p10 a batch of 3 with one missing ledger: Tally''s exact reply', 'p11 Tally''s window and requests during the run (window probe, the bridge''s requests at the proxy)', 'p12 Tally on port 4125 (below 9000): does bridge 2.4.7 connect (auto / config), what Test connection and the diagnosis say') }
