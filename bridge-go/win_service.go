@@ -435,6 +435,10 @@ func installCmd(args []string) int {
 		_ = k.SetStringValue("Version", BridgeVersion)
 		k.Close()
 	}
+	// 2.5.3 (gate g253 n2): the bridge's own settings and folder, so the setup's tally.ini results (tally-ini.json) are
+	// kept where the bridge reads them, not in the setup's working folder
+	setPaths(cfgPath, o.home)
+	loadConfigRO()
 	// round 19 (S2): the recorder trial's folders, links refused, their permissions set here (folders.go)
 	installFinComFolders(true, installLog)
 	if err := createService(exe, cfgPath); err != nil {

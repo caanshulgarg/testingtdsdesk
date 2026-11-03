@@ -439,6 +439,10 @@ func installUserCmd(args []string) int {
 	_ = k.SetStringValue("InstallDir", filepath.Dir(exe))
 	_ = k.SetStringValue("RunMode", "user")
 	k.Close()
+	// 2.5.3 (gate g253 n2): the bridge's own settings and folder, so the setup's tally.ini results (tally-ini.json) are
+	// kept where the bridge reads them, not in the setup's working folder
+	setPaths(cfgPath, o.home)
+	loadConfigRO()
 	// round 19 (S2): the recorder trial's folders, links refused (folders.go); their permissions as Windows gives them
 	installFinComFolders(false, installLog)
 	// started when this user signs in (HKCU Run needs no administrator, and runs in the user's own session with the tray)
