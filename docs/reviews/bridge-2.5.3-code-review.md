@@ -4,7 +4,7 @@ Reviewer: the build session's own adversarial pass over the diff (as for 2.3.2),
 fix of 03-Nov-2026 ("Don't full check.. need basic check first.. I need to do it real fast."). No independent review
 session was run; one is owed after the release.
 
-Range: 3f242aa08..198e86e4d
+Range: 3f242aa08..cfd170de2
 
 ## The cause, found in the code (bridge 2.5.2)
 
@@ -46,6 +46,12 @@ Range: 3f242aa08..198e86e4d
   9100..9199); the backup first; a file this user cannot open for writing is not touched ("cannot write"). The same
   read-back and put-back as the add-on line. Deviation noted: the write is in place with read-back and put-back (the
   2.4.5-reviewed path that keeps the file's permissions and never follows a link), not a rename.
+
+- sameSession (ownuser.go sameSessionOf, win_peer.go platPeerSession): the TCP table's row for the browser's end
+  (peerPidFrom, as the own-user check of 2.3.0), ProcessIdToSessionId, else the Remote Desktop service (5 s cache); true
+  when the session is one of the owner's (isMine), false for another known session (session 0 too), "unknown" when no
+  process or no session is found. On /ping and /status; not a Tally request. TestR253SameSession: same, another, session
+  0, unknown, the browser's port used, /status.
 
 ## Findings of this pass
 

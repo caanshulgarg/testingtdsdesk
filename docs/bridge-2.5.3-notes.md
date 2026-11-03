@@ -49,6 +49,20 @@ session's own pass: docs/reviews/bridge-2.5.3-{code,security}-review.md); the CI
    app's line for it is a small follow-up (the field is in the beat and in /status).
 6. No new Tally request and no request shape changed (the allow-list table's words for FinComStockInHand only).
 7. Cloud: tally-ingest passes the new beat fields through (no migration).
+8. One FinCom login for every user of a shared server (the owner, 03-Nov-2026): the browser finds its own Windows login's
+   bridge by itself. /ping (which answers every local program) now carries `sameSession` and `bridgePort`; /status
+   carries `sameSession` too. For each request the bridge finds the program at the other end of the connection
+   (GetExtendedTcpTable, the row whose local end is the browser's port and whose remote end is the bridge's port), its
+   session (ProcessIdToSessionId, else the Remote Desktop service) and compares it with its owner's sessions:
+   `"sameSession": true` (the browser runs in this bridge's owner's session), `false` (another session),
+   `"unknown"` (Windows did not say). The reply of `GET http://127.0.0.1:<port>/ping`, as before plus three fields:
+   `{"ok": true, "bridge": "FinCom Tally Bridge", "version": "2.5.3", "impl": "go", "testMode": false, "runMode": "user",
+   "pid": 1234, "loopSec": 3, "yours": true|false, "tallyPorts": [9070], "tallyPortsUnknown": [], "windowsUser":
+   "NW144\\Durgesh", "sameSession": true|false|"unknown", "bridgePort": 9100}` (with "yours": true also bridgeId, port and
+   the proofs as before). Each user's bridge already has its own port (the first free of 9100..9199, remembered), and the
+   beat already carries it (bridgePort). The app tries the firm's bridges' ports on 127.0.0.1 and takes the one answering
+   `"sameSession": true` (the field "yours", the same Windows user, says the same on a server where each person has
+   their own Windows login).
 
 ## Known limits
 

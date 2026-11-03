@@ -3,7 +3,7 @@
 Reviewer: the build session's own adversarial pass over the diff, on the owner's reduced gates of 03-Nov-2026. No
 independent review session was run; one is owed after the release.
 
-Range: 3f242aa08..198e86e4d
+Range: 3f242aa08..cfd170de2
 
 ## Another user's Tally
 
@@ -24,6 +24,11 @@ Range: 3f242aa08..198e86e4d
   names, no key, no data folder. A page cannot read it without an allowed Origin (CORS as before).
 - A local program answering /ping as a bridge can only make this bridge leave an owner-unknown Tally alone (denial,
   shown as "another bridge"); it cannot make it use a Tally.
+
+- sameSession on /ping: true / false / "unknown" for the asking program's own session, and the bridge's port. It tells
+  a local program only whether it runs in this bridge's owner's session; the bridge's key, proofs and data stay behind
+  "yours" (the same Windows user) as before. FinCom must still prove the bridge (its key) before using it: a program in
+  another session answering /ping with "sameSession": true could only offer itself; it cannot hold this bridge's key.
 
 ## tally.ini
 
