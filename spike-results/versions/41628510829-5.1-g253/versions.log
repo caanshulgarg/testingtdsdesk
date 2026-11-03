@@ -1,0 +1,68 @@
+[11:46:09] ---- c1 install and open the company (TallyPrime 5.1)
+  INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-11-03, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+  INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-00-started (1024x768)
+[companies] 6 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</TDSRATE><TAXCLASSIFICATION>0</TAXCLASSIFICATION><STCATEGORY>0</STCATEGORY><DEDUCTEETYPE>0</DEDUCTEETYPE><ATTENDANCETYPE>0</ATTENDANCETYPE><FBT...
+[header] 8 ms: <ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS><PRODMAJORVER>1</PRODMAJORVER><PRODMINORVER>1</PRODMINORVER><PRODMAJORREL>5</PRODMAJORREL><PRODMINORREL>1</PRODMINORREL><PRODTYPE>5</PRODTYPE></HEADER><BODY><DESC><CMPINFO><COMPANY>0</COMPANY><GROUP>0</GROUP><LEDGER>0</LEDGER><COSTCATEGORY>0</COSTCATEGORY><COSTCENTRE>0</COSTCENTRE><GODOWN>0</GODOWN><STOCKGROUP>0</STOCKGROUP><STOCKCATEGORY>0</STOCKCATEGORY><STOCKITEM>0</STOCKITEM><VOUCHERTYPE>0</VOUCHERTYPE><CURRENCY>0</CURRENCY><UNIT>0</UNIT><BUDGET>0</BUDGET><CLIENTRULE>0</CLIENTRULE><SERVERRULE>0</SERVERRULE><STATE>0</STATE><TDSRATE>0</...
+  INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+######## PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-11-03, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+######## PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 17 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+[11:46:41] ---- the stub cloud and the bridge
+[ledger Spike Income] 12 ms: <RESPONSE><CREATED>1</CREATED><ALTERED>0</ALTERED><DELETED>0</DELETED><LASTVCHID>0</LASTVCHID><LASTMID>0</LASTMID><COMBINED>0</COMBINED><IGNORED>0</IGNORED><ERRORS>0</ERRORS><CANCELLED>0</CANCELLED><EXCEPTIONS>0</EXCEPTIONS></RESPONSE>
+  INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.3.exe SHA-256 5c971505d704599bb55f61d88221b770b102c24f6f200aadee808fb24a90d9a7; bridge source: 421e323d6092af17327309fcdb2e8a3a0f3ef56d Bridge 2.5.3 rebuilt: setup 5c971505...d9a7, program 46a4cd60...64a0; latest.json names 2.5.3; release log row; not published
+[11:46:47] proxy 127.0.0.2:9000 -> Tally: True (HTTP 200, pid 3712)
+bridge setup ended with 0
+  INFO bridge on 127.0.0.1:9100, version 2.5.2, allowImport True, readOnly '', testMode False
+  bridge log: 2026-11-03 11:46:53  FinCom Bridge 2.5.2: started just for runnervmhao91\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-11-03 11:46:53  FinCom Bridge 2.5.2, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-11-03 11:46:53  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-11-03 11:46:53  FinCom Bridge 2.5.2 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmhao91\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-11-03 11:46:53  Tally is open on port 9000; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-11-03 11:46:53  Recorder: re-scan of the add-on's files for 2.5.2: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-11-03 11:46:54  Check:  - 
+  bridge log: 2026-11-03 11:46:56  Tray icon: set to show next to the clock always (Windows 11)
+  bridge log: 2026-11-03 11:46:56  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-11-03 11:46:56  Recorder: FinCom sets where the changes come from on this computer: both
+  bridge log: 2026-11-03 11:46:56  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+  bridge log: 2026-11-03 11:46:57  Company FinCom Spike Co: its Tally GUID c74b1bf6-3917-464c-8076-da4f15008a48 is held from now on
+  bridge log: 2026-11-03 11:46:57  Company FinCom Spike Co: its starting point is recorded: ALTVCHID=1, ALTMSTID=209 (reading is prospective only: the bridge follows what changes after this)
+  bridge log: 2026-11-03 11:46:57  Company FinCom Spike Co: change numbers read with form a: ALTVCHID=1, ALTMSTID=209
+  bridge log: 2026-11-03 11:46:57  Light check of FinCom Spike Co: starting point recorded (ALTVCHID=1, ALTMSTID=209)
+  bridge log: 2026-11-03 11:46:58  Employees of FinCom Spike Co: Tally's master counter 209: the payroll list read (2 request(s), 0 row(s)); unchanged, nothing sent
+  INFO add-on: recorder files after start: none
+InvalidOperation: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dblib.ps1:88
+Line |
+  88 |  …  '*.xml') { $script:RQ[$f.BaseName] = (Get-Content $f.FullName -Raw). …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | You cannot call a method on a null-valued expression.
+
+InvalidOperation: D:\a\testingtdsdesk\testingtdsdesk\.github\tally-spike\dblib.ps1:88
+Line |
+  88 |  …  '*.xml') { $script:RQ[$f.BaseName] = (Get-Content $f.FullName -Raw). …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | You cannot call a method on a null-valued expression.
+
+  INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, names-chunk, names-tail, tagcheck, vchheads
+[11:47:40] ---- g253: the own Tally always found; Tally's connection switched on
+[11:47:42] db: Tally (pid 1044) closed
+  bridge log: 2026-11-03 11:47:42  Stopping: asked to (setup or uninstall)
+  bridge log: 2026-11-03 11:47:46  FinCom Bridge 2.5.3: started just for runnervmhao91\runneradmin (no service); it keeps the bridge and its icon running
+  bridge log: 2026-11-03 11:47:46  FinCom Bridge 2.5.3, its first start: FinCom's add-on in each TallyPrime's tally.ini (added only, never removed or moved)
+  bridge log: 2026-11-03 11:47:46  tally.ini C:\Program Files\TallyPrime\tally.ini: FinCom's add-on is already named; nothing changed
+  bridge log: 2026-11-03 11:47:46  FinCom Bridge 2.5.3 (Go) started on 127.0.0.1:9100: the only bridge on this computer; working for runnervmhao91\runneradmin, Windows session 2; runs just for this Windows user (starts at sign-in, no service)
+  bridge log: 2026-11-03 11:47:46  Tally is not open; the bridge reads it only after an event (a client opened in FinCom, Update now, a posting, the nightly catch-up at 19:00)
+  bridge log: 2026-11-03 11:47:46  Recorder: re-scan of the add-on's files for 2.5.3: 0 line(s) sent earlier without their entry found (a new entry's line with no MasterID, a GUID of another entry, or read while the body fetch was off)
+  bridge log: 2026-11-03 11:47:46  Check:  - 
+  bridge log: 2026-11-03 11:47:49  Trial tools switched on for this computer in FinCom: the tray shows the trial items
+  bridge log: 2026-11-03 11:47:49  FinCom: this bridge is now the main bridge on this computer (set by the setup); it reads and posts
+######## PASS n1 the committed setup installed over the published 2.5.2: its own version, the settings carried: before: version 2.5.2; the setup FinComBridge-Setup-2.5.3.exe ended 0; after: version 2.5.3; port 9100 -> 9100; key carried True; TallyHost 127.0.0.2 -> 127.0.0.2; setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.3.exe SHA-256 5c971505d704599bb55f61d88221b770b102c24f6f200aadee808fb24a90d9a7
+######## PASS n2 tally.ini Client Server = None: switched to Both by the setup, ServerPort and every other line unchanged: lines changed by the setup: 1 ([4] 'Client Server = None' -> 'Client Server = Both'); Client Server after: 'Client Server = Both'; ServerPort before 'ServerPort = 9000', after 'ServerPort = 9000'; the beat's tally.ini: C:\Program Files\TallyPrime\tally.ini: state already, connect 'enabled; Tally needs one restart', serverPort 9000; /status tallyWhy 'no Tally running in this login', tallyConnectSay 'FinCom switched on Tally's connection. Close and reopen Tally once.'
+[11:48:07] db: Tally started (pid 6464), not waited for
+[keys] 'a' -> Tally 'TallyPrime:9000'
+[keys] 't' -> Tally 'TallyPrime:9000'
+[shot] v-db-g253-started (1024x768)
+######## PASS n3 Tally restarted once: it serves, and Connect finds the company within 15 s: Tally's port 9000 listening after the restart; the company up in Tally 11:48:37; Connect found it 10.3 s after (11 polls); its port entry: port 9000 ok True reason open owner ''
+######## PASS n4 the heartbeat: the port open with its reason, no tallyWhy, the tally.ini state: the last beat: tallyState open, tallyWhy '', tallyConnectSay '', ports 9000 ok=True reason=open n=1; tally.ini C:\Program Files\TallyPrime\tally.ini: already / enabled; Tally needs one restart
+######## PASS n5 each background request 2 s or less; one request in flight: 3 requests at Tally since the gate's setup, worst 20 ms; started while another was at Tally: 0; FinComCompany x1 worst 12 ms; TDSDeskCompanies x2 worst 20 ms

@@ -1,0 +1,31 @@
+INFO TallyPrime 5.1, mode g253, runner GitHub Actions 1000014346, 2026-11-03T11:46:08
+INFO installed: C:\Program Files\TallyPrime\tally.exe; tally.exe 15643264 bytes, 2026-11-03, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime
+INFO company folder made by flow.ps1: D:\a\_temp\TallyData\100000
+INFO Tally's own release in its answer header: PRODMAJORREL 5 PRODMINORREL 1 (PRODMAJORVER 1 PRODMINORVER 1 PRODTYPE 5)
+PASS c1 install and open the company: installed tally.exe 15643264 bytes, 2026-11-03, FileVersion 1.1.5.1, ProductVersion 1.1.5.1, ProductName TallyPrime; company folder 100000 loaded at start: True; window 'TallyPrime:9000'
+PASS c2 port and company list: port 9000 answered 10.1 s after start, GET 17 ms ('<RESPONSE>TallyPrime Server is Running</RESPONSE>'); company list 6 ms, 'FinCom Spike Co' in it: True
+INFO setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.3.exe SHA-256 5c971505d704599bb55f61d88221b770b102c24f6f200aadee808fb24a90d9a7; bridge source: 421e323d6092af17327309fcdb2e8a3a0f3ef56d Bridge 2.5.3 rebuilt: setup 5c971505...d9a7, program 46a4cd60...64a0; latest.json names 2.5.3; release log row; not published
+INFO bridge on 127.0.0.1:9100, version 2.5.2, allowImport True, readOnly '', testMode False
+INFO add-on: recorder files after start: none
+INFO db: requests from D:\a\testingtdsdesk\testingtdsdesk\bridge-dist\dbmreq: bymaster, company-check, datesprobe-1, datesprobe-2, datesprobe-3, datesprobe-4, datesprobe-5, datesprobe-6, datesprobe-7, daybook-dmy, daybook-dmyt, daybook-plain, daybook-plaint, entry-object, ledids-chunk, ledids-tail, names-chunk, names-tail, tagcheck, vchheads
+PASS n1 the committed setup installed over the published 2.5.2: its own version, the settings carried: before: version 2.5.2; the setup FinComBridge-Setup-2.5.3.exe ended 0; after: version 2.5.3; port 9100 -> 9100; key carried True; TallyHost 127.0.0.2 -> 127.0.0.2; setup origin: COMMITTED assets-test/bridge-go/FinComBridge-Setup-2.5.3.exe SHA-256 5c971505d704599bb55f61d88221b770b102c24f6f200aadee808fb24a90d9a7
+PASS n2 tally.ini Client Server = None: switched to Both by the setup, ServerPort and every other line unchanged: lines changed by the setup: 1 ([4] 'Client Server = None' -> 'Client Server = Both'); Client Server after: 'Client Server = Both'; ServerPort before 'ServerPort = 9000', after 'ServerPort = 9000'; the beat's tally.ini: C:\Program Files\TallyPrime\tally.ini: state already, connect 'enabled; Tally needs one restart', serverPort 9000; /status tallyWhy 'no Tally running in this login', tallyConnectSay 'FinCom switched on Tally's connection. Close and reopen Tally once.'
+PASS n3 Tally restarted once: it serves, and Connect finds the company within 15 s: Tally's port 9000 listening after the restart; the company up in Tally 11:48:37; Connect found it 10.3 s after (11 polls); its port entry: port 9000 ok True reason open owner ''
+PASS n4 the heartbeat: the port open with its reason, no tallyWhy, the tally.ini state: the last beat: tallyState open, tallyWhy '', tallyConnectSay '', ports 9000 ok=True reason=open n=1; tally.ini C:\Program Files\TallyPrime\tally.ini: already / enabled; Tally needs one restart
+PASS n5 each background request 2 s or less; one request in flight: 3 requests at Tally since the gate's setup, worst 20 ms; started while another was at Tally: 0; FinComCompany x1 worst 12 ms; TDSDeskCompanies x2 worst 20 ms
+INFO installer: Tally's download page lists TallyPrime setups for: Rel_2.1, REL_TP_1.0.0, Rel.2.0.1, Rel.2.0, Rel.3.0_Gold, Rel.3.0.1, Rel.3.0, Rel.4.0, Rel.4.1, Rel.5.0, Rel.5.1, Rel.6.1, Rel.7.0, Rel.7.1_gold, Rel.TP_1.1.1, Rel.TP_1.1.2, Rel.TP_1.1.3, Rel.TP_1.1.4, Rel.TP_1.1, Rel.TP_2.0, Rel6.0, Rel6.2, Rel7.2, TallyPrime_Beta
+INFO installer: NO(403) -1 bytes, Last-Modified : https://tallymirror.tallysolutions.com/download_centre/Rel.5.1_gold/TP/Full/setup.exe
+INFO installer: AVAILABLE 45651144 bytes, Last-Modified Sun, 01 Dec 2024 05:56:26 GMT: https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0_Gold/TP/Full/setup.exe (43440848 bytes)
+INFO installer: AVAILABLE other release 3.0.1: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0.1/TP/Full/setup.exe (43476688 bytes)
+INFO installer: AVAILABLE other release 3.0: https://tallymirror.tallysolutions.com/download_centre/Rel.3.0/TP/Full/setup.exe (43465936 bytes)
+INFO installer: AVAILABLE other release 4.0: https://tallymirror.tallysolutions.com/download_centre/Rel.4.0/TP/Full/setup.exe (44497616 bytes)
+INFO installer: AVAILABLE other release 4.1: https://tallymirror.tallysolutions.com/download_centre/Rel.4.1/TP/Full/setup.exe (44673232 bytes)
+INFO installer: AVAILABLE other release 5.0: https://tallymirror.tallysolutions.com/download_centre/Rel.5.0/TP/Full/setup.exe (45592784 bytes)
+INFO installer: AVAILABLE other release 6.1: https://tallymirror.tallysolutions.com/download_centre/Rel.6.1/TP/Full/setup.exe (46460616 bytes)
+INFO installer: AVAILABLE other release 7.0: https://tallymirror.tallysolutions.com/download_centre/Rel.7.0/TP/Full/setup.exe (70912776 bytes)
+INFO installer: AVAILABLE other release 7.1: https://tallymirror.tallysolutions.com/download_centre/Rel.7.1_gold/TP/Full/setup.exe (72090376 bytes)
+INFO installer: AVAILABLE other release 6.0: https://tallymirror.tallysolutions.com/download_centre/Rel6.0/TP/Full/setup.exe (46324936 bytes)
+INFO installer: AVAILABLE other release 6.2: https://tallymirror.tallysolutions.com/download_centre/Rel6.2/TP/Full/setup.exe (47408904 bytes)
+INFO installer: AVAILABLE other release 7.2: https://tallymirror.tallysolutions.com/download_centre/Rel7.2/TP/Full/setup.exe (72347912 bytes)
+INFO installer: DOWNLOADED Rel.5.1 from https://tallymirror.tallysolutions.com/download_centre/Rel.5.1/TP/Full/setup.exe : 45651144 bytes in 2 s, SHA-256 05EF11D4542CF420223D327C733C479105ECF7BBD660331F126CFD71A5CA367B, signature Valid CN=Tally Solutions Pvt Ltd, O=Tally Solutions Pvt Ltd, L=Bengaluru, S=Karnataka, C=IN, file version 1.1.5.1 product 1.1.5.1
