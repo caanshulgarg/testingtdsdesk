@@ -4,7 +4,7 @@ Reviewer: the build session's own adversarial pass over the diff (as for 2.3.2),
 fix of 03-Nov-2026 ("Don't full check.. need basic check first.. I need to do it real fast."). No independent review
 session was run; one is owed after the release.
 
-Range: 3f242aa08..ec31e755c
+Range: 3f242aa08..dec738975
 
 ## The cause, found in the code (bridge 2.5.2)
 
@@ -75,6 +75,11 @@ Range: 3f242aa08..ec31e755c
    the bridge's own first start ran the step again, found it on and recorded "already": the beat lost "enabled; Tally
    needs one restart" and the person's words. An "already" now keeps a recent "enabled" of the same file (24 hours,
    connectAt) (TestR253IniEnabledKeptAcrossSecondStep).
+10. (Fixed after the gate run 41618857913 on the committed setup, n2 again) The setup's `install` runs before the
+   bridge's paths are set, so its tally.ini results went to tally-ini.json under the setup's working folder (true for the
+   add-on line since 2.4.5 too; the bridge's first start always re-recorded it); the bridge never saw "enabled". The
+   per-user and the service install now set the bridge's own settings and folder (setPaths, loadConfigRO) before the
+   step. The first 2.5.3 build (setup 84e2f8aa...dc22) was withdrawn unpublished.
 
 ## Tests
 
