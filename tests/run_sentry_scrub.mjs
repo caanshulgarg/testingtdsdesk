@@ -17,7 +17,7 @@ const ALLOWED = {
   top: ["event_id", "timestamp", "platform", "level", "release", "environment", "exception", "message", "breadcrumbs", "tags", "user", "request", "contexts", "sdk", "fingerprint", "extra"],
   exception: ["type", "value", "mechanism", "stacktrace"], mechanism: ["type", "handled"], frame: ["filename", "function", "module", "lineno", "colno", "in_app"],
   breadcrumb: ["type", "category", "level", "timestamp", "message", "data"], crumbData: ["from", "to", "size_mb", "kind", "ready", "pieces", "piece", "of", "state", "reason", "file"],
-  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code", "chunk"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
+  tags: ["route", "install", "where", "kind", "guard", "firm", "mode", "tool", "firm_id", "client_id", "step", "status", "api_error", "model", "request_id", "db_code", "chunk", "msg_code"], user: ["id"], request: ["url", "headers"], headers: ["User-Agent"],
   contexts: ["os", "runtime", "browser"], context: ["name", "version"], sdk: ["name", "version", "settings"], settings: ["infer_ip"],
 };
 function shape(e) {
@@ -201,6 +201,22 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
   const leak = am("messages.0.content: invalid value 'Ashvattha Transport 40,000' for ALPHA TRADERS 09AANFG3202D1ZR AGWPA1185G a@b.in 123456").api_message;
   ok(!/Ashvattha|40,000|ALPHA|TRADERS|09AANFG|AGWPA|a@b|123456/.test(leak) && /messages\.0\.content/.test(leak), "the API's message: quoted values, names in capitals, ids, e-mails and numbers dropped (" + leak + ")");
   ok(!("extra" in S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { where: "light_check" }, extra: { api_message: "x" } })), "api_message only on the assistant's failed turn");
+}
+
+// Sentry FINCOM-APP-STAGING-E (02/03-Nov-2026): a browser's own message whose words the scrubber cannot keep ("ResizeObserver
+// loop completed with undelivered notifications." became "… with …") carries its code name as the tag msg_code, from a fixed
+// list of the browsers' words only; the message itself is scrubbed as before; a message with anything else in it has no code
+{
+  const ro = (m, where = "value") => S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "error",
+    ...(where === "value" ? { exception: { values: [{ type: "Error", value: m, mechanism: { type: "auto.browser.global_handlers.onerror", handled: false } }] } } : { message: m }) });
+  const a = ro("ResizeObserver loop completed with undelivered notifications.");
+  ok(a.tags && a.tags.msg_code === "resizeObserverLoop" && a.exception.values[0].value === "… with …", "the ResizeObserver loop: msg_code resizeObserverLoop, the message scrubbed as before (" + JSON.stringify(a.tags) + ")");
+  ok((ro("ResizeObserver loop limit exceeded").tags || {}).msg_code === "resizeObserverLoop", "the older words of the same (ResizeObserver loop limit exceeded)");
+  ok((ro("Uncaught ResizeObserver loop completed with undelivered notifications.", "message").tags || {}).msg_code === "resizeObserverLoop", "in the event's message too");
+  ok(!(ro("ResizeObserver loop completed with ALPHA TRADERS 09AANFG3202D1ZR").tags || {}).msg_code, "the same words with anything else in them: no code");
+  ok(!(ro("Ledger ALPHA TRADERS clashes with BETA").tags || {}).msg_code, "any other message: no code");
+  ok(!(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "ALPHA TRADERS" } }).tags || {}).msg_code &&
+    !(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "someOtherName" } }).tags || {}).msg_code, "a msg_code tag set by hand: only a code of the fixed list");
 }
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");

@@ -36,6 +36,8 @@ run_bank_smart.py                     240  TDSDESK_SITE=../app/dist-test
 run_bank_table_ui.py                  240  TDSDESK_SITE=../app/dist-test
 # the bank page's spacious layout (01-Nov-2026): slim rail and flyouts, one-line header, one filter row with chips, drawer, Compact
 run_bank_spacious.py                  420  TDSDESK_SITE=../app/dist-test
+# Sentry FINCOM-APP-STAGING-E (03-Nov-2026): the spacious layout's ResizeObservers never set --bk-fill in their callback
+run_bank_ro_loop.py                   180  TDSDESK_SITE=../app/dist-test
 run_beat_history.py                   120
 run_bill_typing_echo.py               180  TDSDESK_SITE=../app/dist-test
 run_block17.js                        120

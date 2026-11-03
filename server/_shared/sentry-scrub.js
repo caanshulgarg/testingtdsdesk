@@ -195,8 +195,23 @@ export function scrubBreadcrumb(b) {
 
 // a file of the app's build by its name only: letters, digits, - _ . and .js/.mjs/.css (app/src/staleChunk.js)
 const CHUNK_FILE = (v) => (typeof v === "string" && /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,79}\.(?:m?js|css)$/.test(v) && !/[A-Z]{5}\d{4}[A-Z]/.test(v) ? v : undefined);
+// ---- a browser's own message the scrubber cannot keep, by its code name (Sentry FINCOM-APP-STAGING-E: "ResizeObserver loop
+// completed with undelivered notifications." came as "… with …"). The WHOLE message must be one of these words (an
+// "Uncaught " in front and a full stop after allowed), so nothing else can ride along; the code is fixed text, never data
+const KNOWN_MESSAGES = [
+  [/^(?:uncaught )?(?:error: )?resizeobserver loop completed with undelivered notifications\.?$/i, "resizeObserverLoop"],
+  [/^(?:uncaught )?(?:error: )?resizeobserver loop limit exceeded\.?$/i, "resizeObserverLoop"],
+];
+const MSG_CODES = new Set(KNOWN_MESSAGES.map((k) => k[1]));
+export function messageCode(m) {
+  if (typeof m !== "string" || m.length > 200) return "";
+  const t = m.trim();
+  for (const [re, code] of KNOWN_MESSAGES) if (re.test(t)) return code;
+  return "";
+}
 // ---- tags: these keys only, each with its own shape
 const TAGS = {
+  msg_code: (v) => (MSG_CODES.has(v) ? v : undefined),               // FINCOM-APP-STAGING-E: a known browser message's code name
   chunk: (v) => CHUNK_FILE(v) || (v === "unknown" ? v : undefined),           // round 90: a screen's file that did not come
   route: (v) => (scrubRoute(v) === v ? v : undefined),
   install: (v) => (/^[0-9a-f]{32}$/.test(v) ? v : undefined),       // the random per-install id
@@ -266,6 +281,9 @@ export function scrubEvent(e) {
   const crumbs = (Array.isArray(e.breadcrumbs) ? e.breadcrumbs : e.breadcrumbs && Array.isArray(e.breadcrumbs.values) ? e.breadcrumbs.values : []).map(scrubBreadcrumb).filter(Boolean).slice(-30);
   if (crumbs.length) o.breadcrumbs = crumbs;
   const tags = {};
+  // the code name of a known browser message (messageCode), from the words before they are scrubbed
+  const code = [msg].concat((e.exception && Array.isArray(e.exception.values) ? e.exception.values : []).map((v) => v && v.value)).map(messageCode).find(Boolean);
+  if (code) tags.msg_code = code;
   for (const [k, ok] of Object.entries(TAGS)) { const v = e.tags && e.tags[k]; if (typeof v === "string") { const s = ok(v); if (s !== undefined) tags[k] = s; } }
   if (Object.keys(tags).length) o.tags = tags;
   if (e.user && typeof e.user.id === "string" && /^[0-9a-f]{32}$/.test(e.user.id)) o.user = { id: e.user.id };
