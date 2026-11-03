@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { useEffect, useState } from "react";
 import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, aimLocal, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
+import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, lookOnce, aimLocal, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
@@ -291,6 +291,9 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const rows = tableRows({ focus, own }), all = companyRows(), unlinked = openUnlinked(all, own), just = justLinked(all);
   const linkedN = all.filter((r) => r.client).length;
   useEffect(() => { booksLoad(rows.filter((r) => r.kind === "client" && r.c.w === YES).map((r) => r.cid)); countLedgers(rows); });
+  // bridge 2.5.3: this Windows login's own bridge, looked for once for the tab, once the firm's computers are read (their
+  // ports are asked too); never from a drawing (next-fix-probe-loop)
+  useEffect(() => { if (ready) lookOnce(); }, [ready]);
   // from a client's "Open Tally page" (openTallyFor: S.tallyFocus): its row is marked here, and For support opens with that
   // client's company and its ⋯ (Post entries here, Change Tally company…, Unlink)
   useEffect(() => { if (S.tallyFocus && !(S.tallyMore || {}).support) { S.tallyMore = Object.assign({}, S.tallyMore, { support: true }); render(); } }, [S.tallyFocus]);

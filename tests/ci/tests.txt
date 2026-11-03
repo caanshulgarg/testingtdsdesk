@@ -604,4 +604,5 @@ run_bank_deleted_reupload.py          150  TDSDESK_SITE=../app/dist-test
 # next-tally-simple (02-Nov-2026): the simple Tally page (the guided box, the strip, the one table, filters, no computer names,
 # For support) and migration 138 (opening balances: same / differ / do not balance; Use Tally's, Keep FinCom's)
 run_tally_simple.py                   420  TDSDESK_SITE=../app/dist-test
+run_tally_probe_once.py               120  TDSDESK_SITE=../app/dist-test
 run_migration138.py                   300

@@ -150,10 +150,15 @@ const cfgOf = () => { try { return (typeof Bridge === "object" && Bridge.cfg && 
 // ---------- bridge 2.5.3 (next-tally-samesession; the owner, 03-Nov-2026: one FinCom login for everyone on the shared
 // server, each Windows login its own bridge): the browser finds its OWN Windows login's bridge by itself. /ping (nothing
 // secret sent) on 127.0.0.1 at the firm's bridges' ports (their beats' bridgePort), 9103 and 9100..9110, all at once,
-// short waits, once for the tab (again on Connect / I have opened it, or when the firm's ports change; with nothing
-// found, at most every 2 minutes). The bridge says sameSession: true (this browser runs in its owner's Windows session),
-// false (another session: never this user's), "unknown" (Windows did not say). 2.5.2 and older say nothing: as before.
-export const LOCALB = { list: null, busy: false, at: 0, ports: "" };
+// short waits. The bridge says sameSession: true (this browser runs in its owner's Windows session), false (another
+// session: never this user's), "unknown" (Windows did not say). 2.5.2 and older say nothing: as before.
+// next-fix-probe-loop (03-Nov-2026; build mw0mxsrv-dd8f8d at review/: "Site is crashing.. not working properly", rolled
+// back): drawing the page NEVER asks the network. The look was started from inside ownState(), i.e. from every drawing of
+// the Tally page, and its answer drew the whole app again (render), so a drawing could start a look whose answer drew the
+// page, which looked again (2-minute clock, a beat with another port) and drew again. Now: localBridges() only reads; the
+// look runs once per tab (lookOnce, from the Tally page once its computers are read) and on an explicit ask (rescanLocal:
+// Connect, I have opened it), one at a time; its answer draws the page only when it changed and the Tally page is shown.
+export const LOCALB = { list: null, busy: false, at: 0, ports: "", sig: "", n: 0 };
 const PROBE_MS = 900;
 const isNew = (b) => !!b && Object.prototype.hasOwnProperty.call(b, "sameSession");
 function portsToTry() {
@@ -162,19 +167,28 @@ function portsToTry() {
   bridgesOf().forEach((b) => { if (b.port >= 9100 && b.port <= 9199) ps.add(b.port); });
   return [...ps].sort((a, b) => a - b);
 }
-export function localBridges(force) {
-  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) return [];
-  const ports = portsToTry(), key = ports.join(",");
-  const due = force || LOCALB.list === null || key !== LOCALB.ports || (!LOCALB.list.length && Date.now() - LOCALB.at > 120000);
-  if (due && !LOCALB.busy) {
-    LOCALB.busy = true; LOCALB.ports = key;
-    Promise.all(ports.map((p) => Promise.resolve(Bridge.probe(p, PROBE_MS)).catch(() => null)))
-      .then((xs) => { LOCALB.list = xs.filter((x) => x && (x.bridge || x.version)); }, () => { LOCALB.list = LOCALB.list || []; })
-      .finally(() => { LOCALB.at = Date.now(); LOCALB.busy = false; if (typeof render === "function") render(); });
-  }
-  return LOCALB.list;
+// what the last look found (null: not looked yet); reads only, whoever calls it, as often as the page is drawn
+export const localBridges = () => LOCALB.list;
+const sigOf = (xs) => JSON.stringify(xs.map((x) => [Number(x.bridgePort || x.port) || 0, x.bridgeId || "", x.sameSession, x.windowsUser || "", x.version || ""]));
+function look() {
+  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) { if (LOCALB.list === null) LOCALB.list = []; return; }
+  if (LOCALB.busy) return;            // an ask while asking is that same look
+  LOCALB.busy = true;
+  const gen = ++LOCALB.n, ports = portsToTry(); LOCALB.ports = ports.join(",");
+  Promise.all(ports.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)))
+    .then((xs) => xs.filter((x) => x && (x.bridge || x.version)), () => [])
+    .then((list) => {
+      if (gen !== LOCALB.n) return;    // (a look started over meanwhile: its answer counts, not this one)
+      const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
+      Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false });
+      // (a later task: never inside the drawing that asked; only when it changes what the Tally page shows)
+      if (changed && typeof render === "function" && typeof document === "object" && document.querySelector("#app [data-tally-simple]")) setTimeout(() => render(), 0);
+    });
 }
-export const rescanLocal = () => localBridges(true);
+// once for this tab (the Tally page, once the firm's computers are read: their ports are asked too)
+export const lookOnce = () => { if (!LOCALB.n) look(); };
+// Connect / I have opened it: asked again now
+export const rescanLocal = () => look();
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
   return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
@@ -422,4 +436,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, LOCALB, rescanLocal, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, LOCALB, rescanLocal, lookOnce, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

@@ -121,13 +121,13 @@ MINE = """([how, bid, dev]) => {
   render();
 }"""
 # bridge 2.5.3: what /ping answers on 127.0.0.1 at each port (made-up; nothing listens): {port: reply}; the page's look
-# here (FCTallySimple.LOCALB) is started again
+# here (FCTallySimple.LOCALB) is started again (asked now, as Connect asks it: a drawing never asks)
 PINGS = """(pings) => {
   window.__pings = pings || {}; window.__probed = [];
   Bridge.probe = async (port, ms) => { window.__probed.push(port); const j = window.__pings[String(port)];
     return j ? Object.assign({port, url: 'http://127.0.0.1:' + port}, j, {proven: false, pairProven: false}) : null; };
-  Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: ''});
-  render();
+  Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 1});
+  FCTallySimple.rescanLocal(); render();
 }"""
 def ping(port, same, user, version="2.5.3", **kw):
     r = {"ok": True, "bridge": "FinCom Tally Bridge", "version": version, "impl": "go", "runMode": "user", "pid": 1234, "loopSec": 3, "yours": same is True,
