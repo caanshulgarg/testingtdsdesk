@@ -175,20 +175,19 @@ func portSessionMine(port int) (known, mine bool) {
 	if !ok {
 		return false, false
 	}
-	sess := map[int]int{}
+	byID := map[int]proc{}
 	for _, p := range procs {
-		sess[p.ID] = p.Session
-	}
-	name := map[int]string{}
-	for _, p := range procs {
-		name[p.ID] = p.Name
+		byID[p.ID] = p
 	}
 	for _, l := range lis {
 		if l.Port == port {
-			s, has := sess[l.Pid]
+			p, has := byID[l.Pid]
 			// round 5 (R5-2): a TallyPrime program only (as tallyListeners decides "mine"); another program that will
-			// not be opened is not taken as this user's
-			return has, has && isMine(s) && reTally.MatchString(name[l.Pid])
+			// not be opened is not taken as this user's. 2.5.3: a session Windows did not give (or session 0) is not known
+			if !has || sessionOwner(p) == "unknown" {
+				return false, false
+			}
+			return true, sessionOwner(p) == "mine" && reTally.MatchString(p.Name)
 		}
 	}
 	return false, false
@@ -222,10 +221,11 @@ func portOfOtherUser(port int) bool {
 		ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf())
 		other = !ok
 	} else {
-		// R4-3, R5-1: the session decides; Windows not saying it counts as another user's (never asked), not kept
+		// R4-3, R5-1: the session decides. 2.5.3: Windows not saying it is NOT another user's (the owner unknown: the
+		// light company list is asked, as for any Tally whose owner is unknown); not kept
 		known, mine := portSessionMine(port)
 		if !known {
-			return true
+			return false
 		}
 		other = !mine
 	}
@@ -281,22 +281,29 @@ func tryTypedPort(port int) (M, error) {
 		if err != nil && sid == "" && strings.Contains(err.Error(), "no program listens") {
 			return fail(useNothing, nothingWords(port))
 		}
-		if err != nil {
-			return fail(useUnknown, fmt.Sprintf("Windows did not say which program listens on port %d, so FinCom Bridge cannot tell whether it is your own TallyPrime; nothing was asked there. Try again in a moment.", port))
-		}
-		// R2-6, R4-5: a program this bridge may not open ("" with no error) is this user's only when Windows says it runs
-		// in one of the owner's sessions (TallyPrime as administrator), the plan's own rule (portSessionMine); else another
-		// user's (also when Windows does not say: the typed port is kept only when it is known to be this user's)
-		if sid == "" {
-			known, mine := portSessionMine(port)
-			if !known {
-				return fail(useUnknown, fmt.Sprintf("Windows did not say which program listens on port %d, so FinCom Bridge cannot tell whether it is your own TallyPrime; nothing was asked there. Try again in a moment.", port))
-			}
-			if !mine {
+		// 2.5.3: Windows not saying whose program it is (the owner unknown) is no reason to skip it: it is tried below
+		// unless another FinCom Bridge on this computer uses it
+		unknown := err != nil
+		// R2-6, R4-5: a program this bridge may not open ("" with no error) is this user's when Windows says it runs in one
+		// of the owner's sessions (TallyPrime as administrator), the plan's own rule (portSessionMine); another user's when
+		// Windows says it runs in another signed-in user's session; 2.5.3: else the owner unknown
+		switch {
+		case unknown:
+		case sid == "":
+			if known, mine := portSessionMine(port); !known {
+				unknown = true
+			} else if !mine {
 				return fail(useOtherUser, fmt.Sprintf("Port %d belongs to a program of another Windows user on this computer (another user's TallyPrime). FinCom Bridge uses only your own TallyPrime (%s): open TallyPrime in your own login and use its port.", port, me))
 			}
-		} else if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok {
-			return fail(useOtherUser, fmt.Sprintf("Port %d belongs to a program of another Windows user on this computer (another user's TallyPrime). FinCom Bridge uses only your own TallyPrime (%s): open TallyPrime in your own login and use its port.", port, me))
+		default:
+			if ok, _ := ownUserDecision(true, sid, nil, ownSIDsOf()); !ok {
+				return fail(useOtherUser, fmt.Sprintf("Port %d belongs to a program of another Windows user on this computer (another user's TallyPrime). FinCom Bridge uses only your own TallyPrime (%s): open TallyPrime in your own login and use its port.", port, me))
+			}
+		}
+		if unknown {
+			if who := otherBridgeClaimFn(port); who != "" {
+				return fail(useOtherUser, fmt.Sprintf("Windows did not say whose TallyPrime listens on port %d, and the FinCom Bridge of %s on this computer already uses it; nothing was asked there.", port, who))
+			}
 		}
 	}
 	// review 2.4.8 (R1-1): postings first, and nothing waits unbounded: a posting going on, or FinCom waiting for Tally,

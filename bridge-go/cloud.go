@@ -901,7 +901,8 @@ func startLightCheck(sessions []M) {
 func beatParts(sessions []M) (open, ports []any, tally bool, cos []any) {
 	open, ports = []any{}, []any{}
 	for _, s := range sessions {
-		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"])})
+		// 2.5.3: why each port stands as it does (reason), and whether its owner is unknown
+		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"]), "reason": portReason(s), "owner": str(s["owner"])})
 		if s["skipped"] == true {
 			continue
 		}
@@ -1121,7 +1122,10 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 	waitStarts := liveWaitStarts()                                                                                  // release-240 re-review M2-r: each reason's start, and the earliest
 	return M{"windowsUser": ownerName(), "bridgePort": toInt(cfg("Port")), "tallyPort": tport, "dataFolder": tdata, // 2.3.0: one bridge per Windows user
 		"reqs": beatReqs(), "readStopped": readStopAny(), "kind": "beat", "tally": tally, "tallyState": tstate, "busySince": tsince, "every": beatEvery(), "open": open, "ports": ports, "companies": cos,
-		"updating": keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
+		"tallyWhy": tallyWhy(ports), // 2.5.3: why no Tally of this user answers ("" when one does)
+		// 2.5.3: the person's words while FinCom just switched on Tally's connection in tally.ini ("" otherwise)
+		"tallyConnectSay": tallyConnectSay(tallyWhy(ports), tallyIniBeat()),
+		"updating":        keepRunning(), "dailyAt": keepDailyAt(), "nightlyAt": keepDailyAt(), "lastRun": keepLastRun(), "paused": paused(), "notAnsweringSince": notAnsweringSince(),
 		"lastRead": lastReadAt(), "events": true, "computer": computerName(), "allowlist": allowListBeat(),
 		"postOnly": toAny(postOnlyList()), // round 11: the companies this computer may post to (empty: any)
 		// round 15: the batch sizes applied (the file's, or FinCom's), and when FinCom last set them

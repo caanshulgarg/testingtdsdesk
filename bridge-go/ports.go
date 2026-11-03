@@ -21,6 +21,9 @@ type proc struct {
 	Session int
 	Path    string
 	Started time.Time
+	// 2.5.3: Windows did not give the program's session (run as administrator, access denied): its owner is unknown,
+	// never taken as session 0 (another user's)
+	SessionUnknown bool
 }
 type listener struct{ Port, Pid int }
 
@@ -81,7 +84,7 @@ func netState() (bool, []proc, []listener) {
 		var ps []proc
 		for _, x := range arr(f["processes"]) {
 			o := obj(x)
-			ps = append(ps, proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"])})
+			ps = append(ps, proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"]), SessionUnknown: o["sessionUnknown"] == true})
 		}
 		var ls []listener
 		for _, x := range arr(f["listeners"]) {
@@ -96,6 +99,30 @@ func netState() (bool, []proc, []listener) {
 // review L2 (06-Oct-2026): the Tally program alone (tally, TallyPrime; with or without .exe), never tallyscheduler or another
 // helper TallyPrime 7.1 runs from its install folder (as tallyProgram, recorder_probes.go)
 var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
+
+// 2.5.3: whose a program is by its Windows session: "mine" (one of the owner's sessions), "other" (positively another
+// signed-in user's session) or "unknown" (Windows did not give its session, or session 0, where no user signs in: a
+// TallyPrime run as administrator or by a service). Only "other" is ever skipped
+func sessionOwner(p proc) string {
+	switch {
+	case !p.SessionUnknown && isMine(p.Session):
+		return "mine"
+	case !p.SessionUnknown && p.Session != 0:
+		return "other"
+	}
+	return "unknown"
+}
+
+// the plan's "mine": true, false (positively another user's) or nil (not known)
+func mineOf(owner string) any {
+	switch owner {
+	case "mine":
+		return true
+	case "other":
+		return false
+	}
+	return nil
+}
 
 // TallyPrime programs that are listening, with the Windows session they run in; nil when Windows cannot tell
 func tallyListeners() []M {
@@ -121,7 +148,12 @@ func tallyListeners() []M {
 			continue
 		}
 		seen[c.Port] = true
-		out = append(out, M{"port": c.Port, "pid": c.Pid, "session": p.Session, "mine": isMine(p.Session), "program": p.Name, "user": users[p.Session]})
+		own := sessionOwner(p)
+		var sess any = p.Session
+		if p.SessionUnknown {
+			sess = nil
+		}
+		out = append(out, M{"port": c.Port, "pid": c.Pid, "session": sess, "mine": mineOf(own), "owner": own, "program": p.Name, "user": users[p.Session]})
 	}
 	return out
 }
@@ -193,7 +225,8 @@ func diagnosis() M {
 					ports = append(ports, toInt(l["port"]))
 				}
 			}
-			tallies = append(tallies, M{"pid": p.ID, "program": p.Name, "session": p.Session, "user": users[p.Session], "mine": isMine(p.Session), "ports": ports, "ini": tallyIni(p.Path)})
+			// 2.5.3: a Tally whose owner is unknown counts as possibly yours (it is asked), never as another user's
+			tallies = append(tallies, M{"pid": p.ID, "program": p.Name, "session": p.Session, "user": users[p.Session], "mine": sessionOwner(p) != "other", "owner": sessionOwner(p), "ports": ports, "ini": tallyIni(p.Path)})
 		}
 	}
 	free := 0
@@ -271,47 +304,82 @@ func diagnosis() M {
 	return M{"ok": true, "version": BridgeVersion, "user": me, "mySession": mySession(), "seeProcesses": ok, "findings": findings, "tallies": tallies, "listeners": listeners, "freePort": free}
 }
 
-// the ports to try: from the settings, else your own Tally's (auto), else the usual ones (fallback)
+// the ports to try (2.5.3: a chain that cannot silently end empty): the ports the settings name (TallyPorts), then
+//  1. every port a TallyPrime program of this user's Windows session listens on,
+//  2. every port a TallyPrime program whose owner is unknown listens on (its session not given, or session 0),
+//  3. every tally.ini's Server Port and the default 9000 (and, when Windows does not let the bridge list programs,
+//     FallbackPorts), whether or not Windows' listener list shows them (a port named by hand or by tally.ini is never
+//     only remembered: it is checked for a listener first, nothing is sent to a closed one),
+//  4. the ports of TallyPrime programs positively of another signed-in user, listed (skipped) so the beat can say so.
+//
+// A port of a Tally program known to answer not as Tally is left out (2.4.8). Mode: "config" with TallyPorts set,
+// "fallback" when Windows did not list programs, else "auto"
 func portPlan() (string, []M) {
-	// ports set in the settings are tried first, then any other Tally of yours found now (it may have moved to another
-	// port since): a port is never only remembered. A 0 or an empty list means "find it"
-	// 2.4.8 (anyport.go): Tally's ports from Windows' listener table, whatever their number, without a port of a Tally
-	// program known to answer not as Tally
-	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
-		// 2.3.0: a port set by hand that Windows shows as another user's Tally (another session) is that user's: it is
-		// marked so, and skipped with OnlyMySession like any other user's Tally
-		found := map[int]M{}
-		lis := tallyListeners()
-		for _, f := range lis {
+	lis := tallyListeners()
+	found := map[int]M{}
+	for _, f := range lis {
+		if _, had := found[toInt(f["port"])]; !had {
 			found[toInt(f["port"])] = f
 		}
-		var l []M
-		for _, p := range ports {
-			if f, ok := found[p]; ok {
-				l = append(l, f)
-				continue
-			}
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
-		}
-		for _, f := range tallyHTTPListeners(lis) {
-			if !containsInt(ports, toInt(f["port"])) && f["mine"] == true {
-				l = append(l, f)
-			}
-		}
-		return "config", l
 	}
-	found := tallyHTTPListeners(tallyListeners())
-	if found == nil {
-		var l []M
-		// 2.4.8: Windows did not let the bridge list programs: the ports the tally.ini files name first, then FallbackPorts
-		ports, _ := cleanPorts(cfg("FallbackPorts"))
-		ports = mergePorts(tallyIniPorts(), ports)
-		for _, p := range ports {
-			l = append(l, M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": ""})
+	var l []M
+	seen := map[int]bool{}
+	add := func(m M) {
+		p := toInt(m["port"])
+		if p <= 0 || p > 65535 || seen[p] || (cfgS("Port") != "" && p == toInt(cfg("Port"))) {
+			return
 		}
-		return "fallback", l
+		seen[p] = true
+		l = append(l, m)
 	}
-	return "auto", found
+	byPort := func(p int, via string) {
+		if f, ok := found[p]; ok {
+			add(f)
+			return
+		}
+		// no Tally program Windows lists there: whose the listener is, by Windows (false: another user's), else not known
+		add(M{"port": p, "pid": nil, "session": nil, "mine": mineByWindows(p), "program": "", "via": via})
+	}
+	mode := "auto"
+	if ports, auto := cleanPorts(cfg("TallyPorts")); !auto {
+		// 2.3.0: a port set by hand that Windows shows as another user's Tally (another session) is that user's: marked so,
+		// and skipped with OnlyMySession like any other user's Tally
+		mode = "config"
+		for _, p := range ports {
+			byPort(p, "settings")
+		}
+	}
+	listed := tallyHTTPListeners(lis)
+	for _, f := range listed {
+		if f["mine"] == true {
+			add(f)
+		}
+	}
+	for _, f := range listed {
+		if f["mine"] == nil {
+			add(f)
+		}
+	}
+	more := mergePorts(tallyIniPorts(), []int{9000})
+	if lis == nil {
+		if mode == "auto" {
+			mode = "fallback"
+		}
+		fb, _ := cleanPorts(cfg("FallbackPorts"))
+		more = mergePorts(more, fb)
+	}
+	for _, p := range more {
+		byPort(p, "tally.ini")
+	}
+	for _, f := range listed {
+		if f["mine"] == false {
+			add(f)
+		}
+	}
+	if l == nil {
+		l = []M{}
+	}
+	return mode, l
 }
 
 // --- which companies are open: shared through a file and kept 30 s, so status checks cost Tally nothing
@@ -404,8 +472,11 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	if cacheSec < 30 {
 		cacheSec = 30
 	}
+	// 2.5.3: a list held counts only while it still matches Windows' list now (cacheMatches): a Tally opened, moved or
+	// restarted since (Connect, the Tally page) is asked at once
+	mode, plan := portPlan()
 	coMu.Lock()
-	if !fresh && coCache != nil && time.Since(coCacheAt).Seconds() < float64(cacheSec) {
+	if !fresh && coCache != nil && time.Since(coCacheAt).Seconds() < float64(cacheSec) && cacheMatches(coCache, plan) {
 		c := copySessions(coCache)
 		coMu.Unlock()
 		return c, false
@@ -414,7 +485,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	shared := filepath.Join(syncDir(), "open-companies.json")
 	if !fresh {
 		if t, ok := mtime(shared); ok && time.Since(t).Seconds() < float64(cacheSec) {
-			if l := sessionsFromFile(shared); l != nil {
+			if l := sessionsFromFile(shared); l != nil && cacheMatches(l, plan) {
 				coMu.Lock()
 				coCache, coCacheAt = l, t
 				coMu.Unlock()
@@ -422,29 +493,31 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			}
 		}
 	}
-	mode, plan := portPlan()
 	sessions := []M{}
 	allFresh := true
 	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
 	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
 	ownOpen, ownAll := map[string]string{}, true
 	for _, pp := range plan {
-		e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
-		if cfgB("OnlyMySession") && pp["mine"] == false {
-			e["skipped"] = true
-			who := str(pp["user"])
-			if who == "" {
-				who = fmt.Sprint("Windows session ", pp["session"])
-			}
-			e["error"] = "Tally of " + who
+		e := planEntry(pp)
+		if e["skipped"] == true {
 			sessions = append(sessions, e)
 			continue
 		}
 		if !tallyRunning() || !tallyPortOpen(toInt(pp["port"])) {
 			// closed: nothing is sent to it
-			e["error"], e["tallyState"] = "Tally is not open (nothing listens on this port)", "closed"
+			e["error"], e["tallyState"], e["reason"] = "Tally is not open (nothing listens on this port)", "closed", "closed"
 			sessions = append(sessions, e)
 			continue
+		}
+		// 2.5.3: a Tally whose owner is unknown: left to another FinCom Bridge of this computer that already uses it
+		if pp["mine"] == nil {
+			if who := otherBridgeClaimFn(toInt(pp["port"])); who != "" {
+				e["skipped"], e["reason"] = true, "another bridge"
+				e["error"] = "owner unknown; the FinCom Bridge of " + who + " on this computer uses this Tally"
+				sessions = append(sessions, e)
+				continue
+			}
 		}
 		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go)
 		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
@@ -463,6 +536,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
 			e["error"] = err.Error()
+			if pp["mine"] == nil {
+				e["error"] = ownerUnknownWords + ": " + err.Error()
+			}
 		} else if notTallyAnswer(raw) {
 			// 2.4.8 (anyport.go): the port answers, but not as Tally (another listener of a Tally program, or another
 			// program on a port set by hand): not a Tally; a program's port is left out of the plan while it holds it
@@ -493,6 +569,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["companies"] = list
 			e["tallyState"] = "open"
 		}
+		e["reason"] = portReason(e)
 		sessions = append(sessions, e)
 	}
 	coMu.Lock()
@@ -623,21 +700,37 @@ func tallyOpenNow() int {
 
 // Get-OpenCompaniesCached (1.14.0; 2.1.3 never asks Tally at all): the companies Tally named the last time it was asked
 // after an event, and whether Tally is open now (the program running and its port taking a connection)
-func openCompaniesCached() []M {
+//
+// 2.5.3 (the Durgesh beat: the list of an earlier ask named an old port, 1817, closed since, and never the own Tally
+// opened later on 9070, so the beat said "closed" for ever: nothing was open, so no event asked again): the list held is
+// matched with Windows' list now (portPlan, no request to Tally). A port no longer in the plan goes; a port new in the
+// plan, or whose owner changed, is added as it stands, and the company list is asked afresh in the background (once a
+// minute at most, the same light request under the 2-second stop, one in flight, postings first: askAfreshFn)
+func openCompaniesCached() []M { return openCompaniesCachedOnce(true) }
+
+func openCompaniesCachedOnce(mayAsk bool) []M {
 	shared := filepath.Join(syncDir(), "open-companies.json")
-	list := sessionsFromFile(shared)
-	if list == nil {
-		// nothing asked yet: each of your ports as it stands, without companies
-		list = []M{}
-		_, plan := portPlan()
-		for _, pp := range plan {
-			e := M{"port": toInt(pp["port"]), "ok": false, "companies": []any{}, "error": "", "mine": pp["mine"], "session": pp["session"], "program": pp["program"], "user": pp["user"], "skipped": false}
-			if cfgB("OnlyMySession") && pp["mine"] == false {
-				e["skipped"] = true
-			}
-			list = append(list, e)
+	before, _ := mtime(shared)
+	held := sessionsFromFile(shared)
+	_, plan := portPlan()
+	byPort := map[int]M{}
+	for _, e := range held {
+		if _, had := byPort[toInt(e["port"])]; !had {
+			byPort[toInt(e["port"])] = e
 		}
 	}
+	list := []M{}
+	changed := len(held) != len(plan)
+	for _, pp := range plan {
+		now := planEntry(pp)
+		e, had := byPort[toInt(pp["port"])]
+		if !had || (e["skipped"] == true) != (now["skipped"] == true) || fmt.Sprint(e["mine"]) != fmt.Sprint(now["mine"]) {
+			e = now
+			changed = true
+		}
+		list = append(list, e)
+	}
+	ask := false
 	for _, e := range list {
 		if e["skipped"] == true {
 			continue
@@ -648,6 +741,18 @@ func openCompaniesCached() []M {
 		e["tallyState"], e["busy"] = st, st == "busy"
 		if !open {
 			e["companies"] = []any{}
+			e["reason"] = "closed"
+			continue
+		}
+		if r := str(e["reason"]); r == "" || r == "closed" {
+			e["reason"] = portReason(e)
+		}
+		// a Tally Windows shows now that the list held does not (or not as it is), or one held without its companies
+		ask = ask || changed
+	}
+	if ask && mayAsk && askAfreshSoon() {
+		if after, ok := mtime(shared); ok && after.After(before) {
+			return openCompaniesCachedOnce(false) // asked at once (a person's check now): its answer
 		}
 	}
 	return list

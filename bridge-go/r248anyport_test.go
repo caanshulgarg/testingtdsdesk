@@ -92,7 +92,8 @@ func TestAnyPortAutoFindsOwnTallyAnyPort(t *testing.T) {
 		[][2]int{{mine.port, 10}, {other, 10}, {theirs.port, 20}})
 	setCfg("TallyPorts", "auto")
 	setCfg("OnlyMySession", true)
-	if mode, plan := portPlan(); mode != "auto" || len(plan) != 3 {
+	// 2.5.3: tally.ini's 9000 is in the plan too (checked for a listener first; nothing is sent to a closed port)
+	if mode, plan := portPlan(); mode != "auto" || len(plan) != 4 {
 		t.Fatalf("plan %s %v", mode, plan)
 	}
 	ss := openCompanies(true)
@@ -125,7 +126,7 @@ func TestAnyPortAutoFindsOwnTallyAnyPort(t *testing.T) {
 	}
 	// another program takes that port (another pid): asked again
 	fakeWindows(t, []fakeProc{{10, 1, "tally", ""}, {11, 1, "tally", ""}}, [][2]int{{mine.port, 10}, {other, 11}})
-	if _, plan := portPlan(); len(plan) != 2 {
+	if _, plan := portPlan(); len(plan) != 3 { // 2.5.3: with the default 9000
 		t.Fatalf("a new program on the port is asked again: %v", plan)
 	}
 }
@@ -185,7 +186,8 @@ func TestAnyPortFallbackReadsIniPort(t *testing.T) {
 		t.Skip("this platform lists programs")
 	}
 	mode, plan := portPlan()
-	if mode != "fallback" || len(plan) != 2 || toInt(plan[0]["port"]) != f.port {
+	// 2.5.3: tally.ini's port, the default 9000, then FallbackPorts
+	if mode != "fallback" || len(plan) != 3 || toInt(plan[0]["port"]) != f.port || toInt(plan[1]["port"]) != 9000 {
 		t.Fatalf("plan %s %v", mode, plan)
 	}
 	if p, _, err := findCompanyNow(zz, 0); err != nil || p != f.port {
@@ -359,7 +361,7 @@ func TestTypedPortOwnUserOnly(t *testing.T) {
 // 2.4.8 adds and changes no Tally request: the allow-list table as 2.4.5's, the decision line names 2.4.8 with 2.4.7's
 // kept as history, a dated line for 2.4.8; the test sheet names this version's new steps
 func TestRelease248VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.5.2" { // 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go): kept as history
+	if BridgeVersion != "2.5.3" { // 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"
@@ -651,15 +653,16 @@ func TestAnyPortUnopenableOtherSessionSkipped(t *testing.T) {
 func TestAnyPortRound4(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"k248"`)
-	// R4-3/R5-1: a program Windows will not open, and Windows does not say its session: another user's for the plan, not kept
+	// R4-3/R5-1: a program Windows will not open, and Windows does not say its session. 2.5.3 (the owner's rule: skipped
+	// only when positively another user's): the owner unknown, NOT another user's (the light company list is asked); not kept
 	t.Setenv("TDSBRIDGE_FAKE", "")
 	oldL := listenerUserOf
 	t.Cleanup(func() { listenerUserOf = oldL; resetOtherUser() })
 	listenerUserOf = func(p int) (string, bool, error) { return "", true, nil }
 	resetOtherUser()
 	if ok, _, _ := netState(); !ok {
-		if !portOfOtherUser(f.port) {
-			t.Fatal("R5-1: Windows not saying the session: the port must count as another user's (never asked)")
+		if portOfOtherUser(f.port) {
+			t.Fatal("2.5.3: Windows not saying the session: the owner is unknown, not another user's")
 		}
 		otherUserMu.Lock()
 		_, kept := otherUserAt[f.port]

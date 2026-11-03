@@ -1940,8 +1940,15 @@ function tallyIniOf(b: any) {
   if (!Array.isArray(b?.tallyIni)) return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const st = ["added", "already", "notadded", "usertdl-no", "failed", "refused", "unreadable", "missing"];
-  return { tallyIni: b.tallyIni.slice(0, 10).map((x: any) => ({ path: s(x?.path, 260), state: st.includes(x?.state) ? x.state : "other", why: s(x?.why, 300), at: s(x?.at, 40), checkedAt: s(x?.checkedAt, 40) })) };
+  // bridge 2.5.3: TallyPrime's connection in the file ("enabled; Tally needs one restart", "already", "cannot write",
+  // "unreadable") and the port it names
+  const cs = ["enabled; Tally needs one restart", "already", "cannot write", "unreadable"];
+  return { tallyIni: b.tallyIni.slice(0, 10).map((x: any) => ({ path: s(x?.path, 260), state: st.includes(x?.state) ? x.state : "other", why: s(x?.why, 300), at: s(x?.at, 40), checkedAt: s(x?.checkedAt, 40),
+    ...(cs.includes(x?.connect) ? { connect: x.connect } : {}), ...(Number(x?.serverPort) > 0 ? { serverPort: Math.min(65535, Math.floor(Number(x.serverPort))) } : {}) })) };
 }
+// bridge 2.5.3: a port's reason, and the beat's tallyWhy (anything else dropped)
+const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown", "another user", "another bridge", "not Tally"];
+const TALLY_WHY = ["not answering", "owner unknown", "another user", "no Tally running in this login"];
 // ROUND 103 (1d): the tray's old-days test (read only), its last result as the bridge says it: the company, the line
 // ("0.21 s / 0.34 s / 0.18 s · no freeze", or the reason it stopped), each day's time; nothing else kept
 function oldDaysTestOf(b: any) {
@@ -3875,7 +3882,12 @@ Deno.serve(sentry.wrap(async (req) => {
           open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
           // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
-            n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120) })),
+            n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120),
+            // bridge 2.5.3: why the port stands as it does, and whether Windows did not say whose Tally it is
+            ...(PORT_REASONS.includes(p?.reason) ? { reason: p.reason } : {}), ...(p?.owner === "unknown" ? { owner: "unknown" } : {}) })),
+          // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
+          // switched on Tally's connection in tally.ini
+          ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),
           companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
             // 2.4.5: the company's GUID as the bridge holds it (the ledger progress of a bridge not holding it yet is matched by it)

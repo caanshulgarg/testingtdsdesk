@@ -532,8 +532,9 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	}
 	// the decision line, and the class
 	a := tallyAllowList[stockID]
-	if !strings.Contains(a.purpose, "allowed for "+BridgeVersion+" by the owner's decision of 2026-10-30 (person's click only)") || a.measureOnly || a.maxSec <= 0 ||
-		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.2" {
+	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3
+	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+BridgeVersion+")") || a.measureOnly || a.maxSec <= 0 ||
+		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.3" { // 2.5.3 (r253owntally_test.go)
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
 }
@@ -552,7 +553,7 @@ func allowRowsBeforeStock() string {
 // --- 8. 2.5.2: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.2 by the owner's
 // decision of 2026-10-30 (person's click only), 2.5.0's kept as history; the dated line; the test sheet
 func TestStock251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.2" {
+	if BridgeVersion != "2.5.3" { // 2.5.3 (r253owntally_test.go)
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {
@@ -560,7 +561,7 @@ func TestStock251VersionAllowList(t *testing.T) {
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))
 	line := group(`(?m)^(First table: .*)$`, al, 1)
-	for _, w := range []string{"allowed for 2.5.2 by the owner's decision of 2026-10-30 (person's click only)", "FinComStockInHand " + shapeOf(allowListSamples()[stockID]),
+	for _, w := range []string{"as for 2.5.2: the owner's decision of 2026-10-30 (person's click only)", "FinComStockInHand " + shapeOf(allowListSamples()[stockID]),
 		"run 41009967960", "as for 2.5.1: the owner's decision of 2026-10-30", "as for 2.5.0: the owner's decision of 2026-10-30", "as for 2.4.9: the owner's decision of 2026-10-29"} {
 		if !strings.Contains(line, w) {
 			t.Errorf("the decision line does not say %q", w)

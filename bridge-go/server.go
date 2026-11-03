@@ -168,6 +168,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	if path == "/ping" {
 		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
 		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine}
+		// 2.5.3: the Tallys this bridge uses (its own, and those it found with the owner unknown), so the other users'
+		// bridges of this computer leave them alone; the Windows user, to name it in their words
+		own, unknown := claimedPorts()
+		p["tallyPorts"], p["tallyPortsUnknown"], p["windowsUser"] = own, unknown, ownerName()
 		if mine {
 			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
 			// review M1: the proof FinCom checks before it uses this bridge (its key), or pairs with it (the code shown now).
@@ -412,12 +416,15 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			sessions = openCompaniesCached() // Tally is not asked on a status check, unless a person's action asks
 		}
 		why := readOnlyWhy()
+		_, beatPorts, _, _ := beatParts(sessions)
+		why253 := tallyWhy(beatPorts) // 2.5.3: why no Tally of this user answers ("" when one does)
 		coMu.Lock()
 		pm := planMode
 		coMu.Unlock()
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
-			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus()}, nil
+			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus(),
+			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat())}, nil // 2.5.3
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {

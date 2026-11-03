@@ -28,6 +28,7 @@ var (
 	procGetExtendedTcpTable = iphlpapi.NewProc("GetExtendedTcpTable")
 	wtsapi32                = windows.NewLazySystemDLL("wtsapi32.dll")
 	procWTSQuerySessionInfo = wtsapi32.NewProc("WTSQuerySessionInformationW")
+	procWTSEnumProcesses    = wtsapi32.NewProc("WTSEnumerateProcessesW")
 	user32                  = windows.NewLazySystemDLL("user32.dll")
 	procGetLastInputInfo    = user32.NewProc("GetLastInputInfo")
 	kernel32                = windows.NewLazySystemDLL("kernel32.dll")
@@ -153,6 +154,31 @@ func listeningPorts() ([]listener, bool) {
 	return out, true
 }
 
+// 2.5.3: WTS_PROCESS_INFOW (wtsapi32): a process's session as the Remote Desktop service tells it, without opening the
+// process (so also for a program run as administrator, which ProcessIdToSessionId may not open)
+type wtsProcessInfo struct {
+	SessionID   uint32
+	ProcessID   uint32
+	ProcessName *uint16
+	UserSid     uintptr
+}
+
+// every process's session by the Remote Desktop service; nil when it does not say
+func wtsProcessSessions() map[uint32]uint32 {
+	var p *wtsProcessInfo
+	var n uint32
+	r, _, _ := procWTSEnumProcesses.Call(0, 0, 1, uintptr(unsafe.Pointer(&p)), uintptr(unsafe.Pointer(&n)))
+	if r == 0 || p == nil {
+		return nil
+	}
+	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(p)))
+	out := make(map[uint32]uint32, n)
+	for _, x := range unsafe.Slice(p, n) {
+		out[x.ProcessID] = x.SessionID
+	}
+	return out
+}
+
 func processes() ([]proc, bool) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
@@ -162,12 +188,25 @@ func processes() ([]proc, bool) {
 	var e windows.ProcessEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
 	var out []proc
+	var wts map[uint32]uint32
+	wtsAsked := false
 	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
 		name := windows.UTF16ToString(e.ExeFile[:])
 		p := proc{ID: int(e.ProcessID), Name: strings.TrimSuffix(strings.TrimSuffix(name, ".exe"), ".EXE")}
 		var s uint32
 		if windows.ProcessIdToSessionId(e.ProcessID, &s) == nil {
 			p.Session = int(s)
+		} else {
+			// 2.5.3: the session not given (run as administrator, access denied) was taken as session 0, another user's
+			// Tally: asked of the Remote Desktop service instead; when it does not say either, the owner is unknown
+			if !wtsAsked {
+				wts, wtsAsked = wtsProcessSessions(), true
+			}
+			if ws, ok := wts[e.ProcessID]; ok {
+				p.Session = int(ws)
+			} else {
+				p.SessionUnknown = true
+			}
 		}
 		if reTally.MatchString(p.Name) {
 			if h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, e.ProcessID); err == nil {
@@ -210,7 +249,7 @@ func platTallyRunning() bool {
 		return true // Windows did not say: the port decides
 	}
 	for _, p := range ps {
-		if reTally.MatchString(p.Name) && (!cfgB("OnlyMySession") || isMine(p.Session)) {
+		if reTally.MatchString(p.Name) && (!cfgB("OnlyMySession") || sessionOwner(p) != "other") {
 			return true
 		}
 	}
@@ -221,7 +260,7 @@ func platTallyRunning() bool {
 func platTallyYoung(min float64) bool {
 	ps, _ := processes()
 	for _, p := range ps {
-		if reTally.MatchString(p.Name) && isMine(p.Session) && !p.Started.IsZero() && time.Since(p.Started).Minutes() < min {
+		if reTally.MatchString(p.Name) && sessionOwner(p) != "other" && !p.Started.IsZero() && time.Since(p.Started).Minutes() < min {
 			return true
 		}
 	}
@@ -606,7 +645,7 @@ func platTallyResponds() bool {
 	}
 	pids := map[uint32]bool{}
 	for _, p := range ps {
-		if reTally.MatchString(p.Name) && isMine(p.Session) {
+		if reTally.MatchString(p.Name) && sessionOwner(p) != "other" {
 			pids[uint32(p.ID)] = true
 		}
 	}
@@ -645,7 +684,7 @@ func tallyWindows() []uintptr {
 	}
 	pids := map[uint32]bool{}
 	for _, p := range ps {
-		if reTally.MatchString(p.Name) && isMine(p.Session) {
+		if reTally.MatchString(p.Name) && sessionOwner(p) != "other" {
 			pids[uint32(p.ID)] = true
 		}
 	}

@@ -222,8 +222,38 @@ func tallyIniApply(path, addon string) (M, error) {
 	}
 	nb, state, added := iniAddAddon(raw, addon)
 	e["state"] = state
-	if state != "added" {
+	// 2.5.3 (iniconnect253.go): TallyPrime's connection switched on in the same write (Client Server = Both, a Server Port)
+	base := raw
+	if state == "added" {
+		base = nb
+	}
+	cb, cstate, cport, cchg := iniConnect(base, iniPortUsed(path))
+	e["connect"] = cstate
+	if cport > 0 {
+		e["serverPort"] = cport
+	}
+	if cstate == connectEnabled {
+		nb = cb
+		added = append(added, cchg...)
+	}
+	if state != "added" && cstate != connectEnabled {
 		return e, nil
+	}
+	// a file this Windows user cannot write is not touched (no backup, nothing written)
+	if err := iniWritableFn(path); err != nil {
+		if cstate == connectEnabled {
+			e["connect"] = connectCannotWrite
+		}
+		if state == "added" {
+			e["state"] = "failed"
+		}
+		if isNoWrite(err) {
+			return e, fmt.Errorf("this Windows user may not change %s: not touched", path)
+		}
+		return e, fmt.Errorf("tally.ini could not be opened for writing (%v): not touched", err)
+	}
+	if cstate == connectEnabled {
+		e["connect"] = connectCannotWrite // until the file is written and read back
 	}
 	bak := path + ".fincom-bak"
 	if bi, err := os.Lstat(bak); err == nil && !bi.Mode().IsRegular() {
@@ -267,6 +297,9 @@ func tallyIniApply(path, addon string) (M, error) {
 		return e, errors.New("tally.ini did not read back as written: put back as it was")
 	}
 	e["added"] = toAny(added)
+	if cstate == connectEnabled {
+		e["connect"] = connectEnabled
+	}
 	return e, nil
 }
 
@@ -322,6 +355,13 @@ func tallyIniStep(log func(string)) []M {
 				e["why"] = cutRunes(err.Error(), 200)
 			}
 			log("tally.ini " + p + ": not changed (" + str(e["state"]) + ": " + str(e["why"]) + ")")
+		}
+		// 2.5.3: TallyPrime's connection
+		switch str(e["connect"]) {
+		case connectEnabled:
+			log(fmt.Sprintf("tally.ini %s: TallyPrime's connection switched on (acts as Both, port %d); Tally needs one restart", p, toInt(e["serverPort"])))
+		case connectCannotWrite:
+			log("tally.ini " + p + ": TallyPrime's connection is off and this Windows user may not change the file: not touched")
 		}
 		out = append(out, e)
 	}
