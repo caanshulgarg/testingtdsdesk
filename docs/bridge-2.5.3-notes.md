@@ -75,13 +75,15 @@ session's own pass: docs/reviews/bridge-2.5.3-{code,security}-review.md); the CI
 ## Hemant's bridge (device 1dcec4b8-..., NW144\Hemant) still on 2.4.7
 
 Its beat carries no update error: tally-ingest keeps no update fields from the beat (2.4.7 sends autoUpdate and
-rolledBack, both dropped by the cloud's beat whitelist), and 2.4.7 keeps its update message (checkForUpdate's
-updLast) on the computer only. The firm has no held, withdrawn or rolled-back release (tally_bridge_releases and
-tally_bridge_rollbacks empty), review/assets/bridge-go/latest.json names 2.5.2, signed with the same key 2.4.7 checks. So
-the cloud allows it; the reason is on the computer, and the cloud cannot show which. The candidates: NoAutoUpdate set by a rollback from the tray (or an undone
-update, update-undone.json), or the six-hourly check failing to reach staging.fincom.live from that login. Its tray's
-"Check for updates" message, or its log (Update: ... lines), says which. A follow-up: let tally-ingest keep autoUpdate,
-rolledBack and the last update message from the beat.
+rolledBack, both dropped by the cloud's beat whitelist), and 2.4.7 keeps its update message (checkForUpdate's updLast)
+on the computer only. The cause is on FinCom's side: the bridge's updater fetches latest.json AND latest.json.sig from
+staging.fincom.live/review/assets/bridge-go/ and stops when the signature is missing ("The list of updates has no
+signature, so nothing was changed."), and no bridge latest.json.sig has ever been published on staging (none in git
+history for review/, next/ or assets-test/; docs/HANDOVER.md: "Bridges never auto-update on staging: no latest.json.sig
+is published"). The firm has no held, withdrawn or rolled-back release (tally_bridge_releases, tally_bridge_rollbacks
+empty), so the cloud would allow it. Hemant's bridge (and every staging bridge) takes a new version only from a setup run
+by hand, until the owner decides to sign and publish latest.json.sig (connector/publish.py's key, from the vault). Not
+changed here. A follow-up: let tally-ingest keep autoUpdate, rolledBack and the last update message from the beat.
 
 ## Gates
 

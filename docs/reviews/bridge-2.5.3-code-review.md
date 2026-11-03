@@ -4,7 +4,7 @@ Reviewer: the build session's own adversarial pass over the diff (as for 2.3.2),
 fix of 03-Nov-2026 ("Don't full check.. need basic check first.. I need to do it real fast."). No independent review
 session was run; one is owed after the release.
 
-Range: 3f242aa08..cfd170de2
+Range: 3f242aa08..f3cf93170
 
 ## The cause, found in the code (bridge 2.5.2)
 
@@ -67,6 +67,10 @@ Range: 3f242aa08..cfd170de2
    /ping: both may ask it the company list once; the cloud's lease still lets one read or post a company.
 7. (Low, open) On a shared install (one tally.ini for every user) switching the connection on applies to every user of
    that install; the port is the file's own (kept) or 9000/free.
+
+8. (Fixed after release-check's first full run) FallbackPorts were merged in settings mode too when Windows listed no
+   programs; now automatic mode only, as before. Three tests encoded the old rules (the open check's list of one port;
+   the typed port refused when the owner is unknown; the recorder fixture's version) and were changed to the new ones.
 
 ## Tests
 
