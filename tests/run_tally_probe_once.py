@@ -12,8 +12,10 @@ reported "Site is crashing.. not working properly"). Made-up firm, computers and
   7. an answer that is the same as the last one does not draw the page again.
   8. idle on Tally with answering bridges (one sameSession true, one false): React commits per second stay low, no
      long task over 200 ms; the own bridge is the one saying sameSession true (the owner's requirement stays).
+  9. 25 clients and 15 companies open, then 150 clients and 100: one drawing of the page under 200 ms; the table's rows
+     are the same with the once-per-table name keys and without.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_probe_once.py"""
-import os, sys, json, threading, functools, http.server
+import os, sys, json, time, threading, functools, http.server, subprocess
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -150,8 +152,54 @@ def main():
            "8. userB's open company (sameSession false) is not offered as this login's")
         ok(not errors, "no page errors (%s)" % errors[:3])
         br.close()
+
+    print("== 9. many clients and many companies: one drawing stays quick, its rows unchanged")
+    # next-fix-probe-loop: each client's row asked every company's twin, and each twin compared every client's name
+    # (clients x companies x clients name keys at every drawing): 50 clients and 50 companies held the page ~100 s. Each
+    # size is drawn in a page of its own, stopped after 90 s (a page that hangs is a failure, not a test that never ends).
+    for nc, nk in ((25, 15), (150, 100)):
+        try:
+            out = subprocess.run([sys.executable, os.path.abspath(__file__), "--big", str(nc), str(nk)], capture_output=True, text=True, timeout=90).stdout
+            r = json.loads([l for l in out.splitlines() if l.startswith("{")][-1])
+        except subprocess.TimeoutExpired: r = {"hung": True}
+        except Exception as e: r = {"err": str(e)[:200]}
+        if r.get("hung") or r.get("err"):
+            ok(False, "9. %d clients, %d companies open: the page drew within 90 s (%s)" % (nc, nk, "it hung" if r.get("hung") else r["err"])); continue
+        ok(max(r["ms"][1:]) < 200, "9. %d clients, %d companies open: one drawing under 200 ms (%s ms; the scene's first: %d ms)" % (nc, nk, r["ms"], r["first_ms"]))
+        if nc <= 30: ok(r["same"], "9. %d clients, %d companies: the rows are the same, worked out within a drawing (all kept) and as before (nothing kept)" % (nc, nk))
+        ok(r.get("kept"), "9. %d clients: the name rules' answers are kept (tallyNameKey, nameScore, clientNameFromTally)" % nc)
+        ok(r["rows"] >= nc, "9. %d clients: the table has every client's row (%d rows)" % (nc, r["rows"]))
+        ok(not r["errors"], "9. %d clients: no page errors (%s)" % (nc, r["errors"][:2]))
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))
     raise SystemExit(1 if fails else 0)
 
+# one size of section 9 in a page of its own: prints {"ms": [4 drawings], "same": rows alike with and without, "rows": n}.
+# Made-up names: a third the same as a client (a period off), a third a split's date off, a third nobody's.
+def big(nc, nk):
+    srv = http.server.ThreadingHTTPServer(("localhost", PORT + 1), functools.partial(T.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
+    with sync_playwright() as p:
+        br = p.chromium.launch(); pg = br.new_page(viewport={"width": 1440, "height": 900}); errs = []
+        pg.on("pageerror", lambda e: errs.append(str(e)))
+        pg.route("**/assets/bridge-go/latest.json", lambda r: r.fulfill(status=200, content_type="application/json", body=json.dumps(LATEST)))
+        pg.route("http://127.0.0.1:*/**", lambda r: r.abort("connectionrefused"))
+        pg.goto("http://localhost:%d/" % (PORT + 1)); pg.wait_for_timeout(2500)
+        pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })")
+        pg.wait_for_timeout(800)
+        cl = ["CLIENT %03d TRADERS PRIVATE LIMITED" % i for i in range(1, nc + 1)]
+        cos = [{"company": ("CLIENT %03d TRADERS PVT LTD - (from 1-Apr-25)" % i) if i % 3 == 0 else ("CLIENT %03d TRADERS 01 Apr 2018" % i) if i % 3 == 1 else ("OTHER %03d MILLS LLP" % i),
+                "client_id": None, "device_id": "d0000000-0000-4000-8000-000000000007", "gstin": "", "last_seen": "ago:1"} for i in range(1, nk + 1)]
+        dm = T.dev(7, "PC1", UA, tally="open", opened=tuple(c["company"] for c in cos), version="2.5.3", beat={"bridgePort": 9103, "windowsUser": UA}, rec=())
+        t0 = time.time(); pg.evaluate(T.SETUP, [[dm], cos, [], "owner", cl, True, {}]); first = round((time.time() - t0) * 1000); pg.wait_for_timeout(1500)
+        ms = pg.evaluate("() => { const t = []; for (let i = 0; i < 4; i++) { const a = performance.now(); render(); t.push(Math.round(performance.now() - a)); } return t; }")
+        # the rows worked out within a drawing (memoScope: everything kept for that drawing) and outside one with nothing kept
+        rows = "(off) => { const M = FCTallySimple.MEMO || {}; M.off = !!off; const f = () => JSON.stringify(FCTallySimple.tableRows({}).map((r) => [r.key, r.kind, r.found || '', r.act && r.act.kind, r.todo, r.c.w, r.c.note, r.o.w, r.o.note, r.best ? r.best.id : ''])); try { return off ? f() : memoScope(f); } finally { M.off = false; } }"
+        # (the rows worked out as before, nothing kept, take minutes at 150 and 100: compared at the small size)
+        same = pg.evaluate("() => !!FCTallySimple.MEMO") and (nc > 30 or pg.evaluate(rows, True) == pg.evaluate(rows, False))
+        n = pg.evaluate("() => document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]').length")
+        kept = pg.evaluate("() => ['tallyNameKey', 'nameScore', 'clientNameFromTally'].every((f) => typeof window[f] === 'function' && window[f].kept)")
+        print(json.dumps({"ms": ms, "first_ms": first, "same": bool(same), "kept": kept, "rows": n, "errors": errs}))
+        br.close()
+
 if __name__ == "__main__":
-    main()
+    if "--big" in sys.argv: i = sys.argv.index("--big"); big(int(sys.argv[i + 1]), int(sys.argv[i + 2]))
+    else: main()

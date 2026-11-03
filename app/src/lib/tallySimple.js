@@ -44,8 +44,62 @@ export function missingWords(need) {
 // the client FinCom offers first for a Tally company: the same name (a split's date or a year off) or GSTIN, a year of a
 // client's company, then the likeliest alike (twinOf / yearOf / alikeOf, as the rest of the app); null when none is alike
 export function bestFor(r, all) {
-  return twinOf(r) || yearOf(r, all) || alikeOf(r)[0] || null;
+  return twinM(r) || yearOf(r, all) || alikeOf(r)[0] || null;
 }
+// next-fix-probe-loop (03-Nov-2026): the table's name work once per table. Each client's row asked every Tally company's
+// twin (twinOf), and each twin put every client's name through the name rules (tallyNameKey, server/_shared/tallyname.js):
+// clients x companies x clients name keys at every drawing (50 clients and 50 companies held the page about 100 s).
+// While one table is worked out (tableRows): each company's twin once, and each client's companies of its name read from
+// those; and each name's answer from the name rules kept (keepAnswers below). The rows are the same (MEMO.off: without,
+// for the test that compares them).
+export const MEMO = { off: false, cur: null };
+function twinM(r) {
+  const m = MEMO.cur;
+  if (!m) return twinOf(r);
+  if (!m.twin.has(r)) m.twin.set(r, twinOf(r));
+  return m.twin.get(r);
+}
+// the companies no client has whose twin is client cid, in the order of all (as all.filter would give them)
+function twinsOf(all, cid) {
+  const m = MEMO.cur;
+  if (!m) return all.filter((r) => !r.client && twinOf(r) && twinOf(r).id === cid);
+  if (!m.by) {
+    m.by = new Map();
+    all.forEach((r) => { if (r.client) return; const t = twinM(r); if (!t) return; if (!m.by.has(t.id)) m.by.set(t.id, []); m.by.get(t.id).push(r); });
+  }
+  return (m.by.get(cid) || []).slice();
+}
+function withTable(fn) {
+  if (MEMO.off || MEMO.cur) return fn();
+  MEMO.cur = { twin: new Map(), by: null };
+  try { return fn(); } finally { MEMO.cur = null; }
+}
+// the name rules are plain functions of their words (server/_shared/tallyname.js, globals of legacy.js): each name's
+// answer kept (strings only; at most 20,000 kept, then started afresh), so a page of 150 clients and 100 companies does not
+// put each name through the rules again for every pair. The same answers (MEMO.off: the rules asked each time).
+function keepAnswers(name, arity) {
+  const g = globalThis, f = g[name];
+  if (typeof f !== "function" || f.kept) return;
+  const m = new Map();
+  const k = arity === 1
+    ? function (x) {
+      if (MEMO.off || typeof x !== "string") return f.apply(this, arguments);
+      let v = m.get(x);
+      if (v === undefined) { if (m.size >= 20000) m.clear(); v = f.apply(this, arguments); m.set(x, v); }
+      return v;
+    }
+    : function (x, y) {
+      if (MEMO.off || typeof x !== "string" || typeof y !== "string") return f.apply(this, arguments);
+      let n = m.get(x);
+      if (!n) { if (m.size >= 2000) m.clear(); n = new Map(); m.set(x, n); }
+      let v = n.get(y);
+      if (v === undefined) { if (n.size >= 2000) n.clear(); v = f.apply(this, arguments); n.set(y, v); }
+      return v;
+    };
+  k.kept = true;
+  g[name] = k;
+}
+if (typeof window === "object") { keepAnswers("tallyNameKey", 1); keepAnswers("nameScore", 2); keepAnswers("clientNameFromTally", 1); }
 // the page's own count of a client's ledgers (FinCom's cloud, tally_ledgers counted), by book: a later read of the client's
 // books (TCloud.status) replaces TCloud.st[cid] and its count with it
 export const LEDN = {}, ASKED_N = new Set();
@@ -296,7 +350,7 @@ function clientRow(co, all, opts) {
   const row = { key: "c:" + cid, kind: "client", cid, co, client: co.name, company, act: null, todo: "", upload: false, focus: opts.focus === cid };
   if (!company) {
     // not connected: the company of its name (or GSTIN) that FinCom has seen in Tally, open first
-    const mine = all.filter((r) => !r.client && twinOf(r) && twinOf(r).id === cid).sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)));
+    const mine = twinsOf(all, cid).sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)));
     const r = mine[0] || null;
     Object.assign(row, { r, found: r ? r.company : "",
       c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "" },
@@ -373,7 +427,8 @@ function companyRow(r, all, own) {
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")
-export function tableRows(opts) {
+export function tableRows(opts) { return withTable(() => tableRowsNow(opts)); }
+function tableRowsNow(opts) {
   opts = Object.assign({}, opts);
   opts.own = opts.own || ownState();
   const all = companyRows(), cs = live().sort((a, b) => String(a.name).localeCompare(String(b.name)));
@@ -436,4 +491,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, LOCALB, rescanLocal, lookOnce, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

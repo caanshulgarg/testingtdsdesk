@@ -48,11 +48,27 @@ export function hereOpen(k) {
   try { return typeof Bridge === "object" && Bridge.up() && [].concat(Bridge.st.open || []).some((x) => coKey(x && x.name) === k); } catch (e) { return false; }
 }
 // {state: connected | notopen | offline | unseen, level, word, text, computer, seen}
+// next-fix-probe-loop (03-Nov-2026): within one drawing of the page (perRender, src/js/01: outside a drawing always worked
+// out afresh) each company's state is worked out once, and each computer's open names keyed once; the Tally page asked
+// it for every company in every list, each time going through every name open on the computer (100 companies open:
+// 10,000 names compared, again for each list). The same answers; a copy each time (callers add to it).
+const PR = {};
+const perDraw = (key, fn) => (typeof perRender === "function" ? perRender(PR, key, fn) : fn());
 export function tallyCoState(company) {
+  return Object.assign({}, perDraw("st:" + String(company), () => tallyCoStateNow(company)));
+}
+function openHas(d, k, company) {
+  const names = openOn(d), keys = perDraw("openKeys", () => new WeakMap());
+  let ks = keys.get(d);
+  if (!ks) { ks = new Set(names.map(coKey)); keys.set(d, ks); }
+  if (ks.has(k)) return true;
+  return names.some((n) => coKey(n) === k || (globalThis.LinkRec && LinkRec.same(n, company)));
+}
+function tallyCoStateNow(company) {
   const k = coKey(company), devs = tallyDevs(), rows = coRows(company);
   const seen = rows.map((r) => String(r.last_seen || "")).sort().pop() || "";
   // (next-link-record: or its other name, a company renamed in Tally: the link record's LinkRec.same)
-  const has = (d) => openOn(d).some((n) => coKey(n) === k || (globalThis.LinkRec && LinkRec.same(n, company))) && (typeof devState !== "function" || devState(d).tally !== "closed");
+  const has = (d) => openHas(d, k, company) && (typeof devState !== "function" || devState(d).tally !== "closed");
   const o = (state, text, d) => ({ state, level: state === "connected" ? "ok" : "bad", word: state === "connected" ? "Connected" : "Disconnected", text, computer: d ? pcOf(d) : "", seen });
   const on = devs.find((d) => pcLive(d) && has(d));
   if (on) return o("connected", "Connected", on);

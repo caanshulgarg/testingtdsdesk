@@ -143,7 +143,16 @@ export function deviceGone(id) {
 }
 // opts.hidden: the companies removed from the list too; opts.gone: a company no client has whose computer was removed or
 // moved away (behind "From a removed computer (n)"); a linked one stays, marked "computer moved" (moved)
+// next-fix-probe-loop (03-Nov-2026): worked out once per drawing of the page (perRender, src/js/01; outside a drawing
+// always afresh): the Tally page asked for these rows from each of its parts, each time with every company's state.
+// Each caller gets its own rows (copies), as before.
+const PR_ROWS = {};
 export function companyRows(opts) {
+  const now = () => companyRowsNow(opts);
+  const rows = typeof perRender === "function" ? perRender(PR_ROWS, "rows:" + JSON.stringify(opts || {}), now) : now();
+  return rows.map((r) => Object.assign({}, r));
+}
+function companyRowsNow(opts) {
   const by = new Map(), put = (name, x) => { const k = coKey(name); if (!k) return; const r = by.get(k) || { company: String(name), gstin: "", client: "", device: "", seen: "", open: false, reported: false, nowName: "" };
     if (x.reported && !r.reported) r.company = String(name);   // the link names the company exactly as the cloud has it
     by.set(k, Object.assign(r, { gstin: r.gstin || x.gstin || "", client: r.client || x.client || "", device: r.device || x.device || "", seen: [r.seen, x.seen || ""].sort().pop(), open: r.open || !!x.open, reported: r.reported || !!x.reported, nowName: r.nowName || x.nowName || "" })); };
@@ -170,11 +179,28 @@ export function companyRows(opts) {
 // second one made in one click. strict: the name as Tally has it (only a bracketed period off), as before 31-Oct-2026
 export function twinOf(r, strict) {
   if (typeof similarClients !== "function") return null;
-  const t = similarClients(strict ? r.company : baseName(r.company), r.gstin || "", live()).find((d) => d.why === "same" || d.why === "gstin");
+  const t = alikeClients(strict ? r.company : baseName(r.company), r.gstin || "").find((d) => d.why === "same" || d.why === "gstin");
   return t ? t.client : null;
 }
 // the clients alike (the same GSTIN or name first, then names much alike), best first
-export const alikeOf = (r) => (typeof similarClients === "function" ? similarClients(baseName(r.company), r.gstin || "", live()).map((d) => d.client) : []);
+export const alikeOf = (r) => (typeof similarClients === "function" ? alikeClients(baseName(r.company), r.gstin || "").map((d) => d.client) : []);
+// next-fix-probe-loop (03-Nov-2026): similarClients (server/_shared/tallyname.js) goes through every client's name; the
+// Tally page asked it for each company from each list at every drawing (150 clients and 100 companies held the page for a
+// minute). Its answer depends on the name, the GSTIN and the clients' ids, names and GSTINs only, so it is kept until one
+// of those changes, and each answer's clients are this moment's (by id). The same answers (FCTallySimple.MEMO.off: asked
+// each time, for the test that compares them).
+const SIM = { sig: null, kept: new Map() }, PR_SIM = {};
+function alikeClients(name, gstin) {
+  const off = globalThis.FCTallySimple && FCTallySimple.MEMO && FCTallySimple.MEMO.off;
+  if (off) return similarClients(name, gstin, live());
+  const now = () => { const cs = live(); return { cs, by: new Map(cs.map((c) => [String(c.id), c])), sig: JSON.stringify(cs.map((c) => [String(c.id), String(c.name || ""), String(c.gstin || "")])) }; };
+  const c = typeof perRender === "function" ? perRender(PR_SIM, "clients", now) : now();
+  if (c.sig !== SIM.sig) { SIM.sig = c.sig; SIM.kept = new Map(); }
+  const key = JSON.stringify([String(name), String(gstin)]);
+  let hit = SIM.kept.get(key);
+  if (!hit) { hit = similarClients(name, gstin, c.cs).map((d) => [String(d.client.id), d.why]); SIM.kept.set(key, hit); }
+  return hit.map(([id, why]) => ({ client: c.by.get(id), why }));
+}
 // a newer (or older) year of a company already linked: the same business once the period is off (Suvit: a split or a
 // year's copy of a company), its client already chosen
 export function yearOf(r, rows) {
