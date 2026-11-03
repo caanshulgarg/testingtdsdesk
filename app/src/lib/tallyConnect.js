@@ -56,8 +56,10 @@ export function deadKey(whose, beat) {
 export async function lookHere() {
   const c = Bridge.cfg(), first = await Bridge.probeUrl(c.url.replace(/\/+$/, ""), 2500);
   let all = first ? [first] : [];
-  if (!(first && first.yours !== false && first.bridgeId)) all = all.concat((await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
-  const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
+  if (!(first && first.yours !== false && first.bridgeId && first.sameSession !== false)) all = all.concat((await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
+  // bridge 2.5.3: sameSession true is this browser's Windows session's bridge; false never is
+  const mine = all.find((b) => b.sameSession === true) || all.find((b) => b.yours !== false && b.bridgeId && b.sameSession !== false),
+    other = all.find((b) => b.yours === false || b.sameSession === false), old = all.find((b) => b.yours !== false && !b.bridgeId && b.sameSession !== false);
   return { mine, other, old };
 }
 

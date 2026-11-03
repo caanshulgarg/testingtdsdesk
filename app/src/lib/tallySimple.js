@@ -107,8 +107,11 @@ const iso = (x) => { const s = d8(x); return s.length === 8 ? s.slice(0, 4) + "-
 // on the shared cloud server each Windows login runs its own FinCom Bridge and its own Tally: each person's FinCom
 // shows the Tally that person has opened in their own cloud login; 02-Nov-2026's next-tally-local-open trusted whatever bridge
 // answered on 127.0.0.1, which on a shared server is every login's address). This user's own bridge, in this order:
+//   (0) bridge 2.5.3: the local bridge whose /ping says sameSession true (this browser's own Windows session), else the
+//       only one answering when it says "unknown" (not confirmed); one saying false is never this user's (localPick below);
 //   (a) the bridge this browser paired with (Bridge.cfg: its key and bridge id), when the firm's computers list it;
-//   (b) the bridge the signed-in member is linked to (tally_member_bridges, migration 54: TCloud.pane.links).
+//   (b) the bridge the signed-in member is linked to (tally_member_bridges, migration 54: TCloud.pane.links), only when no
+//       2.5.3 bridge answers on this computer (one FinCom login shared by every Windows login links only one of them).
 // tally_devices.created_by is not used: one person often makes every login's computer key (the owner did, on the shared
 // server), so it names no Windows login. What the bridge says:
 //   (c) the local bridge's own reply (Bridge.st.open, its minute check) ONLY when it is that same bridge: its Windows user
@@ -124,7 +127,7 @@ const lc = (s) => String(s || "").trim().toLowerCase();
 // "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not
 const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
 const fresh = (at) => !!at && Date.now() - Date.parse(at) < 3 * 60000;
-// every bridge on the firm's computers (revoked ones left out by tallyDevs): {dev, id, user, open, at}
+// every bridge on the firm's computers (revoked ones left out by tallyDevs): {dev, id, user, open, at, port, beat}
 function bridgesOf() {
   const out = [];
   tallyDevs().forEach((d) => {
@@ -135,22 +138,79 @@ function bridgesOf() {
       const beatMine = ids.length === 1 || d.main_bridge === id || sameUser(beat.windowsUser, user) === true;
       const at = [b.at || "", beatMine ? beat.at || "" : ""].sort().pop();
       const open = Array.isArray(b.open) ? b.open : beatMine ? [].concat(beat.open || []) : [];
-      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at });
+      // bridge 2.5.3: each Windows login's bridge has its own port of 9100..9199, said in its beat (bridgePort)
+      const port = Number(b.bridgePort || (beatMine ? beat.bridgePort : 0)) || 0;
+      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at, port, beat: beatMine ? beat : b });
     });
   });
   return out;
 }
 const cfgOf = () => { try { return (typeof Bridge === "object" && Bridge.cfg && Bridge.cfg()) || {}; } catch (e) { return {}; } };
+
+// ---------- bridge 2.5.3 (next-tally-samesession; the owner, 03-Nov-2026: one FinCom login for everyone on the shared
+// server, each Windows login its own bridge): the browser finds its OWN Windows login's bridge by itself. /ping (nothing
+// secret sent) on 127.0.0.1 at the firm's bridges' ports (their beats' bridgePort), 9103 and 9100..9110, all at once,
+// short waits, once for the tab (again on Connect / I have opened it, or when the firm's ports change; with nothing
+// found, at most every 2 minutes). The bridge says sameSession: true (this browser runs in its owner's Windows session),
+// false (another session: never this user's), "unknown" (Windows did not say). 2.5.2 and older say nothing: as before.
+export const LOCALB = { list: null, busy: false, at: 0, ports: "" };
+const PROBE_MS = 900;
+const isNew = (b) => !!b && Object.prototype.hasOwnProperty.call(b, "sameSession");
+function portsToTry() {
+  const ps = new Set([9103]);
+  for (let p = 9100; p <= 9110; p++) ps.add(p);
+  bridgesOf().forEach((b) => { if (b.port >= 9100 && b.port <= 9199) ps.add(b.port); });
+  return [...ps].sort((a, b) => a - b);
+}
+export function localBridges(force) {
+  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) return [];
+  const ports = portsToTry(), key = ports.join(",");
+  const due = force || LOCALB.list === null || key !== LOCALB.ports || (!LOCALB.list.length && Date.now() - LOCALB.at > 120000);
+  if (due && !LOCALB.busy) {
+    LOCALB.busy = true; LOCALB.ports = key;
+    Promise.all(ports.map((p) => Promise.resolve(Bridge.probe(p, PROBE_MS)).catch(() => null)))
+      .then((xs) => { LOCALB.list = xs.filter((x) => x && (x.bridge || x.version)); }, () => { LOCALB.list = LOCALB.list || []; })
+      .finally(() => { LOCALB.at = Date.now(); LOCALB.busy = false; if (typeof render === "function") render(); });
+  }
+  return LOCALB.list;
+}
+export const rescanLocal = () => localBridges(true);
+// the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
+function cloudOf(x, all) {
+  return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
+    || (x.windowsUser && all.find((b) => sameUser(b.user, x.windowsUser) === true)) || null;
+}
+// the local answer that is this firm's bridge b (or null)
+function localOf(b, list) {
+  return (list || []).find((x) => (x.bridgeId && x.bridgeId === b.id) || (b.port && Number(x.bridgePort || x.port) === b.port) || (x.windowsUser && sameUser(b.user, x.windowsUser) === true)) || null;
+}
+// this browser's own bridge among the local answers: {x, sure} | null
+export function localPick(list) {
+  const xs = list || [], t = xs.filter((x) => x.sameSession === true);
+  if (t.length) return { x: t[0], sure: true };
+  if (xs.length === 1 && xs[0].sameSession === "unknown") return { x: xs[0], sure: false };
+  return null;
+}
 export function ownBridge() {
-  const all = bridgesOf(), c = cfgOf();
+  const all = bridgesOf(), c = cfgOf(), list = localBridges() || [];
+  // (0) bridge 2.5.3: the local bridge in this browser's own Windows session (beats the pairing and the member link)
+  const pk = localPick(list);
+  if (pk) {
+    const b = cloudOf(pk.x, all);
+    const base = b || { dev: null, id: pk.x.bridgeId || "", user: pk.x.windowsUser || "", open: [], at: "", port: Number(pk.x.bridgePort || pk.x.port) || 0, beat: {} };
+    return Object.assign({}, base, { how: pk.sure ? "found" : "unsure", local: pk.x });
+  }
+  // a bridge saying sameSession false is never this user's
+  const notMine = (b) => { const x = localOf(b, list); return !!x && x.sameSession === false; };
   // (a) paired in this browser
   const a = c.key && c.bridgeId ? all.find((b) => b.id === c.bridgeId) : null;
-  if (a) return Object.assign({ how: "paired" }, a);
-  // (b) linked to the signed-in member
+  if (a && !notMine(a)) return Object.assign({ how: "paired" }, a);
+  // (b) linked to the signed-in member: only when no 2.5.3 bridge answers here (the owner's laptop; older bridges: as before)
+  if (list.some(isNew)) return null;
   const me = typeof TCloud === "object" && TCloud.me ? TCloud.me() : "";
   const l = me && ((typeof TCloud === "object" && TCloud.pane && TCloud.pane.links) || []).find((x) => x && x.user_id === me && x.bridge_id);
   const b = l ? all.find((x) => x.id === l.bridge_id && (!l.device_id || x.dev.id === l.device_id)) : null;
-  return b ? Object.assign({ how: "linked" }, b) : null;
+  return b && !notMine(b) ? Object.assign({ how: "linked" }, b) : null;
 }
 // (c) the bridge answering this browser, when it is the own bridge (else null)
 function hereIfOwn(own) {
@@ -158,22 +218,51 @@ function hereIfOwn(own) {
     if (typeof Bridge !== "object" || Bridge.blocked() || !Bridge.on()) return null;
     const st = Bridge.st || {};
     if (st.state !== "ok") return null;
+    // found by its session (2.5.3): the bridge this browser reads is it when it is at its address
+    if (own.local) { const p = Bridge.urlPort ? Bridge.urlPort(cfgOf().url || "") : 0; return p && p === Number(own.local.port) && st.sameSession !== false ? st : null; }
     const u = sameUser(st.user, own.user), id = !!cfgOf().bridgeId && cfgOf().bridgeId === own.id;
     return u === true || (u === null && id) ? st : null;
   } catch (e) { return null; }
 }
+// bridge 2.5.3's plain reasons: why none of this user's Tallys answers (tallyWhy, each port's reason), and Tally's
+// connection switched on (tallyConnectSay)
+function whyOf(src) {
+  const s = src || {}, why = shown(s.tallyWhy), say = shown(s.tallyConnectSay);
+  let words = "";
+  if (why) {
+    if (/^no tally running/i.test(why)) words = "Tally is not open in your Windows login.";
+    else {
+      const per = [...new Set([].concat(s.ports || s.sessions || []).filter((p) => p && (p.reason || p.error) && lc(p.reason || "") === lc(why))
+        .map((p) => shown(p.error && lc(p.error).startsWith(lc(p.reason || why)) ? p.error : p.reason || p.error)).filter(Boolean))];
+      words = "Tally is open but FinCom can’t use it: " + (per.length ? per.join("; ") : why);
+    }
+  }
+  return { why: words, say };
+}
 export function ownState() {
+  const list = localBridges();
+  // the first look on this computer not done yet (at most a second)
+  if (list === null && LOCALB.busy) return { state: "checking" };
   const own = ownBridge();
   if (!own) return { state: "none" };
-  const st = hereIfOwn(own);
+  const st = hereIfOwn(own), unsure = own.how === "unsure";
   // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
   const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return { state: "ok", from: "here", own, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) };
-  if (fresh(own.at)) return { state: "ok", from: "beat", own, names: by(own.open) };
+  if (st) return Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat));
+  if (fresh(own.at)) return Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open) }, whyOf(own.beat));
   // this browser holds the own bridge's key, its first answer not read yet
   const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
-  if (c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
-  return { state: "away", own };
+  if (!own.local && c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
+  return { state: "away", own, unsure };
+}
+// Connect in the column: the bridge found here is the one asked (/status?fresh=1 through the local connect flow)
+export function aimLocal(own) {
+  try {
+    const x = own && own.local;
+    if (!x || typeof Bridge !== "object" || !Bridge.setCfg) return;
+    const u = x.url || "http://127.0.0.1:" + Number(x.bridgePort || x.port);
+    if (String(cfgOf().url || "").replace(/\/+$/, "") !== u.replace(/\/+$/, "")) { Bridge.setCfg({ url: u }); Bridge.foundAt = 0; }
+  } catch (e) { /* the connect says why */ }
 }
 // "yes" | "no" | "checking" | "away" | "none" for a company (own: ownState(), read once for the whole table)
 export function localOpen(company, own) {
@@ -333,4 +422,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, LOCALB, rescanLocal, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

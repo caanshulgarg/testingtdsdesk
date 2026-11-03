@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { useEffect, useState } from "react";
 import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
+import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, aimLocal, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
@@ -71,12 +71,16 @@ function checking() {
 }
 
 // ---------- the header
-function Head({ rows, checkAgain, ready }) {
-  const w = headWords(rows), on = checking();
+function Head({ rows, checkAgain, ready, own }) {
+  const w = headWords(rows), on = checking(), o = own || {};
   return <header className="tsm-head" data-tsm-head="">
     <div className="tsm-head-words"><h3 className="tsm-title">Tally</h3>
       {ready && <div className="tsm-say" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></div>}</div>
     <button type="button" className="btn primary tsm-check" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check Tally now"}</button>
+    {ready && (o.unsure || (o.state === "ok" && !o.names.size && o.why) || o.say) && <div className="tsm-head-notes">
+      {o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
+      {o.state === "ok" && !o.names.size && o.why && <div className="tsm-note" data-tsm-why="">{o.why}</div>}
+      {o.say && <div className="tsm-note" data-tsm-connect-say="">{o.say}</div>}</div>}
   </header>;
 }
 
@@ -101,7 +105,7 @@ function Guide({ step, collapsed, forced, open, best, connectPanel, download, ch
   const now = [
     ["Step 1: download FinCom Bridge and install it on the computer that has Tally.", download],
     ["Step 2: FinCom Bridge is installed. Now open your company in Tally. This box moves on by itself when it sees the company.",
-      <button type="button" className="btn primary" data-tsm-go="opened" disabled={ck} onClick={() => { setCk(true); Promise.resolve(checkAgain()).finally(() => setCk(false)); }}>{ck ? "Checking…" : "I have opened it"}</button>],
+      <button type="button" className="btn primary" data-tsm-go="opened" disabled={ck} onClick={() => { setCk(true); rescanLocal(); Promise.resolve(checkAgain()).finally(() => setCk(false)); }}>{ck ? "Checking…" : "I have opened it"}</button>],
     open ? [best ? "Step 3: Tally has “" + shown(open.company) + "” open. Connect it to client “" + best.name + "”?" : "Step 3: Tally has “" + shown(open.company) + "” open. Which client is it?",
       best ? <ConnectBtn r={open} co={best} label="Yes, connect" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": best.id }} /> : null] : ["", null],
     ["Connected. Ledgers, opening balances and entries are coming in by themselves. You can follow it in the list below.", null],
@@ -210,7 +214,7 @@ function Differences({ row }) {
 // pressed; Set it up (this user has no FinCom Bridge of their own): the pairing steps (step 1 of the guided box)
 function LocalConnect() {
   const [mine, setMine] = useState(false), busy = OC.busy === "c";
-  return <div><button type="button" className="linkbtn tsm-small" data-tsm-local-connect="" disabled={!!OC.busy} onClick={() => { setMine(true); doConnect(false); }}>{busy && mine ? "Connecting…" : "Connect"}</button>
+  return <div><button type="button" className="linkbtn tsm-small" data-tsm-local-connect="" disabled={!!OC.busy} onClick={() => { setMine(true); const o = ownState(); aimLocal(o.own); rescanLocal(); doConnect(false); }}>{busy && mine ? "Connecting…" : "Connect"}</button>
     {mine && !busy && OC.c && <Line r={OC.c} hook="tsm-local" />}</div>;
 }
 function SetUp() {
@@ -300,8 +304,8 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const expanded = forced || !mineIn || linkedN === 0 || step === 4 || ui.open || asked;
   const open = unlinked[0] || null, best = open ? bestFor(open, all) : null;
   const strip = unlinked.length > 0 && !(expanded && step === 3);
-  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined}>
-    <Head rows={rows} checkAgain={checkAgain} ready={ready} />
+  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined}>
+    <Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} />
     {strip && <Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} />}
     {ready && <Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} />}
     <Table rows={rows} />

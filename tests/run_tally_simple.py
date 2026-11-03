@@ -36,6 +36,11 @@ companies and computers only (run_tally_page_clean.py's stand-in cloud; nothing 
      their ⋯, every client's Tally company, each computer, versions with hold and roll back, stop reading, every bridge,
      the bridge address and key, Check my Tally, the bridge log, the connection history, the install with its PowerShell
      line and fingerprint).
+  3d. bridge 2.5.3 (next-tally-samesession; one FinCom login for every Windows login of a shared server): the page asks
+     /ping on 127.0.0.1 at the firm's bridges' ports, 9103 and 9100..9110; the bridge saying sameSession true wins over the
+     member link; one saying false is never shown; only one answering "unknown": used, "your bridge (not confirmed)"; none
+     answering: the member link; a 2.5.2 bridge (no field): as before; tallyWhy / the port's reason and tallyConnectSay in
+     plain words; Connect asks the bridge found.
   8. a phone 390 wide never scrolls sideways; light and dark.
 Options: --shots DIR saves 1440x900 and 390x844, light and dark.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_simple.py"""
@@ -115,6 +120,20 @@ MINE = """([how, bid, dev]) => {
   TCloud.pane.links = JSON.parse(JSON.stringify(window.__links));
   render();
 }"""
+# bridge 2.5.3: what /ping answers on 127.0.0.1 at each port (made-up; nothing listens): {port: reply}; the page's look
+# here (FCTallySimple.LOCALB) is started again
+PINGS = """(pings) => {
+  window.__pings = pings || {}; window.__probed = [];
+  Bridge.probe = async (port, ms) => { window.__probed.push(port); const j = window.__pings[String(port)];
+    return j ? Object.assign({port, url: 'http://127.0.0.1:' + port}, j, {proven: false, pairProven: false}) : null; };
+  Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: ''});
+  render();
+}"""
+def ping(port, same, user, version="2.5.3", **kw):
+    r = {"ok": True, "bridge": "FinCom Tally Bridge", "version": version, "impl": "go", "runMode": "user", "pid": 1234, "loopSec": 3, "yours": same is True,
+         "windowsUser": user, "bridgePort": port, "tallyPorts": [9070], "tallyPortsUnknown": []}
+    if same is not None: r["sameSession"] = same
+    r.update(kw); return r
 NOT_MINE, AWAY, NOT_SET = "Not open in your Tally", "Your FinCom Bridge is not connected now", "Your FinCom Bridge is not set up."
 
 def main():
@@ -134,12 +153,13 @@ def main():
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         links = lambda: [c[1] for c in E("window.__calls") if c[0] == "tally_company_link"]
         calls = lambda fn: [c[1] for c in E("window.__calls") if c[0] == fn]
-        def scene(devs, cos, clients, books=None, lines=(), sum_=None, open_=None, rows=None, changes=None, ledgers=None, role="owner", held=None, own=None):
+        def scene(devs, cos, clients, books=None, lines=(), sum_=None, open_=None, rows=None, changes=None, ledgers=None, role="owner", held=None, own=None, pings=None):
             ids = E(T.SETUP, [devs, cos, list(lines), role, clients, True, books or {}])
             E("() => { window.__linksApi = false; }")
             if ledgers: E("(l) => { Object.assign(window.__ledgers, l); }", ledgers)
             fix = lambda xs: [dict(x, client=ids.get(x.get("client"), x.get("client"))) for x in (xs or [])]
             E(EXTRA, [fix(sum_), open_ or [], rows or [], changes or {}, fix(held)])
+            E(PINGS, pings or {})
             # this member's own bridge: the first computer's, linked to the member, unless the scene says otherwise
             E(MINE, own if own is not None else (["linked", devs[0]["main_bridge"], devs[0]["id"]] if devs else [None, "", ""])); pg.wait_for_timeout(2600)
             return ids
@@ -401,6 +421,57 @@ def main():
         ok(n("#app [data-tsm-strip]") == 0 and ZETA not in shown() and word(ACME, "o") == "Yes", "3c. A's page with B's bridge answering locally: still only A's Tally (%s)" % shown())
         E(LOCAL, [None, "", ""])
 
+        print("== 3d. bridge 2.5.3: the browser finds its own Windows login's bridge (sameSession)")
+        WHY_PORT = [{"port": 9070, "ok": False, "skipped": False, "n": 0, "state": "closed", "reason": "owner unknown", "owner": "unknown", "error": "owner unknown (Tally may be running as administrator)"}]
+        SAY = "FinCom switched on Tally's connection. Close and reopen Tally once."
+        da = T.dev(7, PC, "made-up-a", tally="open", opened=(ACME,), version="2.5.3", rec=(ACME,), beat={"bridgePort": 9101, "windowsUser": PC + "\\made-up-a"})
+        db = T.dev(8, PC, "made-up-b", tally="open", opened=(SPLIT, ZETA), version="2.5.3", rec=(SPLIT, ZETA), beat={"bridgePort": 9150, "windowsUser": PC + "\\made-up-b"})
+        UA, UB = PC + "\\made-up-a", PC + "\\made-up-b"
+        how = lambda: pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-how")
+        # the member link points the one shared FinCom login at B's bridge (the wrong one for A's Windows login)
+        LINK_B = ["linked", "go-8", db["id"]]
+        scene([da, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=LINK_B, pings={"9101": ping(9101, True, UA, bridgeId="go-7"), "9150": ping(9150, False, UB)})
+        probed = set(E("window.__probed"))
+        ok({9101, 9103, 9150}.issubset(probed) and set(range(9100, 9111)).issubset(probed) and max(probed) <= 9199, "3d. looks at the firm's bridges' ports (beats), 9103 and 9100..9110 (%s)" % sorted(probed))
+        ok(how() == "found" and word(ACME, "o") == "Yes" and ZETA not in shown() and n("#app [data-tsm-strip]") == 0 and n("#app [data-tsm-unsure]") == 0,
+           "3d. two local bridges, true and false: the true one (A's) wins over the member link to B's; B's companies not shown (%s, %s)" % (how(), shown()))
+        # only B's bridge answers here, and says false: never shown (the link to it is not used either)
+        E(PINGS, {"9150": ping(9150, False, UB)}); pg.wait_for_timeout(1500)
+        o = col_o()
+        ok(how() is None and ZETA not in shown() and "Yes" not in o.values() and n("#app [data-tsm-strip]") == 0, "3d. a bridge saying sameSession false is never yours, its link neither (%s, %s)" % (how(), o))
+        # only one bridge answers, and says "unknown": used, marked not confirmed
+        E(PINGS, {"9101": ping(9101, "unknown", UA)}); pg.wait_for_timeout(1500)
+        ok(how() == "unsure" and word(ACME, "o") == "Yes" and ZETA not in shown() and "your bridge (not confirmed)" in txt("#app [data-tsm-unsure]"),
+           "3d. only \"unknown\": used as your bridge (not confirmed) (%s, %s)" % (how(), txt("#app [data-tsm-unsure]")))
+        # two answering, one "unknown": not taken; nothing paired here and the link not used
+        E(PINGS, {"9101": ping(9101, "unknown", UA), "9150": ping(9150, "unknown", UB)}); pg.wait_for_timeout(1500)
+        ok(how() is None and word(ACME, "o") == "—", "3d. two \"unknown\" bridges: neither is taken (%s)" % how())
+        # none answers (the owner's laptop): the member link
+        E(PINGS, {}); pg.wait_for_timeout(1500)
+        ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. no local bridge answers: the member link (%s, %s)" % (how(), col_o()))
+        # an older bridge (2.5.2: no sameSession) answering: as before (the member link)
+        E(PINGS, {"9103": ping(9103, None, UA, version="2.5.2")}); pg.wait_for_timeout(1500)
+        ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. an old bridge with no sameSession: today's behaviour (the link) (%s)" % how())
+        # the found bridge is the one this browser reads (its address): its own answer, not the beat
+        E(PINGS, {"9103": ping(9103, True, UA)}); E(LOCAL, [[], UA, ""]); pg.wait_for_timeout(1500)
+        ok(how() == "found" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "here" and word(ACME, "o") == "No", "3d. the found bridge read here: its own answer (%s)" % col_o())
+        E(LOCAL, [None, "", ""])
+        # nothing open: the bridge's plain reasons (tallyWhy, the port's), and tallyConnectSay
+        da2 = T.dev(7, PC, "made-up-a", tally="closed", opened=(), version="2.5.3", rec=(ACME,), ports=WHY_PORT,
+                    beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "owner unknown", "tallyConnectSay": SAY})
+        scene([da2, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=LINK_B, pings={"9101": ping(9101, True, UA, bridgeId="go-7"), "9150": ping(9150, False, UB)})
+        ok(txt("#app [data-tsm-why]") == "Tally is open but FinCom can’t use it: owner unknown (Tally may be running as administrator)" and word(ACME, "o") == "No",
+           "3d. tallyWhy and the port's reason in plain words (%s)" % txt("#app [data-tsm-why]"))
+        ok(txt("#app [data-tsm-connect-say]") == SAY, "3d. tallyConnectSay shown (%s)" % txt("#app [data-tsm-connect-say]"))
+        ok("made-up-a" not in main_text() and "9101" not in main_text(), "3d. no Windows login or port outside For support")
+        # its beat old: Connect asks the bridge found here (its address), never another's
+        E("""() => { const old = new Date(Date.now() - 10 * 60000).toISOString(); [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return;
+            d.info.beat.at = old; Object.values(d.info.bridges || {}).forEach(b => { b.at = old; }); }); render(); }"""); pg.wait_for_timeout(1200)
+        ok(word(ACME, "o") == "—" and n(cell(ACME, "o") + " [data-tsm-local-connect]") == 1, "3d. its beat old: —, Connect (%s)" % txt(cell(ACME, "o")))
+        pg.click(cell(ACME, "o") + " [data-tsm-local-connect]"); pg.wait_for_timeout(1500)
+        ok(E("() => Bridge.cfg().url").rstrip("/") == "http://127.0.0.1:9101", "3d. Connect asks the found bridge's address (%s)" % E("() => Bridge.cfg().url"))
+        E("() => { try { localStorage.removeItem('tdsdesk:bridge'); } catch (e) {} }"); E(PINGS, {}); pg.wait_for_timeout(500)
+
         print("== 8. a phone, light and dark")
         for w, h, sch in ((390, 844, "light"), (390, 844, "dark"), (1440, 900, "dark")):
             pg2 = open_page(w, h, sch); pg, keep = pg2, pg
@@ -408,7 +479,7 @@ def main():
             E2(T.SETUP, [[d], cos, HELD, "owner", [ACME, BRIGHT, CORAL, DELTA, EVER, IRIS, GAMMA, HAZEL], True, books])
             E2("(l) => { Object.assign(window.__ledgers, l); }", {"bk-" + ACME: [{"name": "L%d" % i} for i in range(412)]})
             E2(EXTRA, [[dict(x, client=E2("(n) => Object.values(S.companies).find(c => c.name === n).id", x["client"])) for x in SUM], OPEN, DIFFS, CHG, []])
-            E2(MINE, ["linked", "go-7", d["id"]]); pg2.wait_for_timeout(4000)
+            E2(PINGS, {}); E2(MINE, ["linked", "go-7", d["id"]]); pg2.wait_for_timeout(4000)
             sw = E2("() => document.documentElement.scrollWidth")
             ok(sw <= w + 1, "8. %dx%d %s: no sideways scroll (%d)" % (w, h, sch, sw))
             ok(pg2.locator("#app [data-tsm-table] tr[data-tsm-row]").count() == 9, "8. %d wide: every row" % w)

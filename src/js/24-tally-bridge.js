@@ -56,9 +56,10 @@ const Bridge = {
     const c = this.cfg();
     if (!this.localUrl(c.url)) return null;
     const found = (await Promise.all(this.PORTS.map(p => this.probe(p, 1500, c.key, code)))).filter(Boolean);
-    const ok = found.filter(b => code ? (b.pairProven || b.spake) : b.proven);
+    // bridge 2.5.3: one answering sameSession false runs for another Windows session (never this browser's); true: this one's
+    const ok = found.filter(b => (code ? (b.pairProven || b.spake) : b.proven) && b.sameSession !== false);
     const linked = typeof TCloud === "object" && TCloud.myBridge ? TCloud.myBridge() : "";
-    const pick = (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
+    const pick = ok.find(b => b.sameSession === true) || (c.bridgeId && ok.find(b => b.bridgeId === c.bridgeId)) || (linked && ok.find(b => b.bridgeId === linked)) || ok[0] || null;
     this.foundAt = Date.now();
     this.lastFound = found;
     // FinCom Bridge 2.4.7: every bridge of this user with its window open, the likeliest first (pair() tries each)
@@ -142,7 +143,9 @@ const Bridge = {
         stuck: j.tallyStuck || null, tallyUp: usable.length > 0, pinMissing: !!pin && !(j.sessions || []).some(s => s.port === pin && s.ok && !s.skipped),
         // go-bridge: Tally open / busy / closed (a busy Tally is open, only slow); bridge 1.15.0: busy when it says Tally is stuck
         tallyState: (j.tally && j.tally.state) || (usable.length ? (j.tallyStuck ? "busy" : "open") : "closed"), busySince: (j.tally && j.tally.since) || (j.tallyStuck && j.tallyStuck.since) || "",
-        beat: j.beat || null, computer: j.computer || "", paused: !!j.paused};
+        beat: j.beat || null, computer: j.computer || "", paused: !!j.paused,
+        // bridge 2.5.3: why none of this user's Tallys answers, Tally's connection switched on, this browser's session
+        tallyWhy: j.tallyWhy || "", tallyConnectSay: j.tallyConnectSay || "", sameSession: j.sameSession};
       if (!this.st.tallyUp || this.st.pinMissing){ if (!this.diag || Date.now() - this.diag.at > 30000) await this.diagnose(); }
       else this.diag = null;
       this.misses = 0; this.okAt = Date.now();
