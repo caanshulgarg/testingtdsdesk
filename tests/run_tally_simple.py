@@ -20,6 +20,12 @@ companies and computers only (run_tally_page_clean.py's stand-in cloud; nothing 
      answers, not open here → No, "Not open in Tally on this computer"; no bridge reachable from this browser → —, "FinCom
      Bridge is not connected on this computer" and Connect (the local connect flow); another computer's bridge having the
      company open never makes it Yes. The header and the filter "Not open in Tally" follow the same meaning.
+  3c. this FinCom user's OWN bridge only (next-tally-own-login; the owner: on the shared server each person's FinCom
+     shows the Tally that person has opened in their own cloud login): the own bridge is the one paired in this browser, else
+     the one the member is linked to; a local bridge answering with another Windows user is ignored; when no local bridge
+     is the own one, the cloud copy of the own bridge's beat answers (Yes / No); its beat old: —, "Your FinCom Bridge is
+     not connected now" and Connect; no own bridge: —, "Your FinCom Bridge is not set up." and Set it up (step 1); user
+     A's page never shows user B's open company (no strip, no row, no step 3), and B's page does.
   4. opening balances (migration 138): same (green), differ (amber: N ledgers, ₹X in total; Use Tally's / Keep FinCom's;
      See differences: Ledger | FinCom amount | Tally amount | Difference), do not balance; Use Tally's refused in words
      when not dated the books' first day; the choices call tally_openings_decide; the filter "Opening balances differ".
@@ -84,15 +90,32 @@ EXTRA = """([sum, open, rows, changes, heldSt]) => {
 
 # this browser's FinCom Bridge (made-up key; nothing is sent anywhere): open = the companies Tally has open on THIS
 # computer, as the bridge's own minute check last said (Bridge.st.open); None = no bridge reachable from this browser
-LOCAL = """(open) => {
+# user: the Windows user the bridge says it runs for; bid: the bridge id this browser holds (its pairing)
+LOCAL = """([open, user, bid]) => {
   const B = window.__bridge0 = window.__bridge0 || {on: Bridge.on, up: Bridge.up, cfg: Bridge.cfg, refresh: Bridge.refresh};
   if (open === null) { Object.assign(Bridge, B); Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: ''}; }
-  else { const c = {url: 'http://127.0.0.1:9103', key: 'made-up-key', follow: false, port: 0};
+  else { const c = {url: 'http://127.0.0.1:9103', key: 'made-up-key', follow: false, port: 0, bridgeId: bid || ''};
     Bridge.cfg = () => c; Bridge.on = () => true; Bridge.up = () => true; Bridge.refresh = async () => Bridge.st;
-    Bridge.st = {state: 'ok', sessions: [], tallyUp: true, version: '2.5.2', at: Date.now(), mode: 'auto', open: open.map(n => ({name: n, port: 9000, mine: true}))}; }
+    Bridge.st = {state: 'ok', sessions: [], tallyUp: true, version: '2.5.2', at: Date.now(), mode: 'auto', user: user || '', open: open.map(n => ({name: n, port: 9000, mine: true}))}; }
   render();
 }"""
-NOT_HERE, NO_BRIDGE = "Not open in Tally on this computer", "FinCom Bridge is not connected on this computer"
+# whose bridge is this FinCom user's own (made-up member id): ['linked', bridge, device] the member's link (tally_member_bridges),
+# ['paired', bridge] paired in this browser (its key and bridge id held here, the bridge not answering), [null] none
+MINE = """([how, bid, dev]) => {
+  const B = window.__bridge0 = window.__bridge0 || {on: Bridge.on, up: Bridge.up, cfg: Bridge.cfg, refresh: Bridge.refresh};
+  const T0 = window.__tme0 = window.__tme0 || {me: TCloud.me};
+  Object.assign(Bridge, B); Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: ''}; TCloud.me = T0.me;
+  window.__links = [];
+  if (how === 'linked') { TCloud.me = () => 'made-up-member-a'; window.__links = [{user_id: 'made-up-member-a', device_id: dev, bridge_id: bid}]; }
+  if (how === 'paired') { const c = {url: 'http://127.0.0.1:9104', key: 'made-up-key', follow: false, port: 0, bridgeId: bid};
+    Bridge.cfg = () => c; Bridge.on = () => true; Bridge.up = () => false; Bridge.refresh = async () => Bridge.st;
+    Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: 'not answering'}; }
+  if (!window.__linksApi) { window.__linksApi = true; const api = Cloud.api;
+    Cloud.api = async (p, o) => /^tally_member_bridges/.test(p) ? JSON.parse(JSON.stringify(window.__links)) : api(p, o); }
+  TCloud.pane.links = JSON.parse(JSON.stringify(window.__links));
+  render();
+}"""
+NOT_MINE, AWAY, NOT_SET = "Not open in your Tally", "Your FinCom Bridge is not connected now", "Your FinCom Bridge is not set up."
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(T.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -111,11 +134,14 @@ def main():
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         links = lambda: [c[1] for c in E("window.__calls") if c[0] == "tally_company_link"]
         calls = lambda fn: [c[1] for c in E("window.__calls") if c[0] == fn]
-        def scene(devs, cos, clients, books=None, lines=(), sum_=None, open_=None, rows=None, changes=None, ledgers=None, role="owner", held=None):
+        def scene(devs, cos, clients, books=None, lines=(), sum_=None, open_=None, rows=None, changes=None, ledgers=None, role="owner", held=None, own=None):
             ids = E(T.SETUP, [devs, cos, list(lines), role, clients, True, books or {}])
+            E("() => { window.__linksApi = false; }")
             if ledgers: E("(l) => { Object.assign(window.__ledgers, l); }", ledgers)
             fix = lambda xs: [dict(x, client=ids.get(x.get("client"), x.get("client"))) for x in (xs or [])]
-            E(EXTRA, [fix(sum_), open_ or [], rows or [], changes or {}, fix(held)]); pg.wait_for_timeout(2600)
+            E(EXTRA, [fix(sum_), open_ or [], rows or [], changes or {}, fix(held)])
+            # this member's own bridge: the first computer's, linked to the member, unless the scene says otherwise
+            E(MINE, own if own is not None else (["linked", devs[0]["main_bridge"], devs[0]["id"]] if devs else [None, "", ""])); pg.wait_for_timeout(2600)
             return ids
         def confirm(yes):
             sel = '#confirmBox [data-cbx="%s"]' % ("yes" if yes else "no")
@@ -203,7 +229,7 @@ def main():
         ids = scene([d], cos, [ACME, BRIGHT, CORAL, DELTA, EVER, IRIS, GAMMA, HAZEL], books=books, lines=HELD, sum_=SUM, open_=OPEN, rows=DIFFS, changes=CHG, held=HELD136,
                     ledgers={"bk-" + ACME: [{"name": "L%d" % i} for i in range(412)], "bk-" + BRIGHT: [{"name": "L%d" % i} for i in range(286)], "bk-" + IRIS: [{"name": "L%d" % i} for i in range(40)]})
         HERE = [ACME, CORAL, IRIS, HAZEL, ZETA]     # open in Tally on THIS computer (and on the firm's computer d)
-        E(LOCAL, HERE); pg.wait_for_timeout(2500)
+        E(LOCAL, [HERE, PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(2500)
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
@@ -212,7 +238,7 @@ def main():
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
         ok(re.match(r"Till today \d\d:\d\d$", txt(cell(ACME, "e") + " [data-tsm-note]") or ""), "3. entries: Till today <time> (%s)" % txt(cell(ACME, "e")))
-        ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_HERE, "3. %s: not open on this computer: No, %s (%s)" % (BRIGHT, NOT_HERE, txt(cell(BRIGHT, "o"))))
+        ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_MINE, "3. %s: not open in this user's Tally: No, %s (%s)" % (BRIGHT, NOT_MINE, txt(cell(BRIGHT, "o"))))
         ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(cell(BRIGHT, "do") + ' [data-tsm-act="upload"]') == "Upload Day Book"
            and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.",
            "3. held lines (migration 136): All entries received? No, the period, the row's button Upload Day Book (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
@@ -244,26 +270,56 @@ def main():
         connected = [ACME, BRIGHT, CORAL, IRIS, GAMMA, HAZEL]
         ok(word(ACME, "o") == "Yes" and txt(cell(ACME, "o") + " [data-tsm-note]") == "" and n(cell(ACME, "o") + " [data-tsm-local-connect]") == 0, "3b. the bridge here answers, %s open here: Yes (%s)" % (ACME, txt(cell(ACME, "o"))))
         ok(fcount("closed") == 2 and say_ok(), "3b. Not open in Tally: the 2 connected clients not open here (%d); the header from the same rows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
-        # another computer's bridge (d, the firm's) has every company open; THIS computer's bridge has none open
-        E(LOCAL, []); pg.wait_for_timeout(1200)
+        # this user's own bridge answers here (its Windows user, its id) with nothing open: its answer, not the beat's
+        E(LOCAL, [[], PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(1200)
         o = col_o()
-        ok(o[ACME] == "No" and txt(cell(ACME, "o") + " [data-tsm-note]") == NOT_HERE, "3b. open on another computer only: %s is No, %s (%s)" % (ACME, NOT_HERE, txt(cell(ACME, "o"))))
-        ok("Yes" not in o.values() and all(o[c] == "No" for c in connected) and o[ZETA] == "No", "3b. no row says Yes for another computer's Tally (%s)" % o)
-        ok(fcount("closed") == len(connected) + 1 and say_ok(), "3b. Not open in Tally counts this computer only (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        ok(o[ACME] == "No" and txt(cell(ACME, "o") + " [data-tsm-note]") == NOT_MINE and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "here",
+           "3b. the own bridge here says nothing is open: %s is No, %s (%s)" % (ACME, NOT_MINE, txt(cell(ACME, "o"))))
+        ok("Yes" not in o.values() and all(o[c] == "No" for c in connected) and ZETA not in o, "3b. no Yes, and the company no client has is not this user's open one any more (%s)" % o)
+        ok(fcount("closed") == len(connected) and say_ok(), "3b. Not open in Tally counts this user's Tally only (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
         ok(txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally." and word(ACME, "c") == "Yes", "3b. what to do and Connected to Tally? stay as they were (%s)" % txt(cell(GAMMA, "do")))
-        # no FinCom Bridge reachable from this browser (the firm's other computer still has them all open)
-        E(LOCAL, None); pg.wait_for_timeout(1200)
+        # a local bridge answering on 127.0.0.1 with ANOTHER Windows user (made-up), even holding this id: ignored; the own
+        # bridge's beat in FinCom's cloud answers instead
+        E(LOCAL, [[BRIGHT, GAMMA], PC + "\\made-up-other", "go-7"]); pg.wait_for_timeout(1200)
         o = col_o()
-        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == NO_BRIDGE and txt(cell(ACME, "o") + " [data-tsm-local-connect]") == "Connect", "3b. no bridge here: —, %s, Connect (%s)" % (NO_BRIDGE, txt(cell(ACME, "o"))))
-        ok("Yes" not in o.values() and all(o[c] == "—" for c in connected), "3b. no bridge here: no Yes from another computer (%s)" % o)
-        ok(fcount("closed") == 0 and say_ok(), "3b. no bridge here: nothing counted as Not open in Tally (%d); the header follows (%s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        ok(o[BRIGHT] == "No" and o[GAMMA] == "No" and o[ACME] == "Yes" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "beat",
+           "3b. a local bridge of another Windows user is ignored: its %s / %s are not Yes; the own beat says %s Yes (%s)" % (BRIGHT, GAMMA, ACME, o))
+        # no bridge answers this browser (the owner's laptop): the own bridge's beat (every 30 s) answers
+        E(LOCAL, [None, "", ""]); pg.wait_for_timeout(1200)
+        o = col_o()
+        ok(o[ACME] == "Yes" and o[BRIGHT] == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_MINE and o[ZETA] == "Yes" and n("#app [data-tsm-local-connect]") == 0
+           and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "beat", "3b. the beat fallback: Yes / No from the own bridge's beat, no Connect (%s)" % o)
+        ok(fcount("closed") == 2 and say_ok(), "3b. the beat fallback: Not open in Tally 2, the header follows (%d, %s)" % (fcount("closed"), txt("#app [data-tsm-say]")))
+        # the own bridge's beat is old (not heard for 10 minutes): —, not connected now, and Connect (the local connect flow)
+        E("""() => { const old = new Date(Date.now() - 10 * 60000).toISOString(); window.__beatAt = window.__beatAt || {};
+          [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return; window.__beatAt[d.id] = window.__beatAt[d.id] || d.info.beat.at;
+            d.info.beat.at = old; Object.values(d.info.bridges || {}).forEach(b => { b.at = old; }); }); render(); }"""); pg.wait_for_timeout(1200)
+        o = col_o()
+        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == AWAY and txt(cell(ACME, "o") + " [data-tsm-local-connect]") == "Connect", "3b. its beat old: —, %s, Connect (%s)" % (AWAY, txt(cell(ACME, "o"))))
+        ok("Yes" not in o.values() and all(o[c] == "—" for c in connected) and fcount("closed") == 0 and say_ok(), "3b. its beat old: nothing Yes, nothing counted as Not open (%s)" % o)
         ok(word(DELTA, "o") == "—" and n(cell(DELTA, "o") + " [data-tsm-local-connect]") == 0, "3b. a client not connected keeps its plain — (no Connect there)")
         pg.click(cell(ACME, "o") + " [data-tsm-local-connect]")
         try: pg.wait_for_selector(cell(ACME, "o") + " [data-oc-say]", timeout=20000)
         except Exception: pass
         ok(n(cell(ACME, "o") + " [data-oc-say]") == 1 and n(cell(BRIGHT, "o") + " [data-oc-say]") == 0, "3b. Connect runs this computer's connect, its answer under that row only (%s)" % txt(cell(ACME, "o")))
-        E(LOCAL, HERE); pg.wait_for_timeout(1200)
-        ok(word(ACME, "o") == "Yes" and word(BRIGHT, "o") == "No" and n("#app [data-tsm-local-connect]") == 0, "3b. the bridge here again: Yes / No, no Connect")
+        E("""() => { const now = new Date().toISOString(); [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return;
+            d.info.beat.at = now; Object.values(d.info.bridges || {}).forEach(b => { b.at = now; }); }); render(); }""")
+        E(LOCAL, [HERE, PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(1200)
+        ok(word(ACME, "o") == "Yes" and word(BRIGHT, "o") == "No" and n("#app [data-tsm-local-connect]") == 0, "3b. the own bridge here again: Yes / No, no Connect")
+        # no bridge of this user's own (nothing paired here, no link): —, not set up, Set it up; the guided box at step 1
+        E(LOCAL, [None, "", ""]); E(MINE, [None, "", ""]); pg.wait_for_timeout(1500)
+        o = col_o()
+        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == NOT_SET and txt(cell(ACME, "o") + " [data-tsm-setup]") == "Set it up" and n("#app [data-tsm-local-connect]") == 0,
+           "3b. no own bridge: —, %s, Set it up (%s)" % (NOT_SET, txt(cell(ACME, "o"))))
+        ok("Yes" not in o.values() and ZETA not in o and n("#app [data-tsm-strip]") == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "1",
+           "3b. no own bridge: no Yes from another login's Tally, no company row or strip of theirs, the guided box at step 1 (%s)" % o)
+        pg.click(cell(ACME, "o") + " [data-tsm-setup]"); pg.wait_for_timeout(1200)
+        ok(n("#app [data-tsm-guide][data-tsm-forced]") == 1 and n("#app [data-tsm-guide] [data-tsm-panel]") == 1, "3b. Set it up: the pairing steps (step 1, the connect panel)")
+        E("() => { S.tallyGuide = {}; S.tsm = null; render(); }")
+        # paired in this browser (its key and id held here, the bridge itself not answering): that bridge's beat
+        E(MINE, ["paired", "go-7", ""]); pg.wait_for_timeout(1500)
+        ok(word(ACME, "o") == "Yes" and word(BRIGHT, "o") == "No" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own") == "ok", "3b. paired in this browser: its bridge's beat answers (%s)" % col_o())
+        E(MINE, ["linked", "go-7", d["id"]]); E(LOCAL, [HERE, PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(1500)
 
         print("== 4. opening balances")
         ok(pg.get_attribute(cell(ACME, "l") + " [data-tsm-open]", "data-tsm-open") == "same" and txt(cell(ACME, "l") + " [data-tsm-open-words]") == "Opening balances: same as Tally", "4. same: green, same as Tally")
@@ -326,13 +382,33 @@ def main():
         ok(all(w in ft for w in ("Check my Tally", "Roll back", "Hold version", "Stop reading on all computers", "Every bridge FinCom has heard from")), "7. Check my Tally, Roll back, Hold version, Stop reading, Every bridge: all there")
         E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)
 
+        print("== 3c. user A's page never shows user B's Tally (two Windows logins on one server)")
+        da = T.dev(7, PC, "made-up-a", tally="open", opened=(ACME,), version="2.5.2", rec=(ACME,))
+        db = T.dev(8, PC, "made-up-b", tally="open", opened=(SPLIT, ZETA), version="2.5.2", rec=(SPLIT, ZETA))
+        cos2 = [{"company": ACME, "client_id": "NAME:" + ACME, "device_id": da["id"], "gstin": "", "last_seen": "ago:1"},
+                {"company": SPLIT, "client_id": None, "device_id": db["id"], "gstin": "", "last_seen": "ago:1"},
+                {"company": ZETA, "client_id": None, "device_id": db["id"], "gstin": "", "last_seen": "ago:1"}]
+        scene([da, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=["linked", "go-7", da["id"]])
+        rows_a = shown(); mt = main_text()
+        ok(word(ACME, "o") == "Yes" and n("#app [data-tsm-strip]") == 0 and ZETA not in rows_a and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3"
+           and "Zeta" not in mt and "is not connected:" not in mt, "3c. A's page: A's %s Yes; no strip, no row, no step 3 for B's open %s / %s (%s)" % (ACME, ZETA, SPLIT, rows_a))
+        ok(txt(cell(EVER, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % SPLIT and word(EVER, "o") == "—", "3c. A's page: B's company is only a name seen in Tally, never open (%s)" % txt(row(EVER)))
+        # B's own browser (B's bridge paired there): B's companies, and A's is not open in B's Tally
+        E(MINE, ["paired", "go-8", ""]); pg.wait_for_timeout(1500)
+        ok(n("#app [data-tsm-strip]") == 1 and ZETA in shown() and word(ACME, "o") == "No" and word(ZETA, "o") == "Yes", "3c. B's page: B's open companies (the strip, %s's row Yes); A's %s No (%s)" % (ZETA, ACME, shown()))
+        # A's browser reaches B's bridge on 127.0.0.1 (B's Windows user): A's page is unchanged
+        E(MINE, ["linked", "go-7", da["id"]]); E(LOCAL, [[SPLIT, ZETA], PC + "\\made-up-b", ""]); pg.wait_for_timeout(1500)
+        ok(n("#app [data-tsm-strip]") == 0 and ZETA not in shown() and word(ACME, "o") == "Yes", "3c. A's page with B's bridge answering locally: still only A's Tally (%s)" % shown())
+        E(LOCAL, [None, "", ""])
+
         print("== 8. a phone, light and dark")
         for w, h, sch in ((390, 844, "light"), (390, 844, "dark"), (1440, 900, "dark")):
             pg2 = open_page(w, h, sch); pg, keep = pg2, pg
             E2 = lambda js, *a: pg2.evaluate(js, *a)
             E2(T.SETUP, [[d], cos, HELD, "owner", [ACME, BRIGHT, CORAL, DELTA, EVER, IRIS, GAMMA, HAZEL], True, books])
             E2("(l) => { Object.assign(window.__ledgers, l); }", {"bk-" + ACME: [{"name": "L%d" % i} for i in range(412)]})
-            E2(EXTRA, [[dict(x, client=E2("(n) => Object.values(S.companies).find(c => c.name === n).id", x["client"])) for x in SUM], OPEN, DIFFS, CHG, []]); pg2.wait_for_timeout(4000)
+            E2(EXTRA, [[dict(x, client=E2("(n) => Object.values(S.companies).find(c => c.name === n).id", x["client"])) for x in SUM], OPEN, DIFFS, CHG, []])
+            E2(MINE, ["linked", "go-7", d["id"]]); pg2.wait_for_timeout(4000)
             sw = E2("() => document.documentElement.scrollWidth")
             ok(sw <= w + 1, "8. %dx%d %s: no sideways scroll (%d)" % (w, h, sch, sw))
             ok(pg2.locator("#app [data-tsm-table] tr[data-tsm-row]").count() == 9, "8. %d wide: every row" % w)

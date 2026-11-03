@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { useEffect, useState } from "react";
 import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
+import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
@@ -206,12 +206,15 @@ function Differences({ row }) {
       {Number(r.n) > (r.rows || []).length && <p className="note">{"Showing the largest " + (r.rows || []).length + " of " + r.n + "."}</p>}</>}
   </div>;
 }
-// the column's Connect (this computer's FinCom Bridge not reachable from this browser): the local connect flow, its answer
-// under the one pressed
+// the column's Connect (this user's own FinCom Bridge not heard from now): the local connect flow, its answer under the one
+// pressed; Set it up (this user has no FinCom Bridge of their own): the pairing steps (step 1 of the guided box)
 function LocalConnect() {
   const [mine, setMine] = useState(false), busy = OC.busy === "c";
   return <div><button type="button" className="linkbtn tsm-small" data-tsm-local-connect="" disabled={!!OC.busy} onClick={() => { setMine(true); doConnect(false); }}>{busy && mine ? "Connecting…" : "Connect"}</button>
     {mine && !busy && OC.c && <Line r={OC.c} hook="tsm-local" />}</div>;
+}
+function SetUp() {
+  return <div><button type="button" className="linkbtn tsm-small" data-tsm-setup="" onClick={() => { if (typeof openConnectTally === "function") openConnectTally(1, ""); window.scrollTo(0, 0); }}>Set it up</button></div>;
 }
 function Row({ row }) {
   const [list, setList] = useState(false);
@@ -221,7 +224,7 @@ function Row({ row }) {
     <td className="tsm-td tsm-client" data-tsm-col="client" data-label="Client">{linkedRow ? <button type="button" className="linkbtn tsm-client-name" data-tsm-client={row.cid} onClick={() => openCompany(row.cid)}>{row.client}</button>
       : <span className="tsm-client-none">Not chosen yet</span>}</td>
     <Cell k="c" label="Connected to Tally?" x={row.c} />
-    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.connect && <LocalConnect />}</Cell>
+    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.connect && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}
       <OpenLine row={row} list={list} onList={() => setList(!list)} />
@@ -272,12 +275,16 @@ function Computers({ pcs, download, sha }) {
   </section>;
 }
 
-// the page above For support. installed: a bridge of the firm heard this week; pcs: {connected, away, older};
+// the page above For support. installed: a bridge of the firm heard this week (the guided box counts it only when this user
+// has a bridge of their own: ownState); pcs: {connected, away, older};
 // download: the one Download FinCom Bridge (this site's latest.json); connectPanel: step 1's Download, Open it, Type its code
 export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel }) {
   const ui = UI(), g = S.tallyGuide || {}, now = Date.now();
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
-  const rows = tableRows({ focus }), all = companyRows(), unlinked = openUnlinked(all), just = justLinked(all);
+  // next-tally-own-login: everything above For support is this user's own FinCom Bridge and Tally (ownState), never another
+  // Windows login's on the same server
+  const own = ownState(), mineIn = installed && own.state !== "none";
+  const rows = tableRows({ focus, own }), all = companyRows(), unlinked = openUnlinked(all, own), just = justLinked(all);
   const linkedN = all.filter((r) => r.client).length;
   useEffect(() => { booksLoad(rows.filter((r) => r.kind === "client" && r.c.w === YES).map((r) => r.cid)); countLedgers(rows); });
   // from a client's "Open Tally page" (openTallyFor: S.tallyFocus): its row is marked here, and For support opens with that
@@ -289,11 +296,11 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   // openConnectTally(1): install on another computer (step 1 shown again); 2 and 3: the steps open
   const forced = (!!ui.again && now - ui.again < GUIDE_MS) || (g.step === 1 && !!g.at && now - g.at < GUIDE_MS);
   const asked = !!g.at && g.step >= 1 && g.step <= 3 && now - g.at < GUIDE_MS;
-  const step = forced ? 1 : guideStep({ installed, unlinked, just });
-  const expanded = forced || !installed || linkedN === 0 || step === 4 || ui.open || asked;
+  const step = forced ? 1 : guideStep({ installed: mineIn, unlinked, just });
+  const expanded = forced || !mineIn || linkedN === 0 || step === 4 || ui.open || asked;
   const open = unlinked[0] || null, best = open ? bestFor(open, all) : null;
   const strip = unlinked.length > 0 && !(expanded && step === 3);
-  return <div className="tsm" data-tally-simple="">
+  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined}>
     <Head rows={rows} checkAgain={checkAgain} ready={ready} />
     {strip && <Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} />}
     {ready && <Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} />}
