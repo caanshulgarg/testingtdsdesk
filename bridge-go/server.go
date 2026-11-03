@@ -172,6 +172,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		// bridges of this computer leave them alone; the Windows user, to name it in their words
 		own, unknown := claimedPorts()
 		p["tallyPorts"], p["tallyPortsUnknown"], p["windowsUser"] = own, unknown, ownerName()
+		// 2.5.3 (one FinCom login on a shared server): whether the asking browser runs in this bridge's owner's Windows
+		// session (true / false / "unknown"), and this bridge's own port, so FinCom picks its own login's bridge
+		p["sameSession"], p["bridgePort"] = sameSessionOf(r), toInt(cfg("Port"))
 		if mine {
 			p["bridgeId"], p["port"] = "go-"+instanceID(), toInt(cfg("Port"))
 			// review M1: the proof FinCom checks before it uses this bridge (its key), or pairs with it (the code shown now).
@@ -424,7 +427,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		return M{"ok": true, "version": BridgeVersion, "computer": computerName(), "user": ownerName(), "mySession": mySession(), "mode": pm, "onlyMySession": cfgB("OnlyMySession"), "time": nowS(),
 			"sessions": sessions, "allowImport": cfgB("AllowImport") && why == "", "readOnly": why, "impl": "go", "testMode": testMode(), "paused": paused(),
 			"tallyStuck": getTallyStuck(), "wake": wakeStatus(), "jobs": jobsNow, "posting": postingNow(), "tally": tallyStatus(sessions), "beat": beatStatus(),
-			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat())}, nil // 2.5.3
+			"tallyWhy": why253, "tallyConnectSay": tallyConnectSay(why253, tallyIniBeat()), "sameSession": sameSessionOf(r)}, nil // 2.5.3
 	case "/companies":
 		list := []any{}
 		for _, s := range openCompanies(false) {

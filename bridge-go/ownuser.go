@@ -79,6 +79,22 @@ func connPorts(r *http.Request) (local, remote int) {
 	return local, remote
 }
 
+// 2.5.3 (one FinCom login for every user of a shared server): the Windows session of the program at the other end of a
+// connection (the TCP table's process, then its session); known false when Windows does not say (platform; a stand-in in
+// the tests)
+var peerSessionOf = platPeerSession
+
+// the reply's sameSession: true when the asking program (the browser) runs in one of this bridge's owner's Windows
+// sessions, false when Windows places it in another session, "unknown" when Windows does not say
+func sameSessionOf(r *http.Request) any {
+	local, remote := connPorts(r)
+	s, known := peerSessionOf(local, remote)
+	if !known {
+		return "unknown"
+	}
+	return isMine(s)
+}
+
 // whether the request comes from a program of this bridge's own Windows user, and why not
 func fromOwnUser(r *http.Request) (bool, string) {
 	local, remote := connPorts(r)

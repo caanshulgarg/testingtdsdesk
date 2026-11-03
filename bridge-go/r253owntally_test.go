@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -251,5 +252,47 @@ func TestR253ClaimedPorts(t *testing.T) {
 	// a claim's decision: an own Tally's claim always wins; of two owner-unknown claims, the lower bridge port's
 	if !claimWins(bridgeClaim{port: 9105, unknown: false}, 9101) || !claimWins(bridgeClaim{port: 9101, unknown: true}, 9105) || claimWins(bridgeClaim{port: 9105, unknown: true}, 9101) {
 		t.Fatal("claim decisions")
+	}
+}
+
+// one FinCom login on a shared server: /ping says whether the asking browser runs in this bridge's owner's Windows
+// session (sameSession true / false / "unknown") and the bridge's own port; /status says it too
+func TestR253SameSession(t *testing.T) {
+	f := newStandTally(t)
+	standBridge(t, f, `,"Key":"same-session-key","Port":9103`)
+	r253Server(t, `{"pid": 10, "name": "tally", "session": 1}`, fmt.Sprintf(`{"port": %d, "pid": 10}`, f.port))
+	oldS := peerSessionOf
+	t.Cleanup(func() { peerSessionOf = oldS })
+	var asked [2]int
+	ping := func() M {
+		r := httptest.NewRequest("GET", "http://127.0.0.1:9103/ping", nil)
+		r.RemoteAddr = "127.0.0.1:50999"
+		w := httptest.NewRecorder()
+		handle(w, r)
+		return parseObj(w.Body.String())
+	}
+	for _, c := range []struct {
+		sess  int
+		known bool
+		want  any
+	}{{1, true, true}, {2, true, false}, {0, true, false}, {0, false, "unknown"}} {
+		peerSessionOf = func(local, remote int) (int, bool) { asked = [2]int{local, remote}; return c.sess, c.known }
+		res := ping()
+		if res["sameSession"] != c.want || toInt(res["bridgePort"]) != 9103 {
+			t.Fatalf("session %d known %v: %v", c.sess, c.known, res)
+		}
+	}
+	if asked[1] != 50999 {
+		t.Fatalf("the browser's port: %v", asked)
+	}
+	// /status (the owner's own programs) carries it too
+	peerSessionOf = func(int, int) (int, bool) { return 1, true }
+	r := httptest.NewRequest("GET", "http://127.0.0.1:9103/status", nil)
+	r.RemoteAddr = "127.0.0.1:50998"
+	r.Header.Set("X-Bridge-Key", "same-session-key")
+	w := httptest.NewRecorder()
+	handle(w, r)
+	if res := parseObj(w.Body.String()); res["sameSession"] != true {
+		t.Fatalf("/status: %d %v", w.Code, res)
 	}
 }

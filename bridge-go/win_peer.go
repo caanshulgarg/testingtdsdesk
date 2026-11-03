@@ -82,6 +82,27 @@ func platPeerUser(local, remote int) (string, bool, error) {
 	return sid, true, err
 }
 
+// 2.5.3: the Windows session of the program at the other end of a connection to the bridge: its process from the TCP
+// table, its session from ProcessIdToSessionId, else from the Remote Desktop service; known false when neither says
+func platPeerSession(local, remote int) (int, bool) {
+	rows, err := tcpTable()
+	if err != nil {
+		return 0, false
+	}
+	pid := peerPidFrom(rows, local, remote)
+	if pid == 0 {
+		return 0, false
+	}
+	var s uint32
+	if windows.ProcessIdToSessionId(uint32(pid), &s) == nil {
+		return int(s), true
+	}
+	if ws, ok := wtsProcessSessions()[uint32(pid)]; ok {
+		return int(ws), true
+	}
+	return 0, false
+}
+
 // the user this bridge runs as, and (as the service, which runs as SYSTEM) the owner it works for
 func platOwnSIDs() []string {
 	own := []string{}
