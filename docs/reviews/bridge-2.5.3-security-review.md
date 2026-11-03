@@ -3,7 +3,7 @@
 Reviewer: the build session's own adversarial pass over the diff, on the owner's reduced gates of 03-Nov-2026. No
 independent review session was run; one is owed after the release.
 
-Range: 3f242aa08..780fc5b87
+Range: 3f242aa08..ec31e755c
 
 ## Another user's Tally
 

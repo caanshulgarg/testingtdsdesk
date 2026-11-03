@@ -4,7 +4,7 @@ Reviewer: the build session's own adversarial pass over the diff (as for 2.3.2),
 fix of 03-Nov-2026 ("Don't full check.. need basic check first.. I need to do it real fast."). No independent review
 session was run; one is owed after the release.
 
-Range: 3f242aa08..780fc5b87
+Range: 3f242aa08..ec31e755c
 
 ## The cause, found in the code (bridge 2.5.2)
 
@@ -71,6 +71,10 @@ Range: 3f242aa08..780fc5b87
 8. (Fixed after release-check's first full run) FallbackPorts were merged in settings mode too when Windows listed no
    programs; now automatic mode only, as before. Three tests encoded the old rules (the open check's list of one port;
    the typed port refused when the owner is unknown; the recorder fixture's version) and were changed to the new ones.
+9. (Fixed after the from-source gate run 41612077771 on TallyPrime 7.1, n2) The setup switched the connection on, then
+   the bridge's own first start ran the step again, found it on and recorded "already": the beat lost "enabled; Tally
+   needs one restart" and the person's words. An "already" now keeps a recent "enabled" of the same file (24 hours,
+   connectAt) (TestR253IniEnabledKeptAcrossSecondStep).
 
 ## Tests
 
