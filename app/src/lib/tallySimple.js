@@ -7,10 +7,12 @@
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
 import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
 import { seenWords, coKey, lastEntry, tallyDevs } from "./tallyState.js";
-import { bookSum, bookFetch, pctOf, etaWords } from "../parts/TallyFetch.jsx";
+import { bookSum, bookFetch, pctOf, etaWords, summary, askStatus } from "../parts/TallyFetch.jsx";
 import { needDays } from "./needDays.js";
 // migration 136 (next-held-settle): a client's held lines, one period, with the Day Book upload preset to it
 import { heldFor } from "../parts/HeldBlock.jsx";
+import { soonDraw } from "./soonDraw.js";
+import { QUIET } from "./quietReads.js";
 
 export const YES = "Yes", NO = "No", NOTYET = "Not yet", DASH = "—";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -127,10 +129,10 @@ const rpc0 = (fn, a) => (typeof TCloud === "object" && TCloud.rpc ? TCloud.rpc(f
 const gone = (e) => /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((e && e.message) || e));
 export function openingsAll(force) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || OPEN.off) return null;
-  if (!OPEN.busy && (force || (Date.now() - OPEN.at > 5 * 60000 && (typeof pollOk !== "function" || pollOk())))) {
+  if (!OPEN.busy && (force || (!QUIET.on && Date.now() - OPEN.at > 5 * 60000 && (typeof pollOk !== "function" || pollOk())))) {
     OPEN.busy = true;
     rpc0("tally_openings_decide", { p_book: null, p_action: "status" }).then((r) => { if (r && r.ok && Array.isArray(r.books)) OPEN.books = r.books; },
-      (e) => { if (gone(e)) OPEN.off = true; }).finally(() => { OPEN.at = Date.now(); OPEN.busy = false; if (typeof render === "function") render(); });
+      (e) => { if (gone(e)) OPEN.off = true; }).finally(() => { OPEN.at = Date.now(); OPEN.busy = false; soonDraw(); });
   }
   return OPEN.books;
 }
@@ -232,6 +234,9 @@ function look() {
   // next-hang-watch: Chrome's own leave for a site to reach this computer's apps (Local Network Access; Chrome 142+): a
   // page that may not reach 127.0.0.1 finds no bridge, and says so in those words (bridgeSay)
   permOf().then((v) => { LOCALB.perm = v; }, () => {});
+  // next-tally-table: the look never holds the page. Each /ping stops at PROBE_MS; whatever has not settled after 5 s (a
+  // browser that holds a request to this computer while it asks the person) counts as nothing found, and the page says so
+  setTimeout(() => { if (gen === LOCALB.n && LOCALB.busy) { LOCALB.busy = false; if (LOCALB.list === null) { LOCALB.list = []; soonDraw(); } } }, 5000);
   Promise.all(ports.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)))
     .then((xs) => xs.filter((x) => x && (x.bridge || x.version)), () => [])
     .then((list) => {
@@ -239,8 +244,8 @@ function look() {
       const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
       Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false });
       // (a later task: never inside the drawing that asked; only when it changes what the Tally page shows)
-      if (changed && typeof render === "function" && typeof document === "object" && document.querySelector("#app [data-tally-simple]")) setTimeout(() => render(), 0);
-    });
+      if (changed && typeof document === "object" && document.querySelector("#app [data-tally-simple]")) soonDraw();
+    }, () => { LOCALB.busy = false; if (LOCALB.list === null) LOCALB.list = []; });
 }
 function permOf() {
   try {
@@ -499,11 +504,119 @@ function companyRow(r, all, own) {
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")
 export function tableRows(opts) { return withTable(() => tableRowsNow(opts)); }
+const byName = (a, b) => String(a.name).localeCompare(String(b.name));
 function tableRowsNow(opts) {
   opts = Object.assign({}, opts);
   opts.own = opts.own || ownState();
-  const all = companyRows(), cs = live().sort((a, b) => String(a.name).localeCompare(String(b.name)));
-  const rows = cs.map((co) => clientRow(co, all, opts));
+  const all = companyRows(), cs = live().sort(byName);
+  return finishRows(cs.map((co) => safeRow(co, all, opts)), all, opts);
+}
+// next-tally-table (04-Nov-2026): a client whose row cannot be worked out (a state FinCom did not expect) still has its
+// row (its name, its Tally company, the rest "—"); the error goes to the console and to Sentry once a client, never a
+// blank page
+const SAID = new Set();
+function told(e, what) {
+  try { console.error("[FinCom] the Tally page: " + what + ":", e); if (typeof window === "object" && typeof window.__fincomReport === "function") window.__fincomReport(e, "the Tally page (" + what + ")"); } catch (x) { /* never in the way */ }
+}
+function safeRow(co, all, opts) {
+  try { return clientRow(co, all, opts); }
+  catch (e) {
+    if (!SAID.has(co.id)) { SAID.add(co.id); told(e, "a client's row"); }
+    return quickRow(co, linkRows(), opts, "FinCom could not read this client’s Tally state just now; it tries again by itself.");
+  }
+}
+// the cloud's links as FinCom last read them (TLight's every 30 s, else the Tally page's own read), as tallyLinkOf reads them
+function linkRows() {
+  const st = (typeof TLight === "object" && TLight.st) || {}, p = (typeof TCloud === "object" && TCloud.pane) || {};
+  return ((st.cos && st.cos.length ? st.cos : p.companies) || []).filter((c) => c && c.client_id);
+}
+// a client's row from what is already here, at once: its name and its Tally company; the other columns fill in a moment later
+function quickRow(co, cos, opts, note) {
+  const k = cos.filter((c) => String(c.client_id) === String(co.id)).sort((a, b) => String(b.last_seen || "").localeCompare(String(a.last_seen || "")))[0];
+  const company = (k && k.company) || "";
+  return { key: "c:" + co.id, kind: "client", cid: co.id, co, client: co.name, company, quick: true, act: null, todo: note || "", upload: false, focus: opts.focus === co.id, need: false, fine: false,
+    c: company ? { w: YES, note: "Tally company: " + shown(company) } : { w: NO, note: "" }, o: { w: DASH, note: note ? "" : "Checking…" }, l: { w: DASH, note: "" }, e: { w: DASH, note: "" } };
+}
+export function quickRows(opts) { const cos = linkRows(), o = opts || {}; return live().sort(byName).map((co) => quickRow(co, cos, o)); }
+
+// ---------- next-tally-table (04-Nov-2026; the owner: "now the table is not showing... this tally link is the basic page that
+// should work seamlessly"; Sentry "Page blocked" on home/tally from the shared server): the rows are worked out OFF the
+// drawing. With staging's books (the held lines, the opening balances, the checks, the summary) one working-out of every
+// row cost 100-200 ms at a 4x slower CPU and ran in every drawing of the app, several drawings in one go when answers came
+// together: 300-580 ms blocks. Now a drawing takes the rows last worked out (the first drawing: quickRows, at once), and
+// asks for them again; the work runs when the browser is free, a few clients at a time (25 ms, then a pause for the page),
+// never while the tab is hidden, and draws the page again only when the rows changed. The same rows as tableRows().
+export const ROWS = { rows: null, extra: null, sig: "", want: null, dirty: false, busy: false, n: 0, ms: 0 };
+const SLICE_MS = 25;
+const idle = (fn) => (typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 100 }) : setTimeout(fn, 0));
+const hiddenNow = () => typeof document === "object" && document.visibilityState === "hidden";
+// from the drawing: {rows, extra (the companies open that no client has, the one just linked, the best client; null until
+// the first work is done)}
+export function rowsFor(opts) {
+  // the page's own reads start from the drawing, at its moment, as when the rows were worked out in it (each returns at
+  // once when not due); the working-out itself starts none of them (lib/quietReads.js)
+  // (the drawing the rows asked for themselves only shows what is here: it starts none; the checks only once there are books,
+  // as clientRow asked them, bookFetch)
+  if (!ROWS.self) try { const b = summary(); heldFor(""); openingsAll(); if (b && b.length) askStatus(); } catch (e) { /* the next drawing */ }
+  ROWS.self = false;
+  ROWS.want = Object.assign({}, opts); ROWS.dirty = true;
+  if (!ROWS.busy) { ROWS.busy = true; idle(rowsWork); }
+  if (ROWS.rows) return { rows: ROWS.rows, extra: ROWS.extra };
+  let rows = []; try { rows = quickRows(opts); } catch (e) { rows = []; }
+  return { rows, extra: null };
+}
+function rowsWork() {
+  if (hiddenNow()) {
+    const on = () => { if (hiddenNow()) return; document.removeEventListener("visibilitychange", on); rowsWork(); };
+    document.addEventListener("visibilitychange", on); return;
+  }
+  ROWS.dirty = false;
+  const t0 = Date.now(), opts = Object.assign({}, ROWS.want);
+  let own, all, cs;
+  const p0 = performance.now();
+  try { own = ownState(); } catch (e) { own = { state: "none" }; told(e, "this login's bridge"); }
+  opts.own = own;
+  const p1 = performance.now();
+  try { all = companyRows(); cs = live().sort(byName); }
+  catch (e) { told(e, "the companies"); let q = []; try { q = quickRows(opts); } catch (x) { q = []; } return rowsDone(q, null, Date.now() - t0); }
+  ROWS.phase = { own: Math.round(p1 - p0), all: Math.round(performance.now() - p1), steps: [] };
+  const memo = { twin: new Map(), by: null }, out = [];
+  let i = 0;
+  const step = () => {
+    const a = performance.now(), was = MEMO.cur, q = 1;
+    if (!MEMO.off) MEMO.cur = memo;
+    QUIET.on += q;
+    let fin = null;
+    try {
+      do { if (i < cs.length) out.push(safeRow(cs[i++], all, opts)); } while (i < cs.length && performance.now() - a < SLICE_MS);
+      if (i >= cs.length) {
+        const rows = finishRows(out, all, opts), unlinked = openUnlinked(all, own), open = unlinked[0] || null;
+        fin = { rows, extra: { own, unlinked, open, best: open ? bestFor(open, all) : null, just: justLinked(all), linkedN: all.filter((r) => r.client).length } };
+      }
+    } catch (e) { told(e, "the table"); fin = { rows: out.length ? out : quickRows(opts), extra: null }; }
+    finally { MEMO.cur = was; QUIET.on -= q; }
+    ROWS.phase.steps.push(Math.round(performance.now() - a));
+    if (fin) rowsDone(fin.rows, fin.extra, Date.now() - t0);
+    else setTimeout(step, 0);
+  };
+  // (the companies and this login's bridge are one piece of work, the rows the next ones: each its own task)
+  setTimeout(step, 0);
+}
+// what the page shows of the rows, to draw it again only when that changed
+function rowsSig(rows, x) {
+  try {
+    return JSON.stringify([rows.map((r) => [r.key, r.client, r.company, r.found, r.c, r.o, r.l, r.e, r.act && [r.act.kind, r.act.label, r.act.day], r.todo, r.upload, r.need, r.fine, r.focus,
+      r.open && [r.open.state, r.open.words, r.open.canUse, r.open.why], r.best && r.best.id, r.lKnown, r.quick]),
+      x && [x.unlinked.map((r) => r.company), x.open && x.open.company, x.best && x.best.id, x.just, x.linkedN, x.own && x.own.state]]);
+  } catch (e) { return String(Date.now()); }
+}
+function rowsDone(rows, extra, ms) {
+  const sig = rowsSig(rows, extra);
+  Object.assign(ROWS, { rows, extra, ms, busy: false }); ROWS.n++;
+  if (sig !== ROWS.sig) { ROWS.sig = sig; ROWS.self = true; soonDraw(); }
+  else if (ROWS.dirty) { ROWS.busy = true; idle(rowsWork); }
+}
+function finishRows(rows, all, opts) {
   const found = new Set(rows.filter((x) => x.found).map((x) => coKey(x.found)));
   openUnlinked(all, opts.own).filter((r) => !found.has(coKey(r.company))).forEach((r) => rows.push(companyRow(r, all, opts.own)));
   rows.forEach((x) => {
@@ -562,4 +675,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

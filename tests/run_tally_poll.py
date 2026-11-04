@@ -22,7 +22,11 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = 8431
-TALLY_MAX, CALL_MAX = 20, 5
+# next-tally-table (04-Nov-2026): 21 is the page's own cadences in 2 minutes: the computers every 30 s (4), the held lines
+# every 20 s (6), the summary every 30 s (4), the recorder's lines, the alerts and the unknown ledgers every minute (2 each),
+# the records once. The page before it made 19 here only because its first held and summary reads fell later in the
+# window (they started only at a drawing); in real time both make the same requests (5 in 20 s on the Tally page)
+TALLY_MAX, CALL_MAX = 21, 5
 class Q(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 fails, errors = [], []

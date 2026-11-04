@@ -230,6 +230,17 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
   const bad = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { build: "ALPHA TRADERS", ms: "12a" } }).tags || {};
   ok(!bad.build && !bad.ms, "build and ms of another shape: dropped");
 }
+// next-tally-table (04-Nov-2026): what a "Page blocked" ran: seen or hidden, the last click's code name and the seconds since,
+// the long frames counted, the longest script as file:function; any other shape (a client's name, an address) dropped
+{
+  const h = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "warning", message: "Page blocked",
+    tags: { kind: "hang", where: "heartbeat", vis: "seen", last_ui: "tsm-check", ui_s: "31", frames: "4", script: "Tally-CGBcdhGo.js:clientRow" } }).tags;
+  ok(h.vis === "seen" && h.last_ui === "tsm-check" && h.ui_s === "31" && h.frames === "4" && h.script === "Tally-CGBcdhGo.js:clientRow", "a hang's attribution kept (" + JSON.stringify(h) + ")");
+  const bad = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { vis: "ALPHA", last_ui: "ALPHA TRADERS", ui_s: "1e3", frames: "a", script: "https://x.example/ALPHA TRADERS.js:f" } }).tags || {};
+  ok(!bad.vis && !bad.last_ui && !bad.ui_s && !bad.frames && !bad.script, "attribution of another shape: dropped (" + JSON.stringify(bad) + ")");
+  const bad2 = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { script: "legacy.js:ALPHA TRADERS", vis: "visible" } }).tags || {};
+  ok(!bad2.script && !bad2.vis, "a script tag whose function is words, or vis of another word: dropped");
+}
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

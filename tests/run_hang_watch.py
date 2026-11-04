@@ -18,6 +18,8 @@ and "while tally is open still system is not recognising the tally"). Made-up fi
   3. The hang reporter (src/hangWatch.js, in the Sentry chunk): a 2.5 s block sends one warning "Page blocked" (kind hang,
      where frame, the page's name, the build, the long frame's script); a second block within 10 minutes sends nothing;
      a page stuck 9 s is reported by the worker while it is stuck (where stall).
+  4. (next-tally-table) a hidden page stuck 9 s (a tab in the background: its timers held back) sends nothing; seen again,
+     a 2.5 s block sends one warning with vis seen, the last click's code name and the seconds since.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_hang_watch.py"""
 import os, sys, json, time, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -163,6 +165,24 @@ def main():
         during = [b for b, at in zip(sent, sentAt) if '"where":"stall"' in b and at - t0 < 9.0]
         ok(len(during) == 1, "stuck 9 s: the worker reported it while stuck (where stall): %d" % len(during))
         ok(len([b for b in sent if '"kind":"hang"' in b]) <= 2, "one incident: the worker's report and the page's own after it, no more (%d)" % len([b for b in sent if '"kind":"hang"' in b]))
+        pg.close()
+        # next-tally-table (04-Nov-2026; FINCOM-APP-STAGING-G's first 16 events: a tab in the background, a computer asleep):
+        # a page not seen is never reported; a seen one says what was clicked last and that it was seen
+        print("4. the hang reporter: a hidden page is not reported; a seen one says what ran and what was clicked last")
+        pg = page(INIT); sent.clear(); sentAt.clear(); pg.context.route("https://*.ingest.us.sentry.io/**", onsentry); pg.wait_for_timeout(5000)
+        HIDE = """(h) => { Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => h ? 'hidden' : 'visible'});
+          Object.defineProperty(document, 'hidden', {configurable: true, get: () => h}); document.dispatchEvent(new Event('visibilitychange')); }"""
+        E(HIDE, True); pg.wait_for_timeout(1500)
+        E("() => { function blockFor(ms){ const t = performance.now(); while (performance.now() - t < ms) {} } setTimeout(() => blockFor(9000), 10); }")
+        pg.wait_for_timeout(13000)
+        ok(not [b for b in sent if '"kind":"hang"' in b], "hidden (a tab in the background, a minimised remote desktop), stuck 9 s: nothing sent (%d)" % len([b for b in sent if '"kind":"hang"' in b]))
+        E(HIDE, False); pg.wait_for_timeout(1500)
+        E("() => { const b = document.createElement('button'); b.setAttribute('data-made-up-step', ''); b.textContent = 'ALPHA MADE-UP TRADERS'; document.body.appendChild(b); b.click(); b.remove(); }")
+        E("() => { function blockFor(ms){ const t = performance.now(); while (performance.now() - t < ms) {} } setTimeout(() => blockFor(2500), 10); }"); pg.wait_for_timeout(4500)
+        evs = [b for b in sent if '"kind":"hang"' in b]
+        print("      ", [b[-500:] for b in evs][:2])
+        ok(len(evs) == 1 and '"vis":"seen"' in evs[0], "seen again, a 2.5 s block: one warning, vis seen (%d)" % len(evs))
+        ok(evs and '"last_ui":"made-up-step"' in evs[0] and '"ui_s":"' in evs[0] and "ALPHA MADE-UP" not in evs[0], "the last click by its code name only, and the seconds since (never its words)")
         pg.close()
         br.close()
     print("errors", errors[:5])

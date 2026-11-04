@@ -10,18 +10,19 @@
 //   5. the computers in one line (no names), Download FinCom Bridge when one is older
 // The same links, reads and RPCs as before (linkTo, addNew in Pick, ChangePick, firstSync, tally_fill_request, the Day
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
-import { useEffect, useState } from "react";
-import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, lookOnce, aimLocal, bestFor, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { Component, useEffect, useState } from "react";
+import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
+import { LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, ownState, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
+import { soonDraw } from "../lib/soonDraw.js";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
 function countLedgers(rows) {
   rows.forEach((r) => {
     const bk = ledBook(r.cid);
     if (r.kind !== "client" || r.c.w !== YES || ASKED_N.has(r.cid) || !bk || (LEDN[r.cid] && LEDN[r.cid].book === bk.book && Date.now() - LEDN[r.cid].at < 300000)) return;
     ASKED_N.add(r.cid);
-    Promise.resolve(cloudLedgerCount(r.cid, true)).then((n) => { if (n != null) { LEDN[r.cid] = { n, book: bk.book, at: Date.now() }; render(); } }, () => {}).finally(() => setTimeout(() => ASKED_N.delete(r.cid), 60000));
+    Promise.resolve(cloudLedgerCount(r.cid, true)).then((n) => { if (n != null) { LEDN[r.cid] = { n, book: bk.book, at: Date.now() }; soonDraw(); } }, () => {}).finally(() => setTimeout(() => ASKED_N.delete(r.cid), 60000));
   });
 }
 import { rpc, missing, bookSum, askStatus, summary } from "./TallyFetch.jsx";
@@ -72,12 +73,12 @@ function checking() {
 
 // ---------- the header
 function Head({ rows, checkAgain, ready, own, download }) {
-  const w = headWords(rows), on = checking(), o = own || {};
+  const w = headWords(rows), on = checking(), o = own || {}, quick = rows.some((r) => r.quick);
   // next-hang-watch: no bridge of this Windows login answers here: why, plainly, with what to do (never a blank)
   const say = (o.state === "none" || o.state === "away") && o.say ? o.say : null, far = o.state === "ok" && o.far;
   return <header className="tsm-head" data-tsm-head="">
     <div className="tsm-head-words"><h3 className="tsm-title">Tally</h3>
-      {ready && <div className="tsm-say" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></div>}</div>
+      {ready && !quick && <div className="tsm-say" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></div>}</div>
     <button type="button" className="btn primary tsm-check" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check Tally now"}</button>
     {ready && (say || far) && <div className="tsm-head-notes tsm-head-bridge" data-tsm-bridge-say={say ? say.kind : "far"}>
       <div className="tsm-note">{say ? say.words : "This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div>
@@ -147,6 +148,36 @@ function Strip({ r, best, more }) {
     {pick && <div className="tsm-pick" data-tsm-strip-pick=""><Pick r={r} co={null} pre="" onClose={() => setPick(false)} /></div>}
   </section>;
 }
+
+// ---------- next-tally-table (04-Nov-2026): the table is never lost to another part. Each part of the page is drawn on its
+// own: one that fails shows nothing (the header, the strip, the guided box, the computers) or, for the table, the clients
+// with their Tally company from what is already here; the error goes to the console and Sentry, and the next drawing
+// tries again
+let DRAWN = 0;
+const TOLD = new Set();
+class Part extends Component {
+  constructor(p) { super(p); this.state = { e: null }; }
+  static getDerivedStateFromError(e) { return { e }; }
+  componentDidCatch(e) {
+    // (told once a part for the page: it is tried again at every drawing)
+    try { console.error("[FinCom] the Tally page's " + this.props.name + " could not be drawn:", e); if (!TOLD.has(this.props.name) && typeof window.__fincomReport === "function") { TOLD.add(this.props.name); window.__fincomReport(e, "the Tally page's " + this.props.name); } } catch (x) { /* */ }
+  }
+  componentDidUpdate(p) { if (this.state.e && p.v !== this.props.v) this.setState({ e: null }); }
+  render() { return this.state.e ? (this.props.fallback ? this.props.fallback() : null) : this.props.children; }
+}
+// the table when its own drawing failed: every client and its Tally company, nothing else
+function PlainTable() {
+  let rows = []; try { rows = quickRows({}); } catch (e) { rows = []; }
+  return <section className="tsm-card tsm-table" aria-label="Clients" data-tsm-table="" data-tsm-plain="" data-tsm-n={rows.length}>
+    <div className="tsm-scroll"><table className="tsm-grid nocards"><thead><tr><th>Client</th><th>Connected to Tally?</th></tr></thead>
+      <tbody>{rows.map((r) => <tr key={r.key} className="tsm-tr" data-tsm-row={r.client} data-tsm-kind="client"><td className="tsm-td tsm-client" data-label="Client">{r.client}</td><Cell k="c" label="Connected to Tally?" x={r.c} /></tr>)}</tbody></table></div>
+  </section>;
+}
+// the firm's clients not read from FinCom's cloud yet in this tab (its first sync, Cloud.st.lastSync): never "No client yet"
+// while they are on their way
+const reading = () => typeof Cloud === "object" && Cloud.on && Cloud.on() && !(Cloud.st && Cloud.st.lastSync);
+const readingWords = () => (Cloud.st && Cloud.st.error ? "FinCom’s cloud did not answer (" + String(Cloud.st.error).slice(0, 120) + "). Your clients show here as soon as it does. "
+  : "Reading your clients from FinCom’s cloud… ");
 
 // ---------- the table
 const CLS = { [YES]: "yes", [NO]: "no", [NOTYET]: "notyet" };
@@ -279,7 +310,7 @@ function Table({ rows, download }) {
           return <button key={k} type="button" className={"tsm-filter" + (on ? " on" : "")} aria-pressed={on} data-tsm-filter={k} data-tsm-count={n} onClick={() => set({ filter: k })}>{label + " " + n}</button>; })}
       </div>
     </div>
-    {!list.length && <div className="tsm-none" data-tsm-none="">{rows.length ? "No client matches. " : "No client yet. "}
+    {!list.length && <div className="tsm-none" data-tsm-none={rows.length ? "match" : reading() ? "reading" : "none"}>{rows.length ? "No client matches. " : reading() ? readingWords() : "No client yet. "}
       {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set({ filter: "all", q: "" })}>Show all</button>}</div>}
     {list.length > 0 && <div className="tsm-scroll"><table className="tsm-grid nocards">
       <thead><tr><th>Client</th><th>Connected to Tally?</th><th>Open in Tally right now?</th><th>Ledgers received?</th><th>All entries received?</th><th>What to do</th></tr></thead>
@@ -306,9 +337,12 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
   // next-tally-own-login: everything above For support is this user's own FinCom Bridge and Tally (ownState), never another
   // Windows login's on the same server
-  const own = ownState(), mineIn = installed && own.state !== "none";
-  const rows = tableRows({ focus, own }), all = companyRows(), unlinked = openUnlinked(all, own), just = justLinked(all);
-  const linkedN = all.filter((r) => r.client).length;
+  let own; try { own = ownState(); } catch (e) { own = { state: "none" }; }
+  const mineIn = installed && own.state !== "none";
+  // next-tally-table: the rows as last worked out (lib/tallySimple.js rowsFor: off the drawing, a few clients at a time),
+  // at the very first drawing each client with its Tally company at once; the rest fills in as it is worked out
+  const R = rowsFor({ focus }), rows = R.rows, x = R.extra || { unlinked: [], open: null, best: null, just: "", linkedN: rows.filter((r) => r.c.w === YES).length };
+  const unlinked = x.unlinked, just = x.just, linkedN = x.linkedN, v = ++DRAWN;
   useEffect(() => { booksLoad(rows.filter((r) => r.kind === "client" && r.c.w === YES).map((r) => r.cid)); countLedgers(rows); });
   // bridge 2.5.3: this Windows login's own bridge, looked for once for the tab, once the firm's computers are read (their
   // ports are asked too); never from a drawing (next-fix-probe-loop)
@@ -324,13 +358,13 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const asked = !!g.at && g.step >= 1 && g.step <= 3 && now - g.at < GUIDE_MS;
   const step = forced ? 1 : guideStep({ installed: mineIn, unlinked, just });
   const expanded = forced || !mineIn || linkedN === 0 || step === 4 || ui.open || asked;
-  const open = unlinked[0] || null, best = open ? bestFor(open, all) : null;
+  const open = x.open, best = x.best;
   const strip = unlinked.length > 0 && !(expanded && step === 3);
-  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined}>
-    <Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} />
-    {strip && <Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} />}
-    {ready && <Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} />}
-    <Table rows={rows} download={download} />
-    {ready && <Computers pcs={pcs} download={download} sha={sha} />}
+  return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
+    <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} /></Part>
+    {strip && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
+    {ready && <Part name="guided box" v={v}><Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
+    <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} /></Part>
+    {ready && <Part name="computers line" v={v}><Computers pcs={pcs} download={download} sha={sha} /></Part>}
   </div>;
 }

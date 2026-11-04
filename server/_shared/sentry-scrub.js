@@ -236,6 +236,14 @@ const TAGS = {
   // next-hang-watch (04-Nov-2026): a page that blocked (app/src/hangWatch.js): the build's id and how long, in ms
   build: (v) => (/^[a-z0-9]{6,12}-[0-9a-f]{6}$/.test(v) || v === "dev" ? v : undefined),
   ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
+  // next-tally-table (04-Nov-2026): what a "Page blocked" ran: whether the page was seen, the last thing clicked (its code
+  // name, as the ui breadcrumbs) and the seconds since, the long frames counted, and the longest script as the build's file
+  // name and the function's code name (Tally-Ab12.js:clientRow); nothing else
+  vis: (v) => (v === "seen" || v === "hidden" ? v : undefined),
+  last_ui: (v) => (/^[a-z][a-z0-9-]{0,40}$/.test(v) ? v : undefined),
+  ui_s: (v) => (/^[0-9]{1,7}$/.test(v) ? v : undefined),
+  frames: (v) => (/^[0-9]{1,3}$/.test(v) ? v : undefined),
+  script: (v) => { const i = typeof v === "string" ? v.indexOf(":") : -1; return i > 0 && CHUNK_FILE(v.slice(0, i)) && /^[A-Za-z_$][A-Za-z0-9_$.:-]{0,60}$/.test(v.slice(i + 1)) ? v : undefined; },
   // FinCom Assistant's failed turn (Sentry FINCOM-CLOUD-STAGING-1): where in the turn, the API's HTTP status and error
   // type, the model asked for, the API's request id (for Anthropic's support), the database's error code (SQLSTATE or
   // PostgREST's). Codes only, each its own shape

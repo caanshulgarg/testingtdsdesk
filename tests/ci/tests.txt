@@ -612,3 +612,9 @@ run_migration138.py                   300
 # next-hang-watch (04-Nov-2026): opening a 2,500-ledger client checks each ledger once; the Tally page says why this Windows
 # login's Tally is not seen (old bridge, not running, browser not letting it, another login); the hang reporter
 run_hang_watch.py                     240  TDSDESK_SITE=../app/dist-test
+# next-tally-table (04-Nov-2026; the owner: "now the table is not showing... this tally link is the basic page that should
+# work seamlessly"): staging's shapes at a 4x slower CPU: every client's row within 1 s of the Tally page whatever the bridges
+# do (this login's 2.5.3, none, a port that hangs, only old ones, all hanging), never "No client yet" while the clients come,
+# five minutes with no task over 200 ms; the hang reporter's worker counts nothing while the tab is hidden or the computer sleeps
+run_tally_table_first.py              900  TDSDESK_SITE=../app/dist-test
+run_hang_worker.mjs                   60

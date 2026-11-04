@@ -4344,10 +4344,15 @@ function bottomBannerH(){
   if (root.style.getPropertyValue("--bottom-banner-h") !== v) root.style.setProperty("--bottom-banner-h", v);
   return h;
 }
+// next-tally-table (04-Nov-2026; 40-80 ms of every frame at a 4x slower CPU, twice or three times when drawings came together):
+// once a frame (padSoon: each drawing asked for its own), and an element with an offsetParent is never fixed (the web's own
+// rule), so only the others' style is read; the same padding as before
+let padQ = 0;
+function padSoon(){ if (!padQ) padQ = requestAnimationFrame(() => { padQ = 0; padForBars(); }); }
 function padForBars(){
   let top = window.innerHeight - bottomBannerH();
   document.querySelectorAll("body *").forEach(el => {
-    if (!el.offsetParent && getComputedStyle(el).position !== "fixed") return;
+    if (el.offsetParent) return;
     const cs = getComputedStyle(el);
     if (cs.position !== "fixed" || cs.display === "none" || cs.visibility === "hidden") return;
     const r = el.getBoundingClientRect();
@@ -4411,7 +4416,7 @@ function render(){
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the
 // page needs once drawn (afterRender, called by app/src/store.js after React has drawn)
 function renderNow(){
-  requestAnimationFrame(padForBars);
+  padSoon();
   if (signInNeeded()) return;
   const co = CO();
   if (!(S.view === "company" && co)){ S.view = "home"; return; }

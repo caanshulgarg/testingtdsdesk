@@ -19,6 +19,8 @@
 // Tally: the bridge reads one day at a time, only while Tally is idle, each request stopped at 2 s, postings first.
 import { useEffect, useRef, useState } from "react";
 import "./tallyCompanies.css";
+import { soonDraw } from "../lib/soonDraw.js";
+import { QUIET } from "../lib/quietReads.js";
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -35,14 +37,15 @@ export const missing = (e) => /PGRST202|Could not find the function|schema cache
 // owner or staff change it; a member who may only look sees it (as the Tally page's rows)
 export const may = () => (typeof S === "object" && S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const owner = () => !!(typeof S === "object" && S.account && S.account.me && S.account.me.role === "owner");
-const redraw = () => { if (typeof render === "function") render(); };
+// next-tally-table: one drawing for the answers that come together (lib/soonDraw.js), not one each
+const redraw = () => soonDraw();
 
 // ---------- the firm's summary (one call for the Tally page and From Tally; read again every 30 s, at once after a click)
 const SUM = { at: 0, busy: false, books: null, off: false };
 export function summary(force = false) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || SUM.off) return null;
   // (a hidden tab reads nothing by itself: pollOk, src/js; a press still reads at once)
-  if (!SUM.busy && (force || (Date.now() - SUM.at > 30000 && (typeof pollOk !== "function" || pollOk())))) {
+  if (!SUM.busy && (force || (!QUIET.on && Date.now() - SUM.at > 30000 && (typeof pollOk !== "function" || pollOk())))) {
     SUM.busy = true;
     rpc("tally_fetch_summary", { p_book: null }).then((r) => { if (r && r.ok && Array.isArray(r.books)) SUM.books = r.books; },
       (e) => { if (missing(e)) SUM.off = true; }).finally(() => { SUM.at = Date.now(); SUM.busy = false; redraw(); });
@@ -67,7 +70,7 @@ const ASK = { at: 0, busy: false, asks: null, books: null, off: false };
 export function askStatus(force = false) {
   if (typeof TCloud !== "object" || !TCloud.on || !TCloud.on() || ASK.off) return null;
   const going = (ASK.asks || []).some((k) => k.state !== "done") || (ASK.books || []).some((x) => x.fill && x.fill.waiting > 0);
-  if (!ASK.busy && (force || (Date.now() - ASK.at > (going ? 10000 : 30000) && (typeof pollOk !== "function" || pollOk())))) {
+  if (!ASK.busy && (force || (!QUIET.on && Date.now() - ASK.at > (going ? 10000 : 30000) && (typeof pollOk !== "function" || pollOk())))) {
     ASK.busy = true;
     rpc("tally_check_ask_status", { p_client: null }).then((r) => { if (r && r.ok && Array.isArray(r.asks)) { ASK.asks = r.asks; ASK.books = Array.isArray(r.books) ? r.books : []; } },
       (e) => { if (missing(e)) ASK.off = true; }).finally(() => { ASK.at = Date.now(); ASK.busy = false; redraw(); });

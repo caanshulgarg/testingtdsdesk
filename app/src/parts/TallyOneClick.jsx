@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefused, lookHere } from "../lib/tallyConnect.js";
 import { FL } from "./TallyFirstLink.jsx";
 import "./tallyOneClick.css";
+import { soonDraw } from "../lib/soonDraw.js";
 
 // the card's state (module state, drawn with render())
 export const OC = { c: null, f: null, g: null, busy: "", refused: false, checkedAt: 0, act: {}, port: false, here: "", hereAt: 0, localAt: 0, gen: 0, p: null };
@@ -24,6 +25,8 @@ export function resetOC() { Object.assign(OC, { c: null, f: null, g: null, busy:
 if (typeof window !== "undefined") window.FCOneClick = { OC, reset: resetOC };
 const redraw = () => { if (typeof render === "function") render(); };
 const set = (p) => { Object.assign(OC, p); redraw(); };
+// next-tally-table: what the page finds by itself (not a click) is drawn with the next drawing, one for all that came (lib/soonDraw.js)
+const setSoon = (p) => { Object.assign(OC, p); soonDraw(); };
 
 export async function run(which, fn) {
   if (OC.busy) return;
@@ -56,7 +59,7 @@ export function useRefusedCheck() {
     if (Date.now() - OC.checkedAt < 120000) return;
     OC.checkedAt = Date.now();
     const gen = OC.gen;
-    Promise.resolve(keyRefused()).then((x) => { if (OC.gen === gen && x !== OC.refused) set({ refused: !!x }); }, () => {});
+    Promise.resolve(keyRefused()).then((x) => { if (OC.gen === gen && x !== OC.refused) setSoon({ refused: !!x }); }, () => {});
   });
 }
 
@@ -67,7 +70,7 @@ export function useHereProbe(on) {
   useEffect(() => {   // (at every drawing, at most every 2 minutes; a reset of the card asks again)
     if (!on || typeof Bridge !== "object" || Bridge.blocked() || Date.now() - OC.hereAt < 120000) return;
     OC.hereAt = Date.now();
-    Promise.resolve(lookHere()).then((h) => { const v = h.mine ? "mine" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) set({ here: v }); }, () => {});
+    Promise.resolve(lookHere()).then((h) => { const v = h.mine ? "mine" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) setSoon({ here: v }); }, () => {});
   });
 }
 // this browser holds a key for a bridge here whose state is not read yet: read it now (at most every 30 s), so the card
@@ -76,7 +79,7 @@ export function useLocalRead(on) {
   useEffect(() => {
     if (!on || typeof Bridge !== "object" || Date.now() - (OC.localAt || 0) < 30000) return;
     OC.localAt = Date.now();
-    Promise.resolve(Bridge.refresh(false)).catch(() => null).then(() => redraw());
+    Promise.resolve(Bridge.refresh(false)).catch(() => null).then(() => soonDraw());
   });
 }
 export const Line = ({ r, hook }) => r && r.say ? <p className={"oc-say " + (r.st === "ok" || r.st === "found" ? "ok" : r.st === "code" ? "wait" : "bad")} data-oc-say={hook} data-oc-st={r.st} role="status">{(r.st === "ok" || r.st === "found" ? "✓ " : "") + r.say}</p> : null;

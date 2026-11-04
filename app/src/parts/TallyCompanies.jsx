@@ -28,6 +28,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { seenWords, tallyCoState, tallyDevs, openOn, pcOf, pcLive, coKey, coRows, spacesOdd, lastEntry } from "../lib/tallyState.js";
 import "./tallyCompanies.css";
+import { soonDraw } from "../lib/soonDraw.js";
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
@@ -122,7 +123,7 @@ export function booksLoad(cids) {
   // (a read that leaves no time behind is kept as read now, so the list does not ask again at every drawing)
   const stamp = (cid) => { const s = TCloud.st[cid] = TCloud.st[cid] || {}; if (!s.at) s.at = Date.now(); };
   Promise.all(want.map((cid) => Promise.resolve(TCloud.status(cid)).then(() => (ledgersOf(cid) > 0 ? null : cloudLedgerCount(cid))).catch(() => null).finally(() => stamp(cid))))
-    .finally(() => { booksBusy = false; render(); });
+    .finally(() => { booksBusy = false; soonDraw(); });
 }
 
 
@@ -561,7 +562,7 @@ export function ledgerChanges(cid) {
       const renamed = [].concat(ren || []).length;
       // a round that sent only some of the ledgers (the changed ones); a full first read is not a change
       const sent = [].concat(rounds || []).filter((r) => r && r.rows_read != null && Number(r.rows_received) < Number(r.rows_read)).reduce((t, r) => t + (Number(r.rows_received) || 0), 0);
-      CHG[k] = { at: Date.now(), busy: false, v: { changed: Math.max(0, sent - renamed), renamed } }; render();
+      CHG[k] = { at: Date.now(), busy: false, v: { changed: Math.max(0, sent - renamed), renamed } }; soonDraw();
     });
   }
   return (CHG[k] || {}).v || null;
