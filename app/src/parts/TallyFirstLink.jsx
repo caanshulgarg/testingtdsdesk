@@ -16,7 +16,7 @@
 // Nothing new is asked of the bridge or of Tally: the same /ping, /pair, /cloudlink and RPCs as before.
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
-import { ownHint, sameUser, START_SAY } from "../lib/tallyConnect.js";
+import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
 // the watcher: one for the page (module state, drawn with render())
@@ -45,6 +45,8 @@ const pcWords = (b) => "this computer";   // next-fix-tally-links2: never a comp
 async function scan() {
   if (typeof Bridge !== "object") return;
   if (Bridge.blocked()) return say({ st: "blocked" });
+  // next-tally-connectfix (audit item 8): Chrome's Local network access blocked for this site: its plain fix, never "waiting"
+  if (lnaDenied()) return FL.st === "lna" ? undefined : say({ st: "lna", found: null });
   if (FL.busy || FL.st === "pairing") return;
   if (Bridge.on() && (FL.st === "linking" || FL.st === "error")) return;
   if (Bridge.on() && await Bridge.ensureProven()) return afterPair();
@@ -179,6 +181,7 @@ export default function ConnectThisComputer({ download, linked = false }) {
   const status = st === "blocked" ? ["bad", "Pages opened inside claude.ai cannot reach programs on this computer. Open FinCom in Chrome or Edge on the Tally computer."]
     : st === "waiting" ? ["wait", "Waiting for FinCom Bridge on this computer…"]
     : st === "stopped" ? ["bad", START_SAY]
+    : st === "lna" ? ["bad", LNA_SAY]
     : st === "other" ? ["bad", "FinCom Bridge here belongs to another Windows user" + (FL.other && FL.other.user ? " (" + FL.other.user + ")" : "") + ". Install it for yourself: run the setup while signed in to Windows as you (“Just for me”)."]
     : st === "old" ? ["bad", "An older FinCom Bridge" + (FL.old && FL.old.version ? " (" + FL.old.version + ")" : "") + " is running here. Download the new one and open it: it takes over by itself, keeping everything."]
     : st === "code" ? ["ok", "Found FinCom Bridge" + (b.version ? " " + b.version : "") + " on this computer. Now type its code."]

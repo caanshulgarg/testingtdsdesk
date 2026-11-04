@@ -121,6 +121,29 @@ async function lookHereOnce(full) {
   const known = !mine && !!(hint.user ? !(other && other.windowsUser && sameUser(other.windowsUser, hint.user) === true) : hint.id && !(other && other.bridgeId === hint.id));
   return { mine, other, old, known, hint };
 }
+// next-tally-connectfix (audit item 8): Chrome's Local Network Access permission (Chrome 142+). Once a person said Block,
+// every /ping fails as if no bridge ran, and nothing in the page could say why. The permission's state ("denied" |
+// "granted" | "prompt" | "" when the browser does not tell) is asked once and followed (its change event); denied: the
+// page says the plain fix and never that the bridge is not running
+export const LNA = { st: "", asked: null };
+export const LNA_SAY = "Chrome blocked FinCom from talking to FinCom Bridge on this computer: click the icon at the left of the address bar › Local network access › Allow, then reload this page.";
+export function checkLna() {
+  if (LNA.asked) return LNA.asked;
+  LNA.asked = (async () => {
+    try {
+      if (typeof navigator !== "object" || !navigator.permissions || !navigator.permissions.query) return "";
+      for (const name of ["local-network-access", "loopback-network"]) {
+        let s = null;
+        try { s = await navigator.permissions.query({ name }); } catch (e) { s = null; }
+        if (s) { LNA.st = s.state; try { s.onchange = () => { LNA.st = s.state; if (typeof render === "function") render(); }; } catch (e) { /* read again next time */ } return LNA.st; }
+      }
+    } catch (e) { /* the browser does not say */ }
+    return "";
+  })();
+  return LNA.asked;
+}
+export const lnaDenied = () => LNA.st === "denied";
+if (typeof window !== "undefined") checkLna();
 export const START_SAY = "FinCom Bridge is installed but not running in this login: start it from the Start menu (FinCom Bridge).";
 
 // the cloud's view of the bridge (migration 115); null when the cloud cannot say
@@ -183,6 +206,7 @@ export async function connectNow(opts) {
   opts = opts || {};
   if (typeof Bridge !== "object" || Bridge.blocked()) return { st: "blocked", say: "Pages opened inside claude.ai cannot reach programs on this computer. Open FinCom in Chrome or Edge on the Tally computer." };
   if (typeof TCloud !== "object" || !TCloud.on()) return { st: "signin", say: "Sign in to the firm account first." };
+  if ((await within(checkLna(), 3000, "").catch(() => "")) === "denied") return { st: "lna", say: LNA_SAY };
   // 1. this browser's key for the bridge here, proven now
   let proven = false;
   if (Bridge.on()) {
@@ -320,4 +344,4 @@ export async function linkNow(company, cid) {
 }
 
 // for support and the tests (tests/run_tally_connect_norekey.py, run_tally_here_light.py)
-if (typeof window !== "undefined") window.FCTallyConnect = { connectNow, lookHere, HERE, resetHere, ownHint, rekey, START_SAY };
+if (typeof window !== "undefined") window.FCTallyConnect = { connectNow, lookHere, HERE, resetHere, ownHint, rekey, START_SAY, LNA, LNA_SAY, checkLna, getCompanies, findTally };

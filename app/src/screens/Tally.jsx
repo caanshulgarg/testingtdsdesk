@@ -18,7 +18,7 @@ import CompaniesInTally, { companyRows, LinkedClients } from "../parts/TallyComp
 import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLink.jsx";
 import { OC, doConnect, doFind, doRefresh, useRefusedCheck, useHereProbe, useLocalRead, Line, Found } from "../parts/TallyOneClick.jsx";
 import { coKey, openOn } from "../lib/tallyState.js";
-import { beatFresh } from "../lib/tallyConnect.js";
+import { beatFresh, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 // 30-Oct-2026 (the owner): what FinCom received from Tally today, per company, and the books being brought from Tally
 import { TodayStatus } from "../parts/TallyFetch.jsx";
 // 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
@@ -848,6 +848,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   const n0 = me ? needOf(me, latest, owner, allStopped) : null;
   const reading = tc.localOn && !local && (!Bridge.st || Bridge.st.state !== "down") && Date.now() - (OC.localAt || 0) < 30000 && !(Bridge.st && Bridge.st.error);
   if (!local && !me && reading) { word = "Checking…"; lv = "warn"; kind = "checking"; need = ""; }
+  else if (!local && !me && tc.localOn && lnaDenied()) { word = "Blocked by Chrome"; lv = "bad"; kind = "lna"; need = LNA_SAY; }
   else if (!local && !me) { word = "Not connected"; lv = "bad"; kind = "none";
     need = tc.localOn ? "This browser is not connected to FinCom Bridge on this computer: " + ((Bridge.st && Bridge.st.error) || "it did not answer") + "." : week.length ? "FinCom is not open on a Tally computer here." : "FinCom Bridge is not connected on this computer yet: the steps below take a minute.";
     act = tc.localOn || !week.length ? connectBtn() : null; }
@@ -868,10 +869,10 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   const ps = (local || me) && ["", "tally", "noco", "update"].includes(kind) ? portState(rows, me) : { state: "" };
   if (kind === "tally" && ps.state === "set" && !local) act = null;   // the port step's own Check, below
   if (ps.state === "clash") { word = "Port clash"; lv = "warn"; kind = "port"; need = "Your Tally is on port " + ps.port + ", the same as another user’s on this computer: FinCom may be reading the wrong Tally. Give yours a port of its own:"; act = null; }
-  const tallyLine = kind === "none" || kind === "refused" ? "" : tallyUp ? "Tally open: " + (openHere.length ? nOf(openHere.length, "company", "companies") : "no company open") : "Tally not open";
+  const tallyLine = kind === "none" || kind === "refused" || kind === "lna" ? "" : tallyUp ? "Tally open: " + (openHere.length ? nOf(openHere.length, "company", "companies") : "no company open") : "Tally not open";
   const refresh = () => doRefresh(checkAgain);
   const calm = !kind && scope !== "all" && !needsItems().length;
-  const g0 = S.tallyGuide || {}, gOpen = !!(g0.at && (g0.step || 0) > 0 && (g0.step || 0) < 3), setupOk = !!(local || me || week.length) && !["none", "refused", "unlinked", "checking"].includes(kind);
+  const g0 = S.tallyGuide || {}, gOpen = !!(g0.at && (g0.step || 0) > 0 && (g0.step || 0) < 3), setupOk = !!(local || me || week.length) && !["none", "refused", "unlinked", "checking", "lna"].includes(kind);
   return <section className="pane tsc" data-status-card={kind || "ok"} data-scope={scope} data-all-good={calm ? "" : undefined} aria-label="This computer">
     <div className="tsc-top">
       <div className="tsc-name" data-tsc-name="" data-pc-lines={scope !== "all" && me ? "" : undefined} data-pc-line={scope !== "all" && me ? me.device.id : undefined} data-pc-state={scope !== "all" && me ? word.toLowerCase() : undefined}>{scope === "all" ? <b>All computers</b>

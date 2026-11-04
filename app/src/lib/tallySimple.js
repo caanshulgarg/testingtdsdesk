@@ -338,6 +338,8 @@ export const BLOCKED = "This browser does not let FinCom reach FinCom Bridge on 
 export function bridgeSay(list0) {
   const list = list0 === undefined ? localBridges() : list0;
   if (!list || localPick(list)) return null;
+  // next-tally-connectfix (audit item 8): the browser's leave to reach this computer refused: that, never "not running"
+  if (LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
   const old = list.find((x) => !isNew(x) && x.yours !== false);
   if (old) return { kind: "old", version: String(old.version || ""), words: "Your FinCom Bridge is old (" + (old.version || "before " + NEED_V) + "). Install " + NEED_V + " to connect this login’s Tally." };
   if (!list.length && LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
