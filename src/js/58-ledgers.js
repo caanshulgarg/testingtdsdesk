@@ -376,12 +376,23 @@ const Ledgers = {
     return {gstin: tg || bg, pan: tp || bp, tallyGstin: tg, bookGstin: bg, tallyPan: tp, bookPan: bp};
   },
   // ---------- groups ----------
+  // next-hang-watch (04-Nov-2026): the groups' parents of the three places, merged once while none of them changed (the
+  // same objects, the same number of names), not at every chain(): a new object each time also made ledLook build its index
+  // again (ledIdx is kept per object), so each of a 2,455-ledger client's ledgers went through every group at each look
+  _par: null,
+  parentsOf(cid, a, b, c){
+    const n = (o) => (o ? Object.keys(o).length : 0), p = this._par;
+    if (p && p.cid === cid && p.a === a && p.b === b && p.c === c && p.na === n(a) && p.nb === n(b) && p.nc === n(c)) return p.m;
+    const m = Object.assign({}, a || {}, b || {}, c || {});
+    this._par = {cid, a, b, c, na: n(a), nb: n(b), nc: n(c), m};
+    return m;
+  },
   // the group chain of a ledger, from the list held, the cloud's groups, and the client's books
   chain(cid, name){
     const s = this.st[cid], bk = S.books && S.books.cid === cid ? S.books : null;
     const l = typeof knownLedgers === "function" && cid === this.cid() ? knownLedgers().get(String(name).toLowerCase()) : (this.list(cid).find(x => x.name.toLowerCase() === String(name).toLowerCase()));
     if (l && Array.isArray(l.chain) && l.chain.length) return l.chain;
-    const parents = Object.assign({}, (bk && bk.groups) || {}, (S.bank && S.bank.cid === cid && S.bank.ledgers && S.bank.ledgers.parents) || {}, (s && s.parents) || {});
+    const parents = this.parentsOf(cid, (bk && bk.groups) || null, (S.bank && S.bank.cid === cid && S.bank.ledgers && S.bank.ledgers.parents) || null, (s && s.parents) || null);
     let g = (l && l.group) || (bk && ((bk.ledInfo || {})[name] || {}).group) || (bk && (bk.under || {})[name]) || "";
     const out = [];
     // a group's parent looked up whatever its capitals (Tally's "Cash-in-hand" against a list's "Cash-in-Hand")

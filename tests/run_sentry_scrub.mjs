@@ -219,5 +219,17 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
     !(S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { msg_code: "someOtherName" } }).tags || {}).msg_code, "a msg_code tag set by hand: only a code of the fixed list");
 }
 
+// next-hang-watch (04-Nov-2026): a page that blocked: the build's id and ms as tags (their shapes only); what was clicked
+// as a "ui" breadcrumb of a code name (never words), with the page's name
+{
+  const h = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", level: "warning", message: "Page blocked",
+    tags: { kind: "hang", where: "frame", route: "home/tally", build: "mw1p21k5-21fb8f", ms: "2513" },
+    breadcrumbs: [{ category: "ui", message: "tsm-strip-choose", data: { route: "home/tally" } }, { category: "ui", message: "ALPHA TRADERS", data: { route: "home/tally" } }, { category: "ui", message: "data-x", data: { route: "c/ALPHA TRADERS" } }] });
+  ok(h.level === "warning" && h.message === "Page blocked" && h.tags.kind === "hang" && h.tags.where === "frame" && h.tags.build === "mw1p21k5-21fb8f" && h.tags.ms === "2513", "a hang: kind, where, build and ms kept (" + JSON.stringify(h.tags) + ")");
+  ok(h.breadcrumbs.length === 2 && h.breadcrumbs[0].message === "tsm-strip-choose" && h.breadcrumbs[0].data.route === "home/tally" && h.breadcrumbs[1].data.route === "other", "ui breadcrumbs: code names only, a page name scrubbed (" + JSON.stringify(h.breadcrumbs) + ")");
+  const bad = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { build: "ALPHA TRADERS", ms: "12a" } }).tags || {};
+  ok(!bad.build && !bad.ms, "build and ms of another shape: dropped");
+}
+
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
 process.exit(fails ? 1 : 0);

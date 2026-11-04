@@ -6,11 +6,12 @@
 // random id of this browser. Every event and breadcrumb goes through the one scrubber (server/_shared/sentry-scrub.js).
 // No replay, no screenshots, no feedback widget, no request bodies, no XHR / fetch / click breadcrumbs, no user.
 import {
-  init, captureException, addBreadcrumb, setTag, setUser,
+  init, captureException, captureEvent, addBreadcrumb, setTag, setUser,
   breadcrumbsIntegration, globalHandlersIntegration, linkedErrorsIntegration, dedupeIntegration, browserApiErrorsIntegration, functionToStringIntegration,
 } from "@sentry/browser";
 import { scrubEvent, scrubBreadcrumb, scrubRoute, SENTRY_ENVIRONMENT } from "../../server/_shared/sentry-scrub.js";
 import { subscribe } from "./store.js";
+import { watchHangs } from "./hangWatch.js";
 
 export const DSN = "https://7f2432ad2a6406244d931f4856c30933@o4512221111320576.ingest.us.sentry.io/4512221234724864";
 export const STAGING_HOSTS = ["staging.fincom.live"];
@@ -86,5 +87,7 @@ export function start() {
   try { (window.__fincomTagsEarly || []).splice(0).forEach((t) => setTag(t[0], t[1])); } catch { /* never in the way */ }
   // a part of the page that failed to draw (Guard.jsx): reported with the part's name
   window.__fincomReport = (error, guard) => { try { captureException(error, { tags: { guard: String(guard || "") } }); } catch { /* never in the way */ } };
+  // next-hang-watch (04-Nov-2026): a page that blocks over 2 s, or is stuck 6 s (src/hangWatch.js)
+  try { watchHangs({ captureEvent, addBreadcrumb, scrubEvent, routeName, dsn: DSN, release: __SENTRY_RELEASE__, user: { id: installId() } }); } catch { /* never in the way */ }
   return true;
 }

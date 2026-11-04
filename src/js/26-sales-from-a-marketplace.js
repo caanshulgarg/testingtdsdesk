@@ -737,12 +737,24 @@ function autoMapCompanyLedgers(co){
   const usage = Ledgers.usage(cid) || {}, used = n => (usage[n] || {}).n || 0;
   const best = arr => arr.sort((a, b) => used(b) - used(a) || a.length - b.length)[0] || "";
   const names = list.map(l => l.name);
-  const gstFits = (n, head, kind) => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok && !!c.info.rcm === (kind !== "gst") ? c.name : ""; };
+  // next-hang-watch (04-Nov-2026; staging's 2,455-ledger client blocked the page about a second on a fast computer at each
+  // opening, several on the shared server): every head and every TDS section went through all the ledgers (about 80,000
+  // checks). The same answers, worked out once per call: only a ledger Tally knows, of a tax group (or none) and with GST
+  // in it can pass gstLedgerCheck, and only a TDS ledger of its own section can be a section's choice
+  const gstNames = names.filter(n => { const ex = exactLedger(n), c = ex ? Ledgers.cls(cid, ex) : ""; return !!ex && (!c || ["tax", "other"].includes(c)) && !!Ledgers.gstInfo(cid, ex).gst; });
+  const fitMemo = new Map();
+  const gstFits = (n, head, kind) => { const k = n + "\u0001" + head + "\u0001" + kind; if (fitMemo.has(k)) return fitMemo.get(k);
+    const c = gstLedgerCheck(cid, n, head, kind), v = c.ok && !!c.info.rcm === (kind !== "gst") ? c.name : ""; fitMemo.set(k, v); return v; };
+  let bySec = null;
+  const tdsOf = sec => {
+    if (!bySec){ bySec = new Map(); names.forEach(n => { const ex = exactLedger(n), sc = ex ? Ledgers.secOf(cid, ex) : ""; if (sc && Ledgers.isTds(cid, ex)){ if (!bySec.has(sc)) bySec.set(sc, []); bySec.get(sc).push(n); } }); }
+    return bySec.get(sec) || [];
+  };
   const gstValid = (head, kind) => n => { const c = gstLedgerCheck(cid, n, head, kind); return c.ok ? c.name : ""; };
   co.gst = co.gst || {};
   [["cgst", "CGST"], ["sgst", "SGST"], ["igst", "IGST"]].forEach(([k, head]) => {
     const before = co.gst[k];
-    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(names.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(names.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst", "gst:" + k);
+    fix(co.gst[k], v => { co.gst[k] = v; }, gstValid(head, "gst"), () => best(gstNames.map(n => gstFits(n, head, "gst")).filter(Boolean).filter(n => !Ledgers.gstInfo(cid, n).rate)) || best(gstNames.map(n => gstFits(n, head, "gst")).filter(Boolean)), "gst", "gst:" + k);
     if (co.gst[k] !== before && co.gstPin && !confirmed("gst:" + k)) delete co.gstPin[k];
   });
   fix(co.roundOff, v => { co.roundOff = v; }, n => exactLedger(n) || "", () => one(list.filter(l => /round(ed|ing)?\s*[- ]?off/i.test(l.name))), "roundoff");
@@ -753,27 +765,30 @@ function autoMapCompanyLedgers(co){
     if (!sec) return;
     const tech = r.id === "technical", fit = n => sec !== "194J" || /technical/i.test(n) === tech ? 1 : 0;
     const valid = n => { const c = tdsLedgerCheck(cid, n, sec); return c.ok ? c.name : ""; };
-    const find = () => { const c = names.filter(n => { const x = tdsLedgerCheck(cid, n, sec); return x.ok && x.sec === sec && Ledgers.isTds(cid, x.name); }); return c.sort((a, b) => fit(b) - fit(a) || used(b) - used(a) || a.length - b.length)[0] || ""; };
+    let found;
+    const find = () => { if (found === undefined){ const c = tdsOf(sec).slice(); found = c.sort((a, b) => fit(b) - fit(a) || used(b) - used(a) || a.length - b.length)[0] || ""; } return found; };
     // a default not in Tally and no ledger of the section: left as it is (it shows as not in Tally on the bill)
     const cur = co.tdsLedgers[r.id];
     if (cur && !exactLedger(cur) && !find()) return;
     fix(cur, v => { co.tdsLedgers[r.id] = v; }, valid, find, "tds", "tds:" + r.id);
   });
   co.expenseLedgers = co.expenseLedgers || {};
-  const exp = list.filter(l => ["expense", "asset"].includes(Ledgers.cls(cid, l.name)) || (!Ledgers.cls(cid, l.name) && ROLE_GROUPS.expense.test(l.group || "")));
+  // (the expense and asset ledgers only when a default expense ledger needs a match: each ledger's group chain is walked)
+  let expL = null;
+  const expOf = () => expL || (expL = list.filter(l => ["expense", "asset"].includes(Ledgers.cls(cid, l.name)) || (!Ledgers.cls(cid, l.name) && ROLE_GROUPS.expense.test(l.group || ""))));
   Object.keys(co.expenseLedgers).forEach(k => {
     if (confirmed("exp:" + k)) return;
     const cur = co.expenseLedgers[k], ex = cur && exactLedger(cur), put = v => choiceGuess(co, "exp:" + k, v, "matched in Tally's ledger list");
     if (ex && Ledgers.cls(cid, ex) === "income"){ changes.push({from: cur, to: "", role: "expense"}); put(""); return; }
     if (ex){ if (ex !== cur){ changes.push({from: cur, to: ex, role: "expense"}); put(ex); } return; }
-    const c = exp.map(l => ({l, s: nameSim(cur, l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s);
+    const c = expOf().map(l => ({l, s: nameSim(cur, l.name)})).filter(x => x.s >= 0.85).sort((a, b) => b.s - a.s);
     const f = c.length && (c.length === 1 || c[0].s > c[1].s + 0.05) ? c[0].l.name : "";
     if (f){ changes.push({from: cur, to: f, role: "expense"}); put(f); }
   });
   ["rcmCgstIn", "rcmSgstIn", "rcmIgstIn", "rcmCgstOut", "rcmSgstOut", "rcmIgstOut"].forEach(k => {
     const head = /Cgst/.test(k) ? "CGST" : /Sgst/.test(k) ? "SGST" : "IGST", kind = /In$/.test(k) ? "rcm-in" : "rcm-out";
     const cur = co.gst[k];
-    const cands = names.map(n => gstFits(n, head, kind)).filter(Boolean);
+    const cands = gstNames.map(n => gstFits(n, head, kind)).filter(Boolean);
     // the default name, not in Tally, and nothing that fits: left as it is
     if (!cur && !cands.length) return;
     fix(cur || "", v => { co.gst[k] = v; }, gstValid(head, kind), () => best(cands), kind, "gst:" + k);

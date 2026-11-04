@@ -189,6 +189,13 @@ export function scrubBreadcrumb(b) {
     if (!step) return null;
     return { type: "default", category: "chunk", timestamp: ts, message: step, data: { file: CHUNK_FILE(f) || "unknown" } };
   }
+  // next-hang-watch (04-Nov-2026): what was clicked, by its code name only (the data-* attribute's name, never its text or
+  // value), and the page's NAME, for a page that blocked (app/src/hangWatch.js)
+  if (b.category === "ui") {
+    const what = typeof b.message === "string" && /^[a-z][a-z0-9-]{0,40}$/.test(b.message) ? b.message : null;
+    if (!what) return null;
+    return { type: "default", category: "ui", timestamp: ts, message: what, data: { route: scrubRoute((b.data || {}).route) } };
+  }
   if (b.category === "console" && b.level === "error") return { type: "default", category: "console", level: "error", timestamp: ts, message: scrubText(b.message, 200) };
   return null;
 }
@@ -226,6 +233,9 @@ const TAGS = {
   where: (v) => (/^[a-z]+(?:_[a-z]+){0,3}$/.test(v) || (/^[a-z][a-z0-9_ .:-]{0,60}$/.test(v) && scrubText(v) === v) ? v : undefined),
   guard: (v) => (/^[A-Za-z][A-Za-z0-9 ']{0,40}$/.test(v) && (scrubText(v) === v || (/^[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*$/.test(v) && !/[A-Z]{3}/.test(v))) ? v : undefined),   // a part of the page
   mode: (v) => (/^[a-z]{1,12}$/.test(v) ? v : undefined),
+  // next-hang-watch (04-Nov-2026): a page that blocked (app/src/hangWatch.js): the build's id and how long, in ms
+  build: (v) => (/^[a-z0-9]{6,12}-[0-9a-f]{6}$/.test(v) || v === "dev" ? v : undefined),
+  ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
   // FinCom Assistant's failed turn (Sentry FINCOM-CLOUD-STAGING-1): where in the turn, the API's HTTP status and error
   // type, the model asked for, the API's request id (for Anthropic's support), the database's error code (SQLSTATE or
   // PostgREST's). Codes only, each its own shape

@@ -6,8 +6,8 @@ companies and computers only (run_tally_page_clean.py's stand-in cloud; nothing 
      open that no client has → step 3, "Connect it to client X?" (the best match by name, a split's date off), Yes,
      connect links the FULL Tally name in one call, Choose another client opens the picker; just linked → step 4; once a
      company is connected the box is small.
-  2. the strip (a company is connected already): "Tally has a company open that is not connected: “<full name>”", one
-     click "Connect to client “<best>”" links the full name; Choose another client opens the picker; + New client asks
+  2. the strip (a company is connected already): "Open in your Tally now: “<full name>”, not linked yet" (next-hang-watch),
+     one click "Link to client “<best>”" links the full name; Choose another client opens the picker; + New client asks
      first (No: nothing made, nothing linked).
   3. the ONE table, each column Yes / No / Not yet / —, with its note: connected ("Tally company: …" / "Found in Tally:
      …"), open now ("Last opened …"), ledgers ("412 ledgers", "Changed in Tally today: 2 new or changed, 1 renamed",
@@ -135,6 +135,8 @@ def ping(port, same, user, version="2.5.3", **kw):
     if same is not None: r["sameSession"] = same
     r.update(kw); return r
 NOT_MINE, AWAY, NOT_SET = "Not open in your Tally", "Your FinCom Bridge is not connected now", "Your FinCom Bridge is not set up."
+NOTRUN = "FinCom Bridge is not running in this Windows login: start it, or install it."
+FORGET = "() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }"
 
 def main():
     srv = http.server.ThreadingHTTPServer(("localhost", PORT), functools.partial(T.Q, directory=SITE)); threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -214,8 +216,8 @@ def main():
         ids = scene([d], cos, [ACME, EVER])
         st = "#app [data-tsm-strip]"
         ok(n(g + "[data-tsm-collapsed]") == 1 and "Show the steps" in txt(g), "2. a company connected already: the box is small (%s)" % txt(g))
-        ok(txt(st + " .tsm-strip-words") == "Tally has a company open that is not connected: “%s”" % SPLIT and pg.get_attribute(st, "data-tsm-strip") == SPLIT, "2. the strip names the full Tally name (%s)" % txt(st))
-        ok(txt(st + " [data-tsm-strip-connect]") == "Connect to client “%s”" % EVER, "2. one click: Connect to client “%s”" % EVER)
+        ok(txt(st + " .tsm-strip-words") == "Open in your Tally now: “%s”, not linked yet" % SPLIT and pg.get_attribute(st, "data-tsm-strip") == SPLIT, "2. the strip names the full Tally name (%s)" % txt(st))
+        ok(txt(st + " [data-tsm-strip-connect]") == "Link to client “%s”" % EVER, "2. one click: Link to client “%s”" % EVER)
         pg.click(st + " [data-tsm-strip-choose]"); pg.wait_for_timeout(500)
         ok(n(st + " select[data-tco-relink-pick]") == 1 and n(st + " [data-tco-add-new]") == 1, "2. Choose another client: the picker, + New client with this name beside it")
         n0 = E("() => Object.values(S.companies).filter(c => c && !c.deleted).length"); E("() => { window.__calls = []; }")
@@ -315,7 +317,8 @@ def main():
           [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return; window.__beatAt[d.id] = window.__beatAt[d.id] || d.info.beat.at;
             d.info.beat.at = old; Object.values(d.info.bridges || {}).forEach(b => { b.at = old; }); }); render(); }"""); pg.wait_for_timeout(1200)
         o = col_o()
-        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == AWAY and txt(cell(ACME, "o") + " [data-tsm-local-connect]") == "Connect", "3b. its beat old: —, %s, Connect (%s)" % (AWAY, txt(cell(ACME, "o"))))
+        # next-hang-watch: no bridge answers here at all (this test's 127.0.0.1): why, in words, instead of "not connected now"
+        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]").startswith(NOTRUN) and txt(cell(ACME, "o") + " [data-tsm-local-connect]") == "Connect", "3b. its beat old: —, %s, Connect (%s)" % (NOTRUN, txt(cell(ACME, "o"))))
         ok("Yes" not in o.values() and all(o[c] == "—" for c in connected) and fcount("closed") == 0 and say_ok(), "3b. its beat old: nothing Yes, nothing counted as Not open (%s)" % o)
         ok(word(DELTA, "o") == "—" and n(cell(DELTA, "o") + " [data-tsm-local-connect]") == 0, "3b. a client not connected keeps its plain — (no Connect there)")
         pg.click(cell(ACME, "o") + " [data-tsm-local-connect]")
@@ -329,8 +332,8 @@ def main():
         # no bridge of this user's own (nothing paired here, no link): —, not set up, Set it up; the guided box at step 1
         E(LOCAL, [None, "", ""]); E(MINE, [None, "", ""]); pg.wait_for_timeout(1500)
         o = col_o()
-        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]") == NOT_SET and txt(cell(ACME, "o") + " [data-tsm-setup]") == "Set it up" and n("#app [data-tsm-local-connect]") == 0,
-           "3b. no own bridge: —, %s, Set it up (%s)" % (NOT_SET, txt(cell(ACME, "o"))))
+        ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]").startswith(NOTRUN) and txt(cell(ACME, "o") + " [data-tsm-setup]") == "Set it up" and n("#app [data-tsm-local-connect]") == 0,
+           "3b. no own bridge, nothing answering here: —, %s, Set it up (%s)" % (NOTRUN, txt(cell(ACME, "o"))))
         ok("Yes" not in o.values() and ZETA not in o and n("#app [data-tsm-strip]") == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "1",
            "3b. no own bridge: no Yes from another login's Tally, no company row or strip of theirs, the guided box at step 1 (%s)" % o)
         pg.click(cell(ACME, "o") + " [data-tsm-setup]"); pg.wait_for_timeout(1200)
@@ -436,20 +439,25 @@ def main():
         ok(how() == "found" and word(ACME, "o") == "Yes" and ZETA not in shown() and n("#app [data-tsm-strip]") == 0 and n("#app [data-tsm-unsure]") == 0,
            "3d. two local bridges, true and false: the true one (A's) wins over the member link to B's; B's companies not shown (%s, %s)" % (how(), shown()))
         # only B's bridge answers here, and says false: never shown (the link to it is not used either)
+        E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9150": ping(9150, False, UB)}); pg.wait_for_timeout(1500)
         o = col_o()
         ok(how() is None and ZETA not in shown() and "Yes" not in o.values() and n("#app [data-tsm-strip]") == 0, "3d. a bridge saying sameSession false is never yours, its link neither (%s, %s)" % (how(), o))
         # only one bridge answers, and says "unknown": used, marked not confirmed
+        E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9101": ping(9101, "unknown", UA)}); pg.wait_for_timeout(1500)
         ok(how() == "unsure" and word(ACME, "o") == "Yes" and ZETA not in shown() and "your bridge (not confirmed)" in txt("#app [data-tsm-unsure]"),
            "3d. only \"unknown\": used as your bridge (not confirmed) (%s, %s)" % (how(), txt("#app [data-tsm-unsure]")))
         # two answering, one "unknown": not taken; nothing paired here and the link not used
+        E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9101": ping(9101, "unknown", UA), "9150": ping(9150, "unknown", UB)}); pg.wait_for_timeout(1500)
         ok(how() is None and word(ACME, "o") == "—", "3d. two \"unknown\" bridges: neither is taken (%s)" % how())
         # none answers (the owner's laptop): the member link
+        E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {}); pg.wait_for_timeout(1500)
         ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. no local bridge answers: the member link (%s, %s)" % (how(), col_o()))
         # an older bridge (2.5.2: no sameSession) answering: as before (the member link)
+        E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9103": ping(9103, None, UA, version="2.5.2")}); pg.wait_for_timeout(1500)
         ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. an old bridge with no sameSession: today's behaviour (the link) (%s)" % how())
         # the found bridge is the one this browser reads (its address): its own answer, not the beat

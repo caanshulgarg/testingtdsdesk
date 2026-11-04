@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { useEffect, useState } from "react";
 import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, lookOnce, aimLocal, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
+import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, lookOnce, aimLocal, bestFor, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
@@ -71,16 +71,21 @@ function checking() {
 }
 
 // ---------- the header
-function Head({ rows, checkAgain, ready, own }) {
+function Head({ rows, checkAgain, ready, own, download }) {
   const w = headWords(rows), on = checking(), o = own || {};
+  // next-hang-watch: no bridge of this Windows login answers here: why, plainly, with what to do (never a blank)
+  const say = (o.state === "none" || o.state === "away") && o.say ? o.say : null, far = o.state === "ok" && o.far;
   return <header className="tsm-head" data-tsm-head="">
     <div className="tsm-head-words"><h3 className="tsm-title">Tally</h3>
       {ready && <div className="tsm-say" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></div>}</div>
     <button type="button" className="btn primary tsm-check" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check Tally now"}</button>
-    {ready && (o.unsure || (o.state === "ok" && !o.names.size && o.why) || o.say) && <div className="tsm-head-notes">
+    {ready && (say || far) && <div className="tsm-head-notes tsm-head-bridge" data-tsm-bridge-say={say ? say.kind : "far"}>
+      <div className="tsm-note">{say ? say.words : "This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div>
+      {say && say.kind !== "blocked" && download}</div>}
+    {ready && (o.unsure || (o.state === "ok" && !o.names.size && o.why) || (typeof o.say === "string" && o.say)) && <div className="tsm-head-notes">
       {o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
       {o.state === "ok" && !o.names.size && o.why && <div className="tsm-note" data-tsm-why="">{o.why}</div>}
-      {o.say && <div className="tsm-note" data-tsm-connect-say="">{o.say}</div>}</div>}
+      {typeof o.say === "string" && o.say && <div className="tsm-note" data-tsm-connect-say="">{o.say}</div>}</div>}
   </header>;
 }
 
@@ -134,11 +139,11 @@ function Guide({ step, collapsed, forced, open, best, connectPanel, download, ch
 function Strip({ r, best, more }) {
   const [pick, setPick] = useState(false);
   return <section className="tsm-strip" aria-label="New company found in Tally" data-tsm-strip={r.company}>
-    <div className="tsm-strip-words"><b>Tally has a company open that is not connected:</b>{" “" + shown(r.company) + "”"}
+    <div className="tsm-strip-words"><b>Open in your Tally now:</b>{" “" + shown(r.company) + "”, not linked yet"}
       {more > 0 && <span className="note">{" (and " + more + " more in the list below)"}</span>}</div>
     {canWrite() && <div className="tsm-strip-acts">
-      {best && <ConnectBtn r={r} co={best} label={"Connect to client “" + best.name + "”"} hook={{ "data-tsm-strip-connect": best.id }} />}
-      {!pick && <button type="button" className={best ? "linkbtn" : "btn primary"} data-tsm-strip-choose="" onClick={() => setPick(true)}>{best ? "Choose another client" : "Choose the client"}</button>}</div>}
+      {best && <ConnectBtn r={r} co={best} label={"Link to client “" + best.name + "”"} hook={{ "data-tsm-strip-connect": best.id }} />}
+      {!pick && <button type="button" className={best ? "linkbtn" : "btn primary"} data-tsm-strip-choose="" onClick={() => setPick(true)}>{best ? "Link to another client" : "Link to a client"}</button>}</div>}
     {pick && <div className="tsm-pick" data-tsm-strip-pick=""><Pick r={r} co={null} pre="" onClose={() => setPick(false)} /></div>}
   </section>;
 }
@@ -230,7 +235,7 @@ function Bring({ row }) {
     <button type="button" className="btn small primary" data-tsm-bring-btn="" disabled={busy || !l.can} onClick={go}>{busy ? "Asking Tally…" : "Bring ledgers from Tally"}</button>
     {!l.can && l.why && <div className="tsm-note" data-tsm-bring-why="">{l.why}</div>}</div>;
 }
-function Row({ row }) {
+function Row({ row, download }) {
   const [list, setList] = useState(false);
   // a first sync going: read every 10 seconds (its count, done, or stuck after 3 minutes with the button), as the bar does
   // elsewhere; this page had read it only once, so "Coming in now" stayed until the page was opened again
@@ -241,7 +246,7 @@ function Row({ row }) {
     <td className="tsm-td tsm-client" data-tsm-col="client" data-label="Client">{linkedRow ? <button type="button" className="linkbtn tsm-client-name" data-tsm-client={row.cid} onClick={() => openCompany(row.cid)}>{row.client}</button>
       : <span className="tsm-client-none">Not chosen yet</span>}</td>
     <Cell k="c" label="Connected to Tally?" x={row.c} />
-    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.connect && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
+    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.say && row.o.say !== "blocked" && <div className="tsm-say-dl" data-tsm-o-say={row.o.say}>{download}</div>}{row.o.connect && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}
       <OpenLine row={row} list={list} onList={() => setList(!list)} />
@@ -260,7 +265,7 @@ function Row({ row }) {
   {list && row.open && row.open.state === "differ" && <tr className="tsm-tr-diffs"><td colSpan={6} className="tsm-td">
     <Differences row={row} /></td></tr>}</>;
 }
-function Table({ rows }) {
+function Table({ rows, download }) {
   const ui = UI(), known = ledChangeKnown(rows);
   const fs = FILTERS.filter(([k]) => (k !== "ledchg" || known) && (k !== "opendiff" || openKnown()));
   const cur = fs.some(([k]) => k === ui.filter) ? ui.filter : "all";
@@ -278,7 +283,7 @@ function Table({ rows }) {
       {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set({ filter: "all", q: "" })}>Show all</button>}</div>}
     {list.length > 0 && <div className="tsm-scroll"><table className="tsm-grid nocards">
       <thead><tr><th>Client</th><th>Connected to Tally?</th><th>Open in Tally right now?</th><th>Ledgers received?</th><th>All entries received?</th><th>What to do</th></tr></thead>
-      <tbody>{list.map((r) => <Row key={r.key} row={r} />)}</tbody></table></div>}
+      <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} />)}</tbody></table></div>}
   </section>;
 }
 
@@ -322,10 +327,10 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const open = unlinked[0] || null, best = open ? bestFor(open, all) : null;
   const strip = unlinked.length > 0 && !(expanded && step === 3);
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined}>
-    <Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} />
+    <Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} />
     {strip && <Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} />}
     {ready && <Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} />}
-    <Table rows={rows} />
+    <Table rows={rows} download={download} />
     {ready && <Computers pcs={pcs} download={download} sha={sha} />}
   </div>;
 }

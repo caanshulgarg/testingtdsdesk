@@ -609,3 +609,6 @@ run_tally_probe_once.py               120  TDSDESK_SITE=../app/dist-test
 # the first sync through the cloud asks the existing Update now when the ledgers wake brings nothing in 45 s
 run_tally_ledgers_button.py           300  TDSDESK_SITE=../app/dist-test
 run_migration138.py                   300
+# next-hang-watch (04-Nov-2026): opening a 2,500-ledger client checks each ledger once; the Tally page says why this Windows
+# login's Tally is not seen (old bridge, not running, browser not letting it, another login); the hang reporter
+run_hang_watch.py                     240  TDSDESK_SITE=../app/dist-test
