@@ -1,7 +1,7 @@
 # FinCom Bridge 2.5.4 (branch next-bridge-254, from staging-next e7f2f1990, bridge 2.5.3)
 
-Prepared, built and tested; **not published**. It is released after signed automatic updates are live, so it reaches
-every computer by itself and one computer after another (the owner, 04-Nov-2026). The owner's rules it follows: no
+Released to staging through the signed, gated automatic updates (the owner's pre-approval, 05-Nov-2026 ~01:00 IST,
+quiet hours), after two independent review rounds (docs/reviews/bridge-2.5.4-code-review.md). The owner's rules it follows: no
 hang on any computer; no false message; the open Tally in this login is always found; an update never hangs anyone.
 
 No new Tally request and no request shape changed: only waits (2 s), caching of Windows' own lists, and order.
@@ -57,8 +57,10 @@ No new Tally request and no request shape changed: only waits (2 s), caching of 
    the setup as before and restarts from the new program by itself. The uninstall for all users likewise ends only the
    service's and the person's own. (installer/FinComBridge.nsi.)
 8. **The update never hangs anyone.**
-   - Each bridge looks for an update after its schedule plus a random 0-60 minutes (`UpdateJitterMin`, 60), the first
-     look 2 minutes plus that after the start, so the bridges of one server update one after another.
+   - A random wait before each look (`UpdateJitterMin`) is there but OFF by default (0): FinCom's update gate
+     (migration 139) already lets one bridge of a computer through at a time, only while idle with Tally, and expects
+     each look exactly 2 minutes after the start and then every 6 hours; a random wait would keep the bridge outside
+     the gate's window for good.
    - The download: 10 s to connect and for TLS, 30 s for the answer's head, 5 minutes for the whole; in the background.
    - One look at a time; the tray's "Check for updates" never waits for a download: it answers within 8 s and the look
      goes on in the background; no look at all while an update waits to start again or has not run well yet (review S1).
@@ -102,6 +104,22 @@ test needs the late answer, which f9f807b88 does not have).
 - **M1:** the 2.5.4 code no longer imports package testing (a hook the tests set).
 - **M2:** a Microsoft Entra ID user (S-1-12-1-...) counts as a person's account, as S-1-5-21-... does.
 
+## The re-review of 9c8546b75 (N1-N4), and its fixes
+
+Tests in `bridge-go/r254review2_test.go` fail on 9c8546b75 and pass now.
+
+- **N1:** the one-look flag stays only while an update this bridge put in place waits to start again; a look that only
+  found update-pending.json clears it (before, a tray click in the new version's first minutes stopped all later
+  updates until a restart).
+- **N2:** a Tally whose last list is kept marked busy and does not name the company: "Tally is busy", never "not open".
+- **N3:** a caller that waited for Tally's lock behind the slow list takes the late answer instead of sending the list again.
+- **N4:** an answer in time drops an older late answer to the same request.
+
+## FinCom's cloud (tally-ingest)
+
+Keeps the new beat fields: `update`, tallyWhy `connection off`, tallyIni[].connect "off; shared by every user of this
+computer, not changed" and tallyIni[].connectWhy (tests/run_beat254_ingest.py).
+
 ## Not changed / left for the owner
 
 - A shared server where 2.5.3 already wrote "Client Server = Both" and a ServerPort into the shared tally.ini: 2.5.4
@@ -109,10 +127,7 @@ test needs the late answer, which f9f807b88 does not have).
   `tally.ini.fincom-bak` holds it as it was before FinCom first changed it.
 - The last tie between two bridges that both cannot tell whose a Tally is (Windows gives neither its user nor its
   session) is still a tie-break (by user name now, not by bridge port). It is rare now that the Tally's user is read.
-- FinCom (tally-ingest) keeps only the beat fields it knows: to show the new ones it needs `update` (the object above),
-  `tallyWhy` value `connection off`, `tallyIni[].connect` value "off; shared by every user of this computer, not
-  changed" and `tallyIni[].connectWhy`. Until then the person still gets the plain words through `tallyConnectSay`
-  and `tallyIni[].why`, which FinCom passes today.
+- FinCom's Tally page does not show the beat's `update` yet (it is kept in the device's beat for Help & support).
 
 ## Tests
 
