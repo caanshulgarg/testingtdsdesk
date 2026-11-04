@@ -32,7 +32,7 @@ func TestPingProof(t *testing.T) {
 	defer func() { peerUserOf, ownSIDsOf = oldP, oldO }()
 	ownSIDsOf = func() []string { return []string{sidAnshul} }
 	who := sidAnshul
-	peerUserOf = func(local, remote int) (string, bool, error) { return who, true, nil }
+	peerUserOf = func(local, remote int, _ time.Time) (string, bool, error) { return who, true, nil }
 	ping := func(q string) M {
 		r := httptest.NewRequest("GET", "http://127.0.0.1:9100/ping"+q, nil)
 		r.RemoteAddr = "127.0.0.1:50999"

@@ -367,7 +367,7 @@ func TestTypedPortOwnUserOnly(t *testing.T) {
 	oldP, oldO := peerUserOf, ownSIDsOf
 	t.Cleanup(func() { peerUserOf, ownSIDsOf = oldP, oldO })
 	ownSIDsOf = func() []string { return []string{sidAnshul} }
-	peerUserOf = func(local, remote int) (string, bool, error) { return sidRavi, true, nil }
+	peerUserOf = func(local, remote int, _ time.Time) (string, bool, error) { return sidRavi, true, nil }
 	code, res := callLocal(t, "POST", "/ports/use", "", fmt.Sprintf(`{"port": %d}`, f.port))
 	if code != 403 || len(f.ids()) != 0 {
 		t.Fatalf("another user's program: %d %v, Tally asked %v", code, res, f.ids())
@@ -377,7 +377,7 @@ func TestTypedPortOwnUserOnly(t *testing.T) {
 // 2.4.8 adds and changes no Tally request: the allow-list table as 2.4.5's, the decision line names 2.4.8 with 2.4.7's
 // kept as history, a dated line for 2.4.8; the test sheet names this version's new steps
 func TestRelease248VersionAllowListUnchanged(t *testing.T) {
-	if BridgeVersion != "2.5.3" { // 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go): kept as history
+	if BridgeVersion != "2.5.4" { // 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	const table245 = "b4df290484f57e3cba053d16cc29f68209eda6a1f087c3c4a1616e69886e9391"

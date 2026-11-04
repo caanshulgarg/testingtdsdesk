@@ -488,7 +488,10 @@ Function InstallForAll
   ; the service stops (and the tray icons close) before the program is replaced
   ${If} ${FileExists} "$INSTDIR\FinComBridge.exe"
     ExecWait '"$INSTDIR\FinComBridge.exe" stop'
-    nsExec::Exec 'taskkill.exe /F /IM FinComBridge.exe'
+    ; 2.5.4: only the service's own process (it runs as SYSTEM), never the other Windows users' FinCom Bridges of a
+    ; shared server; a tray icon still running from this folder is moved aside by PutFiles and starts again from the
+    ; new program by itself
+    nsExec::Exec 'taskkill.exe /F /IM FinComBridge.exe /FI "USERNAME eq SYSTEM"'
     Pop $0
   ${EndIf}
   Call PutFiles
@@ -732,7 +735,10 @@ Section "Uninstall"
   ${Else}
     SetShellVarContext all
     ExecWait '"$INSTDIR\FinComBridge.exe" uninstall$1' $0
-    nsExec::Exec 'taskkill.exe /F /IM FinComBridge.exe'
+    ; 2.5.4: only the service's own process (SYSTEM) and this user's, never the other Windows users' FinCom Bridges
+    nsExec::Exec 'taskkill.exe /F /IM FinComBridge.exe /FI "USERNAME eq SYSTEM"'
+    Pop $2
+    nsExec::Exec 'cmd.exe /c taskkill.exe /F /IM FinComBridge.exe /FI "USERNAME eq %USERNAME%"'
     Pop $2
     DeleteRegKey HKLM "${BRIDGEKEY}"
   ${EndIf}

@@ -8,6 +8,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -20,8 +21,26 @@ var (
 
 const tcpTableOwnerPidAll = 5
 
+// 2.5.4 (snapcache254.go): the table read at most once in 1.5 s and shared; a caller that needs one taken after a
+// moment (a connection accepted then) never gets an older one
+var tcpTableCache = newSnapCache(func() ([]tcpRow, bool) {
+	rows, err := tcpTableNow()
+	return rows, err == nil
+})
+
+func tcpTableAfter(notBefore time.Time) ([]tcpRow, error) {
+	rows, ok := tcpTableCache.get(notBefore)
+	if !ok {
+		return tcpTableNow() // the reason, read once more
+	}
+	return rows, nil
+}
+
+// the table now (the tray's own look, and the cache's read)
+func tcpTable() ([]tcpRow, error) { return tcpTableAfter(time.Now()) }
+
 // the IPv4 TCP table with each connection's process
-func tcpTable() ([]tcpRow, error) {
+func tcpTableNow() ([]tcpRow, error) {
 	size := uint32(16 * 1024)
 	for i := 0; i < 5; i++ {
 		buf := make([]byte, size)
@@ -67,7 +86,12 @@ func processSID(pid int) (string, error) {
 }
 
 func platPeerUser(local, remote int) (string, bool, error) {
-	rows, err := tcpTable()
+	return platPeerUserAt(local, remote, time.Now())
+}
+
+// 2.5.4: with a table taken after notBefore (the connection's accept time)
+func platPeerUserAt(local, remote int, notBefore time.Time) (string, bool, error) {
+	rows, err := tcpTableAfter(notBefore)
 	if err != nil {
 		return "", true, err
 	}
@@ -85,7 +109,11 @@ func platPeerUser(local, remote int) (string, bool, error) {
 // 2.5.3: the Windows session of the program at the other end of a connection to the bridge: its process from the TCP
 // table, its session from ProcessIdToSessionId, else from the Remote Desktop service; known false when neither says
 func platPeerSession(local, remote int) (int, bool) {
-	rows, err := tcpTable()
+	return platPeerSessionAt(local, remote, time.Now())
+}
+
+func platPeerSessionAt(local, remote int, notBefore time.Time) (int, bool) {
+	rows, err := tcpTableAfter(notBefore)
 	if err != nil {
 		return 0, false
 	}
@@ -98,7 +126,7 @@ func platPeerSession(local, remote int) (int, bool) {
 		return int(s), true
 	}
 	if ws, ok := wtsProcessSessions()[uint32(pid)]; ok {
-		return int(ws), true
+		return int(ws.session), true
 	}
 	return 0, false
 }

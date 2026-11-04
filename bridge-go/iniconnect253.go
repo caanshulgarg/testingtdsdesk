@@ -218,8 +218,17 @@ func keepConnectEnabled(e, prev M) {
 
 // the beat's words for the person: while one of the tally.ini files was switched on in the last 24 hours and none of
 // the user's Tallys answers yet ("" otherwise)
+//
+// 2.5.4: "Tally's connection is off" (tallyWhy whyConnOff) gives its own plain fix (owntally254.go); the restart words
+// are never given on a computer several people use (the file is theirs too: the words may not be true for this user)
 func tallyConnectSay(why string, ini []any) string {
 	if why == "" {
+		return ""
+	}
+	if why == whyConnOff {
+		return connOffWords()
+	}
+	if iniSharedFn() {
 		return ""
 	}
 	for _, x := range ini {

@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "b38b75ee0b19a234245073f4a851414480617c3f065b821fee29230c159f06b8",
+    "hash": "c128c6790417817a095b9c118e68309950467492e400a1e2a494bb7c5025703b",
     "measured": false
   },
   "autoUpdate": true,
@@ -122,7 +122,16 @@
   "tallyState": "open",
   "tallyWhy": "",
   "trialTools": false,
+  "update": {
+    "applying": false,
+    "checked": "",
+    "checking": false,
+    "message": "",
+    "next": "",
+    "noAutoUpdate": false,
+    "offered": ""
+  },
   "updating": false,
-  "version": "2.5.3",
+  "version": "2.5.4",
   "windowsUser": ""
 }

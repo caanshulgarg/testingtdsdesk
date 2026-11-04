@@ -5,6 +5,7 @@ package main
 // or backed off decide nothing; the last complete list keeps attributing lines (kept on disk, so a restart keeps it); a
 // line written while no complete look could be had waits for the next complete look (never the 2-minute pass-over); with
 // no complete list at all the lines wait, said in plain words on the Tally page (the beat). Tests written before the code.
+// 2.5.4: a person's look is cut at 2 s as well (the owner's rule: each request to Tally 2 s at most)
 
 import (
 	"fmt"
@@ -54,10 +55,21 @@ func TestOwnLookSlowListNoCompleteList(t *testing.T) {
 	if b := beatBody(true, "open", "", nil, nil, nil); str(b["recorderWaitWords"]) != w {
 		t.Fatalf("the beat does not carry the words: %v", b["recorderWaitWords"])
 	}
-	// a person's look (Update now / Test connection: not cut at 2 s) at +76 minutes, then the reader again
+	// 2.5.4 (the owner's rule: each request to Tally 2 s at most): a person's look (Update now / Test connection) is cut
+	// at 2 s too; the lines still wait, nothing is sent and nothing passed over
 	ownAt(base.Add(76 * time.Minute))
 	openCompaniesWith(fin, true)
 	ownAt(base.Add(77 * time.Minute))
+	readAndUploadAll(t)
+	if len(ownSentUsers(c)) != 0 || liveOwnWaitWords() == "" {
+		t.Fatalf("a person's look cut at 2 s: sent %v, words %q", ownSentUsers(c), liveOwnWaitWords())
+	}
+	// Tally lists its companies in time again: the person's next look is complete, then the reader again
+	ownSlowList(f, false)
+	time.Sleep(1500 * time.Millisecond) // the stand-in finishes the slow list (Tally's lock held until then)
+	ownAt(base.Add(80 * time.Minute))
+	openCompaniesWith(fin, true)
+	ownAt(base.Add(81 * time.Minute))
 	readAndUploadAll(t)
 	if got := strings.Join(ownSentUsers(c), ","); got != "mine@"+b220CoGUID {
 		t.Fatalf("after the complete look, lines sent: %q (the own company's line, never the other user's)", got)

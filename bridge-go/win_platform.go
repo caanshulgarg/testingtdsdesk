@@ -132,7 +132,24 @@ type mibTCPRowOwnerPID struct {
 	State, LocalAddr, LocalPort, RemoteAddr, RemotePort, OwningPid uint32
 }
 
+// 2.5.4 (snapcache254.go): Windows' listener table and list of programs read at most once in 1.5 s and shared by every
+// caller (tallyRunning, portPlan, tallyListeners, platTallyYoung, the window checks...); each caller gets its own copy
+var (
+	listenCache = newSnapCache(listeningPortsNow)
+	procCache   = newSnapCache(processesNow)
+)
+
 func listeningPorts() ([]listener, bool) {
+	l, ok := listenCache.get(time.Time{})
+	return append([]listener(nil), l...), ok
+}
+
+func processes() ([]proc, bool) {
+	l, ok := procCache.get(time.Time{})
+	return append([]proc(nil), l...), ok
+}
+
+func listeningPortsNow() ([]listener, bool) {
 	var size uint32
 	procGetExtendedTcpTable.Call(0, uintptr(unsafe.Pointer(&size)), 0, windows.AF_INET, 3, 0) // TCP_TABLE_OWNER_PID_LISTENER
 	if size == 0 {
@@ -160,17 +177,24 @@ type wtsProcessInfo struct {
 	SessionID   uint32
 	ProcessID   uint32
 	ProcessName *uint16
-	UserSid     uintptr
+	UserSid     *windows.SID
 }
 
-// every process's session by the Remote Desktop service; nil when it does not say. Kept 5 s (the plan is made often)
+// a process as the Remote Desktop service tells it: its session and (2.5.4) its user's SID ("" when not given)
+type wtsProc struct {
+	session uint32
+	sid     string
+}
+
+// every process's session and user by the Remote Desktop service; nil when it does not say. Kept 5 s (the plan is made
+// often)
 var (
 	wtsMu   sync.Mutex
 	wtsAt   time.Time
-	wtsLast map[uint32]uint32
+	wtsLast map[uint32]wtsProc
 )
 
-func wtsProcessSessions() map[uint32]uint32 {
+func wtsProcessSessions() map[uint32]wtsProc {
 	wtsMu.Lock()
 	defer wtsMu.Unlock()
 	if !wtsAt.IsZero() && time.Since(wtsAt) < 5*time.Second {
@@ -180,7 +204,7 @@ func wtsProcessSessions() map[uint32]uint32 {
 	return wtsLast
 }
 
-func wtsProcessSessionsNow() map[uint32]uint32 {
+func wtsProcessSessionsNow() map[uint32]wtsProc {
 	var p *wtsProcessInfo
 	var n uint32
 	r, _, _ := procWTSEnumProcesses.Call(0, 0, 1, uintptr(unsafe.Pointer(&p)), uintptr(unsafe.Pointer(&n)))
@@ -188,14 +212,19 @@ func wtsProcessSessionsNow() map[uint32]uint32 {
 		return nil
 	}
 	defer windows.WTSFreeMemory(uintptr(unsafe.Pointer(p)))
-	out := make(map[uint32]uint32, n)
+	out := make(map[uint32]wtsProc, n)
 	for _, x := range unsafe.Slice(p, n) {
-		out[x.ProcessID] = x.SessionID
+		w := wtsProc{session: x.SessionID}
+		// 2.5.4: the process's user, as the service gives it (read before the memory is freed)
+		if x.UserSid != nil && x.UserSid.IsValid() {
+			w.sid = x.UserSid.String()
+		}
+		out[x.ProcessID] = w
 	}
 	return out
 }
 
-func processes() ([]proc, bool) {
+func processesNow() ([]proc, bool) {
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
 		return nil, false
@@ -204,7 +233,7 @@ func processes() ([]proc, bool) {
 	var e windows.ProcessEntry32
 	e.Size = uint32(unsafe.Sizeof(e))
 	var out []proc
-	var wts map[uint32]uint32
+	var wts map[uint32]wtsProc
 	wtsAsked := false
 	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
 		name := windows.UTF16ToString(e.ExeFile[:])
@@ -219,12 +248,22 @@ func processes() ([]proc, bool) {
 				wts, wtsAsked = wtsProcessSessions(), true
 			}
 			if ws, ok := wts[e.ProcessID]; ok {
-				p.Session = int(ws)
+				p.Session = int(ws.session)
 			} else {
 				p.SessionUnknown = true
 			}
 		}
 		if reTally.MatchString(p.Name) {
+			// 2.5.4: the Windows user the Tally runs as (its token; else the Remote Desktop service's word), so the owner
+			// is settled by the user before any other rule (ports.go sessionOwner)
+			if sid, err := processSID(int(e.ProcessID)); err == nil {
+				p.Sid = sid
+			} else {
+				if !wtsAsked {
+					wts, wtsAsked = wtsProcessSessions(), true
+				}
+				p.Sid = wts[e.ProcessID].sid
+			}
 			if h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, e.ProcessID); err == nil {
 				b := make([]uint16, windows.MAX_PATH*2)
 				n := uint32(len(b))
@@ -768,4 +807,26 @@ func platWindowHold() func(from time.Time) int {
 		close(done)
 		return worstSpellFrom(<-res, from)
 	}
+}
+
+// 2.5.4 (iniconnect254.go): this computer is one several people sign in to: Windows Server (Remote Desktop), Windows'
+// multi-session edition, or more than one person signed in now (active or disconnected sessions)
+func platSharedComputer() bool {
+	if k, err := registry.OpenKey(registry.LOCAL_MACHINE, `SYSTEM\CurrentControlSet\Control\ProductOptions`, registry.QUERY_VALUE|registry.WOW64_64KEY); err == nil {
+		pt, _, _ := k.GetStringValue("ProductType")
+		k.Close()
+		if pt != "" && !strings.EqualFold(pt, "WinNT") {
+			return true // ServerNT / LanmanNT
+		}
+	}
+	if strings.Contains(strings.ToLower(windowsVersion()), "multi-session") {
+		return true
+	}
+	who := map[string]bool{}
+	for _, s := range sessions() {
+		if s.id != 0 && s.user != "" && (s.state == windows.WTSActive || s.state == windows.WTSDisconnected) {
+			who[strings.ToLower(s.user)] = true
+		}
+	}
+	return len(who) > 1
 }

@@ -72,7 +72,8 @@ func portReason(e M) string {
 	return "not answering"
 }
 
-// the beat's tallyWhy: "" when one of the user's Tallys answers; else the most useful reason for the person
+// the beat's tallyWhy: "" when one of the user's Tallys answers; else the most useful reason for the person: not
+// answering, (2.5.4) connection off, owner unknown, another user, no Tally running in this login
 func tallyWhy(ports []any) string {
 	has := map[string]bool{}
 	for _, x := range ports {
@@ -86,9 +87,15 @@ func tallyWhy(ports []any) string {
 		}
 		has[r] = true
 	}
-	switch {
-	case has["not answering"] || has["not Tally"]:
+	if has["not answering"] || has["not Tally"] {
 		return "not answering"
+	}
+	// 2.5.4 (owntally254.go): this login's Tally takes no connection: said above "owner unknown" and "another user"
+	if off, words := connOffFn(ports); off {
+		noteConnOff(words)
+		return whyConnOff
+	}
+	switch {
 	case has["owner unknown"] || has["another bridge"]:
 		return "owner unknown"
 	case has["another user"]:
@@ -125,9 +132,29 @@ type bridgeClaim struct {
 	user    string
 }
 
-// the other bridge keeps the Tally: its own Tally always; of two bridges that only found it, the lower bridge port
-func claimWins(c bridgeClaim, ownPort int) bool {
-	return !c.unknown || c.port < ownPort
+// the other bridge keeps the Tally: its own Tally always (its owner's session or Windows user, ports.go sessionOwner).
+// 2.5.4: this is asked only for a Tally whose owner this bridge could not settle by the Tally's Windows user and session
+// (portPlan's mine == nil: a Tally settled as this login's is never given away, one settled as another login's is never
+// used). Of two bridges that both only found it, the tie is broken by something that stays the same for each login:
+// the Windows user's name (the lower, case aside), and only when the two names are the same or not given, the lower
+// bridge port (bridge ports are not stable per user: two users' bridges have held 9102 at different times)
+func claimWins(c bridgeClaim, ownPort int, ownUser string) bool {
+	if !c.unknown {
+		return true
+	}
+	a, b := shortUser(c.user), shortUser(ownUser)
+	if a != "" && b != "" && a != b {
+		return a < b
+	}
+	return c.port < ownPort
+}
+
+// a Windows user's name without its domain, lower case
+func shortUser(u string) string {
+	if i := strings.LastIndex(u, `\`); i >= 0 {
+		u = u[i+1:]
+	}
+	return strings.ToLower(strings.TrimSpace(u))
 }
 
 // Tally is on this computer (TallyHost empty, 127.0.0.1 or localhost): only then can another bridge here share it
@@ -147,7 +174,7 @@ var (
 
 func otherBridgeClaim(port int) string {
 	c, ok := bridgeClaims()[port]
-	if !ok || !claimWins(c, toInt(cfg("Port"))) {
+	if !ok || !claimWins(c, toInt(cfg("Port")), ownerName()) {
 		return ""
 	}
 	if c.user == "" {

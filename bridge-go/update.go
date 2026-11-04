@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	mrand "math/rand"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -24,6 +26,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -95,8 +98,29 @@ func updateInfo() M {
 }
 func setUpd(k string, v any) { updMu.Lock(); updLast[k] = v; updMu.Unlock() }
 
+// 2.5.4: the update's state for the heartbeat, kept small: the last look's time, its words (200 letters at most), the
+// version FinCom's list offered, whether it is being put in place or looked for now, and whether automatic updates are
+// off on this computer (NoAutoUpdate) and the next look's time
+func updateBeat() M {
+	u := updateInfo()
+	return M{"checked": str(u["checked"]), "message": cutRunes(str(u["message"]), 200), "offered": str(u["latest"]),
+		"applying": u["applying"] == true, "checking": updChecking.Load(), "noAutoUpdate": cfgB("NoAutoUpdate"), "next": updNextAt()}
+}
+
+// when the schedule looks next ("" before the first wait is set)
+var updNext atomic.Int64
+
+func updNextAt() string {
+	if t := updNext.Load(); t > 0 {
+		return time.Unix(0, t).Format(time.RFC3339)
+	}
+	return ""
+}
+
+// 2.5.4: the download never hangs: 10 s to connect and to get the answer's head, 5 minutes for the whole
 func fetch(u string, max int64) ([]byte, error) {
-	c := &http.Client{Timeout: 5 * time.Minute, Transport: &http.Transport{Proxy: http.ProxyFromEnvironment}}
+	c := &http.Client{Timeout: 5 * time.Minute, Transport: &http.Transport{Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{Timeout: 10 * time.Second}).DialContext, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 30 * time.Second}}
 	r, err := c.Get(u)
 	if err != nil {
 		return nil, plainNetErr(err)
@@ -179,23 +203,158 @@ func checkForUpdate(now bool) M {
 	return updateInfo()
 }
 
-// putting the new program in place and starting again (the tests put their own)
+// putting the new program in place and starting again (the tests put their own). 2.5.4: the start again waits until
+// nothing goes to Tally (updateRestartWhenQuiet): never during a posting or while a request is at Tally
 var (
 	applyUpdateFn      = applyUpdate
-	restartAfterUpdate = func() { time.Sleep(time.Second); requestStop(3) }
+	restartAfterUpdate = func() { updateRestartWhenQuiet(time.Second, func() { requestStop(3) }) }
 )
 
+// 2.5.4: nothing goes to Tally now: no posting being sent (postingGoing: an import in flight, a job starting or
+// sending, a posting being taken from FinCom's queue), no request at Tally (inflight), and no request Tally is still
+// on after the bridge stopped waiting for it (inflight.go earlier). A posting only waiting for Tally resumes after the
+// start again, as before (nothing is posted twice)
+var tallyQuietFn = func() bool {
+	if postingGoing() {
+		return false
+	}
+	busyMu.Lock()
+	n := len(inflight)
+	busyMu.Unlock()
+	earlierMu.Lock()
+	m := len(earlier)
+	earlierMu.Unlock()
+	return n == 0 && m == 0
+}
+
+// the start again after an update: once nothing has gone to Tally for two looks in a row (every tick); it waits as
+// long as that takes (the new program is already in place: any start from now on is the new one) and says so once
+func updateRestartWhenQuiet(tick time.Duration, restart func()) {
+	quiet, said := 0, false
+	for !stopping() {
+		if tallyQuietFn() {
+			quiet++
+			if quiet >= 2 {
+				restart()
+				return
+			}
+		} else {
+			quiet = 0
+			if !said {
+				said = true
+				writeLog("Update: in place; the bridge starts again as soon as the posting or the request at Tally now has finished")
+				setUpd("message", "Updating: the bridge starts again as soon as the work with Tally now has finished.")
+			}
+		}
+		sleepOrStop(tick)
+	}
+}
+
+// 2.5.4: the bridges of one computer (every user's, on a shared server) do not all look for an update at once: each
+// look comes after the schedule plus a random 0-60 minutes (UpdateJitterMin), so they update one after another
+var updateJitterFn = func() time.Duration {
+	m := keepNum("UpdateJitterMin", 60)
+	if m <= 0 {
+		return 0
+	}
+	return time.Duration(mrand.Int63n(int64(m) * int64(time.Minute)))
+}
+
+// the wait before the next look: the first after 2 minutes, then UpdateCheckHours (6); each plus the jitter
+func updateWait(first bool) time.Duration {
+	base := time.Duration(keepNum("UpdateCheckHours", 6)) * time.Hour
+	if first {
+		base = 2 * time.Minute
+	}
+	return base + updateJitterFn()
+}
+
+// 2.5.4: one look for an update at a time (the schedule's and the tray's "Check for updates" never run together)
+var updChecking atomic.Bool
+
+func checkForUpdateOnce(now bool) (M, bool) {
+	if !updChecking.CompareAndSwap(false, true) {
+		return updateInfo(), false
+	}
+	defer updChecking.Store(false)
+	return checkForUpdate(now), true
+}
+
+// 2.5.4: the tray's "Check for updates" never waits for a download: the look runs in the background and the tray gets
+// what is known after at most updTrayWait (the tray asks again for the rest)
+var updTrayWait = 8 * time.Second
+
+func checkForUpdateTray() M {
+	done := make(chan M, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				writeLog(fmt.Sprint("Update check: ", r))
+				done <- updateInfo()
+			}
+		}()
+		m, ran := checkForUpdateOnce(true)
+		if !ran {
+			m["message"] = "Already looking for an update; the result shows here in a moment."
+		}
+		done <- m
+	}()
+	select {
+	case m := <-done:
+		return m
+	case <-time.After(updTrayWait):
+		m := updateInfo()
+		m["checking"] = true
+		m["message"] = "Looking for an update in the background; the result shows here in a moment. FinCom Bridge keeps working meanwhile."
+		return m
+	}
+}
+
 func updateLoop() {
-	sleepOrStop(2 * time.Minute)
+	wait := func(first bool) {
+		d := updateWait(first)
+		updNext.Store(time.Now().Add(d).UnixNano())
+		sleepOrStop(d)
+	}
+	wait(true)
 	for !stopping() {
 		if !cfgB("NoAutoUpdate") {
 			func() {
 				defer func() { recover() }()
-				checkForUpdate(false)
+				checkForUpdateOnce(false)
 			}()
 		}
-		sleepOrStop(time.Duration(keepNum("UpdateCheckHours", 6)) * time.Hour)
+		wait(false)
 	}
+}
+
+// --- 2.5.4: an update runs well only when the new program really works: its web server is up (serving) and its main
+// loop turns (loopSec); updateHealth (the service and the per-user worker) waits for that before it keeps the new one.
+// A new program that does not get there within updHealthMax stops with a failure, so Windows (or the supervisor) starts
+// it again and undoFailedUpdate puts the previous one back after three such starts
+var (
+	serving      atomic.Bool
+	updHealthMax = 6 * time.Minute
+)
+
+func updateLooksHealthy() bool {
+	return serving.Load() && loopAt.Load() > 0 && loopSec() < 30
+}
+
+// waits 2 minutes, then until healthy (every 15 s) or updHealthMax; true when healthy
+func updateWaitHealthy(first, every time.Duration) bool {
+	sleepOrStop(first)
+	end := time.Now().Add(updHealthMax - first)
+	for !stopping() {
+		if updateLooksHealthy() {
+			return true
+		}
+		if time.Now().After(end) {
+			return false
+		}
+		sleepOrStop(every)
+	}
+	return false
 }
 
 // --- the release: FinCom's heartbeat answer says what this computer may take. The owner's rule of 05-Oct-2026 (migration

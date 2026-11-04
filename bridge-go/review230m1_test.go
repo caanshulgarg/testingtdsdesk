@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func m1Req(t *testing.T, host, path string, hdr map[string]string) (int, M) {
@@ -33,7 +34,7 @@ func m1Setup(t *testing.T) {
 	oldP, oldO := peerUserOf, ownSIDsOf
 	t.Cleanup(func() { peerUserOf, ownSIDsOf = oldP, oldO })
 	ownSIDsOf = func() []string { return []string{sidAnshul} }
-	peerUserOf = func(local, remote int) (string, bool, error) { return sidAnshul, true, nil }
+	peerUserOf = func(local, remote int, _ time.Time) (string, bool, error) { return sidAnshul, true, nil }
 }
 
 func TestM1ForeignHostRefused(t *testing.T) {

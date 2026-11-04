@@ -892,6 +892,10 @@ func standBridge(t *testing.T, f *standTally, extra string) string {
 	retryReset()   // 2.3.1: the shared retry schedule (retry.go), per test
 	r245Reset()    // 2.4.5: the older entries' days, the ledger progress, the tally.ini results
 	resetEarlier() // and the requests given up while Tally is still on them (inflight.go)
+	resetColist()  // 2.5.4: the company list's wait after it did not come in 2 s (colist254.go)
+	updMu.Lock()   // 2.5.4: the update's last look (the beat carries it): none, per test
+	updLast = M{"checked": "", "latest": "", "message": "", "applying": false}
+	updMu.Unlock()
 	decideMu.Lock()
 	decideAt = map[string]time.Time{} // the decision log's once-in-10-minutes, per test
 	decideMu.Unlock()

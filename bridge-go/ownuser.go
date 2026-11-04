@@ -30,7 +30,8 @@ func netPort(v uint32) int { return int((v&0xff)<<8 | (v>>8)&0xff) }
 func peerPidFrom(rows []tcpRow, serverPort, clientPort int) int {
 	const loopback = 0x0100007f
 	for _, r := range rows {
-		if r.LocalAddr == loopback && netPort(r.LocalPort) == clientPort && netPort(r.RemotePort) == serverPort {
+		// 2.5.4: a row without a process (a connection already closed, TIME_WAIT) is not the asking program's
+		if r.Pid != 0 && r.LocalAddr == loopback && netPort(r.LocalPort) == clientPort && netPort(r.RemotePort) == serverPort {
 			return int(r.Pid)
 		}
 	}
@@ -57,8 +58,9 @@ func ownUserDecision(checked bool, peer string, err error, own []string) (bool, 
 	return false, notYours
 }
 
-// the Windows user of the program at the other end (platform; a stand-in in the tests)
-var peerUserOf = platPeerUser
+// the Windows user of the program at the other end (platform; a stand-in in the tests). 2.5.4: notBefore is when the
+// connection was accepted: the TCP table looked in is one taken after it (snapcache254.go)
+var peerUserOf = platPeerUserAt
 
 // this bridge's own Windows users (platform; a stand-in in the tests)
 var ownSIDsOf = platOwnSIDs
@@ -82,13 +84,13 @@ func connPorts(r *http.Request) (local, remote int) {
 // 2.5.3 (one FinCom login for every user of a shared server): the Windows session of the program at the other end of a
 // connection (the TCP table's process, then its session); known false when Windows does not say (platform; a stand-in in
 // the tests)
-var peerSessionOf = platPeerSession
+var peerSessionOf = platPeerSessionAt
 
 // the reply's sameSession: true when the asking program (the browser) runs in one of this bridge's owner's Windows
 // sessions, false when Windows places it in another session, "unknown" when Windows does not say
 func sameSessionOf(r *http.Request) any {
 	local, remote := connPorts(r)
-	s, known := peerSessionOf(local, remote)
+	s, known := peerSessionOf(local, remote, acceptedAt(r))
 	if !known {
 		return "unknown"
 	}
@@ -98,7 +100,7 @@ func sameSessionOf(r *http.Request) any {
 // whether the request comes from a program of this bridge's own Windows user, and why not
 func fromOwnUser(r *http.Request) (bool, string) {
 	local, remote := connPorts(r)
-	peer, checked, err := peerUserOf(local, remote)
+	peer, checked, err := peerUserOf(local, remote, acceptedAt(r))
 	return ownUserDecision(checked, peer, err, ownSIDsOf())
 }
 

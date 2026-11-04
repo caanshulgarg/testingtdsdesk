@@ -1145,6 +1145,9 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"recorderSourceB": M{}, "recorderSourceC": M{}, "recorderBodyFetch": slowBeat(), "tallyRetry": retryBeat(),
 		// review M8: the add-on's file names read; review S4: whether automatic updates are on, and the last rollback
 		"recorderFiles": liveFilesSeen(), "autoUpdate": au, "rolledBack": rb,
+		// 2.5.4: why this bridge did or did not update: the last look (when, its words, the version offered), whether a
+		// look is going on, and NoAutoUpdate (update.go updateBeat; a few short fields)
+		"update": updateBeat(),
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
 		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": waitSinceOf(waitStarts), "recorderWaitStarts": waitStarts,
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)

@@ -1947,7 +1947,7 @@ func fastProveGone(tc *TC, company string, port int, mid string, sec int) error 
 // 2.3.4 (re-review 2 L-d): the company is open in the Tally on this port now, with the GUID this bridge holds for it (a
 // company of that name with another GUID, or none held yet: not proven)
 func fastCompanyOpen(tc *TC, company string, port, sec int) error {
-	raw, err := invokeTally(tc, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	raw, err := invokeTally(tc, port, companiesRequest(), minI(maxI(sec, 2), 8)) // 2.5.4: 2 s at most (tally.go tallyRaw)
 	if err != nil {
 		return err
 	}
@@ -1983,7 +1983,7 @@ func fastCompanyListed(tc *TC, company string, port, sec int) error {
 	t2.bg, t2.light = false, true // the tiny open-company list: not held by the cool-down after a stop (the entry request is)
 	// release-240 review M4: the list is not the ask: only the entry request itself marks an ask as having reached Tally
 	t2.sentOut, t2.slotOut = nil, nil
-	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8))
+	raw, err := invokeTally(&t2, port, companiesRequest(), minI(maxI(sec, 2), 8)) // 2.5.4: 2 s at most (tally.go tallyRaw)
 	if errors.Is(err, errRecorderStop) || tallyNoAnswer(err) {
 		retryNote(port, "TDSDeskCompanies", err) // a frozen Tally steps the shared schedule on, as the entry request would
 	}

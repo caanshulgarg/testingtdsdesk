@@ -228,10 +228,17 @@ func tallyIniApply(path, addon string) (M, error) {
 		base = nb
 	}
 	cb, cstate, cport, cchg := iniConnect(base, iniPortUsed(path))
+	// 2.5.4 (iniconnect254.go): never in a tally.ini every user of the computer shares; the port the file names is
+	// reported, none is chosen for it
+	if cstate == connectEnabled && iniSharedFn() {
+		cstate, cb, cchg = connectSharedOff, nil, nil
+		cport = toInt(tallyIni(filepath.Join(filepath.Dir(path), "tally.exe"))["port"])
+	}
 	e["connect"] = cstate
 	if cport > 0 {
 		e["serverPort"] = cport
 	}
+	defer noteConnectWhy(e)
 	if cstate == connectEnabled {
 		nb = cb
 		added = append(added, cchg...)
@@ -362,6 +369,8 @@ func tallyIniStep(log func(string)) []M {
 			log(fmt.Sprintf("tally.ini %s: TallyPrime's connection switched on (acts as Both, port %d); Tally needs one restart", p, toInt(e["serverPort"])))
 		case connectCannotWrite:
 			log("tally.ini " + p + ": TallyPrime's connection is off and this Windows user may not change the file: not touched")
+		case connectSharedOff:
+			log("tally.ini " + p + ": TallyPrime's connection is off; every user of this computer shares this file, so its connection settings are not changed (2.5.4)")
 		}
 		out = append(out, e)
 	}

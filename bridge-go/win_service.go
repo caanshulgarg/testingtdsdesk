@@ -124,9 +124,19 @@ func updateHealth() {
 	if !exists(pf) {
 		return
 	}
-	sleepOrStop(2 * time.Minute)
-	if stopping() {
-		return
+	// 2.5.4: kept only when the new program really works (its web server up, its main loop turning: update.go); one
+	// that does not get there stops with a failure, so it is started again and, after three starts, the previous one
+	// is put back (undoFailedUpdate)
+	if !updateWaitHealthy(2*time.Minute, 15*time.Second) {
+		if stopping() {
+			return
+		}
+		writeLog("Update: FinCom Bridge " + BridgeVersion + " does not work properly (its web server or main loop); it stops, so it is started again and the previous version is put back after three tries")
+		requestStop(9)
+		// a main loop that does not turn never ends by itself: the process ends after 30 s (Windows' recovery, or the
+		// per-user supervisor, starts it again)
+		time.Sleep(30 * time.Second)
+		os.Exit(9)
 	}
 	from := str(readObjFile(pf)["from"])
 	_ = os.Remove(pf)

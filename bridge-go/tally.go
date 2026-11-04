@@ -548,6 +548,16 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 	if m := tallyMaxSec(); timeoutSec > m && !isImportRequest(x) {
 		timeoutSec = m // the read cap (2.1.5: 20 s); an import request keeps its own timeout (importTimeoutSec)
 	}
+	// 2.5.4 (the owner's rule: each request to Tally 2 s at most): the company list and one company's GSTIN / PAN wait
+	// 2 s, whoever asks (they waited 8 s and 15 s). The request itself is unchanged; a list that does not come in time
+	// keeps the last one (ports.go colistHold), and Tally's lock stays held until Tally has finished it (one in flight)
+	// (a background read's own 2 s hard stop, when it has one, ends it first as before: the cap is then one second later)
+	if id := tallyRequestID(x); (id == "TDSDeskCompanies" || id == "TDSDeskCompanyInfo") && timeoutSec > colistMaxSec {
+		timeoutSec = colistMaxSec
+		if d, _ := ctx.Value(stopKey{}).(time.Duration); d > 0 && d <= colistMaxSec*time.Second {
+			timeoutSec = colistMaxSec + 1
+		}
+	}
 	if ms := gentleFor(ctx); ms > 0 {
 		select {
 		case <-ctx.Done():

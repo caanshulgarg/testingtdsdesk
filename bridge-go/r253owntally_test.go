@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // one server, two users: durgesh (session 1, this bridge's) and hemant (session 2). procs/listeners as JSON fragments
@@ -251,7 +252,8 @@ func TestR253ClaimedPorts(t *testing.T) {
 		t.Fatalf("claims: own %v unknown %v", own, unknown)
 	}
 	// a claim's decision: an own Tally's claim always wins; of two owner-unknown claims, the lower bridge port's
-	if !claimWins(bridgeClaim{port: 9105, unknown: false}, 9101) || !claimWins(bridgeClaim{port: 9101, unknown: true}, 9105) || claimWins(bridgeClaim{port: 9105, unknown: true}, 9101) {
+	// (2.5.4: the users' names first when both are given and differ: r254_test.go)
+	if !claimWins(bridgeClaim{port: 9105, unknown: false}, 9101, "") || !claimWins(bridgeClaim{port: 9101, unknown: true}, 9105, "") || claimWins(bridgeClaim{port: 9105, unknown: true}, 9101, "") {
 		t.Fatal("claim decisions")
 	}
 }
@@ -277,7 +279,10 @@ func TestR253SameSession(t *testing.T) {
 		known bool
 		want  any
 	}{{1, true, true}, {2, true, false}, {0, true, false}, {0, false, "unknown"}} {
-		peerSessionOf = func(local, remote int) (int, bool) { asked = [2]int{local, remote}; return c.sess, c.known }
+		peerSessionOf = func(local, remote int, _ time.Time) (int, bool) {
+			asked = [2]int{local, remote}
+			return c.sess, c.known
+		}
 		res := ping()
 		if res["sameSession"] != c.want || toInt(res["bridgePort"]) != 9103 {
 			t.Fatalf("session %d known %v: %v", c.sess, c.known, res)
@@ -287,7 +292,7 @@ func TestR253SameSession(t *testing.T) {
 		t.Fatalf("the browser's port: %v", asked)
 	}
 	// /status (the owner's own programs) carries it too
-	peerSessionOf = func(int, int) (int, bool) { return 1, true }
+	peerSessionOf = func(int, int, time.Time) (int, bool) { return 1, true }
 	r := httptest.NewRequest("GET", "http://127.0.0.1:9103/status", nil)
 	r.RemoteAddr = "127.0.0.1:50998"
 	r.Header.Set("X-Bridge-Key", "same-session-key")

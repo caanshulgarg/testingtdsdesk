@@ -24,6 +24,8 @@ type proc struct {
 	// 2.5.3: Windows did not give the program's session (run as administrator, access denied): its owner is unknown,
 	// never taken as session 0 (another user's)
 	SessionUnknown bool
+	// 2.5.4: the SID of the Windows user the program runs as ("" when Windows did not say)
+	Sid string
 }
 type listener struct{ Port, Pid int }
 
@@ -84,7 +86,7 @@ func netState() (bool, []proc, []listener) {
 		var ps []proc
 		for _, x := range arr(f["processes"]) {
 			o := obj(x)
-			ps = append(ps, proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"]), SessionUnknown: o["sessionUnknown"] == true})
+			ps = append(ps, proc{ID: toInt(o["pid"]), Name: str(o["name"]), Session: toInt(o["session"]), Path: str(o["path"]), SessionUnknown: o["sessionUnknown"] == true, Sid: str(o["sid"])})
 		}
 		var ls []listener
 		for _, x := range arr(f["listeners"]) {
@@ -103,14 +105,49 @@ var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
 // 2.5.3: whose a program is by its Windows session: "mine" (one of the owner's sessions), "other" (positively another
 // signed-in user's session) or "unknown" (Windows did not give its session, or session 0, where no user signs in: a
 // TallyPrime run as administrator or by a service). Only "other" is ever skipped
+//
+// 2.5.4 (Hemant and saurabh on one server: an owner-unknown Tally was given to the bridge with the lower port, and
+// bridge ports are not stable per user): the Windows user the Tally runs as settles it before anything else may. A
+// Tally in one of the owner's sessions stays "mine" (the person in this login opened it, also "as another user"); else
+// a Tally running as the owner's own Windows user is "mine" (run as administrator by the owner: session not given, or
+// session 0), one running as another person's Windows user (a user SID, S-1-5-21-...) is "other". Only a Tally whose
+// user and session Windows both did not give stays "unknown". Service accounts (SYSTEM, LOCAL SERVICE...) never count
+// as anyone's: the bridge's service runs as SYSTEM
 func sessionOwner(p proc) string {
 	switch {
 	case !p.SessionUnknown && isMine(p.Session):
 		return "mine"
+	case isUserSid(p.Sid) && ownSidIs(p.Sid):
+		return "mine"
+	case isUserSid(p.Sid) && ownUserSidKnown():
+		return "other"
 	case !p.SessionUnknown && p.Session != 0:
 		return "other"
 	}
 	return "unknown"
+}
+
+// a person's Windows account (local or domain: S-1-5-21-...), not a service account
+func isUserSid(sid string) bool { return strings.HasPrefix(strings.ToUpper(sid), "S-1-5-21-") }
+
+// the SID is this bridge's owner's (the user it runs as, or the owner the service works for)
+func ownSidIs(sid string) bool {
+	for _, o := range ownSIDsOf() {
+		if isUserSid(o) && strings.EqualFold(o, sid) {
+			return true
+		}
+	}
+	return false
+}
+
+// the bridge knows its owner's own user SID (so "another user's SID" means another person)
+func ownUserSidKnown() bool {
+	for _, o := range ownSIDsOf() {
+		if isUserSid(o) {
+			return true
+		}
+	}
+	return false
 }
 
 // the plan's "mine": true, false (positively another user's) or nil (not known)
@@ -423,7 +460,7 @@ func getCoInfo(tc *TC, name string, port int) M {
 	}
 	coInfoMu.Unlock()
 	g, pan := "", ""
-	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil {
+	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil { // 2.5.4: 2 s at most (tally.go tallyRaw)
 		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
 			g = nt(c[0], "GSTREGISTRATIONNUMBER")
 			if g == "" {
@@ -518,8 +555,29 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				continue
 			}
 		}
-		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go)
-		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8)
+		// 2.5.4 (colist254.go): a Tally that did not give its list in 2 s is not asked for it again until its wait has
+		// passed; meanwhile the list it gave last stands (nothing is sent). Only while a list is held (a Tally never
+		// listed is always asked, under the small-check rule after no answer) and not for a background ask (it follows
+		// the shared retry schedule, retry.go)
+		if !tc.bg {
+			if _, held := colistHold(toInt(pp["port"])); held {
+				if prev := prevCompanies(toInt(pp["port"])); prev != nil {
+					allFresh = false
+					if pp["mine"] != false {
+						ownAll = false
+					}
+					e["ok"], e["companies"], e["tallyState"], e["kept"] = true, prev, "open", true
+					e["reason"] = portReason(e)
+					sessions = append(sessions, e)
+					continue
+				}
+			}
+		}
+		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go). 2.5.4: 2 s at most
+		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8) // 2.5.4: 2 s at most (tally.go tallyRaw)
+		if !tc.bg {
+			colistNote(toInt(pp["port"]), err)
+		}
 		if err != nil {
 			allFresh = false
 			if pp["mine"] != false {

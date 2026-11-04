@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -76,7 +77,7 @@ func TestOwnUserOnlyThroughServer(t *testing.T) {
 	ownSIDsOf = func() []string { return []string{sidAnshul} }
 	who := sidRavi
 	var asked [][2]int
-	peerUserOf = func(local, remote int) (string, bool, error) {
+	peerUserOf = func(local, remote int, _ time.Time) (string, bool, error) {
 		asked = append(asked, [2]int{local, remote})
 		return who, true, nil
 	}

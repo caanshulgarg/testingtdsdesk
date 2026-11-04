@@ -61,7 +61,13 @@ func TestWindowsR253PeerSession(t *testing.T) {
 	if ws == nil {
 		t.Skip("the Remote Desktop service lists no processes on this runner")
 	}
-	if got, ok := ws[windows.GetCurrentProcessId()]; !ok || got != own {
-		t.Fatalf("the Remote Desktop service: this process's session %d (listed %v), own %d", got, ok, own)
+	if got, ok := ws[windows.GetCurrentProcessId()]; !ok || got.session != own {
+		t.Fatalf("the Remote Desktop service: this process's session %d (listed %v), own %d", got.session, ok, own)
+	}
+	// 2.5.4: the service also gives the process's user, the same as its own token's
+	if u, err := windows.GetCurrentProcessToken().GetTokenUser(); err == nil {
+		if got := ws[windows.GetCurrentProcessId()].sid; got != "" && got != u.User.Sid.String() {
+			t.Fatalf("the Remote Desktop service: this process's user %s, its token's %s", got, u.User.Sid.String())
+		}
 	}
 }

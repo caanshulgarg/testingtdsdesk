@@ -997,7 +997,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err
 		}
-		return checkForUpdate(true), nil
+		return checkForUpdateTray(), nil // 2.5.4: the tray never waits for a download
 	case "/tray/idle":
 		// the tray, in the owner's Windows session, says how long the keyboard and mouse have been idle and whether Tally
 		// is in front: a service cannot see that itself
@@ -1090,7 +1090,9 @@ func pingLocal(port int, timeout time.Duration) M {
 
 // the web server, on this computer only, on the port bound for it (bridgeport.go)
 func serve(ln net.Listener) {
-	srv := &http.Server{Handler: http.HandlerFunc(handle), ReadHeaderTimeout: 30 * time.Second}
+	// 2.5.4: each connection's accept time, so /ping's user and session checks share one TCP table taken after it
+	srv := &http.Server{Handler: http.HandlerFunc(handle), ReadHeaderTimeout: 30 * time.Second, ConnContext: withAcceptTime}
+	serving.Store(true)
 	srv.SetKeepAlivesEnabled(false)
 	go func() { _ = srv.Serve(ln) }()
 	go func() { <-stopCh; _ = srv.Close() }()

@@ -320,7 +320,7 @@ func tryTypedPort(port int) (M, error) {
 	given := &atomic.Bool{}
 	unplanned := !portPlanned(port)
 	go func() {
-		r, e := invokeTally(usePortTC(given, unplanned), port, companiesRequest(), 3)
+		r, e := invokeTally(usePortTC(given, unplanned), port, companiesRequest(), 3) // 2.5.4: 2 s at most (tally.go tallyRaw)
 		got <- res{r, e}
 	}()
 	var raw string
