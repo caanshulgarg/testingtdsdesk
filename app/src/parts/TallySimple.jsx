@@ -33,6 +33,8 @@ import "./tallySimple.css";
 import { OC, doConnect, Line } from "./TallyOneClick.jsx";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
+// next-tally-words: a client named as its Tally company (case and spaces aside): the button says only "Link"
+const sameName = (a, b) => !!shown(a) && shown(a).toLowerCase() === shown(b).toLowerCase();
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const UI = () => (S.tsm = S.tsm || { filter: "all", q: "", open: false, again: 0, check: 0 });
 const set = (p) => { Object.assign(UI(), p); render(); };
@@ -72,7 +74,7 @@ function checking() {
 }
 
 // ---------- the header
-function Head({ rows, checkAgain, ready, own, download }) {
+function Head({ rows, checkAgain, ready, own, download, oneDl }) {
   const w = headWords(rows), on = checking(), o = own || {}, quick = rows.some((r) => r.quick);
   // next-hang-watch: no bridge of this Windows login answers here: why, plainly, with what to do (never a blank)
   const say = (o.state === "none" || o.state === "away") && o.say ? o.say : null, far = o.state === "ok" && o.far;
@@ -82,7 +84,7 @@ function Head({ rows, checkAgain, ready, own, download }) {
     <button type="button" className="btn primary tsm-check" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check Tally now"}</button>
     {ready && (say || far) && <div className="tsm-head-notes tsm-head-bridge" data-tsm-bridge-say={say ? say.kind : "far"}>
       <div className="tsm-note">{say ? say.words : "This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div>
-      {say && say.kind !== "blocked" && download}</div>}
+      {say && say.kind !== "blocked" && !(oneDl && say.kind !== "old") && download}</div>}
     {ready && (o.unsure || (o.state === "ok" && !o.names.size && o.why) || (typeof o.say === "string" && o.say)) && <div className="tsm-head-notes">
       {o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
       {o.state === "ok" && !o.names.size && o.why && <div className="tsm-note" data-tsm-why="">{o.why}</div>}
@@ -93,15 +95,15 @@ function Head({ rows, checkAgain, ready, own, download }) {
 // ---------- the guided box
 const STEPS = [["Install FinCom Bridge", "On the computer that has Tally. Takes 1 minute."],
   ["Open the company in Tally", "Just open it. FinCom finds it by itself."],
-  ["Choose the client", "FinCom suggests the client with the same name."],
+  ["Link the client", "FinCom suggests the client with the same name."],
   ["Done", "Ledgers, opening balances and entries come in by themselves."]];
 const TICK = <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 // one click: the company to the client (the same link as everywhere: linkTo, its first sync started)
 function ConnectBtn({ r, co, label, hook, primary = true }) {
   const [busy, setBusy] = useState(false);
-  if (!canWrite()) return <span className="note">A member of the firm who may make changes connects it.</span>;
+  if (!canWrite()) return <span className="note">A member of the firm who may make changes links it.</span>;
   return <button type="button" className={"btn" + (primary ? " primary" : "")} {...hook} disabled={busy}
-    onClick={async () => { setBusy(true); try { await linkTo(r, co); } finally { setBusy(false); } }}>{busy ? "Connecting…" : label}</button>;
+    onClick={async () => { setBusy(true); try { await linkTo(r, co); } finally { setBusy(false); } }}>{busy ? "Linking…" : label}</button>;
 }
 function Guide({ step, collapsed, forced, open, best, connectPanel, download, checkAgain }) {
   const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false);
@@ -112,9 +114,9 @@ function Guide({ step, collapsed, forced, open, best, connectPanel, download, ch
     ["Step 1: download FinCom Bridge and install it on the computer that has Tally.", download],
     ["Step 2: FinCom Bridge is installed. Now open your company in Tally. This box moves on by itself when it sees the company.",
       <button type="button" className="btn primary" data-tsm-go="opened" disabled={ck} onClick={() => { setCk(true); rescanLocal(); Promise.resolve(checkAgain()).finally(() => setCk(false)); }}>{ck ? "Checking…" : "I have opened it"}</button>],
-    open ? [best ? "Step 3: Tally has “" + shown(open.company) + "” open. Connect it to client “" + best.name + "”?" : "Step 3: Tally has “" + shown(open.company) + "” open. Which client is it?",
-      best ? <ConnectBtn r={open} co={best} label="Yes, connect" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": best.id }} /> : null] : ["", null],
-    ["Connected. Ledgers, opening balances and entries are coming in by themselves. You can follow it in the list below.", null],
+    open ? [best ? "Step 3: Tally has “" + shown(open.company) + "” open. Link it to client “" + best.name + "”?" : "Step 3: Tally has “" + shown(open.company) + "” open. Which client is it?",
+      best ? <ConnectBtn r={open} co={best} label="Yes, link" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": best.id }} /> : null] : ["", null],
+    ["Linked. Ledgers, opening balances and entries are coming in by themselves. You can follow it in the list below.", null],
   ][step - 1];
   return <section className="tsm-card tsm-guide" aria-label="Connect a company" data-tsm-guide={step} data-tsm-forced={forced ? "" : undefined}>
     <div className="tsm-guide-top"><b className="tsm-guide-title">Connect a company to Tally</b>
@@ -143,7 +145,7 @@ function Strip({ r, best, more }) {
     <div className="tsm-strip-words"><b>Open in your Tally now:</b>{" “" + shown(r.company) + "”, not linked yet"}
       {more > 0 && <span className="note">{" (and " + more + " more in the list below)"}</span>}</div>
     {canWrite() && <div className="tsm-strip-acts">
-      {best && <ConnectBtn r={r} co={best} label={"Link to client “" + best.name + "”"} hook={{ "data-tsm-strip-connect": best.id }} />}
+      {best && <ConnectBtn r={r} co={best} label={sameName(best.name, r.company) ? "Link" : "Link to client “" + best.name + "”"} hook={{ "data-tsm-strip-connect": best.id }} />}
       {!pick && <button type="button" className={best ? "linkbtn" : "btn primary"} data-tsm-strip-choose="" onClick={() => setPick(true)}>{best ? "Link to another client" : "Link to a client"}</button>}</div>}
     {pick && <div className="tsm-pick" data-tsm-strip-pick=""><Pick r={r} co={null} pre="" onClose={() => setPick(false)} /></div>}
   </section>;
@@ -169,8 +171,8 @@ class Part extends Component {
 function PlainTable() {
   let rows = []; try { rows = quickRows({}); } catch (e) { rows = []; }
   return <section className="tsm-card tsm-table" aria-label="Clients" data-tsm-table="" data-tsm-plain="" data-tsm-n={rows.length}>
-    <div className="tsm-scroll"><table className="tsm-grid nocards"><thead><tr><th>Client</th><th>Connected to Tally?</th></tr></thead>
-      <tbody>{rows.map((r) => <tr key={r.key} className="tsm-tr" data-tsm-row={r.client} data-tsm-kind="client"><td className="tsm-td tsm-client" data-label="Client">{r.client}</td><Cell k="c" label="Connected to Tally?" x={r.c} /></tr>)}</tbody></table></div>
+    <div className="tsm-scroll"><table className="tsm-grid nocards"><thead><tr><th>Client</th><th>Linked to Tally?</th></tr></thead>
+      <tbody>{rows.map((r) => <tr key={r.key} className="tsm-tr" data-tsm-row={r.client} data-tsm-kind="client"><td className="tsm-td tsm-client" data-label="Client">{r.client}</td><Cell k="c" label="Linked to Tally?" x={r.c} /></tr>)}</tbody></table></div>
   </section>;
 }
 // the firm's clients not read from FinCom's cloud yet in this tab (its first sync, Cloud.st.lastSync): never "No client yet"
@@ -191,8 +193,8 @@ function Act({ row }) {
   if (!canWrite()) return null;
   const run = (fn) => async () => { setBusy(true); try { await fn(); } finally { setBusy(false); } };
   let btn;
-  if (a.kind === "connect") btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-act": "connect" }} />;
-  else if (a.kind === "choose" && row.best) btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
+  if (a.kind === "connect") btn = <ConnectBtn r={row.r} co={row.co} label="Link" hook={{ "data-tsm-act": "connect" }} />;
+  else if (a.kind === "choose" && row.best) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
   else if (a.kind === "choose" || a.kind === "pickco") btn = <button type="button" className="btn primary" data-tsm-act={a.kind} onClick={() => setPick(!pick)} aria-expanded={pick}>{a.label}</button>;
   else if (a.kind === "upload") btn = <button type="button" className="btn primary" data-tsm-act="upload" onClick={() => a.run ? a.run() : (a.day && typeof Rec === "object" && Rec.uploadFrom ? Rec.uploadFrom(row.cid, a.day) : openFromTally(row.cid))}>{a.label}</button>;
   else if (a.kind === "bring") btn = <button type="button" className="btn primary" data-tsm-act="bring" disabled={busy}
@@ -266,7 +268,7 @@ function Bring({ row }) {
     <button type="button" className="btn small primary" data-tsm-bring-btn="" disabled={busy || !l.can} onClick={go}>{busy ? "Asking Tally…" : "Bring ledgers from Tally"}</button>
     {!l.can && l.why && <div className="tsm-note" data-tsm-bring-why="">{l.why}</div>}</div>;
 }
-function Row({ row, download }) {
+function Row({ row, download, oneDl }) {
   const [list, setList] = useState(false);
   // a first sync going: read every 10 seconds (its count, done, or stuck after 3 minutes with the button), as the bar does
   // elsewhere; this page had read it only once, so "Coming in now" stayed until the page was opened again
@@ -276,8 +278,8 @@ function Row({ row, download }) {
     data-tsm-need={row.need ? "" : undefined} data-tsm-fine={row.fine ? "" : undefined} data-focus={row.focus ? "" : undefined}>
     <td className="tsm-td tsm-client" data-tsm-col="client" data-label="Client">{linkedRow ? <button type="button" className="linkbtn tsm-client-name" data-tsm-client={row.cid} onClick={() => openCompany(row.cid)}>{row.client}</button>
       : <span className="tsm-client-none">Not chosen yet</span>}</td>
-    <Cell k="c" label="Connected to Tally?" x={row.c} />
-    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.say && row.o.say !== "blocked" && <div className="tsm-say-dl" data-tsm-o-say={row.o.say}>{download}</div>}{row.o.connect && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
+    <Cell k="c" label="Linked to Tally?" x={row.c} />
+    <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.say && row.o.say !== "blocked" && (row.o.say === "old" || !oneDl) && <div className="tsm-say-dl" data-tsm-o-say={row.o.say}>{download}</div>}{row.o.connect && row.o.say !== "old" && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}
       <OpenLine row={row} list={list} onList={() => setList(!list)} />
@@ -296,7 +298,7 @@ function Row({ row, download }) {
   {list && row.open && row.open.state === "differ" && <tr className="tsm-tr-diffs"><td colSpan={6} className="tsm-td">
     <Differences row={row} /></td></tr>}</>;
 }
-function Table({ rows, download }) {
+function Table({ rows, download, oneDl }) {
   const ui = UI(), known = ledChangeKnown(rows);
   const fs = FILTERS.filter(([k]) => (k !== "ledchg" || known) && (k !== "opendiff" || openKnown()));
   const cur = fs.some(([k]) => k === ui.filter) ? ui.filter : "all";
@@ -313,8 +315,8 @@ function Table({ rows, download }) {
     {!list.length && <div className="tsm-none" data-tsm-none={rows.length ? "match" : reading() ? "reading" : "none"}>{rows.length ? "No client matches. " : reading() ? readingWords() : "No client yet. "}
       {rows.length > 0 && <button type="button" className="linkbtn" data-tsm-showall="" onClick={() => set({ filter: "all", q: "" })}>Show all</button>}</div>}
     {list.length > 0 && <div className="tsm-scroll"><table className="tsm-grid nocards">
-      <thead><tr><th>Client</th><th>Connected to Tally?</th><th>Open in Tally right now?</th><th>Ledgers received?</th><th>All entries received?</th><th>What to do</th></tr></thead>
-      <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} />)}</tbody></table></div>}
+      <thead><tr><th>Client</th><th>Linked to Tally?</th><th>Open in Tally right now?</th><th>Ledgers received?</th><th>All entries received?</th><th>What to do</th></tr></thead>
+      <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} oneDl={oneDl} />)}</tbody></table></div>}
   </section>;
 }
 
@@ -360,11 +362,14 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const expanded = forced || !mineIn || linkedN === 0 || step === 4 || ui.open || asked;
   const open = x.open, best = x.best;
   const strip = unlinked.length > 0 && !(expanded && step === 3);
+  // next-tally-words: step 1 open has the one Download button; the header's note and the rows say the words only (an
+  // older bridge keeps its own Download in its row and note)
+  const oneDl = !!ready && expanded && step === 1;
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
-    <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} /></Part>
+    <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} oneDl={oneDl} /></Part>
     {strip && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
-    {ready && <Part name="guided box" v={v}><Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
-    <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} /></Part>
+    {ready && !(strip && !expanded) && <Part name="guided box" v={v}><Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
+    <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} oneDl={oneDl} /></Part>
     {ready && <Part name="computers line" v={v}><Computers pcs={pcs} download={download} sha={sha} /></Part>}
   </div>;
 }

@@ -28,7 +28,7 @@ function OpenCompany({ r, here }) {
   const add = async () => { setBusy("add"); const id = await addNew(r); setBusy("");
     if (id && S.companies[id]) toast(S.companies[id].name + " is added and linked to " + shown(r.company) + ". Its ledgers are coming in now."); after(); };
   const link = async (co) => { if (!co) return; setBusy("link"); const ok = await linkTo(r, co); setBusy("");
-    if (ok) toast(shown(r.company) + " is linked to " + co.name + ". Its ledgers are coming in now."); after(); };
+    if (ok) toast(shown(r.company) + (shown(r.company).toLowerCase() === shown(co.name).toLowerCase() ? " is linked" : " is linked to " + co.name) + ". Its ledgers are coming in now."); after(); };
   const first = here || alike[0], addFirst = !first && !dated;
   const addBtn = <button className={"btn small" + (addFirst ? " primary" : "")} data-tally-offer-add="" disabled={!!busy} onClick={add}>{busy === "add" ? "Adding…" : "Add as new client"}</button>;
   const ids = new Set(alike.map((c) => c.id)), list = alike.concat(clients().filter((c) => !ids.has(c.id)));

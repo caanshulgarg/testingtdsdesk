@@ -1342,7 +1342,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     older: week.filter((r) => !r.go || r.old || (latest && vnum(latest) > vnum(r.version))).length };
   const set = setupOf(m);
   const dl = set ? <a className="btn" data-tsm-download="" href={set.href} download={set.file}>Download FinCom Bridge</a> : <DownloadBtn m={m} />;
-  const panel = <ConnectThisComputer download={<span className="note">Use Download FinCom Bridge above.</span>} linked={gx.done.install && Bridge.on()} />;
+  const panel = <ConnectThisComputer download={<span className="note">Use the Download FinCom Bridge button above.</span>} linked={gx.done.install && Bridge.on()} />;
   return <>
     <GuideRefresh />
     {!Bridge.blocked() && <ThisWatch rows={rows} />}

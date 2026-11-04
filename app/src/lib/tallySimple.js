@@ -3,7 +3,7 @@
 // column answered Yes / No / Not yet / — with one short note, and at most one thing to do. Everything here is read from
 // what FinCom already holds (the links, the computers' beats, the books in FinCom's cloud, the held lines, the first sync,
 // the books being brought); nothing new is asked of the bridge, the cloud or Tally.
-//   Client · Connected to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
+//   Client · Linked to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
 import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
 import { seenWords, coKey, lastEntry, tallyDevs } from "./tallyState.js";
@@ -425,8 +425,8 @@ function clientRow(co, all, opts) {
     Object.assign(row, { r, found: r ? r.company : "",
       c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "" },
       o: { w: DASH, note: "" }, l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" } });
-    if (r) { row.act = { kind: "connect", label: "Connect" }; row.todo = "Connect it to the Tally company shown."; }
-    else { row.act = { kind: "pickco", label: "Connect" }; row.todo = "Open its company in Tally, then connect it."; }
+    if (r) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
+    else { row.act = { kind: "pickco", label: "Link" }; row.todo = "Open its company in Tally, then press Link."; }
     return row;
   }
   // connected
@@ -499,7 +499,7 @@ function companyRow(r, all, own) {
   const best = bestFor(r, all);
   return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best,
     c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company, own), own), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
-    act: { kind: "choose", label: best ? "Connect" : "Choose the client" }, todo: best ? "Connect it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
+    act: { kind: "choose", label: best ? "Link" : "Link to a client" }, todo: best ? "Link it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")

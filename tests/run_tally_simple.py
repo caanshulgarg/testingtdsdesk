@@ -198,14 +198,14 @@ def main():
         d = T.dev(7, PC, WIN, tally="open", opened=(SPLIT,), version="2.5.1", rec=(SPLIT,))
         ids = scene([d], [{"company": SPLIT, "client_id": None, "device_id": d["id"], "gstin": "", "last_seen": "ago:1"}], [ACME, EVER])
         ok(pg.get_attribute(g, "data-tsm-guide") == "3" and [s[2] for s in steps()] == [True, True, False, False], "1. a company open that no client has: step 3, steps 1 and 2 ticked (%s)" % steps())
-        ok(txt("#app [data-tsm-now]") == "Step 3: Tally has “%s” open. Connect it to client “%s”?" % (SPLIT, EVER), "1. step 3: the full Tally name, the client of its name (%s)" % txt("#app [data-tsm-now]"))
+        ok(txt("#app [data-tsm-now]") == "Step 3: Tally has “%s” open. Link it to client “%s”?" % (SPLIT, EVER), "1. step 3: the full Tally name, the client of its name (%s)" % txt("#app [data-tsm-now]"))
         ok(n("#app [data-tsm-strip]") == 0, "1. step 3 says it: no strip as well")
         pg.click(g + " [data-tsm-go-choose]"); pg.wait_for_timeout(500)
         ok(n(g + " [data-tsm-guide-pick] select[data-tco-relink-pick]") == 1, "1. Choose another client: the picker of the clients")
         E("() => { window.__calls = []; }")
         pg.click(g + ' [data-tsm-go="connect"]'); pg.wait_for_timeout(2500)
-        ok([x for x in links() if x.get("p_client")] == [{"p_company": SPLIT, "p_client": ids[EVER]}], "1. Yes, connect: ONE link, the full Tally name to %s (%s)" % (EVER, links()))
-        ok(pg.get_attribute(g, "data-tsm-guide") == "4" and txt("#app [data-tsm-now]").startswith("Connected. Ledgers, opening balances and entries are coming in by themselves.") and n(g + " [data-tsm-go]") == 0,
+        ok([x for x in links() if x.get("p_client")] == [{"p_company": SPLIT, "p_client": ids[EVER]}], "1. Yes, link: ONE link, the full Tally name to %s (%s)" % (EVER, links()))
+        ok(pg.get_attribute(g, "data-tsm-guide") == "4" and txt("#app [data-tsm-now]").startswith("Linked. Ledgers, opening balances and entries are coming in by themselves.") and n(g + " [data-tsm-go]") == 0,
            "1. just linked: step 4, no button (%s)" % txt("#app [data-tsm-now]"))
         shot("guide-step4")
 
@@ -215,7 +215,8 @@ def main():
                {"company": SPLIT, "client_id": None, "device_id": d["id"], "gstin": "", "last_seen": "ago:1"}]
         ids = scene([d], cos, [ACME, EVER])
         st = "#app [data-tsm-strip]"
-        ok(n(g + "[data-tsm-collapsed]") == 1 and "Show the steps" in txt(g), "2. a company connected already: the box is small (%s)" % txt(g))
+        # next-tally-words: a company connected already: the box is folded, and hidden while the strip shows
+        ok(n("#app [data-tsm-guide]") == 0 and n(st) == 1, "2. a company connected already, the strip showing: no folded steps box")
         ok(txt(st + " .tsm-strip-words") == "Open in your Tally now: “%s”, not linked yet" % SPLIT and pg.get_attribute(st, "data-tsm-strip") == SPLIT, "2. the strip names the full Tally name (%s)" % txt(st))
         ok(txt(st + " [data-tsm-strip-connect]") == "Link to client “%s”" % EVER, "2. one click: Link to client “%s”" % EVER)
         pg.click(st + " [data-tsm-strip-choose]"); pg.wait_for_timeout(500)
@@ -255,7 +256,7 @@ def main():
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
-        ok(heads == ["Client", "Connected to Tally?", "Open in Tally right now?", "Ledgers received?", "All entries received?", "What to do"], "3. the six questions (%s)" % heads)
+        ok(heads == ["Client", "Linked to Tally?", "Open in Tally right now?", "Ledgers received?", "All entries received?", "What to do"], "3. the six questions (%s)" % heads)
         ok([word(ACME, k) for k in "cole"] == ["Yes"] * 4 and txt(cell(ACME, "c") + " [data-tsm-note]") == "Tally company: " + ACME and txt(cell(ACME, "do")) == "Nothing.", "3. %s: Yes Yes Yes Yes, Nothing. (%s)" % (ACME, txt(row(ACME))))
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
@@ -268,12 +269,12 @@ def main():
         ok(word(CORAL, "e") == "Not yet" and txt(cell(CORAL, "e") + " [data-tsm-note]") == "New client · 62% received · 6 min left" and pg.get_attribute(cell(CORAL, "e") + " [role=progressbar]", "aria-valuenow") == "62",
            "3. being brought: Not yet, New client · 62%% received · 6 min left, the bar (%s)" % txt(cell(CORAL, "e")))
         ok(txt(cell(CORAL, "do") + " [data-tsm-todo]") == "Nothing. It is coming in by itself." and n(cell(CORAL, "do") + " [data-tsm-upload]") == 1, "3. coming in by itself, or upload the file yourself (%s)" % txt(cell(CORAL, "do")))
-        ok(word(DELTA, "c") == "No" and txt(cell(DELTA, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % DELTA and [word(DELTA, k) for k in "ole"] == ["—"] * 3 and txt(cell(DELTA, "do") + " [data-tsm-act]") == "Connect",
-           "3. not connected, found in Tally: No, —, Connect (%s)" % txt(row(DELTA)))
+        ok(word(DELTA, "c") == "No" and txt(cell(DELTA, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % DELTA and [word(DELTA, k) for k in "ole"] == ["—"] * 3 and txt(cell(DELTA, "do") + " [data-tsm-act]") == "Link",
+           "3. not connected, found in Tally: No, —, Link (%s)" % txt(row(DELTA)))
         ok(txt(cell(EVER, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % SPLIT, "3. a split is found by its client's name, said in full (%s)" % txt(cell(EVER, "c")))
         ok(word(GAMMA, "l") == "Not yet" and word(GAMMA, "e") == "Not yet" and word(GAMMA, "o") == "No" and txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally.", "3. linked, nothing received yet: Not yet (%s)" % txt(row(GAMMA)))
-        ok(pg.get_attribute(row(ZETA), "data-tsm-kind") == "company" and "Not chosen yet" in txt(cell(ZETA, "client")) and txt(cell(ZETA, "c") + " [data-tsm-note]") == "Open in Tally: “%s”" % ZETA and txt(cell(ZETA, "do") + " [data-tsm-act]") == "Choose the client",
-           "3. a company no client has: Not chosen yet, Choose the client (%s)" % txt(row(ZETA)))
+        ok(pg.get_attribute(row(ZETA), "data-tsm-kind") == "company" and "Not chosen yet" in txt(cell(ZETA, "client")) and txt(cell(ZETA, "c") + " [data-tsm-note]") == "Open in Tally: “%s”" % ZETA and txt(cell(ZETA, "do") + " [data-tsm-act]") == "Link to a client",
+           "3. a company no client has: Not chosen yet, Link to a client (%s)" % txt(row(ZETA)))
         acts = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => r.querySelectorAll('[data-tsm-col=do] .btn').length)")
         ok(max(acts) <= 1, "3. at most one button in What to do (%s)" % acts)
         need, fine = n("#app [data-tsm-table] tr[data-tsm-need]"), n("#app [data-tsm-table] tr[data-tsm-fine]")

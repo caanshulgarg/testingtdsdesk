@@ -176,6 +176,9 @@ export default function ConnectThisComputer({ download, linked = false }) {
     : st === "linking" ? ["ok", "✓ Connected to FinCom Bridge on " + pcWords(Bridge.st && Bridge.st.computer ? { computer: Bridge.st.computer, user: Bridge.st.user } : b) + ". Linking it to " + firm + "…" + tallyWords()]
     : st === "error" ? ["bad", "Connected to the bridge, but linking it to " + firm + " did not work: " + (FL.err || "no answer") + "."] : ["wait", ""];
   const slow = st === "linking" && FL.pairedAt && Date.now() - FL.pairedAt > SLOW_LINK_MS;
+  // next-tally-words: the setup's Finish opens FinCom with the code in the address (#pair=, src/js/49) and it connects by
+  // itself; "Type its code here" shows only when FinCom found the bridge and asks for the code, or a typed code was used
+  const askCode = st === "code" || st === "pairing" || (st === "linking" && FL.tries > 0) || !!FL.msg;
   return <div className="fl" data-firstlink={st}>
     <h4 className="fl-h">Connect this computer</h4>
     <ol className="fl-steps">
@@ -184,14 +187,14 @@ export default function ConnectThisComputer({ download, linked = false }) {
         <span className="note">On the computer where TallyPrime runs. Windows says “Windows protected your PC”? Press More info, then Run anyway.</span>
       </Sub>
       <Sub k="open" n={2} title="Open it and press Next until Finish" done={seen} now={!seen}>
-        <span className="note">It asks nothing else: “Just for me” is right. An icon appears near the clock and FinCom finds it here by itself.</span>
+        <span className="note">It asks nothing else: “Just for me” is right. An icon appears near the clock, and FinCom finds it here and connects by itself.</span>
       </Sub>
-      <Sub k="code" n={3} title="Type its code here" done={st === "linking"} now={st === "code" || st === "pairing"}>
+      {askCode && <Sub k="code" n={3} title="Type its code here" done={st === "linking"} now={st === "code" || st === "pairing"}>
         {st === "code" || st === "pairing" ? <div className="fl-codewrap">
           <div className="fl-where"><p className="tc3-p"><b>Right-click the FinCom icon near the clock</b> (click ^ if you do not see it) and choose <b>Connect FinCom on this computer…</b> A box shows six digits.</p><TrayPicture /></div>
           <CodeBox /></div>
-          : st === "linking" ? <span className="note">Done.</span> : <span className="note">After step 2: FinCom asks for it as soon as it finds the bridge.</span>}
-      </Sub>
+          : st === "linking" ? <span className="note">Done.</span> : <span className="note">The code is shown by FinCom Bridge: right-click the FinCom icon near the clock › Connect FinCom on this computer…</span>}
+      </Sub>}
     </ol>
     {status[1] && <p className={"fl-status " + status[0]} data-fl-status={st} role="status" aria-live="polite">{status[0] === "wait" && <span className="fl-spin" aria-hidden="true" />}{status[1]}</p>}
     {st === "error" && <button className="btn small primary" data-fl-retry="" onClick={() => { say({ st: "linking", err: "" }); linkFirm(); }}>Try again</button>}
