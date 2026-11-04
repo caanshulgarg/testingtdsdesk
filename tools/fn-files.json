@@ -1,7 +1,7 @@
 {
   "_": "Edge functions deployed as uploaded files from one commit (tools/deploy-fn-files.md). sha: the commit the files come from; entry: the module the root index.ts imports; call: true when index.ts calls its exported main() (the module only serves when it is the main module, import.meta.main); rollback: the version to go back to.",
   "fincom-call":       { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/video-calls/index.ts",       "call": true,  "verify_jwt": false },
-  "tally-ingest":      { "sha": "65e37fb6e98868ae03f7e6c81ccb060955a4e651", "entry": "server/tally-cloud/index.ts",       "call": false, "verify_jwt": false },
+  "tally-ingest":      { "sha": "13435b4d6e18cb23a65e74f9820c68ec9ae1bbfb", "entry": "server/tally-cloud/index.ts",       "call": false, "verify_jwt": false },
   "gst-2b-match":      { "sha": "dfc79fbaef4202437592e3f8355fdf55178258e3", "entry": "server/gst-2b-match/index.ts",      "call": false, "verify_jwt": false },
   "fincom-assistant":  { "sha": "1de642a6be0d278b6c9ffd140be729de8cb7d622", "entry": "server/assistant/index.ts",         "call": true,  "verify_jwt": false },
   "tds-challan-match": { "sha": "735de9b405541e39f909ca242cd428485d8f8003", "entry": "server/tds-challan-match/index.ts", "call": false, "verify_jwt": false },
