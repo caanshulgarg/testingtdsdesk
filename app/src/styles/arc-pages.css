@@ -57,8 +57,8 @@ nav.sbar > button[aria-selected="true"] .sbar-n { background: var(--accent); col
 /* ---------- Purchase and Bank: the head of the list and the bar along the bottom ---------- */
 .bk-head { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface); box-shadow: var(--shadow-resting); }
 .bk-title { font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em; }
-.actionbar { background: color-mix(in oklab, var(--surface) 92%, transparent); border-top: 1px solid var(--border);
-  box-shadow: 0 -10px 30px rgb(var(--shade) / .08); -webkit-backdrop-filter: saturate(1.4) blur(10px); backdrop-filter: saturate(1.4) blur(10px); }
+.actionbar { background: var(--surface); border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 30px rgb(var(--shade) / .08); }
 /* the bill open beside the list: Arc's drawer panel */
 .detail { border-color: var(--border); border-radius: var(--radius-panel); background: var(--surface-raised); box-shadow: var(--shadow-raised); }
 .detail .drawer-head { border-bottom: 1px solid var(--border-subtle); }

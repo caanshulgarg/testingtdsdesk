@@ -232,7 +232,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported from TallyPrime as JSON, each object read as
 // the XML element Tally writes for it (the one rule, shared with the app: server/_shared/tallyjson.js)
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
-import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -328,7 +329,7 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     port: port(body?.bridgePort ?? b?.port), tallyPort: port(body?.tallyPort), dataFolder: s(body?.dataFolder, 260),
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
-    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
     // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
     reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist),
     ...tallyRetryOf(body),
@@ -1038,6 +1039,35 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
   } catch (e) { fail("bridge_control", e); console.error("tally-ingest bridge control", (e as Error).message); }
   return { out, info };
 }
+// migration 139 (the owner's requirement of 04-Nov-2026: an update never hangs a computer or anyone's Tally): the newest
+// version's release is allowed only while the bridge is idle with Tally, at its own time to look for an update, and holds
+// its computer's one slot of 10 minutes (tally_bridge_update_gate; server/tally-cloud/updategate.js). A cloud without
+// 139 (or no gate version set): the release as before; any other error: not allowed this time (the bridge looks again
+// at its next time)
+async function gatedRelease(firm: string, dev: any, me: { id: string; entry: any }, prevInfo: any, beat: any, ug: any, posts: number, rel: any) {
+  if (!rel || !rel.newest || rel.rollback) return rel;
+  const now = Date.now(), win = checkWindow(ug, now);
+  const busy = !beat ? "no beat" : posts > 0 ? "a posting or a check waits for this computer" : busyWhy(beat, ug, now);
+  let why = busy || (win.at ? "" : "not its time to look for an update (next " + win.next + ")");
+  try {
+    if (!why && !win.known) {
+      // its time not known: it gives way to another bridge of the computer near its own known time
+      const [tg, ps] = await Promise.all([db.from("tally_bridge_update_target").select("version").eq("id", 1).maybeSingle(),
+        db.from("tally_devices").select("id, info").eq("firm_id", firm).neq("id", dev.id)]);
+      if (!tg.error && tg.data?.version && !ps.error) why = peerNear(ps.data || [], String(prevInfo?.computer || me.entry?.computer || ""), String(tg.data.version), now);
+    }
+    const { data, error } = await db.rpc("tally_bridge_update_gate", { p_firm: firm, p_device: dev.id, p_computer: String(me.entry?.computer || prevInfo?.computer || "").slice(0, 60),
+      p_version: String(beat?.version || me.entry?.version || ""), p_ready: !why,
+      p_why: why || (win.known ? "its time to look for an update (" + win.check + ")" : "its time to look not known: a 10-minute slot") });
+    if (error) {
+      if (/tally_bridge_update_gate|tally_bridge_update_target|PGRST202|42883|42P01|schema cache|does not exist/i.test(String(error.message) + " " + String((error as any).code || ""))) return rel;
+      fail("update_gate", error); console.error("tally-ingest update gate", error.message);
+      return { ...rel, allowed: false };
+    }
+    if (!data || typeof data !== "object" || (data as any).gate === false) return rel;
+    return { ...rel, allowed: (data as any).allowed === true };
+  } catch (e) { fail("update_gate", e); return { ...rel, allowed: false }; }
+}
 // a support pack (the bridge's log, or its install log) for FinCom support; readable only by the platform's admins
 async function supportPack(firm: string, dev: any, body: any) {
   const zip = typeof body.zip === "string" ? b64bytes(body.zip) : new Uint8Array();
@@ -1113,6 +1143,8 @@ async function shadowCall(dev: any, firm: string, body: any) {
     const me = bridgeOf(dev, body, true);
     // migration-35: Stop reading / Resume / release apply to a bridge in test mode too
     const ctl = await bridgeControl(dev, firm, me, prev);
+    // migration 139: a bridge in test mode is never let through by the gate (no beat of its own is kept)
+    if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prev, null, null, 0, (ctl.out as any).release);
     // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
     const info = me.id === "v1" ? { ...prev, ...ctl.info, shadow } : { ...prev, ...ctl.info, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
@@ -3716,7 +3748,27 @@ async function linkNow(firm: string, body: any, asUser: any, userId: string) {
   }
   const { error: le } = await asUser.rpc("tally_company_link", { p_company: company, p_client: client });
   if (le) return reply(409, { ok: false, error: String(le.message || "Could not link it.") });
+  await fillLinkPlace(firm, company, ((devs || []) as any[]).find((x) => String(x.id) === device), String(body.bridge || ""));
   return reply(200, { ok: true, linked: true, company, client, device, registered: !row });
+}
+
+// next-tally-connectfix (finding 6; staging: only 3 of 7 links had them): the link's Windows user and Tally port, from
+// the device's beat when known (linkPlace, linknow.js), written only where the link has none yet; never fails the link
+async function fillLinkPlace(firm: string, company: string, dev: any, bridge: string) {
+  try {
+    const at = linkPlace(dev, bridge, company);
+    if (!at.user && !at.port) return;
+    const { data: bk } = await db.from("tally_companies").select("book_id").eq("firm_id", firm).eq("company", company).maybeSingle();
+    if (!bk || !bk.book_id) return;
+    const { data: ln } = await db.from("tally_links").select("windows_user, tally_port").eq("firm_id", firm).eq("book_id", bk.book_id).maybeSingle();
+    if (!ln) return;
+    const set: Record<string, unknown> = {};
+    if (!ln.windows_user && at.user) set.windows_user = at.user;
+    if (!ln.tally_port && at.port) set.tally_port = at.port;
+    if (!Object.keys(set).length) return;
+    const { error } = await db.from("tally_links").update(set).eq("firm_id", firm).eq("book_id", bk.book_id).is(set.windows_user ? "windows_user" : "tally_port", null);
+    if (error) console.error("tally-ingest link_now: place not kept", String(error.message || "").slice(0, 200));
+  } catch (e) { console.error("tally-ingest link_now: place", (e as Error).message); }
 }
 
 async function userUpload(req: Request, auth: string) {
@@ -3879,7 +3931,8 @@ Deno.serve(sentry.wrap(async (req) => {
         const b = body || {};
         const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
         const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
-          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          // next-tally-connectfix: a company's name trimmed of spaces and CR/LF (staging: one came with "\r\n\r\n" at its end)
+          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
           // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120),
@@ -3888,7 +3941,7 @@ Deno.serve(sentry.wrap(async (req) => {
           // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
           // switched on Tally's connection in tally.ini
           ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),
-          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
+          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: coTrim(c?.name), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
             // 2.4.5: the company's GUID as the bridge holds it (the ledger progress of a bridge not holding it yet is matched by it)
             ...(typeof c?.guid === "string" && c.guid ? { guid: s(c.guid, 100) } : {}),
@@ -3934,7 +3987,9 @@ Deno.serve(sentry.wrap(async (req) => {
         if (co) (me.entry as any).changesOnly = true;
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
-        const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
+        // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
+        const ug = gateTrack(prevInfo, beat, Date.now());
+        const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
         // 2.3.1 (2.3.0 review, cloud Lows): the computer's row was read before the bind; a refusal of THIS bridge's id that
         // the bind has just cleared (the id is this computer's own again) is not written back. Another bridge's is kept
         if (boundOwn && boundOwn === me.id && (info as any).idRefused?.bridge === me.id) delete (info as any).idRefused;
@@ -3971,6 +4026,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
         // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
         const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
+        // migration 139: the newest version only while idle with Tally, at its time, in its computer's slot
+        if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prevInfo, beat, ug, posts, (ctl.out as any).release);
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
@@ -4310,7 +4367,7 @@ Deno.serve(sentry.wrap(async (req) => {
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)
-          .map((c: any) => ({ name: String(c?.name || "").trim().slice(0, 200), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
+          .map((c: any) => ({ name: coTrim(String(c?.name || "")), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
         const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so

@@ -164,15 +164,19 @@ After install: watch NWS144 for a working day (timeouts, retries, longest wait f
 - 02-Nov-2026 to staging review: FinCom Bridge 2.5.2 (the stock from Tally only on a person's click), published to staging review 02-Nov-2026 (main aef7653be: next/ 3ee532fe3 then promoted; build mvz30jmw-e2781d from staging-next 339ef3da6); review/assets/bridge-go/latest.json names 2.5.2, setup 648b5187128fc3d6f003fbcc7afa0dc87b849eb1655a0b400d978005439e3e07, program 267d696c…3c05 (the same blobs as next/); migration 134 run on staging first (md5 51e6ac0d9b38c04515b77e1192e1fd05 checked on the joined piece in fincom_migration_text; read back: tally_stock_ask 62440d35fa1ca1d2e67784f346461ae3 and tally_stock_answer f485b9d0b568e960f4e9f306a90a1945 equal to pg_stand's, security definer, execute service_role only; tally_stock_reads with RLS on, policy tally_stock_reads_read for authenticated, authenticated select only, anon nothing; service_role also has delete there from Supabase's default privileges); tally-ingest version 70 (verify_jwt off): a one-line index.ts importing server/tally-cloud/index.ts at 339ef3da69a966d101bba5bb91059b5f14d6ce08 from raw.githubusercontent.com (its imports at the same commit; staging-next's tallyname.js split-company names deployed with it); a pg_net probe without a key answered its own 401. Rollback: v69. Gates on the build commit 8f2b33645: real-Tally g251 run 41418944815 40 of 40 PASS (3.0, 4.1, 5.1, 6.2, 7.1, installed over the published 2.5.1), Windows CI 41418945380 green, CI 41418948460 (bridge jobs green; app shares red as on staging-next, baseline 41386112956).
 - 22-Oct-2026 11:28 IST to staging review (main 3abcaed23, from staging-next = next-245 42f1f189c: 05a94beb7 merged with staging-next e6b980aca); latest.json says 2.4.5, setup SHA-256 `bfe87c2afc3c5ad737e83e6c3aba8c33a80ae8e1a966c36640c4eeee64fa0168` (matches the .sha256 file and the setup's bytes on main), program `17e2fff3…537c`; banner "REVIEW BUILD – Bridge 2.4.5 · older entries by year (off until tested) · faster night pace"; only review/ changed (the 2.4.4 files and review/assets/connector/TDSBridge.ps1 no longer shipped). Migration 98 run on staging first (22-Oct-2026 05:55 UTC; md5 105ee6905da7a94e1d062fdde95e5343 checked on the joined pieces in fincom_migration_text; read back: the 18 functions' prosrc md5 equal to pg_stand's, the three tables with RLS on, the nine tally_devices columns, period_fetch default false; every tally_devices row period_fetch false (2 of 2)). CI 39725596363 green on 42f1f189c (share 4's run_quiet_refresh hung before any output on the first attempt; the one re-run green), Windows CI 39725590585; on the build commit 05a94beb7: CI 39716403034, Windows CI 39716405231, real-Tally gate 39716414044. tally-ingest version 56 (verify_jwt off): the one-line index.ts importing server/tally-cloud/index.ts at `42f1f189c98004eb282f494ed4f6455ca7ed4580` from raw.githubusercontent.com; a pg_net probe without a key answered its own 401 ("This computer is not connected to FinCom..."). Rollback: v55, pinned to 203fbdfc4. Reading older entries stays off on every computer until the owner switches it on.
 
-## 04-Nov: bridge update list signing (automatic updates still OFF on staging)
+## 04-Nov: bridge updates signed and gated (automatic updates ON on staging, 17:49 UTC)
 - The Connector's key (connector/signing-key.enc) is the bridge's: its public part equals bridge-go/update.go
-  updatePublicKeyXML (3072-bit, e=65537), checked 04-Nov.
-- publish-preview.sh signs the built list only with FINCOM_SIGN_BRIDGE_LIST=1 (tools/bridge_list_sign.py; passphrase
-  from FINCOM_SIGNING_PASS or FINCOM_SIGNING_PASS_FILE, out of the staging vault, connector_signing_passphrase), and
-  stops the publish if it does not verify with the bridge's key; without it no .sig is published (bridges stay as they
-  are). promote-next.sh refuses a next/ signature that does not verify.
-- Not switched on yet (the owner's requirement: an update must never hang a computer or anyone's Tally): the bridge's
-  updater restarts without waiting for a posting or a Tally request in flight, and has no per-bridge stagger. See the
-  report of 04-Nov before signing.
-- Tests: tests/run_bridge_list_signed.py (FINCOM_TEST_REAL_PASS_FILE also signs a copy of the real list with the real
-  key), bridge-go/listsigned_test.go.
+  updatePublicKeyXML (3072-bit, e=65537).
+- Published: next/ (main 7c7710984) then promoted to review/ (main 1e243af76), build mw2euj8x-e99100 from staging-next
+  0198950ca, with FINCOM_SIGN_BRIDGE_LIST=1 FINCOM_SHIP_BRIDGE=1. review/assets/bridge-go/latest.json (2.5.3, md5
+  ed67b716...) and latest.json.sig (md5 0f06e9d1...) served 200; the signature verifies with the bridge's key.
+- The gate (migration 139, run on staging; tally-ingest v72 from b1cffa930, rollback: the stub at cfbd052e9): a bridge older
+  than tally_bridge_update_target (2.5.3) is allowed only while idle with Tally, at its own time to look for an update
+  (2 min after a start, then every 6 h), and in its computer's one 10-minute slot (tally_bridge_update_grants). Before
+  signing a newer list: `update tally_bridge_update_target set version = '<v>', set_at = now()`.
+- The signature is kept beside the list (assets-test/bridge-go/latest.json.sig), so every FINCOM_SHIP_BRIDGE=1 build
+  ships it; publish-preview.sh checks it with the bridge's key and stops on a bad one. A new latest.json needs a new
+  signature: FINCOM_SIGN_BRIDGE_LIST=1 (passphrase: FINCOM_SIGNING_PASS or FINCOM_SIGNING_PASS_FILE, from the staging
+  vault, connector_signing_passphrase), or `python3 tools/bridge_list_sign.py sign assets-test/bridge-go`.
+- Tests: tests/run_bridge_list_signed.py, bridge-go/listsigned_test.go, tests/run_migration139.py,
+  tests/run_update_gate_ingest.py, server/tally-cloud/updategate_test.ts.

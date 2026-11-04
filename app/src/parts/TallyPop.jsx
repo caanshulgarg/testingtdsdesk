@@ -63,7 +63,7 @@ function LinkPick({ co, run }) {
     <button type="button" className="btn small primary" data-tally-pop-act="link" onClick={() => run(async () => {
       const r = rows.find((x) => x.company === sel); if (!r) return "Choose a company.";
       const ok = await linkTo(r, co);
-      return ok ? co.name + " is linked to " + sel + "." : "Not linked: " + ((typeof TCloud === "object" && TCloud.linkErr) || "the cloud did not take it") + ".";
+      return ok ? co.name + (String(co.name).replace(/\s+/g, " ").trim().toLowerCase() === String(sel).replace(/\s+/g, " ").trim().toLowerCase() ? " is linked." : " is linked to " + sel + ".") : "Not linked: " + ((typeof TCloud === "object" && TCloud.linkErr) || "the cloud did not take it") + ".";
     })}>Link</button>
   </div>;
 }

@@ -16,6 +16,7 @@
 // Nothing new is asked of the bridge or of Tally: the same /ping, /pair, /cloudlink and RPCs as before.
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
+import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
 // the watcher: one for the page (module state, drawn with render())
@@ -44,6 +45,8 @@ const pcWords = (b) => "this computer";   // next-fix-tally-links2: never a comp
 async function scan() {
   if (typeof Bridge !== "object") return;
   if (Bridge.blocked()) return say({ st: "blocked" });
+  // next-tally-connectfix (audit item 8): Chrome's Local network access blocked for this site: its plain fix, never "waiting"
+  if (lnaDenied()) return FL.st === "lna" ? undefined : say({ st: "lna", found: null });
   if (FL.busy || FL.st === "pairing") return;
   if (Bridge.on() && (FL.st === "linking" || FL.st === "error")) return;
   if (Bridge.on() && await Bridge.ensureProven()) return afterPair();
@@ -57,9 +60,17 @@ async function scan() {
   // alone): the code box stayed only a few seconds, then "another Windows user" and back. Kept for STICKY_MS
   if (!mine && FL.st === "code" && FL.found && Date.now() - (FL.mineAt || 0) < STICKY_MS) return;
   if (mine) { say({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
+  // next-tally-connectfix (finding 2): this login's own bridge is known here (found in this login before, or paired and
+  // heard by the cloud) and another login's answers: it is installed, only not running in this login
+  else if (other && ownStopped(other)) { say({ st: "stopped", other, found: null }); logStep("other_user", other.version, "own bridge known, not running"); }
   else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
   else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
   else { say({ st: "waiting", found: null }); logStep("waiting"); }
+}
+
+function ownStopped(other) {
+  const h = ownHint();
+  return h.user ? !(other.windowsUser && sameUser(other.windowsUser, h.user) === true) : !!h.id && other.bridgeId !== h.id;
 }
 
 // the six digits: checked against the bridge's proof here first (Bridge.pair sends nothing to a bridge that does not
@@ -169,6 +180,8 @@ export default function ConnectThisComputer({ download, linked = false }) {
   const seen = st === "code" || st === "pairing" || st === "linking" || st === "error";
   const status = st === "blocked" ? ["bad", "Pages opened inside claude.ai cannot reach programs on this computer. Open FinCom in Chrome or Edge on the Tally computer."]
     : st === "waiting" ? ["wait", "Waiting for FinCom Bridge on this computer…"]
+    : st === "stopped" ? ["bad", START_SAY]
+    : st === "lna" ? ["bad", LNA_SAY]
     : st === "other" ? ["bad", "FinCom Bridge here belongs to another Windows user" + (FL.other && FL.other.user ? " (" + FL.other.user + ")" : "") + ". Install it for yourself: run the setup while signed in to Windows as you (“Just for me”)."]
     : st === "old" ? ["bad", "An older FinCom Bridge" + (FL.old && FL.old.version ? " (" + FL.old.version + ")" : "") + " is running here. Download the new one and open it: it takes over by itself, keeping everything."]
     : st === "code" ? ["ok", "Found FinCom Bridge" + (b.version ? " " + b.version : "") + " on this computer. Now type its code."]
@@ -176,6 +189,9 @@ export default function ConnectThisComputer({ download, linked = false }) {
     : st === "linking" ? ["ok", "✓ Connected to FinCom Bridge on " + pcWords(Bridge.st && Bridge.st.computer ? { computer: Bridge.st.computer, user: Bridge.st.user } : b) + ". Linking it to " + firm + "…" + tallyWords()]
     : st === "error" ? ["bad", "Connected to the bridge, but linking it to " + firm + " did not work: " + (FL.err || "no answer") + "."] : ["wait", ""];
   const slow = st === "linking" && FL.pairedAt && Date.now() - FL.pairedAt > SLOW_LINK_MS;
+  // next-tally-words: the setup's Finish opens FinCom with the code in the address (#pair=, src/js/49) and it connects by
+  // itself; "Type its code here" shows only when FinCom found the bridge and asks for the code, or a typed code was used
+  const askCode = st === "code" || st === "pairing" || (st === "linking" && FL.tries > 0) || !!FL.msg;
   return <div className="fl" data-firstlink={st}>
     <h4 className="fl-h">Connect this computer</h4>
     <ol className="fl-steps">
@@ -184,19 +200,19 @@ export default function ConnectThisComputer({ download, linked = false }) {
         <span className="note">On the computer where TallyPrime runs. Windows says “Windows protected your PC”? Press More info, then Run anyway.</span>
       </Sub>
       <Sub k="open" n={2} title="Open it and press Next until Finish" done={seen} now={!seen}>
-        <span className="note">It asks nothing else: “Just for me” is right. An icon appears near the clock and FinCom finds it here by itself.</span>
+        <span className="note">It asks nothing else: “Just for me” is right. An icon appears near the clock, and FinCom finds it here and connects by itself.</span>
       </Sub>
-      <Sub k="code" n={3} title="Type its code here" done={st === "linking"} now={st === "code" || st === "pairing"}>
+      {askCode && <Sub k="code" n={3} title="Type its code here" done={st === "linking"} now={st === "code" || st === "pairing"}>
         {st === "code" || st === "pairing" ? <div className="fl-codewrap">
           <div className="fl-where"><p className="tc3-p"><b>Right-click the FinCom icon near the clock</b> (click ^ if you do not see it) and choose <b>Connect FinCom on this computer…</b> A box shows six digits.</p><TrayPicture /></div>
           <CodeBox /></div>
-          : st === "linking" ? <span className="note">Done.</span> : <span className="note">After step 2: FinCom asks for it as soon as it finds the bridge.</span>}
-      </Sub>
+          : st === "linking" ? <span className="note">Done.</span> : <span className="note">The code is shown by FinCom Bridge: right-click the FinCom icon near the clock › Connect FinCom on this computer…</span>}
+      </Sub>}
     </ol>
     {status[1] && <p className={"fl-status " + status[0]} data-fl-status={st} role="status" aria-live="polite">{status[0] === "wait" && <span className="fl-spin" aria-hidden="true" />}{status[1]}</p>}
     {st === "error" && <button className="btn small primary" data-fl-retry="" onClick={() => { say({ st: "linking", err: "" }); linkFirm(); }}>Try again</button>}
     {slow && <p className="note" data-fl-slow="">Still linking after 2 minutes? FinCom Bridge needs to reach FinCom’s cloud over the internet. If your office network blocks websites, ask the person who looks after it to allow FinCom; then right-click the FinCom icon › Test connection.</p>}
-    {(st === "waiting" || st === "other" || st === "old" || st === "blocked") && <Help />}
+    {(st === "waiting" || st === "other" || st === "stopped" || st === "old" || st === "blocked") && <Help />}
   </div>;
 }
 

@@ -39,8 +39,8 @@ with sync_playwright() as p:
     # that no client has ("Not chosen yet", Choose the client: the picker, + New client with this name inside it)
     rows = pg.evaluate("[...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => [r.getAttribute('data-tsm-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tsm-kind')])")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
-    ok(zz and zz[0][2] == "company" and "Not chosen yet" in zz[0][1] and "Open in Tally: “ZZ TEST”" in zz[0][1] and "Choose the client" in zz[0][1] and "Add as client" not in zz[0][1],
-       "the Tally page: ZZ TEST, open in Tally, no client yet, Choose the client (no Add as client) (%s)" % (zz and zz[0][1]))
+    ok(zz and zz[0][2] == "company" and "Not chosen yet" in zz[0][1] and "Open in Tally: “ZZ TEST”" in zz[0][1] and "Link to a client" in zz[0][1] and "Add as client" not in zz[0][1],
+       "the Tally page: ZZ TEST, open in Tally, no client yet, Link to a client (no Add as client) (%s)" % (zz and zz[0][1]))
     gs = [r for r in rows if r[0] == "Testing AAD"]
     ok(gs and "Tally company: GARG SHEKHAR & COMPANY" in gs[0][1] and "Add as client" not in gs[0][1] and not [r for r in rows if r[0] == "GARG SHEKHAR & COMPANY"],
        "GARG SHEKHAR & COMPANY is its client Testing AAD's row, not offered to add (%s)" % (gs and gs[0][1]))

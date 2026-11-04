@@ -121,11 +121,13 @@ function sig(cid) {
 }
 function look(force) {
   if (!S || !S.companies) return;
+  // next-tally-connectfix (finding 5): a hidden tab asks FinCom's cloud nothing (the next look once it is shown again)
+  if (typeof document === "object" && document.hidden) return;
   // Today and the bell need the figures when any client has it on
   if (!AP() && Object.values(S.companies).some(on)) loadAP().then((ap) => ap.loadCloudToday()).catch(() => {});
   else if (AP()) AP().loadCloudToday();
   const cid = S.coId, co = cid && S.companies[cid];
-  if (!on(co) || document.hidden) return;
+  if (!on(co)) return;
   const s = sig(cid), fifteen = Date.now() - lastAt > 15 * 60000;
   if (!(force || fifteen || s !== lastSig || cid !== lastCid)) return;
   lastSig = s; lastCid = cid; lastAt = Date.now();

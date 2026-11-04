@@ -3,7 +3,7 @@
 // column answered Yes / No / Not yet / — with one short note, and at most one thing to do. Everything here is read from
 // what FinCom already holds (the links, the computers' beats, the books in FinCom's cloud, the held lines, the first sync,
 // the books being brought); nothing new is asked of the bridge, the cloud or Tally.
-//   Client · Connected to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
+//   Client · Linked to Tally? · Open in Tally right now? · Ledgers received? · All entries received? · What to do
 // No computer's name anywhere here (the owner: "no computer names like NWS144"); For support keeps those.
 import { companyRows, twinOf, alikeOf, yearOf, ledgersOf, ledgersHeld, daybookHeld, cloudBook, ledBook, ledgerChanges, ledgerChangesForget } from "../parts/TallyCompanies.jsx";
 import { seenWords, coKey, lastEntry, tallyDevs } from "./tallyState.js";
@@ -13,6 +13,7 @@ import { needDays } from "./needDays.js";
 import { heldFor } from "../parts/HeldBlock.jsx";
 import { soonDraw } from "./soonDraw.js";
 import { QUIET } from "./quietReads.js";
+import { HERE } from "./tallyConnect.js";
 
 export const YES = "Yes", NO = "No", NOTYET = "Not yet", DASH = "—";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -241,11 +242,27 @@ function look() {
     .then((xs) => xs.filter((x) => x && (x.bridge || x.version)), () => [])
     .then((list) => {
       if (gen !== LOCALB.n) return;    // (a look started over meanwhile: its answer counts, not this one)
+      fixRemembered(list, ports);
       const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
       Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false });
       // (a later task: never inside the drawing that asked; only when it changes what the Tally page shows)
       if (changed && typeof document === "object" && document.querySelector("#app [data-tally-simple]")) soonDraw();
     }, () => { LOCALB.busy = false; if (LOCALB.list === null) LOCALB.list = []; });
+}
+// next-tally-connectfix (finding 3; staging: after another login's bridge took this login's old port 9102, this browser's
+// remembered bridge address pointed at that login's bridge until a full scan): the look found this login's own bridge
+// (sameSession true) and the remembered address (Bridge.cfg().url) is another login's now, or silent on a port just asked:
+// the own bridge's address is remembered instead, at once
+function fixRemembered(list, ports) {
+  try {
+    const pk = localPick(list);
+    if (!pk || !pk.sure || typeof Bridge !== "object" || !Bridge.setCfg) return;
+    const norm = (u) => String(u || "").replace(/\/+$/, ""), u = norm(cfgOf().url), mineU = norm(pk.x.url || "http://127.0.0.1:" + Number(pk.x.bridgePort || pk.x.port));
+    if (!mineU || u === mineU || (Bridge.localUrl && !Bridge.localUrl(u))) return;
+    const at = list.find((x) => norm(x.url) === u), port = Bridge.urlPort ? Bridge.urlPort(u) : 0;
+    const otherNow = at ? at.sameSession === false || (!!at.windowsUser && !!pk.x.windowsUser && sameUser(at.windowsUser, pk.x.windowsUser) === false) : ports.includes(port);
+    if (otherNow) { Bridge.setCfg({ url: mineU }); Bridge.foundAt = 0; }
+  } catch (e) { /* kept as it was */ }
 }
 function permOf() {
   try {
@@ -257,7 +274,9 @@ function permOf() {
 // once for this tab (the Tally page, once the firm's computers are read: their ports are asked too)
 export const lookOnce = () => { if (!LOCALB.n) look(); };
 // Connect / I have opened it: asked again now
-export const rescanLocal = () => look();
+// next-tally-connectfix (finding 4): and the one-click card's look of the whole range 9100-9199 (lib/tallyConnect.js
+// lookHere, otherwise once a tab) asked again with it
+export const rescanLocal = () => { HERE.again = true; look(); };
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
   return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
@@ -319,6 +338,8 @@ export const BLOCKED = "This browser does not let FinCom reach FinCom Bridge on 
 export function bridgeSay(list0) {
   const list = list0 === undefined ? localBridges() : list0;
   if (!list || localPick(list)) return null;
+  // next-tally-connectfix (audit item 8): the browser's leave to reach this computer refused: that, never "not running"
+  if (LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
   const old = list.find((x) => !isNew(x) && x.yours !== false);
   if (old) return { kind: "old", version: String(old.version || ""), words: "Your FinCom Bridge is old (" + (old.version || "before " + NEED_V) + "). Install " + NEED_V + " to connect this login’s Tally." };
   if (!list.length && LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
@@ -404,13 +425,50 @@ export function localOpen(company, own) {
   return o.names.has(k) || [...o.names.values()].some((n) => !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
 }
 export const BRING_WHY = "Open this company in Tally first";
+// next-tally-connectfix (finding 6): why the computer a company is linked to does not bring its ledgers, in words, only
+// when its beat (heard now) shows it cannot: the company not open in its Tally and none of the Tallys it sees answering
+// for it (each skipped, or none answers). Its FinCom Bridge older than 2.5.3 (2.5.3 no longer skips a Tally whose owner
+// Windows did not say): "Waiting for FinCom Bridge in the linked Windows login to update to 2.5.3"; else "FinCom Bridge
+// in the linked Windows login can't see this Tally". No computer or login named on this page (the owner's rule; For
+// support names them). "" when nothing says so (or not known)
+export const WAIT_OLD = "Waiting for FinCom Bridge in the linked Windows login to update to ", WAIT_BLIND = "FinCom Bridge in the linked Windows login can’t see this Tally";
+const vk = (v) => String(v || "").split(".").map((n) => String(Number(n) || 0).padStart(3, "0")).join(".");
+export function firstLinkWait(company, all) {
+  const k = coKey(company), r = [].concat(all || []).find((x) => x && coKey(x.company) === k);
+  const dev = r && r.device ? tallyDevs().find((d) => d.id === r.device) : null;
+  if (!dev) return "";
+  const info = dev.info || {}, beat = info.beat || {}, br = info.bridges || {};
+  const ids = Object.keys(br).filter((id) => id !== "v1"), has = (b) => [].concat((b && b.open) || []).some((n) => coKey(n) === k);
+  const id = ids.find((x) => has(br[x])) || ids.sort((a, b) => String((br[b] || {}).at || "").localeCompare(String((br[a] || {}).at || "")))[0];
+  const b = (id && br[id]) || {};
+  if (!fresh(b.at || beat.at) || has(b) || has(beat)) return "";
+  const ports = [].concat(beat.ports || []);
+  if (!ports.length || ports.some((p) => p && p.ok && !p.skipped)) return "";
+  const ver = String(b.version || beat.version || dev.version || "");
+  return ver && vk(ver) < vk(NEED_V) ? WAIT_OLD + NEED_V : WAIT_BLIND;
+}
 const openCell = (h, own, other) => h === "yes" ? { w: YES, note: "" } : h === "no" ? { w: NO, note: other || NOT_MINE }
   : h === "checking" ? { w: DASH, note: "Checking your FinCom Bridge…" }
   // next-hang-watch: no bridge of this login answering here: why, in words, with the download (old) or the start / install
   : own && own.say && (h === "none" || h === "away") ? { w: DASH, note: own.say.words, say: own.say.kind, connect: h === "away", setup: h === "none" }
   : h === "away" ? { w: DASH, note: AWAY, connect: true } : { w: DASH, note: NOT_SET, setup: true };
-const otherWords = (client, company) => { const u = otherLoginOf(client, company);
-  return u ? shown(client) + "’s Tally is open in another Windows login (" + u + "), not in this login’s. Open it in this login, or install FinCom Bridge in the " + u + " login." : ""; };
+const otherWords = (client, company, own) => { const u = otherLoginOf(client, company);
+  if (!u) return "";
+  // next-tally-connectfix (finding 7): this login's own Tally's connection is off (its tally.ini could not be written, or
+  // its own Tally's ports are closed): that is why the company is not seen here, not another login
+  const off = ownConnOff(own);
+  return off || shown(client) + "’s Tally is open in another Windows login (" + u + "), not in this login’s. Open it in this login, or install FinCom Bridge in the " + u + " login."; };
+export const CONN_OFF = "Your Tally’s connection is off, so FinCom can’t see the companies open in it. In TallyPrime: F1 → Settings → Connectivity → Client/Server configuration → TallyPrime acts as: Both, then restart Tally.";
+// this login's own bridge's beat says its Tally's connection is off: FinCom Bridge could not write tally.ini ("cannot
+// write"), or Tally runs in this login and none of its own ports answers (closed / not answering; another user's never
+// counts); "" otherwise
+export function ownConnOff(own) {
+  const o = own && own.own ? own.own : own, beat = (o && o.beat) || {};
+  const ini = [].concat(beat.tallyIni || []).some((x) => x && x.connect === "cannot write");
+  const ports = [].concat(beat.ports || []).filter((p) => p && !p.skipped && !["another user", "another bridge", "owner unknown", "not tally"].includes(lc(p.reason)));
+  const closed = !/^no tally running/i.test(String(beat.tallyWhy || "")) && ports.length > 0 && !ports.some((p) => p.ok) && ports.every((p) => ["closed", "not answering"].includes(lc(p.reason)));
+  return ini || closed ? CONN_OFF : "";
+}
 // the companies open in THIS user's own Tally that no client has (each its own row, the strip and step 3)
 export const openUnlinked = (all, own) => { const o = own || ownState(); return o.state === "ok" ? all.filter((r) => !r.client && o.names.has(coKey(r.company))) : []; };
 
@@ -425,15 +483,15 @@ function clientRow(co, all, opts) {
     Object.assign(row, { r, found: r ? r.company : "",
       c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "" },
       o: { w: DASH, note: "" }, l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" } });
-    if (r) { row.act = { kind: "connect", label: "Connect" }; row.todo = "Connect it to the Tally company shown."; }
-    else { row.act = { kind: "pickco", label: "Connect" }; row.todo = "Open its company in Tally, then connect it."; }
+    if (r) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
+    else { row.act = { kind: "pickco", label: "Link" }; row.todo = "Open its company in Tally, then press Link."; }
     return row;
   }
   // connected
   // open: in this user's own Tally (localOpen), never another login's bridge
   const here = localOpen(company, opts.own), open = here === "yes";
   row.c = { w: YES, note: "Tally company: " + shown(company) };
-  row.o = openCell(here, opts.own, here === "no" ? otherWords(co.name, company) : "");
+  row.o = openCell(here, opts.own, here === "no" ? otherWords(co.name, company, opts.own) : "");
   // ledgers: the first sync going (its bar), stuck (its reason, Try again), held (the count), not yet
   const x = firstSyncOf(cid), running = !!(x && !x.end && !x.err && !x.late), stuck = !!(x && !x.end && (x.err || x.late));
   const n = Math.max(ledgersOf(cid), ledN(cid), (x && x.led > 0 && x.led) || 0), held = ledgersHeld(cid) || !!(x && x.end);
@@ -442,9 +500,14 @@ function clientRow(co, all, opts) {
   // ledgers wake and, through the cloud, Update now); it can run when the company is open in Tally on this user's own
   // computer or on any computer FinCom hears now, else one plain line
   const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company));
-  const bring = { bring: true, can: anyOpen, why: anyOpen ? "" : BRING_WHY };
+  // next-tally-connectfix (finding 6; staging: "Coming in now" / "coming in by itself" for 34 hours): no ledgers yet, and
+  // the computer the company is linked to cannot bring them (its bridge older than 2.5.3, or it sees none of its Tallys):
+  // the true reason, and no button that cannot work
+  const wait = held ? "" : firstLinkWait(company, all);
+  const bring = wait ? { bring: true, can: false, why: wait } : { bring: true, can: anyOpen, why: anyOpen ? "" : BRING_WHY };
   if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0;
-    row.l = { w: NOTYET, note: of > 0 ? nf(rd) + " of " + nOf(of, "ledger", "ledgers") : "Coming in now", syncing: true }; }
+    const stop = of > 0 ? "" : wait;
+    row.l = { w: NOTYET, note: of > 0 ? nf(rd) + " of " + nOf(of, "ledger", "ledgers") : stop || "Coming in now", syncing: !stop, ...(stop ? { why: stop } : {}) }; }
   else if (stuck && !held) row.l = Object.assign({ w: NO, note: x.err || x.why || "Nothing came from Tally in 3 minutes" }, bring);
   else if (held) row.l = { w: YES, note: n > 0 ? nOf(n, "ledger", "ledgers") : "Received", change: ch.words, link: true };
   else row.l = Object.assign({ w: NOTYET, note: "" }, bring);
@@ -483,7 +546,8 @@ function clientRow(co, all, opts) {
   }
   // what to do (at most one button), else plain words
   if (!row.act) {
-    if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
+    if (wait && row.l.w !== YES) { row.todo = wait + "."; row.upload = true; }
+    else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
     else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Bring ledgers from Tally."; row.upload = true; }
     else if (row.e.w === NOTYET || row.l.w === NOTYET) {
       if (open || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
@@ -499,7 +563,7 @@ function companyRow(r, all, own) {
   const best = bestFor(r, all);
   return { key: "t:" + coKey(r.company), kind: "company", r, company: r.company, client: "", best,
     c: { w: NO, note: "Open in Tally: “" + shown(r.company) + "”" }, o: openCell(localOpen(r.company, own), own), l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" },
-    act: { kind: "choose", label: best ? "Connect" : "Choose the client" }, todo: best ? "Connect it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
+    act: { kind: "choose", label: best ? "Link" : "Link to a client" }, todo: best ? "Link it to client “" + best.name + "”." : "Choose which client it is.", upload: false };
 }
 // every row: the clients (by name), then the companies open in Tally that no client has (and that are not a client's
 // "Found in Tally")
@@ -675,4 +739,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

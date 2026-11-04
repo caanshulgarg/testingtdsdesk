@@ -1,7 +1,8 @@
 // The slim rail of the bank page (spacious layout, 01-Nov-2026; the owner approved the draft "Bank statement — spacious
 // layout"): on the Bank page only, the sidebar folds to a 72 px rail, one icon and a short word a section, so the
 // statement's table has the width. Every other page keeps the sidebar (Side.jsx) as it is.
-//   - hover an item, or focus or click it (keyboard and touch), and its flyout opens with the section's pages;
+//   - hover an item, or focus it (keyboard), and its flyout opens with the section's pages; a click, a tap or Enter on the
+//     item opens its first page (the owner, 04-Nov-2026: "if click to main menu then it should reach to first submenu");
 //   - Menu opens the full sidebar over the page (the sidebar itself, #side, shown as a panel); Pin there keeps the full
 //     sidebar on the Bank page too (remembered for this person in this browser), and "Slim rail" undoes it;
 //   - a phone (600 px and less) keeps its bar along the bottom: no rail.
@@ -69,7 +70,8 @@ function Flyout({ it, close, at }) {
   };
   return <div ref={box} className="bkr-fly" role="menu" aria-label={it.label} data-rail-flyout={it.k} style={{ top: at }} onKeyDown={key}>
     <div className="bkr-fly-head" aria-hidden="true">{it.label}</div>
-    {it.subs.map(([w, go]) => <button key={w} type="button" role="menuitem" className="bkr-fly-item" data-rail-sub={it.k + ":" + w}
+    {it.subs.map(([w, go], i) => <button key={w} type="button" role="menuitem" className="bkr-fly-item" data-rail-sub={it.k + ":" + w}
+      aria-current={it.k === "bank" && !i && !(B() && B().filter === "rules") ? "page" : undefined}
       onClick={() => { close(false); FinComNav.go(go); }}>{w}</button>)}
   </div>;
 }
@@ -86,8 +88,8 @@ function Item({ it, open, setOpen }) {
   return <div className="bkr-item" onMouseEnter={show} onMouseLeave={hide}>
     <button ref={btn} type="button" className="bkr-btn" data-rail={it.k} aria-label={it.label} aria-haspopup="menu" aria-expanded={open === it.k}
       aria-current={on ? "page" : undefined} onFocus={() => { if (!quiet.current) show(); }} onBlur={(ev) => { if (!(ev.relatedTarget && ev.currentTarget.parentElement.contains(ev.relatedTarget))) hide(); }}
-      onClick={show}
-      onKeyDown={(ev) => { if (["ArrowRight", "Enter", " ", "ArrowDown"].includes(ev.key)) { ev.preventDefault(); show(); first(); } else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); setOpen(null); } }}>
+      onClick={() => { setOpen(null); FinComNav.go(it.subs[0][1]); }}
+      onKeyDown={(ev) => { if (["ArrowRight", " ", "ArrowDown"].includes(ev.key)) { ev.preventDefault(); show(); first(); } else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); setOpen(null); } }}>
       <it.Icon width={18} height={18} strokeWidth={1.8} aria-hidden="true" />
       <span className="bkr-word" aria-hidden="true">{it.short || it.label}</span>
     </button>

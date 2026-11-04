@@ -222,8 +222,11 @@ def main():
         ok(pg.locator("#app [data-firstlink]").count() == 1, "2. Connect this computer is on the Tally page, under the three steps (not under Help & support)")
         # 02-Nov-2026 (next-tally-simple): the panel is under Connect a company to Tally's step 1, whose one button downloads
         ok(pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "2. step 1: the one Download button")
-        steps = [txt('#app [data-fl-step="%s"] b' % k) for k in ("download", "open", "code")]
-        ok(steps == ["Download FinCom Bridge", "Open it and press Next until Finish", "Type its code here"], "2. the three sub-steps in plain words (%s)" % steps)
+        steps = [txt('#app [data-fl-step="%s"] b' % k) for k in ("download", "open")]
+        # next-tally-words: the setup's Finish opens FinCom with the code (#pair=) and it connects by itself; "Type its code
+        # here" only once FinCom found the bridge and asks for it (step 3 below)
+        ok(steps == ["Download FinCom Bridge", "Open it and press Next until Finish"] and pg.locator('#app [data-fl-step="code"]').count() == 0,
+           "2. the sub-steps in plain words, no code step before FinCom asks for one (%s)" % steps)
         ok("Windows protected your PC" in txt("#app [data-fl-step=download]") and "More info" in txt("#app [data-fl-step=download]"), "2. the SmartScreen words, where the download is")
         ok("Just for me" in txt("#app [data-fl-step=open]"), "2. 'Just for me' is right: nothing else to choose")
         ok(wait_state("waiting"), "2. no bridge yet: waiting (%s)" % state())
@@ -249,6 +252,7 @@ def main():
         ok(wait_state("code"), "3. the bridge starts: found by itself (%s)" % state())
         ok(not pairs() and not any(x[1] != "/ping" for x in BR["log"]), "3. only /ping was asked; nothing secret sent (%s)" % sorted(set(x[1] for x in BR["log"])))
         ok("Found FinCom Bridge 2.4.5 on this computer" in txt("#app [data-fl-status]"), "3. 'Found FinCom Bridge 2.4.5 on this computer. Now type its code.' (%s)" % txt("#app [data-fl-status]"))
+        ok(txt('#app [data-fl-step="code"] b') == "Type its code here", "3. found: Type its code here (%s)" % txt('#app [data-fl-step="code"] b'))
         where = txt("#app [data-fl-step=code] .fl-where")
         ok("Right-click the FinCom icon near the clock" in where and "Connect FinCom on this computer…" in where and "six digits" in where, "3. the tray's exact words: right-click the icon › Connect FinCom on this computer… (%s)" % where[:160])
         ok(pg.locator("#app [data-fl-tray] .fl-pick").inner_text().strip() == "Connect FinCom on this computer…", "3. the picture of the icon's menu marks that line")

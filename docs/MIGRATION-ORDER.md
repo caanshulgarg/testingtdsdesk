@@ -654,3 +654,19 @@ written to tally_opening_repairs; tally_books.ledgers_at moved on) and 'keep' (o
 "Dismissed by <user> at <time> IST (Keep FinCom's)", stage kept). No table made or altered, no row deleted; one transaction,
 lock_timeout 10 s, safe twice; the change takes 130's per-book advisory lock. Tested on pg_stand: `tests/run_migration138.py`
 (RED_WITHOUT_138=1 fails); the page: `tests/run_tally_simple.py`. No tally-ingest change.
+
+## 139: the gated rollout of FinCom Bridge updates
+
+**139, bridge update gate** (04-Nov-2026, branch `next-bridge-signed-list`; the owner's requirement: an automatic update never
+hangs a computer or anyone's Tally): `server/tally-cloud/migration-139-bridge-update-gate.sql`. Tables
+`tally_bridge_update_target` (one row: the version the gate lets through, 2.5.3), `tally_bridge_update_grants` (each
+10-minute slot given: firm, computer, name, from and to version, when; kept, never deleted) and `tally_bridge_update_asks`
+(each computer's last ask while ready); RLS on, service_role only, explicit grants. ONE function,
+`tally_bridge_update_gate(uuid, uuid, text, text, boolean, text)` (service_role only): a bridge older than the target is
+let through only when tally-ingest says it is ready (idle with Tally, at its time to look) and no posting of its computer
+waits or is taken, at most one bridge per computer each 10 minutes (under a transaction lock of firm and computer name);
+a bridge whose slot ended yields to another of its computer that waits. Add-only, one transaction, lock_timeout 10 s,
+safe twice. Deploy order: 139, then the tally-ingest of the same branch (updategate.js); a tally-ingest without it never
+calls the function, and a cloud without 139 answers the release as before. Tested on pg_stand: `tests/run_migration139.py`
+(RED_WITHOUT_139=1 fails); tally-ingest: `tests/run_update_gate_ingest.py`, `server/tally-cloud/updategate_test.ts`.
+When a newer bridge list is signed, set the target first: `update tally_bridge_update_target set version = '<v>', set_at = now()`.

@@ -23,15 +23,17 @@ if [ -z "${FINCOM_SKIP_BUILD:-}" ]; then
   FINCOM_BANNER="$banner" npm run build:test >/dev/null
 fi
 # FinCom Bridge's update list (FINCOM_SHIP_BRIDGE=1): the bridges take an update by themselves only with FinCom's
-# signature on the exact bytes of latest.json (bridge-go/update.go). The list is signed only when asked for
-# (FINCOM_SIGN_BRIDGE_LIST=1, the owner's go-ahead for automatic updates; the passphrase: FINCOM_SIGNING_PASS or
-# FINCOM_SIGNING_PASS_FILE), and then checked with the bridge's own key: a list that does not verify stops the publish.
-# Without it the list goes unsigned (no .sig at all), so no bridge updates itself
+# signature on the exact bytes of latest.json (bridge-go/update.go); the cloud's gate (migration 139) then lets them
+# through one at a time. The signature is kept beside the list (assets-test/bridge-go/latest.json.sig) and checked here
+# with the bridge's own key: a signature that does not verify stops the publish. FINCOM_SIGN_BRIDGE_LIST=1 signs the list
+# afresh (a new latest.json; the passphrase: FINCOM_SIGNING_PASS or FINCOM_SIGNING_PASS_FILE). A list with no signature
+# goes as it is (no bridge updates itself), said here
 if [ -f dist-test/assets/bridge-go/latest.json ]; then
   if [ "${FINCOM_SIGN_BRIDGE_LIST:-}" = 1 ]; then
     python3 "../tools/bridge_list_sign.py" sign dist-test/assets/bridge-go || { echo "The bridge's update list is not signed well: stopped (nothing published)."; exit 1; }
+  elif [ -f dist-test/assets/bridge-go/latest.json.sig ]; then
+    python3 "../tools/bridge_list_sign.py" verify dist-test/assets/bridge-go || { echo "The bridge's update list's signature does not verify (a new latest.json? sign it: FINCOM_SIGN_BRIDGE_LIST=1): stopped (nothing published)."; exit 1; }
   else
-    rm -f dist-test/assets/bridge-go/latest.json.sig
     echo "Bridge update list shipped unsigned: bridges do not update themselves (FINCOM_SIGN_BRIDGE_LIST=1 signs it)."
   fi
 fi

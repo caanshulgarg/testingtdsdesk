@@ -1033,7 +1033,7 @@ const TCloud = {
   // true when the cloud took it (round 39: the Link to Tally card sets the client's Tally name only then)
   async link(company, client){
     let ok = false; this.linkErr = "";
-    try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); ok = true; toast(client ? company + " is linked to " + ((CO(client) || {}).name || "the client") + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
+    try { await this.rpc("tally_company_link", {p_company: company, p_client: client || null}); ok = true; const nm = (CO(client) || {}).name || "the client", same = (x) => String(x || "").replace(/\s+/g, " ").trim().toLowerCase(); toast(client ? company + (same(nm) === same(company) ? " is linked" : " is linked to " + nm) + ". Its books go to the cloud within a few minutes." : company + " is no longer linked."); }
     catch (e){ this.linkErr = String((e && e.message) || e); toast("Could not link it: " + this.linkErr); }
     await this.refreshPane();
     return ok;
