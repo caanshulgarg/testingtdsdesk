@@ -232,8 +232,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported from TallyPrime as JSON, each object read as
 // the XML element Tally writes for it (the one rule, shared with the app: server/_shared/tallyjson.js)
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
-import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";
-import { gateTrack, checkWindow, busyWhy } from "./updategate.js";   // migration 139: the gated rollout of bridge updates   // next-tally-linknow: a company open in Tally is linked at a click
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1048,8 +1048,14 @@ async function gatedRelease(firm: string, dev: any, me: { id: string; entry: any
   if (!rel || !rel.newest || rel.rollback) return rel;
   const now = Date.now(), win = checkWindow(ug, now);
   const busy = !beat ? "no beat" : posts > 0 ? "a posting or a check waits for this computer" : busyWhy(beat, ug, now);
-  const why = busy || (win.at ? "" : "not its time to look for an update (next " + win.next + ")");
+  let why = busy || (win.at ? "" : "not its time to look for an update (next " + win.next + ")");
   try {
+    if (!why && !win.known) {
+      // its time not known: it gives way to another bridge of the computer near its own known time
+      const [tg, ps] = await Promise.all([db.from("tally_bridge_update_target").select("version").eq("id", 1).maybeSingle(),
+        db.from("tally_devices").select("id, info").eq("firm_id", firm).neq("id", dev.id)]);
+      if (!tg.error && tg.data?.version && !ps.error) why = peerNear(ps.data || [], String(prevInfo?.computer || me.entry?.computer || ""), String(tg.data.version), now);
+    }
     const { data, error } = await db.rpc("tally_bridge_update_gate", { p_firm: firm, p_device: dev.id, p_computer: String(me.entry?.computer || prevInfo?.computer || "").slice(0, 60),
       p_version: String(beat?.version || me.entry?.version || ""), p_ready: !why,
       p_why: why || (win.known ? "its time to look for an update (" + win.check + ")" : "its time to look not known: a 10-minute slot") });

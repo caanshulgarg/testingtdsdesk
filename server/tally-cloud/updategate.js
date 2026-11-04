@@ -100,3 +100,20 @@ export function olderThan(a, b) {
   for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i];
   return false;
 }
+
+// a bridge whose time to look is not known takes the computer's slot only when no other bridge of the same computer,
+// older than the gate's version and beating now, is at or within 15 minutes of its own known time (else the one with
+// the unknown time could hold the slot through the other's only chance in 6 hours). "" when none; else why not
+export const NEAR_MS = 15 * 60 * 1000;
+export function peerNear(peers, computer, target, nowMs) {
+  for (const p of Array.isArray(peers) ? peers : []) {
+    const info = p && typeof p.info === "object" && p.info ? p.info : {};
+    const b = info.beat && typeof info.beat === "object" ? info.beat : null;
+    if (!b || !(nowMs - t(b.at) <= 120000)) continue;
+    if (String(info.computer || "") !== String(computer || "")) continue;
+    if (!olderThan(b.version, target)) continue;
+    const w = checkWindow(info.updGate, nowMs);
+    if (w.known && (w.at || t(w.next) - nowMs <= NEAR_MS)) return "another bridge of this computer is near its time to look for an update (" + w.next + ")";
+  }
+  return "";
+}

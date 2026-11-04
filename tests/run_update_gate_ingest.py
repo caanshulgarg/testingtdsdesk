@@ -13,7 +13,8 @@ Checks:
   5. a posting waiting for this bridge: not ready.
   6. not its time (its start an hour ago): not ready, "not its time".
   7. the owner's rollback: no gate (the rollback as before); an error of the function: not allowed this time.
-  8. a bridge in test mode: never let through (asked not ready)."""
+  8. a bridge in test mode: never let through (asked not ready).
+  9. a bridge whose time is not known gives way to another bridge of its computer near its known time."""
 import os, sys, json, time, hashlib, subprocess, threading, urllib.request, urllib.error, shutil
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import fake_supabase as F
@@ -131,6 +132,18 @@ try:
     tm = GATE["calls"][n0:]
     ok(c == 200 and r.get("shadow") is True and len(tm) == 1 and tm[0].get("p_ready") is False and tm[0].get("p_why") == "no beat" and r.get("release", {}).get("allowed") is False,
        "8. a beat in test mode: never ready (%s, %s)" % (tm, r.get("release")))
+    # 9. the unknown time gives way
+    F.T["tally_bridge_update_target"] = [{"id": 1, "version": "2.5.3"}]
+    GATE["answer"] = {"gate": True, "allowed": True, "until": iso(600)}
+    dev2["info"]["computer"] = "MADEUP-PC"
+    dev2["info"]["updGate"]["starts"] = [iso(-6 * 3600 - 60)]; dev2["info"]["updGate"]["startAt"] = iso(-6 * 3600 - 60)   # its check in a minute
+    dev2["info"]["beat"]["at"] = iso(-20)
+    dev1["info"].setdefault("updGate", {})["starts"] = []; dev1["info"]["updGate"]["startAt"] = ""; dev1["info"]["updGate"]["quietSince"] = iso(-600)
+    c, r = beat(K1, G1)
+    ok(last().get("p_device") == D1 and last().get("p_ready") is False and "near its time" in str(last().get("p_why")), "9. unknown time, a peer near its check: gives way (%s)" % last().get("p_why"))
+    dev2["info"]["updGate"]["starts"] = [iso(-3 * 3600)]; dev2["info"]["updGate"]["startAt"] = iso(-3 * 3600)              # its check in 3 hours
+    c, r = beat(K1, G1)
+    ok(last().get("p_ready") is True and "not known" in str(last().get("p_why")), "9. the peer's check far away: the unknown one asks for a slot (%s)" % last().get("p_why"))
 finally:
     fn.terminate()
 print("\n" + ("PASSED" if not fails else "FAILED: %d" % len(fails)))

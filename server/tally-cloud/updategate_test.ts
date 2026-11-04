@@ -1,7 +1,7 @@
 // deno test server/tally-cloud/updategate_test.ts - migration 139's gate, the part worked out from the beat
 // (updategate.js): when the bridge last started as far as the cloud saw, whether it is at its own time to look for an
 // update (2 minutes after a start, then every 6 hours), and whether it is idle with Tally. Made-up bridges only.
-import { gateTrack, checkWindow, busyWhy, reqKey, olderThan, QUIET_MS, EVERY_MS } from "./updategate.js";
+import { gateTrack, checkWindow, busyWhy, reqKey, olderThan, peerNear, QUIET_MS, EVERY_MS } from "./updategate.js";
 
 function assert(c: unknown, w: string) { if (!c) throw new Error(w); }
 const T0 = Date.parse("2026-11-04T05:00:00Z");
@@ -66,4 +66,15 @@ Deno.test("quiet since: kept while the request count stays, moved when it change
 
 Deno.test("olderThan", () => {
   assert(olderThan("2.4.7", "2.5.3") && olderThan("2.5.2", "2.5.10") && !olderThan("2.5.3", "2.5.3") && !olderThan("x", "2.5.3"), "versions");
+});
+
+Deno.test("a bridge with an unknown time gives way to another of its computer near its known time", () => {
+  const peer = (start: number, x: Record<string, unknown> = {}) => ({ id: "p", info: { computer: "MADEUP-PC", beat: beat(T0 + 6 * 3600e3 - 30000), updGate: { starts: [iso(start)] }, ...x } });
+  const now = T0 + 6 * 3600e3;           // the peer started at T0: its check at T0 + 6 h 2 min
+  assert(/near its time/.test(peerNear([peer(T0)], "MADEUP-PC", "2.5.3", now)), "2 minutes before the peer's check: give way");
+  assert(peerNear([peer(T0)], "MADEUP-PC", "2.5.3", now - 3600e3) === "", "an hour before: no");
+  assert(peerNear([peer(T0)], "OTHER-PC", "2.5.3", now) === "", "another computer: no");
+  assert(peerNear([peer(T0, { beat: beat(now - 30000, { version: "2.5.3" }) })], "MADEUP-PC", "2.5.3", now) === "", "a peer up to date: no");
+  assert(peerNear([peer(T0, { beat: beat(now - 600e3) })], "MADEUP-PC", "2.5.3", now) === "", "a peer not beating now: no");
+  assert(peerNear([peer(T0 - 20 * 3600e3)], "MADEUP-PC", "2.5.3", now) === "", "a peer whose time is not known either: no");
 });
