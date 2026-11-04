@@ -11,6 +11,10 @@
 // a company's name as compared across the beat and the list (spaces collapsed, case off): index.ts coName
 export const coName = (v) => String(v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
+// next-tally-connectfix (04-Nov-2026): a Tally company's name as a beat says it: trimmed of spaces, tabs and CR/LF at
+// either end (staging: a name came with "\r\n\r\n" at its end), at most 200 characters; "" when not a string
+export const coTrim = (v) => typeof v === "string" ? v.replace(/^[\s\u0000-\u001f]+|[\s\u0000-\u001f]+$/g, "").slice(0, 200) : "";
+
 // the company's name as the bridge returned it: trimmed; empty when not a name (control characters, longer than 200 —
 // never cut, a cut name could be another company's)
 export function cleanCompany(v) {
@@ -65,4 +69,18 @@ export async function latestEntryDay(days, decode) {
     if (/<VOUCHER[\s>]/i.test(text)) return d.day;
   }
   return "";
+}
+
+// next-tally-connectfix (04-Nov-2026; staging: only 3 of 7 tally_links had windows_user and tally_port): where a company
+// linked at a click is, from its device's beat: the bridge the browser named (its id in info.bridges), else the bridge
+// whose beat has the company open, else the device's own beat. {user, port}; "" / 0 when not known
+export function linkPlace(dev, bridgeId, company) {
+  const info = dev && dev.info && typeof dev.info === "object" ? dev.info : {}, beat = info.beat && typeof info.beat === "object" ? info.beat : {};
+  const br = info.bridges && typeof info.bridges === "object" ? info.bridges : {}, k = coName(company);
+  const has = (b) => Array.isArray(b && b.open) && b.open.some((o) => coName(o) === k);
+  const bid = String(bridgeId || "");
+  const b = (BRIDGE_ID.test(bid) && br[bid]) || Object.values(br).find((x) => x && has(x)) || null;
+  const port = (v) => { const n = Math.floor(Number(v)); return n > 0 && n <= 65535 ? n : 0; };
+  const user = String((b && b.user) || beat.windowsUser || "").trim().slice(0, 60);
+  return { user, port: port(b && b.tallyPort) || port(beat.tallyPort) };
 }

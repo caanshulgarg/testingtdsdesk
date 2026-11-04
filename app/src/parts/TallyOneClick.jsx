@@ -13,7 +13,7 @@
 // next-tally-anyport (bridge 2.4.8): Use this port asks a 2.4.8 bridge to try the port itself (POST /ports/use: the same
 // light company request, at most 2 s) and says its plain reason when it is not your own TallyPrime.
 import { useEffect, useState } from "react";
-import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefused, lookHere } from "../lib/tallyConnect.js";
+import { connectNow, findTally, getCompanies, typePort, bridgeTakesPort, keyRefused, lookHere, HERE } from "../lib/tallyConnect.js";
 import { FL } from "./TallyFirstLink.jsx";
 import "./tallyOneClick.css";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -68,9 +68,12 @@ export function useRefusedCheck() {
 // computer only when one is here (a phone, or a browser elsewhere, is never told to connect)
 export function useHereProbe(on) {
   useEffect(() => {   // (at every drawing, at most every 2 minutes; a reset of the card asks again)
-    if (!on || typeof Bridge !== "object" || Bridge.blocked() || Date.now() - OC.hereAt < 120000) return;
-    OC.hereAt = Date.now();
-    Promise.resolve(lookHere()).then((h) => { const v = h.mine ? "mine" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) setSoon({ here: v }); }, () => {});
+    // next-tally-connectfix (finding 4): the light look (the remembered address and this login's own bridge's port; the
+    // whole range once a tab, lib/tallyConnect.js lookHere); a person's "I have opened it" asks the whole range again now
+    const again = !!HERE.again;
+    if (!on || typeof Bridge !== "object" || Bridge.blocked() || (!again && Date.now() - OC.hereAt < 120000)) return;
+    OC.hereAt = Date.now(); HERE.again = false;
+    Promise.resolve(lookHere({ full: again })).then((h) => { const v = h.mine ? "mine" : h.known ? "stopped" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) setSoon({ here: v }); }, () => {});
   });
 }
 // this browser holds a key for a bridge here whose state is not read yet: read it now (at most every 30 s), so the card

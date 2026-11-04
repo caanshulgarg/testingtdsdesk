@@ -51,17 +51,77 @@ export function deadKey(whose, beat) {
   return !!whose && !whose.mine && !whose.elsewhere && !beatFresh(beat);
 }
 
-// this computer's FinCom Bridge as /ping finds it (nothing secret sent): mine (with its id), another Windows user's, an
-// older bridge, or none. The configured address first, then the user's range at once
-export async function lookHere() {
-  const c = Bridge.cfg(), first = await Bridge.probeUrl(c.url.replace(/\/+$/, ""), 2500);
-  let all = first ? [first] : [];
-  if (!(first && first.yours !== false && first.bridgeId && first.sameSession !== false)) all = all.concat((await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
-  // bridge 2.5.3: sameSession true is this browser's Windows session's bridge; false never is
-  const mine = all.find((b) => b.sameSession === true) || all.find((b) => b.yours !== false && b.bridgeId && b.sameSession !== false),
-    other = all.find((b) => b.yours === false || b.sameSession === false), old = all.find((b) => b.yours !== false && !b.bridgeId && b.sameSession !== false);
-  return { mine, other, old };
+// "PC1\usera" and "usera" are the same login (one side may say no computer); two computers' are not; null: not known
+const lc = (s) => String(s || "").trim().toLowerCase();
+export const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
+const OWNKEY = () => ((typeof LocalOwner === "object" && LocalOwner && LocalOwner.P) || "tdsdesk:") + "ownbridge";
+// next-tally-connectfix (04-Nov-2026): what this browser knows of THIS Windows login's own bridge, without asking it: the
+// bridge a 2.5.3 look found in this login's session before (lib/tallySimple.js rememberOwn: its id, port and Windows user;
+// each Windows login has its own browser profile), and the paired bridge's line in FinCom's cloud (its beat's Windows user
+// and bridgePort). {id, user, ports}; empty when nothing is known
+export function ownHint() {
+  const out = { id: "", user: "", ports: [] }, add = (p) => { p = Number(p) || 0; if (p >= 1 && p <= 65535 && !out.ports.includes(p)) out.ports.push(p); };
+  let m = null;
+  try { m = JSON.parse(localStorage.getItem(OWNKEY()) || "null"); } catch (e) { m = null; }
+  if (m && typeof m === "object") { out.id = String(m.id || ""); out.user = String(m.user || ""); add(m.port); }
+  try {
+    const c = (typeof Bridge === "object" && Bridge.cfg && Bridge.cfg()) || {};
+    const id = out.id || (c.key ? String(c.bridgeId || "") : "");
+    const r = id && typeof TCloud === "object" && TCloud.bridgesHeard ? TCloud.bridgesHeard().find((x) => x && x.id === id) : null;
+    if (r) { out.id = out.id || id; out.user = out.user || String(r.user || ""); add(r.port); }
+  } catch (e) { /* the cloud's list not read yet */ }
+  return out;
 }
+// a /ping answer is this login's bridge: its session says so (2.5.3), or (older, or Windows did not say) it is this
+// Windows user's with an id, and its Windows user is not another than this login's own bridge's (when both are known)
+const isMine = (b, hint) => !!b && (b.sameSession === true || (b.yours !== false && !!b.bridgeId && b.sameSession !== false
+  && !(hint.user && b.windowsUser && sameUser(b.windowsUser, hint.user) === false)));
+const isOther = (b, hint) => !!b && (b.yours === false || b.sameSession === false || (b.sameSession !== true && !!hint.user && !!b.windowsUser && sameUser(b.windowsUser, hint.user) === false));
+
+// next-tally-connectfix (finding 4: on a shared server each port that answers is another login's bridge reading the
+// computer's TCP table for its /ping): what this tab asked of 127.0.0.1. The look is one at a time (busy); the whole range
+// 9100-9199 is asked at most once in this tab by itself, and again only on a person's ask (Connect this computer, I have
+// opened it: full)
+export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0 };
+export function resetHere() { Object.assign(HERE, { busy: null, busyFull: false, fullAt: 0, n: 0 }); }
+
+// this computer's FinCom Bridge as /ping finds it (nothing secret sent): mine (with its id), another Windows user's, an
+// older bridge, or none; known: this login's own bridge is known to exist (installed here, not answering now). First the
+// remembered address and this login's own bridge's port (its beat's bridgePort); only when none of them is this login's
+// bridge, the whole range (once a tab, or when full)
+export function lookHere(opts) {
+  const full = !!(opts && opts.full);
+  if (HERE.busy && (HERE.busyFull || !full)) return HERE.busy;
+  const p = lookHereOnce(full).finally(() => { if (HERE.busy === p) { HERE.busy = null; HERE.busyFull = false; } });
+  HERE.busy = p; HERE.busyFull = full;
+  return p;
+}
+async function lookHereOnce(full) {
+  HERE.n++;
+  const c = Bridge.cfg(), base = String(c.url || "").replace(/\/+$/, ""), hint = ownHint();
+  const urls = [];
+  [base].concat(hint.ports.map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.includes(u)) urls.push(u); });
+  let all = (await Promise.all(urls.slice(0, 4).map((u) => Bridge.probeUrl(u, 2500)))).filter(Boolean);
+  // finding 3: the remembered address is trusted only when what answers there is this login's (its session or its Windows
+  // user); another login's bridge on it (it took the port when this login's stopped): the range is asked at once
+  if (!all.some((b) => isMine(b, hint)) && (full || !HERE.fullAt)) {
+    HERE.fullAt = Date.now();
+    const asked = new Set(all.map((b) => Number(b.port) || Bridge.urlPort(b.url || "")));
+    all = all.concat((await Promise.all(Bridge.PORTS.filter((p) => !asked.has(p)).map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
+  }
+  const mine = all.find((b) => b.sameSession === true) || all.find((b) => isMine(b, hint)),
+    other = all.find((b) => !isMine(b, hint) && isOther(b, hint)), old = all.find((b) => b.yours !== false && !b.bridgeId && b.sameSession !== false && !isOther(b, hint));
+  // the remembered address now another login's (or silent) and this login's bridge found elsewhere: remembered there
+  if (mine && mine.url && mine.url !== base) {
+    const atBase = all.find((b) => b.url === base);
+    if (!atBase || isOther(atBase, hint)) { try { Bridge.setCfg({ url: mine.url }); Bridge.foundAt = 0; } catch (e) { /* kept as it was */ } }
+  }
+  // finding 2: this login's own bridge is known (found in this login before, or paired here and heard by the cloud) and is
+  // not the one answering: it is installed, only not running in this login
+  const known = !mine && !!(hint.user ? !(other && other.windowsUser && sameUser(other.windowsUser, hint.user) === true) : hint.id && !(other && other.bridgeId === hint.id));
+  return { mine, other, old, known, hint };
+}
+export const START_SAY = "FinCom Bridge is installed but not running in this login: start it from the Start menu (FinCom Bridge).";
 
 // the cloud's view of the bridge (migration 115); null when the cloud cannot say
 export async function whoseIs(id) {
@@ -77,7 +137,25 @@ export function rekey(why) {
   if (!inflight) inflight = rekeyOnce(why).finally(() => { inflight = null; });
   return inflight;
 }
+// next-tally-connectfix (finding 1; staging 29-Oct, 31-Oct, 03-Nov-2026: two computer keys made within a second for one
+// bridge, the second refused for ever, "This computer key cannot use bridge go-…: it belongs to …"): a bridge FinCom's
+// cloud already has for this firm is bound to its first computer key (migration 54), so a new key for it is always
+// refused. Before a key is made: TCloud.auto's own hand-over in this tab finished first, another tab's within the last
+// minute waited for, and the cloud asked again; the bridge this firm's: no key made ({already: true})
+const REKEY_KEY = "tdsdesk:rekeyAt";
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms * ((typeof window !== "undefined" && window.__ocMsScale) || 1)));
+async function stillNeeded() {
+  for (let i = 0; i < 30 && typeof TCloud === "object" && TCloud.autoBusy; i++) await pause(500);
+  let other = 0;
+  try { other = Number(localStorage.getItem(REKEY_KEY) || 0); } catch (e) { other = 0; }
+  if (other && Date.now() - other < 60000) await pause(Math.min(15000, 60000 - (Date.now() - other)));
+  const w = await whoseIs((Bridge.cfg() || {}).bridgeId || "");
+  return !(w && w.mine);
+}
 async function rekeyOnce(why) {
+  if (!(await stillNeeded())) return { already: true };
+  try { localStorage.setItem(REKEY_KEY, String(Date.now())); } catch (e) { /* one tab only, then */ }
+  if (typeof TCloud === "object") TCloud.autoAt = Date.now() + 60000;   // TCloud.auto makes none meanwhile
   const st = Bridge.st || {};
   const d = await within(TCloud.rpc("tally_device_create", { p_name: String([st.computer || "Office computer", st.user || ""].filter(Boolean).join(" · ")).slice(0, 80) }), STEP_MS, "FinCom's cloud did not make a key for this computer in time. Try again.");
   if (!d || !d.key) throw { message: "FinCom's cloud did not make a key for this computer." };
@@ -112,10 +190,12 @@ export async function connectNow(opts) {
     if (!proven) { Bridge.foundAt = 0; await within(Bridge.refind(), 8000, "").catch(() => false); proven = await within(Bridge.ensureProven(), 6000, "").catch(() => false); }
   }
   if (!proven) {
-    const h = await within(lookHere(), 8000, "").catch(() => ({}));
+    const h = await within(lookHere({ full: true }), 8000, "").catch(() => ({}));
     if (h.mine) return { st: "code", found: h.mine, say: "Found FinCom Bridge " + (h.mine.version || "") + " on this computer. This browser is not connected to it yet: right-click the FinCom icon near the clock and choose “Connect FinCom on this computer…”. FinCom opens and connects by itself; or type the 6 digits it shows." };
-    if (h.other) return { st: "other", say: "The FinCom Bridge here belongs to another Windows user" + (h.other.user ? " (" + h.other.user + ")" : "") + ". Install FinCom Bridge while signed in to Windows as you (“Just for me”)." };
     if (h.old) return { st: "old", say: "An older FinCom Bridge" + (h.old.version ? " (" + h.old.version + ")" : "") + " is running here. Download the new one below and open it: it takes over by itself." };
+    // finding 2: this login's own bridge is known (installed here) and only another login's answers: start it, not install
+    if (h.known) return { st: "stopped", say: START_SAY };
+    if (h.other) return { st: "other", say: "The FinCom Bridge here belongs to another Windows user" + (h.other.windowsUser || h.other.user ? " (" + (h.other.windowsUser || h.other.user) + ")" : "") + ". Install FinCom Bridge while signed in to Windows as you (“Just for me”)." };
     return { st: "none", say: "FinCom Bridge is not running on this computer. Download it below and open it; if it is installed, start it from the Start menu (FinCom Bridge)." };
   }
   // 2. the bridge's own status (no Tally request), its cloud link and the cloud's view of it
@@ -135,9 +215,18 @@ export async function connectNow(opts) {
       return { st: "error", say: TCloud.followWait ? "Not yet: " + TCloud.followWait + " in the other firm. FinCom tries again in a minute." : "This bridge sends to another firm, and FinCom's cloud did not move it (only a member who may write can)." };
     } catch (e) { return { st: "error", say: msg(e) }; }
   }
+  // finding 1: the cloud already has this bridge for this firm (bound to its first computer key, heard from): a new key
+  // would be refused for ever, so none is made. Its heartbeat is asked for now (the wake the Tally page already sends)
+  if (whose && whose.mine) {
+    try { if (typeof TWake === "object" && TWake.send) TWake.send({ kind: "wake", what: "active" }); } catch (e) { /* the next beat comes by itself */ }
+    if (TCloud.refreshPane) Promise.resolve(TCloud.refreshPane()).catch(() => {});
+    if (link && link.connected) return { st: "ok", already: true, waiting: !beatFresh(Bridge.st.beat), pc, say: beatFresh(Bridge.st.beat) ? "Connected: " + pc + " sends Tally to " + firm + "." : "Connected: " + pc + " is " + firm + "’s; waiting for its first heartbeat." };
+    return { st: "error", held: true, pc, say: "FinCom’s cloud already has this FinCom Bridge for " + firm + " under its first computer key, but the bridge holds no key now. An owner can press “Release this bridge's identity” on the Tally page (For support), then Connect this computer again." };
+  }
   const why = !same ? "not connected" : whose && !whose.mine ? "key not known to FinCom" : "asked";
   try {
     const r = await rekey(why);
+    if (r && r.already) return { st: "ok", already: true, waiting: true, pc, say: "Connected: " + pc + " is " + firm + "’s; waiting for its first heartbeat." };
     if (TCloud.refreshPane) Promise.resolve(TCloud.refreshPane()).catch(() => {});
     return { st: "ok", pc, fresh: true, replaced: same, say: "Connected: " + pc + " sends Tally to " + (r.firm || firm) + (same && why !== "asked" ? ". Its old key (not valid any more) was replaced." : ".") };
   } catch (e) {
@@ -229,3 +318,6 @@ export async function linkNow(company, cid) {
     .forEach((list) => { if (Array.isArray(list) && !list.some((r) => r && r.company === company)) list.push(Object.assign({}, row)); });
   return j;
 }
+
+// for support and the tests (tests/run_tally_connect_norekey.py, run_tally_here_light.py)
+if (typeof window !== "undefined") window.FCTallyConnect = { connectNow, lookHere, HERE, resetHere, ownHint, rekey, START_SAY };

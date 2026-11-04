@@ -16,6 +16,7 @@
 // Nothing new is asked of the bridge or of Tally: the same /ping, /pair, /cloudlink and RPCs as before.
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
+import { ownHint, sameUser, START_SAY } from "../lib/tallyConnect.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
 // the watcher: one for the page (module state, drawn with render())
@@ -57,9 +58,17 @@ async function scan() {
   // alone): the code box stayed only a few seconds, then "another Windows user" and back. Kept for STICKY_MS
   if (!mine && FL.st === "code" && FL.found && Date.now() - (FL.mineAt || 0) < STICKY_MS) return;
   if (mine) { say({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
+  // next-tally-connectfix (finding 2): this login's own bridge is known here (found in this login before, or paired and
+  // heard by the cloud) and another login's answers: it is installed, only not running in this login
+  else if (other && ownStopped(other)) { say({ st: "stopped", other, found: null }); logStep("other_user", other.version, "own bridge known, not running"); }
   else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
   else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
   else { say({ st: "waiting", found: null }); logStep("waiting"); }
+}
+
+function ownStopped(other) {
+  const h = ownHint();
+  return h.user ? !(other.windowsUser && sameUser(other.windowsUser, h.user) === true) : !!h.id && other.bridgeId !== h.id;
 }
 
 // the six digits: checked against the bridge's proof here first (Bridge.pair sends nothing to a bridge that does not
@@ -169,6 +178,7 @@ export default function ConnectThisComputer({ download, linked = false }) {
   const seen = st === "code" || st === "pairing" || st === "linking" || st === "error";
   const status = st === "blocked" ? ["bad", "Pages opened inside claude.ai cannot reach programs on this computer. Open FinCom in Chrome or Edge on the Tally computer."]
     : st === "waiting" ? ["wait", "Waiting for FinCom Bridge on this computer…"]
+    : st === "stopped" ? ["bad", START_SAY]
     : st === "other" ? ["bad", "FinCom Bridge here belongs to another Windows user" + (FL.other && FL.other.user ? " (" + FL.other.user + ")" : "") + ". Install it for yourself: run the setup while signed in to Windows as you (“Just for me”)."]
     : st === "old" ? ["bad", "An older FinCom Bridge" + (FL.old && FL.old.version ? " (" + FL.old.version + ")" : "") + " is running here. Download the new one and open it: it takes over by itself, keeping everything."]
     : st === "code" ? ["ok", "Found FinCom Bridge" + (b.version ? " " + b.version : "") + " on this computer. Now type its code."]
@@ -199,7 +209,7 @@ export default function ConnectThisComputer({ download, linked = false }) {
     {status[1] && <p className={"fl-status " + status[0]} data-fl-status={st} role="status" aria-live="polite">{status[0] === "wait" && <span className="fl-spin" aria-hidden="true" />}{status[1]}</p>}
     {st === "error" && <button className="btn small primary" data-fl-retry="" onClick={() => { say({ st: "linking", err: "" }); linkFirm(); }}>Try again</button>}
     {slow && <p className="note" data-fl-slow="">Still linking after 2 minutes? FinCom Bridge needs to reach FinCom’s cloud over the internet. If your office network blocks websites, ask the person who looks after it to allow FinCom; then right-click the FinCom icon › Test connection.</p>}
-    {(st === "waiting" || st === "other" || st === "old" || st === "blocked") && <Help />}
+    {(st === "waiting" || st === "other" || st === "stopped" || st === "old" || st === "blocked") && <Help />}
   </div>;
 }
 

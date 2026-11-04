@@ -882,7 +882,7 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
           <button className={"linkbtn" + (scope === "this" ? " on" : "")} data-scope-pick="this" aria-pressed={scope === "this"} onClick={() => { S.tallyScope = "this"; render(); }}>This computer</button>
           <button className={"linkbtn" + (scope === "all" ? " on" : "")} data-scope-pick="all" aria-pressed={scope === "all"} onClick={() => { S.tallyScope = "all"; render(); }}>All computers</button></span>}
         {/* this browser not connected to a FinCom Bridge: the one click, quiet (the owner: "a simple click to connect") */}
-        {!local && kind !== "none" && !!OC.here && <button className="linkbtn" data-oc-connect="" data-oc-here={OC.here} disabled={!!b} onClick={() => doConnect(false)}>{b === "c" ? "Connecting…" : "Connect this computer"}</button>}
+        {!local && kind !== "none" && OC.here === "mine" && <button className="linkbtn" data-oc-connect="" data-oc-here={OC.here} disabled={!!b} onClick={() => doConnect(false)}>{b === "c" ? "Connecting…" : "Connect this computer"}</button>}
         {/* next-fix-tally-links (the owner: "the steps was hidden after connecting"): connected, the steps stay folded
             behind this small link (Connect another computer: step 1 asked again; Hide the steps folds them back) */}
         {setupOk && <button className="linkbtn" data-tsc-setup="" aria-expanded={gOpen} onClick={() => { if (gOpen) { S.tallyGuide = {}; render(); } else openConnectTally(1, ""); }}>Set up again / another computer</button>}

@@ -232,7 +232,7 @@ import { packMonth, monthEnd } from "./monthpack.js";
 // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported from TallyPrime as JSON, each object read as
 // the XML element Tally writes for it (the one rule, shared with the app: server/_shared/tallyjson.js)
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
-import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
@@ -329,7 +329,7 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     port: port(body?.bridgePort ?? b?.port), tallyPort: port(body?.tallyPort), dataFolder: s(body?.dataFolder, 260),
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
-    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+    open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
     // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
     reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist),
     ...tallyRetryOf(body),
@@ -3748,7 +3748,27 @@ async function linkNow(firm: string, body: any, asUser: any, userId: string) {
   }
   const { error: le } = await asUser.rpc("tally_company_link", { p_company: company, p_client: client });
   if (le) return reply(409, { ok: false, error: String(le.message || "Could not link it.") });
+  await fillLinkPlace(firm, company, ((devs || []) as any[]).find((x) => String(x.id) === device), String(body.bridge || ""));
   return reply(200, { ok: true, linked: true, company, client, device, registered: !row });
+}
+
+// next-tally-connectfix (finding 6; staging: only 3 of 7 links had them): the link's Windows user and Tally port, from
+// the device's beat when known (linkPlace, linknow.js), written only where the link has none yet; never fails the link
+async function fillLinkPlace(firm: string, company: string, dev: any, bridge: string) {
+  try {
+    const at = linkPlace(dev, bridge, company);
+    if (!at.user && !at.port) return;
+    const { data: bk } = await db.from("tally_companies").select("book_id").eq("firm_id", firm).eq("company", company).maybeSingle();
+    if (!bk || !bk.book_id) return;
+    const { data: ln } = await db.from("tally_links").select("windows_user, tally_port").eq("firm_id", firm).eq("book_id", bk.book_id).maybeSingle();
+    if (!ln) return;
+    const set: Record<string, unknown> = {};
+    if (!ln.windows_user && at.user) set.windows_user = at.user;
+    if (!ln.tally_port && at.port) set.tally_port = at.port;
+    if (!Object.keys(set).length) return;
+    const { error } = await db.from("tally_links").update(set).eq("firm_id", firm).eq("book_id", bk.book_id).is(set.windows_user ? "windows_user" : "tally_port", null);
+    if (error) console.error("tally-ingest link_now: place not kept", String(error.message || "").slice(0, 200));
+  } catch (e) { console.error("tally-ingest link_now: place", (e as Error).message); }
 }
 
 async function userUpload(req: Request, auth: string) {
@@ -3911,7 +3931,8 @@ Deno.serve(sentry.wrap(async (req) => {
         const b = body || {};
         const s = (v: unknown, n = 80) => typeof v === "string" ? v.slice(0, n) : "";
         const beat = { at: new Date().toISOString(), tally: !!b.tally, updating: !!b.updating, dailyAt: s(b.dailyAt, 5), lastRun: s(b.lastRun, 8),
-          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => s(x, 200)),
+          // next-tally-connectfix: a company's name trimmed of spaces and CR/LF (staging: one came with "\r\n\r\n" at its end)
+          open: (Array.isArray(b.open) ? b.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
           // bridge 1.14.9: each Tally port as the bridge sees it (open, another user's, how many companies, the error)
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120),
@@ -3920,7 +3941,7 @@ Deno.serve(sentry.wrap(async (req) => {
           // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
           // switched on Tally's connection in tally.ini
           ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),
-          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: s(c?.name, 200), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
+          companies: (Array.isArray(b.companies) ? b.companies : []).slice(0, 200).map((c: any) => ({ name: coTrim(c?.name), open: !!c?.open, at: s(c?.at, 30), phase: s(c?.phase, 12),
             waiting: Math.max(0, Math.min(1e6, Math.floor(Number(c?.waiting) || 0))), lastRead: s(c?.lastRead, 30),
             // 2.4.5: the company's GUID as the bridge holds it (the ledger progress of a bridge not holding it yet is matched by it)
             ...(typeof c?.guid === "string" && c.guid ? { guid: s(c.guid, 100) } : {}),
@@ -4346,7 +4367,7 @@ Deno.serve(sentry.wrap(async (req) => {
       }
       case "companies": {
         const list = (Array.isArray(body.companies) ? body.companies : []).slice(0, 200)
-          .map((c: any) => ({ name: String(c?.name || "").trim().slice(0, 200), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
+          .map((c: any) => ({ name: coTrim(String(c?.name || "")), gstin: String(c?.gstin || "").trim().toUpperCase().slice(0, 15), guid: String(c?.guid || "").trim().slice(0, 100) })).filter((c: any) => c.name);
         const { data: have } = await db.from("tally_companies").select("company, client_id, linked_at").eq("firm_id", firm);
         const known = new Map((have || []).map((r: any) => [r.company, r.client_id]));
         const unlinked = new Set((have || []).filter((r: any) => !r.client_id && r.linked_at).map((r: any) => r.company));   // unlinked by a person: left so

@@ -601,5 +601,5 @@ function lkAct(a){
 // the books follow Tally on every screen, not only while Look up is open: once a minute, quietly (only the bridge's
 // copy or the cloud is asked; Tally is not)
 setInterval(() => { try { if (S.books && S.books.cid === S.coId && !document.hidden && typeof LK === "object") LK.autoFresh(false, true); } catch (e){} }, 60000);
-setInterval(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 60000);
+setInterval(() => { try { if (typeof TCloud === "object" && !document.hidden) TCloud.auto(); } catch (e){} }, 60000);   // (a hidden tab: not asked; next-tally-connectfix)
 setTimeout(() => { try { if (typeof TCloud === "object") TCloud.auto(); } catch (e){} }, 8000);
