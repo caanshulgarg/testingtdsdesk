@@ -23,9 +23,10 @@ if [ -n "$rb" ] && [ "$(built_ms "$nb")" -le "$(built_ms "$rb")" ]; then
   die "next/ holds an older build than review/: refused. next/ $nb ($(stamp_of next/build.json)), review/ $rb ($(stamp_of review/build.json)). Publish a new build to next/ first."
 fi
 ! grep -qE '(src|href)="/[^/]' next/index.html || die "next/index.html asks for a file from the site's root instead of ./: it cannot be served from review/ unchanged. Stopped."
-# FinCom Bridge's update list goes live only with a signature that verifies with the bridge's own key (bridge-go/update.go)
-if [ -f next/assets/bridge-go/latest.json ]; then
-  python3 "$here_dir/../tools/bridge_list_sign.py" verify next/assets/bridge-go || die "next/'s bridge update list is not signed well (publish again with the signing passphrase): stopped."
+# FinCom Bridge's update list: a signature beside it goes live only if it verifies with the bridge's own key
+# (bridge-go/update.go); a list without one (bridges do not update themselves) goes as it is
+if [ -f next/assets/bridge-go/latest.json.sig ]; then
+  python3 "$here_dir/../tools/bridge_list_sign.py" verify next/assets/bridge-go || die "next/'s bridge update list is not signed well (publish again with FINCOM_SIGN_BRIDGE_LIST=1): stopped."
 fi
 last_good_save "$nb" "promote"
 replace_folder next review

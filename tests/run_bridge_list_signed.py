@@ -3,12 +3,12 @@
 1. The signing tool with a throwaway key: signs the exact bytes, the signature verifies, a changed list is refused,
    a wrong passphrase signs nothing, without a passphrase only a kept signature that verifies is accepted, and no
    private key is left behind in the temporary folder.
-2. The kept list (assets-test/bridge-go/latest.json + .sig) verifies with the bridge's built-in key, checked two ways:
-   this tool's own RSA check, and openssl with the key rebuilt from bridge-go/update.go; a changed list fails both.
-3. The published lists on main (next/ and review/assets/bridge-go/), where there is one: a .sig beside each
-   latest.json, and it verifies.
-4. The release scripts sign/verify: publish-preview.sh signs the built list before anything is published, and
-   promote-next.sh refuses a next/ whose list does not verify.
+2. The bridge's built-in key; a signature kept beside assets-test/bridge-go/latest.json must verify; with
+   FINCOM_TEST_REAL_PASS_FILE, the real list is signed in a temporary copy with the real key and checked two ways
+   (this tool's own RSA check, and openssl with the key rebuilt from bridge-go/update.go); a changed list fails both.
+3. The published lists on main (next/ and review/assets/bridge-go/): a .sig beside one must verify.
+4. The release scripts: publish-preview.sh signs the built list only with FINCOM_SIGN_BRIDGE_LIST=1 (else ships none),
+   before anything is published; promote-next.sh refuses a next/ signature that does not verify.
   python3 tests/run_bridge_list_signed.py"""
 import base64, glob, os, subprocess, sys, tempfile
 
@@ -110,17 +110,30 @@ with tempfile.TemporaryDirectory() as t:
         stale = True
     ok(stale, "1k no passphrase and a kept signature for another list: refused")
 
-    # 2. the kept list, with the bridge's real built-in key
+    # 2. the bridge's real key; the real list signed in a temporary copy only when the passphrase is given
     real = bls.bridge_key()
     ok(real[0].bit_length() == 3072 and real[1] == 65537, "2a the bridge's key read from bridge-go/update.go (3072-bit, e=65537)")
     kd = os.path.join(ROOT, "assets-test", "bridge-go")
-    ok(bls.check(kd) is None, "2b assets-test/bridge-go/latest.json.sig verifies with the bridge's key (" + str(bls.check(kd)) + ")")
-    kb = open(os.path.join(kd, "latest.json"), "rb").read()
-    ks = open(os.path.join(kd, "latest.json.sig")).read() if os.path.exists(os.path.join(kd, "latest.json.sig")) else ""
-    rpem = spki_pem(*real)
-    ok(openssl_verifies(rpem, kb, ks, t), "2c openssl verifies it with the key rebuilt from updatePublicKeyXML")
-    ok(not openssl_verifies(rpem, kb.replace(b'"2.', b'"3.', 1), ks, t), "2d a changed list fails with openssl")
-    ok(not bls.verifies(kb.replace(b'"2.', b'"3.', 1), ks, real), "2e a changed list fails with the tool")
+    if os.path.exists(os.path.join(kd, "latest.json.sig")):
+        ok(bls.check(kd) is None, "2b the kept assets-test/bridge-go/latest.json.sig verifies (" + str(bls.check(kd)) + ")")
+    else:
+        print("SKIP 2b the list is kept unsigned (automatic updates off)")
+    if os.environ.get("FINCOM_TEST_REAL_PASS_FILE"):
+        rd = os.path.join(t, "real")
+        os.makedirs(rd)
+        kb = open(os.path.join(kd, "latest.json"), "rb").read()
+        open(os.path.join(rd, "latest.json"), "wb").write(kb)
+        os.environ["FINCOM_SIGNING_PASS_FILE"] = os.environ["FINCOM_TEST_REAL_PASS_FILE"]
+        bls.sign(rd)
+        del os.environ["FINCOM_SIGNING_PASS_FILE"]
+        ks = open(os.path.join(rd, "latest.json.sig")).read()
+        rpem = spki_pem(*real)
+        ok(bls.check(rd) is None, "2c the real list signed with the real key verifies with the bridge's key")
+        ok(openssl_verifies(rpem, kb, ks, t), "2d openssl verifies it with the key rebuilt from updatePublicKeyXML")
+        ok(not openssl_verifies(rpem, kb.replace(b'"2.', b'"3.', 1), ks, t), "2e a changed list fails with openssl")
+        ok(not bls.verifies(kb.replace(b'"2.', b'"3.', 1), ks, real), "2f a changed list fails with the tool")
+    else:
+        print("SKIP 2c-2f the real key (FINCOM_TEST_REAL_PASS_FILE not given)")
 
     # 3. what main publishes (when the repository has main)
     for folder in ("next", "review"):
@@ -130,13 +143,17 @@ with tempfile.TemporaryDirectory() as t:
             print("SKIP 3 " + p + " not on origin/main")
             continue
         ls = run("git", "-C", ROOT, "show", "origin/main:" + p + ".sig", text=True)
-        ok(ls.returncode == 0 and bls.verifies(lb.stdout, ls.stdout, real), "3 origin/main:" + p + ".sig exists and verifies")
+        if ls.returncode != 0:
+            print("SKIP 3 origin/main:" + p + " is unsigned (bridges do not update themselves)")
+            continue
+        ok(bls.verifies(lb.stdout, ls.stdout, real), "3 origin/main:" + p + ".sig verifies with the bridge's key")
 
     # 4. the scripts
     pp = open(os.path.join(ROOT, "app", "publish-preview.sh")).read()
     pn = open(os.path.join(ROOT, "app", "promote-next.sh")).read()
     ok("bridge_list_sign.py\" sign" in pp and pp.index("bridge_list_sign.py") < pp.index("main_checkout\n"), "4a publish-preview.sh signs the built list before it touches main")
-    ok("bridge_list_sign.py\" verify" in pn and pn.index("bridge_list_sign.py") < pn.index("replace_folder next review"), "4b promote-next.sh verifies next/'s list before copying it to review/")
+    ok('[ "${FINCOM_SIGN_BRIDGE_LIST:-}" = 1 ]' in pp and "rm -f dist-test/assets/bridge-go/latest.json.sig" in pp, "4b signing is opt-in: without FINCOM_SIGN_BRIDGE_LIST=1 no .sig is published")
+    ok("bridge_list_sign.py\" verify" in pn and pn.index("bridge_list_sign.py") < pn.index("replace_folder next review"), "4c promote-next.sh verifies a next/ signature before copying it to review/")
 
 print("all passed" if not fails else str(len(fails)) + " failed")
 sys.exit(1 if fails else 0)
