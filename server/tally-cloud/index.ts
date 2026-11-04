@@ -232,7 +232,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Day Book exported from TallyPrime as JSON, each object read as
 // the XML element Tally writes for it (the one rule, shared with the app: server/_shared/tallyjson.js)
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
-import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
+import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay } from "./linknow.js";
+import { gateTrack, checkWindow, busyWhy } from "./updategate.js";   // migration 139: the gated rollout of bridge updates   // next-tally-linknow: a company open in Tally is linked at a click
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1038,6 +1039,29 @@ async function bridgeControl(dev: any, firm: string, me: { id: string; entry: an
   } catch (e) { fail("bridge_control", e); console.error("tally-ingest bridge control", (e as Error).message); }
   return { out, info };
 }
+// migration 139 (the owner's requirement of 04-Nov-2026: an update never hangs a computer or anyone's Tally): the newest
+// version's release is allowed only while the bridge is idle with Tally, at its own time to look for an update, and holds
+// its computer's one slot of 10 minutes (tally_bridge_update_gate; server/tally-cloud/updategate.js). A cloud without
+// 139 (or no gate version set): the release as before; any other error: not allowed this time (the bridge looks again
+// at its next time)
+async function gatedRelease(firm: string, dev: any, me: { id: string; entry: any }, prevInfo: any, beat: any, ug: any, posts: number, rel: any) {
+  if (!rel || !rel.newest || rel.rollback) return rel;
+  const now = Date.now(), win = checkWindow(ug, now);
+  const busy = !beat ? "no beat" : posts > 0 ? "a posting or a check waits for this computer" : busyWhy(beat, ug, now);
+  const why = busy || (win.at ? "" : "not its time to look for an update (next " + win.next + ")");
+  try {
+    const { data, error } = await db.rpc("tally_bridge_update_gate", { p_firm: firm, p_device: dev.id, p_computer: String(me.entry?.computer || prevInfo?.computer || "").slice(0, 60),
+      p_version: String(beat?.version || me.entry?.version || ""), p_ready: !why,
+      p_why: why || (win.known ? "its time to look for an update (" + win.check + ")" : "its time to look not known: a 10-minute slot") });
+    if (error) {
+      if (/tally_bridge_update_gate|tally_bridge_update_target|PGRST202|42883|42P01|schema cache|does not exist/i.test(String(error.message) + " " + String((error as any).code || ""))) return rel;
+      fail("update_gate", error); console.error("tally-ingest update gate", error.message);
+      return { ...rel, allowed: false };
+    }
+    if (!data || typeof data !== "object" || (data as any).gate === false) return rel;
+    return { ...rel, allowed: (data as any).allowed === true };
+  } catch (e) { fail("update_gate", e); return { ...rel, allowed: false }; }
+}
 // a support pack (the bridge's log, or its install log) for FinCom support; readable only by the platform's admins
 async function supportPack(firm: string, dev: any, body: any) {
   const zip = typeof body.zip === "string" ? b64bytes(body.zip) : new Uint8Array();
@@ -1113,6 +1137,8 @@ async function shadowCall(dev: any, firm: string, body: any) {
     const me = bridgeOf(dev, body, true);
     // migration-35: Stop reading / Resume / release apply to a bridge in test mode too
     const ctl = await bridgeControl(dev, firm, me, prev);
+    // migration 139: a bridge in test mode is never let through by the gate (no beat of its own is kept)
+    if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prev, null, null, 0, (ctl.out as any).release);
     // a bridge 2.0.0 in test mode sends no name of its own: it is kept in info.shadow only, never in bridge 1.15.0's place
     const info = me.id === "v1" ? { ...prev, ...ctl.info, shadow } : { ...prev, ...ctl.info, shadow, bridges: bridgesWith(prev, me.id, me.entry) };
     await db.from("tally_devices").update({ info }).eq("id", dev.id);
@@ -3934,7 +3960,9 @@ Deno.serve(sentry.wrap(async (req) => {
         if (co) (me.entry as any).changesOnly = true;
         // migration-35: Stop reading from FinCom, Resume, the version it may install (and the pilot's evidence)
         const ctl = await bridgeControl(dev, firm, me, prevInfo);
-        const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry) };
+        // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
+        const ug = gateTrack(prevInfo, beat, Date.now());
+        const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
         // 2.3.1 (2.3.0 review, cloud Lows): the computer's row was read before the bind; a refusal of THIS bridge's id that
         // the bind has just cleared (the id is this computer's own again) is not written back. Another bridge's is kept
         if (boundOwn && boundOwn === me.id && (info as any).idRefused?.bridge === me.id) delete (info as any).idRefused;
@@ -3971,6 +3999,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 55: a check waiting for this bridge counts as work too (the bridge then asks posts_take, which carries it)
         // (final review M1: the checks of the postings this bridge took or is named in; with no record, only the key's main bridge)
         const posts = co ? 0 : await postsFor(dev, me.id, may && isMain(dev, me.id)) + (may ? (await checksFor(dev, me.id, isMain(dev, me.id))).length : 0);
+        // migration 139: the newest version only while idle with Tally, at its time, in its computer's slot
+        if ((ctl.out as any).release) (ctl.out as any).release = await gatedRelease(firm, dev, me, prevInfo, beat, ug, posts, (ctl.out as any).release);
         // fast-sync (bridge 1.15.0): the computer's own Realtime channel, where the database wakes it the moment a
         // posting is queued or an update asked for (migration-13); the heartbeat stays the fallback
         const tok = (dev as any).wake_token;
