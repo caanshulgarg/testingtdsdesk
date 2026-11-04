@@ -130,7 +130,10 @@ type bridgeClaim struct {
 	port    int
 	unknown bool
 	user    string
+	rule    string // 2.5.4 review S2: the other bridge's tie rule from its /ping ("user"; "" before 2.5.4: the bridge port)
 }
+
+const claimRuleUser = "user"
 
 // the other bridge keeps the Tally: its own Tally always (its owner's session or Windows user, ports.go sessionOwner).
 // 2.5.4: this is asked only for a Tally whose owner this bridge could not settle by the Tally's Windows user and session
@@ -142,8 +145,10 @@ func claimWins(c bridgeClaim, ownPort int, ownUser string) bool {
 	if !c.unknown {
 		return true
 	}
+	// review S2: a bridge before 2.5.4 breaks the tie by the bridge port only: so does this one with it, so the two
+	// never both give the Tally up nor both take it
 	a, b := shortUser(c.user), shortUser(ownUser)
-	if a != "" && b != "" && a != b {
+	if c.rule == claimRuleUser && a != "" && b != "" && a != b {
 		return a < b
 	}
 	return c.port < ownPort
@@ -214,17 +219,18 @@ func bridgeClaims() map[int]bridgeClaim {
 				User         string `json:"windowsUser"`
 				Ports        []int  `json:"tallyPorts"`
 				UnknownPorts []int  `json:"tallyPortsUnknown"`
+				Rule         string `json:"claimRule"`
 			}
 			if json.Unmarshal(b, &p) != nil || p.Bridge != "FinCom Tally Bridge" || p.Yours {
 				continue
 			}
 			for _, tp := range p.UnknownPorts {
 				if _, had := out[tp]; !had {
-					out[tp] = bridgeClaim{l.Port, true, p.User}
+					out[tp] = bridgeClaim{l.Port, true, p.User, p.Rule}
 				}
 			}
 			for _, tp := range p.Ports {
-				out[tp] = bridgeClaim{l.Port, false, p.User}
+				out[tp] = bridgeClaim{l.Port, false, p.User, p.Rule}
 			}
 		}
 	}

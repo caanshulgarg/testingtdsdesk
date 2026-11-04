@@ -47,7 +47,8 @@ No new Tally request and no request shape changed: only waits (2 s), caching of 
    (ports.go `sessionOwner`, owntally253.go `claimWins`.)
 6. **The company list 2 s at most.** TDSDeskCompanies (and TDSDeskCompanyInfo, one company's GSTIN / PAN) wait 2 s,
    whoever asks (they waited 8 s and 15 s; the typed port's look 3 s; the entry fetch's guard up to 8 s). The request is
-   unchanged. A list that does not come in 2 s keeps the last list, and that Tally's list is not asked again for 15 s,
+   unchanged; Tally's answer that comes within the wait after the stop is kept as the answer (review B1, below). A list
+   that does not come in 2 s keeps the last list, and (for an ask that is not fresh) that Tally's list is not asked again for 15 s,
    then 30 s, 1, 2, 4, 8 and at most 10 minutes; an answer in time ends the wait. While it waits nothing is sent for the
    list; the one in flight keeps Tally's lock until Tally finished it (one request in flight per Tally, postings first,
    as before). (tally.go `tallyRaw`, colist254.go, ports.go `openCompaniesAsk`.)
@@ -60,7 +61,7 @@ No new Tally request and no request shape changed: only waits (2 s), caching of 
      look 2 minutes plus that after the start, so the bridges of one server update one after another.
    - The download: 10 s to connect and for TLS, 30 s for the answer's head, 5 minutes for the whole; in the background.
    - One look at a time; the tray's "Check for updates" never waits for a download: it answers within 8 s and the look
-     goes on in the background.
+     goes on in the background; no look at all while an update waits to start again or has not run well yet (review S1).
    - The new program is put in place (a rename: nothing stops), but the bridge starts again only when nothing goes to
      Tally: no posting being sent, no request at Tally, no request Tally is still on after the bridge stopped waiting for
      it (checked twice in a row). A posting only waiting for Tally resumes after the start, as before.
@@ -69,6 +70,37 @@ No new Tally request and no request shape changed: only waits (2 s), caching of 
      supervisor starts it again, and after three starts the previous one is put back (undoFailedUpdate, as before).
    - No window, no UAC prompt: the service (SYSTEM) or the per-user worker replaces its own program; the tray icon in
      each user's session restarts itself when it sees the new version (as before).
+
+## The independent review of f9f807b88, and its fixes
+
+Each finding has a test in `bridge-go/r254review_test.go` that fails on f9f807b88 and passes now (the B2 kept-list
+test needs the late answer, which f9f807b88 does not have).
+
+- **B1 (blocker): a Tally that always takes 2-8 s for its list never had one.** The late answer is kept
+  (late254.go): when the bridge stopped waiting for TDSDeskCompanies (or TDSDeskCompanyInfo) and Tally finishes it within
+  the wait after the stop (TallyAbandonWaitSec, 20 s), its answer is kept with the Tally program then on the port, and
+  the next ask for the very same request within a minute takes it (invokeTally, and the company list in
+  openCompaniesAsk, marked `late`): nothing is sent again. Tally's "not responding" and "busy" marks go with it. One
+  request in flight and the 2 s stop are unchanged (the lock is still held until Tally finished). A Tally restarted
+  (another program on the port) never gets a kept answer.
+- **B2 (blocker): the wait after a slow list held fresh asks.** It now holds only an ask that is not fresh (never a
+  posting, Test connection or Connect), and a wait noted for another program on the port is dropped. A kept list (late,
+  or the last list while a slow one waits) that does not name the company a posting wants: Tally itself is asked once
+  more (findCompanyIn, `noLate`).
+- **S1: "Check for updates" while an update waited re-applied it.** checkForUpdate returns at once while an update is
+  in place and the bridge has not started again, or while update-pending.json says the new program has not run well
+  yet (so FinComBridge.old.exe, the real previous version, is never replaced); the one-look flag stays until the
+  restart. The wait for a quiet moment has a maximum (30 minutes): after it, the first quiet look (between two requests,
+  never during one) starts it again.
+- **S2: 2.5.3 and 2.5.4 bridges broke the tie differently.** /ping says `claimRule: "user"`; with a bridge whose /ping
+  has none (before 2.5.4) the tie is the bridge port, as that bridge decides it.
+- **S3: a GSTIN / PAN that did not come in 2 s was kept empty for 6 hours.** Nothing is kept for it; it is asked again
+  after 5 minutes (or its late answer is taken).
+- **S4: installer.** A FinComBridge.setup-old.exe still in use (a FinCom icon of another Windows user, now that only the
+  service's own process is ended) is moved to a name of its own and removed at the next restart, so the setup's own
+  move of the program never fails; the uninstall marks every such file for removal at the next restart and says why.
+- **M1:** the 2.5.4 code no longer imports package testing (a hook the tests set).
+- **M2:** a Microsoft Entra ID user (S-1-12-1-...) counts as a person's account, as S-1-5-21-... does.
 
 ## Not changed / left for the owner
 

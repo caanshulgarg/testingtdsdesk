@@ -374,6 +374,19 @@ Function PutFiles
   Delete "$INSTDIR\setup-write-test.tmp"
   ; the program, if a bridge did not stop: moved aside (Windows allows that for a running program) so the new one fits
   Delete "$INSTDIR\FinComBridge.setup-old.exe"
+  ; 2.5.4 (review S4): a FinCom icon of another Windows user may still run from the program an earlier setup moved
+  ; aside (only the service's own process is ended now), so it cannot be deleted: it is moved to a name of its own and
+  ; goes at the next restart; the name setup-old.exe is free again for this setup
+  Delete "$INSTDIR\FinComBridge.setup-old-*.exe"
+  ${If} ${FileExists} "$INSTDIR\FinComBridge.setup-old.exe"
+    System::Call "kernel32::GetTickCount() i .r9"
+    ClearErrors
+    Rename "$INSTDIR\FinComBridge.setup-old.exe" "$INSTDIR\FinComBridge.setup-old-$9.exe"
+    ${IfNot} ${Errors}
+      Delete /REBOOTOK "$INSTDIR\FinComBridge.setup-old-$9.exe"
+      ${Log} "An earlier FinComBridge.setup-old.exe is still in use (a FinCom icon of another Windows user?): moved to FinComBridge.setup-old-$9.exe, removed at the next restart"
+    ${EndIf}
+  ${EndIf}
   ${If} ${FileExists} "$INSTDIR\FinComBridge.exe"
     ; 2.2.0 (round 2 R2-4): the program being replaced is copied to a temporary name; the install step keeps it for "Roll
     ; back to the previous version" only when it is whole (its SHA-256 equals the replaced program's, kept below as
@@ -767,8 +780,17 @@ Section "Uninstall"
   Delete "$INSTDIR\Uninstall FinCom Bridge.exe"
   ; just for me, $INSTDIR is also where install.log lives: the folder goes only when empty
   RMDir "$INSTDIR"
+  ; 2.5.4 (review S4): only the service's and this user's FinCom Bridge processes are ended; a FinCom icon of another
+  ; Windows user still running from this folder keeps its program until it closes: each such file goes at the next restart
+  Delete "$INSTDIR\FinComBridge.setup-old-*.exe"
+  ${If} ${FileExists} "$INSTDIR\FinComBridge.setup-old.exe"
+    Delete /REBOOTOK "$INSTDIR\FinComBridge.setup-old.exe"
+  ${EndIf}
+  ${If} ${FileExists} "$INSTDIR\FinComBridge.old.exe"
+    Delete /REBOOTOK "$INSTDIR\FinComBridge.old.exe"
+  ${EndIf}
   ${If} ${FileExists} "$INSTDIR\FinComBridge.exe"
-    ${Log} "FinComBridge.exe could not be removed from $INSTDIR (still running?); it goes at the next restart"
+    ${Log} "FinComBridge.exe could not be removed from $INSTDIR (still running, e.g. the FinCom icon of another Windows user signed in); it goes at the next restart, and that icon closes when its user signs out"
     Delete /REBOOTOK "$INSTDIR\FinComBridge.exe"
   ${Else}
     ${Log} "Removed the program files from $INSTDIR"

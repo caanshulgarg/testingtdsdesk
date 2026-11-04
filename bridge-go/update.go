@@ -134,6 +134,16 @@ func fetch(u string, max int64) ([]byte, error) {
 
 // asked from the tray (now=true) or every few hours; returns what happened
 func checkForUpdate(now bool) M {
+	// 2.5.4 review S1: an update already put in place (waiting to start again, or not yet confirmed as running well:
+	// update-pending.json) is never put in place again: that would replace FinComBridge.old.exe, the real previous
+	// version a failed update is undone to
+	if updatePending() {
+		u := updateInfo()
+		if str(u["message"]) == "" || u["applying"] != true {
+			u["message"] = "An update is being put in place; the bridge starts again when the work with Tally now has finished."
+		}
+		return u
+	}
 	setUpd("checked", nowS())
 	base := updateBase()
 	body, err := fetch(base+"latest.json", 1<<20)
@@ -227,14 +237,17 @@ var tallyQuietFn = func() bool {
 	return n == 0 && m == 0
 }
 
-// the start again after an update: once nothing has gone to Tally for two looks in a row (every tick); it waits as
-// long as that takes (the new program is already in place: any start from now on is the new one) and says so once
+// the start again after an update: once nothing has gone to Tally for two looks in a row (every tick); it says so
+// once. Review S1: after updQuietMax (30 minutes) one quiet look is enough (the moment between two requests: never in
+// the middle of one); the new program is already in place, so any start from now on is the new one
+var updQuietMax = 30 * time.Minute
+
 func updateRestartWhenQuiet(tick time.Duration, restart func()) {
-	quiet, said := 0, false
+	quiet, said, start := 0, false, time.Now()
 	for !stopping() {
 		if tallyQuietFn() {
 			quiet++
-			if quiet >= 2 {
+			if quiet >= 2 || time.Since(start) >= updQuietMax {
 				restart()
 				return
 			}
@@ -269,15 +282,31 @@ func updateWait(first bool) time.Duration {
 	return base + updateJitterFn()
 }
 
-// 2.5.4: one look for an update at a time (the schedule's and the tray's "Check for updates" never run together)
+// 2.5.4: one look for an update at a time (the schedule's and the tray's "Check for updates" never run together).
+// Review S1: an update put in place keeps the flag until the bridge starts again
 var updChecking atomic.Bool
 
 func checkForUpdateOnce(now bool) (M, bool) {
 	if !updChecking.CompareAndSwap(false, true) {
 		return updateInfo(), false
 	}
-	defer updChecking.Store(false)
-	return checkForUpdate(now), true
+	m := checkForUpdate(now)
+	if !updatePending() {
+		updChecking.Store(false)
+	}
+	return m, true
+}
+
+// an update is in place and the bridge has not started again yet (applying), or the new program has not run well for
+// two minutes yet (update-pending.json beside it)
+func updatePending() bool {
+	if u := updateInfo(); u["applying"] == true {
+		return true
+	}
+	if exe := exePathFn(); exe != "" && exists(filepath.Join(filepath.Dir(exe), "update-pending.json")) {
+		return true
+	}
+	return false
 }
 
 // 2.5.4: the tray's "Check for updates" never waits for a download: the look runs in the background and the tray gets

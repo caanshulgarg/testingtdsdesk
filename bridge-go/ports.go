@@ -110,7 +110,7 @@ var reTally = regexp.MustCompile(`(?i)^tally(prime)?(\.exe)?$`)
 // bridge ports are not stable per user): the Windows user the Tally runs as settles it before anything else may. A
 // Tally in one of the owner's sessions stays "mine" (the person in this login opened it, also "as another user"); else
 // a Tally running as the owner's own Windows user is "mine" (run as administrator by the owner: session not given, or
-// session 0), one running as another person's Windows user (a user SID, S-1-5-21-...) is "other". Only a Tally whose
+// session 0), one running as another person's Windows user (a user SID, S-1-5-21-... or S-1-12-1-...) is "other". Only a Tally whose
 // user and session Windows both did not give stays "unknown". Service accounts (SYSTEM, LOCAL SERVICE...) never count
 // as anyone's: the bridge's service runs as SYSTEM
 func sessionOwner(p proc) string {
@@ -128,7 +128,11 @@ func sessionOwner(p proc) string {
 }
 
 // a person's Windows account (local or domain: S-1-5-21-...), not a service account
-func isUserSid(sid string) bool { return strings.HasPrefix(strings.ToUpper(sid), "S-1-5-21-") }
+// (review M2: S-1-12-1-... too, a Microsoft Entra ID user signed in to Windows)
+func isUserSid(sid string) bool {
+	u := strings.ToUpper(sid)
+	return strings.HasPrefix(u, "S-1-5-21-") || strings.HasPrefix(u, "S-1-12-1-")
+}
 
 // the SID is this bridge's owner's (the user it runs as, or the owner the service works for)
 func ownSidIs(sid string) bool {
@@ -439,6 +443,7 @@ var coInfoMu sync.Mutex
 func resetCoInfo() {
 	coInfoMu.Lock()
 	coInfo = nil
+	coInfoFailAt = map[string]time.Time{}
 	coInfoMu.Unlock()
 }
 
@@ -458,19 +463,42 @@ func getCoInfo(tc *TC, name string, port int) M {
 			return x
 		}
 	}
-	coInfoMu.Unlock()
-	g, pan := "", ""
-	if raw, err := invokeTally(tc, port, coInfoRequest(name), 15); err == nil { // 2.5.4: 2 s at most (tally.go tallyRaw)
-		if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
-			g = nt(c[0], "GSTREGISTRATIONNUMBER")
-			if g == "" {
-				g = nt(c[0], "GSTREGISTRATIONDETAILS.LIST/GSTIN")
-			}
-			pan = nt(c[0], "INCOMETAXNUMBER")
+	// 2.5.4 review S3: a company whose GSTIN / PAN Tally did not give in time is not asked again for 5 minutes, and
+	// nothing is kept for it (so it is asked again then, or its late answer is taken: late254.go)
+	if t, ok := coInfoFailAt[name]; ok && nowFn().Sub(t) < 5*time.Minute && nowFn().After(t.Add(-time.Minute)) {
+		coInfoMu.Unlock()
+		if raw, ok := takeLateAnswer(port, coInfoRequest(name), 0); ok {
+			return keepCoInfo(name, raw)
 		}
+		return M{"gstin": "", "pan": ""}
+	}
+	coInfoMu.Unlock()
+	raw, err := invokeTally(tc, port, coInfoRequest(name), 15) // 2.5.4: 2 s at most (tally.go tallyRaw)
+	if err != nil {
+		coInfoMu.Lock()
+		coInfoFailAt[name] = nowFn()
+		coInfoMu.Unlock()
+		return M{"gstin": "", "pan": ""}
+	}
+	return keepCoInfo(name, raw)
+}
+
+// review S3: the companies whose GSTIN / PAN did not come in time, and when (under coInfoMu)
+var coInfoFailAt = map[string]time.Time{}
+
+// Tally's answer for one company's GSTIN / PAN, kept (the company's entry is never changed afterwards)
+func keepCoInfo(name, raw string) M {
+	g, pan := "", ""
+	if c := xmlDoc(raw).All("COMPANY"); len(c) > 0 {
+		g = nt(c[0], "GSTREGISTRATIONNUMBER")
+		if g == "" {
+			g = nt(c[0], "GSTREGISTRATIONDETAILS.LIST/GSTIN")
+		}
+		pan = nt(c[0], "INCOMETAXNUMBER")
 	}
 	x := M{"gstin": g, "pan": pan, "at": nowS()}
 	coInfoMu.Lock()
+	delete(coInfoFailAt, name)
 	defer coInfoMu.Unlock()
 	if coInfo == nil { // forgotten meanwhile (a test)
 		coInfo = M{}
@@ -557,10 +585,10 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		}
 		// 2.5.4 (colist254.go): a Tally that did not give its list in 2 s is not asked for it again until its wait has
 		// passed; meanwhile the list it gave last stands (nothing is sent). Only while a list is held (a Tally never
-		// listed is always asked, under the small-check rule after no answer) and not for a background ask (it follows
-		// the shared retry schedule, retry.go)
-		if !tc.bg {
-			if _, held := colistHold(toInt(pp["port"])); held {
+		// listed is always asked, under the small-check rule after no answer), not for a background ask (it follows
+		// the shared retry schedule, retry.go), and (review B2) never for a fresh ask: a posting, Test connection, Connect
+		if !tc.bg && !fresh {
+			if _, held := colistHold(toInt(pp["port"]), toInt(pp["pid"])); held {
 				if prev := prevCompanies(toInt(pp["port"])); prev != nil {
 					allFresh = false
 					if pp["mine"] != false {
@@ -574,9 +602,17 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			}
 		}
 		// 2.3.1: asked in the background (tc.bg), it follows the shared retry schedule (retry.go). 2.5.4: 2 s at most
-		raw, err := invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8) // 2.5.4: 2 s at most (tally.go tallyRaw)
+		// 2.5.4 review B1 (late254.go): Tally's late answer to the list, kept within the last minute, is the list
+		// (marked late: a posting whose company it does not name asks once more, findCompanyIn)
+		var raw string
+		var err error
+		if lr, ok := takeLateAnswer(toInt(pp["port"]), companiesRequest(), toInt(pp["pid"])); ok && !tc.noLate {
+			raw, e["late"] = lr, true
+		} else {
+			raw, err = invokeTally(tc, toInt(pp["port"]), companiesRequest(), 8) // 2.5.4: 2 s at most (tally.go tallyRaw)
+		}
 		if !tc.bg {
-			colistNote(toInt(pp["port"]), err)
+			colistNote(toInt(pp["port"]), toInt(pp["pid"]), err)
 		}
 		if err != nil {
 			allFresh = false
@@ -844,7 +880,36 @@ func findCompanyNow(company string, preferred int) (int, string, error) {
 }
 
 func findCompanyIn(company string, preferred int, passes []bool) (int, string, error) {
-	return findCompanyWith(company, preferred, passes, openCompanies)
+	return findCompanyWith(company, preferred, passes, func(fresh bool) []M {
+		l := openCompanies(fresh)
+		// 2.5.4 review B2: a list kept (the late answer, or the last list while a slow one waits) that does not name the
+		// company: Tally itself is asked once more
+		if listKeptWithout(l, company) {
+			l = openCompaniesWith(&TC{noLate: true}, true)
+		}
+		return l
+	})
+}
+
+// a usable entry of the list is a kept one (late or kept) and no usable entry names the company
+func listKeptWithout(l []M, company string) bool {
+	kept := false
+	for _, s := range l {
+		if s["skipped"] == true || s["ok"] != true {
+			continue
+		}
+		if s["late"] == true || s["kept"] == true {
+			kept = true
+		}
+		var names []string
+		for _, c := range sessCompanies(s) {
+			names = append(names, str(c["name"]))
+		}
+		if _, n := matchCompany(company, names); n > 0 {
+			return false
+		}
+	}
+	return kept
 }
 
 func findCompanyWith(company string, preferred int, passes []bool, list func(fresh bool) []M) (int, string, error) {

@@ -17,7 +17,6 @@ package main
 
 import (
 	"sync"
-	"testing"
 	"time"
 )
 
@@ -34,6 +33,9 @@ var iniSharedFn = func() bool { return sharedNow.get() }
 
 var sharedNow = &sharedCache{}
 
+// how long the look is kept (the tests set 0 in r254_test.go: each look their own)
+var sharedKeep = time.Minute
+
 type sharedCache struct {
 	mu sync.Mutex
 	at time.Time
@@ -43,8 +45,7 @@ type sharedCache struct {
 func (c *sharedCache) get() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// (under go test each look is the test's own: nothing kept from another test)
-	if !testing.Testing() && !c.at.IsZero() && time.Since(c.at) < time.Minute {
+	if sharedKeep > 0 && !c.at.IsZero() && time.Since(c.at) < sharedKeep {
 		return c.v
 	}
 	c.v, c.at = sharedComputerNow(), time.Now()

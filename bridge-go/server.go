@@ -172,6 +172,9 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		// bridges of this computer leave them alone; the Windows user, to name it in their words
 		own, unknown := claimedPorts()
 		p["tallyPorts"], p["tallyPortsUnknown"], p["windowsUser"] = own, unknown, ownerName()
+		// 2.5.4 review S2: how this bridge breaks the last tie over an owner-unknown Tally ("user"; a bridge before 2.5.4
+		// sends none and breaks it by the bridge port), so two bridges of different versions decide alike
+		p["claimRule"] = claimRuleUser
 		// 2.5.3 (one FinCom login on a shared server): whether the asking browser runs in this bridge's owner's Windows
 		// session (true / false / "unknown"), and this bridge's own port, so FinCom picks its own login's bridge
 		p["sameSession"], p["bridgePort"] = sameSessionOf(r), toInt(cfg("Port"))

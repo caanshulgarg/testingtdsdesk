@@ -19,6 +19,9 @@ import (
 	"time"
 )
 
+// under go test the shared-computer look is never kept from one test to the next (review M1: a hook, not package testing)
+func init() { sharedKeep = 0 }
+
 // --- fix 1: the update's state in the beat, small
 func TestR254BeatCarriesUpdateState(t *testing.T) {
 	f := newStandTally(t)
@@ -371,13 +374,15 @@ func TestR254ClaimTieStable(t *testing.T) {
 		t.Fatal("an own claim always wins")
 	}
 	// hemant < saurabh, whichever bridge holds the lower port
-	if !claimWins(bridgeClaim{port: 9109, unknown: true, user: `SRV\Hemant`}, 9102, "saurabh") || claimWins(bridgeClaim{port: 9102, unknown: true, user: "saurabh"}, 9109, `SRV\hemant`) {
+	// (both 2.5.4: the other bridge's /ping says claimRule "user"; an older one: r254review_test.go S2)
+	u := claimRuleUser
+	if !claimWins(bridgeClaim{port: 9109, unknown: true, user: `SRV\Hemant`, rule: u}, 9102, "saurabh") || claimWins(bridgeClaim{port: 9102, unknown: true, user: "saurabh", rule: u}, 9109, `SRV\hemant`) {
 		t.Fatal("names decide")
 	}
-	if claimWins(bridgeClaim{port: 9101, unknown: true, user: "saurabh"}, 9109, "hemant") {
+	if claimWins(bridgeClaim{port: 9101, unknown: true, user: "saurabh", rule: u}, 9109, "hemant") {
 		t.Fatal("the port does not decide when the names differ")
 	}
-	if !claimWins(bridgeClaim{port: 9101, unknown: true}, 9109, "hemant") || claimWins(bridgeClaim{port: 9109, unknown: true, user: "hemant"}, 9101, "HEMANT") {
+	if !claimWins(bridgeClaim{port: 9101, unknown: true, rule: u}, 9109, "hemant") || claimWins(bridgeClaim{port: 9109, unknown: true, user: "hemant", rule: u}, 9101, "HEMANT") {
 		t.Fatal("no name or the same name: the lower port")
 	}
 }
@@ -411,7 +416,7 @@ func TestR254CompanyListTwoSeconds(t *testing.T) {
 	if e["ok"] != true || len(sessCompanies(e)) == 0 {
 		t.Fatalf("the last list not kept: %v", e)
 	}
-	until, held := colistHold(mine.port)
+	until, held := colistHold(mine.port, 0)
 	if !held || time.Until(until) < 10*time.Second || time.Until(until) > 16*time.Second {
 		t.Fatalf("wait after a slow list: %v %v", held, time.Until(until))
 	}
@@ -421,7 +426,14 @@ func TestR254CompanyListTwoSeconds(t *testing.T) {
 	n0 := len(mine.reqs)
 	mine.mu.Unlock()
 	t0 = time.Now()
-	e = r253Entry(t, openCompanies(true), mine.port)
+	// (an ask that is not fresh: the light check, the beat's own look; a fresh one always asks, review B2)
+	coMu.Lock()
+	coCacheAt = time.Time{}
+	coMu.Unlock()
+	old := time.Now().Add(-time.Hour)
+	_ = os.Chtimes(filepath.Join(syncDir(), "open-companies.json"), old, old)
+	l, _ := openCompaniesAsk(fin, false)
+	e = r253Entry(t, l, mine.port)
 	mine.mu.Lock()
 	n1 := len(mine.reqs)
 	mine.mu.Unlock()
@@ -439,7 +451,7 @@ func TestR254CompanyListTwoSeconds(t *testing.T) {
 	colistBack[mine.port] = w
 	colistMu.Unlock()
 	e = r253Entry(t, openCompanies(true), mine.port)
-	if _, held := colistHold(mine.port); held || e["ok"] != true || e["kept"] == true {
+	if _, held := colistHold(mine.port, 0); held || e["ok"] != true || e["kept"] == true {
 		t.Fatalf("after the wait: %v held %v", e, held)
 	}
 }
@@ -451,18 +463,18 @@ func TestR254ColistBackoff(t *testing.T) {
 	t.Cleanup(resetColist)
 	want := []time.Duration{15 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 10 * time.Minute, 10 * time.Minute}
 	for i, d := range want {
-		colistNote(9000, errTimeout)
-		until, _ := colistHold(9000)
+		colistNote(9000, 0, errTimeout)
+		until, _ := colistHold(9000, 0)
 		if got := time.Until(until); got < d-time.Second || got > d+time.Second {
 			t.Fatalf("try %d: %v, want %v", i+1, got, d)
 		}
 	}
-	colistNote(9000, nil)
-	if _, held := colistHold(9000); held {
+	colistNote(9000, 0, nil)
+	if _, held := colistHold(9000, 0); held {
 		t.Fatal("an answer in time ends the wait")
 	}
-	colistNote(9001, errors.New("refused: not on the allow-list"))
-	if _, held := colistHold(9001); held {
+	colistNote(9001, 0, errors.New("refused: not on the allow-list"))
+	if _, held := colistHold(9001, 0); held {
 		t.Fatal("a refusal starts no wait")
 	}
 }

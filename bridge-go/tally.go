@@ -313,6 +313,9 @@ type TC struct {
 	// review round 3 (R3-4): the trial's port is not a Tally the bridge uses: only then does a failure leave no mark (a
 	// planned port, the real Tally, keeps the small check and the stuck record as any request)
 	unplanned bool
+	// 2.5.4 review B2: Tally itself is asked, never a late answer kept (late254.go): a posting whose company the kept list
+	// does not name asks once more
+	noLate bool
 }
 
 // 2.4.8 (anyport.go): the typed port's trial's yield, looked at right before the send (tallyRaw)
@@ -674,6 +677,14 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		slot.took = time.Since(t0)
 		clearProbe(port)
 		clearTallyStuck(port)
+		// 2.5.4 review B1: the company list (or one company's GSTIN / PAN) Tally finished within the wait after the stop is
+		// kept as its answer (late254.go): a Tally that always takes 2-8 s for it still gets its list, nothing is sent again
+		if a.err == nil && slot.took <= abandonWait() && keepsLateAnswer(id) {
+			noteLateAnswer(port, x, textFromBytes(a.b))
+			writeLog(fmt.Sprintf("Tally %d finished the request the bridge stopped waiting for (%s) %s after the stop; its answer is kept as the answer (nothing is asked again)",
+				port, id, slot.took.Round(100*time.Millisecond)))
+			return
+		}
 		if slot.took <= abandonWait() {
 			writeLog(fmt.Sprintf("Tally %d finished the request the bridge stopped waiting for (%s) %s after the stop; its answer is discarded and the next request goes now",
 				port, id, slot.took.Round(100*time.Millisecond)))
@@ -982,6 +993,13 @@ func isBusyErr(err error) bool {
 }
 
 func invokeTally(tc *TC, port int, x string, timeoutSec int) (string, error) {
+	// 2.5.4 review B1 (late254.go): Tally's late answer to this very request, kept within the last minute, is the answer:
+	// nothing is sent (not for a caller that must ask Tally itself: noLate)
+	if !tc.noLate && keepsLateAnswer(tallyRequestID(x)) && checkAllowed(x) == nil {
+		if raw, ok := takeLateAnswer(port, x, 0); ok {
+			return raw, nil
+		}
+	}
 	if !tc.bg || tc.person || isImportRequest(x) || checkAllowed(x) != nil || readStopRefuses(x) != nil {
 		return invokeTallyNow(tc, port, x, timeoutSec)
 	}
