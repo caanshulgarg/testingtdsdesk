@@ -1,7 +1,8 @@
 """python3 run_bank_spacious.py - the bank statement page's spacious layout (01-Nov-2026; the owner's approved draft
 "Bank statement — spacious layout"). Offline, a made-up statement of 120 lines (no real client):
   1. the slim rail (72 px) on the Bank page, and the full sidebar on every other page;
-  2. a rail item's flyout opens on hover, and from the keyboard (focus, arrows, Esc); every flyout entry opens its page;
+  2. a rail item's flyout opens on hover, and from the keyboard (focus, arrows, Esc); a click opens its first page; every
+     flyout entry opens its page;
   3. Menu opens the full menu; Pin keeps the full sidebar (after a reload too); "Slim rail" undoes it;
   4. the page's header is one line; the status tabs, search and filters are one row; what is filtered shows as chips with ✕;
   5. the table fills the window: its header row stays at the top of its box when it scrolls, its totals stay at its foot,
@@ -140,10 +141,11 @@ with sync_playwright() as p:
     pg.keyboard.press("Escape"); W(150)
     ok(not E(VIS, '[data-rail-flyout="tds"]') and E("document.activeElement && document.activeElement.dataset.rail") == "tds", "Esc closes it, back on TDS")
     ok(E("S.view === 'company' && S.tab === 'bank'"), "and Esc did not leave the Bank page")
-    pg.click('.bkr [data-rail="sales"]'); W(200)
-    ok(E(VIS, '[data-rail-flyout="sales"]'), "a click (touch) on Sales opens its flyout")
-    pg.mouse.click(700, 500); W(250)
-    ok(not E(VIS, '[data-rail-flyout="sales"]'), "a click elsewhere closes it")
+    pg.click('.bkr [data-rail="sales"]'); W(700)
+    ok(E("S.tab === 'sales'") and not E(VIS, '[data-rail-flyout="sales"]'), "a click on Sales opens its first page (Invoices), no flyout left (run_nav_first_sub.py)")
+    E(BACK); W(700)
+    pg.focus('.bkr [data-rail="sales"]'); W(200); ok(E(VIS, '[data-rail-flyout="sales"]'), "focus Sales: its flyout"); pg.mouse.click(700, 500); W(250)
+    ok(not E(VIS, '[data-rail-flyout="sales"]'), "a click elsewhere closes a flyout")
     E("() => { window.__acts = []; const a = window.bankAct, d = window.doAct; window.bankAct = (x, ...r) => { window.__acts.push(x); if (x !== 'bookPick' && x !== 'bankCheckTally') return a(x, ...r); }; window.doAct = (x, ...r) => { window.__acts.push(x); if (x !== 'uploadHere') return d(x, ...r); }; }")
     for (sec, word, want) in SUBS:
         E(BACK); W(700); E("window.__acts = []")
