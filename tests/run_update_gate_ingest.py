@@ -111,7 +111,7 @@ try:
     ok(last().get("p_ready") is False and "posting" in str(last().get("p_why")), "5. a posting waiting: not ready (%s)" % last().get("p_why"))
     F.T["tally_post_jobs"][-1]["status"] = "done"
     # 6. not its time
-    dev2["info"]["updGate"]["startAt"] = iso(-3600)
+    dev2["info"]["updGate"]["startAt"] = iso(-3600); dev2["info"]["updGate"]["starts"] = [iso(-3600)]
     c, r = beat(K2, G2)
     ok(last().get("p_ready") is False and "not its time" in str(last().get("p_why")), "6. an hour after its start: not its time (%s)" % last().get("p_why"))
     # 7. the owner's rollback: no gate; a function error: not allowed

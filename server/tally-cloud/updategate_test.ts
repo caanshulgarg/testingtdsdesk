@@ -16,9 +16,10 @@ Deno.test("the start: a first beat, a beat after a gap, a new version, the reque
   const g2 = gateTrack({ beat: beat(T0), updGate: g }, beat(T0 + 30000), T0 + 30000);
   assert(g2.startAt === iso(T0), "a beat 30 s later keeps the start");
   const g3 = gateTrack({ beat: beat(T0), updGate: g }, beat(T0 + 200000), T0 + 200000);
-  assert(g3.startAt === iso(T0 + 200000) && /again after 200 s/.test(g3.startHow), "a gap of 200 s: started again");
+  assert(g3.startAt === iso(T0 + 200000) && /again after 200 s/.test(g3.startHow) && g3.starts.join() === [iso(T0), iso(T0 + 200000)].join(), "a gap of 200 s: a possible start beside the first");
+  assert(checkWindow(g3, T0 + 120e3 + EVERY_MS).at && checkWindow(g3, T0 + 200e3 + 120e3 + EVERY_MS).at, "either start's time counts (a network gap does not lose the real one)");
   const g4 = gateTrack({ beat: beat(T0, { version: "2.5.1" }), updGate: g }, beat(T0 + 30000, { version: "2.5.3" }), T0 + 30000);
-  assert(g4.startAt === iso(T0 + 30000), "a new version: started again");
+  assert(g4.startAt === iso(T0 + 30000) && g4.starts.length === 1, "a new version: started again (the only start)");
   const g5 = gateTrack({ beat: beat(T0, { reqs: R5 }), updGate: g }, beat(T0 + 30000, { reqs: { ...R5, n: 1 } }), T0 + 30000);
   assert(g5.startAt === iso(T0 + 30000), "the count went down the same day: started again");
 });
@@ -26,7 +27,7 @@ Deno.test("the start: a first beat, a beat after a gap, a new version, the reque
 Deno.test("the start from the connection history when the gate first sees a bridge", () => {
   const hist = [{ kind: "bridge", state: "offline", at: iso(T0 - 9 * 3600e3), to: iso(T0 - 3600e3) }, { kind: "tally", state: "open", at: iso(T0 - 1800e3) }];
   const g = gateTrack({ beat: beat(T0 - 30000), history: hist }, beat(T0), T0);
-  assert(g.startAt === iso(T0 - 3600e3) && g.startHow === "the connection history", JSON.stringify(g));
+  assert(g.startAt === iso(T0 - 3600e3) && g.starts.length === 1 && g.startHow === "the connection history", JSON.stringify(g));
   const old = [{ kind: "bridge", state: "offline", at: iso(T0 - 30 * 3600e3), to: iso(T0 - 20 * 3600e3) }];
   assert(gateTrack({ beat: beat(T0 - 30000), history: old }, beat(T0), T0).startAt === "", "a start over 12 h ago: not known");
   assert(gateTrack({ beat: beat(T0 - 30000) }, beat(T0), T0).startAt === "", "no history: not known");
