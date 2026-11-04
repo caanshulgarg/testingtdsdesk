@@ -126,8 +126,7 @@ nav.sbar button[role="tab"] .sbar-n { margin-left: 6px; }
    a rule, the body, and the buttons in a footer. Styles only: the box keeps its markup, ids (#confirmBox, #cbxT, #cbxCheck,
    #cbxName, ...), words, buttons and keys (Enter = the main button, Escape = Cancel), which the tests and the app use.
    Its first part is the title (h2), then the words (.note), a tick box (.chk) or a red line (.cbx-err), then .row. */
-#confirmBox { align-items: center; padding: var(--space-4, 16px); background: oklch(10% 0 0 / .46);
-  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px); animation: arc-fade var(--duration-fast) var(--ease-enter); }
+#confirmBox { align-items: center; padding: var(--space-4, 16px); background: oklch(10% 0 0 / .5); animation: arc-fade var(--duration-fast) var(--ease-enter); }
 #confirmBox .cbx { width: min(calc(100vw - 32px), 520px); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow: auto; border: 1px solid var(--border);
   border-radius: var(--radius-surface); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating);
   animation: arc-fade var(--duration-fast) var(--ease-enter); }

@@ -2,8 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: oklch(10% 0 0 / .38);
-  backdrop-filter: blur(4px);
+  background: oklch(10% 0 0 / .42);
 }
 
 .content {

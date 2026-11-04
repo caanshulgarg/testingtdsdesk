@@ -211,7 +211,14 @@ function Table({ tab, all }) {
   useLayoutEffect(() => markClipped(grid.current));
   // the lines scroll in their own box (bankSmart.css): a scroll down over the box first brings the box up under the app's
   // header, then scrolls the lines, so it reads as one scroll; going up, the lines first, then the page
-  useEffect(() => { const g = grid.current; if (!g) return; const w = (ev) => wheelToTop(ev, g); g.addEventListener("wheel", w, { passive: false }); return () => g.removeEventListener("wheel", w); }, []);
+  // next-scroll-rdp: a wheel listener that may stop the scroll makes Chrome wait for the page before every scroll over it (on
+  // a busy shared server, the wheel did nothing for a while); it is only there while the pointer is over the grid and the
+  // spacious layout (where it has nothing to do) is off
+  useEffect(() => { const g = grid.current; if (!g) return; const w = (ev) => wheelToTop(ev, g); let on = false;
+    const off = () => { if (on) { on = false; g.removeEventListener("wheel", w); } };
+    const enter = () => { if (on || (document.documentElement.classList.contains("bk-spacious") && window.innerWidth > 600)) return; on = true; g.addEventListener("wheel", w, { passive: false }); };
+    g.addEventListener("pointerenter", enter); g.addEventListener("pointerleave", off);
+    return () => { off(); g.removeEventListener("pointerenter", enter); g.removeEventListener("pointerleave", off); }; }, []);
   useEffect(() => { const g = grid.current; if (!g || typeof ResizeObserver !== "function") return; const o = new ResizeObserver(() => requestAnimationFrame(() => markClipped(g))); o.observe(g); return () => o.disconnect(); }, []);
   // a long statement: more lines load as the end comes into view (the scroll listener in src/js/23 finds this button)
   const more = <div className="bk-more"><button className="btn small" data-act="bankMore" onClick={() => bankAct("bankMore")}>Show {Math.min(100, total - Math.min(total, b.limit))} more ({total - Math.min(total, b.limit)} left)</button></div>;
