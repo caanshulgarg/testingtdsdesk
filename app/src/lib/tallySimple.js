@@ -339,6 +339,7 @@ export function localOpen(company, own) {
   const k = coKey(company);
   return o.names.has(k) || [...o.names.values()].some((n) => !!(globalThis.LinkRec && LinkRec.same(n, company))) ? "yes" : "no";
 }
+export const BRING_WHY = "Open this company in Tally first";
 const openCell = (h) => h === "yes" ? { w: YES, note: "" } : h === "no" ? { w: NO, note: NOT_MINE }
   : h === "checking" ? { w: DASH, note: "Checking your FinCom Bridge…" } : h === "away" ? { w: DASH, note: AWAY, connect: true } : { w: DASH, note: NOT_SET, setup: true };
 // the companies open in THIS user's own Tally that no client has (each its own row, the strip and step 3)
@@ -368,11 +369,16 @@ function clientRow(co, all, opts) {
   const x = firstSyncOf(cid), running = !!(x && !x.end && !x.err && !x.late), stuck = !!(x && !x.end && (x.err || x.late));
   const n = Math.max(ledgersOf(cid), ledN(cid), (x && x.led > 0 && x.led) || 0), held = ledgersHeld(cid) || !!(x && x.end);
   const ch = held ? changeWords(cid) : { known: false, words: "" };
+  // next-tally-ledgers-button (04-Nov-2026): not yet or stuck, the button "Bring ledgers from Tally" (firstSync, now: the
+  // ledgers wake and, through the cloud, Update now); it can run when the company is open in Tally on this user's own
+  // computer or on any computer FinCom hears now, else one plain line
+  const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company));
+  const bring = { bring: true, can: anyOpen, why: anyOpen ? "" : BRING_WHY };
   if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0;
-    row.l = { w: NOTYET, note: of > 0 ? nf(rd) + " of " + nOf(of, "ledger", "ledgers") : "Coming in now" }; }
-  else if (stuck && !held) row.l = { w: NO, note: x.err || x.why || "Nothing came from Tally in 3 minutes" };
+    row.l = { w: NOTYET, note: of > 0 ? nf(rd) + " of " + nOf(of, "ledger", "ledgers") : "Coming in now", syncing: true }; }
+  else if (stuck && !held) row.l = Object.assign({ w: NO, note: x.err || x.why || "Nothing came from Tally in 3 minutes" }, bring);
   else if (held) row.l = { w: YES, note: n > 0 ? nOf(n, "ledger", "ledgers") : "Received", change: ch.words, link: true };
-  else row.l = { w: NOTYET, note: open ? "" : "Come when the company is open in Tally" };
+  else row.l = Object.assign({ w: NOTYET, note: "" }, bring);
   row.lKnown = ch.known;
   row.open = held ? openingsOf(cid) : null;
   // entries: being brought (the bar), missing days (held lines first), till a day, not yet
@@ -408,7 +414,8 @@ function clientRow(co, all, opts) {
   }
   // what to do (at most one button), else plain words
   if (!row.act) {
-    if (stuck && !held) { row.act = { kind: "retry", label: "Try again" }; row.todo = "Keep the company open in Tally, then try again."; row.upload = true; }
+    if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
+    else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Bring ledgers from Tally."; row.upload = true; }
     else if (row.e.w === NOTYET || row.l.w === NOTYET) {
       if (open || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
       else row.todo = "Open the company in Tally.";

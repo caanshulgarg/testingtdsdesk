@@ -65,6 +65,8 @@
 #app .tsm-note { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
 #app .tsm-change { font-size: 13px; color: var(--info); font-weight: 600; margin-top: 2px; }
 #app .tsm-small { font-size: 13px; margin-top: 4px; }
+#app .tsm-bring { margin-top: 6px; }
+#app .tsm-bring .btn { white-space: normal; max-width: 100%; }
 #app .tsm-bar { margin-top: 6px; width: 170px; max-width: 100%; height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; }
 #app .tsm-bar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
 #app .tsm-do .btn { white-space: nowrap; }

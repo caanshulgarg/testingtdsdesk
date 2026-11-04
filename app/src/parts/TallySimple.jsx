@@ -11,7 +11,7 @@
 // The same links, reads and RPCs as before (linkTo, addNew in Pick, ChangePick, firstSync, tally_fill_request, the Day
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { useEffect, useState } from "react";
-import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, openFromTally } from "./TallyCompanies.jsx";
+import { companyRows, linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
 import { LEDN, ASKED_N, tableRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, justLinked, openUnlinked, ownState, rescanLocal, lookOnce, aimLocal, bestFor, YES, NO, NOTYET } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
@@ -162,7 +162,6 @@ function Act({ row }) {
   else if (a.kind === "bring") btn = <button type="button" className="btn primary" data-tsm-act="bring" disabled={busy}
     onClick={run(() => rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) }).then((r) => { if (r && r.ok === false) toast(String(r.error || "FinCom did not take it")); askStatus(true); },
       () => toast("FinCom’s cloud did not answer; try again in a minute.")))}>{busy ? "Asking Tally…" : a.label}</button>;
-  else if (a.kind === "retry") btn = <button type="button" className="btn primary" data-tsm-act="retry" onClick={() => firstSync(row.cid, row.company)}>{a.label}</button>;
   return <>{btn}
     {a.kind === "choose" && row.best && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
     {pick && a.kind === "choose" && <div className="tsm-pick" data-tsm-row-pick=""><Pick r={row.r} co={null} pre={row.best ? row.best.id : ""} onClose={() => setPick(false)} /></div>}
@@ -220,8 +219,22 @@ function LocalConnect() {
 function SetUp() {
   return <div><button type="button" className="linkbtn tsm-small" data-tsm-setup="" onClick={() => { if (typeof openConnectTally === "function") openConnectTally(1, ""); window.scrollTo(0, 0); }}>Set it up</button></div>;
 }
+// next-tally-ledgers-button (04-Nov-2026): "Bring ledgers from Tally" under "Ledgers received?" (not yet, or stuck): the
+// first sync again on a person's click (firstSync, now: the ledgers wake, and Update now through the cloud); it cannot
+// run while no computer has the company open in Tally: the button is off and one plain line says so
+function Bring({ row }) {
+  const [busy, setBusy] = useState(false), l = row.l;
+  if (!canWrite()) return null;
+  const go = async () => { setBusy(true); try { await firstSync(row.cid, row.company, { now: true }); } finally { setBusy(false); } };
+  return <div className="tsm-bring" data-tsm-bring={row.cid}>
+    <button type="button" className="btn small primary" data-tsm-bring-btn="" disabled={busy || !l.can} onClick={go}>{busy ? "Asking Tally…" : "Bring ledgers from Tally"}</button>
+    {!l.can && l.why && <div className="tsm-note" data-tsm-bring-why="">{l.why}</div>}</div>;
+}
 function Row({ row }) {
   const [list, setList] = useState(false);
+  // a first sync going: read every 10 seconds (its count, done, or stuck after 3 minutes with the button), as the bar does
+  // elsewhere; this page had read it only once, so "Coming in now" stayed until the page was opened again
+  useEffect(() => { if (!row.l || !row.l.syncing) return; const t = setInterval(() => syncPoll(row.cid), 10000); return () => clearInterval(t); }, [row.cid, row.l && row.l.syncing]);
   const linkedRow = row.kind === "client";
   return <><tr className={"tsm-tr" + (row.focus ? " tsm-focus" : "")} data-tsm-row={linkedRow ? row.client : row.company} data-tsm-kind={row.kind} data-tsm-cid={row.cid || undefined}
     data-tsm-need={row.need ? "" : undefined} data-tsm-fine={row.fine ? "" : undefined} data-focus={row.focus ? "" : undefined}>
@@ -232,6 +245,7 @@ function Row({ row }) {
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}
       <OpenLine row={row} list={list} onList={() => setList(!list)} />
+      {row.l.bring && <Bring row={row} />}
       {row.l.link && <div><button type="button" className="linkbtn tsm-small" data-tsm-ledgers={row.cid} onClick={() => (typeof Rec === "object" && Rec.openClientTab ? Rec.openClientTab(row.cid, "books:ledgers") : openCompany(row.cid))}>See ledgers</button></div>}
     </Cell>
     <Cell k="e" label="All entries received?" x={row.e}>

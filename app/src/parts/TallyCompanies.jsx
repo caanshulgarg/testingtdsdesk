@@ -425,8 +425,23 @@ async function ledgerNow(cid) {
   return (p && p.ledger) || null;
 }
 const sameLp = (a, b) => !!a && !!b && a.round === b.round && String(a.at) === String(b.at) && Number(a.read) === Number(b.read) && !!a.done === !!b.done;
-export async function firstSync(cid, company) {
-  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "", moveAt: 0, samples: [] };
+// next-tally-ledgers-button (04-Nov-2026; the owner: "first time integrating a Tally company I cannot see the masters coming,
+// nor any button to bring them"). Staging, a shared server: the "ledgers" wake reached the computers, but a bridge reads
+// the ledger list only for a company it already keeps in step (bridge-go events.go wakeLedgers: "this company is not kept
+// in step on this computer"); a company just opened and linked is not kept yet, and the cloud's wake has no answer to say
+// so, so nothing came and nothing asked again. The bridge here already falls back to Update now for it (askTally: POST
+// /keep {now, company}); through FinCom's cloud the same fallback is the existing Update now (tally_want_update: the
+// bridge's "now" run makes its kept state and reads the ledger list first). Asked by itself once when the wake brought no
+// progress in 45 seconds, and at once on a person's click (opts.now: "Bring ledgers from Tally", Try again). Nothing new
+// is asked of the bridge or of Tally.
+const UP_MS = 45000;
+async function askUpdate(x) {
+  if (x.upAsked) return;
+  x.upAsked = Date.now();
+  try { await TCloud.rpc("tally_want_update", { p_client: x.cid }); } catch (e) { /* the wake was asked; the beat says why */ }
+}
+export async function firstSync(cid, company, opts) {
+  const x = SYNC()[cid] = { cid, company: company || "", at: Date.now(), via: "", err: "", end: 0, late: false, led: null, prog: null, ledAt: 0, why: "", snap: false, ledger0: null, la0: "", moveAt: 0, samples: [], upAsked: 0 };
   render();
   // what is there before this read (so an earlier read never counts as this one's)
   try { await TCloud.status(cid, true); } catch (e) { /* the time check below then */ }
@@ -443,6 +458,7 @@ export async function firstSync(cid, company) {
   // nobody asked (and not because one was asked a moment ago): no computer holds the company now
   else if (r.via === "cloud" && a.woken !== undefined && !Number(a.woken) && (a.asked === undefined ? !Number(a.debounced) : !Number(a.asked)))
     x.err = "No computer with Tally was asked: FinCom has no computer that holds " + (x.company || "the company") + " now. Open it in TallyPrime on the Tally computer, with FinCom Bridge running; then Try again.";
+  if (!x.err && x.via === "cloud" && opts && opts.now && typeof TCloud === "object" && TCloud.rpc) await askUpdate(x);
   render();
   setTimeout(() => syncPoll(cid), 1500);
 }
@@ -475,6 +491,8 @@ export async function syncPoll(cid) {
       // the beat's plain reason after 30 seconds without a count (the read goes on by itself once it is fixed); no progress
       // for 3 minutes: stuck, with Try again (never a bar that runs for ever)
       x.why = Date.now() - x.at > 30000 && Date.now() - (x.moveAt || x.at) > 30000 ? stallWhy(cid, x.company) : "";
+      // the wake brought nothing in 45 seconds through the cloud: the company may not be kept on its computer yet (above)
+      if (x.via === "cloud" && !x.upAsked && !x.prog && Date.now() - x.at > UP_MS) await askUpdate(x);
       if (Date.now() - (x.moveAt || x.at) > STUCK_MS) x.late = true;
     }
   } finally { polling[cid] = false; render(); }
@@ -569,7 +587,7 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
   const stuck = x && (x.err || x.late || (running && x.why));
   if (stuck) return <div className="tco-sync bad" data-tco-sync="stuck" data-tco-stuck={x.err ? "error" : x.late && !x.why ? "late" : "why"} data-tco-where={where} role="status">
     <span data-tco-sync-why="">{x.err || x.why || stallWhy(cid, name) || "No progress from Tally in 3 minutes: keep " + (name || "the company") + " open in TallyPrime on its computer."}</span>
-    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name)}>Try again</button></span>
+    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name, { now: true })}>Try again</button></span>
     {!led && <Masters cid={cid} />}</div>;
   if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.round(100 * rd / of) : 0;
     const left = timeLeft(x, of);

@@ -150,7 +150,13 @@ export function Status({ b }) {
   // (a list that is only the masters uploaded on Books, Ledgers.list's fallback since 25-Oct-2026, is said as the file)
   if (!lines.length && st.n && !(st.masters && nInfo)) lines = [{ k: "list", label: "", n: st.n, at: Ledgers.listAt(cid) || st.at }];
   if (!lines.length && nInfo) lines = [{ k: "file", label: "", n: nInfo, at: b.ledInfoAt, file: true }];
-  const again = live ? <button className="btn small" data-led-read="bridge" onClick={() => doAct("ledRead")}>Read again now</button>
+  // next-tally-ledgers-button (04-Nov-2026): no ledgers yet from a connected client: "Bring ledgers from Tally", the same
+  // first sync as the Tally page's (firstSync, now; loaded with the Tally screen's own code)
+  const bringNow = () => import("../../parts/TallyCompanies.jsx").then((m) => m.firstSync(cid, "", { now: true }));
+  // (a book in the cloud with no ledger yet, "Ledgers from Tally: 0", is the same empty state)
+  if (cloud && !lines.some((x) => Number(x.n) > 0)) lines = [];
+  const again = cloud && !lines.length ? <button className="btn small primary" data-led-bring="" onClick={bringNow}>Bring ledgers from Tally</button>
+    : live ? <button className="btn small" data-led-read="bridge" onClick={() => doAct("ledRead")}>Read again now</button>
     : cloud ? <button className="btn small" data-led-read="cloud" disabled={st.busy} onClick={() => Ledgers.refresh(cid)}>{st.busy ? "Reading…" : "Read again now"}</button> : null;
   return <div className="led-status" data-led-status="">
     {lines.length ? lines.map((x) => <div key={x.k} className="led-status-line" data-led-status-line={x.k}>

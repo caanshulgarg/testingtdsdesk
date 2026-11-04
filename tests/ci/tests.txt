@@ -605,4 +605,7 @@ run_bank_deleted_reupload.py          150  TDSDESK_SITE=../app/dist-test
 # For support) and migration 138 (opening balances: same / differ / do not balance; Use Tally's, Keep FinCom's)
 run_tally_simple.py                   420  TDSDESK_SITE=../app/dist-test
 run_tally_probe_once.py               120  TDSDESK_SITE=../app/dist-test
+# next-tally-ledgers-button (04-Nov-2026): "Bring ledgers from Tally" under Ledgers received? and on the ledgers screen;
+# the first sync through the cloud asks the existing Update now when the ledgers wake brings nothing in 45 s
+run_tally_ledgers_button.py           300  TDSDESK_SITE=../app/dist-test
 run_migration138.py                   300
