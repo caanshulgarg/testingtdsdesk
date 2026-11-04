@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.4 - TEST SHEET (2.5.3's sheet below, with 2.5.4's new checks first)
 
 File:        FinComBridge-Setup-2.5.4.exe
-Fingerprint: (filled in when the setup is built)
+Fingerprint: SHA-256 b04879382c59a002d0fcc5f74ee98b7d1ccf2e70fe836398a20b6ecc0fa7b48c (FinComBridge-Setup-2.5.4.exe, built 04-Nov-2026 20:50 UTC at bridge sources d187cf024, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.4.exe SHA-256 de96e30c7eb6928bc0ba171b7bb47ad2b7fdb6ef874b8cd2424d8c03412e927d
 
 2.5.4: no hang and no false message on a shared Windows server. It reaches computers by itself through FinCom's signed,
 gated automatic updates (one bridge of a computer at a time, only while idle with Tally). Nothing new is asked of Tally:
