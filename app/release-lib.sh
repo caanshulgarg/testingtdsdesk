@@ -59,7 +59,10 @@ last_good_put() {
 replace_folder() {  # $1 from (a directory), $2 the folder of main
   mkdir -p "$2"
   find "$2" -mindepth 1 ! -name README.txt -delete
-  tar -C "$1" --exclude=./README.txt -cf - . | tar -C "$2" -xf -
+  # -m: each file gets the time of now, not the one it had in $1. With $1's time, a file of the same size and time as the
+  # one it replaced (build.json: every build id has the same length) looked unchanged to git's stat check, so the promote
+  # to mw1p21k5-21fb8f kept review/'s old build.json (fixed by hand in 18fa738ec)
+  tar -C "$1" --exclude=./README.txt -cf - . | tar -C "$2" -m -xf -
 }
 
 # commit $1/ only (or the folders $1 names, "review review-prev"), refuse anything outside, push main (or not, DRY=1)
