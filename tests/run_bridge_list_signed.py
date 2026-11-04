@@ -7,8 +7,9 @@
    FINCOM_TEST_REAL_PASS_FILE, the real list is signed in a temporary copy with the real key and checked two ways
    (this tool's own RSA check, and openssl with the key rebuilt from bridge-go/update.go); a changed list fails both.
 3. The published lists on main (next/ and review/assets/bridge-go/): a .sig beside one must verify.
-4. The release scripts: publish-preview.sh signs the built list only with FINCOM_SIGN_BRIDGE_LIST=1 (else ships none),
-   before anything is published; promote-next.sh refuses a next/ signature that does not verify.
+4. The release scripts: publish-preview.sh signs the built list with FINCOM_SIGN_BRIDGE_LIST=1, else checks the kept
+   signature (a bad one stops the publish), before anything is published; promote-next.sh refuses a next/ signature
+   that does not verify.
   python3 tests/run_bridge_list_signed.py"""
 import base64, glob, os, subprocess, sys, tempfile
 
@@ -152,7 +153,8 @@ with tempfile.TemporaryDirectory() as t:
     pp = open(os.path.join(ROOT, "app", "publish-preview.sh")).read()
     pn = open(os.path.join(ROOT, "app", "promote-next.sh")).read()
     ok("bridge_list_sign.py\" sign" in pp and pp.index("bridge_list_sign.py") < pp.index("main_checkout\n"), "4a publish-preview.sh signs the built list before it touches main")
-    ok('[ "${FINCOM_SIGN_BRIDGE_LIST:-}" = 1 ]' in pp and "rm -f dist-test/assets/bridge-go/latest.json.sig" in pp, "4b signing is opt-in: without FINCOM_SIGN_BRIDGE_LIST=1 no .sig is published")
+    ok('[ "${FINCOM_SIGN_BRIDGE_LIST:-}" = 1 ]' in pp and 'bridge_list_sign.py" verify dist-test/assets/bridge-go' in pp and "rm -f dist-test/assets/bridge-go/latest.json.sig" not in pp,
+       "4b without FINCOM_SIGN_BRIDGE_LIST=1 the kept signature is checked and shipped, never dropped")
     ok("bridge_list_sign.py\" verify" in pn and pn.index("bridge_list_sign.py") < pn.index("replace_folder next review"), "4c promote-next.sh verifies a next/ signature before copying it to review/")
 
 print("all passed" if not fails else str(len(fails)) + " failed")

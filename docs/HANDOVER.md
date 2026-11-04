@@ -174,8 +174,9 @@ After install: watch NWS144 for a working day (timeouts, retries, longest wait f
   than tally_bridge_update_target (2.5.3) is allowed only while idle with Tally, at its own time to look for an update
   (2 min after a start, then every 6 h), and in its computer's one 10-minute slot (tally_bridge_update_grants). Before
   signing a newer list: `update tally_bridge_update_target set version = '<v>', set_at = now()`.
-- publish-preview.sh signs only with FINCOM_SIGN_BRIDGE_LIST=1 (passphrase: FINCOM_SIGNING_PASS or
-  FINCOM_SIGNING_PASS_FILE, from the staging vault, connector_signing_passphrase); without it the list ships with NO .sig
-  and every bridge stops updating itself: any later publish with FINCOM_SHIP_BRIDGE=1 must also sign.
+- The signature is kept beside the list (assets-test/bridge-go/latest.json.sig), so every FINCOM_SHIP_BRIDGE=1 build
+  ships it; publish-preview.sh checks it with the bridge's key and stops on a bad one. A new latest.json needs a new
+  signature: FINCOM_SIGN_BRIDGE_LIST=1 (passphrase: FINCOM_SIGNING_PASS or FINCOM_SIGNING_PASS_FILE, from the staging
+  vault, connector_signing_passphrase), or `python3 tools/bridge_list_sign.py sign assets-test/bridge-go`.
 - Tests: tests/run_bridge_list_signed.py, bridge-go/listsigned_test.go, tests/run_migration139.py,
   tests/run_update_gate_ingest.py, server/tally-cloud/updategate_test.ts.
