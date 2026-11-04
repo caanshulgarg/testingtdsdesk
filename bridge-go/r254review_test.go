@@ -145,10 +145,11 @@ func TestR254ReviewS1NoSecondApply(t *testing.T) {
 	if _, ran := checkForUpdateOnce(true); !ran || hits.Load() != 0 {
 		t.Fatalf("looked again before the new one ran well: %d hits", hits.Load())
 	}
-	if !updChecking.Load() {
-		t.Fatal("the one-look flag was cleared while the update is pending")
+	// (re-review N1: the flag stays only while an update this bridge put in place waits to start again; a look that only
+	// found update-pending.json clears it: r254review2_test.go)
+	if updChecking.Load() {
+		t.Fatal("the one-look flag stays after a look that put nothing in place")
 	}
-	updChecking.Store(false)
 	_ = os.Remove(filepath.Join(dir, "update-pending.json"))
 	if _, ran := checkForUpdateOnce(true); !ran || hits.Load() == 0 || updChecking.Load() {
 		t.Fatalf("no update pending: looked %d, flag %v", hits.Load(), updChecking.Load())

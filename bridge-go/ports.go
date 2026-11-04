@@ -981,7 +981,9 @@ func findCompanyWith(company string, preferred int, passes []bool, list func(fre
 		}
 		switch {
 		case last != nil:
-		case busy && !answered:
+		case busy:
+			// re-review N2: a Tally that is busy (its last list kept, marked busy) may have the company open: busy, never
+			// "not open"
 			last = &tallyWait{"busy", "Tally is busy and did not answer in time."}
 		case !answered:
 			last = &tallyWait{"closed", "TallyPrime is not running in your Windows login, or does not accept connections (F1 Help > Settings > Connectivity: TallyPrime acts as Both)."}

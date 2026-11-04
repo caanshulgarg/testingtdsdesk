@@ -630,6 +630,10 @@ func tallyRaw(ctx context.Context, port int, x string, timeoutSec int) (string, 
 		if a.err != nil {
 			return "", plainNetErr(a.err)
 		}
+		// re-review N4: an answer in time is newer than any late one kept for the same request: that goes
+		if keepsLateAnswer(tallyRequestID(x)) {
+			forgetLateFor(port, x)
+		}
 		return textFromBytes(a.b), nil
 	case <-ctx.Done():
 		if stoppedHere() {
@@ -1114,6 +1118,14 @@ func invokeTallyNow(tc *TC, port int, x string, timeoutSec int) (string, error) 
 			return
 		}
 		unlock0()
+	}
+	// re-review N3: a caller that waited for the lock behind the very request Tally was slow on takes its late answer
+	// (kept before the lock went: late254.go), never sends the same request again
+	if !tc.noLate && keepsLateAnswer(tallyRequestID(x)) {
+		if raw, ok := takeLateAnswer(port, x, 0); ok {
+			unlock()
+			return raw, nil
+		}
 	}
 	if tc.copier && !tc.bg && !bgBackoffUntil(port).IsZero() {
 		unlock()

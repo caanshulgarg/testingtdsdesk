@@ -561,6 +561,12 @@ func TestR254TallyQuiet(t *testing.T) {
 
 func TestR254UpdateJitter(t *testing.T) {
 	r254Bridge(t)
+	// by default none: FinCom's update gate expects each look 2 minutes after the start, then every 6 hours
+	if updateWait(true) != 2*time.Minute || updateWait(false) != 6*time.Hour {
+		t.Fatalf("default waits %v / %v: not the gate's times", updateWait(true), updateWait(false))
+	}
+	setCfg("UpdateJitterMin", float64(60))
+	t.Cleanup(func() { setCfg("UpdateJitterMin", nil) })
 	base := time.Duration(keepNum("UpdateCheckHours", 6)) * time.Hour
 	seen := map[time.Duration]bool{}
 	for i := 0; i < 200; i++ {

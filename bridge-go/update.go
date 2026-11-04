@@ -263,10 +263,13 @@ func updateRestartWhenQuiet(tick time.Duration, restart func()) {
 	}
 }
 
-// 2.5.4: the bridges of one computer (every user's, on a shared server) do not all look for an update at once: each
-// look comes after the schedule plus a random 0-60 minutes (UpdateJitterMin), so they update one after another
+// 2.5.4: a random wait on top of the schedule (UpdateJitterMin minutes, 0-n). Off by default (0): FinCom's update gate
+// (migration 139, server/tally-cloud/updategate.js) already lets the bridges of one computer through one at a time, each
+// only while idle with Tally, and it expects each bridge's look exactly 2 minutes after its start and then every 6 hours
+// (from 4 minutes before to 6 after); a random wait would put the bridge outside that window, and it would never be let
+// through. The knob stays for a cloud without the gate
 var updateJitterFn = func() time.Duration {
-	m := keepNum("UpdateJitterMin", 60)
+	m := keepNum("UpdateJitterMin", 0)
 	if m <= 0 {
 		return 0
 	}
@@ -291,7 +294,9 @@ func checkForUpdateOnce(now bool) (M, bool) {
 		return updateInfo(), false
 	}
 	m := checkForUpdate(now)
-	if !updatePending() {
+	// re-review N1: kept only while an update this bridge put in place waits to start again (applying); a look that
+	// only found update-pending.json (the new program not yet two minutes running) clears it, as every other look
+	if updateInfo()["applying"] != true {
 		updChecking.Store(false)
 	}
 	return m, true
