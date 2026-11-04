@@ -22,6 +22,13 @@ if [ -z "${FINCOM_SKIP_BUILD:-}" ]; then
   ( cd .. && python3 build.py --react >/dev/null )
   FINCOM_BANNER="$banner" npm run build:test >/dev/null
 fi
+# FinCom Bridge's update list (FINCOM_SHIP_BRIDGE=1): the bridges take an update only with FinCom's signature on the
+# exact bytes of latest.json (bridge-go/update.go), so it is signed here (the passphrase: FINCOM_SIGNING_PASS or
+# FINCOM_SIGNING_PASS_FILE; without one, the signature kept beside the list in assets-test/bridge-go/ is used only if it
+# verifies) and checked with the bridge's own key. A list that does not verify stops the publish
+if [ -f dist-test/assets/bridge-go/latest.json ]; then
+  python3 "../tools/bridge_list_sign.py" sign dist-test/assets/bridge-go || { echo "The bridge's update list is not signed well: stopped (nothing published)."; exit 1; }
+fi
 # FinCom Bridge 2.4.5 (ROUND 102): the retired PowerShell bridge is never published (build.py leaves it out; checked here too)
 [ ! -e dist-test/assets/connector/TDSBridge.ps1 ] || { echo "dist-test still holds assets/connector/TDSBridge.ps1 (the retired PowerShell bridge): stopped."; exit 1; }
 grep -q "qbocskaiewaxqcvaunzc" dist-test/legacy.js && ! grep -q "nrtczucrlgalvtojwoes" dist-test/legacy.js || { echo "The build does not point at the staging database: stopped."; exit 1; }
