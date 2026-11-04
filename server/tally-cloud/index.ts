@@ -1974,13 +1974,26 @@ function tallyIniOf(b: any) {
   const st = ["added", "already", "notadded", "usertdl-no", "failed", "refused", "unreadable", "missing"];
   // bridge 2.5.3: TallyPrime's connection in the file ("enabled; Tally needs one restart", "already", "cannot write",
   // "unreadable") and the port it names
-  const cs = ["enabled; Tally needs one restart", "already", "cannot write", "unreadable"];
+  // bridge 2.5.4: "off; shared by every user of this computer, not changed", and the plain words (connectWhy)
+  const cs = ["enabled; Tally needs one restart", "already", "cannot write", "unreadable", "off; shared by every user of this computer, not changed"];
   return { tallyIni: b.tallyIni.slice(0, 10).map((x: any) => ({ path: s(x?.path, 260), state: st.includes(x?.state) ? x.state : "other", why: s(x?.why, 300), at: s(x?.at, 40), checkedAt: s(x?.checkedAt, 40),
-    ...(cs.includes(x?.connect) ? { connect: x.connect } : {}), ...(Number(x?.serverPort) > 0 ? { serverPort: Math.min(65535, Math.floor(Number(x.serverPort))) } : {}) })) };
+    ...(cs.includes(x?.connect) ? { connect: x.connect } : {}), ...(Number(x?.serverPort) > 0 ? { serverPort: Math.min(65535, Math.floor(Number(x.serverPort))) } : {}),
+    ...(s(x?.connectWhy, 300) ? { connectWhy: s(x.connectWhy, 300) } : {}) })) };
 }
 // bridge 2.5.3: a port's reason, and the beat's tallyWhy (anything else dropped)
 const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown", "another user", "another bridge", "not Tally"];
-const TALLY_WHY = ["not answering", "owner unknown", "another user", "no Tally running in this login"];
+// bridge 2.5.4: "connection off" (this login's Tally runs but takes no connection; the fix in tallyConnectSay)
+const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another user", "no Tally running in this login"];
+// bridge 2.5.4: why a bridge did or did not update (the beat's update: the last look, its words, the version offered,
+// whether it is being put in place or looked for now, NoAutoUpdate, the next look); anything else dropped
+function updateOf(b: any) {
+  const u = b?.update;
+  if (!u || typeof u !== "object" || Array.isArray(u)) return {};
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const v = typeof u.offered === "string" && /^\d+\.\d+\.\d+$/.test(u.offered) ? u.offered : "";
+  return { update: { checked: s(u.checked, 40), message: s(u.message, 200), offered: v, applying: u.applying === true, checking: u.checking === true,
+    noAutoUpdate: u.noAutoUpdate === true, next: s(u.next, 40) } };
+}
 // ROUND 103 (1d): the tray's old-days test (read only), its last result as the bridge says it: the company, the line
 // ("0.21 s / 0.34 s / 0.18 s · no freeze", or the reason it stopped), each day's time; nothing else kept
 function oldDaysTestOf(b: any) {
@@ -3978,7 +3991,7 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(b.recorderState && typeof b.recorderState === "object" ? { recorderStuck: stuckOf(b.recorderState) } : {}),
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
-          ...tallyIniOf(b), ...periodPullOf(b), ...oldDaysTestOf(b),
+          ...tallyIniOf(b), ...periodPullOf(b), ...oldDaysTestOf(b), ...updateOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
