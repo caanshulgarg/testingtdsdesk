@@ -389,13 +389,15 @@ async function cloudPushClient(r, sendBatch){
 }
 // next-noclients (05-Nov-2026, "showing no client"): the pull's cursor (lastPull) is in localStorage, what it brought in
 // IndexedDB (clients, bills, parties: tdsdesk-work; bank and sales: tdsdesk-bank). A browser that lost a database and kept
-// localStorage asked only for what changed since, and that copy stayed empty for good. Each database keeps a mark of the
-// pull; once a page, a cursor with a database that lost its mark pulls everything again (tests/run_stale_cursor.py). A
-// copy from before the marks counts as whole when its clients are here, and is marked.
+// localStorage asked only for what changed since, and that copy stayed empty (or short: "1 client of 9") for good. Each
+// database keeps a mark of the pull; once a page, with a cursor, everything is pulled again when a database lost its mark
+// or a live client of the firm (ids only, one small read) is not here (tests/run_stale_cursor.py). A copy from before the
+// marks counts as whole when every client is here, and is marked.
 const PULL_MARK = "cloud:pulled";
 async function cloudCopyGone(){
   const idb = S.storeKind === "idb";
-  const [w, b] = await Promise.all([idb ? IDBStore.get(PULL_MARK).catch(() => 1) : 1, BankDB.get(PULL_MARK)]);
+  const [w, b, ids] = await Promise.all([idb ? IDBStore.get(PULL_MARK).catch(() => 1) : 1, BankDB.get(PULL_MARK), Cloud.api("clients?select=id&deleted=is.false").catch(() => null)]);
+  if ((ids || []).some(r => r && SAFE_ID.test(String(r.id)) && !S.companies[r.id])) return true;
   return w ? !b : !Object.keys(S.companies).length;
 }
 async function cloudPull(){

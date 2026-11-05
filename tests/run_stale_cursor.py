@@ -11,7 +11,9 @@ cloud of tally_shapes.py (the made-up firm: 10 live clients, 2 removed, bank sta
   1. both databases gone, the cursor kept: every client shown again, the bank statements back (a pull from the start)
   2. only tdsdesk-bank gone: the bank statements back
   3. nothing gone: the page opened again pulls from its cursor (no pull from the start)
-  4. a copy from before the marks (its clients here, no mark): no pull from the start, and the marks set"""
+  4. a copy from before the marks (its clients here, no mark): no pull from the start, and the marks set
+  5. a short copy from before the marks (1 client of 10 here, no mark: the owner's "1 client of 9"): every client back
+  6. a short copy with its marks (1 client of 10 here): every client back"""
 import os, sys, json, time, asyncio
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -27,11 +29,15 @@ def ok(c, w):
 SHOWN = """(names) => { const t = (document.querySelector('#app') || {}).innerText || ''; return names.filter((n) => t.includes(n)).length; }"""
 STMTS = """() => Promise.all(Object.keys(S.companies).map((c) => BankDB.get('stmts:' + c))).then((l) => l.reduce((a, x) => a + ((x || []).length), 0))"""
 SYNCED = "() => typeof Cloud === 'object' && Cloud.st && Cloud.st.lastSync > 0 && !document.querySelector('[data-boot-part]')"
-# which databases: 'work', 'bank'; what: 'db' (the database removed) or 'mark' (only its mark)
+# which databases: 'work', 'bank'; what: 'db' (the database removed), 'mark' (only its mark), 'short' (every client but
+# one removed, and the mark), 'shortkeep' (every client but one removed, the mark kept)
 WIPE = """([which, what]) => indexedDB.databases().then((l) => Promise.all(l.filter((d) => which.some((w) => (d.name || '').startsWith('tdsdesk-' + w))).map((d) => new Promise((done) => {
   if (what === 'db') { const q = indexedDB.deleteDatabase(d.name); q.onsuccess = q.onerror = q.onblocked = () => done(d.name); return; }
   const o = indexedDB.open(d.name); o.onerror = () => done('');
-  o.onsuccess = () => { const db = o.result, st = db.objectStoreNames.contains('docs') ? 'docs' : 'kv', tx = db.transaction(st, 'readwrite'); tx.objectStore(st).delete('cloud:pulled'); tx.oncomplete = () => { db.close(); done(d.name); }; tx.onerror = () => { db.close(); done(''); }; };
+  o.onsuccess = () => { const db = o.result, st = db.objectStoreNames.contains('docs') ? 'docs' : 'kv', tx = db.transaction(st, 'readwrite'); const os = tx.objectStore(st);
+    if (what !== 'shortkeep') os.delete('cloud:pulled');
+    if (what.startsWith('short') && st === 'docs') { let kept = 0; os.openCursor(IDBKeyRange.bound('companies/', 'companies/\uffff')).onsuccess = (e) => { const c = e.target.result; if (!c) return; if (String(c.key).split('/').length === 2 && kept++) c.delete(); c.continue(); }; }
+    tx.oncomplete = () => { db.close(); done(d.name); }; tx.onerror = () => { db.close(); done(''); }; };
 }))))"""
 MARKS = """() => Promise.all([IDBStore.get('cloud:pulled'), BankDB.get('cloud:pulled')])"""
 
@@ -80,7 +86,9 @@ async def main():
         for label, which, what, want_full in (("1. both databases gone, the cursor kept", ["work", "bank"], "db", True),
                                               ("2. only tdsdesk-bank gone, the cursor kept", ["bank"], "db", True),
                                               ("3. nothing gone, opened again", [], "db", False),
-                                              ("4. a copy from before the marks", ["work", "bank"], "mark", False)):
+                                              ("4. a copy from before the marks", ["work", "bank"], "mark", False),
+                                              ("5. a short copy from before the marks (1 client of 10 here)", ["work", "bank"], "short", True),
+                                              ("6. a short copy with its marks (1 client of 10 here)", ["work"], "shortkeep", True)):
             print(label)
             ctx, names, pulls = await context()
             pg = await ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)[:200]))
@@ -96,7 +104,7 @@ async def main():
             ok(s1 == s0, "opened again: %d bank statements (were %d)" % (s1, s0))
             f = full(pulls)
             ok((f > 0) == want_full, "a pull from the start: %s (%d of %d pulls)" % ("wanted" if want_full else "not wanted", f, len(pulls)))
-            if what == "mark":
+            if what != "db":
                 m = await pg.evaluate(MARKS)
                 ok(m == [1, 1], "the marks set after the pull: %s" % (m,))
             ok(not errs, "no page errors (%s)" % errs[:2])
