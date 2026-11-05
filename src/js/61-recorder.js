@@ -450,7 +450,7 @@ const Rec = {
     u.busy = false; u.at = Date.now();
     // drawn only when what it shows changed: the minute's re-read that finds the same lines draws nothing (a page drawn
     // again for nothing; run_quiet_refresh.py's own-save check caught it as an extra drawing)
-    if (this.unkSig(u) !== was) render();
+    if (this.unkSig(u) !== was) soonRender();   // next-speed-redraw: with the background's drawing (src/js/01)
   },
   // what the unknown-ledger line shows, as one string (to tell a re-read that changed nothing)
   unkSig(u){

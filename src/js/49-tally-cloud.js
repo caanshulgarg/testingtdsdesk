@@ -564,8 +564,11 @@ const TCloud = {
     devs.forEach(d => { const x = d && by.get(d.id); if (x) ["name", "last_seen", "info", "revoked"].forEach(k => { if (k in d) x[k] = d[k]; }); else if (d && !d.revoked) p.at = 0; });
   },
   paneShown(){ const p = this.pane; if (p.devices && !p.busy && Date.now() - (p.at || 0) >= SLOW_MS && document.querySelector("#app [data-tco-list], #app [data-pc-line]")){ p.at = Date.now(); this.refreshPane({auto: true}); } },
+  // next-speed-redraw: a re-read the page makes by itself (o.auto: every few minutes; o.soon: the first-link watcher's
+  // 5 s look) is drawn with the background's drawing (soonRender, src/js/01); a click's (Refresh, Check again) at once
   async refreshPane(o){
-    const p = this.pane; p.busy = "Loading…"; render();
+    const bg = !!(o && (o.auto || o.soon)), draw = () => { if (bg) soonRender(); else render(); };
+    const p = this.pane; p.busy = "Loading…"; draw();
     const once = !(o && o.auto) || !p.onceAt;
     try {
       // main_bridge from migration-22 on; without it, the list as before
@@ -645,7 +648,7 @@ const TCloud = {
       p.err = ""; p.at = Date.now(); if (once) p.onceAt = p.at;
       linkByGstin(p.companies);
     } catch (e){ p.err = /tally_devices|does not exist|schema cache/i.test(String(e && e.message)) ? "The cloud copy is not set up in this database yet." : (e && e.message) || String(e); }
-    p.busy = ""; render();
+    p.busy = ""; draw();
   },
   // 02-Oct-2026: every bridge heard from on the firm's computers (tally_devices.info.bridges, kept by tally-ingest from
   // each heartbeat): computer, Windows user, version, test or main, last seen, Tally and the companies open. A bridge

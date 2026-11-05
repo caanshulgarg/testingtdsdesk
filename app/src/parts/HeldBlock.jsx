@@ -13,6 +13,7 @@
 // by itself once 136 says every day from its first day is checked (Rec.renOk, read by Rec.renumberNeeds).
 import Button from "./Button.jsx";
 import { QUIET } from "../lib/quietReads.js";
+import { soonDraw } from "../lib/soonDraw.js";
 import { ClearBtn } from "./Bell.jsx";
 
 // tally_held_status (136): {books: [{book, client, company, held, from, to, check: {total, done, waiting, etaMin, state,
@@ -24,7 +25,7 @@ async function load() {
   try { const r = await TCloud.rpc("tally_held_status", { p_client: null }); HS.books = (r && r.books) || []; }
   catch (e) { HS.books = []; if (Rec.missing && Rec.missing(e)) HS.none = true; }
   HS.busy = false; HS.at = Date.now();
-  if (JSON.stringify(HS.books) !== was) render();
+  if (JSON.stringify(HS.books) !== was) soonDraw();   // next-speed-redraw: the 20 s re-read, with the background's drawing
 }
 function heldStatus() {
   if (!HS.none && !HS.busy && !QUIET.on && typeof TCloud === "object" && TCloud.on() && (!HS.at || (Date.now() - HS.at > 20000 && pollOk()))) { HS.at = Date.now(); setTimeout(load, 0); }

@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
 import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
+import { soonDraw } from "../lib/soonDraw.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
 // the watcher: one for the page (module state, drawn with render())
@@ -25,6 +26,8 @@ const FRESH = { ...FL };
 // for support and the tests (tests/run_tally_firstlink.py): the watcher's state, and a fresh start
 if (typeof window !== "undefined") window.FCFirstLink = { FL, reset() { Object.keys(FL).forEach((k) => { delete FL[k]; }); Object.assign(FL, FRESH); } };
 const say = (p) => { Object.assign(FL, p); if (typeof render === "function") render(); };
+// next-speed-redraw: the 5 s look (scan) draws only what changed, with the background's drawing (lib/soonDraw.js)
+const saySoon = (p) => { const was = JSON.stringify(Object.keys(p).map((k) => FL[k])); Object.assign(FL, p); if (JSON.stringify(Object.keys(p).map((k) => FL[k])) !== was) soonDraw(); };
 // migration 104 (run on staging 24-Oct-2026): each state the panel reaches, once per change, to tally_connect_step, so the
 // owner sees where a first connection stops (none of this was ever seen by the cloud before). Never the code or a key;
 // a refusal or an older cloud is ignored (the panel works the same without it)
@@ -44,9 +47,9 @@ const pcWords = (b) => "this computer";   // next-fix-tally-links2: never a comp
 // Windows user's, or an older bridge that cannot prove itself
 async function scan() {
   if (typeof Bridge !== "object") return;
-  if (Bridge.blocked()) return say({ st: "blocked" });
+  if (Bridge.blocked()) return saySoon({ st: "blocked" });
   // next-tally-connectfix (audit item 8): Chrome's Local network access blocked for this site: its plain fix, never "waiting"
-  if (lnaDenied()) return FL.st === "lna" ? undefined : say({ st: "lna", found: null });
+  if (lnaDenied()) return FL.st === "lna" ? undefined : saySoon({ st: "lna", found: null });
   if (FL.busy || FL.st === "pairing") return;
   if (Bridge.on() && (FL.st === "linking" || FL.st === "error")) return;
   if (Bridge.on() && await Bridge.ensureProven()) return afterPair();
@@ -59,13 +62,13 @@ async function scan() {
   // moment ago is not given up for one scan where it did not answer in time (or another Windows user's bridge answered
   // alone): the code box stayed only a few seconds, then "another Windows user" and back. Kept for STICKY_MS
   if (!mine && FL.st === "code" && FL.found && Date.now() - (FL.mineAt || 0) < STICKY_MS) return;
-  if (mine) { say({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
+  if (mine) { saySoon({ st: "code", found: mine, windowOpen: !!(mine.pairProof || mine.pairWindow) }); logStep("found", mine.version); }
   // next-tally-connectfix (finding 2): this login's own bridge is known here (found in this login before, or paired and
   // heard by the cloud) and another login's answers: it is installed, only not running in this login
-  else if (other && ownStopped(other)) { say({ st: "stopped", other, found: null }); logStep("other_user", other.version, "own bridge known, not running"); }
-  else if (other) { say({ st: "other", other, found: null }); logStep("other_user", other.version); }
-  else if (old) { say({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
-  else { say({ st: "waiting", found: null }); logStep("waiting"); }
+  else if (other && ownStopped(other)) { saySoon({ st: "stopped", other, found: null }); logStep("other_user", other.version, "own bridge known, not running"); }
+  else if (other) { saySoon({ st: "other", other, found: null }); logStep("other_user", other.version); }
+  else if (old) { saySoon({ st: "old", old, found: null }); logStep("old_bridge", old.version); }
+  else { saySoon({ st: "waiting", found: null }); logStep("waiting"); }
 }
 
 function ownStopped(other) {
@@ -124,7 +127,7 @@ function useWatch(linked) {
     const tick = async () => {
       if (stop) return;
       try {
-        if (FL.st === "linking") { await TCloud.refreshPane(); if ((TCloud.pane.devices || []).length) logStep("linked", Bridge.st && Bridge.st.version); if (!(TCloud.pane.devices || []).length && Date.now() - (TCloud.lastAutoKick || 0) > 30000) { TCloud.lastAutoKick = Date.now(); await linkFirm(); } if (typeof render === "function") render(); }
+        if (FL.st === "linking") { await TCloud.refreshPane({ soon: true }); if ((TCloud.pane.devices || []).length) logStep("linked", Bridge.st && Bridge.st.version); if (!(TCloud.pane.devices || []).length && Date.now() - (TCloud.lastAutoKick || 0) > 30000) { TCloud.lastAutoKick = Date.now(); await linkFirm(); } soonDraw(); }
         else await scan();
       } catch (e) { /* the next tick */ }
       if (!stop) t = setTimeout(tick, FL.st === "linking" ? LINK_MS : SCAN_MS);

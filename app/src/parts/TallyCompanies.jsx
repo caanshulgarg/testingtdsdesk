@@ -398,8 +398,9 @@ function pendTick(rows) {
   const P = PEND();
   Object.entries(P).forEach(([k, job]) => {
     const r = rows.find((x) => coKey(x.company) === k);
-    if (r && r.reported && !pendBusy) { delete P[k]; pendBusy = true; Promise.resolve(doJob(r, job)).finally(() => { pendBusy = false; render(); }); }
-    else if (!job.late && Date.now() - job.at > PEND_MS) { job.late = true; render(); }
+    // next-speed-redraw: what the page does by itself (a kept click sent, one gone late) with the background's drawing
+    if (r && r.reported && !pendBusy) { delete P[k]; pendBusy = true; Promise.resolve(doJob(r, job)).finally(() => { pendBusy = false; soonDraw(); }); }
+    else if (!job.late && Date.now() - job.at > PEND_MS) { job.late = true; soonDraw(); }
   });
 }
 
@@ -496,7 +497,7 @@ export async function syncPoll(cid) {
       if (x.via === "cloud" && !x.upAsked && !x.prog && Date.now() - x.at > UP_MS) await askUpdate(x);
       if (Date.now() - (x.moveAt || x.at) > STUCK_MS) x.late = true;
     }
-  } finally { polling[cid] = false; render(); }
+  } finally { polling[cid] = false; soonDraw(); }   // next-speed-redraw: each look of the read, with the background's drawing
 }
 // why nothing comes, from the computer's beat (plain words; "" when its beat says all is well)
 export function stallWhy(cid, company) {

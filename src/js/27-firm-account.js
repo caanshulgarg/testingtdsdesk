@@ -613,7 +613,7 @@ async function cloudSync(manual){
   cloudBusy = true;
   // quiet refresh (14-Oct-2026): the look every 45 s with nothing to send said "Saving…" in the top bar each time; it says
   // so only when asked for, or when there is something of this computer's to send
-  const before = JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]);
+  const before = JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]), wasSynced = !!Cloud.st.lastSync;
   let toSend = 0; try { toSend = cloudChanges().changes.length; } catch (e){}
   Cloud.st.busy = manual || toSend ? "Syncing\u2026" : ""; Cloud.st.error = "";
   // this person's copy opened again (LocalOwner): what they changed here and had not sent goes now, and is said so
@@ -638,7 +638,10 @@ async function cloudSync(manual){
     if (manual) toast("Sync failed: " + e.message);
   }
   Cloud.st.busy = ""; cloudBusy = false;
-  if (manual || changed || JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]) !== before) render();
+  // next-speed-redraw: the sync FinCom makes by itself is drawn with the background's drawing (soonRender, src/js/01); the
+  // first of the page (the firm's data come) at the next frame, without the wait; Sync now at once
+  if (manual) render();
+  else if (changed || JSON.stringify([Cloud.st.state, Cloud.st.error, Cloud.st.pending]) !== before) soonRender({now: !wasSynced});
 }
 function startCloudSync(){
   clearInterval(cloudTimer);

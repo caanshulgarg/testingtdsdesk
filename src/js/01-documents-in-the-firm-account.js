@@ -3489,14 +3489,60 @@ function softRender(){ if (renderQueued) return; renderQueued = true; requestAni
 // loading state: the screen keeps what it shows until the new figures are in.
 //   quietRender()             the page drawn again quietly (the caller knows something changed)
 //   quietChanged(key, value)  drawn quietly only when value differs from the last one given under key; true when drawn
-let quietQueued = false;
 const QUIET = {depth: 0, sig: {}};
-function quietRender(){
-  if (quietQueued) return;
-  quietQueued = true;
-  const go = () => { quietQueued = false; QUIET.depth++; try { render(); } finally { QUIET.depth--; } };
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(go); else setTimeout(go, 0);
+function quietRender(){ soonRender({quiet: true}); }
+// next-speed-redraw (05-Nov-2026; the speed audit, tests/run_speed_open.py: the Tally page drew the whole app 22-37 times in
+// its first 30 s, 0.5-0.95 s of a 4x slower CPU, each answer that came in its own drawing): what comes in the background
+// (the cloud's answers, the firm's sync, a heartbeat, Realtime, a timer) is drawn by soonRender: one drawing for all that
+// came, at the next frame, and never sooner than SOON_GAP_MS after the last drawing (the answers that come one after
+// another in the first seconds are drawn together, about twice a second); held while the page is scrolled (a scroll or a
+// wheel in the last 400 ms, at most 10 s), and in a hidden tab until it is shown. Any drawing (render()) draws what was
+// asked before it, so a click's drawing takes the background's with it. A click, typing, a choice: render() at once, as
+// before. app/src/lib/soonDraw.js is the screens' name for it.
+//   soonRender()              the page drawn again soon
+//   soonRender({quiet: true}) the same, as a background drawing (quietRender); a drawing asked both ways is not quiet
+//   soonRender({now: true})   at the next frame, without the gap (the page's own first answer)
+const SOON = {queued: false, quiet: true, now: false, since: 0, moved: 0, at: 0, hid: false, n: 0};
+const SOON_GAP_MS = 500, SOON_STILL_MS = 400, SOON_MAX_MS = 10000;
+if (typeof addEventListener === "function"){
+  const mark = () => { SOON.moved = Date.now(); };
+  addEventListener("scroll", mark, {capture: true, passive: true});
+  addEventListener("wheel", mark, {capture: true, passive: true});
 }
+const soonHidden = () => typeof document === "object" && document.visibilityState === "hidden";
+function soonGo(){
+  if (!SOON.queued) return;
+  const now = Date.now(), still = now - SOON.moved, gap = now - SOON.at;
+  if (now - SOON.since < SOON_MAX_MS){
+    if (still < SOON_STILL_MS){ setTimeout(soonGo, SOON_STILL_MS - still + 10); return; }
+    // the gap only once the page is open (index.html's frame gone): what opens it is drawn at once, as before
+    if (!SOON.now && gap < SOON_GAP_MS && !document.querySelector("[data-boot-part]")){ setTimeout(soonGo, SOON_GAP_MS - gap + 5); return; }
+  }
+  const quiet = SOON.quiet;
+  SOON.queued = false; SOON.n++;
+  try { if (quiet){ QUIET.depth++; try { render(); } finally { QUIET.depth--; } } else render(); } catch (e){ /* the next drawing shows it */ }
+  SOON.at = Date.now();
+}
+function soonRender(o){
+  if (typeof render !== "function") return;
+  const now = !!(o && o.now);
+  if (!(o && o.quiet)) SOON.quiet = false;
+  if (now) SOON.now = true;
+  if (SOON.queued && !now) return;
+  if (!SOON.queued){ SOON.queued = true; SOON.since = Date.now(); }
+  if (soonHidden()){
+    if (!SOON.hid){
+      SOON.hid = true;
+      const on = () => { if (soonHidden()) return; document.removeEventListener("visibilitychange", on); SOON.hid = false; soonGo(); };
+      document.addEventListener("visibilitychange", on);
+    }
+    return;
+  }
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(soonGo);
+  setTimeout(soonGo, now ? 100 : 1000);
+}
+// a drawing starts: what was asked before it is in it
+function soonDrawn(){ SOON.queued = false; SOON.quiet = true; SOON.now = false; SOON.at = Date.now(); }
 function quietDrawing(){ return QUIET.depth > 0; }
 function quietChanged(key, value){
   let s; try { s = typeof stableStr === "function" ? stableStr(value) : JSON.stringify(value); } catch (e){ s = String(Date.now()); }
@@ -4410,7 +4456,7 @@ function perRender(o, key, fn){
 // 48 times in one MIS run, and the TDS rows 18 times
 function memoScope(fn){ reactScopeEnd(); if (!IN_RENDER){ RENDER_GEN++; drawStamp(); } IN_RENDER++; try { return fn(); } finally { IN_RENDER--; } }
 function render(){
-  reactScopeEnd(); RENDER_GEN++; drawStamp(); IN_RENDER++;
+  soonDrawn(); reactScopeEnd(); RENDER_GEN++; drawStamp(); IN_RENDER++;
   try { return renderNow(); } finally { IN_RENDER--; if (!IN_RENDER && typeof Route === "object") Route.sync(); }
 }
 // render(): what the screen of the moment needs loaded, before React draws the page (app/src/Main.jsx); and what the

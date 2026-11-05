@@ -274,7 +274,7 @@ export function TodayStatus() {
   // Books › From Tally of the client (as the row's Upload older entries opens it)
   const open = (cid) => () => { const h = "#/c/" + encodeURIComponent(cid) + "/from-tally";
     try { history.pushState(null, "", location.pathname + location.search + h); } catch (e) { /* */ }
-    if (typeof Route === "object" && Route.apply) Route.apply(h); else if (typeof openCompany === "function") openCompany(cid).then(() => { S.tab = "books"; S.booksTab = "import"; redraw(); }); };
+    if (typeof Route === "object" && Route.apply) Route.apply(h); else if (typeof openCompany === "function") openCompany(cid).then(() => { S.tab = "books"; S.booksTab = "import"; render(); }); };
   return <div className="tfx-today-status" data-today-status="">
     {going.map((x) => <div key={"o" + x.book} data-older-status={x.book}><span className="note">{x.company + ":"}</span><OlderLine cid={x.client} onOpen={open(x.client)} /></div>)}
     {busy.length ? busy.map((x) => <TodayLine key={x.book} book={x.book} cid={x.client} where="status" />)

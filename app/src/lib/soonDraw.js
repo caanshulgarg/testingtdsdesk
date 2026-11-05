@@ -7,31 +7,10 @@
 // next-scroll-rdp (the owner: on the shared server, the Tally page "doesn't move" with the wheel): a drawing of the whole
 // app is 80-180 ms there, and one made while the page is being scrolled holds the scroll's frames. While the person
 // scrolls (a scroll or a wheel in the last 400 ms: the clicks of a wheel come closer than that) the drawing waits for the scroll to stop, at most 10 s.
-let queued = false, waiting = false, since = 0, moved = 0;
-const QUIET_MS = 400, MAX_WAIT_MS = 10000;
-const hidden = () => typeof document === "object" && document.visibilityState === "hidden";
-if (typeof addEventListener === "function") {
-  const mark = () => { moved = Date.now(); };
-  addEventListener("scroll", mark, { capture: true, passive: true });
-  addEventListener("wheel", mark, { capture: true, passive: true });
-}
-function go() {
-  if (!queued) return;
-  const now = Date.now(), q = now - moved;
-  if (q < QUIET_MS && now - since < MAX_WAIT_MS) { setTimeout(go, QUIET_MS - q + 10); return; }
-  queued = false; try { render(); } catch (e) { /* the next drawing shows it */ }
-}
-export function soonDraw() {
-  if (queued || typeof render !== "function") return;
-  queued = true; since = Date.now();
-  if (hidden()) {
-    if (!waiting) {
-      waiting = true;
-      const on = () => { if (hidden()) return; document.removeEventListener("visibilitychange", on); waiting = false; go(); };
-      document.addEventListener("visibilitychange", on);
-    }
-    return;
-  }
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(go);
-  setTimeout(go, 1000);
+// next-speed-redraw (05-Nov-2026): the drawing itself is soonRender (src/js/01), the one for every background drawing of
+// the app (quietRender too): answers that come one after another are drawn together, never sooner than half a second
+// after the last drawing. soonDraw({ now: true }): at the next frame, without that wait (the page's own first answer).
+export function soonDraw(o) {
+  if (typeof soonRender === "function") { soonRender(o); return; }
+  try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ }
 }

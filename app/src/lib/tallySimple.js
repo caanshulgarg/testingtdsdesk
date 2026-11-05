@@ -675,9 +675,10 @@ function rowsSig(rows, x) {
   } catch (e) { return String(Date.now()); }
 }
 function rowsDone(rows, extra, ms) {
-  const sig = rowsSig(rows, extra);
+  const sig = rowsSig(rows, extra), first = !ROWS.extra && !!extra;
   Object.assign(ROWS, { rows, extra, ms, busy: false }); ROWS.n++;
-  if (sig !== ROWS.sig) { ROWS.sig = sig; ROWS.self = true; soonDraw(); }
+  // next-speed-redraw: the table's first full rows at the next frame (the page usable); later ones with the background's drawing
+  if (sig !== ROWS.sig) { ROWS.sig = sig; ROWS.self = true; soonDraw({ now: first }); }
   else if (ROWS.dirty) { ROWS.busy = true; idle(rowsWork); }
 }
 function finishRows(rows, all, opts) {

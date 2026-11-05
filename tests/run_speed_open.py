@@ -135,15 +135,17 @@ async def main():
             await asyncio.sleep(max(0, 30 - (time.time() - t0) + ms / 1000.0))
             aft = await pg.evaluate("(t) => { const l = __long.filter((x) => x[0] >= t); return {renders: __renders, render_ms: Math.round(__renderMs), long_n: l.length, long_ms: l.reduce((a, x) => a + x[1], 0), long_max: l.reduce((a, x) => Math.max(a, x[1]), 0), long_before: __long.filter((x) => x[0] < t).reduce((a, x) => a + x[1], 0)}; }", t_usable)
             nav = await pg.evaluate("() => { const n = performance.getEntriesByType('navigation')[0] || {}; return {dcl: Math.round(n.domContentLoadedEventEnd || 0), load: Math.round(n.loadEventEnd || 0)}; }")
-            files = await pg.evaluate("() => performance.getEntriesByType('resource').filter((e) => e.name.startsWith(location.origin)).map((e) => ({n: e.name.replace(location.origin, ''), t: e.transferSize, d: Math.round(e.duration)}))")
+            files = await pg.evaluate("() => performance.getEntriesByType('resource').filter((e) => e.name.startsWith(location.origin)).map((e) => ({n: e.name.replace(location.origin, ''), t: e.transferSize, d: Math.round(e.duration), s: e.startTime}))")
             if os.environ.get("SPEED_FILES"):
                 for f in files: print("      %8d %5d ms %s" % (f["t"], f["d"], f["n"][:110]))
             sent = [x for x in log if x["m"] != "OPTIONS"]
             row = {"label": label, "screen": screen, "rtt": rtt, "usable_ms": round(ms), "dcl_ms": nav["dcl"], "script_ms": round(m.get("ScriptDuration", 0) * 1000), "task_ms": round(m.get("TaskDuration", 0) * 1000),
-                   "after": aft, "cloud_requests": n_usable, "synced_ms": synced, "cloud_requests_by_synced": len(sent), "preflights": len(log) - len(sent), "files_from_network": sum(1 for f in files if f["t"] > 0), "file_bytes_from_network": sum(f["t"] for f in files), "errors": errs[:3]}
+                   "after": aft, "cloud_requests": n_usable, "synced_ms": synced, "cloud_requests_by_synced": len(sent), "preflights": len(log) - len(sent), "files_from_network": sum(1 for f in files if f["t"] > 0), "file_bytes_from_network": sum(f["t"] for f in files),
+                   "file_bytes_after_usable": sum(f["t"] for f in files if f["s"] >= t_usable), "errors": errs[:3]}
             print("  %-34s usable %6d ms (cloud requests %2d)  synced %6d ms (cloud requests %3d)  page read %5d ms  script %5d ms  files from the network %3d (%d bytes)" % (
                 label, row["usable_ms"], row["cloud_requests"], row["synced_ms"], row["cloud_requests_by_synced"], row["dcl_ms"], row["script_ms"], row["files_from_network"], row["file_bytes_from_network"]))
-            print("     the 30 s after usable: %(renders)d full drawings (%(render_ms)d ms), %(long_n)d long tasks (%(long_ms)d ms, longest %(long_max)d ms); long tasks before usable: %(long_before)d ms" % aft)
+            print("     the 30 s after usable: %(renders)d full drawings (%(render_ms)d ms), %(long_n)d long tasks (%(long_ms)d ms, longest %(long_max)d ms); long tasks before usable: %(long_before)d ms" % aft
+                  + "; files from the network after usable: %d bytes" % row["file_bytes_after_usable"])
             if errs: print("     page errors:", errs[:3])
             res["opens"].append(row)
             await cdp.detach()

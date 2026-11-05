@@ -49,7 +49,8 @@ const SUP = {
     if (!this.on()) return;
     try { s.list = await Cloud.rpc("support_list"); s.err = ""; s.loadedAt = Date.now(); }
     catch (e){ s.err = e.message; if (!quiet) toast("Tickets: " + e.message); }
-    render();
+    // next-speed-redraw: the quiet re-read (the Help count, a timer) with the background's drawing (soonRender, src/js/01)
+    if (quiet) soonRender(); else render();
   },
   async open(id){
     const s = this.st(); if (s.open !== id){ s.rtext = ""; s.rfiles = []; } s.open = id; s.detail = null; render();
