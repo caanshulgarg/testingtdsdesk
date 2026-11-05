@@ -13,7 +13,7 @@ import { needDays } from "./needDays.js";
 import { heldFor } from "../parts/HeldBlock.jsx";
 import { soonDraw } from "./soonDraw.js";
 import { QUIET } from "./quietReads.js";
-import { HERE } from "./tallyConnect.js";
+import { HERE, ownHint, lastMine } from "./tallyConnect.js";
 
 export const YES = "Yes", NO = "No", NOTYET = "Not yet", DASH = "—";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -239,10 +239,34 @@ function look() {
   // next-tally-table: the look never holds the page. Each /ping stops at PROBE_MS; whatever has not settled after 5 s (a
   // browser that holds a request to this computer while it asks the person) counts as nothing found, and the page says so
   setTimeout(() => { if (gen === LOCALB.n && LOCALB.busy) { LOCALB.busy = false; LOCALB.cut = true; if (LOCALB.list === null) { LOCALB.list = []; soonDraw(); } } }, 5000);
-  Promise.all(ports.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)))
-    .then((xs) => xs.filter((x) => x && (x.bridge || x.version)), () => [])
+  // next-tally-other-login (05-Nov-2026): the remembered address first: this browser's address and this login's own bridge's
+  // port; the firm's other ports only when neither answers as this login's bridge (sameSession true)
+  const ask = (ps) => Promise.all(ps.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)));
+  const sure = (xs) => xs.some((x) => x && x.sameSession === true);
+  // the one-click card's look in flight (lib/tallyConnect.js lookHere, the same remembered address first) is waited for
+  // and its answers used: no port asked twice. A new start meanwhile (resetHere) or another address: asked again from
+  // that address, never the other ports for the old one
+  const g = HERE.gen, u0 = String(cfgOf().url || ""), asked = new Set();
+  // (waited for at most a second: a card's look gone on to the range, or a Tally that never answers, never holds this one)
+  const stage1 = Promise.race([Promise.resolve(HERE.busy || lastMine()).catch(() => null), new Promise((ok) => setTimeout(() => ok(null), 1000))]).then((h) => {
+    if (HERE.gen !== g) return null;   // (a new start while waiting: asked again, from the new start)
+    const had = h && !h.stale && h.gen === HERE.gen ? [].concat(h.all || []) : [];
+    if (h && !h.stale && h.gen === HERE.gen) [].concat(h.asked || [], had.map((x) => Number(x.port) || 0)).forEach((p) => asked.add(p));
+    if (sure(had)) return had;
+    let hint = []; try { hint = ownHint().ports; } catch (e) { hint = []; }
+    const first = [...new Set([Bridge.urlPort ? Bridge.urlPort(cfgOf().url || "") : 0].concat(hint))].filter((p) => p >= 1 && !asked.has(p));
+    first.forEach((p) => asked.add(p));
+    return ask(first).then((ys) => had.concat(ys));
+  });
+  // its answer is every caller's a moment later (HERE.last), and the card's look waits for it (HERE.lookP)
+  const lp = HERE.lookP = stage1.then((xs) => { const m = (xs || []).find((x) => x && x.sameSession === true);
+    if (m && HERE.gen === g) HERE.last = { at: Date.now(), gen: g, base: u0.replace(/\/+$/, ""), h: { mine: m, other: null, old: null, known: false, hint: { id: "", user: "", ports: [] }, all: xs, asked: [...asked], gen: g } }; }, () => {})
+    .finally(() => { if (HERE.lookP === lp) HERE.lookP = null; });
+  stage1.then(async (xs) => (!xs ? null : sure(xs) ? xs : HERE.gen !== g || String(cfgOf().url || "") !== u0 ? null : xs.concat(await ask(ports.filter((p) => !asked.has(p))))))
+    .then((xs) => xs && xs.filter((x) => x && (x.bridge || x.version)), () => [])
     .then((list) => {
       if (gen !== LOCALB.n) return;    // (a look started over meanwhile: its answer counts, not this one)
+      if (!list) { LOCALB.busy = false; look(); return; }
       fixRemembered(list, ports);
       const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
       Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false, cut: false });
@@ -277,7 +301,7 @@ export const lookOnce = () => { if (!LOCALB.n) look(); };
 // Connect / I have opened it: asked again now
 // next-tally-connectfix (finding 4): and the one-click card's look of the whole range 9100-9199 (lib/tallyConnect.js
 // lookHere, otherwise once a tab) asked again with it
-export const rescanLocal = () => { HERE.again = true; look(); };
+export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); };   // (a person's ask: never a moment-old answer)
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
   return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))

@@ -16,7 +16,7 @@
 // Nothing new is asked of the bridge or of Tally: the same /ping, /pair, /cloudlink and RPCs as before.
 import { useEffect, useState } from "react";
 import "./tallyFirstLink.css";
-import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
+import { ownHint, sameUser, START_SAY, lnaDenied, LNA_SAY, lookHere, HERE } from "../lib/tallyConnect.js";
 import { soonDraw } from "../lib/soonDraw.js";
 
 const SCAN_MS = 5000, LINK_MS = 5000, SLOW_LINK_MS = 120000, STICKY_MS = 60000;
@@ -53,7 +53,10 @@ async function scan() {
   if (FL.busy || FL.st === "pairing") return;
   if (Bridge.on() && (FL.st === "linking" || FL.st === "error")) return;
   if (Bridge.on() && await Bridge.ensureProven()) return afterPair();
-  const all = (await Promise.all(Bridge.PORTS.map((p) => Bridge.probe(p, 2500)))).filter(Boolean);
+  // next-tally-other-login (05-Nov-2026): the one look every caller shares (lib/tallyConnect.js lookHere): this browser's
+  // address and this login's own port first, the whole range only when neither answers as this login's
+  // (the whole range at most every 30 s; between, the light look)
+  const all = [].concat(((await lookHere({ full: Date.now() - (HERE.fullAt || 0) > 30000 })) || {}).all || []);
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;

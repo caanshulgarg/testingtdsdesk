@@ -260,6 +260,23 @@ def main():
         cn2 = cos + [{"company": NOVAS, "client_id": None, "device_id": dn2["id"], "gstin": "", "last_seen": "ago:0.5"}]
         scene([dn2, db], cn2, [NOVA, "Nova-Space", ACME], LINK_B, A_PINGS, local=[[NOVAS], UA, "go-7", 9101])
         ok("Found in Tally" not in txt(row(NOVA)) and "Found in Tally" not in txt(row("Nova-Space")) and n(row(NOVAS)) == 1, "14. neither client is guessed; the company has its own row (%s | %s)" % (txt(row(NOVA)), txt(row("Nova-Space"))))
+
+        print("== 15. the remembered address answers: one light look for every caller, never the whole range")
+        ids = scene([da, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
+        E("""(own) => { const P = {'9101': own.a, '9150': own.b}; window.__asked = [];
+          Bridge.probeUrl = (base, ms) => { const port = Bridge.urlPort(base); window.__asked.push(port); const j = P[String(port)];
+            return new Promise((r) => setTimeout(() => r(j ? Object.assign({port, url: 'http://127.0.0.1:' + port}, j, {proven: false, pairProven: false}) : null), 300)); };
+          Bridge.probe = (port, ms) => Bridge.probeUrl('http://127.0.0.1:' + port, ms);
+          try { localStorage.setItem(LocalOwner.P + 'ownbridge', JSON.stringify({id: 'go-7', port: 9101, user: own.u})); } catch (e) {}
+          Bridge.setCfg({url: 'http://127.0.0.1:9101'});
+          FCTallyConnect.resetHere(); Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 0, cut: false}); }""",
+          {"a": TS.ping(9101, True, UA, version="2.5.4", bridgeId="go-7"), "b": TS.ping(9150, False, UB, version="2.5.4"), "u": UA})
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", ids[ORBIT]); pg.wait_for_timeout(200)
+        pg.click("header.top [data-tally-icon]"); E("() => { FCTallyConnect.lookHere(); FCTallySimple.lookOnce(); FCTallyConnect.lookHere(); }")
+        pg.wait_for_timeout(3000)
+        asked = E("window.__asked"); found = E("() => (FCTallySimple.LOCALB.list || []).some((x) => x.sameSession === true)")
+        ok(found and 9101 in asked and len(asked) <= 2 and not (set(range(9102, 9111)) & set(asked)), "15. the picker's look, the card's and another: the remembered address only, asked once (%s)" % asked)
+        pg.keyboard.press("Escape"); E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(800)
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

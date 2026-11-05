@@ -82,30 +82,44 @@ const isOther = (b, hint) => !!b && (b.yours === false || b.sameSession === fals
 // computer's TCP table for its /ping): what this tab asked of 127.0.0.1. The look is one at a time (busy); the whole range
 // 9100-9199 is asked at most once in this tab by itself, and again only on a person's ask (Connect this computer, I have
 // opened it: full)
-export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0 };
-export function resetHere() { Object.assign(HERE, { busy: null, busyFull: false, fullAt: 0, n: 0 }); }
+// next-tally-other-login (05-Nov-2026): gen, a new start (resetHere): a look begun before it never goes on to the range
+export const HERE = { busy: null, busyFull: false, fullAt: 0, n: 0, gen: 0 };
+export function resetHere() { Object.assign(HERE, { busy: null, busyFull: false, fullAt: 0, n: 0, gen: HERE.gen + 1, last: null, lookP: null }); }
+// the last look's answer, when it found this login's bridge at this browser's address, in this start, a moment ago: every
+// caller takes it (no port asked again)
+const baseNow = () => String((Bridge.cfg() || {}).url || "").replace(/\/+$/, "");
+export const lastMine = () => { const L = HERE.last; return L && L.gen === HERE.gen && L.base === baseNow() && Date.now() - L.at < 5000 && L.h.mine ? L.h : null; };
 
 // this computer's FinCom Bridge as /ping finds it (nothing secret sent): mine (with its id), another Windows user's, an
 // older bridge, or none; known: this login's own bridge is known to exist (installed here, not answering now). First the
 // remembered address and this login's own bridge's port (its beat's bridgePort); only when none of them is this login's
 // bridge, the whole range (once a tab, or when full)
 export function lookHere(opts) {
-  const full = !!(opts && opts.full);
+  const full = !!(opts && opts.full), L = lastMine();
+  if (L) return Promise.resolve(L);
+  // the Tally page's own look in flight (lib/tallySimple.js look): its answer first
+  if (HERE.lookP) return HERE.lookP.then(() => lookHere(opts));
   if (HERE.busy && (HERE.busyFull || !full)) return HERE.busy;
+  // a light look in flight and the whole range asked for: that look's answer first; this login's bridge found by it, no range
+  if (HERE.busy) return HERE.busy.then((h) => (h && h.mine && !h.stale ? h : lookHere(opts)), () => lookHere(opts));
   const p = lookHereOnce(full).finally(() => { if (HERE.busy === p) { HERE.busy = null; HERE.busyFull = false; } });
   HERE.busy = p; HERE.busyFull = full;
   return p;
 }
 async function lookHereOnce(full) {
   HERE.n++;
-  const c = Bridge.cfg(), base = String(c.url || "").replace(/\/+$/, ""), hint = ownHint();
+  const g = HERE.gen, c = Bridge.cfg(), base = String(c.url || "").replace(/\/+$/, ""), hint = ownHint();
   const urls = [];
   [base].concat(hint.ports.map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.includes(u)) urls.push(u); });
-  let all = (await Promise.all(urls.slice(0, 4).map((u) => Bridge.probeUrl(u, 2500)))).filter(Boolean);
+  const ask = urls.slice(0, 4), port = (u) => (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) ? Bridge.urlPort(u) : 0);
+  let all = (await Promise.all(ask.map((u) => (port(u) ? Bridge.probe(port(u), 2500) : Bridge.probeUrl(u, 2500))))).filter(Boolean);
+  // a new start meanwhile (another address, another login's scene): this look ends here, never asking the whole range
+  if (HERE.gen !== g) return { mine: null, other: null, old: null, known: false, hint, all, asked: ask.map(port), stale: true, gen: g };
   // finding 3: the remembered address is trusted only when what answers there is this login's (its session or its Windows
   // user); another login's bridge on it (it took the port when this login's stopped): the range is asked at once
+  let ranged = false;
   if (!all.some((b) => isMine(b, hint)) && (full || !HERE.fullAt)) {
-    HERE.fullAt = Date.now();
+    HERE.fullAt = Date.now(); ranged = true;
     const asked = new Set(all.map((b) => Number(b.port) || Bridge.urlPort(b.url || "")));
     all = all.concat((await Promise.all(Bridge.PORTS.filter((p) => !asked.has(p)).map((p) => Bridge.probe(p, 2500)))).filter(Boolean));
   }
@@ -119,7 +133,9 @@ async function lookHereOnce(full) {
   // finding 2: this login's own bridge is known (found in this login before, or paired here and heard by the cloud) and is
   // not the one answering: it is installed, only not running in this login
   const known = !mine && !!(hint.user ? !(other && other.windowsUser && sameUser(other.windowsUser, hint.user) === true) : hint.id && !(other && other.bridgeId === hint.id));
-  return { mine, other, old, known, hint };
+  const res = { mine, other, old, known, hint, all, asked: ask.map(port), ranged, gen: g };
+  if (HERE.gen === g) HERE.last = { at: Date.now(), gen: g, base, h: res };
+  return res;
 }
 // next-tally-connectfix (audit item 8): Chrome's Local Network Access permission (Chrome 142+). Once a person said Block,
 // every /ping fails as if no bridge ran, and nothing in the page could say why. The permission's state ("denied" |
