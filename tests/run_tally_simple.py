@@ -407,21 +407,25 @@ def main():
         E("() => { S.tallyMore = {}; render(); }"); pg.wait_for_timeout(500)
 
         print("== 3c. user A's page never shows user B's Tally (two Windows logins on one server)")
-        da = T.dev(7, PC, "made-up-a", tally="open", opened=(ACME,), version="2.5.2", rec=(ACME,))
-        db = T.dev(8, PC, "made-up-b", tally="open", opened=(SPLIT, ZETA), version="2.5.2", rec=(SPLIT, ZETA))
+        # (2.5.3: a bridge older than 2.5.3 on a server with another login's bridge is never trusted, run_tally_other_login.py)
+        da = T.dev(7, PC, "made-up-a", tally="open", opened=(ACME,), version="2.5.3", rec=(ACME,))
+        db = T.dev(8, PC, "made-up-b", tally="open", opened=(SPLIT, ZETA), version="2.5.3", rec=(SPLIT, ZETA))
         cos2 = [{"company": ACME, "client_id": "NAME:" + ACME, "device_id": da["id"], "gstin": "", "last_seen": "ago:1"},
                 {"company": SPLIT, "client_id": None, "device_id": db["id"], "gstin": "", "last_seen": "ago:1"},
                 {"company": ZETA, "client_id": None, "device_id": db["id"], "gstin": "", "last_seen": "ago:1"}]
-        scene([da, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=["linked", "go-7", da["id"]])
+        # (next-tally-other-login: the member link is never used on a computer with another login's bridge: A's own is the
+        # one paired in A's browser)
+        scene([da, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=["paired", "go-7", ""])
         rows_a = shown(); mt = main_text()
         ok(word(ACME, "o") == "Yes" and n("#app [data-tsm-strip]") == 0 and ZETA not in rows_a and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3"
            and "Zeta" not in mt and "is not connected:" not in mt, "3c. A's page: A's %s Yes; no strip, no row, no step 3 for B's open %s / %s (%s)" % (ACME, ZETA, SPLIT, rows_a))
-        ok(txt(cell(EVER, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % SPLIT and word(EVER, "o") == "—", "3c. A's page: B's company is only a name seen in Tally, never open (%s)" % txt(row(EVER)))
+        # (next-tally-other-login: a company open now in another login's Tally is not even offered as found)
+        ok(SPLIT not in txt(row(EVER)) and word(EVER, "o") == "—" and n(cell(EVER, "c") + " [data-tsm-connect]") == 0, "3c. A's page: B's open company is not offered to A's client (%s)" % txt(row(EVER)))
         # B's own browser (B's bridge paired there): B's companies, and A's is not open in B's Tally
         E(MINE, ["paired", "go-8", ""]); pg.wait_for_timeout(1500)
         ok(n("#app [data-tsm-strip]") == 1 and ZETA in shown() and word(ACME, "o") == "No" and word(ZETA, "o") == "Yes", "3c. B's page: B's open companies (the strip, %s's row Yes); A's %s No (%s)" % (ZETA, ACME, shown()))
         # A's browser reaches B's bridge on 127.0.0.1 (B's Windows user): A's page is unchanged
-        E(MINE, ["linked", "go-7", da["id"]]); E(LOCAL, [[SPLIT, ZETA], PC + "\\made-up-b", ""]); pg.wait_for_timeout(1500)
+        E(MINE, ["paired", "go-7", ""]); E(LOCAL, [[SPLIT, ZETA], PC + "\\made-up-b", "go-7"]); pg.wait_for_timeout(1500)
         ok(n("#app [data-tsm-strip]") == 0 and ZETA not in shown() and word(ACME, "o") == "Yes", "3c. A's page with B's bridge answering locally: still only A's Tally (%s)" % shown())
         E(LOCAL, [None, "", ""])
 
@@ -456,11 +460,11 @@ def main():
         # none answers (the owner's laptop): the member link
         E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {}); pg.wait_for_timeout(1500)
-        ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. no local bridge answers: the member link (%s, %s)" % (how(), col_o()))
+        ok(how() is None and word(ZETA, "o") != "Yes", "3d. no local bridge answers: the member link to another login's bridge on this server is not used (%s, %s)" % (how(), col_o()))
         # an older bridge (2.5.2: no sameSession) answering: as before (the member link)
         E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9103": ping(9103, None, UA, version="2.5.2")}); pg.wait_for_timeout(1500)
-        ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. an old bridge with no sameSession: today's behaviour (the link) (%s)" % how())
+        ok(how() is None and word(ZETA, "o") != "Yes", "3d. an old bridge with no sameSession: the link to another login's bridge is not used either (%s)" % how())
         # the found bridge is the one this browser reads (its address): its own answer, not the beat
         E(PINGS, {"9103": ping(9103, True, UA)}); E(LOCAL, [[], UA, ""]); pg.wait_for_timeout(1500)
         ok(how() == "found" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "here" and word(ACME, "o") == "No", "3d. the found bridge read here: its own answer (%s)" % col_o())

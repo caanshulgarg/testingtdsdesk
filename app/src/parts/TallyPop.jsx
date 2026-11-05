@@ -22,6 +22,7 @@ import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
+import { ownOpen, NO_CO } from "../lib/tallySimple.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
@@ -49,15 +50,20 @@ function LinkPick({ co, run }) {
   useEffect(() => { let on = true; if (typeof Cloud === "object" && Cloud.on && Cloud.on() && co.id)
     Promise.resolve(Cloud.api("tally_link_history?select=company_name&client_id=eq." + encodeURIComponent(co.id) + "&order=at.desc&limit=5")).then((r) => on && setHist([].concat(r || []).map((x) => x.company_name)), () => {});
     return () => { on = false; }; }, [co.id]);
-  const score = (r) => ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : [k, kn].includes(baseKey(r.company)) ? 1 : 0);
-  const rows = companyRows().filter((r) => r.reported && !r.client).sort((a, b) => score(b) - score(a));
+  // next-tally-other-login (05-Nov-2026; staging: a new client's list started with a company open in ANOTHER Windows
+  // login's Tally): first a company open in THIS login's own Tally, or one of the client's own (linked before, its GSTIN,
+  // its name); nothing else is chosen for it
+  const own = ownOpen(), mine = own.has;
+  const score = (r) => (mine(r) ? 8 : 0) + ((hist || []).includes(r.company) ? 4 : 0) + (String(r.gstin || "").toUpperCase() === g && g ? 2 : [k, kn].includes(baseKey(r.company)) ? 1 : 0);
+  const rows = companyRows().filter((r) => r.reported && !r.client && !own.theirs(r)).sort((a, b) => score(b) - score(a) || (mine(b) - mine(a)) || String(b.seen).localeCompare(String(a.seen)));
   const [pick, setPick] = useState("");
-  const sel = pick || (rows[0] ? rows[0].company : "");
+  const sel = pick || (rows[0] && score(rows[0]) > 0 ? rows[0].company : "");
   if (!mayLink()) return <p className="note" data-tally-pop-owner="">An owner or staff member of the firm links it.</p>;
-  if (!rows.length) return tallyDevs().length ? <p className="note" data-tally-pop-none="">No Tally company to link yet: open the company in Tally; it shows here within a minute.</p> : <Download />;
+  if (!rows.length) return tallyDevs().length ? <p className="note" data-tally-pop-none="">{own.noCo ? NO_CO : "No Tally company to link yet: open the company in Tally; it shows here within a minute."}</p> : <Download />;
   return <div className="tally-pop-link" data-tally-pop-link="">
     <label className="note" htmlFor="tallyPopPick">Link to Tally company</label>
     <select id="tallyPopPick" data-tally-pop-pick="" value={sel} title={sel} onChange={(e) => setPick(e.target.value)}>
+      {!sel && <option value="">Choose a Tally company…</option>}
       {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : (hist || []).includes(r.company) ? " (linked before)" : "")}</option>)}
     </select>
     <button type="button" className="btn small primary" data-tally-pop-act="link" onClick={() => run(async () => {
@@ -65,6 +71,7 @@ function LinkPick({ co, run }) {
       const ok = await linkTo(r, co);
       return ok ? co.name + (String(co.name).replace(/\s+/g, " ").trim().toLowerCase() === String(sel).replace(/\s+/g, " ").trim().toLowerCase() ? " is linked." : " is linked to " + sel + ".") : "Not linked: " + ((typeof TCloud === "object" && TCloud.linkErr) || "the cloud did not take it") + ".";
     })}>Link</button>
+    {own.noCo && <p className="note" data-tally-pop-noco="">{NO_CO}</p>}
   </div>;
 }
 

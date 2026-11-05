@@ -197,7 +197,8 @@ function bridgesOf() {
       const open = Array.isArray(b.open) ? b.open : beatMine ? [].concat(beat.open || []) : [];
       // bridge 2.5.3: each Windows login's bridge has its own port of 9100..9199, said in its beat (bridgePort)
       const port = Number(b.bridgePort || (beatMine ? beat.bridgePort : 0)) || 0;
-      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at, port, beat: beatMine ? beat : b });
+      out.push({ dev: d, id, user, open: open.map((n) => String((n && n.name) || n || "")).filter(Boolean), at, port, beat: beatMine ? beat : b,
+        version: String(b.version || (beatMine ? beat.version : "") || ""), pc: String(b.computer || info.computer || beat.computer || "") });
     });
   });
   return out;
@@ -304,8 +305,18 @@ function rememberOwn(x) {
     if (localStorage.getItem(OWNKEY()) !== v) localStorage.setItem(OWNKEY(), v); } catch (e) { /* storage blocked: looked for each time */ }
 }
 export function rememberedOwn() { try { const v = JSON.parse(localStorage.getItem(OWNKEY()) || "null"); return v && (v.id || v.port) ? v : null; } catch (e) { return null; } }
+// next-tally-other-login (05-Nov-2026): a bridge older than 2.5.3 cannot tell whose Tally it reads (no sameSession; 2.5.1
+// takes every Tally for Windows session 0's), so on a computer where another Windows login has a bridge of the firm its
+// companies are never this login's: the page says it is old (bridgeSay), with the Download
+const shared = (b, all) => !!b.pc && all.some((x) => x !== b && lc(x.pc) === lc(b.pc) && sameUser(x.user, b.user) === false);
+const unproven = (b, all) => !!b && !!b.version && vk(b.version) < vk(NEED_V) && shared(b, all);
 export function ownBridge() {
-  const all = bridgesOf(), c = cfgOf(), list = localBridges() || [];
+  const all = bridgesOf();
+  const b = ownBridgeAny(all);
+  return b && !b.local && unproven(b, all) ? null : b;
+}
+function ownBridgeAny(all) {
+  const c = cfgOf(), list = localBridges() || [];
   // (0) bridge 2.5.3: the local bridge in this browser's own Windows session (beats the pairing and the member link)
   const pk = localPick(list);
   if (pk) {
@@ -328,7 +339,10 @@ export function ownBridge() {
   const me = typeof TCloud === "object" && TCloud.me ? TCloud.me() : "";
   const l = me && ((typeof TCloud === "object" && TCloud.pane && TCloud.pane.links) || []).find((x) => x && x.user_id === me && x.bridge_id);
   const b = l ? all.find((x) => x.id === l.bridge_id && (!l.device_id || x.dev.id === l.device_id)) : null;
-  return b && !notMine(b) ? Object.assign({ how: "linked" }, b) : null;
+  // next-tally-other-login (staging, 05-Nov-2026: one FinCom login for every Windows login, linked to one login's bridge;
+  // a browser in another login that did not find its own bridge showed that login's Tally): never on a computer where
+  // another Windows login has a bridge of the firm (the link names one login of many)
+  return b && !notMine(b) && !shared(b, all) ? Object.assign({ how: "linked" }, b) : null;
 }
 // what this browser's look on 127.0.0.1 says when it found no bridge of this Windows login (null when it found one, or has
 // not looked yet): an older bridge that is this Windows user's (2.5.2 and older say nothing of the session, so FinCom can't
@@ -392,6 +406,25 @@ function whyOf(src) {
   }
   return { why: words, say };
 }
+// next-tally-other-login: this login's own Tally open with no company loaded: said plainly (never another login's company)
+export const NO_CO = "Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.";
+const noCo = (o, up) => (up && !o.names.size ? Object.assign(o, { noCo: true, why: o.why || NO_CO }) : o);
+// this browser is on a Tally computer: a bridge answers here, or one is paired here (a laptop: none)
+export const onTallyPc = () => (localBridges() || []).length > 0 || !!cfgOf().key;
+// the companies open in THIS login's own Tally, for the lists that offer a company to link: {keys, noCo, has, theirs}.
+// has(r): open in this login's own Tally (what a picker calls open, or chooses first). theirs(r): on a Tally computer, a
+// company open now in another login's or computer's Tally: never offered here (a laptop sees the firm's as before)
+export function ownOpen() {
+  let o; try { o = ownState(); } catch (e) { o = { state: "none" }; }
+  return openOf(o);
+}
+function openOf(o) {
+  const keys = o.state === "ok" ? new Set(o.names.keys()) : new Set(), has = (r) => keys.has(coKey(r.company));
+  // (the own bridge's own beat is never another's)
+  const beat = new Set([].concat((o.own && o.own.open) || []).map(coKey));
+  const here = o.state === "ok" || onTallyPc();
+  return { keys, noCo: !!o.noCo, has, theirs: (r) => !!here && !!r.open && !has(r) && !beat.has(coKey(r.company)) };
+}
 export function ownState() {
   const list = localBridges();
   // the first look on this computer not done yet (at most a second)
@@ -401,8 +434,9 @@ export function ownState() {
   const st = hereIfOwn(own), unsure = own.how === "unsure";
   // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
   const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat));
-  if (fresh(own.at)) return Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat));
+  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat)), !!st.tallyUp);
+  if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
+    own.beat.tally === true || own.beat.tallyState === "open");
   // this browser holds the own bridge's key, its first answer not read yet
   const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
   if (!own.local && c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
@@ -477,13 +511,15 @@ function clientRow(co, all, opts) {
   const cid = co.id, k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) : null, company = (k && k.company) || "";
   const row = { key: "c:" + cid, kind: "client", cid, co, client: co.name, company, act: null, todo: "", upload: false, focus: opts.focus === cid };
   if (!company) {
-    // not connected: the company of its name (or GSTIN) that FinCom has seen in Tally, open first
-    const mine = twinsOf(all, cid).sort((a, b) => (b.open - a.open) || String(b.seen).localeCompare(String(a.seen)));
-    const r = mine[0] || null;
+    // not connected: the company of its name (or GSTIN) that FinCom has seen in Tally, open first; never one open now in
+    // another login's Tally (next-tally-other-login). Open in this login's own Tally: Connect, one click, in the column
+    const oo = openOf(opts.own), mine = twinsOf(all, cid).filter((r) => !oo.theirs(r)).sort((a, b) => (oo.has(b) - oo.has(a)) || String(b.seen).localeCompare(String(a.seen)));
+    const r = mine[0] || null, here = !!r && oo.has(r);
     Object.assign(row, { r, found: r ? r.company : "",
-      c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "" },
+      c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "", connect: here },
       o: { w: DASH, note: "" }, l: { w: DASH, note: "Come after connecting" }, e: { w: DASH, note: "" } });
-    if (r) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
+    if (here) row.todo = "Press Connect.";
+    else if (r) { row.act = { kind: "connect", label: "Link" }; row.todo = "Link it to the Tally company shown."; }
     else { row.act = { kind: "pickco", label: "Link" }; row.todo = "Open its company in Tally, then press Link."; }
     return row;
   }

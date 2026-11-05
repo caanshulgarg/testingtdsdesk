@@ -2161,7 +2161,9 @@ function tallySignNow(co){
   }
   const isOpen = x => x.tally === "open" || x.tally === "busy";
   const has = x => co ? x.open.some(same) : x.open.length > 0;
-  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x));
+  // next-tally-other-login (05-Nov-2026): with this login's own bridge here, the firm's sign never names another bridge's
+  // companies (on a shared server: another Windows login's Tally); a client's own company open elsewhere still counts
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || co || !localOn));
   const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
   const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
@@ -2175,7 +2177,7 @@ function tallySignNow(co){
     return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on " + good.pc, short: good.pc, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
-  const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0];
+  const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || (localOn ? pcs.find(x => x.local) : pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0]);
   const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", pc: x ? x.pc || x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix,
     words: code === "othercompany" && x ? "Tally is open on " + x.computer + " with a different company" : "Tally not connected" + (x && x.at ? ". Last seen on " + x.computer + " at " + tallyIst(x.at) : ""),
     short: x ? x.computer : "No Tally"});
@@ -2192,7 +2194,7 @@ function tallySignNow(co){
   }
   if (!isOpen(pick)) return off("tally", "TallyPrime is closed on " + pick.computer + ".", "Open TallyPrime on " + pick.computer + (co ? " and open " + coName + " in it." : "."), pick);
   if (!pick.open.length) return off("nocompany", "TallyPrime is open on " + pick.computer + ", but no company is open in it.", "Open " + coName + " in TallyPrime on " + pick.computer + ".", pick);
-  return off("othercompany", "A different company is open in Tally on " + pick.computer + ": " + pick.open.slice(0, 3).join(", ") + ".", "Open " + coName + " in TallyPrime on " + pick.computer + " (the other company can stay open)." + (co && !link ? " If it is open under another name, link it in Client setup → Tally." : ""), pick);
+  return off("othercompany", "A different company is open in Tally on " + pick.computer + (pick.local || !localOn ? ": " + pick.open.slice(0, 3).join(", ") : "") + ".", "Open " + coName + " in TallyPrime on " + pick.computer + " (the other company can stay open)." + (co && !link ? " If it is open under another name, link it in Client setup → Tally." : ""), pick);
 }
 // the bridge here cannot reach FinCom's cloud: for longer than two beats (a single late beat is not "no internet")
 function tallyNoNet(lst){

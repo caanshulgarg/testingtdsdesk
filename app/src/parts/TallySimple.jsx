@@ -278,7 +278,7 @@ function Row({ row, download, oneDl }) {
     data-tsm-need={row.need ? "" : undefined} data-tsm-fine={row.fine ? "" : undefined} data-focus={row.focus ? "" : undefined}>
     <td className="tsm-td tsm-client" data-tsm-col="client" data-label="Client">{linkedRow ? <button type="button" className="linkbtn tsm-client-name" data-tsm-client={row.cid} onClick={() => openCompany(row.cid)}>{row.client}</button>
       : <span className="tsm-client-none">Not chosen yet</span>}</td>
-    <Cell k="c" label="Linked to Tally?" x={row.c} />
+    <Cell k="c" label="Linked to Tally?" x={row.c}>{row.c.connect && <div><ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid }} /></div>}</Cell>
     <Cell k="o" label="Open in Tally right now?" x={row.o}>{row.o.say && row.o.say !== "blocked" && (row.o.say === "old" || !oneDl) && <div className="tsm-say-dl" data-tsm-o-say={row.o.say}>{download}</div>}{row.o.connect && row.o.say !== "old" && <LocalConnect />}{row.o.setup && <SetUp />}</Cell>
     <Cell k="l" label="Ledgers received?" x={row.l}>
       {row.l.change && <div className="tsm-change" data-tsm-lchange="">{row.l.change}</div>}

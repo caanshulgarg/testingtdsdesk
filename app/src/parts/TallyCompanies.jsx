@@ -36,6 +36,7 @@ import LinkStatus from "./LinkStatus.jsx";
 import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
+import { ownOpen, NO_CO } from "../lib/tallySimple.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -56,7 +57,10 @@ const yearKey = (n) => (typeof tallyYearKey === "function" ? tallyYearKey(n) : c
 // option to choose"): a Tally company's name without its period or a split's date ("… 01 Apr 2018", "… 2024-25"), to
 // compare with clients' names only; the link always names the Tally company in full (each split is its own company)
 const baseName = (n) => (typeof clientNameFromTally === "function" ? clientNameFromTally(shown(n)) : shown(n));
-export const baseKey = (n) => (typeof tallyNameKey === "function" ? tallyNameKey(baseName(n)) : coKey(baseName(n)));
+// next-tally-other-login (05-Nov-2026; staging: a client named in the singular, its Tally company in the plural, never
+// offered): a word's plural "s" is not a different name ("spaces" = "space"; "business", "gas" kept)
+const one = (k) => String(k || "").split(" ").map((w) => (w.length > 3 && /[^s]s$/.test(w) ? w.slice(0, -1) : w)).join(" ");
+export const baseKey = (n) => one(typeof tallyNameKey === "function" ? tallyNameKey(baseName(n)) : coKey(baseName(n)));
 
 // ---------- what FinCom holds of a client's books (the cloud's book, tally_status; its ledgers' count, tally_ledgers)
 export const d8Of = (x) => String(x || "").replace(/-/g, "").slice(0, 8);
@@ -181,7 +185,9 @@ function companyRowsNow(opts) {
 export function twinOf(r, strict) {
   if (typeof similarClients !== "function") return null;
   const t = alikeClients(strict ? r.company : baseName(r.company), r.gstin || "").find((d) => d.why === "same" || d.why === "gstin");
-  return t ? t.client : null;
+  if (t || strict) return t ? t.client : null;
+  const k = baseKey(r.company);
+  return (k && live().find((c) => baseKey(c.name) === k)) || null;
 }
 // the clients alike (the same GSTIN or name first, then names much alike), best first
 export const alikeOf = (r) => (typeof similarClients === "function" ? alikeClients(baseName(r.company), r.gstin || "").map((d) => d.client) : []);
@@ -324,7 +330,9 @@ export async function changeTo(co, r) {
 // last seen; a company of another client says whose it is (no computer's name)
 export function ChangePick({ co, cur = "", onClose }) {
   const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
-  const rows = companyRows({ hidden: true }).filter((r) => coKey(r.company) !== coKey(cur));
+  // next-tally-other-login (05-Nov-2026): "Open in Tally now" is THIS login's own Tally only; a company open in another
+  // login's Tally (or another computer's) is one seen, never offered as open here
+  const own = ownOpen(), rows = companyRows({ hidden: true }).filter((r) => coKey(r.company) !== coKey(cur) && !own.theirs(r)).map((r) => Object.assign(r, { open: own.has(r) }));
   const label = (r) => { const o = r.client && r.client !== co.id ? S.companies[r.client] : null;
     return shown(r.nowName || r.company) + (o ? " — linked to " + o.name : r.client && r.client !== co.id ? " — linked to another client" : "") + (!r.open && r.seen ? " · last seen " + seenWords(r.seen) : ""); };
   // 31-Oct-2026: the companies of this client's name or GSTIN (its splits and years: each its own Tally company) first
@@ -341,7 +349,8 @@ export function ChangePick({ co, cur = "", onClose }) {
       {rest.length > 0 && <optgroup label="Seen earlier">{rest.map(opt)}</optgroup>}</select>
     <button className="btn small primary" data-tlk-go="" disabled={!pick || busy} onClick={go}>{busy ? (SENDING[coKey(pick)] ? "Sending to FinCom…" : "Linking…") : "Link"}</button>
     <button className="linkbtn" data-tlk-cancel="" onClick={onClose}>Cancel</button>
-    {!rows.length && <span className="note" data-tlk-pick-none="">No other company seen yet: open it in TallyPrime and it shows here within a minute.</span>}</div>;
+    {!rows.length && <span className="note" data-tlk-pick-none="">No other company seen yet: open it in TallyPrime and it shows here within a minute.</span>}
+    {own.noCo && <span className="note" data-tlk-pick-noco="">{NO_CO}</span>}</div>;
 }
 // Remove company (Suvit: an unused company taken off the list): hidden, never deleted; Show hidden puts it back
 export function hideCo(r, on) {

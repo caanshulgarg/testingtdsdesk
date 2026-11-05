@@ -17,12 +17,13 @@ import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
 import CompaniesInTally, { companyRows, LinkedClients } from "../parts/TallyCompanies.jsx";
 import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLink.jsx";
 import { OC, doConnect, doFind, doRefresh, useRefusedCheck, useHereProbe, useLocalRead, Line, Found } from "../parts/TallyOneClick.jsx";
-import { coKey, openOn } from "../lib/tallyState.js";
+import { coKey } from "../lib/tallyState.js";
 import { beatFresh, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 // 30-Oct-2026 (the owner): what FinCom received from Tally today, per company, and the books being brought from Tally
 import { TodayStatus } from "../parts/TallyFetch.jsx";
 // 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
 import SimpleTally from "../parts/TallySimple.jsx";
+import { ownBridge, ownOpen, onTallyPc } from "../lib/tallySimple.js";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -800,13 +801,15 @@ function thisComputer(rows) {
   const localOn = typeof Bridge === "object" && Bridge.on(), local = localOn && Bridge.st && Bridge.st.state === "ok" ? Bridge.st : null;
   const week = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const loc = TCloud.localRow ? TCloud.localRow() : null;
-  // one computer may carry a bridge per Windows user (a shared server): the computers are the distinct devices
   // next-fix-tally-links2 (the owner: "NWS144 ● online · NWS144 ○ offline since 17:49 — why showing this"): the firm's
-  // ONE state, never a row per computer: this browser's bridge, else the best one heard (online with Tally and a company
-  // open, then online, then the latest); an old or offline extra bridge is not said here (Help & support › Each computer)
+  // ONE state, never a row per computer: this browser's bridge, else (a browser with no bridge: the owner's laptop) the best
+  // one heard (online with Tally and a company open, then online, then the latest)
   const best = (xs) => xs.find((r) => r.online && r.main && (r.tally === "open" || r.tally === "busy") && (r.open || []).length) || xs.find((r) => r.online && (r.tally === "open" || r.tally === "busy"))
     || xs.find((r) => r.online && r.main) || xs.find((r) => r.online) || xs[0] || null;
-  const me = (loc && week.find((r) => r.id === loc.id)) || (!localOn ? best(week) : null);
+  // next-tally-other-login (05-Nov-2026): on a Tally computer this login's own bridge only (lib/tallySimple.js ownBridge),
+  // never the best one of the firm (on a shared server: another Windows login's Tally and its companies)
+  const ob = !loc && !localOn ? ownBridge() : null;
+  const me = (loc && week.find((r) => r.id === loc.id)) || (ob ? week.find((r) => r.id === ob.id) || null : !localOn && !onTallyPc() ? best(week) : null);
   return { local, localOn, me, week, many: false };
 }
 // the scope of the page: "this" (this computer's Tally) or "all" (every computer): the switch only when the firm has more
@@ -909,16 +912,12 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
 // on this computer (the scope) or on every computer. A company seen earlier and not open now is not here: linked, it is
 // under Clients linked to Tally below the list; not linked, under Help & support › Every company seen. From a client not linked ("Choose on
 // Tally page"): the open companies ranked for it, each with "Link to <client>"
-function hereKeys(tc) {
-  const ks = new Set();
-  if (tc.local) [].concat(tc.local.open || []).forEach((o) => { const k = coKey(o && o.name); if (k) ks.add(k); });
-  if (tc.me) openOn(tc.me.device).forEach((n) => { const k = coKey(n); if (k) ks.add(k); });
-  return ks;
-}
 function OpenCompanies({ rows }) {
   const g = S.tallyGuide || {}, forCo = guideFor(g), tc = thisComputer(rows), { scope } = scopeOf(tc);
-  const all = companyRows(), here = scope === "this" && tc.many ? hereKeys(tc) : null;
-  const openHere = (r) => r.open && (!here || here.has(coKey(r.company)));
+  // next-tally-other-login: open now is THIS login's own Tally only (ownOpen); one open in another login's Tally right now
+  // is that login's: not here, nor offered to link
+  const own = ownOpen(), all = companyRows().filter((r) => !own.theirs(r));
+  const openHere = (r) => r.open;
   // next-fix-tally-links: the linked clients (open or not) are their own quiet section under this list, Clients linked to
   // Tally (parts/TallyCompanies.jsx LinkedClients), always there; this list is the companies open now only
   let list = forCo ? all.slice() : all.filter(openHere);
@@ -932,10 +931,10 @@ function OpenCompanies({ rows }) {
   const focus = !forCo && S.tallyFocus && S.companies && S.companies[S.tallyFocus] ? S.tallyFocus : "";
   const pcWord = scope === "all" && tc.many ? " across " + tc.week.length + " computers" : "";
   const none = <p className="note" data-tco-empty="" data-tco-none-open="">{"No company is open in Tally right now" + pcWord + ". Open your company in TallyPrime: it shows here within a minute."}</p>;
-  const nOpen = list.length, inList = new Set(list.map((r) => coKey(r.company)));
+  const nOpen = list.filter((r) => r.open).length, inList = new Set(list.map((r) => coKey(r.company)));
   return <section className="pane tcompanies" data-tally-focus={focus || undefined}>
     <CompaniesInTally rows={list} forCo={forCo} note={note} focus={focus} title="Open in Tally now" empty={forCo ? null : none} pcs={tc.many}
-      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} after={<LinkedClients inList={inList} here={here} />} /></section>;
+      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} after={<LinkedClients inList={inList} />} /></section>;
 }
 // 2. Needs you: only what neither the guide nor a computer's line says (reading stopped on all computers, a computer key
 // refused). sources: the slot for 2.4.1's card of a book open in two data locations (SourceCards on next-241), drawn
