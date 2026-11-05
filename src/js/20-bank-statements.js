@@ -19,7 +19,7 @@ const BankDB = {
       let done = false;
       const finish = v => { if (!done){ done = true; this.mode = v ? "database" : (this.lsOk() ? "browser storage" : "memory only"); ok(v); } };
       // Safari can leave this request unanswered for files opened from disk: give up after 3 seconds
-      setTimeout(() => finish(null), 3000);
+      setTimeout(() => { if (!done) this.late = true; finish(null); }, 3000);
       try {
         if (!window.indexedDB) return finish(null);
         const r = indexedDB.open(LocalOwner.db("tdsdesk-bank"), 1);
@@ -35,10 +35,12 @@ const BankDB = {
   lsGet(k){ try { const v = localStorage.getItem("tdsdesk:bank:" + k); return v ? JSON.parse(v) : undefined; } catch (e){ return undefined; } },
   lsSet(k, v){ try { localStorage.setItem("tdsdesk:bank:" + k, JSON.stringify(v)); return true; } catch (e){ this.lost = true; return false; } },
   withTimeout(p, fallback){ return Promise.race([p, new Promise(ok => setTimeout(() => ok(fallback), 4000))]); },
-  async get(k){
+  // late (next-noclients): what get answers when the database did not answer in time (late is set), not "nothing kept"
+  async get(k, late){
     const db = await this.open();
-    if (!db) return k in this.mem ? this.mem[k] : this.lsGet(k);
-    return this.withTimeout(new Promise(ok => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(this.mem[k]); } catch (e){ ok(this.mem[k]); } }), this.mem[k]);
+    if (!db) return late !== undefined && this.late ? late : k in this.mem ? this.mem[k] : this.lsGet(k);
+    let t = 0; const slow = new Promise(ok => { t = setTimeout(() => { if (late !== undefined) this.late = true; ok(late !== undefined ? late : this.mem[k]); }, 4000); });
+    return Promise.race([new Promise(ok => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(this.mem[k]); } catch (e){ ok(this.mem[k]); } }), slow]).finally(() => clearTimeout(t));
   },
   async set(k, v){
     this.mem[k] = v;

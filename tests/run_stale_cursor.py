@@ -13,7 +13,9 @@ cloud of tally_shapes.py (the made-up firm: 10 live clients, 2 removed, bank sta
   3. nothing gone: the page opened again pulls from its cursor (no pull from the start)
   4. a copy from before the marks (its clients here, no mark): no pull from the start, and the marks set
   5. a short copy from before the marks (1 client of 10 here, no mark: the owner's "1 client of 9"): every client back
-  6. a short copy with its marks (1 client of 10 here): every client back"""
+  6. a short copy with its marks (1 client of 10 here): every client back
+  7. a client added on another computer after the cursor: it comes with the pull from the cursor (no pull from the start)
+  8. a client removed here in a paused firm (its removal waits here, the cloud still has it): it is not brought back"""
 import os, sys, json, time, asyncio
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
@@ -22,6 +24,7 @@ import run_speed_open as R
 from playwright.async_api import async_playwright
 TS = R.TS
 fails = []
+CTX = {}
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
@@ -56,6 +59,9 @@ async def main():
                 req = route.request
                 try: st, j, hd = cloud.handle(req.method, req.url, req.post_data)
                 except Exception as e: st, j, hd = 500, {"message": str(e)}, {}
+                # a paused firm: the cloud refuses its writes (case 8)
+                if CTX.get("readonly") and req.method in ("POST", "PATCH", "DELETE") and "/rest/v1/" in req.url and "/rpc/" not in req.url:
+                    st, j, hd = 403, {"message": "made-up: the firm is read-only"}, {}
                 if req.method == "PATCH" and "/rest/v1/clients" in req.url:
                     try: j = [dict(json.loads(req.post_data or "{}"), updated_at=time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()))]
                     except Exception: pass
@@ -67,6 +73,7 @@ async def main():
             await ctx.route("https://*.sentry.io/**", lambda r: r.fulfill(status=200, body="{}"))
             await ctx.route("http://127.0.0.1:*/**", lambda r: r.abort("connectionrefused"))
             names = [c["name"] for c in fx["clients"] if not c["deleted"]]
+            CTX["fx"] = fx
             return ctx, names, pulls
 
         async def opened(pg, names, timeout=30000):
@@ -109,6 +116,39 @@ async def main():
                 ok(m == [1, 1], "the marks set after the pull: %s" % (m,))
             ok(not errs, "no page errors (%s)" % errs[:2])
             await ctx.close()
+
+        print("7. a client added on another computer after the cursor")
+        ctx, names, pulls = await context(); fx = CTX["fx"]
+        pg = await ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)[:200]))
+        n0, s0 = await opened(pg, names)
+        await away(pg, [], "db")
+        c = json.loads(json.dumps(fx["clients"][0])); now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(time.time() + 5))
+        c.update(id="cmadeupnew7", name="Made-up Added Elsewhere", tally_name="Made-up Added Elsewhere", deleted=False, updated_at=now)
+        c["data"] = dict(c.get("data") or {}, id="cmadeupnew7", name="Made-up Added Elsewhere")
+        fx["clients"].append(c); names.append(c["name"])
+        del pulls[:]
+        n1, s1 = await opened(pg, names, 15000)
+        ok(n1 == len(names), "opened again: %d of %d clients shown (the new one too)" % (n1, len(names)))
+        ok(full(pulls) == 0, "no pull from the start (%d of %d pulls)" % (full(pulls), len(pulls)))
+        ok(not errs, "no page errors (%s)" % errs[:2])
+        await ctx.close()
+
+        print("8. a client removed here in a paused firm")
+        ctx, names, pulls = await context(); fx = CTX["fx"]
+        pg = await ctx.new_page(); errs = []; pg.on("pageerror", lambda e: errs.append(str(e)[:200]))
+        n0, s0 = await opened(pg, names)
+        fx["_rpc"]["my_firm_status"] = {"status": "suspended", "reason": "made-up test", "at": now}
+        CTX["readonly"] = True
+        gone = fx["clients"][[i for i, x in enumerate(fx["clients"]) if not x["deleted"]][0]]
+        del pulls[:]
+        r = await pg.evaluate("""async (id) => { FirmGate.st = {status: 'suspended', reason: 'made-up test'};
+            await Store.deleteCompany(id, 'made-up test removal'); await new Promise((r) => setTimeout(r, 300));
+            while (cloudBusy) await new Promise((r) => setTimeout(r, 100)); cloudPull.marked = 0; await cloudSync(false); await new Promise((r) => setTimeout(r, 1500));
+            const k = 'client|' + id + '|' + id; return {here: !!S.companies[id], pending: k in Cloud.dels()}; }""", gone["id"])
+        ok(r == {"here": False, "pending": True}, "the removed client stays removed, its removal still waiting to be sent: %s" % (r,))
+        ok(full(pulls) == 0, "no pull from the start (%d of %d pulls)" % (full(pulls), len(pulls)))
+        ok(not errs, "no page errors (%s)" % errs[:2])
+        await ctx.close(); CTX["readonly"] = False
 
         await br.close()
     srv.shutdown()

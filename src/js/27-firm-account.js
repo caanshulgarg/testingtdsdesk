@@ -392,18 +392,22 @@ async function cloudPushClient(r, sendBatch){
 // localStorage asked only for what changed since, and that copy stayed empty (or short: "1 client of 9") for good. Each
 // database keeps a mark of the pull; once a page, with a cursor, everything is pulled again when a database lost its mark
 // or a live client of the firm (ids only, one small read) is not here (tests/run_stale_cursor.py). A copy from before the
-// marks counts as whole when every client is here, and is marked.
+// marks counts as whole when every client is here, and is marked. Not counted as missing: a client changed after the
+// cursor (added on another computer: the pull from the cursor brings it), one removed here and not sent yet (a paused
+// firm keeps the removal here: a pull from the start would bring it back), and the bank's database not open in time.
 const PULL_MARK = "cloud:pulled";
-async function cloudCopyGone(){
-  const idb = S.storeKind === "idb";
-  const [w, b, ids] = await Promise.all([idb ? IDBStore.get(PULL_MARK).catch(() => 1) : 1, BankDB.get(PULL_MARK), Cloud.api("clients?select=id&deleted=is.false").catch(() => null)]);
-  if ((ids || []).some(r => r && SAFE_ID.test(String(r.id)) && !S.companies[r.id])) return true;
+async function cloudCopyGone(since){
+  const idb = S.storeKind === "idb", at = Date.parse(since), dels = Cloud.dels(), marks = Cloud.marks();
+  const [w, b, ids] = await Promise.all([idb ? IDBStore.get(PULL_MARK).catch(() => 1) : 1, BankDB.get(PULL_MARK, "late"), Cloud.api("clients?select=id,updated_at&deleted=is.false").catch(() => null)]);
+  const missing = r => { const id = String(r && r.id), k = "client|" + id + "|" + id;
+    return SAFE_ID.test(id) && !S.companies[id] && !(Date.parse(r.updated_at) > at) && !(k in dels) && marks[k] !== "gone"; };
+  if ((ids || []).some(missing)) return true;
   return w ? !b : !Object.keys(S.companies).length;
 }
 async function cloudPull(){
   const cfg = Cloud.cfg(), first = !cloudPull.marked;
   let since = cfg.lastPull || "1970-01-01T00:00:00Z";
-  if (first && cfg.lastPull && await cloudCopyGone()) since = "1970-01-01T00:00:00Z";
+  if (first && cfg.lastPull && await cloudCopyGone(cfg.lastPull)) since = "1970-01-01T00:00:00Z";
   let got = 0, applied = [];
   for (const table of ["clients", "records"]){
     let cursor = since;
@@ -423,7 +427,7 @@ async function cloudPull(){
     cloudPull.took = num(await cloudApply(applied));
     Cloud.setCfg({lastPull: newest});
   }
-  if (first){ cloudPull.marked = 1; if (S.storeKind === "idb") IDBStore.write([[PULL_MARK, 1]]).catch(() => {}); BankDB.set(PULL_MARK, 1); }
+  if (first){ cloudPull.marked = 1; if (S.storeKind === "idb") IDBStore.write([[PULL_MARK, 1]]).catch(() => {}); if (!BankDB.late) BankDB.set(PULL_MARK, 1); }
   return got;
 }
 // write what came from the cloud into this computer
