@@ -387,9 +387,21 @@ async function cloudPushClient(r, sendBatch){
   }
   throw new Error("The setup of " + ((r.data && r.data.name) || "a client") + " kept changing on another computer while it was being saved; it is saved at the next try.");
 }
+// next-noclients (05-Nov-2026, "showing no client"): the pull's cursor (lastPull) is in localStorage, what it brought in
+// IndexedDB (clients, bills, parties: tdsdesk-work; bank and sales: tdsdesk-bank). A browser that lost a database and kept
+// localStorage asked only for what changed since, and that copy stayed empty for good. Each database keeps a mark of the
+// pull; once a page, a cursor with a database that lost its mark pulls everything again (tests/run_stale_cursor.py). A
+// copy from before the marks counts as whole when its clients are here, and is marked.
+const PULL_MARK = "cloud:pulled";
+async function cloudCopyGone(){
+  const idb = S.storeKind === "idb";
+  const [w, b] = await Promise.all([idb ? IDBStore.get(PULL_MARK).catch(() => 1) : 1, BankDB.get(PULL_MARK)]);
+  return w ? !b : !Object.keys(S.companies).length;
+}
 async function cloudPull(){
-  const cfg = Cloud.cfg();
+  const cfg = Cloud.cfg(), first = !cloudPull.marked;
   let since = cfg.lastPull || "1970-01-01T00:00:00Z";
+  if (first && cfg.lastPull && await cloudCopyGone()) since = "1970-01-01T00:00:00Z";
   let got = 0, applied = [];
   for (const table of ["clients", "records"]){
     let cursor = since;
@@ -404,10 +416,12 @@ async function cloudPull(){
     }
   }
   cloudPull.took = 0;
-  if (!applied.length) return 0;
-  const newest = applied.map(r => r.updated_at).sort().pop();
-  cloudPull.took = num(await cloudApply(applied));
-  Cloud.setCfg({lastPull: newest});
+  if (applied.length){
+    const newest = applied.map(r => r.updated_at).sort().pop();
+    cloudPull.took = num(await cloudApply(applied));
+    Cloud.setCfg({lastPull: newest});
+  }
+  if (first){ cloudPull.marked = 1; if (S.storeKind === "idb") IDBStore.write([[PULL_MARK, 1]]).catch(() => {}); BankDB.set(PULL_MARK, 1); }
   return got;
 }
 // write what came from the cloud into this computer
