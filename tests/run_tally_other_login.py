@@ -146,14 +146,21 @@ def main():
         ok(n("#app .tcompanies") == 1 and "Kestrel" not in tco, "6. For support's Open in Tally now: none (%s)" % tco[:160])
 
         print("== 7. the look on 127.0.0.1 finds no bridge of this login: the member link to B's bridge is never used here")
-        for label, pings in (("nothing answers", {}), ("only B's bridge answers (another session)", {"9150": TS.ping(9150, False, UB, version="2.5.4")})):
+        for label, pings in (("only B's bridge answers (another session)", {"9150": TS.ping(9150, False, UB, version="2.5.4")}),
+                             ("a 2.5.2 bridge answers (no session said)", {"9103": TS.ping(9103, None, UA, version="2.5.2")})):
             scene([da, db], cos, [ORBIT, ACME], LINK_B, pings)
             own = pg.get_attribute("#app [data-tally-simple]", "data-tsm-own")
             if not n(row(ORBIT) + " [data-tlk-pick-box]"): pg.click(row(ORBIT) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
             gs = picker_groups(row(ORBIT) + " [data-tlk-pick-box]")
             ok(not any(KESTREL in vs for (l, vs) in gs if l == "Open in Tally now"), "7. %s: the picker never calls B's company open here (%s)" % (label, gs))
             ok(own != "ok" and n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3" and n("#app [data-tsm-connect]") == 0,
-               "7. %s: B's Tally is not this login's (own %s; no strip, row or step 3 with B's company: %s)" % (label, own, [n("#app [data-tsm-strip]"), n(row(KESTREL)), pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide"), main_text()[max(0, main_text().find("Kestrel") - 200):][:300] if "Kestrel" in main_text() else ""]))
+               "7. %s: B's Tally is not this login's (own %s; no strip, row or step 3 with B's company)" % (label, own))
+        # a laptop (nothing answers, no key here): the member link is kept, and the firm's open companies are open as before
+        scene([da, db], cos, [ORBIT, ACME], LINK_B, {})
+        ok(pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-how") == "linked", "7. a laptop: the member link is used (%s)" % pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-how"))
+        if not n(row(ORBIT) + " [data-tlk-pick-box]"): pg.click(row(ORBIT) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
+        gs = picker_groups(row(ORBIT) + " [data-tlk-pick-box]")
+        ok(any(l == "Open in Tally now" and KESTREL in vs for (l, vs) in gs), "7. a laptop: the picker's Open in Tally now is the firm's, as before (%s)" % gs)
 
         print("== 8. a client named like its Tally company, but for a plural: offered, one click")
         NOVA, NOVAS = "Nova Space", "NOVA SPACES"
@@ -206,6 +213,53 @@ def main():
         scene([d0, b9], c9, cl9, LINK_B, A_PINGS, local=[[], UA, "go-7", 9101])
         ok(txt("#app [data-tsm-why]").startswith(NO_CO) and n("#app [data-tsm-connect]") == 0 and n(row(ZEN)) == 0 and n(row(KESTREL)) == 0,
            "9. none open here: %s; no Connect, no company row (%s)" % (NO_CO, txt("#app [data-tsm-head]")))
+
+        print("== 10. a fresh tab: the look on 127.0.0.1 not settled yet")
+        ids = scene([da, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
+        E("""() => { Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 0, cut: false});
+          const pr = Bridge.probe; Bridge.probe = (port, ms) => new Promise((ok) => setTimeout(() => ok(pr(port, ms)), 2500)); }""")
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", ids[ORBIT]); pg.wait_for_timeout(300)
+        POP = "header.top .tally-pop"
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector(POP + " [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(200)
+        sel0 = E("(s) => { const e = document.querySelector(s + ' [data-tally-pop-pick]'); return e ? e.value : null; }", POP)
+        busy = E("() => FCTallySimple.LOCALB.list === null")
+        ok(busy and sel0 != KESTREL, "10. before the look settles: nothing of B's chosen (%r, looking %s)" % (sel0, busy))
+        pg.wait_for_timeout(4000)
+        sel1 = E("(s) => { const e = document.querySelector(s + ' [data-tally-pop-pick]'); return e ? e.value : null; }", POP)
+        ok(E("() => FCTallySimple.LOCALB.list !== null") and sel1 != KESTREL, "10. the look started by the list itself, settled: still nothing of B's (%r)" % sel1)
+        pg.keyboard.press("Escape"); E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(800)
+
+        print("== 11. the firm's sign with this login's bridge found here, not paired in this browser")
+        scene([da, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
+        sg = E("() => JSON.stringify([Bridge.on(), tallySignNow(null)])")
+        ok(sg.startswith("[false") and "Kestrel" not in sg, "11. not paired here, a bridge of this login answers: the sign never names B's company (%s)" % sg[:260])
+
+        print("== 12. Tally open only in another login (this login's own Tally not answering): no 'no company' line")
+        dc = T.dev(7, PC, "made-up-a", tally="open", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9101, "windowsUser": UA},
+                   ports=[{"port": 511, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}])
+        scene([dc, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
+        ok(pg.get_attribute("#app [data-tally-simple]", "data-tsm-own") == "ok" and not txt("#app [data-tsm-head]").count(NO_CO), "12. not said (%s)" % txt("#app [data-tsm-head]"))
+
+        print("== 13. an office of two computers: a company open only on the other computer is linkable, never chosen")
+        LUMEN = "Lumen Traders"
+        dp = T.dev(9, "PC2", "made-up-c", tally="open", opened=(LUMEN,), version="2.5.4", rec=(LUMEN,), beat={"bridgePort": 9100, "windowsUser": "PC2\\made-up-c"})
+        c13 = cos + [{"company": LUMEN, "client_id": None, "device_id": dp["id"], "gstin": "", "last_seen": "ago:0.5"}]
+        ids = scene([da, dp], c13, [LUMEN, ACME], ["paired", "go-7", ""], A_PINGS, local=[[], UA, "go-7", 9101])
+        ok(n(row(LUMEN) + ' [data-tsm-connect]') == 0 and "Found in Tally" not in txt(row(LUMEN)), "13. not offered as found or Connect (%s)" % txt(row(LUMEN)))
+        if not n(row(LUMEN) + " [data-tlk-pick-box]"): pg.click(row(LUMEN) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
+        gs = picker_groups(row(LUMEN) + " [data-tlk-pick-box]")
+        ok(any(LUMEN in vs for (l, vs) in gs) and not any(LUMEN in vs for (l, vs) in gs if l == "Open in Tally now"), "13. the picker: listed, not under Open in Tally now (%s)" % gs)
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", ids[LUMEN]); pg.wait_for_timeout(1200)
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector(POP + " [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(400)
+        opts = E("(s) => { const e = document.querySelector(s + ' [data-tally-pop-pick]'); return e ? [e.value, [...e.options].map(o => o.value)] : null; }", POP)
+        ok(opts and opts[0] != LUMEN and LUMEN in opts[1], "13. the Tally icon: listed, not chosen (%s)" % opts)
+        pg.keyboard.press("Escape"); E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(800)
+
+        print("== 14. a plural name that two clients share: no guess")
+        dn2 = T.dev(7, PC, "made-up-a", tally="open", opened=(NOVAS,), version="2.5.4", rec=(NOVAS,), beat={"bridgePort": 9101, "windowsUser": UA})
+        cn2 = cos + [{"company": NOVAS, "client_id": None, "device_id": dn2["id"], "gstin": "", "last_seen": "ago:0.5"}]
+        scene([dn2, db], cn2, [NOVA, "Nova-Space", ACME], LINK_B, A_PINGS, local=[[NOVAS], UA, "go-7", 9101])
+        ok("Found in Tally" not in txt(row(NOVA)) and "Found in Tally" not in txt(row("Nova-Space")) and n(row(NOVAS)) == 1, "14. neither client is guessed; the company has its own row (%s | %s)" % (txt(row(NOVA)), txt(row("Nova-Space"))))
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

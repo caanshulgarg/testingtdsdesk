@@ -238,16 +238,16 @@ function look() {
   permOf().then((v) => { LOCALB.perm = v; }, () => {});
   // next-tally-table: the look never holds the page. Each /ping stops at PROBE_MS; whatever has not settled after 5 s (a
   // browser that holds a request to this computer while it asks the person) counts as nothing found, and the page says so
-  setTimeout(() => { if (gen === LOCALB.n && LOCALB.busy) { LOCALB.busy = false; if (LOCALB.list === null) { LOCALB.list = []; soonDraw(); } } }, 5000);
+  setTimeout(() => { if (gen === LOCALB.n && LOCALB.busy) { LOCALB.busy = false; LOCALB.cut = true; if (LOCALB.list === null) { LOCALB.list = []; soonDraw(); } } }, 5000);
   Promise.all(ports.map((p) => Promise.resolve().then(() => Bridge.probe(p, PROBE_MS)).catch(() => null)))
     .then((xs) => xs.filter((x) => x && (x.bridge || x.version)), () => [])
     .then((list) => {
       if (gen !== LOCALB.n) return;    // (a look started over meanwhile: its answer counts, not this one)
       fixRemembered(list, ports);
       const sig = sigOf(list), changed = LOCALB.list === null || sig !== LOCALB.sig;
-      Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false });
-      // (a later task: never inside the drawing that asked; only when it changes what the Tally page shows)
-      if (changed && typeof document === "object" && document.querySelector("#app [data-tally-simple]")) soonDraw();
+      Object.assign(LOCALB, { list, sig, at: Date.now(), busy: false, cut: false });
+      // (a later task: never inside the drawing that asked; only when it changes what the Tally page or a picker shows)
+      if (changed && typeof document === "object" && document.querySelector("#app [data-tally-simple], [data-tlk-pick-box], [data-tally-pop-link]")) soonDraw();
     }, () => { LOCALB.busy = false; if (LOCALB.list === null) LOCALB.list = []; });
 }
 // next-tally-connectfix (finding 3; staging: after another login's bridge took this login's old port 9102, this browser's
@@ -308,8 +308,9 @@ export function rememberedOwn() { try { const v = JSON.parse(localStorage.getIte
 // next-tally-other-login (05-Nov-2026): a bridge older than 2.5.3 cannot tell whose Tally it reads (no sameSession; 2.5.1
 // takes every Tally for Windows session 0's), so on a computer where another Windows login has a bridge of the firm its
 // companies are never this login's: the page says it is old (bridgeSay), with the Download
-const shared = (b, all) => !!b.pc && all.some((x) => x !== b && lc(x.pc) === lc(b.pc) && sameUser(x.user, b.user) === false);
-const unproven = (b, all) => !!b && !!b.version && vk(b.version) < vk(NEED_V) && shared(b, all);
+const day = (at) => !!at && Date.now() - Date.parse(at) < 864e5;
+const shared = (b, all) => !!b.pc && all.some((x) => x !== b && day(x.at) && lc(x.pc) === lc(b.pc) && sameUser(x.user, b.user) === false);
+const unproven = (b, all) => !!b && (!b.version || vk(b.version) < vk(NEED_V)) && shared(b, all);
 export function ownBridge() {
   const all = bridgesOf();
   const b = ownBridgeAny(all);
@@ -341,8 +342,8 @@ function ownBridgeAny(all) {
   const b = l ? all.find((x) => x.id === l.bridge_id && (!l.device_id || x.dev.id === l.device_id)) : null;
   // next-tally-other-login (staging, 05-Nov-2026: one FinCom login for every Windows login, linked to one login's bridge;
   // a browser in another login that did not find its own bridge showed that login's Tally): never on a computer where
-  // another Windows login has a bridge of the firm (the link names one login of many)
-  return b && !notMine(b) && !shared(b, all) ? Object.assign({ how: "linked" }, b) : null;
+  // another Windows login has a bridge of the firm (the link names one login of many); a laptop keeps it
+  return b && !notMine(b) && !(placeOf() !== "laptop" && shared(b, all)) ? Object.assign({ how: "linked" }, b) : null;
 }
 // what this browser's look on 127.0.0.1 says when it found no bridge of this Windows login (null when it found one, or has
 // not looked yet): an older bridge that is this Windows user's (2.5.2 and older say nothing of the session, so FinCom can't
@@ -408,22 +409,45 @@ function whyOf(src) {
 }
 // next-tally-other-login: this login's own Tally open with no company loaded: said plainly (never another login's company)
 export const NO_CO = "Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.";
-const noCo = (o, up) => (up && !o.names.size ? Object.assign(o, { noCo: true, why: o.why || NO_CO }) : o);
-// this browser is on a Tally computer: a bridge answers here, or one is paired here (a laptop: none)
-export const onTallyPc = () => (localBridges() || []).length > 0 || !!cfgOf().key;
-// the companies open in THIS login's own Tally, for the lists that offer a company to link: {keys, noCo, has, theirs}.
-// has(r): open in this login's own Tally (what a picker calls open, or chooses first). theirs(r): on a Tally computer, a
-// company open now in another login's or computer's Tally: never offered here (a laptop sees the firm's as before)
+const noCo = (o, up) => (up && !o.names.size && !o.why ? Object.assign(o, { noCo: true, why: NO_CO }) : o);
+// this login's own Tally answers: its bridge's own sessions (another user's never), else (an older answer) Tally up
+const upHere = (st) => { const s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && x.mine !== false); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };
+const upBeat = (b) => { const p = [].concat(b.ports || []); return p.length ? p.some((x) => x && x.ok && !x.skipped) : b.tally === true || b.tallyState === "open"; };
+// where this browser is: "pc" a Tally computer (a bridge answers here, or one is paired here), "laptop" (the look found
+// none), "unknown" (not looked yet, the look cut at 5 s, or the browser does not let the page reach this computer)
+export function placeOf() {
+  if (cfgOf().key || (LOCALB.list || []).length) return "pc";
+  return LOCALB.list === null || LOCALB.cut || LOCALB.perm === "denied" ? "unknown" : "laptop";
+}
+export const onTallyPc = () => placeOf() === "pc";
+// the companies open in THIS login's own Tally, for the lists that offer a company to link: {keys, noCo, has, open, theirs}.
+// has(r): open in this login's own Tally (what a picker chooses first). open(r): what a list calls open: this login's own
+// only (a laptop: the firm's, as before). theirs(r): open now in another Windows login's Tally of this very computer: not
+// offered here at all; one open on another computer is only seen (never open here, never chosen)
 export function ownOpen() {
   let o; try { o = ownState(); } catch (e) { o = { state: "none" }; }
   return openOf(o);
 }
+const OPEN_OF = new WeakMap();
 function openOf(o) {
+  if (o && typeof o === "object" && OPEN_OF.has(o)) return OPEN_OF.get(o);
+  const v = openNow(o);
+  if (o && typeof o === "object") OPEN_OF.set(o, v);
+  return v;
+}
+function openNow(o) {
   const keys = o.state === "ok" ? new Set(o.names.keys()) : new Set(), has = (r) => keys.has(coKey(r.company));
   // (the own bridge's own beat is never another's)
-  const beat = new Set([].concat((o.own && o.own.open) || []).map(coKey));
-  const here = o.state === "ok" || onTallyPc();
-  return { keys, noCo: !!o.noCo, has, theirs: (r) => !!here && !!r.open && !has(r) && !beat.has(coKey(r.company)) };
+  const beat = new Set([].concat((o.own && o.own.open) || []).map(coKey)), place = placeOf();
+  // this login: its own bridge's computer and Windows user, else the one this browser's session's bridge says
+  const x = (LOCALB.list || []).find((y) => y.sameSession === true), u = (o.own && o.own.user) || (x && x.windowsUser) || "";
+  const pc = (o.own && o.own.pc) || (u.includes("\\") ? u.split("\\")[0] : "");
+  const sib = new Set();
+  if (pc && u && place !== "laptop") bridgesOf().forEach((b) => { if (day(b.at) && lc(b.pc) === lc(pc) && sameUser(b.user, u) === false) b.open.forEach((n) => sib.add(coKey(n))); });
+  const mine = (r) => has(r) || beat.has(coKey(r.company));
+  // elsewhere(r): open now only in another Tally (another computer's, or not known to be this login's): never chosen for a client
+  return { keys, noCo: !!o.noCo, has, laptop: place === "laptop", open: (r) => (place === "laptop" ? !!r.open : has(r)), theirs: (r) => !mine(r) && sib.has(coKey(r.company)),
+    elsewhere: (r) => place !== "laptop" && !!r.open && !mine(r) };
 }
 export function ownState() {
   const list = localBridges();
@@ -434,9 +458,9 @@ export function ownState() {
   const st = hereIfOwn(own), unsure = own.how === "unsure";
   // (another Windows user's Tally on this computer, when the bridge says so, is not this user's)
   const by = (ns) => new Map(ns.filter(Boolean).map((n) => [coKey(n), String(n)]));
-  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat)), !!st.tallyUp);
+  if (st) return noCo(Object.assign({ state: "ok", from: "here", own, unsure, names: by([].concat(st.open || []).filter((x) => x && x.mine !== false).map((x) => x.name)) }, whyOf(st.tallyWhy != null ? st : own.beat)), upHere(st));
   if (fresh(own.at)) return noCo(Object.assign({ state: "ok", from: "beat", own, unsure, names: by(own.open), far: own.how === "remembered" && !!say && (say.kind === "blocked" ? "blocked" : "far") }, whyOf(own.beat)),
-    own.beat.tally === true || own.beat.tallyState === "open");
+    upBeat(own.beat || {}));
   // this browser holds the own bridge's key, its first answer not read yet
   const c = cfgOf(), b = typeof Bridge === "object" ? Bridge.st || {} : {};
   if (!own.local && c.key && c.bridgeId === own.id && b.state === "off" && !b.error) return { state: "checking", own };
@@ -513,7 +537,7 @@ function clientRow(co, all, opts) {
   if (!company) {
     // not connected: the company of its name (or GSTIN) that FinCom has seen in Tally, open first; never one open now in
     // another login's Tally (next-tally-other-login). Open in this login's own Tally: Connect, one click, in the column
-    const oo = openOf(opts.own), mine = twinsOf(all, cid).filter((r) => !oo.theirs(r)).sort((a, b) => (oo.has(b) - oo.has(a)) || String(b.seen).localeCompare(String(a.seen)));
+    const oo = openOf(opts.own), mine = twinsOf(all, cid).filter((r) => !oo.theirs(r) && !oo.elsewhere(r)).sort((a, b) => (oo.open(b) - oo.open(a)) || String(b.seen).localeCompare(String(a.seen)));
     const r = mine[0] || null, here = !!r && oo.has(r);
     Object.assign(row, { r, found: r ? r.company : "",
       c: { w: NO, note: r ? "Found in Tally: “" + shown(r.company) + "”" : "", connect: here },
@@ -776,4 +800,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { placeOf, onTallyPc, ownBridge, tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

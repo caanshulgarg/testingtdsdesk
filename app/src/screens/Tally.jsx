@@ -23,7 +23,7 @@ import { beatFresh, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 import { TodayStatus } from "../parts/TallyFetch.jsx";
 // 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
 import SimpleTally from "../parts/TallySimple.jsx";
-import { ownBridge, ownOpen, onTallyPc } from "../lib/tallySimple.js";
+import { ownBridge, ownOpen, placeOf } from "../lib/tallySimple.js";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -809,7 +809,7 @@ function thisComputer(rows) {
   // next-tally-other-login (05-Nov-2026): on a Tally computer this login's own bridge only (lib/tallySimple.js ownBridge),
   // never the best one of the firm (on a shared server: another Windows login's Tally and its companies)
   const ob = !loc && !localOn ? ownBridge() : null;
-  const me = (loc && week.find((r) => r.id === loc.id)) || (ob ? week.find((r) => r.id === ob.id) || null : !localOn && !onTallyPc() ? best(week) : null);
+  const me = (loc && week.find((r) => r.id === loc.id)) || (ob ? week.find((r) => r.id === ob.id) || null : !localOn && placeOf() === "laptop" ? best(week) : null);
   return { local, localOn, me, week, many: false };
 }
 // the scope of the page: "this" (this computer's Tally) or "all" (every computer): the switch only when the firm has more
@@ -916,7 +916,7 @@ function OpenCompanies({ rows }) {
   const g = S.tallyGuide || {}, forCo = guideFor(g), tc = thisComputer(rows), { scope } = scopeOf(tc);
   // next-tally-other-login: open now is THIS login's own Tally only (ownOpen); one open in another login's Tally right now
   // is that login's: not here, nor offered to link
-  const own = ownOpen(), all = companyRows().filter((r) => !own.theirs(r));
+  const own = ownOpen(), all = companyRows().filter((r) => !own.theirs(r)).map((r) => Object.assign(r, { open: own.open(r) }));
   const openHere = (r) => r.open;
   // next-fix-tally-links: the linked clients (open or not) are their own quiet section under this list, Clients linked to
   // Tally (parts/TallyCompanies.jsx LinkedClients), always there; this list is the companies open now only
@@ -934,7 +934,7 @@ function OpenCompanies({ rows }) {
   const nOpen = list.filter((r) => r.open).length, inList = new Set(list.map((r) => coKey(r.company)));
   return <section className="pane tcompanies" data-tally-focus={focus || undefined}>
     <CompaniesInTally rows={list} forCo={forCo} note={note} focus={focus} title="Open in Tally now" empty={forCo ? null : none} pcs={tc.many}
-      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} after={<LinkedClients inList={inList} />} /></section>;
+      count={(l) => nOf(nOpen, "company", "companies") + " open" + pcWord} after={<LinkedClients inList={inList} here={own.laptop ? null : own.keys} />} /></section>;
 }
 // 2. Needs you: only what neither the guide nor a computer's line says (reading stopped on all computers, a computer key
 // refused). sources: the slot for 2.4.1's card of a book open in two data locations (SourceCards on next-241), drawn

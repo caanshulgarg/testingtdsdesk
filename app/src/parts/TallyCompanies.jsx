@@ -36,7 +36,7 @@ import LinkStatus from "./LinkStatus.jsx";
 import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
-import { ownOpen, NO_CO } from "../lib/tallySimple.js";
+import { ownOpen, NO_CO, lookOnce } from "../lib/tallySimple.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -186,9 +186,13 @@ export function twinOf(r, strict) {
   if (typeof similarClients !== "function") return null;
   const t = alikeClients(strict ? r.company : baseName(r.company), r.gstin || "").find((d) => d.why === "same" || d.why === "gstin");
   if (t || strict) return t ? t.client : null;
-  const k = baseKey(r.company);
-  return (k && live().find((c) => baseKey(c.name) === k)) || null;
+  // the plural "s" off (baseKey): only when exactly one client has that name
+  const c = clientsNow(), k = baseKey(r.company);
+  if (c.sig !== ONE.sig) { ONE.sig = c.sig; ONE.by = new Map(); c.cs.forEach((x) => { const y = baseKey(x.name); if (y) ONE.by.set(y, (ONE.by.get(y) || []).concat(x)); }); }
+  const hit = (k && ONE.by.get(k)) || [];
+  return hit.length === 1 ? hit[0] : null;
 }
+const ONE = { sig: null, by: null };
 // the clients alike (the same GSTIN or name first, then names much alike), best first
 export const alikeOf = (r) => (typeof similarClients === "function" ? alikeClients(baseName(r.company), r.gstin || "").map((d) => d.client) : []);
 // next-fix-probe-loop (03-Nov-2026): similarClients (server/_shared/tallyname.js) goes through every client's name; the
@@ -197,11 +201,12 @@ export const alikeOf = (r) => (typeof similarClients === "function" ? alikeClien
 // of those changes, and each answer's clients are this moment's (by id). The same answers (FCTallySimple.MEMO.off: asked
 // each time, for the test that compares them).
 const SIM = { sig: null, kept: new Map() }, PR_SIM = {};
+const clientsNow = () => { const now = () => { const cs = live(); return { cs, by: new Map(cs.map((c) => [String(c.id), c])), sig: JSON.stringify(cs.map((c) => [String(c.id), String(c.name || ""), String(c.gstin || "")])) }; };
+  return typeof perRender === "function" ? perRender(PR_SIM, "clients", now) : now(); };
 function alikeClients(name, gstin) {
   const off = globalThis.FCTallySimple && FCTallySimple.MEMO && FCTallySimple.MEMO.off;
   if (off) return similarClients(name, gstin, live());
-  const now = () => { const cs = live(); return { cs, by: new Map(cs.map((c) => [String(c.id), c])), sig: JSON.stringify(cs.map((c) => [String(c.id), String(c.name || ""), String(c.gstin || "")])) }; };
-  const c = typeof perRender === "function" ? perRender(PR_SIM, "clients", now) : now();
+  const c = clientsNow();
   if (c.sig !== SIM.sig) { SIM.sig = c.sig; SIM.kept = new Map(); }
   const key = JSON.stringify([String(name), String(gstin)]);
   let hit = SIM.kept.get(key);
@@ -332,7 +337,8 @@ export function ChangePick({ co, cur = "", onClose }) {
   const [pick, setPick] = useState(""), [busy, setBusy] = useState(false);
   // next-tally-other-login (05-Nov-2026): "Open in Tally now" is THIS login's own Tally only; a company open in another
   // login's Tally (or another computer's) is one seen, never offered as open here
-  const own = ownOpen(), rows = companyRows({ hidden: true }).filter((r) => coKey(r.company) !== coKey(cur) && !own.theirs(r)).map((r) => Object.assign(r, { open: own.has(r) }));
+  useEffect(() => { lookOnce(); }, []);   // (this computer's bridges looked for, if not yet: until then nothing is open here)
+  const own = ownOpen(), rows = companyRows({ hidden: true }).filter((r) => coKey(r.company) !== coKey(cur) && !own.theirs(r)).map((r) => Object.assign(r, { open: own.open(r) }));
   const label = (r) => { const o = r.client && r.client !== co.id ? S.companies[r.client] : null;
     return shown(r.nowName || r.company) + (o ? " — linked to " + o.name : r.client && r.client !== co.id ? " — linked to another client" : "") + (!r.open && r.seen ? " · last seen " + seenWords(r.seen) : ""); };
   // 31-Oct-2026: the companies of this client's name or GSTIN (its splits and years: each its own Tally company) first

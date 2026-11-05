@@ -460,11 +460,11 @@ def main():
         # none answers (the owner's laptop): the member link
         E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {}); pg.wait_for_timeout(1500)
-        ok(how() is None and word(ZETA, "o") != "Yes", "3d. no local bridge answers: the member link to another login's bridge on this server is not used (%s, %s)" % (how(), col_o()))
+        ok(how() == "linked" and word(ZETA, "o") == "Yes", "3d. no local bridge answers (a laptop: no key, nothing here): the member link (%s, %s)" % (how(), col_o()))
         # an older bridge (2.5.2: no sameSession) answering: as before (the member link)
         E(FORGET)   # (a browser that never found its bridge: nothing remembered; run_hang_watch.py tests the remembered one)
         E(PINGS, {"9103": ping(9103, None, UA, version="2.5.2")}); pg.wait_for_timeout(1500)
-        ok(how() is None and word(ZETA, "o") != "Yes", "3d. an old bridge with no sameSession: the link to another login's bridge is not used either (%s)" % how())
+        ok(how() is None and word(ZETA, "o") != "Yes", "3d. a bridge answers here (this is the shared server): the link to another login's bridge is not used (%s)" % how())
         # the found bridge is the one this browser reads (its address): its own answer, not the beat
         E(PINGS, {"9103": ping(9103, True, UA)}); E(LOCAL, [[], UA, ""]); pg.wait_for_timeout(1500)
         ok(how() == "found" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "here" and word(ACME, "o") == "No", "3d. the found bridge read here: its own answer (%s)" % col_o())
