@@ -670,3 +670,15 @@ safe twice. Deploy order: 139, then the tally-ingest of the same branch (updateg
 calls the function, and a cloud without 139 answers the release as before. Tested on pg_stand: `tests/run_migration139.py`
 (RED_WITHOUT_139=1 fails); tally-ingest: `tests/run_update_gate_ingest.py`, `server/tally-cloud/updategate_test.ts`.
 When a newer bridge list is signed, set the target first: `update tally_bridge_update_target set version = '<v>', set_at = now()`.
+
+## 141: an index for the unknown-ledger line (speed round)
+
+**141, unknown ledgers index** (05-Nov-2026, branch `next-speed`; file md5 bc82a76bc2fa9e5373f15cbe784a6a30; **run on staging
+05-Nov-2026** under the standing approval, the file's two statements without its begin/commit lines as one transaction;
+read back: pg_indexes has `tally_ledgers_live_nm` = `CREATE INDEX tally_ledgers_live_nm ON public.tally_ledgers USING btree
+(book_id, tally_nm(name)) WHERE (deleted_at IS NULL)`, and EXPLAIN of `tally_unknown_ledger_entries`' query uses it):
+`server/tally-cloud/migration-141-unknown-ledgers-index.sql`. One index on `tally_ledgers (book_id, tally_nm(name)) where
+deleted_at is null`, the test the function's `not exists` makes (migration 56), so the ledgers' cleaned names come from the
+index in order instead of a regular expression and a sort over every live ledger of the firm at each call (once a minute
+per open page). Staging, the firm's books together: 76 ms before, 47-66 ms after (the rest is the join of the lines).
+Add-only: nothing else changed, no grant (an index has none). Independent of every other migration after 56.

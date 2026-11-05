@@ -361,6 +361,9 @@ function takeClientHere(id, data){
 async function cloudPushClient(r, sendBatch){
   const q = "clients?firm_id=eq." + Cloud.st.firm + "&id=eq." + encodeURIComponent(r.id);
   for (let tries = 0; tries < 5; tries++){
+    // speed round 2 (05-Nov-2026): a save that met another computer's save waits a little before reading again (about
+    // 0.2, 0.4, 0.8, 1.6 s, a random part so two computers do not meet again), not five reads and saves in a row
+    if (tries) await new Promise(ok => setTimeout(ok, 100 * Math.pow(2, tries) * (0.75 + Math.random() / 2)));
     const cur = ((await Cloud.api(q + "&select=data,updated_at,deleted")) || [])[0];
     const row = d => ({name: d.name || "", gstin: d.gstin || "", pan: d.pan || "", tally_name: d.tallyName || "", data: d, deleted: false});
     if (!cur){                                                    // a new client: sent as it is

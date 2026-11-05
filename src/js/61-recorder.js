@@ -440,8 +440,10 @@ const Rec = {
     u.busy = true;
     const was = this.unkSig(u);
     try {
-      const out = [];
-      for (const b of (books && books.length ? books : [null])) out.push(...[].concat(await TCloud.rpc("tally_unknown_ledger_entries", {p_book: b}) || []));
+      // speed round 2 (05-Nov-2026): a client's books asked together, not one after another (each answer about 150 ms on
+      // staging, one round trip each: from the USA some 250 ms more a book); the rows in the books' order as before
+      const got = await Promise.all((books && books.length ? books : [null]).map(b => TCloud.rpc("tally_unknown_ledger_entries", {p_book: b})));
+      const out = [].concat(...got.map(r => [].concat(r || [])));
       u.known = await this.unkKnown([...new Set(out.map(r => String((r && r.book_id) || "")).filter(Boolean))]);
       u.rows = out; u.none = false; u.err = "";
     } catch (e){ u.rows = []; if (this.missing(e)) u.none = true; else u.err = this.say(e); }
