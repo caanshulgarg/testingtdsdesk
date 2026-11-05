@@ -1,7 +1,11 @@
 # FinCom Bridge 2.5.4 (branch next-bridge-254, from staging-next e7f2f1990, bridge 2.5.3)
 
 Released to staging through the signed, gated automatic updates (the owner's pre-approval, 05-Nov-2026 ~01:00 IST,
-quiet hours), after two independent review rounds (docs/reviews/bridge-2.5.4-code-review.md). The owner's rules it follows: no
+quiet hours), after two independent review rounds (docs/reviews/bridge-2.5.4-code-review.md).
+
+| Published | 05-Nov-2026 ~07:05 IST to staging review: next/ (main bf6778f50) then promoted to review/ (main d4ecee70a), build mw2vbdl8-7926e0 from staging-next 09333a1d1, FINCOM_SHIP_BRIDGE=1; review/assets/bridge-go/latest.json names 2.5.4 (sha256 b4892c09...c16a), latest.json.sig served 200 (the same bytes as assets-test's, which verify with the bridge's key), FinComBridge-2.5.4.exe 200 (11,586,560 bytes; de96e30c...927d on main), setup b0487938...b48c |
+| Cloud | tally-ingest v74: the stub importing server/tally-cloud/index.ts at 09333a1d1 (keeps the new beat fields; on top of 0198950ca). Rollback: the stub at 0198950ca0059130b69044483fbec81a4e6901d0 (v73) |
+| Gate | tally_bridge_update_target set to 2.5.4 at 01:29 UTC, right before the publish (one bridge per computer per 10 minutes, only while idle with Tally, at its own time to look) | The owner's rules it follows: no
 hang on any computer; no false message; the open Tally in this login is always found; an update never hangs anyone.
 
 No new Tally request and no request shape changed: only waits (2 s), caching of Windows' own lists, and order.
