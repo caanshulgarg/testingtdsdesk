@@ -101,7 +101,7 @@ export function lookHere(opts) {
   if (HERE.lookP) return HERE.lookP.then(() => lookHere(opts));
   if (HERE.busy && (HERE.busyFull || !full)) return HERE.busy;
   // a light look in flight and the whole range asked for: that look's answer first; this login's bridge found by it, no range
-  if (HERE.busy) return HERE.busy.then((h) => (h && h.mine && !h.stale ? h : lookHere(opts)), () => lookHere(opts));
+  if (HERE.busy) return HERE.busy.then((h) => (h && !h.stale && (h.mine || h.ranged) ? h : lookHere(opts)), () => lookHere(opts));
   const p = lookHereOnce(full).finally(() => { if (HERE.busy === p) { HERE.busy = null; HERE.busyFull = false; } });
   HERE.busy = p; HERE.busyFull = full;
   return p;
@@ -109,12 +109,14 @@ export function lookHere(opts) {
 async function lookHereOnce(full) {
   HERE.n++;
   const g = HERE.gen, c = Bridge.cfg(), base = String(c.url || "").replace(/\/+$/, ""), hint = ownHint();
+  // (localhost and 127.0.0.1 are one address: told apart by port only)
+  const port = (u) => (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) ? Bridge.urlPort(u) : 0), key = (u) => (port(u) ? "p" + port(u) : u), same = (a, b) => key(a || "") === key(b || "");
   const urls = [];
-  [base].concat(hint.ports.map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.includes(u)) urls.push(u); });
-  const ask = urls.slice(0, 4), port = (u) => (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) ? Bridge.urlPort(u) : 0);
+  [base].concat(hint.ports.map((p) => "http://127.0.0.1:" + p)).forEach((u) => { if (u && !urls.some((x) => same(x, u))) urls.push(u); });
+  const ask = urls.slice(0, 4);
   let all = (await Promise.all(ask.map((u) => (port(u) ? Bridge.probe(port(u), 2500) : Bridge.probeUrl(u, 2500))))).filter(Boolean);
   // a new start meanwhile (another address, another login's scene): this look ends here, never asking the whole range
-  if (HERE.gen !== g) return { mine: null, other: null, old: null, known: false, hint, all, asked: ask.map(port), stale: true, gen: g };
+  if (HERE.gen !== g || !same(baseNow(), base)) return { mine: null, other: null, old: null, known: false, hint, all, asked: ask.map(port), stale: true, gen: g };
   // finding 3: the remembered address is trusted only when what answers there is this login's (its session or its Windows
   // user); another login's bridge on it (it took the port when this login's stopped): the range is asked at once
   let ranged = false;
@@ -126,8 +128,8 @@ async function lookHereOnce(full) {
   const mine = all.find((b) => b.sameSession === true) || all.find((b) => isMine(b, hint)),
     other = all.find((b) => !isMine(b, hint) && isOther(b, hint)), old = all.find((b) => b.yours !== false && !b.bridgeId && b.sameSession !== false && !isOther(b, hint));
   // the remembered address now another login's (or silent) and this login's bridge found elsewhere: remembered there
-  if (mine && mine.url && mine.url !== base) {
-    const atBase = all.find((b) => b.url === base);
+  if (mine && mine.url && !same(mine.url, base)) {
+    const atBase = all.find((b) => same(b.url, base));
     if (!atBase || isOther(atBase, hint)) { try { Bridge.setCfg({ url: mine.url }); Bridge.foundAt = 0; } catch (e) { /* kept as it was */ } }
   }
   // finding 2: this login's own bridge is known (found in this login before, or paired here and heard by the cloud) and is
@@ -135,6 +137,7 @@ async function lookHereOnce(full) {
   const known = !mine && !!(hint.user ? !(other && other.windowsUser && sameUser(other.windowsUser, hint.user) === true) : hint.id && !(other && other.bridgeId === hint.id));
   const res = { mine, other, old, known, hint, all, asked: ask.map(port), ranged, gen: g };
   if (HERE.gen === g) HERE.last = { at: Date.now(), gen: g, base, h: res };
+  HERE.lastAny = { at: Date.now(), gen: g, h: res };
   return res;
 }
 // next-tally-connectfix (audit item 8): Chrome's Local Network Access permission (Chrome 142+). Once a person said Block,

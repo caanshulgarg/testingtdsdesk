@@ -56,7 +56,9 @@ async function scan() {
   // next-tally-other-login (05-Nov-2026): the one look every caller shares (lib/tallyConnect.js lookHere): this browser's
   // address and this login's own port first, the whole range only when neither answers as this login's
   // (the whole range at most every 30 s; between, the light look)
-  const all = [].concat(((await lookHere({ full: Date.now() - (HERE.fullAt || 0) > 30000 })) || {}).all || []);
+  // (another caller's look in the last 5 s: its answer, nothing asked again)
+  const A = HERE.lastAny, recent = A && A.gen === HERE.gen && Date.now() - A.at < SCAN_MS ? A.h : null;
+  const all = [].concat(((recent || await lookHere({ full: Date.now() - (HERE.fullAt || 0) > 30000 })) || {}).all || []).filter(Boolean);
   FL.scanAt = Date.now();
   const mine = all.find((b) => b.yours !== false && b.bridgeId), other = all.find((b) => b.yours === false), old = all.find((b) => b.yours !== false && !b.bridgeId);
   if (FL.st === "pairing") return;

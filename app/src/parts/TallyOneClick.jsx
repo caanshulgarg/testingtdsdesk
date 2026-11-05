@@ -73,7 +73,9 @@ export function useHereProbe(on) {
     const again = !!HERE.again;
     if (!on || typeof Bridge !== "object" || Bridge.blocked() || (!again && Date.now() - OC.hereAt < 120000)) return;
     OC.hereAt = Date.now(); HERE.again = false;
-    Promise.resolve(lookHere({ full: again })).then((h) => { const v = h.mine ? "mine" : h.known ? "stopped" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) setSoon({ here: v }); }, () => {});
+    // (by itself: another caller's look in the last 5 s is its answer, nothing asked again)
+    const A = HERE.lastAny, recent = !again && A && A.gen === HERE.gen && Date.now() - A.at < 5000 ? A.h : null;
+    Promise.resolve(recent || lookHere({ full: again })).then((h) => { const v = h.mine ? "mine" : h.known ? "stopped" : h.other ? "other" : h.old ? "old" : ""; if (v !== OC.here) setSoon({ here: v }); }, () => {});
   });
 }
 // this browser holds a key for a bridge here whose state is not read yet: read it now (at most every 30 s), so the card

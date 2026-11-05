@@ -229,7 +229,8 @@ function portsToTry() {
 export const localBridges = () => LOCALB.list;
 const sigOf = (xs) => JSON.stringify(xs.map((x) => [Number(x.bridgePort || x.port) || 0, x.bridgeId || "", x.sameSession, x.windowsUser || "", x.version || ""]));
 function look() {
-  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) { if (LOCALB.list === null) LOCALB.list = []; return; }
+  if (typeof Bridge !== "object" || !Bridge.probe || (Bridge.blocked && Bridge.blocked())) { LOCALB.blocked = true; if (LOCALB.list === null) LOCALB.list = []; return; }
+  LOCALB.blocked = false;
   if (LOCALB.busy) return;            // an ask while asking is that same look
   LOCALB.busy = true;
   const gen = ++LOCALB.n, ports = portsToTry(); LOCALB.ports = ports.join(",");
@@ -250,13 +251,13 @@ function look() {
   // (waited for at most a second: a card's look gone on to the range, or a Tally that never answers, never holds this one)
   const stage1 = Promise.race([Promise.resolve(HERE.busy || lastMine()).catch(() => null), new Promise((ok) => setTimeout(() => ok(null), 1000))]).then((h) => {
     if (HERE.gen !== g) return null;   // (a new start while waiting: asked again, from the new start)
-    const had = h && !h.stale && h.gen === HERE.gen ? [].concat(h.all || []) : [];
+    const had = h && !h.stale && h.gen === HERE.gen ? [].concat(h.all || []).filter(Boolean) : [];
     if (h && !h.stale && h.gen === HERE.gen) [].concat(h.asked || [], had.map((x) => Number(x.port) || 0)).forEach((p) => asked.add(p));
     if (sure(had)) return had;
     let hint = []; try { hint = ownHint().ports; } catch (e) { hint = []; }
     const first = [...new Set([Bridge.urlPort ? Bridge.urlPort(cfgOf().url || "") : 0].concat(hint))].filter((p) => p >= 1 && !asked.has(p));
     first.forEach((p) => asked.add(p));
-    return ask(first).then((ys) => had.concat(ys));
+    return ask(first).then((ys) => had.concat(ys.filter(Boolean)));
   });
   // its answer is every caller's a moment later (HERE.last), and the card's look waits for it (HERE.lookP)
   const lp = HERE.lookP = stage1.then((xs) => { const m = (xs || []).find((x) => x && x.sameSession === true);
@@ -283,7 +284,8 @@ function fixRemembered(list, ports) {
     const pk = localPick(list);
     if (!pk || !pk.sure || typeof Bridge !== "object" || !Bridge.setCfg) return;
     const norm = (u) => String(u || "").replace(/\/+$/, ""), u = norm(cfgOf().url), mineU = norm(pk.x.url || "http://127.0.0.1:" + Number(pk.x.bridgePort || pk.x.port));
-    if (!mineU || u === mineU || (Bridge.localUrl && !Bridge.localUrl(u))) return;
+    // (localhost and 127.0.0.1 at the same port are the same address: kept as saved)
+    if (!mineU || u === mineU || (Bridge.localUrl && !Bridge.localUrl(u)) || (/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(u) && Bridge.urlPort(u) === Bridge.urlPort(mineU))) return;
     const at = list.find((x) => norm(x.url) === u), port = Bridge.urlPort ? Bridge.urlPort(u) : 0;
     const otherNow = at ? at.sameSession === false || (!!at.windowsUser && !!pk.x.windowsUser && sameUser(at.windowsUser, pk.x.windowsUser) === false) : ports.includes(port);
     if (otherNow) { Bridge.setCfg({ url: mineU }); Bridge.foundAt = 0; }
@@ -367,7 +369,8 @@ function ownBridgeAny(all) {
   // next-tally-other-login (staging, 05-Nov-2026: one FinCom login for every Windows login, linked to one login's bridge;
   // a browser in another login that did not find its own bridge showed that login's Tally): never on a computer where
   // another Windows login has a bridge of the firm (the link names one login of many); a laptop keeps it
-  return b && !notMine(b) && !(placeOf() !== "laptop" && shared(b, all)) ? Object.assign({ how: "linked" }, b) : null;
+  const pl = placeOf();
+  return b && !notMine(b) && pl !== "unknown" && !(pl === "pc" && shared(b, all)) ? Object.assign({ how: "linked" }, b) : null;
 }
 // what this browser's look on 127.0.0.1 says when it found no bridge of this Windows login (null when it found one, or has
 // not looked yet): an older bridge that is this Windows user's (2.5.2 and older say nothing of the session, so FinCom can't
@@ -441,7 +444,7 @@ const upBeat = (b) => { const p = [].concat(b.ports || []); return p.length ? p.
 // none), "unknown" (not looked yet, the look cut at 5 s, or the browser does not let the page reach this computer)
 export function placeOf() {
   if (cfgOf().key || (LOCALB.list || []).length) return "pc";
-  return LOCALB.list === null || LOCALB.cut || LOCALB.perm === "denied" ? "unknown" : "laptop";
+  return LOCALB.list === null || LOCALB.cut || LOCALB.blocked || LOCALB.perm === "denied" ? "unknown" : "laptop";
 }
 export const onTallyPc = () => placeOf() === "pc";
 // the companies open in THIS login's own Tally, for the lists that offer a company to link: {keys, noCo, has, open, theirs}.

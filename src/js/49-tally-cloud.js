@@ -2164,8 +2164,11 @@ function tallySignNow(co){
   // next-tally-other-login (05-Nov-2026): on a Tally computer (this browser's bridge, or one answering here: FCTallySimple)
   // the firm's sign never names another bridge's companies (a shared server: another Windows login's Tally); a client's own
   // company open elsewhere still counts
-  const FS = typeof FCTallySimple === "object" ? FCTallySimple : null, here = localOn || !!(FS && FS.onTallyPc()), ownDev = !localOn && here && ((FS.ownBridge() || {}).dev || {}).id;
-  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || co || !here));
+  const FS = typeof FCTallySimple === "object" ? FCTallySimple : null, here = localOn || !!(FS && FS.onTallyPc()), ob = here && FS ? FS.ownBridge() || {} : {}, ownDev = (ob.dev || {}).id;
+  // a client's company open in another Windows login's Tally of this very computer is not this login's: only another computer counts
+  const myPc = here ? norm((localUp && lst.computer) || ob.pc || "") : "", myU = norm(tallyWinUser((localUp && lst.user) || ob.user));
+  const away = x => x.id === ownDev || !myPc || norm(x.win || "") !== myPc || !myU || norm(tallyWinUser(x.user)) === myU;
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || !here || (co && away(x))));
   const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
   const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
@@ -2179,7 +2182,7 @@ function tallySignNow(co){
     return out({on: true, code: "ok", computer: good.computer, pc: good.pc, company, at: tallyIst(good.at), words: "Tally ready on " + good.pc, short: good.pc, through: [good.computer]});
   }
   // the computer that matters: the one linked to this client, else the one heard from last
-  const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || (localOn ? pcs.find(x => x.local) : here ? pcs.find(x => x.id === ownDev) : pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0]);
+  const pick = (link && link.device_id && pcs.find(x => x.id === link.device_id)) || (localOn ? pcs.find(x => x.local) : here ? ownDev && pcs.find(x => x.id === ownDev) : pcs.slice().sort((a, b) => (b.recent - a.recent) || (b.at - a.at))[0]);
   const off = (code, reason, fix, x) => out({on: false, code, computer: x ? x.computer : "", pc: x ? x.pc || x.computer : "", at: x && x.at ? tallyIst(x.at) : "", reason, fix,
     words: code === "othercompany" && x ? "Tally is open on " + x.computer + " with a different company" : "Tally not connected" + (x && x.at ? ". Last seen on " + x.computer + " at " + tallyIst(x.at) : ""),
     short: x ? x.computer : "No Tally"});

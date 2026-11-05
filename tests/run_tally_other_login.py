@@ -195,6 +195,8 @@ def main():
         con = lambda c: txt(row(c) + ' [data-tsm-col="c"] [data-tsm-connect]')
         ok(con(DEX) == "Connect" and con(NOVA) == "Connect", "9. the exact and the near name (%s / %s): Connect in Linked to Tally? (%r, %r)" % (DEX, NOVAS, con(DEX), con(NOVA)))
         ok(n(row(ZEN)) == 1 and txt(row(ZEN) + ' [data-tsm-col="do"] [data-tsm-act]') in ("Link", "Link to a client"), "9. %s (no client of its name): its own row with Link (%s)" % (ZEN, txt(row(ZEN))))
+        sk = E("(c) => JSON.stringify(tallySignNow(S.companies[c]))", ids[KITE])
+        ok('"on":false' in sk and "KITE WORKS" not in sk, "9. the firm's sign for %s: not ready here, its company open only in another login's Tally (%s)" % (KITE, sk[:200]))
         ok(n(row(KESTREL)) == 0 and con(KITE) == "" and "KITE WORKS" not in txt(row(KITE)) and "Kestrel" not in main_text(), "9. another login's open companies: no row, no Connect, not offered to %s (%s)" % (KITE, txt(row(KITE))))
         ok(con("Iris Foods") == "" and txt(row("Iris Foods") + ' [data-tsm-col="c"] [data-tsm-note]') == "Found in Tally: “%s”" % IRIS, "9. a company not open now: plain words, no Connect (%s)" % txt(row("Iris Foods")))
         E("() => { window.__calls = []; }")
@@ -277,6 +279,26 @@ def main():
         asked = E("window.__asked"); found = E("() => (FCTallySimple.LOCALB.list || []).some((x) => x.sameSession === true)")
         ok(found and 9101 in asked and len(asked) <= 2 and not (set(range(9102, 9111)) & set(asked)), "15. the picker's look, the card's and another: the remembered address only, asked once (%s)" % asked)
         pg.keyboard.press("Escape"); E("() => { S.coId = null; S.view = 'home'; navHome('tally'); }"); pg.wait_for_timeout(800)
+
+        print("== 16. the look's small edges: a silent port, localhost, a blocked browser")
+        scene([da, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
+        r16 = E("""(own) => new Promise((done) => { const P = {'9101': own.a}; window.__asked = [];
+          Bridge.probeUrl = (base, ms) => { const port = Bridge.urlPort(base); window.__asked.push(port); const j = P[String(port)];
+            return new Promise((r) => setTimeout(() => r(j ? Object.assign({port, url: 'http://127.0.0.1:' + port}, j) : null), 50)); };
+          Bridge.probe = (port, ms) => Bridge.probeUrl('http://127.0.0.1:' + port, ms);
+          try { localStorage.setItem(LocalOwner.P + 'ownbridge', JSON.stringify({id: 'go-7', port: 9105, user: own.u})); } catch (e) {}
+          Bridge.setCfg({url: 'http://localhost:9101'});
+          FCTallyConnect.resetHere(); Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 0, cut: false});
+          FCTallySimple.lookOnce();
+          setTimeout(() => FCTallyConnect.lookHere().then((h) => { const L = FCTallyConnect.HERE.last;
+            done({url: Bridge.cfg().url, nulls: !!(L && L.h.all.some((x) => !x)), mine: !!(h && h.mine), asked: window.__asked.slice()}); }), 600); })""",
+          {"a": TS.ping(9101, True, UA, version="2.5.4", bridgeId="go-7"), "u": UA})
+        ok(r16["url"] == "http://localhost:9101" and r16["mine"] and not r16["nulls"] and r16["asked"].count(9101) <= 2 and len(set(r16["asked"])) <= 2,
+           "16. a localhost address kept, a silent port's answer not stored, no range (%s)" % r16)
+        pl = E("""() => new Promise((done) => { const b = Bridge.blocked; Bridge.blocked = () => true; Bridge.setCfg({key: ''});
+          Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, at: 0, ports: '', sig: '', n: 0, cut: false}); FCTallySimple.lookOnce();
+          setTimeout(() => { const v = FCTallySimple.placeOf(); Bridge.blocked = b; done(v); }, 300); })""")
+        ok(pl == "unknown", "16. a browser that may not reach this computer: not a laptop (%s)" % pl)
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))
