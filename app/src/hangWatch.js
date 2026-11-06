@@ -22,6 +22,34 @@
 //     minute (a page truly stuck that long is told by the worker while it is stuck);
 //   - each report says what ran: the long frames of the gap (their scripts as the stack, the longest as tag "script"),
 //     and the last UI step (tag "last_ui", its code name, and "ui_s", the seconds since).
+// hang-tally-sync (FINCOM-APP-STAGING-G, staging 6-Nov-2026 06:59 UTC: the Tally page blocked 4,283 ms about 10 s after
+// Try again, where frame, and no stack): the long frame named no script with a file, so nothing said whether the time was
+// the page's code, a script without a file, or the browser laying out and painting the page. Each report now says how the
+// frame's time was spent (the frame's own figures, Long Animation Frames): script_ms (its scripts, with a file or not),
+// style_ms (style and layout), render_ms (the whole rendering step, style and layout among it), other_ms (the rest: neither
+// a script nor the rendering step, as a large table shown by a one-line script: tests/run_hang_render.py, 35 of 38 s), and
+// invoker, what started the longest script (a code name: TimerHandler:setTimeout, IDBRequest.onsuccess, DIV.onclick)
+// Review: the invoker can carry the page's addresses (IFRAME[src=/review/...], a script's URL): only an entry point's code
+// name is sent (not for a script file's own run: classic-script, module-script), cut at "[", "#" or "://", and only in
+// the shape Name.member or Name:member (the scrubber keeps that shape alone: INVOKER, server/_shared/sentry-scrub.js).
+// The scripts run in the rendering step (requestAnimationFrame, from renderStart on) count as scripts, not rendering
+export const INVOKER = /^[A-Z][A-Za-z]*(?:[.:][A-Za-z]+){1,3}$/;
+export const invokerOf = (s) => { if (!s || /script$/.test(String(s.invokerType || ""))) return "";
+  const v = String(s.invoker || "").split(/\[|#|:\/\//)[0]; return INVOKER.test(v) ? v : ""; };
+export function frameTags(list) {
+  let render = 0, style = 0, script = 0, all = 0, top = null;
+  [].concat(list || []).forEach((e) => {
+    if (!e) return;
+    const end = (Number(e.startTime) || 0) + (Number(e.duration) || 0); all += Number(e.duration) || 0;
+    let inRender = 0;
+    [].concat(e.scripts || []).forEach((x) => { if (!x) return; const d = Number(x.duration) || 0; script += d; if (e.renderStart > 0 && x.startTime >= e.renderStart) inRender += d; if (!top || d > top.duration) top = x; });
+    if (e.renderStart > 0) render += Math.max(0, end - e.renderStart - inRender);
+    if (e.styleAndLayoutStart > 0) style += Math.max(0, end - e.styleAndLayoutStart);
+  });
+  const t = { render_ms: String(Math.round(render)), style_ms: String(Math.round(style)), script_ms: String(Math.round(script)), other_ms: String(Math.round(Math.max(0, all - script - render))) };
+  const inv = invokerOf(top); if (inv) t.invoker = inv;
+  return t;
+}
 const LONG_MS = 2000, LATE_MS = 3000, STALL_MS = 6000, EVERY_MS = 10 * 60000, SLEPT_MS = 60000, KEY = "fincom.hang.at";
 const build = () => (typeof __BUILD_ID__ !== "undefined" ? __BUILD_ID__ : "dev");
 const recent = () => { try { return Date.now() - (Number(sessionStorage.getItem(KEY)) || 0) < EVERY_MS; } catch { return false; } };
@@ -71,8 +99,8 @@ export function watchHangs({ captureEvent, addBreadcrumb, scrubEvent, routeName,
   // (after) a long frame, with its scripts, when the page was seen from its start
   try {
     new PerformanceObserver((l) => l.getEntries().forEach((e) => {
-      if (e.duration > 150) { lf.push({ t: e.startTime, end: e.startTime + e.duration, scripts: [].concat(e.scripts || []) }); while (lf.length > 30) lf.shift(); }
-      if (e.duration > LONG_MS && seenSince(e.startTime)) { lastFrame = Date.now(); send("frame", e.duration, e.scripts); }
+      if (e.duration > 150) { lf.push({ t: e.startTime, end: e.startTime + e.duration, scripts: [].concat(e.scripts || []), e }); while (lf.length > 30) lf.shift(); }
+      if (e.duration > LONG_MS && seenSince(e.startTime)) { lastFrame = Date.now(); send("frame", e.duration, e.scripts, frameTags([e])); }
     })).observe({ type: "long-animation-frame", buffered: false });
   } catch { /* a browser without it: the heartbeat */ }
   // the computer slept: the worker says so (its own clock came late), or the wall clock moved on more than this page's
@@ -89,9 +117,9 @@ export function watchHangs({ captureEvent, addBreadcrumb, scrubEvent, routeName,
     // computer that slept (the worker tells a page truly stuck that long, while it is stuck)
     if (gap > LATE_MS && gap < SLEPT_MS && !late && seenSince(from)) setTimeout(() => {
       if (Date.now() - lastFrame <= 3000 || Date.now() - sleptAt < gap + 2500) return;
-      const scripts = []; let n = 0;
-      lf.forEach((f) => { if (f.end > from && f.t < now) { n++; scripts.push(...f.scripts); } });
-      send("heartbeat", gap, scripts, { frames: String(n) });
+      const scripts = [], es = []; let n = 0;
+      lf.forEach((f) => { if (f.end > from && f.t < now) { n++; scripts.push(...f.scripts); es.push(f.e); } });
+      send("heartbeat", gap, scripts, Object.assign({ frames: String(n) }, n ? frameTags(es) : {}));
     }, 300);
   }, 1000);
   // (during) the worker

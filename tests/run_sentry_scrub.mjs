@@ -240,6 +240,15 @@ ok(/xhr: false/.test(appSrc) && /fetch: false/.test(appSrc) && /dom: false/.test
   ok(!bad.vis && !bad.last_ui && !bad.ui_s && !bad.frames && !bad.script, "attribution of another shape: dropped (" + JSON.stringify(bad) + ")");
   const bad2 = S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags: { script: "legacy.js:ALPHA TRADERS", vis: "visible" } }).tags || {};
   ok(!bad2.script && !bad2.vis, "a script tag whose function is words, or vis of another word: dropped");
+  // hang-tally-sync (review): how the frame's time was spent, and the code name of what started its longest script; an
+  // invoker that carries an address or anything else than a code name is dropped
+  const t = (tags) => S.scrubEvent({ event_id: "0123456789abcdef0123456789abcdef", tags }).tags || {};
+  const fine = t({ render_ms: "1238", style_ms: "0", script_ms: "12", other_ms: "11149", invoker: "TimerHandler:setTimeout" });
+  ok(fine.render_ms === "1238" && fine.style_ms === "0" && fine.script_ms === "12" && fine.other_ms === "11149" && fine.invoker === "TimerHandler:setTimeout", "the frame's figures and a code-name invoker kept (" + JSON.stringify(fine) + ")");
+  ["DIV.onclick", "IDBRequest.onsuccess", "Response.json.then"].forEach((v) => ok(t({ invoker: v }).invoker === v, "invoker " + v + " kept"));
+  ["IFRAME[src=/review/client/c000115838/books].onload", "IFRAMEsrcreviewclientc000115838books.onload", "https://staging.fincom.live/review/legacy.js", "DIV#zz-ALPHA.onclick",
+   "ALPHA TRADERS", "a.b", "TimerHandler:setTimeout:x:y:z", "Bill.c000115838"].forEach((v) => ok(!t({ invoker: v }).invoker, "invoker " + v.slice(0, 50) + ": dropped (" + JSON.stringify(t({ invoker: v }).invoker) + ")"));
+  ok(!t({ render_ms: "12 ms", other_ms: "-1", script_ms: "1e3" }).render_ms && !t({ other_ms: "-1" }).other_ms && !t({ script_ms: "1e3" }).script_ms, "figures of another shape: dropped");
 }
 
 console.log(fails ? "\nFAILED: " + fails : "\nall passed");
