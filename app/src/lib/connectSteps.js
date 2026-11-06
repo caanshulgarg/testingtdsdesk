@@ -136,7 +136,7 @@ export function connectSteps(opts) {
   const connOff = why === "connection off" || (!why && !up && !!ownConnOff(own));
   const ok1 = steps[0].done;
   if (!ok1) { put("tally", false); put("connect", false); }
-  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + (holderOf(onThisPc(b), Number(okP.port), login) ? ", also used by another login’s Tally" : ", this login’s own") + ")" : "")); }
+  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + ")" + (holderOf(onThisPc(b), Number(okP.port), login) ? ": another login’s Tally uses it too" : ": this login’s own") : "")); }
   else if (connOff || why === "not answering") {
     put("tally", true, "", null, "", "TallyPrime is running in this login");
     if (why === "not answering") put("connect", false, WORDS.notanswering, { kind: "check" }, "notanswering");

@@ -140,9 +140,9 @@ with sync_playwright() as p:
     st = T("#app [data-led-status]")
     ok(pg.locator("#app [data-led-upload-btn]").count() == 1 and pg.locator("#app [data-led-read]").count() == 0, "no bridge: one Upload button, no Read again")
     ok("(from the ledger masters file)" in st, "the status line says the ledgers came from the masters file: %r" % st.split("\n")[0])
-    E("() => { window.__picked = 0; const i = document.getElementById('mastersIn'); i.click = () => { window.__picked++; }; }")
-    pg.click("#app [data-led-upload-btn]"); pg.wait_for_timeout(200)
-    ok(E("window.__picked") == 1, "Upload opens the file chooser for the masters (the existing mastersPick)")
+    # next-tally-basics: one place brings the Tally data in: the button opens Books › From Tally (its drop takes the masters XML)
+    pg.click("#app [data-led-upload-btn]"); pg.wait_for_timeout(800)
+    ok(E("() => S.tab === 'books' && booksTab() === 'import'") and pg.locator("#app [data-up-drop]").count() == 1, "Bring in from Tally opens From Tally, where the masters XML is dropped")
     # ---------- phone width
     L.open_page(pg, "owner")
     pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(800)
