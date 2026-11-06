@@ -145,9 +145,10 @@ export function connectSteps(opts) {
       else if (/set but not on yet/i.test(say)) put("connect", false, WORDS.reopen, { kind: "check" }, "reopen");
       else put("connect", false, WORDS.mode(free) + warn, { kind: "check", free }, warn ? (warn === " " + WORDS.shared ? "shared" : "cantwrite") : "mode");
     }
-  } else if (say && /close and reopen|reopen tally/i.test(say)) {
-    // bridge 2.5.3: it switched Tally's connection on (its tally.ini) and Tally runs without it until reopened; it says
-    // "no Tally running in this login" meanwhile: its own words, as step 3
+  } else if (say && /close and reopen|reopen tally/i.test(say) && ver && vk(ver) < vk("2.5.4") && (!why || /^no tally running/.test(why))) {
+    // bridge 2.5.3 only: it switched Tally's connection on (its tally.ini) and Tally runs without it until reopened; it says
+    // "no Tally running in this login" meanwhile: its own words, as step 3 (2.5.4 tells a closed Tally apart, and an
+    // "owner unknown" Tally is the administrator's words; the bridge keeps this say for a day)
     put("tally", true, "", null, "", "TallyPrime is running in this login");
     put("connect", false, shown(say), { kind: "check" }, "reopen");
   } else {

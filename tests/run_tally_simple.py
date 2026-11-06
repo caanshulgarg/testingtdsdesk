@@ -481,8 +481,10 @@ def main():
         ok(how() == "found" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-from") == "here" and word(ACME, "o") == "No", "3d. the found bridge read here: its own answer (%s)" % col_o())
         E(LOCAL, [None, "", ""])
         # nothing open: the bridge's plain reasons (tallyWhy, the port's), and tallyConnectSay
-        da2 = T.dev(7, PC, "made-up-a", tally="closed", opened=(), version="2.5.3", rec=(ACME,), ports=WHY_PORT,
-                    beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "owner unknown", "tallyConnectSay": SAY})
+        # (bridge 2.5.3 switched the connection on and says "no Tally running in this login" until Tally is reopened)
+        CLOSED9070 = [{"port": 9070, "ok": False, "skipped": False, "n": 0, "state": "closed", "reason": "closed", "error": "Tally is not open (nothing listens on this port)"}]
+        da2 = T.dev(7, PC, "made-up-a", tally="closed", opened=(), version="2.5.3", rec=(ACME,), ports=CLOSED9070,
+                    beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "no tally running in this login", "tallyConnectSay": SAY})
         scene([da2, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=LINK_B, pings={"9101": ping(9101, True, UA, bridgeId="go-7"), "9150": ping(9150, False, UB)})
         # next-tally-connect-steps: the bridge's tallyConnectSay (it switched the connection on: reopen Tally once) is shown,
         # once, as Connect Tally's step 3, in the bridge's own words; step 2 ticked (its Tally runs, without the connection yet)

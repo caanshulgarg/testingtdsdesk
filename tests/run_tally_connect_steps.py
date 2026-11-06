@@ -193,6 +193,16 @@ def main():
         g = guide()
         ok(g["now"] == "3" and g["hook"] == "reopen" and g["say"] == "Step 3: " + SAY253 and g["states"][:2] == ["done", "done"], "12. 2.5.3's words as step 3, step 2 ticked (%s)" % g["say"])
 
+        print("== 12b. the same words from 2.5.4 (kept a day), or with Tally as administrator: never 'reopen' in their place")
+        scene([adev([skipped_b], why="no tally running in this login", say=SAY253, tally="closed", version="2.5.4"), bdev()], cos, CL, A_PINGS)
+        g = guide()
+        ok(g["now"] == "2" and g["say"].startswith("Step 2: Open TallyPrime in this Windows login (made-up-a).") and "reopen" not in g["say"].lower(), "12b. 2.5.4, Tally closed since: step 2, open TallyPrime (%s)" % g["say"][:140])
+        unk = {"port": 9070, "ok": False, "skipped": False, "n": 0, "state": "closed", "reason": "owner unknown", "owner": "unknown", "error": "owner unknown (Tally may be running as administrator)"}
+        for ver, pings in (("2.5.4", A_PINGS), ("2.5.3", P253)):
+            scene([adev([unk], why="owner unknown", say=SAY253, tally="closed", version=ver), bdev()], cos, CL, pings)
+            g = guide()
+            ok(g["now"] == "2" and g["hook"] == "admin" and g["say"].startswith("Step 2: TallyPrime seems to run as administrator"), "12b. %s, owner unknown: the administrator words (%s)" % (ver, g["say"][:120]))
+
         print("== 13. FinCom Bridge 2.5.3: no Tally answering, nothing switched: open Tally, or its connection may be off")
         for why in ("no tally running in this login", "another user"):
             scene([adev([skipped_b], why=why, tally="closed", version="2.5.3"), bdev()], cos, CL, P253)
