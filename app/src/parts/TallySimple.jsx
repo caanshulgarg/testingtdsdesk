@@ -184,26 +184,36 @@ function Strip({ r, best, more }) {
 // the clients linked but not connected now, each with Connect again (the shared look and the steps' Check again, then
 // what is missing in plain words and the step that is stuck; the company open under a close name: link to it). The
 // strip it replaces said only the first company not linked. Nothing new is polled or asked of the bridge or Tally.
+// {tallys: [{port, ok, state, names}], unknown: [names]}: this login's own sessions (another login's, skipped, never), the
+// ones that answer and the ones running that do not (connection off, not answering, …; a port nothing listens on is no
+// Tally); each company under the Tally whose port its bridge names, else under the one Tally that answers, else under
+// "port not known" (an older bridge that names no port: never said "connected")
+const lc = (v) => String(v || "").trim().toLowerCase();
+const SESS_STATE = { "connection off": "connection off", "not answering": "not answering", "owner unknown": "run as administrator", busy: "busy" };
 export function ownTallys(own) {
   const here = own && own.from === "here" && typeof Bridge === "object" ? Bridge.st || {} : null, b = (own && own.own && own.own.beat) || {};
-  const ses = [].concat((here && here.sessions && here.sessions.length ? here.sessions : b.ports) || []).filter((p) => p && !p.skipped && p.mine !== false && Number(p.port) > 0);
+  const all = [].concat((here && here.sessions && here.sessions.length ? here.sessions : b.ports) || []).filter((p) => p && !p.skipped && p.mine !== false && Number(p.port) > 0);
+  const ses = all.filter((p) => p.ok || !(/^closed$|^$/.test(lc(p.reason || p.state || "")) || /nothing listens/i.test(String(p.error || ""))));
   const items = here ? [].concat(here.open || []).filter((o) => o && o.mine !== false) : [], oks = ses.filter((s) => s.ok);
-  const by = new Map(), out = [];
+  const by = new Map(), out = [], unknown = [];
   [...((own && own.names) || new Map()).values()].forEach((n) => { const it = items.find((o) => coKey(o.name) === coKey(n));
-    const p = (it && Number(it.port)) || (oks.length === 1 ? Number(oks[0].port) : 0); by.set(p, (by.get(p) || []).concat(n)); });
-  ses.forEach((s) => { const p = Number(s.port); if (!out.some((t) => t.port === p)) out.push({ port: p, ok: !!s.ok, names: by.get(p) || [] }); });
-  by.forEach((ns, p) => { if (!out.some((t) => t.port === p)) out.push({ port: p, ok: true, names: ns }); });
-  return out.filter((t) => t.ok);
+    const p0 = it && Number(it.port), p = p0 && ses.some((x) => Number(x.port) === p0) ? p0 : oks.length === 1 ? Number(oks[0].port) : 0;
+    if (p) by.set(p, (by.get(p) || []).concat(n)); else unknown.push(n); });
+  ses.forEach((x) => { const p = Number(x.port); if (out.some((t) => t.port === p)) return;
+    out.push({ port: p, ok: !!x.ok, state: x.ok ? "connected" : SESS_STATE[lc(x.reason || x.state)] || "not answering", names: by.get(p) || [] }); });
+  return { tallys: out, unknown };
 }
 const STATE_OF = { clash: "port taken", reopen: "connection set, not on yet", notanswering: "not answering", admin: "run as administrator" };
-function HereCompany({ name, rows, x }) {
+function HereCompany({ name, rows, x, skip = "" }) {
   const [pick, setPick] = useState(false), k = coKey(name), same = (a) => coKey(a) === k || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(a, name));
   const linked = rows.find((r) => r.kind === "client" && r.c.w === YES && same(r.company));
   const conn = rows.find((r) => r.kind === "client" && r.c.w !== YES && r.r && r.c.connect && coKey(r.r.company) === k);
   const comp = rows.find((r) => r.kind === "company" && coKey(r.company) === k), ur = (x.unlinked || []).find((r) => coKey(r.company) === k);
   const r = (conn && conn.r) || (comp && comp.r) || ur, best = (conn && conn.co) || (comp && comp.best) || null;
   let body;
-  if (linked) {
+  // (Connect Tally's step 5 links this very company: its button is there, not a second one here)
+  if (!linked && skip && k === skip) body = <span className="tsm-note" data-tsm-here-step5="">Not linked: link it with step 5, above.</span>;
+  else if (linked) {
     const done = linked.l.w === YES && linked.e.w === YES, reading = !done && (linked.l.w === NOTYET || linked.e.w === NOTYET);
     const say = done ? "Up to date" + (linked.e.note ? " · " + linked.e.note : "") : reading ? "Reading…" + ((linked.l.w === NOTYET ? linked.l.note : linked.e.note) ? " " + (linked.l.w === NOTYET ? linked.l.note : linked.e.note) : "")
       : [linked.l.w !== YES ? "Ledgers: " + (linked.l.note || linked.l.w) : "", linked.e.w !== YES ? "Entries: " + (linked.e.note || linked.e.w) : ""].filter(Boolean).join(" · ");
@@ -238,18 +248,24 @@ function Away({ row, x, cs, checkAgain }) {
 }
 function OpenHere({ cs, own, rows, x, checkAgain }) {
   if (cs.mode !== "login" || !x) return null;
-  const tallys = ownTallys(own), conn = cs.steps[2] || {}, run = (cs.steps[1] || {}).done;
+  const T = ownTallys(own), tallys = T.tallys, unknown = T.unknown, conn = cs.steps[2] || {}, run = (cs.steps[1] || {}).done;
+  const s5 = cs.now && cs.now.key === "link" && cs.now.act && cs.now.act.r ? coKey(cs.now.act.r.company) : "";
+  const co = (n) => <HereCompany key={n} name={n} rows={rows} x={x} skip={s5} />;
   // (a company open in another Tally FinCom hears now, another login's or computer's, is connected there: not listed)
   let seen = []; try { seen = companyRows().filter((r) => r.open).map((r) => coKey(r.company)); } catch (e) { seen = []; }
   const away = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w !== YES && r.company && !seen.includes(coKey(r.company)));
-  const sayN = tallys.length ? nOfW(tallys.length, "Tally", "Tallys") + " running in this login" : run ? "TallyPrime is running in this login but FinCom can’t use it yet" : "No TallyPrime running in this login";
+  const nT = tallys.length + (unknown.length && !tallys.some((t) => t.ok) ? 1 : 0);
+  const sayN = nT ? nOfW(nT, "Tally", "Tallys") + " running in this login" : run ? "TallyPrime is running in this login but FinCom can’t use it yet" : "No TallyPrime running in this login";
   return <section className="tsm-here" aria-label="Open in your Tally now" data-tsm-here={tallys.length} data-tsm-login={cs.login || undefined}>
     <div className="tsm-guide-top"><b>{"Open in your Tally now" + (cs.login ? " (" + cs.login + ")" : "")}</b><span className="tsm-note" data-tsm-here-n="">{sayN}</span></div>
     {tallys.map((t) => <div key={t.port} className="tsm-here-tally" data-tsm-here-tally={t.port}>
-      <div className="tsm-here-head"><b>{"TallyPrime · port " + (t.port || "?")}</b><span className="tsm-word yes" data-tsm-here-tstate="connected">connected</span></div>
-      {t.names.length ? <ul className="tsm-here-list">{t.names.map((n) => <HereCompany key={n} name={n} rows={rows} x={x} />)}</ul>
-        : <div className="tsm-note" data-tsm-here-noco="">No company open in it. Open your company in TallyPrime: it shows here within a minute.</div>}</div>)}
-    {!tallys.length && run && conn.state !== "done" && <div className="tsm-here-tally" data-tsm-here-tally="off">
+      <div className="tsm-here-head"><b>{"TallyPrime · port " + t.port}</b><span className={"tsm-word " + (t.ok ? "yes" : "no")} data-tsm-here-tstate={t.ok ? "connected" : t.state}>{t.state}</span></div>
+      {t.names.length ? <ul className="tsm-here-list">{t.names.map(co)}</ul>
+        : t.ok && !unknown.length ? <div className="tsm-note" data-tsm-here-noco="">No company open in it. Open your company in TallyPrime: it shows here within a minute.</div>
+        : !t.ok && conn.state !== "done" ? <div className="tsm-note" data-tsm-here-see="3">What to do is step 3, above.</div> : null}</div>)}
+    {unknown.length > 0 && <div className="tsm-here-tally" data-tsm-here-tally="unknown">
+      <div className="tsm-here-head"><b>TallyPrime · port not known</b></div><ul className="tsm-here-list">{unknown.map(co)}</ul></div>}
+    {!tallys.length && !unknown.length && run && conn.state !== "done" && <div className="tsm-here-tally" data-tsm-here-tally="off">
       <div className="tsm-here-head"><b>TallyPrime</b><span className="tsm-word no" data-tsm-here-tstate={conn.hook || "off"}>{STATE_OF[conn.hook] || "connection off"}</span></div>
       <div className="tsm-note" data-tsm-here-see="3">What to do is step 3, above.</div></div>}
     {away.length > 0 && <div className="tsm-here-away" data-tsm-here-away={away.length}><b>Linked clients not connected now</b>
@@ -474,7 +490,7 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   useEffect(() => { if (ready && cs.now && cs.now.hook === "checking") lookOnce(); });
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} /></Part>
-    {strip && cs.mode !== "login" && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
+    {strip && !(ready && R.extra && cs.mode === "login") && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
     {/* next-tally-basics: Open in your Tally now, inside Connect Tally (this login's own: its name and ports are said only there) */}
     {ready && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain}
       here={<Part name="open here" v={v}><OpenHere cs={cs} own={own} rows={rows} x={R.extra} checkAgain={checkAgain} /></Part>} /></Part>}

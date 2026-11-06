@@ -622,7 +622,7 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
   if (stuck) return <div className="tco-sync bad" data-tco-sync="stuck" data-tco-stuck={x.err ? "error" : x.late && !x.why ? "late" : "why"} data-tco-where={where} role="status">
     <span data-tco-sync-why="">{x.err || x.why || stallWhy(cid, name) || "No progress from Tally in 3 minutes: keep " + (name || "the company") + " open in TallyPrime on its computer."}</span>
     <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name, { now: true })}>Try again</button></span>
-    {!led && <Masters cid={cid} />}</div>;
+    {!led && where !== "books" && <Masters cid={cid} />}</div>;
   if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.round(100 * rd / of) : 0;
     const left = timeLeft(x, of);
     return <div className="tco-sync" data-tco-sync="running" data-tco-where={where} role="status">
@@ -631,7 +631,7 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
       <span data-tco-sync-words="">{of > 0 ? "Reading ledgers from Tally: " + rd.toLocaleString("en-IN") + " of " + of.toLocaleString("en-IN") + " (" + pct + "%)" + (left ? " · " + left : "")
         : "Reading ledgers from Tally…" + (rd > 0 ? " " + rd.toLocaleString("en-IN") + " so far" : "")}
         {x.via === "cloud" && !of && !rd ? <span className="note">{" · the Tally computer picks it up within a minute"}</span> : null}</span>
-      {!led && <Masters cid={cid} />}</div>; }
+      {!led && where !== "books" && <Masters cid={cid} />}</div>; }
   if (where === "books" && led) { const bk = ledBook(cid) || {}; return <>{done(n, bk.ledgersAt ? Date.parse(bk.ledgersAt) : 0)}<LaterLine cid={cid} /></>; }
   if (where === "ledgers") return <LaterLine cid={cid} />;
   return null;
@@ -649,10 +649,15 @@ const hm = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : "";
 // ledgers created or altered since Tally's master counter last moved; the whole list (groups too) each night and on
 // Update now. Nothing new is asked of the bridge or of Tally; the counts are reads of FinCom's cloud.
 export const AUTO_WORDS = "by itself: new and changed ledgers every 10 minutes while the company is open in Tally; the whole list, groups too, each night";
-export function mastersResult(b, a, received) {
-  const nw = Math.max(0, (Number(a.n) || 0) - (Number(b.n) || 0)), gw = Math.max(0, (Number(a.g) || 0) - (Number(b.g) || 0));
-  const ch = Math.max(0, (Number(received) || 0) - nw);
-  const bits = [nw ? nw + " new" : "", ch ? ch + " changed" : "", gw ? nOf(gw, "new group", "new groups") : ""].filter(Boolean);
+// r: the rounds of this read, {changed: the rows of the rounds that sent only the new or changed ledgers (rows_received
+// below rows_read, the rule of ledgerChanges and firstSync), full: the ledgers of a round that sent the whole list (0: none)};
+// a number alone is the changed rows. A whole list sent is never counted as that many changes
+export function mastersResult(b, a, r) {
+  const q = typeof r === "object" && r ? r : { changed: Number(r) || 0, full: 0 };
+  const nw = Math.max(0, (Number(a.n) || 0) - (Number(b.n) || 0)), gw = Math.max(0, (Number(a.g) || 0) - (Number(b.g) || 0)), nf = (k) => Number(k).toLocaleString("en-IN");
+  const ch = Math.max(0, (Number(q.changed) || 0) - nw), grp = gw ? nOf(gw, "new group", "new groups") : "";
+  if (Number(q.full) > 0) return "Updated: whole list read (" + nOf(Number(q.full), "ledger", "ledgers") + ")" + [nw ? nf(nw) + " new" : "", grp].filter(Boolean).map((x) => ", " + x).join("");
+  const bits = [nw ? nf(nw) + " new" : "", ch ? nf(ch) + " changed" : "", grp].filter(Boolean);
   return bits.length ? "Updated: " + bits.join(", ") : "Updated: no changes in Tally";
 }
 const GRP = {};
@@ -666,10 +671,17 @@ async function groupCount(cid, force) {
   GRP[cid] = { n, at: Date.now(), book: bk.book };
   return n;
 }
+// this book's complete rounds started since the press (on the cloud's clock: this computer's difference taken off)
 async function roundRows(cid, since) {
-  const bk = ledBook(cid); if (!bk || !bk.book) return 0;
-  const r = await Cloud.api("tally_ledger_rounds?select=rows_received&complete=is.true&book_id=eq." + encodeURIComponent(bk.book) + "&last_seen_at=gte." + encodeURIComponent(new Date(since).toISOString())).catch(() => []);
-  return [].concat(r || []).reduce((t, x) => t + (Number(x && x.rows_received) || 0), 0);
+  const bk = ledBook(cid); if (!bk || !bk.book) return { changed: 0, full: 0 };
+  const at = since - (typeof TallyClock === "object" && TallyClock.skew ? TallyClock.skew() : 0);
+  const r = await Cloud.api("tally_ledger_rounds?select=rows_received,rows_read,complete&complete=is.true&book_id=eq." + encodeURIComponent(bk.book) + "&started_at=gte." + encodeURIComponent(new Date(at).toISOString())).catch(() => []);
+  return roundsOf(r);
+}
+export function roundsOf(r) {
+  const rs = [].concat(r || []).filter((x) => x && x.rows_read != null && x.complete !== false);
+  const part = rs.filter((x) => Number(x.rows_received) < Number(x.rows_read)), whole = rs.filter((x) => !(Number(x.rows_received) < Number(x.rows_read)));
+  return { changed: part.reduce((t, x) => t + (Number(x.rows_received) || 0), 0), full: whole.reduce((t, x) => Math.max(t, Number(x.rows_read) || 0), 0) };
 }
 // the light check's last look at this company (its computer's beat: changeNumbers[company].at, the computer's clock)
 function lightAt(company) {
@@ -679,9 +691,9 @@ function lightAt(company) {
 }
 const dtWords = (ms) => { if (!ms) return ""; const t = new Date(ms + 5.5 * 3600e3), today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10) === t.toISOString().slice(0, 10);
   return (today ? "today " : t.getUTCDate() + "-" + MON[t.getUTCMonth()] + " ") + hm(ms); };
-const MR = {};
+const MR = {}, PRESS = {};
 export function MastersLine({ cid }) {
-  const [ck, setCk] = useState(false);
+  const [ck, setCk] = useState(false), [pressing, setPressing] = useState(false);
   const [, tick] = useState(0), co = S.companies && S.companies[cid];
   const link = typeof tallyLinkOf === "function" && co ? tallyLinkOf(co) || {} : {}, company = link.company || (TCloud.companyOf ? TCloud.companyOf(cid) : "") || "";
   const x = SYNC()[cid], running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
@@ -689,34 +701,47 @@ export function MastersLine({ cid }) {
   useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid, bk.book, bk.ledgersAt]);
   // the result once this Update now's read is done (counts read again, the rounds since the press)
   useEffect(() => { if (!m || m.say || !x || x.at !== m.at) return;
-    if (x.err || x.late) { m.say = "Not updated: " + (x.err || x.why || stallWhy(cid, company) || "no answer from Tally in 3 minutes"); tick((k) => k + 1); return; }
+    if (x.err || x.late) { const w = x.err || x.why || stallWhy(cid, company) || "no answer from Tally in 3 minutes";
+      // (this login's step: its title only here, never its words, which name the login and its port)
+      const st = /^Step (\d) of 6: /.exec(w), c = st && typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+      m.say = "Not updated: " + (st ? "Step " + st[1] + " of 6 is not done" + (c && String(c.n) === st[1] ? ": " + c.title : "") + " (Tally page › Connect Tally)" : w); tick((k) => k + 1); return; }
     if (!x.end || m.busy) return;
     m.busy = true;
-    Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at - 60000)])
+    Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at)])
       .then(([n1, g1, rr]) => { m.say = mastersResult(m.b, { n: n1 == null ? m.b.n : n1, g: g1 == null ? m.b.g : g1 }, rr); m.ok = true; tick((k) => k + 1); }); });
   const may = !(S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
-  const press = async () => { const b = { n: await cloudLedgerCount(cid, true).catch(() => n), g: await groupCount(cid, true).catch(() => g) };
-    MR[cid] = { b: { n: b.n == null ? n : b.n, g: b.g == null ? g : b.g }, at: 0, say: "" };
-    const p = firstSync(cid, company, { now: true }); MR[cid].at = (SYNC()[cid] || {}).at || Date.now(); await p; tick((k) => k + 1); };
+  // one read at a time: the button is off from the press (before its first count is read) until the read is asked
+  const press = async () => { if (PRESS[cid] || pressing || running) return; PRESS[cid] = 1; setPressing(true);
+    try { const b = { n: await cloudLedgerCount(cid, true).catch(() => n), g: await groupCount(cid, true).catch(() => g) };
+      MR[cid] = { b: { n: b.n == null ? n : b.n, g: b.g == null ? g : b.g }, at: 0, say: "" };
+      const p = firstSync(cid, company, { now: true }); MR[cid].at = (SYNC()[cid] || {}).at || Date.now(); await p; }
+    finally { delete PRESS[cid]; setPressing(false); tick((k) => k + 1); } };
   if (!company) return <p className="note" data-masters="" data-masters-why="unlinked">{"Ledgers & groups from Tally: this client is not linked to a Tally company yet. Link it on the Tally page."}</p>;
-  const la = Date.parse(bk.ledgersAt || "") || 0, lt = lightAt(company), held = ledgersHeld(cid);
+  // (the light check's time is the Tally computer's own clock, India time: said in IST)
+  const la = Date.parse(bk.ledgersAt || "") || 0, lt0 = lightAt(company), held = ledgersHeld(cid);
+  const ltMs = lt0 ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(lt0) ? lt0 : lt0 + "+05:30") || 0 : 0, lt = ltMs ? hm(ltMs) : "";
   const head = held ? "Ledgers & groups from Tally: " + nOf(n || 0, "ledger", "ledgers") + (g != null ? ", " + nOf(g, "group", "groups") : "") + (la ? " · updated " + dtWords(la) : "")
     : "Ledgers & groups from Tally: not in FinCom yet";
-  const step = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+  // this login's step 1-3, only where the client's company is this login's own computer key's (or none known), as the
+  // ledger bar's stallWhy; its title only (its words name the login and its port: the Tally page says them)
+  const c0 = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+  const devId = (coRows(company).find((r) => r.device_id) || {}).device_id || "";
+  const step = c0 && c0.n <= 3 && typeof globalThis.FCOwnOrNone === "function" && globalThis.FCOwnOrNone(devId) ? c0 : null;
   const again = () => { setCk(true); rescanLocal(); Promise.resolve(typeof tallyCheckNow === "function" ? tallyCheckNow() : null).catch(() => {}).finally(() => setCk(false)); };
   return <div className="tco-masters-line" data-masters="" data-masters-n={n || 0} data-masters-g={g == null ? "" : g}>
     {/* the client's Tally section: this login's Connect Tally step not done, with the steps' Check again (nothing to do next time: it reconnects by itself) */}
-    {step && <p className="note bad" data-masters-step={step.n} style={{ margin: "0 0 4px" }}>{"Step " + step.n + " of 6: " + step.say + " "}
+    {step && <p className="note bad" data-masters-step={step.n} style={{ margin: "0 0 4px" }}>{"Step " + step.n + " of 6: " + step.title + " — not done. "}
       <button type="button" className="linkbtn" data-masters-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{" · "}
       <button type="button" className="linkbtn" data-masters-steps={step.n} onClick={() => globalThis.FCGoSteps && globalThis.FCGoSteps()}>See the 6 steps</button></p>}
-    <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt.slice(11, 16) : "") + ")"}</span>{" "}
-      {may && <button type="button" className="btn small" data-masters-update="" disabled={running} onClick={press}>{running ? "Updating…" : "Update now"}</button>}</p>
+    <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt : "") + ")"}</span>{" "}
+      {may && <button type="button" className="btn small" data-masters-update="" disabled={running || pressing} onClick={press}>{running || pressing ? "Updating…" : "Update now"}</button>}</p>
     {m && m.say && x && x.at === m.at ? <><p className={"note" + (m.ok ? " ok" : " bad")} data-masters-result={m.ok ? "ok" : "why"} role="status" style={{ margin: "0 0 4px" }}>{m.say}</p><LaterLine cid={cid} /></>
       : x ? <LedgerBar cid={cid} where="books" company={company} /> : <LaterLine cid={cid} />}
-    {!held && <Masters cid={cid} />}
+    {/* (the masters XML: the drop of Bring in from Tally, below on this page; not a second uploader here) */}
+    {!held && <p className="note" data-masters-file="" style={{ margin: "0 0 4px" }}>Or export List of Accounts from Tally as XML (Alt+E) and drop it in Bring in from Tally, below.</p>}
   </div>;
 }
-if (typeof globalThis === "object") globalThis.FCMastersResult = mastersResult;
+if (typeof globalThis === "object") Object.assign(globalThis, { FCMastersResult: mastersResult, FCRoundsOf: roundsOf });
 // words: only the held words, inline on the row's second line (nothing while a read runs: the bar is under the row);
 // bar: only the bar of a read going on (next-tally-smart: the two halves of the row)
 export function SyncLine({ cid, compact = false, words = false, bar = false }) {
