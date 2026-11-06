@@ -363,16 +363,32 @@ const LocalOwner = {
 // once, right after a publish). Now the opening is never given up: open() is the real opening (null only on an error);
 // wait(ms) is it or null after ms, for a caller that cannot wait longer (Store.init), and the next call still gets the
 // database once it is open. Each read and write waits for it up to WAIT (then fails as before, so a page is never held)
+// idb-closing (FINCOM-APP-STAGING-N, staging 6-Nov-2026: a save of the books failed with "InvalidStateError: Failed to
+// execute 'transaction' on 'IDBDatabase': The database connection is closing"): the connection kept here was closed under
+// the page (by the browser, or for another tab's upgrade or removal of the database), and every read and write after it
+// failed until a reload. Now a connection closed so is let go (versionchange: closed here so the other tab is not held;
+// close: closed by the browser), and a read or write that met it opens the database again and is done once more (once:
+// a database that keeps closing fails as before). A connection this page closed itself (clearLocalCopy) is not opened again.
+// Review: never opened again once the copy is not this page's any more (idbOk): another tab removing the database (its
+// versionchange: "clear this browser's copy" there), this page clearing it (LocalOwner.clearing, until its reload), the
+// copy put aside or its owner gone (LocalOwner.stale, the slot or the sign-in not the one this page opened); a write
+// then would make the copy again, nobody's, for the next sign-in to take over
+function idbOk(o){ const b = LocalOwner.bound, c = LocalOwner.cur(); return !o.vc && !LocalOwner.stale && !LocalOwner.clearing && (!b || (c.slot === b.slot && (!b.uid || c.uid === b.uid))); }
+function idbWatch(o, d){ d.onversionchange = () => { d.close(); o.vc = 1; idbDrop(o, d); }; d.onclose = () => idbDrop(o, d); return d; }
+function idbDrop(o, d){ d.lost = 1; if (o.db === d){ o.db = null; o.dbp = null; } }
+// the connection met by e was closed under the page (let go here: the next call opens the database again, if idbOk)
+function idbGone(o, d, e){ if (!d || !(d.lost || e && e.name === "InvalidStateError" && o.db === d)) return false; idbDrop(o, d); return idbOk(o); }
 const IDBStore = {
   dbp: null, db: null, WAIT: 20000,
   open(){
     if (this.dbp) return this.dbp;
+    if (!idbOk(this)) return Promise.resolve(null);
     this.dbp = new Promise(ok => {
       let done = false; const fin = v => { if (!done){ done = true; this.db = v; ok(v); } };
       try {
         const r = indexedDB.open(LocalOwner.db("tdsdesk-work"), 1);
         r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("docs")) r.result.createObjectStore("docs"); };
-        r.onsuccess = () => fin(r.result); r.onerror = () => fin(null);
+        r.onsuccess = () => fin(idbWatch(this, r.result)); r.onerror = () => fin(null);
         // blocked: another tab holds an older version open; its versionchange closes it and this opening goes on
         r.onblocked = () => {};
       } catch (e){ fin(null); }
@@ -381,22 +397,29 @@ const IDBStore = {
   },
   wait(ms){ if (this.db) return Promise.resolve(this.db); const p = this.open(); return Promise.race([p, new Promise(ok => setTimeout(() => ok(null), ms))]); },
   async ready(){ const db = await this.wait(this.WAIT); if (!db) throw new Error("This browser's database did not open."); return db; },
-  async get(key){ const db = await this.ready(); return new Promise((ok, no) => { const q = db.transaction("docs").objectStore("docs").get(key); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }); },
-  async prefix(p){
+  // f(db): the read or write; done once more on a database opened again when the connection was closed under it (a
+  // transaction cut short by the browser's closing: its close event comes after the abort, so it is waited for); the
+  // answer is the second try's
+  async run(f){
     const db = await this.ready();
-    return new Promise((ok, no) => {
+    try { return await f(db); }
+    catch (e){ await new Promise(r => setTimeout(r, 0)); if (!idbGone(this, db, e)) throw e; return f(await this.ready()); }
+  },
+  get(key){ return this.run(db => new Promise((ok, no) => { const q = db.transaction("docs").objectStore("docs").get(key); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); })); },
+  prefix(p){
+    return this.run(db => new Promise((ok, no) => {
       const out = [], q = db.transaction("docs").objectStore("docs").openCursor(IDBKeyRange.bound(p, p + "\uffff"));
       q.onsuccess = () => { const c = q.result; if (c){ out.push([c.key, c.value]); c.continue(); } else ok(out); };
       q.onerror = () => no(q.error);
-    });
+    }));
   },
-  async write(pairs){
-    const db = await this.ready();
-    return new Promise((ok, no) => {
+  write(pairs){
+    return this.run(db => new Promise((ok, no) => {
       const tx = db.transaction("docs", "readwrite"), st = tx.objectStore("docs");
       pairs.forEach(([k, v]) => { if (v == null) st.delete(k); else st.put(v, k); });
-      tx.oncomplete = () => ok(); tx.onerror = () => no(tx.error); tx.onabort = () => no(tx.error || {name: "AbortError"});
-    });
+      // (an error ends in the abort: answered there, once the transaction is over)
+      tx.oncomplete = () => ok(); tx.onabort = () => no(tx.error || {name: "AbortError"});
+    }));
   }
 };
 // The uploaded file is kept in this browser's database, so the document can be opened later, not just in this session.

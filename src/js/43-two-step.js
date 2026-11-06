@@ -261,8 +261,9 @@ async function signOutAll(){
 }
 // removes this firm's copy from this browser (only after everything has reached the firm account)
 async function clearLocalCopy(){
+  LocalOwner.clearing = true;   // nothing opens this browser's databases again until the page is reloaded (idbOk, src/js/00)
   try { const d = IDBStore.dbp && await IDBStore.wait(3000); if (d && d.close) d.close(); IDBStore.dbp = null; IDBStore.db = null; } catch (e){}
-  try { const b = BankDB.dbp && await BankDB.dbp; if (b && b.close) b.close(); BankDB.dbp = null; } catch (e){}
+  try { const b = BankDB.dbp && await BankDB.dbp; if (b && b.close) b.close(); BankDB.dbp = null; BankDB.db = null; } catch (e){}
   // this copy (LocalOwner), the databases of builds before 21-Oct-2026 (tdsdesk, -files, -docs) and older copies put aside
   // as nobody's ("?": no sign-in opens them again); the copies of other people put aside in this browser are theirs
   const s = LocalOwner.read(), held = s.parked.filter(p => p.uid !== "?").map(p => p.slot), gone = s.parked.filter(p => p.uid === "?").map(p => p.slot);

@@ -15,16 +15,18 @@ const BankDB = {
   mem: {}, dbp: null, mode: "starting", lost: false,
   open(){
     if (this.dbp) return this.dbp;
+    if (!idbOk(this)) return Promise.resolve(null);
     this.dbp = new Promise(ok => {
       let done = false;
-      const finish = v => { if (!done){ done = true; this.mode = v ? "database" : (this.lsOk() ? "browser storage" : "memory only"); ok(v); } };
+      const finish = v => { if (!done){ done = true; this.db = v; this.mode = v ? "database" : (this.lsOk() ? "browser storage" : "memory only"); ok(v); } };
       // Safari can leave this request unanswered for files opened from disk: give up after 3 seconds
       setTimeout(() => { if (!done) this.late = true; finish(null); }, 3000);
       try {
         if (!window.indexedDB) return finish(null);
         const r = indexedDB.open(LocalOwner.db("tdsdesk-bank"), 1);
         r.onupgradeneeded = () => { try { r.result.createObjectStore("kv"); } catch (e){} };
-        r.onsuccess = () => finish(r.result);
+        // (an answer after the 3 seconds: closed, the page goes on without it)
+        r.onsuccess = () => { if (done) r.result.close(); else finish(idbWatch(this, r.result)); };
         r.onerror = () => finish(null);
         r.onblocked = () => finish(null);
       } catch (e){ finish(null); }
@@ -33,26 +35,36 @@ const BankDB = {
   },
   lsOk(){ try { localStorage.setItem("tdsdesk:bank:test", "1"); localStorage.removeItem("tdsdesk:bank:test"); return true; } catch (e){ return false; } },
   lsGet(k){ try { const v = localStorage.getItem("tdsdesk:bank:" + k); return v ? JSON.parse(v) : undefined; } catch (e){ return undefined; } },
-  lsSet(k, v){ try { localStorage.setItem("tdsdesk:bank:" + k, JSON.stringify(v)); return true; } catch (e){ this.lost = true; return false; } },
+  lsSet(k, v){ if (!idbOk(this)) return false; try { localStorage.setItem("tdsdesk:bank:" + k, JSON.stringify(v)); return true; } catch (e){ this.lost = true; return false; } },
   withTimeout(p, fallback){ return Promise.race([p, new Promise(ok => setTimeout(() => ok(fallback), 4000))]); },
-  // late (next-noclients): what get answers when the database did not answer in time (late is set), not "nothing kept"
-  async get(k, late){
+  // late (next-noclients): what get answers when the database did not answer in time (late is set), not "nothing kept".
+  // again (idb-closing, src/js/00-core.js idbGone): the connection was closed under the page: done once more on the
+  // database opened again (a save kept only in memory was lost at the next reload; a read answered from memory, not the copy)
+  async get(k, late, again){
     const db = await this.open();
     if (!db) return late !== undefined && this.late ? late : k in this.mem ? this.mem[k] : this.lsGet(k);
     let t = 0; const slow = new Promise(ok => { t = setTimeout(() => { if (late !== undefined) this.late = true; ok(late !== undefined ? late : this.mem[k]); }, 4000); });
-    return Promise.race([new Promise(ok => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(this.mem[k]); } catch (e){ ok(this.mem[k]); } }), slow]).finally(() => clearTimeout(t));
+    return Promise.race([new Promise(ok => { try { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ok(this.mem[k]); } catch (e){ ok(!again && idbGone(this, db, e) ? this.get(k, late, 1) : this.mem[k]); } }), slow]).finally(() => clearTimeout(t));
   },
-  async set(k, v){
+  async set(k, v, again){
     this.mem[k] = v;
     const db = await this.open();
     if (!db) return this.lsSet(k, v);
-    return this.withTimeout(new Promise(ok => { try { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => ok(true); tx.onerror = () => ok(false); } catch (e){ ok(false); } }), false);
+    return this.withTimeout(this.tx(db, again, st => st.put(v, k), () => this.set(k, v, 1)), false);
   },
-  async del(k){
+  async del(k, again){
     delete this.mem[k];
     const db = await this.open();
     if (!db){ try { localStorage.removeItem("tdsdesk:bank:" + k); } catch (e){} return; }
-    return this.withTimeout(new Promise(ok => { try { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").delete(k); tx.oncomplete = () => ok(true); tx.onerror = () => ok(false); } catch (e){ ok(false); } }), false);
+    return this.withTimeout(this.tx(db, again, st => st.delete(k), () => this.del(k, 1)), false);
+  },
+  // a write: true when kept; redo() once when the connection was closed under it (before it began, or cut short)
+  tx(db, again, f, redo){
+    return new Promise(ok => {
+      const re = e => ok(!again && idbGone(this, db, e) ? redo() : false);
+      // (an error ends in the abort: answered there, with the second try's answer when the connection was closed under it)
+      try { const tx = db.transaction("kv", "readwrite"); f(tx.objectStore("kv")); tx.oncomplete = () => ok(true); tx.onabort = () => setTimeout(re, 0); } catch (e){ re(e); }
+    });
   }
 };
 function B(){ return S.bank; }
