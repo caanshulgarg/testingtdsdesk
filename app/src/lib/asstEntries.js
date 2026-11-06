@@ -20,7 +20,7 @@
 import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
-/* global S, INR, Cloud, TCloud, CloudTally, CloudJobs, Bridge, xesc, toTallyDate, remoteIdFor, num, r2, ledNm, choiceGet, postToProblem, postReasonFor, tallySign, canPostTally, saveFile, fmtDate */
+/* global S, INR, tallyPostSign, Cloud, TCloud, CloudTally, CloudJobs, Bridge, xesc, toTallyDate, remoteIdFor, num, r2, ledNm, choiceGet, postToProblem, postReasonFor, tallySign, canPostTally, saveFile, fmtDate */
 
 export const VTYPES = ["Journal", "Payment", "Receipt", "Contra", "Sales", "Purchase", "Debit Note", "Credit Note"];
 export const KEY = "asstEntries";
@@ -127,7 +127,8 @@ export function draftEnvelope(xmls, company) {
 export function postGate(co) {
   const why = typeof postToProblem === "function" ? postToProblem(co, "") : "";
   if (why) return { ok: false, why: why.replace(/ Nothing was posted\.$/, "") };
-  const sg = typeof tallySign === "function" ? tallySign(co) : null;
+  // next-tally-read-any: Post by the posting's rule (the poster's own bridge), not the reading sign's any login
+  const sg = typeof tallyPostSign === "function" ? tallyPostSign(co) : typeof tallySign === "function" ? tallySign(co) : null;
   const can = typeof canPostTally === "function" ? canPostTally(co) : false;
   if (!sg || !sg.on || !can) return { ok: false, why: "Tally is not connected for " + co.name + (sg && sg.reason ? ": " + sg.reason + (sg.fix ? " " + sg.fix : "") : " (no FinCom Bridge online with " + postCompany(co) + ").") + " Download XML and import it in Tally instead." };
   return { ok: true, why: "", company: postCompany(co) };

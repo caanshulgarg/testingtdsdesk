@@ -44,7 +44,8 @@ function postStatusFor(co){
   // as steady as the top bar: "Posting into X on NWS144 (anshul) · Tally ready · read 15:34" (the owner: no "via"); not
   // ready only once that held a minute. Only the words: posting itself checks the bridge and the cloud at the moment it
   // posts (canPostTally, the posting's own checks), never this
-  const sg = typeof tallySign === "function" ? tallySign(co) : null;
+  // next-tally-read-any: the posting's rule (the poster's own bridge: 98's tallyPostSign), not the reading sign's any login
+  const sg = typeof tallyPostSign === "function" ? tallyPostSign(co) : typeof tallySign === "function" ? tallySign(co) : null;
   // next-link-record: the client's one word, as every place says it (lib/linkStatus.js, globalThis.LinkWord)
   const w = typeof LinkWord === "function" ? LinkWord(co) : null;
   if (w) out.word = w.word;

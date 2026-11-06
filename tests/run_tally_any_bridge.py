@@ -12,6 +12,10 @@ names, tally_companies.device_id) and B (made-up-b, go-8). The client Orbit Work
   4. a company of the same name under ANOTHER GUID in B's beat (the link knows its GUID): not served there
   5. a bridge heard more than 3 minutes ago does not serve
   6. the link record names a real data folder: a bridge reading the company from ANOTHER folder (a copy) does not serve
+  P. posting is unchanged until migration 142 (next-tally-read-any): with the company open only in B's login, A's
+     browser reads it (the sign on) but Post is not offered: tallyPostSign (asstEntries' postGate), the Post line
+     (postStatusFor) and "This will post through" (postThroughWords) say what the poster's own bridge can do, as before;
+     open in A's own Tally: Post offered as before
   7. open in none and the linked key A offline: another login's key on the SAME computer heard -> the plain words; the
      other key on ANOTHER computer -> the existing words (offline / the bridge not running), never "Open ... in Tally"
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_any_bridge.py"""
@@ -88,6 +92,9 @@ def main():
             ok(E(LINKS, [ids[ORBIT], da["id"], GUID, folder]) is True, "   (the link record read: GUID and key A)")
             pg.wait_for_timeout(300)
             return ids, da, db
+        def post(cid):
+            return E("""(c) => { const co = S.companies[c], p = tallyPostSign(co), r = tallySign(co), st = typeof postStatusFor === 'function' ? postStatusFor(co) : null;
+              return {post: !!p.on, read: !!r.on, where: st ? st.where : null, through: typeof postThroughWords === 'function' ? postThroughWords(co) : null}; }""", cid)
         def look(cid):
             return E("""(c) => { const co = S.companies[c], sv = tallyServe('ORBIT WORKS'), l = tallyLine(co), w = LinkWord(co), s = tallySignNow(co);
               return {serve: sv ? {dev: sv.dev.id, id: sv.id, how: sv.how} : null, line: l ? [l.state, l.text] : null, word: w ? [w.kind, w.line, w.text] : null,
@@ -103,6 +110,8 @@ def main():
         ok(r["word"] and r["word"][0] == "linked" and "Waiting" not in r["word"][2], "1. LinkWord: Linked, not Waiting for Tally (%s)" % r["word"])
         ok(r["sign"][0] is True, "1. the client's sign: on (%s)" % r["sign"])
         ok(r["cell"] and r["cell"].get("short") != "Tally closed" and "not open" not in str(r["cell"].get("say", "")), "1. the Clients column: not Tally closed (%s)" % r["cell"])
+        pp = post(ids[ORBIT])
+        ok(pp["read"] is True and pp["post"] is False and not pp["where"] and not pp["through"], "P. open only in B's login: read (the sign on), but Post not offered by the posting's rule (%s)" % pp)
         ok("Waiting: Tally company not open" not in E("() => document.querySelector('#app').innerText"), "1. no 'Waiting: Tally company not open' on the page")
 
         print("== 2. open in none: the plain words")
@@ -118,6 +127,7 @@ def main():
         r = look(ids[ORBIT]); ok(r["serve"] and r["serve"]["id"] == "go-8" and r["serve"]["how"] == "own", "3. B's browser: B's own bridge (%s)" % r["serve"])
         ids, da, db = scene([CO], [CO], me="a")
         r = look(ids[ORBIT]); ok(r["serve"] and r["serve"]["id"] == "go-7" and r["serve"]["how"] == "own", "3. A's browser: A's own bridge (%s)" % r["serve"])
+        pp = post(ids[ORBIT]); ok(pp["post"] is True and pp["read"] is True, "P. open in A's own Tally too: Post offered, as before (%s)" % pp)
         ids, da, db = scene([CO], [CO], me=None)
         r = look(ids[ORBIT]); ok(r["serve"] and r["serve"]["dev"] == da["id"] and r["serve"]["how"] == "linked", "3. no own bridge here (a laptop): the link's key A (%s)" % r["serve"])
 

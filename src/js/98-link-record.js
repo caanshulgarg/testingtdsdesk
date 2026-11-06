@@ -273,6 +273,14 @@ async function linkPostingSet(co, rec, on){
     if (typeof TLight === "object") TLight.st.at = 0;
     if (typeof render === "function") render(); }, () => {});
 })();
+// next-tally-read-any (re-review of part A): READING follows the company (tallyServe), but POSTING is unchanged until
+// migration 142 is decided: a posting still goes to the poster's own target bridge, so whether Post is offered and enabled
+// is the sign by the old rule (src/js/49 tallySignNow(co, old)), steady as tallySign is (connected at once, not connected
+// once it held a minute). asstEntries' postGate, the Post line (src/js/97 postStatusFor) and postThroughWords ask this
+function tallyPostSign(co){
+  const raw = tallySignNow(co, true);
+  return TallySteady.step("post:" + (co ? co.id : ""), raw, raw.on ? "on:" + (raw.through || []).join(",") : "off:" + raw.code + ":" + (raw.computer || ""), !!raw.on);
+}
 // the Clients page's Tally column (src/js/49 TLight.work): each company's state from the computer key serving it now
 (function hookServeWork(){
   if (typeof TLight !== "object" || typeof TLight.work !== "function" || TLight.workServed) return;
@@ -282,5 +290,5 @@ async function linkPostingSet(co, rec, on){
       return sv && sv.dev.id !== c.device_id ? Object.assign({}, c, {device_id: sv.dev.id}) : c; }), devs, now);
   };
 })();
-if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec, tallyServe, tallyPlain});
+if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec, tallyServe, tallyPlain, tallyPostSign});
 /* @react-lazy: end */
