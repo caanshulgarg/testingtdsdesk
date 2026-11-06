@@ -298,6 +298,7 @@ const Store = {
     S.data[cid] = d;
   },
   put(path, obj){
+    if (/\/(entries|parties)\//.test(path)) ENTRY_REV++;   // (the bills' figures kept for a drawing are worked out again: dupKeys, draftRows)
     if (S.storeKind === "db"){
       const body = obj ? clone(obj) : null;
       this.chains[path] = (this.chains[path] || Promise.resolve()).then(async () => {
@@ -3448,12 +3449,26 @@ function dupMsg(o){
   const st = o.status === "approved" ? "approved on " + fmtDate((o.approvedAt || "").slice(0, 10)) + (billInTally(o) ? " (in Tally)" : o.exportedAt ? " (in a Tally file)" : "") : statusLabel(o.status);
   return "Duplicate of " + (o.x.vendorName || o.fileName) + " bill " + o.x.invoiceNo + " dated " + fmtDate(o.x.invoiceDate) + ", " + st + ".";
 }
+// hang-invoices (FINCOM-APP-STAGING-K, staging 6-Nov-2026: a client opened from Today held the page 2.4 s in one click,
+// React's click handler l3): every draft's compute() looks for its duplicate here, and each look worked out every other
+// bill's number, supplier and year again (normInv, norm, fyOf: regular expressions), for every draft, at each of the
+// drawings of the opening (draftRows asked 70 times: 4,260 computes for 60 drafts). Within a drawing the bills' keys are
+// worked out once (dupKeys, perRender); outside one, as before. The same bill found, in the same order. ENTRY_REV: moved by
+// every save of a bill or a supplier (Store.put: one typed here, or a colleague's coming in), so a drawing made with the
+// last drawing's figures (memoKeep: the top bar's news) never shows the bills as they were
+var ENTRY_REV = 0;   // (var: Store.put may run before this line is reached)
+function dupKeys(cid){
+  return perRender(dupKeys, (cid || S.coId) + "|" + ENTRY_REV, () => Object.values(D(cid).entries).map(o => { const x = o.x, inv = normInv(x.invoiceNo), fy = fyOf(x.invoiceDate), pan = effectivePan(x), nm = norm(x.vendorName), who = pan || nm;
+    return {o, inv, fy, pan, nm, k: inv && who ? who + "|" + inv + "|" + fy : ""}; }));
+}
 function findDuplicate(e, cid){
-  const k = invKey(e.x);
-  if (k || normInv(e.x.invoiceNo)){
-    for (const o of Object.values(D(cid).entries)){
+  const k = invKey(e.x), inv = normInv(e.x.invoiceNo), fy = fyOf(e.x.invoiceDate), pan = effectivePan(e.x), nm = norm(e.x.vendorName);
+  if (k || inv){
+    for (const r of dupKeys(cid)){
+      const o = r.o;
       if (o.id === e.id || o.status === "duplicate" || o.status === "deleted" || o.notDuplicate) continue;
-      if ((k && invKey(o.x) === k) || sameBill(e.x, o.x)) return {entryId:o.id, strong:true, msg:dupMsg(o)};
+      // (sameBill, from the keys)
+      if ((k && r.k === k) || (inv === r.inv && fy === r.fy && (pan && r.pan ? pan === r.pan : !!nm && nm === r.nm))) return {entryId:o.id, strong:true, msg:dupMsg(o)};
     }
     const sent = k && (CO(cid).keys || {})[k];
     if (sent){
@@ -3464,11 +3479,12 @@ function findDuplicate(e, cid){
     }
   }
   // weaker: same supplier, same date and same total
-  const who = effectivePan(e.x) || norm(e.x.vendorName), tot = num(e.x.total);
+  const who = pan || nm, tot = num(e.x.total);
   if (who && tot && e.x.invoiceDate){
-    for (const o of Object.values(D(cid).entries)){
+    for (const r of dupKeys(cid)){
+      const o = r.o;
       if (o.id === e.id || o.status === "duplicate") continue;
-      if ((effectivePan(o.x) || norm(o.x.vendorName)) === who && o.x.invoiceDate === e.x.invoiceDate && Math.abs(num(o.x.total) - tot) < 1)
+      if ((r.pan || r.nm) === who && o.x.invoiceDate === e.x.invoiceDate && Math.abs(num(o.x.total) - tot) < 1)
         return {entryId:o.id, strong:false, msg:"Same supplier, date and total as " + (o.x.vendorName || o.fileName) + (o.x.invoiceNo ? " bill " + o.x.invoiceNo : "") + " (" + statusLabel(o.status) + ")."};
     }
   }
