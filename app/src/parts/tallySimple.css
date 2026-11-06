@@ -105,3 +105,4 @@
 #app .tsm-here-co { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0; min-width: 0; overflow-wrap: anywhere; }
 #app .tsm-here-co .tsm-pick, #app .tsm-here-why { flex: 1 1 100%; }
 #app .tsm-here-away { border-top: 1px solid var(--rule, var(--border)); padding-top: 8px; margin-top: 4px; }
+#app .tsm-here { border-top: 1px solid var(--rule, var(--border)); margin-top: 12px; padding-top: 10px; }

@@ -32,7 +32,7 @@ import "./tallySimple.css";
 // (Connect this computer: doConnect, its answer in OC.c), nothing new
 import { OC, doConnect, Line } from "./TallyOneClick.jsx";
 import { HERE } from "../lib/tallyConnect.js";
-import { connectSteps, LAPTOP, LAPTOP_HERE, stepLine } from "../lib/connectSteps.js";
+import { connectSteps, LAPTOP, LAPTOP_HERE } from "../lib/connectSteps.js";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 // next-tally-words: a client named as its Tally company (case and spaces aside): the button says only "Link"
@@ -105,7 +105,7 @@ function ConnectBtn({ r, co, label, hook, primary = true }) {
     onClick={async () => { setBusy(true); try { await linkTo(r, co); } finally { setBusy(false); } }}>{busy ? "Linking…" : label}</button>;
 }
 const STATE_WORD = { done: "Done", now: "Do this now", later: "Later" };
-function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgain }) {
+function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgain, here = null }) {
   const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false);
   const again = () => { setCk(true); rescanLocal(); Promise.resolve(checkAgain()).finally(() => { setCk(false); render(); }); };
   // the card's own look (TallyOneClick useHereProbe, every 2 minutes) found this login's bridge: the page's look follows
@@ -133,7 +133,7 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
   const now = cs.now, who = cs.login ? "This Windows login: " + cs.login : "This Windows login";
   if (collapsed) return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="done" data-tsm-collapsed="" data-tsm-login={cs.login || undefined}>
     <div className="tsm-guide-top"><b>{"Connect Tally · " + who + " · all 6 steps done ✓"}</b>
-      <span className="tsm-guide-links">{recheck}<button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></span></div></section>;
+      <span className="tsm-guide-links">{recheck}<button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></span></div>{here}</section>;
   const a = now && now.act;
   let btn = null;
   if (a && a.kind === "download") btn = download;
@@ -159,6 +159,7 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
     {forced && !(now && now.n === 1) && another}
     {now && now.n === 1 && connectPanel && now.hook !== "blocked" && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
+    {here}
   </section>;
 }
 
@@ -226,11 +227,11 @@ function Away({ row, x, cs, checkAgain }) {
   const step = cs.now && cs.now.n <= 4 ? cs.now : null;
   // (the computer offline, reading paused or stopped: its own words; the company not open: said for connecting, not for the ledgers)
   const sw = stallWhy(row.cid, row.company), shut = !sw || /^Open .+ in Tally|is not open in Tally|^No computer with FinCom Bridge holds /.test(sw);
-  const why = step ? stepLine(step) : shut ? "“" + shown(row.company) + "” is not open in your Tally. Open it in TallyPrime in this Windows login: it connects by itself within a minute." : sw;
+  const why = step ? "Step " + step.n + " of 6 above is not done: " + step.title + "." : shut ? "“" + shown(row.company) + "” is not open in your Tally. Open it in TallyPrime in this Windows login: it connects by itself within a minute." : sw;
   return <li className="tsm-here-co" data-tsm-away={row.cid}>
     <b className="tsm-here-name">{row.client}</b><span className="tsm-note">{"Tally company: " + shown(row.company)}</span>
     <button type="button" className="btn small primary" data-tsm-away-again={row.cid} disabled={st === 1} onClick={go}>{st === 1 ? "Checking…" : "Connect again"}</button>
-    {(st === 2 || step) && <div className="tsm-note tsm-here-why" data-tsm-away-why={step ? "step" + step.n : "why"} role="status">{why}
+    {st === 2 && <div className="tsm-note tsm-here-why" data-tsm-away-why={step ? "step" + step.n : "why"} role="status">{why}
       {step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {step.n}</button></>}</div>}
     {near && canWrite() && <div className="tsm-note" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
       <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></div>}</li>;
@@ -242,7 +243,7 @@ function OpenHere({ cs, own, rows, x, checkAgain }) {
   let seen = []; try { seen = companyRows().filter((r) => r.open).map((r) => coKey(r.company)); } catch (e) { seen = []; }
   const away = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w !== YES && r.company && !seen.includes(coKey(r.company)));
   const sayN = tallys.length ? nOfW(tallys.length, "Tally", "Tallys") + " running in this login" : run ? "TallyPrime is running in this login but FinCom can’t use it yet" : "No TallyPrime running in this login";
-  return <section className="tsm-card tsm-here" aria-label="Open in your Tally now" data-tsm-here={tallys.length} data-tsm-login={cs.login || undefined}>
+  return <section className="tsm-here" aria-label="Open in your Tally now" data-tsm-here={tallys.length} data-tsm-login={cs.login || undefined}>
     <div className="tsm-guide-top"><b>{"Open in your Tally now" + (cs.login ? " (" + cs.login + ")" : "")}</b><span className="tsm-note" data-tsm-here-n="">{sayN}</span></div>
     {tallys.map((t) => <div key={t.port} className="tsm-here-tally" data-tsm-here-tally={t.port}>
       <div className="tsm-here-head"><b>{"TallyPrime · port " + (t.port || "?")}</b><span className="tsm-word yes" data-tsm-here-tstate="connected">connected</span></div>
@@ -250,7 +251,7 @@ function OpenHere({ cs, own, rows, x, checkAgain }) {
         : <div className="tsm-note" data-tsm-here-noco="">No company open in it. Open your company in TallyPrime: it shows here within a minute.</div>}</div>)}
     {!tallys.length && run && conn.state !== "done" && <div className="tsm-here-tally" data-tsm-here-tally="off">
       <div className="tsm-here-head"><b>TallyPrime</b><span className="tsm-word no" data-tsm-here-tstate={conn.hook || "off"}>{STATE_OF[conn.hook] || "connection off"}</span></div>
-      {conn.say && <div className="tsm-note">{"Step 3 of 6: " + conn.say}</div>}</div>}
+      <div className="tsm-note" data-tsm-here-see="3">What to do is step 3, above.</div></div>}
     {away.length > 0 && <div className="tsm-here-away" data-tsm-here-away={away.length}><b>Linked clients not connected now</b>
       <ul className="tsm-here-list">{away.map((r) => <Away key={r.cid} row={r} x={x} cs={cs} checkAgain={checkAgain} />)}</ul></div>}
   </section>;
@@ -474,8 +475,9 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
     <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} /></Part>
     {strip && cs.mode !== "login" && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
-    {ready && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
-    {ready && <Part name="open here" v={v}><OpenHere cs={cs} own={own} rows={rows} x={R.extra} checkAgain={checkAgain} /></Part>}
+    {/* next-tally-basics: Open in your Tally now, inside Connect Tally (this login's own: its name and ports are said only there) */}
+    {ready && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain}
+      here={<Part name="open here" v={v}><OpenHere cs={cs} own={own} rows={rows} x={R.extra} checkAgain={checkAgain} /></Part>} /></Part>}
     <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} oneDl={oneDl} /></Part>
     {ready && <Part name="computers line" v={v}><Computers pcs={pcs} download={download} sha={sha} /></Part>}
   </div>;
