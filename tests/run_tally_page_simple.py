@@ -173,10 +173,15 @@ def main():
         scene([], [], fold=False)
         g = "#app [data-connect-guide]"
         # 23-Oct-2026 (next-tally-suvit, Suvit's flow): three steps; linking, the ledgers and the entries are Companies in Tally's rows
-        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-connect-step]").count() == 4, "guide: four steps while nothing is connected (26-Oct-2026: Set Tally's port)")
-        steps = E("() => [...document.querySelectorAll('#app [data-connect-guide] [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done'), e.innerText.trim()])")
-        ok([s[0] for s in steps] == ["install", "port", "open", "add"], "guide: Install -> Set Tally's port -> Open your company in TallyPrime -> Add as client (%s)" % [s[0] for s in steps])
+        # next-tally-connect-steps (06-Nov-2026; the owner: "3-4 Tally pages", "all 6 steps are not visible anywhere"): ONE list
+        # of steps, Connect Tally's six at the top of the page; the second list under For support is gone
+        g = "#app [data-tsm-guide]"
+        E("() => { window.__tm0 = S.tallyMore; S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(400)
+        ok(pg.locator(g).count() == 1 and pg.locator(g + " [data-tsm-step]").count() == 6 and pg.locator("#app [data-connect-guide]").count() == 0, "guide: one list of six steps while nothing is connected, no second list under For support")
+        steps = E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => [e.getAttribute('data-tsm-step-key'), e.hasAttribute('data-done'), e.innerText.trim()])")
+        ok([s[0] for s in steps] == ["bridge", "tally", "connect", "company", "link", "reading"], "guide: bridge -> Tally -> its connection and port -> a company -> link -> reading (%s)" % [s[0] for s in steps])
         ok(not any(s[1] for s in steps), "guide: nothing ticked yet")
+        E("() => { S.tallyMore = window.__tm0; render(); }"); pg.wait_for_timeout(300)
         # 24-Oct-2026 (next-tally-firstlink, fd7efe4e4): step 1's download is in Connect this computer under the steps
         # (Download, Open it, Type its code), as run_tally_page_clean and run_tally_suvit read it
         # 02-Nov-2026 (next-tally-simple): the guide above is the former one, under For support (its port step there); the page's
@@ -192,7 +197,8 @@ def main():
         ok(pg.locator("#app [data-connect-section]").count() == 1 and pg.locator("#app [data-connect-section]").is_visible(), "Advanced: this browser's connect section")
         # the numbering of "Connect this browser to FinCom Bridge" is written once (was "1. 1.")
         lis = E("() => [...document.querySelectorAll('#app ol.setup > li')].map(li => li.innerText.trim())")
-        ok(len(lis) == 3 and not [x for x in lis if re.match(r"^\d+\.", x)], "connect steps: no doubled numbering (%s)" % [x[:30] for x in lis])
+        # (next-tally-connect-steps: its first two steps are Connect Tally's, pointed to: two left)
+        ok(len(lis) == 2 and not [x for x in lis if re.match(r"^\d+\.", x)], "connect steps: no doubled numbering (%s)" % [x[:30] for x in lis])
         shot("guide-connect-open")
 
         # ---- 2. a bridge heard from, Tally open, no company linked: three ticked, Link to do
@@ -316,7 +322,7 @@ def main():
         E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(400)
         ok(pg.locator("#app [data-advanced] [data-guide-again]").count() == 1, "Help & support: 'Connect another computer'")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
-        ok(pg.locator("#app [data-connect-step]").count() == 4 and pg.locator('#app [data-connect-step="install"] [data-bridge-download]').count() == 1, "Connect another computer: the steps again, with the download")
+        ok(pg.locator("#app [data-tsm-guide][data-tsm-forced] [data-tsm-step]").count() == 6 and pg.locator('#app [data-tsm-guide] [data-tsm-another] [data-tsm-download]').count() == 1, "Connect another computer: the six steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
         # the Day Book upload; no "waiting" box
         scene(DEVS, LINKED)

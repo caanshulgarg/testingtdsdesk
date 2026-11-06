@@ -157,7 +157,8 @@ with sync_playwright() as p:
     press("tallyConnect"); pg.wait_for_timeout(600)
     ok(pg.evaluate("[S.view, S.homeTab]") == ["home", "tally"], "Connect this computer: the Tally page (%s)" % pg.evaluate("[S.view, S.homeTab]"))
     # 02-Nov-2026 (next-tally-simple): Connect a company to Tally at step 1, with Connect this computer (its install and code)
-    ok(pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() > 0, "with Connect a company to Tally at step 1: the install and connect steps, on it")
+    # next-tally-connect-steps: Connect Tally, opened by the ask (step 1 here; a browser with no bridge: where to do it, and the set-up)
+    ok(pg.locator('#app [data-tsm-guide] [data-firstlink]').count() > 0, "with Connect a company to Tally at step 1: the install and connect steps, on it")
     pg.evaluate("(cid) => { S.view = 'company'; S.coId = cid; S.tab = 'dash'; S.returnTo = null; render(); }", cid)
 
     # 7. the same computer, two Windows users: anshul's bridge here is not Ranjeet's

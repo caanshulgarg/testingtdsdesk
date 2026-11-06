@@ -174,40 +174,48 @@ def main():
         def word(name, k): return pg.get_attribute(cell(name, k) + " [data-tsm-word]", "data-tsm-word") if n(cell(name, k) + " [data-tsm-word]") else None
         def steps(): return E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => [e.getAttribute('data-tsm-step'), e.hasAttribute('data-now'), e.hasAttribute('data-done')])")
         def main_text(): return E("() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-for-support]').forEach(e => e.remove()); return a.innerText; }")
+        # next-tally-connect-steps (the owner, 06-Nov-2026: the steps say WHICH Windows login, and whose Tally holds a port):
+        # Connect Tally names this login and its Tally's port; the rest of the page still names no computer or login
+        def rest_text(): return E("() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-for-support], [data-tsm-guide]').forEach(e => e.remove()); return a.innerText; }")
         def shot(name, full=True):
             if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, name + ".png"), full_page=full)
 
-        print("== 1. the guided box, from real state")
+        print("== 1. Connect Tally's six steps, from real state (next-tally-connect-steps: was the four-step guided box)")
+        def states(): return E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => e.getAttribute('data-tsm-state'))")
         scene([], [], [ACME, EVER])
         g = "#app [data-tsm-guide]"
-        ok(pg.get_attribute(g, "data-tsm-guide") == "1" and steps() == [["1", True, False], ["2", False, False], ["3", False, False], ["4", False, False]], "1. no bridge heard: step 1 current, nothing ticked (%s)" % steps())
-        ok(txt("#app [data-tsm-now]") == "Step 1: download FinCom Bridge and install it on the computer that has Tally." and txt(g + " [data-tsm-download]") == "Download FinCom Bridge"
-           and (pg.get_attribute(g + " [data-tsm-download]", "href") or "").startswith("assets/bridge-go/FinComBridge-Setup-2.5.1.exe?v="), "1. step 1: one sentence, Download FinCom Bridge (this site's setup)")
+        ok(pg.get_attribute(g, "data-tsm-guide") == "1" and states() == ["now"] + ["later"] * 5, "1. no bridge anywhere (the first time): step 1 now, the rest later (%s)" % states())
+        ok(txt("#app [data-tsm-now]").startswith("Step 1: On the computer or server where TallyPrime runs, download FinCom Bridge") and txt(g + " [data-tsm-download]") == "Download FinCom Bridge"
+           and (pg.get_attribute(g + " [data-tsm-download]", "href") or "").startswith("assets/bridge-go/FinComBridge-Setup-2.5.1.exe?v="), "1. step 1: one sentence, Download FinCom Bridge (this site's setup) (%s)" % txt("#app [data-tsm-now]"))
         ok(n(g + " [data-tsm-panel]") == 1, "1. step 1: the connect panel (open it, type its code) under the box")
         ok(n("#app [data-tsm-strip]") == 0 and "none connected" in txt("#app [data-tsm-pcs]"), "1. no strip; Computers with Tally: none connected (%s)" % txt("#app [data-tsm-pcs]"))
         hd = txt("#app [data-tsm-head]")
         ok(hd.startswith("Tally") and "Check Tally now" in hd and n("#app [data-tsm-check]") == 1, "1. the header: Tally, the sentence, Check Tally now (%s)" % hd)
 
-        d = T.dev(7, PC, WIN, tally="open", opened=(), version="2.5.1", rec=())
-        scene([d], [], [ACME, EVER])
-        ok(pg.get_attribute(g, "data-tsm-guide") == "2" and steps()[0] == ["1", False, True] and steps()[1] == ["2", True, False], "1. a bridge, nothing open: step 2, step 1 ticked (%s)" % steps())
-        ok(txt("#app [data-tsm-now]") == "Step 2: FinCom Bridge is installed. Now open your company in Tally. This box moves on by itself when it sees the company.", "1. step 2's sentence")
-        r0 = E("window.__reads"); pg.click(g + ' [data-tsm-go="opened"]'); pg.wait_for_timeout(1500)
-        ok(E("window.__reads") > r0, "1. I have opened it: the computers are read again (%d -> %d)" % (r0, E("window.__reads")))
+        # this login's own bridge answers here (bridge 2.5.3's sameSession); its Tally open, no company
+        P1 = {"9101": ping(9101, True, PC + "\\" + WIN, version="2.5.3", bridgeId="go-7")}
+        d = T.dev(7, PC, WIN, tally="open", opened=(), version="2.5.3", rec=())
+        scene([d], [], [ACME, EVER], pings=P1)
+        ok(pg.get_attribute(g, "data-tsm-guide") == "4" and states()[:4] == ["done", "done", "done", "now"], "1. a bridge, Tally open, no company: step 4 now, 1 to 3 ticked (%s)" % states())
+        ok(txt("#app [data-tsm-now]") == "Step 4: Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.", "1. step 4's sentence (%s)" % txt("#app [data-tsm-now]"))
+        r0 = E("window.__reads"); pg.click(g + ' [data-tsm-go="check"]'); pg.wait_for_timeout(1500)
+        ok(E("window.__reads") > r0, "1. Check again: the computers are read again (%d -> %d)" % (r0, E("window.__reads")))
 
-        d = T.dev(7, PC, WIN, tally="open", opened=(SPLIT,), version="2.5.1", rec=(SPLIT,))
-        ids = scene([d], [{"company": SPLIT, "client_id": None, "device_id": d["id"], "gstin": "", "last_seen": "ago:1"}], [ACME, EVER])
-        ok(pg.get_attribute(g, "data-tsm-guide") == "3" and [s[2] for s in steps()] == [True, True, False, False], "1. a company open that no client has: step 3, steps 1 and 2 ticked (%s)" % steps())
-        ok(txt("#app [data-tsm-now]") == "Step 3: Tally has “%s” open. Link it to client “%s”?" % (SPLIT, EVER), "1. step 3: the full Tally name, the client of its name (%s)" % txt("#app [data-tsm-now]"))
-        ok(n("#app [data-tsm-strip]") == 0, "1. step 3 says it: no strip as well")
+        d = T.dev(7, PC, WIN, tally="open", opened=(SPLIT,), version="2.5.3", rec=(SPLIT,))
+        ids = scene([d], [{"company": SPLIT, "client_id": None, "device_id": d["id"], "gstin": "", "last_seen": "ago:1"}], [ACME, EVER], pings=P1)
+        ok(pg.get_attribute(g, "data-tsm-guide") == "5" and states()[:5] == ["done"] * 4 + ["now"], "1. a company open that no client has: step 5, steps 1 to 4 ticked (%s)" % states())
+        ok(txt("#app [data-tsm-now]") == "Step 5: “%s” is open in your Tally. Link it to client “%s”." % (SPLIT, EVER), "1. step 5: the full Tally name, the client of its name (%s)" % txt("#app [data-tsm-now]"))
+        ok(n("#app [data-tsm-strip]") == 0, "1. step 5 says it: no strip as well")
         pg.click(g + " [data-tsm-go-choose]"); pg.wait_for_timeout(500)
         ok(n(g + " [data-tsm-guide-pick] select[data-tco-relink-pick]") == 1, "1. Choose another client: the picker of the clients")
         E("() => { window.__calls = []; }")
         pg.click(g + ' [data-tsm-go="connect"]'); pg.wait_for_timeout(2500)
-        ok([x for x in links() if x.get("p_client")] == [{"p_company": SPLIT, "p_client": ids[EVER]}], "1. Yes, link: ONE link, the full Tally name to %s (%s)" % (EVER, links()))
-        ok(pg.get_attribute(g, "data-tsm-guide") == "4" and txt("#app [data-tsm-now]").startswith("Linked. Ledgers, opening balances and entries are coming in by themselves.") and n(g + " [data-tsm-go]") == 0,
-           "1. just linked: step 4, no button (%s)" % txt("#app [data-tsm-now]"))
-        shot("guide-step4")
+        ok([x for x in links() if x.get("p_client")] == [{"p_company": SPLIT, "p_client": ids[EVER]}], "1. Link: ONE link, the full Tally name to %s (%s)" % (EVER, links()))
+        ok(pg.get_attribute(g, "data-tsm-guide") == "6" and txt("#app [data-tsm-now]").startswith("Step 6: Reading “%s”:" % SPLIT) and n(g + " [data-tsm-go]") == 0,
+           "1. just linked: step 6 (reading), no button (%s)" % txt("#app [data-tsm-now]"))
+        shot("guide-step6")
+        # (this login's bridge found above is not remembered for the scenes below: neither as its own bridge nor as the address)
+        E(FORGET); E(PINGS, {}); E("() => { try { localStorage.removeItem('tdsdesk:bridge'); } catch (e) {} Bridge.setCfg({key: '', bridgeId: '', url: 'http://127.0.0.1:9100'}); }")
 
         print("== 2. the strip, next time")
         d = T.dev(7, PC, WIN, tally="open", opened=(ACME, SPLIT), version="2.5.1", rec=(ACME,))
@@ -216,7 +224,9 @@ def main():
         ids = scene([d], cos, [ACME, EVER])
         st = "#app [data-tsm-strip]"
         # next-tally-words: a company connected already: the box is folded, and hidden while the strip shows
-        ok(n("#app [data-tsm-guide]") == 0 and n(st) == 1, "2. a company connected already, the strip showing: no folded steps box")
+        # next-tally-connect-steps: a browser with no bridge here (a laptop): Connect Tally is one small line (where to do
+        # the steps, the firm's state), never a login's steps
+        ok(pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "laptop" and n("#app [data-tsm-guide] [data-tsm-state]") == 0 and n(st) == 1, "2. a company connected already, a laptop: the strip, and Connect Tally's one line")
         ok(txt(st + " .tsm-strip-words") == "Open in your Tally now: “%s”, not linked yet" % SPLIT and pg.get_attribute(st, "data-tsm-strip") == SPLIT, "2. the strip names the full Tally name (%s)" % txt(st))
         ok(txt(st + " [data-tsm-strip-connect]") == "Link to client “%s”" % EVER, "2. one click: Link to client “%s”" % EVER)
         pg.click(st + " [data-tsm-strip-choose]"); pg.wait_for_timeout(500)
@@ -335,8 +345,8 @@ def main():
         o = col_o()
         ok(o[ACME] == "—" and txt(cell(ACME, "o") + " [data-tsm-note]").startswith(NOTRUN) and txt(cell(ACME, "o") + " [data-tsm-setup]") == "Set it up" and n("#app [data-tsm-local-connect]") == 0,
            "3b. no own bridge, nothing answering here: —, %s, Set it up (%s)" % (NOTRUN, txt(cell(ACME, "o"))))
-        ok("Yes" not in o.values() and ZETA not in o and n("#app [data-tsm-strip]") == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "1",
-           "3b. no own bridge: no Yes from another login's Tally, no company row or strip of theirs, the guided box at step 1 (%s)" % o)
+        ok("Yes" not in o.values() and ZETA not in o and n("#app [data-tsm-strip]") == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") in ("1", "laptop"),
+           "3b. no own bridge: no Yes from another login's Tally, no company row or strip of theirs, Connect Tally at step 1 (or, nothing answering here, where to do it) (%s)" % o)
         pg.click(cell(ACME, "o") + " [data-tsm-setup]"); pg.wait_for_timeout(1200)
         ok(n("#app [data-tsm-guide][data-tsm-forced]") == 1 and n("#app [data-tsm-guide] [data-tsm-panel]") == 1, "3b. Set it up: the pairing steps (step 1, the connect panel)")
         E("() => { S.tallyGuide = {}; S.tsm = null; render(); }")
@@ -383,7 +393,8 @@ def main():
 
         print("== 6. no computer names outside For support")
         mt = main_text()
-        ok(PC not in mt and WIN not in mt, "6. neither %s nor %s outside For support" % (PC, WIN))
+        mt = rest_text()
+        ok(PC not in mt and WIN not in mt, "6. neither %s nor %s outside For support and Connect Tally" % (PC, WIN))
         ok("older FinCom Bridge" in txt("#app [data-tsm-pcs]") and txt("#app [data-tsm-pcs]").startswith("Computers with Tally: 1 connected.") and n("#app [data-tsm-pcs] [data-tsm-download]") == 1 and n("#app [data-tsm-pcs] [data-tsm-sha]") == 1 and "Update it now" not in mt,
            "6. Computers with Tally: 1 connected. One has an older FinCom Bridge, Download and its fingerprint (no Update it now: no remote update) (%s)" % txt("#app [data-tsm-pcs]"))
 
@@ -423,7 +434,7 @@ def main():
         ok(SPLIT not in txt(row(EVER)) and word(EVER, "o") == "—" and n(cell(EVER, "c") + " [data-tsm-connect]") == 0, "3c. A's page: B's open company is not offered to A's client (%s)" % txt(row(EVER)))
         # B's own browser (B's bridge paired there): B's companies, and A's is not open in B's Tally
         E(MINE, ["paired", "go-8", ""]); pg.wait_for_timeout(1500)
-        ok(n("#app [data-tsm-strip]") == 1 and ZETA in shown() and word(ACME, "o") == "No" and word(ZETA, "o") == "Yes", "3c. B's page: B's open companies (the strip, %s's row Yes); A's %s No (%s)" % (ZETA, ACME, shown()))
+        ok((n("#app [data-tsm-strip]") == 1 or pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "5") and ZETA in shown() and word(ACME, "o") == "No" and word(ZETA, "o") == "Yes", "3c. B's page: B's open companies (the strip, %s's row Yes); A's %s No (%s)" % (ZETA, ACME, shown()))
         # A's browser reaches B's bridge on 127.0.0.1 (B's Windows user): A's page is unchanged
         E(MINE, ["paired", "go-7", ""]); E(LOCAL, [[SPLIT, ZETA], PC + "\\made-up-b", "go-7"]); pg.wait_for_timeout(1500)
         ok(n("#app [data-tsm-strip]") == 0 and ZETA not in shown() and word(ACME, "o") == "Yes", "3c. A's page with B's bridge answering locally: still only A's Tally (%s)" % shown())
@@ -473,10 +484,11 @@ def main():
         da2 = T.dev(7, PC, "made-up-a", tally="closed", opened=(), version="2.5.3", rec=(ACME,), ports=WHY_PORT,
                     beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "owner unknown", "tallyConnectSay": SAY})
         scene([da2, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=LINK_B, pings={"9101": ping(9101, True, UA, bridgeId="go-7"), "9150": ping(9150, False, UB)})
-        ok(txt("#app [data-tsm-why]") == "Tally is open but FinCom can’t use it: owner unknown (Tally may be running as administrator)" and word(ACME, "o") == "No",
-           "3d. tallyWhy and the port's reason in plain words (%s)" % txt("#app [data-tsm-why]"))
-        ok(txt("#app [data-tsm-connect-say]") == SAY, "3d. tallyConnectSay shown (%s)" % txt("#app [data-tsm-connect-say]"))
-        ok("made-up-a" not in main_text() and "9101" not in main_text(), "3d. no Windows login or port outside For support")
+        # next-tally-connect-steps: the bridge's reason is said once, as Connect Tally's step (owner unknown: Tally as administrator)
+        ok(txt("#app [data-tsm-now]").startswith("Step 2: TallyPrime seems to run as administrator") and word(ACME, "o") == "No",
+           "3d. tallyWhy in plain words, as step 2 (%s)" % txt("#app [data-tsm-now]"))
+        ok(n("#app [data-tsm-connect-say]") == 0 and SAY not in txt("#app [data-tsm-head]"), "3d. tallyConnectSay not said a second time in the header")
+        ok("made-up-a" not in rest_text() and "9101" not in rest_text(), "3d. no Windows login or port outside For support and Connect Tally")
         # its beat old: Connect asks the bridge found here (its address), never another's
         E("""() => { const old = new Date(Date.now() - 10 * 60000).toISOString(); [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return;
             d.info.beat.at = old; Object.values(d.info.bridges || {}).forEach(b => { b.at = old; }); }); render(); }"""); pg.wait_for_timeout(1200)

@@ -26,7 +26,13 @@ const goRow = (co) => () => { S.tallyPanel = false; S.tallyGuide = {}; if (typeo
 export const WORDS = { linked: "Linked", waiting: "Waiting for Tally", needs: "Needs you", unlinked: "Not linked" };
 const LEVEL = { linked: "ok", waiting: "warn", needs: "bad", unlinked: "warn" };
 
+// next-tally-connect-steps: a client waiting for Tally (or the port) while this login's own Connect Tally step is not done
+// says that step's words, with the way to the six steps (lib/connectSteps.js, through globalThis: no import cycle)
 export function linkWord(co, company) {
+  const w = linkWordNow(co, company);
+  return typeof globalThis.FCWithStep === "function" ? globalThis.FCWithStep(w) : w;
+}
+function linkWordNow(co, company) {
   if (!co || typeof tallyLinkOf !== "function") return null;
   const k = tallyLinkOf(co);
   const o = (kind, line, button, extra) => Object.assign({ kind, word: WORDS[kind], level: LEVEL[kind], line: line || "", button: button || null, state: "unlinked", company: "", computer: "", seen: "" }, extra || {},

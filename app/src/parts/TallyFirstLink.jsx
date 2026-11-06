@@ -233,13 +233,5 @@ function tallyWords() {
   return " Tally found · " + n + (n === 1 ? " company" : " companies") + " open.";
 }
 
-// step 2, from the bridge on this computer (the cloud's view comes a beat later): "Tally found · 2 companies open"
-export function LocalTally() {
-  const st = typeof Bridge === "object" && Bridge.on() ? Bridge.st : null;
-  if (!st || st.state !== "ok") return null;
-  const n = (st.open || []).length;
-  return <p className={"tc3-p fl-local " + (st.tallyUp && n ? "ok" : "bad")} data-fl-local={st.tallyUp ? n : "down"}>
-    {st.tallyUp ? (n ? "On this computer: Tally found · " + n + (n === 1 ? " company" : " companies") + " open. " + (n ? "They show in the list below within a minute." : "")
-      : "On this computer: Tally found, but no company is open. Open your company in TallyPrime.")
-      : "On this computer: Tally is not answering. Open TallyPrime and your company. Still not found: in TallyPrime press F1 (Help) → Settings → Connectivity and set “TallyPrime acts as” to Both."}</p>;
-}
+// (next-tally-connect-steps: LocalTally, a second "Tally is not answering" line with its own fix, is gone: Connect Tally's
+// steps 2 to 4 say it, from lib/connectSteps.js)

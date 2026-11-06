@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, guideStep, ownState, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -31,6 +31,8 @@ import "./tallySimple.css";
 // "Open in Tally right now?" with no FinCom Bridge reachable from this browser: Connect is the page's own local connect
 // (Connect this computer: doConnect, its answer in OC.c), nothing new
 import { OC, doConnect, Line } from "./TallyOneClick.jsx";
+import { HERE } from "../lib/tallyConnect.js";
+import { connectSteps, LAPTOP, LAPTOP_HERE } from "../lib/connectSteps.js";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 // next-tally-words: a client named as its Tally company (case and spaces aside): the button says only "Link"
@@ -74,29 +76,26 @@ function checking() {
 }
 
 // ---------- the header
-function Head({ rows, checkAgain, ready, own, download, oneDl }) {
+function Head({ rows, checkAgain, ready, own }) {
   const w = headWords(rows), on = checking(), o = own || {}, quick = rows.some((r) => r.quick);
-  // next-hang-watch: no bridge of this Windows login answers here: why, plainly, with what to do (never a blank)
-  const say = (o.state === "none" || o.state === "away") && o.say ? o.say : null, far = o.state === "ok" && o.far;
+  // next-tally-connect-steps: why this login's bridge or Tally is not ready is said once, in Connect Tally's step (never here
+  // too); only that the page shows the bridge's last beat (it does not answer here now), or a bridge not confirmed yours
+  const far = o.state === "ok" && o.far;
   return <header className="tsm-head" data-tsm-head="">
     <div className="tsm-head-words"><h3 className="tsm-title">Tally</h3>
       {ready && !quick && <div className="tsm-say" data-tsm-say=""><b className="tsm-fine">{w.fine}</b>{" "}<b className="tsm-need" data-tsm-need-n={rows.filter((r) => r.need).length}>{w.need}</b></div>}</div>
     <button type="button" className="btn primary tsm-check" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check Tally now"}</button>
-    {ready && (say || far) && <div className="tsm-head-notes tsm-head-bridge" data-tsm-bridge-say={say ? say.kind : "far"}>
-      <div className="tsm-note">{say ? say.words : "This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div>
-      {say && say.kind !== "blocked" && !(oneDl && say.kind !== "old") && download}</div>}
-    {ready && (o.unsure || (o.state === "ok" && !o.names.size && o.why) || (typeof o.say === "string" && o.say)) && <div className="tsm-head-notes">
-      {o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
-      {o.state === "ok" && !o.names.size && o.why && <div className="tsm-note" data-tsm-why="">{o.why}</div>}
-      {typeof o.say === "string" && o.say && <div className="tsm-note" data-tsm-connect-say="">{o.say}</div>}</div>}
+    {ready && far && <div className="tsm-head-notes tsm-head-bridge" data-tsm-bridge-say="far">
+      <div className="tsm-note">{"This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div></div>}
+    {ready && o.unsure && <div className="tsm-head-notes"><div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div></div>}
   </header>;
 }
 
-// ---------- the guided box
-const STEPS = [["Install FinCom Bridge", "On the computer that has Tally. Takes 1 minute."],
-  ["Open the company in Tally", "Just open it. FinCom finds it by itself."],
-  ["Link the client", "FinCom suggests the client with the same name."],
-  ["Done", "Ledgers, opening balances and entries come in by themselves."]];
+// ---------- Connect Tally: the six live steps for THIS browser's own Windows login (next-tally-connect-steps; the
+// owner: "all 6 steps are not visible anywhere"; lib/connectSteps.js holds the steps and their words). Each step ticks by
+// itself from what the page already reads (the beats every 30 s, the look on 127.0.0.1, the rows); only the first step
+// not done says what to do, with its one button; Check again asks now. All done: one small line. A laptop (no bridge
+// here): where to do the steps, with the firm's state
 const TICK = <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 // one click: the company to the client (the same link as everywhere: linkTo, its first sync started)
 function ConnectBtn({ r, co, label, hook, primary = true }) {
@@ -105,36 +104,58 @@ function ConnectBtn({ r, co, label, hook, primary = true }) {
   return <button type="button" className={"btn" + (primary ? " primary" : "")} {...hook} disabled={busy}
     onClick={async () => { setBusy(true); try { await linkTo(r, co); } finally { setBusy(false); } }}>{busy ? "Linking…" : label}</button>;
 }
-function Guide({ step, collapsed, forced, open, best, connectPanel, download, checkAgain }) {
+const STATE_WORD = { done: "Done", now: "Do this now", later: "Later" };
+function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgain }) {
   const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false);
-  if (collapsed) return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect a company" data-tsm-guide="done" data-tsm-collapsed="">
-    <div className="tsm-guide-top"><b>Connect a company to Tally</b>
-      <button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></div></section>;
-  const now = [
-    ["Step 1: download FinCom Bridge and install it on the computer that has Tally.", download],
-    ["Step 2: FinCom Bridge is installed. Now open your company in Tally. This box moves on by itself when it sees the company.",
-      <button type="button" className="btn primary" data-tsm-go="opened" disabled={ck} onClick={() => { setCk(true); rescanLocal(); Promise.resolve(checkAgain()).finally(() => setCk(false)); }}>{ck ? "Checking…" : "I have opened it"}</button>],
-    open ? [best ? "Step 3: Tally has “" + shown(open.company) + "” open. Link it to client “" + best.name + "”?" : "Step 3: Tally has “" + shown(open.company) + "” open. Which client is it?",
-      best ? <ConnectBtn r={open} co={best} label="Yes, link" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": best.id }} /> : null] : ["", null],
-    ["Linked. Ledgers, opening balances and entries are coming in by themselves. You can follow it in the list below.", null],
-  ][step - 1];
-  return <section className="tsm-card tsm-guide" aria-label="Connect a company" data-tsm-guide={step} data-tsm-forced={forced ? "" : undefined}>
-    <div className="tsm-guide-top"><b className="tsm-guide-title">Connect a company to Tally</b>
-      <span className="tsm-guide-links">
-        {forced ? <button type="button" className="linkbtn" data-tsm-back="" onClick={() => { S.tallyGuide = {}; set({ again: 0 }); }}>Back</button>
-          : <button type="button" className="linkbtn" data-tsm-again="" onClick={() => set({ again: Date.now() })}>Start again</button>}
-        {ui.open && !forced && <button type="button" className="linkbtn" data-tsm-hide="" onClick={() => set({ open: false })}>Hide the steps</button>}</span></div>
-    <ol className="tsm-steps">{STEPS.map(([title, text], i) => { const n = i + 1, done = n < step, cur = n === step;
-      return <li key={n} className={"tsm-step" + (cur ? " now" : done ? " done" : "")} data-tsm-step={n} data-now={cur ? "" : undefined} data-done={done ? "" : undefined} aria-current={cur ? "step" : undefined}>
-        <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{done ? TICK : n}</span><span className="tsm-step-title">{title}</span></div>
-        <div className="tsm-step-text">{text}</div></li>; })}</ol>
-    <div className="tsm-now">
-      <div className="tsm-now-text" data-tsm-now={step}>{now[0]}</div>
-      {now[1] && <span className="tsm-now-act">{now[1]}</span>}
-      {step === 3 && open && canWrite() && (best ? !pick && <button type="button" className="linkbtn" data-tsm-go-choose="" onClick={() => setPick(true)}>Choose another client</button> : null)}
-    </div>
-    {step === 3 && open && canWrite() && (pick || !best) && <div className="tsm-pick" data-tsm-guide-pick=""><Pick r={open} co={null} pre={best ? "" : ""} onClose={() => setPick(false)} /></div>}
-    {step === 1 && connectPanel && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
+  const again = () => { setCk(true); rescanLocal(); Promise.resolve(checkAgain()).finally(() => { setCk(false); render(); }); };
+  // the card's own look (TallyOneClick useHereProbe, every 2 minutes) found this login's bridge: the page's look follows
+  // (once for each bridge it finds, and only a 2.5.3 one saying it is this session's: never a look that starts another look)
+  useEffect(() => { const A = HERE.lastAny, m = A && A.h && A.h.mine, k = m ? String(m.bridgeId || m.port || "") : "";
+    if (cs.now && cs.now.n === 1 && m && m.sameSession === true && k && k !== Guide.seen && !(localBridges() || []).some((x) => x && x.sameSession === true)) { Guide.seen = k; rescanLocal(); } });
+  const recheck = <button type="button" className="linkbtn" data-tsm-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>;
+  const another = <div className="tsm-now" data-tsm-another=""><div className="tsm-now-text">On another computer or Windows login: download FinCom Bridge there and run it in the login that runs TallyPrime. Its own six steps show there.</div>
+    <span className="tsm-now-act">{download}</span></div>;
+  if (cs.mode === "laptop") return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="laptop" data-tsm-forced={forced ? "" : undefined}>
+    <div className="tsm-guide-top"><b className="tsm-guide-title">Connect Tally</b><span className="tsm-guide-links">{recheck}
+      <button type="button" className="linkbtn" data-tsm-show="" aria-expanded={!!ui.open} onClick={() => set({ open: !ui.open })}>{ui.open ? "Hide the steps" : "Show the steps"}</button></span></div>
+    <div className="tsm-now-text" data-tsm-laptop="">{LAPTOP}</div>
+    <div className="tsm-note" data-tsm-laptop-here="">{LAPTOP_HERE}</div>
+    <div className="tsm-note" data-tsm-firm="">{cs.firm}</div>
+    {forced && another}
+    {/* (asked to set up here: this may be the Tally computer, its bridge not installed in this login yet) */}
+    {(forced || asked) && connectPanel && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
+    {(ui.open || forced) && <ol className="tsm-steps" data-tsm-titles="">{cs.steps.map((s) => <li key={s.n} className="tsm-step" data-tsm-step={s.n}>
+      <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{s.n}</span><span className="tsm-step-title">{s.title}</span></div></li>)}</ol>}
+  </section>;
+  const now = cs.now, who = cs.login ? "This Windows login: " + cs.login : "This Windows login";
+  if (collapsed) return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="done" data-tsm-collapsed="" data-tsm-login={cs.login || undefined}>
+    <div className="tsm-guide-top"><b>{"Connect Tally · " + who + " · all 6 steps done ✓"}</b>
+      <span className="tsm-guide-links">{recheck}<button type="button" className="linkbtn" data-tsm-show="" onClick={() => set({ open: true })}>Show the steps</button></span></div></section>;
+  const a = now && now.act;
+  let btn = null;
+  if (a && a.kind === "download") btn = download;
+  else if (a && a.kind === "link" && canWrite()) btn = a.co ? <ConnectBtn r={a.r} co={a.co} label="Link" hook={{ "data-tsm-go": "connect", "data-tsm-go-client": a.co.id }} />
+    : <button type="button" className="btn primary" data-tsm-go="choose" onClick={() => setPick(!pick)} aria-expanded={pick}>Choose the client</button>;
+  else if (a && a.kind === "check") btn = <button type="button" className="btn primary" data-tsm-go="check" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>;
+  const copy = a && a.free ? <button type="button" className="linkbtn" data-tsm-port-copy={a.free} onClick={() => (navigator.clipboard ? navigator.clipboard.writeText(String(a.free)) : Promise.reject()).then(() => toast("Port " + a.free + " copied."), () => toast("Could not copy; type " + a.free + "."))}>{"Copy " + a.free}</button> : null;
+  return <section className="tsm-card tsm-guide" aria-label="Connect Tally" data-tsm-guide={now ? now.n : "done"} data-tsm-hook={now ? now.hook || undefined : undefined} data-tsm-login={cs.login || undefined} data-tsm-forced={forced ? "" : undefined}>
+    <div className="tsm-guide-top"><b className="tsm-guide-title">Connect Tally</b><span className="tsm-note" data-tsm-who="">{who}</span>
+      <span className="tsm-guide-links">{recheck}
+        {forced ? <button type="button" className="linkbtn" data-tsm-back="" onClick={() => { S.tallyGuide = {}; set({ again: 0 }); }}>Back</button> : null}
+        {ui.open && !now && <button type="button" className="linkbtn" data-tsm-hide="" onClick={() => set({ open: false })}>Hide the steps</button>}</span></div>
+    <ol className="tsm-steps">{cs.steps.map((s) => <li key={s.n} className={"tsm-step " + s.state} data-tsm-step={s.n} data-tsm-step-key={s.key} data-tsm-state={s.state}
+      data-now={s.state === "now" ? "" : undefined} data-done={s.state === "done" ? "" : undefined} aria-current={s.state === "now" ? "step" : undefined}>
+      <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{s.state === "done" ? TICK : s.n}</span><span className="tsm-step-title">{s.title}</span></div>
+      <div className="tsm-step-text">{s.state === "done" ? (s.doneSay || STATE_WORD.done) + " ✓" : STATE_WORD[s.state]}</div></li>)}</ol>
+    {now && <div className="tsm-now">
+      <div className="tsm-now-text" data-tsm-now={now.n} data-tsm-now-hook={now.hook || undefined}>{"Step " + now.n + ": " + now.say}</div>
+      {(btn || copy) && <span className="tsm-now-act">{btn}{copy}</span>}
+      {a && a.kind === "link" && a.co && canWrite() && !pick && <button type="button" className="linkbtn" data-tsm-go-choose="" onClick={() => setPick(true)}>Choose another client</button>}
+    </div>}
+    {a && a.kind === "link" && canWrite() && pick && <div className="tsm-pick" data-tsm-guide-pick=""><Pick r={a.r} co={null} pre="" onClose={() => setPick(false)} /></div>}
+    {/* Set up again / another computer (openConnectTally(1)): the one Download for that other login */}
+    {forced && !(now && now.n === 1) && another}
+    {now && now.n === 1 && connectPanel && now.hook !== "blocked" && <div className="tsm-guide-panel" data-tsm-panel="">{connectPanel}</div>}
   </section>;
 }
 
@@ -334,17 +355,16 @@ function Computers({ pcs, download, sha }) {
 // the page above For support. installed: a bridge of the firm heard this week (the guided box counts it only when this user
 // has a bridge of their own: ownState); pcs: {connected, away, older};
 // download: the one Download FinCom Bridge (this site's latest.json); connectPanel: step 1's Download, Open it, Type its code
-export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel }) {
+export default function SimpleTally({ installed, ready = true, pcs, download, sha, checkAgain, connectPanel, latest = "" }) {
   const ui = UI(), g = S.tallyGuide || {}, now = Date.now();
   const focus = g.cid && g.at && now - g.at < GUIDE_MS ? g.cid : (S.tallyFocus || "");
   // next-tally-own-login: everything above For support is this user's own FinCom Bridge and Tally (ownState), never another
   // Windows login's on the same server
   let own; try { own = ownState(); } catch (e) { own = { state: "none" }; }
-  const mineIn = installed && own.state !== "none";
   // next-tally-table: the rows as last worked out (lib/tallySimple.js rowsFor: off the drawing, a few clients at a time),
   // at the very first drawing each client with its Tally company at once; the rest fills in as it is worked out
   const R = rowsFor({ focus }), rows = R.rows, x = R.extra || { unlinked: [], open: null, best: null, just: "", linkedN: rows.filter((r) => r.c.w === YES).length };
-  const unlinked = x.unlinked, just = x.just, linkedN = x.linkedN, v = ++DRAWN;
+  const unlinked = x.unlinked, v = ++DRAWN;
   useEffect(() => { booksLoad(rows.filter((r) => r.kind === "client" && r.c.w === YES).map((r) => r.cid)); countLedgers(rows); });
   // bridge 2.5.3: this Windows login's own bridge, looked for once for the tab, once the firm's computers are read (their
   // ports are asked too); never from a drawing (next-fix-probe-loop)
@@ -355,20 +375,21 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   // "Open Companies in Tally" (openConnectTally(4) with no client, e.g. Settings › Books in the cloud): that list is under For support
   useEffect(() => { if (g.at && (g.step || 0) >= 4 && !g.cid && !(S.tallyMore || {}).support) { S.tallyMore = Object.assign({}, S.tallyMore, { support: true }); render(); } }, [g.at]);
   useEffect(() => { if (!focus) return; const t = setTimeout(() => { const e = document.querySelector("#app [data-tsm-row][data-focus]"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 120); return () => clearTimeout(t); }, [focus]);
-  // openConnectTally(1): install on another computer (step 1 shown again); 2 and 3: the steps open
+  // openConnectTally(1..3): the steps shown (and forced open) for a while
   const forced = (!!ui.again && now - ui.again < GUIDE_MS) || (g.step === 1 && !!g.at && now - g.at < GUIDE_MS);
   const asked = !!g.at && g.step >= 1 && g.step <= 3 && now - g.at < GUIDE_MS;
-  const step = forced ? 1 : guideStep({ installed: mineIn, unlinked, just });
-  const expanded = forced || !mineIn || linkedN === 0 || step === 4 || ui.open || asked;
+  // next-tally-connect-steps: the six steps of this login (lib/connectSteps.js), from the same rows and the same own state
+  let cs; try { cs = connectSteps({ latest, rows: R.extra ? rows : null, rowsWait: !R.extra, extra: R.extra }); } catch (e) { cs = { mode: "login", login: "", steps: [], now: null }; }
+  const expanded = cs.mode === "laptop" || !!cs.now || forced || ui.open || asked;
   const open = x.open, best = x.best;
-  const strip = unlinked.length > 0 && !(expanded && step === 3);
-  // next-tally-words: step 1 open has the one Download button; the header's note and the rows say the words only (an
-  // older bridge keeps its own Download in its row and note)
-  const oneDl = !!ready && expanded && step === 1;
+  const strip = unlinked.length > 0 && !(expanded && cs.now && cs.now.key === "link");
+  // one Download on the page while step 1 asks for it (the rows and the header say the words only)
+  const oneDl = !!ready && !!cs.now && cs.now.n === 1;
+  useEffect(() => { if (ready && cs.now && cs.now.hook === "checking") lookOnce(); });
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
-    <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} download={download} oneDl={oneDl} /></Part>
+    <Part name="header" v={v}><Head rows={rows} checkAgain={checkAgain} ready={ready} own={own} /></Part>
     {strip && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
-    {ready && !(strip && !expanded) && <Part name="guided box" v={v}><Guide step={step} collapsed={!expanded} forced={forced} open={open} best={best} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
+    {ready && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     <Part name="table" v={v} fallback={() => <PlainTable />}><Table rows={rows} download={download} oneDl={oneDl} /></Part>
     {ready && <Part name="computers line" v={v}><Computers pcs={pcs} download={download} sha={sha} /></Part>}
   </div>;

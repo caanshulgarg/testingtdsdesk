@@ -8,7 +8,7 @@ and "while tally is open still system is not recognising the tally"). Made-up fi
      a. this login's 2.5.3 bridge (sameSession true), a company open there that no client has: at the top "Open in your
         Tally now: “<company>”, not linked yet" with Link to a client; the bridge is remembered in this browser;
      b. this login's bridge is 2.5.1 (it says it is this Windows user's, nothing of the session): the row and the top box
-        "Your FinCom Bridge is old (2.5.1). Install 2.5.3 to connect this login’s Tally." and Download FinCom Bridge;
+        "Your FinCom Bridge is old (2.5.1). Install 2.5.4 to connect this login’s Tally." and Download FinCom Bridge;
      c. only other logins' bridges answer (2.5.3 saying false, older ones not this user's): "FinCom Bridge is not running in
         this Windows login: start it, or install it.";
      d. nothing answers at all (the browser may not let the page reach this computer): the same, and choose Allow;
@@ -106,8 +106,9 @@ def main():
             return E("""() => { const t = (s) => [...document.querySelectorAll(s)].map(e => e.innerText.replace(/\\s+/g, ' ').trim());
               const row = (n) => { const r = document.querySelector('#app [data-tsm-row="' + n + '"] [data-tsm-col=o]'); return r ? r.innerText.replace(/\\s+/g, ' ').trim() : ''; };
               const tsm = document.querySelector('#app [data-tally-simple]') || {dataset: {}};
-              return {own: tsm.dataset.tsmOwn || '', how: tsm.dataset.tsmOwnHow || '', strip: t('#app [data-tsm-strip]').join(' | '), say: t('#app [data-tsm-bridge-say]').join(' | '),
-                gb: row('GB TEXCOAT'), eps: row('EPSILON X DESIGNS'), dl: document.querySelectorAll('#app [data-tsm-o-say] a[download], #app [data-tsm-bridge-say] a[download]').length}; }""")
+              return {own: tsm.dataset.tsmOwn || '', how: tsm.dataset.tsmOwnHow || '', strip: t('#app [data-tsm-strip]').join(' | '), say: [(t('#app [data-tsm-now]').join(' | ') || t('#app [data-tsm-laptop-here]').join(' | ').replace(/^If TallyPrime runs on this computer, F/, 'F')).replace(/^Step \\d: /, ''), t('#app [data-tsm-bridge-say]').join(' | ')].filter(Boolean).join(' | '),
+                gb: row('GB TEXCOAT'), eps: row('EPSILON X DESIGNS'), dl: document.querySelectorAll('#app [data-tsm-o-say] a[download], #app [data-tsm-guide] .tsm-now-act a[download]').length,
+                step5: (document.querySelector('#app [data-tsm-guide="5"] [data-tsm-now]') || {innerText: ''}).innerText}; }""")
         mine = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.3", "impl": "go", "yours": True, "windowsUser": UOWN, "bridgePort": 9103, "port": 9103, "bridgeId": "go-1", "sameSession": True}
         other253 = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.3", "impl": "go", "yours": False, "windowsUser": "PC1\\userb", "bridgePort": 9100, "sameSession": False}
         other251 = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.1", "impl": "go", "yours": False, "port": 9101}
@@ -115,13 +116,15 @@ def main():
         E("() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }")
         look([mine, other253, other251]); w = words(); print("      a.", w)
         ok(w["own"] == "ok" and w["how"] == "found", "a. this login's 2.5.3 bridge found (sameSession true)")
-        ok(w["strip"].startswith("Open in your Tally now: “%s”, not linked yet" % OPEN) and "Link to a client" in w["strip"], "a. at the top: Open in your Tally now: “…”, not linked yet, Link to a client")
+        # next-tally-connect-steps: the first company to link is Connect Tally's step 5 (the strip is for the ones after it)
+        ok((w["strip"].startswith("Open in your Tally now: “%s”, not linked yet" % OPEN) and "Link to a client" in w["strip"]) or w["step5"].startswith("Step 5: “%s” is open in your Tally." % OPEN),
+           "a. at the top: Open in your Tally now: “…”, not linked yet (the strip, or Connect Tally's step 5) (%s | %s)" % (w["strip"], w["step5"]))
         ok(E("() => !!FCTallySimple.rememberedOwn()"), "a. this login's bridge remembered in this browser")
         ok(w["eps"].startswith("No EPSILON X DESIGNS’s Tally is open in another Windows login (epsilonx), not in this login’s. Open it in this login, or install FinCom Bridge in the epsilonx login."),
            "f. a linked client whose Tally runs in another login: said so, by that login's name (%s)" % w["eps"][:160])
         E("() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }")
         look([own251, other253]); w = words(); print("      b.", w)
-        OLD = "Your FinCom Bridge is old (2.5.1). Install 2.5.3 to connect this login’s Tally."
+        OLD = "Your FinCom Bridge is old (2.5.1). Install 2.5.4 to connect this login’s Tally."
         ok(w["own"] == "none" and w["gb"].startswith("— " + OLD) and w["say"].startswith(OLD) and w["dl"] >= 2, "b. an old bridge of this login: the row and the top box say so, with the download (%s)" % w["gb"][:120])
         look([other253, other251]); w = words(); print("      c.", w)
         NOTRUN = "FinCom Bridge is not running in this Windows login: start it, or install it."

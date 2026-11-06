@@ -131,7 +131,7 @@ def main():
         card = txt("#app [data-status-card]")
         ok("Offline" in card and n("#app [data-tsc-need=offline]") == 1, "offline: said on the card (%s)" % card[:120])
         scene([], [])
-        ok(n("#app [data-connect-step]") == 4 and n("#app [data-firstlink]") == 1 and "Not connected" in txt("#app [data-status-card]"), "no computer ever connected: the four steps and the connect panel")
+        ok(n("#app [data-tsm-guide] [data-tsm-step]") == 6 and n("#app [data-connect-step]") == 0 and n("#app [data-firstlink]") == 1 and "Not connected" in txt("#app [data-status-card]"), "no computer ever connected: Connect Tally's six steps (one list) and the connect panel")
         shot("3-nothing-1440")
         pg.close()
         print("== 7. no overlap, no sideways scroll (1366, 1440, 390; light and dark)")

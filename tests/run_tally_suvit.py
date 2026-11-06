@@ -217,8 +217,9 @@ def main():
         # ---- 5b. the steps tick from real data
         scene(cos(), devs=[])
         tally_page()
-        g = E("() => [...document.querySelectorAll('#app [data-connect-step]')].map(e => [e.getAttribute('data-connect-step'), e.hasAttribute('data-done')])")
-        ok(g == [["install", False], ["port", False], ["open", False], ["add", False]] and pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
+        # next-tally-connect-steps: the one list of steps is Connect Tally's six at the top (the second list is gone)
+        g = E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => [e.getAttribute('data-tsm-step-key'), e.hasAttribute('data-done')])")
+        ok(g == [["bridge", False], ["tally", False], ["connect", False], ["company", False], ["link", False], ["reading", False]] and pg.locator("#app [data-connect-step]").count() == 0 and pg.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "5. no bridge: nothing ticked, the Download in step 1 (Connect this computer, next-tally-firstlink) (%s)" % g)
         scene(cos(), devs=[dev(opened=(), tally="closed")]); tally_page()
         ok(pg.locator("#app [data-connect-step=open]").count() == 0 and "Tally not open" in txt("#app [data-pc-lines]"), "5. bridge on, Tally closed: the card says Tally not open (%s)" % txt("#app [data-pc-lines]").replace("\n", " "))
         scene(cos(vms="GS"), devs=[dev()]); tally_page()

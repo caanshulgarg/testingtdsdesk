@@ -185,7 +185,7 @@ const lc = (s) => String(s || "").trim().toLowerCase();
 const sameUser = (a, b) => { const x = lc(a), y = lc(b); if (!x || !y) return null; if (x.includes("\\") && y.includes("\\")) return x === y; return x.split("\\").pop() === y.split("\\").pop(); };
 const fresh = (at) => !!at && Date.now() - Date.parse(at) < 3 * 60000;
 // every bridge on the firm's computers (revoked ones left out by tallyDevs): {dev, id, user, open, at, port, beat}
-function bridgesOf() {
+export function bridgesOf() {
   const out = [];
   tallyDevs().forEach((d) => {
     const info = d.info || {}, beat = info.beat || {}, br = info.bridges || {}, ids = Object.keys(br);
@@ -378,6 +378,9 @@ function ownBridgeAny(all) {
 // not looked yet): an older bridge that is this Windows user's (2.5.2 and older say nothing of the session, so FinCom can't
 // tell which login's Tally it serves) | none of this login's answering (other logins' bridges did) | nothing answered at all
 export const NEED_V = "2.5.3";
+// the newest FinCom Bridge (this site's latest.json, as the Tally page reads it; lib/connectSteps.js keeps it), named
+// when a bridge here is too old
+export const BRIDGE = { latest: "2.5.4" };
 export const BLOCKED = "This browser does not let FinCom reach FinCom Bridge on this computer. Allow it: the icon left of the address › Site settings › Local network access › Allow, then reload this page.";
 export function bridgeSay(list0) {
   const list = list0 === undefined ? localBridges() : list0;
@@ -385,7 +388,7 @@ export function bridgeSay(list0) {
   // next-tally-connectfix (audit item 8): the browser's leave to reach this computer refused: that, never "not running"
   if (LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
   const old = list.find((x) => !isNew(x) && x.yours !== false);
-  if (old) return { kind: "old", version: String(old.version || ""), words: "Your FinCom Bridge is old (" + (old.version || "before " + NEED_V) + "). Install " + NEED_V + " to connect this login’s Tally." };
+  if (old) return { kind: "old", version: String(old.version || ""), words: "Your FinCom Bridge is old (" + (old.version || "before " + NEED_V) + "). Install " + BRIDGE.latest + " to connect this login’s Tally." };
   if (!list.length && LOCALB.perm === "denied") return { kind: "blocked", words: BLOCKED };
   return { kind: list.length ? "notrunning" : "nothing", words: "FinCom Bridge is not running in this Windows login: start it, or install it." +
     (list.length ? "" : " If it is running, choose Allow when the browser asks to let this site reach apps on this computer.") };

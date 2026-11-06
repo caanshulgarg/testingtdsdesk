@@ -287,7 +287,7 @@ try:
             E2("() => { S.tallyGuide = {}; S.tallyFocus = ''; navHome('tally'); }"); W2(1500)
         scene([], []); card_again()
         # (next-tally-firstlink, fd7efe4e4: step 1's download is in Connect this computer: Download, Open it, Type its code)
-        ok(steps() == [0, 0, 0, 0] and tl.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and tl.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
+        ok(steps() == [0] * 6 and tl.locator('#app [data-tsm-guide="1"] [data-tsm-download]').count() == 1 and tl.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1, "no bridge: no step done, step 1 with the download (%s)" % steps())
         old = [TL.dev(1, "NWS144", "anshul", at="ago:20160", opened=())]
         scene([], old); card_again()
         ok(steps()[0] == 0, "a bridge last heard two weeks ago: step 1 not ticked (%s)" % steps())

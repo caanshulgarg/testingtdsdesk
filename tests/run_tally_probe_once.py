@@ -105,20 +105,20 @@ def main():
         E("() => navHome('today')"); pg.wait_for_timeout(800); E("() => navHome('tally')"); pg.wait_for_timeout(2000)
         ok(looks() == n1, "4. Today and back to Tally: no second look (%d -> %d)" % (n1, looks()))
 
-        print("== 5. I have opened it: one round more")
+        print("== 5. Check again (Connect Tally; was I have opened it): one round more")
         # the guided box at step 2 (a bridge of this user, nothing open): the member's own bridge is userA's
         da2 = T.dev(1, "PC1", UA, opened=(), version="2.5.3", beat={"bridgePort": 9103, "windowsUser": UA}, rec=())
         E(T.SETUP, [[da2, db], [], [], "owner", T.CLIENTS, True, {}]); pg.wait_for_timeout(300)
         E("(dev) => { TCloud.me = () => 'made-up-member-a'; const L = [{user_id: 'made-up-member-a', device_id: dev, bridge_id: 'go-1'}]; TCloud.pane.links = L; " "const api = Cloud.api; Cloud.api = async (p, o) => /^tally_member_bridges/.test(p) ? JSON.parse(JSON.stringify(L)) : api(p, o); render(); }", da2["id"])
         pg.wait_for_timeout(1500)
-        b = "#app [data-tsm-guide] [data-tsm-go=opened]"
+        b = "#app [data-tsm-guide] [data-tsm-recheck]"   # next-tally-connect-steps: Connect Tally's Check again
         if pg.locator(b).count():
             n2 = looks(); E("(s) => { const e = document.querySelector(s); e.click(); e.click(); }", b)   # (two clicks at once)
             E("() => FCTallySimple.rescanLocal()")                                                       # (and a third ask while asking)
             pg.wait_for_timeout(2500)
             new = E("(n) => window.__looks.slice(n)", n2)
             ok(len(new) > 0 and len(set(new)) == len(new), "5. I have opened it (pressed while asking too): exactly one round more (%d pings, %d ports)" % (len(new), len(set(new))))
-        else: ok(False, "5. the guided box's I have opened it is shown (step %s)" % E("() => (document.querySelector('#app [data-tsm-guide]') || {}).getAttribute && document.querySelector('#app [data-tsm-guide]').getAttribute('data-tsm-guide')"))
+        else: ok(False, "5. Connect Tally's Check again is shown (step %s)" % E("() => (document.querySelector('#app [data-tsm-guide]') || {}).getAttribute && document.querySelector('#app [data-tsm-guide]').getAttribute('data-tsm-guide')"))
 
         print("== 6. Connect: one round more")
         # the member's own bridge last heard an hour ago, its clients connected: the column says not connected, with Connect

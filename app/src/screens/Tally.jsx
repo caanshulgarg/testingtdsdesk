@@ -13,9 +13,8 @@ import { TallyStates, TallyHistory } from "../parts/TallyStates.jsx";
 import { PostLog } from "./Done.jsx";
 import CommitBox from "../parts/CommitBox.jsx";
 import { lastEntry } from "../lib/tallyState.js";
-import { freePort, portHowWords, portWarnWords } from "../lib/tallyPort.js";
 import CompaniesInTally, { companyRows, LinkedClients } from "../parts/TallyCompanies.jsx";
-import ConnectThisComputer, { LocalTally, CodeBox } from "../parts/TallyFirstLink.jsx";
+import ConnectThisComputer, { CodeBox } from "../parts/TallyFirstLink.jsx";
 import { OC, doConnect, doFind, doRefresh, useRefusedCheck, useHereProbe, useLocalRead, Line, Found } from "../parts/TallyOneClick.jsx";
 import { coKey } from "../lib/tallyState.js";
 import { beatFresh, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
@@ -24,6 +23,7 @@ import { TodayStatus } from "../parts/TallyFetch.jsx";
 // 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
 import SimpleTally from "../parts/TallySimple.jsx";
 import { ownBridge, ownOpen, placeOf } from "../lib/tallySimple.js";
+import { connectNow, stepLine } from "../lib/connectSteps.js";
 import { useState, useEffect } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
@@ -600,57 +600,11 @@ function ReadingView({ cards }) {
 // 26-Oct-2026 (next-tally-port; the owner: "we still need to set the port.. FinCom needs a step: this port is free, and do
 // this step in Tally. Everything should be clearly spoken"): step 2, Set Tally's port, between Install and Open. GUIDE_KEYS
 // are the steps in order; openConnectTally(1..3) still names Install, Open and the list (STEP_OF)
-const GUIDE_KEYS = ["install", "port", "open", "add"], STEP_OF = ["install", "open", "add"], GUIDE_REFRESH_MS = 30000;
+// next-tally-connect-steps (06-Nov-2026): those steps are now the six live steps at the top of the page (Connect Tally,
+// parts/TallySimple.jsx, lib/connectSteps.js); the second list of steps that was here, under For support, is gone
+const GUIDE_REFRESH_MS = 30000;
 const nOf = (n, one, many) => Number(n).toLocaleString("en-IN") + " " + (n === 1 ? one : many);
 const lc = (x) => String(x || "").trim().replace(/\s+/g, " ").toLowerCase();
-// Tally's port for this Windows user (me: this browser's own bridge, else the member's bridge, else the guide's computer),
-// from what the bridges already say: each bridge's tallyPort (info.bridges), the computer's beat ports (ok: answering;
-// skipped: another Windows user's Tally) and, when this browser's bridge answers, its /status sessions ("Your session",
-// "Another user — not used") and its /diagnose (each Tally's owner, ports and tally.ini port; every program on 9000-9999).
-//   {state: wait | offline | done | clash | set, port (his Tally's), who (the other user), set (his tally.ini port, not
-//    answering), free (the one port proposed), used (every port seen on that computer), pc, user}
-// free: lib/tallyPort.js freePort (9000-9099, not seen in use, not in PORT_AVOID, from a start by the Windows user's name).
-// A Tally on any port the bridge reaches is done (the TallyPrime 7.2 proof: 2.4.7 connects on 4125)
-function portState(rows, me) {
-  const mine = me ? lc(me.user) : "";
-  const L = typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.st && Bridge.st.state === "ok" && (!me || !Bridge.st.user || lc(Bridge.st.user) === mine) ? Bridge.st : null;
-  const pc = me ? "the Tally computer" : "this computer", user = me ? me.user || "" : (L && L.user) || "";
-  if (!me && !L) return { state: "wait", pc, user };
-  if (me && !me.online && !L) return { state: "offline", pc, user };
-  const seen = new Set(), other = new Map(), add = (p, who) => { p = Number(p) || 0; if (p <= 0) return; seen.add(p); if (who != null && !other.has(p)) other.set(p, who); };
-  let my = 0, set = 0, held = null;
-  // this browser's own bridge first: it says now which Tally is whose
-  if (L) {
-    (L.sessions || []).forEach((se) => { if (se.skipped) add(se.port, ""); else if (se.mine === true && se.ok) { my = my || Number(se.port) || 0; seen.add(Number(se.port)); } else add(se.port); });
-    const d = typeof Bridge === "object" && Bridge.diag && !Bridge.diag.error ? Bridge.diag : null;
-    if (d) {
-      (d.tallies || []).forEach((t) => { if (t.mine) { if (t.ports.length) my = my || Number(t.ports[0]); else if (t.ini && t.ini.found) set = Number(t.ini.port) || 9000; }
-        else t.ports.forEach((p) => add(p, t.user || "")); });
-      (d.listeners || []).forEach((l) => { add(l.port); if (Number(l.port) === set && !/tally/i.test(String(l.program || ""))) held = l; });
-    }
-  }
-  if (me) {
-    const dev = me.device || {}, info = dev.info || {}, beat = info.beat || {}, br = Object.values(info.bridges || {});
-    const answering = me.tally === "open" || me.tally === "busy";
-    const beatUser = beat.windowsUser || (br.length === 1 ? br[0].user || "" : ""), beatMine = beatUser ? lc(beatUser) === mine : !!me.main;
-    if (!my && answering && me.tallyPort) my = Number(me.tallyPort) || 0;
-    [].concat(beat.ports || []).forEach((x) => { if (!x || !x.port) return;
-      if (beatMine) { if (x.skipped) add(x.port, ""); else if (x.ok) { my = my || (answering ? Number(x.port) : 0); seen.add(Number(x.port)); } else add(x.port); }
-      else if (x.ok && !x.skipped) add(x.port, beatUser); else if (Number(x.port) !== my) add(x.port, x.skipped ? "" : null); });
-    // every other Windows user's bridge heard this week on that computer: its Tally's port
-    rows.filter((x) => x !== me && x.device && x.device.id === dev.id && x.go && !x.old && heardThisWeek(x) && lc(x.user) !== mine).forEach((x) => add(x.tallyPort, x.user || ""));
-  }
-  if (my) seen.add(my);
-  const used = [...seen].filter((p) => p > 0).sort((a, b) => a - b);
-  const free = freePort(seen, mine);
-  const base = { pc, user, free, used, port: my, set };
-  if (my && other.has(my)) return Object.assign(base, { state: "clash", who: other.get(my) });
-  if (!my && set && (other.has(set) || held)) return Object.assign(base, { state: "clash", port: set, who: other.has(set) ? other.get(set) : null, program: held ? String(held.program || "") : "" });
-  if (my) return Object.assign(base, { state: "done" });
-  // an older bridge that does not say the port: his Tally answers it, so it has one of its own
-  if (me && (me.tally === "open" || me.tally === "busy")) return Object.assign(base, { state: "done" });
-  return Object.assign(base, { state: "set" });
-}
 function guideState(rows, latest) {
   const p = TCloud.pane, live = cardsOf(rows).filter(heardThisWeek).filter((r) => r.go && !r.old);
   const st = live.map((r) => [r, pcState(r, latest)]);
@@ -665,48 +619,8 @@ function guideState(rows, latest) {
   // step 2 is this Windows user's: this browser's own bridge, else the member's bridge, else the guide's computer
   const loc = TCloud.localRow ? TCloud.localRow() : null, mb = TCloud.myBridge ? TCloud.myBridge() : "";
   const me = (loc && live.find((x) => x.id === loc.id)) || (mb && live.find((x) => x.id === mb)) || r;
-  const port = portState(rows, me);
-  const done = { install: live.length > 0, port: port.state === "done", open: reading.length > 0, add: linkedN > 0 };
-  return { done, r, s, live, on, tally, openNow, pcs, linkedN, port, fine: (st.find(([, x]) => x.fine) || open[0] || null) };
-}
-// "3 companies open in Tally on NWS144" / "12 companies open in Tally on 2 computers": a count, never the names
-function openWords(x) {
-  const n = x.openNow.length;
-  if (!n) return "No company is open in Tally right now.";
-  return nOf(n, "company", "companies") + " open in Tally.";
-}
-const TICK = <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-function Step({ k, n, title, done, now, children }) {
-  return <li data-connect-step={k} data-done={done ? "" : undefined} className={"tc3-step " + (done ? "done" : now ? "now" : "")}>
-    <span className="tc3-mark" aria-hidden="true">{done ? TICK : n}</span>
-    <div className="tc3-body"><b>{title}</b><div className="tc3-say">{children}</div></div></li>;
-}
-// step 2's words: the one free port, large, with Copy; TallyPrime's own menu in one line (TallyPrime 3.0 to 7.1:
-// F1 Help → Settings → Connectivity → Client/Server configuration; tally.ini's "Client Server = Both", "Enable ODBC Server
-// = Yes", "ServerPort", as .github/tally-spike writes them); Check (the wake and a fresh read; this browser's own bridge
-// asked again), and the guide's 20-second read ticks it by itself when the bridge sees his Tally on a port of its own
-function PortStep({ ps, installed }) {
-  const [ck, setCk] = useState({ busy: false, at: 0 }), [all, setAll] = useState(false);
-  if (!installed || ps.state === "wait") return <span className="note" data-port-state="wait">Finish step 1 first.</span>;
-  if (ps.state === "offline") return <span className="note" data-port-state="offline">{"Finish step 1 first: FinCom Bridge on " + ps.pc + " is offline."}</span>;
-  if (ps.state === "done") return <span className="note" data-port-state="done" data-port={ps.port || undefined}>{ps.port ? "Your Tally uses port " + ps.port + " ✓" : "Your Tally answers FinCom Bridge ✓"}</span>;
-  const free = ps.free;
-  const copy = () => (navigator.clipboard ? navigator.clipboard.writeText(String(free)) : Promise.reject()).then(() => toast("Port " + free + " copied."), () => toast("Could not copy; type " + free + "."));
-  const check = () => { setCk({ busy: true, at: 0 });
-    const local = typeof Bridge === "object" && Bridge.on && Bridge.on() ? Promise.resolve(Bridge.refresh(true)).then(() => Bridge.diagnose()) : null;
-    Promise.all([checkAgain(), local]).then(() => setCk({ busy: false, at: Date.now() }), () => setCk({ busy: false, at: Date.now() })).then(() => render()); };
-  // 26-Oct-2026, the owner on the first draft: "too lengthy, make it small and clear": the port, the menu in one line, Check
-  return <div data-port-state={ps.state} data-port-free={free}>
-    <div className="tc3-port"><span>Use port</span><b data-port-free-big="">{free}</b><span className="note">(free for you)</span><button className="btn small" data-port-copy="" onClick={copy}>Copy</button></div>
-    {ps.state === "clash" && <p className="tc3-p bk-warn" data-port-warn={ps.state}>{portWarnWords(free) + "."}</p>}
-    <p className="tc3-p" data-port-how="">{portHowWords(free)}</p>
-    {ps.state === "clash" && <p className="tc3-p bk-warn" data-port-clash={ps.port}>{"Your Tally is on " + ps.port + ", same as " + (ps.program ? "another program (" + ps.program + ")" : "another user") + ". Change it to " + free + " as above."}
-      {!ps.program && " If their port changes too, you share one TallyPrime folder: ask whoever set up " + ps.pc + " to give each user their own."}</p>}
-    <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button className="btn small primary" data-port-check="" disabled={ck.busy} onClick={check}>{ck.busy ? "Checking…" : "Check"}</button>
-      {ps.used.length > 0 && <button className="linkbtn" data-port-used-toggle="" aria-expanded={all} onClick={() => setAll(!all)}>{"Ports in use (" + ps.used.length + ")"}</button>}
-      {ck.at > 0 && <span className="note" data-port-not-yet="">{"Not yet: restart TallyPrime, then Check."}</span>}</div>
-    {all && <p className="tc3-p note" data-port-used="">{"In use on " + ps.pc + ": " + ps.used.join(", ") + "."}</p>}
-  </div>;
+  const done = { install: live.length > 0, open: reading.length > 0, add: linkedN > 0 };
+  return { done, r, s, live, on, tally, openNow, pcs, linkedN, me, fine: (st.find(([, x]) => x.fine) || open[0] || null) };
 }
 // the client a pointer named (openConnectTally(4, cid) from a client, Settings, the Clients list), while it is not linked
 function guideFor(g) {
@@ -727,53 +641,6 @@ function useGuideRefresh() {
   }, GUIDE_REFRESH_MS); return () => clearInterval(t); }, []);
 }
 function GuideRefresh() { useGuideRefresh(); return null; }
-function ConnectGuide({ x, m, connectStep, noPanel = false }) {
-  const p = TCloud.pane, g = S.tallyGuide || {}, d = x.done, all = GUIDE_KEYS.every((k) => d[k]);
-  useEffect(() => { if (!g.at) return; const t = setTimeout(() => { const k = STEP_OF[(g.step || 0) - 1];
-    const e = (k && !d[k] && document.querySelector('#app [data-connect-step="' + k + '"]')) || ((g.step || 0) >= 3 ? document.querySelector("#app [data-tco-list=firm]") : null) || document.querySelector("#app [data-connect-guide]");
-    if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 80); return () => clearTimeout(t); }, [g.at]);
-  if (p.devices == null && !p.err) return null;
-  // next-tally-smart (the owner: "no step wizard once connected"): the steps only while no computer of the firm is heard
-  // (a computer never connected); Connect another computer (step 1 asked again) shows them once more
-  if (d.install && !((g.step || 0) > 0 && (g.step || 0) < 3 && g.at)) return null;
-  const now = GUIDE_KEYS.find((k) => !d[k]), owner = isOwner(), r = x.r, s = x.s, pc = "the Tally computer";
-  const allStopped = TCloud.stoppedAll && TCloud.stoppedAll(), stop = s && s.stopped ? ((TCloud.stopFor && TCloud.stopFor(r.device.id)) || {}) : null;
-  const doneN = GUIDE_KEYS.filter((k) => d[k]).length;
-  return <section className="pane tguide tconnect tc3" data-connect-guide={now || "open"}>
-    <div className="tc3-top"><h3>Connect Tally</h3><span className="note tg-count" data-guide-count={doneN}>{doneN + " of " + GUIDE_KEYS.length + " done"}</span>
-      {d.install && <button className="linkbtn" data-guide-hide="" onClick={() => { S.tallyGuide = {}; render(); }}>Hide the steps</button>}</div>
-    <ol className="tc3-steps">
-      <Step k="install" n={1} title="Install FinCom Bridge on the Tally computer" done={d.install} now={now === "install"}>
-        {d.install ? <span className="note">{"FinCom Bridge is installed. "}
-            {g.step === 1 && g.at ? <><span>On another computer: </span><DownloadBtn m={m} primary /></> : null}</span>
-          : <><span className="note">Download it, open it, then type the code it shows: below, step by step. FinCom finds it on this computer by itself.</span>
-            {connectStep && <div data-guide-connect-slot="">{connectStep}</div>}</>}
-      </Step>
-      <Step k="port" n={2} title="Set Tally’s port" done={d.port} now={now === "port"}>
-        <PortStep ps={x.port} installed={d.install} />
-      </Step>
-      <Step k="open" n={3} title="Open your company in TallyPrime" done={d.open} now={now === "open"}>
-        {d.open ? <span className="note" data-guide-open-count={x.openNow.length}>{openWords(x)}</span>
-          : !d.install ? <span className="note">After step 1.</span>
-          : r && !r.online && !(Bridge.on() && Bridge.up()) ? <span className="note">{"FinCom Bridge on " + pc + " is offline. Turn the computer on and sign in to Windows: it starts by itself."}</span>
-          : <><LocalTally />{s && s.stopped && <p className="tc3-p" data-guide-paused="stopped"><b>{"Reading stopped" + (stop.stopped_by ? " by " + who(stop.stopped_by) : "") + " on " + pc + ": " + (s.rd.reason || stop.reason || "no reason given") + "."}</b>{" "}
-              {owner && !allStopped ? <button className="btn small primary" data-read-resume={r.device.id} onClick={() => TCloud.readResume(r)}>Resume reading</button> : !owner ? <span className="note">An owner of the firm can resume it.</span> : null}</p>}
-            {s && s.paused && <p className="tc3-p" data-guide-paused="paused"><b>{"Reading is paused on " + pc + "."}</b>{" To resume: " + RESUME_TRAY + ". " + PAUSE_SAYS}</p>}
-            {s && !s.tallyOk ? <p className="tc3-p note">{"Open TallyPrime on " + pc + " and open your company."}</p>
-              : !(s && (s.paused || s.stopped)) ? <p className="tc3-p note">{"Open your company in TallyPrime on " + pc + ": it shows in the list below within a minute."}</p>
-              : x.openNow.length ? <p className="tc3-p note" data-guide-open-count={x.openNow.length}>{openWords(x)}</p> : null}</>}
-      </Step>
-      <Step k="add" n={4} title="Link each company to its client (“Link to client…” in the list below)" done={d.add} now={now === "add"}>
-        {d.add ? <span className="note" data-guide-added={x.linkedN}>{nOf(x.linkedN, "company is", "companies are") + " clients in FinCom. Their first sync runs by itself."}</span>
-          : <span className="note">Choose the client the company belongs to: FinCom links it and brings its ledgers and entries by itself.</span>}
-      </Step>
-    </ol>
-    {/* next-tally-firstlink: until a bridge of the firm is heard (or Connect another computer, this browser not connected
-        yet): Download, Open it, Type its code, watched live on this computer (parts/TallyFirstLink.jsx) */}
-    {!noPanel && (!d.install || (g.step === 1 && g.at && !Bridge.on())) && <ConnectThisComputer download={<DownloadBtn m={m} primary />} linked={d.install && Bridge.on()} />}
-    {!all && d.install && <button className="btn small" data-check-again="" style={{ marginTop: 8 }} onClick={checkAgain}>Check again</button>}
-  </section>;
-}
 // the computers heard this week, one short span each ("NWS144 ● online · LAPTOP ○ offline since 14:02"), their Update or
 // Resume where one is needed: the status card's "All computers" view (next-tally-smart; was the line under the guide)
 function PcLines({ rows, latest, m }) {
@@ -874,9 +741,9 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
   else if (s && s.update) { word = "Connected"; lv = "ok"; kind = "update"; need = ""; }
   // his Tally's port (the owner's step of 26-Oct-2026): not answering on one yet (set), or the same port as another Windows
   // user's Tally on this computer (clash: FinCom may be reading the wrong Tally), said here once a computer is connected
-  const ps = (local || me) && ["", "tally", "noco", "update"].includes(kind) ? portState(rows, me) : { state: "" };
-  if (kind === "tally" && ps.state === "set" && !local) act = null;   // the port step's own Check, below
-  if (ps.state === "clash") { word = "Port clash"; lv = "warn"; kind = "port"; need = "Your Tally is on port " + ps.port + ", the same as another user’s on this computer: FinCom may be reading the wrong Tally. Give yours a port of its own:"; act = null; }
+  // next-tally-connect-steps: Tally not open, its connection or no company: this login's step and its words (one source)
+  let st = null; try { st = ["tally", "noco", ""].includes(kind) && (local || me) ? connectNow(latest) : null; } catch (e) { st = null; }
+  if (st && st.n >= 2 && st.n <= 4) { if (st.n === 3) { word = "Connection off"; lv = "warn"; kind = "port"; } need = stepLine(st); }
   const tallyLine = kind === "none" || kind === "refused" || kind === "lna" ? "" : tallyUp ? "Tally open: " + (openHere.length ? nOf(openHere.length, "company", "companies") : "no company open") : "Tally not open";
   const refresh = () => doRefresh(checkAgain);
   const calm = !kind && scope !== "all" && !needsItems().length;
@@ -902,7 +769,6 @@ function ThisComputer({ rows, latest, m, codeBelow, allStopped }) {
       {need && <p className={"tsc-need " + lv} data-tsc-need={kind} data-oc-refused={kind === "refused" ? "" : undefined}><span>{need}</span>{act && <span className="tsc-act">{act}</span>}</p>}
       {/* the owner's port step (26-Oct-2026), here once a computer is connected: only while his Tally is not answering on a
           port of its own (not found, or the same port as another Windows user's) */}
-      {((kind === "tally" && ps.state === "set") || kind === "port") && <div className="tsc-port" data-connect-step="port" data-port-step=""><b>Set Tally’s port</b><PortStep ps={ps} installed /></div>}
       {TCloud.on() && setupOk && <TodayStatus />}
       {s && s.update && !s.stopped && kind !== "version" && <p className="tsc-line note" data-tsc-update="">{"A newer FinCom Bridge is ready for this computer. "}<UpdateBtn m={m} /></p>}
     </>}
@@ -1196,9 +1062,9 @@ function SetupSteps() {
   const st = Bridge.st, connected = Bridge.on() && Bridge.up();
   const Step = ({ n, done, title, children }) => <li className={done ? "done" : ""}><b>{(done ? "✔ " : "") + title}</b>{children && <div>{children}</div>}</li>;
   return <div className="setupcard" data-connect-steps=""><h3 style={{ margin: "0 0 6px" }}>Connect this browser to FinCom Bridge</h3><ol className="setup">
-    <Step n={1} done={connected} title="FinCom Bridge on the Tally computer">Download it from the card on this page and run it there. No admin rights needed.</Step>
-    <Step n={2} done={connected && st.tallyUp} title="Open TallyPrime and your company">In TallyPrime: F1 Help → Settings → Connectivity → <b>TallyPrime acts as: Both</b>.</Step>
-    <Step n={3} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
+    {/* next-tally-connect-steps: the bridge, Tally and its connection are Connect Tally's steps at the top of this page */}
+    <Step n={1} done={connected && st.tallyUp} title="Steps 1 to 4 of Connect Tally (at the top of this page)">FinCom Bridge and TallyPrime running in this Windows login, Tally’s connection on, a company open.</Step>
+    <Step n={2} done={connected} title="Press Connect here">Press <Act act="bridgeConnect" className="btn small">Connect</Act> and type the 6-digit code: right-click the FinCom icon near the clock → <b>Connect FinCom on this computer…</b>. No other web page can connect.</Step>
   </ol></div>;
 }
 
@@ -1351,13 +1217,12 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   return <>
     <GuideRefresh />
     {!Bridge.blocked() && <ThisWatch rows={rows} />}
-    <SimpleTally installed={gx.done.install} ready={TCloud.pane.devices != null || !!TCloud.pane.err} pcs={pcs} download={dl} sha={set ? set.sha : ""} checkAgain={checkAgain} connectPanel={panel} />
+    <SimpleTally latest={latest} installed={gx.done.install} ready={TCloud.pane.devices != null || !!TCloud.pane.err} pcs={pcs} download={dl} sha={set ? set.sha : ""} checkAgain={checkAgain} connectPanel={panel} />
     {ctl.err && <p className="bk-alert bad" data-control-err="" style={{ margin: "6px 0 0" }}><Msg text={ctl.err} /></p>}
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     <NeedsYou sources={sourcesSlot} />
     <ForSupport>
       {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={false} />}
-      <ConnectGuide x={gx} m={m} connectStep={connectStep} noPanel />
       <OpenCompanies rows={rows} />
       <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
     </ForSupport>

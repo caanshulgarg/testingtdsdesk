@@ -291,7 +291,8 @@ def main():
         # next-tally-smart: a computer heard: the steps give way to the one status card (never a wizard once connected)
         # next-tally-simple: the box moves on by itself to step 3 (a company open that no client has); the computer's card is
         # under For support
-        try: pg.wait_for_function("() => !!document.querySelector('#app [data-tsm-guide=\"3\"]')", timeout=12000); heard = True
+        # next-tally-connect-steps: Connect Tally's step 5 (the company open in this login's Tally, to link)
+        try: pg.wait_for_function("() => !!document.querySelector('#app [data-tsm-guide=\"5\"]')", timeout=12000); heard = True
         except Exception: heard = False
         E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(800)
         heard = heard and pg.locator("#app [data-connect-step]").count() == 0 and "Connected" in txt("#app [data-tsc-word]")
@@ -322,12 +323,13 @@ def main():
         ok(state() == "linking" and BR.get("linked"), "9. Try again: linked (%s)" % state())
         BR["tally"] = False
         E("([d]) => { window.__devs = window.__fix(d); window.__companies = []; }", [[dev(opened=(), tally="closed")]]); E("() => Bridge.refresh().then(() => render())"); pg.wait_for_timeout(1500)
-        try: pg.wait_for_selector("#app [data-connect-step=install][data-done]", timeout=12000)
+        try: pg.wait_for_selector("#app [data-tsm-guide] [data-tsm-step=\"1\"][data-done]", timeout=12000)
         except Exception: pass
         pg.wait_for_timeout(600)
-        lt = txt("#app [data-fl-local]")
-        ok("Tally is not answering" in lt and "F1 (Help) → Settings → Connectivity" in lt and "Both" in lt, "9. Tally not answering on this computer: F1 (Help) → Settings → Connectivity, Both (%s)" % lt)
-        ok("Open TallyPrime" in txt("#app [data-connect-step=open]"), "9. step 2 says to open TallyPrime")
+        # next-tally-connect-steps: said once, as Connect Tally's step 2 (an older bridge cannot tell closed from connection off)
+        lt = txt("#app [data-tsm-now]")
+        ok(lt.startswith("Step 2: Open TallyPrime in this Windows login") and "F1 → Settings → Connectivity" in lt and "Acts as Both" in lt, "9. Tally not answering on this computer: open TallyPrime; F1 → Settings → Connectivity, Both (%s)" % lt)
+        ok(pg.locator("#app [data-fl-local]").count() == 0, "9. said once (no second line under the connect panel)")
         shot("09-tally-not-open"); check_narrow("tally not open")
         # ---- 12. migration 104: each state once per change to tally_connect_step; never the code or a key
         st = [c[1] for c in calls("tally_connect_step")]

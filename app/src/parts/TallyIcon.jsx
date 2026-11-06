@@ -26,19 +26,25 @@ export function clock(t) {
 
 // {icon: linked | waiting | needs | none, word, line (one plain sentence), cause (Needs you's: two | port | posting |
 //  stopped | paused | notanswering | entries), company, p (the client's state from lib/tallyState.js, or null)}
+// next-tally-connect-steps: this login's first Connect Tally step not done (lib/connectSteps.js, once a Tally file is loaded)
+const step = () => { try { return typeof FCConnectNow === "function" ? FCConnectNow() : null; } catch (e) { return null; } };
+const stepSay = (c) => "Step " + c.n + " of 6: " + c.say;
 export function tallyIconState(co) {
+  const c = step();
   if (co) {
+    // (no company open in this login's Tally: the client's own words name the company to open)
+    const cs = c && c.n < 4 ? c : null;
     const p = clientTallyState(co) || {}, k = typeof tallyLinkOf === "function" ? tallyLinkOf(co) || {} : {};
     const kind = p.kind || (p.state === "connected" ? "linked" : p.state === "unlinked" || !p.state ? "unlinked" : "waiting");
     const company = p.company || k.company || co.tallyName || co.name;
-    const o = (icon, word, line, cause) => ({ icon, word, line, cause: cause || "", company, p });
+    const o = (icon, word, line, cause) => ({ icon, word, line, cause: cause || "", company, p, step: cs });
     if (kind === "unlinked") return o("none", "Not linked", "Not linked to a Tally company yet.");
     if (kind === "linked") { const last = lastEntry(co, k); return o("linked", "Linked", "Connected to Tally" + (last ? " · last entry " + clock(last) : "")); }
-    if (kind === "waiting") return noBridge() ? o("none", "Not connected", "Not connected to Tally yet.") : o("waiting", "Waiting for Tally", "Open " + company + " in Tally");
+    if (kind === "waiting") return cs ? o("waiting", "Waiting for Tally", stepSay(cs)) : noBridge() ? o("none", "Not connected", "Not connected to Tally yet.") : o("waiting", "Waiting for Tally", "Open " + company + " in Tally");
     // Needs you: one short sentence about the problem (its button: parts/TallyPop.jsx)
     const b = (p.button || {}).label || "", l = typeof tallyLine === "function" ? tallyLine(co) : null, st = (l && l.state) || "";
     if (b === "Choose") return o("needs", "Needs you", company + " is open in two places with different data. Choose which one is the books.", "two");
-    if (p.port) return o("needs", "Needs you", "Tally's connection setting needs a change before FinCom can read it.", "port");
+    if (p.port) return o("needs", "Needs you", cs && cs.n === 3 ? stepSay(cs) : "Tally's connection setting needs a change before FinCom can read it.", "port");
     if (b === "Allow posting") return o("needs", "Needs you", "Posting to Tally is stopped for " + co.name + ".", "posting");
     if (st === "stopped") return o("needs", "Needs you", "Reading from Tally is stopped.", "stopped");
     if (st === "paused") return o("needs", "Needs you", "Reading from Tally is paused.", "paused");
@@ -47,7 +53,9 @@ export function tallyIconState(co) {
   }
   // the firm's pages: any computer of the firm with Tally ready (tallySign, src/js/49), the one here
   const s = typeof tallySign === "function" ? tallySign(null) : { on: false }, h = typeof tallyHere === "function" ? tallyHere(null) : { level: "idle" };
-  const o = (icon, word, line) => ({ icon, word, line, cause: "", company: "", p: null });
+  const o = (icon, word, line) => ({ icon, word, line, cause: "", company: "", p: null, step: c });
+  // (this login's own step first: the firm's sign, held steady for a minute, is never this login's state)
+  if (c) return o(c.n < 2 ? "none" : "waiting", c.n < 2 ? "Not connected" : "Waiting for Tally", stepSay(c));
   if (s.on) return o("linked", "Connected", "Connected to Tally");
   if (h.level === "bad") return o("needs", "Needs you", "Tally is not answering.");
   if (s.computer || tallyDevs().length) return o("waiting", "Waiting for Tally", "Open Tally to connect.");

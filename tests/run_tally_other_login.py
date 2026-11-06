@@ -89,8 +89,8 @@ def main():
         own = pg.get_attribute("#app [data-tally-simple]", "data-tsm-own")
         mt = main_text()
         ok(own == "ok" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own-how") == "found", "1. A's own bridge found by its session (%s)" % own)
-        ok(txt("#app [data-tsm-why]").startswith(NO_CO), "1. the header says plainly: %s (%s)" % (NO_CO, txt("#app [data-tsm-head]")))
-        ok(n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3" and "Kestrel" not in mt,
+        ok(txt("#app [data-tsm-now]").startswith("Step 4: " + NO_CO), "1. Connect Tally's step 4 says plainly: %s (%s)" % (NO_CO, txt("#app [data-tsm-now]")))
+        ok(n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "5" and "Kestrel" not in mt,
            "1. no strip, no row, no step 3 with B's company (%s)" % mt[:300].replace("\n", " | "))
 
         print("== 2. the new client's Link: the picker and the Tally icon's list")
@@ -123,7 +123,7 @@ def main():
         B_PINGS = {"9101": TS.ping(9101, False, UA, version="2.5.4"), "9150": TS.ping(9150, True, UB, version="2.5.4", bridgeId="go-8")}
         scene([da, db], cos, [ORBIT, ACME], LINK_B, B_PINGS, local=[[KESTREL], UB, "go-8", 9150])
         ok((n("#app [data-tsm-strip]") == 1 and pg.get_attribute("#app [data-tsm-strip]", "data-tsm-strip") == KESTREL) or
-           (pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "3" and KESTREL in txt("#app [data-tsm-now]")), "5. B's page: B's company offered (the strip or step 3: %s)" % txt("#app [data-tsm-now]"))
+           (pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "5" and KESTREL in txt("#app [data-tsm-now]")), "5. B's page: B's company offered (the strip or step 3: %s)" % txt("#app [data-tsm-now]"))
         pg.click(row(ORBIT) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
         gs = picker_groups(row(ORBIT) + " [data-tlk-pick-box]")
         ok(any(l == "Open in Tally now" and KESTREL in vs for (l, vs) in gs), "5. B's picker: B's company under Open in Tally now (%s)" % gs)
@@ -133,11 +133,11 @@ def main():
         dold = T.dev(7, PC, "made-up-a", tally="open", opened=(KESTREL,), version="2.5.1", rec=(KESTREL,), beat={"bridgePort": 9101, "windowsUser": UA})
         OLD_PINGS = {"9101": TS.ping(9101, None, UA, version="2.5.1", yours=True, bridgeId="go-7"), "9150": TS.ping(9150, False, UB, version="2.5.4")}
         scene([dold, db], cos, [ORBIT, ACME], ["linked", "go-7", dold["id"]], OLD_PINGS)
-        hd = txt("#app [data-tsm-head]")
-        say = E("() => { const e = document.querySelector('#app [data-tsm-head] [data-tsm-bridge-say]'); return e ? e.getAttribute('data-tsm-bridge-say') : null; }")
-        ok(say == "old" and OLD in hd and n("#app [data-tsm-head] [data-tsm-download]") == 1,
-           "6. the header: the bridge is old, with Download (%s)" % hd)
-        ok(n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3", "6. the old bridge's companies are not offered as open in your Tally")
+        hd = txt("#app [data-tsm-now]")
+        say = pg.get_attribute("#app [data-tsm-guide]", "data-tsm-hook")
+        ok(say == "old" and OLD in hd and n("#app [data-tsm-guide] .tsm-now-act [data-tsm-download]") == 1,
+           "6. Connect Tally's step 1: the bridge is old, with Download (%s)" % hd)
+        ok(n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "5", "6. the old bridge's companies are not offered as open in your Tally")
         if not n(row(ORBIT) + " [data-tlk-pick-box]"): pg.click(row(ORBIT) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
         gs = picker_groups(row(ORBIT) + " [data-tlk-pick-box]")
         ok(n(row(ORBIT) + " [data-tlk-pick-box]") == 1 and not any(KESTREL in vs for (l, vs) in gs if l == "Open in Tally now"), "6. the picker: nothing under Open in Tally now (%s)" % gs)
@@ -153,7 +153,7 @@ def main():
             if not n(row(ORBIT) + " [data-tlk-pick-box]"): pg.click(row(ORBIT) + ' [data-tsm-act="pickco"]'); pg.wait_for_timeout(600)
             gs = picker_groups(row(ORBIT) + " [data-tlk-pick-box]")
             ok(not any(KESTREL in vs for (l, vs) in gs if l == "Open in Tally now"), "7. %s: the picker never calls B's company open here (%s)" % (label, gs))
-            ok(own != "ok" and n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3" and n("#app [data-tsm-connect]") == 0,
+            ok(own != "ok" and n("#app [data-tsm-strip]") == 0 and n(row(KESTREL)) == 0 and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "5" and n("#app [data-tsm-connect]") == 0,
                "7. %s: B's Tally is not this login's (own %s; no strip, row or step 3 with B's company)" % (label, own))
         # a laptop (nothing answers, no key here): the member link is kept, and the firm's open companies are open as before
         scene([da, db], cos, [ORBIT, ACME], LINK_B, {})
@@ -213,8 +213,8 @@ def main():
         # none open in this login's Tally
         d0 = T.dev(7, PC, "made-up-a", tally="open", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9101, "windowsUser": UA})
         scene([d0, b9], c9, cl9, LINK_B, A_PINGS, local=[[], UA, "go-7", 9101])
-        ok(txt("#app [data-tsm-why]").startswith(NO_CO) and n("#app [data-tsm-connect]") == 0 and n(row(ZEN)) == 0 and n(row(KESTREL)) == 0,
-           "9. none open here: %s; no Connect, no company row (%s)" % (NO_CO, txt("#app [data-tsm-head]")))
+        ok(txt("#app [data-tsm-now]").startswith("Step 4: " + NO_CO) and n("#app [data-tsm-connect]") == 0 and n(row(ZEN)) == 0 and n(row(KESTREL)) == 0,
+           "9. none open here: %s; no Connect, no company row (%s)" % (NO_CO, txt("#app [data-tsm-now]")))
 
         print("== 10. a fresh tab: the look on 127.0.0.1 not settled yet")
         ids = scene([da, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
@@ -240,7 +240,7 @@ def main():
         dc = T.dev(7, PC, "made-up-a", tally="open", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9101, "windowsUser": UA},
                    ports=[{"port": 511, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}])
         scene([dc, db], cos, [ORBIT, ACME], LINK_B, A_PINGS)
-        ok(pg.get_attribute("#app [data-tally-simple]", "data-tsm-own") == "ok" and not txt("#app [data-tsm-head]").count(NO_CO), "12. not said (%s)" % txt("#app [data-tsm-head]"))
+        ok(pg.get_attribute("#app [data-tally-simple]", "data-tsm-own") == "ok" and not txt("#app [data-tally-simple]").count(NO_CO), "12. not said (%s)" % txt("#app [data-tsm-guide]"))
 
         print("== 13. an office of two computers: a company open only on the other computer is linkable, never chosen")
         LUMEN = "Lumen Traders"

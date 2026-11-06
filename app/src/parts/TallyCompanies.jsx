@@ -37,6 +37,7 @@ import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 import { ownOpen, NO_CO, lookOnce } from "../lib/tallySimple.js";
+import "../lib/connectSteps.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -516,6 +517,13 @@ export async function syncPoll(cid) {
 }
 // why nothing comes, from the computer's beat (plain words; "" when its beat says all is well)
 export function stallWhy(cid, company) {
+  const w = stallWhyNow(cid, company);
+  // next-tally-connect-steps: not coming, and this login's own Connect Tally step not done: that step's words (the same
+  // as the Tally page's checklist), pointing to it
+  const c = w && typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+  return c && c.n < 4 ? globalThis.FCStepLine(c) + " (Tally page › Connect Tally)" : w;
+}
+function stallWhyNow(cid, company) {
   const co = S.companies && S.companies[cid], name = company || (co && (co.tallyName || co.name)) || "the company";
   const rows = coRows(name), devs = tallyDevs();
   // next-tally-link-any-bridge: the computer key whose bridge has the company open now (tallyServe), else the row's

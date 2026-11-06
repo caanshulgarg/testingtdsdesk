@@ -23,6 +23,7 @@ import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
 import { ownOpen, NO_CO, lookOnce } from "../lib/tallySimple.js";
+import "../lib/connectSteps.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
@@ -104,7 +105,7 @@ function Actions({ co, s, run, busy }) {
   if (s.cause === "stopped") return isOwner() && l && l.stop && typeof TCloud === "object"
     ? row(btn("resume", "Resume reading", async () => { await TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer }); return "Reading from Tally starts again within a minute."; }, true)) : OWNER_ONLY;
   if (s.cause === "paused") return row(update());
-  if (s.cause === "port" || s.cause === "notanswering") return <>{s.cause === "port" && <p className="note" data-tally-pop-how="">The steps are on the Tally page.</p>}{row(check(true))}</>;
+  if (s.cause === "port" || s.cause === "notanswering") return row(check(true));
   return null;   // entries waiting for a person: on the Tally page (the link below)
 }
 
@@ -115,6 +116,8 @@ export default function TallyPop({ co, nOpen, close, back }) {
   const stale = co && s.cause !== "stopped" ? staleWords(co.id) : "";
   // the first thing to do has the focus (the keyboard); Esc and a click outside close it (TallyIcon, parts/dismiss.js)
   useEffect(() => { const el = ref.current && ref.current.querySelector("button, select, a[href]"); if (el) el.focus(); }, []);
+  // next-tally-connect-steps: this login's bridge looked for (once a tab, the shared look), so the step is known
+  useEffect(() => { lookOnce(); }, []);
   const run = async (fn) => {
     setBusy(true); setMsg(null);
     try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: "Did not work: " + ((e && e.message) || e) }); }
@@ -127,6 +130,8 @@ export default function TallyPop({ co, nOpen, close, back }) {
     {/* next-fix-clientremove (the owner: "no visibility of which client it's linked to"): the company linked, and where */}
     {co && s.icon !== "none" && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b></p>}
     <Actions co={co} s={s} run={run} busy={busy} />
+    {/* next-tally-connect-steps: this login's step not done: its words above, and the way to the six steps */}
+    {s.step && <p className="tally-pop-acts"><button type="button" className="btn small" data-tally-pop-steps={s.step.n} onClick={() => { close(); goTallyPage(); }}>See the 6 steps</button></p>}
     {busy && <p className="note" data-tally-pop-busy="">Working…</p>}
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}
     {stale && <p className="note books-stale" data-books-stale="">{stale}</p>}
