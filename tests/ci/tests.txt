@@ -618,3 +618,5 @@ run_hang_watch.py                     240  TDSDESK_SITE=../app/dist-test
 # five minutes with no task over 200 ms; the hang reporter's worker counts nothing while the tab is hidden or the computer sleeps
 run_tally_table_first.py              900  TDSDESK_SITE=../app/dist-test
 run_hang_worker.mjs                   60
+run_hang_render.py                    240  TDSDESK_SITE=../app/dist-test
+run_hang_invoker.mjs                  60

@@ -243,6 +243,13 @@ const TAGS = {
   last_ui: (v) => (/^[a-z][a-z0-9-]{0,40}$/.test(v) ? v : undefined),
   ui_s: (v) => (/^[0-9]{1,7}$/.test(v) ? v : undefined),
   frames: (v) => (/^[0-9]{1,3}$/.test(v) ? v : undefined),
+  // hang-tally-sync (FINCOM-APP-STAGING-G): how the blocked frame's time was spent, in ms, and the code name of what started
+  // its longest script (TimerHandler:setTimeout, IDBRequest.onsuccess, DIV.onclick)
+  render_ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
+  style_ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
+  script_ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
+  other_ms: (v) => (/^[0-9]{1,8}$/.test(v) ? v : undefined),
+  invoker: (v) => (/^[A-Z][A-Za-z]*(?:[.:][A-Za-z]+){1,3}$/.test(v) ? v : undefined),   // a code name only, never an address
   script: (v) => { const i = typeof v === "string" ? v.indexOf(":") : -1; return i > 0 && CHUNK_FILE(v.slice(0, i)) && /^[A-Za-z_$][A-Za-z0-9_$.:-]{0,60}$/.test(v.slice(i + 1)) ? v : undefined; },
   // FinCom Assistant's failed turn (Sentry FINCOM-CLOUD-STAGING-1): where in the turn, the API's HTTP status and error
   // type, the model asked for, the API's request id (for Anthropic's support), the database's error code (SQLSTATE or
