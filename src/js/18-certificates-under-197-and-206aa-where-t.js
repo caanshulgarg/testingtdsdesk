@@ -761,12 +761,14 @@ function viewRules(){ return '<div data-react="FirmSettings"></div>'; }
 
 /* ---------- Client: invoices ---------- */
 /* ---------- all drafts in one table (for uploads of many bills) ---------- */
+// hang-invoices: worked out once per drawing (perRender, src/js/01; the review table, its bar, the top bar and the column
+// filters each asked for it), fresh outside a drawing (an action on the rows)
 function draftRows(){
   const cid = S.coId;
-  return Object.values(D().entries).filter(e => e.status === "draft").sort(byDate).map(e => {
+  return perRender(draftRows, cid + "|" + ENTRY_REV, () => Object.values(D().entries).filter(e => e.status === "draft").sort(byDate).map(e => {
     const c = compute(e, cid);
     return {e, c};
-  });
+  }));
 }
 function drawerEntry(){
   if (!S.drawerOpen || S.view !== "company" || S.tab !== "invoices" || !S.reviewTable || S.filter !== "draft") return null;

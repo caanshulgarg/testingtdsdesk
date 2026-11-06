@@ -619,3 +619,4 @@ run_hang_watch.py                     240  TDSDESK_SITE=../app/dist-test
 run_tally_table_first.py              900  TDSDESK_SITE=../app/dist-test
 run_hang_worker.mjs                   60
 run_idb_reopen.py                     180  TDSDESK_SITE=../app/dist-test
+run_open_client_hang.py               180  TDSDESK_SITE=../app/dist-test
