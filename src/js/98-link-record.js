@@ -165,11 +165,71 @@ function tallyCoNameRec(co){
   const lp = co ? linkPostOf(co) : null, r = lp && (lp.pick || lp.recs[0]);
   return r ? LinkRec.nameOf(r) : tallyCoNameOld ? tallyCoNameOld(co) : (co && (co.tallyName || co.name)) || "";
 }
-// a client's line (src/js/49 tallyLine): a company renamed in Tally is open under its new name, not "not open"
+// next-tally-link-any-bridge (the owner, 06-Nov-2026, staging: "a client <-> Tally company link belongs to the COMPANY, not to
+// one Windows login's bridge"; a link pinned to one login's computer key waited for that login's Tally while the company
+// was open in another login's bridge on the same server). The bridge that serves a company is chosen at the time of use:
+// one of the firm's bridges heard within 3 minutes whose own beat has the company open (by its GUID when both the link
+// and that computer key's beat know one: a company of the same name under another GUID is another company; else by name),
+// reading the link's data location when the record has a real folder (the computer and the data folder, as migration 127's
+// tally_link_loc: a copy of the company in another folder is never the books; a bridge naming no real folder counts, as
+// tally_link_place_check applies its data), this browser's own bridge first, then the link's computer key (tally_links.device_id / tally_companies.device_id: the
+// last used), then the newest heard. null: open in none. {dev, id, how: "own" | "linked" | "other", at, all: Set of the keys}
+function tallyServeDevs(){
+  const by = new Map(), at = d => String((((d && d.info) || {}).beat || {}).at || "");
+  [].concat((typeof TLight === "object" && TLight.st.devs) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices) || [])
+    .forEach(d => { if (d && d.id && !d.revoked && (!by.has(d.id) || at(d) > at(by.get(d.id)))) by.set(d.id, d); });
+  return [...by.values()];
+}
+function tallyServeOwn(){
+  try { const b = typeof globalThis.tallyOwnBridge === "function" ? globalThis.tallyOwnBridge() : null; if (b && b.id) return b.id; } catch (e){}
+  try { return (typeof Bridge === "object" && Bridge.cfg && (Bridge.cfg() || {}).bridgeId) || ""; } catch (e){ return ""; }
+}
+// the plain words "Open <company> in Tally" (open in none) only where they are true: another computer key of the firm was
+// heard within 3 minutes, and the linked key (devId) is heard too (its Tally simply lacks the company) or that other key is
+// on the same computer (another Windows login of a shared server, where the company can be opened). Otherwise (the linked
+// key offline, its bridge not running, no internet, and no other login on its computer) the existing words stand
+const tallyPcOf = d => { const i = (d && d.info) || {}; return String(i.computer || (i.beat || {}).computer || "").trim().toLowerCase(); };
+const tallyFresh = d => Date.now() - (Date.parse((((d && d.info) || {}).beat || {}).at || (d && d.last_seen) || "") || 0) < 180000;
+function tallyPlain(devId){
+  const devs = tallyServeDevs(), me = devs.find(d => d.id === devId), others = devs.filter(d => d.id !== devId && tallyFresh(d));
+  if (!others.length) return false;
+  if (!me) return !devId;
+  return tallyFresh(me) || (!!tallyPcOf(me) && others.some(d => tallyPcOf(d) === tallyPcOf(me)));
+}
+function tallyServe(company, o){
+  o = o || {};
+  const k = LinkRec.key(company); if (!k) return null;
+  const rec = o.rec || LinkRec.ofName(company), guid = String(o.guid || (rec && rec.company_guid) || "").trim().toLowerCase();
+  const linked = o.device || (rec && rec.device_id) || "", own = o.own === undefined ? tallyServeOwn() : o.own, now = Date.now(), hits = [];
+  const fk = rec && LinkRec.folderKey(rec.data_folder), place = fk ? String(rec.computer || "").trim().toLowerCase() + "|" + fk : "";
+  tallyServeDevs().forEach(d => {
+    const info = d.info || {}, beat = info.beat || {}, br = info.bridges && typeof info.bridges === "object" ? info.bridges : {}, ids = Object.keys(br);
+    const g = {}; [].concat(beat.companies || []).forEach(c => { if (c && c.name && c.guid) g[LinkRec.key(c.name)] = String(c.guid).trim().toLowerCase(); });
+    const same = n => { const nk = LinkRec.key(n); return (nk === k || LinkRec.same(n, company)) && (!guid || !g[nk] || g[nk] === guid); };
+    (ids.length ? ids : [""]).forEach(id => {
+      const b = (id && br[id]) || {}, mine = !id || ids.length === 1 || d.main_bridge === id;
+      const t = Date.parse(b.at || (mine ? beat.at : "") || "") || 0, open = Array.isArray(b.open) ? b.open : mine ? [].concat(beat.open || []) : [];
+      const bf = LinkRec.folderKey(b.dataFolder || (mine ? beat.dataFolder : "")), at = String(b.computer || info.computer || beat.computer || "").trim().toLowerCase() + "|" + bf;
+      if (place && bf && at !== place) return;
+      if (o.only && !o.only(d, id)) return;
+      if (now - t < 180000 && open.some(n => same((n && n.name) || n))) hits.push({dev: d, id, at: t, how: own && id === own ? "own" : d.id === linked ? "linked" : "other"});
+    });
+  });
+  const rank = {own: 0, linked: 1, other: 2};
+  const best = hits.sort((a, b) => rank[a.how] - rank[b.how] || b.at - a.at)[0] || null;
+  if (best) best.all = new Set(hits.map(h => h.dev.id));   // every computer key serving it (the sign counts them all)
+  return best;
+}
+// a client's line (src/js/49 tallyLine): read from the computer key whose bridge serves the company now (tallyServe), else
+// the link's as before; open in none while the firm has more than one computer key: the plain words "Open <company> in
+// Tally" (never one Windows login's computer); a company renamed in Tally is open under its new name, not "not open"
 const tallyLineOld = typeof tallyLine === "function" ? tallyLine : null;
 function tallyLineRec(co){
-  const l = tallyLineOld ? tallyLineOld(co) : null;
-  if (!l || l.state !== "notopen" || !LinkRec.ready() || !l.company) return l;
+  const row = co && typeof tallyRowOf === "function" ? tallyRowOf(co, (typeof TLight === "object" && TLight.st.cos) || []) : null;
+  const name = row ? LinkRec.nameOf(row.rec) || row.company : "", sv = name ? tallyServe(name, {rec: row.rec, device: row.device_id}) : null;
+  let l = tallyLineOld ? tallyLineOld(co, sv && sv.dev) : null;
+  if (l && row && !sv && /^(closed|notopen|offline)$/.test(l.state) && tallyPlain(row.device_id)) l = Object.assign({}, l, {text: "Open " + name + " in Tally", plain: true});
+  if (!l || l.state !== "notopen" || !LinkRec.ready() || !l.company || l.plain) return l;
   const devs = [].concat((typeof TLight === "object" && TLight.st.devs) || []);
   const open = devs.some(d => { const i = (d && d.info) || {}; return [i.beat && i.beat.open].concat(Object.values(i.bridges || {}).map(b => b && b.open)).some(x => Array.isArray(x) && x.some(n => LinkRec.same(n, l.company))); });
   return open ? Object.assign({}, l, {state: "open", level: "ok", text: "Connected \u00b7 Tally open on " + l.computer + (l.read && typeof tallyHm === "function" ? " \u00b7 last read " + tallyHm(l.read) : "")}) : l;
@@ -213,5 +273,14 @@ async function linkPostingSet(co, rec, on){
     if (typeof TLight === "object") TLight.st.at = 0;
     if (typeof render === "function") render(); }, () => {});
 })();
-if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec});
+// the Clients page's Tally column (src/js/49 TLight.work): each company's state from the computer key serving it now
+(function hookServeWork(){
+  if (typeof TLight !== "object" || typeof TLight.work !== "function" || TLight.workServed) return;
+  const work = TLight.work; TLight.workServed = true;
+  TLight.work = function (cos, devs, now){
+    return work.call(this, [].concat(cos || []).map(c => { const sv = c && c.company ? tallyServe(LinkRec.nameOf(c.rec) || c.company, {rec: c.rec, device: c.device_id}) : null;
+      return sv && sv.dev.id !== c.device_id ? Object.assign({}, c, {device_id: sv.dev.id}) : c; }), devs, now);
+  };
+})();
+if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec, tallyServe, tallyPlain});
 /* @react-lazy: end */

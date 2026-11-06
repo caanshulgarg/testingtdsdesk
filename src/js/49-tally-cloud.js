@@ -1668,11 +1668,13 @@ function tallyHm(t){
   if (!ms) return "";
   return istDay(ms) === istDay(Date.now()) ? fmtTime(ms) : fmtDateTime(ms);
 }
-function tallyLine(co){
+// d0: the computer key whose bridge has the company open now (src/js/98-link-record.js tallyServe; the owner, 06-Nov-2026:
+// a link belongs to the company, not to one Windows login's bridge), else the link's
+function tallyLine(co, d0){
   if (!co) return null;
   const st = (typeof TLight === "object" && TLight.st) || {}, now = Date.now();
   const link = tallyRowOf(co, st.cos);
-  const dev = link && (st.devs || []).find(d => d.id === link.device_id && !d.revoked);
+  const dev = link && (d0 || (st.devs || []).find(d => d.id === link.device_id && !d.revoked));
   let comp = "", beat = null, bridge = "online", tally = "closed", since = "", paused = false, read = "", notOpen = false;
   if (dev){
     const info = dev.info || {}, ds = devState(dev, now);
@@ -2168,7 +2170,10 @@ function tallySignNow(co){
   // a client's company open in another Windows login's Tally of this very computer is not this login's: only another computer counts
   const myPc = here ? norm((localUp && lst.computer) || ob.pc || "") : "", myU = norm(tallyWinUser((localUp && lst.user) || ob.user));
   const away = x => x.id === ownDev || !myPc || norm(x.win || "") !== myPc || !myU || norm(tallyWinUser(x.user)) === myU;
-  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || !here || (co && away(x))));
+  // next-tally-link-any-bridge (the owner, 06-Nov-2026): a LINKED client's company counts open in the bridge of any login
+  // that serves it (src/js/98-link-record.js tallyServe: its GUID and data folder checked); 98 not loaded: as before
+  const sv = link && typeof tallyServe == "function" ? tallyServe(want, {device: link.device_id}) : void 0;
+  const goods = pcs.filter(x => x.recent && isOpen(x) && has(x) && (x.local || (sv !== void 0 ? !!sv && sv.all.has(x.id) : !here || (co && away(x)))));
   const good = goods.find(x => x.local) || goods.find(x => !link || !link.device_id || x.id === link.device_id) || goods[0];
   const out = (o) => Object.assign({computer: "", company: co ? want : "", at: "", reason: "", fix: "", short: o.computer || ""}, o);
   if (good){
@@ -2192,6 +2197,9 @@ function tallySignNow(co){
     if (here) return off("bridge", "This browser is not connected to FinCom Bridge on this computer.", "Press Connect this computer on the Tally page.", {computer: "this computer"});
     return off("bridge", "FinCom Bridge is not running on any computer of the firm.", "Start FinCom Bridge on the computer with TallyPrime, or install it from the Tally page.", null);
   }
+  // linked, open in none, and the plain words are true (98's tallyPlain: the linked key heard, or another login of its
+  // computer heard): never one login's; else the words below (offline, the bridge not running, no internet)
+  if (link && typeof tallyPlain == "function" && tallyPlain(link.device_id)) return off("nocompany", coName + " is not open in Tally now.", "Open " + coName + " in Tally.", null);
   if (!pick.recent){
     if (pick.local && pick.noNet) return off("internet", pick.computer + " has no internet: FinCom Bridge is running there but cannot reach FinCom since " + tallyIst(lst.beat.missedSince) + ".", "Check the internet connection on " + pick.computer + ". Nothing is lost: FinCom Bridge sends everything when it is back.", pick);
     if (localOn && !localUp && localIsPick(pick)) return off("bridge", "FinCom Bridge is not running on " + pick.computer + " (this computer).", "Start FinCom Bridge on this computer (its icon near the clock, or from the Start menu).", pick);

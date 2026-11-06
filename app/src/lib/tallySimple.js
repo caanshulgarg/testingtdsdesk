@@ -342,6 +342,8 @@ export function ownBridge() {
   const b = ownBridgeAny(all);
   return b && !b.local && unproven(b, all) ? null : b;
 }
+// next-tally-link-any-bridge: src/js/98-link-record.js tallyServe prefers this browser's own bridge
+if (typeof globalThis === "object") globalThis.tallyOwnBridge = ownBridge;
 function ownBridgeAny(all) {
   const c = cfgOf(), list = localBridges() || [];
   // (0) bridge 2.5.3: the local bridge in this browser's own Windows session (beats the pairing and the member link)
@@ -521,7 +523,8 @@ const vk = (v) => String(v || "").split(".").map((n) => String(Number(n) || 0).p
 export function firstLinkWait(company, all) {
   const k = coKey(company), r = [].concat(all || []).find((x) => x && coKey(x.company) === k);
   const dev = r && r.device ? tallyDevs().find((d) => d.id === r.device) : null;
-  if (!dev) return "";
+  // next-tally-link-any-bridge: open in another login's bridge of the firm: it reads it there, nothing to wait for
+  if (!dev || (typeof globalThis.tallyServe === "function" && globalThis.tallyServe(r.company))) return "";
   const info = dev.info || {}, beat = info.beat || {}, br = info.bridges || {};
   const ids = Object.keys(br).filter((id) => id !== "v1"), has = (b) => [].concat((b && b.open) || []).some((n) => coKey(n) === k);
   const id = ids.find((x) => has(br[x])) || ids.sort((a, b) => String((br[b] || {}).at || "").localeCompare(String((br[a] || {}).at || "")))[0];

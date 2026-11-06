@@ -39,11 +39,15 @@ export function linkWord(co, company) {
   // the computer that keeps it: its row's (the cloud's companies), else the record's, else one with it open now
   const rows = [].concat((typeof TLight === "object" && TLight.st.cos) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.companies) || []);
   const row = rows.find((r) => r && String(r.client_id || "") === String(co.id) && r.device_id && sameCo(r.company, name)) || (typeof tallyRowOf === "function" ? tallyRowOf(co, rows) : null);
+  // next-tally-link-any-bridge (the owner, 06-Nov-2026: a link belongs to the COMPANY): the computer key whose bridge has
+  // it open now (src/js/98-link-record.js tallyServe: this browser's own, else the link's, else the newest heard), else as before
   const devs = tallyDevs(), devId = (row && row.device_id) || (rec && rec.device_id) || "";
-  const dev = devs.find((d) => d.id === devId) || devs.find((d) => openOn(d).some((n) => sameCo(n, name))) || null;
+  const sv = typeof globalThis.tallyServe === "function" ? globalThis.tallyServe(name, { rec, device: devId }) : undefined;
+  const dev = (sv && sv.dev) || devs.find((d) => d.id === devId) || devs.find((d) => openOn(d).some((n) => sameCo(n, name))) || null;
   const pc = rec || dev ? pcOf(dev) : "its computer";   // (never a computer's name: next-fix-tally-links2)
   const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen };
-  const open = "Open " + name + " in TallyPrime on " + pc;
+  // open in none of several computer keys (a shared server: one a Windows login): the plain words, never one login's
+  const open = sv === null && globalThis.tallyPlain(devId) ? "Open " + name + " in Tally" : "Open " + name + " in TallyPrime on " + pc;
   // the same company in two places (a copied data folder keeps the GUID): nothing from the other place is applied
   if (rec && typeof LinkRec === "object" && LinkRec.twoPlaces(rec)) return o("needs", name + " is open in two places with different data: choose which is the books", { label: "Choose", act: goRow(co) }, base);
   // (no computer of the firm has FinCom Bridge at all: that is what to do first)

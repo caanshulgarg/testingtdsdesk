@@ -518,7 +518,10 @@ export async function syncPoll(cid) {
 export function stallWhy(cid, company) {
   const co = S.companies && S.companies[cid], name = company || (co && (co.tallyName || co.name)) || "the company";
   const rows = coRows(name), devs = tallyDevs();
-  const d = devs.find((v) => rows.some((r) => r.device_id === v.id)) || (devs.length === 1 ? devs[0] : null);
+  // next-tally-link-any-bridge: the computer key whose bridge has the company open now (tallyServe), else the row's
+  const sv = typeof globalThis.tallyServe === "function" ? globalThis.tallyServe(name) : undefined;
+  if (sv === null && globalThis.tallyPlain((rows.find((r) => r.device_id) || {}).device_id)) return "Open " + name + " in Tally: the ledgers come within a minute.";
+  const d = (sv && sv.dev) || devs.find((v) => rows.some((r) => r.device_id === v.id)) || (devs.length === 1 ? devs[0] : null);
   if (!d) return "No computer with FinCom Bridge holds " + name + " yet: open it in TallyPrime on the Tally computer.";
   const pc = pcOf(d), b = ((d.info || {}).beat) || {};
   if (!pcLive(d)) return "FinCom Bridge on " + pc + " is offline: turn that computer on and sign in to Windows; the ledgers come as soon as it is back.";

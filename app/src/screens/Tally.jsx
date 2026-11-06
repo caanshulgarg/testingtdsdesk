@@ -510,6 +510,9 @@ function checkAgain() {
 // what is saved in Tally, and postings and Update now still work
 const PAUSE_SAYS = "While paused, FinCom does not read Tally in the background; entries saved in Tally still come in, and postings still work.";
 const RESUME_TRAY = "right-click the FinCom icon near the clock → Resume background reading";
+// a company open now in another bridge of the firm than this card's (src/js/98-link-record.js tallyServe)
+// (its GUID as this card's beat names it, the link record's data folder: tallyServe's checks)
+const elsewhere = (r, c) => { const sv = typeof globalThis.tallyServe === "function" ? globalThis.tallyServe(c.name, { own: "", guid: c.guid }) : null; return !!sv && !(sv.dev.id === r.device.id && (!r.id || sv.id === r.id || !sv.id)); };
 function readingRows(cards) {
   const p = TCloud.pane, out = [];
   cards.filter((r) => r.go && !r.old).forEach((r) => {
@@ -521,6 +524,8 @@ function readingRows(cards) {
       const [lv, state, kind] = !r.online ? ["bad", "Waiting: the Tally computer is offline", "waiting"]
         : stopWhy ? ["bad", "Stopped: " + stopWhy, "stopped"]
         : r.paused || rd.state === "paused" ? ["warn", "Paused", "paused"]
+        // next-tally-link-any-bridge: not open in this login's Tally, but in another login's bridge of the firm: read there
+        : !c.open && elsewhere(r, c) ? ["ok", "Read by another Windows login’s FinCom Bridge (open there)", "elsewhere"]
         : !c.open ? ["warn", "Waiting: Tally company not open", "waiting"]
         : waiting > 0 ? ["warn", "Catching up: " + waiting + " to fetch", "catching"]
         : c.phase === "live" ? ["ok", "Reading live", "live"]
