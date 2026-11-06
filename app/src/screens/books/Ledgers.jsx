@@ -165,8 +165,9 @@ export function Status({ b }) {
     {again}
     {cloud && <Suspense fallback={null}><LedgerBar cid={cid} where="ledgers" /></Suspense>}
     {!live && !cloud && <div className="led-upload" data-led-upload="">
-      <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then bring the file in here.</span>
-      <button className="btn small" data-led-upload-btn="" onClick={() => doAct("mastersPick")}>Bring in from Tally</button></div>}
+      <span className="note">No FinCom Bridge is connected for this client, so the ledgers do not come by themselves. In Tally: <b>Display → List of Accounts</b>, export it as XML (<b>Alt+E</b>), then drop the file on From Tally.</span>
+      {/* next-tally-basics: one place brings the Tally data in (Books › From Tally): this is the way there, not an uploader of its own */}
+      <button className="btn small" data-led-upload-btn="" data-go-from-tally="" onClick={() => goClient("books:import")}>Bring in from Tally</button></div>}
   </div>;
 }
 

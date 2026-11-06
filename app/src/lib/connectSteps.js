@@ -69,13 +69,18 @@ function onThisPc(own) {
   const pc = lc(own && own.pc), devs = tallyDevs();
   return pc ? devs.filter((d) => pcOfDev(d) === pc) : devs.filter((d) => own && own.dev && d.id === own.dev.id);
 }
-function portsSeen(devs, extra) {
-  const used = new Set([].concat(extra || []).map(Number).filter((p) => p > 0));
-  devs.forEach((d) => { const i = d.info || {}, b = i.beat || {};
-    [].concat(b.ports || []).forEach((p) => { if (p && Number(p.port) > 0) used.add(Number(p.port)); });
-    if (Number(b.tallyPort) > 0) used.add(Number(b.tallyPort));
-    Object.values(i.bridges || {}).forEach((x) => { if (x && Number(x.tallyPort) > 0) used.add(Number(x.tallyPort)); }); });
-  return used;
+// next-tally-basics (the port problem, option A, the page's part): THIS login's own port, the same number every time. Counted
+// from the login's name (freePort), skipping only the ports another login of this computer uses (their beats' ports,
+// Tally ports and bridges, and a port this login's bridge saw held by another login's Tally): never this login's own
+// earlier tries, so the number does not move from one look to the next, and never one another login uses
+export function ownPort(devs, login, held) {
+  const me = lc(login), used = new Set([].concat(held || []).map(Number).filter((p) => p > 0));
+  const mine = (u) => !!me && lc(short(u)) === me;
+  devs.forEach((d) => { const i = d.info || {}, b = i.beat || {}, own = mine(b.windowsUser || i.user);
+    [].concat(b.ports || []).forEach((p) => { if (p && Number(p.port) > 0 && (!own || p.skipped)) used.add(Number(p.port)); });
+    if (!own && Number(b.tallyPort) > 0) used.add(Number(b.tallyPort));
+    Object.values(i.bridges || {}).forEach((x) => { if (x && Number(x.tallyPort) > 0 && !mine(x.user)) used.add(Number(x.tallyPort)); }); });
+  return freePort(used, login);
 }
 // whose Tally holds port n on this computer: a beat's "Tally of <user>" for that port, else another login's bridge on it
 function holderOf(devs, n, me) {
@@ -131,13 +136,13 @@ export function connectSteps(opts) {
   const connOff = why === "connection off" || (!why && !up && !!ownConnOff(own));
   const ok1 = steps[0].done;
   if (!ok1) { put("tally", false); put("connect", false); }
-  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + ")" : "")); }
+  else if (up) { put("tally", true, "", null, "", "TallyPrime is running in this login"); put("connect", true, "", null, "", "Tally’s connection is on" + (okP && okP.port ? " (port " + okP.port + (holderOf(onThisPc(b), Number(okP.port), login) ? ", also used by another login’s Tally" : ", this login’s own") + ")" : "")); }
   else if (connOff || why === "not answering") {
     put("tally", true, "", null, "", "TallyPrime is running in this login");
     if (why === "not answering") put("connect", false, WORDS.notanswering, { kind: "check" }, "notanswering");
     else {
       const devs = onThisPc(b), m = /port (\d+) is used/i.exec(say), held = m ? Number(m[1]) : 0;
-      const free = freePort(portsSeen(devs, [held].concat(ports.map((p) => p && p.port))), login);
+      const free = ownPort(devs, login, [held].concat(ports.filter((p) => p && p.skipped).map((p) => p.port)));
       const ini = [].concat(src.tallyIni || (b && b.beat && b.beat.tallyIni) || []).map((x) => lc(x && x.connect));
       const warn = /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
         : /may not change tallyprime|cannot write/i.test(say) || ini.includes("cannot write") ? " " + WORDS.cantWrite : "";
@@ -154,7 +159,7 @@ export function connectSteps(opts) {
   } else {
     // (a bridge before 2.5.4 cannot tell a closed Tally from one whose connection is off: both, with the menu path)
     const pre254 = !!ver && vk(ver) < vk("2.5.4") && (!why || /^no tally running/.test(why) || why === "another user");
-    const free = pre254 ? freePort(portsSeen(onThisPc(b), ports.map((p) => p && p.port)), login) : 0;
+    const free = pre254 ? ownPort(onThisPc(b), login, ports.filter((p) => p && p.skipped).map((p) => p.port)) : 0;
     put("tally", false, why === "owner unknown" ? WORDS.admin : WORDS.tally(login, otherTally(ports)) + (pre254 ? " " + WORDS.maybeOff(free) : ""), { kind: "check" }, why === "owner unknown" ? "admin" : "notrunning");
     put("connect", false);
   }

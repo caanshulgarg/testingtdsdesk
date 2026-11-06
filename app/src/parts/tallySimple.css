@@ -98,3 +98,10 @@
 #app .tsm-diffs { max-height: 360px; overflow: auto; }
 #app .tsm-diff-grid { width: 100%; font-size: 13px; }
 #app .tsm-diff-grid .n { text-align: right; white-space: nowrap; }
+/* next-tally-basics: Open in your Tally now (this login's own Tallys, their companies, the linked clients not connected) */
+#app .tsm-here-tally { border-top: 1px solid var(--rule, var(--border)); padding: 8px 0 4px; }
+#app .tsm-here-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#app .tsm-here-list { list-style: none; margin: 4px 0 0; padding: 0; }
+#app .tsm-here-co { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 0; min-width: 0; overflow-wrap: anywhere; }
+#app .tsm-here-co .tsm-pick, #app .tsm-here-why { flex: 1 1 100%; }
+#app .tsm-here-away { border-top: 1px solid var(--rule, var(--border)); padding-top: 8px; margin-top: 4px; }

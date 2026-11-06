@@ -18,7 +18,9 @@ import DateBox from "../../parts/DateBox.jsx";
 import { needDays } from "../../lib/needDays.js";
 // 26-Oct-2026: the ledgers' one bar (reading / done / stuck / today's changes), as on the Tally page's row; loaded with
 // the Tally screen's own code, so the app's first file stays within its budget
-const LedgerBar = lazy(() => import("../../parts/TallyCompanies.jsx").then((m) => ({ default: m.LedgerBar })));
+// next-tally-basics: the masters' one line ("Ledgers & groups from Tally: N ledgers, M groups · updated …", Update now and its
+// result); its bar while a read runs
+const LedgerBar = lazy(() => import("../../parts/TallyCompanies.jsx").then((m) => ({ default: m.MastersLine })));
 // 30-Oct-2026 (the owner: books brought from Tally with a progress bar and its timing; an upload checked against Tally and
 // corrected to it): the two cards, in their own file (parts/TallyFetch.jsx), loaded only here and on the Tally page
 const OlderEntries = lazy(() => import("../../parts/TallyFetch.jsx"));
@@ -202,7 +204,7 @@ export default function FromTally({ b }) {
         page's (the client's title chip opens its row) */}
     <Status b={b} days={days} />
     {typeof TCloud === "object" && TCloud.on() && hasLedBook(S.coId) && days.length > 0 && <Suspense fallback={null}><MissingDays cid={S.coId} need={days} /></Suspense>}
-    {typeof TCloud === "object" && TCloud.on() && (hasLedBook(S.coId) || (S.tcoSync || {})[S.coId]) && <div data-up-ledgers="" style={{ margin: "-4px 0 12px" }}><Suspense fallback={null}><LedgerBar cid={S.coId} where="books" /></Suspense></div>}
+    {typeof TCloud === "object" && TCloud.on() && <div data-up-ledgers="" style={{ margin: "-4px 0 12px" }}><Suspense fallback={null}><LedgerBar cid={S.coId} /></Suspense></div>}
     {other.length > 0 && <p className="bk-warn">The books here are for {other.join(", ")}, not this client’s PAN ({clientPan()}). Remove them with More → “Remove Tally data and all GST work”.</p>}
     {typeof TCloud === "object" && TCloud.on() && hasLedBook(S.coId) && <Suspense fallback={null}><OlderEntries cid={S.coId} /></Suspense>}
     {typeof TCloud === "object" && TCloud.on() && hasLedBook(S.coId) && <Suspense fallback={null}><CheckChanges cid={S.coId} /></Suspense>}

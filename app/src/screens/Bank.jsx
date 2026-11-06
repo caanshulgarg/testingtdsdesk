@@ -301,7 +301,7 @@ function LedgerSetup({ co }) {
   if (B().ledgersLoading || (typeof TCloud === "object" && TCloud.on() && TCloud.has(co.id))) return <NoticeLine sev="info" text={"Loading ledgers from FinCom’s cloud copy of the books of " + ((TCloud.book(co.id) || {}).company || co.name) + "…"} />;
   if (bridgeLive(co)) return <NoticeLine sev="info" text={"Loading ledgers from Tally (" + Bridge.openFor(co).name + " is open)…"} />;
   if (live()) return <NoticeLine text={"Open " + Bridge.tallyName(co) + " in TallyPrime: its ledgers load by themselves."} how="Or import the ledger list from a file."><button className="btn small" onClick={() => bankAct("ledPick")}>Import from file</button></NoticeLine>;
-  return <NoticeLine text={"Bring in the Tally ledger list for " + co.name + ": suggestions use only ledgers Tally has."} how="In Tally: Display More Reports → List of Accounts → Export (Excel or XML). With FinCom Bridge this happens by itself."><button className="btn small" onClick={() => bankAct("ledPick")}>Bring in from Tally</button></NoticeLine>;
+  return <NoticeLine text={"Bring in the Tally ledger list for " + co.name + ": suggestions use only ledgers Tally has."} how="With FinCom Bridge this happens by itself. Or in Tally: Display More Reports → List of Accounts → Export (XML), and drop it on From Tally."><button className="btn small" data-go-from-tally="" onClick={() => goClient("books:import")}>Bring in from Tally</button></NoticeLine>;
 }
 
 // the deleted statements (soft deletes, kept on the server and in this browser), read once for the Restore item

@@ -36,7 +36,7 @@ import LinkStatus from "./LinkStatus.jsx";
 import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
-import { ownOpen, NO_CO, lookOnce } from "../lib/tallySimple.js";
+import { ownOpen, NO_CO, lookOnce, rescanLocal } from "../lib/tallySimple.js";
 import "../lib/connectSteps.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
@@ -637,6 +637,86 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
   return null;
 }
 const hm = (ms) => { const t = typeof tallyHm === "function" ? tallyHm(ms) : ""; return String(t || "").replace(/\s*IST$/, ""); };
+
+// ---------- next-tally-basics (06-Nov-2026; the owner: "the masters in Tally should get updated, and right now I can't tell
+// whether they update or not"): the client's ONE masters line, on Books › From Tally (the client's Tally section):
+//   "Ledgers & groups from Tally: 1,240 ledgers, 38 groups · updated 06-Nov 10:42 (by itself: …)" and one Update now.
+// Update now is the existing ledgers read (firstSync: the bridge here, else the cloud's "ledgers" wake, then Update now
+// for a company not kept yet); the bridge reads in its own gate (postings first, one request at a time). Its result:
+// "Updated: 3 new, 1 changed" from the cloud's own counts before and after and the round's rows (tally_ledger_rounds:
+// rows_received are the new or changed ledgers), or the plain reason it could not (the bar's stallWhy). By itself: the
+// bridge's light check (every 10 minutes per company open in Tally, and when a company is first seen open) sends the
+// ledgers created or altered since Tally's master counter last moved; the whole list (groups too) each night and on
+// Update now. Nothing new is asked of the bridge or of Tally; the counts are reads of FinCom's cloud.
+export const AUTO_WORDS = "by itself: new and changed ledgers every 10 minutes while the company is open in Tally; the whole list, groups too, each night";
+export function mastersResult(b, a, received) {
+  const nw = Math.max(0, (Number(a.n) || 0) - (Number(b.n) || 0)), gw = Math.max(0, (Number(a.g) || 0) - (Number(b.g) || 0));
+  const ch = Math.max(0, (Number(received) || 0) - nw);
+  const bits = [nw ? nw + " new" : "", ch ? ch + " changed" : "", gw ? nOf(gw, "new group", "new groups") : ""].filter(Boolean);
+  return bits.length ? "Updated: " + bits.join(", ") : "Updated: no changes in Tally";
+}
+const GRP = {};
+async function groupCount(cid, force) {
+  const bk = ledBook(cid);
+  if (!bk || !bk.book) return null;
+  const k = GRP[cid];
+  if (!force && k && k.book === bk.book && Date.now() - k.at < 60000) return k.n;
+  let n = await Cloud.api("tally_groups?select=name&limit=1&book_id=eq." + encodeURIComponent(bk.book), { headers: { Prefer: "count=exact" }, count: true });
+  n = Array.isArray(n) ? n.length : Math.max(0, Math.floor(Number(n) || 0));
+  GRP[cid] = { n, at: Date.now(), book: bk.book };
+  return n;
+}
+async function roundRows(cid, since) {
+  const bk = ledBook(cid); if (!bk || !bk.book) return 0;
+  const r = await Cloud.api("tally_ledger_rounds?select=rows_received&complete=is.true&book_id=eq." + encodeURIComponent(bk.book) + "&last_seen_at=gte." + encodeURIComponent(new Date(since).toISOString())).catch(() => []);
+  return [].concat(r || []).reduce((t, x) => t + (Number(x && x.rows_received) || 0), 0);
+}
+// the light check's last look at this company (its computer's beat: changeNumbers[company].at, the computer's clock)
+function lightAt(company) {
+  let at = "";
+  tallyDevs().forEach((d) => { const c = (((d.info || {}).beat || {}).changeNumbers || {}); Object.keys(c).forEach((k) => { if (coKey(k) === coKey(company) && c[k] && String(c[k].at || "") > at) at = String(c[k].at); }); });
+  return at;
+}
+const dtWords = (ms) => { if (!ms) return ""; const t = new Date(ms + 5.5 * 3600e3), today = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10) === t.toISOString().slice(0, 10);
+  return (today ? "today " : t.getUTCDate() + "-" + MON[t.getUTCMonth()] + " ") + hm(ms); };
+const MR = {};
+export function MastersLine({ cid }) {
+  const [ck, setCk] = useState(false);
+  const [, tick] = useState(0), co = S.companies && S.companies[cid];
+  const link = typeof tallyLinkOf === "function" && co ? tallyLinkOf(co) || {} : {}, company = link.company || (TCloud.companyOf ? TCloud.companyOf(cid) : "") || "";
+  const x = SYNC()[cid], running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
+  const bk = ledBook(cid) || {}, n = Math.max(ledgersOf(cid), (x && x.led > 0 && x.led) || 0), g = (GRP[cid] || {}).n;
+  useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid, bk.book, bk.ledgersAt]);
+  // the result once this Update now's read is done (counts read again, the rounds since the press)
+  useEffect(() => { if (!m || m.say || !x || x.at !== m.at) return;
+    if (x.err || x.late) { m.say = "Not updated: " + (x.err || x.why || stallWhy(cid, company) || "no answer from Tally in 3 minutes"); tick((k) => k + 1); return; }
+    if (!x.end || m.busy) return;
+    m.busy = true;
+    Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at - 60000)])
+      .then(([n1, g1, rr]) => { m.say = mastersResult(m.b, { n: n1 == null ? m.b.n : n1, g: g1 == null ? m.b.g : g1 }, rr); m.ok = true; tick((k) => k + 1); }); });
+  const may = !(S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
+  const press = async () => { const b = { n: await cloudLedgerCount(cid, true).catch(() => n), g: await groupCount(cid, true).catch(() => g) };
+    MR[cid] = { b: { n: b.n == null ? n : b.n, g: b.g == null ? g : b.g }, at: 0, say: "" };
+    const p = firstSync(cid, company, { now: true }); MR[cid].at = (SYNC()[cid] || {}).at || Date.now(); await p; tick((k) => k + 1); };
+  if (!company) return <p className="note" data-masters="" data-masters-why="unlinked">{"Ledgers & groups from Tally: this client is not linked to a Tally company yet. Link it on the Tally page."}</p>;
+  const la = Date.parse(bk.ledgersAt || "") || 0, lt = lightAt(company), held = ledgersHeld(cid);
+  const head = held ? "Ledgers & groups from Tally: " + nOf(n || 0, "ledger", "ledgers") + (g != null ? ", " + nOf(g, "group", "groups") : "") + (la ? " · updated " + dtWords(la) : "")
+    : "Ledgers & groups from Tally: not in FinCom yet";
+  const step = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+  const again = () => { setCk(true); rescanLocal(); Promise.resolve(typeof tallyCheckNow === "function" ? tallyCheckNow() : null).catch(() => {}).finally(() => setCk(false)); };
+  return <div className="tco-masters-line" data-masters="" data-masters-n={n || 0} data-masters-g={g == null ? "" : g}>
+    {/* the client's Tally section: this login's Connect Tally step not done, with the steps' Check again (nothing to do next time: it reconnects by itself) */}
+    {step && <p className="note bad" data-masters-step={step.n} style={{ margin: "0 0 4px" }}>{"Step " + step.n + " of 6: " + step.say + " "}
+      <button type="button" className="linkbtn" data-masters-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{" · "}
+      <button type="button" className="linkbtn" data-masters-steps={step.n} onClick={() => globalThis.FCGoSteps && globalThis.FCGoSteps()}>See the 6 steps</button></p>}
+    <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt.slice(11, 16) : "") + ")"}</span>{" "}
+      {may && <button type="button" className="btn small" data-masters-update="" disabled={running} onClick={press}>{running ? "Updating…" : "Update now"}</button>}</p>
+    {m && m.say && x && x.at === m.at ? <><p className={"note" + (m.ok ? " ok" : " bad")} data-masters-result={m.ok ? "ok" : "why"} role="status" style={{ margin: "0 0 4px" }}>{m.say}</p><LaterLine cid={cid} /></>
+      : x ? <LedgerBar cid={cid} where="books" company={company} /> : <LaterLine cid={cid} />}
+    {!held && <Masters cid={cid} />}
+  </div>;
+}
+if (typeof globalThis === "object") globalThis.FCMastersResult = mastersResult;
 // words: only the held words, inline on the row's second line (nothing while a read runs: the bar is under the row);
 // bar: only the bar of a read going on (next-tally-smart: the two halves of the row)
 export function SyncLine({ cid, compact = false, words = false, bar = false }) {

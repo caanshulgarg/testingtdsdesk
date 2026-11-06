@@ -22,7 +22,7 @@ import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
-import { ownOpen, NO_CO, lookOnce } from "../lib/tallySimple.js";
+import { ownOpen, NO_CO, lookOnce, rescanLocal } from "../lib/tallySimple.js";
 import "../lib/connectSteps.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
@@ -131,7 +131,10 @@ export default function TallyPop({ co, nOpen, close, back }) {
     {co && s.icon !== "none" && s.company && <p className="tally-pop-co" data-tally-pop-company="">{"Tally company: "}<b>{s.company}</b></p>}
     <Actions co={co} s={s} run={run} busy={busy} />
     {/* next-tally-connect-steps: this login's step not done: its words above, and the way to the six steps */}
-    {s.step && <p className="tally-pop-acts"><button type="button" className="btn small" data-tally-pop-steps={s.step.n} onClick={() => { close(); goTallyPage(); }}>See the 6 steps</button></p>}
+    {/* next-tally-basics: the steps' Check again here too, where the actions above have none (the manual "Tally is open, check now") */}
+    {s.step && <p className="tally-pop-acts"><button type="button" className="btn small" data-tally-pop-steps={s.step.n} onClick={() => { close(); goTallyPage(); }}>See the 6 steps</button>
+      {!(s.icon === "waiting" || s.cause === "port" || s.cause === "notanswering" || (!co && s.icon !== "none" && s.icon !== "linked")) && <button type="button" className="btn small" data-tally-pop-recheck="" disabled={busy}
+        onClick={() => run(async () => { rescanLocal(); await tallyCheckNow(); const x = tallyIconState(co); return "Checked at " + now() + ": " + x.word + "."; })}>Check again</button>}</p>}
     {busy && <p className="note" data-tally-pop-busy="">Working…</p>}
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}
     {stale && <p className="note books-stale" data-books-stale="">{stale}</p>}
