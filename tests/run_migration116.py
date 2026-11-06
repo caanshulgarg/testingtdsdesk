@@ -55,12 +55,12 @@ ok(made == sorted(FNS), "replaces only %s (%s)" % (sorted(FNS), made))
 def body(t, name, end):
     i = t.index("create or replace function public." + name + "("); return t[i:t.index(end, i) + len(end)]
 def last_def(name):
-    """the function's last definition in the repo (in migration order: the highest number), but 116"""
+    """the function's last definition in the repo before 116 (in migration order: the highest number below 116; 142 replaces enqueue_to after it)"""
     hits = []
     for d, _, fs in os.walk(os.path.join(ROOT, "server")):
         for f in fs:
             m = re.match(r"migration-(\d+)", f)
-            if f.endswith(".sql") and m and "migration-116" not in f and ("create or replace function public.%s(" % name) in open(os.path.join(d, f)).read(): hits.append((int(m.group(1)), os.path.join(d, f)))
+            if f.endswith(".sql") and m and int(m.group(1)) < 116 and ("create or replace function public.%s(" % name) in open(os.path.join(d, f)).read(): hits.append((int(m.group(1)), os.path.join(d, f)))
     return max(hits)[1]
 GATE = re.compile(r"^  if (auth\.uid\(\) is not null and )?not can_write\(\) then raise exception 'Only the firm''s owner or staff can [a-z ]+ (Tally|the posting list)\.' using errcode = '42501'; end if;$")
 for fn, (path, end) in FNS.items():

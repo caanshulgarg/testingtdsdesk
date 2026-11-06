@@ -277,7 +277,23 @@ async function linkPostingSet(co, rec, on){
 // migration 142 is decided: a posting still goes to the poster's own target bridge, so whether Post is offered and enabled
 // is the sign by the old rule (src/js/49 tallySignNow(co, old)), steady as tallySign is (connected at once, not connected
 // once it held a minute). asstEntries' postGate, the Post line (src/js/97 postStatusFor) and postThroughWords ask this
+// part B (the owner, 06-Nov-2026: postings go to whichever login has the company open): only once FinCom's cloud has
+// migration 142, which tally_post_any_bridge() answering true says (asked once a page, again every 10 minutes while it
+// is not; no such function, an error, offline, or not asked yet: no). Until then the posting's old rule stands
+const TallyCap = {any: false, at: 0, busy: false};
+function tallyPost142(){
+  if (TallyCap.any) return true;
+  if (!TallyCap.busy && Date.now() - TallyCap.at > 600000 && typeof TCloud === "object" && typeof TCloud.on === "function" && TCloud.on() && typeof TCloud.rpc === "function"){
+    TallyCap.busy = true; TallyCap.at = Date.now();
+    Promise.resolve().then(() => TCloud.rpc("tally_post_any_bridge", {}))
+      .then(v => { TallyCap.any = v === true; if (TallyCap.any && typeof render === "function") render(); }, () => {})
+      .then(() => { TallyCap.busy = false; });
+  }
+  return false;
+}
 function tallyPostSign(co){
+  // 142 here: a posting goes to whichever bridge serves the company, so Post follows the reading sign
+  if (tallyPost142()) return tallySign(co);
   const raw = tallySignNow(co, true);
   return TallySteady.step("post:" + (co ? co.id : ""), raw, raw.on ? "on:" + (raw.through || []).join(",") : "off:" + raw.code + ":" + (raw.computer || ""), !!raw.on);
 }
@@ -290,5 +306,21 @@ function tallyPostSign(co){
       return sv && sv.dev.id !== c.device_id ? Object.assign({}, c, {device_id: sv.dev.id}) : c; }), devs, now);
   };
 })();
-if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec, tallyServe, tallyPlain, tallyPostSign});
+// PART B (posting; needs migration 142 live): the bridge a posting goes through, as the Post confirm says it (src/js/49
+// TCloud.postThrough). The poster has no bridge of their own with the company open: the bridge that serves it now among
+// the bridges a posting may go through (TCloud.postTargets(): 2.x, may post, not changes only), as 142's
+// tally_post_enqueue_to queues it. Only once 142 is in the cloud (tallyPost142); until then exactly as before (the words
+// of no bridge of your own)
+(function hookServePost(){
+  if (typeof TCloud !== "object" || typeof TCloud.postThrough !== "function" || TCloud.postServed) return;
+  const through = TCloud.postThrough; TCloud.postServed = true;
+  TCloud.postThrough = function (co){
+    const r = through.call(this, co);
+    if (r || !co || this.pane.noTarget || !tallyPost142()) return r;
+    const company = typeof this.companyOf === "function" ? this.companyOf(co.id) : "", ts = this.postTargets() || [];
+    const sv = company ? tallyServe(company, {only: (d, id) => ts.some(x => x.id === id && x.device && x.device.id === d.id)}) : null;
+    return sv ? ts.find(x => x.id === sv.id && x.device && x.device.id === sv.dev.id) || null : null;
+  };
+})();
+if (typeof globalThis === "object") Object.assign(globalThis, {LinkRec, linkPostOf, linkPostingSet, postToProblem: postToProblemRec, tallyCoName: tallyCoNameRec, tallyLine: tallyLineRec, tallyServe, tallyPlain, tallyPostSign, TallyCap, tallyPost142});
 /* @react-lazy: end */

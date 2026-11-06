@@ -18,6 +18,9 @@ names, tally_companies.device_id) and B (made-up-b, go-8). The client Orbit Work
      open in A's own Tally: Post offered as before
   7. open in none and the linked key A offline: another login's key on the SAME computer heard -> the plain words; the
      other key on ANOTHER computer -> the existing words (offline / the bridge not running), never "Open ... in Tally"
+  8. (part B, posting) the Post confirm (TCloud.postThrough) names the serving bridge, and Post follows the reading sign,
+     only once the cloud has migration 142 (tally_post_any_bridge() answers true; no such function: never), and only among
+     TCloud.postTargets()
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_any_bridge.py"""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -152,6 +155,32 @@ def main():
         r = look(ids[ORBIT]); ok(r["line"] and r["line"][1] == "Open ORBIT WORKS in Tally" and "Open ORBIT WORKS in Tally." in r["sign"][2], "7. another login on the same computer heard: the plain words (%s / %s)" % (r["line"], r["sign"]))
         ids, da, db = scene([], [], me=None, a_at="ago:20", b_pc="OTHERPC")
         r = look(ids[ORBIT]); ok(r["line"] and r["line"][0] == "offline" and r["line"][1] != "Open ORBIT WORKS in Tally" and r["sign"][1] == "bridge", "7. the other key on another computer: the offline words stand (%s / %s)" % (r["line"], r["sign"][:2]))
+
+        print("== 8. (part B) the Post confirm names the serving bridge only once 142 is live, among the posting bridges")
+        ids, da, db = scene([], [CO], me="a")
+        pt = E("""(c) => { const co = S.companies[c], T = TCloud, keep = {pt: T.postTargets, th: T.postThrough, cf: T.companyOf, nt: T.pane.noTarget, p: TallyCap.any};
+          const rowB = {id: 'go-8', device: {id: window.__devs[1].id}}, rowA = {id: 'go-7', device: {id: window.__devs[0].id}};
+          T.companyOf = () => 'ORBIT WORKS'; T.pane.noTarget = false;
+          const out = [];
+          T.postTargets = () => [rowA, rowB]; TallyCap.any = false; TallyCap.at = Date.now(); out.push(T.postThrough(co) ? T.postThrough(co).id : null);
+          TallyCap.any = true; out.push(T.postThrough(co) ? T.postThrough(co).id : null);
+          T.postTargets = () => [rowA]; out.push(T.postThrough(co) ? T.postThrough(co).id : null);
+          Object.assign(T, {postTargets: keep.pt, companyOf: keep.cf}); T.pane.noTarget = keep.nt; TallyCap.any = keep.p;
+          return out; }""", ids[ORBIT])
+        ok(pt == [None, "go-8", None], "8. before 142: none (as before); 142 live: B; B not a posting bridge: none (%s)" % pt)
+        pg2 = E("""(c) => { TallySteady.reset(); const co = S.companies[c], k = TallyCap.any; TallyCap.any = false; TallyCap.at = Date.now(); const out = [!!tallyPostSign(co).on];
+          TallyCap.any = true; out.push(!!tallyPostSign(co).on); TallyCap.any = k; TallySteady.reset(); return out; }""", ids[ORBIT])
+        cap = E("""() => new Promise((done) => { const rpc = TCloud.rpc, out = [], calls = [];
+          const ask = (fn) => { TCloud.rpc = async (f, a) => { calls.push(f); return fn(); }; Object.assign(TallyCap, {any: false, at: 0, busy: false}); out.push(tallyPost142()); };
+          ask(() => { throw new Error("Could not find the function public.tally_post_any_bridge in the schema cache"); });
+          setTimeout(() => { out.push(tallyPost142(), TallyCap.any);
+            ask(() => ({ok: true}));
+            setTimeout(() => { out.push(TallyCap.any);
+              ask(() => true);
+              setTimeout(() => { out.push(tallyPost142()); TCloud.rpc = rpc; Object.assign(TallyCap, {any: false, at: Date.now(), busy: false}); done({out, calls}); }, 50); }, 50); }, 50); })""")
+        ok(cap["out"] == [False] * 6 + [True] and cap["calls"] == ["tally_post_any_bridge"] * 3,
+           "8. 142 asked once a time: no such function -> no; another answer -> no; true -> yes (%s)" % cap)
+        ok(pg2 == [False, True], "8. Post (open only in B): not offered before 142, offered once 142 is live (%s)" % pg2)
         br.close()
     srv.shutdown()
     bad = [e for e in errors if "could not be drawn" in e or "TypeError" in e or "ReferenceError" in e]

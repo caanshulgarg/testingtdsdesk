@@ -682,3 +682,30 @@ deleted_at is null`, the test the function's `not exists` makes (migration 56), 
 index in order instead of a regular expression and a sort over every live ledger of the firm at each call (once a minute
 per open page). Staging, the firm's books together: 76 ms before, 47-66 ms after (the rest is the join of the lines).
 Add-only: nothing else changed, no grant (an index has none). Independent of every other migration after 56.
+
+## 142: a posting goes to whichever bridge has the company open (not run yet; the owner said yes, 06-Nov-2026)
+
+**142, post any bridge** (06-Nov-2026, branch `next-tally-post-any`; the owner's decision: postings go to whichever login
+has the company open; **written, not run yet**; file md5 45b871fe6635fb6fcfe5e91d31d10cb0):
+`server/tally-cloud/migration-142-post-any-bridge.sql`. New, service_role only: `tally_bridge_serves` (heard within 3
+minutes, the company open in its own beat; a known GUID that differs: no), `tally_post_serving_bridge` (also reads the
+link's data location), `tally_post_pickable_ok`, `tally_post_pickable`, `tally_post_mine_ok`, `tally_post_count_for` (the
+beat's posts count); for members (authenticated): `tally_post_any_bridge()`, true, the page's check that 142 is here.
+Replaced (same signatures, grants restated): `tally_post_take_for` (a "go-" bridge is handed its own posting only while
+its beat has the company open, else it waits in the cloud; then a waiting posting of the firm NEVER taken, whose bridge
+does not have the company open while this one does and reads the link's data location, moved to this bridge in the same
+locked update; a posting once taken stays with its bridge) and `tally_post_enqueue_to` (116's text; no own bridge with
+the company open: any bridge serving it, the link's key first; none: the own linked bridge as before, else "Open
+<company> in Tally ..."; the note of a posting waiting for a bridge not heard from: "Queued: waits for the Tally that has
+<company> open ..."). Create or replace only; no table, column or row. Runs after 54, 55, 110, 116, 127.
+Deploy order: 142, then the tally-ingest of the same branch (postsFor asks `tally_post_count_for`; without 142 it counts
+as before), then the app build (it asks `tally_post_any_bridge()` once; without 142, no such function: the posting's old
+rule). Read-back md5(prosrc) after 142 (pg_stand): tally_post_take_for 023453bdcacc89eb2002956be8415bfd,
+tally_post_enqueue_to 7f2d015ee2a8bcb5c02fecb01dda7bd0, tally_bridge_serves 718ff4cbd56a52a5124c0b68963df714,
+tally_post_serving_bridge 6ebd57ca83845004ccdea456e0a71f7a, tally_post_pickable_ok 060edde087ef41fdd47c9193b7d17e83,
+tally_post_pickable e4f100600b65d4b906430b7be8cc8735, tally_post_mine_ok 34bf058847d009c406f653bc3c00b1fa,
+tally_post_count_for dfacb63ec76bcec7de9a5ce7f7060a95, tally_post_any_bridge 12121c1c821d63ac9833861df2e81850. Before 142
+(staging, read 06-Nov-2026): tally_post_take_for e81f469cca85bd2edbf745745040d671, tally_post_enqueue_to
+0097e6cac5ee123775cf37e18a3cd601. Rollback: `server/tally-cloud/rollback-142-post-any-bridge.sql` (not a migration) puts those two texts back (54's and 116's) and makes
+`tally_post_any_bridge()` answer false (tested: `ROLLBACK_142=<file> tests/run_migration142.py`). Tested on pg_stand:
+`tests/run_migration142.py` (RED_WITHOUT_142=1 fails).

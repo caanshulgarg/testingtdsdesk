@@ -891,6 +891,11 @@ async function rescuePosts(dev: any) {
 // the waiting postings this bridge may take: those naming it (tally_post_jobs.target_bridge), and those naming none when it
 // is the computer's main bridge; a cloud without migration 54 (no column): every waiting posting of the computer, when main
 async function postsFor(dev: any, id: string, main: boolean) {
+  // migration 142 (next-tally-link-any-bridge, review 2): the database counts (tally_post_count_for): its own postings only
+  // for a company its own beat has open (the beat wrote it above), plus the firm's never-taken postings it may pick up
+  // (their bridge lacks the company, this one has it). A cloud without 142: as before
+  const n = await countFor(dev, id, main);
+  if (n !== null) return n;
   const { data, error } = await db.from("tally_post_jobs").select("id, target_bridge").eq("device_id", dev.id).eq("status", "waiting");
   if (error) {
     if (!main) return 0;
@@ -898,6 +903,14 @@ async function postsFor(dev: any, id: string, main: boolean) {
     return count || 0;
   }
   return (data || []).filter((j: any) => j.target_bridge === id || (!j.target_bridge && main)).length;
+}
+// tally_post_count_for (migration 142); null on a cloud without it (asked again after 10 minutes) or on an error
+let countMissing = 0;
+async function countFor(dev: any, id: string, main: boolean): Promise<number | null> {
+  if (Date.now() - countMissing < 600000) return null;
+  const { data, error } = await db.rpc("tally_post_count_for", { p_device: dev.id, p_bridge: id, p_main: main });
+  if (error) { if (error.code === "PGRST202" || missingFn(String(error.message || ""))) countMissing = Date.now(); return null; }
+  return Number(data) || 0;
 }
 // migration 55 (the owner's decision B, 05-Oct-2026): the checks "Not in Tally - post again" asks of this bridge (its
 // computer's postings that name it, or name none when it is the main one): the company, the entry and its voucher. A cloud
