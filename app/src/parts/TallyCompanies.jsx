@@ -37,7 +37,7 @@ import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 import { ownOpen, NO_CO, lookOnce, rescanLocal } from "../lib/tallySimple.js";
-import "../lib/connectSteps.js";
+import { TITLES } from "../lib/connectSteps.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -547,6 +547,9 @@ function stallWhyNow(cid, company) {
   return "";
 }
 
+// "Step 3 of 6: <its words>" (stallWhy, FCStepLine): its number, else 0; and the step said by its title only
+const stepOf = (w) => { const m = /^Step (\d) of 6: /.exec(String(w || "")); return m ? Number(m[1]) : 0; };
+const stepTitle = (n) => "Step " + n + " of 6 is not done: " + (TITLES[n - 1] || "") + " (Tally page › Connect Tally).";
 // ---------- the ledgers' ONE bar (26-Oct-2026; the owner: "ledgers stay automatic through the bridge, but the progress
 // must be a clear, smart bar"), on the company's row (Companies in Tally), Books › From Tally and the Ledgers page:
 //   reading   "Reading ledgers from Tally: 312 of 1,240 (25%) · about 1 min left" (a filled bar; the time left from the rate
@@ -619,9 +622,14 @@ export function LedgerBar({ cid, where = "row", company = "" }) {
   const done = (ln, at) => <p className="tco-sync ok" data-tco-sync="done" data-tco-where={where} role="status">{(ln > 0 ? nOf(ln, "ledger", "ledgers") : "Ledgers") + " from Tally ✓" + (at ? " · " + hm(at) : "")}</p>;
   if (x && x.end) return <>{done(x.led > 0 ? x.led : n, x.ledAt)}{where !== "row" && <LaterLine cid={cid} />}</>;
   const stuck = x && (x.err || x.late || (running && x.why));
+  // next-tally-basics: on Books › From Tally this login's step is said by its title only (its words name the login and
+  // its port: the Tally page's steps say them), with the way to the steps
+  const why0 = stuck ? x.err || x.why || stallWhy(cid, name) || "No progress from Tally in 3 minutes: keep " + (name || "the company") + " open in TallyPrime on its computer." : "";
+  const sn = where === "books" ? stepOf(why0) : 0;
   if (stuck) return <div className="tco-sync bad" data-tco-sync="stuck" data-tco-stuck={x.err ? "error" : x.late && !x.why ? "late" : "why"} data-tco-where={where} role="status">
-    <span data-tco-sync-why="">{x.err || x.why || stallWhy(cid, name) || "No progress from Tally in 3 minutes: keep " + (name || "the company") + " open in TallyPrime on its computer."}</span>
-    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name, { now: true })}>Try again</button></span>
+    <span data-tco-sync-why="" data-tco-step={sn || undefined}>{sn ? stepTitle(sn) : why0}</span>
+    <span className="tco-sync-acts"><button className="btn small" data-tco-sync-again={cid} onClick={() => firstSync(cid, name, { now: true })}>Try again</button>
+      {sn > 0 && <button type="button" className="linkbtn" data-tco-sync-steps={sn} onClick={() => globalThis.FCGoSteps && globalThis.FCGoSteps()}>See the 6 steps</button>}</span>
     {!led && where !== "books" && <Masters cid={cid} />}</div>;
   if (running) { const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0, pct = of > 0 ? Math.round(100 * rd / of) : 0;
     const left = timeLeft(x, of);
@@ -671,7 +679,9 @@ async function groupCount(cid, force) {
   GRP[cid] = { n, at: Date.now(), book: bk.book };
   return n;
 }
-// this book's complete rounds started since the press (on the cloud's clock: this computer's difference taken off)
+// this book's complete rounds started since a minute before the press (on the cloud's clock: this computer's difference
+// taken off; the minute: a clock off by less than the 15 s TallyClock corrects, or a read asked a moment before that this
+// press joined); only the rounds that sent the changed ledgers count as changes
 async function roundRows(cid, since) {
   const bk = ledBook(cid); if (!bk || !bk.book) return { changed: 0, full: 0 };
   const at = since - (typeof TallyClock === "object" && TallyClock.skew ? TallyClock.skew() : 0);
@@ -703,11 +713,10 @@ export function MastersLine({ cid }) {
   useEffect(() => { if (!m || m.say || !x || x.at !== m.at) return;
     if (x.err || x.late) { const w = x.err || x.why || stallWhy(cid, company) || "no answer from Tally in 3 minutes";
       // (this login's step: its title only here, never its words, which name the login and its port)
-      const st = /^Step (\d) of 6: /.exec(w), c = st && typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
-      m.say = "Not updated: " + (st ? "Step " + st[1] + " of 6 is not done" + (c && String(c.n) === st[1] ? ": " + c.title : "") + " (Tally page › Connect Tally)" : w); tick((k) => k + 1); return; }
+      m.say = "Not updated: " + (stepOf(w) ? stepTitle(stepOf(w)) : w); tick((k) => k + 1); return; }
     if (!x.end || m.busy) return;
     m.busy = true;
-    Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at)])
+    Promise.all([cloudLedgerCount(cid, true).catch(() => null), groupCount(cid, true).catch(() => null), roundRows(cid, m.at - 60000)])
       .then(([n1, g1, rr]) => { m.say = mastersResult(m.b, { n: n1 == null ? m.b.n : n1, g: g1 == null ? m.b.g : g1 }, rr); m.ok = true; tick((k) => k + 1); }); });
   const may = !(S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
   // one read at a time: the button is off from the press (before its first count is read) until the read is asked

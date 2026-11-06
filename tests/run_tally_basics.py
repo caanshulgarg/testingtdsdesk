@@ -106,11 +106,15 @@ def main():
         ok(lk.upper() == ORB, "1. Connect links ORBIT SPACE to client Orbit Space (%s)" % lk)
 
         print("== 1b (review 5). two of A's Tallys: one answering, one with its connection off; a company with no port known")
-        off43 = {"port": 9043, "ok": False, "skipped": False, "n": 0, "error": "connection off", "reason": "connection off"}
-        dA1b = adev([up, off43], opened=(ORB,))
+        # (the bridge's real shape: the port's reason "closed", the beat's tallyWhy "connection off" for this login's tallyPort;
+        # another program on a port, "not tally", is no Tally)
+        off43 = {"port": 9043, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}
+        nt44 = {"port": 9044, "ok": False, "skipped": False, "n": 0, "error": "not TallyPrime", "reason": "not tally"}
+        dA1b = adev([up, off43, nt44], opened=(ORB,), why="connection off"); dA1b["info"]["beat"]["tallyPort"] = 9043
         scene([dA1b, bdev()], c1, CL, A_PINGS)
         ok(attr(HERE_ + ' [data-tsm-here-tally="9043"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "connection off" and n(HERE_ + ' [data-tsm-here-tally="9041"] [data-tsm-here-co="%s"]' % ORB) == 1,
            "1b. 9041 connected with ORBIT SPACE, 9043 listed with its connection off (%s)" % txt(HERE_)[:220])
+        ok(n(HERE_ + ' [data-tsm-here-tally="9044"]') == 0, "1b (re-review 3). another program on 9044 ('not tally') is not listed as a Tally")
         up45 = {"port": 9045, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}
         scene([adev([up, up45], opened=(ORB,)), bdev()], c1, CL, A_PINGS)
         ok(n(HERE_ + ' [data-tsm-here-tally="unknown"] [data-tsm-here-co="%s"]' % ORB) == 1 and n(HERE_ + " [data-tsm-here-noco]") == 0 and "port ?" not in txt(HERE_),
@@ -164,7 +168,7 @@ def main():
         ok(n("#app [data-upload-page] [data-up-drop]") == 1, "8. the upload (the fallback) is on the same page")
         ok(n("#app [data-upload-page] [data-tco-masters]") == 0, "8 (review 10). no second masters uploader beside the drop")
         lt = re.search(r"last checked ([^;)]*)", mt)
-        ok(lt is not None and re.match(r"^\d{1,2}:\d\d( ?[ap]m)?$", lt.group(1).strip(), re.I), "8 (review 10). 'last checked' as the IST time of the computer's 15:04 (%s)" % (lt and lt.group(1)))
+        ok(lt is not None and re.match(r"^(\d{1,2}-\w{3}-\d{4} )?\d{1,2}:\d\d( ?[ap]m)?$", lt.group(1).strip(), re.I), "8 (review 10). 'last checked' as the IST time (with its day when not today) of the computer's 15:04 (%s)" % (lt and lt.group(1)))
         ok(lt is not None and ("3:04" in lt.group(1) or "15:04" in lt.group(1)), "8 (review 10). the computer's own clock read as IST, not cut from the text")
         # review 4: two presses in a row start one read
         E("() => { S.tcoSync = {}; render(); }"); pg.wait_for_timeout(600)
@@ -187,6 +191,27 @@ def main():
         ids8 = scene([dA8, dC, bdev()], c8c, CL, A_PINGS)
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids8[ORBIT]); pg.wait_for_timeout(4000)
         ok(n("#app [data-upload-page] [data-masters]") == 1 and n("#app [data-upload-page] [data-masters-step]") == 0, "8b. a client whose Tally is on another computer: no step of this login (%s)" % txt("#app [data-masters]")[:160])
+
+        print("== 8d (re-review 1). From Tally, a read stuck with this login's step 2 not done: Update now, 30 s, Try again: no login, no port")
+        skipped_b2 = {"port": 9070, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}
+        dA2 = adev([skipped_b2], why="no tally running in this login", tally="closed")
+        cd = cos + [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": dA2["id"], "gstin": "", "last_seen": "ago:30"}]
+        idsd = scene([dA2, bdev()], cd, CL, A_PINGS)
+        E("(c) => { S.tcoSync = {}; location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", idsd[ORBIT]); pg.wait_for_timeout(4000)
+        PG = "#app [data-upload-page]"
+        leak = lambda t: re.findall(r"made-up[\w-]*|SRV01|\b9\d{3}\b", t)
+        if n(PG + " [data-masters-update]"): pg.click(PG + " [data-masters-update]")
+        def later30(c):
+            E("(c) => { const x = (S.tcoSync || {})[c]; if (x) { x.at -= 40000; x.moveAt = x.at; x.upAsked = x.upAsked || Date.now(); } }", c); pg.wait_for_timeout(12000)
+        pg.wait_for_timeout(2000); later30(idsd[ORBIT])
+        w1 = txt(PG + " [data-tco-sync-why]"); p1 = txt(PG)
+        ok(bool(w1) and not leak(p1), "8d. after 30 s: the bar's reason without a login name or port (%s | leaks %s)" % (w1[:140], leak(p1)[:4]))
+        ok(not w1.startswith("Step ") or (w1.startswith("Step 2 of 6 is not done: TallyPrime running in this login") and n(PG + " [data-tco-sync-steps]") == 1), "8d. a step: its title only, with See the 6 steps (%s)" % w1[:140])
+        if n(PG + " [data-tco-sync-again]"):
+            pg.click(PG + " [data-tco-sync-again]"); pg.wait_for_timeout(2000); later30(idsd[ORBIT])
+            w2 = txt(PG + " [data-tco-sync-why]"); p2 = txt(PG)
+            ok(not leak(p2) and (not w2.startswith("Step ") or w2.startswith("Step 2 of 6 is not done: ")), "8d. Try again, 30 s more: still no login name or port (%s | leaks %s)" % (w2[:140], leak(p2)[:4]))
+        else: ok(False, "8d. Try again on the stuck bar (%s)" % txt(PG + " [data-masters]")[:200])
 
         print("== 8c (review 3). Bank: Bring in from Tally, and the Excel ledger list still imported (the old path)")
         ids3 = scene([adev([up]), bdev()], cos, CL, A_PINGS)
@@ -216,7 +241,8 @@ def main():
         print("== 4. A's Tally running, its connection off, or its port held by B's Tally")
         own9000 = {"port": 9000, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}
         scene([adev([own9000], why="connection off", say=MODE), bdev()], cos, CL, A_PINGS)
-        ok(attr(HERE_ + ' [data-tsm-here-tally="off"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "mode" and "connection off" in txt(HERE_), "4. connection off, said on the panel (%s)" % txt(HERE_)[:200])
+        ok((attr(HERE_ + ' [data-tsm-here-tally="9000"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "connection off" or attr(HERE_ + ' [data-tsm-here-tally="off"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "mode")
+           and "connection off" in txt(HERE_), "4. connection off, said on the panel (%s)" % txt(HERE_)[:200])
         held = {"port": 9000, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}
         scene([adev([held], why="connection off", say=CLASH), bdev(port=9000)], cos, CL, A_PINGS)
         ok(attr(HERE_ + ' [data-tsm-here-tally="off"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "clash" and "port taken" in txt(HERE_), "4. port taken (%s)" % txt(HERE_)[:200])

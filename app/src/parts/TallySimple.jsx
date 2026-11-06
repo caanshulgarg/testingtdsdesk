@@ -192,15 +192,22 @@ const lc = (v) => String(v || "").trim().toLowerCase();
 const SESS_STATE = { "connection off": "connection off", "not answering": "not answering", "owner unknown": "run as administrator", busy: "busy" };
 export function ownTallys(own) {
   const here = own && own.from === "here" && typeof Bridge === "object" ? Bridge.st || {} : null, b = (own && own.own && own.own.beat) || {};
-  const all = [].concat((here && here.sessions && here.sessions.length ? here.sessions : b.ports) || []).filter((p) => p && !p.skipped && p.mine !== false && Number(p.port) > 0);
-  const ses = all.filter((p) => p.ok || !(/^closed$|^$/.test(lc(p.reason || p.state || "")) || /nothing listens/i.test(String(p.error || ""))));
+  // (another program on a port, another login's or bridge's, or a Tally whose owner is unknown: not this login's Tally;
+  // the list of lib/tallySimple.js ownConnOff)
+  const all = [].concat((here && here.sessions && here.sessions.length ? here.sessions : b.ports) || [])
+    .filter((p) => p && !p.skipped && p.mine !== false && Number(p.port) > 0 && !["not tally", "another user", "another bridge", "owner unknown"].includes(lc(p.reason)));
+  // the bridge says a Tally whose connection is off by the beat's tallyWhy, its own port's reason "closed": that port is
+  // this login's Tally with its connection off
+  const why = lc((here && here.tallyWhy) || b.tallyWhy), tp = Number((here && here.tallyPort) || b.tallyPort) || 0;
+  const offAt = (p) => why === "connection off" && !p.ok && (tp ? Number(p.port) === tp : all.filter((x) => !x.ok).length === 1);
+  const ses = all.filter((p) => p.ok || offAt(p) || !(/^closed$|^$/.test(lc(p.reason || p.state || "")) || /nothing listens/i.test(String(p.error || ""))));
   const items = here ? [].concat(here.open || []).filter((o) => o && o.mine !== false) : [], oks = ses.filter((s) => s.ok);
   const by = new Map(), out = [], unknown = [];
   [...((own && own.names) || new Map()).values()].forEach((n) => { const it = items.find((o) => coKey(o.name) === coKey(n));
     const p0 = it && Number(it.port), p = p0 && ses.some((x) => Number(x.port) === p0) ? p0 : oks.length === 1 ? Number(oks[0].port) : 0;
     if (p) by.set(p, (by.get(p) || []).concat(n)); else unknown.push(n); });
   ses.forEach((x) => { const p = Number(x.port); if (out.some((t) => t.port === p)) return;
-    out.push({ port: p, ok: !!x.ok, state: x.ok ? "connected" : SESS_STATE[lc(x.reason || x.state)] || "not answering", names: by.get(p) || [] }); });
+    out.push({ port: p, ok: !!x.ok, state: x.ok ? "connected" : offAt(x) ? "connection off" : SESS_STATE[lc(x.reason || x.state)] || "not answering", names: by.get(p) || [] }); });
   return { tallys: out, unknown };
 }
 const STATE_OF = { clash: "port taken", reopen: "connection set, not on yet", notanswering: "not answering", admin: "run as administrator" };
