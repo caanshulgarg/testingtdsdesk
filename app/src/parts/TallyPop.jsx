@@ -105,7 +105,7 @@ function Actions({ co, s, run, busy }) {
   if (s.cause === "stopped") return isOwner() && l && l.stop && typeof TCloud === "object"
     ? row(btn("resume", "Resume reading", async () => { await TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer }); return "Reading from Tally starts again within a minute."; }, true)) : OWNER_ONLY;
   if (s.cause === "paused") return row(update());
-  if (s.cause === "port" || s.cause === "notanswering") return row(check(true));
+  if (s.cause === "port" || s.cause === "notanswering") return <>{s.cause === "port" && !s.step && <p className="note" data-tally-pop-how="">The steps are on the Tally page.</p>}{row(check(true))}</>;
   return null;   // entries waiting for a person: on the Tally page (the link below)
 }
 

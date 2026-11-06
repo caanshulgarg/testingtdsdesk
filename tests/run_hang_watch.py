@@ -117,8 +117,9 @@ def main():
         look([mine, other253, other251]); w = words(); print("      a.", w)
         ok(w["own"] == "ok" and w["how"] == "found", "a. this login's 2.5.3 bridge found (sameSession true)")
         # next-tally-connect-steps: the first company to link is Connect Tally's step 5 (the strip is for the ones after it)
-        ok((w["strip"].startswith("Open in your Tally now: “%s”, not linked yet" % OPEN) and "Link to a client" in w["strip"]) or w["step5"].startswith("Step 5: “%s” is open in your Tally." % OPEN),
-           "a. at the top: Open in your Tally now: “…”, not linked yet (the strip, or Connect Tally's step 5) (%s | %s)" % (w["strip"], w["step5"]))
+        # (nothing linked yet: the company is Connect Tally's step 5, the strip only for the ones after it)
+        ok(w["step5"].startswith("Step 5: “%s” is open in your Tally." % OPEN) and not w["strip"],
+           "a. at the top: Connect Tally's step 5, “…” is open in your Tally, Link (%s | %s)" % (w["strip"], w["step5"]))
         ok(E("() => !!FCTallySimple.rememberedOwn()"), "a. this login's bridge remembered in this browser")
         ok(w["eps"].startswith("No EPSILON X DESIGNS’s Tally is open in another Windows login (epsilonx), not in this login’s. Open it in this login, or install FinCom Bridge in the epsilonx login."),
            "f. a linked client whose Tally runs in another login: said so, by that login's name (%s)" % w["eps"][:160])

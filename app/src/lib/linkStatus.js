@@ -51,7 +51,7 @@ function linkWordNow(co, company) {
   const sv = typeof globalThis.tallyServe === "function" ? globalThis.tallyServe(name, { rec, device: devId }) : undefined;
   const dev = (sv && sv.dev) || devs.find((d) => d.id === devId) || devs.find((d) => openOn(d).some((n) => sameCo(n, name))) || null;
   const pc = rec || dev ? pcOf(dev) : "its computer";   // (never a computer's name: next-fix-tally-links2)
-  const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen };
+  const base = { state: st.state, company: name, computer: st.computer || pc, seen: st.seen, device: (dev && dev.id) || "" };
   // open in none of several computer keys (a shared server: one a Windows login): the plain words, never one login's
   const open = sv === null && globalThis.tallyPlain(devId) ? "Open " + name + " in Tally" : "Open " + name + " in TallyPrime on " + pc;
   // the same company in two places (a copied data folder keeps the GUID): nothing from the other place is applied

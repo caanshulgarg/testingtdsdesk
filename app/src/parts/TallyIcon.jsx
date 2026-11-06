@@ -44,7 +44,7 @@ export function tallyIconState(co) {
     // Needs you: one short sentence about the problem (its button: parts/TallyPop.jsx)
     const b = (p.button || {}).label || "", l = typeof tallyLine === "function" ? tallyLine(co) : null, st = (l && l.state) || "";
     if (b === "Choose") return o("needs", "Needs you", company + " is open in two places with different data. Choose which one is the books.", "two");
-    if (p.port) return o("needs", "Needs you", cs && cs.n === 3 ? stepSay(cs) : "Tally's connection setting needs a change before FinCom can read it.", "port");
+    if (p.port || p.step) return o("needs", "Needs you", cs && cs.n === 3 ? stepSay(cs) : "Tally's connection setting needs a change before FinCom can read it.", "port");
     if (b === "Allow posting") return o("needs", "Needs you", "Posting to Tally is stopped for " + co.name + ".", "posting");
     if (st === "stopped") return o("needs", "Needs you", "Reading from Tally is stopped.", "stopped");
     if (st === "paused") return o("needs", "Needs you", "Reading from Tally is paused.", "paused");
@@ -54,9 +54,11 @@ export function tallyIconState(co) {
   // the firm's pages: any computer of the firm with Tally ready (tallySign, src/js/49), the one here
   const s = typeof tallySign === "function" ? tallySign(null) : { on: false }, h = typeof tallyHere === "function" ? tallyHere(null) : { level: "idle" };
   const o = (icon, word, line) => ({ icon, word, line, cause: "", company: "", p: null, step: c });
-  // (this login's own step first: the firm's sign, held steady for a minute, is never this login's state)
-  if (c) return o(c.n < 2 ? "none" : "waiting", c.n < 2 ? "Not connected" : "Waiting for Tally", stepSay(c));
+  // (this login's own steps 1-3 first, on its own Tally computer only: the firm's sign is held steady for a minute; step 4
+  // after the firm's sign)
+  if (c && c.n < 4) return o(c.n < 2 ? "none" : "waiting", c.n < 2 ? "Not connected" : "Waiting for Tally", stepSay(c));
   if (s.on) return o("linked", "Connected", "Connected to Tally");
+  if (c) return o("waiting", "Waiting for Tally", stepSay(c));
   if (h.level === "bad") return o("needs", "Needs you", "Tally is not answering.");
   if (s.computer || tallyDevs().length) return o("waiting", "Waiting for Tally", "Open Tally to connect.");
   return o("none", "Not connected", "Not connected to Tally yet.");

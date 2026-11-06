@@ -518,11 +518,17 @@ export async function syncPoll(cid) {
 // why nothing comes, from the computer's beat (plain words; "" when its beat says all is well)
 export function stallWhy(cid, company) {
   const w = stallWhyNow(cid, company);
-  // next-tally-connect-steps: not coming, and this login's own Connect Tally step not done: that step's words (the same
-  // as the Tally page's checklist), pointing to it
-  const c = w && typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
-  return c && c.n < 4 ? globalThis.FCStepLine(c) + " (Tally page › Connect Tally)" : w;
+  // next-tally-connect-steps: Tally closed or the company not open (no computer key holds it, or this login's own does),
+  // and this login's own Connect Tally step 1-3 not done: that step's words (the Tally page's checklist), pointing to it.
+  // Reading stopped or paused, or another computer offline: its own words
+  if (!w || !/^(Tally is not open on |No computer with FinCom Bridge holds |Open .+ in Tally: )|is not open in Tally on /.test(w)) return w;
+  const c = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
+  if (!c || c.n > 3) return w;
+  const name = company || (S.companies && S.companies[cid] && (S.companies[cid].tallyName || S.companies[cid].name)) || "";
+  const devId = (coRows(name).find((r) => r.device_id) || {}).device_id || "";
+  return typeof globalThis.FCOwnOrNone === "function" && globalThis.FCOwnOrNone(devId) ? globalThis.FCStepLine(c) + " (Tally page › Connect Tally)" : w;
 }
+if (typeof globalThis === "object") globalThis.FCStallWhy = stallWhy;
 function stallWhyNow(cid, company) {
   const co = S.companies && S.companies[cid], name = company || (co && (co.tallyName || co.name)) || "the company";
   const rows = coRows(name), devs = tallyDevs();

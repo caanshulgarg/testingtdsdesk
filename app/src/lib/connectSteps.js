@@ -15,7 +15,7 @@
 // A browser with no bridge (a laptop): "Do these steps on the computer or server where TallyPrime runs", with the firm's
 // state, and no per-login steps. Nothing new is asked of the bridge or Tally: what ownState() (lib/tallySimple.js), the
 // beats and the rows already hold. Never another login's company, and never the firm's state shown as this login's.
-import { ownState, localBridges, LOCALB, placeOf, bridgeSay, bridgesOf, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, YES } from "./tallySimple.js";
+import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, bridgesOf, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, YES } from "./tallySimple.js";
 import { tallyDevs } from "./tallyState.js";
 import { freePort, portHowWords } from "./tallyPort.js";
 
@@ -45,6 +45,9 @@ export const WORDS = {
   clash: (port, who, free) => "Your Tally’s port " + port + " is taken by " + (who ? "the Tally of " + who : "another program (on a shared server, usually another login’s Tally)") +
     ", so your Tally takes no connection. Give it a port of its own, " + free + ". " + portHowWords(free),
   maybeOff: (free) => "If TallyPrime is already open here, its connection may be off: " + portHowWords(free),
+  // (the bridge's tally.ini says every login of this computer shares these settings, or this login may not change them)
+  shared: "Careful: every Windows login that runs this TallyPrime shares these settings, so changing the port here changes it for all of them. If another login’s Tally then stops connecting, give each login its own TallyPrime folder.",
+  cantWrite: "If TallyPrime does not keep the change, this Windows login may not change TallyPrime’s settings: make the change once as a user who may.",
   reopen: "Your Tally’s connection is set but not on yet. Close TallyPrime and open it again once.",
   notanswering: "TallyPrime is open in this login but does not answer FinCom. Close any message or report open in Tally; if it stays, close TallyPrime and open it again once.",
   noco: () => NO_CO,
@@ -135,13 +138,21 @@ export function connectSteps(opts) {
     else {
       const devs = onThisPc(b), m = /port (\d+) is used/i.exec(say), held = m ? Number(m[1]) : 0;
       const free = freePort(portsSeen(devs, [held].concat(ports.map((p) => p && p.port))), login);
-      if (held) put("connect", false, WORDS.clash(held, holderOf(devs, held, login), free), { kind: "check", free }, "clash");
+      const ini = [].concat(src.tallyIni || (b && b.beat && b.beat.tallyIni) || []).map((x) => lc(x && x.connect));
+      const warn = /every user of this computer shares/i.test(say) || ini.some((c) => c.startsWith("off; shared")) ? " " + WORDS.shared
+        : /may not change tallyprime|cannot write/i.test(say) || ini.includes("cannot write") ? " " + WORDS.cantWrite : "";
+      if (held) put("connect", false, WORDS.clash(held, holderOf(devs, held, login), free) + warn, { kind: "check", free }, "clash");
       else if (/set but not on yet/i.test(say)) put("connect", false, WORDS.reopen, { kind: "check" }, "reopen");
-      else put("connect", false, WORDS.mode(free), { kind: "check", free }, "mode");
+      else put("connect", false, WORDS.mode(free) + warn, { kind: "check", free }, warn ? (warn === " " + WORDS.shared ? "shared" : "cantwrite") : "mode");
     }
+  } else if (say && /close and reopen|reopen tally/i.test(say)) {
+    // bridge 2.5.3: it switched Tally's connection on (its tally.ini) and Tally runs without it until reopened; it says
+    // "no Tally running in this login" meanwhile: its own words, as step 3
+    put("tally", true, "", null, "", "TallyPrime is running in this login");
+    put("connect", false, shown(say), { kind: "check" }, "reopen");
   } else {
     // (a bridge before 2.5.4 cannot tell a closed Tally from one whose connection is off: both, with the menu path)
-    const pre254 = !why && ver && vk(ver) < vk("2.5.4");
+    const pre254 = !!ver && vk(ver) < vk("2.5.4") && (!why || /^no tally running/.test(why) || why === "another user");
     const free = pre254 ? freePort(portsSeen(onThisPc(b), ports.map((p) => p && p.port)), login) : 0;
     put("tally", false, why === "owner unknown" ? WORDS.admin : WORDS.tally(login, otherTally(ports)) + (pre254 ? " " + WORDS.maybeOff(free) : ""), { kind: "check" }, why === "owner unknown" ? "admin" : "notrunning");
     put("connect", false);
@@ -190,6 +201,9 @@ export function firmWords(rows) {
 export function connectNow(latest) {
   let r; try { r = connectSteps({ latest }); } catch (e) { return null; }
   const s = r.mode === "login" ? r.now : null;
+  // (only where this browser is on a Tally computer: a laptop whose browser did not let FinCom look, or whose look was
+  // cut, says the firm's state as before; the first time anywhere, step 1)
+  if (s && placeOf() !== "pc" && s.hook !== "first") return null;
   return s && s.hook !== "checking" ? { n: s.n, title: s.title, say: s.say, hook: s.hook, login: r.login } : null;
 }
 // "Step 3 of 6 · Tally’s connection on…": the same words everywhere a box points to the checklist
@@ -198,11 +212,18 @@ export const stepLine = (s) => s ? "Step " + s.n + " of 6: " + s.say : "";
 export const goSteps = () => { S.tallyPanel = false; S.tallyGuide = {}; S.tallyFocus = ""; S.tallyTab = "computers"; if (typeof navHome === "function") navHome("tally"); if (typeof window === "object") window.scrollTo(0, 0); };
 // a client's box with no step of its own: this login's step instead (Waiting for Tally, the port), its words and the way here
 export function withStep(w) {
-  if (!w || !(w.kind === "waiting" || w.port)) return w;
-  // (step 4, no company open: the client's own words name its company, "Open <company> in Tally": kept)
+  if (!w || !(w.kind === "waiting" || w.port) || w.state === "offline") return w;
+  // (step 4, no company open: the client's own words name its company, "Open <company> in Tally": kept; another
+  // computer key's Tally, or one offline, keeps its own words too)
   const c = connectNow();
-  if (!c || c.n > 3 || (w.port && c.n !== 3)) return w;
+  if (!c || c.n > 3 || (w.port && c.n !== 3) || !ownOrNone(w.device)) return w;
   const line = stepLine(c);
-  return Object.assign({}, w, { line, text: w.word + " — " + line, step: c, button: { label: "See the 6 steps", act: goSteps } });
+  return Object.assign({}, w, { line, text: w.word + " — " + line, step: c, port: null, button: { label: "See the 6 steps", act: goSteps } });
 }
-if (typeof globalThis === "object") Object.assign(globalThis, { FCConnectNow: connectNow, FCConnectSteps: connectSteps, FCWithStep: withStep, FCStepLine: stepLine, FCGoSteps: goSteps });
+// a computer key that is this login's own bridge's, or none known
+export function ownOrNone(devId) {
+  if (!devId) return true;
+  let o = null; try { o = ownBridge(); } catch (e) { o = null; }
+  return !!(o && o.dev && o.dev.id === devId);
+}
+if (typeof globalThis === "object") Object.assign(globalThis, { FCConnectNow: connectNow, FCConnectSteps: connectSteps, FCWithStep: withStep, FCStepLine: stepLine, FCGoSteps: goSteps, FCOwnOrNone: ownOrNone });

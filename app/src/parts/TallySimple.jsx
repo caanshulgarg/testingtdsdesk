@@ -127,6 +127,9 @@ function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgai
     {(ui.open || forced) && <ol className="tsm-steps" data-tsm-titles="">{cs.steps.map((s) => <li key={s.n} className="tsm-step" data-tsm-step={s.n}>
       <div className="tsm-step-top"><span className="tsm-mark" aria-hidden="true">{s.n}</span><span className="tsm-step-title">{s.title}</span></div></li>)}</ol>}
   </section>;
+  // (the steps could not be worked out this time: a neutral line, never "all done"; the next drawing tries again)
+  if (cs.mode === "error") return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="error">
+    <div className="tsm-guide-top"><b>Connect Tally</b><span className="tsm-note">The steps could not be worked out just now.</span><span className="tsm-guide-links">{recheck}</span></div></section>;
   const now = cs.now, who = cs.login ? "This Windows login: " + cs.login : "This Windows login";
   if (collapsed) return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="done" data-tsm-collapsed="" data-tsm-login={cs.login || undefined}>
     <div className="tsm-guide-top"><b>{"Connect Tally · " + who + " · all 6 steps done ✓"}</b>
@@ -379,8 +382,8 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const forced = (!!ui.again && now - ui.again < GUIDE_MS) || (g.step === 1 && !!g.at && now - g.at < GUIDE_MS);
   const asked = !!g.at && g.step >= 1 && g.step <= 3 && now - g.at < GUIDE_MS;
   // next-tally-connect-steps: the six steps of this login (lib/connectSteps.js), from the same rows and the same own state
-  let cs; try { cs = connectSteps({ latest, rows: R.extra ? rows : null, rowsWait: !R.extra, extra: R.extra }); } catch (e) { cs = { mode: "login", login: "", steps: [], now: null }; }
-  const expanded = cs.mode === "laptop" || !!cs.now || forced || ui.open || asked;
+  let cs; try { cs = connectSteps({ latest, rows: R.extra ? rows : null, rowsWait: !R.extra, extra: R.extra }); } catch (e) { cs = { mode: "error", login: "", steps: [], now: null }; }
+  const expanded = cs.mode === "laptop" || cs.mode === "error" || !!cs.now || forced || ui.open || asked;
   const open = x.open, best = x.best;
   const strip = unlinked.length > 0 && !(expanded && cs.now && cs.now.key === "link");
   // one Download on the page while step 1 asks for it (the rows and the header say the words only)

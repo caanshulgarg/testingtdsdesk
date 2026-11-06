@@ -186,6 +186,58 @@ def main():
         ok(g["now"] == "laptop" and "Do these steps on the computer or server where TallyPrime runs" in g["all"], "10. where to do them (%s)" % g["all"][:200])
         ok(fw.startswith("For the firm now: 2 FinCom Bridges are connected") and n(G + " [data-tsm-state]") == 0 and n("#app [data-tsm-now]") == 0, "10. the firm's state, no per-login step (%s)" % fw)
         ok(E("() => FCConnectNow()") is None, "10. no login's step said elsewhere on a laptop")
+        print("== 12. FinCom Bridge 2.5.3: it switched the connection on, Tally not reopened yet (no Tally running, it says)")
+        SAY253 = "FinCom switched on Tally's connection. Close and reopen Tally once."
+        P253 = {"9101": TS.ping(9101, True, UA, version="2.5.3", bridgeId="go-7"), "9150": TS.ping(9150, False, UB, version="2.5.4")}
+        scene([adev([skipped_b], why="no tally running in this login", say=SAY253, tally="closed", version="2.5.3"), bdev()], cos, CL, P253)
+        g = guide()
+        ok(g["now"] == "3" and g["hook"] == "reopen" and g["say"] == "Step 3: " + SAY253 and g["states"][:2] == ["done", "done"], "12. 2.5.3's words as step 3, step 2 ticked (%s)" % g["say"])
+
+        print("== 13. FinCom Bridge 2.5.3: no Tally answering, nothing switched: open Tally, or its connection may be off")
+        for why in ("no tally running in this login", "another user"):
+            scene([adev([skipped_b], why=why, tally="closed", version="2.5.3"), bdev()], cos, CL, P253)
+            g = guide(); m = re.search(r"Port (\d+), ODBC", g["say"])
+            ok(g["now"] == "2" and g["say"].startswith("Step 2: Open TallyPrime in this Windows login (made-up-a).") and "If TallyPrime is already open here, its connection may be off: " + MENU in g["say"]
+               and m and int(m.group(1)) not in (9070, 9002), "13. %s: open TallyPrime, or the menu path with a free port (%s)" % (why, g["say"][:220]))
+
+        print("== 14. connection off on a computer every login shares (tally.ini not changed by FinCom): the menu, and the warning")
+        SHARED = "Tally's connection is off. Every user of this computer shares this TallyPrime's settings, so FinCom does not change them: ask the computer's administrator to give each user's Tally its own port."
+        dS = adev([own9000], why="connection off", say=SHARED)
+        dS["info"]["beat"]["tallyIni"] = [{"path": "C:\\Program Files\\TallyPrime\\tally.ini", "connect": "off; shared by every user of this computer, not changed"}]
+        scene([dS, bdev()], cos, CL, A_PINGS)
+        g = guide()
+        ok(g["now"] == "3" and g["hook"] == "shared" and g["say"].startswith("Step 3: Your Tally’s connection is off. " + MENU) and "changing the port here changes it for all of them" in g["say"] and "administrator" not in g["all"].lower(),
+           "14. the menu path, and that the settings are shared by every login (%s)" % g["say"][:260])
+
+        print("== 15. a browser that may not look on this computer (place unknown): the firm's state, no login's step elsewhere")
+        scene([adev([up]), bdev()], cos, CL, {})
+        E("() => { window.__blk0 = Bridge.blocked; Bridge.blocked = () => true; Object.assign(FCTallySimple.LOCALB, {list: null, busy: false, n: 0, cut: false}); FCTallySimple.lookOnce(); render(); }"); pg.wait_for_timeout(1500)
+        pl = E("() => FCTallySimple.placeOf()"); icon = E("() => { const b = document.querySelector('header.top [data-tally-icon]'); return b ? b.getAttribute('title') : ''; }")
+        ok(pl == "unknown" and E("() => FCConnectNow()") is None and "Step " not in icon, "15. unknown place: no step said by the icon or a client's box (%s | %s)" % (pl, icon[:120]))
+        E("() => { Bridge.blocked = window.__blk0; }")
+
+        print("== 16. a client's box: only Tally closed / not open on this login's own computer key takes the step")
+        ORB = ORBIT.upper()
+        dP = adev([held], why="connection off", say=CLASH)
+        dC = T.dev(9, "PC9", "made-up-c", at="ago:60", tally="open", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9100, "windowsUser": "PC9\\made-up-c"})
+        c16 = cos + [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": dP["id"], "gstin": "", "last_seen": "ago:30"},
+                     {"company": "ACME TRADERS", "client_id": "NAME:" + ACME, "device_id": dC["id"], "gstin": "", "last_seen": "ago:90"}]
+        ids = scene([dP, dC], c16, CL, A_PINGS)   # (no other login heard now: the link's own computer key reads it)
+        sw = E("(c) => FCStallWhy(c, 'ORBIT SPACE')", ids[ORBIT])
+        lw = E("(c) => { const w = LinkWord(S.companies[c]); return w ? [w.line, w.port || null, (w.button || {}).label || ''] : null; }", ids[ORBIT])
+        ok(sw.startswith("Step 3 of 6: Your Tally’s port 9000 is taken"), "16. own computer key, company not open: the ledger bar says step 3 (%s)" % sw[:120])
+        ok(lw and lw[0].startswith("Step 3 of 6: ") and lw[1] is None and lw[2] == "See the 6 steps", "16. the client's word: step 3, no second port, See the 6 steps (%s)" % lw)
+        E("() => { const d = window.__devs.find(x => x.info && x.info.computer === 'SRV01' && x.info.user === 'made-up-a'); d.info.beat.paused = true; [TLight.st.devs, TCloud.pane.devices].forEach(L => (L || []).forEach(x => { if (x.id === d.id) x.info.beat.paused = true; })); }")
+        sw = E("(c) => FCStallWhy(c, 'ORBIT SPACE')", ids[ORBIT])
+        ok(sw.startswith("Reading is paused on "), "16. reading paused: its own words, not the step (%s)" % sw[:120])
+        lc = E("(c) => { const w = LinkWord(S.companies[c]); return w ? [w.kind, w.line] : null; }", ids[ACME])
+        sc = E("(c) => FCStallWhy(c, 'ACME TRADERS')", ids[ACME])
+        ok(lc and not lc[1].startswith("Step ") and not sc.startswith("Step "), "16. another computer offline: its own words, never this login's step (%s | %s)" % (lc, sc[:100]))
+        E("(c) => { openCompany(c); S.view = 'company'; S.tab = 'dash'; render(); }", ids[ORBIT]); pg.wait_for_timeout(1500)
+        pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top .tally-pop [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(500)
+        if n("header.top .tally-pop [data-link-status-go]"): pg.click("header.top .tally-pop [data-link-status-go]"); pg.wait_for_timeout(1500)
+        else: pg.click("header.top .tally-pop [data-tally-pop-steps]"); pg.wait_for_timeout(1500)
+        ok(n(G) == 1 and E("() => S.view") == "home", "16. See the 6 steps opens the Tally page's steps")
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

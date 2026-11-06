@@ -484,10 +484,11 @@ def main():
         da2 = T.dev(7, PC, "made-up-a", tally="closed", opened=(), version="2.5.3", rec=(ACME,), ports=WHY_PORT,
                     beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "owner unknown", "tallyConnectSay": SAY})
         scene([da2, db], cos2, [ACME, EVER], books={ACME: T.book(ACME)}, own=LINK_B, pings={"9101": ping(9101, True, UA, bridgeId="go-7"), "9150": ping(9150, False, UB)})
-        # next-tally-connect-steps: the bridge's reason is said once, as Connect Tally's step (owner unknown: Tally as administrator)
-        ok(txt("#app [data-tsm-now]").startswith("Step 2: TallyPrime seems to run as administrator") and word(ACME, "o") == "No",
-           "3d. tallyWhy in plain words, as step 2 (%s)" % txt("#app [data-tsm-now]"))
-        ok(n("#app [data-tsm-connect-say]") == 0 and SAY not in txt("#app [data-tsm-head]"), "3d. tallyConnectSay not said a second time in the header")
+        # next-tally-connect-steps: the bridge's tallyConnectSay (it switched the connection on: reopen Tally once) is shown,
+        # once, as Connect Tally's step 3, in the bridge's own words; step 2 ticked (its Tally runs, without the connection yet)
+        ok(txt("#app [data-tsm-now]") == "Step 3: " + SAY and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-hook") == "reopen" and word(ACME, "o") == "No",
+           "3d. tallyConnectSay shown, as step 3 (%s)" % txt("#app [data-tsm-now]"))
+        ok(txt("#app [data-tally-simple]").count(SAY) == 1, "3d. said once on the page")
         ok("made-up-a" not in rest_text() and "9101" not in rest_text(), "3d. no Windows login or port outside For support and Connect Tally")
         # its beat old: Connect asks the bridge found here (its address), never another's
         E("""() => { const old = new Date(Date.now() - 10 * 60000).toISOString(); [].concat(window.__devs, TLight.st.devs || [], TCloud.pane.devices || []).forEach(d => { if (!d || !d.info) return;
