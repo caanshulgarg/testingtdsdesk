@@ -320,11 +320,13 @@ const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // going said so. lead: a sentence first (the Tally box: the client's own state)
 const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0"); return p(d.getHours()) + ":" + p(d.getMinutes()); };
 const nBr = (n) => n + (n > 1 ? " bridges" : " bridge");
+// a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
+export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
 export function checkedSay(lead) {
   const at = "Checked " + hhmm() + ": ";
   try {
     const o = ownState(), own = o.own || {}, here = o.from === "here" || !!own.local || own.how === "found" || own.how === "unsure";
-    const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter((b) => b.open.length || upBeat(b.beat || {})).length;
+    const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
     const office = !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected (" + nBr(on.length) + ", Tally open in " + k + ")."
       : nBr(on.length) + " online, but Tally is not open.";
     const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED

@@ -88,7 +88,7 @@ def main():
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
         MAC = ["the office Tally is connected (2 bridges, Tally open in 2).", "This computer has no FinCom Bridge."]
         ids = scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
-        ok(txt("#app [data-tsm-top-title]").startswith("Connected through the office Tally"), "M. the top line: through the office Tally (%s)" % txt("#app [data-tsm-top-title]"))
+        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (Tally open in 2 of 2 bridges)", "M. the top line: through the office Tally, counted by Tally open (%s)" % txt("#app [data-tsm-top-title]"))
         press("M. the top line's Check again", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", MAC)
         pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)
         press("M. Connect Tally on this computer's Check again", "#app [data-tsm-guide] [data-tsm-recheck]", "#app [data-tsm-guide] [data-checked]", MAC)
@@ -119,6 +119,8 @@ def main():
                T.dev(6, NW, "made-up-o2", tally="closed", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9102, "windowsUser": NW + "\\made-up-o2"},
                      ports=[{"port": 9043, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}])]
         scene(c1s, c9, [ORBIT, NOVA_C, LARK], {})
+        ok(txt("#app [data-tsm-top-title]") == "Office bridges online, but Tally is not open" and E("() => (document.querySelector('#app [data-tsm-top] [data-tpt-dot]') || {}).getAttribute?.('data-tpt-dot')") == "warn",
+           "M2. the top line: office bridges online, but Tally is not open, amber (%s)" % txt("#app [data-tsm-top]")[:160])
         say = E("() => FCTallySimple.checkedSay()")
         ok(re.match(CHECKED, say) and "2 bridges online, but Tally is not open." in say and "connected" not in say, "M2. bridges online, Tally closed: not 'connected' (%s)" % say)
         say = E("() => { const L = FCTallySimple.LOCALB, b = L.busy; L.busy = true; try { return FCTallySimple.checkedSay(); } finally { L.busy = b; } }")

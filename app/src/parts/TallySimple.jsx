@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, connSig, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -512,13 +512,17 @@ function Top({ cs, own, rows, checkAgain, ready }) {
   const login = cs.mode === "login", down = login && !!cs.now && cs.now.n <= 4;
   const last = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const office = cs.mode === "laptop" ? bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000) : [];
+  const officeK = office.filter(tallyOpenOn).length;
   const officeOpen = new Set([].concat(...office.map((b) => b.open)).map(coKey)).size;
   const lastAny = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const o = own || {}, far = o.state === "ok" && o.far, kw = login ? keepWaitWords((((o.own || {}).beat) || {}).keepWait) : "";
   let dot, title, sub;
   if (!ready) { dot = "idle"; title = "Looking for your Tally…"; sub = ""; }
   // a computer with no bridge of its own (a laptop, a Mac): the office's Tally through the firm's bridges heard now
-  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (" + nOfW(office.length, "bridge", "bridges") + " online)";
+  // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
+  else if (cs.mode === "laptop" && office.length && !officeK) { dot = "warn"; title = "Office bridges online, but Tally is not open";
+    sub = "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
+  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (Tally open in " + officeK + " of " + nOfW(office.length, "bridge", "bridges") + ")";
     sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), nOfW(officeOpen, "company open", "companies open"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
   else if (cs.mode === "laptop") { dot = "warn"; title = "No FinCom Bridge is connected"; sub = "Open FinCom on the computer or server where TallyPrime runs, and install FinCom Bridge there."; }
   else if (cs.mode === "error" || !login) { dot = "idle"; title = "Tally"; sub = "The state could not be worked out just now."; }

@@ -1118,8 +1118,8 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
   // next-tally-page-redesign (Sentry FINCOM-APP-STAGING-K): a long list (Every company seen: hundreds) drawn 15 rows a
   // task, the next ones a tick later, so no one task holds the page while it opens
   // (15 rows a task: a row of this list is about 7 ms to draw, so a task stays near 100 ms)
-  const [upto, setUpto] = useState(15), Row = hook === "all" ? MemoRow : CompanyRow;
-  useEffect(() => { if (upto >= hits.length) return; const t = setTimeout(() => setUpto((u) => u + 15), 0); return () => clearTimeout(t); }, [upto, hits.length]);
+  const [upto, setUpto] = useState(10), Row = hook === "all" ? MemoRow : CompanyRow;
+  useEffect(() => { if (upto >= hits.length) return; const t = setTimeout(() => setUpto((u) => u + 10), 0); return () => clearTimeout(t); }, [upto, hits.length]);
   const nOpen = list.filter((r) => r.open).length;
   const countWords = count ? count(list) : nOf(list.length, "company", "companies") + " · " + nOpen + " open in Tally now";
   return <section className="tco" data-tco-list={hook} data-tco-n={list.length}>
