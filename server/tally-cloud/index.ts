@@ -4247,7 +4247,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // all: what is there (an owner's settlement among it) stands
         const seq = body.seq === undefined || body.seq === null || !Number.isFinite(Number(body.seq)) ? null : Math.floor(Number(body.seq));
         if (seq !== null && typeof cur.seq === "number" && seq < cur.seq) return reply(200, { ok: true, stale: true, seq: cur.seq });
-        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status });
+        // next-fix-first-read (07-Nov-2026, staging): ... and cancelled too, so the bridge stops its own copy (bridge 2.5.5
+        // stops a job only on cancelled or gone). A posting failed here ("did not finish after 5 tries") lived on in the
+        // computer, resumed by itself and waiting for Tally, and held that computer's ledger read behind it. Nothing of
+        // the row changes: a done posting stays done, its results as they are (the bridge's cancel leaves a done job done)
+        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status, cancelled: true });
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
         // 2.1.6), a voucher id (lastVchId) / voucher number / master id / GUID, or CREATED / ALTERED with a voucher id in
         // Tally's words ("CREATED 0" is not one). The fault of the day: Tally replied CREATED with LASTVCHID 26298, the
