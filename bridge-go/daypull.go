@@ -221,7 +221,9 @@ func applyPeriodDays(j M) {
 	}
 	nightAns := truthy(j["periodNight"]) && len(arr(v)) > 0
 	max := 3
-	if nightAns {
+	if nightAns || fastOn() {
+		// next-fast-entries: with FastEntries on FinCom hands out up to 30 days by day too (periodpace.js), read as windows;
+		// the night pace itself (more requests a turn, no rest) still follows periodNight only
 		max = pullNightDays()
 	}
 	var items []pullItem

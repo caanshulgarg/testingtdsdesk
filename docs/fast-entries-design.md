@@ -202,13 +202,20 @@ identical. Only then are the two rows of the allow-list given their measured tim
 
 Pass on all of these, twice (two different days), before any client computer has the switch on.
 
-## 10. Decisions needed from the owner
+## 10. Decisions
 
-1. **The cloud's hand-out by day**: hand out up to 30 days per answer by day too, for a computer whose beat says the
-   fast read is on (today: 3 by day). Without it the gain by day is small. (A small change to `periodDaysFor`; not made
-   on this branch.)
-2. **The first sizes**: start at 7 days and 10 entries, grow to 31 days and 100 entries. Keep the 100-entry cap?
-3. **The page's time left**: use the bridge's `entriesPerMin` when the cloud's figure is not yet known or is stale
-   (a small cloud change; not made on this branch).
-4. Later, separately: the entries that still go one by one (On Account allocation with no name; GST type of supply on
-   TallyPrime 3.0–6.2) are the next speed limit; whether to look at a measured rule for them is a separate decision.
+Taken (the owner, 07-Nov-2026, "Yes to both"):
+
+1. **The cloud's hand-out by day.** `server/tally-cloud/periodpace.js` (`periodPace`): a bridge whose beat says
+   `periodPull.fast.on === true` is handed up to 30 days per beat answer by day too; every other bridge as before (3 by
+   day, 30 outside office hours). The pace said to the database (`p_night` of `tally_period_next_paced`) stays the
+   computer's own hours, so the status line does not call a fast bridge's day "night". No database function changed.
+   The bridge keeps up to 30 listed days by day when FastEntries is on (`applyPeriodDays`); its night pace (more
+   requests a turn, no rest) still follows `periodNight` only.
+2. **The page's time left.** The cloud keeps the bridge's speed from its beat (`info.beat.periodPull.speed`,
+   `[{company, perMin}]`); the page (`app/src/lib/pullSpeed.js`, used by `bookSum`) uses it for the rate and "about N
+   min left" while the beat is under 3 minutes old and the entries are being brought (not while the year's days are
+   counted); otherwise the cloud's own estimate (`tally_period_status_of`), as before.
+
+Still open: the first sizes (7 days, 10 entries; cap 100), and the entries that still go one by one (a separate
+decision).

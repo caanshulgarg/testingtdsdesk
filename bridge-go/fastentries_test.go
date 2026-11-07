@@ -42,8 +42,8 @@ func fastDays(f *standTally, mid int64, perDay map[string]int) []*tVch {
 	return o
 }
 
-// FinCom lists the days newest first, as tally_period_next does, up to 30 an answer outside office hours (periodNight;
-// by day it lists 3, so a window is 3 days at most then: TestFastByDayThreeDays)
+// FinCom lists the days newest first, as tally_period_next does, up to 30 an answer outside office hours (periodNight)
+// and, to a bridge with FastEntries on, by day too (TestFastByDayTakesThirty)
 func fastList(in ...string) M {
 	days := append([]string(nil), in...) // the caller's days kept in their order
 	sort.Sort(sort.Reverse(sort.StringSlice(days)))
@@ -576,13 +576,12 @@ func TestFastRateInBeat(t *testing.T) {
 	}
 }
 
-// --- 3b. by day FinCom lists 3 days an answer: the window is those 3 (one heads request instead of 3); the rest waits for
-// FinCom's next answer, as today
-func TestFastByDayThreeDays(t *testing.T) {
+// --- 3b. by day: the days FinCom listed (5 here, two with no entries) are one window, one heads request
+func TestFastByDayOneWindow(t *testing.T) {
 	f, _, m := fastBridge(t, "")
 	days := daysFrom("20250901", 3)
 	vs := fastDays(f, 600, map[string]int{days[0]: 4, days[1]: 5, days[2]: 6})
-	applyPeriodDays(pullList(days[2], days[1], days[0], "20250831", "20250830")) // by day: 3 kept
+	applyPeriodDays(pullList(days[2], days[1], days[0], "20250831", "20250830")) // by day
 	pullRun(t, 40)
 	if f.n(fastHeadsID) != 1 || f.n(dayHeadsID) != 0 || f.n(vchObjectID) != 0 {
 		t.Fatalf("requests %v", f.ids())
@@ -620,4 +619,36 @@ func TestFastPostingFirst(t *testing.T) {
 		t.Fatalf("the window's heads asked %d times", f.n(fastHeadsID))
 	}
 	fastAllOnce(t, m, vs)
+}
+
+// --- 3c. FinCom hands a fast bridge up to 30 days by day (the owner's "Yes to both"): all are kept and read as windows;
+// with the switch off, 3 as before; the night pace is not taken by day
+func TestFastByDayTakesThirty(t *testing.T) {
+	f, _, m := fastBridge(t, "")
+	days := daysFrom("20250901", 12)
+	per := map[string]int{}
+	for _, d := range days {
+		per[d] = 2
+	}
+	vs := fastDays(f, 700, per)
+	applyPeriodDays(pullList(days...)) // by day (no periodNight)
+	pull.mu.Lock()
+	n := len(pull.items)
+	pull.mu.Unlock()
+	if n != 12 || pullNight() {
+		t.Fatalf("%d days kept by day (want 12), night %v", n, pullNight())
+	}
+	pullRun(t, 80)
+	if f.n(fastHeadsID) > 2 || f.n(dayHeadsID) != 0 {
+		t.Fatalf("requests %v", f.ids())
+	}
+	fastAllOnce(t, m, vs)
+	setCfg("FastEntries", false)
+	applyPeriodDays(pullList(days...))
+	pull.mu.Lock()
+	n = len(pull.items)
+	pull.mu.Unlock()
+	if n > 3 {
+		t.Fatalf("%d days kept by day with the switch off", n)
+	}
 }

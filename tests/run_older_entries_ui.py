@@ -98,6 +98,17 @@ def main():
         w = txt(card + " [data-older-words]")
         ok(w == FYL + ": 8,412 of 12,960 entries (65%) · about 40 min left · started 10:42 IST · 113 entries a minute", "1. the bar's words (%s)" % w)
         ok(E("() => document.querySelector('#app [data-older-entries] [role=progressbar]').getAttribute('aria-valuenow')") == "65" and n(card + " [data-older-why]") == 0, "1. the bar at 65%, nothing in the way")
+        # next-fast-entries (the owner's "Yes to both", 07-Nov-2026): the bridge's own speed from a fresh beat (300 a
+        # minute: 4,548 left, about 16 min); a beat over 3 minutes old: the cloud's estimate again
+        SPEED = """(ago) => { TCloud.pane = TCloud.pane || {}; if (!('__devs0' in window)) window.__devs0 = TCloud.pane.devices;
+          TCloud.pane.devices = [{id: 'd-1', info: {beat: {at: new Date(Date.now() - ago * 1000).toISOString(), periodPull: {uploadDays: [], speed: [{company: 'zz', perMin: 300}]}}}}]; }"""
+        E(SPEED, 20); state(sb(pull=GOING))
+        w = txt(card + " [data-older-words]")
+        ok(w == FYL + ": 8,412 of 12,960 entries (65%) · about 16 min left · started 10:42 IST · 300 entries a minute", "1. the time left from the bridge's speed (%s)" % w)
+        E(SPEED, 400); state(sb(pull=GOING))
+        w = txt(card + " [data-older-words]")
+        ok(w == FYL + ": 8,412 of 12,960 entries (65%) · about 40 min left · started 10:42 IST · 113 entries a minute", "1. a stale beat: the cloud's estimate (%s)" % w)
+        E("() => { TCloud.pane.devices = window.__devs0; }"); state(sb(pull=GOING))
         ok(n(card + " [data-older-pause]") == 1 and n(card + " [data-older-stop]") == 1 and n(card + " [data-older-start]") == 0, "1. going: Pause and Stop")
         ok("2 seconds" in txt(card + " [data-older-safe]") and "never hangs" in txt(card + " [data-older-safe]"), "1. Tally never hangs, said once (%s)" % txt(card + " [data-older-safe]"))
         shot("from-tally-going-1366")
