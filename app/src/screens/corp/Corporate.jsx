@@ -64,8 +64,9 @@ export default function Corporate() {
       <PageTabs label="Corporate" attr="data-corp-tab" value={tab} onPick={(k) => goCorp(k)}
         tabs={[["profile", "Company profile"], ["forms", "e-Forms", due || null], ["docs", "Resolutions & minutes"]]} />
       <span className="corp-note" data-corp-cloud={note.tone} role="status" style={{ fontSize: 12, color: note.tone === "bad" ? "var(--corp-bad)" : note.tone === "warn" ? "var(--corp-warn)" : undefined }}>{note.text}
-        {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}
-        {note.removed && <> <button className="linkbtn" data-corp-restore="" onClick={() => settleRemoved(co.id, true)}>Restore</button> / <button className="linkbtn" data-corp-discard="" onClick={() => settleRemoved(co.id, false)}>Discard</button></>}</span>
+        {(note.removed || []).map((r) => <span key={r.key} data-corp-removed={r.key}>{" " + r.name + ": "}<button className="linkbtn" data-corp-restore={r.key} onClick={() => settleRemoved(co.id, true, r.key)}>Restore</button>{" / "}<button className="linkbtn" data-corp-discard={r.key} onClick={() => settleRemoved(co.id, false, r.key)}>Discard</button></span>)}
+        {note.after && <span data-corp-also="">{" " + note.after}</span>}
+        {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}</span>
     </div>
     {page === "forms" ? <Forms key={co.id} co={co} />
       : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>

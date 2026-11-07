@@ -28,7 +28,10 @@
 //   - a record removed on another computer while it has an edit here not saved is kept: "Removed on another computer.
 //     Your change isn't saved:" Restore (saved again as new) / Discard; never "Saved", never sent again by itself;
 //   - a removal asked while the record's first save is on its way waits for it, then is a conditional DELETE;
-//   - a part whose table is not there (the migration not run) takes no edit.
+//   - a part whose table is not there (the migration not run) takes no edit;
+//   - (the review of 5ac1e8aca) a removal is never a DELETE without updated_at: a record whose first save failed or whose
+//     answer was lost is looked up by its key first; a removal meeting another computer's change is not made (said); a
+//     read that started before the last one laid is thrown away; every request gives up after 20 s.
 // Before the migrations are run, a table not there (a missing relation) is said for that part alone (cloudNote).
 //
 //   corpOf(cid)                     {profile, filings: [], docs: [], cloud, pending, ver}
@@ -40,6 +43,19 @@ const TABLES = { profile: "corp_profiles", filings: "corp_filings", docs: "corp_
 const LISTS = ["directors", "shareholders", "charges", "letterhead"];
 const BACKOFF = [5000, 15000, 60000, 300000];
 const isPending = (e) => !!(Object.keys(e.dirty).length || e.deleting);
+const OUT = "you're signed out";
+const NOT_REMOVED = "Not removed: it had been changed on another computer meanwhile. Look at it again, then remove it if it should go.";
+// the store's requests: Cloud.api, given up after 20 s (an AbortController's signal goes with it; the legacy Cloud.api does
+// not pass it to fetch, so a write given up may still land: the next try is conditional, and finds it)
+const TIMEOUT = () => (typeof window === "object" && window.__corpTimeout) || 20000;   // (shorter in the tests)
+async function api(path, o) {
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  let t = 0;
+  try {
+    return await Promise.race([Cloud.api(path, Object.assign({}, o || {}, ctl ? { signal: ctl.signal } : {})),
+      new Promise((_, no) => { t = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) { /* given up all the same */ } no(new Error("no answer from FinCom’s server in " + Math.round(TIMEOUT() / 1000) + " s")); }, TIMEOUT()); })]);
+  } finally { clearTimeout(t); }
+}
 const redraw = () => { try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ } };
 const stale = () => { try { return typeof LocalOwner === "object" && !!LocalOwner.stale; } catch (e) { return false; } };
 export const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on() && !stale(); } catch (e) { return false; } };
@@ -122,11 +138,12 @@ function mergeObj(b, l, s) {
 }
 
 // ---- a record: row (the server's, last read: the ancestor), at (its updated_at), cur (shown: row + edits), dirty (fields
-// edited and not saved), err (why the last save did not go), deleting, posting (its first save on its way), removed (gone
-// from the server while edited here)
-const rec = (row, at, from) => ({ row: row || null, at: at || "", cur: row ? copy(row) : {}, dirty: {}, err: "", deleting: false, posting: false, removed: false, from });
-// wseq: writes done (a read started before one finished is thrown away); rerr: a read again that failed (still editable)
-function blank() { return { profile: rec(null, ""), filings: {}, docs: {}, ver: 0, state: "", none: {}, error: "", rerr: "", tries: 0, timer: 0, saveTries: 0, saveTimer: 0, note: "", wseq: 0 }; }
+// edited and not saved), err (why the last save did not go), deleting, posting (its first save on its way), sent (a first
+// save was tried: it may be on the server though no answer came), removed (gone from the server while edited here)
+const rec = (row, at, from) => ({ row: row || null, at: at || "", cur: row ? copy(row) : {}, dirty: {}, err: "", deleting: false, posting: false, sent: false, removed: false, from });
+// wseq: writes done (a read started before one finished is thrown away); rseq / laid: reads started / the last one laid
+// (an older one is thrown away); rerr: a read again that failed (still editable)
+function blank() { return { profile: rec(null, ""), filings: {}, docs: {}, ver: 0, state: "", none: {}, error: "", rerr: "", tries: 0, timer: 0, saveTries: 0, saveTimer: 0, note: "", wseq: 0, rseq: 0, laid: 0 }; }
 
 // the read copy: only rows read from the server, for a quick first drawing (never sent, never merged)
 function cacheRead(cid) {
@@ -167,7 +184,8 @@ export function corpOf(cid) {
   if (!mem[cid]) { mem[cid] = cacheRead(cid) || blank(); mem[cid].state = cloudOn() ? "loading" : "signedout"; if (cloudOn()) pull(cid); }
   const c = mem[cid];
   // signed in since: one read (the state changes at once, so drawing never asks again)
-  if (c.state === "signedout" && cloudOn()) { c.state = "loading"; pull(cid); }
+  if (c.state === "signedout" && cloudOn()) { c.state = "loading"; if (c.error === OUT) c.error = ""; pull(cid); }
+  else if (c.error === OUT && cloudOn()) { c.error = ""; if (c.state === "ready") setTimeout(() => save(cid), 0); }
   else if (c.state !== "signedout" && !cloudOn() && !Object.keys(pendingOf(c)).length) c.state = "signedout";
   let v = views.get(c);
   if (!v || v.ver !== c.ver) { v = view(c); views.set(c, v); }
@@ -195,15 +213,17 @@ export async function pull(cid) {
   if (!cloudOn()) { c.state = "signedout"; bump(cid); return; }
   if (c.saving) { c.pullAfter = true; return; }        // read once the save on its way is in
   clearTimeout(c.timer);
-  const first = c.state !== "ready", w0 = c.wseq;
+  const first = c.state !== "ready", w0 = c.wseq, seq = ++c.rseq;
   if (first) c.state = "loading";
   const q = "client_id=eq." + encodeURIComponent(cid);
   let failed = null;
   const get = async (k, path) => {
-    try { const r = await Cloud.api(path); delete c.none[k]; return r || []; }
+    try { const r = await api(path); delete c.none[k]; return r || []; }
     catch (e) { if (missing(e)) c.none[k] = true; else failed = e; return null; }
   };
   const [p, f, d] = await Promise.all([get("profile", TABLES.profile + "?select=*&" + q), get("filings", TABLES.filings + "?select=*&" + q), get("docs", TABLES.docs + "?select=*&" + q)]);
+  // a newer read is in already: this one is older than what the page shows
+  if (seq < c.laid) return;
   // a save went (or is going) while this read was on its way: what it read may be older than the save; read again after
   if (c.saving || c.wseq !== w0) { if (c.saving) c.pullAfter = true; else pull(cid); return; }
   if (failed) {
@@ -214,7 +234,7 @@ export async function pull(cid) {
     c.timer = setTimeout(() => pull(cid), wait);
     bump(cid); return;
   }
-  c.tries = 0; c.error = ""; c.rerr = "";
+  c.laid = seq; c.tries = 0; c.error = ""; c.rerr = "";
   // a record the server no longer has: removed on another computer (gone here too), unless it is edited here and not saved:
   // kept, and said (Restore / Discard)
   const goneThere = (e) => { if (Object.keys(e.dirty).length) { e.removed = true; return false; } return true; };
@@ -223,7 +243,8 @@ export async function pull(cid) {
     if (!rows) return;
     const seen = {};
     rows.forEach((r) => { const k = r[key]; seen[k] = 1; const e = store[k] || (store[k] = rec(null, "")); if (!e.deleting) take(kind, e, r); });
-    Object.keys(store).forEach((k) => { const e = store[k]; if (!seen[k] && e.at && !e.deleting && !e.removed && goneThere(e)) delete store[k]; });
+    // being removed here and gone there: done
+    Object.keys(store).forEach((k) => { const e = store[k]; if (seen[k] || !e.at) return; if (e.deleting || (!e.removed && goneThere(e))) delete store[k]; });
   };
   lay("filings", f, c.filings, "ref");
   lay("docs", d, c.docs, "id");
@@ -235,14 +256,16 @@ async function sendOne(cid, kind, e, tries) {
   const K = KIND[kind], fields = Object.keys(e.dirty), sentVals = Object.fromEntries(fields.map((k) => [k, copy(e.cur[k])]));
   const body = K.body(cid, e.cur, e.at ? e.row : null, fields);
   let rows = null;
-  e.posting = !e.at;
+  e.posting = !e.at; if (!e.at) e.sent = true;
   try {
-    rows = e.at ? await Cloud.api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
-      : await Cloud.api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
+    rows = e.at ? await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
+      : await api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
   } catch (x) { if (!(dup(x) && !e.at)) throw x; rows = []; } finally { e.posting = false; }
   if (!rows || !rows.length) {
     if (tries >= 3) throw new Error("another computer kept changing it");
-    const now = await Cloud.api(K.table + "?select=*&" + K.where(cid, e.cur));
+    const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
+    // its removal was asked meanwhile: another computer's row is no leave to remove it (said); gone there: done
+    if (e.deleting) { if (!now || !now[0]) return "gone"; e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; return "merged"; }
     if (now && now[0]) take(kind, e, now[0]);
     else if (e.at) { e.removed = true; return "removed"; }    // removed on another computer: kept, said; never sent as new by itself
     return Object.keys(e.dirty).length ? sendOne(cid, kind, e, tries + 1) : "merged";
@@ -260,11 +283,18 @@ async function sendOne(cid, kind, e, tries) {
 
 async function removeOne(cid, kind, store, k, e) {
   const K = KIND[kind];
-  const gone = await Cloud.api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "DELETE", headers: { Prefer: "return=representation" } });
+  if (!e.at) {
+    // its first save failed, or its answer was lost: on the server or not, looked up by its key (never a DELETE without
+    // updated_at)
+    const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
+    if (!now || !now[0] || !now[0].updated_at) { delete store[k]; return; }
+    e.at = now[0].updated_at;
+  }
+  const gone = await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "DELETE", headers: { Prefer: "return=representation" } });
   if (gone && gone.length) { mem[cid].wseq++; delete store[k]; return; }
   // changed on another computer since it was read (or already removed there): read again and say so
-  const now = await Cloud.api(K.table + "?select=*&" + K.where(cid, e.cur));
-  if (now && now[0]) { e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = "Not removed: it had been changed on another computer meanwhile. Look at it again, then remove it if it should go."; }
+  const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
+  if (now && now[0]) { e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; }
   else delete store[k];
 }
 
@@ -272,7 +302,7 @@ async function removeOne(cid, kind, store, k, e) {
 export async function save(cid) {
   const c = mem[cid];
   if (!c) return;
-  if (!cloudOn()) { c.error = "you're signed out"; bump(cid); return; }
+  if (!cloudOn()) { c.error = OUT; bump(cid); return; }
   if (c.state !== "ready") return;           // after the read (it saves what is pending once it is in)
   if (c.saving) { c.again = true; return c.saving; }
   clearTimeout(c.saveTimer);
@@ -289,7 +319,7 @@ export async function save(cid) {
         if (c.none[kind]) { e.err = "FinCom’s server is not updated for this part yet"; continue; }
         try {
           if (e.deleting) await removeOne(cid, kind, store, k, e);
-          else if ((await sendOne(cid, kind, e, 0)) === "again") c.again = true;
+          else { const r = await sendOne(cid, kind, e, 0); if (r === "again") c.again = true; else if (r === "gone") delete store[k]; }
           e.err = "";
         } catch (x) { if (missing(x)) { c.none[kind] = true; e.err = "FinCom’s server is not updated for this part yet"; } else { e.err = why(x); failed = x; } }
       }
@@ -309,12 +339,13 @@ export function retryNow(cid) {
   if (c.state !== "ready" || c.rerr) return pull(cid);
   if ([c.profile].concat(Object.values(c.filings), Object.values(c.docs)).some((e) => isPending(e) && !e.removed)) save(cid);
 }
-// a record removed on another computer while edited here: keep = saved again as a new record; else the edit is dropped
-export function settleRemoved(cid, keep) {
+// a record removed on another computer while edited here: keep = saved again as a new record; else the edit is dropped.
+// key: that record ("profile", "f:<ref>", "d:<id>"; cloudNote's removed[]); none: all of them
+export function settleRemoved(cid, keep, key) {
   const c = mem[cid]; if (!c) return;
-  const one = (e, gone) => { if (!e.removed) return; if (keep) { Object.assign(e, { removed: false, row: null, at: "", err: "" }); Object.keys(e.cur).forEach((k) => { if (k !== "at") e.dirty[k] = 1; }); } else gone(); };
-  one(c.profile, () => { c.profile = rec(null, ""); });
-  ["filings", "docs"].forEach((kind) => Object.keys(c[kind]).forEach((k) => one(c[kind][k], () => { delete c[kind][k]; })));
+  const one = (e, gone, k) => { if (!e.removed || (key && key !== k)) return; if (keep) { Object.assign(e, { removed: false, row: null, at: "", err: "" }); Object.keys(e.cur).forEach((k) => { if (k !== "at") e.dirty[k] = 1; }); } else gone(); };
+  one(c.profile, () => { c.profile = rec(null, ""); }, "profile");
+  ["filings", "docs"].forEach((kind) => Object.keys(c[kind]).forEach((k) => one(c[kind][k], () => { delete c[kind][k]; }, kind[0] + ":" + k)));
   c.ver++; redraw(); if (keep) save(cid);
 }
 
@@ -346,8 +377,8 @@ export function saveDoc(cid, d) {
 function drop(cid, kind, k) {
   if (!ready(cid, kind)) return;
   const store = mem[cid][kind], e = store[k]; if (!e) return;
-  // never saved (and no first save on its way): nothing on the server to remove
-  if (!e.at && !e.posting) { delete store[k]; mem[cid].ver++; redraw(); return; }
+  // never sent: nothing on the server to remove (a first save on its way, or one that failed, is looked up first)
+  if (!e.at && !e.posting && !e.sent) { delete store[k]; mem[cid].ver++; redraw(); return; }
   e.dirty = {}; e.deleting = true; e.removed = false; mem[cid].ver++; redraw(); save(cid);
 }
 export function dropFiling(cid, ref) { drop(cid, "filings", ref); }
@@ -359,8 +390,13 @@ export function cloudNote(cid) {
   const c = mem[cid], n = Object.keys(pendingOf(c)).length, none = Object.keys(c.none);
   const errs = [c.profile].concat(Object.values(c.filings), Object.values(c.docs)).map((e) => e.err).filter(Boolean);
   if (c.state === "signedout" && !n) return { tone: "", text: "Sign in to use Corporate.", signin: true };
-  if ([c.profile].concat(Object.values(c.filings), Object.values(c.docs)).some((e) => e.removed))
-    return { tone: "bad", text: "Removed on another computer. Your change isn’t saved:", removed: true };
+  // removed on another computer: each record named, its own Restore / Discard; another record's failed save said too
+  const rm = [["profile", c.profile]].concat(Object.entries(c.filings).map(([k, e]) => ["f:" + k, e]), Object.entries(c.docs).map(([k, e]) => ["d:" + k, e])).filter(([, e]) => e.removed)
+    .map(([key, e]) => ({ key, name: key === "profile" ? "the company’s details" : key[0] === "f" ? (e.cur.form || "a form") + (e.cur.period ? " · FY " + e.cur.period : "") : e.cur.title || "a document" }));
+  if (rm.length) {
+    const other = [c.profile].concat(Object.values(c.filings), Object.values(c.docs)).find((e) => !e.removed && e.err);
+    return { tone: "bad", text: "Removed on another computer. Your change isn’t saved:", removed: rm, retry: !!other, after: other ? "Not saved: " + other.err + "." : "" };
+  }
   if (none.length) return { tone: "warn", text: (none.includes("profile") ? "Corporate is not set up on FinCom’s server yet: nothing can be saved." : PART[none[0]][0].toUpperCase() + PART[none[0]].slice(1) + (none.length > 1 ? " and " + PART[none[1]] : "") + ": not set up on FinCom’s server yet, so not saved.") };
   if (n && (errs.length || c.error)) return { tone: "bad", text: "Not saved: " + (errs[0] || c.error) + ".", retry: true };
   if (c.state === "unread" || c.rerr) return { tone: "warn", text: "The firm’s copy could not be read (" + (c.error || c.rerr) + "). Trying again…", retry: true };

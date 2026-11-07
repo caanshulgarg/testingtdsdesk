@@ -1,0 +1,27 @@
+// a removal asked while a PATCH of the same record is on its way, and that PATCH meets another computer's work
+import { srv, H, W, st, ok, done, profile0, STORE } from "./harness.mjs";
+profile0();
+const F = (ref) => ({ client_id: "c1", ref, form: "DPT-3", kind: "annual", status: "in_progress", steps: 1, srn: "", data: {}, updated_at: st() });
+srv.corp_filings.push(F("F1"), F("F2"));
+H.hook = async (m, t, f) => { if (m === "DELETE" && f.updated_at === "") throw new Error('invalid input syntax for type timestamp with time zone: ""'); };
+const S = await import(STORE);
+S.corpOf("c1"); await W(20);
+console.log("A: another computer CHANGED F1 just before our PATCH; we remove F1 while the PATCH is on its way");
+let other = (t, f) => {};
+const orig = Cloud.api;
+Cloud.api = async (p, o = {}) => { if (o.method === "PATCH") { other(); await W(200); } return orig(p, o); };
+other = () => { const r = srv.corp_filings.find((x) => x.ref === "F1"); if (r) { r.srn = "OTHER-COMPUTER"; r.status = "filed"; r.updated_at = st(); } other = () => {}; };
+S.saveFiling("c1", { ref: "F1", steps: 2 }); await W(500);
+S.dropFiling("c1", "F1"); await W(800);
+console.log("  server F1:", JSON.stringify(srv.corp_filings.find((r) => r.ref === "F1") || null), "note:", S.cloudNote("c1").text);
+ok(srv.corp_filings.some((r) => r.ref === "F1") , "the other computer's change (filed, SRN) is not removed without a word");
+console.log("B: another computer REMOVED F2 just before our PATCH; we remove F2 while the PATCH is on its way");
+other = () => { srv.corp_filings = srv.corp_filings.filter((x) => x.ref !== "F2"); other = () => {}; };
+S.saveFiling("c1", { ref: "F2", steps: 3 }); await W(500);
+S.dropFiling("c1", "F2"); await W(800);
+const n = S.cloudNote("c1");
+console.log("  note:", n.text, "pending:", JSON.stringify(S.corpOf("c1").pending));
+ok(!n.removed && !Object.keys(S.corpOf("c1").pending).length, "removed here and there: nothing pending, no 'Removed on another computer'");
+S.settleRemoved("c1", true); await W(6000);
+console.log("  after Restore: note:", S.cloudNote("c1").text, "DELETEs:", H.log.filter((l) => l.m === "DELETE").map((l) => l.path).join(" ; "));
+done();
