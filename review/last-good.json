@@ -1,10 +1,10 @@
 {
- "build": "mw6e3zme-f0a34e",
+ "build": "mw6f78ff-b34be8",
  "path": "../review-prev/",
- "stamp": "React \u00b7 07-Nov-2026 18:09 \u00b7 e72c6bab0",
- "commit": "8fe1acbc0c362ddd41b61c1e4e114b1e0b570188",
- "replacedBy": "mw6f78ff-b34be8",
+ "stamp": "React \u00b7 07-Nov-2026 18:39 \u00b7 a9aadbdc0",
+ "commit": "bbe958befbb101895a94ba0696af458900e829a8",
+ "replacedBy": "mw6fw8hv-754a61",
  "how": "promote",
- "at": "2026-11-07T13:09:52Z",
+ "at": "2026-11-07T13:32:54Z",
  "note": "the build review/ held before; app/rollback-review.sh puts review/ back as it is at commit"
 }
