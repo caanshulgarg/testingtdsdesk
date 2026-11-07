@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.6 - TEST SHEET (2.5.5's sheet below, with 2.5.6's new check first)
 
 File:        FinComBridge-Setup-2.5.6.exe
-Fingerprint: (filled in when the setup is built)
+Fingerprint: SHA-256 80e6f4705803460aa5616ab87cbcffbc88cb0a64fc98372034869530aeb32073 (FinComBridge-Setup-2.5.6.exe, built 07-Nov-2026 12:58 UTC at bridge sources a219bdee9, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.6.exe SHA-256 99087ddbe8b888001ecb3965e43595ba9a767b1f2804cda4b9fd5e0123796436
 
 2.5.6: Update now (and the nightly and light runs) waits only for a posting that is being started or sent, as every
 other read from Tally does, not for one that is waiting for Tally or was stopped part-way. No new request to Tally and
