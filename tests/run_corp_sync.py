@@ -100,15 +100,15 @@ with sync_playwright() as p:
     pg2.close()
 
     print("5. Paste master data twice: nobody twice")
-    E("(cid) => FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Asha Verma (made-up)', din: '00000011', desig: 'Director'}, {id: 'd2', name: 'Meera Iyer (made-up)', din: '', desig: 'Director'}]})", co); W(1300)
+    E("(cid) => FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Asha Verma (made-up)', din: '00000011', desig: 'Director'}, {id: 'd2', name: 'Meera Iyer (made-up)', din: '', desig: 'Director'}, {id: 'd3', name: 'Meera Iyer (made-up)', din: '', desig: 'Director'}]})", co); W(1300)
     for i in range(2):
         pg.click("#app [data-corp-paste]"); W(300)
         pg.fill("#app [data-corp-paste-box] textarea", "CIN\tU17299DL2019PTC000000\n00000011\tAsha Verma (made-up)\t10/06/2019\n00000033\tKiran Rao (made-up)\t15/07/2020\n00000044\tMEERA IYER (made-up)\t01/08/2021"); W(300)
         pg.click("#app [data-corp-paste-keep]"); W(1500)
     ds = srvp(pg, co).get("directors", [])
-    ok(sorted(d.get("din") for d in ds) == ["00000011", "00000033", "00000044"], "Asha matched by DIN, Kiran added once (%s)" % [d.get("din") for d in ds])
-    mi = [d for d in ds if "Meera" in d.get("name", "") or "MEERA" in d.get("name", "")]
-    ok(len(mi) == 1 and mi[0].get("id") == "d2" and mi[0].get("din") == "00000044" and mi[0].get("appointed") == "2021-08-01", "Meera, entered without a DIN, matched by name: her row given the DIN (%s)" % mi)
+    ok(sorted(d.get("din") for d in ds) == ["", "00000011", "00000033", "00000044"], "Asha matched by DIN, Kiran added once (%s)" % [d.get("din") for d in ds])
+    mi = [d for d in ds if d.get("din") == "00000044"]
+    ok(len(mi) == 1 and mi[0].get("id") == "d2" and mi[0].get("appointed") == "2021-08-01", "Meera, entered without a DIN, matched by name: her row given the DIN, and only one row (%s)" % mi)
     ok(next(d for d in ds if d["din"] == "00000011").get("appointed") == "2019-06-10" and next(d for d in ds if d["din"] == "00000011").get("id") == "d1", "the matched director keeps her row and takes the date")
 
     print("6. tables not there")
@@ -137,7 +137,7 @@ with sync_playwright() as p:
     E("(cid) => FCCorp.saveProfile(cid, {phone: '+91 11 3333 3333'})", co); W(800)
     E("(cid) => { __fake.rows.corp_profiles = __fake.rows.corp_profiles.filter(r => r.client_id !== cid); __fake.keep(); __fake.fail = ''; __fake.log = []; return FCCorp.pull(cid); }", co); W(800)
     note = txt(pg, "#app [data-corp-cloud]")
-    ok(note.startswith("Removed on another computer. Your change isn’t saved:") and E("!!document.querySelector('#app [data-corp-restore]') && !!document.querySelector('#app [data-corp-discard]')") and "Saved" not in note.replace("isn’t saved", ""), "said, with Restore / Discard (%s)" % note)
+    ok(note.startswith("Removed on another computer. Your change isn’t saved: the company’s details: Restore / Discard") and E("!!document.querySelector('#app [data-corp-restore]') && !!document.querySelector('#app [data-corp-discard]')") and "Saved" not in note.replace("isn’t saved", ""), "said, with Restore / Discard (%s)" % note)
     ok(not [c for c in E("() => __fake.log") if c["method"] == "POST"], "not sent again by itself")
     pg.click("#app [data-corp-restore]"); W(1500)
     r = srvp(pg, co)

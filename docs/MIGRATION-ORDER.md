@@ -720,3 +720,14 @@ Rollback `server/corporate/rollback-143-corp-profiles.sql` (not a migration): re
 `set fincom.corp_rollback = 'drop-with-rows'` after a copy is kept. Tested on pg_stand: `tests/run_migration_corp.py`
 (`CORP_ONLY=143`). Without it Corporate says it is not set up on FinCom's server yet and offers nothing to change
 (the firm's server is the record; this computer keeps a read copy only).
+
+## 144: Corporate phase 1, the e-Forms tracked (not run yet; branch next-corporate)
+
+**144** `server/corporate/migration-144-corp-filings.sql`: `corp_filings` (one row a form tracked: an annual form of a year,
+ref `annual:<form>:<FY>[:<DIN or half>]`, or one started for an event, ref `event:<form>:<uuid>`; status, steps 0-4, due
+date, SRN and filing date (both needed when filed), the reason when not needed, the builder's data; unique firm, client,
+ref; read for members, add / change / remove for owner and staff; anon nothing, service_role all), trigger
+`corp_filings_touch`. Add-only, one transaction, safe to run twice; independent of every other migration, 143 included.
+Rollback `server/corporate/rollback-144-corp-filings.sql` (refuses while rows exist unless `fincom.corp_rollback`).
+Tested: `tests/run_migration_corp.py` (`CORP_ONLY=144`). Without it the profile works and e-Forms says the server is
+not updated yet.

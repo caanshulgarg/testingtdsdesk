@@ -83,7 +83,7 @@ function Details({ co, P, done }) {
       <Text label="GSTIN" value={P.gstin} from={g("gstin").from} upper onSave={s("gstin")} />
       <Text label="Statutory auditor (firm)" value={P.auditor} from={g("auditor").from} onSave={s("auditor")} attr={["data-f", "auditor"]} />
       <Text label="Auditor's FRN" value={P.auditorFrn} from={g("auditorFrn").from} upper onSave={s("auditorFrn")} />
-      <Text label="Auditor appointed on" type="date" value={P.auditorFrom} onSave={s("auditorFrom")} attr={["data-f", "auditorFrom"]} />
+      <Text label="Auditor appointed on (the AGM's date)" type="date" value={P.auditorFrom} onSave={s("auditorFrom")} attr={["data-f", "auditorFrom"]} />
       <Pick label="Auditor holds office till the AGM of FY" value={P.auditorTill} onSave={s("auditorTill")} attr={["data-f", "auditorTill"]}
         options={[["", "Choose"]].concat(Array.from({ length: 8 }, (_, i) => fyNext(fy, i - 1)).map((f) => [f, "FY " + f]))} />
       <Text label="Main activity (NIC code · activity)" value={P.nic} from={g("nic").from} onSave={s("nic")} />
@@ -263,10 +263,11 @@ function Paste({ co, P, close }) {
     if (r.directors.length) {
       // a director already here: the same DIN, or (entered without a DIN) the same name: that row takes the master data's
       // DIN and appointment date; a new one is added
-      const had = P.directors || [], got = Object.fromEntries(r.directors.map((d) => [d.din, d]));
-      const byName = (d) => r.directors.find((x) => x.din && !had.some((h) => h.din === x.din) && norm(x.name) === norm(d.name));
+      // a DIN goes to one row only: one already held is never given to a second row
+      const had = P.directors || [], got = Object.fromEntries(r.directors.map((d) => [d.din, d])), held = new Set(had.map((h) => h.din).filter(Boolean));
+      const byName = (d) => { const m = r.directors.find((x) => x.din && !held.has(x.din) && norm(x.name) === norm(d.name)); if (m) held.add(m.din); return m; };
       const upd = (d, m) => Object.assign({}, d, { din: m.din, name: d.name || m.name }, m.appointed ? { appointed: m.appointed } : {});
-      patch.directors = addNew(had.map((d) => (d.din ? (got[d.din] ? upd(d, got[d.din]) : d) : byName(d) ? upd(d, byName(d)) : d)), r.directors, dirKey);
+      patch.directors = addNew(had.map((d) => { if (d.din) return got[d.din] ? upd(d, got[d.din]) : d; const m = byName(d); return m ? upd(d, m) : d; }), r.directors, dirKey);
     }
     saveProfile(co.id, patch); close();
   };
