@@ -8,6 +8,7 @@
 //   paginate(model, letter, measure)        [[block index, ...], ...] pages, by the blocks' heights (measure(i) in px)
 //   printPdf(model, letter, pages, title)   opens the print view (A4) and prints
 import { runText } from "./docModel.js";
+import { serifCss } from "./fonts.js";
 
 export const H = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 export const PAGE = { w: 794, h: 1123 };            // A4 at 96 px an inch
@@ -129,11 +130,10 @@ export function printPdf(model, letter, pages, title) {
   const w = window.open("", "_blank");
   if (!w) { if (typeof toast === "function") toast("Allow pop-ups for this site to save the PDF."); return null; }
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + H(title) + "</title>" +
-    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&display=swap">' +
-    "<style>" + PAPER_CSS + "@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.corp-a4{page-break-after:always;break-after:page}.corp-a4:last-child{page-break-after:auto;break-after:auto}" +
+    "<style>" + serifCss() + PAPER_CSS + "@page{size:A4 portrait;margin:0}html,body{margin:0;padding:0;background:#fff}.corp-a4{page-break-after:always;break-after:page}.corp-a4:last-child{page-break-after:auto;break-after:auto}" +
     "@media screen{body{background:#E9ECF2}.corp-a4{margin:16px auto;box-shadow:0 1px 4px rgba(0,0,0,.15)}}</style></head><body data-corp-print=\"\">" + docHtml(model, letter, pages) + "</body></html>");
   w.document.close();
-  // the fonts first (the serif from Google Fonts), then the browser's print (Save as PDF)
+  // the fonts first (the serif kept with the app, fonts.js), then the browser's print (Save as PDF)
   const go = () => { try { w.focus(); w.print(); } catch (e) { /* the person prints from the window */ } };
   try { (w.document.fonts && w.document.fonts.ready ? w.document.fonts.ready : Promise.resolve()).then(() => setTimeout(go, 250)); } catch (e) { setTimeout(go, 600); }
   return w;
