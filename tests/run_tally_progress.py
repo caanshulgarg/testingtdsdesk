@@ -164,8 +164,9 @@ def main():
         ok(bb and bb[0][0] == "tally_period_choose_lean" and bb[0][1].get("p_book") == "bk-Orbit Space" and bb[0][1].get("p_part") == "year", "3. Bring books: this year's missing days asked (%s)" % bb)
         pg.click(D + " [data-tpg-another-year]"); pg.wait_for_timeout(600)
         ok(n(D + " [data-older-entries] [data-older-fy]") == 1, "3. Bring another year: the year to choose, here")
-        # (review of 0b3c34839: the Day Book drop box is out of this release: it swapped the open client; Books › From Tally keeps the upload)
-        ok(n(D + " [data-tpg-drop], " + D + " input[type=file]") == 0, "3. no Day Book drop box in the details (out of this release)")
+        # next-tally-daybook: the Day Book drop box is back in the Entries card (its reading: run_tally_daybook_drop.py)
+        ok(n(D + ' [data-tpg-d="entries"] [data-tpg-drop]') == 1 and txt(D + " [data-tpg-drop]") == "Or drop a Day Book file here" and n(D + " input[type=file][data-tpg-drop-file]") == 1,
+           "3. Entries: Or drop a Day Book file here (%s)" % txt(D + " [data-tpg-drop]"))
         ok(E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space") <= 2, "3 (review B2). the groups' count of a book asked once at a time, not once per part (%s)" % E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space"))
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(600)
         ok(n("#app [data-tpg-drow]") == 0, "3. Hide details: closed")
