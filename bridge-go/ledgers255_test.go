@@ -436,11 +436,13 @@ func TestLedger255GrowBackStopsAtFirstStop(t *testing.T) {
 // finishes in a few dozen requests (well within LedgerResumeHours, the round never started again)
 func TestLedger255SlowPatchLargeCompanyFinishes(t *testing.T) {
 	const n = 50000
-	f := ledgerTally(t, n, `,"RecorderStopCoolSec":1,"RecorderLimitMs":500,"LedgerHangSec":5,"TallyAbandonMaxSec":600`)
+	// fourth review: a limit of 1.5 s, so a 2,000 chunk in time never trips the stop on a loaded machine; the slow ledger
+	// (1.8 s) still does
+	f := ledgerTally(t, n, `,"RecorderStopCoolSec":1,"RecorderLimitMs":1500,"LedgerHangSec":5,"TallyAbandonMaxSec":600`)
 	f.mu.Lock()
 	slow := f.led[20000].mid
 	f.mu.Unlock()
-	led255SlowMids(f, 800*time.Millisecond, slow)
+	led255SlowMids(f, 1800*time.Millisecond, slow)
 	k := newRun("now", "r255q")
 	t0 := time.Now()
 	plain, turns := led255Run(t, f, k, 120, 2*time.Minute) // a turn reads many 2,000 chunks in time here

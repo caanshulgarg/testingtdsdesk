@@ -988,7 +988,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 				// the empty day is trusted and goes the normal way (written empty, marked full, sent as empty:true)
 				more := ""
 				if f == t && toInt(st["dayFail"]) >= 2 {
-					if raw, e := invokeTally(k.tc, port, tagCheckRequest(company, f), 60); e != nil || !goodDupAnswer(raw) {
+					if raw, e := invokeTally(dtc, port, tagCheckRequest(company, f), 60); e != nil || !goodDupAnswer(raw) { // fourth review: under the 2 s stop too when reading on
 						more = "; the entry list did not answer"
 					} else if ln := len(xmlDoc(raw).All("VOUCHER")); ln > 0 {
 						more = fmt.Sprintf("; the entry list (FinComTag) lists %d", ln)
@@ -1009,6 +1009,12 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		if err != nil {
 			if gaveWay(err) {
 				return err // the same slice again when Tally is free
+			}
+			if k.pressOn && errors.Is(err, errRecorderStop) {
+				// fourth review: an Update now reading on stopped a day-book slice at 2 s: it gives way like a posting
+				// (the same slice again after the stop's cool-down; no halving, no day's try used, no back-off)
+				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: Tally took longer than 2 s; the bridge stopped waiting and reads it again shortly", company, f, t))
+				return fmt.Errorf("day book %s-%s stopped at 2 s: %w", f, t, errBackoff)
 			}
 			if sl > 1 {
 				st["slice"] = maxI(1, sl/2)
@@ -1228,8 +1234,8 @@ func keepWorker(r runReq) {
 		next := kwPending
 		kwRunning, kwRun, kwPending = false, nil, nil
 		kwMu.Unlock()
-		if next != nil && !stopping() {
-			startKeepRun(*next)
+		if next == nil || stopping() || !startKeepRun(*next) {
+			kwNowForget() // fourth review: no stale press time when the queued run is not started
 		}
 	}()
 	what := map[string]string{"light": "Light update", "now": "Update from Tally", "nightly": "Nightly catch-up", "ledgers": "Ledger list"}[r.kind]
@@ -1264,9 +1270,14 @@ func keepWorker(r runReq) {
 			invokeCloudPush()
 		}
 	}
-	if r.kind == "now" && kwNowPressOn() {
-		k.pressOn = true // third review T2: it took over from a held run that had already waited the Update now's time
-		writeLog(what + ": someone has been working in Tally since this Update now was pressed, " + keepNowWaitWords() + " or more; reading goes on in short parts (each request 2 s at most), giving way while they type")
+	var pressedAt time.Time // fourth review: a queued Update now's wait counts from the press, not from this start
+	if r.kind == "now" {
+		var press bool
+		press, pressedAt = kwNowPressOn()
+		if press {
+			k.pressOn = true // third review T2: it took over from a held run that had already waited the Update now's time
+			writeLog(what + ": someone has been working in Tally since this Update now was pressed, " + keepNowWaitWords() + " or more; reading goes on in short parts (each request 2 s at most), giving way while they type")
+		}
 	}
 	for {
 		syncConfig()
@@ -1289,6 +1300,9 @@ func keepWorker(r runReq) {
 			if hold != held {
 				writeLog(what + ": waiting, " + hold)
 				heldAt = time.Now()
+				if !pressedAt.IsZero() && code == "userInTally" {
+					heldAt, pressedAt = pressedAt, time.Time{} // fourth review: the 2 minutes count from the press
+				}
 			}
 			held = hold
 			setKeepWait(code, hold) // next-fix-read-any-bridge: said in the beat; the push goes on meanwhile (heldPush)
@@ -1447,6 +1461,11 @@ func keepWorker(r runReq) {
 	keepReleaseLeases()
 	// what came in goes on to the cloud before this stops (a few minutes at most; Tally is not asked)
 	until := time.Now().Add(10 * time.Minute)
+	if kwNowNext() {
+		// fourth review: an Update now waits behind this run: one push, then it starts at once (it pushes as it goes)
+		invokeCloudPush()
+		until = time.Now()
+	}
 	for time.Now().Before(until) && !stopping() {
 		if invokeCloudPush() == 0 {
 			break
@@ -1656,11 +1675,29 @@ func kwNowQueued(userInTally bool) bool {
 	return true
 }
 
-// at the Update now's start: whether it reads on at once (once), and the queued time cleared
-func kwNowPressOn() bool {
+// at the Update now's start: whether it reads on at once (once), and when it was pressed if it was queued (zero: it
+// started at once); the queued time cleared
+func kwNowPressOn() (bool, time.Time) {
 	kwMu.Lock()
 	defer kwMu.Unlock()
-	p := kwNowPress
+	p, at := kwNowPress, kwNowAt
 	kwNowPress, kwNowAt = false, time.Time{}
-	return p
+	return p, at
+}
+
+// fourth review: a queued Update now that did not start (reading switched off or stopped meanwhile) leaves no press
+// time behind, or a later Update now would read on at once
+func kwNowForget() {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	if kwPending == nil && !kwRunning {
+		kwNowPress, kwNowAt = false, time.Time{}
+	}
+}
+
+// fourth review: an Update now is queued behind this run (it starts as soon as this run ends)
+func kwNowNext() bool {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	return kwPending != nil && kwPending.kind == "now"
 }

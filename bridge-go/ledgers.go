@@ -362,6 +362,11 @@ func ledResendFile(dir string) string { return filepath.Join(dir, "ledger-resend
 func setLedOutOpeningsAt(dir, bf string, whole bool) {
 	ledOutMu.Lock()
 	defer ledOutMu.Unlock()
+	setLedOutOpeningsAtLocked(dir, bf, whole)
+}
+
+// setLedOutOpeningsAt with ledOutMu held
+func setLedOutOpeningsAtLocked(dir, bf string, whole bool) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		return
@@ -384,6 +389,11 @@ func setLedOutOpeningsAt(dir, bf string, whole bool) {
 func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen []string, natures []any) {
 	ledOutMu.Lock()
 	defer ledOutMu.Unlock()
+	mergeLedOutLocked(dir, d, groups, round, seen, natures)
+}
+
+// mergeLedOut with ledOutMu held
+func mergeLedOutLocked(dir string, d ledDiff, groups [][2]string, round string, seen []string, natures []any) {
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}
@@ -760,8 +770,11 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the held list: what Tally listed (and the skipped ledgers)
 	saveLedList(dir, read)
 	delete(st, "ledGone") // the second-look bookkeeping of 2.1.4: the cloud holds many gone at once now
-	mergeLedOut(dir, d, sendGroups, round, seen, natOfRound(ls))
-	setLedOutOpeningsAt(dir, bf, whole) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
+	// fourth review: one ledOutMu section, so a push never reads the outbox between the merge and its openingsAt
+	ledOutMu.Lock()
+	mergeLedOutLocked(dir, d, sendGroups, round, seen, natOfRound(ls))
+	setLedOutOpeningsAtLocked(dir, bf, whole) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
+	ledOutMu.Unlock()
 	st["ledOpeningsAt"] = bf
 	if resend {
 		_ = os.Remove(ledResendFile(dir))
