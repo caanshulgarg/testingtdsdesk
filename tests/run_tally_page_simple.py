@@ -189,7 +189,9 @@ def main():
         dl = '#app [data-tsm-guide="1"] [data-tsm-download]'
         ok(pg.locator(dl).count() == 1 and "2.3.4" in (pg.get_attribute(dl, "href") or "") and pg.locator('#app [data-tsm-guide="1"] [data-firstlink]').count() == 1,
            "guide: step 1 has the download, Connect this computer under it (%s)" % txt('#app [data-tsm-guide]')[:120])
-        ok(pg.locator("#app [data-bridge-card]").count() == 0 and pg.locator("#app [data-install-help]").count() == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
+        # next-tally-page-redesign: "Install again or on another computer" (the card, fingerprint, PowerShell) heads Advanced (for
+        # support) itself, open in this scene; the page's own Download is the head's (data-tpg-download)
+        ok(E("(sel) => [...document.querySelectorAll(sel)].filter(e => !e.closest('[data-for-support]')).length", "#app [data-bridge-card], #app [data-install-help]") == 0, "install help (fingerprint, PowerShell, SmartScreen) is under Advanced, not on the page")
         shot("guide-empty")
         # this browser's own bridge connect (the 6-digit code) is only under Advanced (for support)
         ok(pg.locator("#app [data-connect-section]").count() == 0, "guide: no 6-digit code connect on the page")
@@ -224,14 +226,16 @@ def main():
         ok(l1 == "" and txt(card(D1) + " [data-bridge-state]") == "Connected" and txt(card(D1) + " [data-card-companies]") == "Reads GARG SHEKHAR"
            and re.match(r"^Last entry received 2 min ago \(\d\d:\d\d IST\)$", txt(card(D1) + " [data-card-last]")) is not None and "9005" not in txt(card(D1)), "all well: %r %r" % (l1, txt(card(D1))))
         ok(pg.get_attribute(card(D1) + " [data-status-line]", "data-level") == "ok" and pg.locator(card(D1) + " [data-status-line] button").count() == 0, "all well: green, nothing to press")
-        ok("NWS144" in txt(card(D1)) and "anshul" in txt(card(D1)), "the card names the computer and the Windows user")
+        # next-fix-tally-links2 (fc79ae4c9, the owner): never a computer's name or Windows login on the page; the card is named by
+        # its bridge (was: "the card names the computer and the Windows user", obsolete since then)
+        ok("NWS144" not in txt(card(D1)) and "anshul" not in txt(card(D1)) and "FinCom Bridge" in txt(card(D1)), "the card is named by its bridge, never the computer or the Windows user (%s)" % txt(card(D1))[:80])
         # problems: the problem and the one thing that fixes it
         l2, l3, l4 = line(D2), line(D3), line(D4)
-        ok(l2.startswith("LAPTOP (ravi) is not connected since ") and " IST" in l2 and "Sign in to Windows there as ravi" in l2 and pg.get_attribute(card(D2) + " [data-status-line]", "data-level") == "bad"
+        ok(l2.startswith("The Tally computer is not connected since ") and " IST" in l2 and "Turn it on and sign in to Windows there" in l2 and pg.get_attribute(card(D2) + " [data-status-line]", "data-level") == "bad"
            and txt(card(D2) + " [data-bridge-state]") == "Not connected", "offline: the problem and the fix (%s)" % l2)
-        ok(l3.startswith("Tally is not open on FRONTDESK (tally). Open TallyPrime and the company there") and pg.get_attribute(card(D3) + " [data-status-line]", "data-level") == "warn"
+        ok(l3.startswith("Tally is not open on the Tally computer. Open TallyPrime and the company there") and pg.get_attribute(card(D3) + " [data-status-line]", "data-level") == "warn"
            and txt(card(D3) + " [data-bridge-state]") == "Needs you", "Tally not open: the fix (%s)" % l3)
-        ok("Reading stopped on TALLYSRV (meena): Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
+        ok("Reading stopped on the Tally computer: Tally hangs on the bank ledger" in l4 and pg.locator(card(D4) + " [data-status-line] button").count() == 1 and txt(card(D4) + " [data-status-line] button") == "Resume reading",
            "stopped from FinCom: the owner's one action, Resume reading (%s)" % l4)
         ok(all(pg.locator(card(d) + " [data-status-line] button").count() <= 1 for d in (D1, D2, D3, D4)), "never more than one action on a line")
         ok(not re.search(r"(?<![\d-])\d{2}:\d{2}(?! IST)", pg.inner_text("#app [data-computers]")), "no bare 14:05: every time in IST")
@@ -241,8 +245,10 @@ def main():
         page = pg.inner_text("#app")
         ok(not [w for w in hidden if w in page], "More closed: none of the rest on the page (%s)" % [w for w in hidden if w in page])
         pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
-        ok(pg.locator("#app [data-release], #app [data-read-stop-all], #app [data-bridges], #app [data-pane=\"tally-history\"], #app [data-bridge-card], #app [data-computer]").count() == 0,
-           "Advanced closed: versions, stop on all, every bridge, connection history, the install help and the computers' cards hidden")
+        ok(pg.locator("#app [data-release], #app [data-read-stop-all], #app [data-bridges], #app [data-pane=\"tally-history\"], #app [data-computer]").count() == 0,
+           "Advanced closed: versions, stop on all, every bridge, connection history and the computers' cards hidden")
+        # (the install help heads Advanced (for support) since the redesign: inside it, never on the page)
+        ok(E("(sel) => [...document.querySelectorAll(sel)].filter(e => !e.closest('[data-for-support]')).length", "#app [data-bridge-card], #app [data-install-help]") == 0 and pg.locator("#app [data-for-support] [data-bridge-card]").count() == 1, "the install help: at the head of Advanced (for support), not on the page")
         pg.click("#app [data-page-more] > [data-more-toggle]"); pg.wait_for_timeout(600)
         pg.click(card(D1) + " [data-more-toggle]"); pg.wait_for_timeout(400)
         c1 = txt(card(D1))
@@ -264,13 +270,14 @@ def main():
         # the old bridge on a computer: the problem and its one action, the download
         old = dev(5, "OLDPC", "tally"); old["info"]["bridges"] = {}; old["main_bridge"] = None
         scene([OK_DEV, old], LINKED)
-        l5 = E("() => { const e = [...document.querySelectorAll('#app [data-computer]')].find(x => x.innerText.includes('OLDPC')); const s = e && e.querySelector('[data-status-line]'); return s ? s.innerText.trim() : ''; }")
-        ok(l5.startswith("Install FinCom Bridge 2.3.4 on OLDPC") and E("() => { const e = [...document.querySelectorAll('#app [data-computer]')].find(x => x.innerText.includes('OLDPC')); return e ? e.querySelectorAll('[data-status-line] [data-bridge-download]').length : -1; }") == 1,
+        # (the card found by its computer's id: its name is never shown, next-fix-tally-links2)
+        l5 = line(old["id"])
+        ok(l5.startswith("Install FinCom Bridge 2.3.4 on the Tally computer") and pg.locator(card(old["id"]) + " [data-status-line] [data-bridge-download]").count() == 1,
            "an older bridge: Needs FinCom Bridge, with the download (%s)" % l5)
 
         # ---- 5. staff: the same lines, no owner button anywhere, More open or not
         scene(DEVS, LINKED, role="member")
-        ok(line(D1) == l1 and "Reading stopped on TALLYSRV" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
+        ok(line(D1) == l1 and "Reading stopped on the Tally computer" in line(D4) and pg.locator(card(D4) + " [data-status-line] button").count() == 0 and "owner" in line(D4), "staff: the same lines; the stop names who can resume it (%s)" % line(D4))
         open_all()
         ok(pg.locator("#app [data-page-more] [data-bridges]").count() == 1 and "Posting settings" in txt(card(D1)), "staff: More opens too")
         found = [h for h in OWNER_HOOKS if pg.locator("#app [%s]" % h).count()]
@@ -311,7 +318,7 @@ def main():
         scene([ro], LINKED)
         l6 = line(ro["id"])
         open_all()
-        ok("Tally is not open on RO-PC" in l6 and "reads only" in txt(card(ro["id"]) + " [data-card-more]"), "a reads-only bridge: Tally not open said, 'reads only' under Details (%s)" % l6)
+        ok("Tally is not open on the Tally computer" in l6 and "reads only" in txt(card(ro["id"]) + " [data-card-more]"), "a reads-only bridge: Tally not open said, 'reads only' under Details (%s)" % l6)
         # round 39: the guide folds once every client is linked (here: each client to a company of its own)
         scene([OK_DEV], LINKED + [{"company": "CO " + str(i), "client_id": c, "device_id": D1, "gstin": "", "last_seen": "ago:1"} for i, c in enumerate(E("Object.values(S.companies).filter(c => !c.deleted).map(c => c.id)"))])
         # round 63: and each client's ledgers and this year's Day Book are in FinCom (tally_status: a book with ledgers and days)
@@ -320,7 +327,7 @@ def main():
             Object.keys(TCloud.st).forEach(k => delete TCloud.st[k]); render(); }"""); pg.wait_for_timeout(2500)
         ok(pg.locator("#app [data-status-card]").count() == 1 and pg.locator("#app [data-connect-step]").count() == 0, "every client linked: the status card, no steps")
         E("() => { S.tallyMore = {support: true, page: true}; render(); }"); pg.wait_for_timeout(400)
-        ok(pg.locator("#app [data-advanced] [data-guide-again]").count() == 1, "Help & support: 'Connect another computer'")
+        ok(pg.locator("#app [data-for-support] [data-install-again] [data-guide-again]").count() == 1, "Help & support: 'Connect another computer' (in Install again, at the head of Advanced)")
         pg.click("#app [data-guide-again]"); pg.wait_for_timeout(500)
         ok(pg.locator("#app [data-tsm-guide][data-tsm-forced] [data-tsm-step]").count() == 6 and pg.locator('#app [data-tsm-guide] [data-tsm-another] [data-tsm-download]').count() == 1, "Connect another computer: the six steps again, with the download")
         # ---- 6. Sync activity: one clear flow. Only ended lines -> "Needs you", one group per company and day, each with
