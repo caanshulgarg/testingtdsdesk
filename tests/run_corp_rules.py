@@ -55,6 +55,7 @@ CASES = [
     ("M1 earliest date shown", "R.nextBoard({cls: 'opc', lastBoard: '2026-08-01'}).rule.includes('not before 30-Oct-2026')", True),
     ("M2 DIR-3 KYC, three-yearly (the owner's decision): none recorded, due for the year by 30 June", "[R.kycFor({kyc: []}, '2025-26').done, R.kycFor({kyc: []}, '2025-26').due]", [False, "2026-06-30"]),
     ("M2 last done in FY 2023-24: nothing due in FY 2025-26, next in FY 2026-27 by 30-Jun-2027", "[R.kycFor({kyc: ['2023-24']}, '2025-26').done, R.kycFor({kyc: ['2023-24']}, '2025-26').due, R.kycFor({kyc: ['2023-24']}, '2025-26').next]", [True, "2027-06-30", "2026-27"]),
+    ("DIR-3: the tick is the year's own (thisYear); a KYC of an earlier year is not", "[R.kycFor({kyc: ['2025-26']}, '2025-26').thisYear, R.kycFor({kyc: ['2023-24']}, '2025-26').thisYear]", [True, False]),
     ("M2 last done in FY 2022-23: due in FY 2025-26, by 30-Jun-2026", "[R.kycFor({kyc: ['2022-23']}, '2025-26').done, R.kycFor({kyc: ['2022-23']}, '2025-26').due]", [False, "2026-06-30"]),
     ("L2 auditor's term ended: Overdue", "R.health({auditor: 'Made-up & Co', auditorTill: '2023-24'}, {on: '2026-11-07'}).items.filter(x => x.key === 'auditor').map(x => [x.when, x.tone])", [["Overdue", "bad"]]),
     ("M3 one ROC", "R.cinInfo('U17299DL2019PTC000000').roc", "ROC Delhi"),

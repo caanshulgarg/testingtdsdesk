@@ -20,7 +20,7 @@ import "./corp.css";
 import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
 import Profile from "./Profile.jsx";
-import { cloudNote, retryNow } from "./store.js";
+import { cloudNote, retryNow, settleRemoved } from "./store.js";
 
 // the serif of the documents and headings, from Google Fonts, once, when the page first opens (Georgia meanwhile)
 function useSerif() {
@@ -62,7 +62,8 @@ export default function Corporate() {
       <PageTabs label="Corporate" attr="data-corp-tab" value={tab} onPick={(k) => goCorp(k)}
         tabs={[["profile", "Company profile"], ["forms", "e-Forms"], ["docs", "Resolutions & minutes"]]} />
       <span className="corp-note" data-corp-cloud={note.tone} role="status" style={{ fontSize: 12, color: note.tone === "bad" ? "var(--corp-bad)" : note.tone === "warn" ? "var(--corp-warn)" : undefined }}>{note.text}
-        {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}</span>
+        {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}
+        {note.removed && <> <button className="linkbtn" data-corp-restore="" onClick={() => settleRemoved(co.id, true)}>Restore</button> / <button className="linkbtn" data-corp-discard="" onClick={() => settleRemoved(co.id, false)}>Discard</button></>}</span>
     </div>
     {page === "forms" ? <div className="corp-card corp-empty" data-corp-page="forms">e-Forms come with the next part of this release.</div>
       : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>

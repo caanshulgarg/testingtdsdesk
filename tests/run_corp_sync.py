@@ -6,8 +6,13 @@ included). On a stand-in of the cloud in the page (tests/corp_fake_cloud.py; mad
   3. the line down: the edit stays on the screen, "Not saved: ..." with Retry; Retry saves it; nothing of it is in this
      computer's read copy; leaving the page with an edit not saved asks first; a reload does not bring it back;
   4. two tabs: a save in one makes the other read the firm's copy again, and the other's edit not yet saved survives;
-  5. Paste master data twice: directors matched by DIN (the appointment date taken), never added twice;
-  6. a server without corp_filings: the profile saved, e-Forms said; without corp_profiles: said, nothing to change.
+  5. Paste master data twice: directors matched by DIN (the appointment date taken), never added twice; one entered
+     without a DIN matched by name and given the DIN;
+  6. a server without corp_filings: the profile saved, e-Forms said; without corp_profiles: said, nothing to change;
+  7. one tab (the review of 263c13939): a save is not followed by a read of its own ping; the form stays editable and an
+     edit right after it is saved;
+  8. removed on another computer with an edit here not saved: kept, "Removed on another computer. Your change isn't
+     saved:" Restore / Discard; Restore saves it again.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_corp_sync.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -95,13 +100,15 @@ with sync_playwright() as p:
     pg2.close()
 
     print("5. Paste master data twice: nobody twice")
-    E("(cid) => FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Asha Verma (made-up)', din: '00000011', desig: 'Director'}]})", co); W(1300)
+    E("(cid) => FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Asha Verma (made-up)', din: '00000011', desig: 'Director'}, {id: 'd2', name: 'Meera Iyer (made-up)', din: '', desig: 'Director'}]})", co); W(1300)
     for i in range(2):
         pg.click("#app [data-corp-paste]"); W(300)
-        pg.fill("#app [data-corp-paste-box] textarea", "CIN\tU17299DL2019PTC000000\n00000011\tAsha Verma (made-up)\t10/06/2019\n00000033\tKiran Rao (made-up)\t15/07/2020"); W(300)
+        pg.fill("#app [data-corp-paste-box] textarea", "CIN\tU17299DL2019PTC000000\n00000011\tAsha Verma (made-up)\t10/06/2019\n00000033\tKiran Rao (made-up)\t15/07/2020\n00000044\tMEERA IYER (made-up)\t01/08/2021"); W(300)
         pg.click("#app [data-corp-paste-keep]"); W(1500)
     ds = srvp(pg, co).get("directors", [])
-    ok(sorted(d.get("din") for d in ds) == ["00000011", "00000033"], "Asha matched by DIN, Kiran added once (%s)" % [d.get("din") for d in ds])
+    ok(sorted(d.get("din") for d in ds) == ["00000011", "00000033", "00000044"], "Asha matched by DIN, Kiran added once (%s)" % [d.get("din") for d in ds])
+    mi = [d for d in ds if "Meera" in d.get("name", "") or "MEERA" in d.get("name", "")]
+    ok(len(mi) == 1 and mi[0].get("id") == "d2" and mi[0].get("din") == "00000044" and mi[0].get("appointed") == "2021-08-01", "Meera, entered without a DIN, matched by name: her row given the DIN (%s)" % mi)
     ok(next(d for d in ds if d["din"] == "00000011").get("appointed") == "2019-06-10" and next(d for d in ds if d["din"] == "00000011").get("id") == "d1", "the matched director keeps her row and takes the date")
 
     print("6. tables not there")
@@ -113,6 +120,28 @@ with sync_playwright() as p:
     E("(cid) => { __fake.missing.corp_profiles = true; FCCorp.forget(cid); render(); }", co); W(1500)
     note = txt(pg, "#app [data-corp-cloud]")
     ok("not set up on FinCom’s server yet" in note and not E("!!document.querySelector('#app [data-corp-edit]')"), "corp_profiles not there: said, nothing to change (%s)" % note)
+    E("() => __fake.restore()")
+
+    print("7. one tab: no read after its own save")
+    pg.reload(); W(3500); E(OPEN); W(800); E(INSTALL); W(1800)
+    pg.click("#app [data-corp-edit=details]"); W(300)
+    E("() => { __fake.delay = 400; __fake.log = []; }")
+    pg.fill("#app [data-corp-details] input[data-f=email]", "first@example.com"); pg.press("#app [data-corp-details] input[data-f=email]", "Tab"); W(950)
+    ok([c["method"] for c in E("() => __fake.log")] == ["PATCH"], "one save: one PATCH, no read of its own ping (%s)" % [c["method"] for c in E("() => __fake.log")])
+    ok(E("!!document.querySelector('#app [data-corp-details]')") and E("(cid) => FCCorp.canEdit(cid)", co), "the form still there, editable")
+    E("(cid) => FCCorp.saveProfile(cid, {website: 'typed-after.example.com'})", co); W(2000)
+    ok(srvp(pg, co)["profile"].get("website") == "typed-after.example.com" and srvp(pg, co)["profile"].get("email") == "first@example.com", "the edit right after it saved")
+
+    print("8. removed on another computer, with an edit here not saved")
+    E("() => { __fake.delay = 0; __fake.fail = 'net'; }")
+    E("(cid) => FCCorp.saveProfile(cid, {phone: '+91 11 3333 3333'})", co); W(800)
+    E("(cid) => { __fake.rows.corp_profiles = __fake.rows.corp_profiles.filter(r => r.client_id !== cid); __fake.keep(); __fake.fail = ''; __fake.log = []; return FCCorp.pull(cid); }", co); W(800)
+    note = txt(pg, "#app [data-corp-cloud]")
+    ok(note.startswith("Removed on another computer. Your change isn’t saved:") and E("!!document.querySelector('#app [data-corp-restore]') && !!document.querySelector('#app [data-corp-discard]')") and "Saved" not in note.replace("isn’t saved", ""), "said, with Restore / Discard (%s)" % note)
+    ok(not [c for c in E("() => __fake.log") if c["method"] == "POST"], "not sent again by itself")
+    pg.click("#app [data-corp-restore]"); W(1500)
+    r = srvp(pg, co)
+    ok(r.get("profile", {}).get("phone") == "+91 11 3333 3333" and r.get("profile", {}).get("email") == "first@example.com" and "Saved to the firm account" in txt(pg, "#app [data-corp-cloud]"), "Restore: saved again, whole (%s)" % r.get("profile"))
     E("() => __fake.restore()")
     ctx.close(); br.close()
 

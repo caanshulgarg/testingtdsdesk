@@ -134,7 +134,7 @@ function Directors({ co, P }) {
   const [edit, setEdit] = useState(false);
   const { rows, put, add, del } = useRows(co, P, "directors"), fy = lastClosedFy(today()), pre = P._pre.directors || [];
   const kyc = (d) => { if (!isDirector(d)) return <span className="corp-chip">Not needed (no DIN)</span>;
-    const k = kycFor(d, fy); if (k.done) return <span className="corp-chip" data-tone="ok" data-kyc-chip="done">{"Done · next by " + dmy(k.due)}</span>;
+    const k = kycFor(d, fy); if (k.done) return <span className="corp-chip" data-tone="ok" data-kyc-chip={k.thisYear ? "done" : "not-needed"}>{(k.thisYear ? "Done" : "Not needed") + " · next by " + dmy(k.due)}</span>;
     return today() > k.due ? <span className="corp-chip" data-tone="bad" data-kyc-chip="overdue">Overdue</span> : <span className="corp-chip" data-tone="warn" data-kyc-chip="due">{"Due by " + dmy(k.due).slice(0, 6)}</span>; };
   return <Card title="Directors & KMP" pad={false} attr={["data-corp-directors", ""]}
     aside={canEdit(co.id) && <Button className="btn small" data-corp-edit="directors" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Appoint / change" : "Add"}</Button>}>
@@ -146,7 +146,8 @@ function Directors({ co, P }) {
         <td><input aria-label="DIN" defaultValue={d.din} inputMode="numeric" maxLength={8} onBlur={(e) => put(i, { din: e.target.value.trim() })} /></td>
         <td><select aria-label="Designation" value={d.desig || "Director"} onChange={(e) => put(i, { desig: e.target.value })}>{DESIGNATIONS.map((x) => <option key={x}>{x}</option>)}</select></td>
         <td><input type="date" aria-label="Appointed on" value={d.appointed || ""} onChange={(e) => put(i, { appointed: e.target.value })} /></td>
-        <td>{isDirector(d) ? <Tick label="Done" on={kycFor(d, fy).done} attr={["data-kyc", i]} onSave={(v) => put(i, { kyc: v ? (d.kyc || []).concat([fy]) : (d.kyc || []).filter((x) => x !== fy) })} /> : "—"}</td>
+        <td>{!isDirector(d) ? "—" : kycFor(d, fy).done && !kycFor(d, fy).thisYear ? <span className="corp-note" data-kyc-not-needed={i}>{"Not needed, next due " + dmy(kycFor(d, fy).due)}</span>
+          : <Tick label="Done" on={kycFor(d, fy).thisYear} attr={["data-kyc", i]} onSave={(v) => put(i, { kyc: v ? (d.kyc || []).filter((x) => x !== fy).concat([fy]) : (d.kyc || []).filter((x) => x !== fy) })} />}</td>
         <td><button className="linkbtn" aria-label={"Remove " + (d.name || "this row")} onClick={() => del(i)}>Remove</button></td>
       </tr> : <tr key={keyOf(d, i)} data-director-row={i} data-row-id={d.id || ""}>
         <td style={{ fontWeight: 500 }}>{d.name}</td><td className="corp-num">{d.din || "—"}</td><td>{d.desig || "Director"}</td><td>{dmy(d.appointed) || "—"}</td><td>{kyc(d)}</td></tr>)}
@@ -260,10 +261,12 @@ function Paste({ co, P, close }) {
     if (f.cin && cinOk(f.cin)) patch.cin = f.cin;
     if (f.lastAgm) { const y = +f.lastAgm.slice(0, 4), m = +f.lastAgm.slice(5, 7), fy = (m <= 12 && m >= 4 ? y - 1 : y - 2); patch.agms = Object.assign({}, P.agms, { [fy + "-" + String(fy + 1).slice(2)]: f.lastAgm }); }
     if (r.directors.length) {
-      const had = P.directors || [], by = Object.fromEntries(had.filter((d) => d.din).map((d) => [d.din, d]));
-      // a director already here (the same DIN): the master data's appointment date is taken; a new one is added
-      const got = Object.fromEntries(r.directors.map((d) => [d.din, d]));
-      patch.directors = addNew(had.map((d) => (d.din && got[d.din] ? Object.assign({}, d, got[d.din].appointed ? { appointed: got[d.din].appointed } : {}, { name: d.name || got[d.din].name }) : d)), r.directors, dirKey);
+      // a director already here: the same DIN, or (entered without a DIN) the same name: that row takes the master data's
+      // DIN and appointment date; a new one is added
+      const had = P.directors || [], got = Object.fromEntries(r.directors.map((d) => [d.din, d]));
+      const byName = (d) => r.directors.find((x) => x.din && !had.some((h) => h.din === x.din) && norm(x.name) === norm(d.name));
+      const upd = (d, m) => Object.assign({}, d, { din: m.din, name: d.name || m.name }, m.appointed ? { appointed: m.appointed } : {});
+      patch.directors = addNew(had.map((d) => (d.din ? (got[d.din] ? upd(d, got[d.din]) : d) : byName(d) ? upd(d, byName(d)) : d)), r.directors, dirKey);
     }
     saveProfile(co.id, patch); close();
   };

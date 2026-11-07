@@ -1,0 +1,20 @@
+// 4: a read that started before a save finished never lays its older row over the save
+import { srv, W, ok, done, STORE, profile0 } from "./harness.mjs";
+profile0({ phone: "P0" });
+const S = await import(STORE);
+S.corpOf("c1"); await W(20);
+const orig = Cloud.api; let late = false;
+Cloud.api = async (p, o = {}) => { if (!o.method && late) { const r = await orig(p, o); await W(400); return r; } if (o.method === "PATCH") await W(50); return orig(p, o); };
+S.saveProfile("c1", { phone: "P1" });
+await W(405);
+late = true; S.pull("c1"); late = false;
+await W(150);
+ok(S.corpOf("c1").profile.phone === "P1", "after the save: P1 on the page");
+await W(800);
+ok(S.corpOf("c1").profile.phone === "P1" && S.corpOf("c1").profile.at === srv.corp_profiles[0].updated_at, "after the slow read: still P1, the server's updated_at (" + S.corpOf("c1").profile.at + ")");
+console.log("a read already on its way when the save finishes");
+Cloud.api = async (p, o = {}) => { if (!o.method && late) { const r = await orig(p, o); await W(300); return r; } return orig(p, o); };
+late = true; S.pull("c1"); late = false;
+S.saveProfile("c1", { phone: "P2" }); await W(1200);
+ok(S.corpOf("c1").profile.phone === "P2" && srv.corp_profiles[0].profile.phone === "P2" && S.corpOf("c1").profile.at === srv.corp_profiles[0].updated_at, "the older read thrown away, read again: P2");
+done();

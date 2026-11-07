@@ -18,15 +18,16 @@ export const DIR3_KYC = {
 export const kycRule = () => DIR3_KYC[DIR3_KYC.use] || DIR3_KYC.triennial;
 const dueOn = (y, r) => (y + 1) + "-" + String(r.month).padStart(2, "0") + "-" + String(r.day).padStart(2, "0");
 // a director's KYC as at a year: {done, due, next, words}; kyc = the years the director's KYC was done (Directors & KMP).
-// done: nothing to file for this year (filed this year, or, three-yearly, the next one falls in a later year); due: the
-// date the next KYC is due; next: the financial year it falls in
+// done: nothing to file for this year (filed this year, or, three-yearly, the next one falls in a later year); thisYear:
+// done in this year itself (the tick); due: the date the next KYC is due; next: the financial year it falls in
 export function kycFor(d, fy) {
   const r = kycRule(), y = +String(fy).slice(0, 4), done = (d.kyc || []).map((x) => +String(x).slice(0, 4)).filter((z) => z <= y);
   const last = done.length ? Math.max(...done) : null;
-  if (r.every === 1) return { done: done.includes(y), due: dueOn(y, r), next: y, words: r.words };
+  const thisYear = done.includes(y);
+  if (r.every === 1) return { done: thisYear, thisYear, due: dueOn(y, r), next: y, words: r.words };
   const next = last == null ? y : last + r.every;
   const nfy = next + "-" + String(next + 1).slice(2);
-  return { done: next > y, due: dueOn(next, r), next: nfy, words: r.words };
+  return { done: next > y, thisYear, due: dueOn(next, r), next: nfy, words: r.words };
 }
 
 // a small company is a private company (s.2(85)): the tick is not used for a public or a section 8 company

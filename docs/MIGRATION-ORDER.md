@@ -718,4 +718,5 @@ anon nothing, service_role all), trigger `corp_profiles_touch` (who and when; fi
 transaction, safe to run twice; independent of every other migration (needs only firms, members, my_firm(), can_write()).
 Rollback `server/corporate/rollback-143-corp-profiles.sql` (not a migration): refuses while the table has rows unless
 `set fincom.corp_rollback = 'drop-with-rows'` after a copy is kept. Tested on pg_stand: `tests/run_migration_corp.py`
-(`CORP_ONLY=143`). The app works without it (kept on each computer, and says sharing starts once the server is updated).
+(`CORP_ONLY=143`). Without it Corporate says it is not set up on FinCom's server yet and offers nothing to change
+(the firm's server is the record; this computer keeps a read copy only).

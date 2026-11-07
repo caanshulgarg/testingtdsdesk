@@ -98,6 +98,18 @@ with sync_playwright() as p:
     pg.click("#app [data-corp-edit=directors]"); W(400)
     rows = E("[...document.querySelectorAll('#app [data-corp-directors] tbody tr')].map(r => r.innerText.replace(/\\s+/g, ' ').trim())")
     ok(len(rows) == 3 and rows[0].startswith("Asha Verma (made-up) 00000011 Director 10-Jun-2019 Done · next by 30-Jun-") and (rows[1].endswith("Overdue") if E("istToday()") > "20260630" else rows[1].endswith("Due by 30-Jun")) and "Not needed (no DIN)" in rows[2], "the directors and their KYC (%s)" % rows)
+    # the KYC tick is this year's: untick it, and it is due again; a KYC done in an earlier year (three-yearly) is not
+    # ticked: "Not needed, next due"
+    pg.click("#app [data-corp-edit=directors]"); W(300)
+    pg.uncheck("#app [data-director-row='0'] input[data-kyc]"); W(400)
+    ok(not E("document.querySelector('#app [data-director-row=\"0\"] input[data-kyc]').checked") and not E("(cid) => (FCCorp.corpOf(cid).profile.directors[0].kyc || []).length", co), "the tick unticked: the year taken off")
+    pg.check("#app [data-director-row='0'] input[data-kyc]"); W(400)
+    kfy = E("(cid) => FCCorp.corpOf(cid).profile.directors[0].kyc[0]", co); prev = "%d-%02d" % (int(kfy[:4]) - 1, (int(kfy[:4])) % 100)
+    E("([cid, y]) => { const ds = FCCorp.corpOf(cid).profile.directors.map((d, i) => i === 1 ? Object.assign({}, d, {kyc: [y]}) : d); FCCorp.saveProfile(cid, {directors: ds}); }", [co, prev]); W(400)
+    nn = E("(document.querySelector('#app [data-kyc-not-needed=\"1\"]') || {}).innerText || ''")
+    ok(nn.startswith("Not needed, next due 30-Jun-") and not E("!!document.querySelector('#app [data-director-row=\"1\"] input[data-kyc]')"), "done the year before: no tick, %s" % nn)
+    E("(cid) => { const ds = FCCorp.corpOf(cid).profile.directors.map((d, i) => i === 1 ? Object.assign({}, d, {kyc: []}) : d); FCCorp.saveProfile(cid, {directors: ds}); }", co); W(400)
+    pg.click("#app [data-corp-edit=directors]"); W(400)
     pg.click("#app [data-corp-edit=shares]"); W(300)
     for n, s in (("Asha Verma (made-up)", "6000"), ("Ravi Menon (made-up)", "4000")):
         pg.click("#app [data-corp-add=holder]"); W(250)
