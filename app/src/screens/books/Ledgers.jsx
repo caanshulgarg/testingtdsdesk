@@ -1,8 +1,8 @@
 // The "Tally ledgers" tab of a client's books: the GST and TDS ledgers from Tally, as one simple table (FinCom 2.4.1; the
 // owner's decisions of 09-Oct-2026: "Yes, build it", "Confirm all" only where FinCom and its check agree, "Keep today's
 // figures"). In plain words, for the owner:
-//   1. one status line: "Ledgers from Tally: 1,248 · updated 2 min ago", with "Read again now" where it exists (the bridge
-//      here: ledRead; FinCom's cloud copy: Ledgers.refresh), else one Upload button for the ledger masters (mastersPick);
+//   1. one status line: "Ledgers from Tally: 1,248 · updated 2 min ago", with the way to Books › From Tally, where the ledgers
+//      are updated (next-tally-basics), else Bring in from Tally (From Tally's drop takes the ledger masters);
 //   2. "Please check" (only when there is something): a ledger confirmed one way that FinCom's check reads another way
 //      (both answers and an example entry; "Keep mine" or "Use the check's"), a confirmed name-guess no entry uses yet,
 //      a confirmed ledger now used differently, and the ledgers entries use that FinCom does not have yet;
@@ -13,7 +13,7 @@
 //      ledgers, a PAN not in its GSTIN, a ledger renamed in Tally, ledgers changed after returns were made).
 // Every action is its own step, saved at once (no Save at the foot, no drafts), with Undo. Nothing here is AI's.
 // The rows are LedPage (src/js/57); a change goes through lmSet (src/js/23), LedPage.confirm / confirmAgree / keepMine /
-// useCheck / undoRow / undoLast, and the doAct cases ledRead and mastersPick. Owner only: a rename's Confirm (as before);
+// useCheck / undoRow / undoLast (no read or upload of its own: Books › From Tally does both). Owner only: a rename's Confirm (as before);
 // staff confirm and change ledgers (as before).
 //
 // State: S.ledQ (the find box), S.ledEdit (the row being changed), S.ledEditPrev (that row before the change, for Undo),

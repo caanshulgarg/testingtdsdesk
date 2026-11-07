@@ -13,8 +13,9 @@ PAUSED from the tray. Checked:
      has one item for the client with the count only;
   2. expanded: one row a ledger with its entry count and "see entries" (which lists that ledger's entries);
   3. no "2.3.1" anywhere;
-  4. the one action, Read the ledgers now: the existing Update now path (tally_want_update for the client); with reading
-     paused on NWS144 its plain reason (the tray's Resume background reading) and that it still reads once; then progress;
+  4. the way to Books › From Tally (next-tally-basics: the one place that updates the ledgers; it asks nothing of Tally
+     itself); with reading paused on NWS144 its plain reason (the tray's Resume background reading) and that From Tally's
+     Update now still reads them once;
   5. self-clearing, with no Clear pressed:
      a. a ledger confirmed on the GST/TDS ledgers page (b.map ok) leaves the line at once;
      b. a ledger arriving in FinCom's list under Tally's other capitals or spaces ("Input CGST" for "INPUT CGST", as on
@@ -24,7 +25,7 @@ PAUSED from the tray. Checked:
      d. every ledger settled: nothing shown anywhere, the bell's item gone.
   6. the stopped / offline / Tally-closed reasons: the button cannot run and says why.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_unknown_ledgers_smart.py [shots-dir]
-RED (before the change): a line an entry and ledger, the "2.3.1" words, no Read the ledgers now, a confirmed ledger stays."""
+RED (before the change): a line an entry and ledger, the "2.3.1" words, no action, a confirmed ledger stays."""
 import json, os, sys
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -130,7 +131,6 @@ with sync_playwright() as p:
     head = alltxt(box + " [data-unk-head]")
     ok(head and head[0].startswith("4 ledgers used in Tally"), "5c. a ledger renamed in Tally (alias, same GUID): gone (%s)" % head)
     # ---------- 6. the reasons it cannot run now
-    E("() => { Rec.unkAsk = {}; }")
     for st, word in [("stopped", "stopped"), ("offline", "offline"), ("closed", "not open")]:
         E(DEV, [cid, co, False, st]); pg.wait_for_timeout(300)
         why = alltxt(box + " [data-unk-why]")

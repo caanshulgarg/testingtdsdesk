@@ -16,7 +16,7 @@
   G. Gone from the page: Save at the foot, "Confirm the check's sure answers", Check again, the check / likely / AI tags
      and the Why panel, Ask AI, the "What FinCom posts to" and "AI: TDS and credit" tabs. Kept in "Other notices": the
      GSTIN and PAN lines, the renamed-in-Tally confirm (owners only), ledgers changed after returns were made. Kept in
-     "Please check": the masters line (a ledger used by entries FinCom does not have yet), with Read the ledgers now (one line a client since 15-Oct-2026).
+     "Please check": the masters line (a ledger used by entries FinCom does not have yet), with the way to Books › From Tally (one line a client since 15-Oct-2026).
   H. Staff: Confirm, Change and Undo as before (today's rule); the rename Confirm only for an owner. Phone: no sideways
      scroll.
 Made-up client: tests/ledpage_setup.py (fixture books and masters). Offline, but for B (a stand-in server).

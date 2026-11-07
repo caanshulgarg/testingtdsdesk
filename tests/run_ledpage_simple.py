@@ -2,8 +2,8 @@
 is one table, see run_ledpage241.py: Needs you became "Please check" plus an "Other notices" fold, GST and TDS one table,
 the confirmed are no longer folded, More and its tabs are gone, a change is saved at once; the owner of 08-Oct-2026: "there
 should be simple page of tds & gst tally ledger import page.. it is currently in very bad shape.. take it with 2.4").
-  1. one status line a book: "Ledgers from Tally: 73 · last updated 2 min ago · 5 need you", with "Read again now" only
-     where it exists (the cloud copy here: Ledgers.refresh; nothing is asked of Tally) and an Upload button only when no
+  1. one status line a book: "Ledgers from Tally: 73 · last updated 2 min ago · 5 need you", with "Update ledgers in Books ›
+     From Tally" only where a read exists (next-tally-basics; nothing is asked of Tally here) and an Upload button only when no
      bridge or cloud copy serves the client;
   2. three short sections, one answer and one action a row: GST ledgers (ledger -> what FinCom treats it as -> Confirm /
      Change), TDS ledgers (ledger -> section and nature of payment -> Confirm / Change), Needs you (renamed ledger: owner's
@@ -103,7 +103,7 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-led-notices] tr[data-notice=gstin]").count() == 0 and E("!!(S.books.ledOk || {})['gstin:%s']" % L.SAME_GSTIN), "Fine as it is: the GSTIN line goes, kept with the books")
     pg.click("#app button[data-rename-confirm='%s']" % L.RENAMED); pg.wait_for_timeout(1200)
     ok(any(c[0] == "tally_ledger_rename_confirm" for c in E("window.__rpc")) and pg.locator("#app [data-renamed='%s']" % L.RENAMED).count() == 0, "rename Confirm: asked of FinCom's cloud, the line goes")
-    # no Tally computer keeps this made-up client: Read the ledgers now cannot run, and says why
+    # no Tally computer keeps this made-up client: the reason beside the way to From Tally
     ok(E("() => !!document.querySelector('#app [data-led-line=unknown] [data-unk-go]') && !document.querySelector('#app [data-led-line=unknown] [data-unk-read]')") and "No Tally computer" in pg.locator("#app [data-led-line=unknown] [data-unk-why]").inner_text(),
        "unknown ledger: no Tally computer for this client: says why, beside Update ledgers in Books › From Tally")
     E("() => { window.__rest = []; }")

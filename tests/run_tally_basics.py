@@ -286,7 +286,12 @@ def main():
         ok(n("#app [data-led-read]") == 0 and n("#app [data-unk-read]") == 0, "10. no Read again now, no Read the ledgers now")
         ok(txt("#app [data-led-go='cloud']") == "Update ledgers in Books › From Tally", "10. the status line: 'Update ledgers in Books › From Tally' (%s)" % txt("#app [data-led-status]")[:160])
         ok(txt("#app [data-led-line=unknown] [data-unk-go]") == "Update ledgers in Books › From Tally" and n("#app [data-led-line=unknown] [data-unk-why]") == 1, "10. the unknown-ledgers box: the same link, its reason kept (%s)" % txt("#app [data-led-line=unknown]")[:160])
-        E("() => { window.__bridge = window.__bridge || []; }"); b0 = len(E("() => window.__bridge"))
+        # every way a read could be asked, recorded (the bridge here, the cloud's RPCs and wakes, the ledgers read, Update now)
+        HOOK = """() => { const R = window.__reads10 = []; const wrap = (o, k, tag) => { if (!o || typeof o[k] !== 'function' || o[k].__h10) return; const f = o[k];
+            const g = function () { R.push(tag + ':' + String(arguments[0] || '').slice(0, 60)); return f.apply(this, arguments); }; g.__h10 = true; o[k] = g; };
+          wrap(window.Bridge, 'call', 'bridge'); wrap(window.TCloud, 'rpc', 'rpc'); wrap(window.TCloudUp, 'post', 'post'); wrap(window.Ledgers, 'askTally', 'askTally');
+          wrap(window.Ledgers, 'refresh', 'ledRefresh'); wrap(window, 'tallyUpdateNow', 'update'); window.__rpc = window.__rpc || []; window.__rpc0 = window.__rpc.length; }"""
+        E(HOOK)
         # (scene 7 left the top bar's Tally popover open; the app's rule (parts/dismiss.js) is that the first click outside an
         # open overlay only closes it. Closed first, as a person would see it, then a real mouse click)
         ov = E("() => [...document.querySelectorAll('header.top .tally-pop, details[open]')].map(e => e.className || e.tagName)")
@@ -296,7 +301,13 @@ def main():
             pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
         ok(not E("() => !!document.querySelector('header.top .tally-pop')"), "10. the popover left open by scene 7 is closed (Esc)")
         pg.click("#app [data-led-go='cloud']"); pg.wait_for_timeout(1500)
-        ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1 and len(E("() => window.__bridge")) == b0, "10. the link opens Books › From Tally and asks nothing of Tally by itself")
+        reads = E("() => window.__reads10.filter(x => !/^rpc:(tally_status|tally_period_status|tally_check_status)|^bridge:\\/status/.test(x))")
+        wants = E("() => window.__rpc.slice(window.__rpc0).filter(c => c && c[0] === 'tally_want_update').length")
+        ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1, "10. the link opens Books › From Tally")
+        ok(not reads and wants == 0, "10. the link asks nothing of Tally: no bridge call, wake, ledgers read or Update now, no tally_want_update (%s, %s)" % (reads[:5], wants))
+        # (the check catches a read: Update now asked here is recorded)
+        E("() => { window.__reads10.length = 0; try { tallyUpdateNow(S.coId); } catch (e) {} }"); pg.wait_for_timeout(800)
+        ok(len(E("() => window.__reads10")) > 0, "10. control: a read asked is seen by the same check (%s)" % E("() => window.__reads10")[:3])
         ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update now")
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")

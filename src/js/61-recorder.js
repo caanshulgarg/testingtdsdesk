@@ -425,9 +425,8 @@ const Rec = {
   //        while FinCom still has that ledger;
   //     c. a person confirmed it on the GST and TDS ledgers page (b.map[name].ok: the answer the returns read);
   //     d. it arrives in FinCom's list (the ledger list, or a ledger_changes): the next read (a minute) drops it.
-  //   - the one action: Read the ledgers now (unkRead): the existing Update now (tallyUpdateNow: the bridge here, else
-  //     tally_want_update), which reads the ledger list even while background reading is paused in the tray (bridge-go
-  //     keep.go: a "now" run is not held by the pause); what stops it is said before (unkCan).
+  //   - the way to Books › From Tally, whose Update now reads the ledger list (next-tally-basics); what stops it is said
+  //     beside it (unkCan).
   unk: {},                 // per list: "firm" (p_book null) or "b:<book ids>" (a client's books, one call a book): {rows, known, at, busy, none, err}
   unkKey(books){ return books && books.length ? "b:" + books.join(",") : "firm"; },
   unkOf(books){
@@ -532,46 +531,17 @@ const Rec = {
     return (n === 1 ? "1 ledger used in Tally is" : n + " ledgers used in Tally are") + " not in FinCom yet (" + names + " \u00b7 " + this.unkN(g.entries) + ")";
   },
   unkN(k){ return k + (k === 1 ? " entry" : " entries"); },
-  // can Read the ledgers now run for this client, and what to say: {ok, kind, pc, text}
+  // can Tally's ledger list be read for this client now, and what to say beside the way to From Tally: {ok, kind, pc, text}
   unkCan(cid){
     const co = S.companies && S.companies[cid], name = (co && (co.tallyName || co.name)) || "this client's company";
     const l = co && typeof tallyLine === "function" ? tallyLine(co) : null, pc = (l && l.computer) || "the Tally computer";
     if (!l) return {ok: false, kind: "none", pc, text: "No Tally computer keeps this client's books yet: link one in Client setup → Tally."};
-    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Cannot read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
-    if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Cannot read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
-    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Cannot read now: Tally is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
+    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Tally can't be read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
+    if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Tally can't be read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
+    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Tally can't be read now: it is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
     if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. From Tally's Update now reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
-    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; the read goes once Tally answers."};
-    return {ok: true, kind: "open", pc, text: "Reads Tally's ledger list on " + pc + " (a few requests, each under 2 seconds)."};
-  },
-  // Read the ledgers now: the existing Update now; the line is read again every 20 s for 4 minutes, and says how it went
-  unkAsk: {},              // cid -> {at, pc, before (ledgers missing then), now, done, checked}
-  unkRead(cid){
-    const c = this.unkCan(cid);
-    if (!c.ok){ toast(c.text); return; }
-    const g = this.unkGroups(cid, this.unkBooks(cid).length ? this.unkBooks(cid) : null)[0];
-    const a = this.unkAsk[cid] = {at: Date.now(), pc: c.pc, before: g ? g.ledgers.length : 0, now: g ? g.ledgers.length : 0, done: false, checked: 0};
-    if (typeof tallyUpdateNow === "function") tallyUpdateNow(cid);
-    render();
-    const tick = async () => {
-      if (this.unkAsk[cid] !== a) return;
-      const bks = this.unkBooks(cid);
-      try { if (typeof Ledgers === "object" && Ledgers.load) await Ledgers.load(cid, {force: true}); } catch (e){}
-      await this.unkLoad(bks.length ? bks : null);
-      const h = this.unkGroups(cid, bks.length ? bks : null)[0];
-      a.now = h ? h.ledgers.length : 0; a.checked = Date.now();
-      if (!a.now || a.now < a.before || Date.now() - a.at > 240000){ a.done = true; render(); return; }
-      render(); setTimeout(tick, 20000);
-    };
-    setTimeout(tick, 20000);
-  },
-  // the progress words under the line ("" when not asked)
-  unkProgress(cid, missing){
-    const a = this.unkAsk[cid]; if (!a) return "";
-    const t = (x) => typeof fmtTime === "function" ? fmtTime(x) : new Date(x).toLocaleTimeString();
-    if (!a.done) return "Asked " + a.pc + " at " + t(a.at) + " to read Tally's ledger list. Waiting for it" + (a.checked ? " (looked again at " + t(a.checked) + ")" : "") + "…";
-    if (missing < a.before) return "Ledger list read: " + (a.before - missing) + " of " + a.before + " came in; " + missing + " still not in Tally's list. Check their names in Tally, or confirm them on Ledgers.";
-    return "No new ledger list from " + a.pc + " in 4 minutes. " + this.unkCan(cid).text;
+    if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; From Tally's Update now goes once Tally answers."};
+    return {ok: true, kind: "open", pc, text: "Update now on Books › From Tally reads Tally's ledger list on " + pc + "."};
   },
 
   // ---------------------------------------------------------------- F36 / N102: is each PC recording?

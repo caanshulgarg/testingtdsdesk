@@ -1,8 +1,8 @@
 // The ledgers a client's entries use that FinCom does not have yet (migration 56's tally_unknown_ledger_entries, worked out
 // live by Rec.unkGroups, src/js/61). The owner, 15-Oct-2026, on 221 near-identical lines for one client: "there should be
 // some smart way to show it.. everywhere it is showing like that.. and there is no option to rectify this also".
-//   ONE line a client: "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327 entries)", the one
-//   action (Read the ledgers now: the existing Update now, with what stops it said plainly) and its progress; expanded, one
+//   ONE line a client: "9 ledgers used in Tally are not in FinCom yet (INPUT IGST, INPUT CGST, … · 327 entries)", the way
+//   to Books › From Tally, whose Update now reads the ledgers (next-tally-basics), with what stops it said plainly; expanded, one
 //   row a ledger with its entry count and "see entries". Never a line an entry.
 //   Where: the client's Books page (above every tab but Ledgers) and Books -> Ledgers' Please check (UnknownBody), the GST
 //   and TDS ledgers pages' Please check; the bell has the count only (AlertHub, src/js/63). Not on Sync activity.
@@ -24,7 +24,7 @@ export function unknownGroup(cid, byBook = true) {
 }
 
 export function UnknownBody({ g, where }) {
-  const cid = g.cid, can = Rec.unkCan(cid), prog = Rec.unkProgress(cid, g.ledgers.length);
+  const cid = g.cid, can = Rec.unkCan(cid);
   const see = S.unkSee && S.unkSee.cid === cid ? S.unkSee.n : "";
   const toggle = (n) => { S.unkSee = see === n ? null : { cid, n }; render(); };
   return <div data-unk-line={where || ""}>
@@ -47,6 +47,5 @@ export function UnknownBody({ g, where }) {
       <button className="linkbtn" data-unk-go="" data-go-from-tally="" onClick={() => (cid === S.coId || typeof Rec !== "object" || !Rec.openClientTab ? goClient("books:import") : Rec.openClientTab(cid, "books:import"))}>Update ledgers in Books › From Tally</button>
       <span className="note" data-unk-why={can.kind}>{can.text}</span>
     </div>
-    {prog && <div className="note" data-unk-progress="" style={{ marginTop: 4 }}>{prog}</div>}
   </div>;
 }
