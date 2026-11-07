@@ -7,7 +7,15 @@
 //	                        added at the end of the [Tally] section when there is none)
 //	ServerPort = <n>       (kept when the file names one; else added: 9000 when free, else the first free port of
 //	                        9001..9999 outside FinCom Bridge's own 9100..9199, free meaning no other tally.ini names it
-//	                        and nothing listens on it now)
+//	                        and nothing listens on it now; 2.5.5: this login's own port first, below)
+//
+// 2.5.5 (the owner's Option B, loginport255.go): when the bridge switches the connection on in a tally.ini only this
+// login uses (a computer one person uses) and the file names no port, the port added is FinCom's per-login port, the
+// one the Tally page proposes for this login: the first of the login's ports (counted from its name, as the page
+// counts) that no other tally.ini names and nothing listens on; none free, the choice above. A file that names a port
+// keeps it. A file whose connection is already on and that names no port, while a Tally listens on TallyPrime's own
+// 9000, is that Tally's working port: nothing is written (review P1; before 2.5.5 it got 9001). A tally.ini every user
+// shares is not written (2.5.4, iniconnect254.go).
 //
 // The line keeps its own spelling and spacing; only the value changes. A file the bridge's Windows user cannot write is
 // not touched ("cannot write"). Each file's state is in the beat (tallyIni[].connect): "enabled; Tally needs one
@@ -79,6 +87,32 @@ func iniEncode(t, enc string) []byte {
 // port the file names after it, and the lines changed or added. used: a port another tally.ini names or something
 // listens on
 func iniConnect(raw []byte, used func(int) bool) ([]byte, string, int, []string) {
+	return iniConnectPref(raw, used, nil)
+}
+
+// 2.5.5 (review P1): a Tally listens on this port now (Windows' listener table and the program that holds it); a hook
+// for the tests
+var iniTallyListensFn = func(port int) bool {
+	ok, procs, lis := netState()
+	if !ok {
+		return false
+	}
+	names := map[int]string{}
+	for _, p := range procs {
+		names[p.ID] = p.Name
+	}
+	for _, l := range lis {
+		if l.Port == port && reTally.MatchString(names[l.Pid]) {
+			return true
+		}
+	}
+	return false
+}
+
+// 2.5.5: the rule with this login's own port preferred: prefer is asked only when a port is to be added to a file whose
+// connection this write switches on (it was off: no "Client Server" line, or None / Client), with used: the port it
+// gives is taken (0: none preferred, or none free), else freeTallyPort's
+func iniConnectPref(raw []byte, used func(int) bool, prefer func(used func(int) bool) int) ([]byte, string, int, []string) {
 	text, enc, ok := iniDecode(raw)
 	if !ok {
 		return raw, connectUnreadable, 0, nil
@@ -127,8 +161,22 @@ func iniConnect(raw []byte, used func(int) bool) ([]byte, string, int, []string)
 	if csAt < 0 {
 		add = append(add, "Client Server = Both")
 	}
+	switching := csAt < 0 || len(changed) > 0
+	if port == 0 && !switching && len(add) == 0 && iniTallyListensFn(tallyDefaultPort) {
+		// 2.5.5 (review P1): the connection is on, the file names no port, and a Tally listens on TallyPrime's own
+		// 9000: that is this file's working port. Nothing is written
+		return raw, connectAlready, tallyDefaultPort, nil
+	}
 	if port == 0 {
-		port = freeTallyPort(used)
+		// 2.5.5: this login's own port, only when this write switches the connection on (no working port to change)
+		if switching && prefer != nil {
+			if p := prefer(used); p > 0 && p < 65536 && (used == nil || !used(p)) {
+				port = p
+			}
+		}
+		if port == 0 {
+			port = freeTallyPort(used)
+		}
 		add = append(add, fmt.Sprintf("ServerPort = %d", port)) // TallyPrime's own spelling (proof72 p4)
 	}
 	if len(changed) == 0 && len(add) == 0 {
@@ -156,6 +204,20 @@ func freeTallyPort(used func(int) bool) int {
 		}
 	}
 	return 9000
+}
+
+// 2.5.5: this login's own port (loginport255.go) for a tally.ini only this login uses: none on a computer several
+// people use (its tally.ini is shared: 2.5.4's rule stands) or when the login's name is not known; a hook for the tests
+var iniLoginPortFn = func(used func(int) bool) int { return iniLoginPort(ownerName(), used) }
+
+// TallyPrime's own port when its tally.ini names none
+const tallyDefaultPort = 9000
+
+func iniLoginPort(windowsUser string, used func(int) bool) int {
+	if iniSharedFn() {
+		return 0
+	}
+	return loginOwnPortFree(windowsUser, used)
 }
 
 // a port another tally.ini names, or something listens on now (Windows' listener table; else a connection tried)

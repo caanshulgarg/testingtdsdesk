@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -131,8 +132,14 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		save()
 		return true, nil
 	}
+	if truthy(st["natWaitNight"]) && k.kind != "nightly" {
+		// second review N5: stopped at 2 s before: they wait for the next nightly run (FinCom keeps the natures it has)
+		ls["natDone"], ls["natSkip"] = true, true
+		save()
+		return true, nil
+	}
 	for !truthy(ls["natDone"]) {
-		if !inBudget() || keepHold() != "" {
+		if !inBudget() || k.holdNow() != "" {
 			return false, nil
 		}
 		after, bound := toI64(ls["natAfter"]), toI64(ls["bound"])
@@ -142,7 +149,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			upto = 0
 		}
 		t1 := time.Now()
-		raw, err := invokeTally(k.tc, port, natureChunkRequest(company, after, upto), ledChunkSec())
+		raw, err := invokeTally(ledgerTC(k.tc), port, natureChunkRequest(company, after, upto), ledChunkSec()) // 2.5.5: the 2 s stop
 		if err == nil && !strings.Contains(raw, "<ENVELOPE") {
 			err = fmt.Errorf("Tally's answer to the natures of payment could not be read: %s", cut(flat(raw), 120))
 		}
@@ -154,8 +161,16 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			}
 			// any other failure never holds the ledger list: it goes on without the natures this round. Tally not
 			// answering twice: not asked again until the bridge is updated
+			stopped := errors.Is(err, errRecorderStop)
 			if tallyNoAnswer(err) {
 				st["natMiss"] = toInt(st["natMiss"]) + 1
+			}
+			if stopped {
+				// 2.5.5 (review L3, second review N5): said in the round's end line and in the company's trouble (the
+				// beat); never turns them off: asked again at the next nightly run (not at Update now before it)
+				ls["natStopped"] = true
+				st["natStops"], st["natWaitNight"] = toInt(st["natStops"])+1, true
+				st["trouble"] = M{"at": nowS(), "why": fmt.Sprintf("Tally took longer than 2 s for the natures of payment (%d time(s)); the ledger list went on without them, and they are asked again at the next nightly run", toInt(st["natStops"]))}
 			}
 			if toInt(st["natMiss"]) >= 2 {
 				st["natOffVer"], st["natMiss"] = BridgeVersion, 0
@@ -173,6 +188,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		if tail {
 			ls["natDone"] = true
 			delete(st, "natMiss")
+			delete(st, "natWaitNight")
 		} else {
 			ls["natAfter"] = upto
 			if top > bound {

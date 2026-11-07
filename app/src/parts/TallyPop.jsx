@@ -22,7 +22,7 @@ import { goTallyRow } from "./TallyChip.jsx";
 import { goTallyPage } from "./HomeLink.jsx";
 import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
-import { ownOpen, NO_CO, lookOnce, checkAll } from "../lib/tallySimple.js";
+import { ownOpen, NO_CO, lookOnce, checkAll, checkedSay } from "../lib/tallySimple.js";
 import "../lib/connectSteps.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
@@ -91,9 +91,9 @@ function Places({ co, run }) {
 }
 
 function Actions({ co, s, run, busy }) {
-  const btn = (act, label, fn, primary) => <button type="button" className={"btn small" + (primary ? " primary" : "")} data-tally-pop-act={act} disabled={busy} onClick={() => run(fn)}>{label}</button>;
+  const btn = (act, label, fn, primary) => <button type="button" className={"btn small" + (primary ? " primary" : "")} data-tally-pop-act={act} disabled={!!busy} onClick={() => run(fn, act === "check" && "Checking…")}>{label}</button>;
   const row = (...b) => <p className="tally-pop-acts">{b}</p>;
-  const check = (primary) => btn("check", "Check again", async () => { await checkAll(); const x = tallyIconState(co); return "Checked at " + now() + ": " + x.word + "."; }, primary);
+  const check = (primary) => btn("check", busy === "Checking…" ? "Checking…" : "Check again", async () => { await checkAll(); return checkedSay(tallyIconState(co).word); }, primary);
   const update = () => btn("update", "Update now", async () => { await tallyUpdateNow(co ? co.id : null); return "Asked Tally for its new entries at " + now() + "."; }, true);
   if (!co) return s.icon === "none" ? <Download /> : s.icon === "linked" ? null : row(check(true));
   if (s.icon === "linked") return row(update());
@@ -118,8 +118,9 @@ export default function TallyPop({ co, nOpen, close, back }) {
   useEffect(() => { const el = ref.current && ref.current.querySelector("button, select, a[href]"); if (el) el.focus(); }, []);
   // next-tally-connect-steps: this login's bridge looked for (once a tab, the shared look), so the step is known
   useEffect(() => { lookOnce(); }, []);
-  const run = async (fn) => {
-    setBusy(true); setMsg(null);
+  // (Check again: "Checking…" below, even when the button it was pressed on goes as the state changes)
+  const run = async (fn, word) => {
+    setBusy(word || true); setMsg(null);
     try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: "Did not work: " + ((e && e.message) || e) }); }
     setBusy(false);
   };
@@ -134,8 +135,8 @@ export default function TallyPop({ co, nOpen, close, back }) {
     {/* next-tally-basics: the steps' Check again here too, where the actions above have none (the manual "Tally is open, check now") */}
     {s.step && <p className="tally-pop-acts"><button type="button" className="btn small" data-tally-pop-steps={s.step.n} onClick={() => { close(); goTallyPage(); }}>See the 6 steps</button>
       {!(s.icon === "waiting" || s.cause === "port" || s.cause === "notanswering" || (!co && s.icon !== "none" && s.icon !== "linked")) && <button type="button" className="btn small" data-tally-pop-recheck="" disabled={busy}
-        onClick={() => run(async () => { await checkAll(); const x = tallyIconState(co); return "Checked at " + now() + ": " + x.word + "."; })}>Check again</button>}</p>}
-    {busy && <p className="note" data-tally-pop-busy="">Working…</p>}
+        onClick={() => run(async () => { await checkAll(); return checkedSay(tallyIconState(co).word); }, "Checking…")}>{busy === "Checking…" ? "Checking…" : "Check again"}</button>}</p>}
+    {busy && <p className="note" data-tally-pop-busy="">{busy === true ? "Working…" : busy}</p>}
     {msg && <p className={"note tally-pop-msg" + (msg.ok ? "" : " bad")} data-tally-pop-msg="" role="status">{msg.text}</p>}
     {stale && <p className="note books-stale" data-books-stale="">{stale}</p>}
     {/* Task D (the owner, 28-Oct-2026: "No suggestion to add clients"): no count of companies not linked */}

@@ -27,7 +27,7 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import run_tally_page_clean as T
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
-PORT = 9547
+PORT = int(os.environ.get("HANG_WATCH_PORT", "9547"))   # (another run may hold 9547)
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -102,7 +102,14 @@ def main():
         E(T.SETUP, [[da], cos, [], "owner", clients, True, {}]); pg.wait_for_timeout(1500)
         def look(list_):
             E("""(list) => { const L = FCTallySimple.LOCALB; Object.assign(L, {list, busy: false, n: L.n + 1, sig: 'x' + Date.now()}); render(); }""", list_); pg.wait_for_timeout(900)
+        # next-tally-page-redesign: the steps are folded while connected (a laptop: "Connect Tally on this computer"), a row's
+        # "Open in Tally right now?" is in its Details: first what shows folded, then the steps and every row's details opened
+        def folded():
+            return E("""(co) => { const q = (s) => document.querySelector(s); S.tsm = {filter: 'all', q: '', open: false, again: 0, check: 0}; S.tallyGuide = {}; render();
+              return new Promise((r) => setTimeout(() => r({guide: document.querySelectorAll('#app [data-tsm-guide]').length, link: (q('#app [data-tsm-steps-link]') || {}).getAttribute ? q('#app [data-tsm-steps-link]').getAttribute('data-tsm-steps-link') : null,
+                coMain: ((q('#app [data-tsm-row="' + co + '"] [data-tpt-main]') || {}).innerText || '').trim()}), 700)); }""", OPEN)
         def words():
+            E("() => { S.tsm = {filter: 'all', q: '', open: true, again: 0, check: 0, details: 'all'}; render(); }"); pg.wait_for_timeout(900)
             return E("""() => { const t = (s) => [...document.querySelectorAll(s)].map(e => e.innerText.replace(/\\s+/g, ' ').trim());
               const row = (n) => { const r = document.querySelector('#app [data-tsm-row="' + n + '"] [data-tsm-col=o]'); return r ? r.innerText.replace(/\\s+/g, ' ').trim() : ''; };
               const tsm = document.querySelector('#app [data-tally-simple]') || {dataset: {}};
@@ -114,23 +121,25 @@ def main():
         other251 = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.1", "impl": "go", "yours": False, "port": 9101}
         own251 = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.1", "impl": "go", "yours": True, "bridgeId": "go-9", "port": 9104}
         E("() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }")
-        look([mine, other253, other251]); w = words(); print("      a.", w)
+        look([mine, other253, other251]); f = folded(); w = words(); print("      a.", f, w)
+        ok(f["guide"] == 0 and f["link"] == "" and f["coMain"] == "Link", "a. connected: the steps folded behind See the 6 steps; the company no client has, its row's Link (%s)" % f)
         ok(w["own"] == "ok" and w["how"] == "found", "a. this login's 2.5.3 bridge found (sameSession true)")
         # next-tally-connect-steps: the first company to link is Connect Tally's step 5 (the strip is for the ones after it)
         # (nothing linked yet: the company is Connect Tally's step 5, the strip only for the ones after it)
         ok(w["step5"].startswith("Step 5: “%s” is open in your Tally." % OPEN) and not w["strip"],
-           "a. at the top: Connect Tally's step 5, “…” is open in your Tally, Link (%s | %s)" % (w["strip"], w["step5"]))
+           "a. the steps opened: Connect Tally's step 5, “…” is open in your Tally, Link (%s | %s)" % (w["strip"], w["step5"]))
         ok(E("() => !!FCTallySimple.rememberedOwn()"), "a. this login's bridge remembered in this browser")
         ok(w["eps"].startswith("No EPSILON X DESIGNS’s Tally is open in another Windows login (epsilonx), not in this login’s. Open it in this login, or install FinCom Bridge in the epsilonx login."),
            "f. a linked client whose Tally runs in another login: said so, by that login's name (%s)" % w["eps"][:160])
         E("() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }")
-        look([own251, other253]); w = words(); print("      b.", w)
+        look([own251, other253]); f = folded(); w = words(); print("      b.", f, w)
         OLD = "Your FinCom Bridge is old (2.5.1). Install 2.5.4 to connect this login’s Tally."
         ok(w["own"] == "none" and w["gb"].startswith("— " + OLD) and w["say"].startswith(OLD) and w["dl"] >= 2, "b. an old bridge of this login: the row and the top box say so, with the download (%s)" % w["gb"][:120])
-        look([other253, other251]); w = words(); print("      c.", w)
+        look([other253, other251]); f = folded(); w = words(); print("      c.", f, w)
         NOTRUN = "FinCom Bridge is not running in this Windows login: start it, or install it."
         ok(w["own"] == "none" and w["gb"].startswith("— " + NOTRUN) and w["say"].startswith(NOTRUN), "c. only other logins' bridges: not running in this Windows login")
-        look([]); w = words(); print("      d.", w)
+        look([]); f = folded(); w = words(); print("      d.", f, w)
+        ok(f["guide"] == 0 and f["link"] == "laptop", "d. nothing answers, the office's bridge online: the steps folded as Connect Tally on this computer (%s)" % f)
         ok(w["gb"].startswith("— " + NOTRUN) and "choose Allow" in w["say"], "d. nothing answers: not running, and Allow when the browser asks")
         ok("not set up" not in json.dumps(w) and w["gb"] != "—", "b-d. never a blank or “not set up” while a reason is known")
         E("() => localStorage.setItem(LocalOwner.P + 'ownbridge', JSON.stringify({id: 'go-1', port: 9103, user: 'PC1\\\\usera'}))")

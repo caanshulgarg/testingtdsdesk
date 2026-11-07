@@ -144,28 +144,31 @@ func keepRest(d time.Duration) {
 func setFinComReading() { _ = saveFile(sp("fincom-reading.txt"), nowS()) }
 
 // why Tally is to be left alone right now (” when it is free)
-func keepHold() string {
+func keepHold() string { _, w := keepHoldWhy(); return w }
+
+// next-fix-read-any-bridge: the hold as a reason code (keepwait.go says it in the beat) and the log's words, as before
+func keepHoldWhy() (string, string) {
 	if st := readStop(); st != nil {
-		return "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
+		return "stopped", "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
 	}
 	for _, d := range []string{syncDir(), psSyncDir()} {
 		if d == "" {
 			continue
 		}
 		if t, ok := mtime(filepath.Join(d, "fincom-reading.txt")); ok && time.Since(t) < 120*time.Second {
-			return "FinCom is reading from Tally"
+			return "fincomReading", "FinCom is reading from Tally"
 		}
 	}
 	if isFake() && cfgS("KeepFakeHold") != "" {
-		return cfgS("KeepFakeHold")
+		return "other", cfgS("KeepFakeHold")
 	}
 	if platTallyYoung(float64(keepNum("KeepSettleMin", 3))) {
-		return "Tally has just opened; letting it finish loading"
+		return "tallyYoung", "Tally has just opened; letting it finish loading"
 	}
-	if keepUserInTally() {
-		return "someone is working in Tally"
+	if keepUserInTallyFn() {
+		return "userInTally", "someone is working in Tally"
 	}
-	return ""
+	return "", ""
 }
 
 // --- the copy's state (keep.json): a JSON object, read and written as the PowerShell bridge did
@@ -650,6 +653,9 @@ type keepRun struct {
 	told      map[string]bool
 	id        string           // this run (a round of slices resumes within it)
 	alter     map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
+	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
+	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
+	pressOn bool
 }
 type keepBack struct {
 	n     int
@@ -893,7 +899,12 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	// the same name). Round 4 (03-Oct-2026): the check is made once per ROUND (k.id), not once per keeper, so the rewind
 	// guard sent at the round's end carries the company's highest AlterID as of this round, never a stale one
 	if ck := "check:" + company + ":" + k.id; !k.told[ck] {
-		g, err := companyCheck(k.tc, company, port)
+		ctc := k.tc
+		if k.pressOn {
+			ctc = ledgerTC(k.tc) // the Update now reading on while someone types: this request too under the 2 s stop
+			k.holdNow()          // third review T5: and it waits while the person types
+		}
+		g, err := companyCheck(ctc, company, port)
 		if err != nil {
 			return err
 		}
@@ -943,7 +954,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		}
 		save()
 	}
-	for str(st["roundNext"]) <= td && inBudget() && keepHold() == "" {
+	for str(st["roundNext"]) <= td && inBudget() && k.holdNow() == "" {
 		f := str(st["roundNext"])
 		sl := maxI(1, minI(31, toInt(st["slice"])))
 		t := addDays(f, sl-1)
@@ -954,7 +965,11 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 			t = td
 		}
 		t1 := time.Now()
-		x, err := getDayBookXML(k.tc, company, f, t, port)
+		dtc := k.tc
+		if k.pressOn {
+			dtc = ledgerTC(k.tc) // third review T5: an Update now reading on: each day-book request under the 2 s stop
+		}
+		x, err := getDayBookXML(dtc, company, f, t, port)
 		// round 10 (03-Oct-2026): a day counts as read only when its answer came in full. An answer that is not a whole
 		// Tally envelope (the connection dropped, the decoder stopped), or one taken while the self-watch stopped reading,
 		// is thrown away like a timeout: nothing of it is kept, no day of it goes to the cloud, the slice is read again.
@@ -973,7 +988,7 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 				// the empty day is trusted and goes the normal way (written empty, marked full, sent as empty:true)
 				more := ""
 				if f == t && toInt(st["dayFail"]) >= 2 {
-					if raw, e := invokeTally(k.tc, port, tagCheckRequest(company, f), 60); e != nil || !goodDupAnswer(raw) {
+					if raw, e := invokeTally(dtc, port, tagCheckRequest(company, f), 60); e != nil || !goodDupAnswer(raw) { // fourth review: under the 2 s stop too when reading on
 						more = "; the entry list did not answer"
 					} else if ln := len(xmlDoc(raw).All("VOUCHER")); ln > 0 {
 						more = fmt.Sprintf("; the entry list (FinComTag) lists %d", ln)
@@ -994,6 +1009,12 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 		if err != nil {
 			if gaveWay(err) {
 				return err // the same slice again when Tally is free
+			}
+			if k.pressOn && errors.Is(err, errRecorderStop) {
+				// fourth review: an Update now reading on stopped a day-book slice at 2 s: it gives way like a posting
+				// (the same slice again after the stop's cool-down; no halving, no day's try used, no back-off)
+				writeLog(fmt.Sprintf("Keeping %s: day book %s-%s: Tally took longer than 2 s; the bridge stopped waiting and reads it again shortly", company, f, t))
+				return fmt.Errorf("day book %s-%s stopped at 2 s: %w", f, t, errBackoff)
 			}
 			if sl > 1 {
 				st["slice"] = maxI(1, sl/2)
@@ -1123,6 +1144,9 @@ func startKeepRun(r runReq) bool {
 				}
 			}
 		}
+		if r.kind == "now" && kwNowAt.IsZero() {
+			kwNowAt = time.Now() // third review T2: when the queued Update now was pressed
+		}
 		if kwPending == nil {
 			c := r
 			kwPending = &c
@@ -1205,12 +1229,13 @@ func keepWorker(r runReq) {
 		if strings.TrimSpace(readText(pidf)) == fmt.Sprint(os.Getpid()) {
 			_ = os.WriteFile(pidf, nil, 0o644)
 		}
+		setKeepWait("", "")
 		kwMu.Lock()
 		next := kwPending
 		kwRunning, kwRun, kwPending = false, nil, nil
 		kwMu.Unlock()
-		if next != nil && !stopping() {
-			startKeepRun(*next)
+		if next == nil || stopping() || !startKeepRun(*next) {
+			kwNowForget() // fourth review: no stale press time when the queued run is not started
 		}
 	}()
 	what := map[string]string{"light": "Light update", "now": "Update from Tally", "nightly": "Nightly catch-up", "ledgers": "Ledger list"}[r.kind]
@@ -1236,6 +1261,24 @@ func keepWorker(r runReq) {
 	var open []oc
 	asked, held, why := false, "", ""
 	heldAt := time.Time{}
+	var heldPushAt time.Time
+	// third review T1: a run held before reading pushes to the cloud itself, from this loop, at most once a minute (the
+	// main loop does not while a run goes): never beside the round's own writes of the outbox
+	heldPush := func() {
+		if time.Since(heldPushAt) >= time.Minute {
+			heldPushAt = time.Now()
+			invokeCloudPush()
+		}
+	}
+	var pressedAt time.Time // fourth review: a queued Update now's wait counts from the press, not from this start
+	if r.kind == "now" {
+		var press bool
+		press, pressedAt = kwNowPressOn()
+		if press {
+			k.pressOn = true // third review T2: it took over from a held run that had already waited the Update now's time
+			writeLog(what + ": someone has been working in Tally since this Update now was pressed, " + keepNowWaitWords() + " or more; reading goes on in short parts (each request 2 s at most), giving way while they type")
+		}
+	}
 	for {
 		syncConfig()
 		if !keepOn() || stopping() {
@@ -1253,24 +1296,47 @@ func keepWorker(r runReq) {
 			why = "time is up; the rest follows at the next update"
 			break
 		}
-		if hold := keepHold(); hold != "" {
+		if code, hold := keepHoldWhy(); hold != "" && !(k.pressOn && code == "userInTally") {
 			if hold != held {
 				writeLog(what + ": waiting, " + hold)
 				heldAt = time.Now()
+				if !pressedAt.IsZero() && code == "userInTally" {
+					heldAt, pressedAt = pressedAt, time.Time{} // fourth review: the 2 minutes count from the press
+				}
 			}
 			held = hold
+			setKeepWait(code, hold) // next-fix-read-any-bridge: said in the beat; the push goes on meanwhile (heldPush)
 			if k.light && time.Since(heldAt) > 2*time.Minute {
 				why = hold
 				break
 			}
+			// third review T2: an Update now queued behind this held run (nightly, ledger wake, light): this run gives way
+			// to it at once; the Update now starts next, waits KeepNowWaitSec at most from when it was pressed, then reads on
+			if r.kind != "now" && kwNowQueued(code == "userInTally") {
+				why = "an Update now came in and goes first"
+				writeLog(what + ": waiting, " + hold + "; an Update now came in: it goes first (this run's progress is kept)")
+				break
+			}
+			// the agreed rule: an Update now a person pressed waits about 2 minutes at most for a 15 s pause in Tally;
+			// then it reads on in short slices, giving way while the person types. The nightly and light runs keep
+			// waiting as before; a posting is never held (it does not ask keepHold)
+			if r.kind == "now" && code == "userInTally" && time.Since(heldAt) >= time.Duration(keepNum("KeepNowWaitSec", 120))*time.Second {
+				k.pressOn = true
+				writeLog(what + ": someone has been working in Tally for " + time.Since(heldAt).Round(time.Second).String() + " without a 15 s pause; reading goes on in short parts (each request 2 s at most), giving way while they type")
+				continue
+			}
+			heldPush()
 			sleepOrStop(5 * time.Second)
 			continue
 		}
 		held = ""
 		if len(activeJobs()) > 0 { // a posting goes first: nothing is read while one is going
+			setKeepWait("posting", "")
+			heldPush()
 			sleepOrStop(2 * time.Second)
 			continue
 		}
+		setKeepWait("", "")
 		if !asked && k.light {
 			// a light update asks Tally nothing (not even which companies are open): only the copy is brought up to date
 			for _, c := range r.only {
@@ -1296,6 +1362,7 @@ func keepWorker(r runReq) {
 			}
 			// which companies are open: asked once a run
 			want := strs(cfg("KeepCompanies"))
+			k.holdNow() // third review T5: reading on, the company list too waits while the person types
 			for _, s := range openCompaniesWith(k.tc, true) {
 				if s["skipped"] == true || s["ok"] != true {
 					continue
@@ -1390,9 +1457,15 @@ func keepWorker(r runReq) {
 		}
 		sleepOrStop(time.Duration(minI(5, keepNum("KeepCycleSec", 5))) * time.Second)
 	}
+	setKeepWait("", "") // third review T7: no longer waiting, whatever comes next (the leases, the last push)
 	keepReleaseLeases()
 	// what came in goes on to the cloud before this stops (a few minutes at most; Tally is not asked)
 	until := time.Now().Add(10 * time.Minute)
+	if kwNowNext() {
+		// fourth review: an Update now waits behind this run: one push, then it starts at once (it pushes as it goes)
+		invokeCloudPush()
+		until = time.Now()
+	}
 	for time.Now().Before(until) && !stopping() {
 		if invokeCloudPush() == 0 {
 			break
@@ -1550,4 +1623,81 @@ func writeDayFile(dir, d, text string, full bool) {
 		return
 	}
 	_ = os.Remove(m)
+}
+
+// the hold for the next slice of a run: keepHold's words, except for an Update now reading on (pressOn) while someone
+// works in Tally: then it gives way while they type (no slice until KeepNowGapMs without a key or click, KeepNowYieldSec
+// at most) and goes on
+func (k *keepRun) holdNow() string {
+	code, h := keepHoldWhy()
+	if h == "" || !(k.pressOn && code == "userInTally") {
+		return h
+	}
+	end := time.Now().Add(time.Duration(keepNum("KeepNowYieldSec", 20)) * time.Second)
+	for keepTypingFn() && time.Now().Before(end) && !stopping() {
+		sleepOrStop(200 * time.Millisecond)
+	}
+	return ""
+}
+
+// someone works in Tally, and is typing or clicking there right now (hooks for the tests)
+var (
+	keepUserInTallyFn = keepUserInTally
+	keepTypingFn      = keepTypingNow
+)
+
+// the person is typing or clicking in Tally right now (less than KeepNowGapMs, 1 s, since the last key or click)
+func keepTypingNow() bool {
+	if idleSec()*1000 >= float64(keepNum("KeepNowGapMs", 1000)) {
+		return false
+	}
+	return isFake() || platFrontIsTally()
+}
+
+// third review T2: an Update now queued behind a run that is going
+var (
+	kwNowAt    time.Time // when it was pressed (zero: none queued)
+	kwNowPress bool      // the run it took over from had waited KeepNowWaitSec for someone in Tally: it reads on at once
+)
+
+// an Update now is queued behind this run; the run gives way to it now (userInTally: someone in Tally, the Update now
+// then reads on at once if it was pressed KeepNowWaitSec ago or more). The queued run takes over this run's companies
+func kwNowQueued(userInTally bool) bool {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	if kwPending == nil || kwPending.kind != "now" {
+		return false
+	}
+	if kwRun != nil && len(kwRun.only) == 0 {
+		kwPending.only = nil // this run read every company: so does the Update now that takes over
+	}
+	kwNowPress = userInTally && !kwNowAt.IsZero() && time.Since(kwNowAt) >= time.Duration(keepNum("KeepNowWaitSec", 120))*time.Second
+	return true
+}
+
+// at the Update now's start: whether it reads on at once (once), and when it was pressed if it was queued (zero: it
+// started at once); the queued time cleared
+func kwNowPressOn() (bool, time.Time) {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	p, at := kwNowPress, kwNowAt
+	kwNowPress, kwNowAt = false, time.Time{}
+	return p, at
+}
+
+// fourth review: a queued Update now that did not start (reading switched off or stopped meanwhile) leaves no press
+// time behind, or a later Update now would read on at once
+func kwNowForget() {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	if kwPending == nil && !kwRunning {
+		kwNowPress, kwNowAt = false, time.Time{}
+	}
+}
+
+// fourth review: an Update now is queued behind this run (it starts as soon as this run ends)
+func kwNowNext() bool {
+	kwMu.Lock()
+	defer kwMu.Unlock()
+	return kwPending != nil && kwPending.kind == "now"
 }

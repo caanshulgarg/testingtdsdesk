@@ -1148,6 +1148,8 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		// 2.5.4: why this bridge did or did not update: the last look (when, its words, the version offered), whether a
 		// look is going on, and NoAutoUpdate (update.go updateBeat; a few short fields)
 		"update": updateBeat(),
+		// next-fix-read-any-bridge: why a run waits before reading, in plain words, and an Update now queued behind it (nil: none)
+		"keepWait": keepWaitBeat(),
 		// review H1 (2.3.1): why this computer's changes wait for a complete look at its own Tally, in plain words ("" when none)
 		"recorderWaitWords": liveWaitWordsAll(), "recorderWaitSince": waitSinceOf(waitStarts), "recorderWaitStarts": waitStarts,
 		// next-renumber: entries Tally may have renumbered that the bridge did not read again, in plain words (renumber.go)

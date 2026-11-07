@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "c128c6790417817a095b9c118e68309950467492e400a1e2a494bb7c5025703b",
+    "hash": "709e19c2980489287ffab525966ec1281ff59cb1e2b9822c14b70b8181cfb66c",
     "measured": false
   },
   "autoUpdate": true,
@@ -35,6 +35,7 @@
   "dataFolder": "",
   "events": true,
   "every": 30,
+  "keepWait": null,
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",
@@ -132,6 +133,6 @@
     "offered": ""
   },
   "updating": false,
-  "version": "2.5.4",
+  "version": "2.5.5",
   "windowsUser": ""
 }

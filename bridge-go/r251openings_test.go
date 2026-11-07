@@ -289,7 +289,7 @@ func TestR251FinComDayOnOrAfterTallysBooks(t *testing.T) {
 // the owner's decision of 2026-10-30 (the same dated form, only the date's source changed), 2.5.0's kept as history; the
 // dated line; the test sheet
 func TestR251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.4" { // 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go): kept as history
+	if BridgeVersion != "2.5.5" { // 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go): kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); !strings.HasPrefix(h, "0ed4d3e21f6f") { // 2.5.2 added FinComStockInHand

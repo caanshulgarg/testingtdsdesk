@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -39,6 +39,9 @@ const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 const sameName = (a, b) => !!shown(a) && shown(a).toLowerCase() === shown(b).toLowerCase();
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const UI = () => (S.tsm = S.tsm || { filter: "all", q: "", open: false, again: 0, check: 0 });
+// a Check again's words, on the top line too: for 3 minutes, and only while the connection is as they saw it
+const keepSaid = (w) => { UI().said = { w, at: Date.now(), sig: connSig() }; };
+const saidNow = () => { const x = UI().said; return x && x.w && Date.now() - x.at < 180000 && x.sig === connSig() ? x.w : ""; };
 const set = (p) => { Object.assign(UI(), p); render(); };
 const GUIDE_MS = 15 * 60000;
 
@@ -90,13 +93,14 @@ function ConnectBtn({ r, co, label, hook, primary = true }) {
 }
 const STATE_WORD = { done: "Done", now: "Do this now", later: "Later" };
 function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgain, here = null }) {
-  const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false);
-  const again = () => { setCk(true); checkAll(checkAgain).finally(() => { setCk(false); render(); }); };
+  const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false), [said, setSaid] = useState("");
+  // (the words also on the top line: connected, the steps fold away)
+  const again = () => { setCk(true); setSaid(""); checkAll(checkAgain).then((w) => { setSaid(w); keepSaid(w); }).finally(() => { setCk(false); render(); }); };
   // the card's own look (TallyOneClick useHereProbe, every 2 minutes) found this login's bridge: the page's look follows
   // (once for each bridge it finds, and only a 2.5.3 one saying it is this session's: never a look that starts another look)
   useEffect(() => { const A = HERE.lastAny, m = A && A.h && A.h.mine, k = m ? String(m.bridgeId || m.port || "") : "";
     if (cs.now && cs.now.n === 1 && m && m.sameSession === true && k && k !== Guide.seen && !(localBridges() || []).some((x) => x && x.sameSession === true)) { Guide.seen = k; rescanLocal(); } });
-  const recheck = <button type="button" className="linkbtn" data-tsm-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>;
+  const recheck = <><button type="button" className="linkbtn" data-tsm-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{said && !ck && <span className="tsm-note" data-checked="" role="status">{said}</span>}</>;
   const another = <div className="tsm-now" data-tsm-another=""><div className="tsm-now-text">On another computer or Windows login: download FinCom Bridge there and run it in the login that runs TallyPrime. Its own six steps show there.</div>
     <span className="tsm-now-act">{download}</span></div>;
   if (cs.mode === "laptop") return <section className="tsm-card tsm-guide tsm-guide-small" aria-label="Connect Tally" data-tsm-guide="laptop" data-tsm-forced={forced ? "" : undefined}>
@@ -373,12 +377,12 @@ function Dot({ k }) { return <span aria-hidden="true" className={"tpt-dot " + k}
 // Connect again (the "Open in your Tally now" panel's, moved here): the shared look and Check again, a new read where the
 // company is open; then what is missing in plain words and the step that is stuck; the company open under a close name
 function Again({ row, x, cs, checkAgain, primary = true }) {
-  const [st, setSt] = useState(0);
-  const go = async () => { setSt(1);
-    try { await checkAll(checkAgain); } catch (e) { /* the words say why */ }
+  const [st, setSt] = useState(0), [said, setSaid] = useState("");
+  const go = async () => { setSt(1); setSaid("");
+    const w = await checkAll(checkAgain); setSaid(w); keepSaid(w);
     if (openAnywhere().has(coKey(row.company)) && !runBusy(row.cid)) runPress(row.cid, row.company, { entries: true });
     setSt(2); render(); };
-  return <button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="again" data-tsm-away-again={row.cid} disabled={st === 1} onClick={go}>{st === 1 ? "Checking…" : "Connect again"}</button>;
+  return <><button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="again" data-tsm-away-again={row.cid} disabled={st === 1} onClick={go}>{st === 1 ? "Checking…" : "Connect again"}</button>{said && st !== 1 && <div className="tsm-note" data-checked="" role="status">{said}</div>}</>;
 }
 Again.why = (row, cs) => {
   const step = cs && cs.now && cs.now.n <= 4 ? cs.now : null;
@@ -501,20 +505,24 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
 }
 // ---------- the top: this login's Tally in one line, with Check again (and See the 6 steps while a step is not done)
 function Top({ cs, own, rows, checkAgain, ready }) {
-  const [ck, setCk] = useState(false), [said, setSaid] = useState("");
-  // Check again does what a refresh does for the connection (checkAll), then says what it found
-  const again = () => { setCk(true); setSaid(""); checkAll(checkAgain).finally(() => { setCk(false); setSaid("checked"); render(); }); };
+  const [ck, setCk] = useState(false), said = saidNow();
+  // Check again does what a refresh does for the connection (checkAll), then says what it found (the steps' too: UI().said)
+  const again = () => { setCk(true); checkAll(checkAgain).then(keepSaid).finally(() => { setCk(false); render(); }); };
   const T = ownTallys(own), ok = T.tallys.filter((t) => t.ok), off = T.tallys.filter((t) => !t.ok), names = (own && own.names) || new Map();
   const login = cs.mode === "login", down = login && !!cs.now && cs.now.n <= 4;
   const last = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const office = cs.mode === "laptop" ? bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000) : [];
+  const officeK = office.filter(tallyOpenOn).length;
   const officeOpen = new Set([].concat(...office.map((b) => b.open)).map(coKey)).size;
   const lastAny = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const o = own || {}, far = o.state === "ok" && o.far, kw = login ? keepWaitWords((((o.own || {}).beat) || {}).keepWait) : "";
   let dot, title, sub;
   if (!ready) { dot = "idle"; title = "Looking for your Tally…"; sub = ""; }
   // a computer with no bridge of its own (a laptop, a Mac): the office's Tally through the firm's bridges heard now
-  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (" + nOfW(office.length, "bridge", "bridges") + " online)";
+  // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
+  else if (cs.mode === "laptop" && office.length && !officeK) { dot = "warn"; title = "Office bridges online, but Tally is not open";
+    sub = "Open TallyPrime and the company on the computer or server where FinCom Bridge runs."; }
+  else if (cs.mode === "laptop" && office.length) { dot = "ok"; title = "Connected through the office Tally (Tally open in " + officeK + " of " + nOfW(office.length, "bridge", "bridges") + ")";
     sub = [nOfW(rows.filter((r) => r.kind === "client" && r.c.w === YES).length, "client linked", "clients linked"), nOfW(officeOpen, "company open", "companies open"), lastAny ? "last entry " + lastWords(lastAny) : ""].filter(Boolean).join(" · "); }
   else if (cs.mode === "laptop") { dot = "warn"; title = "No FinCom Bridge is connected"; sub = "Open FinCom on the computer or server where TallyPrime runs, and install FinCom Bridge there."; }
   else if (cs.mode === "error" || !login) { dot = "idle"; title = "Tally"; sub = "The state could not be worked out just now."; }
@@ -532,7 +540,7 @@ function Top({ cs, own, rows, checkAgain, ready }) {
       {ready && o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
       {/* FinCom Bridge 2.5.5: why this login's bridge waits to read (its own words); an older bridge sends none */}
       {kw && <div className="tsm-note tpt-wait" data-tsm-top-wait="" role="status">{kw}</div>}
-      {said && !ck && <div className="tsm-note" data-tsm-top-checked="" role="status">{"Checked at " + lastWords(new Date().toISOString()).replace(/ IST$/, "") + ": " + (down ? "not connected yet (step " + cs.now.n + " of 6)" : login ? "connected" : title.toLowerCase())}</div>}</div></div>
+      {said && !ck && <div className="tsm-note" data-tsm-top-checked="" data-checked="" role="status">{said + (down ? " Not connected yet: step " + cs.now.n + " of 6." : "")}</div>}</div></div>
     <span className="tpt-top-acts">
       {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide: Connect Tally on this computer" : "Connect Tally on this computer"}</button>}
       {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide the 6 steps" : "See the 6 steps"}</button>}
