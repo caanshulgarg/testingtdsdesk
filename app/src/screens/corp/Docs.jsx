@@ -7,7 +7,8 @@ import { useEffect, useState } from "react";
 import Button from "../../parts/Button.jsx";
 import { Card, Pick, Text } from "./parts.jsx";
 import { canEdit, corpOf, dropDoc, saveDoc, saveProfile } from "./store.js";
-import { GALLERY, MINUTES, TEMPLATES, VENUES, build, byKey, directorsOf, fieldsOf, quorum, startValues, titleOf } from "./docModel.js";
+import { GALLERY, MINUTES, TEMPLATES, VENUES, build, byKey, cond, logoOk, pictureKind, directorsOf, dirOf, fieldsOf, idOf, profileFor, quorum, realDirectors, snapshotOf, startValues, titleOf } from "./docModel.js";
+import { withIds } from "./Profile.jsx";
 import { GROUPS } from "./templates/index.js";
 import Paper from "./Paper.jsx";
 import { printPdf } from "./docPrint.js";
@@ -19,10 +20,9 @@ import { dmy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
 
 const CLASS = { private: "Private, limited by shares", public: "Public company", opc: "One Person Company", section8: "Section 8 company", unlimited: "Unlimited company", govt: "Government company" };
-const idOf = (d, i) => d.din || "n" + i;
 export function letterOf(P, on) {
   const l = P.letterhead || {};
-  return { on: !!on, name: P.name, cin: P.cin, address: P.office, phone: P.phone || "", email: l.email || P.email || "", website: P.website || "", logo: l.logo || "" };
+  return { on: !!on, name: P.name, cin: P.cin, address: P.office, phone: P.phone || "", email: l.email || P.email || "", website: P.website || "", logo: logoOk(l.logo) ? l.logo : "" };
 }
 
 function newDoc(co, P, tpl, extra) {
@@ -32,45 +32,48 @@ function newDoc(co, P, tpl, extra) {
 }
 
 // one field of a template
+// directors to pick: the real directors (not a KMP who is not one); one picked before who has ceased since stays listed
 function Field({ f, v, set, P, disabled }) {
-  const ds = directorsOf(P), opts = ds.map((d, i) => [idOf(d, i), d.name + (d.din ? " · DIN " + d.din : "") + " · " + (d.desig || "Director")]);
+  const ds = realDirectors(P), was = f.type === "director" && dirOf(P, v), list = was && !ds.includes(was) ? ds.concat([was]) : ds;
+  const opts = list.map((d) => [idOf(d), d.name + (d.din ? " · DIN " + d.din : "") + " · " + (d.desig || "Director") + (d.ceased ? " · ceased" : "")]);
   const attr = ["data-field", f.k];
   if (f.type === "date") return <label className="corp-f"><span>{f.label}</span><input type="date" disabled={disabled} data-field={f.k} value={v || ""} onChange={(e) => set(e.target.value)} /></label>;
-  if (f.type === "choice") return <Pick label={f.label} value={v} options={f.options} onSave={set} attr={attr} />;
-  if (f.type === "venue") return <Pick label={f.label} value={v || "office"} options={VENUES.map(([k, l]) => [k, l[0].toUpperCase() + l.slice(1)])} onSave={set} attr={attr} />;
-  if (f.type === "director") return <Pick label={f.label} value={v} options={[["", "Choose"]].concat(opts)} onSave={set} attr={attr} />;
+  if (f.type === "choice") return <Pick label={f.label} value={v} options={f.options} onSave={set} attr={attr} disabled={disabled} />;
+  if (f.type === "venue") return <Pick label={f.label} value={v || "office"} options={VENUES.map(([k, l]) => [k, l[0].toUpperCase() + l.slice(1)])} onSave={set} attr={attr} disabled={disabled} />;
+  if (f.type === "director") return <Pick label={f.label} value={v} options={[["", "Choose"]].concat(opts)} onSave={set} attr={attr} disabled={disabled} />;
   if (f.type === "directors") return <fieldset className="corp-f wide" style={{ border: 0, padding: 0, margin: 0 }} data-field={f.k}><legend style={{ fontWeight: 500, marginBottom: 4 }}>{f.label}</legend>
-    {ds.length ? ds.map((d, i) => { const id = idOf(d, i), on = (v || []).includes(id);
+    {ds.length ? ds.map((d) => { const id = idOf(d), on = (v || []).includes(id) || (!!d.din && (v || []).includes(d.din));
       return <label key={id} className="chk" style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--corp-ink)" }}><input type="checkbox" disabled={disabled} checked={on}
-        onChange={(e) => set(e.target.checked ? (v || []).concat([id]) : (v || []).filter((x) => x !== id))} /> <span>{d.name} <span className="corp-note">{"· " + (d.desig || "Director") + (d.din ? " · DIN " + d.din : "")}</span></span></label>; })
+        onChange={(e) => set(e.target.checked ? (v || []).concat([id]) : (v || []).filter((x) => x !== id && x !== d.din))} /> <span>{d.name} <span className="corp-note">{"· " + (d.desig || "Director") + (d.din ? " · DIN " + d.din : "")}</span></span></label>; })
       : <span className="corp-note">Add the directors in Company profile first.</span>}</fieldset>;
-  if (f.type === "lines") return <Text label={f.label} value={v} onSave={set} area rows={5} wide attr={attr} />;
-  return <Text label={f.label} value={v} placeholder={f.ph} onSave={set} wide={f.k === "toAddr" || f.k === "fromAddr"} attr={attr} inputMode={f.type === "money" ? "decimal" : undefined} />;
+  if (f.type === "lines") return <Text label={f.label} value={v} onSave={set} area rows={5} wide attr={attr} disabled={disabled} />;
+  return <Text label={f.label} value={v} placeholder={f.ph} onSave={set} wide={f.k === "toAddr" || f.k === "fromAddr"} attr={attr} inputMode={f.type === "money" ? "decimal" : undefined} disabled={disabled} />;
 }
 
-function Checks({ tpl, P, model }) {
-  const ds = directorsOf(P).filter(isDirector), q = model.quorum || quorum(P, {});
+function Checks({ tpl, P, model, v }) {
+  const ds = realDirectors(P), q = model.quorum || quorum(P, {}), note = cond(tpl.note || "", P, v || {});
   return <section className="corp-card corp-card-body corp-checks" style={{ paddingTop: 14 }} data-doc-checks="">
     <div className="corp-eyebrow">Compliance check</div>
     {tpl.kind !== "notice" && <div><span data-mark="info">§</span><span>{tpl.kind === "minutes" ? "Minutes within 30 days of the meeting, each page initialled and the last signed by the Chairman (s.118, SS-1 para 7)" : "Power of the Board: " + tpl.law + " of the Companies Act, 2013"}</span></div>}
     <div data-quorum={q.ok ? "ok" : "short"}><span data-mark={q.ok ? "ok" : "warn"}>{q.ok ? "✓" : "!"}</span><span>{ds.length < 2 ? "Fewer than two directors in the profile: a board meeting needs two at least (s.174)" : "Quorum: " + q.present + " of " + q.total + " directors, " + q.need + " needed (section 174)"}</span></div>
     {model.missing.length > 0 && <div data-doc-missing={model.missing.length}><span data-mark="warn">!</span><span>{"Still to fill in: " + model.missing.join(", ")}</span></div>}
-    {tpl.note && <div><span data-mark="info">i</span><span>{tpl.note}</span></div>}
+    {(model.warn || []).map((w, i) => <div key={i} data-doc-warn={i}><span data-mark="warn">!</span><span>{w}</span></div>)}
+    {note && <div><span data-mark="info">i</span><span>{note}</span></div>}
     <div><span data-mark="info">i</span><span>Template wording to be checked by a Company Secretary before use.</span></div>
   </section>;
 }
 
 function MinutesForm({ co, P, doc, set, disabled }) {
-  const v = doc.fields || {}, ds = directorsOf(P).filter(isDirector), att = v.attendance || {}, q = quorum(P, att);
+  const v = doc.fields || {}, ds = realDirectors(P), att = v.attendance || {}, q = quorum(P, att);
   const [adding, setAdding] = useState(false), [openItem, setOpenItem] = useState(-1);
   const items = v.items || [], off = v.off || [];
   const setItems = (x) => set({ items: x });
   return <>
     <Card title="Attendance" aside={<span className="corp-chip" data-tone={q.ok ? "ok" : "warn"} data-quorum-chip="">{q.ok ? "Quorum met · " + q.present + " of " + q.total : "No quorum · " + q.present + " of " + q.need + " needed"}</span>}>
-      {ds.map((d, i) => { const id = idOf(d, i); return <div key={id} className="corp-row" style={{ flexWrap: "nowrap" }} data-attend={id}>
+      {ds.map((d) => { const id = idOf(d); return <div key={id} className="corp-row" style={{ flexWrap: "nowrap" }} data-attend={id}>
         <span style={{ flex: 1, minWidth: 0 }}>{d.name}<br /><span className="corp-note">{(d.desig || "Director") + (v.chairman === id ? " · Chairman" : "")}</span></span>
-        <select aria-label={"Attendance of " + d.name} disabled={disabled} value={att[id] || "In person"} onChange={(e) => set({ attendance: Object.assign({}, att, { [id]: e.target.value }) })}>{MINUTES.attendance.map((x) => <option key={x}>{x}</option>)}</select></div>; })}
-      <Pick label="Chairman of the meeting" value={v.chairman} onSave={(x) => set({ chairman: x })} options={[["", "Choose"]].concat(ds.map((d, i) => [idOf(d, i), d.name]))} attr={["data-field", "chairman"]} />
+        <select aria-label={"Attendance of " + d.name} disabled={disabled} value={att[id] || att[d.din] || "In person"} onChange={(e) => set({ attendance: Object.assign({}, att, { [id]: e.target.value }) })}>{MINUTES.attendance.map((x) => <option key={x}>{x}</option>)}</select></div>; })}
+      <Pick label="Chairman of the meeting" value={v.chairman} onSave={(x) => set({ chairman: x })} options={[["", "Choose"]].concat(ds.map((d) => [idOf(d), d.name]))} attr={["data-field", "chairman"]} disabled={disabled} />
     </Card>
     <Card title="Business transacted">
       {MINUTES.standard.map((s) => <div key={s.k} className="corp-row" style={{ justifyContent: "space-between" }} data-std={s.k}>
@@ -78,7 +81,7 @@ function MinutesForm({ co, P, doc, set, disabled }) {
         {s.fixed ? <span className="corp-chip">STANDARD</span> : <button className="linkbtn" disabled={disabled} onClick={() => set({ off: off.includes(s.k) ? off.filter((x) => x !== s.k) : off.concat([s.k]) })}>{off.includes(s.k) ? "Put back" : "Leave out"}</button>}</div>)}
       {items.map((it, i) => { const t = byKey(it.template); if (!t) return null; return <div key={i} data-item={i} style={{ borderTop: "1px solid var(--corp-soft)", paddingTop: 8 }}>
         <div className="corp-row" style={{ justifyContent: "space-between" }}><span><b>{t.title}</b> <span className="corp-note">{"· " + t.law}</span></span>
-          <span className="corp-row"><button className="linkbtn" onClick={() => setOpenItem(openItem === i ? -1 : i)}>{openItem === i ? "Done" : "Edit"}</button>
+          <span className="corp-row"><button className="linkbtn" onClick={() => setOpenItem(openItem === i ? -1 : i)}>{openItem === i ? "Done" : disabled ? "View" : "Edit"}</button>
             <button className="linkbtn" disabled={disabled} aria-label={"Remove " + t.title} onClick={() => setItems(items.filter((_, j) => j !== i))}>×</button></span></div>
         {openItem === i && <div className="corp-grid" style={{ marginTop: 8 }}>{t.fields.map((f) => <Field key={f.k} f={f} P={P} disabled={disabled} v={(it.fields || {})[f.k]}
           set={(x) => setItems(items.map((z, j) => (j === i ? Object.assign({}, z, { fields: Object.assign({}, z.fields, { [f.k]: x }) }) : z)))} />)}</div>}
@@ -95,8 +98,11 @@ function Editor({ co, P, doc }) {
   const tpl = byKey(doc.template), [pages, setPages] = useState([[]]), [busy, setBusy] = useState("");
   if (!tpl) return <div className="corp-card corp-empty">This document's template is not known here.</div>;
   // a viewer, or a page whose copy is not in, only looks (and downloads)
-  const may = canEdit(co.id), v = doc.fields || {}, final = doc.status === "final", ro = final || !may, letter = letterOf(P, doc.letterhead !== false);
-  const model = build(doc, P, co);
+  // a Final document: drawn from the snapshot kept when it was marked Final, and nothing in it changes
+  const may = canEdit(co.id), v = doc.fields || {}, final = doc.status === "final", ro = final || !may;
+  const P0 = P; P = profileFor(doc, P0);
+  const letter = letterOf(P, doc.letterhead !== false), model = build(doc, P0, co);
+  const owner = String((typeof Cloud === "object" && Cloud.st && Cloud.st.role) || "") === "owner";
   const set = (patch) => saveDoc(co.id, { id: doc.id, fields: Object.assign({}, v, patch), title: tpl.kind === "minutes" ? "Minutes of board meeting" + ((patch.serial || v.serial) ? " " + (patch.serial || v.serial) : "") : doc.title });
   const name = (P.name || co.name) + " - " + model.title + (v.meetingDate ? " " + dmy(v.meetingDate) : "");
   const addToMinutes = () => {
@@ -125,23 +131,26 @@ function Editor({ co, P, doc }) {
       <aside className="corp-doc-form">
         <Card title="Meeting">
           <div className="corp-grid">{meetFields.map((f) => <Field key={f.k} f={f} P={P} v={v[f.k]} set={(x) => set({ [f.k]: x })} disabled={ro} />)}
-            {v.venue === "other" && <Text label="Address of the venue" value={v.venueText} onSave={(x) => set({ venueText: x })} wide attr={["data-field", "venueText"]} />}
+            {v.venue === "other" && <Text label="Address of the venue" value={v.venueText} onSave={(x) => set({ venueText: x })} wide attr={["data-field", "venueText"]} disabled={ro} />}
             {tpl.kind === "minutes" && tpl.fields.map((f) => <Field key={f.k} f={f} P={P} v={v[f.k]} set={(x) => set({ [f.k]: x })} disabled={ro} />)}</div>
         </Card>
         {tpl.kind === "minutes" ? <MinutesForm co={co} P={P} doc={doc} set={set} disabled={ro} />
           : <Card title={tpl.title}><div className="corp-grid">{tpl.fields.map((f) => <Field key={f.k} f={f} P={P} v={v[f.k]} set={(x) => set({ [f.k]: x })} disabled={ro} />)}</div></Card>}
-        <Checks tpl={tpl} P={P} model={model} />
+        <Checks tpl={tpl} P={P} model={model} v={v} />
         {may && <div className="corp-row">
-          {final ? <Button className="btn small" data-doc-draft="" onClick={() => saveDoc(co.id, { id: doc.id, status: "draft" })}>Back to draft</Button>
-            : <Button className="btn small" data-doc-final="" onClick={() => saveDoc(co.id, { id: doc.id, status: "final" })}>Mark as final</Button>}
+          {final ? (owner ? <Button className="btn small" data-doc-draft="" onClick={() => saveDoc(co.id, { id: doc.id, status: "draft" })}>Back to draft</Button>
+              : <span className="corp-note" data-doc-final-note="">Final: only the firm's owner takes it back to draft.</span>)
+            : <Button className="btn small" data-doc-final="" disabled={!!model.finalBlock} title={model.finalBlock || undefined}
+              onClick={() => saveDoc(co.id, { id: doc.id, status: "final", fields: Object.assign({}, v, { snapshot: snapshotOf(P0, co) }) })}>Mark as final</Button>}
+          {!final && model.finalBlock && <span className="corp-note" data-doc-final-block="" style={{ color: "var(--corp-bad)" }}>{model.finalBlock}: it cannot be marked Final.</span>}
           {!final && <button className="linkbtn" data-doc-delete="" onClick={() => { dropDoc(co.id, doc.id); S.corpDoc = ""; render(); }}>Delete this draft</button>}
         </div>}
       </aside>
       <main className="corp-doc-view">
         <div className="corp-paper-bar">
           <div role="radiogroup" aria-label="Paper" className="corp-seg">
-            <button role="radio" aria-checked={letter.on} data-paper="letterhead" disabled={!may} onClick={() => saveDoc(co.id, { id: doc.id, letterhead: true })}>With letterhead</button>
-            <button role="radio" aria-checked={!letter.on} data-paper="plain" disabled={!may} onClick={() => saveDoc(co.id, { id: doc.id, letterhead: false })}>{tpl.kind === "minutes" ? "Minutes book page" : "Plain paper"}</button>
+            <button role="radio" aria-checked={letter.on} data-paper="letterhead" disabled={ro} onClick={() => saveDoc(co.id, { id: doc.id, letterhead: true })}>With letterhead</button>
+            <button role="radio" aria-checked={!letter.on} data-paper="plain" disabled={ro} onClick={() => saveDoc(co.id, { id: doc.id, letterhead: false })}>{tpl.kind === "minutes" ? "Minutes book page" : "Plain paper"}</button>
           </div>
           <span className="corp-note" data-page-count={pages.length}>{"A4 · " + pages.length + (pages.length === 1 ? " page" : " pages")}</span>
         </div>
@@ -159,7 +168,14 @@ function Letterhead({ co, P }) {
     if (!f) return;
     if (!/^image\/(png|jpe?g)$/.test(f.type)) { setMsg("A PNG or JPEG picture, please."); return; }
     if (f.size > 150 * 1024) { setMsg("The logo is " + Math.round(f.size / 1024) + " KB: keep it under 150 KB (a picture about 300 pixels wide is plenty)."); return; }
-    const r = new FileReader(); r.onload = () => { saveProfile(co.id, { letterhead: Object.assign({}, l, { logo: String(r.result) }) }); setMsg("Logo kept."); }; r.readAsDataURL(f);
+    // the file's own first bytes, not only its name or type, say it is a PNG or a JPEG
+    f.slice(0, 8).arrayBuffer().then((buf) => {
+      const kind = pictureKind(Array.from(new Uint8Array(buf)));
+      if (!kind) { setMsg("That file is not a PNG or JPEG picture."); return; }
+      const r = new FileReader();
+      r.onload = () => { const u = String(r.result).replace(/^data:[^;,]*;base64,/, "data:image/" + kind + ";base64,"); if (!logoOk(u)) { setMsg("That picture could not be read."); return; } saveProfile(co.id, { letterhead: Object.assign({}, l, { logo: u }) }); setMsg("Logo kept."); };
+      r.readAsDataURL(f);
+    }, () => setMsg("That picture could not be read."));
   };
   return <section className="corp-card corp-card-body" style={{ paddingTop: 16 }} data-letterhead-card="">
     <h2 style={{ fontSize: 17 }}>Letterhead</h2>
@@ -172,7 +188,7 @@ function Letterhead({ co, P }) {
       <Text label="Email" type="email" value={l.email || P.email} onSave={(v) => saveProfile(co.id, { letterhead: Object.assign({}, l, { email: v }) })} attr={["data-lh", "email"]} />
       <Text label="Website" value={P.website} onSave={(v) => saveProfile(co.id, { website: v })} />
     </div>
-    <div className="corp-row">{l.logo ? <img src={l.logo} alt="The company's logo" style={{ height: 40, maxWidth: 120, objectFit: "contain" }} data-logo-shown="" /> : <span className="corp-note">No logo: the letterhead shows the initials.</span>}
+    <div className="corp-row">{logoOk(l.logo) ? <img src={l.logo} alt="The company's logo" style={{ height: 40, maxWidth: 120, objectFit: "contain" }} data-logo-shown="" /> : <span className="corp-note">No logo: the letterhead shows the initials.</span>}
       <label className="btn small" style={{ cursor: "pointer" }}><input type="file" accept="image/png,image/jpeg" data-logo-input="" onChange={pick} style={{ display: "none" }} />{l.logo ? "Change logo" : "Upload logo"}</label>
       {l.logo && <button className="linkbtn" onClick={() => saveProfile(co.id, { letterhead: Object.assign({}, l, { logo: "" }) })}>Remove</button>}</div>
     {msg && <p className="corp-note" role="status">{msg}</p>}
@@ -229,6 +245,9 @@ function List({ co, P, c }) {
 
 export default function Docs({ co }) {
   const c = corpOf(co.id), P = shown(co);
+  // every director row has a stable id (documents name directors by it): given once, to the rows that have none
+  const noId = (P._own.directors || []).some((d) => d && !d.id);
+  useEffect(() => { if (noId && canEdit(co.id)) saveProfile(co.id, { directors: withIds(P._own.directors) }); }, [noId, c.cloud.state]);
   // a form's "Make the board resolution" (e-Forms) opens a new one from its template
   useEffect(() => { if (S.corpNew) { const t = byKey(S.corpNew); S.corpNew = ""; if (t) newDoc(co, P, t); } }, []);
   const doc = S.corpDoc && c.docs.find((d) => d.id === S.corpDoc);

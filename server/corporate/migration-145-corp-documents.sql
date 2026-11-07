@@ -11,6 +11,8 @@
 --                   final, fields (the values), meeting_on (the meeting's date), letterhead (on letterhead or plain paper)
 -- Row security: a firm's members read their firm's rows; its owner and staff (can_write()) add and change them, and remove
 -- a DRAFT (a final document stays); for their own firm only. The service role keeps all rights.
+-- A FINAL document is locked (the trigger): the only change it takes is its status back to 'draft', every other column as
+-- it was, and only by the firm's owner (members.role = 'owner'); the service role (no auth.uid()) is not held.
 -- Tested by tests/run_migration_corp.py.
 
 begin;
@@ -43,6 +45,17 @@ create or replace function public.corp_documents_touch() returns trigger
 language plpgsql security invoker set search_path = public, pg_temp as $$
 begin
   if tg_op = 'UPDATE' then
+    if old.status = 'final' then
+      if new.status is distinct from 'draft' or new.template is distinct from old.template or new.title is distinct from old.title
+         or new.kind is distinct from old.kind or new.fields is distinct from old.fields or new.meeting_on is distinct from old.meeting_on
+         or new.letterhead is distinct from old.letterhead or new.client_id is distinct from old.client_id or new.firm_id is distinct from old.firm_id then
+        raise exception 'corp_documents: a final document is locked; only its status goes back to draft' using errcode = '42501';
+      end if;
+      if auth.uid() is not null and not exists (select 1 from public.members m where m.user_id = auth.uid() and m.firm_id = old.firm_id
+                                                 and m.role = 'owner' and coalesce(m.active, true)) then
+        raise exception 'corp_documents: only the firm''s owner takes a final document back to draft' using errcode = '42501';
+      end if;
+    end if;
     new.id := old.id; new.firm_id := old.firm_id; new.client_id := old.client_id; new.created_by := old.created_by; new.created_at := old.created_at;
   else
     new.created_at := now(); new.created_by := coalesce(auth.uid(), new.created_by);

@@ -10,9 +10,11 @@ export default {
     { k: "signer", label: "Signed by", type: "director" },
   ],
   subject: "Notice of the meeting {{serial}} of the Board of Directors",
-  text: `NOTICE is hereby given that the meeting {{serial}} of the Board of Directors of {{company}} will be held on {{meetingDay}}, {{meetingDate}} at {{meetingTime}} at {{venue}}, to transact the following business:
+  text: `NOTICE is hereby given that the meeting {{serial}} of the Board of Directors of {{company}} will be held on {{meetingDay}}, {{meetingDate}} at {{meetingTime}} {{atVenue}}, to transact the following business:
 
 {{agenda:lines}}
+
+[[shortNotice=yes:The meeting is called at a notice shorter than seven days to transact urgent business (proviso to section 173(3) of the Companies Act, 2013); at least one independent director, where the Company has one, is to be present at it.]]
 
 The notes on the agenda are enclosed. A Director who wishes to take part through video conferencing or other audio-visual means is requested to say so in advance, so that the arrangements can be made (rule 3 of the Companies (Meetings of Board and its Powers) Rules, 2014).`,
   note: "Seven days' notice at least (s.173(3)); a shorter notice only for urgent business, with an independent director present where the company has one.",

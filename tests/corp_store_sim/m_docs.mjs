@@ -1,0 +1,64 @@
+// the review of acf04975e (stage 4): the document model (docModel.js, templates/) on made-up profiles: directors by stable
+// id (a CFO never a signatory, a director without a DIN still one), a ceased director still named, the titles through
+// video conferencing, the law's words (s.180 for a public company only, s.161(1), s.134), the quorum, the casual vacancy's
+// cause, the date checks, Certified on, a Final document drawn from its snapshot, the logo's checks
+import { ok, done } from "./harness.mjs";
+const M = await import("../../app/src/screens/corp/docModel.js");
+const txt = (m) => m.blocks.map((b) => M.runText(b.runs || []) + (b.rows ? b.rows.map((r) => r.map((x) => (typeof x === "string" ? x : M.runText([x]))).join(" ")).join("\n") : "") + (b.items ? b.items.map((x) => M.runText(x)).join("\n") : "") + (b.lines ? b.lines.map((l) => (Array.isArray(l) ? M.runText(l) : String(l))).join("\n") : "")).join("\n");
+const P = { name: "Kestrel Textiles Private Limited (made-up)", cls: "private", office: "14 Sample Lane, New Delhi", incorporated: "2026-08-01", directors: [
+  { id: "r1", name: "Cfo Kmp (made-up)", desig: "Chief Financial Officer" }, { id: "r2", name: "Dir NoDin (made-up)", desig: "Director" }, { id: "r3", name: "Dir Din (made-up)", din: "00000022", desig: "Director" }] };
+const MEET = { meetingDate: "2026-10-05", meetingTime: "11:00 A.M.", venue: "office", place: "New Delhi", signer: "r3", certifiedOn: "2026-10-06" };
+console.log("4. directors by stable id");
+const v = M.startValues(M.byKey("bank-open"), P);
+ok(JSON.stringify(v.signatories) === JSON.stringify(["r2", "r3"]), "signatories by default: the two directors, by id (" + v.signatories + ")");
+const t1 = txt(M.build({ template: "bank-open", fields: Object.assign({}, v, MEET, { bank: "Made-up Bank", branch: "Main" }) }, P, {}));
+ok(/Dir NoDin/.test(t1) && /Dir Din/.test(t1) && !/Cfo Kmp/.test(t1), "the list: the directors, not the CFO");
+ok(/Dir Din \(made-up\), Director|Dir Din/.test(t1) && /DIN 00000022/.test(t1), "the signer with the DIN");
+const old = txt(M.build({ template: "bank-open", fields: Object.assign({}, MEET, { signatories: ["00000022"], signer: "00000022", bank: "B", branch: "C" }) }, P, {}));
+ok(/Dir Din/.test(old) && !/\[Certified true copy signed by\]/.test(old), "an older document naming by DIN still resolves");
+const P2 = JSON.parse(JSON.stringify(P)), f = Object.assign({}, MEET, { director: "r2", letter: "2026-10-01", from: "2026-10-01" });
+const a = M.build({ template: "director-resignation", fields: f }, P2, {}).missing; P2.directors[1].ceased = true;
+const b = M.build({ template: "director-resignation", fields: f }, P2, {}).missing;
+ok(JSON.stringify(a) === JSON.stringify(b) && !b.includes("Director who resigned"), "a director who has ceased since is still named (" + b + ")");
+console.log("9. through video conferencing, Certified on");
+const vc = M.build({ template: "bank-open", fields: Object.assign({}, MEET, { venue: "vc" }) }, P, {});
+const title = M.runText(vc.blocks[0].runs);
+ok(/AT 11:00 A\.M\. THROUGH VIDEO CONFERENCING$/.test(title) && !/AT THROUGH/.test(title), "the title (" + title.slice(-60) + ")");
+const nt = txt(M.build({ template: "board-notice", fields: Object.assign({}, M.startValues(M.byKey("board-notice"), P), MEET, { venue: "vc", noticeDate: "2026-09-20" }) }, P, {}));
+ok(/11:00 A\.M\. through video conferencing, to transact/.test(nt), "the notice: no 'at through'");
+ok(M.startValues(M.byKey("bank-open"), P).certifiedOn && /Date: 06-Oct-2026/.test(t1), "Certified on: today by default, on the certificate");
+console.log("5-7. the law's words");
+const bor = (cls) => txt(M.build({ template: "borrowing", fields: Object.assign({}, MEET, { lender: "L", amount: "100000", facility: "a term loan", security: "S", signers: ["r3"] }), status: "draft" }, Object.assign({}, P, { cls }), {}));
+const items = (cls) => { const m = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", items: [{ template: "borrowing", fields: { lender: "L", amount: "1", facility: "f", security: "s", signers: ["r3"] } }] }) }, Object.assign({}, P, { cls }), {}); return txt(m); };
+ok(!/180/.test(bor("private")) && !/180/.test(items("private")) && /180\(1\)\(c\)/.test(items("public")), "borrowing: no s.180 words for a private company, its limit for a public one");
+ok(!/180/.test(M.cond(M.byKey("borrowing").note, { cls: "private" }, {})) && /180\(1\)\(c\)/.test(M.cond(M.byKey("borrowing").note, { cls: "public" }, {})), "and its note");
+const ad = txt(M.build({ template: "additional-director", fields: Object.assign({}, MEET, { name: "N (made-up)", din: "00000099", from: "2026-10-05" }) }, P, {}));
+ok(/up to the date of the next annual general meeting or the last date on which the annual general meeting should have been held, whichever is earlier/.test(ad), "additional director: s.161(1) tenure");
+const ac = txt(M.build({ template: "accounts-approval", fields: Object.assign({}, MEET, { fyEnd: "2026-03-31", signers: ["r2", "r3"] }) }, P, {}));
+ok(/Chairperson of the Company where authorised by the Board, or else by the following two Directors, one of whom is the Managing Director where there is one, and by the Chief Executive Officer, the Chief Financial Officer and the Company Secretary/.test(ac) && /Board's report be signed by the Chairperson/.test(ac), "s.134: the financial statements' and the Board's report's signing");
+console.log("8. the quorum");
+const P3 = { name: "Q (made-up)", cls: "private", directors: [{ id: "a", name: "A (made-up)", din: "00000001" }, { id: "b", name: "B (made-up)", din: "00000002" }] };
+const mq = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", attendance: { a: "In person", b: "Leave of absence" } }) }, P3, {});
+ok(/quorum required under section 174 of the Companies Act, 2013 was not present/.test(txt(mq)) && !/requisite quorum being present/.test(txt(mq)) && mq.finalBlock === "Quorum not present", "one of two present: not minuted as present; Final blocked");
+const mok = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", attendance: { a: "In person", b: "In person" } }) }, P3, {});
+ok(/requisite quorum being present/.test(txt(mok)) && !mok.finalBlock, "both: present, Final allowed");
+console.log("9. the casual vacancy's cause; the dates");
+const cv = (cause) => txt(M.build({ template: "casual-vacancy", fields: Object.assign({}, MEET, { cause, old: "Old & Co (made-up)", oldOn: "2026-09-01", firm: "New & Co (made-up)", frn: "000000N", egm: "a general meeting" }) }, P, {}));
+ok(/subject to the approval of the members/.test(cv("resignation")) && !/subject to the approval of the members/.test(cv("death, disqualification or another cause")) && /in the office of Old & Co \(made-up\) that arose on/.test(cv("death, disqualification or another cause")), "resignation: the members approve; another cause: the Board alone");
+const fa = M.build({ template: "first-auditor", fields: Object.assign({}, MEET, { firm: "F", frn: "1" }) }, P, {});
+ok(fa.warn.some((w) => /within 30 days of incorporation/.test(w)), "first auditor 65 days after incorporation: warned (" + fa.warn + ")");
+const sn = M.build({ template: "board-notice", fields: Object.assign({}, M.startValues(M.byKey("board-notice"), P), MEET, { noticeDate: "2026-10-02" }) }, P, {});
+ok(sn.warn.some((w) => /Less than seven days' notice \(3 days\)/.test(w)) && /proviso to section 173\(3\)/.test(txt(sn)), "a notice 3 days before: warned, and the notice says the proviso");
+ok(!M.build({ template: "board-notice", fields: Object.assign({}, M.startValues(M.byKey("board-notice"), P), MEET, { noticeDate: "2026-09-20" }) }, P, {}).warn.length && !/proviso/.test(nt), "15 days before: no warning, no proviso");
+const ms = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", signedOn: "2026-11-20" }) }, P3, {});
+ok(ms.warn.some((w) => /within 30 days of the meeting/.test(w)), "minutes signed 46 days after: warned");
+console.log("3. a Final document from its snapshot");
+const snap = M.snapshotOf(P, {});
+const later = Object.assign({}, P, { name: "Renamed Later (made-up)", directors: [] });
+const fin = txt(M.build({ template: "bank-open", status: "final", fields: Object.assign({}, v, MEET, { bank: "B", branch: "C", snapshot: snap }) }, later, {}));
+ok(/KESTREL TEXTILES/.test(fin) && !/RENAMED LATER/i.test(fin) && /Dir Din/.test(fin), "drawn from the snapshot, not the profile as it is now");
+ok(/RENAMED LATER/.test(txt(M.build({ template: "bank-open", status: "draft", fields: Object.assign({}, v, MEET, { snapshot: snap }) }, later, {}))), "a draft: from the profile");
+console.log("logo");
+ok(M.pictureKind([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) === "png" && M.pictureKind([0xff, 0xd8, 0xff, 0xe0]) === "jpeg" && M.pictureKind([0x3c, 0x73, 0x76, 0x67]) === "", "the first bytes: PNG, JPEG, not an SVG");
+ok(M.logoOk("data:image/png;base64,iVBORw0KGgo=") && !M.logoOk("https://example.com/logo.png") && !M.logoOk("data:image/svg+xml;base64,PHN2Zz4=") && !M.logoOk("javascript:alert(1)"), "only a PNG or JPEG data: URL");
+done();

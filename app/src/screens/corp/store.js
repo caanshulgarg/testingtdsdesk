@@ -381,6 +381,14 @@ export function saveFiling(cid, f) {
 }
 export function saveDoc(cid, d) {
   if (!ready(cid, "docs")) return Object.assign({ id: d.id || "" }, d);
+  // a viewer changes nothing; a Final document changes only back to draft, by the firm's owner (the server's trigger
+  // holds the same rule, migration 145)
+  if (!canEdit(cid)) return Object.assign({ id: d.id || "" }, d);
+  const was = d.id && mem[cid].docs[d.id];
+  if (was && was.cur.status === "final") {
+    const back = Object.keys(d).every((k) => k === "id" || (k === "status" && d.status === "draft")) && d.status === "draft";
+    if (!back || String((Cloud.st && Cloud.st.role) || "") !== "owner") return Object.assign({}, was.cur);
+  }
   const c = mem[cid], id = d.id || uid(), e = c.docs[id] || (c.docs[id] = rec(null, ""));
   if (e.deleting) return Object.assign({}, e.cur);
   if (!e.at && !e.cur.id) e.cur = { id };

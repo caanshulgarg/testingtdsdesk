@@ -17,7 +17,9 @@ export default {
   ],
   // the standard items, in order; each may be taken out except the Chairman and the quorum
   standard: [
-    { k: "chair", title: "Chairman", fixed: true, text: "{{chairman}} took the Chair. The Chairman welcomed the Directors and, the requisite quorum being present throughout the meeting, called the meeting to order." },
+    { k: "chair", title: "Chairman", fixed: true, text: "{{chairman}} took the Chair. The Chairman welcomed the Directors and, the requisite quorum being present throughout the meeting, called the meeting to order.",
+      // the attendance short of the quorum (s.174): said so; such minutes cannot be marked Final
+      noQuorum: "{{chairman}} took the Chair. The quorum required under section 174 of the Companies Act, 2013 was not present." },
     { k: "leave", title: "Leave of absence", text: "{{leaveText}}" },
     { k: "prev", title: "Confirmation of the minutes of the previous meeting", text: "The minutes of the meeting of the Board held on {{prevDate}}, circulated in draft and taken as read, were confirmed and signed by the Chairman." },
     { k: "mbp", title: "Disclosure of interest", text: "The Board noted the disclosures of interest received from the Directors in Form MBP-1 under section 184(1) of the Companies Act, 2013, and the declarations in Form DIR-8 under section 164(2)." },
