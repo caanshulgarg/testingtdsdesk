@@ -222,7 +222,7 @@ def main():
         except Exception: con = False
         ok(con and E("() => window.__navMark") is not None, "8. the bridge reachable now, Check again: Connected, without a reload (%s)" % txt("#app [data-tsm-top]")[:160])
         ok("Checking…" in E("() => window.__seen"), "8. Checking… while it looks")
-        ok(txt("#app [data-tsm-top-checked]").startswith("Checked at ") and "connected" in txt("#app [data-tsm-top-checked]"), "8. and says what it found (%s)" % txt("#app [data-tsm-top-checked]"))
+        ok(re.match(r"Checked \d\d:\d\d: ", txt("#app [data-tsm-top-checked]")) and "This computer's FinCom Bridge is connected" in txt("#app [data-tsm-top-checked]"), "8. and says what it found (%s)" % txt("#app [data-tsm-top-checked]"))
         # the owner's case: this browser paired with its bridge, which did not answer when the page opened (Bridge.st: down)
         # and answers now; its beat in the cloud not new yet. Before: Check again never asked the bridge's status again
         scene([dOff, bdev()], c1, CLx, B_ONLY)
@@ -253,7 +253,7 @@ def main():
               {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
         scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
-        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (2 bridges online)", "9. the top line: through the office Tally, 2 bridges online (%s)" % txt("#app [data-tsm-top]")[:160])
+        ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (Tally open in 2 of 2 bridges)", "9. the top line: through the office Tally, Tally open in 2 of 2 bridges (%s)" % txt("#app [data-tsm-top]")[:160])
         ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "Connect Tally on this computer", "9. the six steps folded: 'Connect Tally on this computer'")
         sts = {nm: attr(R(nm) + " [data-tpt-state]", "data-tpt-state") for nm in (ORBIT, NOVA_C)}
         ok(all(v in ("ok", "reading") for v in sts.values()) and n(R(ORBIT) + ".tpt-need") + n(R(NOVA_C) + ".tpt-need") == 0, "9. both clients open in the office's Tally fine or reading, not 'needs you' (%s)" % sts)

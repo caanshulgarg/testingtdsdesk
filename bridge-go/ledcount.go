@@ -56,7 +56,7 @@ func ledCountFor(company string, port int, ls M, save func(), inBudget func() bo
 		save()
 		return
 	}
-	held := func() bool { return keepHold() != "" || (inBudget != nil && !inBudget()) }
+	held := func() bool { return (inBudget != nil && !inBudget()) || (inBudget == nil && keepHold() != "") } // the caller's hold (the ledger read's: holdNow)
 	tc := recorderTC(nil)
 	if !truthy(ls["countChunked"]) {
 		if held() {

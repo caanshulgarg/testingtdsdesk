@@ -2007,6 +2007,17 @@ function updateOf(b: any) {
   return { update: { checked: s(u.checked, 40), message: s(u.message, 200), offered: v, applying: u.applying === true, checking: u.checking === true,
     noAutoUpdate: u.noAutoUpdate === true, next: s(u.next, 40) } };
 }
+// next-fix-read-any-bridge (07-Nov-2026, staging; bridge 2.5.5): an Update now that waited on a computer (someone working in
+// Tally, a posting, FinCom reading) said nothing for up to 30 minutes. The bridge now says why its run waits: a known reason,
+// its plain words (300 letters at most), since when (an ISO time only), and an update queued behind it; anything else dropped
+const KEEP_WAITS = ["userInTally", "tallyYoung", "fincomReading", "posting", "stopped", "other"];
+function keepWaitOf(b: any) {
+  const w = b?.keepWait;
+  if (!w || typeof w !== "object" || Array.isArray(w) || !KEEP_WAITS.includes(w.reason)) return {};
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const since = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(s(w.since, 40)) ? s(w.since, 40) : "";
+  return { keepWait: { reason: w.reason, words: s(w.words, 300), since, ...(s(w.queued, 300) ? { queued: s(w.queued, 300) } : {}) } };
+}
 // ROUND 103 (1d): the tray's old-days test (read only), its last result as the bridge says it: the company, the line
 // ("0.21 s / 0.34 s / 0.18 s · no freeze", or the reason it stopped), each day's time; nothing else kept
 function oldDaysTestOf(b: any) {
@@ -4005,6 +4016,8 @@ Deno.serve(sentry.wrap(async (req) => {
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
           ...tallyIniOf(b), ...periodPullOf(b), ...oldDaysTestOf(b), ...updateOf(b),
+          // next-fix-read-any-bridge (bridge 2.5.5): why its run waits before reading Tally, and an Update now queued behind it
+          ...keepWaitOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
@@ -4031,7 +4044,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
         const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null, x.recorderStuck ?? null]);
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null, x.recorderStuck ?? null, x.keepWait ?? null]);
         if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
@@ -4039,7 +4052,9 @@ Deno.serve(sentry.wrap(async (req) => {
             bridge: me.id, reqs: beat.reqs, readStopped: beat.readStopped, readStop: (info as any).readStop ?? null, postOnly: (beat as any).postOnly ?? null,
             postBatchBills: (beat as any).postBatchBills ?? null, postBatchBank: (beat as any).postBatchBank ?? null, settingsAt: (beat as any).settingsAt ?? null,
             // bridge 2.3.1: a request not answered in time and when it tries again by itself (null: as normal)
-            tallyRetry: (beat as any).tallyRetry ?? null, recorderStuck: (beat as any).recorderStuck ?? null } });
+            tallyRetry: (beat as any).tallyRetry ?? null, recorderStuck: (beat as any).recorderStuck ?? null,
+            // next-fix-read-any-bridge: why an Update now waits on this computer (null: it does not)
+            keepWait: (beat as any).keepWait ?? null } });
         }
         // 2.1.8 (round 15, migration 43): the owner's per-computer posting settings (tally_device_post_settings), read from the
         // device's row: postOnly (null = no restriction, [] = any company, else the names), the batch sizes, and when they were
@@ -4232,7 +4247,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // all: what is there (an owner's settlement among it) stands
         const seq = body.seq === undefined || body.seq === null || !Number.isFinite(Number(body.seq)) ? null : Math.floor(Number(body.seq));
         if (seq !== null && typeof cur.seq === "number" && seq < cur.seq) return reply(200, { ok: true, stale: true, seq: cur.seq });
-        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status });
+        // next-fix-first-read (07-Nov-2026, staging): ... and cancelled too, so the bridge stops its own copy (bridge 2.5.5
+        // stops a job only on cancelled or gone). A posting failed here ("did not finish after 5 tries") lived on in the
+        // computer, resumed by itself and waiting for Tally, and held that computer's ledger read behind it. Nothing of
+        // the row changes: a done posting stays done, its results as they are (the bridge's cancel leaves a done job done)
+        if (["done", "failed"].includes(cur.status) && !cur.checking) return reply(200, { ok: true, stale: true, settled: true, status: cur.status, cancelled: true });
         // 03-Oct-2026 (round 4): an entry Tally accepted is never stored as failed. An acceptance is ok, accepted (bridge
         // 2.1.6), a voucher id (lastVchId) / voucher number / master id / GUID, or CREATED / ALTERED with a voucher id in
         // Tally's words ("CREATED 0" is not one). The fault of the day: Tally replied CREATED with LASTVCHID 26298, the

@@ -3,3 +3,4 @@ FinCom Bridge 2.0.0 (test build, taken down 02-Oct-2026), 2.1.1 and 2.1.2 (repla
 latest-2.0.0.json, latest-2.1.2.json and latest-2.1.3.json are the update lists those versions were published with.
 2.1.6 (built 03-Oct-2026, installed on NWS144 at 20:18 IST with PostOnly ZZ TEST; replaced by 2.1.7 the same night): FinComBridge-Setup-2.1.6.exe, FinComBridge-2.1.6.exe and latest-2.1.6.json kept here as history.
 2.5.3 (published to staging review 04-Nov-2026 with the signed list; replaced by 2.5.4 on 05-Nov-2026): FinComBridge-2.5.3.exe, FinComBridge-Setup-2.5.3.exe(.sha256), latest-2.5.3.json and its signature latest-2.5.3.json.sig kept here as history.
+2.5.4 (published to staging review 05-Nov-2026 with the signed list; replaced by 2.5.5, built 07-Nov-2026): FinComBridge-2.5.4.exe, FinComBridge-Setup-2.5.4.exe(.sha256), latest-2.5.4.json and its signature latest-2.5.4.json.sig kept here as history.

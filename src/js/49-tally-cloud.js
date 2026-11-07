@@ -28,6 +28,7 @@ const TCloud = {
     let out = [], off = 0;
     for (;;){
       const page = await this.rpc(fn, args, "?limit=1000&offset=" + off) || [];
+      if (!Array.isArray(page)) throw Error("not a list: " + fn);   // (never paged through for ever)
       out = out.concat(page);
       if (page.length < 1000) return out;
       off += 1000;
@@ -59,6 +60,7 @@ const TCloud = {
     let out = [], off = 0;
     for (;;){
       const page = await Cloud.api(path + "&limit=1000&offset=" + off) || [];
+      if (!Array.isArray(page)) throw Error("not a list");
       out = out.concat(page);
       if (page.length < 1000) return out;
       off += 1000;

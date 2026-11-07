@@ -184,7 +184,8 @@ func TestOutboxKillMidSendAndCloud500(t *testing.T) {
 func TestOutboxPairAcrossFilesKept(t *testing.T) {
 	rec, _, c := liveBridge(t, "")
 	o := obModel(c)
-	d1, d2 := liveFilePath(rec, "20261004"), liveFilePath(rec, "20261005")
+	// two consecutive days inside the reader's window (fixed dates fall out of it as the calendar moves on)
+	d1, d2 := liveFilePath(rec, nowFn().AddDate(0, 0, -2).Format("20060102")), liveFilePath(rec, nowFn().AddDate(0, 0, -1).Format("20060102"))
 	// the first file has lines sent before (its offset well past the second file's size)
 	for i := 0; i < 4; i++ {
 		liveAppend(t, d1, obImport(zz, 0x60+i, "fc"+itoa(i))...)
