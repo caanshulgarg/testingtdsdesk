@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -154,8 +155,15 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			}
 			// any other failure never holds the ledger list: it goes on without the natures this round. Tally not
 			// answering twice: not asked again until the bridge is updated
-			if tallyNoAnswer(err) {
-				st["natMiss"] = toInt(st["natMiss"]) + 1
+			stopped := errors.Is(err, errRecorderStop)
+			if tallyNoAnswer(err) || stopped {
+				st["natMiss"] = toInt(st["natMiss"]) + 1 // 2.5.5 (review L3): a 2-second stop counts as not answering
+			}
+			if stopped {
+				// 2.5.5 (review L3): said in the round's end line and in the company's trouble (the beat)
+				ls["natStopped"] = true
+				st["natStops"] = toInt(st["natStops"]) + 1
+				st["trouble"] = M{"at": nowS(), "why": fmt.Sprintf("Tally took longer than 2 s for the natures of payment (%d time(s)); the ledger list went on without them", toInt(st["natStops"]))}
 			}
 			if toInt(st["natMiss"]) >= 2 {
 				st["natOffVer"], st["natMiss"] = BridgeVersion, 0
