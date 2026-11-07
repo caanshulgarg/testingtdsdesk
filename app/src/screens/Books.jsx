@@ -29,6 +29,9 @@ import Loading from "../parts/Loading.jsx";
 import { lazy, Suspense } from "react";
 // My MIS (ROUND 105): the custom MIS builder, a lazy chunk of its own (the engine, the charts, the downloads)
 const MyMis = lazy(() => import("./books/MyMis.jsx"));
+// Corporate (07-Nov-2026): a company's profile, e-Forms, resolutions and minutes, AOC-4; a lazy chunk of its own
+// (screens/corp). Its pages are books tabs (books:corp, corp-forms, corp-docs, corp-aoc4) for their addresses only
+const Corporate = lazy(() => import("./corp/Corporate.jsx"));
 import { AlertLine } from "../parts/Bell.jsx";
 
 // the date of the books' last entry (yyyymmdd), worked out once for each set of entries
@@ -93,6 +96,7 @@ export default function Books() {
   // ledger-confirm (14-Oct-2026): the Tally ledgers tab is gone; its address and every way to it open the TDS page's
   // Ledgers (TaxLed.redirect, src/js/81)
   TaxLed.redirect();
+  if (/^corp/.test(booksTab())) return <Suspense fallback={<Loading what="Corporate" page="books" />}><Corporate /></Suspense>;
   // 2.4.0: on From Tally, the book's alert (lines waiting, the cloud's gap) is not said twice: the page lists those days,
   // each with its Upload (needDays); the bell keeps it
   const days = co && booksTab() === "import" && S.books && S.books.cid === co.id ? needDays(S.books, co.id) : [];

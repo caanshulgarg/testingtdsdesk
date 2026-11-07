@@ -307,6 +307,11 @@ header.top .headrow > .tbar { flex: 1 1 auto; min-width: min(100%, max-content);
    Up to 1440 px wide a compact sidebar of 168 px (13 px words, 30 px rows); wider, 200 px. Folded by the person (the
    button, remembered): a 72 px rail, each item its icon with its words under it (two lines at most), the groups apart
    by a thin line. */
+/* corporate (07-Nov-2026): a company's client menu has one item more (Corporate); on a screen 800 px tall or less the
+   rows are 28 px, so every item still shows at 1366 x 768 without scrolling */
+@media (min-width: 601px) and (max-height: 800px) {
+  #side.side:not(.side-folded) .side-link.side-link { height: 28px; min-height: 28px; }
+}
 @media (min-width: 601px) and (max-width: 1440px) {
   #side.side:not(.side-folded) { width: 168px; padding: 10px 6px; }
   #side.side:not(.side-folded) .side-link { height: 30px; min-height: 30px; font-size: 13px; gap: 7px; padding: 0 6px; }
