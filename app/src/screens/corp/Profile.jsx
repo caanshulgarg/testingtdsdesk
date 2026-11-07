@@ -41,8 +41,8 @@ function Hero({ co, P, filings, onEdit, onPaste }) {
         <div className="corp-sub">{[P.cin ? "CIN " + P.cin : "CIN not entered", P.incorporated ? "Incorporated " + dmy(P.incorporated) : "", P.office].filter(Boolean).join(" · ")}</div>
       </div>
       <div className="corp-row">
-        {canEdit() && <Button className="btn" onClick={onPaste} data-corp-paste="">Paste MCA master data</Button>}
-        {canEdit() && <Button className="btn" onClick={onEdit} data-corp-edit="details">Edit details</Button>}
+        {canEdit(co.id) && <Button className="btn" onClick={onPaste} data-corp-paste="">Paste MCA master data</Button>}
+        {canEdit(co.id) && <Button className="btn" onClick={onEdit} data-corp-edit="details">Edit details</Button>}
         <Button className="btn primary" onClick={() => goClient("books:corp-forms")}>New e-Form</Button>
       </div>
     </div>
@@ -112,6 +112,16 @@ function Details({ co, P, done }) {
 // that has rows without one
 export const withIds = (rows) => (rows || []).map((r) => (r && r.id ? r : Object.assign({ id: uid() }, r)));
 const keyOf = (r, i) => (r && r.id) || "i" + i;
+// rows brought in (from the financial statements, or pasted master data) are matched to the rows there before they are
+// added: a director by DIN (else by name), a shareholder by name (the review of 08b05e4c8: no duplicates)
+const norm = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+export const dirKey = (d) => (d && d.din ? "din:" + String(d.din).trim() : "name:" + norm(d && d.name));
+export const holderKey = (h) => "name:" + norm(h && h.name);
+export function addNew(rows, incoming, keyFn) {
+  const have = new Set((rows || []).map(keyFn)), out = withIds(rows || []);
+  (incoming || []).forEach((r) => { const k = keyFn(r); if (!have.has(k)) { have.add(k); out.push(Object.assign({ id: uid() }, r)); } });
+  return out;
+}
 function useRows(co, P, k) {
   const rows = P[k] || [];
   const put = (i, patch) => saveProfile(co.id, { [k]: withIds(rows).map((r, j) => (j === i ? Object.assign({}, r, patch) : r)) });
@@ -127,8 +137,8 @@ function Directors({ co, P }) {
     const k = kycFor(d, fy); if (k.done) return <span className="corp-chip" data-tone="ok" data-kyc-chip="done">{"Done · next by " + dmy(k.due)}</span>;
     return today() > k.due ? <span className="corp-chip" data-tone="bad" data-kyc-chip="overdue">Overdue</span> : <span className="corp-chip" data-tone="warn" data-kyc-chip="due">{"Due by " + dmy(k.due).slice(0, 6)}</span>; };
   return <Card title="Directors & KMP" pad={false} attr={["data-corp-directors", ""]}
-    aside={canEdit() && <Button className="btn small" data-corp-edit="directors" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Appoint / change" : "Add"}</Button>}>
-    {!rows.length && !edit && <div className="corp-empty">{pre.length ? <>The financial statements name {pre.length === 1 ? "one director" : pre.length + " directors"}. {canEdit() && <button className="linkbtn" data-corp-bring="directors" onClick={() => saveProfile(co.id, { directors: withIds(pre) })}>Bring them in</button>}</> : "No directors entered yet."}</div>}
+    aside={canEdit(co.id) && <Button className="btn small" data-corp-edit="directors" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Appoint / change" : "Add"}</Button>}>
+    {!rows.length && !edit && <div className="corp-empty">{pre.length ? <>The financial statements name {pre.length === 1 ? "one director" : pre.length + " directors"}. {canEdit(co.id) && <button className="linkbtn" data-corp-bring="directors" onClick={() => saveProfile(co.id, { directors: addNew(P.directors, pre, dirKey) })}>Bring them in</button>}</> : "No directors entered yet."}</div>}
     {(rows.length > 0 || edit) && <div className="corp-scroll"><table className="corp-table" style={{ minWidth: 640 }}>
       <thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th>Appointed</th><th>DIR-3 KYC</th>{edit && <th aria-label="Remove" />}</tr></thead>
       <tbody>{rows.map((d, i) => edit ? <tr key={keyOf(d, i)} data-director-row={i} data-row-id={d.id || ""}>
@@ -143,7 +153,7 @@ function Directors({ co, P }) {
       </tbody></table></div>}
     {edit && <div className="corp-card-body" style={{ paddingTop: 12 }}><div className="corp-row">
       <Button className="btn small" data-corp-add="director" onClick={() => add({ name: "", din: "", desig: "Director", appointed: "" })}>Add a director or KMP</Button>
-      {pre.length > 0 && !rows.length && <Button className="btn small" onClick={() => saveProfile(co.id, { directors: withIds(pre) })}>Bring in from the financial statements</Button>}</div></div>}
+      {pre.length > 0 && !rows.length && <Button className="btn small" onClick={() => saveProfile(co.id, { directors: addNew(P.directors, pre, dirKey) })}>Bring in from the financial statements</Button>}</div></div>}
   </Card>;
 }
 
@@ -153,10 +163,10 @@ function Shareholding({ co, P }) {
   const pct = (n) => (tot ? Math.round((+n || 0) / tot * 10000) / 100 : 0);
   return <Card title="Shareholding" attr={["data-corp-shares", ""]}
     aside={<span className="corp-row"><span className="corp-note">{tot ? count(tot) + " equity shares" + (P.face ? " of ₹" + P.face + " each" : "") : ""}</span>
-      {canEdit() && <Button className="btn small" data-corp-edit="shares" onClick={() => setEdit(!edit)}>{edit ? "Done" : "Edit"}</Button>}</span>}>
+      {canEdit(co.id) && <Button className="btn small" data-corp-edit="shares" onClick={() => setEdit(!edit)}>{edit ? "Done" : "Edit"}</Button>}</span>}>
     {tot > 0 && <div className="corp-bar" aria-hidden="true">{rows.map((h, i) => <span key={keyOf(h, i)} style={{ flex: +h.shares || 0 }} />)}</div>}
     {!edit && <div className="corp-row" style={{ gap: 24, fontSize: 13 }}>{rows.length ? rows.map((h, i) => <span key={keyOf(h, i)} data-holder={i}>{h.name + " · " + count(h.shares) + " shares · " + pct(h.shares) + "%"}</span>)
-      : pre.length ? <span>The financial statements list {pre.length} shareholder{pre.length > 1 ? "s" : ""}. {canEdit() && <button className="linkbtn" onClick={() => saveProfile(co.id, { shareholders: withIds(pre) })}>Bring them in</button>}</span> : <span className="corp-note">No shareholders entered yet.</span>}</div>}
+      : pre.length ? <span>The financial statements list {pre.length} shareholder{pre.length > 1 ? "s" : ""}. {canEdit(co.id) && <button className="linkbtn" onClick={() => saveProfile(co.id, { shareholders: addNew(P.shareholders, pre, holderKey) })}>Bring them in</button>}</span> : <span className="corp-note">No shareholders entered yet.</span>}</div>}
     {edit && <div className="corp-scroll"><table className="corp-table"><thead><tr><th>Shareholder</th><th className="n">Shares</th><th className="n">%</th><th aria-label="Remove" /></tr></thead>
       <tbody>{rows.map((h, i) => <tr key={keyOf(h, i)}><td><input aria-label="Shareholder's name" defaultValue={h.name} onBlur={(e) => put(i, { name: e.target.value.trim() })} /></td>
         <td className="n"><input aria-label="Shares" inputMode="numeric" defaultValue={h.shares} onBlur={(e) => put(i, { shares: +e.target.value.replace(/,/g, "") || 0 })} /></td>
@@ -169,7 +179,7 @@ function Shareholding({ co, P }) {
 function Charges({ co, P }) {
   const [edit, setEdit] = useState(false);
   const { rows, put, add, del } = useRows(co, P, "charges");
-  return <Card title="Charges" pad={false} attr={["data-corp-charges", ""]} aside={canEdit() && <Button className="btn small" data-corp-edit="charges" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Edit" : "Add"}</Button>}>
+  return <Card title="Charges" pad={false} attr={["data-corp-charges", ""]} aside={canEdit(co.id) && <Button className="btn small" data-corp-edit="charges" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Edit" : "Add"}</Button>}>
     {!rows.length && !edit ? <div className="corp-empty">No charges entered.</div> : <div className="corp-scroll"><table className="corp-table" style={{ minWidth: 560 }}>
       <thead><tr><th>Charge holder</th><th className="n">Amount</th><th>Created</th><th>Satisfied</th>{edit && <th aria-label="Remove" />}</tr></thead>
       <tbody>{rows.map((c, i) => edit ? <tr key={keyOf(c, i)}>
@@ -253,8 +263,7 @@ function Paste({ co, P, close }) {
       const had = P.directors || [], by = Object.fromEntries(had.filter((d) => d.din).map((d) => [d.din, d]));
       // a director already here (the same DIN): the master data's appointment date is taken; a new one is added
       const got = Object.fromEntries(r.directors.map((d) => [d.din, d]));
-      patch.directors = withIds(had.map((d) => (d.din && got[d.din] ? Object.assign({}, d, got[d.din].appointed ? { appointed: got[d.din].appointed } : {}, { name: d.name || got[d.din].name }) : d))
-        .concat(r.directors.filter((d) => !by[d.din])));
+      patch.directors = addNew(had.map((d) => (d.din && got[d.din] ? Object.assign({}, d, got[d.din].appointed ? { appointed: got[d.din].appointed } : {}, { name: d.name || got[d.din].name }) : d)), r.directors, dirKey);
     }
     saveProfile(co.id, patch); close();
   };
@@ -271,7 +280,7 @@ function Paste({ co, P, close }) {
 
 // (drawn with key={co.id} by Corporate.jsx: another client starts with Edit and Paste closed)
 export default function Profile({ co, formsDue }) {
-  const c = corpOf(co.id), P = shown(co), may = canEdit();
+  const c = corpOf(co.id), P = shown(co), may = canEdit(co.id);
   const [edit, setEdit] = useState(false), [paste, setPaste] = useState(false);
   return <div data-corp-page="profile" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
     <Hero co={co} P={P} filings={c.filings || []} onEdit={() => setEdit(!edit)} onPaste={() => setPaste(!paste)} />

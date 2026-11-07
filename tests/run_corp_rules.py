@@ -19,7 +19,8 @@ Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_corp_rules.py"
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+from corp_fake_cloud import INSTALL
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("CORP_PORT") or 8727)
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE)
@@ -72,6 +73,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
     E, W = pg.evaluate, pg.wait_for_timeout
     pg.goto("http://localhost:%d/" % PORT); W(2500); E(OPEN); W(800)
+    E("() => localStorage.removeItem('__corp_fake_rows')"); E(INSTALL)
     co = E(SETUP); W(800)
     E("(id) => openCompany(id).then(() => goClient('books:corp'))", co); W(1800)
     ok(E("typeof FCCorpRules === 'object'"), "the rules are loaded with the page")
@@ -80,7 +82,7 @@ with sync_playwright() as p:
         ok(got == want, "%s: %s" % (name, json.dumps(got)))
     print("M2 on the page: Overdue after the date")
     fy = E("(() => { const d = istToday(), y = +d.slice(0,4), m = +d.slice(4,6), a = (m < 4 ? y - 1 : y) - 1; return a + '-' + String(a + 1).slice(2); })()")
-    E("(cid) => { FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Ravi Menon (made-up)', din: '00000022', desig: 'Director'}]}); render(); }", co); W(600)
+    E("(cid) => { FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Ravi Menon (made-up)', din: '00000022', desig: 'Director'}]}); render(); }", co); W(1500)
     chip = E("(document.querySelector('#app [data-kyc-chip]') || {}).dataset")
     due = str(int(fy[:4]) + 1) + "-06-30"
     today = E("(() => { const d = istToday(); return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6); })()")

@@ -9,12 +9,11 @@ Corporate: know the company"). Offline, made-up companies only (no real client):
      shares do not make the paid-up capital; a charge: the header's Open charges;
   4. Compliance health is worked out from the profile: the KYC not done is listed (late after 30 September), the next board
      meeting from the last one (s.173), the AGM held; ticking the KYC makes it Done and the count goes down;
-  5. kept: a reload brings every value back;
+  5. kept: a reload brings every value back (from the firm's copy);
   6. Paste MCA master data: the pasted page's CIN, name, class, capital, dates, email and a director are found, shown and
      kept (FinCom does not connect to MCA);
-  7. the firm's copy: signed in (Cloud.api watched), the profile is read from corp_profiles for this client and a change is
-     sent as an upsert on (firm_id, client_id) with the lists; a server without the table (migration 143 not run): the work
-     stays on this computer and the page says sharing starts once the server is updated;
+  7. the firm's copy (a stand-in of it, tests/corp_fake_cloud.py; Corporate needs the firm account): the three tables
+     read for this client, what was kept is there (run_corp_sync.py and run_corp_store.mjs test the saving itself);
   8. a phone (390 wide): the page is no wider than the screen.
 RED before stage 2: no profile page. Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_corp_profile.py"""
 import os, sys, json, threading, functools, http.server
@@ -51,6 +50,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
     E, W = pg.evaluate, pg.wait_for_timeout
     pg.goto("http://localhost:%d/" % PORT); W(2500); E(OPEN); W(800)
+    E("() => localStorage.removeItem('__corp_fake_rows')"); E(INSTALL)   # Corporate needs the firm account (a stand-in)
     co, co2 = E(SETUP); W(800)
     go_profile(pg, co)
 
@@ -135,7 +135,7 @@ with sync_playwright() as p:
     pg.screenshot(path=os.path.join(SHOTS, "profile-1440.png"), full_page=True)
 
     print("5. kept")
-    pg.reload(); W(3500); E(OPEN); W(1500)
+    pg.reload(); W(3500); E(OPEN); W(800); E(INSTALL); W(1500)
     ok(E("!!document.querySelector('#app [data-corp-page=profile]')") and txt(pg, "#app [data-kpi=paidup]") == "₹1,00,000" and len(E("[...document.querySelectorAll('#app [data-corp-directors] tbody tr')]")) == 3
        and txt(pg, "#app [data-kpi=charges]") == "1 · ₹5,00,000", "after a reload: capital, directors, charges")
 
@@ -155,25 +155,10 @@ with sync_playwright() as p:
     ok("Kiran Rao (made-up)" in (txt(pg, "#app [data-corp-directors]") or ""), "the director from the master data")
 
     print("7. the firm's copy")
-    E(INSTALL)
-    E("(cid) => { __fake.rows.corp_profiles.push({client_id: cid, profile: {cin: 'U17299DL2019PTC000000', nic: '13990 · weaving (from the firm)'}, directors: [{id: 'f1', name: 'Firm Director (made-up)', din: '00000099', desig: 'Director'}], shareholders: [], charges: [], letterhead: {}, updated_at: __fake.stamp()}); }", co)
-    # this computer's edits already sent (nothing waiting): the firm's copy is the one shown
-    E("(cid) => { const k = FCCorp.key() + cid, o = JSON.parse(localStorage.getItem(k)); o.profile.dirty = {}; localStorage.setItem(k, JSON.stringify(o)); FCCorp.forget(cid); FCCorp.corpOf(cid); }", co); W(1200)
     reads = [c["path"] for c in E("() => __fake.log") if c["method"] == "GET"]
     ok(any(r.startswith("corp_profiles?select=*&client_id=eq.") for r in reads) and any(r.startswith("corp_filings?") for r in reads) and any(r.startswith("corp_documents?") for r in reads),
-       "signed in: the three tables are read for this client (%s)" % reads)
-    got = E("(cid) => { const p = FCCorp.corpOf(cid).profile; return p.nic + ' / ' + (p.directors[0] || {}).name; }", co)
-    ok(got == "13990 · weaving (from the firm) / Firm Director (made-up)", "the firm's copy is taken, its lists too (%s)" % got)
-    E("(cid) => { __fake.log = []; FCCorp.saveProfile(cid, {phone: '+91 11 0000 0002'}); }", co); W(1200)
-    pt = [c for c in E("() => __fake.log") if c["method"] == "PATCH"]
-    ok(pt and pt[0]["path"].startswith("corp_profiles?client_id=eq.") and "updated_at=eq." in pt[0]["path"] and [d["din"] for d in pt[0]["body"]["directors"]] == ["00000099"]
-       and "directors" not in pt[0]["body"]["profile"] and pt[0]["body"]["profile"].get("phone") == "+91 11 0000 0002", "a change: a conditional update of the row, the lists beside the profile (%s)" % json.dumps(pt[:1])[:300])
-    E("(cid) => { __fake.missing.corp_profiles = true; FCCorp.forget(cid); FCCorp.corpOf(cid); }", co2); W(800)
-    E("(cid) => { FCCorp.saveProfile(cid, {phone: '+91 80 0000 0003'}); render(); }", co2); W(1200)
-    note = E("() => (document.querySelector('#app [data-corp-cloud]') || {}).innerText || ''")
-    ok("Sharing with the firm starts once" in note and "profile" in E("(cid) => Object.keys(FCCorp.corpOf(cid).pending)", co2), "no table on the server: kept here, waiting, and said (%s)" % note)
-    E("() => __fake.restore()"); E("() => { FCCorp.forget(); render(); }"); W(500)
-    ok("Kiran Rao (made-up)" in (txt(pg, "#app [data-corp-directors]") or ""), "this computer's copy is still there afterwards")
+       "the three tables are read for this client (%s)" % reads[:3])
+    ok(E("(cid) => !!__fake.rows.corp_profiles.find(r => r.client_id === cid && (r.directors || []).some(d => d.name === 'Kiran Rao (made-up)'))", co2), "what was kept is in the firm's copy")
 
     print("M4, M5, L3: row ids, another client, a viewer")
     pg.click("#app [data-corp-edit=directors]"); W(300)
@@ -189,7 +174,7 @@ with sync_playwright() as p:
     ok(E("!!document.querySelector('#app [data-corp-paste-box]')"), "Paste open on this client")
     go_profile(pg, co); W(400)
     ok(not E("!!document.querySelector('#app [data-corp-paste-box]')") and not E("!!document.querySelector('#app [data-corp-details]')"), "another client: Paste and Edit closed")
-    E("() => { window.__realOn = Cloud.on; window.__realRole = Cloud.st.role; Cloud.on = () => true; Cloud.st.role = 'viewer'; Cloud.api = async () => []; render(); }"); W(600)
+    E("() => { window.__realRole = Cloud.st.role; Cloud.st.role = 'viewer'; render(); }"); W(600)
     ok(E("!!document.querySelector('#app [data-corp-readonly]')") and not E("!!document.querySelector('#app [data-corp-edit]')") and not E("!!document.querySelector('#app [data-corp-paste]')"), "a viewer: the profile read-only, no Edit, no Paste")
     pg.reload(); W(3500); E(OPEN); W(1200)
     ctx.close()
@@ -199,7 +184,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
     E, W = pg.evaluate, pg.wait_for_timeout
     pg.goto("http://localhost:%d/" % PORT); W(2500); E(OPEN); W(800)
-    co, co2 = E(SETUP); W(800); go_profile(pg, co)
+    E(INSTALL); co, co2 = E(SETUP); W(800); go_profile(pg, co)
     wide = E("document.documentElement.scrollWidth")
     ok(E("!!document.querySelector('#app [data-corp-page=profile]')") and wide <= 392, "the profile on a phone, no wider than the screen (%s)" % wide)
     pg.screenshot(path=os.path.join(SHOTS, "profile-390.png"), full_page=True)

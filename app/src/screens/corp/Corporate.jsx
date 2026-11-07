@@ -20,7 +20,7 @@ import "./corp.css";
 import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
 import Profile from "./Profile.jsx";
-import { cloudNote } from "./store.js";
+import { cloudNote, retryNow } from "./store.js";
 
 // the serif of the documents and headings, from Google Fonts, once, when the page first opens (Georgia meanwhile)
 function useSerif() {
@@ -53,11 +53,16 @@ export default function Corporate() {
   if (!isCompany(co)) return <div className="corp"><NotCompany co={co} /></div>;
   const page = pageOf(booksTab()), tab = page === "aoc4" ? "forms" : page;
   const note = cloudNote(co.id);
+  // Corporate is kept in the firm account only: signed out, nothing to show or change
+  if (note.signin) return <div className="corp" data-corp=""><div className="corp-card corp-empty" data-corp-signin="">
+    <p style={{ margin: "0 0 10px" }}>Sign in to use Corporate. The company's profile, e-Forms and documents are kept in the firm account, so everyone in the firm sees the same.</p>
+    <Button className="btn small primary" onClick={() => goSettings("account")}>Sign in</Button></div></div>;
   return <div className="corp" data-corp="">
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
       <PageTabs label="Corporate" attr="data-corp-tab" value={tab} onPick={(k) => goCorp(k)}
         tabs={[["profile", "Company profile"], ["forms", "e-Forms"], ["docs", "Resolutions & minutes"]]} />
-      <span className="corp-note" data-corp-cloud={note.tone} role="status" style={{ fontSize: 12, color: note.tone === "warn" || note.tone === "bad" ? "var(--corp-warn)" : undefined }}>{note.text}</span>
+      <span className="corp-note" data-corp-cloud={note.tone} role="status" style={{ fontSize: 12, color: note.tone === "bad" ? "var(--corp-bad)" : note.tone === "warn" ? "var(--corp-warn)" : undefined }}>{note.text}
+        {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}</span>
     </div>
     {page === "forms" ? <div className="corp-card corp-empty" data-corp-page="forms">e-Forms come with the next part of this release.</div>
       : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>

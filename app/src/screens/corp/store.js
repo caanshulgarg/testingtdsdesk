@@ -1,357 +1,339 @@
-// Corporate's records per client, and where they are kept (phase 1, 07-Nov-2026):
+// Corporate's records per client (phase 1, 07-Nov-2026; simplified after the reviews of 30f70eea6, 74eccc47b, 08b05e4c8):
 //   profile    one record a client: the company's details, directors and KMP, shareholders, charges, letterhead
 //              -> corp_profiles (migration 143)
 //   filings    the e-Forms tracked: one record a form and period (annual) or a form started for an event
 //              -> corp_filings (migration 144)
 //   docs       resolutions, notices and minutes made for the client (draft / final) -> corp_documents (migration 145)
-// Signed in to a firm account: FinCom's cloud is the record (row security by firm: a firm's members read, its owner and
-// staff write). Always also on this computer (localStorage, under the copy of the person signed in: LocalOwner.P, so it is
-// put aside with that person's copy when someone else signs in), so the page opens at once, works without an account,
-// and keeps an edit made while the line is down until it can be sent.
+// FinCom's cloud is the only record: Corporate needs a firm account (signed out, the page says "Sign in to use
+// Corporate" and nothing can be changed). Row security by firm: a firm's members read, its owner and staff write.
+//   - a save goes straight to the server: a conditional update of the fields this edit changed (updated_at = the one last
+//     read). When another computer saved meanwhile, nothing is written; the row is read again, merged three ways (the
+//     row last read is the common ancestor: lists of rows by row id, objects key by key, boardDates as a set; this
+//     computer wins only where both changed the same field of the same row), and sent again, three times at most;
+//   - a field is never written with an old value: only the changed fields and lists are sent (the profile's own keys
+//     go laid over the row last read, which the conditional update proves is the server's);
+//   - offline or a failed save: the edit stays on the screen, the page says "Not saved: <reason>" with Retry, and tries
+//     again by itself when the line is back ("online") and after 5 s, 15 s, 60 s, then every 5 minutes. Nothing is kept
+//     across a reload: leaving the page with an edit not saved asks first;
+//   - a removal is a conditional DELETE (updated_at = the one last read); a row changed elsewhere meanwhile is read again,
+//     kept, and the page says so. A record never saved is simply dropped; no DELETE without updated_at;
+//   - this computer keeps only a READ copy of the last rows read (localStorage, under the signed-in person's copy:
+//     LocalOwner.P), to draw the page at once; nothing is ever sent from it or merged from it;
+//   - another tab's save: "corp updated <cid>" (BroadcastChannel and a storage ping) makes this tab read the server again;
+//   - a read is tried again only when the line is back, after signing in, or on its back-off timer: never from drawing.
+// Before the migrations are run, a table not there (a missing relation) is said for that part alone (cloudNote).
 //
-// How two computers (or two tabs) editing one record stay right (the reviews of 30f70eea6 and 74eccc47b):
-//   - each record keeps the server's last row (base), its updated_at (at: the SERVER's time; no clock of this computer is
-//     compared with it) and the fields changed here and not yet sent (dirty: field -> version);
-//   - nothing is sent before the firm's copy has been read (pull); a row read is merged THREE WAYS with base as the common
-//     ancestor: a scalar field changed here keeps this computer's value; a list of rows (directors, shareholders,
-//     charges) is merged row by row by the row's id, an object (agms, letterhead, a filing's data, a document's fields)
-//     key by key, a list of dates (boardDates) as a set: a row or key added, changed or removed on either side survives,
-//     and this computer wins only where both changed the same field of the same row;
-//   - a change is a conditional update (updated_at = the one last seen); when another computer changed the row meanwhile,
-//     nothing is written, the row is read again, merged, and sent again; a removal is conditional too: a row changed
-//     elsewhere meanwhile is kept (and said so); a record saved again while its removal was on its way is sent as new;
-//   - a field is marked sent only if it was not changed again while the save was on its way (its version unchanged);
-//   - two tabs: another tab's write of this client's copy ("storage" event) is merged in, and the stored copy is merged
-//     in again before every write, the higher version of a field winning, so neither tab drops the other's edit;
-//   - this computer's copy is written only for the person it belongs to (its owner = the signed-in copy's), never by a
-//     page that another sign-in has taken over (LocalOwner.stale).
-// Before the migrations are run on the server, a table that is not there is kept on this computer only, and said so for
-// that part alone (cloudNote).
-//
-//   corpOf(cid)                     {profile, filings: [], docs: [], cloud, pending} (this computer's at once; the cloud's after)
-//   saveProfile(cid, patch)         merge into the profile, keep, send
-//   saveFiling(cid, f)              add or change a filing (by its ref), keep, send; dropFiling(cid, ref)
-//   saveDoc(cid, d)                 add or change a document (by its id), keep, send; dropDoc(cid, id) (drafts only)
-//   cloudNote(cid)                  where the work is kept, in words; canEdit() the owner and staff
+//   corpOf(cid)                     {profile, filings: [], docs: [], cloud, pending, ver}
+//   saveProfile / saveFiling / saveDoc, dropFiling / dropDoc, cloudNote(cid), retryNow(cid), canEdit(cid)
 const KEY = () => ((typeof LocalOwner === "object" && LocalOwner.P) || "tdsdesk:") + "corp:";
+const PING = "fincom:corp-updated";
 const mem = {};
 const TABLES = { profile: "corp_profiles", filings: "corp_filings", docs: "corp_documents" };
 const LISTS = ["directors", "shareholders", "charges", "letterhead"];
-const nowIso = () => new Date().toISOString();
+const BACKOFF = [5000, 15000, 60000, 300000];
 const redraw = () => { try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ } };
 const stale = () => { try { return typeof LocalOwner === "object" && !!LocalOwner.stale; } catch (e) { return false; } };
-const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on() && !stale(); } catch (e) { return false; } };
-const owner = () => { try { const b = LocalOwner.bound || LocalOwner.cur() || {}; return b.uid || ""; } catch (e) { return ""; } };
+export const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on() && !stale(); } catch (e) { return false; } };
 const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 const plain = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+const copy = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 export const uid = () => { try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* below */ }
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }); };
-// a field's version: rising across tabs too (milliseconds, then a counter within the millisecond)
-let lastVer = 0;
-const nextVer = () => { lastVer = Math.max(lastVer + 1, Date.now() * 100); return lastVer; };
 
-// ---- the three kinds: a server row <-> the flat record the page edits
+// ---- the three kinds: a server row <-> the flat record the page edits; body(): the columns of the fields changed
 const fromProfile = (r) => Object.assign({}, r.profile || {}, { directors: r.directors || [], shareholders: r.shareholders || [], charges: r.charges || [], letterhead: r.letterhead || {} });
-const toProfile = (cid, x) => { const own = Object.assign({}, x); LISTS.concat(["at"]).forEach((k) => delete own[k]);
-  return { client_id: cid, profile: own, directors: x.directors || [], shareholders: x.shareholders || [], charges: x.charges || [], letterhead: x.letterhead || {} }; };
+const ownOf = (x) => { const own = Object.assign({}, x); LISTS.concat(["at"]).forEach((k) => delete own[k]); return own; };
+const profileBody = (cid, cur, row, fields) => {
+  const b = {};
+  fields.filter((k) => LISTS.includes(k)).forEach((k) => { b[k] = cur[k] || (k === "letterhead" ? {} : []); });
+  const own = fields.filter((k) => !LISTS.includes(k));
+  if (own.length || !row) { const p = ownOf(row || {}); own.forEach((k) => { if (cur[k] === undefined) delete p[k]; else p[k] = cur[k]; }); b.profile = p; }
+  if (!row) { b.client_id = cid; LISTS.forEach((k) => { if (!(k in b)) b[k] = cur[k] || (k === "letterhead" ? {} : []); }); }
+  return b;
+};
 const fromFiling = (r) => ({ ref: r.ref, form: r.form, kind: r.kind, period: r.period || "", director: r.director || "", status: r.status, steps: r.steps || 0, due: r.due_on || "", event: r.event_on || "",
   srn: r.srn || "", filedOn: r.filed_on || "", reason: r.reason || "", data: r.data || {} });
-const toFiling = (cid, x) => ({ client_id: cid, ref: x.ref, form: x.form, kind: x.kind || "annual", period: x.period || "", director: x.director || "", status: x.status || "not_started",
-  steps: Math.max(0, Math.min(4, x.steps | 0)), due_on: x.due || null, event_on: x.event || null, srn: x.srn || "", filed_on: x.filedOn || null, reason: x.reason || "", data: x.data || {} });
+const FILING_COL = { ref: "ref", form: "form", kind: "kind", period: "period", director: "director", status: "status", steps: "steps", due: "due_on", event: "event_on", srn: "srn", filedOn: "filed_on", reason: "reason", data: "data" };
+const filingVal = (k, v) => (k === "steps" ? Math.max(0, Math.min(4, v | 0)) : ["due", "event", "filedOn"].includes(k) ? v || null : k === "data" ? v || {} : v == null ? "" : v);
+const filingBody = (cid, cur, row, fields) => {
+  const b = {}, ks = row ? fields : Object.keys(FILING_COL);
+  ks.forEach((k) => { if (FILING_COL[k]) b[FILING_COL[k]] = filingVal(k, cur[k]); });
+  if (!row) Object.assign(b, { client_id: cid, kind: cur.kind || "annual", status: cur.status || "not_started" });
+  return b;
+};
 const meetingOf = (x) => { const m = x.meeting || (x.fields && x.fields.meetingDate) || ""; return /^\d{4}-\d{2}-\d{2}$/.test(m) ? m : null; };
 const fromDoc = (r) => ({ id: r.id, template: r.template, title: r.title, kind: r.kind, status: r.status, fields: r.fields || {}, meeting: r.meeting_on || "", letterhead: r.letterhead !== false });
-const toDoc = (cid, x) => ({ id: x.id, client_id: cid, template: x.template, title: String(x.title || "").slice(0, 300), kind: x.kind || "resolution", status: x.status === "final" ? "final" : "draft",
-  fields: x.fields || {}, meeting_on: meetingOf(x), letterhead: x.letterhead !== false });
+const docBody = (cid, cur, row, fields) => {
+  const b = {}, ks = row ? fields : ["id", "template", "title", "kind", "status", "fields", "letterhead"];
+  ks.forEach((k) => {
+    if (k === "title") b.title = String(cur.title || "").slice(0, 300);
+    else if (k === "status") b.status = cur.status === "final" ? "final" : "draft";
+    else if (k === "letterhead") b.letterhead = cur.letterhead !== false;
+    else if (k === "fields") { b.fields = cur.fields || {}; b.meeting_on = meetingOf(cur); }
+    else if (["id", "template", "kind"].includes(k)) b[k] = cur[k] || (k === "kind" ? "resolution" : cur[k]);
+  });
+  if (!row) Object.assign(b, { client_id: cid, meeting_on: meetingOf(cur) });
+  return b;
+};
 const KIND = {
-  profile: { table: TABLES.profile, from: fromProfile, to: toProfile, where: (cid) => "client_id=eq." + encodeURIComponent(cid), skip: ["at"] },
-  filings: { table: TABLES.filings, from: fromFiling, to: toFiling, where: (cid, x) => "client_id=eq." + encodeURIComponent(cid) + "&ref=eq." + encodeURIComponent(x.ref), skip: ["at", "fromProfile"] },
-  docs: { table: TABLES.docs, from: fromDoc, to: toDoc, where: (cid, x) => "id=eq." + encodeURIComponent(x.id), skip: ["at"] },
+  profile: { table: TABLES.profile, from: fromProfile, body: profileBody, where: (cid) => "client_id=eq." + encodeURIComponent(cid) },
+  filings: { table: TABLES.filings, from: fromFiling, body: filingBody, where: (cid, x) => "client_id=eq." + encodeURIComponent(cid) + "&ref=eq." + encodeURIComponent(x.ref) },
+  docs: { table: TABLES.docs, from: fromDoc, body: docBody, where: (cid, x) => "id=eq." + encodeURIComponent(x.id) },
 };
 
-// ---- the three-way merge of one field: b the common ancestor (the server's row last seen), l this computer's, s the server's
+// ---- the three-way merge of one field: b the row last read (the common ancestor), l this computer's, s the server's now
 const rowKey = (r, i) => (r && r.id) || "#" + i;
-function merge3(b, l, s) {
-  if (same(l, b)) return s;           // not changed here: the server's
-  if (same(s, b) || same(s, l)) return l; // not changed there, or the same change
+export function merge3(b, l, s) {
+  if (same(l, b)) return s;
+  if (same(s, b) || same(s, l)) return l;
   if (Array.isArray(l) && Array.isArray(s) && [l, s, b || []].every((a) => a.every((x) => typeof x === "string"))) {
-    // a set of values (boardDates): the server's, less what was removed here, plus what was added here
     const B = new Set(b || []), L = new Set(l);
     return Array.from(new Set(s.filter((x) => L.has(x) || !B.has(x)).concat(l.filter((x) => !B.has(x))))).sort();
   }
   if (Array.isArray(l) && Array.isArray(s) && l.concat(s).every((x) => plain(x))) {
-    // rows by their ids: added on either side kept; removed on one side and unchanged on the other removed; a row changed
-    // on both sides merged field by field (this computer wins on the same field)
     const B = new Map((b || []).map((r, i) => [rowKey(r, i), r])), L = new Map(l.map((r, i) => [rowKey(r, i), r])), out = [];
     s.forEach((r, i) => {
       const k = rowKey(r, i), br = B.get(k), lr = L.get(k);
       if (lr) out.push(br ? mergeObj(br, lr, r) : lr);
-      else if (!br) out.push(r);                           // added there
-      else if (!same(r, br)) out.push(r);                  // removed here, changed there: kept
+      else if (!br) out.push(r);
+      else if (!same(r, br)) out.push(r);
     });
     l.forEach((r, i) => { const k = rowKey(r, i); if (out.some((x, j) => rowKey(x, j) === k) || s.some((x, j) => rowKey(x, j) === k)) return;
-      const br = B.get(k); if (!br || !same(r, br)) out.push(r); });   // added here (or changed here, removed there: kept)
+      const br = B.get(k); if (!br || !same(r, br)) out.push(r); });
     return out;
   }
   if (plain(l) && plain(s)) return mergeObj(plain(b) ? b : {}, l, s);
-  return l;                            // both changed one value: this computer's
+  return l;
 }
 function mergeObj(b, l, s) {
   const out = {};
-  new Set(Object.keys(b).concat(Object.keys(l), Object.keys(s))).forEach((k) => {
-    const v = merge3(b[k], l[k], s[k]);
-    if (v !== undefined) out[k] = v;
-  });
+  new Set(Object.keys(b).concat(Object.keys(l), Object.keys(s))).forEach((k) => { const v = merge3(b[k], l[k], s[k]); if (v !== undefined) out[k] = v; });
   return out;
 }
 
-// a record: {base: flat | null, at: the server's updated_at | "", cur: flat, dirty: {field: version}, gone, stamp (shown only)}
-// sent: field -> the version last sent (by this tab or another), so a tab never takes back a field already sent;
-// gone: 0, or the version of its removal; back: the version it was saved again or kept after one (the newer wins in a tab)
-const entry = (cur) => ({ base: null, at: "", cur: cur || {}, dirty: {}, sent: {}, gone: 0, back: 0, stamp: "" });
-// a record back after a removal: one no longer on the server is sent whole, as new
-const unGone = (e) => { if (e.gone) { e.gone = 0; e.back = nextVer(); if (!e.at) allDirty(e); } };
-function blank() { return { profile: entry({}), filings: {}, docs: {}, ver: 0, cloud: { state: "", none: {}, error: "", pulled: null, note: "" }, owner: owner() }; }
-function stored(cid) {
-  try { const t = localStorage.getItem(KEY() + cid); return t ? JSON.parse(t) : null; } catch (e) { return null; }
-}
-function readLocal(cid) {
-  const o = stored(cid), c = blank();
-  // a copy kept for another person is never taken (nor written over: c.foreign)
-  if (o && (o.owner || "") !== c.owner) { c.foreign = true; return c; }
-  if (o) Object.assign(c, { profile: o.profile && o.profile.cur ? o.profile : entry({}), filings: o.filings || {}, docs: o.docs || {}, ver: o.ver || 0 });
-  return c;
-}
-// another tab's copy of the client merged into this one: its unsent fields (the higher version wins), its newer server rows
-function mergeTab(c, o) {
-  if (!o || (o.owner || "") !== c.owner) return false;
-  let moved = false;
-  const one = (mine, theirs) => {
-    if (!theirs) return mine;
-    if (!mine) { moved = true; return Object.assign(entry({}), theirs, { sent: theirs.sent || {} }); }
-    mine.sent = mine.sent || {};
-    // the other tab's newer server row (never over a removal this tab has already made on the server)
-    const tomb = mine.gone && !mine.at;
-    if (theirs.at && !tomb && (!mine.at || theirs.at > mine.at)) { mine.base = theirs.base; mine.at = theirs.at; moved = true; }
-    // a field the other tab has sent: no longer to be sent from here unless changed here since
-    Object.entries(theirs.sent || {}).forEach(([k, v]) => {
-      if (!(mine.sent[k] >= v)) mine.sent[k] = v;
-      if (mine.dirty[k] && mine.dirty[k] <= v) { delete mine.dirty[k]; if (theirs.base && k in theirs.base) mine.cur = Object.assign({}, mine.cur, { [k]: theirs.base[k] }); moved = true; }
-    });
-    // the other tab's unsent fields: taken when newer than anything this tab has for that field (changed or sent)
-    Object.entries(theirs.dirty || {}).forEach(([k, v]) => {
-      if (v > (mine.dirty[k] || 0) && v > (mine.sent[k] || 0)) { mine.dirty[k] = v; mine.cur = Object.assign({}, mine.cur, { [k]: theirs.cur[k] }); moved = true; }
-    });
-    if (theirs.gone && theirs.gone > (mine.gone || 0) && theirs.gone > (mine.back || 0)) { mine.gone = theirs.gone; mine.dirty = {}; moved = true; }
-    if (theirs.back && theirs.back > (mine.back || 0) && theirs.back > (mine.gone || 0)) { mine.back = theirs.back; mine.gone = 0; moved = true; }
-    return mine;
-  };
-  c.profile = one(c.profile, o.profile && o.profile.cur ? o.profile : null);
-  ["filings", "docs"].forEach((kind) => Object.entries(o[kind] || {}).forEach(([k, e]) => { c[kind][k] = one(c[kind][k], e); }));
-  return moved;
-}
-function keepLocal(cid) {
-  const c = mem[cid]; if (!c) return;
-  if (stale() || c.foreign || owner() !== c.owner) return;   // never this person's copy written by a page that is not theirs
-  mergeTab(c, stored(cid));
-  try { localStorage.setItem(KEY() + cid, JSON.stringify({ profile: c.profile, filings: c.filings, docs: c.docs, ver: c.ver, owner: c.owner })); c.cloud.local = ""; }
-  catch (e) { c.cloud.local = "This computer’s storage is full: the last change is not kept here."; }
-}
-if (typeof window === "object") {
-  window.addEventListener("storage", (ev) => {
-    const k = String(ev.key || ""), p = KEY();
-    if (k.indexOf(p) || !ev.newValue) return;
-    const cid = k.slice(p.length), c = mem[cid];
-    if (!c) return;
-    let o = null; try { o = JSON.parse(ev.newValue); } catch (e) { return; }
-    if (mergeTab(c, o)) { c.ver++; redraw(); }
-  });
-  // the line back: the reads not made and the changes not sent are tried again
-  window.addEventListener("online", () => Object.keys(mem).forEach((cid) => retry(cid)));
-}
-function retry(cid) {
-  const c = mem[cid]; if (!c || !cloudOn()) return;
-  if (c.cloud.state === "ready") flush(cid);
-  else if (c.cloud.state !== "loading") c.cloud.pulled = pull(cid);
-}
+// ---- a record: row (the server's, last read: the ancestor), at (its updated_at), cur (shown: row + edits), dirty (fields
+// edited and not saved), err (why the last save did not go), deleting
+const rec = (row, at, from) => ({ row: row || null, at: at || "", cur: row ? copy(row) : {}, dirty: {}, err: "", deleting: false, from });
+function blank() { return { profile: rec(null, ""), filings: {}, docs: {}, ver: 0, state: "", none: {}, error: "", tries: 0, timer: 0, saveTries: 0, saveTimer: 0, note: "" }; }
 
-// what the page reads: the records as they are now (made again only when something changed)
+// the read copy: only rows read from the server, for a quick first drawing (never sent, never merged)
+function cacheRead(cid) {
+  try {
+    const o = JSON.parse(localStorage.getItem(KEY() + cid) || "null"); if (!o || o.v !== 2) return null;
+    const c = blank();
+    if (o.profile) c.profile = rec(o.profile.row, o.profile.at);
+    ["filings", "docs"].forEach((k) => Object.entries(o[k] || {}).forEach(([id, x]) => { c[k][id] = rec(x.row, x.at); }));
+    return c;
+  } catch (e) { return null; }
+}
+function cacheWrite(cid) {
+  const c = mem[cid]; if (!c || stale()) return;
+  const rows = (o) => Object.fromEntries(Object.entries(o).filter(([, e]) => e.at).map(([k, e]) => [k, { row: e.row, at: e.at }]));
+  try { localStorage.setItem(KEY() + cid, JSON.stringify({ v: 2, profile: c.profile.at ? { row: c.profile.row, at: c.profile.at } : null, filings: rows(c.filings), docs: rows(c.docs) })); } catch (e) { /* a read copy only */ }
+}
+const announce = (cid) => {
+  try { if (typeof BroadcastChannel === "function") { const b = new BroadcastChannel("fincom-corp"); b.postMessage("corp updated " + cid); b.close(); } } catch (e) { /* the storage ping below */ }
+  try { localStorage.setItem(PING, cid + "|" + Date.now()); } catch (e) { /* none */ }
+};
+
 function pendingOf(c) {
-  const o = {}, has = (e) => Object.keys(e.dirty).length || (e.gone && e.at);
+  const o = {};
   if (Object.keys(c.profile.dirty).length) o.profile = 1;
-  Object.entries(c.filings).forEach(([k, e]) => { if (has(e)) o["f:" + k] = 1; });
-  Object.entries(c.docs).forEach(([k, e]) => { if (has(e)) o["d:" + k] = 1; });
+  Object.entries(c.filings).forEach(([k, e]) => { if (Object.keys(e.dirty).length || e.deleting) o["f:" + k] = 1; });
+  Object.entries(c.docs).forEach(([k, e]) => { if (Object.keys(e.dirty).length || e.deleting) o["d:" + k] = 1; });
   return o;
 }
 function view(c) {
-  const live = (o) => Object.values(o).filter((e) => !e.gone).map((e) => Object.assign({}, e.cur, { at: e.at || e.stamp || "" }));
-  return { profile: Object.assign({}, c.profile.cur, { at: c.profile.at || c.profile.stamp || "" }), filings: live(c.filings),
-    docs: live(c.docs).sort((a, b) => String(b.at).localeCompare(String(a.at))), cloud: c.cloud, pending: pendingOf(c), ver: c.ver };
+  const live = (o) => Object.values(o).map((e) => Object.assign({}, e.cur, { at: e.at || "" }));
+  return { profile: Object.assign({}, c.profile.cur, { at: c.profile.at }), filings: live(c.filings), docs: live(c.docs).sort((a, b) => String(b.at || "~").localeCompare(String(a.at || "~"))),
+    cloud: { state: c.state, none: c.none, error: c.error }, pending: pendingOf(c), ver: c.ver };
 }
 const views = new WeakMap();
 export function corpOf(cid) {
   if (!cid) return view(blank());
-  if (!mem[cid]) { mem[cid] = readLocal(cid); mem[cid].cloud.pulled = pull(cid); }
+  if (!mem[cid]) { mem[cid] = cacheRead(cid) || blank(); mem[cid].state = cloudOn() ? "loading" : "signedout"; if (cloudOn()) pull(cid); }
   const c = mem[cid];
-  // signed in since the copy was opened (or the read failed): read the firm's copy now
-  if ((c.cloud.state === "local" || c.cloud.state === "unread") && cloudOn() && !c.retrying) { c.retrying = true; setTimeout(() => { c.retrying = false; retry(cid); }, 0); }
+  // signed in since: one read (the state changes at once, so drawing never asks again)
+  if (c.state === "signedout" && cloudOn()) { c.state = "loading"; pull(cid); }
+  else if (c.state !== "signedout" && !cloudOn() && !Object.keys(pendingOf(c)).length) c.state = "signedout";
   let v = views.get(c);
   if (!v || v.ver !== c.ver) { v = view(c); views.set(c, v); }
   return v;
 }
+const bump = (cid) => { const c = mem[cid]; if (c) c.ver++; redraw(); };
 
-// a table that is not there yet (its migration not run): the relation is missing (42P01, "relation ... does not exist"),
-// which PostgREST reports as PGRST205 "Could not find the table ... in the schema cache". A missing function or column
-// is an error of its own, never taken for this
+// a missing relation (the migration not run): 42P01 / "relation ... does not exist" / PostgREST's PGRST205 "Could not
+// find the table"; never a missing function or column
 const missing = (e) => /42P01|relation "?[\w.]*"? does not exist|PGRST205|Could not find the table/i.test(String((e && e.message) || e));
 const dup = (e) => /23505|duplicate key/i.test(String((e && e.message) || e));
+const why = (e) => (typeof navigator === "object" && navigator.onLine === false ? "you're offline" : String((e && e.message) || e).replace(/^TypeError: /, "").slice(0, 160));
 
-// a server row laid under a record, three ways with the last row seen as the ancestor
-function merge(kind, e, row) {
-  const srv = KIND[kind].from(row), base = e.base || {}, cur = Object.assign({}, srv);
-  Object.keys(e.dirty).forEach((k) => { const v = merge3(base[k], e.cur[k], srv[k]); if (v === undefined) delete cur[k]; else cur[k] = v; });
-  e.sent = e.sent || {};
-  Object.keys(e.dirty).forEach((k) => { if (same(cur[k], srv[k])) { e.sent[k] = Math.max(e.sent[k] || 0, e.dirty[k]); delete e.dirty[k]; } });   // nothing left to send
-  e.base = srv; e.at = row.updated_at || ""; e.cur = cur; unGone(e);
+// a server row laid under a record: the shown value of a field edited here is merged three ways, the rest is the server's
+function take(kind, e, row) {
+  const srv = KIND[kind].from(row), cur = copy(srv);
+  Object.keys(e.dirty).forEach((k) => { const v = merge3(e.row ? e.row[k] : undefined, e.cur[k], srv[k]); if (v === undefined) delete cur[k]; else cur[k] = v; });
+  Object.keys(e.dirty).forEach((k) => { if (same(cur[k], srv[k])) delete e.dirty[k]; });
+  e.row = srv; e.at = row.updated_at || ""; e.cur = cur;
 }
-const allDirty = (e) => { Object.keys(e.cur).forEach((k) => { e.dirty[k] = e.dirty[k] || nextVer(); }); };
 
-async function pull(cid) {
+export async function pull(cid) {
   const c = mem[cid];
-  if (!cloudOn()) { c.cloud.state = "local"; return; }
-  c.cloud.state = "loading"; c.cloud.failed = false;
+  if (!c) return;
+  if (!cloudOn()) { c.state = "signedout"; bump(cid); return; }
+  clearTimeout(c.timer); c.state = "loading";
   const q = "client_id=eq." + encodeURIComponent(cid);
-  // each table on its own: one not there yet (its migration not run) keeps only its own part on this computer
+  let failed = null;
   const get = async (k, path) => {
-    try { const r = await Cloud.api(path); delete c.cloud.none[k]; return r; }
-    catch (e) { if (missing(e)) c.cloud.none[k] = true; else { c.cloud.error = String((e && e.message) || e).slice(0, 200); c.cloud.failed = true; } return null; }
+    try { const r = await Cloud.api(path); delete c.none[k]; return r || []; }
+    catch (e) { if (missing(e)) c.none[k] = true; else failed = e; return null; }
   };
   const [p, f, d] = await Promise.all([get("profile", TABLES.profile + "?select=*&" + q), get("filings", TABLES.filings + "?select=*&" + q), get("docs", TABLES.docs + "?select=*&" + q)]);
-  if (p && p[0]) merge("profile", c.profile, p[0]);
+  if (failed) {
+    // tried again on its back-off timer (and when the line is back, or on signing in): never from drawing
+    c.state = "unread"; c.error = why(failed);
+    const wait = BACKOFF[Math.min(c.tries, BACKOFF.length - 1)]; c.tries++;
+    c.timer = setTimeout(() => pull(cid), wait);
+    bump(cid); return;
+  }
+  c.tries = 0; c.error = "";
+  if (p) { if (p[0]) take("profile", c.profile, p[0]); else if (c.profile.at) c.profile = rec(null, ""); }
   const lay = (kind, rows, store, key) => {
     if (!rows) return;
     const seen = {};
-    // a removal here not sent yet stays one; a removal already made on the server, with the row there again (made anew
-    // elsewhere): the row is taken
-    rows.forEach((r) => { const k = r[key]; seen[k] = 1; const e = store[k] || (store[k] = entry({})); if (e.gone && e.at) return; merge(kind, e, r); });
-    // a record the server no longer has: removed on another computer, unless changed here since (then sent again as new)
-    Object.entries(store).forEach(([k, e]) => {
-      if (seen[k] || !e.at) return;
-      if (Object.keys(e.dirty).length && !e.gone) { e.at = ""; e.base = null; allDirty(e); } else { e.at = ""; e.base = null; e.gone = e.gone || nextVer(); }
-    });
+    rows.forEach((r) => { const k = r[key]; seen[k] = 1; const e = store[k] || (store[k] = rec(null, "")); if (!e.deleting) take(kind, e, r); });
+    // a record the server no longer has: removed on another computer (gone here too), unless it is an edit here never saved
+    Object.keys(store).forEach((k) => { if (!seen[k] && store[k].at && !store[k].deleting) delete store[k]; });
   };
   lay("filings", f, c.filings, "ref");
   lay("docs", d, c.docs, "id");
-  // a read that failed (not a missing table): nothing is sent until the firm's copy has been read (tried again later)
-  c.cloud.state = c.cloud.failed ? "unread" : "ready"; c.ver++; keepLocal(cid); redraw();
-  if (c.cloud.state === "ready") await flush(cid);
+  c.state = "ready"; cacheWrite(cid); bump(cid);
+  if (Object.keys(pendingOf(c)).length) save(cid);
 }
 
 async function sendOne(cid, kind, e, tries) {
-  const K = KIND[kind], c = mem[cid];
-  if (e.gone) {
-    // a removal, only of the row as last seen: one changed elsewhere meanwhile is kept, and said so
-    const rows = await Cloud.api(K.table + "?" + K.where(cid, e.cur) + (e.at ? "&updated_at=eq." + encodeURIComponent(e.at) : ""), { method: "DELETE", headers: { Prefer: "return=representation" } });
-    if (!e.gone) { e.at = ""; e.base = null; allDirty(e); return "again"; }   // saved again here while the removal was on its way
-    if (rows && rows.length === 0 && e.at) {
-      const now = await Cloud.api(K.table + "?select=*&" + K.where(cid, e.cur));
-      if (now && now[0]) { merge(kind, e, now[0]); c.cloud.note = "A record removed here had been changed on another computer meanwhile: it is kept."; return "kept"; }
-    }
-    return "dropped";
-  }
-  const vers = Object.assign({}, e.dirty), body = K.to(cid, e.cur);
+  const K = KIND[kind], fields = Object.keys(e.dirty), sentVals = Object.fromEntries(fields.map((k) => [k, copy(e.cur[k])]));
+  const body = K.body(cid, e.cur, e.at ? e.row : null, fields);
   let rows = null;
   try {
-    rows = e.at
-      ? await Cloud.api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
+    rows = e.at ? await Cloud.api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
       : await Cloud.api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
   } catch (x) { if (!(dup(x) && !e.at)) throw x; rows = []; }
   if (!rows || !rows.length) {
-    // another computer changed (or made) the row meanwhile: read it, merge, send again
-    if (tries >= 3) throw new Error("the firm’s copy kept changing; tried again with the next change");
+    if (tries >= 3) throw new Error("another computer kept changing it");
     const now = await Cloud.api(K.table + "?select=*&" + K.where(cid, e.cur));
-    if (now && now[0]) merge(kind, e, now[0]); else { e.at = ""; e.base = null; }
-    c.ver++;
+    if (now && now[0]) take(kind, e, now[0]); else { e.row = null; e.at = ""; }
     return Object.keys(e.dirty).length ? sendOne(cid, kind, e, tries + 1) : "merged";
   }
-  const row = rows[0], srv = K.from(row);
-  // sent: each field as it was when the save started; a field changed again meanwhile stays to be sent
-  e.sent = e.sent || {};
-  Object.keys(vers).forEach((k) => { e.sent[k] = Math.max(e.sent[k] || 0, vers[k]); if (e.dirty[k] === vers[k]) delete e.dirty[k]; });
-  const cur = Object.assign({}, srv); Object.keys(e.dirty).forEach((k) => { cur[k] = e.cur[k]; });
-  e.base = srv; e.at = row.updated_at || e.at; e.cur = cur;
-  c.ver++;
-  return Object.keys(e.dirty).length ? "again" : "sent";
+  const srv = K.from(rows[0]), cur = copy(srv);
+  // saved: a field edited again while the save was on its way stays to be saved
+  fields.forEach((k) => { if (same(e.cur[k], sentVals[k])) delete e.dirty[k]; });
+  Object.keys(e.dirty).forEach((k) => { cur[k] = e.cur[k]; });
+  e.row = srv; e.at = rows[0].updated_at || e.at; e.cur = cur; e.err = "";
+  return Object.keys(e.dirty).length ? "again" : "saved";
 }
 
-// send what this computer has not sent yet; never before the firm's copy has been read
-export async function flush(cid) {
+async function removeOne(cid, kind, store, k, e) {
+  const K = KIND[kind];
+  const gone = await Cloud.api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "DELETE", headers: { Prefer: "return=representation" } });
+  if (gone && gone.length) { delete store[k]; return; }
+  // changed on another computer since it was read (or already removed there): read again and say so
+  const now = await Cloud.api(K.table + "?select=*&" + K.where(cid, e.cur));
+  if (now && now[0]) { e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = "Not removed: it had been changed on another computer meanwhile. Look at it again, then remove it if it should go."; }
+  else delete store[k];
+}
+
+// save what is edited on this page; on a failure: said, with Retry, and tried again by itself (online, then a back-off)
+export async function save(cid) {
   const c = mem[cid];
-  if (!c || !cloudOn()) return;
-  if (c.cloud.state !== "ready") { if (c.cloud.state === "loading" && c.cloud.pulled) await c.cloud.pulled; return; }
-  if (c.flushing) { c.again = true; return c.flushing; }
-  c.flushing = (async () => {
+  if (!c) return;
+  if (!cloudOn()) { c.error = "you're signed out"; bump(cid); return; }
+  if (c.state !== "ready") return;           // after the read (it saves what is pending once it is in)
+  if (c.saving) { c.again = true; return c.saving; }
+  clearTimeout(c.saveTimer);
+  c.saving = (async () => {
+    let failed = null;
     do {
       c.again = false;
       const jobs = [];
-      if (Object.keys(c.profile.dirty).length) jobs.push(["profile", c.profile, null]);
-      [["filings", c.filings], ["docs", c.docs]].forEach(([kind, store]) => Object.entries(store).forEach(([k, e]) => { if (Object.keys(e.dirty).length || (e.gone && e.at)) jobs.push([kind, e, k]); }));
-      for (const [kind, e, k] of jobs) {
-        if (c.cloud.none[kind]) continue;
+      if (Object.keys(c.profile.dirty).length) jobs.push(["profile", c.profile, null, null]);
+      [["filings", c.filings], ["docs", c.docs]].forEach(([kind, store]) => Object.entries(store).forEach(([k, e]) => { if (e.deleting || Object.keys(e.dirty).length) jobs.push([kind, e, store, k]); }));
+      for (const [kind, e, store, k] of jobs) {
+        if (c.none[kind]) { e.err = "FinCom’s server is not updated for this part yet"; continue; }
         try {
-          const r = await sendOne(cid, kind, e, 0);
-          // removed on the server: kept here as a removal (a tombstone), so no tab's older copy brings it back
-          if (r === "dropped" && e.gone) { e.at = ""; e.base = null; }
-          if (r === "again") c.again = true;
-          c.cloud.error = "";
-        } catch (x) { if (missing(x)) c.cloud.none[kind] = true; else c.cloud.error = String((x && x.message) || x).slice(0, 200); }
+          if (e.deleting) await removeOne(cid, kind, store, k, e);
+          else if ((await sendOne(cid, kind, e, 0)) === "again") c.again = true;
+          e.err = "";
+        } catch (x) { if (missing(x)) { c.none[kind] = true; e.err = "FinCom’s server is not updated for this part yet"; } else { e.err = why(x); failed = x; } }
       }
-      c.ver++; keepLocal(cid);
-    } while (c.again);
+    } while (c.again && !failed);
+    if (failed) {
+      const wait = BACKOFF[Math.min(c.saveTries, BACKOFF.length - 1)]; c.saveTries++;
+      c.saveTimer = setTimeout(() => save(cid), wait);
+    } else { c.saveTries = 0; announce(cid); }
+    cacheWrite(cid);
   })();
-  try { await c.flushing; } finally { c.flushing = null; redraw(); }
+  try { await c.saving; } finally { c.saving = null; bump(cid); }
 }
+export function retryNow(cid) { const c = mem[cid]; if (!c) return; c.saveTries = 0; c.tries = 0; if (c.state === "ready") save(cid); else pull(cid); }
 
-// a change here: the fields that differ from the record now are marked, each with a new version
-function edit(e, patch, skip) {
-  Object.entries(patch).forEach(([k, v]) => { if (skip.includes(k) || same(e.cur[k], v)) return; e.cur = Object.assign({}, e.cur, { [k]: v }); e.dirty[k] = nextVer(); });
-  e.stamp = nowIso();
+function edit(cid, e, patch, skip) {
+  Object.entries(patch).forEach(([k, v]) => { if ((skip || []).includes(k) || same(e.cur[k], v)) return; e.cur = Object.assign({}, e.cur, { [k]: copy(v) }); e.dirty[k] = 1; });
+  const c = mem[cid]; c.note = ""; c.ver++; redraw();
+  clearTimeout(c.debounce); c.debounce = setTimeout(() => save(cid), 400);
 }
-function changed(cid) {
-  const c = mem[cid]; c.ver++; keepLocal(cid); redraw();
-  clearTimeout(c.timer); c.timer = setTimeout(() => flush(cid), 400);
-}
-
-export function saveProfile(cid, patch) { corpOf(cid); edit(mem[cid].profile, patch, KIND.profile.skip); changed(cid); }
+const ready = (cid) => { corpOf(cid); return mem[cid].state === "ready" && cloudOn(); };
+export function saveProfile(cid, patch) { if (!ready(cid)) return; edit(cid, mem[cid].profile, patch, ["at"]); }
 export function saveFiling(cid, f) {
-  corpOf(cid); const c = mem[cid], e = c.filings[f.ref] || (c.filings[f.ref] = entry({ ref: f.ref }));
-  unGone(e); edit(e, f, KIND.filings.skip); changed(cid);
+  if (!ready(cid)) return Object.assign({}, f);
+  const c = mem[cid], e = c.filings[f.ref] || (c.filings[f.ref] = rec(null, ""));
+  if (e.deleting) return Object.assign({}, e.cur);
+  if (!e.at && !e.cur.ref) e.cur = { ref: f.ref };
+  edit(cid, e, f, ["at", "fromProfile"]);
   return Object.assign({}, e.cur);
 }
-export function dropFiling(cid, ref) { corpOf(cid); const c = mem[cid], e = c.filings[ref]; if (!e) return; e.gone = nextVer(); e.dirty = {}; changed(cid); }
 export function saveDoc(cid, d) {
-  corpOf(cid); const c = mem[cid], id = d.id || uid(), e = c.docs[id] || (c.docs[id] = entry({ id }));
-  unGone(e); edit(e, Object.assign({}, d, { id }), KIND.docs.skip); changed(cid);
-  return Object.assign({}, e.cur, { at: e.at || e.stamp });
+  if (!ready(cid)) return Object.assign({ id: d.id || "" }, d);
+  const c = mem[cid], id = d.id || uid(), e = c.docs[id] || (c.docs[id] = rec(null, ""));
+  if (e.deleting) return Object.assign({}, e.cur);
+  if (!e.at && !e.cur.id) e.cur = { id };
+  edit(cid, e, Object.assign({}, d, { id }), ["at"]);
+  return Object.assign({}, e.cur);
 }
-export function dropDoc(cid, id) { corpOf(cid); const c = mem[cid], e = c.docs[id]; if (!e) return; e.gone = nextVer(); e.dirty = {}; changed(cid); }
+function drop(cid, store, k) {
+  if (!ready(cid)) return;
+  const e = store[k]; if (!e) return;
+  if (!e.at) { delete store[k]; mem[cid].ver++; redraw(); return; }   // never saved: nothing on the server to remove
+  e.dirty = {}; e.deleting = true; mem[cid].ver++; redraw(); save(cid);
+}
+export function dropFiling(cid, ref) { corpOf(cid); drop(cid, mem[cid].filings, ref); }
+export function dropDoc(cid, id) { corpOf(cid); drop(cid, mem[cid].docs, id); }
 
 const PART = { profile: "the profile", filings: "e-Forms", docs: "the documents" };
 export function cloudNote(cid) {
   corpOf(cid);
-  const c = mem[cid], n = Object.keys(pendingOf(c)).length, none = Object.keys(c.cloud.none);
-  if (c.cloud.local) return { tone: "bad", text: c.cloud.local };
-  if (!cloudOn()) return { tone: "", text: "Kept on this computer: not signed in." };
-  if (c.cloud.none.profile) return { tone: "warn", text: "Saved on this computer. Sharing with the firm starts once FinCom’s server is updated for Corporate." };
-  if (none.length) return { tone: "warn", text: "Saved to the firm account, except " + none.map((k) => PART[k]).join(" and ") + ": on this computer until FinCom’s server is updated for " + (none.length > 1 ? "them" : "it") + "." };
-  if (c.cloud.state === "unread") return { tone: "warn", text: "The firm’s copy could not be read (" + c.cloud.error + "): changes are kept on this computer and sent once it has been read." };
-  if (c.cloud.error) return { tone: "warn", text: "Saved on this computer; not sent to the firm account yet (" + c.cloud.error + "). Tried again with the next change." };
-  if (c.cloud.state === "loading") return { tone: "", text: "Bringing in the firm’s copy…" };
-  return { tone: "ok", text: (n ? "Sending to the firm account…" : "Saved to the firm account.") + (c.cloud.note ? " " + c.cloud.note : "") };
+  const c = mem[cid], n = Object.keys(pendingOf(c)).length, none = Object.keys(c.none);
+  const errs = [c.profile].concat(Object.values(c.filings), Object.values(c.docs)).map((e) => e.err).filter(Boolean);
+  if (c.state === "signedout" && !n) return { tone: "", text: "Sign in to use Corporate.", signin: true };
+  if (none.length) return { tone: "warn", text: (none.includes("profile") ? "Corporate is not set up on FinCom’s server yet: nothing can be saved." : PART[none[0]][0].toUpperCase() + PART[none[0]].slice(1) + (none.length > 1 ? " and " + PART[none[1]] : "") + ": not set up on FinCom’s server yet, so not saved.") };
+  if (n && (errs.length || c.error)) return { tone: "bad", text: "Not saved: " + (errs[0] || c.error) + ".", retry: true };
+  if (c.state === "unread") return { tone: "warn", text: "The firm’s copy could not be read (" + c.error + "). Trying again…", retry: true };
+  if (c.state === "loading") return { tone: "", text: "Bringing in the firm’s copy…" };
+  return { tone: c.note ? "warn" : "ok", text: (n ? "Saving…" : "Saved to the firm account.") + (c.note ? " " + c.note : "") };
 }
 
-// the owner and staff edit; a member who only looks (viewer) sees the records without the means to change them
-export function canEdit() { try { return !cloudOn() || ["owner", "staff", ""].includes(String((Cloud.st && Cloud.st.role) || "")); } catch (e) { return true; } }
+// the owner and staff edit, once the firm's copy is in; a viewer, or signed out, only looks
+export function canEdit(cid) {
+  try { if (!cloudOn()) return false; if (cid && mem[cid] && (mem[cid].state !== "ready" || mem[cid].none.profile)) return false; return ["owner", "staff", ""].includes(String((Cloud.st && Cloud.st.role) || "")); } catch (e) { return false; }
+}
 
-// for the tests: forget what is held in this page (the next corpOf reads this computer and the cloud again)
-export function forget(cid) { if (cid) delete mem[cid]; else Object.keys(mem).forEach((k) => delete mem[k]); }
-if (typeof window === "object") window.FCCorp = { corpOf, forget, flush, saveProfile, saveFiling, saveDoc, dropFiling, dropDoc, cloudNote, canEdit, key: KEY, raw: (cid) => mem[cid], merge3 };
+if (typeof window === "object") {
+  const reread = (cid) => { if (mem[cid] && cloudOn() && mem[cid].state !== "loading") pull(cid); };
+  try { if (typeof BroadcastChannel === "function") new BroadcastChannel("fincom-corp").onmessage = (m) => { const t = String(m.data || ""); if (t.indexOf("corp updated ") === 0) reread(t.slice(13)); }; } catch (e) { /* the storage ping */ }
+  window.addEventListener("storage", (ev) => { if (ev.key === PING && ev.newValue) reread(String(ev.newValue).split("|")[0]); });
+  window.addEventListener("online", () => Object.keys(mem).forEach((cid) => retryNow(cid)));
+  window.addEventListener("beforeunload", (ev) => { if (Object.values(mem).some((c) => Object.keys(pendingOf(c)).length)) { ev.preventDefault(); ev.returnValue = ""; } });
+}
+
+// for the tests: forget what is held in this page (the next corpOf reads the server again)
+export function forget(cid) { const drop1 = (k) => { clearTimeout(mem[k].timer); clearTimeout(mem[k].saveTimer); clearTimeout(mem[k].debounce); delete mem[k]; }; if (cid) { if (mem[cid]) drop1(cid); } else Object.keys(mem).forEach(drop1); }
+if (typeof window === "object") window.FCCorp = { corpOf, forget, save, pull, retryNow, saveProfile, saveFiling, saveDoc, dropFiling, dropDoc, cloudNote, canEdit, key: KEY, raw: (cid) => mem[cid], merge3 };

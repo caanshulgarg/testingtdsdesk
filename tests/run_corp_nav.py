@@ -14,7 +14,8 @@ RED before stage 1: no Corporate entry. Run on the React build: TDSDESK_SITE=../
 import os, sys, glob, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+from corp_fake_cloud import INSTALL
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 PORT = int(os.environ.get("CORP_PORT") or 8721)
 H = functools.partial(http.server.SimpleHTTPRequestHandler, directory=SITE)
@@ -46,6 +47,7 @@ with sync_playwright() as p:
     files = []
     pg.on("request", lambda r: files.append(r.url))
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate(OPEN); pg.wait_for_timeout(800)
+    pg.evaluate("() => localStorage.removeItem('__corp_fake_rows')"); pg.evaluate(INSTALL)   # Corporate needs the firm account
     co, firm = pg.evaluate(SETUP); pg.wait_for_timeout(1200)
     E, W = pg.evaluate, pg.wait_for_timeout
 
@@ -80,7 +82,7 @@ with sync_playwright() as p:
 
     print("3. Refresh and Back")
     pg.click('#app [data-corp-tab="forms"]'); W(900)
-    pg.reload(); W(3500); E(OPEN); W(1500)
+    pg.reload(); W(3500); E(OPEN); W(800); E(INSTALL); W(1200)
     ok(E("S.tab === 'books' && booksTab() === 'corp-forms'") and E("!!document.querySelector('#app [data-corp-page=forms]')"), "Refresh keeps e-Forms (%s)" % E("location.hash"))
     pg.go_back(); W(1500)
     ok(E("!!document.querySelector('#app [data-corp-page=profile]')"), "Back: Company profile again (%s)" % E("location.hash"))
@@ -99,7 +101,7 @@ with sync_playwright() as p:
     ctx = br.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True); pg = ctx.new_page()
     pg.on("pageerror", lambda e: errors.append(str(e)[:200]))
     E, W = pg.evaluate, pg.wait_for_timeout
-    pg.goto("http://localhost:%d/" % PORT); W(2500); E(OPEN); W(800)
+    pg.goto("http://localhost:%d/" % PORT); W(2500); E(OPEN); W(800); E(INSTALL)
     co, firm = E(SETUP); W(1000)
     open_client(pg, co)
     pg.click("#side .side-more"); W(600)
