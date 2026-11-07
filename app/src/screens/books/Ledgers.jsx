@@ -139,7 +139,7 @@ export function PleaseCheck({ b, items, lines }) {
   </section>;
 }
 
-// the status line: "Ledgers from Tally: 1,248 · updated 2 min ago", Read again now
+// the status line: "Ledgers from Tally: 1,248 · updated 2 min ago", and the way to Books › From Tally (next-tally-basics)
 export function Status({ b }) {
   const cid = b.cid, co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
   const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid), st = Ledgers.status(cid), cur = Ledgers.cur(cid) || {};
@@ -156,8 +156,8 @@ export function Status({ b }) {
   // (a book in the cloud with no ledger yet, "Ledgers from Tally: 0", is the same empty state)
   if (cloud && !lines.some((x) => Number(x.n) > 0)) lines = [];
   const again = cloud && !lines.length ? <button className="btn small primary" data-led-bring="" onClick={bringNow}>Bring ledgers from Tally</button>
-    : live ? <button className="btn small" data-led-read="bridge" onClick={() => doAct("ledRead")}>Read again now</button>
-    : cloud ? <button className="btn small" data-led-read="cloud" disabled={st.busy} onClick={() => Ledgers.refresh(cid)}>{st.busy ? "Reading…" : "Read again now"}</button> : null;
+    // next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers; here, the way there
+    : live || cloud ? <button className="linkbtn" data-led-go={live ? "bridge" : "cloud"} data-go-from-tally="" onClick={() => goClient("books:import")}>Update ledgers in Books › From Tally</button> : null;
   return <div className="led-status" data-led-status="">
     {lines.length ? lines.map((x) => <div key={x.k} className="led-status-line" data-led-status-line={x.k}>
       {x.label}{"Ledgers from Tally: "}<b>{Number(x.n || 0).toLocaleString("en-IN")}</b>{x.at ? " · updated " + LedPage.ago(x.at) : ""}{x.file ? " (from the ledger masters file)" : ""}

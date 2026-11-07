@@ -96,14 +96,14 @@ with sync_playwright() as p:
     heads = E("() => [...document.querySelectorAll('#app table[data-led-table=main] thead th')].map(t => t.textContent.trim().toLowerCase())")
     ok(heads[:4] == ["ledger in your tally", "fincom reads it as", "used in (entries)", "example entry"], "G. the columns: %s" % heads)
     st = T("#app [data-led-status]") if pg.locator("#app [data-led-status]").count() else ""
-    ok(re.search(r"Ledgers from Tally: [\d,]+ · updated ", st) is not None and pg.locator("#app [data-led-read]").count() == 1, "G. status line with Read again now: %r" % st.split("\n")[0])
+    ok(re.search(r"Ledgers from Tally: [\d,]+ · updated ", st) is not None and pg.locator("#app [data-led-go]").count() == 1, "G. status line with Update ledgers in Books › From Tally: %r" % st.split("\n")[0])
     ok(pg.locator("#app details[data-led-notices]").count() == 1, "G. one 'Other notices' fold")
     nt = E("() => { const d = document.querySelector('#app details[data-led-notices]'); if (!d) return ''; d.open = true; return d.innerText; }"); pg.wait_for_timeout(200)
     ok(L.SAME_GSTIN in nt and "Kumar Consultants" in nt and "ABCPK9999D" in nt, "G. the GSTIN and PAN lines are in Other notices")
     ok(pg.locator("#app details[data-led-notices] [data-renamed='%s'] button[data-rename-confirm]" % L.RENAMED).count() == 1, "G. the renamed-in-Tally confirm is in Other notices (owner)")
     chk = pg.locator("#app [data-led-check]")
     unk = pg.locator("#app [data-led-check] [data-led-line=unknown]")
-    ok(unk.count() == 1 and "New Party Pvt Ltd" in unk.inner_text() and unk.locator("[data-unk-read]").count() == 1, "G. the masters line is in Please check, with Read the ledgers now")
+    ok(unk.count() == 1 and "New Party Pvt Ltd" in unk.inner_text() and unk.locator("[data-unk-go]").count() == 1, "G. the masters line is in Please check, with Update ledgers in Books › From Tally")
     # ---------- F. TDS 194 T
     g = E("() => [Books.guess('TDS 194 T').section, LedMaster.propose('TDS 194 T', {}, null, []).section, Books.guess('TDS ON CONTRACT 194C').section, Books.guess('TDS PAYABLE 194 A/C').section || '', LedCheck.section('TDS 194 T')]")
     ok(g[0] == "194T" and g[1] == "194T", "F. 'TDS 194 T' is section 194T (guess %s, propose %s)" % (g[0], g[1]))

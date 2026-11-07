@@ -51,8 +51,8 @@ def main():
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         attr = lambda sel, a: pg.get_attribute(sel, a) if pg.locator(sel).count() else None
         G = "#app [data-tsm-guide]"
-        def scene(devs, cos, clients, pings, how=("", "", "")):
-            ids = E(T.SETUP, [devs, cos, [], "owner", clients, True, {}])
+        def scene(devs, cos, clients, pings, how=("", "", ""), books=None):
+            ids = E(T.SETUP, [devs, cos, [], "owner", clients, True, books or {}])
             E("() => { window.__linksApi = false; }")
             E(TS.EXTRA, [[], [], [], {}, []])
             E(TS.PINGS, pings)
@@ -280,6 +280,18 @@ def main():
         if n("header.top .tally-pop [data-tally-pop-recheck]"):
             pg.click("header.top .tally-pop [data-tally-pop-recheck]"); pg.wait_for_timeout(1500)
             ok(txt("header.top .tally-pop [data-tally-pop-msg]").startswith("Checked at "), "7. Check again says when it looked (%s)" % txt("header.top .tally-pop [data-tally-pop-msg]"))
+        print("== 10 (the owner: Books › From Tally is the only place that updates ledgers). The Ledgers page and its unknown-ledgers box: the way there")
+        import ledpage_setup as LP
+        LP.open_page(pg, "owner")
+        ok(n("#app [data-led-read]") == 0 and n("#app [data-unk-read]") == 0, "10. no Read again now, no Read the ledgers now")
+        ok(txt("#app [data-led-go='cloud']") == "Update ledgers in Books › From Tally", "10. the status line: 'Update ledgers in Books › From Tally' (%s)" % txt("#app [data-led-status]")[:160])
+        ok(txt("#app [data-led-line=unknown] [data-unk-go]") == "Update ledgers in Books › From Tally" and n("#app [data-led-line=unknown] [data-unk-why]") == 1, "10. the unknown-ledgers box: the same link, its reason kept (%s)" % txt("#app [data-led-line=unknown]")[:160])
+        E("() => { window.__bridge = window.__bridge || []; }"); b0 = len(E("() => window.__bridge"))
+        # (a click event on the link itself: the earlier scenes' bars still draw every second on this page)
+        E("() => { S.tcoSync = {}; render(); }"); pg.wait_for_timeout(500)
+        E("() => document.querySelector('#app [data-led-go=cloud]').click()"); pg.wait_for_timeout(1500)
+        ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1 and len(E("() => window.__bridge")) == b0, "10. the link opens Books › From Tally and asks nothing of Tally by itself")
+        ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update now")
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

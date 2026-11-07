@@ -24,7 +24,7 @@ export function unknownGroup(cid, byBook = true) {
 }
 
 export function UnknownBody({ g, where }) {
-  const cid = g.cid, can = Rec.unkCan(cid), prog = Rec.unkProgress(cid, g.ledgers.length), asked = Rec.unkAsk[cid];
+  const cid = g.cid, can = Rec.unkCan(cid), prog = Rec.unkProgress(cid, g.ledgers.length);
   const see = S.unkSee && S.unkSee.cid === cid ? S.unkSee.n : "";
   const toggle = (n) => { S.unkSee = see === n ? null : { cid, n }; render(); };
   return <div data-unk-line={where || ""}>
@@ -43,7 +43,8 @@ export function UnknownBody({ g, where }) {
       <p className="note" style={{ margin: "0 0 4px" }}>The entries are in the books. Each ledger leaves this list by itself once Tally’s ledger list brings it, or once you confirm it on Ledgers.</p>
     </details>
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 4 }}>
-      <button className="btn small" data-unk-read="" disabled={!can.ok || !!(asked && !asked.done)} onClick={() => Rec.unkRead(cid)}>{asked && !asked.done ? "Reading…" : "Read the ledgers now"}</button>
+      {/* next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers; this is the way there */}
+      <button className="linkbtn" data-unk-go="" data-go-from-tally="" onClick={() => (cid === S.coId || typeof Rec !== "object" || !Rec.openClientTab ? goClient("books:import") : Rec.openClientTab(cid, "books:import"))}>Update ledgers in Books › From Tally</button>
       <span className="note" data-unk-why={can.kind}>{can.text}</span>
     </div>
     {prog && <div className="note" data-unk-progress="" style={{ marginTop: 4 }}>{prog}</div>}

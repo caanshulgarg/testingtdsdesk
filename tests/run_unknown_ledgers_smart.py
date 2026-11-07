@@ -97,13 +97,12 @@ with sync_playwright() as p:
     # ---------- 4. the action and its reason while paused
     why = alltxt(box + " [data-unk-why]")
     ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "still" in why[0], "4. paused: the plain reason, and that the read still goes once (%s)" % why)
-    ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-read]'); return !!b && !b.disabled && b.innerText.trim(); }", box) == "Read the ledgers now", "4. Read the ledgers now, enabled")
+    # next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers: the box's way there
+    ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-go]'); return !!b && b.innerText.trim(); }", box) == "Update ledgers in Books \u203a From Tally" and E("(s) => !document.querySelector(s + ' [data-unk-read]')", box),
+       "4. Update ledgers in Books › From Tally (no Read the ledgers now of its own)")
     E("() => { window.__rpc.length = 0; }")
-    pg.click(box + " [data-unk-read]"); pg.wait_for_timeout(600)
-    calls = [c for c in E("window.__rpc") if c[0] == "tally_want_update"]
-    ok(len(calls) == 1 and calls[0][1].get("p_client") == cid, "4. asks through the existing Update now (tally_want_update for the client) (%s)" % calls)
-    prog = alltxt(box + " [data-unk-progress]")
-    ok(prog and "Asked NWS144" in prog[0], "4. progress shown (%s)" % prog)
+    pg.click(box + " [data-unk-go]"); pg.wait_for_timeout(800)
+    ok(E("() => S.tab === 'books' && booksTab() === 'import'") and not [c for c in E("window.__rpc") if c[0] == "tally_want_update"], "4. the link opens Books › From Tally, and asks nothing of Tally by itself")
     # ---------- 1b. Books -> Ledgers: one line in Please check; Sync activity: none; the bell: one item, a count
     E("() => { S.booksTab = 'ledgers'; render(); }"); pg.wait_for_timeout(800)
     led = alltxt('#app [data-led-check] [data-led-line="unknown"]')
@@ -135,8 +134,8 @@ with sync_playwright() as p:
     for st, word in [("stopped", "stopped"), ("offline", "offline"), ("closed", "not open")]:
         E(DEV, [cid, co, False, st]); pg.wait_for_timeout(300)
         why = alltxt(box + " [data-unk-why]")
-        dis = E("(s) => { const b = document.querySelector(s + ' [data-unk-read]'); return !!b && b.disabled; }", box)
-        ok(dis and why and word in why[0] and "NWS144" in why[0], "6. %s: cannot run now, says why (%s)" % (st, why))
+        lnk = E("(s) => !!document.querySelector(s + ' [data-unk-go]')", box)
+        ok(lnk and why and word in why[0] and "NWS144" in why[0], "6. %s: says why, beside the way to From Tally (%s)" % (st, why))
     E(DEV, [cid, co, True, "open"])
     # ---------- 5d. every ledger arrives: nothing anywhere
     E("() => { ['GST Payable', 'Input IGST', 'Input SGST', 'Output IGST 18%'].forEach(n => window.__ledRows.push({name: n, parent: 'Duties & Taxes'})); }")
