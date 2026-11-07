@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.5 - TEST SHEET (2.5.4's sheet below, with 2.5.5's new checks first)
 
 File:        FinComBridge-Setup-2.5.5.exe
-Fingerprint: (filled in when the setup is built)
+Fingerprint: SHA-256 816a3253ae78c806063e7a038f0b63c7846aa869348813b3be0e56a0416720aa (FinComBridge-Setup-2.5.5.exe, built 07-Nov-2026 11:03 UTC at bridge sources 9a972e19c, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.5.exe SHA-256 45db9870073a161092a464b2ce64e29c330da9d8db0e0182ef76cc9a14ef5ee9
 
 2.5.5: the full ledger read (Update now, the nightly run, the ledger wake) never holds Tally longer than 2 s per request,
 as the light check already did, and the ledgers keep coming in even when Tally is slow; an Update now a person pressed
