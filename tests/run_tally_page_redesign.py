@@ -107,7 +107,8 @@ def main():
         print("== 2. one table, one button a row")
         ok(n(TB) == 1 and txt(TB + " .tpt-title") == "Clients and Tally", "2. one table, 'Clients and Tally'")
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => t.innerText.trim())")
-        ok(heads == ["Client", "Tally company", "State", "Last entry", "Action"], "2. the columns (%s)" % heads)
+        # next-tally-progress: Masters and Entries columns (the company under the client)
+        ok(heads == ["Client · Tally company", "Connection", "Masters (ledgers & groups)", "Entries", "Action"], "2. the columns (%s)" % heads)
         for name, want in ((ORBIT, ("update", "reading")), (ACME, ("again",)), (NOVA_C, ("connect",)), (ZETA, ("link",)), (LARK, ("link",))):
             m = mains(name)
             ok(len(m) == 1 and m[0] in want, "2. %s: exactly one button, %s (%s)" % (name, "/".join(want), m))

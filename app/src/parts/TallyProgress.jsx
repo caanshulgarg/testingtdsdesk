@@ -117,40 +117,36 @@ function PullButtons({ e, small }) {
     {err && <span className="tsm-note bad" data-tpg-err="">{err}</span>}
   </span>;
 }
-const BADGE = { reading: "Reading", waiting: "Waiting", done: "Done", why: "Not done", none: "Not brought in yet", going: "Bringing", after: "Paused for masters", paused: "Paused", stopped: "Stopped", uptodate: "Up to date", behind: "To bring" };
-function MastersCard({ m, row }) {
-  return <div className="tpg-step" data-tpg-step="masters" data-tpg-state={m.st}>
-    <div className="tpg-step-top"><div><span className="tpg-kicker">Step 1 · Masters</span><b>Ledgers &amp; groups</b></div><span className={"tpg-badge " + m.st} data-tpg-badge="">{m.st === "done" ? "Done" + (m.at ? " · updated " + hhmm(m.at) : "") : BADGE[m.st]}</span></div>
-    {(m.st === "reading" || m.st === "waiting") && <Bar pct={m.pct} kind="read" label="Masters progress" />}
-    <div className="tpg-line" data-tpg-masters-words="">{m.st === "reading" && m.of > 0 ? <>Ledgers: <b>{nf(m.read) + " of " + nf(m.of)}</b>{" (" + m.pct + "%)"}</> : m.words}
-      {m.g != null && m.st !== "none" ? " · groups: " + nf(m.g) : ""}</div>
-    {m.st === "none" && row && <div className="tpg-acts"><BringMasters row={row} /></div>}
-  </div>;
+const BADGE = { reading: "Reading", waiting: "Waiting", done: "Done", why: "Not done", none: "Not brought in yet", going: "Bringing", after: "After masters", paused: "Paused", stopped: "Stopped", uptodate: "Up to date", behind: "To bring" };
+// ---------- Coming in from Tally now: one line each client being read (rows: the table's rows)
+export function busyRows(rows) {
+  const linked = rows.filter((r) => r.kind === "client" && r.cid && r.company && r.c && r.c.w === "Yes");
+  const st = linked.map((r) => { const m = mastersOf(r.cid, r.company), e = entriesOf(r.cid, m, r.last); return { r, m, e }; });
+  const rank = (s) => s.m.st === "reading" ? 0 : s.m.st === "waiting" ? 1 : ["going", "after", "paused", "stopped"].includes(s.e.st) ? 2 : 9;
+  return st.filter((s) => rank(s) < 9).sort((a, b) => rank(a) - rank(b));
 }
-function EntriesCard({ e }) {
-  const p = e.p;
-  return <div className="tpg-step" data-tpg-step="entries" data-tpg-state={e.st}>
-    <div className="tpg-step-top"><div><span className="tpg-kicker">Step 2 · Entries</span><b>{p ? "Day Books, " + partWords(p) : "Day Books"}</b></div><span className={"tpg-badge " + e.st} data-tpg-badge="">{BADGE[e.st]}</span></div>
-    {p && !p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
-    <div className="tpg-line" data-tpg-entries-words="">{e.words}</div>
-    {e.sub && <div className="tsm-note">{e.st === "after" ? "goes on by itself after masters · " + e.sub : e.sub}</div>}
+export const busyRow = (rows) => busyRows(rows)[0] || null;
+function NowLine({ s }) {
+  const { r, m, e } = s, ml = m.st === "reading" || m.st === "waiting", ep = e.p && !e.p.done;
+  const mWords = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) + " ledgers" : m.st === "done" ? m.words.replace(/^✓ /, "") : m.words;
+  const eWords = ep && Number(e.p.y) ? nf(Math.min(Number(e.p.x || 0), Number(e.p.y))) + " of " + nf(e.p.y) + (e.p.state === "going" && Number(e.p.etaMin) > 0 ? " · ~" + etaWords(e.p.etaMin).replace(/^about /, "") : "") : e.words;
+  return <div className="tpg-nl" data-tpg-nl={r.cid}>
+    <b className="tpg-nl-name">{r.client}</b>
+    <div className="tpg-nl-part" data-tpg-nl-masters={m.st}><span className="tpg-sub">{"Masters · " + (BADGE[m.st] || "").toLowerCase()}</span>
+      {ml && <Bar pct={m.pct} kind="read" label={"Masters of " + r.client} />}<span className={"tpg-words" + (m.st === "waiting" || m.st === "why" ? " warn" : "")}>{mWords}</span></div>
+    <div className="tpg-nl-part" data-tpg-nl-entries={e.st}><span className="tpg-sub">{"Entries · " + (BADGE[e.st] || "").toLowerCase()}</span>
+      {ep && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + r.client} />}<span className="tpg-words">{eWords}</span></div>
     <PullButtons e={e} small />
   </div>;
 }
-// ---------- Coming in from Tally now (rows: the table's rows; the first client reading, waiting or paused)
-export function busyRow(rows) {
-  const linked = rows.filter((r) => r.kind === "client" && r.cid && r.company && r.c && r.c.w === "Yes");
-  const st = linked.map((r) => { const m = mastersOf(r.cid, r.company), e = entriesOf(r.cid, m, r.last); return { r, m, e }; });
-  return st.find((s) => s.m.st === "reading") || st.find((s) => s.m.st === "waiting") || st.find((s) => ["going", "after", "paused", "stopped"].includes(s.e.st)) || null;
-}
 export function ComingNow({ rows, beat }) {
-  const [, tick] = useState(0), s = busyRow(rows);
+  const [, tick] = useState(0), list = busyRows(rows);
   // (each 2 s while something moves: the read's own counts; the books' summary reads itself every 30 s)
-  useEffect(() => { if (!s) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [!!s]);
-  if (!s) return <PostingWait beat={beat} hook="panel" />;
-  return <section className="tsm-card tpg-now" aria-label="Coming in from Tally now" data-tpg-now={s.r.cid}>
-    <div className="tpg-now-head"><h3>{"Coming in from Tally now · " + s.r.client}</h3><span className="tsm-note">Masters always go first; entries follow</span></div>
-    <div className="tpg-steps"><MastersCard m={s.m} row={s.r} /><EntriesCard e={s.e} /></div>
+  useEffect(() => { if (!list.length) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [list.length > 0]);
+  if (!list.length) return <PostingWait beat={beat} hook="panel" />;
+  return <section className="tsm-card tpg-now" aria-label="Coming in from Tally now" data-tpg-now={list[0].r.cid}>
+    <div className="tpg-now-head"><h3>Coming in from Tally now</h3><span className="tsm-note">Masters always go first; entries follow</span></div>
+    {list.map((s) => <NowLine key={s.r.cid} s={s} />)}
     <PostingWait beat={beat} hook="panel" />
   </section>;
 }
@@ -203,6 +199,47 @@ export function historyRows(rounds, m, e, kw) {
     res: p.done ? "All in FinCom" : (p.state === "going" ? "Bringing" : p.state === "paused" ? "Paused" : "Stopped") + (Number(p.y) ? " at " + nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : "") });
   return out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
+// a Day Book file dropped (or chosen) here: Books › From Tally's own reading (tallyFiles: the same checks, the same
+// upload), for this client, on this page. Its books are opened first in the background (tallyBooksReady), so the
+// reading never sends the person to the client's page; its lines (S.tallyUp) are said here
+export function DayBookDrop({ cid }) {
+  const [over, setOver] = useState(false), [say, setSay] = useState(""), [, tick] = useState(0);
+  const u = typeof S === "object" && S.tallyUp && S.tallyUp.cid === cid ? S.tallyUp : null;
+  useEffect(() => { if (!u || !u.busy) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [!!(u && u.busy)]);
+  const go = async (files) => {
+    files = Array.from(files || []); if (!files.length || typeof tallyFiles !== "function") return;
+    const prev = S.coId; setSay("Opening the client’s books…");
+    try {
+      S.coId = cid;
+      if (typeof tallyBooksReady === "function") { const r = await tallyBooksReady(cid); if (!r || !r.ok) { setSay("Not read: " + ((r && r.why) || "the books did not open") + "."); return; } }
+      setSay(""); await tallyFiles(files);
+    } catch (e) { setSay("Not read: " + String((e && e.message) || e)); }
+    finally { if (S.view !== "company") S.coId = prev; tick((k) => k + 1); }
+  };
+  const lines = u ? [].concat(u.lines || []).slice(-3) : [];
+  return <div className="tpg-drop-wrap">
+    <label className={"tpg-drop" + (over ? " over" : "")} data-tpg-drop={cid} onDragOver={(ev) => { ev.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+      onDrop={(ev) => { ev.preventDefault(); setOver(false); go(ev.dataTransfer && ev.dataTransfer.files); }}>
+      <input type="file" className="sr-only" data-tpg-drop-file={cid} accept=".xml,.json,.zip,.xlsx,.xls,.pdf" multiple onChange={(ev) => { const f = Array.from(ev.target.files || []); ev.target.value = ""; go(f); }} />
+      {mayChange() ? "Or drop a Day Book file here" : "A member of the firm who may make changes uploads a Day Book."}</label>
+    {(say || lines.length > 0) && <div className="tsm-note" data-tpg-drop-say="" role="status">{say || lines.map((l, k) => <div key={k} className={l.ok === false ? "bad" : ""}>{l.text}</div>)}</div>}
+  </div>;
+}
+// Bring books (this year: the days FinCom lacks, as Books › From Tally's Start) and Bring another year (that card, here)
+function BringBooks({ cid, e }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [other, setOther] = useState(false), book = e.b && e.b.book, going = e.p && !e.p.done && (e.p.state === "going" || e.p.state === "paused");
+  const start = () => { const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }; setBusy(true); setErr("");
+    rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; })
+      .then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
+  return <>
+    {mayChange() && <div className="tpg-acts">
+      {!going && <button type="button" className="btn small" data-tpg-bring-books={cid} disabled={busy || !book} onClick={start}>{busy ? "Starting…" : "Bring books"}</button>}
+      <button type="button" className="btn small" data-tpg-another-year={cid} aria-expanded={other ? "true" : "false"} onClick={() => setOther(!other)}>{other ? "Hide other years" : "Bring another year"}</button>
+      <PullButtons e={e} small /></div>}
+    {err && <p className="tsm-note bad" data-tpg-err="">{err}</p>}
+    {other && <OlderEntries cid={cid} />}
+  </>;
+}
 export function ClientDetails({ row }) {
   const [, tick] = useState(0), cid = row.cid, company = row.company;
   useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid]);
@@ -211,43 +248,33 @@ export function ClientDetails({ row }) {
   const lt = lightAt(company), whole = (h.rows || []).find((r) => r.complete && r.rows_read != null && !(Number(r.rows_received) < Number(r.rows_read)));
   const live = (h.rows || []).find((r) => !r.complete && Date.now() - Date.parse(r.last_seen_at || "") < 180000);
   const total = whole ? Number(whole.rows_read) || 0 : 0;
-  const ledW = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) : live ? nf(Number(live.rows_received) || 0) + (total ? " of " + nf(total) : " so far") + " · reading now" : nf(m.n);
-  const fy = e.p ? Number(String(e.p.fy || "").slice(0, 4)) || fyNow() : fyNow(), bk = cloudBook(cid) || {};
-  return <div className="tpg-details" data-tpg-details={cid}>
-    {/* (inline under the client's row: its name, connection and one button are the row's own) */}
-    <div className="tpg-steps">
-      <section className="tsm-card tpg-d-card" data-tpg-d="masters">
-        <div className="tpg-step-top"><h3>Masters</h3><span className={"tpg-badge " + (live && m.st === "done" ? "reading" : m.st)} data-tpg-d-badge="">{m.st === "reading" || live ? "Reading now" : BADGE[m.st]}</span></div>
-        {(m.st === "reading" || m.st === "waiting") && <Bar pct={m.pct} kind="read" label="Masters progress" />}
-        <dl className="tpg-dl">
-          <dt>Ledgers in FinCom</dt><dd data-tpg-d-ledgers="">{m.held || m.st === "reading" || live ? ledW : "none yet"}</dd>
-          <dt>Groups in FinCom</dt><dd data-tpg-d-groups="">{m.g != null ? nf(m.g) : "—"}</dd>
-          <dt>Whole list last read</dt><dd data-tpg-d-whole="">{whole ? whenWords(whole.started_at) + " · " + nf(whole.rows_read) + " ledgers" : live ? "not yet · reading now" : h.rows ? "not yet" : "…"}</dd>
-          <dt>Changes checked</dt><dd data-tpg-d-light="">{"every 10 min while open" + (lt ? " · last " + hhmm(/[zZ]|[+-]\d\d:?\d\d$/.test(lt) ? lt : lt + "+05:30") : "")}</dd>
-          {m.st === "waiting" && <><dt>Waiting</dt><dd data-tpg-d-wait="">{m.words}</dd></>}
-          {m.st === "why" && <><dt>Last try</dt><dd className="bad">{m.words}</dd></>}
-        </dl>
-        {row.c && row.c.w === "Yes" && <div className="tpg-acts"><BringMasters row={row} primary={false} /></div>}
-        <div className="tsm-note">Masters always come before entries. TDS, GST and bank screens use these ledgers.</div>
-      </section>
-      <section className="tsm-card tpg-d-card" data-tpg-d="entries">
-        <div className="tpg-step-top"><h3>{"Entries · " + fyLabel(fy)}</h3><span className={"tpg-badge " + e.st}>{BADGE[e.st]}</span></div>
-        {e.p && !e.p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
-        <div className="tpg-line" data-tpg-d-entries="">{e.words}{e.sub ? " · " + e.sub : ""}</div>
-        <div className="tpg-months" aria-label="Months" data-tpg-months="">{months(fy, bk, e.p).map((x) => <span key={x.m} data-tpg-month={x.k} title={x.m + ": " + MK[x.k]}><i className={x.k} />{x.m}</span>)}</div>
-        <div className="tsm-note">Dark green: in FinCom · light green: coming in now · grey: to bring · pale: not yet in the year</div>
-        <PullButtons e={e} />
-        {/* Bring books (another year, Start, Pause, Resume, Stop): Books › From Tally's own, here */}
-        <OlderEntries cid={cid} />
-      </section>
-    </div>
-    <section className="tsm-card tpg-hist" data-tpg-history="">
-      <h3>Update history</h3>
+  const ledW = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) : live ? nf(Number(live.rows_received) || 0) + (total ? " of " + nf(total) : " so far") : nf(m.n);
+  const fy = e.p ? Number(String(e.p.fy || "").slice(0, 4)) || fyNow() : fyNow(), bk = cloudBook(cid) || {}, hist = h.rows ? historyRows(h.rows, m, e, kw) : null;
+  return <div className="tpg-details tpg-three" data-tpg-details={cid}>
+    <section className="tpg-d-card" data-tpg-d="masters">
+      <div className="tpg-kicker">Masters</div>
+      <div className="tpg-line">Ledgers <b data-tpg-d-ledgers="">{m.held || m.st === "reading" || live ? ledW : "none yet"}</b>{" · groups "}<b data-tpg-d-groups="">{m.g != null ? nf(m.g) : "—"}</b>{m.st === "done" && !live ? " ✓" : ""}</div>
+      {(m.st === "reading" || m.st === "waiting") && <Bar pct={m.pct} kind="read" label="Masters progress" />}
+      <div className="tsm-note">{"Whole list last read: "}<span data-tpg-d-whole="">{whole ? whenWords(whole.started_at) + " · " + nf(whole.rows_read) + " ledgers" : live || m.st === "reading" ? "reading now" : h.rows ? "not yet" : "…"}</span>
+        <br /><span data-tpg-d-light="">{"Changes checked every 10 min while open" + (lt ? " · last " + hhmm(/[zZ]|[+-]\d\d:?\d\d$/.test(lt) ? lt : lt + "+05:30") : "")}</span></div>
+      {m.st === "waiting" && <div className="tsm-note bad" data-tpg-d-wait="">{m.words}</div>}
+      {m.st === "why" && <div className="tsm-note bad">{m.words}</div>}
+      {row.c && row.c.w === "Yes" && <div className="tpg-acts"><BringMasters row={row} primary={false} /></div>}
+    </section>
+    <section className="tpg-d-card" data-tpg-d="entries">
+      <div className="tpg-kicker">{"Entries · " + fyLabel(fy)}</div>
+      <div className="tpg-months" aria-label="Months" data-tpg-months="">{months(fy, bk, e.p).map((x) => <span key={x.m} data-tpg-month={x.k} title={x.m + ": " + MK[x.k]}><i className={x.k} />{x.m.charAt(0)}</span>)}</div>
+      <div className="tsm-note">Green: in FinCom · light green: coming now · grey: to bring</div>
+      <div className="tpg-line" data-tpg-d-entries="">{e.words}{e.sub ? " · " + e.sub : ""}</div>
+      {e.p && !e.p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
+      <BringBooks cid={cid} e={e} />
+      <DayBookDrop cid={cid} />
+    </section>
+    <section className="tpg-d-card" data-tpg-history="">
+      <div className="tpg-kicker">Update history</div>
       {h.err && <p className="tsm-note bad">{h.err}</p>}
-      {!h.rows ? <p className="tsm-note">Reading…</p> : <div className="tsm-scroll"><table className="tpg-hist-t">
-        <thead><tr><th>When</th><th>What</th><th>How</th><th>Result</th></tr></thead>
-        <tbody>{historyRows(h.rows, m, e, kw).map((r, i) => <tr key={i} className={"tpg-h " + r.k} data-tpg-h={r.k}><td data-label="When">{whenWords(r.at)}</td><td data-label="What">{r.what}</td><td data-label="How">{r.how}</td><td data-label="Result">{r.res}</td></tr>)}
-          {!historyRows(h.rows, m, e, kw).length && <tr><td colSpan={4} className="tsm-note">No update yet.</td></tr>}</tbody></table></div>}
+      {!hist ? <p className="tsm-note">Reading…</p> : !hist.length ? <p className="tsm-note">No update yet.</p>
+        : <ul className="tpg-hlist">{hist.map((r, k) => <li key={k} className={"tpg-h " + r.k} data-tpg-h={r.k}><span data-tpg-h-what="">{[whenWords(r.at), r.what, r.how].filter(Boolean).join(" · ")}</span><span data-tpg-h-res="">{r.res}</span></li>)}</ul>}
     </section>
   </div>;
 }

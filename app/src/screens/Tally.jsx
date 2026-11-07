@@ -1192,6 +1192,15 @@ export function CloudBooks() {
   </>;
 }
 
+// next-tally-progress (the owner: "a single page doing all the things"): "Download FinCom Bridge" always at the top right,
+// with the latest version (setupOf: the same link and fingerprint as everywhere)
+function DownloadHead({ set, m }) {
+  return <div className="tpg-dl-head" data-tpg-dl-head="">
+    <span className="tsm-note">Everything for Tally is on this page</span>
+    <span className="tpg-dl-right">{set && <span className="tsm-note" data-tpg-latest="">{"Latest bridge " + set.version + " · for Windows, no admin needed"}</span>}
+      {set ? <a className="btn tpg-dl-btn" data-tpg-download="" href={set.href} download={set.file}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4v11" /><path d="M7 10l5 5 5-5" /><path d="M5 20h14" /></svg>Download FinCom Bridge</a> : <DownloadBtn m={m} primary />}</span>
+  </div>;
+}
 // the Tally page in the sidebar (02-Oct-2026; the calm page of 15-Oct-2026): the three steps only until a bridge is
 // installed and talking, the computers heard this week, Needs you (or All good), the clients' table, then the one fold,
 // "Advanced (for support)". Sync activity and Everything sent open from that fold (and from the bell and the client
@@ -1213,7 +1222,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     {tab === "activity" ? <SyncActivity /> : <PostLog />}</>;
   // signed out: Connect Tally needs the firm account (the link is kept in FinCom’s cloud); this browser's own bridge
   // connect is only under Advanced (for support)
-  if (!TCloud.on()) return <><div className="pane tguide" data-connect-guide="signin"><h3 style={{ margin: "0 0 4px" }}>Connect Tally</h3>
+  if (!TCloud.on()) return <><DownloadHead set={setupOf(m)} m={m} /><div className="pane tguide" data-connect-guide="signin"><h3 style={{ margin: "0 0 4px" }}>Connect Tally</h3>
     <p className="note" style={{ margin: 0 }}>Sign in to the firm account first: Tally is connected through FinCom’s cloud, for every computer.</p></div>
     <ForSupport><InstallAgain m={m} rows={rows} /><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
@@ -1227,8 +1236,11 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     older: week.filter((r) => !r.go || r.old || (latest && vnum(latest) > vnum(r.version))).length };
   const set = setupOf(m);
   const dl = set ? <a className="btn" data-tsm-download="" href={set.href} download={set.file}>Download FinCom Bridge</a> : <DownloadBtn m={m} />;
+  // next-tally-progress (the owner's single page): the bridge's Download, top right in every state
+  const head = <DownloadHead set={set} m={m} />;
   const panel = <ConnectThisComputer download={<span className="note">Use the Download FinCom Bridge button above.</span>} linked={gx.done.install && Bridge.on()} />;
   return <>
+    {head}
     <GuideRefresh />
     {!Bridge.blocked() && <ThisWatch rows={rows} />}
     <SimpleTally latest={latest} installed={gx.done.install} ready={TCloud.pane.devices != null || !!TCloud.pane.err} pcs={pcs} download={dl} sha={set ? set.sha : ""} checkAgain={checkAgain} connectPanel={panel} />

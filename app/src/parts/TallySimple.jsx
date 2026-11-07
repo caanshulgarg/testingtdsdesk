@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -443,7 +443,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain, dOpen }) {
   // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
   else if (mainOf(row, pg).main === "upload" || mainOf(row, pg).main === "bring") btn = <Act row={row} main />;
   // next-tally-progress: masters not in FinCom yet: Bring ledgers & groups (the masters' read; entries follow by themselves)
-  else if (pg.btn === "update" && linked && !runningRead && !ledgersHeld(row.cid)) btn = <BringMasters row={row} />;
+  // (only for a book FinCom knows with no ledgers: a client whose book is not known yet keeps Update now, which brings them too)
+  else if (pg.btn === "update" && linked && !runningRead && ledBook(row.cid) && !ledgersHeld(row.cid)) btn = <BringMasters row={row} />;
   else if (pg.btn === "update") btn = runningRead ? <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>
     : <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).then(() => tick((k) => k + 1))}>Update now</button>;
   else if (pg.btn === "again") btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} />;
@@ -467,7 +468,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain, dOpen }) {
     </td>
     <td className="tpt-td tpt-masters" data-label="Masters">{linked ? <MastersCell row={row} /> : <span className="tpg-sub">—</span>}</td>
     <td className="tpt-td tpt-entries" data-label="Entries">{linked ? <EntriesCell row={row} /> : <span className="tpg-sub">—</span>}</td>
-    <td className="tpt-td tpt-act" data-label="">{btn}{row.kind === "client" && row.cid && <button type="button" className="btn tpt-btn tpg-open" data-tpt-open={row.cid} aria-expanded={dOpen ? "true" : "false"} onClick={() => set({ client: dOpen ? "" : row.cid })}>{dOpen ? "Hide details ▴" : "Show details ▾"}</button>}<More row={row} label={label} open={!!open} onDetails={() => set({ details: Object.assign({}, typeof ui.details === "object" ? ui.details : {}, { [key]: !open }) })} /></td>
+    <td className="tpt-td tpt-act" data-label="">{btn}{row.kind === "client" && row.cid && <button type="button" className={"btn tpt-btn tpg-open" + (dOpen ? "" : " tpg-caret")} data-tpt-open={row.cid} aria-expanded={dOpen ? "true" : "false"}
+      aria-label={dOpen ? "Hide details" : "Show details for " + label} onClick={() => set({ client: dOpen ? "" : row.cid })}>{dOpen ? "Hide details ▴" : "▾"}</button>}<More row={row} label={label} open={!!open} onDetails={() => set({ details: Object.assign({}, typeof ui.details === "object" ? ui.details : {}, { [key]: !open }) })} /></td>
   </tr>
     {dOpen && <tr className="tpg-drow" data-tpg-drow={row.cid}><td colSpan={5} className="tpg-dcell"><ClientDetails row={row} /></td></tr>}</>;
 }
@@ -506,7 +508,7 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
     {list.length > 0 && <div className="tsm-scroll"><table className="tpt-grid nocards">
       <thead><tr><th>Client · Tally company</th><th>Connection</th><th>Masters (ledgers &amp; groups)</th><th>Entries</th><th className="tpt-th-act">Action</th></tr></thead>
       <tbody>{list.map((r) => <Row key={r.key} row={r} download={download} oneDl={oneDl} seen={seen} cs={cs} x={x} checkAgain={checkAgain} dOpen={!!openCid && r.cid === openCid && r.kind === "client"} />)}</tbody></table></div>}
-    <div className="tpt-foot tsm-note">One button per client, and its Details. ⋯ holds the answers and Unlink.</div>
+    <div className="tpt-foot tsm-note">One button per client; ▾ opens its details here. ⋯ holds the answers and Unlink.</div>
   </section>;
 }
 // ---------- the top: this login's Tally in one line, with Check again (and See the 6 steps while a step is not done)
@@ -544,12 +546,14 @@ function Top({ cs, own, rows, checkAgain, ready }) {
       {!many && off.length > 0 && !down && off.map((t) => <div key={t.port} className="tsm-note" data-tsm-top-tally={t.port}>{"port " + t.port + " · " + t.state}</div>)}
       {ready && far && <div className="tsm-note" data-tsm-bridge-say="far">{"This browser does not reach FinCom Bridge in this Windows login now. Shown: what that bridge last sent to FinCom’s cloud." + (o.far === "blocked" ? " " + BLOCKED : "")}</div>}
       {ready && o.unsure && <div className="tsm-note" data-tsm-unsure="">Showing your bridge (not confirmed).</div>}
+      {/* next-tally-progress (the owner's Mac): this computer's own check, never holding the page; the rest is the cloud's */}
+      {cs.mode === "laptop" && <div className="tsm-note" data-tsm-nobridge="">{LOCALB.busy ? "Looking for a bridge on this computer…" : "No bridge on this computer"}</div>}
       {/* FinCom Bridge 2.5.5: why this login's bridge waits to read (its own words); an older bridge sends none */}
       {kw && <div className="tsm-note tpt-wait" data-tsm-top-wait="" role="status">{kw}</div>}
       {said && !ck && <div className="tsm-note" data-tsm-top-checked="" data-checked="" role="status">{said + (down ? " Not connected yet: step " + cs.now.n + " of 6." : "")}</div>}</div></div>
     <span className="tpt-top-acts">
       {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide: Connect Tally on this computer" : "Connect Tally on this computer"}</button>}
-      {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide the 6 steps" : "See the 6 steps"}</button>}
+      {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "6 steps ▴" : "6 steps ▾"}</button>}
       <button type="button" className="btn tpt-btn" data-tsm-top-check="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></span>
   </section>;
 }
