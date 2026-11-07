@@ -731,3 +731,14 @@ ref; read for members, add / change / remove for owner and staff; anon nothing, 
 Rollback `server/corporate/rollback-144-corp-filings.sql` (refuses while rows exist unless `fincom.corp_rollback`).
 Tested: `tests/run_migration_corp.py` (`CORP_ONLY=144`). Without it the profile works and e-Forms says the server is
 not updated yet.
+
+## 145: Corporate phase 1, the resolutions, notices and minutes (not run yet; branch next-corporate)
+
+**145** `server/corporate/migration-145-corp-documents.sql`: `corp_documents` (one row a document made on Corporate ›
+Resolutions & minutes: id made by the app, template, title, kind resolution / notice / minutes, status draft / final, the
+values typed, the meeting's date, letterhead or plain paper; the words are made from the template on the page, never on
+the server; read for members, add / change for owner and staff, remove a draft only; anon nothing, service_role all),
+trigger `corp_documents_touch`. Add-only, one transaction, safe to run twice; independent of every other migration, 143
+and 144 included. Rollback `server/corporate/rollback-145-corp-documents.sql` (refuses while rows exist unless
+`fincom.corp_rollback`). Tested: `tests/run_migration_corp.py` (`CORP_ONLY=145`). Without it the profile and e-Forms work
+and the documents page says it is not set up on the server.

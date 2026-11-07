@@ -21,6 +21,7 @@ import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
 import Profile, { shown } from "./Profile.jsx";
 import Forms from "./Forms.jsx";
+import Docs from "./Docs.jsx";
 import { corpOf, cloudNote, retryNow, settleRemoved } from "./store.js";
 import { dueCount, dueItems } from "./eforms.js";
 
@@ -69,7 +70,7 @@ export default function Corporate() {
         {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}</span>
     </div>
     {page === "forms" ? <Forms key={co.id} co={co} />
-      : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>
+      : page === "docs" ? <Docs key={co.id} co={co} />
       : page === "aoc4" ? <div className="corp-card corp-empty" data-corp-page="aoc4">The AOC-4 builder comes with the next part of this release.</div>
       : <Profile key={co.id} co={co} formsDue={dueItems(P, c.filings)} />}
   </div>;
