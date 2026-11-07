@@ -21,10 +21,10 @@ import { beatFresh, lnaDenied, LNA_SAY } from "../lib/tallyConnect.js";
 // 30-Oct-2026 (the owner): what FinCom received from Tally today, per company, and the books being brought from Tally
 import { TodayStatus } from "../parts/TallyFetch.jsx";
 // 02-Nov-2026 (next-tally-simple): the owner's approved design, the simple page above For support
-import SimpleTally from "../parts/TallySimple.jsx";
+import SimpleTally, { SupportTools } from "../parts/TallySimple.jsx";
 import { ownBridge, ownOpen, placeOf } from "../lib/tallySimple.js";
 import { connectNow, stepLine } from "../lib/connectSteps.js";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Children } from "react";
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
@@ -928,7 +928,7 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
   const H = ({ children, id }) => <h4 className="tadv-h" data-help-part={id} style={{ margin: "16px 0 6px" }}>{children}</h4>;
   return <div className="pane tadvanced" data-page-more="" data-advanced="" style={{ padding: "8px 16px" }}>
     <MoreToggle k="page" data-bridge-details="" label="Every support tool" less="Hide the support tools" />
-    {open && <div data-bridge-more="" style={{ marginTop: 6 }}>
+    {open && <div data-bridge-more="" style={{ marginTop: 6 }}><Staged>
       {cards.length > 0 && <ReadingView cards={cards} />}
       {/* round 89: deductions on challans the server does not have, after fetching the challans again (54-live-sync.js heal) */}
       {typeof BookItems === "object" && Object.entries(BookItems.st || {}).filter(([, x]) => x && x.chMiss > 0).map(([cid, x]) => <p key={cid} className="note bad" data-sync-chmiss={cid}>
@@ -950,18 +950,32 @@ function PageMore({ rows, latest, m, cards, old = 0, connectStep }) {
       <p className="note" style={{ margin: "0 0 6px" }}>Companies the firm’s computers have seen earlier, not open in Tally now and linked to no client: to link one, or take one off the list.</p>
       <CompaniesInTally hook="all" title="" pcs={cardsOf(rows).filter(heardThisWeek).length > 1} only={(r) => !r.open && !(r.client && S.companies && S.companies[r.client] && !S.companies[r.client].deleted)}
         empty={<p className="note" data-tco-empty="">None: every company seen is open in Tally now or linked to a client.</p>} />
-      <H id="install">Install on another computer</H>
-      <p className="note" style={{ margin: "0 0 6px" }}><button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button>{" (the steps, on that computer)"}</p>
-      <BridgeDownload m={m} again={rows.length > 0} />
-    </div>}
+    </Staged></div>}
   </div>;
 }
+// next-tally-page-redesign (the owner: "I can't see the bridge download button"): Install again or on another computer, at
+// the top of Advanced (it was under Advanced › Every support tool, two folds down), with the Download
+function InstallAgain({ m, rows }) {
+  return <div className="tinstall" data-install-again=""><h4 className="tadv-h" data-help-part="install" style={{ margin: "0 0 6px" }}>Install again or on another computer</h4>
+    <p className="note" style={{ margin: "0 0 6px" }}><button className="linkbtn" data-guide-again="" onClick={() => openConnectTally(1, "")}>Connect another computer</button>{" (the steps, on that computer)"}</p>
+    <BridgeDownload m={m} again={rows.length > 0} /></div>;
+}
+// next-tally-page-redesign (Sentry FINCOM-APP-STAGING-K: opening For support ran 2.2 s of script in one task, all its
+// lists at once: this computer, the companies open with the linked clients, every support tool). Advanced draws its parts
+// one task each, one after the other (a part a tick), so the click answers at once and no task holds the page long
+function Staged({ children }) {
+  const list = Children.toArray(children).filter(Boolean), [k, setK] = useState(1);
+  useEffect(() => { if (k >= list.length) return; const t = setTimeout(() => setK((x) => x + 1), 0); return () => clearTimeout(t); }, [k, list.length]);
+  return <>{list.slice(0, k)}{k < list.length && <p className="note" data-staged-wait="">Loading the rest…</p>}</>;
+}
 // For support (next-tally-simple): closed by default (S.tallyMore.support, kept while FinCom is open)
+// next-tally-page-redesign: "Advanced (for support)", closed by default, everything that is not the top line and the table
 function ForSupport({ children }) {
   const open = moreOpen("support");
   return <section className="pane tsupport" data-for-support="" data-support-open={open ? "" : undefined} style={{ padding: "8px 16px" }}>
-    <MoreToggle k="support" data-support-toggle="" label="For support" less="Hide For support" />
-    {open && <div className="tsupport-body" data-support-body="" style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 12 }}>{children}</div>}
+    <button type="button" className="tsupport-toggle" data-more-toggle="support" data-support-toggle="" aria-expanded={open ? "true" : "false"} onClick={() => moreFlip("support")}>
+      <span className="tsupport-title">Advanced (for support)</span><span className="note tsupport-sub">{open ? "Hide ▾" : "Bridges · computers · history · install · versions · log ▸"}</span></button>
+    {open && <div className="tsupport-body" data-support-body="" style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 12 }}><Staged>{children}</Staged></div>}
   </section>;
 }
 // review of 02-Oct-2026: every bridge FinCom has heard from (TCloud.bridgesHeard), which one is the main one, and a
@@ -1201,7 +1215,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
   // connect is only under Advanced (for support)
   if (!TCloud.on()) return <><div className="pane tguide" data-connect-guide="signin"><h3 style={{ margin: "0 0 4px" }}>Connect Tally</h3>
     <p className="note" style={{ margin: 0 }}>Sign in to the firm account first: Tally is connected through FinCom’s cloud, for every computer.</p></div>
-    <ForSupport><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
+    <ForSupport><InstallAgain m={m} rows={rows} /><PageMore rows={rows} latest={latest} m={m} cards={[]} connectStep={connectStep} /></ForSupport></>;
   // the computers heard in the last 7 days; the older ones are under Advanced (every bridge heard from)
   const cards = cardsOf(rows), week = cards.filter(heardThisWeek), ctl = TCloud.pane.ctl || {};
   const gx = guideState(rows, latest), allStopped = TCloud.stoppedAll && TCloud.stoppedAll();
@@ -1222,6 +1236,8 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
     {ctl.ok && <p className="note" data-control-ok="" style={{ margin: "6px 0 0" }}>{ctl.ok}</p>}
     <NeedsYou sources={sourcesSlot} />
     <ForSupport>
+      <SupportTools checkAgain={checkAgain} pcs={pcs} download={dl} sha={set ? set.sha : ""} />
+      <InstallAgain m={m} rows={rows} />
       {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={false} />}
       <OpenCompanies rows={rows} />
       <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
