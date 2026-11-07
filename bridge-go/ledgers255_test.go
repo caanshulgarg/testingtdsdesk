@@ -247,9 +247,9 @@ func TestLedger255SlowLedgerSkippedRestRead(t *testing.T) {
 	slow := f.led[76].mid
 	f.mu.Unlock()
 	led255SlowMids(f, 800*time.Millisecond, slow)
-	plain, _ := led255Run(t, f, newRun("now", "r255e"), 80, 1500*time.Millisecond)
-	if plain != 4 {
-		t.Fatalf("the turn ended %d times with plain words, want 4 (twice at 125, twice for the one ledger)", plain)
+	plain, _ := led255Run(t, f, newRun("now", "r255e"), 160, 1500*time.Millisecond)
+	if plain < 4 || plain%2 != 0 {
+		t.Fatalf("the turn ended %d times with plain words, want twice for each run of three stops (at 125, at a size kept, and for the one ledger)", plain)
 	}
 	st := readKeepState(syncFolder(zz))
 	sk := arr(st["ledPoison"])
@@ -308,51 +308,107 @@ func TestLedger255SlowLedgerSkippedRestRead(t *testing.T) {
 	}
 }
 
-// review H1: a ledger Tally keeps far longer than the stop (past LedgerHangSec) is taken as hanging Tally at once and
-// never asked again, not even by a night's run; and a night's retry of a slow ledger never goes while a posting does
-func TestLedger255HangingLedgerNeverRetried(t *testing.T) {
+// reviews H1, N2: a ledger Tally keeps far longer than the stop (past LedgerHangSec): each such stop is one of three in
+// a row; after three it hangs Tally. It is asked again only at a nightly run a week on (never Update now, never sooner),
+// and a night's retry never goes while a posting does; answering in time clears it
+func TestLedger255HangingLedgerRetriedWeekly(t *testing.T) {
 	const n = 300
 	f := ledgerTally(t, n, `,"LedgerChunk":250,"LedgerChunkMin":125,"RecorderStopCoolSec":1,"RecorderLimitMs":500,"LedgerHangSec":1,"TallyAbandonMaxSec":600`)
 	f.mu.Lock()
-	hang, slow := f.led[76].mid, f.led[200].mid
+	hang := f.led[76].mid
 	f.mu.Unlock()
 	led255SlowMids(f, 1800*time.Millisecond, hang) // Tally keeps it 1.8 s: past the 1 s taken as hanging here
-	led255Run(t, f, newRun("now", "r255m"), 80, 1500*time.Millisecond)
+	led255Run(t, f, newRun("now", "r255m"), 160, 1500*time.Millisecond)
 	st := readKeepState(syncFolder(zz))
-	if sk := arr(st["ledPoison"]); len(sk) != 1 || toI64(at(arr(sk[0]), 0)) != hang || !strings.Contains(str(at(arr(sk[0]), 2)), "does not answer and holds Tally") || slowSkipped(st, hang) {
-		t.Fatalf("skipped: %v (want MasterID %d as hanging Tally)", sk, hang)
+	if sk := arr(st["ledPoison"]); len(sk) != 1 || toI64(at(arr(sk[0]), 0)) != hang || !strings.Contains(str(at(arr(sk[0]), 2)), "does not answer and holds Tally (stopped 3 times in a row") || slowSkipped(st, hang) {
+		t.Fatalf("skipped: %v (want MasterID %d as hanging Tally, after three stops)", sk, hang)
 	}
-	if !strings.Contains(readText(logFile()), "it hangs Tally; it is skipped from now on and never asked again") {
-		t.Fatal("not said")
+	if len(loadLedList(syncFolder(zz))) != n-1 {
+		t.Fatal("the rest was not read")
 	}
 	asked := slowAsks(f, hang)
-	led255Yesterday(t, hang)
-	led255Round(t, f, "r255n", "nightly")
+	// Update now and a nightly run the same week: not asked
+	led255SetTry(t, hang, addDays(today(), -3))
+	led255Round(t, f, "r255n1", "now")
+	led255Round(t, f, "r255n2", "nightly")
 	if slowAsks(f, hang) != asked {
-		t.Fatal("a night's run asked for a ledger that hangs Tally")
+		t.Fatal("a ledger that hangs Tally was asked again within the week")
 	}
-
-	// a slow ledger (skipped as slow by hand, as the halving would) and a posting going at the night's run: not asked
-	led255SlowMids(f, 0)
-	dir := syncFolder(zz)
-	st = readKeepState(dir)
-	addPoisonWhy(dir, st, slow, "Party 00201", ledSlowWhy())
-	saveKeepState(dir, st)
-	led255Yesterday(t, slow)
+	// a week on, a posting going at the night's run: not asked, the try not used
+	led255SetTry(t, hang, addDays(today(), -7))
 	importsInFlight.Add(1)
-	before := slowAsks(f, slow)
-	led255Round(t, f, "r255o", "nightly")
+	led255Round(t, f, "r255n3", "nightly")
 	importsInFlight.Store(0)
-	if slowAsks(f, slow) != before {
-		t.Fatal("the retry went while a posting was going")
+	if slowAsks(f, hang) != asked || str(obj(readKeepState(syncFolder(zz))["ledSlowTry"])[fmt.Sprint(hang)]) == today() {
+		t.Fatal("the retry went (or used the try) while a posting was going")
 	}
-	if str(obj(readKeepState(dir)["ledSlowTry"])[fmt.Sprint(slow)]) == today() {
-		t.Fatal("the day's try was used though nothing reached Tally (review L1)")
+	// the posting done, still hanging: asked once, stays skipped as hanging Tally, the next try a week on
+	led255Round(t, f, "r255n4", "nightly")
+	st = readKeepState(syncFolder(zz))
+	if slowAsks(f, hang) != asked+1 || len(poisonMids(st)) != 1 || slowSkipped(st, hang) || str(obj(st["ledSlowTry"])[fmt.Sprint(hang)]) != today() {
+		t.Fatalf("the weekly retry: asked %d more, skipped %v", slowAsks(f, hang)-asked, arr(st["ledPoison"]))
 	}
-	// the posting done: the next night's run asks it (quick now) and clears it
-	led255Round(t, f, "r255p", "nightly")
-	if slowAsks(f, slow) != before+1 || slowSkipped(readKeepState(dir), slow) {
-		t.Fatal("the retry after the posting")
+	// another week on, quick now: read and no longer skipped
+	led255SlowMids(f, 0)
+	led255SetTry(t, hang, addDays(today(), -8))
+	led255Round(t, f, "r255n5", "nightly")
+	if st = readKeepState(syncFolder(zz)); len(poisonMids(st)) != 0 || len(loadLedList(syncFolder(zz))) != n {
+		t.Fatalf("cleared: skipped %v, held %d", poisonMids(st), len(loadLedList(syncFolder(zz))))
+	}
+}
+
+// second review N1: after the halving the chunks grow back only until the first stop, then keep the last size that
+// answered in time: no stop every other chunk. (a) a Tally just over 2 s for 124 ledgers; (b) just over 2 s for about
+// 1,000 ledgers, after one slow ledger
+func TestLedger255GrowBackStopsAtFirstStop(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		n       int
+		over    int64 // a chunk of this many MasterIDs or more is over the stop
+		slowIdx int   // -1: none
+	}{{"124", 1500, 124, -1}, {"1000-after-slow", 6000, 1000, 3000}} {
+		t.Run(c.name, func(t *testing.T) {
+			f := ledgerTally(t, c.n, `,"RecorderStopCoolSec":1,"RecorderLimitMs":500,"LedgerHangSec":5,"TallyAbandonMaxSec":600`)
+			slow := int64(-1)
+			f.mu.Lock()
+			if c.slowIdx >= 0 {
+				slow = f.led[c.slowIdx].mid
+			}
+			f.slow = func(id, body string) time.Duration {
+				m := reMidRange.FindStringSubmatch(body)
+				if id != ledListID || m == nil || m[2] == "" {
+					return 0
+				}
+				a, b := toI64(m[1]), toI64(m[2])
+				if b-a >= c.over || (a < slow && slow <= b) {
+					return 800 * time.Millisecond
+				}
+				return 0
+			}
+			f.mu.Unlock()
+			plain, _ := led255Run(t, f, newRun("now", "r255g-"+c.name), 200, 2*time.Minute)
+			want := c.n
+			if slow > 0 {
+				want--
+			}
+			if got := len(loadLedList(syncFolder(zz))); got != want {
+				t.Fatalf("held %d, want %d", got, want)
+			}
+			lg := readText(logFile())
+			i := strings.LastIndex(lg, "as the chunks grew back;")
+			if i < 0 {
+				t.Fatal("the growth never met a stop")
+			}
+			if after := strings.Count(lg[i:], "(stopped)"); after != 0 {
+				t.Fatalf("%d stop(s) after the size was kept: the chunks alternate", after)
+			}
+			stops := strings.Count(lg, "(stopped)")
+			real := time.Duration(stops)*32*time.Second + time.Duration(plain)*2*time.Minute
+			if real > time.Hour {
+				t.Fatalf("%d stops, %d plain ends: about %s in real time", stops, plain, real)
+			}
+			t.Logf("%s: %d requests, %d stops, %d plain ends (about %s in real time)", c.name, len(ledRanges(f)), stops, plain, real)
+		})
 	}
 }
 
@@ -402,11 +458,26 @@ func TestLedger255NaturesStoppedCounted(t *testing.T) {
 	f.mu.Unlock()
 	led255Round(t, f, "r255r", "now")
 	st := readKeepState(syncFolder(zz))
-	if toInt(st["natMiss"]) != 1 || toInt(st["natStops"]) != 1 || !strings.Contains(str(obj(st["trouble"])["why"]), "Tally took longer than 2 s for the natures of payment") {
-		t.Fatalf("natMiss %v, natStops %v, trouble %v", st["natMiss"], st["natStops"], st["trouble"])
+	if toInt(st["natMiss"]) != 0 || toInt(st["natStops"]) != 1 || !truthy(st["natWaitNight"]) || str(st["natOffVer"]) != "" ||
+		!strings.Contains(str(obj(st["trouble"])["why"]), "Tally took longer than 2 s for the natures of payment") {
+		t.Fatalf("natMiss %v, natStops %v, wait %v, off %v, trouble %v", st["natMiss"], st["natStops"], st["natWaitNight"], st["natOffVer"], st["trouble"])
 	}
 	if !strings.Contains(readText(logFile()), "; the natures of payment were stopped at 2 s (1 time(s) so far)") {
 		t.Fatal("the round's end line does not say it")
+	}
+	// second review N5: never turned off; Update now does not ask them again, the next nightly run does
+	asked := f.n(natListID)
+	led255Round(t, f, "r255s", "now")
+	led255Round(t, f, "r255t", "now")
+	if f.n(natListID) != asked || str(readKeepState(syncFolder(zz))["natOffVer"]) != "" {
+		t.Fatal("asked again before the nightly run, or turned off")
+	}
+	f.mu.Lock()
+	f.slow = nil
+	f.mu.Unlock()
+	led255Round(t, f, "r255u", "nightly")
+	if st = readKeepState(syncFolder(zz)); f.n(natListID) == asked || truthy(st["natWaitNight"]) {
+		t.Fatal("the nightly run did not ask the natures again")
 	}
 }
 
@@ -430,6 +501,20 @@ func slowAsks(f *standTally, mid int64) int {
 		}
 	}
 	return c
+}
+
+// a skipped ledger's last try set to a day
+func led255SetTry(t *testing.T, mid int64, day string) {
+	t.Helper()
+	dir := syncFolder(zz)
+	st := readKeepState(dir)
+	tries := obj(st["ledSlowTry"])
+	if tries == nil {
+		tries = M{}
+	}
+	tries[fmt.Sprint(mid)] = day
+	st["ledSlowTry"] = tries
+	saveKeepState(dir, st)
 }
 
 // the slow ledger's last try moved to yesterday (a day passes)

@@ -132,6 +132,12 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		save()
 		return true, nil
 	}
+	if truthy(st["natWaitNight"]) && k.kind != "nightly" {
+		// second review N5: stopped at 2 s before: they wait for the next nightly run (FinCom keeps the natures it has)
+		ls["natDone"], ls["natSkip"] = true, true
+		save()
+		return true, nil
+	}
 	for !truthy(ls["natDone"]) {
 		if !inBudget() || keepHold() != "" {
 			return false, nil
@@ -156,14 +162,15 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			// any other failure never holds the ledger list: it goes on without the natures this round. Tally not
 			// answering twice: not asked again until the bridge is updated
 			stopped := errors.Is(err, errRecorderStop)
-			if tallyNoAnswer(err) || stopped {
-				st["natMiss"] = toInt(st["natMiss"]) + 1 // 2.5.5 (review L3): a 2-second stop counts as not answering
+			if tallyNoAnswer(err) {
+				st["natMiss"] = toInt(st["natMiss"]) + 1
 			}
 			if stopped {
-				// 2.5.5 (review L3): said in the round's end line and in the company's trouble (the beat)
+				// 2.5.5 (review L3, second review N5): said in the round's end line and in the company's trouble (the
+				// beat); never turns them off: asked again at the next nightly run (not at Update now before it)
 				ls["natStopped"] = true
-				st["natStops"] = toInt(st["natStops"]) + 1
-				st["trouble"] = M{"at": nowS(), "why": fmt.Sprintf("Tally took longer than 2 s for the natures of payment (%d time(s)); the ledger list went on without them", toInt(st["natStops"]))}
+				st["natStops"], st["natWaitNight"] = toInt(st["natStops"])+1, true
+				st["trouble"] = M{"at": nowS(), "why": fmt.Sprintf("Tally took longer than 2 s for the natures of payment (%d time(s)); the ledger list went on without them, and they are asked again at the next nightly run", toInt(st["natStops"]))}
 			}
 			if toInt(st["natMiss"]) >= 2 {
 				st["natOffVer"], st["natMiss"] = BridgeVersion, 0
@@ -181,6 +188,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		if tail {
 			ls["natDone"] = true
 			delete(st, "natMiss")
+			delete(st, "natWaitNight")
 		} else {
 			ls["natAfter"] = upto
 			if top > bound {
