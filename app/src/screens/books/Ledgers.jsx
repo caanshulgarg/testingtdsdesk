@@ -1,8 +1,8 @@
 // The "Tally ledgers" tab of a client's books: the GST and TDS ledgers from Tally, as one simple table (FinCom 2.4.1; the
 // owner's decisions of 09-Oct-2026: "Yes, build it", "Confirm all" only where FinCom and its check agree, "Keep today's
 // figures"). In plain words, for the owner:
-//   1. one status line: "Ledgers from Tally: 1,248 · updated 2 min ago", with "Read again now" where it exists (the bridge
-//      here: ledRead; FinCom's cloud copy: Ledgers.refresh), else one Upload button for the ledger masters (mastersPick);
+//   1. one status line: "Ledgers from Tally: 1,248 · updated 2 min ago", with the way to Books › From Tally, where the ledgers
+//      are updated (next-tally-basics), else Bring in from Tally (From Tally's drop takes the ledger masters);
 //   2. "Please check" (only when there is something): a ledger confirmed one way that FinCom's check reads another way
 //      (both answers and an example entry; "Keep mine" or "Use the check's"), a confirmed name-guess no entry uses yet,
 //      a confirmed ledger now used differently, and the ledgers entries use that FinCom does not have yet;
@@ -13,7 +13,7 @@
 //      ledgers, a PAN not in its GSTIN, a ledger renamed in Tally, ledgers changed after returns were made).
 // Every action is its own step, saved at once (no Save at the foot, no drafts), with Undo. Nothing here is AI's.
 // The rows are LedPage (src/js/57); a change goes through lmSet (src/js/23), LedPage.confirm / confirmAgree / keepMine /
-// useCheck / undoRow / undoLast, and the doAct cases ledRead and mastersPick. Owner only: a rename's Confirm (as before);
+// useCheck / undoRow / undoLast (no read or upload of its own: Books › From Tally does both). Owner only: a rename's Confirm (as before);
 // staff confirm and change ledgers (as before).
 //
 // State: S.ledQ (the find box), S.ledEdit (the row being changed), S.ledEditPrev (that row before the change, for Undo),
@@ -139,7 +139,7 @@ export function PleaseCheck({ b, items, lines }) {
   </section>;
 }
 
-// the status line: "Ledgers from Tally: 1,248 · updated 2 min ago", Read again now
+// the status line: "Ledgers from Tally: 1,248 · updated 2 min ago", and the way to Books › From Tally (next-tally-basics)
 export function Status({ b }) {
   const cid = b.cid, co = CO(), live = typeof bridgeLive === "function" && bridgeLive(co);
   const cloud = typeof TCloud === "object" && TCloud.on() && TCloud.has(cid), st = Ledgers.status(cid), cur = Ledgers.cur(cid) || {};
@@ -156,8 +156,8 @@ export function Status({ b }) {
   // (a book in the cloud with no ledger yet, "Ledgers from Tally: 0", is the same empty state)
   if (cloud && !lines.some((x) => Number(x.n) > 0)) lines = [];
   const again = cloud && !lines.length ? <button className="btn small primary" data-led-bring="" onClick={bringNow}>Bring ledgers from Tally</button>
-    : live ? <button className="btn small" data-led-read="bridge" onClick={() => doAct("ledRead")}>Read again now</button>
-    : cloud ? <button className="btn small" data-led-read="cloud" disabled={st.busy} onClick={() => Ledgers.refresh(cid)}>{st.busy ? "Reading…" : "Read again now"}</button> : null;
+    // next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers; here, the way there
+    : live || cloud ? <button className="linkbtn" data-led-go={live ? "bridge" : "cloud"} data-go-from-tally="" onClick={() => goClient("books:import")}>Update ledgers in Books › From Tally</button> : null;
   return <div className="led-status" data-led-status="">
     {lines.length ? lines.map((x) => <div key={x.k} className="led-status-line" data-led-status-line={x.k}>
       {x.label}{"Ledgers from Tally: "}<b>{Number(x.n || 0).toLocaleString("en-IN")}</b>{x.at ? " · updated " + LedPage.ago(x.at) : ""}{x.file ? " (from the ledger masters file)" : ""}

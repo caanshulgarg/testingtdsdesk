@@ -2,8 +2,8 @@
 is one table, see run_ledpage241.py: Needs you became "Please check" plus an "Other notices" fold, GST and TDS one table,
 the confirmed are no longer folded, More and its tabs are gone, a change is saved at once; the owner of 08-Oct-2026: "there
 should be simple page of tds & gst tally ledger import page.. it is currently in very bad shape.. take it with 2.4").
-  1. one status line a book: "Ledgers from Tally: 73 · last updated 2 min ago · 5 need you", with "Read again now" only
-     where it exists (the cloud copy here: Ledgers.refresh; nothing is asked of Tally) and an Upload button only when no
+  1. one status line a book: "Ledgers from Tally: 73 · last updated 2 min ago · 5 need you", with "Update ledgers in Books ›
+     From Tally" only where a read exists (next-tally-basics; nothing is asked of Tally here) and an Upload button only when no
      bridge or cloud copy serves the client;
   2. three short sections, one answer and one action a row: GST ledgers (ledger -> what FinCom treats it as -> Confirm /
      Change), TDS ledgers (ledger -> section and nature of payment -> Confirm / Change), Needs you (renamed ledger: owner's
@@ -36,7 +36,7 @@ with sync_playwright() as p:
     m = re.search(r"Ledgers from Tally: ([\d,]+) · updated (\d+) min ago", st)
     ok(m is not None, "one status line: %r" % st.split("\n")[0])
     ok(m and int(m.group(1).replace(",", "")) == E("Ledgers.status(S.books.cid).n"), "its count is the bridge's ledger list in FinCom's cloud")
-    ok(pg.locator("#app [data-led-read='cloud']").count() == 1 and pg.locator("#app [data-led-upload-btn]").count() == 0, "Read again now (the cloud copy), and no upload while the cloud copy serves the client")
+    ok(pg.locator("#app [data-led-go='cloud']").count() == 1 and pg.locator("#app [data-led-read]").count() == 0 and pg.locator("#app [data-led-upload-btn]").count() == 0, "next-tally-basics: Update ledgers in Books › From Tally (no Read again now), and no upload while the cloud copy serves the client")
     # ---------- 2. one answer a ledger, on one row only; no second list, no tick boxes (2.4.1: one table for GST and TDS)
     keys = E("() => [...document.querySelectorAll('#app table[data-led-table=main] tbody tr[data-key]')].map(r => r.dataset.key)")
     ok(len(keys) > 5 and len(keys) == len(set(keys)), "every ledger on one row only (%d rows)" % len(keys))
@@ -55,8 +55,8 @@ with sync_playwright() as p:
     ok(row194.count() == 1 and "194-C" in row194.inner_text(), "TDS ledgers: the section (%r)" % (row194.inner_text() if row194.count() else ""))
     # ---------- Please check: the masters line (unknown ledger used by entries), one action
     unk = pg.locator("#app [data-led-check] [data-led-line=unknown]")
-    ok(unk.count() == 1 and "1 ledger used in Tally is not in FinCom yet (New Party Pvt Ltd \u00b7 2 entries)" in unk.inner_text() and unk.locator("[data-unk-read]").count() == 1,
-       "unknown ledger: one line for the client (1 ledger, 2 entries), Read the ledgers now (15-Oct-2026)")
+    ok(unk.count() == 1 and "1 ledger used in Tally is not in FinCom yet (New Party Pvt Ltd \u00b7 2 entries)" in unk.inner_text() and unk.locator("[data-unk-go]").count() == 1,
+       "unknown ledger: one line for the client (1 ledger, 2 entries), Update ledgers in Books › From Tally (next-tally-basics)")
     ok(pg.locator("#app [data-unknown-ledgers]").count() == 1, "the line is not repeated above this page")
     # ---------- Other notices (2.4.1: moved from Needs you to one fold at the bottom)
     pg.click("#app details[data-led-notices] > summary"); pg.wait_for_timeout(200)
@@ -103,12 +103,14 @@ with sync_playwright() as p:
     ok(pg.locator("#app [data-led-notices] tr[data-notice=gstin]").count() == 0 and E("!!(S.books.ledOk || {})['gstin:%s']" % L.SAME_GSTIN), "Fine as it is: the GSTIN line goes, kept with the books")
     pg.click("#app button[data-rename-confirm='%s']" % L.RENAMED); pg.wait_for_timeout(1200)
     ok(any(c[0] == "tally_ledger_rename_confirm" for c in E("window.__rpc")) and pg.locator("#app [data-renamed='%s']" % L.RENAMED).count() == 0, "rename Confirm: asked of FinCom's cloud, the line goes")
-    # no Tally computer keeps this made-up client: Read the ledgers now cannot run, and says why
-    ok(E("() => { const b = document.querySelector('#app [data-led-line=unknown] [data-unk-read]'); return !!b && b.disabled; }") and "No Tally computer" in pg.locator("#app [data-led-line=unknown] [data-unk-why]").inner_text(),
-       "Read the ledgers now: no Tally computer for this client: cannot run, says why")
+    # no Tally computer keeps this made-up client: the reason beside the way to From Tally
+    ok(E("() => !!document.querySelector('#app [data-led-line=unknown] [data-unk-go]') && !document.querySelector('#app [data-led-line=unknown] [data-unk-read]')") and "No Tally computer" in pg.locator("#app [data-led-line=unknown] [data-unk-why]").inner_text(),
+       "unknown ledger: no Tally computer for this client: says why, beside Update ledgers in Books › From Tally")
     E("() => { window.__rest = []; }")
-    pg.click("#app [data-led-read='cloud']"); pg.wait_for_timeout(1200)
-    ok(any(x.startswith("tally_ledgers") for x in E("window.__rest")), "Read again now: the cloud copy is read again")
+    ok(E("window.__bridge.length") == 0, "no request to Tally from this page before the link (%s)" % E("window.__bridge"))
+    pg.click("#app [data-led-go='cloud']"); pg.wait_for_timeout(1200)
+    ok(E("() => S.tab === 'books' && booksTab() === 'import'") and pg.locator("#app [data-upload-page]").count() == 1, "Update ledgers in Books › From Tally opens From Tally")
+    E("() => { S.booksTab = 'ledgers'; render(); }"); pg.wait_for_timeout(800)
     ok(E("window.__bridge.length") == 0, "no request to Tally from this page (%s)" % E("window.__bridge"))
     # ---------- find, client, other ledgers (2.4.1: More, what FinCom posts to, AI and Check again are gone)
     pg.fill('#app input[aria-label="Find a ledger"]', "SGST"); pg.wait_for_timeout(500)
@@ -138,7 +140,7 @@ with sync_playwright() as p:
     # ---------- no bridge and no cloud copy: one clear upload
     L.open_page(pg, "owner", cloud=False)
     st = T("#app [data-led-status]")
-    ok(pg.locator("#app [data-led-upload-btn]").count() == 1 and pg.locator("#app [data-led-read]").count() == 0, "no bridge: one Upload button, no Read again")
+    ok(pg.locator("#app [data-led-upload-btn]").count() == 1 and pg.locator("#app [data-led-go]").count() == 0, "no bridge: one Upload button, no link to update")
     ok("(from the ledger masters file)" in st, "the status line says the ledgers came from the masters file: %r" % st.split("\n")[0])
     # next-tally-basics: one place brings the Tally data in: the button opens Books › From Tally (its drop takes the masters XML)
     pg.click("#app [data-led-upload-btn]"); pg.wait_for_timeout(800)

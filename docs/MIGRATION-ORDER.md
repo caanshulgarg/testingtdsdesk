@@ -709,3 +709,14 @@ tally_post_count_for dfacb63ec76bcec7de9a5ce7f7060a95, tally_post_any_bridge 121
 0097e6cac5ee123775cf37e18a3cd601. Rollback: `server/tally-cloud/rollback-142-post-any-bridge.sql` (not a migration) puts those two texts back (54's and 116's) and makes
 `tally_post_any_bridge()` answer false (tested: `ROLLBACK_142=<file> tests/run_migration142.py`). Tested on pg_stand:
 `tests/run_migration142.py` (RED_WITHOUT_142=1 fails).
+
+## 143: Corporate phase 1, the company profile (not run yet; branch next-corporate, 07-Nov-2026)
+
+**143** `server/corporate/migration-143-corp-profiles.sql`: `corp_profiles` (one row a client: profile, directors,
+shareholders, charges, letterhead; read for the firm's members, add / change for owner and staff (can_write()), no delete;
+anon nothing, service_role all), trigger `corp_profiles_touch` (who and when; firm and client never change). Add-only, one
+transaction, safe to run twice; independent of every other migration (needs only firms, members, my_firm(), can_write()).
+Rollback `server/corporate/rollback-143-corp-profiles.sql` (not a migration): refuses while the table has rows unless
+`set fincom.corp_rollback = 'drop-with-rows'` after a copy is kept. Tested on pg_stand: `tests/run_migration_corp.py`
+(`CORP_ONLY=143`). Without it Corporate says it is not set up on FinCom's server yet and offers nothing to change
+(the firm's server is the record; this computer keeps a read copy only).

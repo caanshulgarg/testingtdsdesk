@@ -166,6 +166,8 @@ def main():
         dA8 = adev([up], opened=(ORBIT_CO,))
         c8 = cos + [{"company": ORBIT_CO, "client_id": None, "device_id": dA8["id"], "gstin": "", "last_seen": "ago:0.5"}]
         ids = scene([dA8, bdev()], c8, CL, A_PINGS)
+        # next-tally-page-redesign: connected (steps 1-4 done), the six steps are behind the top line's "See the 6 steps"
+        ok(n("#app [data-tsm-steps-link]") == 1, "8: the top line's See the 6 steps"); pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(600)
         g = guide()
         ok(g["now"] == "5" and g["say"].startswith("Step 5: “ORBIT SPACE” is open in your Tally.") and n(G + " .tsm-now-act button") == 1, "8. step 5, one button: %s" % g["say"])
         ok("1 company open in your Tally" in g["all"], "8. step 4 done: this login's count only (%s)" % g["all"][:300])
@@ -174,6 +176,8 @@ def main():
         print("== 9. linked and reading")
         c9 = cos + [{"company": ORBIT_CO, "client_id": "NAME:" + ORBIT, "device_id": dA8["id"], "gstin": "", "last_seen": "ago:0.5"}]
         scene([dA8, bdev()], c9, CL, A_PINGS)
+        # next-tally-page-redesign: connected (steps 1-4 done), the six steps are behind the top line's "See the 6 steps"
+        ok(n("#app [data-tsm-steps-link]") == 1, "9: the top line's See the 6 steps"); pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(600)
         g = guide()
         ok(g["now"] == "6" and g["states"][:5] == ["done"] * 5 and g["say"].startswith("Step 6: Reading “ORBIT SPACE”:"), "9. step 6 now: %s" % g["say"])
         done6 = E("""() => { const R = FCTallySimple.rowsFor({}); const rows = R.rows.map(r => r.kind === 'client' && r.o && r.o.w === 'Yes' ? Object.assign({}, r, {l: {w: 'Yes', note: '312 ledgers'}, e: {w: 'Yes', note: 'Till today'}}) : r);
@@ -182,6 +186,8 @@ def main():
 
         print("== 10. a laptop: no bridge answers here")
         scene([adev([up], opened=(ORBIT_CO,)), bdev()], c9, CL, {})
+        # next-tally-page-redesign: no bridge here, the office's bridges online: the steps folded, "Connect Tally on this computer"
+        ok(n("#app [data-tsm-guide]") == 0 and n("#app [data-tsm-steps-link='laptop']") == 1, "10. the steps folded behind Connect Tally on this computer"); pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)
         g = guide(); fw = txt("#app [data-tsm-firm]")
         ok(g["now"] == "laptop" and "Do these steps on the computer or server where TallyPrime runs" in g["all"], "10. where to do them (%s)" % g["all"][:200])
         ok(fw.startswith("For the firm now: 2 FinCom Bridges are connected") and n(G + " [data-tsm-state]") == 0 and n("#app [data-tsm-now]") == 0, "10. the firm's state, no per-login step (%s)" % fw)

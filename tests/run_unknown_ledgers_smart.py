@@ -13,8 +13,9 @@ PAUSED from the tray. Checked:
      has one item for the client with the count only;
   2. expanded: one row a ledger with its entry count and "see entries" (which lists that ledger's entries);
   3. no "2.3.1" anywhere;
-  4. the one action, Read the ledgers now: the existing Update now path (tally_want_update for the client); with reading
-     paused on NWS144 its plain reason (the tray's Resume background reading) and that it still reads once; then progress;
+  4. the way to Books › From Tally (next-tally-basics: the one place that updates the ledgers; it asks nothing of Tally
+     itself); with reading paused on NWS144 its plain reason (the tray's Resume background reading) and that From Tally's
+     Update now still reads them once;
   5. self-clearing, with no Clear pressed:
      a. a ledger confirmed on the GST/TDS ledgers page (b.map ok) leaves the line at once;
      b. a ledger arriving in FinCom's list under Tally's other capitals or spaces ("Input CGST" for "INPUT CGST", as on
@@ -24,7 +25,7 @@ PAUSED from the tray. Checked:
      d. every ledger settled: nothing shown anywhere, the bell's item gone.
   6. the stopped / offline / Tally-closed reasons: the button cannot run and says why.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_unknown_ledgers_smart.py [shots-dir]
-RED (before the change): a line an entry and ledger, the "2.3.1" words, no Read the ledgers now, a confirmed ledger stays."""
+RED (before the change): a line an entry and ledger, the "2.3.1" words, no action, a confirmed ledger stays."""
 import json, os, sys
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
@@ -96,14 +97,13 @@ with sync_playwright() as p:
     ok("2.3.1" not in pg.inner_text("#app"), "3. no '2.3.1' on the page")
     # ---------- 4. the action and its reason while paused
     why = alltxt(box + " [data-unk-why]")
-    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "still" in why[0], "4. paused: the plain reason, and that the read still goes once (%s)" % why)
-    ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-read]'); return !!b && !b.disabled && b.innerText.trim(); }", box) == "Read the ledgers now", "4. Read the ledgers now, enabled")
+    ok(why and "paused on NWS144" in why[0] and "Resume background reading" in why[0] and "From Tally's Update now reads them once" in why[0], "4. paused: the plain reason, and that From Tally's Update now still reads them once (%s)" % why)
+    # next-tally-basics (the owner): Books › From Tally is the one place that updates the ledgers: the box's way there
+    ok(E("(s) => { const b = document.querySelector(s + ' [data-unk-go]'); return !!b && b.innerText.trim(); }", box) == "Update ledgers in Books \u203a From Tally" and E("(s) => !document.querySelector(s + ' [data-unk-read]')", box),
+       "4. Update ledgers in Books › From Tally (no Read the ledgers now of its own)")
     E("() => { window.__rpc.length = 0; }")
-    pg.click(box + " [data-unk-read]"); pg.wait_for_timeout(600)
-    calls = [c for c in E("window.__rpc") if c[0] == "tally_want_update"]
-    ok(len(calls) == 1 and calls[0][1].get("p_client") == cid, "4. asks through the existing Update now (tally_want_update for the client) (%s)" % calls)
-    prog = alltxt(box + " [data-unk-progress]")
-    ok(prog and "Asked NWS144" in prog[0], "4. progress shown (%s)" % prog)
+    pg.click(box + " [data-unk-go]"); pg.wait_for_timeout(800)
+    ok(E("() => S.tab === 'books' && booksTab() === 'import'") and not [c for c in E("window.__rpc") if c[0] == "tally_want_update"], "4. the link opens Books › From Tally, and asks nothing of Tally by itself")
     # ---------- 1b. Books -> Ledgers: one line in Please check; Sync activity: none; the bell: one item, a count
     E("() => { S.booksTab = 'ledgers'; render(); }"); pg.wait_for_timeout(800)
     led = alltxt('#app [data-led-check] [data-led-line="unknown"]')
@@ -131,12 +131,11 @@ with sync_playwright() as p:
     head = alltxt(box + " [data-unk-head]")
     ok(head and head[0].startswith("4 ledgers used in Tally"), "5c. a ledger renamed in Tally (alias, same GUID): gone (%s)" % head)
     # ---------- 6. the reasons it cannot run now
-    E("() => { Rec.unkAsk = {}; }")
     for st, word in [("stopped", "stopped"), ("offline", "offline"), ("closed", "not open")]:
         E(DEV, [cid, co, False, st]); pg.wait_for_timeout(300)
         why = alltxt(box + " [data-unk-why]")
-        dis = E("(s) => { const b = document.querySelector(s + ' [data-unk-read]'); return !!b && b.disabled; }", box)
-        ok(dis and why and word in why[0] and "NWS144" in why[0], "6. %s: cannot run now, says why (%s)" % (st, why))
+        lnk = E("(s) => !!document.querySelector(s + ' [data-unk-go]')", box)
+        ok(lnk and why and word in why[0] and "NWS144" in why[0], "6. %s: says why, beside the way to From Tally (%s)" % (st, why))
     E(DEV, [cid, co, True, "open"])
     # ---------- 5d. every ledger arrives: nothing anywhere
     E("() => { ['GST Payable', 'Input IGST', 'Input SGST', 'Output IGST 18%'].forEach(n => window.__ledRows.push({name: n, parent: 'Duties & Taxes'})); }")

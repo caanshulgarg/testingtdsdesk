@@ -304,6 +304,62 @@ export const lookOnce = () => { if (!LOCALB.n) look(); };
 // next-tally-connectfix (finding 4): and the one-click card's look of the whole range 9100-9199 (lib/tallyConnect.js
 // lookHere, otherwise once a tab) asked again with it
 export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); };   // (a person's ask: never a moment-old answer)
+// next-tally-page-redesign (the owner: "Check Tally is not working… after refresh it connected"). Each Check again did half
+// of what opening the page does: the Tally page's looked for this login's bridge on 127.0.0.1 again and read the cloud's
+// beats, but never asked the bridge this browser is paired with for its status again, so Bridge.st kept the failed answer
+// of the page's start ("down") until the minute timer; the top bar's asked that bridge and the beats, but never looked
+// on 127.0.0.1 again, so a bridge started after the page was opened stayed "not found". checkAll does what a refresh does
+// for the connection, in its order: the look on 127.0.0.1 (a look already going is waited for, a finished one started
+// over), the paired bridge pointed at the address the look found, its status asked again, the cloud's beats, computers
+// and links read again, and the page drawn. Nothing new is asked of Tally (the status is the one the page start asks).
+const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+// next-fix-check-again (the owner on a Mac: "Check again is not working anywhere"): each Check again ends in words, even
+// when nothing changed: "Checked 14:32: the office Tally is connected (2 bridges, Tally open in 2). This computer has no
+// FinCom Bridge." From the bridges' Tally (a bridge heard but Tally closed is not "connected"); "This computer's FinCom
+// Bridge" only for one found here (never the member's link to an office bridge); the browser's block and a look still
+// going said so. lead: a sentence first (the Tally box: the client's own state)
+const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0"); return p(d.getHours()) + ":" + p(d.getMinutes()); };
+const nBr = (n) => n + (n > 1 ? " bridges" : " bridge");
+// a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
+export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
+export function checkedSay(lead) {
+  const at = "Checked " + hhmm() + ": ";
+  try {
+    const o = ownState(), own = o.own || {}, here = o.from === "here" || !!own.local || own.how === "found" || own.how === "unsure";
+    const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
+    const office = !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected (" + nBr(on.length) + ", Tally open in " + k + ")."
+      : nBr(on.length) + " online, but Tally is not open.";
+    const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED
+      : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : "This computer's FinCom Bridge is not answering.")
+      : own.how === "linked" ? "This computer has no FinCom Bridge: your login uses the office's."
+      : o.own ? "This computer's FinCom Bridge does not answer here." : "This computer has no FinCom Bridge.";
+    return at + (lead ? lead + ". " + office.charAt(0).toUpperCase() + office.slice(1) : office) + " " + me;
+  } catch (e) { return at + "could not tell, see above."; }
+}
+// the connection as the words saw it: the words go when it changes (Tally page: UI().said)
+export function connSig() { try { const o = ownState(); return [o.state, (o.own || {}).how, bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000).length, LOCALB.perm].join("|"); } catch (e) { return ""; } }
+// one check at a time, shared by every Check again (a second press while one runs gets the same answer); never rejects
+// (a part that never answers is waited for 10 s at most: the words come all the same)
+let inFlight = null;
+export function checkAll(checkAgain) {
+  if (!inFlight) inFlight = checkRun(checkAgain).catch(() => checkedSay()).finally(() => { inFlight = null; });
+  return inFlight;
+}
+async function checkRun(checkAgain) {
+  rescanLocal();
+  for (let i = 0; i < 60 && LOCALB.busy; i++) await pause(100);
+  try { const o = ownState(); if (o && o.own && o.own.local) aimLocal(o.own); } catch (e) { /* the status says why */ }
+  const jobs = [];
+  try { if (typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.refresh) jobs.push(Promise.resolve().then(() => Bridge.refresh(true)).catch(() => {})); } catch (e) { /* */ }
+  if (typeof checkAgain === "function") jobs.push(Promise.resolve().then(checkAgain).catch(() => {}));
+  else if (typeof TCloud === "object" && TCloud.on && TCloud.on() && TCloud.refreshPane) jobs.push(Promise.resolve().then(() => TCloud.refreshPane()).catch(() => {}));
+  try { if (typeof TLight === "object" && TLight.refresh && typeof TCloud === "object" && TCloud.on && TCloud.on()) { TLight.st.at = 0; jobs.push(Promise.resolve().then(() => TLight.refresh()).catch(() => {})); } } catch (e) { /* */ }
+  try { if (typeof LinkRec === "object" && LinkRec.load) jobs.push(Promise.resolve().then(() => LinkRec.load(true)).catch(() => {})); } catch (e) { /* */ }
+  await Promise.race([Promise.all(jobs), pause(10000)]);
+  try { if (typeof TallySteady === "object" && TallySteady.now) TallySteady.now(); } catch (e) { /* */ }
+  try { if (typeof render === "function") render(); } catch (e) { /* */ }
+  return checkedSay();
+}
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
   return (x.bridgeId && all.find((b) => b.id === x.bridgeId)) || (Number(x.bridgePort || x.port) && all.find((b) => b.port && b.port === Number(x.bridgePort || x.port)))
@@ -584,6 +640,8 @@ function clientRow(co, all, opts) {
   // open: in this user's own Tally (localOpen), never another login's bridge
   const here = localOpen(company, opts.own), open = here === "yes";
   row.c = { w: YES, note: "Tally company: " + shown(company) };
+  // next-tally-page-redesign: the last entry FinCom has from Tally (the link record's read, the recorder's last line), for the table
+  row.last = lastEntry(co, k) || "";
   row.o = openCell(here, opts.own, here === "no" ? otherWords(co.name, company, opts.own) : "");
   // ledgers: the first sync going (its bar), stuck (its reason, Try again), held (the count), not yet
   const x = firstSyncOf(cid), running = !!(x && !x.end && !x.err && !x.late), stuck = !!(x && !x.end && (x.err || x.late));
@@ -627,7 +685,7 @@ function clientRow(co, all, opts) {
     const words = missingWords(hd.length ? hd.map((d) => ({ from: d, to: d })) : need);
     row.e = { w: NO, note: words || "Some entries are missing" };
     if (hd.length) { row.act = { kind: "upload", label: "Upload Day Book", day: iso(hd[0]) }; row.todo = "Tally could not send these entries. Upload that day’s Day Book."; }
-    else if (canFetch) { row.act = { kind: "bring", label: "Bring missing days", need }; row.todo = open ? "Press the button: FinCom brings them from Tally." : "Open the company in Tally, then press the button."; }
+    else if (canFetch) { row.act = { kind: "bring", label: "Bring missing days", need }; row.todo = anyOpen ? "Press the button: FinCom brings them from Tally." : "Open the company in Tally, then press the button."; }
     else { row.act = { kind: "upload", label: "Upload Day Book", day: iso(need[need.length - 1].from) }; row.todo = "Upload the Day Book for those days."; }
     row.upload = row.act.kind !== "upload";
   } else if (days) {
@@ -643,7 +701,9 @@ function clientRow(co, all, opts) {
     else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
     else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Bring ledgers from Tally."; row.upload = true; }
     else if (row.e.w === NOTYET || row.l.w === NOTYET) {
-      if (open || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
+      // (next-tally-page-redesign; the owner on a Mac with no bridge: "0 clients are fine. 8 need you"): a company open in
+      // ANY of the firm's Tallys FinCom hears now comes in by itself; only one open nowhere needs opening
+      if (anyOpen || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
       else row.todo = "Open the company in Tally.";
       row.upload = true;
     } else if (row.o.w !== YES) row.todo = "Nothing. Updates when the company is opened in Tally.";
@@ -709,6 +769,8 @@ const idle = (fn) => (typeof requestIdleCallback === "function" ? requestIdleCal
 const hiddenNow = () => typeof document === "object" && document.visibilityState === "hidden";
 // from the drawing: {rows, extra (the companies open that no client has, the one just linked, the best client; null until
 // the first work is done)}
+// the rows as last worked out, without asking for them (Advanced's day check: never the page's own options, its focus)
+export const rowsLast = () => ROWS.rows || [];
 export function rowsFor(opts) {
   // the page's own reads start from the drawing, at its moment, as when the rows were worked out in it (each returns at
   // once when not due); the working-out itself starts none of them (lib/quietReads.js)
@@ -763,7 +825,7 @@ function rowsWork() {
 function rowsSig(rows, x) {
   try {
     return JSON.stringify([rows.map((r) => [r.key, r.client, r.company, r.found, r.c, r.o, r.l, r.e, r.act && [r.act.kind, r.act.label, r.act.day], r.todo, r.upload, r.need, r.fine, r.focus,
-      r.open && [r.open.state, r.open.words, r.open.canUse, r.open.why], r.best && r.best.id, r.lKnown, r.quick]),
+      r.open && [r.open.state, r.open.words, r.open.canUse, r.open.why], r.best && r.best.id, r.lKnown, r.quick, r.last]),
       x && [x.unlinked.map((r) => r.company), x.open && x.open.company, x.best && x.best.id, x.just, x.linkedN, x.own && x.own.state]]);
   } catch (e) { return String(Date.now()); }
 }
@@ -833,4 +895,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { placeOf, onTallyPc, ownBridge, tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { placeOf, onTallyPc, ownBridge, tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, checkAll, checkedSay, connSig, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };

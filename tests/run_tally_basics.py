@@ -51,8 +51,8 @@ def main():
         txt = lambda sel: re.sub(r"\s+", " ", pg.inner_text(sel)).strip() if pg.locator(sel).count() else ""
         attr = lambda sel, a: pg.get_attribute(sel, a) if pg.locator(sel).count() else None
         G = "#app [data-tsm-guide]"
-        def scene(devs, cos, clients, pings, how=("", "", "")):
-            ids = E(T.SETUP, [devs, cos, [], "owner", clients, True, {}])
+        def scene(devs, cos, clients, pings, how=("", "", ""), books=None):
+            ids = E(T.SETUP, [devs, cos, [], "owner", clients, True, books or {}])
             E("() => { window.__linksApi = false; }")
             E(TS.EXTRA, [[], [], [], {}, []])
             E(TS.PINGS, pings)
@@ -77,31 +77,33 @@ def main():
         def never_b(label, g):
             ok("Kestrel" not in g["all"] and "Kestrel" not in txt("#app [data-tsm-head]"), "%s: nothing of B's Tally in the steps (%s)" % (label, g["all"][:160]))
 
-        HERE_ = "#app [data-tsm-here]"
         up = {"port": 9041, "ok": True, "skipped": False, "n": 2, "error": "", "reason": "open"}
         ORB, NOVA = "ORBIT SPACE", "NOVA WIDGETS"
 
-        print("== 1. Open in your Tally now: A's Tally, its port, each company with its one action")
+        # next-tally-page-redesign: the "Open in your Tally now" panel's checks moved to the page's top line (this login's
+        # Tallys and their ports) and the one table "Clients and Tally" (each company's one button, Connect again)
+        TOP, TB = "#app [data-tsm-top]", "#app [data-tsm-table]"
+        RW = lambda name: TB + ' tr[data-tsm-row="%s"]' % name
+        mains = lambda name: E("(s) => [...document.querySelectorAll(s + ' [data-tpt-main]')].map(b => b.getAttribute('data-tpt-main'))", RW(name))
+        print("== 1. this login's Tally (the top line) and each company open in it with its one button (the table)")
         ZETA = "ZETA WORKS"
         dA1 = adev([up], opened=(ORB, NOVA, ZETA))
         c1 = cos + [{"company": c, "client_id": None, "device_id": dA1["id"], "gstin": "", "last_seen": "ago:0.5"} for c in (ORB, NOVA, ZETA)]
         ids = scene([dA1, bdev()], c1, CL, A_PINGS)
-        t = txt(HERE_)
-        ok(n(HERE_) == 1 and t.startswith("Open in your Tally now (made-up-a)") and "1 Tally running in this login" in t, "1. the panel, this login named, how many Tallys (%s)" % t[:160])
-        ok(n(HERE_ + ' [data-tsm-here-tally="9041"] [data-tsm-here-tstate="connected"]') == 1 and "port 9041" in t, "1. A's Tally on port 9041, connected")
-        ok("Kestrel" not in t, "1. never B's company in A's panel")
-        ok(n("#app [data-tsm-strip]") == 0, "1. the one-company strip is not drawn beside the panel")
-        # (Connect Tally's step 5 links one company: its button is there only; the panel says so for that company)
-        s5 = [c for c in (ORB, NOVA, ZETA) if n(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-step5]' % c)]
-        ok(len(s5) == 1 and ("“%s”" % s5[0]) in txt("#app [data-tsm-now]") and n(HERE_ + ' [data-tsm-here-co="%s"] button' % s5[0]) == 0, "6 (review). step 5's company: no second Link in the panel (%s | %s)" % (s5, txt("#app [data-tsm-now]")[:100]))
-        others = [c for c in (NOVA, ZETA) if c not in s5]
-        ok(ORB not in s5 and attr(HERE_ + ' [data-tsm-here-co="%s"]' % ORB, "data-tsm-here-kind") == "match" and n(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-connect]' % ORB) == 1, "1. ORBIT SPACE: client Orbit Space matches, Connect")
-        ok(others and all(attr(HERE_ + ' [data-tsm-here-co="%s"]' % c, "data-tsm-here-kind") == "none" and n(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-link]' % c) == 1 for c in others), "1. %s: no client matches, Link" % others)
+        t = txt(TOP)
+        ok(txt("#app [data-tsm-top-title]") == "Connected to your Tally" and txt("#app [data-tsm-top-sub]").startswith("TallyPrime on port 9041 · 3 companies open"), "1. the top line: connected, port 9041, 3 companies open (%s)" % t[:160])
+        ok("Kestrel" not in t and "Kestrel" not in txt(TB), "1. never B's company")
+        ok(n("#app [data-tsm-strip]") == 0, "1. the one-company strip is not drawn beside the table")
+        # (step 5 links a company: when connected the steps are not on the page, so its Link is only the table's)
+        ok(n("#app [data-tsm-guide]") == 0 and all(len(mains(c)) == 1 for c in (ORBIT, NOVA, ZETA)), "6 (review). one button a company: never a second Link in the steps (%s)" % [mains(c) for c in (ORBIT, NOVA, ZETA)])
+        ok(mains(ORBIT) == ["connect"] and n(RW(ORBIT) + " [data-tsm-connect]") == 1, "1. ORBIT SPACE: client Orbit Space matches, Connect (%s)" % mains(ORBIT))
+        others = [c for c in (NOVA, ZETA) if mains(c) == ["link"]]
+        ok(len(others) == 2, "1. NOVA WIDGETS, ZETA WORKS: no client matches, Link (%s)" % [mains(c) for c in (NOVA, ZETA)])
         if others:
-            pg.click(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-link]' % others[0]); pg.wait_for_timeout(600)
-            ok(n(HERE_ + " [data-tsm-here-pick]") == 1, "1. Link opens the client picker (pick a client or + New client)")
-        if n(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-connect]' % ORB):
-            pg.click(HERE_ + ' [data-tsm-here-co="%s"] [data-tsm-here-connect]' % ORB); pg.wait_for_timeout(2500)
+            pg.click(RW(others[0]) + ' [data-tpt-main="link"]'); pg.wait_for_timeout(600)
+            ok(n(RW(others[0]) + " [data-tsm-row-pick]") == 1, "1. Link opens the client picker (pick a client or + New client)")
+        if n(RW(ORBIT) + " [data-tsm-connect]"):
+            pg.click(RW(ORBIT) + " [data-tsm-connect]"); pg.wait_for_timeout(2500)
         lk = E("(c) => { const k = typeof tallyLinkOf === 'function' ? tallyLinkOf(S.companies[c]) : null; return k ? k.company || '' : ''; }", ids[ORBIT])
         ok(lk.upper() == ORB, "1. Connect links ORBIT SPACE to client Orbit Space (%s)" % lk)
 
@@ -112,19 +114,20 @@ def main():
         nt44 = {"port": 9044, "ok": False, "skipped": False, "n": 0, "error": "not TallyPrime", "reason": "not tally"}
         dA1b = adev([up, off43, nt44], opened=(ORB,), why="connection off"); dA1b["info"]["beat"]["tallyPort"] = 9043
         scene([dA1b, bdev()], c1, CL, A_PINGS)
-        ok(attr(HERE_ + ' [data-tsm-here-tally="9043"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "connection off" and n(HERE_ + ' [data-tsm-here-tally="9041"] [data-tsm-here-co="%s"]' % ORB) == 1,
-           "1b. 9041 connected with ORBIT SPACE, 9043 listed with its connection off (%s)" % txt(HERE_)[:220])
-        ok(n(HERE_ + ' [data-tsm-here-tally="9044"]') == 0, "1b (re-review 3). another program on 9044 ('not tally') is not listed as a Tally")
+        ok(txt("#app [data-tsm-top-tally='9043']").startswith("port 9043 · connection off") and txt("#app [data-tsm-top-tally='9041']").startswith("port 9041 · connected · 1 company"),
+           "1b. the top line: 9041 connected with its company, 9043 its connection off (%s)" % t[:0] + txt(TOP)[:220])
+        ok(n("#app [data-tsm-top-tally='9044']") == 0 and "9044" not in txt(TOP), "1b (re-review 3). another program on 9044 ('not tally') is not listed as a Tally")
         up45 = {"port": 9045, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}
         scene([adev([up, up45], opened=(ORB,)), bdev()], c1, CL, A_PINGS)
-        ok(n(HERE_ + ' [data-tsm-here-tally="unknown"] [data-tsm-here-co="%s"]' % ORB) == 1 and n(HERE_ + " [data-tsm-here-noco]") == 0 and "port ?" not in txt(HERE_),
-           "1b. two answering, the company's port not named: under 'port not known', no false 'No company open' (%s)" % txt(HERE_)[:220])
+        ok(txt("#app [data-tsm-top-sub]").startswith("2 Tallys (ports 9041, 9045) · 1 company open") and "port ?" not in txt(TOP) and "No company open" not in txt(TOP),
+           "1b. two answering, the company's port not named: no phantom Tally, no false 'No company open' (%s)" % txt(TOP)[:220])
         scene([adev([], opened=(ORB,)), bdev()], c1, CL, A_PINGS)
-        ok(n(HERE_ + ' [data-tsm-here-tally="unknown"] [data-tsm-here-co="%s"]' % ORB) == 1 and n(HERE_ + ' [data-tsm-here-tstate="connected"]') == 0, "1b. a bridge that names no port: the company listed, never 'connected' (%s)" % txt(HERE_)[:200])
+        ok(txt("#app [data-tsm-top-sub]").startswith("TallyPrime · 1 company open") and "port" not in txt("#app [data-tsm-top-sub]"), "1b. a bridge that names no port: the company counted, no port claimed (%s)" % txt(TOP)[:200])
 
         print("== 1c (review 9). another login's bridge record from before, on A's port: not a holder")
         bOld = bdev(port=9041); bOld["info"]["bridges"]["go-8"]["at"] = "ago:600"
         scene([adev([up], opened=(ORB,)), bOld], c1, CL, A_PINGS)
+        E("() => { S.tsm = Object.assign(S.tsm || {}, {open: true}); render(); }"); pg.wait_for_timeout(600)   # (See the 6 steps)
         ok("(port 9041): this login’s own" in guide()["all"], "1c. step 3 done: this login's own port (%s)" % re.findall(r"connection is on[^✓]*", guide()["all"])[:1])
 
         print("== 2. a company linked: the client, its state, Update now")
@@ -132,14 +135,14 @@ def main():
         c2 = cos + [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": dA["id"], "gstin": "", "last_seen": "ago:0.5"},
                     {"company": NOVA, "client_id": None, "device_id": dA["id"], "gstin": "", "last_seen": "ago:0.5"}]
         ids = ids0 = scene([dA, bdev()], c2, CL, A_PINGS)
-        R2 = HERE_ + ' [data-tsm-here-co="%s"]' % ORB
-        ok(attr(R2, "data-tsm-here-kind") == "linked" and txt(R2 + " [data-tsm-here-client]") == ORBIT and n(R2 + " [data-tsm-here-update]") == 1, "2. linked: client, Update now (%s)" % txt(R2))
-        st = attr(R2 + " [data-tsm-here-state]", "data-tsm-here-state")
-        ok(st in ("reading", "done", "need") and re.search(r"Reading…|Up to date|Ledgers|Entries", txt(R2 + " [data-tsm-here-state]")), "2. its state in words (%s: %s)" % (st, txt(R2 + " [data-tsm-here-state]")))
-        E("() => { window.__upd = []; window.__tun0 = window.tallyUpdateNow; window.tallyUpdateNow = (c) => window.__upd.push(c); }")
-        pg.click(R2 + " [data-tsm-here-update]"); pg.wait_for_timeout(300)
+        R2 = RW(ORBIT)
+        ok(attr(R2, "data-tsm-kind") == "client" and txt(R2 + " [data-tsm-client]") == ORBIT and mains(ORBIT) in (["update"], ["reading"]), "2. linked: client, Update now (%s)" % txt(R2)[:160])
+        st = attr(R2 + " [data-tpt-state]", "data-tpt-state")
+        ok(st in ("reading", "ok", "need") and re.search(r"Reading|Up to date|Needs you|Entries", txt(R2 + " [data-tpt-state]")), "2. its state in words (%s: %s)" % (st, txt(R2 + " [data-tpt-state]")))
+        E("() => { window.__upd = []; window.__tun0 = window.tallyUpdateNow; window.tallyUpdateNow = (c) => window.__upd.push(c); S.tcoSync = {}; render(); }"); pg.wait_for_timeout(400)
+        if n(R2 + ' [data-tpt-main="update"]'): pg.click(R2 + ' [data-tpt-main="update"]'); pg.wait_for_timeout(1500)
         ok(E("() => window.__upd") == [ids[ORBIT]], "2. Update now asks the existing update for that client (%s)" % E("() => window.__upd"))
-        E("() => { window.tallyUpdateNow = window.__tun0; }")
+        E("() => { window.tallyUpdateNow = window.__tun0; S.tcoSync = {}; }")
 
         print("== 3. a client linked but not connected now: Connect again, the reason, and the company open under the next year's name")
         AOLD, ANEW = "ACME TRADERS 2025-26", "ACME TRADERS 2026-27"
@@ -147,15 +150,15 @@ def main():
         c3 = cos + [{"company": AOLD, "client_id": "NAME:" + ACME, "device_id": dA3["id"], "gstin": "", "last_seen": "ago:3000"},
                     {"company": ANEW, "client_id": None, "device_id": dA3["id"], "gstin": "", "last_seen": "ago:0.5"}]
         ids = scene([dA3, bdev()], c3, CL, A_PINGS)
-        AW = HERE_ + ' [data-tsm-away="%s"]' % ids[ACME]
-        ok(n(AW) == 1 and n(AW + " [data-tsm-away-again]") == 1 and AOLD in txt(AW), "3. Acme Traders listed with Connect again (%s)" % txt(HERE_ + " [data-tsm-here-away]")[:200])
+        AW = RW(ACME)
+        ok(mains(ACME) == ["again"] and n(AW + " [data-tsm-away-again]") == 1 and AOLD in txt(AW), "3. Acme Traders with Connect again, in the table (%s)" % txt(AW)[:200])
         ok(n(AW + ' [data-tsm-away-near="%s"] [data-tsm-away-relink]' % ANEW) == 1, "3. the close name open in A's Tally: Link Acme Traders to it")
         E("() => { window.__probed = []; }")
         pg.click(AW + " [data-tsm-away-again]"); pg.wait_for_timeout(2500)
-        why = txt(AW + " [data-tsm-away-why]")
-        ok(why.startswith("“ACME TRADERS 2025-26” is not open in your Tally.") or why.startswith("Step "), "3. Connect again: what is missing, plainly (%s)" % why)
+        why = txt(AW + " .tpt-why")
+        ok(why.startswith("“ACME TRADERS 2025-26” is not open in Tally.") or why.startswith("Step "), "3. Connect again: what is missing, plainly (%s)" % why)
         ok(len(E("() => window.__probed || []")) >= 1, "3. Connect again looks again (the shared look of this login's bridge)")
-        ok(n(HERE_ + ' [data-tsm-away]') == 1, "3. only the client not connected is listed")
+        ok(E("() => document.querySelectorAll('#app [data-tsm-table] [data-tsm-away-again]').length") == 1, "3. only the client not connected has Connect again")
 
         print("== 8. the client's Tally section (Books › From Tally): the masters' one line, Update now, by itself when")
         dA["info"]["beat"]["changeNumbers"] = {ORB: {"altvchid": 10, "altmstid": 4, "at": "2026-11-06T15:04:05"}}
@@ -229,23 +232,26 @@ def main():
         for b in dOff["info"]["bridges"].values(): b["at"] = "ago:600"
         scene([dOff, bdev()], c2, CL, B_ONLY)
         g0 = guide()
-        ok(g0["now"] == "1", "9. the bridge stopped (Windows restarted): step 1 (%s %s)" % (g0["now"], g0["say"][:100]))
+        ok(g0["now"] == "1" and txt("#app [data-tsm-top-title]").startswith("Not connected yet: step 1"), "9. the bridge stopped (Windows restarted): step 1 (%s %s)" % (g0["now"], g0["say"][:100]))
         E("""() => { const t = new Date().toISOString(), d = window.__devs.find(x => x.info && x.info.user === 'made-up-a');
           d.last_seen = t; d.info.beat.at = t; Object.values(d.info.bridges || {}).forEach(b => { b.at = t; }); }""")
         E(TS.PINGS, A_PINGS)
         pg.wait_for_timeout(36000)
+        ok(txt("#app [data-tsm-top-title]") == "Connected to your Tally", "9. its beat back: connected again by itself, nothing pressed (%s)" % txt("#app [data-tsm-top]")[:120])
+        E("() => { S.tsm = Object.assign(S.tsm || {}, {open: true}); render(); }"); pg.wait_for_timeout(600)   # (See the 6 steps)
         g1 = guide()
-        ok(g1["now"] != "1" and g1["states"][:4] == ["done"] * 4, "9. its beat back: steps 1-4 done again by themselves, nothing pressed (%s %s)" % (g1["now"], g1["states"]))
-        ok(attr(HERE_ + ' [data-tsm-here-co="%s"]' % ORB, "data-tsm-here-kind") == "linked", "9. the linked company is listed as linked again")
+        ok(g1["now"] != "1" and g1["states"][:4] == ["done"] * 4, "9. steps 1-4 done again by themselves (%s %s)" % (g1["now"], g1["states"]))
+        ok(attr(RW(ORBIT), "data-tsm-kind") == "client" and mains(ORBIT) in (["update"], ["reading"]), "9. the linked company is linked and reading again (%s)" % mains(ORBIT))
 
         print("== 4. A's Tally running, its connection off, or its port held by B's Tally")
         own9000 = {"port": 9000, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}
         scene([adev([own9000], why="connection off", say=MODE), bdev()], cos, CL, A_PINGS)
-        ok((attr(HERE_ + ' [data-tsm-here-tally="9000"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "connection off" or attr(HERE_ + ' [data-tsm-here-tally="off"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "mode")
-           and "connection off" in txt(HERE_), "4. connection off, said on the panel (%s)" % txt(HERE_)[:200])
+        ok(txt("#app [data-tsm-top-title]") == "Not connected yet: step 3 of 6" and attr("#app [data-tsm-guide]", "data-tsm-hook") == "mode" and "connection is off" in txt("#app [data-tsm-now]"),
+           "4. connection off: the top line and step 3 say so (%s | %s)" % (txt("#app [data-tsm-top]")[:100], txt("#app [data-tsm-now]")[:100]))
         held = {"port": 9000, "ok": False, "skipped": True, "n": 0, "error": "Tally of made-up-b", "reason": "another user"}
         scene([adev([held], why="connection off", say=CLASH), bdev(port=9000)], cos, CL, A_PINGS)
-        ok(attr(HERE_ + ' [data-tsm-here-tally="off"] [data-tsm-here-tstate]', "data-tsm-here-tstate") == "clash" and "port taken" in txt(HERE_), "4. port taken (%s)" % txt(HERE_)[:200])
+        ok(txt("#app [data-tsm-top-title]") == "Not connected yet: step 3 of 6" and attr("#app [data-tsm-guide]", "data-tsm-hook") == "clash" and "is taken by the Tally of made-up-b" in txt("#app [data-tsm-now]"),
+           "4. port taken: the top line and step 3 say so (%s)" % txt("#app [data-tsm-now]")[:140])
 
         print("== 5. this login's own port: the same number on every look, never B's")
         def proposed(ports, b_port=9070):
@@ -279,7 +285,36 @@ def main():
         ok(n("header.top .tally-pop [data-tally-pop-steps]") == 1 and n("header.top .tally-pop [data-tally-pop-recheck], header.top .tally-pop [data-tally-pop-act=check]") >= 1, "7. See the 6 steps and Check again (%s)" % txt("header.top .tally-pop")[:200])
         if n("header.top .tally-pop [data-tally-pop-recheck]"):
             pg.click("header.top .tally-pop [data-tally-pop-recheck]"); pg.wait_for_timeout(1500)
-            ok(txt("header.top .tally-pop [data-tally-pop-msg]").startswith("Checked at "), "7. Check again says when it looked (%s)" % txt("header.top .tally-pop [data-tally-pop-msg]"))
+            ok(re.match(r"Checked \d\d:\d\d: ", txt("header.top .tally-pop [data-tally-pop-msg]")), "7. Check again says when it looked (%s)" % txt("header.top .tally-pop [data-tally-pop-msg]"))
+        print("== 10 (the owner: Books › From Tally is the only place that updates ledgers). The Ledgers page and its unknown-ledgers box: the way there")
+        import ledpage_setup as LP
+        LP.open_page(pg, "owner")
+        ok(n("#app [data-led-read]") == 0 and n("#app [data-unk-read]") == 0, "10. no Read again now, no Read the ledgers now")
+        ok(txt("#app [data-led-go='cloud']") == "Update ledgers in Books › From Tally", "10. the status line: 'Update ledgers in Books › From Tally' (%s)" % txt("#app [data-led-status]")[:160])
+        ok(txt("#app [data-led-line=unknown] [data-unk-go]") == "Update ledgers in Books › From Tally" and n("#app [data-led-line=unknown] [data-unk-why]") == 1, "10. the unknown-ledgers box: the same link, its reason kept (%s)" % txt("#app [data-led-line=unknown]")[:160])
+        # every way a read could be asked, recorded (the bridge here, the cloud's RPCs and wakes, the ledgers read, Update now)
+        HOOK = """() => { const R = window.__reads10 = []; const wrap = (o, k, tag) => { if (!o || typeof o[k] !== 'function' || o[k].__h10) return; const f = o[k];
+            const g = function () { R.push(tag + ':' + String(arguments[0] || '').slice(0, 60)); return f.apply(this, arguments); }; g.__h10 = true; o[k] = g; };
+          wrap(window.Bridge, 'call', 'bridge'); wrap(window.TCloud, 'rpc', 'rpc'); wrap(window.TCloudUp, 'post', 'post'); wrap(window.Ledgers, 'askTally', 'askTally');
+          wrap(window.Ledgers, 'refresh', 'ledRefresh'); wrap(window, 'tallyUpdateNow', 'update'); window.__rpc = window.__rpc || []; window.__rpc0 = window.__rpc.length; }"""
+        E(HOOK)
+        # (scene 7 left the top bar's Tally popover open; the app's rule (parts/dismiss.js) is that the first click outside an
+        # open overlay only closes it. Closed first, as a person would see it, then a real mouse click)
+        ov = E("() => [...document.querySelectorAll('header.top .tally-pop, details[open]')].map(e => e.className || e.tagName)")
+        print("   open before the click: %s" % ov)
+        for _ in range(3):
+            if not E("() => !!document.querySelector('header.top .tally-pop')"): break
+            pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        ok(not E("() => !!document.querySelector('header.top .tally-pop')"), "10. the popover left open by scene 7 is closed (Esc)")
+        pg.click("#app [data-led-go='cloud']"); pg.wait_for_timeout(1500)
+        reads = E("() => window.__reads10.filter(x => !/^rpc:(tally_status|tally_period_status|tally_check_status)|^bridge:\\/status/.test(x))")
+        wants = E("() => window.__rpc.slice(window.__rpc0).filter(c => c && c[0] === 'tally_want_update').length")
+        ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1, "10. the link opens Books › From Tally")
+        ok(not reads and wants == 0, "10. the link asks nothing of Tally: no bridge call, wake, ledgers read or Update now, no tally_want_update (%s, %s)" % (reads[:5], wants))
+        # (the check catches a read: Update now asked here is recorded)
+        E("() => { window.__reads10.length = 0; try { tallyUpdateNow(S.coId); } catch (e) {} }"); pg.wait_for_timeout(800)
+        ok(len(E("() => window.__reads10")) > 0, "10. control: a read asked is seen by the same check (%s)" % E("() => window.__reads10")[:3])
+        ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update now")
     print("\npage errors: %s" % errors[:5])
     ok(not errors, "no page errors")
     print("\n%s: %d" % ("FAILED" if fails else "PASSED", len(fails)) + ("" if fails else " failures"))

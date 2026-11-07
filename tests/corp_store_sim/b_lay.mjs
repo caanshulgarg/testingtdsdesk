@@ -1,0 +1,37 @@
+// 3: a record removed on another computer while it has an edit here not saved: kept, said (Restore / Discard), never
+// "Saved", never sent again by itself
+import { srv, H, W, st, ok, done, STORE, profile0 } from "./harness.mjs";
+profile0();
+const F = (ref) => ({ client_id: "c1", ref, form: "DPT-3", kind: "annual", status: "in_progress", steps: 1, data: {}, updated_at: st() });
+srv.corp_filings.push(F("F1"), F("F2"));
+const S = await import(STORE);
+S.corpOf("c1"); await W(20);
+console.log("on a read again");
+H.fail = true;
+S.saveFiling("c1", { ref: "F1", srn: "X12345678", status: "filed" }); await W(500);
+srv.corp_filings = srv.corp_filings.filter((r) => r.ref !== "F1");
+H.fail = false; H.log = [];
+await S.pull("c1"); await W(300);
+const n = S.cloudNote("c1");
+ok(S.corpOf("c1").filings.some((f) => f.ref === "F1" && f.srn === "X12345678") && n.removed && /^Removed on another computer\. Your change isn’t saved/.test(n.text), "kept with the edit, said (" + n.text + ")");
+ok(!H.log.some((l) => l.m === "POST") && !srv.corp_filings.some((r) => r.ref === "F1"), "not sent again by itself");
+S.retryNow("c1"); await W(300);
+ok(!H.log.some((l) => l.m === "POST") && !/Saved/.test(S.cloudNote("c1").text), "Retry sends nothing, never Saved");
+S.settleRemoved("c1", true); await W(300);
+const r1 = srv.corp_filings.find((r) => r.ref === "F1");
+ok(r1 && r1.srn === "X12345678" && r1.status === "filed" && r1.form === "DPT-3" && /Saved/.test(S.cloudNote("c1").text), "Restore: saved again as new, whole (" + JSON.stringify(r1) + ")");
+console.log("on the save (the PATCH finds no row)");
+S.saveFiling("c1", { ref: "F2", steps: 2 });
+srv.corp_filings = srv.corp_filings.filter((r) => r.ref !== "F2");
+H.log = []; await W(700);
+ok(S.cloudNote("c1").removed && !H.log.some((l) => l.m === "POST") && S.corpOf("c1").filings.some((f) => f.ref === "F2"), "said, kept, no POST (" + H.log.map((l) => l.m) + ")");
+S.settleRemoved("c1", false); await W(300);
+ok(!S.corpOf("c1").filings.some((f) => f.ref === "F2") && !srv.corp_filings.some((r) => r.ref === "F2") && /Saved/.test(S.cloudNote("c1").text) && !Object.keys(S.corpOf("c1").pending).length, "Discard: gone, nothing left to send");
+console.log("the profile");
+H.fail = true; S.saveProfile("c1", { phone: "kept" }); await W(500);
+srv.corp_profiles = []; H.fail = false; H.log = [];
+await S.pull("c1"); await W(300);
+ok(S.cloudNote("c1").removed && S.corpOf("c1").profile.phone === "kept" && !H.log.some((l) => l.m === "POST"), "the profile removed elsewhere: kept, said");
+S.settleRemoved("c1", true); await W(300);
+ok(srv.corp_profiles.length === 1 && srv.corp_profiles[0].profile.phone === "kept", "Restore: the profile saved again");
+done();
