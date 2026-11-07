@@ -120,6 +120,9 @@ def main():
         ok(gone and BR["gets"] == g1 + 1, "1. keepWait no longer 'posting': the list asked once more, the line gone (%d asks; %s)" % (BR["gets"] - g1, txt("#app [data-masters]")[:120]))
 
         print("== 2. a Mac: no bridge here")
+        # (scene 1's stand-in bridge put back first: the Mac's page starts without it)
+        E("() => { if (window.__bridge0) Object.assign(Bridge, window.__bridge0); Bridge.st = {state: 'off', sessions: [], open: [], at: Date.now(), error: ''}; Bridge.setCfg({key: '', bridgeId: '', url: 'http://127.0.0.1:9100'}); render(); }")
+        pg.wait_for_timeout(800)
         BR["jobs"] = [dict(j) for j in JOBS]; BR["cancels"] = []; g0 = BR["gets"]
         scene([dA], cos, [ORBIT], {}, False, books={ORBIT: T.book(ORBIT)})
         ok(BR["gets"] == g0 and not BR["cancels"] and n("#app [data-stuck-jobs]") == 0, "2. nothing shown, the bridge never asked (%d asks, %s cancels)" % (BR["gets"] - g0, BR["cancels"]))
