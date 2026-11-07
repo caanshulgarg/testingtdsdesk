@@ -4,23 +4,29 @@
 // FinCom does not file on the MCA portal: it works out what is due and when, prepares what it can, and keeps the SRN the
 // person types back in after filing with DSC on the portal.
 //
-// DIR-3 KYC: how often, a SETTING (the review of 30f70eea6: not hard-coded). Rule 12A of the Companies (Appointment and
-// Qualification of Directors) Rules 2014 has read "every financial year, by 30 September"; an amendment to "once in every
-// three financial years, by 30 June" has been notified / proposed. The owner is asked which applies; until then "annual".
+// DIR-3 KYC: how often, a SETTING (the review of 30f70eea6: not hard-coded). The owner decided (07-Nov-2026): Rule 12A of
+// the Companies (Appointment and Qualification of Directors) Rules 2014 as amended, once every three financial years, by
+// 30 June. "annual" (every year by 30 September, the rule before) is kept as the other choice.
+//   triennial  the next KYC is due in the third financial year after the last one done, by 30 June after that year
+//              (last done in FY 2023-24: due in FY 2026-27, by 30-Jun-2027); none recorded: due for the year, by 30 June
 //   annual     every director holding a DIN on 31 March of the year, by 30 September after it
-//   triennial  a director whose last KYC is three or more financial years old, by 30 June after the year
 export const DIR3_KYC = {
-  use: "annual",
-  annual: { every: 1, month: 9, day: 30, words: "every year by 30 September (rule 12A)" },
+  use: "triennial",
   triennial: { every: 3, month: 6, day: 30, words: "once every three financial years, by 30 June (rule 12A, as amended)" },
+  annual: { every: 1, month: 9, day: 30, words: "every year by 30 September (rule 12A, before its amendment)" },
 };
-export const kycRule = () => DIR3_KYC[DIR3_KYC.use] || DIR3_KYC.annual;
-// a director's KYC for a year: {needed, done, due, words}; kyc = the years the director's KYC was done (Directors & KMP)
+export const kycRule = () => DIR3_KYC[DIR3_KYC.use] || DIR3_KYC.triennial;
+const dueOn = (y, r) => (y + 1) + "-" + String(r.month).padStart(2, "0") + "-" + String(r.day).padStart(2, "0");
+// a director's KYC as at a year: {done, due, next, words}; kyc = the years the director's KYC was done (Directors & KMP).
+// done: nothing to file for this year (filed this year, or, three-yearly, the next one falls in a later year); due: the
+// date the next KYC is due; next: the financial year it falls in
 export function kycFor(d, fy) {
-  const r = kycRule(), y = +String(fy).slice(0, 4), done = (d.kyc || []).map((x) => +String(x).slice(0, 4));
-  const due = (y + 1) + "-" + String(r.month).padStart(2, "0") + "-" + String(r.day).padStart(2, "0");
-  const ok = r.every === 1 ? done.includes(y) : done.some((z) => z > y - r.every && z <= y);
-  return { needed: true, done: ok, due, words: r.words };
+  const r = kycRule(), y = +String(fy).slice(0, 4), done = (d.kyc || []).map((x) => +String(x).slice(0, 4)).filter((z) => z <= y);
+  const last = done.length ? Math.max(...done) : null;
+  if (r.every === 1) return { done: done.includes(y), due: dueOn(y, r), next: y, words: r.words };
+  const next = last == null ? y : last + r.every;
+  const nfy = next + "-" + String(next + 1).slice(2);
+  return { done: next > y, due: dueOn(next, r), next: nfy, words: r.words };
 }
 
 // a small company is a private company (s.2(85)): the tick is not used for a public or a section 8 company
@@ -50,7 +56,7 @@ export const ANNUAL = [
     law: "s.139(1) Companies Act 2013; rule 4(2) Companies (Audit and Auditors) Rules 2014: within 15 days of the meeting at which the auditor is appointed.",
     applies: (p, fy) => (!p.auditorTill || p.auditorTill <= fy ? true : "the auditor continues: appointed till the AGM of FY " + p.auditorTill) },
   { form: "DIR-3 KYC", what: "Director KYC", from: "kyc", perDirector: true, steps: ["Details & OTP", "DSC", "Checked", "Ready"],
-    law: "Rule 12A Companies (Appointment and Qualification of Directors) Rules 2014: every director holding a DIN on 31 March, by 30 September (DIR-3 KYC or DIR-3 KYC-WEB); how often is the setting DIR3_KYC above.",
+    law: "Rule 12A Companies (Appointment and Qualification of Directors) Rules 2014: every director holding a DIN; as amended, once every three financial years by 30 June (DIR-3 KYC or DIR-3 KYC-WEB); how often is the setting DIR3_KYC above.",
     applies: () => true },
   { form: "DPT-3", what: "Return of deposits & outstanding loans", from: "fixed", month: 6, day: 30, yearAfter: 0, steps: ["Loans & receipts listed", "Auditor's certificate", "Attachments", "Checked"],
     law: "Rule 16 Companies (Acceptance of Deposits) Rules 2014: by 30 June, as at 31 March (also for receipts that are not deposits, rule 2(1)(c)).",

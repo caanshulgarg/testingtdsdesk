@@ -124,13 +124,13 @@ function Directors({ co, P }) {
   const [edit, setEdit] = useState(false);
   const { rows, put, add, del } = useRows(co, P, "directors"), fy = lastClosedFy(today()), pre = P._pre.directors || [];
   const kyc = (d) => { if (!isDirector(d)) return <span className="corp-chip">Not needed (no DIN)</span>;
-    const k = kycFor(d, fy); if (k.done) return <span className="corp-chip" data-tone="ok">Done</span>;
+    const k = kycFor(d, fy); if (k.done) return <span className="corp-chip" data-tone="ok" data-kyc-chip="done">{"Done · next by " + dmy(k.due)}</span>;
     return today() > k.due ? <span className="corp-chip" data-tone="bad" data-kyc-chip="overdue">Overdue</span> : <span className="corp-chip" data-tone="warn" data-kyc-chip="due">{"Due by " + dmy(k.due).slice(0, 6)}</span>; };
   return <Card title="Directors & KMP" pad={false} attr={["data-corp-directors", ""]}
     aside={canEdit() && <Button className="btn small" data-corp-edit="directors" onClick={() => setEdit(!edit)}>{edit ? "Done" : rows.length ? "Appoint / change" : "Add"}</Button>}>
     {!rows.length && !edit && <div className="corp-empty">{pre.length ? <>The financial statements name {pre.length === 1 ? "one director" : pre.length + " directors"}. {canEdit() && <button className="linkbtn" data-corp-bring="directors" onClick={() => saveProfile(co.id, { directors: withIds(pre) })}>Bring them in</button>}</> : "No directors entered yet."}</div>}
     {(rows.length > 0 || edit) && <div className="corp-scroll"><table className="corp-table" style={{ minWidth: 640 }}>
-      <thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th>Appointed</th><th>{"DIR-3 KYC · FY " + fy}</th>{edit && <th aria-label="Remove" />}</tr></thead>
+      <thead><tr><th>Name</th><th>DIN</th><th>Designation</th><th>Appointed</th><th>DIR-3 KYC</th>{edit && <th aria-label="Remove" />}</tr></thead>
       <tbody>{rows.map((d, i) => edit ? <tr key={keyOf(d, i)} data-director-row={i} data-row-id={d.id || ""}>
         <td><input aria-label="Director's name" defaultValue={d.name} onBlur={(e) => put(i, { name: e.target.value.trim() })} /></td>
         <td><input aria-label="DIN" defaultValue={d.din} inputMode="numeric" maxLength={8} onBlur={(e) => put(i, { din: e.target.value.trim() })} /></td>

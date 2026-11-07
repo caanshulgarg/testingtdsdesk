@@ -98,7 +98,7 @@ export function health(p, o) {
   // DIR-3 KYC of each director holding a DIN on 31 March of the year (rule 12A; how often: rules.js DIR3_KYC)
   (p.directors || []).filter((d) => d && d.name && isDirector(d) && !d.ceased && (!isDay(d.appointed) || d.appointed <= fyEnd(fy))).forEach((d, i) => {
     const k = kycFor(d, fy), key = "kyc:" + (d.din || d.id || i);
-    add(k.done ? { key, title: "DIR-3 KYC · " + d.name, sub: "for FY " + fy, when: "Done", tone: "ok" }
+    add(k.done ? { key, title: "DIR-3 KYC · " + d.name, sub: "next by " + dmy(k.due) + " (" + k.words + ")", when: "Done", tone: "ok" }
       : Object.assign({ key, title: "DIR-3 KYC · " + d.name, sub: k.words }, when(k.due)));
   });
 

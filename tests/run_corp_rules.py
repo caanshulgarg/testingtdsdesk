@@ -6,7 +6,8 @@ page's own code (window.FCCorpRules, the Corporate chunk) on made-up companies:
   M1  board meetings (s.173): 120 days and four a calendar year; a section 8 company one in every six months; a small
       private company, an OPC, a dormant company and a private start-up one in each half-year, not before 90 days; the
       small company tick not used for a public company;
-  M2  DIR-3 KYC from the rules file's setting (annual: 30 September; three-yearly: 30 June, three years' KYC counts);
+  M2  DIR-3 KYC from the rules file's setting, three-yearly (the owner's decision): due in the third financial year after
+      the last KYC, by 30 June after it; none recorded: due for the year;
       after its date the profile says Overdue;
   M3  the ROC from the CIN: one ROC where the state has one; Maharashtra, Tamil Nadu and Andhra Pradesh: the choices,
       "from CIN, check"; Ladakh; FTC / FLC / ULL classes;
@@ -51,7 +52,9 @@ CASES = [
     ("s.173: four no longer reachable is a warning, not red", "R.health({cls: 'private', lastBoard: '2026-02-01'}, {on: '2026-11-07', boards: []}).items.filter(x => x.key === 'board4').map(x => [x.when, x.tone])", [["1 of 4", "warn"]]),
     ("s.173: the year of incorporation counts from its month", "R.health({cls: 'private', incorporated: '2026-07-01', lastBoard: '2026-07-20'}, {on: '2026-11-07', boards: ['2026-10-15']}).items.filter(x => x.key === 'board4').map(x => [x.when, x.tone])", [["2 of 2", "ok"]]),
     ("M1 earliest date shown", "R.nextBoard({cls: 'opc', lastBoard: '2026-08-01'}).rule.includes('not before 30-Oct-2026')", True),
-    ("M2 annual KYC due", "R.kycFor({kyc: []}, '2025-26').due", "2026-09-30"),
+    ("M2 DIR-3 KYC, three-yearly (the owner's decision): none recorded, due for the year by 30 June", "[R.kycFor({kyc: []}, '2025-26').done, R.kycFor({kyc: []}, '2025-26').due]", [False, "2026-06-30"]),
+    ("M2 last done in FY 2023-24: nothing due in FY 2025-26, next in FY 2026-27 by 30-Jun-2027", "[R.kycFor({kyc: ['2023-24']}, '2025-26').done, R.kycFor({kyc: ['2023-24']}, '2025-26').due, R.kycFor({kyc: ['2023-24']}, '2025-26').next]", [True, "2027-06-30", "2026-27"]),
+    ("M2 last done in FY 2022-23: due in FY 2025-26, by 30-Jun-2026", "[R.kycFor({kyc: ['2022-23']}, '2025-26').done, R.kycFor({kyc: ['2022-23']}, '2025-26').due]", [False, "2026-06-30"]),
     ("L2 auditor's term ended: Overdue", "R.health({auditor: 'Made-up & Co', auditorTill: '2023-24'}, {on: '2026-11-07'}).items.filter(x => x.key === 'auditor').map(x => [x.when, x.tone])", [["Overdue", "bad"]]),
     ("M3 one ROC", "R.cinInfo('U17299DL2019PTC000000').roc", "ROC Delhi"),
     ("M3 Maharashtra: choose", "[R.cinInfo('U17299MH2019PTC000000').roc, R.cinInfo('U17299MH2019PTC000000').rocs, R.cinInfo('U17299MH2019PTC000000').rocCheck]", ["", ["ROC Mumbai", "ROC Pune"], True]),
@@ -79,7 +82,7 @@ with sync_playwright() as p:
     fy = E("(() => { const d = istToday(), y = +d.slice(0,4), m = +d.slice(4,6), a = (m < 4 ? y - 1 : y) - 1; return a + '-' + String(a + 1).slice(2); })()")
     E("(cid) => { FCCorp.saveProfile(cid, {directors: [{id: 'd1', name: 'Ravi Menon (made-up)', din: '00000022', desig: 'Director'}]}); render(); }", co); W(600)
     chip = E("(document.querySelector('#app [data-kyc-chip]') || {}).dataset")
-    due = str(int(fy[:4]) + 1) + "-09-30"
+    due = str(int(fy[:4]) + 1) + "-06-30"
     today = E("(() => { const d = istToday(); return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6); })()")
     ok(chip and chip.get("kycChip") == ("overdue" if today > due else "due"), "the KYC chip: %s (today %s, due %s)" % (chip, today, due))
     ctx.close(); br.close()

@@ -5,7 +5,7 @@ Corporate: know the company"). Offline, made-up companies only (no real client):
      incorporation, registered office, capital, auditor and term, email, last board meeting, the AGM for a year and small
      company are kept; the header shows them (Authorised / Paid-up capital, Last AGM);
   3. Directors & KMP: two directors added with their DINs and appointment dates; DIR-3 KYC ticked for one: "Done", the other
-     "Due by 30-Sep"; a KMP (Company Secretary) shows no KYC; shareholders 6,000 / 4,000: 60% / 40%, and a warning when the
+     due by 30 June (three-yearly; Overdue after it); a KMP (Company Secretary) shows no KYC; shareholders 6,000 / 4,000: 60% / 40%, and a warning when the
      shares do not make the paid-up capital; a charge: the header's Open charges;
   4. Compliance health is worked out from the profile: the KYC not done is listed (late after 30 September), the next board
      meeting from the last one (s.173), the AGM held; ticking the KYC makes it Done and the count goes down;
@@ -97,7 +97,7 @@ with sync_playwright() as p:
     pg.check("#app [data-director-row='0'] input[data-kyc]"); W(300)
     pg.click("#app [data-corp-edit=directors]"); W(400)
     rows = E("[...document.querySelectorAll('#app [data-corp-directors] tbody tr')].map(r => r.innerText.replace(/\\s+/g, ' ').trim())")
-    ok(len(rows) == 3 and "Asha Verma (made-up) 00000011 Director 10-Jun-2019 Done" == rows[0] and (rows[1].endswith("Overdue") if E("istToday()") > "20260930" else rows[1].endswith("Due by 30-Sep")) and "Not needed (no DIN)" in rows[2], "the directors and their KYC (%s)" % rows)
+    ok(len(rows) == 3 and rows[0].startswith("Asha Verma (made-up) 00000011 Director 10-Jun-2019 Done · next by 30-Jun-") and (rows[1].endswith("Overdue") if E("istToday()") > "20260630" else rows[1].endswith("Due by 30-Jun")) and "Not needed (no DIN)" in rows[2], "the directors and their KYC (%s)" % rows)
     pg.click("#app [data-corp-edit=shares]"); W(300)
     for n, s in (("Asha Verma (made-up)", "6000"), ("Ravi Menon (made-up)", "4000")):
         pg.click("#app [data-corp-add=holder]"); W(250)
@@ -125,7 +125,7 @@ with sync_playwright() as p:
     today = E("(() => { const d = istToday(); return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6); })()")
     fy = E("(() => { const d = istToday(), y = +d.slice(0,4), m = +d.slice(4,6), a = (m < 4 ? y - 1 : y) - 1; return a + '-' + String(a + 1).slice(2); })()")
     ok("kyc:00000022" in keys and "kyc:00000011" in keys and keys["kyc:00000011"][0] == "ok", "the KYC of each director with a DIN: one done, one not (%s)" % hk)
-    late = today > str(int(fy[:4]) + 1) + "-09-30"
+    late = today > str(int(fy[:4]) + 1) + "-06-30"
     ok(keys.get("kyc:00000022", ("", ""))[0] == ("bad" if late else keys.get("kyc:00000022", ("", ""))[0]), "the KYC not done is late after 30 September (%s, today %s)" % (keys.get("kyc:00000022"), today))
     ok("board" in keys and "120 days" not in keys["board"][1] and "s.173(5)" in keys["board"][1], "the next board meeting: a small company's rule, s.173(5) (%s)" % (keys.get("board"),))
     ok(fy != "2025-26" or keys.get("agm", ("", ""))[0] == "ok", "the AGM of FY 2025-26: held (%s)" % (keys.get("agm"),))
