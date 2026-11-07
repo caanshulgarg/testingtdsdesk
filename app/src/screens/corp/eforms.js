@@ -6,7 +6,7 @@
 //   words(row)                "Not started" / "In progress (2 of 4)" / "Ready" / "Filed · SRN … · date" / "Not needed: …"
 //   dueItems(p, filings, on)  what the Compliance health lists: the last year's forms not filed and the events open
 import { ANNUAL, EVENT, GENERIC_STEPS } from "./rules.js";
-import { addDays, dmy, dueIn, fyEnd, isDay, lastClosedFy, today } from "./dates.js";
+import { addDays, dmy, dueIn, fyEnd, fyOf, isDay, lastClosedFy, today } from "./dates.js";
 import { agmLastDay, firstFyEnd } from "./health.js";
 import { kycFor } from "./rules.js";
 import { isDirector } from "./profile.js";
@@ -17,6 +17,8 @@ const ymd = (y, m, d) => y + "-" + String(m).padStart(2, "0") + "-" + String(d).
 
 // when the AGM of the year was held, or (not entered) the last day it could be: s.96(1)
 // null: no AGM for the year (it ends before the company's first financial year does, s.2(41))
+// firstFy: the company's first financial year (the one its first year ends in); "" when the profile does not say
+export const firstFy = (p) => (firstFyEnd(p) ? fyOf(firstFyEnd(p)) : "");
 export function agmOf(p, fy) {
   const d = (p.agms || {})[fy];
   if (isDay(d)) return { date: d, held: true };
@@ -38,8 +40,11 @@ export function annual(p, fy, filings) {
   const by = Object.fromEntries((filings || []).map((f) => [f.ref, f])), rows = [];
   const row = (rule, ref, extra) => {
     const f = by[ref], d = extra.due ? extra : dueOf(rule, p, fy), ap = d.none || rule.applies(p, fy);
+    // the profile must say more first: the form shown with what to enter, no due date, never late
+    if (ap && ap.ask && !f) { rows.push(Object.assign({ ref, form: rule.form, what: rule.what, law: rule.law, steps: rule.steps || GENERIC_STEPS, builder: rule.builder || "", due: "", dueFrom: ap.ask, kind: "annual", period: fy },
+      extra, { status: "not_started", done: 0, reason: "", auto: false, ask: ap.ask })); return; }
     const base = { ref, form: rule.form, what: rule.what, law: rule.law, steps: rule.steps || GENERIC_STEPS, builder: rule.builder || "", due: d.due, dueFrom: d.from, kind: "annual", period: fy };
-    if (f) rows.push(Object.assign(base, extra, { status: f.status, done: f.steps || 0, srn: f.srn || "", filedOn: f.filedOn || "", reason: f.reason || "", auto: false, data: f.data || {} }));
+    if (f) rows.push(Object.assign(base, extra, ap && ap.ask ? { dueFrom: ap.ask } : {}, { status: f.status, done: f.steps || 0, srn: f.srn || "", filedOn: f.filedOn || "", reason: f.reason || "", auto: false, data: f.data || {} }));
     else rows.push(Object.assign(base, extra, ap === true ? { status: "not_started", done: 0, reason: "", auto: false } : { status: "not_needed", done: 0, reason: ap, auto: true }));
   };
   ANNUAL.forEach((rule) => {
@@ -67,16 +72,21 @@ export function annual(p, fy, filings) {
   return rows;
 }
 
+// the kind of an event chosen when it was started (DIR-12 appointed / resigned, PAS-3 private placement / other)
+export const kindOf = (rule, key) => (rule.choose || []).find((k) => k.key === key) || null;
 export function events(filings) {
   return (filings || []).filter((f) => f.kind === "event").map((f) => {
     const rule = EVENT.find((e) => e.form === f.form && (!f.data || !f.data.event || e.event === f.data.event)) || EVENT.find((e) => e.form === f.form) || {};
-    return Object.assign({}, f, { what: (f.data && f.data.event) || rule.event || f.form, law: rule.law || "", steps: GENERIC_STEPS, done: f.steps || 0, resolution: rule.resolution || "" });
+    const k = kindOf(rule, f.data && f.data.kind);
+    return Object.assign({}, f, { what: ((f.data && f.data.event) || rule.event || f.form) + (k ? " · " + k.label.toLowerCase() : ""), law: (k || rule).law || "", steps: GENERIC_STEPS, done: f.steps || 0,
+      resolution: (k && k.resolution) || rule.resolution || "" });
   }).sort((a, b) => String(a.due).localeCompare(String(b.due)));
 }
 
-export function startEvent(rule, date, note) {
-  return { ref: "event:" + rule.form + ":" + uid(), kind: "event", form: rule.form, period: date.slice(0, 7), event: date, due: addDays(date, rule.days), status: "not_started", steps: 0,
-    data: { event: rule.event, note: note || "" } };
+export function startEvent(rule, date, note, kind) {
+  const k = kindOf(rule, kind);
+  return { ref: "event:" + rule.form + ":" + uid(), kind: "event", form: rule.form, period: date.slice(0, 7), event: date, due: addDays(date, (k || rule).days), status: "not_started", steps: 0,
+    data: Object.assign({ event: rule.event, note: note || "" }, k ? { kind: k.key } : {}) };
 }
 
 export function words(r) {
@@ -88,14 +98,19 @@ export function words(r) {
 }
 export const open = (r) => r.status !== "filed" && r.status !== "not_needed";
 
+// what the Compliance health and the tab's count list: the last closed year's forms not done, this year's half-years
+// already over (MSME-1), and the events open; a form the profile must say more about is listed as asked, never late
 export function dueItems(p, filings, on) {
   on = on || today();
-  const fy = lastClosedFy(on), out = [];
-  annual(p, fy, filings).filter(open).forEach((r) => {
-    if (r.form === "DIR-3 KYC") return;   // the health lists each director's KYC from the profile already
+  const fy = lastClosedFy(on), cur = fyOf(on), out = [];
+  const add = (r, f) => {
+    if (r.ask) { out.push({ key: "form:" + r.ref, title: r.form + " · FY " + f, sub: r.ask, due: "", when: "—", tone: "warn", words: "to enter" }); return; }
     const d = dueIn(r.due, on);
-    out.push({ key: "form:" + r.ref, title: r.form + " · FY " + fy + (r.half ? " " + r.half : ""), sub: r.dueFrom, due: r.due, when: dmy(r.due), tone: d.tone, words: d.words });
-  });
+    out.push({ key: "form:" + r.ref, title: r.form + " · FY " + f + (r.half ? " " + r.half : ""), sub: r.dueFrom, due: r.due, when: dmy(r.due), tone: d.tone, words: d.words });
+  };
+  // the health lists each director's KYC from the profile already
+  annual(p, fy, filings).filter(open).forEach((r) => { if (r.form !== "DIR-3 KYC") add(r, fy); });
+  if (cur !== fy) annual(p, cur, filings).filter((r) => open(r) && r.half && r.due && addDays(r.due, -30) <= on).forEach((r) => add(r, cur));
   events(filings).filter(open).forEach((r) => { const d = dueIn(r.due, on); out.push({ key: "form:" + r.ref, title: r.form + " · " + r.what, sub: "event of " + dmy(r.event), due: r.due, when: dmy(r.due), tone: d.tone, words: d.words }); });
   return out;
 }

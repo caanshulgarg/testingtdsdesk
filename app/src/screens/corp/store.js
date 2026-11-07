@@ -45,6 +45,7 @@ const BACKOFF = [5000, 15000, 60000, 300000];
 const isPending = (e) => !!(Object.keys(e.dirty).length || e.deleting);
 const OUT = "you're signed out";
 const NOT_REMOVED = "Not removed: it had been changed on another computer meanwhile. Look at it again, then remove it if it should go.";
+const REFUSED = "Not removed: the firm account did not allow it (only the firm’s owner or staff remove a record, and a final document stays).";
 // the store's requests: Cloud.api, given up after 20 s (an AbortController's signal goes with it; the legacy Cloud.api does
 // not pass it to fetch, so a write given up may still land: the next try is conditional, and finds it)
 const TIMEOUT = () => (typeof window === "object" && window.__corpTimeout) || 20000;   // (shorter in the tests)
@@ -53,7 +54,7 @@ async function api(path, o) {
   let t = 0;
   try {
     return await Promise.race([Cloud.api(path, Object.assign({}, o || {}, ctl ? { signal: ctl.signal } : {})),
-      new Promise((_, no) => { t = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) { /* given up all the same */ } no(new Error("no answer from FinCom’s server in " + Math.round(TIMEOUT() / 1000) + " s")); }, TIMEOUT()); })]);
+      new Promise((_, no) => { t = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) { /* given up all the same */ } no(new Error("no answer from FinCom’s server in " + TIMEOUT() / 1000 + " s")); }, TIMEOUT()); })]);
   } finally { clearTimeout(t); }
 }
 const redraw = () => { try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ } };
@@ -87,7 +88,8 @@ const filingBody = (cid, cur, row, fields) => {
   if (!row) Object.assign(b, { client_id: cid, kind: cur.kind || "annual", status: cur.status || "not_started" });
   return b;
 };
-const meetingOf = (x) => { const m = x.meeting || (x.fields && x.fields.meetingDate) || ""; return /^\d{4}-\d{2}-\d{2}$/.test(m) ? m : null; };
+// the meeting's date: the one in the fields as edited (the column read, meeting, is only the last one saved)
+const meetingOf = (x) => { const m = (x.fields && x.fields.meetingDate) || x.meeting || ""; return /^\d{4}-\d{2}-\d{2}$/.test(m) ? m : null; };
 const fromDoc = (r) => ({ id: r.id, template: r.template, title: r.title, kind: r.kind, status: r.status, fields: r.fields || {}, meeting: r.meeting_on || "", letterhead: r.letterhead !== false });
 const docBody = (cid, cur, row, fields) => {
   const b = {}, ks = row ? fields : ["id", "template", "title", "kind", "status", "fields", "letterhead"];
@@ -256,7 +258,8 @@ async function sendOne(cid, kind, e, tries) {
   const K = KIND[kind], fields = Object.keys(e.dirty), sentVals = Object.fromEntries(fields.map((k) => [k, copy(e.cur[k])]));
   const body = K.body(cid, e.cur, e.at ? e.row : null, fields);
   let rows = null;
-  e.posting = !e.at; if (!e.at) e.sent = true;
+  // a first save: what it sent is kept, so that a row found later by its key can be told to be this one (or another's)
+  e.posting = !e.at; if (!e.at) { e.sent = true; e.sentBody = K.body(cid, e.cur, null, []); }
   try {
     rows = e.at ? await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
       : await api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
@@ -265,7 +268,10 @@ async function sendOne(cid, kind, e, tries) {
     if (tries >= 3) throw new Error("another computer kept changing it");
     const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
     // its removal was asked meanwhile: another computer's row is no leave to remove it (said); gone there: done
-    if (e.deleting) { if (!now || !now[0]) return "gone"; e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; return "merged"; }
+    if (e.deleting) { if (!now || !now[0]) return "gone";
+      // the first save's own row (a retry after an answer lost): removed now, by its updated_at
+      if (!e.at && mine(cid, kind, e, now[0])) { e.at = now[0].updated_at; e.row = KIND[kind].from(now[0]); return "again"; }
+      e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; return "merged"; }
     if (now && now[0]) take(kind, e, now[0]);
     else if (e.at) { e.removed = true; return "removed"; }    // removed on another computer: kept, said; never sent as new by itself
     return Object.keys(e.dirty).length ? sendOne(cid, kind, e, tries + 1) : "merged";
@@ -281,6 +287,8 @@ async function sendOne(cid, kind, e, tries) {
   return Object.keys(e.dirty).length ? "again" : "saved";
 }
 
+// a row found by its key is the one this computer's first save made: the same as what it sent
+const mine = (cid, kind, e, row) => !!e.sentBody && same(e.sentBody, KIND[kind].body(cid, KIND[kind].from(row), null, []));
 async function removeOne(cid, kind, store, k, e) {
   const K = KIND[kind];
   if (!e.at) {
@@ -288,13 +296,16 @@ async function removeOne(cid, kind, store, k, e) {
     // updated_at)
     const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
     if (!now || !now[0] || !now[0].updated_at) { delete store[k]; return; }
+    // another computer's row (or changed there since): not removed, said
+    if (!mine(cid, kind, e, now[0])) { e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; return; }
     e.at = now[0].updated_at;
   }
   const gone = await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "DELETE", headers: { Prefer: "return=representation" } });
   if (gone && gone.length) { mem[cid].wseq++; delete store[k]; return; }
   // changed on another computer since it was read (or already removed there): read again and say so
   const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
-  if (now && now[0]) { e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = NOT_REMOVED; }
+  // the row as it was read (the same updated_at): the row security refused the removal; else changed meanwhile
+  if (now && now[0]) { const refused = now[0].updated_at === e.at; e.deleting = false; e.dirty = {}; take(kind, e, now[0]); mem[cid].note = refused ? REFUSED : NOT_REMOVED; }
   else delete store[k];
 }
 
@@ -392,7 +403,7 @@ export function cloudNote(cid) {
   if (c.state === "signedout" && !n) return { tone: "", text: "Sign in to use Corporate.", signin: true };
   // removed on another computer: each record named, its own Restore / Discard; another record's failed save said too
   const rm = [["profile", c.profile]].concat(Object.entries(c.filings).map(([k, e]) => ["f:" + k, e]), Object.entries(c.docs).map(([k, e]) => ["d:" + k, e])).filter(([, e]) => e.removed)
-    .map(([key, e]) => ({ key, name: key === "profile" ? "the company’s details" : key[0] === "f" ? (e.cur.form || "a form") + (e.cur.period ? " · FY " + e.cur.period : "") : e.cur.title || "a document" }));
+    .map(([key, e]) => ({ key, name: key === "profile" ? "the company’s details" : key[0] === "f" ? (e.cur.form || "a form") + (e.cur.kind === "event" ? (e.cur.event ? " · event of " + e.cur.event.split("-").reverse().join("-") : "") : e.cur.period ? " · FY " + e.cur.period : "") : e.cur.title || "a document" }));
   if (rm.length) {
     const other = [c.profile].concat(Object.values(c.filings), Object.values(c.docs)).find((e) => !e.removed && e.err);
     return { tone: "bad", text: "Removed on another computer. Your change isn’t saved:", removed: rm, retry: !!other, after: other ? "Not saved: " + other.err + "." : "" };

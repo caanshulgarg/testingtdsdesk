@@ -102,6 +102,23 @@ with sync_playwright() as p:
     pg.click("#app button[aria-label='Year before']"); W(500)
     ok(E("document.querySelector('#app [data-forms-fy]').innerText") == "FY 2024-25" and "27-Oct-2025" in row(pg, "annual:AOC-4:2024-25")["text"] and "30-Jun-2025" in row(pg, "annual:DPT-3:2024-25")["text"], "the year before: its own dates")
     pg.click("#app button[aria-label='Year after']"); W(500)
+    # this year so far: the year after goes on to the current one, its half-year over (MSME-1 H1) shown
+    cur = E("(() => { const d = istToday(), y = +d.slice(0,4), m = +d.slice(4,6), a = m < 4 ? y - 1 : y; return a + '-' + String(a + 1).slice(2); })()")
+    if cur != "2025-26":
+        pg.click("#app button[aria-label='Year after']"); W(500)
+        ok(E("document.querySelector('#app [data-forms-fy]').innerText") == "FY " + cur and E("!!document.querySelector('#app [data-forms-current]')") and row(pg, "annual:MSME-1:%s:H1" % cur) is not None, "this year so far: FY %s, its MSME-1 H1" % cur)
+        ok(E("document.querySelector(\"#app button[aria-label='Year after']\").disabled"), "no year after this one")
+    # a new company (incorporated 01-Feb-2026, made-up): its first year ends 31-Mar-2027 (s.2(41)); it opens on it
+    E("() => { S.corpFy = ''; }"); prof(pg, co, {"incorporated": "2026-02-01"}); W(300)
+    ok(E("document.querySelector('#app [data-forms-fy]').innerText") == "FY 2026-27" and E("document.querySelector(\"#app button[aria-label='Year before']\").disabled"), "a new company: opens on its first FY 2026-27, no year before")
+    E("() => { S.corpFy = '2025-26'; render(); }"); W(400)
+    ok("Before the first financial year ends (31-Mar-2027): only event forms, e.g. INC-20A." in (E("(document.querySelector('#app [data-forms-before]') || {}).innerText") or "") and not errors, "a year before it: only event forms, no page error")
+    prof(pg, co, {"incorporated": PROFILE.get("incorporated", "2019-06-10")}); E("() => { S.corpFy = '2025-26'; render(); }"); W(400)
+    # a blank auditor's term: asked, never late
+    prof(pg, co, {"auditorTill": ""})
+    adt0 = row(pg, "annual:ADT-1:2025-26") or {}
+    ok("Enter the auditor's term" in adt0.get("text", "") and "late" not in adt0.get("text", "") and not adt0.get("due"), "ADT-1, no term entered: asked, not late (%s)" % adt0.get("text"))
+    prof(pg, co, {"auditorTill": "2028-29"})
 
     print("3. steps, filed, not needed")
     pg.click("#app [data-form-open='annual:MGT-7:2025-26']"); W(400)

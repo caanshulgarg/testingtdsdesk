@@ -6,9 +6,10 @@ import { useState } from "react";
 import Button from "../../parts/Button.jsx";
 import { canEdit, corpOf, dropFiling, saveFiling, saveProfile } from "./store.js";
 import { ANNUAL, EVENT, srnOk } from "./rules.js";
-import { agmOf, annual, events, open, startEvent, words } from "./eforms.js";
-import { dmy, dueIn, fyNext, lastClosedFy, today } from "./dates.js";
+import { agmOf, annual, events, firstFy, kindOf, open, startEvent, words } from "./eforms.js";
+import { dmy, dueIn, fyNext, fyOf, lastClosedFy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
+import { firstFyEnd } from "./health.js";
 
 function Steps({ n }) { return <div className="corp-steps" aria-hidden="true">{[0, 1, 2, 3].map((i) => <span key={i} data-on={i < n ? "" : undefined} />)}</div>; }
 
@@ -26,9 +27,9 @@ function Progress({ r }) {
 
 // a form opened in its row: its four steps, Filed (SRN, date), Not needed (why), the rule it rests on
 function Detail({ co, r, close }) {
+  const [srn, setSrn] = useState(r.srn || ""), [on, setOn] = useState(r.filedOn || today()), [why, setWhy] = useState(r.status === "not_needed" ? r.reason : "");
   if (!canEdit(co.id)) return <div className="corp-card-body" data-form-detail={r.ref} style={{ padding: "14px 20px 18px", background: "var(--corp-tint)" }}>
     <span>{words(r)}</span><p className="corp-help" data-form-law="" style={{ margin: 0 }}>{r.law}</p></div>;
-  const [srn, setSrn] = useState(r.srn || ""), [on, setOn] = useState(r.filedOn || today()), [why, setWhy] = useState(r.status === "not_needed" ? r.reason : "");
   const base = { ref: r.ref, form: r.form, kind: r.kind, period: r.period, director: r.din || r.director || "", due: r.due, event: r.event || "", data: r.data || {} };
   const keep = (patch) => saveFiling(co.id, Object.assign({}, base, { status: r.status === "not_needed" && r.auto ? "not_started" : r.status, steps: r.done, srn: r.srn, filedOn: r.filedOn, reason: r.reason }, patch));
   const step = (i, v) => { const n = v ? Math.max(r.done, i + 1) : i; keep({ steps: n, status: n >= 4 ? "ready" : n > 0 ? "in_progress" : "not_started" }); };
@@ -56,7 +57,7 @@ function Detail({ co, r, close }) {
     {r.status !== "filed" && (r.status === "not_needed" ? <div className="corp-row"><span>{words(r)}</span>
       <button className="linkbtn" data-form-needed="" onClick={() => keep({ status: "not_started", reason: "", steps: 0 })}>Needed after all</button></div>
       : <div className="corp-row" style={{ alignItems: "flex-end" }}>
-        <label className="corp-f" style={{ flex: "1 1 260px" }}><span>Not needed? Say why</span><input type="text" data-form-why="" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="e.g. no deposits or loans outstanding on 31 March" /></label>
+        <label className="corp-f" style={{ flex: "1 1 260px" }}><span>Not needed? Say why</span><input type="text" data-form-why="" maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="e.g. no deposits or loans outstanding on 31 March" /></label>
         <Button className="btn small" data-form-not-needed="" disabled={!why.trim()} onClick={() => { keep({ status: "not_needed", reason: why.trim() }); close(); }}>Not needed</Button></div>)}
     {r.kind === "event" && <div className="corp-row">{r.resolution && <button className="linkbtn" onClick={() => { S.corpNew = r.resolution; goClient("books:corp-docs"); }}>Make the board resolution</button>}
       <button className="linkbtn" data-form-drop="" onClick={() => { dropFiling(co.id, r.ref); close(); }}>Remove this form</button></div>}
@@ -81,15 +82,20 @@ function Table({ co, rows, openRef, setOpen, empty, cols = "annual" }) {
   </section>;
 }
 
+// "Within 15 days", or "Within 15 or 30 days" for an event whose kinds differ
+export const daysOf = (r) => "Within " + Array.from(new Set((r.choose || [r]).map((k) => k.days))).join(" or ") + " days";
 function EventStart({ co, rule, close }) {
-  const [on, setOn] = useState(today()), [note, setNote] = useState("");
+  const [on, setOn] = useState(today()), [note, setNote] = useState(""), [kind, setKind] = useState(rule.choose ? rule.choose[0].key : "");
+  const k = kindOf(rule, kind) || rule;
   return <div className="corp-card corp-card-body" style={{ paddingTop: 16 }} data-event-start={rule.form}>
     <h3>{rule.event + " · " + rule.form}</h3>
-    <p className="corp-note">{"Due within " + rule.days + " days of the event. " + rule.law}</p>
+    <p className="corp-note">{"Due within " + k.days + " days of the event. " + k.law}</p>
     <div className="corp-row" style={{ alignItems: "flex-end" }}>
-      <label className="corp-f"><span>Date of the event</span><input type="date" data-event-date="" value={on} onChange={(e) => setOn(e.target.value)} /></label>
+      {rule.choose && <label className="corp-f"><span>Which</span><select data-event-kind="" value={kind} onChange={(e) => setKind(e.target.value)}>
+        {rule.choose.map((x) => <option key={x.key} value={x.key}>{x.label + " · " + x.days + " days"}</option>)}</select></label>}
+      <label className="corp-f"><span>{k.on || "Date of the event"}</span><input type="date" data-event-date="" value={on} onChange={(e) => setOn(e.target.value)} /></label>
       <label className="corp-f" style={{ flex: "1 1 240px" }}><span>Note (optional)</span><input type="text" data-event-note="" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. the director's name, the bank" /></label>
-      <Button className="btn small primary" data-event-go="" disabled={!on} onClick={() => { saveFiling(co.id, startEvent(rule, on, note)); close(true); }}>Start tracking</Button>
+      <Button className="btn small primary" data-event-go="" disabled={!on} onClick={() => { saveFiling(co.id, startEvent(rule, on, note, kind)); close(true); }}>Start tracking</Button>
       <button className="linkbtn" onClick={() => close(false)}>Cancel</button>
     </div>
   </div>;
@@ -99,9 +105,13 @@ export default function Forms({ co }) {
   const c = corpOf(co.id), P = shown(co), on = today();
   const [tab, setTab] = useState("annual"), [openRef, setOpen] = useState(""), [ev, setEv] = useState(null);
   const may = canEdit(co.id);
-  const fy = S.corpFy || lastClosedFy(on), rows = annual(P, fy, c.filings), evs = events(c.filings), a = agmOf(P, fy);
+  // the years: from the company's first financial year (a new company opens on it) to this one (its half-yearly forms
+  // already due: MSME-1); a year before the first has no annual forms
+  const first = firstFy(P), last = first && first > fyOf(on) ? first : fyOf(on);
+  const fy = S.corpFy || (first && first > lastClosedFy(on) ? first : lastClosedFy(on)), before = !!first && fy < first;
+  const rows = before ? [] : annual(P, fy, c.filings), evs = events(c.filings), a = before ? null : agmOf(P, fy);
   const setFy = (f) => { S.corpFy = f; setOpen(""); render(); };
-  const filed = annual(P, fy, c.filings).concat(evs).filter((r) => r.status === "filed" && !r.fromProfile);
+  const filed = rows.concat(evs).filter((r) => r.status === "filed" && !r.fromProfile);
   const allFiled = (c.filings || []).filter((f) => f.status === "filed");
   const TABS = [["annual", "Annual filings · FY " + fy], ["event", "Event-based" + (evs.filter(open).length ? " (" + evs.filter(open).length + ")" : "")], ["filed", "Filed & SRNs"], ["all", "All forms"]];
   return <div data-corp-page="forms" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -109,21 +119,23 @@ export default function Forms({ co }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}><div className="corp-eyebrow">{"Corporate · " + (P.name || co.name)}</div><h1>e-Forms</h1></div>
       <div className="corp-row">
         <span className="corp-row" style={{ gap: 4 }} aria-label="Financial year">
-          <Button className="btn small" aria-label="Year before" onClick={() => setFy(fyNext(fy, -1))}>‹</Button>
+          <Button className="btn small" aria-label="Year before" disabled={!!first && fy <= first} onClick={() => setFy(fyNext(fy, -1))}>‹</Button>
           <b data-forms-fy="" style={{ minWidth: 92, textAlign: "center" }}>{"FY " + fy}</b>
-          <Button className="btn small" aria-label="Year after" disabled={fy >= lastClosedFy(on)} onClick={() => setFy(fyNext(fy, 1))}>›</Button></span>
+          <Button className="btn small" aria-label="Year after" disabled={fy >= last} onClick={() => setFy(fyNext(fy, 1))}>›</Button></span>
         {may && <Button className="btn primary" data-forms-prepare="" onClick={() => { setTab("all"); setOpen(""); }}>Prepare a form</Button>}
       </div>
     </header>
-    <div className="corp-card" style={{ padding: "12px 16px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }} data-forms-agm="">
+    {fy === fyOf(on) && <p className="corp-note" data-forms-current="" style={{ margin: 0 }}>This year so far: the forms of the year still to come, and its half-yearly forms (MSME-1) as each half ends.</p>}
+    {before ? <div className="corp-card corp-empty" data-forms-before="">{"Before the first financial year ends (" + dmy(firstFyEnd(P)) + "): only event forms, e.g. INC-20A."}</div>
+    : <div className="corp-card" style={{ padding: "12px 16px", display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }} data-forms-agm="">
       <label className="corp-f" style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><span>{"AGM for FY " + fy + " held on"}</span>
         <input type="date" data-forms-agm-date="" disabled={!may} value={(P.agms || {})[fy] || ""} onChange={(e) => saveProfile(co.id, { agms: Object.assign({}, P._own.agms, { [fy]: e.target.value }) })} /></label>
-      <span className="corp-note">{a.held ? "The due dates run from it." : P.cls === "opc" ? "An OPC holds no AGM (s.96(1))." : "Not entered: the due dates run from " + dmy(a.date) + ", the last day for the AGM (s.96(1))."}</span>
-    </div>
+      <span className="corp-note">{P.cls === "opc" ? "An OPC holds no AGM (s.96(1))." : !a ? "No AGM for this year (s.2(41))." : a.held ? "The due dates run from it." : "Not entered: the due dates run from " + dmy(a.date) + ", the last day for the AGM (s.96(1))."}</span>
+    </div>}
     <div role="tablist" aria-label="e-Forms" className="sbar" style={{ margin: 0 }}>
       {TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} data-forms-tab={k} onClick={() => { setTab(k); setOpen(""); }}>{l}</button>)}
     </div>
-    {tab === "annual" && <Table co={co} rows={rows} openRef={openRef} setOpen={setOpen} empty="No annual forms." />}
+    {tab === "annual" && <Table co={co} rows={rows} openRef={openRef} setOpen={setOpen} empty={before ? "No annual forms before the first financial year ends." : "No annual forms."} />}
     {tab === "event" && <Table co={co} rows={evs} openRef={openRef} setOpen={setOpen} cols="event" empty="No event-based form started. Pick what happened in the company below." />}
     {tab === "filed" && (allFiled.length ? <section className="corp-card" style={{ overflow: "hidden" }}><div className="corp-scroll"><table className="corp-table" data-forms-table="filed">
       <thead><tr><th>Form</th><th>For</th><th>SRN</th><th>Filed on</th></tr></thead>
@@ -133,7 +145,7 @@ export default function Forms({ co }) {
     {tab === "all" && <section className="corp-card" style={{ overflow: "hidden" }}><div className="corp-scroll"><table className="corp-table" data-forms-table="rules">
       <thead><tr><th>Form</th><th>When</th><th>The rule</th></tr></thead>
       <tbody>{ANNUAL.map((r) => <tr key={"a" + r.form} data-rule={r.form}><td><b>{r.form}</b><br /><span className="corp-note">{r.what}</span></td><td>Every year</td><td className="corp-help">{r.law}</td></tr>)}
-        {EVENT.map((r) => <tr key={"e" + r.form + r.event} data-rule={r.form}><td><b>{r.form}</b><br /><span className="corp-note">{r.event}</span></td><td>{"Within " + r.days + " days"}</td>
+        {EVENT.map((r) => <tr key={"e" + r.form + r.event} data-rule={r.form}><td><b>{r.form}</b><br /><span className="corp-note">{r.event}</span></td><td>{daysOf(r)}</td>
           <td className="corp-help">{r.law} <button className="linkbtn" data-rule-start={r.form} onClick={() => { setEv(r); setTab("event"); }}>Start</button></td></tr>)}</tbody></table></div>
       <p className="corp-help" style={{ padding: "10px 20px 14px", margin: 0 }}>The rules are in one file (screens/corp/rules.js) with the section or rule each rests on, for a Company Secretary to check.</p></section>}
     <section style={{ display: "flex", flexDirection: "column", gap: 12 }} data-forms-events="">
@@ -142,7 +154,7 @@ export default function Forms({ co }) {
         <span className="corp-note">Pick the event: FinCom tracks its form from the event's date, and makes the board resolution where there is one.</span></div>
       {ev && <EventStart co={co} rule={ev} close={(done) => { setEv(null); if (done) setTab("event"); }} />}
       <div className="corp-tiles">{EVENT.map((r) => <button key={r.form + r.event} className="corp-tile" data-event={r.form} disabled={!may} onClick={() => setEv(r)}>
-        <b>{r.event}</b><small>{r.form + " · within " + r.days + " days"}</small></button>)}</div>
+        <b>{r.event}</b><small>{r.form + " · " + daysOf(r).toLowerCase()}</small></button>)}</div>
     </section>
   </div>;
 }

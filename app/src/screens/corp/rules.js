@@ -40,7 +40,8 @@ const smallCo = (p) => !!p.small && (!p.cls || p.cls === "private");
 //   "fyEnd"  `days` after the end of the year (31 March)
 //   "agmLast" `days` after the last day the AGM could be held (an OPC holds none, s.96(1))
 //   "half"   MSME-1, twice a year, for each half-year
-// `applies(p)` -> true, or the reason it is not needed (shown as "Not needed: ..."); p is the company's profile.
+// `applies(p)` -> true, or the reason it is not needed (shown as "Not needed: ..."), or {ask}: what the profile must say
+// before the form can be worked out (shown as the form's note, not as late); p is the company's profile.
 export const ANNUAL = [
   { form: "AOC-4", what: "Financial statements", from: "agm", days: 30, steps: ["Statements", "Figures in AOC-4 order", "Attachments", "Ready for MCA"],
     law: "s.137(1) Companies Act 2013; rule 12(2) Companies (Accounts) Rules 2014: within 30 days of the AGM. OPC: within 180 days of the end of the year (s.137(1), first proviso).",
@@ -54,8 +55,10 @@ export const ANNUAL = [
     opc: { from: "agmLast", days: 60 }, // an OPC holds no AGM: 60 days from the day it would have been due (29 November)
     applies: (p) => (p.cls === "opc" || smallCo(p) ? true : "only small companies and OPCs file MGT-7A (rule 11(1))") },
   { form: "ADT-1", what: "Appointment of auditor", from: "agm", days: 15, steps: ["Auditor's consent & certificate", "Resolution", "Attachments", "Checked"],
-    law: "s.139(1) Companies Act 2013; rule 4(2) Companies (Audit and Auditors) Rules 2014: within 15 days of the meeting at which the auditor is appointed.",
-    applies: (p, fy) => (!p.auditorTill || p.auditorTill <= fy ? true : "the auditor continues: appointed till the AGM of FY " + p.auditorTill) },
+    law: "s.139(1) Companies Act 2013; rule 4(2) Companies (Audit and Auditors) Rules 2014: within 15 days of the meeting at which the auditor is appointed. Filed in a year with an appointment only: at the AGM where the auditor's term ends (here); the first auditor (s.139(6)) and a casual vacancy (s.139(8)) are started as events (Auditor appointed).",
+    // the year of the AGM where the term ends; a term not entered (or ended before this year): asked, never shown late
+    applies: (p, fy) => (!p.auditorTill || p.auditorTill < fy ? { ask: "Enter the auditor's term in the profile (Statutory auditor): ADT-1 is filed in the year it ends" }
+      : p.auditorTill === fy ? true : "the auditor continues: appointed till the AGM of FY " + p.auditorTill) },
   { form: "DIR-3 KYC", what: "Director KYC", from: "kyc", perDirector: true, steps: ["Details & OTP", "DSC", "Checked", "Ready"],
     law: "Rule 12A Companies (Appointment and Qualification of Directors) Rules 2014: every director holding a DIN; as amended, once every three financial years by 30 June (DIR-3 KYC or DIR-3 KYC-WEB); how often is the setting DIR3_KYC above.",
     applies: () => true },
@@ -71,12 +74,21 @@ export const ANNUAL = [
 // EVENT: a form started when something happens in the company; the time limit runs from the event's date.
 // `resolution`: the template of Resolutions & minutes that goes with it (templates/), when there is one.
 export const EVENT = [
+  // `choose`: kinds of the event, each with its own time limit and law (the event's start asks which)
   { form: "DIR-12", event: "Director appointed or resigned", days: 30, resolution: "additional-director",
-    law: "s.168(1) and s.170(2) Companies Act 2013; rule 18 Companies (Appointment and Qualification of Directors) Rules 2014: within 30 days of the appointment or the cessation." },
+    law: "s.170(2) Companies Act 2013; rule 18 Companies (Appointment and Qualification of Directors) Rules 2014: within 30 days of the appointment; a resignation: s.168(1), rule 15, within 30 days of receiving the notice.",
+    choose: [{ key: "appointed", label: "Appointed", days: 30, on: "Date of the appointment", resolution: "additional-director",
+      law: "s.170(2) Companies Act 2013; rule 18 Companies (Appointment and Qualification of Directors) Rules 2014: within 30 days of the appointment." },
+    { key: "resigned", label: "Resigned", days: 30, on: "Date the notice of resignation was received", resolution: "director-resignation",
+      law: "s.168(1) Companies Act 2013; rule 15 Companies (Appointment and Qualification of Directors) Rules 2014: within 30 days of receiving the notice of resignation." }] },
   { form: "INC-22", event: "Registered office shifted", days: 30, resolution: "office-shift",
     law: "s.12(4) Companies Act 2013; rule 27 Companies (Incorporation) Rules 2014: within 30 days of the change." },
   { form: "PAS-3", event: "Shares allotted", days: 15,
-    law: "s.39(4) and s.42 Companies Act 2013; rule 12 Companies (Prospectus and Allotment of Securities) Rules 2014: within 15 days of the allotment." },
+    law: "Private placement: s.42(8) Companies Act 2013, within 15 days of the allotment; any other allotment: s.39(4) and rule 12(1) Companies (Prospectus and Allotment of Securities) Rules 2014, within 30 days.",
+    choose: [{ key: "private", label: "Private placement", days: 15, on: "Date of the allotment",
+      law: "s.42(8) Companies Act 2013: a private placement, within 15 days of the allotment." },
+    { key: "other", label: "Rights, bonus or other allotment", days: 30, on: "Date of the allotment",
+      law: "s.39(4) Companies Act 2013; rule 12(1) Companies (Prospectus and Allotment of Securities) Rules 2014: within 30 days of the allotment." }] },
   { form: "SH-7", event: "Authorised capital increased", days: 30,
     law: "s.64(1) Companies Act 2013: within 30 days of the alteration of the share capital." },
   { form: "MGT-14", event: "Special resolution passed", days: 30,
@@ -94,5 +106,6 @@ export const EVENT = [
 // the four steps of a form: n of 4 done is "In progress (n of 4)"; all four is "Ready"; Filed needs its SRN and date
 export const STATUS = { not_started: "Not started", in_progress: "In progress", ready: "Ready", filed: "Filed", not_needed: "Not needed" };
 export const GENERIC_STEPS = ["Information collected", "Attachments ready", "Approved", "Checked"];
-// an SRN as MCA gives it (V3: a letter and eight digits, e.g. "AB1234567"; V2: "R12345678"): checked loosely
+// an SRN as MCA gives it (V3: two letters and seven digits, e.g. "AB1234567"; V2: a letter and eight digits,
+// "R12345678"): checked loosely
 export const srnOk = (s) => /^[A-Z][A-Z0-9]{6,11}$/.test(String(s || "").trim().toUpperCase());
