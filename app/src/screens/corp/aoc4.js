@@ -103,27 +103,98 @@ export function fromBooks(fy) {
       : n[k] ? "Books · " + n[k] + (n[k] === 1 ? " ledger" : " ledgers") : "Books · nil";
   });
   const pyWords = { copy: "the year before in FinCom", typed: "last year typed", opening: "the opening balances", upload: "last year's balance sheet uploaded", none: "none" }[d.tb.pySrc] || d.tb.pySrc;
-  return { cy, py, src, info: { from: d.tb.from, to: d.tb.to, py: pyWords, ledgers: (d.tb.rows || []).filter((r) => !r.synthetic).length, unmapped: (d.checks || []).find((c) => c.key === "unmapped"), eps: d.pl.eps || null } };
+  // ledgers with a balance and no code: in no head of the form (listed, and Ready held back, until they are coded)
+  const unmapped = (d.tb.rows || []).filter((r) => !r.code && !r.synthetic && (Math.abs(+r.final || 0) >= 0.005 || Math.abs(+r.py || 0) >= 0.005)).map((r) => ({ label: r.ledger || "", cy: R(r.final), py: R(r.py) }));
+  return { cy, py, src, unmapped, info: { from: d.tb.from, to: d.tb.to, py: pyWords, ledgers: (d.tb.rows || []).filter((r) => !r.synthetic).length, unmapped: (d.checks || []).find((c) => c.key === "unmapped"), eps: d.pl.eps || null } };
 }
 
-// an uploaded sheet: rows [[label, cy, py], ...] with each row's head chosen (map: {row index: head key})
+// an uploaded statement as kept: its lines (label, this year, last year, as numbers: never the file's raw rows), each
+// line's head (map: {line index: head key, or "-" for a total or heading not used}), which heads were guessed (guessed:
+// {line index: true}, "check the head" until chosen by hand), and the file's own totals (to compare)
 export function fromUpload(up) {
-  const cy = {}, py = {}, src = {};
+  const cy = {}, py = {}, src = {}, unmapped = [], bad = [];
   LEAVES.forEach(([k]) => { cy[k] = 0; py[k] = 0; });
-  Object.entries(up.map || {}).forEach(([i, k]) => {
-    const r = up.rows[+i]; if (!r || !k || cy[k] === undefined) return;
-    cy[k] = R(cy[k] + num(r[up.cols.cy])); py[k] = R(py[k] + num(r[up.cols.py]));
-    src[k] = (src[k] ? src[k] + ", " : "Upload · ") + String(r[up.cols.label] || "").slice(0, 40);
+  (up.lines || []).forEach((z, i) => {
+    const k = (up.map || {})[i];
+    if (isNaN(z.cy) || isNaN(z.py) || z.cy === null || z.py === null) { bad.push(z.label); return; }
+    if (!k) { if (Math.abs(z.cy) >= 0.005 || Math.abs(z.py) >= 0.005) unmapped.push({ label: z.label, cy: z.cy, py: z.py, line: i }); return; }
+    if (k === "-" || cy[k] === undefined) return;
+    cy[k] = R(cy[k] + z.cy); py[k] = R(py[k] + z.py);
+    src[k] = (src[k] ? src[k] + ", " : "Upload · ") + String(z.label || "").slice(0, 40);
   });
   LEAVES.forEach(([k]) => { if (!src[k]) src[k] = "Upload · nil"; });
-  return { cy, py, src, info: { from: "", to: "", py: "the upload", file: up.file } };
+  return { cy, py, src, unmapped, bad, totals: up.totals || [], info: { from: "", to: "", py: "the upload", file: up.file } };
 }
+// an amount as an auditor's sheet writes it: 1,00,000.00 · (1,000) · -1,000 · 1000- · −1,000 (the Unicode minus) ·
+// ₹ / Rs. / Rs / INR before it · 1,000 Cr (a credit: negative) · 1,000 Dr (a debit: positive; Cr / Dr decide the sign
+// over brackets or a minus) · "-" or "—" for nil.
+// Anything else ("12abc", "1e5") is not an amount: NaN (said as an error, never read as 0)
 export function num(v) {
-  if (typeof v === "number") return v;
-  let s = String(v == null ? "" : v).trim(); if (!s || s === "-") return 0;
-  const neg = /^\(.*\)$/.test(s) || /^-/.test(s); s = s.replace(/[(),₹\s]|Rs\.?/gi, "").replace(/^-/, "");
-  const n = parseFloat(s); return isFinite(n) ? (neg ? -n : n) : 0;
+  if (typeof v === "number") return isFinite(v) ? v : NaN;
+  let s = String(v == null ? "" : v).replace(/[−‒–]/g, "-").replace(/\s+/g, " ").trim();
+  if (!s || /^[-—]$/.test(s)) return 0;
+  s = s.replace(/^(₹|rs\.?|inr)\s*/i, "").trim();
+  let neg = false, side = "";
+  const dc = /\s*\b(cr|dr)\.?$/i.exec(s); if (dc) { side = dc[1].toLowerCase(); s = s.slice(0, dc.index).trim(); }
+  s = s.replace(/^(₹|rs\.?|inr)\s*/i, "").trim();
+  if (/^\(.*\)$/.test(s)) { neg = !neg; s = s.slice(1, -1).trim(); }
+  s = s.replace(/^(₹|rs\.?|inr)\s*/i, "").trim();
+  if (/^-/.test(s)) { neg = !neg; s = s.slice(1).trim(); } else if (/-$/.test(s)) { neg = !neg; s = s.slice(0, -1).trim(); }
+  s = s.replace(/,/g, "");
+  if (!/^\d+(\.\d+)?$|^\.\d+$/.test(s)) return NaN;
+  const n = parseFloat(s);
+  if (side) return side === "cr" ? -n : n;
+  return neg ? -n : n;
 }
+// a cell holds an amount (text is never one)
+export const isNum = (c) => c !== "" && c != null && /\d/.test(String(c)) && !isNaN(num(c));
+
+// the head a line of an uploaded statement is read by (a guess: the page marks it "check the head" until chosen by hand).
+// The order matters: the narrower words first ("other than micro" before "micro", intangible before tangible, purchases
+// of stock-in-trade before stock, interest income before interest, cash credit / overdraft / bank loans before cash and
+// bank, bank charges before bank, a provision for income tax before income tax)
+const SYN = [
+  ["-", /^total\b(?!\s+outstanding)|\btotal$|^profit\b|^loss\b|^\(?[a-z]?\)?\s*$|^note\b/],
+  ["tpo", /other than (micro|msme)/],
+  ["tpm", /micro (and|&) small|micro enterprises|\bmsme\b|micro and small/],
+  ["stp", /provision for (income[- ]?)?tax|provision for taxation|short[- ]term prov/],
+  ["stb", /current maturit|cash credit|overdraft|loans? repayable on demand|\bbank loans?\b|short[- ]term borrow|working capital loan/],
+  ["exp", /bank charges|other expense/],
+  ["oth", /other income|interest income|interest received|dividend income|rent received/],
+  ["pur", /purchases? of stock|purchase/],
+  ["chg", /change.*inventor/],
+  ["dta", /deferred tax asset/], ["dtl", /deferred tax liab/],
+  ["iaud", /under development/], ["cwip", /work[- ]in[- ]progress|\bcwip\b/],
+  ["nci", /non[- ]current invest/], ["ci", /current invest/],
+  ["oltl", /other long[- ]term liab/], ["onca", /other non[- ]current asset/], ["ocl", /other current liab/], ["oca", /other current asset/],
+  ["ltla", /long[- ]term loans? and adv/], ["stla", /short[- ]term loans? and adv/],
+  ["ltb", /long[- ]term borrow|term loan/], ["ltp", /long[- ]term prov/],
+  ["sapp", /application money/], ["msw", /share warrant/], ["sc", /share capital/], ["rs", /reserves|surplus|retained/],
+  ["intang", /intangible/], ["ppe", /property|plant|\btangible|fixed asset/],
+  ["inv", /inventor|stock/], ["tr", /trade receiv|debtor/], ["cash", /cash|bank/], ["tpo", /trade payable|sundry creditor|creditors/],
+  ["rev", /revenue|sales|turnover/], ["mat", /material/], ["emp", /employee|salar|staff/], ["fin", /finance cost|interest/],
+  ["dep", /depreciation|amorti/], ["exc", /exceptional/], ["exo", /extraordinary/], ["cur", /current tax|income tax/], ["def", /deferred tax/],
+];
+export function guessHead(label) {
+  // "(A)", "(b)", "a.", "i)" before the words are not part of them (Schedule III's own MSME lines are lettered)
+  const l = String(label || "").toLowerCase().replace(/^\s*(\(?[a-z]{1,3}\)|[a-z]{1,3}\.)\s*/, "").replace(/\s+/g, " ").trim();
+  if (!l) return "";
+  const hit = SYN.find(([, re]) => re.test(l));
+  return hit ? hit[0] : "";
+}
+
+// the file's own total lines, compared with the totals worked out from the lines mapped (equal to 0.5 paise)
+export function totalChecks(f, totals) {
+  const out = [];
+  (totals || []).forEach((t) => {
+    const l = String(t.label || "").toLowerCase(), want = /equity and liab|liabilities/.test(l) ? ["TL"] : /assets/.test(l) ? ["TA"] : /income|revenue/.test(l) ? ["TI"] : /expens/.test(l) ? ["TE"] : ["TL", "TA", "TI", "TE"];
+    const ok = ["cy", "py"].every((c) => isNaN(t[c]) || want.some((w) => Math.abs((+t[c] || 0) - f.tot[c][w]) < 0.005));
+    out.push({ label: t.label, ok, cy: t.cy, py: t.py });
+  });
+  return out;
+}
+export const udinOk = (u) => /^\d{8}[A-Z0-9]{10}$/i.test(String(u || "").trim());
+const TOL = 0.005;   // half a paisa
 
 // the figures shown: the source's, with an edit (by hand, with its reason) over any of them; totals worked out
 export function figures(base, edits) {
@@ -143,15 +214,22 @@ export function checks(f, o) {
   o = o || {};
   const out = [], rs = (x) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(x);
   const d1 = R(f.tot.cy.TL - f.tot.cy.TA), d0 = R(f.tot.py.TL - f.tot.py.TA);
-  out.push({ key: "bs", ok: Math.abs(d1) < 1 && Math.abs(d0) < 1, text: Math.abs(d1) < 1 && Math.abs(d0) < 1 ? "Balance sheet tallies: assets = equity + liabilities" : "Balance sheet does not tally: equity and liabilities less assets " + rs(d1) + (Math.abs(d0) >= 1 ? " (previous year " + rs(d0) + ")" : "") });
+  out.push({ key: "bs", ok: Math.abs(d1) < TOL && Math.abs(d0) < TOL, text: Math.abs(d1) < TOL && Math.abs(d0) < TOL ? "Balance sheet tallies: assets = equity + liabilities" : "Balance sheet does not tally: equity and liabilities less assets " + rs(d1) + (Math.abs(d0) >= TOL ? " (previous year " + rs(d0) + ")" : "") });
   const move = R((+f.cy.rs || 0) - (+f.py.rs || 0)), pat = f.tot.cy.PAT, dm = R(move - pat);
-  out.push({ key: "reserves", ok: Math.abs(dm) < 1, warn: true, text: Math.abs(dm) < 1 ? "Profit for the year matches the movement in reserves" : "Profit for the year " + rs(pat) + " is not the movement in reserves " + rs(move) + " (difference " + rs(dm) + ": dividends, transfers or an adjustment to explain)" });
+  out.push({ key: "reserves", ok: Math.abs(dm) < TOL, warn: true, text: Math.abs(dm) < TOL ? "Profit for the year matches the movement in reserves" : "Profit for the year " + rs(pat) + " is not the movement in reserves " + rs(move) + " (difference " + rs(dm) + ": dividends, transfers or an adjustment to explain)" });
   if (o.lastFiled) {
-    const bad = LEAVES.filter(([k]) => Math.abs((+f.py[k] || 0) - (+o.lastFiled[k] || 0)) >= 1).map(([, l]) => l);
+    const bad = LEAVES.filter(([k]) => Math.abs((+f.py[k] || 0) - (+o.lastFiled[k] || 0)) >= TOL).map(([, l]) => l);
     out.push({ key: "py", ok: !bad.length, text: !bad.length ? "Previous year equals the AOC-4 filed for FY " + o.lastFy : "Previous year differs from the AOC-4 filed for FY " + o.lastFy + ": " + bad.slice(0, 3).join(", ") + (bad.length > 3 ? " and " + (bad.length - 3) + " more" : "") });
   } else out.push({ key: "py", ok: null, text: "Previous year: no AOC-4 of FY " + o.lastFy + " kept in FinCom to compare with (it is kept once that year's AOC-4 is marked filed here)" });
   if (+f.cy.tpm === 0 && +f.cy.tpo > 0) out.push({ key: "msme", ok: false, warn: true, text: "Trade payables: split the dues to micro and small enterprises (Schedule III; MSMED Act s.22)" });
   if (!o.udin) out.push({ key: "udin", ok: false, warn: true, text: "Auditor's UDIN not entered yet" });
+  else if (!udinOk(o.udin)) out.push({ key: "udin", ok: false, text: "The UDIN is 18 characters: 8 digits (year and membership number), then 10 letters or digits (" + String(o.udin).trim().length + " entered)" });
+  else out.push({ key: "udin", ok: true, text: "Auditor's UDIN entered" });
+  // in no head: ledgers without a code (Books) or lines of the upload not mapped
+  const un = o.unmapped || [];
+  if (un.length) out.push({ key: "unmapped", ok: false, text: "Not in any head: " + un.length + (un.length === 1 ? " line" : " lines") + ", " + rs(un.reduce((x, z) => x + Math.abs(z.cy || 0), 0)) + " this year" });
+  (o.totals || []).forEach((t, i) => out.push({ key: "total" + i, ok: t.ok, text: t.ok ? "The file's " + t.label + " equals the total worked out" : "The file's " + t.label + " (" + rs(t.cy) + ") differs from the total worked out" }));
+  if (o.bad && o.bad.length) out.push({ key: "bad", ok: false, text: "Not an amount in the file: " + o.bad.slice(0, 3).join(", ") + (o.bad.length > 3 ? " and " + (o.bad.length - 3) + " more" : "") });
   return out;
 }
 
@@ -180,6 +258,7 @@ export function sheetRows(f, meta) {
   rows.push([]); rows.push(["FinCom does not file on the MCA portal. Type these figures into AOC-4 there, attach the PDFs, file with DSC and keep the SRN in FinCom (e-Forms)."]);
   return rows;
 }
+// a text cell that a spreadsheet would read as a formula (= + - @, a tab or a return first) is written with a ' before it
 export function csvOf(rows) {
-  return rows.map((r) => r.map((c) => { const s = typeof c === "number" ? String(c) : String(c == null ? "" : c); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(",")).join("\r\n") + "\r\n";
+  return rows.map((r) => r.map((c) => { let s = typeof c === "number" ? String(c) : String(c == null ? "" : c); if (typeof c !== "number" && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(",")).join("\r\n") + "\r\n";
 }

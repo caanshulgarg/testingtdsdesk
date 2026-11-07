@@ -8,7 +8,7 @@ import "../../lib/finGlobals.js";
 import Button from "../../parts/Button.jsx";
 import { Card } from "./parts.jsx";
 import { canEdit, corpOf, saveFiling } from "./store.js";
-import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, checks, csvOf, figures, fromBooks, fromUpload, num, sheetRows } from "./aoc4.js";
+import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, checks, csvOf, figures, fromBooks, fromUpload, guessHead, isNum, num, sheetRows, totalChecks } from "./aoc4.js";
 import { annual } from "./eforms.js";
 import { dmy, dueIn, finKey, fyEnd, fyNext, lastClosedFy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
@@ -18,19 +18,6 @@ const STEPS = [["Statements", "From Books or an upload"], ["Figures in AOC-4 ord
 const fmt = (v) => { const n = +v || 0; if (Math.abs(n) < 0.005) return "-"; const s = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(n)); return n < 0 ? "(" + s + ")" : s; };
 const save = async (name, blob) => { if (typeof window.saveFile === "function") return window.saveFile(name, blob); const a = document.createElement("a"), u = URL.createObjectURL(blob); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000); return true; };
 
-// the words a line of an uploaded statement is read by
-const SYN = { sc: /share capital/, rs: /reserves|surplus|retained/, msw: /share warrant/, sapp: /application money/, ltb: /long[- ]term borrow/, dtl: /deferred tax liab/, oltl: /other long[- ]term liab/, ltp: /long[- ]term prov/,
-  stb: /short[- ]term borrow/, tpm: /(micro|msme)/, tpo: /trade payable|sundry creditor|creditors/, ocl: /other current liab/, stp: /short[- ]term prov/, ppe: /property|plant|tangible|fixed asset/, intang: /^intangible|intangible assets$/,
-  cwip: /work[- ]in[- ]progress|cwip/, iaud: /under development/, nci: /non[- ]current invest/, dta: /deferred tax asset/, ltla: /long[- ]term loan/, onca: /other non[- ]current asset/, ci: /current invest/, inv: /inventor|stock/,
-  tr: /trade receiv|debtor/, cash: /cash|bank/, stla: /short[- ]term loan/, oca: /other current asset/, rev: /revenue|sales|turnover/, oth: /other income/, mat: /material/, pur: /purchase/, chg: /change.*inventor/,
-  emp: /employee|salar|staff/, fin: /finance cost|interest/, dep: /depreciation|amorti/, exp: /other expense/, exc: /exceptional/, exo: /extraordinary/, cur: /current tax|income tax/, def: /deferred tax/ };
-export function guessHead(label) {
-  const l = String(label || "").toLowerCase().trim();
-  if (!l || /^total|^profit|^loss|^\(?[a-z]?\)?\s*$/.test(l) || /total$/.test(l)) return "";
-  const order = ["tpm", "chg", "dta", "dtl", "iaud", "cwip", "nci", "ci", "oltl", "onca", "ocl", "oca", "ltla", "stla", "ltb", "stb", "ltp", "stp", "sc", "rs", "msw", "sapp", "ppe", "intang", "inv", "tr", "cash", "tpo", "oth", "rev", "mat", "pur", "emp", "fin", "dep", "exc", "exo", "cur", "def", "exp"];
-  return order.find((k) => SYN[k].test(l)) || "";
-}
-
 // the statements worked out once for each state of the books (FinSt.build reads two years of balances)
 let memo = { key: "", v: null };
 function booksFigures(b, fy) {
@@ -39,22 +26,49 @@ function booksFigures(b, fy) {
   return memo.v;
 }
 
+// a file read: every sheet (the person picks one), at most 400 lines of at most 30 columns each; a CSV read as UTF-8.
+// Kept on this page only while it is open: what is saved is the lines made from it (linesOf), never the raw cells
+const MAXR = 400, MAXC = 30;
 async function readSheet(file) {
   if (/\.pdf$/i.test(file.name)) throw new Error("Reading a PDF comes in phase 2: upload the Excel or CSV for now.");
   if (typeof window.ensureXlsx === "function") await window.ensureXlsx();
   if (!window.XLSX) throw new Error("The Excel reader could not be loaded.");
-  const buf = await file.arrayBuffer(), wb = window.XLSX.read(buf, { type: "array" }), ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = window.XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "" }).filter((r) => r.some((c) => String(c).trim() !== "")).slice(0, 400);
-  // the columns: the label (the first mostly-text column), this year and last year (the first two mostly-number columns)
-  const w = Math.max(0, ...rows.map((r) => r.length)), isNum = (c) => c !== "" && !isNaN(num(c)) && /\d/.test(String(c));
-  const score = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (isNum(r[j]) ? 1 : 0), 0)), text = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (r[j] && !isNum(r[j]) ? 1 : 0), 0));
+  const X = window.XLSX, wb = /\.csv$/i.test(file.name) ? X.read(await file.text(), { type: "string", raw: true }) : X.read(await file.arrayBuffer(), { type: "array" });
+  const sheets = (wb.SheetNames || []).map((name) => {
+    const ws = wb.Sheets[name]; if (!ws) return { name, rows: [] };
+    const rows = X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "", blankrows: false }).map((r) => r.slice(0, MAXC)).filter((r) => r.some((c) => String(c).trim() !== "")).slice(0, MAXR);
+    return { name, rows };
+  }).filter((x) => x.rows.length);
+  if (!sheets.length) throw new Error("No lines found in the file.");
+  return { file: file.name, sheets };
+}
+// the columns guessed: the label (the column with the most text), this year and last year (the two with the most amounts)
+function autoCols(rows) {
+  const w = Math.min(MAXC, Math.max(0, ...rows.map((r) => r.length)));
+  const score = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (isNum(r[j]) ? 1 : 0), 0)), text = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (r[j] !== "" && !isNum(r[j]) ? 1 : 0), 0));
   const label = text.indexOf(Math.max(...text)), nums = score.map((s, j) => [s, j]).filter(([s, j]) => j !== label && s > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 2).map(([, j]) => j).sort((a, b) => a - b);
-  const cols = { label: Math.max(0, label), cy: nums[0] != null ? nums[0] : 1, py: nums[1] != null ? nums[1] : 2 };
-  const map = {}; rows.forEach((r, i) => { const k = guessHead(r[cols.label]); if (k && (isNum(r[cols.cy]) || isNum(r[cols.py]))) map[i] = k; });
-  return { file: file.name, rows, cols, map };
+  return { label: Math.max(0, label), cy: nums[0] != null ? nums[0] : 1, py: nums[1] != null ? nums[1] : 2 };
+}
+// the lines to keep from a sheet and its columns: label and both years as numbers (NaN: not an amount, said), the heads
+// guessed (each marked "check the head"), the file's own totals
+function linesOf(file, sheet, rows, cols) {
+  const lines = [], map = {}, guessed = {}, totals = [];
+  rows.forEach((r) => {
+    const label = String(r[cols.label] == null ? "" : r[cols.label]).trim().slice(0, 200), a = r[cols.cy], b = r[cols.py];
+    // neither year an amount: a heading (or the column titles, e.g. dates): its amounts nil. One year an amount and the
+    // other not: that cell is not an amount (NaN, said)
+    const head = !isNum(a) && !isNum(b);
+    const z = { label, cy: head || a === "" ? 0 : num(a), py: head || b === "" ? 0 : num(b) };
+    if (!label && !z.cy && !z.py) return;
+    const i = lines.length; lines.push(z);
+    const k = guessHead(label);
+    if (k) { map[i] = k; guessed[i] = true; }
+    if (k === "-" && /total/i.test(label) && (z.cy || z.py)) totals.push({ label, cy: z.cy, py: z.py });
+  });
+  return { file, sheet, cols, lines, map, guessed, totals };
 }
 
-function Grid({ heads, f, edit, setEdit, which, final }) {
+function Grid({ heads, f, edit, setEdit, which, final, onBad }) {
   return <div className="corp-scroll"><table className="corp-table" style={{ minWidth: 720 }} data-aoc4-table={which}>
     <thead><tr><th>Item (Schedule III)</th><th className="n">Current year</th><th className="n">Previous year</th><th>Source</th></tr></thead>
     <tbody>{heads.map(([k, label, sec], i) => {
@@ -65,23 +79,31 @@ function Grid({ heads, f, edit, setEdit, which, final }) {
       return <tr key={i} data-aoc4-line={k}><td style={{ paddingLeft: 32 }}>{label}{k === "tpo" && !(+f.cy.tpm) && +f.cy.tpo > 0 && <span className="corp-note" style={{ color: "var(--corp-warn)" }}> · MSME split needed</span>}</td>
         {["cy", "py"].map((col) => <td key={col} className="n" style={{ width: 160 }}><input aria-label={label + (col === "cy" ? " current year" : " previous year")} data-aoc4-input={k + ":" + col} disabled={final} inputMode="decimal"
           style={{ textAlign: "right", fontVariantNumeric: "tabular-nums", background: edited && e[col] != null && e[col] !== "" ? "var(--brand-tint)" : undefined }}
-          key={String(f[col][k])} defaultValue={fmt(f[col][k])} onBlur={(ev) => { const v = num(ev.target.value); if (Math.abs(v - (+f[col][k] || 0)) < 0.005) return; setEdit(k, Object.assign({}, e, { [col]: v })); }} /></td>)}
-        <td style={{ fontSize: 12, color: "var(--corp-muted)" }}>{f.src[k]}{edited && !final && <input aria-label={"Why " + label + " was changed"} data-aoc4-why={k} defaultValue={e.why || ""} placeholder="why it was changed"
-          style={{ display: "block", marginTop: 4, fontSize: 12, minHeight: 28 }} onBlur={(ev) => setEdit(k, Object.assign({}, e, { why: ev.target.value.trim() }))} />}
+          key={String(f[col][k])} defaultValue={fmt(f[col][k])} onBlur={(ev) => { const v = num(ev.target.value); if (isNaN(v)) { onBad(ev.target.value); return; } if (Math.abs(v - (+f[col][k] || 0)) < 0.005) return; setEdit(k, Object.assign({}, e, { [col]: v })); }} /></td>)}
+        <td style={{ fontSize: 12, color: "var(--corp-muted)" }}>{f.src[k]}{edited && !final && <input aria-label={"Why " + label + " was changed"} data-aoc4-why={k} defaultValue={e.why || ""} placeholder="why it was changed (needed)"
+          style={{ display: "block", marginTop: 4, fontSize: 12, minHeight: 28, borderColor: e.why ? undefined : "var(--corp-warn)" }} onBlur={(ev) => setEdit(k, Object.assign({}, e, { why: ev.target.value.trim() }))} />}
           {edited && !final && <button className="linkbtn" style={{ fontSize: 12 }} data-aoc4-undo={k} onClick={() => setEdit(k, null)}>Back to the source's figure</button>}</td></tr>;
     })}</tbody></table></div>;
 }
 
-function UploadMap({ up, set }) {
-  const opts = [["", "Not used (total or heading)"]].concat(LEAVES.map(([k, l]) => [k, l]));
+function UploadMap({ up, set, raw, setRaw }) {
+  const opts = [["", "Choose the head"], ["-", "Not used (a total or a heading)"]].concat(LEAVES.map(([k, l]) => [k, l]));
+  const sheet = raw && raw.file === up.file ? raw.sheets.find((x) => x.name === up.sheet) || raw.sheets[0] : null;
+  const recut = (sheetName, cols) => { const sh = raw.sheets.find((x) => x.name === sheetName) || raw.sheets[0], c = cols || autoCols(sh.rows); set(linesOf(up.file, sh.name, sh.rows, c)); };
   return <div data-aoc4-map="" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-    <div className="corp-row" style={{ fontSize: 13 }}>{[["label", "Item column"], ["cy", "Current year column"], ["py", "Previous year column"]].map(([k, l]) => <label key={k} className="corp-f"><span>{l}</span>
-      <select data-aoc4-col={k} value={up.cols[k]} onChange={(e) => set(Object.assign({}, up, { cols: Object.assign({}, up.cols, { [k]: +e.target.value }) }))}>
-        {Array.from({ length: Math.max(3, ...up.rows.map((r) => r.length)) }, (_, j) => <option key={j} value={j}>{"Column " + String.fromCharCode(65 + j) + (up.rows[0] && up.rows[0][j] !== undefined ? ": " + String(up.rows[0][j]).slice(0, 18) : "")}</option>)}</select></label>)}</div>
+    {sheet ? <div className="corp-row" style={{ fontSize: 13 }}>
+      {raw.sheets.length > 1 && <label className="corp-f"><span>Sheet</span><select data-aoc4-sheet="" value={sheet.name} onChange={(e) => recut(e.target.value)}>{raw.sheets.map((x) => <option key={x.name} value={x.name}>{x.name + " · " + x.rows.length + " lines"}</option>)}</select></label>}
+      {[["label", "Item column"], ["cy", "Current year column"], ["py", "Previous year column"]].map(([k, l]) => <label key={k} className="corp-f"><span>{l}</span>
+      <select data-aoc4-col={k} value={up.cols[k]} onChange={(e) => recut(sheet.name, Object.assign({}, up.cols, { [k]: +e.target.value }))}>
+        {Array.from({ length: Math.min(30, Math.max(3, ...sheet.rows.map((r) => r.length))) }, (_, j) => <option key={j} value={j}>{"Column " + String.fromCharCode(65 + j) + (sheet.rows[0] && sheet.rows[0][j] !== undefined ? ": " + String(sheet.rows[0][j]).slice(0, 18) : "")}</option>)}</select></label>)}</div>
+      : <p className="corp-note" style={{ margin: 0 }}>{(up.sheet ? "Sheet " + up.sheet + " · " : "") + "To choose other columns or another sheet, upload the file again."}</p>}
+    <p className="corp-note" style={{ margin: 0 }}>Amounts: (1,000), -1,000, 1,000- and 1,000 Cr are read as negative; 1,000 Dr as positive; ₹ and Rs. are left out.</p>
     <div className="corp-scroll" style={{ maxHeight: 360 }}><table className="corp-table"><thead><tr><th>Line in the file</th><th className="n">Current</th><th className="n">Previous</th><th>AOC-4 head</th></tr></thead>
-      <tbody>{up.rows.map((r, i) => <tr key={i} data-upload-row={i}><td>{String(r[up.cols.label] || "")}</td><td className="n">{fmt(num(r[up.cols.cy]))}</td><td className="n">{fmt(num(r[up.cols.py]))}</td>
-        <td><select aria-label={"AOC-4 head for " + String(r[up.cols.label] || "line " + (i + 1))} data-upload-head={i} value={up.map[i] || ""} onChange={(e) => { const m = Object.assign({}, up.map); if (e.target.value) m[i] = e.target.value; else delete m[i]; set(Object.assign({}, up, { map: m })); }}>
-          {opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td></tr>)}</tbody></table></div>
+      <tbody>{up.lines.map((z, i) => <tr key={i} data-upload-row={i} data-unmapped={!(up.map || {})[i] && (z.cy || z.py) ? "" : undefined}><td>{z.label}</td>
+        <td className="n">{isNaN(z.cy) ? <span style={{ color: "var(--corp-bad)" }}>not an amount</span> : fmt(z.cy)}</td><td className="n">{isNaN(z.py) ? <span style={{ color: "var(--corp-bad)" }}>not an amount</span> : fmt(z.py)}</td>
+        <td><select aria-label={"AOC-4 head for " + (z.label || "line " + (i + 1))} data-upload-head={i} value={(up.map || {})[i] || ""} onChange={(e) => { const m = Object.assign({}, up.map), g = Object.assign({}, up.guessed); if (e.target.value) m[i] = e.target.value; else delete m[i]; delete g[i]; set(Object.assign({}, up, { map: m, guessed: g })); }}>
+          {opts.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          {(up.guessed || {})[i] && <span className="corp-note" data-upload-guessed={i} style={{ display: "block", fontSize: 11, color: "var(--corp-warn)" }}>guessed from its words: check the head</span>}</td></tr>)}</tbody></table></div>
   </div>;
 }
 
@@ -100,29 +122,38 @@ export default function Aoc4({ co }) {
   const c = corpOf(co.id), P = shown(co), fy = S.corpFy || lastClosedFy(today());
   const row = annual(P, fy, c.filings).find((r) => r.form === "AOC-4") || {};
   const fl = (c.filings || []).find((x) => x.ref === row.ref) || {}, data = fl.data || {};
-  const [tab, setTab] = useState("bs"), [err, setErr] = useState(""), [busy, setBusy] = useState("");
+  const [tab, setTab] = useState("bs"), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [raw, setRaw] = useState(null), [mapOpen, setMapOpen] = useState(false);
   // a viewer, or a page whose copy is not in, looks and downloads; nothing it does is kept
   const may = canEdit(co.id);
   const keep = (patch, extra) => may && saveFiling(co.id, Object.assign({ ref: row.ref, form: "AOC-4", kind: "annual", period: fy, due: row.due, status: fl.status || "in_progress", steps: fl.steps || 0 }, extra || {}, { data: Object.assign({}, data, patch) }));
-  const source = data.source || "books";
+  const source = data.source || "books", final = fl.status === "filed";
+  // each source has its own edits (switching source starts with that source's); older drafts kept one set, the Books'
+  const editsOf = (src) => (data.editsBy ? data.editsBy[src] || {} : src === "books" ? data.edits || {} : {});
+  const edits = editsOf(source);
   // the books: opened here when they are not (the Statements page's way)
   const b = S.books && S.books.cid === co.id ? S.books : null;
   if (source === "books" && !b) { if (typeof openBooks === "function") openBooks(co.id); }
   let base = null, why = "";
-  if (source === "upload") base = data.upload ? fromUpload(data.upload) : null;
+  // a filed AOC-4 is shown (and downloaded) as it was saved: never worked out again
+  if (final && data.figures) base = { cy: data.figures, py: data.pyFigures || {}, src: data.srcSaved || {}, unmapped: [], info: {} };
+  else if (source === "upload") base = data.upload && data.upload.lines ? fromUpload(data.upload) : null;
   else if (!b || b.loading) why = "Opening the books…";
   else if (!(b.vouchers || []).length) why = "The books have no day book yet: bring it in from Tally (Books › From Tally), or upload the balance sheet and P&L instead.";
   else { const x = booksFigures(b, fy); if (x.error) why = x.error; else base = x; }
-  const f = base ? figures(base, data.edits) : null;
+  const f = base ? figures(base, final && data.figures ? {} : edits) : null;
   const prev = (c.filings || []).find((x) => x.ref === "annual:AOC-4:" + fyNext(fy, -1) && x.status === "filed");
-  const cks = f ? checks(f, { lastFiled: prev && prev.data && prev.data.figures, lastFy: fyNext(fy, -1), udin: data.udin }) : [];
+  const un = (base && base.unmapped) || [], noWhy = Object.entries(edits).filter(([, e]) => !String(e.why || "").trim()).map(([k]) => k);
+  const cks = f ? checks(f, { lastFiled: prev && prev.data && prev.data.figures, lastFy: fyNext(fy, -1), udin: data.udin, unmapped: un, totals: base.totals ? totalChecks(f, base.totals) : [], bad: base.bad }) : [];
+  const hold = un.length ? "Not in any head: map every line first" : noWhy.length ? "Give the reason for each figure changed" : base && base.bad && base.bad.length ? "Some cells of the file are not amounts" : "";
   const att = data.attach || {}, attDone = ATTACHMENTS.every(([k]) => att[k] === "ready" || att[k] === "na");
   const stepNow = !f ? 0 : !data.figuresOk ? 1 : !attDone ? 2 : 3;
-  const setEdit = (k, e) => { const ed = Object.assign({}, data.edits); if (e) ed[k] = e; else delete ed[k]; keep({ edits: ed, figuresOk: false }); };
-  const d = dueIn(row.due), final = fl.status === "filed";
+  // a figure changed: kept with this source's edits; after Ready, the form is in progress again
+  const setEdit = (k, e) => { const ed = Object.assign({}, edits); if (e) ed[k] = e; else delete ed[k];
+    keep({ editsBy: Object.assign({ books: editsOf("books"), upload: editsOf("upload") }, { [source]: ed }), edits: undefined, figuresOk: false }, fl.status === "ready" ? { status: "in_progress", steps: Math.min(fl.steps || 0, 1) } : null); };
+  const d = dueIn(row.due);
   const meta = { company: P.name || co.name, cin: P.cin, fy, source: source === "upload" ? "the uploaded " + ((data.upload || {}).file || "file") : "FinCom Books", cyDate: dmy(fyEnd(fy)), pyDate: dmy(fyEnd(fyNext(fy, -1))) };
   const fileBase = (meta.company + " AOC-4 figures FY " + fy).replace(/[\\/:*?"<>|]+/g, " ");
-  const stamp = () => keep({ figures: f.cy, pyFigures: f.py });
+  const stamp = () => { if (!final) keep({ figures: f.cy, pyFigures: f.py, srcSaved: f.src }); };
   const download = async (kind) => {
     if (!f) return; setBusy(kind); setErr("");
     try {
@@ -140,7 +171,12 @@ export default function Aoc4({ co }) {
   const upload = async (e) => {
     const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return;
     setErr(""); setBusy("upload");
-    try { const up = await readSheet(file); keep({ source: "upload", upload: up, edits: {}, figuresOk: false }); } catch (x) { setErr(String((x && x.message) || x)); } finally { setBusy(""); }
+    try {
+      const r = await readSheet(file), sh = r.sheets[0], up = linesOf(r.file, sh.name, sh.rows, autoCols(sh.rows));
+      // a new file starts again: the figures changed by hand for the upload go (asked first)
+      if (Object.keys(editsOf("upload")).length && !window.confirm("A new file: the figures you changed by hand for the upload will be cleared. Go on?")) return;
+      setRaw(r); keep({ source: "upload", upload: up, editsBy: { books: editsOf("books"), upload: {} }, edits: undefined, figuresOk: false });
+    } catch (x) { setErr(String((x && x.message) || x)); } finally { setBusy(""); }
   };
   return <div data-corp-page="aoc4" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
     {!may && <p className="corp-note" data-corp-readonly="">Read only: the firm's owner or staff prepare the AOC-4.</p>}
@@ -152,9 +188,11 @@ export default function Aoc4({ co }) {
             {row.due && <span className="corp-chip" data-tone={final ? "ok" : d.tone || undefined}>{final ? "Filed" + (fl.srn ? " · SRN " + fl.srn : "") : "Due " + dmy(row.due) + (d.words ? " · " + d.words : "")}</span>}</div>
         </div>
         <div className="corp-row">
-          <Button className="btn" data-aoc4-save="" disabled={!f} onClick={() => { stamp(); }}>Save draft</Button>
-          {stepNow === 1 && <Button className="btn primary" data-aoc4-next="" disabled={!f} onClick={() => { keep({ figuresOk: true, figures: f.cy, pyFigures: f.py }, { steps: Math.max(fl.steps || 0, 2), status: final ? "filed" : "in_progress" }); }}>Next: attachments</Button>}
-          {stepNow === 3 && !final && <Button className="btn primary" data-aoc4-ready="" onClick={() => { keep({ figures: f.cy, pyFigures: f.py }, { steps: 4, status: "ready" }); goClient("books:corp-forms"); }}>Ready for MCA</Button>}
+          {!final && <Button className="btn" data-aoc4-save="" disabled={!f} onClick={() => { stamp(); }}>Save draft</Button>}
+          {stepNow === 1 && !final && hold && <span className="corp-note" data-aoc4-hold="" style={{ color: "var(--corp-bad)" }}>{hold}</span>}
+          {stepNow === 1 && !final && <Button className="btn primary" data-aoc4-next="" disabled={!f || !!hold} title={hold || undefined} onClick={() => { if (hold) return; keep({ figuresOk: true, figures: f.cy, pyFigures: f.py, srcSaved: f.src }, { steps: Math.max(fl.steps || 0, 2), status: "in_progress" }); }}>Next: attachments</Button>}
+          {stepNow === 3 && !final && <Button className="btn primary" data-aoc4-ready="" disabled={!!hold} title={hold || undefined} onClick={() => { if (hold) return; keep({ figures: f.cy, pyFigures: f.py, srcSaved: f.src }, { steps: 4, status: "ready" }); goClient("books:corp-forms"); }}>Ready for MCA</Button>}
+          {stepNow === 3 && !final && hold && <span className="corp-note" data-aoc4-hold="" style={{ color: "var(--corp-bad)" }}>{hold}</span>}
         </div>
       </div>
       <ol aria-label="Steps" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
@@ -174,8 +212,14 @@ export default function Aoc4({ co }) {
           {source === "upload" && !final && <div className="corp-row"><label className="btn small" style={{ cursor: "pointer" }}><input type="file" accept=".xlsx,.xls,.csv" data-aoc4-file="" style={{ display: "none" }} onChange={upload} />{data.upload ? "Upload another file" : "Choose the Excel or CSV"}</label>
             <span className="btn small" aria-disabled="true" title="Reading a PDF balance sheet comes in phase 2" style={{ opacity: 0.55 }}>PDF · coming</span>
             {data.upload && <span className="corp-note">{data.upload.file + " · " + Object.keys(data.upload.map || {}).length + " lines mapped"}</span>}</div>}
-          {source === "upload" && data.upload && !final && <details data-aoc4-mapping="" open={!Object.keys(data.upload.map || {}).length}><summary style={{ cursor: "pointer", fontSize: 13 }}>Map the file's lines to AOC-4's heads</summary>
-            <UploadMap up={data.upload} set={(up) => keep({ upload: up, figuresOk: false })} /></details>}
+          {source === "upload" && data.upload && data.upload.lines && !final && <details data-aoc4-mapping="" open={mapOpen || !Object.keys(data.upload.map || {}).length || undefined} onToggle={(e) => setMapOpen(e.currentTarget.open)}><summary style={{ cursor: "pointer", fontSize: 13 }}>Map the file's lines to AOC-4's heads</summary>
+            <UploadMap up={data.upload} raw={raw} setRaw={setRaw} set={(up) => keep({ upload: up, figuresOk: false })} /></details>}
+          {source === "upload" && data.upload && !data.upload.lines && !final && <p className="corp-note">This upload was kept in an older form: upload the file again.</p>}
+          {f && un.length > 0 && <div data-aoc4-unmapped="" style={{ border: "1px solid var(--corp-bad)", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
+            <b style={{ color: "var(--corp-bad)" }}>{"Not in any head: " + un.length + (un.length === 1 ? " line" : " lines") + ", ₹" + fmt(un.reduce((x, z) => x + Math.abs(z.cy || 0), 0)) + " this year"}</b>
+            <ul style={{ margin: "6px 0", paddingLeft: 18 }}>{un.slice(0, 12).map((z, i) => <li key={i}>{(z.label || "(no name)") + " · " + fmt(z.cy) + " / " + fmt(z.py)}</li>)}{un.length > 12 && <li>{"and " + (un.length - 12) + " more"}</li>}</ul>
+            {source === "upload" ? <button className="linkbtn" data-aoc4-map-open="" onClick={() => setMapOpen(true)}>Map them</button>
+              : <button className="linkbtn" onClick={() => { S.fsTab = "map"; goClient("books:fs"); }}>Give these ledgers their codes in Statements</button>}</div>}
           {busy === "upload" && <p className="corp-note" role="status">Reading the file…</p>}
           {err && <p className="corp-note" role="alert" style={{ color: "var(--corp-bad)" }} data-aoc4-error="">{err}</p>}
         </section>
@@ -183,8 +227,8 @@ export default function Aoc4({ co }) {
           <div role="tablist" aria-label="Statement" className="sbar" style={{ margin: "0 18px" }}>
             {[["bs", "Balance sheet"], ["pl", "Profit & loss"], ["co", "Company & auditor details"]].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} data-aoc4-tab={k} onClick={() => setTab(k)}>{l}</button>)}</div>
           {!f ? <div className="corp-empty" data-aoc4-wait="">{source === "upload" ? "Upload the balance sheet and P&L (Excel or CSV) to begin." : why}</div>
-            : tab === "bs" ? <Grid heads={BS_HEADS} f={f} edit={data.edits || {}} setEdit={setEdit} which="bs" final={final} />
-            : tab === "pl" ? <Grid heads={PL_HEADS} f={f} edit={data.edits || {}} setEdit={setEdit} which="pl" final={final} />
+            : tab === "bs" ? <Grid heads={BS_HEADS} f={f} edit={edits} setEdit={setEdit} which="bs" final={final || !may} onBad={(v) => setErr("“" + v + "” is not an amount.")} />
+            : tab === "pl" ? <Grid heads={PL_HEADS} f={f} edit={edits} setEdit={setEdit} which="pl" final={final || !may} onBad={(v) => setErr("“" + v + "” is not an amount.")} />
             : <div className="corp-card-body" style={{ paddingTop: 14 }}><div className="corp-grid">
               {[["cin", "CIN", P.cin], ["auditor", "Auditor", P.auditor], ["frn", "Auditor's FRN", P.auditorFrn]].map(([k, l, v]) => <label key={k} className="corp-f"><span>{l}</span><input type="text" value={v || ""} readOnly aria-label={l} /></label>)}
               {[["udin", "Auditor's UDIN"], ["signedOn", "Date the statements were signed"], ["agm", "Date of the AGM"]].map(([k, l]) => <label key={k} className="corp-f"><span>{l}</span>
