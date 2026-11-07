@@ -213,7 +213,10 @@ def main():
             p2.wait_for_timeout(6000)
             top = re.sub(r"\s+", " ", p2.inner_text("#app [data-tsm-top]")) if p2.locator("#app [data-tsm-top]").count() else ""
             ok("No bridge on this computer" in top and p2.locator("#app [data-tpg-download]").count() == 1, "5. %s: the local check says No bridge on this computer, Download stays (%s)" % (mode, top[:160]))
-            p2.close()
+            for r in held:
+                try: r.abort()
+                except Exception: pass
+            p2.unroute_all(behavior="ignoreErrors"); p2.close()
         br.close()
     print("errors", errors[:5])
     print("PASSED" if not fails and not errors else "FAILED: %d" % (len(fails) + len(errors)))
