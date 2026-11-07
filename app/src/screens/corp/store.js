@@ -204,7 +204,16 @@ const dup = (e) => /23505|duplicate key/i.test(String((e && e.message) || e));
 const why = (e) => (typeof navigator === "object" && navigator.onLine === false ? "you're offline" : String((e && e.message) || e).replace(/^TypeError: /, "").slice(0, 160));
 
 // a server row laid under a record: the shown value of a field edited here is merged three ways, the rest is the server's
+// a document marked Final on another computer takes no edit from here, except its owner's Back to draft: the edit is dropped
+// and said (never sent again and again to a trigger that refuses it)
+const FINAL_ELSEWHERE = "Marked Final on another computer: your unsaved change was not applied.";
+const ownerBack = (e) => Object.keys(e.dirty).every((k) => k === "status") && e.cur.status === "draft" && String((typeof Cloud === "object" && Cloud.st && Cloud.st.role) || "") === "owner";
+const locked = (x) => /final document is locked|takes a final document back to draft/i.test(String((x && x.message) || x));
 function take(kind, e, row) {
+  if (kind === "docs" && row.status === "final" && Object.keys(e.dirty).length && !ownerBack(e)) {
+    e.dirty = {}; e.err = "";
+    Object.keys(mem).forEach((cid) => { if (mem[cid].docs && Object.values(mem[cid].docs).includes(e)) mem[cid].note = FINAL_ELSEWHERE; });
+  }
   const srv = KIND[kind].from(row), cur = copy(srv);
   Object.keys(e.dirty).forEach((k) => { const v = merge3(e.row ? e.row[k] : undefined, e.cur[k], srv[k]); if (v === undefined) delete cur[k]; else cur[k] = v; });
   Object.keys(e.dirty).forEach((k) => { if (same(cur[k], srv[k])) delete e.dirty[k]; });
@@ -265,7 +274,17 @@ async function sendOne(cid, kind, e, tries) {
   try {
     rows = e.at ? await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
       : await api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
-  } catch (x) { if (!(dup(x) && !e.at)) throw x; rows = []; } finally { e.posting = false; }
+  } catch (x) {
+    // the server's lock on a Final document: read it again (the edit is dropped and said, above), no retry
+    if (locked(x) && kind === "docs") {
+      e.posting = false;
+      let now = null;
+      // the read again failing: the edit stays, marked not saved (Retry), and nothing is thrown (no loop of retries)
+      try { now = await api(K.table + "?select=*&" + K.where(cid, e.cur)); } catch (y) { e.err = why(y); return "held"; }
+      e.dirty = {}; if (now && now[0]) take(kind, e, now[0]); mem[cid].note = FINAL_ELSEWHERE; return "merged";
+    }
+    if (!(dup(x) && !e.at)) throw x; rows = [];
+  } finally { e.posting = false; }
   if (!rows || !rows.length) {
     if (tries >= 3) throw new Error("another computer kept changing it");
     const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));
@@ -332,7 +351,7 @@ export async function save(cid) {
         if (c.none[kind]) { e.err = "FinCom’s server is not updated for this part yet"; continue; }
         try {
           if (e.deleting) await removeOne(cid, kind, store, k, e);
-          else { const r = await sendOne(cid, kind, e, 0); if (r === "again") c.again = true; else if (r === "gone") delete store[k]; }
+          else { const r = await sendOne(cid, kind, e, 0); if (r === "again") c.again = true; else if (r === "gone") delete store[k]; if (r === "held") continue; }
           e.err = "";
         } catch (x) { if (missing(x)) { c.none[kind] = true; e.err = "FinCom’s server is not updated for this part yet"; } else { e.err = why(x); failed = x; } }
       }
@@ -381,6 +400,14 @@ export function saveFiling(cid, f) {
 }
 export function saveDoc(cid, d) {
   if (!ready(cid, "docs")) return Object.assign({ id: d.id || "" }, d);
+  // a viewer changes nothing; a Final document changes only back to draft, by the firm's owner (the server's trigger
+  // holds the same rule, migration 145)
+  if (!canEdit(cid)) return Object.assign({ id: d.id || "" }, d);
+  const was = d.id && mem[cid].docs[d.id];
+  if (was && was.cur.status === "final") {
+    const back = Object.keys(d).every((k) => k === "id" || (k === "status" && d.status === "draft")) && d.status === "draft";
+    if (!back || String((Cloud.st && Cloud.st.role) || "") !== "owner") return Object.assign({}, was.cur);
+  }
   const c = mem[cid], id = d.id || uid(), e = c.docs[id] || (c.docs[id] = rec(null, ""));
   if (e.deleting) return Object.assign({}, e.cur);
   if (!e.at && !e.cur.id) e.cur = { id };

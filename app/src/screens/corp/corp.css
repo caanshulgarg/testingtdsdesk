@@ -1,5 +1,6 @@
 /* Corporate (07-Nov-2026; the owner's approved designs "Corporate and e-Forms" and "ROC documents"): Inter for the page,
-   Source Serif 4 for headings and the documents, navy #14213D. Loaded with the Corporate chunk only (screens/corp). The
+   Source Serif 4 for headings and the documents (kept with the app: fonts.js, never from another site), navy #14213D.
+   Loaded with the Corporate chunk only (screens/corp). The
    app's own tokens are taken where they are (surfaces, ink, rules), so the dark look follows; the A4 paper stays white. */
 .corp {
   --corp-navy: #14213D; --corp-navy-2: #2A3A61; --corp-gold: #C9A96E; --corp-ink: var(--ink, #18202E); --corp-muted: var(--muted, #6A7385);
