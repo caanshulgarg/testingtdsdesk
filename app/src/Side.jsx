@@ -15,17 +15,17 @@ import { useDismiss } from "./parts/dismiss.js";
 //           BOOKS Reports · MIS · Statements (the Financial statements page) · Audit · Look up · Letters / then Client setup · All clients · Help
 // On a phone the bar along the bottom keeps five: Overview · Purchase · Bank · Sales · More (Today · Compliance ·
 // Clients · Tally · More on the firm's pages); More opens a sheet with everything else.
-import { ArrowLeftRight, BookOpen, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
+import { ArrowLeftRight, BookOpen, Building2, Scale, CalendarCheck, ChartColumn, CircleHelp, CloudDownload, Ellipsis, FileSearch, FileText, Inbox,
   Landmark, LayoutDashboard, Mail, PanelLeftClose, PanelLeftOpen, Percent, Plug, ReceiptText, Search, Settings, SlidersHorizontal, Sun,
   TrendingUp, Users, Video, X } from "lucide-react";
 
 const ICONS = { today: Sun, dash: LayoutDashboard, bills: ReceiptText, bank: Landmark, sales: TrendingUp, inbox: Inbox, fromtally: CloudDownload,
   setup: SlidersHorizontal, settings: Settings, txn: ArrowLeftRight, books: BookOpen, tds: Percent, gst: FileText, reports: ChartColumn, lookup: Search,
-  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale, meetings: Video };
+  audit: FileSearch, letters: Mail, mymis: LayoutDashboard, help: CircleHelp, clients: Users, compliance: CalendarCheck, more: Ellipsis, integrations: Plug, recon: Scale, meetings: Video, corp: Building2 };
 // each area its own colour (the owner, 09-Oct-2026: "some bright colours"), the accents of styles/arc-tokens.css
 const TONES = { today: "amber", dash: "indigo", bills: "amber", bank: "sky", sales: "emerald", inbox: "violet", fromtally: "teal", setup: "slate",
   settings: "slate", txn: "teal", books: "violet", tds: "rose", gst: "indigo", reports: "teal", mymis: "indigo", lookup: "sky", audit: "rose", letters: "amber",
-  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald", meetings: "emerald" };
+  help: "sky", clients: "indigo", compliance: "rose", more: "slate", integrations: "teal", recon: "emerald", meetings: "emerald", corp: "slate" };
 
 const RAIL = { Transactions: "Trans\u00ADactions", Reconciliations: "Reconcil\u00ADiations", Integrations: "Integra\u00ADtions", Compliance: "Compli\u00ADance" };
 function Item({ icon, label, on, count, onClick, title, bar }) {
@@ -104,6 +104,8 @@ function tree() {
       // ROUND 105: the person's own MIS (templates, charts, describe in words, save and share, Excel and PDF)
       { icon: "mymis", label: "My MIS", on: bt === "mymis", go: () => goClient("books:mymis"), title: "Build your own MIS: choose the figures, add charts, save and share" },
       { icon: "books", label: "Statements", on: bt === "fs", go: () => { S.fsTab = ""; goClient("books:fs"); }, title: "Financial statements: balance sheet, P&L, cash flow, notes and computation, linked to the trial balance" },
+      // corporate (07-Nov-2026): a company's profile, e-Forms, resolutions and minutes (screens/corp, its own file)
+      ...(typeof FS === "object" && FS.entityOf(open).code === "C" ? [{ icon: "corp", label: "Corporate", on: /^corp/.test(bt), go: () => goClient("books:corp"), title: "Company profile, e-Forms, resolutions and minutes" }] : []),
       // the tie-out with Tally is a tab of Audit
       { icon: "audit", label: "Audit", on: bt === "audit" || bt === "tieout", go: () => goClient("books:audit"), title: "Checks over the books, and the tie-out with Tally" },
       { icon: "lookup", label: "Look up", on: bt === "lookup", go: () => goClient("books:lookup"), title: "Any ledger, any dates (press /)" },
