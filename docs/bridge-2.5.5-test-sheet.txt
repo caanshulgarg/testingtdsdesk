@@ -31,7 +31,8 @@ CHECK 2.5.5-D - UPDATE NOW WHILE SOMEONE TYPES IN TALLY
    Press Update now and keep typing in Tally (an entry, a report) without a 15 s pause.
    You should see: for up to 2 minutes nothing is read; then reading goes on in short parts, each waiting while you are
    typing, so typing is never held up by more than about 2 s. The nightly catch-up and the light update keep waiting for
-   a pause as before. A posting from FinCom is never held by this.
+   a pause as before. A posting from FinCom is never held by this. Pressed while the nightly catch-up (or another
+   update) is waiting, the Update now goes first at once, and its 2 minutes count from when you pressed it.
 
 CHECK 2.5.5-E - tally.ini OF THIS LOGIN GETS THIS LOGIN'S PORT
    On a computer one person uses, with Tally's connection off and no ServerPort line in tally.ini, install 2.5.5 (or let
