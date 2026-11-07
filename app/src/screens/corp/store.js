@@ -276,7 +276,13 @@ async function sendOne(cid, kind, e, tries) {
       : await api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
   } catch (x) {
     // the server's lock on a Final document: read it again (the edit is dropped and said, above), no retry
-    if (locked(x) && kind === "docs") { e.posting = false; const now = await api(K.table + "?select=*&" + K.where(cid, e.cur)); e.dirty = {}; if (now && now[0]) take(kind, e, now[0]); mem[cid].note = FINAL_ELSEWHERE; return "merged"; }
+    if (locked(x) && kind === "docs") {
+      e.posting = false;
+      let now = null;
+      // the read again failing: the edit stays, marked not saved (Retry), and nothing is thrown (no loop of retries)
+      try { now = await api(K.table + "?select=*&" + K.where(cid, e.cur)); } catch (y) { e.err = why(y); return "held"; }
+      e.dirty = {}; if (now && now[0]) take(kind, e, now[0]); mem[cid].note = FINAL_ELSEWHERE; return "merged";
+    }
     if (!(dup(x) && !e.at)) throw x; rows = [];
   } finally { e.posting = false; }
   if (!rows || !rows.length) {
@@ -345,7 +351,7 @@ export async function save(cid) {
         if (c.none[kind]) { e.err = "FinCom’s server is not updated for this part yet"; continue; }
         try {
           if (e.deleting) await removeOne(cid, kind, store, k, e);
-          else { const r = await sendOne(cid, kind, e, 0); if (r === "again") c.again = true; else if (r === "gone") delete store[k]; }
+          else { const r = await sendOne(cid, kind, e, 0); if (r === "again") c.again = true; else if (r === "gone") delete store[k]; if (r === "held") continue; }
           e.err = "";
         } catch (x) { if (missing(x)) { c.none[kind] = true; e.err = "FinCom’s server is not updated for this part yet"; } else { e.err = why(x); failed = x; } }
       }

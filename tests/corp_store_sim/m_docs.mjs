@@ -39,7 +39,7 @@ ok(/Chairperson of the Company where authorised by the Board, or else by the fol
 console.log("8. the quorum");
 const P3 = { name: "Q (made-up)", cls: "private", directors: [{ id: "a", name: "A (made-up)", din: "00000001" }, { id: "b", name: "B (made-up)", din: "00000002" }] };
 const mq = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", attendance: { a: "In person", b: "Leave of absence" } }) }, P3, {});
-ok(/quorum required under section 174 of the Companies Act, 2013 was not present/.test(txt(mq)) && !/requisite quorum being present/.test(txt(mq)) && mq.finalBlock === "Quorum not present", "one of two present: not minuted as present; Final blocked");
+ok(/quorum required under section 174 of the Companies Act, 2013 was not present/.test(txt(mq)) && !/requisite quorum being present/.test(txt(mq)) && !mq.finalBlock, "one of two present: not minuted as present; the adjournment can be made Final");
 const mok = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", attendance: { a: "In person", b: "In person" } }) }, P3, {});
 ok(/requisite quorum being present/.test(txt(mok)) && !mok.finalBlock, "both: present, Final allowed");
 console.log("9. the casual vacancy's cause; the dates");
@@ -61,7 +61,8 @@ ok(cb.warn.some((w) => /Certified on 01-Oct-2026: before the meeting/.test(w)), 
 console.log("the review of e49c57846");
 const opc = Object.assign({}, P, { cls: "opc" });
 const ao = txt(M.build({ template: "accounts-approval", fields: Object.assign({}, MEET, { fyEnd: "2026-03-31", signers: ["r3"] }) }, opc, {}));
-ok(/the financial statements and the Board's report be signed on behalf of the Board by the following Director, the Company being a One Person Company/.test(ao) && !/two Directors/.test(ao), "an OPC: one director signs both (s.134(1), (6))");
+ok(/the financial statements be signed on behalf of the Board by the following Director, the Company being a One Person Company \(section 134\(1\)/.test(ao) && !/following two Directors/.test(ao) && /Board's report be signed by the Chairperson of the Company where authorised by the Board, or else by at least two Directors, one of whom is the Managing Director where there is one, or by the Director where there is one Director/.test(ao), "an OPC: one director signs the financial statements (s.134(1)); the Board's report as for every company (s.134(6))");
+ok(/following Director, the Company being a One Person Company/.test(txt(M.build({ template: "accounts-approval", fields: Object.assign({}, MEET, { fyEnd: "2026-03-31", signers: ["r3"] }) }, Object.assign({}, P, { cls: "", cin: "U17299DL2019OPC000000" }), {}))), "an OPC told by its CIN too");
 ok(M.build({ template: "accounts-approval", fields: Object.assign({}, MEET, { fyEnd: "2026-03-31", signers: ["r2", "r3"] }) }, opc, {}).warn.some((w) => /One Person Company: one director/.test(w)), "an OPC with two picked: warned");
 const adj = M.build({ template: "minutes", fields: Object.assign({}, MEET, { serial: "1/2026-27", chairman: "a", attendance: { a: "In person", b: "Leave of absence" }, items: [{ template: "bank-open", fields: { bank: "B", branch: "C" } }] }) }, P3, {});
 ok(/stood adjourned under section 174\(4\)/.test(txt(adj)) && !/Opening of bank account/.test(txt(adj)) && !/Vote of thanks/.test(txt(adj)) && !/Confirmation of the minutes/.test(txt(adj)), "no quorum: adjourned (s.174(4)), no business in the minutes");

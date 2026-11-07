@@ -28,14 +28,16 @@ export const dirOf = (p, id) => { if (!id) return null; const all = (p.directors
 // private unlimited ULT, a private company limited by guarantee GAT), or the profile marks a Section 8 / unlimited
 // company as private (privateCo)
 const PRIVATE_CIN = ["PTC", "OPC", "FTC", "ULT", "GAT"];
+// a One Person Company: its class, or its CIN's type (OPC)
+export const isOpc = (p) => p.cls === "opc" || (cinInfo(p.cin || "") || {}).type === "OPC";
 export const isPrivate = (p) => p.cls === "private" || p.cls === "opc" || p.privateCo === true || PRIVATE_CIN.includes((cinInfo(p.cin || "") || {}).type || "");
 // the template's conditional words, for this company and these values
 function cond(text, p, vals) {
   return String(text || "").replace(/\[\[(public|private|opc|notopc|(\w+)(!?=)([^:\]]*)):([\s\S]*?)\]\]/g, (m, all, k, op, v, body) => {
     if (all === "public") return isPrivate(p) ? "" : body;
     if (all === "private") return isPrivate(p) ? body : "";
-    if (all === "opc") return p.cls === "opc" ? body : "";
-    if (all === "notopc") return p.cls === "opc" ? "" : body;
+    if (all === "opc") return isOpc(p) ? body : "";
+    if (all === "notopc") return isOpc(p) ? "" : body;
     const is = String((vals || {})[k] == null ? "" : vals[k]) === v;
     return (op === "=" ? is : !is) ? body : "";
   });
@@ -183,8 +185,8 @@ export function build(doc, p0, co) {
   // the certified copy is certified on or after the meeting
   if (tpl.kind === "resolution" && isDay(vals.certifiedOn) && isDay(vals.meetingDate) && vals.certifiedOn < vals.meetingDate)
     warn.push("Certified on " + dmy(vals.certifiedOn) + ": before the meeting (" + dmy(vals.meetingDate) + ") that passed the resolution.");
-  if (tpl.key === "accounts-approval" && p.cls === "opc" && Array.isArray(vals.signers) && vals.signers.length !== 1)
-    warn.push("A One Person Company: one director signs the financial statements and the Board's report (s.134(1), s.134(6)).");
+  if (tpl.key === "accounts-approval" && isOpc(p) && Array.isArray(vals.signers) && vals.signers.length !== 1)
+    warn.push("A One Person Company: one director signs the financial statements (s.134(1)).");
   if (tpl.key === "first-auditor" && isDay(p.incorporated) && isDay(vals.meetingDate) && days(p.incorporated, vals.meetingDate) > 30)
     warn.push("The first auditor is appointed by the Board within 30 days of incorporation (s.139(6)): this meeting is " + days(p.incorporated, vals.meetingDate) + " days after it.");
   const blocks = [];
@@ -271,7 +273,8 @@ function minutes(tpl, vals, p, co, company, missing, warn) {
   // s.118(1): minutes are prepared and entered in the minutes book within 30 days of the meeting (signing is not held to it)
   const en = days(vals.meetingDate, vals.enteredOn);
   if (en != null && en > 30) warn.push("Minutes are to be entered in the minutes book within 30 days of the meeting (s.118(1)): entered " + en + " days after it.");
-  return { kind: "minutes", blocks, missing, warn, quorum: q, finalBlock: q.ok ? "" : "Quorum not present", title: "Minutes of board meeting" + (vals.serial ? " " + vals.serial : ""),
+  return { kind: "minutes", blocks, missing, warn, quorum: q, finalBlock: "",   // no quorum: the adjournment is itself the record (s.174(4)), so it can be made Final
+ title: "Minutes of board meeting" + (vals.serial ? " " + vals.serial : ""),
     head: { left: company + " · Minutes Book of Board Meetings", startPage: Math.max(1, parseInt(vals.startPage, 10) || 1) }, foot: "initials", letterhead: false };
 }
 
