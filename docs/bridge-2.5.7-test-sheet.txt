@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.7 - TEST SHEET (2.5.6's sheet below, with 2.5.7's new checks first)
 
 File:        FinComBridge-Setup-2.5.7.exe
-Fingerprint: SHA-256 @@SETUP_SHA@@ (FinComBridge-Setup-2.5.7.exe, built @@BUILT@@ at bridge sources @@SRC@@, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.7.exe SHA-256 @@PROG_SHA@@
+Fingerprint: SHA-256 ca666efbb5e5a9ab09260d4eda2d94fbc32f5c8ca9c81469727287c34f18b5f4 (FinComBridge-Setup-2.5.7.exe, built 07-Nov-2026 21:31 UTC at bridge sources 7357e3e36, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.7.exe SHA-256 ce3818e9cdc4ff5e761e31bb956cb414645265ed88b5547b9270efe59847a301
 
 2.5.7: the faster read of older entries (FastEntries: a window of days at once) is in the build, SWITCHED OFF. With it
 off nothing new is sent to Tally, the request list and the bridge's heartbeat are 2.5.6's, and Books > From Tally reads

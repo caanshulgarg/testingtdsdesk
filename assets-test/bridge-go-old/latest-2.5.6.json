@@ -1,0 +1,5 @@
+{
+ "at": "2026-11-07T12:58:10Z",
+ "bridge": {"version": "2.5.6", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-2.5.6.exe", "sha256": "99087ddbe8b888001ecb3965e43595ba9a767b1f2804cda4b9fd5e0123796436", "requireSignature": false},
+ "setup": {"version": "2.5.6", "url": "https://staging.fincom.live/review/assets/bridge-go/FinComBridge-Setup-2.5.6.exe", "sha256": "80e6f4705803460aa5616ab87cbcffbc88cb0a64fc98372034869530aeb32073"}
+}
