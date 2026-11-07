@@ -111,8 +111,6 @@ def main():
             E("(p) => { window.__pings = p; }", A_PINGS)
         def down_scene():
             ids = scene([adev()], cw, [ORBIT], {}, books={ORBIT: T.book(ORBIT)})
-            # (the stand-in cloud answers a list RPC with {ok: true}; TCloud.rpcAll would page through it for ever)
-            E("() => { const r = TCloud.rpc; TCloud.rpc = async (fn, a, q) => { const x = await r.call(TCloud, fn, a, q); return q && !Array.isArray(x) ? [] : x; }; }")
             return ids
         ids = down_scene()
         ok(txt("#app [data-tsm-top-title]") != "Connected to your Tally", "W. not reachable at the start: not connected (%s)" % txt("#app [data-tsm-top-title]"))
@@ -128,7 +126,6 @@ def main():
         d3 = T.dev(7, PC, "made-up-a", tally="open", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9101, "windowsUser": UA, "tallyWhy": "connection off",
                    "tallyConnectSay": "Your Tally's connection is off."}, ports=[{"port": 9000, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}])
         ids = scene([d3], [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": d3["id"], "gstin": "", "last_seen": "ago:30"}], [ORBIT], A_PINGS, books={ORBIT: T.book(ORBIT)})
-        E("() => { const r = TCloud.rpc; TCloud.rpc = async (fn, a, q) => { const x = await r.call(TCloud, fn, a, q); return q && !Array.isArray(x) ? [] : x; }; }")
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids[ORBIT])
         pg.wait_for_timeout(4000)
         def tally_on():
@@ -141,6 +138,16 @@ def main():
         pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top .tally-pop [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(500)
         if n(ck): press("W. the client's Tally box", ck, "header.top .tally-pop [data-tally-pop-msg]", WIN, before=comes_up)
         else: ok(False, "W. the client's Tally box: a Check again (%s)" % txt("header.top .tally-pop")[:160])
+        # TCloud.rpcAll (a list a thousand rows at a time): an answer that is not a list ends it (the stand-in cloud answers
+        # {ok: true}, as a cloud error might): before, it asked for the next thousand for ever and the page froze
+        r = E("""() => { const r0 = TCloud.rpc; let n = 0; const big = Array.from({length: 1000}, (_, i) => ({i}));
+          TCloud.rpc = async () => (++n === 1 ? big : {ok: true});
+          return Promise.race([TCloud.rpcAll('made_up_list', {}).then((x) => ({rows: x.length, asked: n})), new Promise((ok) => setTimeout(() => ok({rows: -1, asked: n}), 3000))])
+            .finally(() => { TCloud.rpc = r0; }); }""")
+        ok(r["rows"] == 1000 and r["asked"] == 2, "TCloud.rpcAll: a thousand rows, then an answer that is not a list: it stops, with the rows it had (%s)" % r)
+        r = E("""() => { const r0 = TCloud.rpc; TCloud.rpc = async () => ({ok: true});
+          return Promise.race([TCloud.rpcAll('made_up_list', {}).then((x) => x.length), new Promise((ok) => setTimeout(() => ok(-1), 3000))]).finally(() => { TCloud.rpc = r0; }); }""")
+        ok(r == 0, "TCloud.rpcAll: a first answer that is not a list: no rows, at once (%s)" % r)
         br.close()
     print("errors", errors[:5])
     print("PASSED" if not fails and not errors else "FAILED: %d" % (len(fails) + len(errors)))
