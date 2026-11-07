@@ -670,7 +670,16 @@ export function mastersResult(b, a, r) {
   return bits.length ? "Updated: " + bits.join(", ") : "Updated: no changes in Tally";
 }
 export const GRP = {};
-export async function groupCount(cid, force) {
+const GRP_P = {};
+// (a count already asked for this book: that one answer, never a second request; force asks anew)
+export function groupCount(cid, force) {
+  const bk = ledBook(cid), w = GRP_P[cid];
+  if (!force && w && bk && w.book === bk.book) return w.p;
+  const p = groupCountNow(cid, force), me = { book: bk && bk.book, p };
+  GRP_P[cid] = me; p.then(() => { if (GRP_P[cid] === me) delete GRP_P[cid]; }, () => { if (GRP_P[cid] === me) delete GRP_P[cid]; });
+  return p;
+}
+async function groupCountNow(cid, force) {
   const bk = ledBook(cid);
   if (!bk || !bk.book) return null;
   const k = GRP[cid];

@@ -13,7 +13,7 @@
 // rounds, the books' summary): none is made up; a read with no total known says "Reading…" and the count so far. Nothing
 // new is asked of Tally; the rounds are read from FinCom's cloud only while one client's details are open.
 import { useEffect, useState } from "react";
-import { ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, lightAt, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, fyStart, daybookHeld } from "./TallyCompanies.jsx";
+import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, lightAt, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, fyStart, daybookHeld } from "./TallyCompanies.jsx";
 import OlderEntries, { bookSum, bookFetch, pctOf, partWords, etaWords, nf, rpc, summary, fyLabel, fyNow } from "./TallyFetch.jsx";
 import { PostingWait } from "./StuckJobs.jsx";
 
@@ -35,11 +35,11 @@ const mayChange = () => !(typeof S === "object" && S.account && S.account.me) ||
 // ---------- Step 1 · Masters: {st: reading | waiting | done | none | why, n, g, read, of, pct, words, sub, at}
 export function mastersOf(cid, company) {
   const x = sync(cid), n = ledgersOf(cid), g = (GRP[cid] || {}).n, held = ledgersHeld(cid), bk = ledBook(cid) || {};
-  const rw = runWords(cid, company), at = bk.ledgersAt || "";
+  const rw = runWords(cid, company), at = bk.ledgersAt || "", ln = LED_N.get(cid), nKnown = n > 0 || !!(ln && ln.book === bk.book);
   const running = !!(x && !x.end && !x.err && !x.late) || runBusy(cid);
   const of = x && x.prog ? Number(x.prog.of) || 0 : 0, read = x && x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0;
   const kw = company ? keepWaitOf(company) : "";
-  const base = { n, g: g == null ? null : g, at, held };
+  const base = { n: nKnown ? n : null, g: g == null ? null : g, at, held };
   if (running) {
     if (kw && !(read > 0)) return Object.assign(base, { st: "waiting", words: /^waiting/i.test(kw) ? kw : "Waiting: " + kw, read, of, pct: 0 });
     if (of > 0) return Object.assign(base, { st: "reading", read, of, pct: Math.min(99, Math.round((read * 100) / of)), words: "Reading · " + nf(read) + " of " + nf(of) });
@@ -48,7 +48,8 @@ export function mastersOf(cid, company) {
   }
   if (rw && rw.phase === "why") return Object.assign(base, { st: "why", words: "Not done: " + rw.text.replace(/^Not updated:\s*/, "") });
   if (x && (x.err || x.late) && !held) return Object.assign(base, { st: "why", words: "Not done: " + (x.err || x.why || "no answer from Tally in 3 minutes") });
-  if (held) return Object.assign(base, { st: "done", words: "✓ " + nf(n) + (n === 1 ? " ledger" : " ledgers") + (g != null ? " · " + nf(g) + (g === 1 ? " group" : " groups") : ""),
+  // (the cloud's count not read yet, or not read: "—", never a made-up 0)
+  if (held) return Object.assign(base, { st: "done", words: "✓ " + (nKnown ? nf(n) + (n === 1 ? " ledger" : " ledgers") : "— ledgers") + " · " + (g != null ? nf(g) + (g === 1 ? " group" : " groups") : "— groups"),
     sub: (at ? "updated " + hhmm(at) + " · " : "") + "changes every 10 min", done: rw && rw.phase === "done" ? rw.text : "" });
   return Object.assign(base, { st: "none", words: "Not brought in yet" });
 }
@@ -154,14 +155,14 @@ export function ComingNow({ rows, beat }) {
 // ---------- one client's details, inside the Tally page
 function months(fy, bk, p) {
   const out = [], from = d8Of(bk && bk.from), to = d8Of(bk && bk.to), t8 = today8();
-  const pf = p && !p.done ? String(p.fy || "").replace(/-/g, "").slice(0, 8) : "";
+  const pf = p && !p.done ? String(p.fy || "").replace(/-/g, "").slice(0, 8) : "", part = p ? p.part : "";
   for (let i = 0; i < 12; i++) {
     const m = ((3 + i) % 12) + 1, y = fy + (i >= 9 ? 1 : 0), first = y + String(m).padStart(2, "0") + "01", last = y + String(m).padStart(2, "0") + "31";
     let k = "later";
     if (first > t8) k = "later";
     else if (/^\d{8}$/.test(to) && /^\d{8}$/.test(from) && first <= to && last >= from) k = last <= to ? "in" : "part";
     else k = "bring";
-    if (k !== "in" && k !== "later" && pf && pf.slice(0, 4) === String(fy)) k = "coming";
+    if (k !== "in" && k !== "later" && pf && pf.slice(0, 4) === String(fy) && (part === "h1" ? i < 6 : part === "h2" ? i >= 6 : true)) k = "coming";
     out.push({ m: MON[m - 1], k });
   }
   return out;
@@ -198,32 +199,6 @@ export function historyRows(rounds, m, e, kw) {
   if (p && p.chosenAt) out.push({ at: p.chosenAt, what: "Entries " + partWords(p), how: "Bring books", k: p.done ? "ok" : p.state === "stopped" ? "wait" : "live",
     res: p.done ? "All in FinCom" : (p.state === "going" ? "Bringing" : p.state === "paused" ? "Paused" : "Stopped") + (Number(p.y) ? " at " + nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : "") });
   return out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
-}
-// a Day Book file dropped (or chosen) here: Books › From Tally's own reading (tallyFiles: the same checks, the same
-// upload), for this client, on this page. Its books are opened first in the background (tallyBooksReady), so the
-// reading never sends the person to the client's page; its lines (S.tallyUp) are said here
-export function DayBookDrop({ cid }) {
-  const [over, setOver] = useState(false), [say, setSay] = useState(""), [, tick] = useState(0);
-  const u = typeof S === "object" && S.tallyUp && S.tallyUp.cid === cid ? S.tallyUp : null;
-  useEffect(() => { if (!u || !u.busy) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [!!(u && u.busy)]);
-  const go = async (files) => {
-    files = Array.from(files || []); if (!files.length || typeof tallyFiles !== "function") return;
-    const prev = S.coId; setSay("Opening the client’s books…");
-    try {
-      S.coId = cid;
-      if (typeof tallyBooksReady === "function") { const r = await tallyBooksReady(cid); if (!r || !r.ok) { setSay("Not read: " + ((r && r.why) || "the books did not open") + "."); return; } }
-      setSay(""); await tallyFiles(files);
-    } catch (e) { setSay("Not read: " + String((e && e.message) || e)); }
-    finally { if (S.view !== "company") S.coId = prev; tick((k) => k + 1); }
-  };
-  const lines = u ? [].concat(u.lines || []).slice(-3) : [];
-  return <div className="tpg-drop-wrap">
-    <label className={"tpg-drop" + (over ? " over" : "")} data-tpg-drop={cid} onDragOver={(ev) => { ev.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-      onDrop={(ev) => { ev.preventDefault(); setOver(false); go(ev.dataTransfer && ev.dataTransfer.files); }}>
-      <input type="file" className="sr-only" data-tpg-drop-file={cid} accept=".xml,.json,.zip,.xlsx,.xls,.pdf" multiple onChange={(ev) => { const f = Array.from(ev.target.files || []); ev.target.value = ""; go(f); }} />
-      {mayChange() ? "Or drop a Day Book file here" : "A member of the firm who may make changes uploads a Day Book."}</label>
-    {(say || lines.length > 0) && <div className="tsm-note" data-tpg-drop-say="" role="status">{say || lines.map((l, k) => <div key={k} className={l.ok === false ? "bad" : ""}>{l.text}</div>)}</div>}
-  </div>;
 }
 // Bring books (this year: the days FinCom lacks, as Books › From Tally's Start) and Bring another year (that card, here)
 function BringBooks({ cid, e }) {
@@ -268,7 +243,6 @@ export function ClientDetails({ row }) {
       <div className="tpg-line" data-tpg-d-entries="">{e.words}{e.sub ? " · " + e.sub : ""}</div>
       {e.p && !e.p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
       <BringBooks cid={cid} e={e} />
-      <DayBookDrop cid={cid} />
     </section>
     <section className="tpg-d-card" data-tpg-history="">
       <div className="tpg-kicker">Update history</div>

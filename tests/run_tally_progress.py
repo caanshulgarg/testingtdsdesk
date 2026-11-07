@@ -70,6 +70,7 @@ def main():
           window.__groups = {'bk-Kestrel Textiles': 148, 'bk-Orbit Space': 52, 'bk-Acme Traders': 30}; window.__rounds = {}; window.__sum = [];
           const api = Cloud.api;
           Cloud.api = async (p, o) => { const m = /book_id=eq\\.([^&]+)/.exec(p), bk = m ? decodeURIComponent(m[1]) : '';
+            if (/^tally_groups\\?/.test(p)) { window.__groupsAsked = window.__groupsAsked || {}; window.__groupsAsked[bk] = (window.__groupsAsked[bk] || 0) + 1; await new Promise(r => setTimeout(r, 300)); }
             if (/^tally_groups\\?/.test(p)) return Array.from({length: window.__groups[bk] || 0}, (_, i) => ({name: 'G' + i}));
             if (/^tally_ledger_rounds\\?/.test(p)) { window.__roundsAsked = (window.__roundsAsked || 0) + 1; return JSON.parse(JSON.stringify(window.__rounds[bk] || [])); }
             return api(p, o); };
@@ -163,16 +164,9 @@ def main():
         ok(bb and bb[0][0] == "tally_period_choose_lean" and bb[0][1].get("p_book") == "bk-Orbit Space" and bb[0][1].get("p_part") == "year", "3. Bring books: this year's missing days asked (%s)" % bb)
         pg.click(D + " [data-tpg-another-year]"); pg.wait_for_timeout(600)
         ok(n(D + " [data-older-entries] [data-older-fy]") == 1, "3. Bring another year: the year to choose, here")
-        # a Day Book file dropped here: From Tally's own reading, for this client, on this page
-        E("""() => { window.__tf = []; window.__tfWas = [window.tallyFiles, window.tallyBooksReady];
-          window.tallyBooksReady = async (c) => ({ok: true}); window.tallyFiles = async (fs) => { window.__tf.push({cid: S.coId, view: S.view, n: fs.length, name: fs[0] && fs[0].name}); S.tallyUp = {cid: S.coId, busy: false, lines: [{ok: true, text: 'Read: 12 entries (made-up).'}]}; }; }""")
-        co0 = E("() => S.coId")
-        pg.set_input_files(D + " [data-tpg-drop-file]", files=[{"name": "daybook-made-up.xml", "mimeType": "text/xml", "buffer": b"<ENVELOPE></ENVELOPE>"}]); pg.wait_for_timeout(1200)
-        tf = E("() => window.__tf")
-        ok(tf and tf[0]["cid"] == cid(ORBIT) and tf[0]["view"] == "home" and tf[0]["name"] == "daybook-made-up.xml" and E("() => S.coId") == co0 and E("() => [S.view, location.hash]") == v0,
-           "3. a Day Book file dropped here: read for this client, on this page (%s)" % tf)
-        ok("Read: 12 entries (made-up)." in txt(D + " [data-tpg-drop-say]"), "3. its lines said under the box (%s)" % txt(D + " [data-tpg-drop-say]"))
-        E("() => { [window.tallyFiles, window.tallyBooksReady] = window.__tfWas; }")
+        # (review of 0b3c34839: the Day Book drop box is out of this release: it swapped the open client; Books › From Tally keeps the upload)
+        ok(n(D + " [data-tpg-drop], " + D + " input[type=file]") == 0, "3. no Day Book drop box in the details (out of this release)")
+        ok(E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space") <= 2, "3 (review B2). the groups' count of a book asked once at a time, not once per part (%s)" % E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space"))
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(600)
         ok(n("#app [data-tpg-drow]") == 0, "3. Hide details: closed")
         # Kestrel's: Bring books paused, the bridge's wait, in its history
@@ -182,6 +176,18 @@ def main():
         hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", DK)
         ok(any("Masters · FinCom Bridge" in h[0] and WAIT in h[1] for h in hist) and any("Bring books" in h[0] and h[1].startswith("Paused at 1,304 of 2,651") for h in hist), "3. history: the bridge's wait, Bring books paused (%s)" % hist)
         ok(n(DK + " [data-tpg-resume]") == 1 and n(DK + " [data-tpg-stop]") == 1, "3. Entries: Resume and Stop there")
+
+        print("== 3b (review B1, B3)")
+        # B1: the ledgers' count not read: "—", never "✓ 0 ledgers"
+        E("""(c) => { const st = TCloud.st[c]; window.__ledN = st.ledN; delete st.ledN; window.__lstat = Ledgers.status; Ledgers.status = () => ({n: 0}); render(); }""", cid(ACME)); pg.wait_for_timeout(300)
+        b1 = E("(s) => { const e = document.querySelector(s + ' [data-tpg-mw]'); return e ? e.innerText : ''; }", R(ACME))
+        ok(b1.startswith("✓ — ledgers") and "0 ledgers" not in b1, "3b (B1). the count not known yet: '— ledgers', never '0 ledgers' (%s)" % b1)
+        E("() => { Ledgers.status = window.__lstat; }")
+        # B3: Bring books of Oct–Mar: only those months 'coming'
+        E("""(c) => { const x = window.__sum.find(y => y.pull); x.pull.part = 'h2'; x.pull.state = 'going'; (TCloud.st[c].books || []).forEach(b => { b.to = '2026-05-31'; });
+          if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(KES)); pg.wait_for_timeout(1500)
+        mk = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-month]')].map(e => e.getAttribute('data-tpg-month'))", DK)
+        ok(mk[:2] == ["in", "in"] and mk[2:6] == ["bring"] * 4 and mk[6] == "coming", "3b (B3). Oct–Mar being brought: Jun–Sep to bring, never 'coming'; Oct coming (%s)" % mk)
 
         print("== 4. a phone")
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(800)

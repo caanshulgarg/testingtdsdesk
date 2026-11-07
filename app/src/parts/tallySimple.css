@@ -267,8 +267,6 @@
 #app tr.tpg-drow > td { padding: 0 16px 16px; border-top: 0; background: var(--accent-subtle); }
 #app .tpg-three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 #app .tpg-three .tpg-d-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; gap: 10px; }
-#app .tpg-drop { display: flex; align-items: center; justify-content: center; min-height: 52px; border: 1.5px dashed var(--border-strong, var(--border)); border-radius: 8px; color: var(--accent); cursor: pointer; font-size: 14px; text-align: center; padding: 6px 10px; }
-#app .tpg-drop.over { background: var(--accent-subtle); border-color: var(--accent); }
 #app .tpg-hlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 #app .tpg-hlist li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border-subtle, var(--border)); font-size: 14px; }
 #app .tpg-hlist li:first-child { border-top: 0; }
