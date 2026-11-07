@@ -3,8 +3,13 @@ not working anywhere"). Made-up firm, logins, clients and companies only (the st
 Each Check again, pressed: "Checking…" at once; this computer looked at again on 127.0.0.1 (the bridge's /ping), the
 cloud's beats read again, the page drawn again; then always a line in words, "Checked HH:MM: …", even when nothing changed.
   M. a Mac with no FinCom Bridge, the office's 2 bridges online: the top line, the "Connect Tally on this computer" card,
-     a row's Connect again, the top bar's Tally box: "Checked HH:MM: the office Tally is connected (2 bridges). This
-     computer has no FinCom Bridge."
+     a row's Connect again, the top bar's Tally box: "Checked HH:MM: the office Tally is connected (2 bridges, Tally open
+     in 2). This computer has no FinCom Bridge."
+  M2 (review of 3cfde949f). The Mac's login linked to an office bridge: never "This computer's FinCom Bridge is connected";
+     the office's bridges online but Tally closed: "2 bridges online, but Tally is not open"; the browser's block, a look
+     still going: said so; the words on the top line go after 3 minutes or when the connection changes; words that
+     cannot be worked out: "could not tell, see above"; a part that never answers: the words all the same (no stuck
+     Checking…); presses at once: one check; TCloud.rpcAll / restPages: a non-list answer is an error.
   W. a Windows login whose bridge was down when the page opened and answers now: the top line, step 1's Check again, the
      client's Tally box, Books › From Tally's step line: each finds it ("This computer's FinCom Bridge is connected").
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_check_again.py"""
@@ -81,7 +86,7 @@ def main():
         c9 = [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": o1["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"},
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
-        MAC = ["the office Tally is connected (2 bridges)", "This computer has no FinCom Bridge"]
+        MAC = ["the office Tally is connected (2 bridges, Tally open in 2).", "This computer has no FinCom Bridge."]
         ids = scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
         ok(txt("#app [data-tsm-top-title]").startswith("Connected through the office Tally"), "M. the top line: through the office Tally (%s)" % txt("#app [data-tsm-top-title]"))
         press("M. the top line's Check again", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", MAC)
@@ -94,6 +99,57 @@ def main():
         if n(ck): press("M. the top bar's Tally box", ck, "header.top .tally-pop [data-tally-pop-msg]", MAC)
         else: print("      (M. the top bar's Tally box here: no Check again: %s)" % txt("header.top .tally-pop")[:160])
         pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+
+        print("== M2 (review of 3cfde949f)")
+        # 1. the Mac's login linked to the office bridge go-5 (tally_member_bridges): that bridge is not this computer's
+        scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, how=("linked", "go-5", o1["id"]), books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
+        ok(E("() => (FCTallySimple.ownBridge() || {}).how") == "linked", "M2. the login's bridge: the member's link (%s)" % E("() => (FCTallySimple.ownBridge() || {}).how"))
+        press("M2. linked to an office bridge: the top line", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", ["the office Tally is connected (2 bridges, Tally open in 2).", "This computer has no FinCom Bridge: your login uses the office's."])
+        ok("This computer's FinCom Bridge is connected" not in txt("#app [data-tsm-top]"), "M2. never 'This computer's FinCom Bridge is connected' for the office's bridge")
+        # 3. the top line's words: gone after 3 minutes, gone when the connection changes
+        E("() => { S.tsm.said.at -= 181000; render(); }"); pg.wait_for_timeout(400)
+        ok(n("#app [data-tsm-top] [data-checked]") == 0, "M2. the top line's words gone after 3 minutes")
+        pg.click("#app [data-tsm-top-check]"); pg.wait_for_selector("#app [data-tsm-top] [data-checked]", timeout=12000)
+        E("""() => { const t = new Date(Date.now() - 600000).toISOString(); window.__devs.forEach(d => { d.last_seen = t; d.info.beat.at = t; Object.values(d.info.bridges || {}).forEach(b => { b.at = t; }); });
+          TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }"""); pg.wait_for_timeout(500)
+        ok(n("#app [data-tsm-top] [data-checked]") == 0, "M2. and as soon as the connection changes (the office's bridges went quiet) (%s)" % txt("#app [data-tsm-top]")[:160])
+        # 2. the office's bridges heard, Tally closed on both
+        c1s = [T.dev(5, NW, "made-up-o1", tally="closed", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9101, "windowsUser": NW + "\\made-up-o1"},
+                     ports=[{"port": 9041, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}]),
+               T.dev(6, NW, "made-up-o2", tally="closed", opened=(), version="2.5.4", rec=(), beat={"bridgePort": 9102, "windowsUser": NW + "\\made-up-o2"},
+                     ports=[{"port": 9043, "ok": False, "skipped": False, "n": 0, "error": "Tally is not open (nothing listens on this port)", "reason": "closed"}])]
+        scene(c1s, c9, [ORBIT, NOVA_C, LARK], {})
+        say = E("() => FCTallySimple.checkedSay()")
+        ok(re.match(CHECKED, say) and "2 bridges online, but Tally is not open." in say and "connected" not in say, "M2. bridges online, Tally closed: not 'connected' (%s)" % say)
+        say = E("() => { const L = FCTallySimple.LOCALB, b = L.busy; L.busy = true; try { return FCTallySimple.checkedSay(); } finally { L.busy = b; } }")
+        ok("Still looking on this computer." in say, "M2. the look still going: still looking on this computer (%s)" % say)
+        say = E("() => { const L = FCTallySimple.LOCALB, p = L.perm; L.perm = 'denied'; try { return FCTallySimple.checkedSay(); } finally { L.perm = p; } }")
+        ok("This browser does not let FinCom reach FinCom Bridge on this computer." in say, "M2. the browser blocked this computer: said so (%s)" % say[:160])
+        # 4. words that cannot be worked out; a part that never answers
+        say = E("""() => { const d = TLight.st.devs; TLight.st.devs = [{id: 'made-up-bad', get info() { throw new Error('made-up'); }}];
+          try { return FCTallySimple.checkedSay(); } finally { TLight.st.devs = d; } }""")
+        ok(re.match(CHECKED + "could not tell, see above\\.$", say), "M2. words that cannot be worked out: 'could not tell, see above' (%s)" % say)
+        E("() => { window.__bref = {on: Bridge.on, refresh: Bridge.refresh}; Bridge.on = () => true; Bridge.refresh = () => new Promise(() => {}); }")
+        pg.click("#app [data-tsm-top-check]")
+        try: pg.wait_for_selector("#app [data-tsm-top] [data-checked]", timeout=16000); came = True
+        except Exception: came = False
+        ok(came and txt("#app [data-tsm-top-check]") == "Check again", "M2. the bridge's status never answering: the words all the same, no stuck Checking… (%s)" % txt("#app [data-tsm-top]")[:160])
+        E("() => Object.assign(Bridge, window.__bref)")
+        # 6. presses at once: one check (the same promise; this computer looked at once)
+        r = E("""async () => { window.__probed = []; const a = FCTallySimple.checkAll(), b = FCTallySimple.checkAll(); const same = a === b; await Promise.all([a, b]);
+          return {same, looks: window.__probed.length}; }""")
+        r1 = E("async () => { window.__probed = []; await FCTallySimple.checkAll(); return window.__probed.length; }")
+        ok(r["same"] and r["looks"] == r1, "M2. two presses at once: one check, shared (%s; one press looks %s)" % (r, r1))
+        # 5. a list read a thousand rows at a time: an answer that is not a list is an error (the caller says why)
+        r = E("""() => { const r0 = TCloud.rpc; let n = 0; const big = Array.from({length: 1000}, (_, i) => ({i}));
+          TCloud.rpc = async () => (++n === 1 ? big : {ok: true});
+          return Promise.race([TCloud.rpcAll('made_up_list', {}).then((x) => 'rows ' + x.length, (e) => 'error ' + e.message), new Promise((ok) => setTimeout(() => ok('hung'), 3000))])
+            .finally(() => { TCloud.rpc = r0; }); }""")
+        ok(r == "error not a list: made_up_list", "M2. TCloud.rpcAll: a thousand rows, then an answer that is not a list: an error, not part of the list (%s)" % r)
+        r = E("""() => { const a0 = Cloud.api; Cloud.api = async () => ({ok: true});
+          return Promise.race([TCloud.restPages('made_up_table?select=*').then((x) => 'rows ' + x.length, (e) => 'error ' + e.message), new Promise((ok) => setTimeout(() => ok('hung'), 3000))])
+            .finally(() => { Cloud.api = a0; }); }""")
+        ok(r == "error not a list", "M2. TCloud.restPages: the same (%s)" % r)
 
         print("== W. a Windows login: this computer's bridge down when the page opened, answering now")
         up = {"port": 9041, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}
@@ -138,16 +194,6 @@ def main():
         pg.click("header.top [data-tally-icon]"); pg.wait_for_selector("header.top .tally-pop [data-tally-pop-word]", timeout=15000); pg.wait_for_timeout(500)
         if n(ck): press("W. the client's Tally box", ck, "header.top .tally-pop [data-tally-pop-msg]", WIN, before=comes_up)
         else: ok(False, "W. the client's Tally box: a Check again (%s)" % txt("header.top .tally-pop")[:160])
-        # TCloud.rpcAll (a list a thousand rows at a time): an answer that is not a list ends it (the stand-in cloud answers
-        # {ok: true}, as a cloud error might): before, it asked for the next thousand for ever and the page froze
-        r = E("""() => { const r0 = TCloud.rpc; let n = 0; const big = Array.from({length: 1000}, (_, i) => ({i}));
-          TCloud.rpc = async () => (++n === 1 ? big : {ok: true});
-          return Promise.race([TCloud.rpcAll('made_up_list', {}).then((x) => ({rows: x.length, asked: n})), new Promise((ok) => setTimeout(() => ok({rows: -1, asked: n}), 3000))])
-            .finally(() => { TCloud.rpc = r0; }); }""")
-        ok(r["rows"] == 1000 and r["asked"] == 2, "TCloud.rpcAll: a thousand rows, then an answer that is not a list: it stops, with the rows it had (%s)" % r)
-        r = E("""() => { const r0 = TCloud.rpc; TCloud.rpc = async () => ({ok: true});
-          return Promise.race([TCloud.rpcAll('made_up_list', {}).then((x) => x.length), new Promise((ok) => setTimeout(() => ok(-1), 3000))]).finally(() => { TCloud.rpc = r0; }); }""")
-        ok(r == 0, "TCloud.rpcAll: a first answer that is not a list: no rows, at once (%s)" % r)
         br.close()
     print("errors", errors[:5])
     print("PASSED" if not fails and not errors else "FAILED: %d" % (len(fails) + len(errors)))

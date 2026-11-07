@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, checkedSay, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, connSig, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -39,6 +39,9 @@ const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
 const sameName = (a, b) => !!shown(a) && shown(a).toLowerCase() === shown(b).toLowerCase();
 const canWrite = () => (S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
 const UI = () => (S.tsm = S.tsm || { filter: "all", q: "", open: false, again: 0, check: 0 });
+// a Check again's words, on the top line too: for 3 minutes, and only while the connection is as they saw it
+const keepSaid = (w) => { UI().said = { w, at: Date.now(), sig: connSig() }; };
+const saidNow = () => { const x = UI().said; return x && x.w && Date.now() - x.at < 180000 && x.sig === connSig() ? x.w : ""; };
 const set = (p) => { Object.assign(UI(), p); render(); };
 const GUIDE_MS = 15 * 60000;
 
@@ -92,7 +95,7 @@ const STATE_WORD = { done: "Done", now: "Do this now", later: "Later" };
 function Guide({ cs, collapsed, forced, asked, connectPanel, download, checkAgain, here = null }) {
   const ui = UI(), [ck, setCk] = useState(false), [pick, setPick] = useState(false), [said, setSaid] = useState("");
   // (the words also on the top line: connected, the steps fold away)
-  const again = () => { setCk(true); setSaid(""); checkAll(checkAgain).then((w) => { setSaid(w); UI().said = w; }, () => setSaid(checkedSay())).finally(() => { setCk(false); render(); }); };
+  const again = () => { setCk(true); setSaid(""); checkAll(checkAgain).then((w) => { setSaid(w); keepSaid(w); }).finally(() => { setCk(false); render(); }); };
   // the card's own look (TallyOneClick useHereProbe, every 2 minutes) found this login's bridge: the page's look follows
   // (once for each bridge it finds, and only a 2.5.3 one saying it is this session's: never a look that starts another look)
   useEffect(() => { const A = HERE.lastAny, m = A && A.h && A.h.mine, k = m ? String(m.bridgeId || m.port || "") : "";
@@ -376,7 +379,7 @@ function Dot({ k }) { return <span aria-hidden="true" className={"tpt-dot " + k}
 function Again({ row, x, cs, checkAgain, primary = true }) {
   const [st, setSt] = useState(0), [said, setSaid] = useState("");
   const go = async () => { setSt(1); setSaid("");
-    let w = ""; try { w = await checkAll(checkAgain); } catch (e) { w = checkedSay(); } setSaid(w); UI().said = w;
+    const w = await checkAll(checkAgain); setSaid(w); keepSaid(w);
     if (openAnywhere().has(coKey(row.company)) && !runBusy(row.cid)) runPress(row.cid, row.company, { entries: true });
     setSt(2); render(); };
   return <><button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="again" data-tsm-away-again={row.cid} disabled={st === 1} onClick={go}>{st === 1 ? "Checking…" : "Connect again"}</button>{said && st !== 1 && <div className="tsm-note" data-checked="" role="status">{said}</div>}</>;
@@ -502,9 +505,9 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
 }
 // ---------- the top: this login's Tally in one line, with Check again (and See the 6 steps while a step is not done)
 function Top({ cs, own, rows, checkAgain, ready }) {
-  const [ck, setCk] = useState(false), said = UI().said;
+  const [ck, setCk] = useState(false), said = saidNow();
   // Check again does what a refresh does for the connection (checkAll), then says what it found (the steps' too: UI().said)
-  const again = () => { setCk(true); checkAll(checkAgain).then((w) => { UI().said = w; }, () => { UI().said = checkedSay(); }).finally(() => { setCk(false); render(); }); };
+  const again = () => { setCk(true); checkAll(checkAgain).then(keepSaid).finally(() => { setCk(false); render(); }); };
   const T = ownTallys(own), ok = T.tallys.filter((t) => t.ok), off = T.tallys.filter((t) => !t.ok), names = (own && own.names) || new Map();
   const login = cs.mode === "login", down = login && !!cs.now && cs.now.n <= 4;
   const last = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.o.w === YES && r.last).map((r) => r.last).sort().pop() || "";

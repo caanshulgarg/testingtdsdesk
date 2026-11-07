@@ -134,7 +134,7 @@ def main():
         E("() => { window.__chkWas = window.tallyCheckNow; window.tallyCheckNow = () => { window.__chk++; return Promise.resolve(); }; }")
         m = act(pg, "check", 600)
         # (next-fix-check-again: Check again is checkAll, what a refresh does, not tallyCheckNow; run_check_again.py checks that it looks again)
-        ok(E("window.__chk") <= 1 and re.match(r"Checked \d\d:\d\d: ", m) and m.endswith(" Waiting for Tally.") and no_panel(pg), "Check again: once, the answer in the popover (%s)" % m)
+        ok(E("window.__chk") <= 1 and re.match(r"Checked \d\d:\d\d: ", m) and m.startswith(m[:15] + "Waiting for Tally. ") and no_panel(pg), "Check again: once, the answer in the popover (%s)" % m)
         E("() => { window.tallyCheckNow = window.__chkWas; }")
         pg.keyboard.press("Escape")
 

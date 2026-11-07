@@ -802,7 +802,7 @@ export function MastersLine({ cid }) {
   const c0 = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
   const devId = (coRows(company).find((r) => r.device_id) || {}).device_id || "";
   const step = c0 && c0.n <= 3 && typeof globalThis.FCOwnOrNone === "function" && globalThis.FCOwnOrNone(devId) ? c0 : null;
-  const again = () => { setCk(true); setSaid(""); checkAll().then(setSaid, () => setSaid("")).finally(() => setCk(false)); };
+  const again = () => { setCk(true); setSaid(""); checkAll().then(setSaid).finally(() => setCk(false)); };
   return <div className="tco-masters-line" data-masters="" data-masters-n={n || 0} data-masters-g={g == null ? "" : g}>
     {/* the client's Tally section: this login's Connect Tally step not done, with the steps' Check again (nothing to do next time: it reconnects by itself) */}
     {step && <p className="note bad" data-masters-step={step.n} style={{ margin: "0 0 4px" }}>{"Step " + step.n + " of 6: " + step.title + " — not done. "}
