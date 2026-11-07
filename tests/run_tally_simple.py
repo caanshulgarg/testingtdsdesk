@@ -274,7 +274,8 @@ def main():
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
         # next-tally-page-redesign: five columns; the six questions' answers are in each row's ⋯ › Details (open in these tests)
-        ok(heads == ["Client", "Tally company", "State", "Last entry", "Action"], "3. the five columns (the six questions in Details) (%s)" % heads)
+        # next-tally-progress: Client · Tally company | Connection | Masters | Entries | Action (the answers in ⋯ › Answers)
+        ok(heads == ["Client · Tally company", "Connection", "Masters (ledgers & groups)", "Entries", "Action"], "3. the five columns (the six questions in the answers) (%s)" % heads)
         ok([word(ACME, k) for k in "cole"] == ["Yes"] * 4 and txt(cell(ACME, "c") + " [data-tsm-note]") == "Tally company: " + ACME and txt(cell(ACME, "do")) == "Nothing.", "3. %s: Yes Yes Yes Yes, Nothing. (%s)" % (ACME, txt(row(ACME))))
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))

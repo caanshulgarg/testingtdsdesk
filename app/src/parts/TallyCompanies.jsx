@@ -669,8 +669,17 @@ export function mastersResult(b, a, r) {
   const bits = [nw ? nf(nw) + " new" : "", ch ? nf(ch) + " changed" : "", grp].filter(Boolean);
   return bits.length ? "Updated: " + bits.join(", ") : "Updated: no changes in Tally";
 }
-const GRP = {};
-async function groupCount(cid, force) {
+export const GRP = {};
+const GRP_P = {};
+// (a count already asked for this book: that one answer, never a second request; force asks anew)
+export function groupCount(cid, force) {
+  const bk = ledBook(cid), w = GRP_P[cid];
+  if (!force && w && bk && w.book === bk.book) return w.p;
+  const p = groupCountNow(cid, force), me = { book: bk && bk.book, p };
+  GRP_P[cid] = me; p.then(() => { if (GRP_P[cid] === me) delete GRP_P[cid]; }, () => { if (GRP_P[cid] === me) delete GRP_P[cid]; });
+  return p;
+}
+async function groupCountNow(cid, force) {
   const bk = ledBook(cid);
   if (!bk || !bk.book) return null;
   const k = GRP[cid];
@@ -695,7 +704,7 @@ export function roundsOf(r) {
   return { changed: part.reduce((t, x) => t + (Number(x.rows_received) || 0), 0), full: whole.reduce((t, x) => Math.max(t, Number(x.rows_read) || 0), 0) };
 }
 // the light check's last look at this company (its computer's beat: changeNumbers[company].at, the computer's clock)
-function lightAt(company) {
+export function lightAt(company) {
   let at = "";
   tallyDevs().forEach((d) => { const c = (((d.info || {}).beat || {}).changeNumbers || {}); Object.keys(c).forEach((k) => { if (coKey(k) === coKey(company) && c[k] && String(c[k].at || "") > at) at = String(c[k].at); }); });
   return at;
@@ -822,7 +831,7 @@ export function MastersLine({ cid }) {
     {!held && <p className="note" data-masters-file="" style={{ margin: "0 0 4px" }}>Or export List of Accounts from Tally as XML (Alt+E) and drop it in Bring in from Tally, below.</p>}
   </div>;
 }
-if (typeof globalThis === "object") Object.assign(globalThis, { FCMastersResult: mastersResult, FCRoundsOf: roundsOf, FCRunState: MR });
+if (typeof globalThis === "object") Object.assign(globalThis, { FCMastersResult: mastersResult, FCRoundsOf: roundsOf, FCRunState: MR, FCGroupCounts: GRP });
 // words: only the held words, inline on the row's second line (nothing while a read runs: the bar is under the row);
 // bar: only the bar of a read going on (next-tally-smart: the two halves of the row)
 export function SyncLine({ cid, compact = false, words = false, bar = false }) {
