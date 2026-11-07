@@ -6,6 +6,7 @@ package main
 // sent twice, nothing missed, each entry exactly as FinComVoucherObject's answer keeps it.
 
 import (
+	"errors"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -162,15 +163,35 @@ func TestFastRequestsAsInTheDoc(t *testing.T) {
 			t.Fatalf("a computed figure or the Day Book: %s", x)
 		}
 	}
+	// review of 0de692f49 (9): with the switch off the table is staging-next's (the doc's, its hash and "measured"),
+	// and both ids are refused as not on the list; with it on they are on it, unmeasured, by their id always
+	setCfg("FastEntries", false)
+	t.Cleanup(func() { setCfg("FastEntries", false) })
+	rows, hash := docAllowList(t)
+	if allowListHash(allowListRows()) != hash || allowListHash(rows) != hash {
+		t.Fatal("with FastEntries off the table is not staging-next's (docs/tally-allowlist.md)")
+	}
+	measuredOff := allowListMeasured()
 	for _, id := range []string{fastHeadsID, fastBatchID} {
-		a, ok := tallyAllowList[id]
-		if !ok || a.measureOnly || a.maxSec != 0 || a.measuredOn != "" || requestClass[id] != "exception" {
-			t.Fatalf("%s: %+v %v %q (on the list, not measured yet, by its id always)", id, a, ok, requestClass[id])
+		if _, ok := tallyAllowList[id]; ok || strings.Contains(allowListRows(), "| "+id+" |") {
+			t.Fatalf("%s in the table with FastEntries off", id)
+		}
+		var na *notAllowedError
+		if err := checkAllowed(map[string]string{fastHeadsID: fastHeadsRequest(zz, "20250901", "20250907"), fastBatchID: fastBatchRequest(zz, "20250901", "20250902", 1, 5)}[id]); !errors.As(err, &na) {
+			t.Fatalf("%s with FastEntries off: %v (want not on the list)", id, err)
 		}
 	}
-	if allowListMeasured() {
-		t.Fatal("the table reads measured with the two unmeasured rows")
+	setCfg("FastEntries", true)
+	for _, id := range []string{fastHeadsID, fastBatchID} {
+		a, ok := allowListNow()[id]
+		if !ok || a.measureOnly || a.maxSec != 0 || a.measuredOn != "" || requestClass[id] != "exception" || !strings.Contains(allowListRows(), "| "+id+" |") {
+			t.Fatalf("%s: %+v %v %q (on the list with the switch on, not measured yet, by its id always)", id, a, ok, requestClass[id])
+		}
 	}
+	if allowListMeasured() || allowListHash(allowListRows()) == hash {
+		t.Fatal("with FastEntries on the table reads measured, or is staging-next's")
+	}
+	_ = measuredOff
 	// refused: one day (FinComDayHeads), over 31 days, to before from, no such date, b below a, MasterID 0
 	for name, bad := range map[string]string{
 		"one day": fastHeadsRequest(zz, "20250901", "20250901"), "32 days": fastHeadsRequest(zz, "20250901", "20251002"),
@@ -325,10 +346,10 @@ func TestFastWindowMoreThanTheBatch(t *testing.T) {
 	fastCountsTold(t, m, vs, days)
 }
 
-// --- 5. slow replies: a group over 1.2 s halves the next; a group stopped at 2 s is halved once, a second stop: the rest
-// one by one (FinComVoucherObject); Tally's window answered, so the company is not stopped; nothing missed or doubled
-func TestFastSlowGroupsShrinkThenOneByOne(t *testing.T) {
-	f, c, m := fastBridge(t, `,"TallyAbandonMaxSec":600,"FastEntriesBatchStart":40`)
+// --- 5. slow replies: a group over 1.2 s halves the next; a group stopped at 2 s stops the company's read (the owner's
+// freeze rule, exactly as the per-day path): FinCom told (period_stop), nothing asked again by itself, the size kept as
+// the choice's cap; as the per-day path, what was read and not yet sent is not sent
+func fastStops(c *standCloud) *[]M {
 	var stops []M
 	c.mu.Lock()
 	prev := c.other
@@ -340,6 +361,12 @@ func TestFastSlowGroupsShrinkThenOneByOne(t *testing.T) {
 		return prev(k, b)
 	}
 	c.mu.Unlock()
+	return &stops
+}
+
+func TestFastSlowGroupThenStopStopsCompany(t *testing.T) {
+	f, c, m := fastBridge(t, `,"TallyAbandonMaxSec":600,"FastEntriesBatchStart":40`)
+	stops := fastStops(c)
 	days := daysFrom("20250901", 2)
 	vs := fastDays(f, 3000, map[string]int{days[0]: 60, days[1]: 60})
 	n := 0
@@ -352,47 +379,51 @@ func TestFastSlowGroupsShrinkThenOneByOne(t *testing.T) {
 		switch n {
 		case 1:
 			return 1300 * time.Millisecond // slow, answered: the next group halved
-		case 2, 3:
+		case 2:
 			return 2300 * time.Millisecond // stopped at 2 s
 		}
 		return 0
 	}
 	f.mu.Unlock()
 	applyPeriodDays(fastList(days...))
-	at := nowFn()
-	for i := 0; i < 60 && len(m.held) < len(vs); i++ { // the shared retry schedule waits after a stop: time moves on
-		pullRun(t, 300)
-		at = at.Add(time.Minute)
-		nowFn = func() time.Time { return at }
-		applyPeriodDays(fastList(days...))
-	}
+	pullRun(t, 300)
 	r3Settle()
+	n0 := len(f.ids())
+	for i := 0; i < 3; i++ { // FinCom lists the days again (it will not, once told; the bridge refuses them anyway)
+		applyPeriodDays(fastList(days...))
+		pullRun(t, 50)
+	}
 	bs := fastBodies(f, fastBatchID)
-	var sizes []int
-	for _, b := range bs {
-		sizes = append(sizes, fastGroupSize(b, vs))
+	if len(bs) != 2 || fastGroupSize(bs[0], vs) != 40 || fastGroupSize(bs[1], vs) != 20 {
+		t.Fatalf("%d groups (want 40 slow, then 20 stopped)", len(bs))
 	}
-	if len(sizes) != 3 || sizes[0] != 40 || sizes[1] != 20 || sizes[2] != 10 {
-		t.Fatalf("group sizes %v (want 40 slow, 20 stopped, 10 stopped)", sizes)
+	if len(*stops) != 1 || str((*stops)[0]["why"]) != "over2s" {
+		t.Fatalf("the company's read not stopped once: %v", *stops)
 	}
-	if len(stops) != 0 {
-		t.Fatalf("the company stopped: %v", stops)
+	if len(f.ids()) != n0 || f.n(vchObjectID) != 0 || f.n(dayHeadsID) != 0 {
+		t.Fatalf("asked again after the stop: %v", f.ids()[n0:])
 	}
-	if f.n(vchObjectID) == 0 || f.n(vchBatchID) != 0 {
-		t.Fatalf("one by one %d, day groups %d (the rest is read one by one)", f.n(vchObjectID), f.n(vchBatchID))
+	if s := fastSizeOf(pullItem{Company: zz, CGUID: b220CoGUID}); s.BatchCap != 20 || s.Batch >= 20 {
+		t.Fatalf("sizes %+v (the 20 that hit 2 s kept as the cap)", s)
 	}
-	if s := fastSizeOf(pullItem{Company: zz, CGUID: b220CoGUID}); s.Batch != 1 {
-		t.Fatalf("sizes %+v (one by one kept for the choice)", s)
+	_, times := fastSent(m)
+	for mid, k := range times {
+		if k != 1 {
+			t.Fatalf("MasterID %s sent %d times", mid, k)
+		}
 	}
-	fastAllOnce(t, m, vs)
+	if len(times) != 0 {
+		t.Fatalf("%d entries sent after the stop (the per-day path sends nothing read but not yet sent once stopped)", len(times))
+	}
 }
 
-// --- 6. a window's heads stopped at 2 s (a timeout): the next window is halved; at two days the fast read stops for
-// the choice and the days are read as before; nothing missed or doubled; Tally's window answered
-func TestFastHeadsTimeoutShrinksThenAsBefore(t *testing.T) {
-	f, _, m := fastBridge(t, `,"TallyAbandonMaxSec":600,"FastEntriesWindowDays":4`)
+// --- 6. a window's heads stopped at 2 s: the company's read stops (the per-day path's rule), nothing asked again by
+// itself, the window size kept as the cap
+func TestFastHeadsStopStopsCompany(t *testing.T) {
+	f, c, m := fastBridge(t, `,"TallyAbandonMaxSec":600,"FastEntriesWindowDays":4`)
+	stops := fastStops(c)
 	days := daysFrom("20250901", 4)
-	vs := fastDays(f, 800, map[string]int{days[0]: 2, days[1]: 3, days[2]: 2, days[3]: 3})
+	fastDays(f, 800, map[string]int{days[0]: 2, days[1]: 3, days[2]: 2, days[3]: 3})
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
 		if id == fastHeadsID {
@@ -402,30 +433,167 @@ func TestFastHeadsTimeoutShrinksThenAsBefore(t *testing.T) {
 	}
 	f.mu.Unlock()
 	applyPeriodDays(fastList(days...))
-	at := nowFn()
-	for i := 0; i < 60 && len(m.held) < len(vs); i++ {
-		pullRun(t, 100)
-		at = at.Add(time.Minute)
-		nowFn = func() time.Time { return at }
-		applyPeriodDays(fastList(days...))
-	}
+	pullRun(t, 50)
 	r3Settle()
-	hs := fastBodies(f, fastHeadsID)
-	if len(hs) != 2 {
-		t.Fatalf("%d windows asked (want 4 days, then 2)", len(hs))
+	for i := 0; i < 3; i++ {
+		applyPeriodDays(fastList(days...))
+		pullRun(t, 50)
 	}
-	a0, z0 := pinDates(hs[0])
-	a1, z1 := pinDates(hs[1])
-	if a0 != days[0] || z0 != days[3] || addDays(a1, 1) != z1 {
-		t.Fatalf("windows %s..%s, %s..%s", a0, z0, a1, z1)
+	if f.n(fastHeadsID) != 1 || f.n(dayHeadsID) != 0 || f.n(fastBatchID) != 0 {
+		t.Fatalf("requests %v (want the one window, then nothing)", f.ids())
 	}
-	if s := fastSizeOf(pullItem{Company: zz, CGUID: b220CoGUID}); s.Off == "" {
-		t.Fatal("the fast read still on after two stops")
+	if len(*stops) != 1 || str((*stops)[0]["why"]) != "over2s" || len(m.heads) != 0 {
+		t.Fatalf("stops %v, heads told %d", *stops, len(m.heads))
 	}
-	if f.n(dayHeadsID) != 4 {
-		t.Fatalf("%d days asked as before (want 4)", f.n(dayHeadsID))
+	if s := fastSizeOf(pullItem{Company: zz, CGUID: b220CoGUID}); s.WinCap != 4 || s.Win >= 4 {
+		t.Fatalf("sizes %+v", s)
+	}
+}
+
+// --- 6b. review (2, 4): a window answered with a Tally error (LINEERROR), or with no list, is never "no entries":
+// nothing is told to FinCom from it; after two such answers the days are read as before (FinComDayHeads); every entry once
+func TestFastErrorReplyIsNotZeroEntries(t *testing.T) {
+	for name, reply := range map[string]string{
+		"LINEERROR": "<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>0</STATUS></HEADER><BODY><DATA><LINEERROR>Could not find Report 'FinComWindowHeads'!</LINEERROR></DATA></BODY></ENVELOPE>",
+		"no list":   "<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DESC></DESC></BODY></ENVELOPE>",
+	} {
+		t.Run(name, func(t *testing.T) {
+			f, _, m := fastBridge(t, "")
+			days := daysFrom("20250901", 3)
+			vs := fastDays(f, 900, map[string]int{days[0]: 2, days[1]: 3, days[2]: 2})
+			f.mu.Lock()
+			f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+				if id == fastHeadsID {
+					_, _ = w.Write([]byte(reply))
+					return true
+				}
+				return false
+			}
+			f.mu.Unlock()
+			for i := 0; i < 6; i++ {
+				applyPeriodDays(fastList(days...))
+				pullRun(t, 60)
+			}
+			for _, h := range m.heads {
+				if toInt(h["n"]) == 0 {
+					t.Fatalf("a day told as no entries from the error answer: %v", h)
+				}
+			}
+			if f.n(fastHeadsID) != 2 || f.n(dayHeadsID) != 3 {
+				t.Fatalf("windows %d (want 2), days %d (want 3): %v", f.n(fastHeadsID), f.n(dayHeadsID), f.ids())
+			}
+			fastAllOnce(t, m, vs)
+			fastCountsTold(t, m, vs, days)
+		})
+	}
+}
+
+// --- 6c. review (2), the per-day path (FastEntries off): FinComDayHeads answered with a Tally error is a failure, not a
+// day of no entries; the next answer gives the day's real count
+func TestDayHeadsLineErrorIsFailure(t *testing.T) {
+	f, _, m := pullBridgeWith(t, "")
+	vs := pullDay(f, "20250915", 700, "Sales", "Sales", "Receipt")
+	bad := true
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == dayHeadsID && bad {
+			_, _ = w.Write([]byte("<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>0</STATUS></HEADER><BODY><DATA><LINEERROR>Tally is busy</LINEERROR></DATA></BODY></ENVELOPE>"))
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+	applyPeriodDays(pullList("20250915"))
+	pullRun(t, 5)
+	if len(m.heads) != 0 || f.n(dayHeadsID) == 0 {
+		t.Fatalf("the error answer told FinCom: %v (asked %d)", m.heads, f.n(dayHeadsID))
+	}
+	bad = false
+	at := nowFn().Add(3 * time.Minute) // the day left after five failures waits 2 minutes, as before
+	nowFn = func() time.Time { return at }
+	applyPeriodDays(pullList("20250915"))
+	pullRun(t, 30)
+	if len(m.heads) != 1 || m.n["20250915"] != 3 {
+		t.Fatalf("heads told %v", m.heads)
 	}
 	fastAllOnce(t, m, vs)
+}
+
+// --- 6d. review (4): a window holding a day of more entries than a day may hold: not asked again as a window; the day
+// read as before (the per-day path marks it)
+func TestFastHeadsMaxNotReplanned(t *testing.T) {
+	f, _, m := fastBridge(t, `,"DayPullHeadsMax":3`)
+	days := daysFrom("20250901", 2)
+	fastDays(f, 500, map[string]int{days[0]: 2, days[1]: 5})
+	for i := 0; i < 4; i++ {
+		applyPeriodDays(fastList(days...))
+		pullRun(t, 40)
+	}
+	if f.n(fastHeadsID) != 1 {
+		t.Fatalf("%d windows (want 1)", f.n(fastHeadsID))
+	}
+	if _, up := m.upload[days[1]]; !up {
+		t.Fatalf("the big day not marked by the per-day path: %v", m.upload)
+	}
+}
+
+// --- 6e. review (8): FinCom not answering a day's heads: as the per-day path, the day waits 60 s (no drop); then the
+// window goes on; every entry once
+func TestFastTellWaitsLikeTheDayPath(t *testing.T) {
+	f, c, m := fastBridge(t, "")
+	days := daysFrom("20250901", 3)
+	vs := fastDays(f, 400, map[string]int{days[0]: 2, days[1]: 2, days[2]: 2})
+	down := 1
+	c.mu.Lock()
+	prev := c.other
+	c.other = func(k string, b M) (int, M) {
+		if k == "period_heads" && down > 0 {
+			down--
+			return 503, M{"ok": false, "error": "busy"}
+		}
+		return prev(k, b)
+	}
+	c.mu.Unlock()
+	applyPeriodDays(fastList(days...))
+	pullRun(t, 20)
+	w := pullCurrent()
+	if w == nil || !w.cloudWait.After(nowFn()) {
+		t.Fatalf("the day does not wait after FinCom did not answer (%v)", w)
+	}
+	pull.mu.Lock()
+	_, dropped := pull.done[w.it.key()]
+	pull.mu.Unlock()
+	if dropped {
+		t.Fatal("the day dropped instead of waiting")
+	}
+	at := nowFn().Add(61 * time.Second)
+	nowFn = func() time.Time { return at }
+	applyPeriodDays(fastList(days...))
+	pullRun(t, 60)
+	fastAllOnce(t, m, vs)
+}
+
+// --- 6f. review (5): a wait before a window's request clears its company-list mark (asked again before the next group)
+func TestFastWaitClearsCompanyList(t *testing.T) {
+	f, _, _ := fastBridge(t, `,"FastEntriesBatchStart":2`)
+	days := daysFrom("20250901", 2)
+	fastDays(f, 300, map[string]int{days[0]: 4, days[1]: 4})
+	applyPeriodDays(fastList(days...))
+	for i := 0; i < 60 && f.n(fastBatchID) == 0; i++ {
+		pullStep()
+	}
+	fast.mu.Lock()
+	e := fast.eng
+	fast.mu.Unlock()
+	if e == nil || e.pw.coAt.IsZero() {
+		t.Fatal("no window with its company list asked")
+	}
+	importsInFlight.Store(1)
+	t.Cleanup(func() { importsInFlight.Store(0) })
+	pullStep()
+	if !e.pw.coAt.IsZero() {
+		t.Fatal("the company list mark kept across a wait")
+	}
 }
 
 // --- 7. a malformed reply to a group: not used; those days read one by one; every entry once
@@ -533,45 +701,52 @@ func TestFastCancelledAndOptionalAsToday(t *testing.T) {
 	}
 }
 
-// --- 10. the speed in the beat: entries FinCom took a minute (no figure until two sends a minute apart)
+// --- 10. the speed in the beat, only with FastEntries on (review 1, 7, 9): entries FinCom took a minute for the period's
+// fetch days (never counting or "Check for changes" days), with the company's GUID; with the switch off the beat is
+// staging-next's (no "fast", no speed) and nothing is measured
 func TestFastRateInBeat(t *testing.T) {
+	liveBridge(t, "")
 	fastReset()
 	t.Cleanup(fastReset)
+	t.Cleanup(pullReset)
 	at := time.Date(2026, 11, 7, 10, 0, 0, 0, time.Local)
 	nowFn = func() time.Time { return at }
 	t.Cleanup(func() { nowFn = time.Now })
-	fastRateNote(zz, 50)
+	it := pullItem{Company: zz, CGUID: "GUID-ZZ", Day: "20250901", Fetch: true}
+	// off: nothing kept, nothing in the beat
+	fastRateNote(it, 50)
+	if fastRate(zz) != 0 {
+		t.Fatal("measured with FastEntries off")
+	}
+	if b := pullBeat(); b["fast"] != nil || strings.Contains(jsonText(b), "perMin") || strings.Contains(jsonText(b), "entriesPerMin") {
+		t.Fatalf("the beat with FastEntries off: %v", b)
+	}
+	setCfg("FastEntries", true)
+	t.Cleanup(func() { setCfg("FastEntries", false) })
+	fastRateNote(it, 50)
 	if r := fastRate(zz); r != 0 {
 		t.Fatalf("a speed from one send: %d", r)
 	}
 	at = at.Add(30 * time.Second)
-	fastRateNote(zz, 100)
+	fastRateNote(it, 100)
+	fastRateNote(pullItem{Company: zz, CGUID: "GUID-ZZ", Fetch: false}, 900)             // counting: not counted
+	fastRateNote(pullItem{Company: zz, CGUID: "GUID-ZZ", Fetch: true, Check: true}, 900) // a check day: not counted
 	if r := fastRate(zz); r != 0 {
 		t.Fatalf("a speed over 30 s: %d", r)
 	}
 	at = at.Add(90 * time.Second)
-	fastRateNote(zz, 200)
+	fastRateNote(it, 200)
 	if r := fastRate(zz); r != 150 { // 300 entries in the 2 minutes since the first send
 		t.Fatalf("speed %d, want 150", r)
 	}
-	pull.mu.Lock()
-	pull.state[companyKey(zz)] = M{"day": "20250901", "phase": "fetch"}
-	pull.mu.Unlock()
-	t.Cleanup(pullReset)
-	b := pullBeat()
-	st := obj(obj(b["companies"])[companyKey(zz)])
-	if toInt(st["entriesPerMin"]) != 150 || obj(b["fast"]) == nil {
-		t.Fatalf("beat %v", b)
-	}
-	pull.mu.Lock()
-	_, leaked := pull.state[companyKey(zz)]["entriesPerMin"]
-	pull.mu.Unlock()
-	if leaked {
-		t.Fatal("the beat's copy changed the kept state")
+	f := obj(pullBeat()["fast"])
+	sp := arr(f["speed"])
+	if f["on"] != true || len(sp) != 1 || str(obj(sp[0])["company"]) != zz || str(obj(sp[0])["guid"]) != "guid-zz" || toInt(obj(sp[0])["perMin"]) != 150 {
+		t.Fatalf("beat fast %v", f)
 	}
 	// ten minutes on with nothing taken: no speed
 	at = at.Add(11 * time.Minute)
-	if r := fastRate(zz); r != 0 {
+	if r := fastRate(zz); r != 0 || len(arr(obj(pullBeat()["fast"])["speed"])) != 0 {
 		t.Fatalf("a stale speed %d", r)
 	}
 }

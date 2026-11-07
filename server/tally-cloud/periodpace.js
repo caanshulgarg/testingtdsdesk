@@ -22,16 +22,42 @@ export function periodPace(night, beat) {
   return { max: n || fastOn(beat) ? WIDE_MAX : DAY_MAX, night: n };
 }
 
-// the bridge's speed per company from its beat (periodPull.companies[key].entriesPerMin): [{company, perMin}], at most
-// 50, whole numbers 1..100000; anything else dropped
+// the bridge's speed per company from its beat, only while its fast read is on (review of 0de692f49, 1 and 7):
+// periodPull.fast.speed [{company, guid, perMin}] -> [{company, guid, perMin}], at most 5, whole numbers 1..100000, a
+// company name and a GUID each; anything else dropped (a bridge with the switch off reports none and none is kept)
 export function speedOf(beat) {
-  const c = beat && beat.periodPull && typeof beat.periodPull === "object" ? beat.periodPull.companies : null;
-  if (!c || typeof c !== "object" || Array.isArray(c)) return [];
+  if (!fastOn(beat)) return [];
+  const l = beat.periodPull.fast.speed;
+  if (!Array.isArray(l)) return [];
   const out = [];
-  for (const [k, v] of Object.entries(c)) {
-    if (out.length >= 50) break;
-    const n = Math.floor(Number(v && v.entriesPerMin));
-    if (typeof k === "string" && k.trim() && k.length <= 200 && n >= 1 && n <= 100000) out.push({ company: k.trim(), perMin: n });
+  for (const v of l) {
+    if (out.length >= 5) break;
+    const n = Math.floor(Number(v && v.perMin));
+    const company = typeof (v && v.company) === "string" ? v.company.trim() : "", guid = typeof (v && v.guid) === "string" ? v.guid.trim().toLowerCase() : "";
+    if (company && company.length <= 200 && guid && guid.length <= 100 && n >= 1 && n <= 100000) out.push({ company, guid, perMin: n });
   }
   return out;
+}
+
+// each speed as the book it is for: the book FinCom keeps under that company name (bookOf) whose recorded company GUID
+// (guidOf) is the bridge's; a book with no GUID recorded, another GUID, or a lookup that fails: left out. [{book, perMin}]
+export async function speedBooks(speeds, bookOf, guidOf) {
+  const out = [];
+  for (const s of speeds) {
+    try {
+      const book = await bookOf(s.company);
+      if (!book || out.some((x) => x.book === book)) continue;
+      const g = String((await guidOf(book)) || "").trim().toLowerCase();
+      if (g && g === s.guid) out.push({ book: String(book), perMin: s.perMin });
+    } catch { /* left out */ }
+  }
+  return out;
+}
+
+// review (6): a database without tally_period_next_paced: the older tally_period_next takes its pace from p_max (more
+// than 3 is "night"), so by day it is asked at most 3 (a fast bridge's day is never recorded as night), at night only
+// the room left (never more than fits)
+export function olderNextMax(room, night) {
+  const r = Math.max(0, Math.floor(Number(room) || 0));
+  return night === true ? r : Math.min(3, r);
 }

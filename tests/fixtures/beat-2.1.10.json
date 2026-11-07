@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "7805affb8dddc1101baf5c49b960219fec5f1c56f675c821f49c79490be9d73b",
+    "hash": "56a5219928ca61ac0e2cd0ea9cd5918b8718e771a7e8512f158130e25410025b",
     "measured": false
   },
   "autoUpdate": true,
@@ -49,11 +49,6 @@
   "paused": true,
   "periodPull": {
     "companies": {},
-    "fast": {
-      "on": false,
-      "requests": 0,
-      "sizes": {}
-    },
     "stopped": [],
     "stoppedCompanies": [],
     "uploadDays": []

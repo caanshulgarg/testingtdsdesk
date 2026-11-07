@@ -145,7 +145,6 @@ type fastEng struct {
 	got       map[string]string
 	one       map[string]bool // days to read one by one (a group of theirs failed)
 	pw        *pullWork       // the company list's bookkeeping (pullCoListed)
-	stops     int
 }
 
 // a day read by the window, waiting for its per-day work (daypull.go) to take it
@@ -163,6 +162,10 @@ type fastSize struct {
 	Win   int    `json:"win"`
 	Batch int    `json:"batch"` // 1: one by one for this choice
 	Off   string `json:"off,omitempty"`
+	// review of 0de692f49 (3): the window or group size that took Tally over 2 s in this read (this choice): never asked
+	// at that size or above again (the read stopped then, as the per-day path stops it)
+	WinCap   int `json:"winCap,omitempty"`
+	BatchCap int `json:"batchCap,omitempty"`
 }
 
 type rateMark struct {
@@ -178,13 +181,21 @@ var fast = struct {
 	sizes   map[string]fastSize // company|guid|chosenAt
 	offPort map[int]string      // a Tally that answered a window with a row of another date: not asked a window until restart
 	rate    map[string][]rateMark
-	reqs    atomic.Int64 // requests of the two ids sent (the tests, the beat)
-}{ready: map[string]*fastDay{}, sizes: map[string]fastSize{}, offPort: map[int]string{}, rate: map[string][]rateMark{}}
+	rateCo  map[string][2]string // company key -> {the company's name as listed, its GUID}
+	fails   map[string]int       // review (4): failed window reads of a day (fastDayKey); 2: the day is read as before
+	reqs    atomic.Int64         // requests of the two ids sent (the tests, the beat)
+}{ready: map[string]*fastDay{}, sizes: map[string]fastSize{}, offPort: map[int]string{}, rate: map[string][]rateMark{}, rateCo: map[string][2]string{}, fails: map[string]int{}}
+
+// review (8): a day read by a window, by its key and its phase (counting or fetching), as the per-day work keys it
+func fastDayKey(it pullItem) string { return it.key() + "|" + fmt.Sprint(it.Fetch) }
+
+const fastFailMax = 2
 
 func fastReset() {
 	fast.mu.Lock()
 	fast.ask, fast.eng = "", nil
 	fast.ready, fast.sizes, fast.offPort, fast.rate = map[string]*fastDay{}, map[string]fastSize{}, map[int]string{}, map[string][]rateMark{}
+	fast.rateCo, fast.fails = map[string][2]string{}, map[string]int{}
 	fast.mu.Unlock()
 	fast.reqs.Store(0)
 }
@@ -205,6 +216,12 @@ func fastSizeOf(it pullItem) fastSize {
 		s.Batch = fastBatchStart()
 	}
 	s.Win, s.Batch = clampI(s.Win, 2, fastWinMax()), clampI(s.Batch, 1, fastBatchMax())
+	if s.WinCap > 0 {
+		s.Win = minI(s.Win, maxI(2, s.WinCap/2))
+	}
+	if s.BatchCap > 0 {
+		s.Batch = minI(s.Batch, maxI(1, s.BatchCap/2))
+	}
 	return s
 }
 
@@ -216,7 +233,8 @@ func fastSizeSet(it pullItem, f func(s *fastSize)) {
 	text := jsonText(M{"sizes": fast.sizes})
 	fast.mu.Unlock()
 	fastSaveText.Store(text)
-	go fastSaveNow()
+	fastSaveNow() // a few bytes, written now (no lock held): never later into another folder
+
 }
 
 func fastOff(it pullItem, why string) {
@@ -253,19 +271,22 @@ func fastLoad() {
 		if e == nil {
 			continue
 		}
-		fast.sizes[k] = fastSize{Win: toInt(e["win"]), Batch: toInt(e["batch"]), Off: cutRunes(str(e["off"]), 200)}
+		fast.sizes[k] = fastSize{Win: toInt(e["win"]), Batch: toInt(e["batch"]), Off: cutRunes(str(e["off"]), 200), WinCap: toInt(e["winCap"]), BatchCap: toInt(e["batchCap"])}
 	}
 }
 
 // --- the speed told in the beat: entries FinCom took in the last 10 minutes, a minute
-func fastRateNote(company string, n int) {
-	if n <= 0 {
+// review of 0de692f49 (1, 7): only with FastEntries on, and only for the period's entries being brought (a fetch day of the
+// person's choice; never a counting day or a "Check for changes" day)
+func fastRateNote(it pullItem, n int) {
+	if n <= 0 || !fastOn() || !it.Fetch || it.Check {
 		return
 	}
 	fast.mu.Lock()
 	defer fast.mu.Unlock()
-	k := companyKey(company)
+	k := companyKey(it.Company)
 	fast.rate[k] = append(fast.rate[k], rateMark{nowFn(), n})
+	fast.rateCo[k] = [2]string{it.Company, strings.ToLower(it.CGUID)}
 	fastRateTrimLocked(k)
 }
 
@@ -299,14 +320,45 @@ func fastRate(company string) int {
 	return int(float64(n)/span.Minutes() + 0.5)
 }
 
+// the beat's periodPull.fast, only with FastEntries on (pullBeat): the switch, the sizes, the window requests sent, and
+// each company's speed [{company, guid, perMin}] (entries FinCom took in the last 10 minutes, a minute; none until known)
 func fastBeat() M {
 	fast.mu.Lock()
-	defer fast.mu.Unlock()
 	sz := M{}
 	for k, v := range fast.sizes {
 		sz[k] = M{"windowDays": v.Win, "batch": v.Batch, "off": v.Off}
 	}
-	return M{"on": fastOn(), "sizes": sz, "requests": fast.reqs.Load()}
+	var cos [][2]string
+	for _, c := range fast.rateCo {
+		cos = append(cos, c)
+	}
+	fast.mu.Unlock()
+	sort.Slice(cos, func(a, b int) bool { return cos[a][0] < cos[b][0] })
+	speed := []any{}
+	for _, c := range cos {
+		if r := fastRate(c[0]); r > 0 {
+			speed = append(speed, M{"company": c[0], "guid": c[1], "perMin": r})
+		}
+	}
+	return M{"on": true, "sizes": sz, "requests": fast.reqs.Load(), "speed": speed}
+}
+
+// review (5): a wait before a request of the window (pullMayAsk): the company list is asked again before the next group
+func fastWaited() {
+	fast.mu.Lock()
+	defer fast.mu.Unlock()
+	if fast.eng != nil {
+		fast.eng.pw.coAt = time.Time{}
+	}
+}
+
+// review (4): a failed window read counts against each of its days; at fastFailMax the day is read as before
+func fastFail(e *fastEng, n int) {
+	fast.mu.Lock()
+	defer fast.mu.Unlock()
+	for _, d := range e.days {
+		fast.fails[fastDayKey(e.items[d])] += n
+	}
 }
 
 // --- the per-day work takes a day the window read (daypull.go pullStep): its heads told, what was read, what is left
@@ -315,8 +367,8 @@ func fastTake(w *pullWork) bool {
 		return false
 	}
 	fast.mu.Lock()
-	d := fast.ready[w.it.key()]
-	delete(fast.ready, w.it.key())
+	d := fast.ready[fastDayKey(w.it)]
+	delete(fast.ready, fastDayKey(w.it))
 	for k, x := range fast.ready {
 		if nowFn().Sub(x.at) > fastReadyTTL || nowFn().Before(x.at) {
 			delete(fast.ready, k) // a day FinCom no longer lists, or read too long ago
@@ -375,8 +427,21 @@ func fastStep(w *pullWork, port int) (handled, sent, more bool) {
 			e.told[d] = true
 			e.want = append(e.want, tmp.want...)
 			sort.Slice(e.want, func(a, b int) bool { return toI64(e.want[a]) < toI64(e.want[b]) })
-		} else if d == it.Day {
-			pullDrop(w) // FinCom did not take the day's heads (pullCloudOK said why): the day waits, as today
+			return true, false, true
+		}
+		pull.mu.Lock()
+		_, ended := pull.done[tmp.it.key()] // refused for good (pullCloudOK dropped it or marked it "upload")
+		pull.mu.Unlock()
+		if !ended {
+			// review (8): FinCom did not answer: as the per-day path, the day waits 60 s (DayPullCloudWaitSec) and the window
+			// is left (the days told already are told again then; what FinCom holds stands)
+			w.cloudWait = tmp.cloudWait
+			fastDrop()
+			return true, false, false
+		}
+		if d == it.Day {
+			pullFinish(w, "waiting") // the day being read was refused: it ends here, as the per-day path ends it
+			fastDrop()
 			return true, false, false
 		}
 		return true, false, true
@@ -407,8 +472,12 @@ func fastPlan(it pullItem) *fastEng {
 	}
 	pull.mu.Unlock()
 	fast.mu.Lock()
+	if fast.fails[fastDayKey(it)] >= fastFailMax {
+		fast.mu.Unlock()
+		return nil // review (4): this day's windows failed: read as before
+	}
 	for d, x := range cand {
-		if fast.ready[x.key()] != nil {
+		if fast.ready[fastDayKey(x)] != nil || fast.fails[fastDayKey(x)] >= fastFailMax {
 			delete(cand, d)
 		}
 	}
@@ -533,16 +602,12 @@ func fastHeads(e *fastEng, w *pullWork, port int) (bool, bool, bool) {
 		pullStopCompany(w, "over2s", what+": Tally had not finished it after the 2 s stop (or could not be watched)")
 		return true, true, false
 	case errors.Is(a.err, errRecorderStop):
-		// shrink at once; at two days the window is not asked again for this choice (one day: FinComDayHeads, as today)
+		// review (3), the owner's freeze rule: a request of the read stopped at 2 s stops the company's read, exactly as
+		// the per-day path does (pullHeadsStep); nothing is asked again by itself. The size is kept as this choice's cap
 		fastDrop()
-		n := len(e.days) / 2
-		if n < 2 {
-			fastOff(it, what+" took Tally over 2 s")
-		} else {
-			fastSizeSet(it, func(s *fastSize) { s.Win = n })
-			writeLog(fmt.Sprintf("Older entries of %s: %s took Tally over 2 s; next window %d days", it.Company, what, n))
-		}
-		return true, true, true
+		fastSizeSet(it, func(s *fastSize) { s.WinCap = len(e.days) })
+		pullStopCompany(w, "over2s", what+" (FinComWindowHeads)")
+		return true, true, false
 	case a.err != nil:
 		var na *notAllowedError
 		if errors.As(a.err, &na) || errors.Is(a.err, errFastRefused) {
@@ -550,14 +615,19 @@ func fastHeads(e *fastEng, w *pullWork, port int) (bool, bool, bool) {
 			fastOff(it, "refused before sending: "+cutRunes(a.err.Error(), 160))
 			return false, false, false // nothing went: today's path at once
 		}
+		// review (4): not answered, reset, ...: counted against the window's days (at 2 they are read as before); the
+		// window waits for the next round
 		fastDrop()
-		liveSayOnce("pull|fasterr|"+it.key(), fmt.Sprintf("Older entries of %s: %s not read (%s); read day by day", it.Company, what, cutRunes(a.err.Error(), 160)))
-		return true, true, true
+		fastFail(e, 1)
+		liveSayOnce("pull|fasterr|"+it.key(), fmt.Sprintf("Older entries of %s: %s not read (%s); asked again later", it.Company, what, cutRunes(a.err.Error(), 160)))
+		return true, true, false
 	}
-	if !strings.Contains(a.raw, "<ENVELOPE") {
+	if why := tallyCollectionWhy(a.raw); why != "" {
+		// review (2): a Tally error (LINEERROR), or no collection in the answer, is never taken as "no entries"
 		fastDrop()
-		fastOff(it, what+": Tally's answer could not be read")
-		return true, true, true
+		fastFail(e, 1)
+		liveSayOnce("pull|fastbad|"+it.key(), fmt.Sprintf("Older entries of %s: %s: %s; not used, asked again later", it.Company, what, why))
+		return true, true, false
 	}
 	rows, bad := fastRowsOf(a.raw, from, to)
 	if bad != "" {
@@ -573,7 +643,8 @@ func fastHeads(e *fastEng, w *pullWork, port int) (bool, bool, bool) {
 		perDay[h.Date]++
 		if perDay[h.Date] > pullHeadsMax() {
 			fastDrop()
-			return true, true, true // a day of more entries than a day may hold: today's path (it marks the day)
+			fastFail(e, fastFailMax) // review (4): a day of more entries than a day may hold: read as before (it marks the day)
+			return true, true, true
 		}
 		e.heads[h.Mid] = h
 	}
@@ -708,19 +779,12 @@ func fastBatch(e *fastEng, w *pullWork, port int) (bool, bool, bool) {
 		pullStopCompany(w, "over2s", what+": Tally had not finished it after the 2 s stop (or could not be watched)")
 		return true, true, false
 	case errors.Is(a.err, errRecorderStop):
-		e.stops++
-		if len(g) >= 4 && e.stops < 2 {
-			fastSizeSet(it, func(s *fastSize) { s.Batch = maxI(2, len(g)/2) })
-			writeLog(fmt.Sprintf("Older entries of %s: %s took Tally over 2 s; asked again %d at a time", it.Company, what, maxI(2, len(g)/2)))
-			return true, true, true
-		}
-		fastSizeSet(it, func(s *fastSize) { s.Batch = 1 })
-		for _, d := range e.days {
-			e.one[d] = true
-		}
-		writeLog(fmt.Sprintf("Older entries of %s: %s took Tally over 2 s; the rest is read one by one", it.Company, what))
-		fastFinish(e)
-		return true, true, true
+		// review (3), the owner's freeze rule: stopped at 2 s: the company's read stops, as the per-day path stops it;
+		// the size is kept as this choice's cap (never asked at it or above again)
+		fastDrop()
+		fastSizeSet(it, func(s *fastSize) { s.BatchCap = len(g) })
+		pullStopCompany(w, "over2s", what+" (FinComVoucherWindow)")
+		return true, true, false
 	case a.err != nil:
 		var na *notAllowedError
 		if errors.As(a.err, &na) || errors.Is(a.err, errFastRefused) {
@@ -855,7 +919,7 @@ func fastFinish(e *fastEng) {
 				fd.want = append(fd.want, m) // not read by the window (left for one by one, payroll, or the window ended)
 			}
 		}
-		fast.ready[e.items[d].key()] = fd
+		fast.ready[fastDayKey(e.items[d])] = fd
 	}
 }
 
@@ -864,4 +928,23 @@ func fastDrop() {
 	fast.mu.Lock()
 	fast.eng = nil
 	fast.mu.Unlock()
+}
+
+// review (2): why a collection answer of Tally is not a list ("" when it is): a Tally error (LINEERROR), or no
+// <COLLECTION> under the answer (an answer with no data root is never "no entries")
+var (
+	reTallyLineErr = regexp.MustCompile(`(?i)<LINEERROR[\s>]`)
+	reTallyColl    = regexp.MustCompile(`(?i)<COLLECTION[\s>/]`)
+)
+
+func tallyCollectionWhy(raw string) string {
+	switch {
+	case !strings.Contains(raw, "<ENVELOPE"):
+		return "Tally's answer could not be read"
+	case reTallyLineErr.MatchString(raw):
+		return "Tally answered with an error: " + cut(flat(group(`(?is)<LINEERROR(?:\s[^>]*)?>(.*?)</LINEERROR>`, raw, 1)), 160)
+	case !reTallyColl.MatchString(raw):
+		return "Tally's answer holds no list"
+	}
+	return ""
 }

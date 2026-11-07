@@ -234,7 +234,7 @@ import { packMonth, monthEnd } from "./monthpack.js";
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
-import { periodPace, speedOf } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1735,7 +1735,7 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
   }
   return Object.keys(out).length ? out : null;
 }
-async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3): Promise<Record<string, unknown>[] | null> {
+async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
   let unsure = false;
@@ -1769,7 +1769,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       let { data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night });
       if (error && missingFn(String(error.message || ""))) {
         // a database with an earlier copy of 98 (no tally_period_next_paced): as before
-        ({ data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: max > 3 ? Math.max(4, max - out.length) : max - out.length }));
+        // review (6): its pace comes from p_max: by day at most 3 (a fast bridge's day never recorded as night), only what fits
+        ({ data, error } = await db.rpc("tally_period_next", { p_book: book, p_max: olderNextMax(max - out.length, night) }));
       }
       if (error) {
         const m = String(error.message || "");
@@ -1809,7 +1810,8 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
             if (out.length >= max) break;
             const day = String(d?.day || "");
             if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
-            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d) });
+            // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
+            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}) });
           }
         }
       }
@@ -2031,15 +2033,20 @@ function oldDaysTestOf(b: any) {
   return { oldDaysTest: { company: s(o.company, 200), at: s(o.at, 40), line: s(o.line, 300), stopped: s(o.stopped, 300), state: s(o.state, 12),
     results: (Array.isArray(o.results) ? o.results : []).slice(0, 3).map((r: any) => ({ day: s(r?.day, 8), ms: n(r?.ms), holdMs: n(r?.holdMs), rows: n(r?.rows), stopped: s(r?.stopped, 40) })) } };
 }
-function periodPullOf(b: any) {
+function periodPullOf(b: any, speed: { book: string; perMin: number }[] = []) {
   const p = b?.periodPull;
   if (!p || typeof p !== "object") return {};
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const up = (Array.isArray(p.uploadDays) ? p.uploadDays : []).slice(0, 50).map((x: any) => ({ company: s(x?.company, 200), day: s(x?.day, 8), words: s(x?.words, 300) }));
-  // next-fast-entries: the bridge's own speed per company (entries FinCom took in its last 10 minutes, a minute), for the
-  // page's "about N min left" while it is fresh (the beat's time)
-  const speed = speedOf(b);
+  // next-fast-entries: a fast bridge's own speed per book (speedBooksFor: matched by the book's company GUID), for the
+  // page's "about N min left" while this beat is fresh; nothing from a bridge with the switch off
   return { periodPull: { uploadDays: up, ...(speed.length ? { speed } : {}) } };
+}
+// next-fast-entries (review of 0de692f49, 1 and 7): the speeds of a bridge whose fast read is on, each as its book
+async function speedBooksFor(firm: string, b: any): Promise<{ book: string; perMin: number }[]> {
+  const sp = speedOf(b);
+  if (!sp.length) return [];
+  return await speedBooks(sp, (name: string) => bookForBeat(firm, name), (book: string) => bookGuidOf(book));
 }
 // Bridge 2.4.4 (the owner's decisions of 12-Oct-2026; migration 74): {kind:"employees", company, company_guid, employees:
 // [[guid, MasterID, AlterID, name, group, category, employee group 1/0, PAN, joined yyyymmdd, left yyyymmdd, designation]],
@@ -4021,7 +4028,7 @@ Deno.serve(sentry.wrap(async (req) => {
           ...(b.recorderState && typeof b.recorderState === "object" ? { recorderStuck: stuckOf(b.recorderState) } : {}),
           // FinCom Bridge 2.4.5: each tally.ini and what the bridge did with FinCom's add-on line in it (Help & support:
           // "User TDL = No" left alone), and the older entries being read (per company the day and its phase; the days to upload)
-          ...tallyIniOf(b), ...periodPullOf(b), ...oldDaysTestOf(b), ...updateOf(b),
+          ...tallyIniOf(b), ...periodPullOf(b, await speedBooksFor(firm, b)), ...oldDaysTestOf(b), ...updateOf(b),
           // next-fix-read-any-bridge (bridge 2.5.5): why its run waits before reading Tally, and an Update now queued behind it
           ...keepWaitOf(b),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
@@ -4129,7 +4136,7 @@ Deno.serve(sentry.wrap(async (req) => {
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
         // by day too; every other bridge as before (3 by day, 30 at night)
         const pace = periodPace(periodNight, b);
-        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, pace.max, pace.night) : null;
+        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, b, periodStopped, pace.max, pace.night, fastOn(b)) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
         let booksFrom: Record<string, string> | null = null;

@@ -2,8 +2,10 @@
 
 Status: **prototype on branch `next-fast-entries`, not released.** The owner approved designing new request XML
 ("Yes, design it"). Nothing here reaches a client: the new code runs only when the setting `FastEntries` is switched on
-by hand on one computer (it is off by default), and the two new requests are on the allow-list as **not yet measured**,
-so a build with them reports its request table as unmeasured until the ZZ TEST measurement below is done.
+by hand on one computer (it is off by default). With it off, the bridge's request table (its rows, its hash, "measured")
+and its beat are exactly staging-next's: the two new requests are not on the list at all and are refused before
+anything is sent. With it on, the two requests join the list as **not yet measured**, so that computer's bridge reports
+its table as unmeasured until the measurement in section 9 gives them their times.
 
 ## 1. What happens today, and why it is slow
 
@@ -100,11 +102,15 @@ Why each part is safe:
 |---|---|
 | Group answered in under 0.6 s, full size | next group x2 (10, 20, 40, 80, 100 at most) |
 | Group answered in over 1.2 s | next group halved at once |
-| Group stopped at 2 s | the bridge waits until Tally has finished it (as 2.4.9); next group halved; a second stop: the rest of the choice is read one by one (FinComVoucherObject) |
+| Group stopped at 2 s | the owner's freeze rule, as the per-day path: the bridge waits until Tally has finished it, then the company's read **stops** (FinCom told; one quiet line to upload the Day Book of the days still missing); nothing is asked again by itself; the size is kept as the choice's cap (never asked at it or above again) |
 | Window heads answered in over 1 s, or over 3,000 rows | next window halved |
-| Window heads stopped at 2 s | the bridge waits until Tally has finished it; next window halved; when half would be under two days, the fast read stops for this choice and the days are read as today |
+| Window heads stopped at 2 s | the same: the company's read stops, nothing asked again by itself, the window size kept as the cap |
 | Tally's window held 2 s or more during any request, or Tally not finished with a stopped request | the company's period stops, exactly as today (`pullStopCompany`, the owner's freeze safety) |
-| Any other error, a reply that cannot be read, a row of another date, an answer not exactly the group | that answer is not used; those days are read as today (one by one where a group failed) |
+| Window heads not answered, or answered with a Tally error (LINEERROR) or with no list | never taken as "no entries": nothing is told to FinCom from it; the window waits for the next round; after 2 such failures its days are read as today (FinComDayHeads) |
+| A window holding a day of more entries than a day may hold | its days are read as today at once (the per-day path marks the day) |
+| A row of another date in a window | the answer is dropped; no window is asked of that Tally until the bridge restarts |
+| A group answer not exactly the group, or not readable | not used; those days are read one by one as today |
+| FinCom not answering a day's heads | the day waits 60 s, as the per-day path |
 | A request refused before sending (allow-list, guard) | the fast read is off for this choice; today's read at once |
 | Heads older than 60 s when a group is due | the window ends; what is left is read day by day (its heads asked again) |
 | A posting queued or going, someone typing in Tally, a save waiting, the retry schedule waiting | nothing is sent; the window waits where it was (the six conditions, `pullMayAsk`, before **every** request) |
@@ -147,11 +153,13 @@ and of W2 over several days is **not measured yet**; it must be measured before 
 
 ## 7. Speed told in the beat
 
-`periodPull.companies[<company>].entriesPerMin` — the entries the cloud confirmed in the last 10 minutes, a minute (no
-figure until two sends at least a minute apart) — and `periodPull.fast` (the switch, the sizes per choice, the count of
-window requests). The page's "about N min left" today uses the cloud's own figure (`tally_period_status_of`: days done
-in the last 30 minutes); using the bridge's figure needs a small cloud change (decision 3). Nothing the cloud reads
-today changes.
+Only with FastEntries on: `periodPull.fast` in the beat — the switch, the sizes, the window requests sent, and
+`speed: [{company, guid, perMin}]`, the entries the cloud confirmed in the last 10 minutes of the period's own days
+(never counting days or "Check for changes" days), a minute; no figure until two sends at least a minute apart. With
+the switch off the beat carries none of this (it is staging-next's). The cloud keeps a fast bridge's speeds by book
+(the book of that company whose recorded company GUID is the bridge's: `speedBooksFor`), and the page uses the book's
+speed for "about N min left" while the beat is under 3 minutes old and the entries are being brought; otherwise the
+cloud's own estimate (`tally_period_status_of`), as before.
 
 ## 8. Settings (all in the bridge's settings file; nothing changes unless set)
 
@@ -202,6 +210,17 @@ identical. Only then are the two rows of the allow-list given their measured tim
 
 Pass on all of these, twice (two different days), before any client computer has the switch on.
 
+## 9b. What the release check needs
+
+With FastEntries off a build of this branch reports staging-next's table (the same rows, hash and "measured"), so the
+switch-off case does not hold the release check back. To allow the switch on a computer, the two rows need their
+measured worst times and the date: Step 0 above (real TallyPrime 3.0, 4.1, 5.1, 6.2 and 7.1, at 30,000 and 100,000
+entries): W1 for windows of 2, 7, 14 and 31 days; W2 for groups of 10, 50 and 100 spread over 1, 3 and 7 days; the
+worst time, the longest time Tally's window did not answer, and every kept field of W2's entries compared with
+FinComVoucherObject's answer. Pass: every request under 1.5 s worst, window held under 1 s, every field identical. The
+times then go into `fastAllowList` (maxSec, measuredOn), and the ZZ TEST run on the office server (section 9) follows
+before any client.
+
 ## 10. Decisions
 
 Taken (the owner, 07-Nov-2026, "Yes to both"):
@@ -213,7 +232,7 @@ Taken (the owner, 07-Nov-2026, "Yes to both"):
    The bridge keeps up to 30 listed days by day when FastEntries is on (`applyPeriodDays`); its night pace (more
    requests a turn, no rest) still follows `periodNight` only.
 2. **The page's time left.** The cloud keeps the bridge's speed from its beat (`info.beat.periodPull.speed`,
-   `[{company, perMin}]`); the page (`app/src/lib/pullSpeed.js`, used by `bookSum`) uses it for the rate and "about N
+   `[{book, perMin}]`, a fast bridge's only, matched by the book's company GUID); the page (`app/src/lib/pullSpeed.js`, used by `bookSum`) uses it for the rate and "about N
    min left" while the beat is under 3 minutes old and the entries are being brought (not while the year's days are
    counted); otherwise the cloud's own estimate (`tally_period_status_of`), as before.
 
