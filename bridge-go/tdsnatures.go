@@ -142,7 +142,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 			upto = 0
 		}
 		t1 := time.Now()
-		raw, err := invokeTally(k.tc, port, natureChunkRequest(company, after, upto), ledChunkSec())
+		raw, err := invokeTally(ledgerTC(k.tc), port, natureChunkRequest(company, after, upto), ledChunkSec()) // 2.5.5: the 2 s stop
 		if err == nil && !strings.Contains(raw, "<ENVELOPE") {
 			err = fmt.Errorf("Tally's answer to the natures of payment could not be read: %s", cut(flat(raw), 120))
 		}

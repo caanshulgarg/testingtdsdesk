@@ -8,6 +8,18 @@
 // The ledger list goes in chunks of MasterIDs (2,000 a request, LedgerChunk), so no request holds Tally for long on a
 // company with 50,000 ledgers; a chunk that does not answer is halved (down to LedgerChunkMin, 125) for the rest of
 // the round (the next round starts at twice that) and the read resumes from it; each chunk is saved as it comes (ledger-read.jsonl), so a stop resumes from the last chunk saved.
+//
+// 2.5.5 (the owner's rule: each request to Tally 2 s at most): the full read (Update now, the nightly run, the ledger
+// wake after a posting that carries a ledger) has the same 2-second hard stop as the light check: every request of the
+// round (the groups, the natures of payment, each ledger chunk) is stopped 2 s after the send (TC.limitMs,
+// RecorderLimitMs), where it waited up to 20 s a chunk before (LedgerChunkSec). No request changed. A chunk stopped at
+// 2 s is halved as a chunk that did not answer (2,000, 1,000, 500, 250, 125), and the next one waits only for the stop's
+// own cool-down (RecorderStopCoolSec, 30 s), not a back-off. The smallest chunk (125) stopped at 2 s ends the turn
+// with plain words (the company's trouble, in the beat; the round's end line): Tally is left alone for the back-off
+// (1 minute, doubling to 30 minutes) and the round goes on from that chunk at the next try. It is not halved further:
+// a ledger is taken as hanging Tally (skipped, named to FinCom) only when Tally did not answer at all (as before), never
+// for a 2-second stop. Nothing is read while a posting goes, and a stopped request keeps Tally's one lock until Tally
+// has finished it, so a posting still goes first and never meets two requests at once.
 // Every request goes through the one gate to Tally (postings first, the check after a timeout, the company's GUID, the
 // lease). Groups are few: one request.
 //
@@ -67,7 +79,21 @@ const (
 
 func ledChunkDefault() int { return keepNum("LedgerChunk", 2000) }
 func ledChunkMin() int     { return minI(ledChunkDefault(), keepNum("LedgerChunkMin", 125)) }
-func ledChunkSec() int     { return keepNum("LedgerChunkSec", 20) }
+
+// 2.5.5: the wait for one request of the ledger round: one second past its 2-second hard stop (ledgerTC), so the stop
+// ends it first (as the company list's cap, tally.go tallyRaw); LedgerChunkSec no longer lengthens it
+func ledChunkSec() int { return (recorderLimitMs()+999)/1000 + 1 }
+
+// 2.5.5: the ledger round's requests under the 2-second hard stop (the light check's rule), on a copy of the run's TC
+func ledgerTC(tc *TC) *TC {
+	if tc == nil {
+		tc = &TC{copier: true}
+	}
+	c := *tc
+	c.slotOut, c.sentOut = nil, nil
+	c.limitMs = recorderLimitMs()
+	return &c
+}
 
 // the requests
 // 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): with the books' first year as the period, so Tally gives
@@ -130,7 +156,7 @@ func readLedgerChunkAt(tc *TC, company, bf string, port int, after, upto int64) 
 	if x == "" {
 		return nil, 0, errBooksFromUnknown
 	}
-	raw, err := invokeTally(tc, port, x, ledChunkSec())
+	raw, err := invokeTally(ledgerTC(tc), port, x, ledChunkSec())
 	if err != nil {
 		return nil, 0, err
 	}
@@ -176,7 +202,7 @@ func ledRowsOf(raw string) ([]ledRow, int64) {
 
 // Tally's groups, name and parent (a primary group's parent is empty): one request
 func readGroupList(tc *TC, company string, port int) ([][2]string, error) {
-	raw, err := invokeTally(tc, port, groupListRequest(company), ledChunkSec())
+	raw, err := invokeTally(ledgerTC(tc), port, groupListRequest(company), ledChunkSec())
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +455,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	}
 	if !truthy(ls["groups"]) {
 		g, err := readGroupList(k.tc, company, port)
+		if errors.Is(err, errRecorderStop) {
+			// 2.5.5: the groups (one request) stopped at 2 s: plain words; asked again at the next try, before the ledgers
+			return false, fmt.Errorf("Tally took longer than 2 s for the group list; the bridge stopped waiting and asks again at the next try (the ledger list follows the groups)")
+		}
 		if err != nil {
 			return false, err
 		}
@@ -491,7 +521,9 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		t1 := time.Now()
 		rows, top, err := readLedgerChunkAt(k.tc, company, bf, port, after, upto) // the round's own books-from (review)
 		if err != nil {
-			if gaveWay(err) || !tallyNoAnswer(err) {
+			// 2.5.5: stopped at 2 s (the hard stop): halved as a chunk that did not answer, down to the smallest chunk
+			stopped := errors.Is(err, errRecorderStop)
+			if gaveWay(err) || (!tallyNoAnswer(err) && !stopped) {
 				// not sent (refused, held, reading stopped), stopped for FinCom, or an answer that could not be read:
 				// not Tally hanging on this chunk. The same chunk again later, nothing halved or marked
 				return false, err
@@ -504,6 +536,14 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				span = fmt.Sprintf("from %d", after+1)
 			case size > ledChunkMin():
 				ls["size"] = maxI(ledChunkMin(), size/2)
+			case stopped:
+				// 2.5.5: the smallest chunk stopped at 2 s: Tally is slow or busy, not hanging on one ledger. Not halved
+				// further and nothing marked: the turn ends with plain words, Tally is left alone for the back-off, and the
+				// round goes on from this chunk at the next try
+				st["ledSize"] = ls["size"]
+				save()
+				return false, fmt.Errorf("Tally took longer than 2 s for %d ledgers (MasterID %s), the smallest part the ledger list is read in; the bridge stopped waiting, and the ledger list goes on from MasterID %d at the next try",
+					upto-after, span, after+1)
 			case upto-after > 1:
 				// still not answering at the smallest chunk: halved on, down to one MasterID, to find the ledger that hangs
 				ls["size"] = maxI(1, int(upto-after)/2)
@@ -522,6 +562,12 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			}
 			st["ledSize"] = ls["size"]
 			save()
+			if stopped {
+				// 2.5.5: halved after a 2-second stop: the next chunk waits only for the stop's own cool-down (nothing is
+				// sent into the Tally still on the request stopped; RecorderStopCoolSec), not a back-off
+				writeLog(fmt.Sprintf("Keeping %s: the ledger list MasterID %s took Tally longer than 2 s (stopped); the next try reads %d from MasterID %d", company, span, toInt(ls["size"]), after+1))
+				return false, fmt.Errorf("%w (the ledger list MasterID %s was stopped at 2 s; the next try reads %d from MasterID %d)", errBackoff, span, toInt(ls["size"]), after+1)
+			}
 			return false, fmt.Errorf("Tally did not give the ledger list (MasterID %s: %s); the next try reads %d from MasterID %d", span, err.Error(), toInt(ls["size"]), after+1)
 		}
 		sec := time.Since(t1).Seconds()
