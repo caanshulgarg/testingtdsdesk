@@ -1330,7 +1330,10 @@ func keepWorker(r runReq) {
 			continue
 		}
 		held = ""
-		if len(activeJobs()) > 0 { // a posting goes first: nothing is read while one is going
+		// a posting goes first: nothing is read while one is going. next-fix-first-read (staging, 07-Nov-2026): one that is
+		// going (postingGoing, as every other reader of Tally asks), not any job folder: a posting waiting for Tally (for
+		// another company, failed in the cloud days before) or stopped part-way held the ledger read for days
+		if postingGoing() {
 			setKeepWait("posting", "")
 			heldPush()
 			sleepOrStop(2 * time.Second)
