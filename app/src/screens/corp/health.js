@@ -10,7 +10,9 @@
 //   board meetings (s.173): not more than 120 days between two, and four a calendar year at least (s.173(1)); a small
 //     company (private only), an OPC, a dormant company (s.455) and a private start-up (G.S.R. 583(E), 13-Jun-2017): one in
 //     each half of the calendar year, at least 90 days apart (s.173(5)); a section 8 company: one in every six calendar
-//     months (G.S.R. 466(E), 05-Jun-2015)
+//     months (G.S.R. 466(E), 05-Jun-2015); an OPC with only one director need hold none (s.173(5), proviso). s.173 sets a
+//     largest gap only, so "four this year can no longer be reached" is a warning, never red; a company incorporated
+//     during the year counts only the months from its incorporation
 import { addDays, addMonths, daysBetween, dmy, dueIn, fyEnd, fyOf, isDay, lastClosedFy, today, fyNext } from "./dates.js";
 import { isDirector, lastAgm, openCharges, money } from "./profile.js";
 import { kycFor } from "./rules.js";
@@ -43,7 +45,9 @@ export function agmRule(p, fy) {
 }
 
 // the next board meeting: {by, from?, rule}; dates: the meetings known (the last one, the minutes made in FinCom)
+export const oneDirectorOpc = (p) => p.cls === "opc" && (p.directors || []).filter((d) => d && d.name && isDirector(d) && !d.ceased).length === 1;
 export function nextBoard(p, on, dates) {
+  if (oneDirectorOpc(p)) return { none: true, rule: "an OPC with one director need hold no board meeting (s.173(5), proviso)" };
   const all = Array.from(new Set([p.lastBoard].concat(dates || []).filter(isDay))).sort();
   const last = all[all.length - 1];
   if (!last) return null;
@@ -76,14 +80,18 @@ export function health(p, o) {
 
   // the board
   const nb = nextBoard(p, on, o.boards);
-  if (!nb) add({ key: "board", title: "Board meetings", sub: "Enter the date of the last board meeting (s.173)", when: "Not entered", tone: "warn" });
+  if (nb && nb.none) add({ key: "board", title: "Board meetings", sub: nb.rule, when: "Not needed", tone: "ok" });
+  else if (!nb) add({ key: "board", title: "Board meetings", sub: "Enter the date of the last board meeting (s.173)", when: "Not entered", tone: "warn" });
   else {
     add(Object.assign({ key: "board", title: "Next board meeting", sub: nb.rule }, when(nb.by)));
     if (nb.four) {
       // four a calendar year (s.173(1)): the meetings known this year, against what is left of it
+      // four a calendar year; the year of incorporation counts from the month of incorporation
       const y = on.slice(0, 4), n = nb.all.filter((d) => d.slice(0, 4) === y && d <= on).length, left = daysBetween(on, y + "-12-31");
+      const fromMonth = isDay(p.incorporated) && p.incorporated.slice(0, 4) === y ? +p.incorporated.slice(5, 7) : 1, need = Math.ceil(4 * (13 - fromMonth) / 12);
       const can = Math.floor(left / 120) + 1;
-      add({ key: "board4", title: "Board meetings in " + y, sub: n + " of the four a calendar year needs (s.173(1))", when: n + " of 4", tone: n >= 4 ? "ok" : 4 - n > can ? "bad" : 4 - n >= can ? "warn" : "" });
+      add({ key: "board4", title: "Board meetings in " + y, sub: n + " of the " + need + " this calendar year needs (s.173(1)" + (fromMonth > 1 ? ", from incorporation" : "") + ")", when: n + " of " + need,
+        tone: n >= need ? "ok" : need - n >= can ? "warn" : "" });
     }
   }
 

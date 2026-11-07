@@ -11,7 +11,9 @@ page's own code (window.FCCorpRules, the Corporate chunk) on made-up companies:
   M3  the ROC from the CIN: one ROC where the state has one; Maharashtra, Tamil Nadu and Andhra Pradesh: the choices,
       "from CIN, check"; Ladakh; FTC / FLC / ULL classes;
   L1  the pasted master data: impossible dates refused, director rows split on tabs or two spaces;
-  L2  an auditor's term that has ended: Overdue.
+  L2  an auditor's term that has ended: Overdue;
+  s.173(5) proviso: an OPC with one director holds none; four a year out of reach: a warning; the year of incorporation
+  counts from its month.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_corp_rules.py"""
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -45,6 +47,9 @@ CASES = [
     ("M1 private start-up", "R.nextBoard({cls: 'private', startup: true, lastBoard: '2026-03-10'}).by", "2026-12-31"),
     ("M1 public start-up: no relaxation", "R.nextBoard({cls: 'public', startup: true, lastBoard: '2026-03-10'}).by", "2026-07-08"),
     ("M1 four a calendar year", "R.health({cls: 'private', lastBoard: '2026-08-01'}, {on: '2026-11-07', boards: ['2026-02-01', '2026-05-01']}).items.filter(x => x.key === 'board4').map(x => x.when)", ["3 of 4"]),
+    ("s.173(5) proviso: an OPC with one director needs no meeting", "R.health({cls: 'opc', lastBoard: '2026-03-10', directors: [{name: 'Sole Director (made-up)', din: '00000011'}]}, {on: '2026-11-07'}).items.filter(x => x.key === 'board').map(x => [x.when, x.tone])", [["Not needed", "ok"]]),
+    ("s.173: four no longer reachable is a warning, not red", "R.health({cls: 'private', lastBoard: '2026-02-01'}, {on: '2026-11-07', boards: []}).items.filter(x => x.key === 'board4').map(x => [x.when, x.tone])", [["1 of 4", "warn"]]),
+    ("s.173: the year of incorporation counts from its month", "R.health({cls: 'private', incorporated: '2026-07-01', lastBoard: '2026-07-20'}, {on: '2026-11-07', boards: ['2026-10-15']}).items.filter(x => x.key === 'board4').map(x => [x.when, x.tone])", [["2 of 2", "ok"]]),
     ("M1 earliest date shown", "R.nextBoard({cls: 'opc', lastBoard: '2026-08-01'}).rule.includes('not before 30-Oct-2026')", True),
     ("M2 annual KYC due", "R.kycFor({kyc: []}, '2025-26').due", "2026-09-30"),
     ("L2 auditor's term ended: Overdue", "R.health({auditor: 'Made-up & Co', auditorTill: '2023-24'}, {on: '2026-11-07'}).items.filter(x => x.key === 'auditor').map(x => [x.when, x.tone])", [["Overdue", "bad"]]),

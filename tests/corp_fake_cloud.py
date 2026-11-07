@@ -32,7 +32,7 @@ INSTALL = r"""() => {
       const r = Object.assign({}, body, {updated_at: stamp()}); if (t !== 'corp_profiles' && !r.id) r.id = 'srv-' + tick; rows.push(r); return [copy(r)];
     }
     if (method === 'PATCH') { const hit = rows.filter((r) => match(r, f)); hit.forEach((r) => { Object.assign(r, body, {updated_at: stamp()}); }); return copy(hit); }
-    if (method === 'DELETE') { F.rows[t] = rows.filter((r) => !match(r, f)); return null; }
+    if (method === 'DELETE') { const gone = rows.filter((r) => match(r, f)); F.rows[t] = rows.filter((r) => !match(r, f)); return copy(gone); }
     return [];
   };
 }"""
