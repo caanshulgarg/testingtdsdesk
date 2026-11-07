@@ -140,7 +140,15 @@ try:
                 as_user(OWNER, "update corp_documents set status = 'final' where client_id = 'c-up';")
                 good, out = as_user(OWNER, "delete from corp_documents where client_id = 'c-up' returning 1;")
                 ok(good and out == "", "3. a final document cannot be removed (%s)" % out[-100:])
-                as_user(OWNER, "update corp_documents set status = 'draft' where client_id = 'c-up';")
+                # the review of acf04975e: a final document is locked; back to draft only, by the owner only
+                good, out = as_user(OWNER, "update corp_documents set title = 'changed' where client_id = 'c-up';")
+                ok(not good and "locked" in out, "3. a final document: its title not changed, even by the owner (%s)" % out[-120:])
+                good, out = as_user(OWNER, "update corp_documents set status = 'draft', fields = jsonb_build_object('bank', 'Another (made-up)') where client_id = 'c-up';")
+                ok(not good and "locked" in out, "3. back to draft with another change: refused (%s)" % out[-120:])
+                good, out = as_user(STAFF, "update corp_documents set status = 'draft' where client_id = 'c-up';")
+                ok(not good and "owner" in out, "3. staff cannot take a final document back to draft (%s)" % out[-120:])
+                good, out = as_user(OWNER, "update corp_documents set status = 'draft' where client_id = 'c-up' returning status;")
+                ok(good and last(out) == "draft", "3. the owner takes it back to draft (%s)" % out[-120:])
             good, out = as_user(STAFF, "delete from %s where client_id = 'c-up' returning 1;" % t)
             ok(good and out == "1", "2. staff remove a row of the firm (a draft) (%s)" % out[-100:])
         else:

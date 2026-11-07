@@ -38,6 +38,7 @@ import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 import { ownOpen, ownBridge, NO_CO, lookOnce, rescanLocal, checkAll } from "../lib/tallySimple.js";
 import { TITLES } from "../lib/connectSteps.js";
+import { PostingWait } from "./StuckJobs.jsx";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -812,6 +813,8 @@ export function MastersLine({ cid }) {
     {(said || ck) && <p className="note" data-checked="" role="status" style={{ margin: "0 0 4px" }}>{ck ? "Checking…" : said}</p>}
     <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt : "") + ")"}</span>{" "}
       {may && <button type="button" className="btn small" data-masters-update="" disabled={running || pressing} onClick={press}>{running || pressing ? "Updating…" : "Update now"}</button>}</p>
+    {/* next-fix-stuck-jobs: a posting this computer's bridge holds, beside Update now (only where that bridge answers) */}
+    <PostingWait beat={(() => { try { return (ownBridge() || {}).beat || null; } catch (e) { return null; } })()} hook="masters" />
     {m && m.say && x && x.at === m.at ? <><p className={"note" + (m.ok ? " ok" : " bad")} data-masters-result={m.ok ? "ok" : "why"} role="status" style={{ margin: "0 0 4px" }}>{m.say}</p><LaterLine cid={cid} /></>
       : <>{rw && rw.phase !== "done" && rw.phase !== "why" && <p className={"note" + (rw.phase === "waiting" ? " bad" : "")} data-masters-progress={rw.phase} role="status" style={{ margin: "0 0 4px" }}>{rw.text}</p>}
         {x ? <LedgerBar cid={cid} where="books" company={company} /> : <LaterLine cid={cid} />}</>}

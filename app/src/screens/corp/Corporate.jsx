@@ -17,23 +17,18 @@
 // kept is said under the tabs (store.js).
 import { useEffect } from "react";
 import "./corp.css";
+import { loadSerif } from "./fonts.js";
 import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
 import Profile, { shown } from "./Profile.jsx";
 import Forms from "./Forms.jsx";
+import Docs from "./Docs.jsx";
 import { corpOf, cloudNote, retryNow, settleRemoved } from "./store.js";
 import { dueCount, dueItems } from "./eforms.js";
 
-// the serif of the documents and headings, from Google Fonts, once, when the page first opens (Georgia meanwhile)
-function useSerif() {
-  useEffect(() => {
-    if (document.getElementById("corp-serif")) return;
-    const l = document.createElement("link");
-    l.id = "corp-serif"; l.rel = "stylesheet";
-    l.href = "https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&display=swap";
-    document.head.appendChild(l);
-  }, []);
-}
+// the serif of the documents and headings, kept with the app (fonts.js; never from another site), once, when the page
+// first opens (Georgia meanwhile)
+function useSerif() { useEffect(() => { loadSerif(); }, []); }
 
 export const isCompany = (co) => !!co && typeof FS === "object" && FS.entityOf(co).code === "C";
 // the page of a books tab: corp -> profile, corp-forms -> forms, corp-docs -> docs, corp-aoc4 -> aoc4
@@ -69,7 +64,7 @@ export default function Corporate() {
         {note.retry && <> <button className="linkbtn" data-corp-retry="" onClick={() => retryNow(co.id)}>Retry</button></>}</span>
     </div>
     {page === "forms" ? <Forms key={co.id} co={co} />
-      : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>
+      : page === "docs" ? <Docs key={co.id} co={co} />
       : page === "aoc4" ? <div className="corp-card corp-empty" data-corp-page="aoc4">The AOC-4 builder comes with the next part of this release.</div>
       : <Profile key={co.id} co={co} formsDue={dueItems(P, c.filings)} />}
   </div>;
