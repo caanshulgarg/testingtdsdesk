@@ -141,7 +141,13 @@ function Editor({ co, P, doc }) {
           {final ? (owner ? <Button className="btn small" data-doc-draft="" onClick={() => saveDoc(co.id, { id: doc.id, status: "draft" })}>Back to draft</Button>
               : <span className="corp-note" data-doc-final-note="">Final: only the firm's owner takes it back to draft.</span>)
             : <Button className="btn small" data-doc-final="" disabled={!!model.finalBlock} title={model.finalBlock || undefined}
-              onClick={() => saveDoc(co.id, { id: doc.id, status: "final", fields: Object.assign({}, v, { snapshot: snapshotOf(P0, co) }) })}>Mark as final</Button>}
+              onClick={() => {
+                // a field still being typed in is kept first (its blur saves it), then the document as it now is goes Final
+                try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) { /* nothing focused */ }
+                const now = corpOf(co.id).docs.find((d) => d.id === doc.id) || doc;
+                if (build(now, P0, co).finalBlock) return;
+                saveDoc(co.id, { id: doc.id, status: "final", fields: Object.assign({}, now.fields || {}, { snapshot: snapshotOf(P0, co) }) });
+              }}>Mark as final</Button>}
           {!final && model.finalBlock && <span className="corp-note" data-doc-final-block="" style={{ color: "var(--corp-bad)" }}>{model.finalBlock}: it cannot be marked Final.</span>}
           {!final && <button className="linkbtn" data-doc-delete="" onClick={() => { dropDoc(co.id, doc.id); S.corpDoc = ""; render(); }}>Delete this draft</button>}
         </div>}

@@ -167,7 +167,7 @@ with sync_playwright() as p:
     setf(pg, "serial", "3/2026-27"); setf(pg, "meetingDate", "2026-10-12"); setf(pg, "place", "New Delhi")
     rid2 = E("(cid) => FCCorp.corpOf(cid).profile.directors.find(d => d.din === '00000022').id", co)
     pg.select_option("#app [data-attend='%s'] select" % rid2, "Leave of absence"); W(400)
-    ok("No quorum" in E("document.querySelector('#app [data-quorum-chip]').innerText") and "Leave of absence was granted to Ravi Menon (made-up)" in preview(pg), "one on leave: no quorum with two directors, and the leave minuted")
+    ok("No quorum" in E("document.querySelector('#app [data-quorum-chip]').innerText") and "Ravi Menon (made-up)" in preview(pg) and "stood adjourned under section 174(4)" in preview(pg), "one on leave: no quorum with two directors; his leave in the attendance; the meeting adjourned (s.174(4))")
     ok(E("document.querySelector('#app [data-doc-final]').disabled") and "Quorum not present" in E("(document.querySelector('#app [data-doc-final-block]') || {}).innerText || ''") and "quorum required under section 174" in preview(pg) and "requisite quorum being present" not in preview(pg),
        "no quorum: minuted as not present, and it cannot be marked Final")
     pg.select_option("#app [data-attend='%s'] select" % rid2, "In person"); W(400)

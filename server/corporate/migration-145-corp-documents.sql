@@ -12,7 +12,8 @@
 -- Row security: a firm's members read their firm's rows; its owner and staff (can_write()) add and change them, and remove
 -- a DRAFT (a final document stays); for their own firm only. The service role keeps all rights.
 -- A FINAL document is locked (the trigger): the only change it takes is its status back to 'draft', every other column as
--- it was, and only by the firm's owner (members.role = 'owner'); the service role (no auth.uid()) is not held.
+-- it was, and only by the firm's owner (members.role = 'owner'). The service role (no auth.uid()) is held to the same lock
+-- (only the status back to draft) but needs no owner.
 -- Tested by tests/run_migration_corp.py.
 
 begin;
