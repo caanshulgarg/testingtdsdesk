@@ -112,6 +112,13 @@ with sync_playwright() as p:
     ok(cells(pg, "pl", "rev")[0] == 12200000 and abs(total(pg, "pl", "PAT")[0] - want["pl:pat"][0]) < 0.006 and abs(total(pg, "pl", "PBT")[0] - want["pl:pbt"][0]) < 0.006, "revenue 1,22,00,000; profit before and after tax as the statements (%s)" % total(pg, "pl", "PAT"))
     pg.click("#app [data-aoc4-tab=bs]"); W(300)
 
+    # a voucher edited in FinCom (the books saved): the builder works the statements out again (BOOKS_REV in its key)
+    sum0 = E("() => [...document.querySelectorAll('#app [data-aoc4-input$=\":cy\"]')].reduce((s, e) => s + Math.abs(+e.value.replace(/[,()]/g, '') || 0), 0)")
+    E("() => { const v = S.books.vouchers.find(x => x.id === 'm20260331'); v.ent[0].a = Math.round((v.ent[0].a + 1000) * 100) / 100; v.ent[v.ent.length - 1].a = Math.round((v.ent[v.ent.length - 1].a - 1000) * 100) / 100; saveBooks(); render(); }"); W(1500)
+    sum1 = E("() => [...document.querySelectorAll('#app [data-aoc4-input$=\":cy\"]')].reduce((s, e) => s + Math.abs(+e.value.replace(/[,()]/g, '') || 0), 0)")
+    E("() => { const v = S.books.vouchers.find(x => x.id === 'm20260331'); v.ent[0].a = Math.round((v.ent[0].a - 1000) * 100) / 100; v.ent[v.ent.length - 1].a = Math.round((v.ent[v.ent.length - 1].a + 1000) * 100) / 100; saveBooks(); render(); }"); W(1500)
+    ok(abs(sum1 - sum0) > 0.5, "a voucher edited in FinCom: the figures follow (%s -> %s)" % (sum0, sum1))
+
     print("3. the checks")
     ok(check(pg, "bs")[0] == "yes", "the balance sheet tallies (%s)" % check(pg, "bs"))
     r = check(pg, "reserves")
@@ -151,6 +158,17 @@ with sync_playwright() as p:
     ok(E("booksTab()") == "corp-forms" and "Ready to file" in E("document.querySelector('#app tr[data-form-ref=\"annual:AOC-4:2025-26\"]').innerText"), "Ready for MCA: e-Forms says Ready to file")
     E("() => goClient('books:corp-aoc4')"); W(1500)
 
+    # while Ready: the downloads keep nothing; Save draft with the same figures leaves it Ready; with figures that differ
+    # from the ones it was made Ready with, it goes back to In progress (never replaced quietly)
+    st = lambda: E("(cid) => FCCorp.corpOf(cid).filings.find(x => x.ref === 'annual:AOC-4:2025-26').status", co)
+    pg.click("#app [data-aoc4-save]"); W(800)
+    ok(st() == "ready", "Ready, Save draft with the same figures: still Ready")
+    E("(cid) => { const f = FCCorp.corpOf(cid).filings.find(x => x.ref === 'annual:AOC-4:2025-26'); FCCorp.saveFiling(cid, Object.assign({}, f, {data: Object.assign({}, f.data, {figures: Object.assign({}, f.data.figures, {sc: 1})})})); render(); }", co); W(800)
+    pg.click("#app [data-aoc4-save]"); W(800)
+    ok(st() == "in_progress" and E("(cid) => FCCorp.corpOf(cid).filings.find(x => x.ref === 'annual:AOC-4:2025-26').data.figures.sc", co) == want["sc"][0], "figures that differ from the Ready ones: back to In progress, the new ones kept")
+    pg.click("#app [data-aoc4-next]"); W(500); pg.click("#app [data-aoc4-ready]"); W(1500); E("() => goClient('books:corp-aoc4')"); W(1500)
+    ok(st() == "ready", "made Ready again")
+
     print("6. the sheet in MCA order")
     with pg.expect_download(timeout=20000) as dl:
         pg.click("#app [data-aoc4-csv]")
@@ -179,6 +197,7 @@ with sync_playwright() as p:
                     "Property plant and equipment,200000,180000", "Trade receivables,130000,90000", "Cash and bank balances,100000,40000", "Revenue from operations,900000,700000", "Other expenses,800000,640000"])
     pg.set_input_files("#app [data-aoc4-file]", files=[{"name": "audited-bs.csv", "mimeType": "text/csv", "buffer": up.encode()}]); W(1500)
     ok(cells(pg, "bs", "sc") == [100000.0, 100000.0] and cells(pg, "bs", "rs") == [250000.0, 150000.0] and cells(pg, "bs", "cash") == [100000.0, 40000.0], "the CSV's lines mapped by their words (%s)" % cells(pg, "bs", "cash"))
+    ok(E("document.querySelector('#app [data-aoc4-unit]').value") == "1" and "rupees" in E("document.querySelector('#app [data-aoc4-unit-used]').innerText"), "the unit: rupees, said")
     ok(E("document.querySelector('#app [data-upload-head=\"4\"]').value") == "-", "the total row left out (Not used)")
     ok(E("document.querySelectorAll('#app [data-upload-guessed]').length") >= 8, "every head guessed from the words marked: check the head")
     ok((check(pg, "total0") or ["", ""])[0] == "yes", "the file's own total equals the one worked out (%s)" % check(pg, "total0"))

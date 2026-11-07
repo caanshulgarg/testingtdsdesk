@@ -8,7 +8,7 @@ import "../../lib/finGlobals.js";
 import Button from "../../parts/Button.jsx";
 import { Card } from "./parts.jsx";
 import { canEdit, corpOf, saveFiling } from "./store.js";
-import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, autoCols, checks, csvOf, figures, fromBooks, fromUpload, linesOf, num, sheetLines, sheetRows, totalChecks, udinOk } from "./aoc4.js";
+import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, UNITS, autoCols, checks, csvOf, figures, fromBooks, fromUpload, linesOf, num, sheetLines, sheetRows, totalChecks, udinOk } from "./aoc4.js";
 import { annual } from "./eforms.js";
 import { dmy, dueIn, finKey, fyEnd, fyNext, lastClosedFy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
@@ -21,7 +21,8 @@ const save = async (name, blob) => { if (typeof window.saveFile === "function") 
 // the statements worked out once for each state of the books (FinSt.build reads two years of balances)
 let memo = { key: "", v: null };
 function booksFigures(b, fy) {
-  let k = ""; try { k = [b.cid, fy, (b.vouchers || []).length, (b.tb || {}).at || "", JSON.stringify(b.fs || {})].join("|"); } catch (e) { k = String(Date.now()); }
+  // the books' revision (BOOKS_REV: every save of the books, a voucher edited in FinCom included) is in the key
+  let k = ""; try { k = [b.cid, fy, typeof BOOKS_REV === "number" ? BOOKS_REV : "", (b.vouchers || []).length, (b.tb || {}).at || "", JSON.stringify(b.fs || {})].join("|"); } catch (e) { k = String(Date.now()); }
   if (memo.key !== k) memo = { key: k, v: fromBooks(finKey(fy)) };
   return memo.v;
 }
@@ -122,7 +123,9 @@ export default function Aoc4({ co }) {
   const bsOk = !!cks.find((x) => x.key === "bs" && x.ok), guessLeft = base && base.guessed && !base.headsOk;
   // what holds back Next (the figures) and Ready (as well: the balance sheet tallies, the UDIN is right, the heads checked)
   const holdNext = un.length ? "Not in any head: map every line first" : noWhy.length ? "Give the reason for each figure changed" : base && base.bad && base.bad.length ? "Some cells of the file are not amounts" : "";
-  const hold = holdNext || (!bsOk ? "The balance sheet does not tally" : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : guessLeft ? "Check the heads guessed from the file's words (or tick that you have)" : "");
+  // the file's own totals (P&L ones included: total income, total expenses, profit) must agree, as the balance sheet must tally
+  const badTotal = cks.find((x) => /^total\d+$/.test(x.key) && x.ok === false);
+  const hold = holdNext || (!bsOk ? "The balance sheet does not tally" : badTotal ? badTotal.text : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : guessLeft ? "Check the heads guessed from the file's words (or tick that you have)" : "");
   const att = data.attach || {}, attDone = ATTACHMENTS.every(([k]) => att[k] === "ready" || att[k] === "na");
   const stepNow = !f ? 0 : !data.figuresOk ? 1 : !attDone ? 2 : 3;
   // a figure changed: kept with this source's edits; after Ready, the form is in progress again
@@ -131,11 +134,18 @@ export default function Aoc4({ co }) {
   const d = dueIn(row.due);
   const meta = { company: P.name || co.name, cin: P.cin, fy, source: source === "upload" ? "the uploaded " + ((data.upload || {}).file || "file") : "FinCom Books", cyDate: dmy(fyEnd(fy)), pyDate: dmy(fyEnd(fyNext(fy, -1))) };
   const fileBase = (meta.company + " AOC-4 figures FY " + fy).replace(/[\\/:*?"<>|]+/g, " ");
-  const stamp = () => { if (!final) keep({ figures: f.cy, pyFigures: f.py, srcSaved: f.src }); };
+  // Save draft keeps the figures; a form Ready keeps the figures it was made Ready with: figures that differ take it back to
+  // In progress (change), never replaced quietly; downloads keep nothing
+  const same = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
+  const stamp = () => {
+    if (final || !f) return;
+    if (fl.status === "ready") { if (!same(f.cy, data.figures) || !same(f.py, data.pyFigures)) change({ figures: f.cy, pyFigures: f.py, srcSaved: f.src, figuresOk: false }, { steps: Math.min(fl.steps || 0, 1) }); return; }
+    keep({ figures: f.cy, pyFigures: f.py, srcSaved: f.src });
+  };
   const download = async (kind) => {
     if (!f) return; setBusy(kind); setErr("");
     try {
-      const rows = sheetRows(f, meta); stamp();
+      const rows = sheetRows(f, meta);
       if (kind === "csv") await save(fileBase + ".csv", new Blob(["﻿" + csvOf(rows)], { type: "text/csv;charset=utf-8" }));
       else if (kind === "xlsx") {
         if (typeof window.ensureXlsx === "function") await window.ensureXlsx();
@@ -192,8 +202,13 @@ export default function Aoc4({ co }) {
             {data.upload && <span className="corp-note">{data.upload.file + " · " + Object.keys(data.upload.map || {}).length + " lines mapped"}</span>}</div>}
           {source === "upload" && data.upload && data.upload.lines && !final && <details data-aoc4-mapping="" open={mapOpen || !Object.keys(data.upload.map || {}).length || undefined} onToggle={(e) => setMapOpen(e.currentTarget.open)}><summary style={{ cursor: "pointer", fontSize: 13 }}>Map the file's lines to AOC-4's heads</summary>
             <UploadMap up={data.upload} raw={raw} setRaw={setRaw} set={(up) => change({ upload: Object.assign({}, up, { headsOk: false }), figuresOk: false })} /></details>}
+          {source === "upload" && data.upload && data.upload.lines && !final && <label className="corp-row" style={{ fontSize: 13 }}>
+            <span>{"Amounts in the file are in" + (data.upload.unitFound && data.upload.unitFound !== 1 ? " (found in its headings)" : "")}</span>
+            <select data-aoc4-unit="" value={data.upload.unit || 1} onChange={(e) => change({ upload: Object.assign({}, data.upload, { unit: +e.target.value }), figuresOk: false })}>
+              {UNITS.map(([u, l]) => <option key={u} value={u}>{l}</option>)}</select>
+            <span className="corp-note" data-aoc4-unit-used="">{(data.upload.unit || 1) === 1 ? "read as rupees" : "multiplied by " + new Intl.NumberFormat("en-IN").format(data.upload.unit) + " to rupees"}</span></label>}
           {source === "upload" && data.upload && Object.keys(data.upload.guessed || {}).length > 0 && !final && <label className="corp-row" style={{ fontSize: 13 }} data-aoc4-heads-ok="">
-            <input type="checkbox" checked={!!data.upload.headsOk} onChange={(e) => keep({ upload: Object.assign({}, data.upload, { headsOk: e.target.checked }) })} />
+            <input type="checkbox" checked={!!data.upload.headsOk} onChange={(e) => (e.target.checked ? keep : change)({ upload: Object.assign({}, data.upload, { headsOk: e.target.checked }) })} />
             {"I've checked the heads (" + Object.keys(data.upload.guessed).length + " guessed from the file's words)"}</label>}
           {source === "upload" && data.upload && !data.upload.lines && !final && <p className="corp-note">This upload was kept in an older form: upload the file again.</p>}
           {f && un.length > 0 && <div data-aoc4-unmapped="" style={{ border: "1px solid var(--corp-bad)", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>

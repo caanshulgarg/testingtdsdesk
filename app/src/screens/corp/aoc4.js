@@ -123,15 +123,17 @@ export function fromUpload(up) {
   const cy = {}, py = {}, src = {}, unmapped = [], bad = [];
   LEAVES.forEach(([k]) => { cy[k] = 0; py[k] = 0; });
   (up.lines || []).forEach((z, i) => {
-    const k = (up.map || {})[i];
+    const k = (up.map || {})[i], u = +up.unit || 1;
+    if (k === "-") return;   // not used (a heading or a total): its cells are not read
     if (isNaN(z.cy) || isNaN(z.py) || z.cy === null || z.py === null) { bad.push(z.label); return; }
-    if (!k) { if (Math.abs(z.cy) >= 0.005 || Math.abs(z.py) >= 0.005) unmapped.push({ label: z.label, cy: z.cy, py: z.py, line: i }); return; }
-    if (k === "-" || cy[k] === undefined) return;
-    cy[k] = R(cy[k] + signed(z.cy, z.cm, k)); py[k] = R(py[k] + signed(z.py, z.pm, k));
+    if (!k) { if (Math.abs(z.cy) >= 0.005 || Math.abs(z.py) >= 0.005) unmapped.push({ label: z.label, cy: R(z.cy * u), py: R(z.py * u), line: i }); return; }
+    if (cy[k] === undefined) return;
+    cy[k] = R(cy[k] + signed(z.cy, z.cm, k) * u); py[k] = R(py[k] + signed(z.py, z.pm, k) * u);
     src[k] = (src[k] ? src[k] + ", " : "Upload · ") + String(z.label || "").slice(0, 40);
   });
   LEAVES.forEach(([k]) => { if (!src[k]) src[k] = "Upload · nil"; });
-  return { cy, py, src, unmapped, bad, totals: up.totals || [], guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
+  const u = +up.unit || 1;
+  return { cy, py, src, unmapped, bad, totals: (up.totals || []).map((t) => Object.assign({}, t, { cy: R(t.cy * u), py: R(t.py * u) })), unit: u, guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
 }
 
 // an amount as an auditor's sheet writes it: 1,00,000.00 · 1,000/- · (1,000) · (-1,000) · -1,000 · 1000- · −1,000 (the
@@ -146,7 +148,11 @@ export function amount(v) {
   let mark = "";
   const pre = /^(cr|dr)\.?\s+/i.exec(s), post = /\s*\b(cr|dr)\.?$/i.exec(s);
   if (pre) { mark = pre[1].toLowerCase(); s = s.slice(pre[0].length); } else if (post) { mark = post[1].toLowerCase(); s = s.slice(0, post.index); }
-  s = s.replace(/\/-$/, "").replace(/₹|\b(rs\.?|inr)(?=[\s\d(.-]|$)/gi, " ").replace(/\s+/g, "").trim();
+  s = s.replace(/\s*\/-$/, "").replace(/₹|\b(rs\.?|inr)(?=[\s\d(.-]|nil|$)/gi, " ").replace(/\s+/g, " ").trim();
+  if (!s || /^(-{1,2}|\u2014|nil)$/i.test(s)) return { amt: 0, mark };
+  // spaces only around a sign or a bracket; "12 34" is not an amount
+  s = s.replace(/\s*([()-])\s*/g, "$1");
+  if (/\s/.test(s)) return { amt: NaN, mark };
   let neg = false;
   for (let k = 0; k < 3; k++) {
     if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
@@ -163,7 +169,24 @@ export const num = (v) => amount(v).amt;
 // a cell holds an amount (text is never one; "Nil" is)
 export const isNum = (c) => c !== "" && c != null && (/\d/.test(String(c)) || /^nil$/i.test(String(c).trim())) && !isNaN(num(c));
 // a heading's cell: empty, no digits, or a date / "As at ..." (the column titles)
-const headCell = (c) => { const t = String(c == null ? "" : c).trim(); return !t || (!/\d/.test(t) && !/^nil$/i.test(t)) || /\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|\b(as at|as on|year ended|for the year|fy)\b/i.test(t); };
+const MONTH = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\b/i;
+const headCell = (c) => {
+  const t = String(c == null ? "" : c).trim();
+  if (!t || (!/\d/.test(t) && !/^nil$/i.test(t))) return true;
+  // dates, a financial year (2025-26), "As at ...", a unit or "Amount" heading: the column titles
+  return /\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}|^(fy\s*)?(19|20)\d{2}\s*[-–/]\s*\d{2,4}$|\b(as at|as on|year ended|for the year|fy|amount|particulars)\b/i.test(t)
+    || (MONTH.test(t) && /\b(19|20)\d{2}\b/.test(t)) || /\bin\s+('|’)?(000|lakhs?|lacs?|crores?|thousands?|millions?)\b|'000|’000/i.test(t);
+};
+// the unit a sheet's amounts are in, from its headings: lakhs, crores, thousands ('000), millions; else rupees
+export const UNITS = [[1, "Rupees"], [1000, "Thousands"], [100000, "Lakhs"], [1000000, "Millions"], [10000000, "Crores"]];
+export function unitOf(rows) {
+  const t = (rows || []).slice(0, 12).map((r) => r.join(" ")).join(" ").toLowerCase();
+  if (/\bin\s+crores?\b|\bcrores?\b\s*\)/.test(t)) return 10000000;
+  if (/\bin\s+(lakhs?|lacs?)\b|\b(lakhs?|lacs?)\s*\)/.test(t)) return 100000;
+  if (/\bin\s+millions?\b/.test(t)) return 1000000;
+  if (/\bin\s+thousands?\b|'000|’000/.test(t)) return 1000;
+  return 1;
+}
 
 // a file's sheet read (the caller gives XLSX.read sheetRows: 401): its used range cut to 400 lines and 30 columns first
 export const MAXR = 400, MAXC = 30;
@@ -196,21 +219,29 @@ export function linesOf(file, sheet, rows, cols) {
     const k = guessHead(label);
     if (k) { map[i] = k; guessed[i] = true; }
     if (k && k !== "-") sec = SEC_OF[k] || sec;
-    if (k === "-" && /total/i.test(label) && (z.cy || z.py)) totals.push({ label, cy: z.cy, py: z.py, sec });
+    if (k === "-" && /total|^profit|^\(?loss|before tax|for the (year|period)/i.test(label) && (z.cy || z.py)) totals.push({ label, cy: z.cy, py: z.py, sec });
   });
-  return { file, sheet, cols, lines, map, guessed, totals };
+  return { file, sheet, cols, lines, map, guessed, totals, unit: unitOf(rows), unitFound: unitOf(rows) };
 }
 
 // the head a line of an uploaded statement is read by (a guess: the page marks it "check the head" until chosen by hand).
 // The order matters: the narrower words first
 const SYN = [
+  // a payable / outstanding / provision word wins over an expense's words: a liability (Schedule III)
+  ["stp", /provision for (employee benefits|leave|bonus|expenses)|(income[- ]?tax|tax) payable/],
+  ["ocl", /^(?!.*trade).*\b(payable|outstanding expenses|outstanding liabilit)/],
+  ["mat", /(raw )?materials? consumed/],
+  ["chg", /(\(?increase\)?|\(?decrease\)?)\s*(\/\s*\(?(increase|decrease)\)?\s*)?(in|of) inventor/],
+  ["stla", /advances? recoverable in cash or (in )?kind/],
+  ["onca", /(rent|security) deposits?/],
   ["-", /^(sub[- ]?)?total\b(?!\s+outstanding)|\b(sub[- ]?|grand )?total$|^profit\s*\/?\s*\(?loss\)?\s+(for|before|after)\b|^(profit|loss) (for|before|after) (the )?(year|period|tax)|^note\b|^no\.? of shares|^\(?[a-z]?\)?\s*$/],
   ["tpo", /other than (micro|msme)/],
   ["tpm", /micro (and|&) small|micro enterprises|\bmsme\b|micro and small/],
   ["oca", /interest accrued.*(receivable|on (fixed )?deposits|on investments)|income[- ]tax refund|tax refund receivable/],
   ["oth", /(profit|gain) on (sale|disposal|redemption)|interest income|interest received|interest on (fixed )?deposits|dividend income|rent received|other income/],
   ["exp", /loss on (sale|disposal)|bank charges|other expense/],
-  ["ocl", /interest accrued (but not due )?on borrowings|interest accrued and due|statutory dues|gst payable|tds payable|duties and taxes|advance from customers|creditors for expenses|other current liab/],
+  ["ltb", /loans? (and advances )?from (related parties|directors|members|shareholders)/],
+  ["ocl", /interest accrued (but not due )?on borrowings|interest accrued and due|statutory dues|gst payable|tds payable|duties (and|&) taxes|advance from customers|creditors for expenses|other current liab/],
   ["fin", /^interest\b|interest (on|paid|expense)|finance cost/],
   ["stp", /provision for (income[- ]?)?tax|provision for taxation|short[- ]term prov/],
   ["stla", /advance (income[- ]?)?tax|loans? and advances to employees|short[- ]term loans? and adv|prepaid/],
@@ -226,7 +257,7 @@ const SYN = [
   ["oltl", /other long[- ]term liab/], ["onca", /other non[- ]current asset/], ["oca", /other current asset/],
   ["ltla", /long[- ]term loans? and adv|capital advances/], ["stla", /loans? and advances/],
   ["ltb", /long[- ]term borrow|term loans?|unsecured loans|loans? from directors/], ["ltp", /long[- ]term prov|provision for gratuity/],
-  ["sapp", /application money/], ["msw", /share warrant/], ["sc", /share capital/], ["rs", /reserves|surplus|retained|securities premium|general reserve|profit and loss (account|a\/c)/],
+  ["sapp", /application money/], ["msw", /share warrant/], ["sc", /share capital/], ["rs", /reserves?\b|surplus|retained|securit(y|ies) premium|profit and loss (account|a\/c)|statement of profit and loss/],
   ["intang", /intangible|goodwill|computer software/], ["ppe", /property|plant|\btangible|fixed asset|furniture|machinery/],
   ["tr", /trade receiv|debtor/], ["cash", /cash|bank/], ["tpo", /trade payable|sundry creditor|creditors/],
   ["rev", /revenue|sales?\b|sale of|turnover/], ["mat", /material/], ["emp", /employee|salar|staff|wages|provident fund|directors'? remuneration/],
@@ -255,6 +286,9 @@ function whichTotal(l, sec) {
   if (/tax expense/.test(l)) return "TAX";
   if (/total (revenue|income)$/.test(l)) return "TI";
   if (/total expenses$/.test(l)) return "TE";
+  if (/before (exceptional|extraordinary)/.test(l)) return "PBE";
+  if (/before tax/.test(l)) return "PBT";
+  if (/^(profit|\(?loss)\b.*(for|after tax|the (year|period))/.test(l)) return "PAT";
   if (/^(grand )?total$/.test(l)) return { EQ: "TL", NCL: "TL", CL: "TL", NCA: "TA", CA: "TA", INC: "TI", EXP: "TE" }[sec] || "";
   return "";
 }
@@ -263,7 +297,7 @@ export function totalChecks(f, totals) {
   (totals || []).forEach((t) => {
     const w = whichTotal(String(t.label || "").toLowerCase().replace(/\s+/g, " ").trim(), t.sec);
     if (!w) return;
-    const get = (c) => (["TL", "TA", "TI", "TE"].includes(w) ? f.tot[c][w] : sumOf(f, c, w));
+    const get = (c) => (["TL", "TA", "TI", "TE", "PBE", "PBT", "PAT"].includes(w) ? f.tot[c][w] : sumOf(f, c, w));
     const ok = ["cy", "py"].every((c) => isNaN(t[c]) || Math.abs((+t[c] || 0) - get(c)) < 0.005);
     out.push({ label: t.label, ok, cy: t.cy, py: t.py });
   });
