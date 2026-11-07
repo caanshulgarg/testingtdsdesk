@@ -35,6 +35,7 @@
   "dataFolder": "",
   "events": true,
   "every": 30,
+  "keepWait": null,
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",

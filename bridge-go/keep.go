@@ -144,28 +144,31 @@ func keepRest(d time.Duration) {
 func setFinComReading() { _ = saveFile(sp("fincom-reading.txt"), nowS()) }
 
 // why Tally is to be left alone right now (” when it is free)
-func keepHold() string {
+func keepHold() string { _, w := keepHoldWhy(); return w }
+
+// next-fix-read-any-bridge: the hold as a reason code (keepwait.go says it in the beat) and the log's words, as before
+func keepHoldWhy() (string, string) {
 	if st := readStop(); st != nil {
-		return "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
+		return "stopped", "reading from Tally is stopped on this computer (" + str(st["reason"]) + ")"
 	}
 	for _, d := range []string{syncDir(), psSyncDir()} {
 		if d == "" {
 			continue
 		}
 		if t, ok := mtime(filepath.Join(d, "fincom-reading.txt")); ok && time.Since(t) < 120*time.Second {
-			return "FinCom is reading from Tally"
+			return "fincomReading", "FinCom is reading from Tally"
 		}
 	}
 	if isFake() && cfgS("KeepFakeHold") != "" {
-		return cfgS("KeepFakeHold")
+		return "other", cfgS("KeepFakeHold")
 	}
 	if platTallyYoung(float64(keepNum("KeepSettleMin", 3))) {
-		return "Tally has just opened; letting it finish loading"
+		return "tallyYoung", "Tally has just opened; letting it finish loading"
 	}
 	if keepUserInTally() {
-		return "someone is working in Tally"
+		return "userInTally", "someone is working in Tally"
 	}
-	return ""
+	return "", ""
 }
 
 // --- the copy's state (keep.json): a JSON object, read and written as the PowerShell bridge did
@@ -1205,6 +1208,7 @@ func keepWorker(r runReq) {
 		if strings.TrimSpace(readText(pidf)) == fmt.Sprint(os.Getpid()) {
 			_ = os.WriteFile(pidf, nil, 0o644)
 		}
+		setKeepWait("", "")
 		kwMu.Lock()
 		next := kwPending
 		kwRunning, kwRun, kwPending = false, nil, nil
@@ -1253,12 +1257,13 @@ func keepWorker(r runReq) {
 			why = "time is up; the rest follows at the next update"
 			break
 		}
-		if hold := keepHold(); hold != "" {
+		if code, hold := keepHoldWhy(); hold != "" {
 			if hold != held {
 				writeLog(what + ": waiting, " + hold)
 				heldAt = time.Now()
 			}
 			held = hold
+			setKeepWait(code, hold) // next-fix-read-any-bridge: said in the beat; the push goes on meanwhile (bridgeTurn)
 			if k.light && time.Since(heldAt) > 2*time.Minute {
 				why = hold
 				break
@@ -1268,9 +1273,11 @@ func keepWorker(r runReq) {
 		}
 		held = ""
 		if len(activeJobs()) > 0 { // a posting goes first: nothing is read while one is going
+			setKeepWait("posting", "")
 			sleepOrStop(2 * time.Second)
 			continue
 		}
+		setKeepWait("", "")
 		if !asked && k.light {
 			// a light update asks Tally nothing (not even which companies are open): only the copy is brought up to date
 			for _, c := range r.only {
