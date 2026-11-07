@@ -313,19 +313,52 @@ export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); 
 // over), the paired bridge pointed at the address the look found, its status asked again, the cloud's beats, computers
 // and links read again, and the page drawn. Nothing new is asked of Tally (the status is the one the page start asks).
 const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
-export async function checkAll(checkAgain) {
+// next-fix-check-again (the owner on a Mac: "Check again is not working anywhere"): each Check again ends in words, even
+// when nothing changed: "Checked 14:32: the office Tally is connected (2 bridges, Tally open in 2). This computer has no
+// FinCom Bridge." From the bridges' Tally (a bridge heard but Tally closed is not "connected"); "This computer's FinCom
+// Bridge" only for one found here (never the member's link to an office bridge); the browser's block and a look still
+// going said so. lead: a sentence first (the Tally box: the client's own state)
+const hhmm = () => { const d = new Date(), p = (x) => String(x).padStart(2, "0"); return p(d.getHours()) + ":" + p(d.getMinutes()); };
+const nBr = (n) => n + (n > 1 ? " bridges" : " bridge");
+// a bridge of the firm (bridgesOf) whose Tally is open: a company open there, or its beat's ports say so
+export const tallyOpenOn = (b) => !!(b.open.length || upBeat(b.beat || {}));
+export function checkedSay(lead) {
+  const at = "Checked " + hhmm() + ": ";
+  try {
+    const o = ownState(), own = o.own || {}, here = o.from === "here" || !!own.local || own.how === "found" || own.how === "unsure";
+    const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000), k = on.filter(tallyOpenOn).length;
+    const office = !on.length ? "no FinCom Bridge of the firm is online." : k ? "the office Tally is connected (" + nBr(on.length) + ", Tally open in " + k + ")."
+      : nBr(on.length) + " online, but Tally is not open.";
+    const me = LOCALB.busy ? "Still looking on this computer." : LOCALB.perm === "denied" ? BLOCKED
+      : here ? (o.state === "ok" ? "This computer's FinCom Bridge is connected." : "This computer's FinCom Bridge is not answering.")
+      : own.how === "linked" ? "This computer has no FinCom Bridge: your login uses the office's."
+      : o.own ? "This computer's FinCom Bridge does not answer here." : "This computer has no FinCom Bridge.";
+    return at + (lead ? lead + ". " + office.charAt(0).toUpperCase() + office.slice(1) : office) + " " + me;
+  } catch (e) { return at + "could not tell, see above."; }
+}
+// the connection as the words saw it: the words go when it changes (Tally page: UI().said)
+export function connSig() { try { const o = ownState(); return [o.state, (o.own || {}).how, bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000).length, LOCALB.perm].join("|"); } catch (e) { return ""; } }
+// one check at a time, shared by every Check again (a second press while one runs gets the same answer); never rejects
+// (a part that never answers is waited for 10 s at most: the words come all the same)
+let inFlight = null;
+export function checkAll(checkAgain) {
+  if (!inFlight) inFlight = checkRun(checkAgain).catch(() => checkedSay()).finally(() => { inFlight = null; });
+  return inFlight;
+}
+async function checkRun(checkAgain) {
   rescanLocal();
   for (let i = 0; i < 60 && LOCALB.busy; i++) await pause(100);
   try { const o = ownState(); if (o && o.own && o.own.local) aimLocal(o.own); } catch (e) { /* the status says why */ }
   const jobs = [];
-  try { if (typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.refresh) jobs.push(Promise.resolve(Bridge.refresh(true)).catch(() => {})); } catch (e) { /* */ }
+  try { if (typeof Bridge === "object" && Bridge.on && Bridge.on() && Bridge.refresh) jobs.push(Promise.resolve().then(() => Bridge.refresh(true)).catch(() => {})); } catch (e) { /* */ }
   if (typeof checkAgain === "function") jobs.push(Promise.resolve().then(checkAgain).catch(() => {}));
-  else if (typeof TCloud === "object" && TCloud.on && TCloud.on() && TCloud.refreshPane) jobs.push(Promise.resolve(TCloud.refreshPane()).catch(() => {}));
-  try { if (typeof TLight === "object" && TLight.refresh && typeof TCloud === "object" && TCloud.on && TCloud.on()) { TLight.st.at = 0; jobs.push(Promise.resolve(TLight.refresh()).catch(() => {})); } } catch (e) { /* */ }
-  try { if (typeof LinkRec === "object" && LinkRec.load) jobs.push(Promise.resolve(LinkRec.load(true)).catch(() => {})); } catch (e) { /* */ }
-  await Promise.all(jobs);
+  else if (typeof TCloud === "object" && TCloud.on && TCloud.on() && TCloud.refreshPane) jobs.push(Promise.resolve().then(() => TCloud.refreshPane()).catch(() => {}));
+  try { if (typeof TLight === "object" && TLight.refresh && typeof TCloud === "object" && TCloud.on && TCloud.on()) { TLight.st.at = 0; jobs.push(Promise.resolve().then(() => TLight.refresh()).catch(() => {})); } } catch (e) { /* */ }
+  try { if (typeof LinkRec === "object" && LinkRec.load) jobs.push(Promise.resolve().then(() => LinkRec.load(true)).catch(() => {})); } catch (e) { /* */ }
+  await Promise.race([Promise.all(jobs), pause(10000)]);
   try { if (typeof TallySteady === "object" && TallySteady.now) TallySteady.now(); } catch (e) { /* */ }
-  if (typeof render === "function") render();
+  try { if (typeof render === "function") render(); } catch (e) { /* */ }
+  return checkedSay();
 }
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {
@@ -862,4 +895,4 @@ export function justLinked(all) {
   JUST.linked = now;
   return JUST.at && Date.now() - JUST.at < JUST_MS && now.has(JUST.company) ? JUST.company : "";
 }
-if (typeof window === "object") window.FCTallySimple = { placeOf, onTallyPc, ownBridge, tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
+if (typeof window === "object") window.FCTallySimple = { placeOf, onTallyPc, ownBridge, tableRows, rowsFor, quickRows, ROWS, guideStep, ownState, bridgeSay, otherLoginOf, rememberedOwn, firstLinkWait, ownConnOff, LOCALB, rescanLocal, lookOnce, checkAll, checkedSay, connSig, MEMO, missingWords, headWords, JUST, OPEN, LEDN, forget: () => { ledgerChangesForget(); Object.keys(LEDN).forEach((k) => delete LEDN[k]); ASKED_N.clear(); } };
