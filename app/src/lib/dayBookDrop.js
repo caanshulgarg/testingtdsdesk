@@ -84,7 +84,9 @@ async function dayBook(cid, co, f, fc, step) {
     b.map = Books.mapLedgers(b.vouchers, b.map);
     // (LedMaster and TallyRead.after read the open books: only for the open books; another client's are worked out when opened)
     if (live) { try { LedMaster.refresh(b); } catch (e) {} TallyRead.after(b, "after the day book was read", { from: b.meta.from, to: b.meta.to }); }
-    else { try { TallyRead.cleanNames(b); } catch (e) {} }
+    // another client's books: TallyRead.after's own marks (its GST check reads the open books), so Audit and MIS say
+    // they are out of date when that client is opened
+    else { try { TallyRead.cleanNames(b); } catch (e) {} b.reco = null; if ((b.vouchers || []).length) b.stale = { audit: "after the day book was read", mis: "after the day book was read", range: { from: b.meta.from, to: b.meta.to } }; }
   });
   if (r.refused) return r;
   if (r.live) render();
