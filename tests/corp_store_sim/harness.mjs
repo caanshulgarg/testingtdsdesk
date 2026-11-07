@@ -12,6 +12,9 @@ export const H = { log: [], fail: false, delay: {}, hook: null };
 const parse = (path) => { const [t, q] = path.split("?"); const f = {}; (q || "").split("&").forEach((kv) => { const m = /^([a-z_]+)=eq\.(.*)$/.exec(kv); if (m) f[m[1]] = decodeURIComponent(m[2]); }); return { t, f }; };
 const match = (r, f) => Object.entries(f).every(([k, v]) => String(r[k]) === v);
 export const cp = (x) => JSON.parse(JSON.stringify(x));
+// jsonb as Postgres keeps it: an object's keys by length, then bytewise (not the order sent); every json column so
+export const jb = (o) => (Array.isArray(o) ? o.map(jb) : o && typeof o === "object" ? Object.fromEntries(Object.keys(o).sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0)).map((k) => [k, jb(o[k])])) : o);
+const asJsonb = (r) => { Object.keys(r).forEach((k) => { if (r[k] && typeof r[k] === "object") r[k] = jb(r[k]); }); return r; };
 export const W = (ms) => new Promise((r) => setTimeout(r, ms));
 globalThis.Cloud = { on: () => true, st: { role: "owner" }, async api(path, o = {}) {
   const m = o.method || "GET", { t, f } = parse(path);
@@ -23,8 +26,8 @@ globalThis.Cloud = { on: () => true, st: { role: "owner" }, async api(path, o = 
   const rows = srv[t];
   if (m === "GET") res = cp(rows.filter((r) => match(r, f)));
   else if (m === "POST") { if (rows.some((r) => r.client_id === o.body.client_id && (t === "corp_profiles" || (o.body.ref && r.ref === o.body.ref) || (o.body.id && r.id === o.body.id)))) throw new Error("duplicate key (23505)");
-    const r = Object.assign({}, cp(o.body), { updated_at: st() }); rows.push(r); res = [cp(r)]; }
-  else if (m === "PATCH") { const hit = rows.filter((r) => match(r, f)); hit.forEach((r) => Object.assign(r, cp(o.body), { updated_at: st() })); res = cp(hit); }
+    const r = asJsonb(Object.assign({}, cp(o.body), { updated_at: st() })); rows.push(r); res = [cp(r)]; }
+  else if (m === "PATCH") { const hit = rows.filter((r) => match(r, f)); hit.forEach((r) => asJsonb(Object.assign(r, cp(o.body), { updated_at: st() }))); res = cp(hit); }
   else if (m === "DELETE") { const gone = rows.filter((r) => match(r, f)); srv[t] = rows.filter((r) => !gone.includes(r)); res = cp(gone); }
   if (H.delay[m]) await W(H.delay[m]);
   return res;

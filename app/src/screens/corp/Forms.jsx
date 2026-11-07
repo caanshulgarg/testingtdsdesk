@@ -152,7 +152,7 @@ export default function Forms({ co }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ fontSize: 19 }}>Something changed in the company?</h2>
         <span className="corp-note">Pick the event: FinCom tracks its form from the event's date, and makes the board resolution where there is one.</span></div>
-      {ev && <EventStart co={co} rule={ev} close={(done) => { setEv(null); if (done) setTab("event"); }} />}
+      {ev && <EventStart key={ev.form + ev.event} co={co} rule={ev} close={(done) => { setEv(null); if (done) setTab("event"); }} />}
       <div className="corp-tiles">{EVENT.map((r) => <button key={r.form + r.event} className="corp-tile" data-event={r.form} disabled={!may} onClick={() => setEv(r)}>
         <b>{r.event}</b><small>{r.form + " · " + daysOf(r).toLowerCase()}</small></button>)}</div>
     </section>

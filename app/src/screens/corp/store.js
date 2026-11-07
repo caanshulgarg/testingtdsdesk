@@ -60,7 +60,9 @@ async function api(path, o) {
 const redraw = () => { try { if (typeof render === "function") render(); } catch (e) { /* the next drawing shows it */ } };
 const stale = () => { try { return typeof LocalOwner === "object" && !!LocalOwner.stale; } catch (e) { return false; } };
 export const cloudOn = () => { try { return typeof Cloud === "object" && Cloud.on() && !stale(); } catch (e) { return false; } };
-const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+// equal as values: keys sorted at every level (the server's jsonb keeps its own key order, not the order sent)
+const canon = (x) => (Array.isArray(x) ? x.map(canon) : x && typeof x === "object" ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, canon(x[k])])) : x);
+const same = (a, b) => JSON.stringify(canon(a === undefined ? null : a)) === JSON.stringify(canon(b === undefined ? null : b));
 const plain = (x) => !!x && typeof x === "object" && !Array.isArray(x);
 const copy = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 export const uid = () => { try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* below */ }

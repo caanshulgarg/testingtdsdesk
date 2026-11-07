@@ -83,7 +83,7 @@ function Details({ co, P, done }) {
       <Text label="GSTIN" value={P.gstin} from={g("gstin").from} upper onSave={s("gstin")} />
       <Text label="Statutory auditor (firm)" value={P.auditor} from={g("auditor").from} onSave={s("auditor")} attr={["data-f", "auditor"]} />
       <Text label="Auditor's FRN" value={P.auditorFrn} from={g("auditorFrn").from} upper onSave={s("auditorFrn")} />
-      <Text label="Auditor appointed on" type="date" value={P.auditorFrom} onSave={s("auditorFrom")} attr={["data-f", "auditorFrom"]} />
+      <Text label="Auditor appointed on (the AGM's date)" type="date" value={P.auditorFrom} onSave={s("auditorFrom")} attr={["data-f", "auditorFrom"]} />
       <Pick label="Auditor holds office till the AGM of FY" value={P.auditorTill} onSave={s("auditorTill")} attr={["data-f", "auditorTill"]}
         options={[["", "Choose"]].concat(Array.from({ length: 8 }, (_, i) => fyNext(fy, i - 1)).map((f) => [f, "FY " + f]))} />
       <Text label="Main activity (NIC code · activity)" value={P.nic} from={g("nic").from} onSave={s("nic")} />
