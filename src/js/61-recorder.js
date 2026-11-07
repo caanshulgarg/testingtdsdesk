@@ -537,10 +537,10 @@ const Rec = {
     const co = S.companies && S.companies[cid], name = (co && (co.tallyName || co.name)) || "this client's company";
     const l = co && typeof tallyLine === "function" ? tallyLine(co) : null, pc = (l && l.computer) || "the Tally computer";
     if (!l) return {ok: false, kind: "none", pc, text: "No Tally computer keeps this client's books yet: link one in Client setup → Tally."};
-    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Cannot read now: " + pc + " is offline. Once FinCom Bridge runs there again, press Read the ledgers now."};
+    if (l.state === "offline") return {ok: false, kind: "offline", pc, text: "Cannot read now: " + pc + " is offline. Once FinCom Bridge runs there again, use Books › From Tally."};
     if (l.state === "stopped") return {ok: false, kind: "stopped", pc, text: "Cannot read now: reading is stopped from FinCom on " + pc + (l.stop && l.stop.reason ? " (" + l.stop.reason + ")" : "") + ". An owner resumes it on the Tally page; then the ledgers come in and this line goes by itself."};
-    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Cannot read now: Tally is not open on " + pc + ". Open " + name + " in Tally there, then press Read the ledgers now."};
-    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. Read the ledgers now still reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
+    if (l.state === "closed") return {ok: false, kind: "closed", pc, text: "Cannot read now: Tally is not open on " + pc + ". Open " + name + " in Tally there, then use Books › From Tally."};
+    if (l.state === "paused") return {ok: true, kind: "paused", pc, text: "Background reading is paused on " + pc + ", so new ledgers do not come in by themselves. From Tally's Update now reads them once. To keep them coming: right-click the FinCom icon near the clock → Resume background reading."};
     if (l.state === "notanswering") return {ok: true, kind: "notanswering", pc, text: l.text + "; the read goes once Tally answers."};
     return {ok: true, kind: "open", pc, text: "Reads Tally's ledger list on " + pc + " (a few requests, each under 2 seconds)."};
   },

@@ -287,9 +287,15 @@ def main():
         ok(txt("#app [data-led-go='cloud']") == "Update ledgers in Books › From Tally", "10. the status line: 'Update ledgers in Books › From Tally' (%s)" % txt("#app [data-led-status]")[:160])
         ok(txt("#app [data-led-line=unknown] [data-unk-go]") == "Update ledgers in Books › From Tally" and n("#app [data-led-line=unknown] [data-unk-why]") == 1, "10. the unknown-ledgers box: the same link, its reason kept (%s)" % txt("#app [data-led-line=unknown]")[:160])
         E("() => { window.__bridge = window.__bridge || []; }"); b0 = len(E("() => window.__bridge"))
-        # (a click event on the link itself: the earlier scenes' bars still draw every second on this page)
-        E("() => { S.tcoSync = {}; render(); }"); pg.wait_for_timeout(500)
-        E("() => document.querySelector('#app [data-led-go=cloud]').click()"); pg.wait_for_timeout(1500)
+        # (scene 7 left the top bar's Tally popover open; the app's rule (parts/dismiss.js) is that the first click outside an
+        # open overlay only closes it. Closed first, as a person would see it, then a real mouse click)
+        ov = E("() => [...document.querySelectorAll('header.top .tally-pop, details[open]')].map(e => e.className || e.tagName)")
+        print("   open before the click: %s" % ov)
+        for _ in range(3):
+            if not E("() => !!document.querySelector('header.top .tally-pop')"): break
+            pg.keyboard.press("Escape"); pg.wait_for_timeout(300)
+        ok(not E("() => !!document.querySelector('header.top .tally-pop')"), "10. the popover left open by scene 7 is closed (Esc)")
+        pg.click("#app [data-led-go='cloud']"); pg.wait_for_timeout(1500)
         ok(E("() => S.tab === 'books' && booksTab() === 'import'") and n("#app [data-upload-page]") == 1 and len(E("() => window.__bridge")) == b0, "10. the link opens Books › From Tally and asks nothing of Tally by itself")
         ok(n("#app [data-upload-page] [data-masters] [data-masters-update]") == 1, "10. From Tally has the masters' one Update now")
     print("\npage errors: %s" % errors[:5])

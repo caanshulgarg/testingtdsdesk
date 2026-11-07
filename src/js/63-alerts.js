@@ -216,7 +216,7 @@ const AlertHub = {
         const k = g.ledgers.length;
         out.push({key: "unk:" + g.cid, fp: AlertClear.fp(g.ledgers.map(x => "unk:" + g.cid + ":" + x.n).sort()), sev: "info", cid: g.cid, selfClear: true,
           text: coName(g.cid) + ": " + (k === 1 ? "1 ledger" : k + " ledgers") + " used in Tally " + (k === 1 ? "is" : "are") + " not in FinCom yet.",
-          fix: "Open the client's Ledgers: Read the ledgers now there, or confirm them.", act: {label: "Ledgers", run: () => Rec.openClientTab(g.cid, "books:ledgers")}});
+          fix: "Open Books › From Tally: Update now there, or confirm them.", act: {label: "Ledgers", run: () => Rec.openClientTab(g.cid, "books:ledgers")}});
       });
       // ---- one problem a computer: not answering, tried again by itself, silent today
       const devs = ((typeof TLight === "object" && TLight.st.devs) || []).filter(d => d && !d.revoked);
