@@ -22,12 +22,15 @@
 //   s4  a removal waiting on its back-off meets another computer's change: kept
 //   l_rules  a new company's first FY; ADT-1 only in a year with an appointment (asked, never late); this year's MSME-1;
 //            DIR-12 and PAS-3 kinds and laws; the SRN
+// after the re-review of 423e40e74 (the stand-in keeps json columns in jsonb's key order, as Postgres does):
+//   x1_jsonb / x1_ctl  a removal after a lost answer, with an event's data: its own row in jsonb order is its own
+//   x2_items  new companies' items; H1 from 1 October, H2 from 1 April; ADT-1 kept due with the new term entered
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const dir = join(dirname(fileURLToPath(import.meta.url)), "corp_store_sim");
 let bad = 0;
-for (const s of ["a_selfping", "a_reread", "a_early", "b_lay", "c_dropnew", "d_order", "e_exhaust", "f_tabs", "g_none", "h_postfail_drop", "i_two_reads", "j_drop_during_patch", "k_more", "s1_lostanswer_other_edit_drop", "s2_dup_while_deleting", "s3_rls_delete", "s4_drop_pending_then_other_change", "l_rules"]) {
+for (const s of ["a_selfping", "a_reread", "a_early", "b_lay", "c_dropnew", "d_order", "e_exhaust", "f_tabs", "g_none", "h_postfail_drop", "i_two_reads", "j_drop_during_patch", "k_more", "s1_lostanswer_other_edit_drop", "s2_dup_while_deleting", "s3_rls_delete", "s4_drop_pending_then_other_change", "l_rules", "x1_jsonb", "x1_ctl", "x2_items"]) {
   console.log(s);
   const r = spawnSync(process.execPath, [join(dir, s + ".mjs")], { cwd: dir, encoding: "utf8", timeout: 30000 });
   process.stdout.write(r.stdout || ""); if (r.stderr) process.stdout.write(r.stderr);

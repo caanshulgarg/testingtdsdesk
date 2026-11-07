@@ -62,7 +62,13 @@ export function annual(p, fy, filings) {
       return;
     }
     if (rule.from === "half") {
-      rule.halves.forEach((h) => { const due = ymd(endYear(fy) + h.yearAfter, h.month, h.day); row(rule, "annual:" + rule.form + ":" + fy + ":" + h.key, { half: h.key, what: rule.what + " · " + h.label, due, from: "half-year " + h.label }); });
+      rule.halves.forEach((h) => {
+        const due = ymd(endYear(fy) + h.yearAfter, h.month, h.day), end = ymd(endYear(fy) + h.end[2], h.end[0], h.end[1]);
+        row(rule, "annual:" + rule.form + ":" + fy + ":" + h.key, { half: h.key, halfEnd: end, what: rule.what + " · " + h.label, due, from: "half-year " + h.label });
+        // a half-year over before the company was incorporated: nothing to file for it
+        const r = rows[rows.length - 1];
+        if (isDay(p.incorporated) && end < p.incorporated && r.status === "not_started") Object.assign(r, { status: "not_needed", reason: "the half-year ended before the company was incorporated (" + dmy(p.incorporated) + ")", auto: true });
+      });
       return;
     }
     row(rule, "annual:" + rule.form + ":" + fy, {});
@@ -108,9 +114,11 @@ export function dueItems(p, filings, on) {
     const d = dueIn(r.due, on);
     out.push({ key: "form:" + r.ref, title: r.form + " · FY " + f + (r.half ? " " + r.half : ""), sub: r.dueFrom, due: r.due, when: dmy(r.due), tone: d.tone, words: d.words });
   };
-  // the health lists each director's KYC from the profile already
-  annual(p, fy, filings).filter(open).forEach((r) => { if (r.form !== "DIR-3 KYC") add(r, fy); });
-  if (cur !== fy) annual(p, cur, filings).filter((r) => open(r) && r.half && r.due && addDays(r.due, -30) <= on).forEach((r) => add(r, cur));
+  // the health lists each director's KYC from the profile already; a year before the company's first has nothing; this
+  // year's half-years once each is over (H1 from 1 October, H2 from 1 April, then in the year just closed)
+  const first = firstFy(p);
+  if (!first || fy >= first) annual(p, fy, filings).filter(open).forEach((r) => { if (r.form !== "DIR-3 KYC") add(r, fy); });
+  if (cur !== fy && (!first || cur >= first)) annual(p, cur, filings).filter((r) => open(r) && r.half && r.halfEnd < on).forEach((r) => add(r, cur));
   events(filings).filter(open).forEach((r) => { const d = dueIn(r.due, on); out.push({ key: "form:" + r.ref, title: r.form + " · " + r.what, sub: "event of " + dmy(r.event), due: r.due, when: dmy(r.due), tone: d.tone, words: d.words }); });
   return out;
 }

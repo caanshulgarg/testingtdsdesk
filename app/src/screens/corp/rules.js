@@ -30,6 +30,18 @@ export function kycFor(d, fy) {
   return { done: next > y, thisYear, due: dueOn(next, r), next: nfy, words: r.words };
 }
 
+// the year whose AGM appointed the auditor: the year whose AGM date is "Auditor appointed on", else the year before the
+// one that date falls in (an AGM is held after its year ends); "" when not entered
+const fyOfDay = (d) => { const y = +d.slice(0, 4), a = +d.slice(5, 7) < 4 ? y - 1 : y; return a + "-" + String(a + 1).slice(2); };
+export function apptFy(p) {
+  const d = String(p.auditorFrom || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return "";
+  const at = Object.keys(p.agms || {}).find((f) => p.agms[f] === d);
+  if (at) return at;
+  const f = fyOfDay(d), a = +f.slice(0, 4) - 1;
+  return a + "-" + String(a + 1).slice(2);
+}
+
 // a small company is a private company (s.2(85)): the tick is not used for a public or a section 8 company
 const smallCo = (p) => !!p.small && (!p.cls || p.cls === "private");
 
@@ -56,9 +68,12 @@ export const ANNUAL = [
     applies: (p) => (p.cls === "opc" || smallCo(p) ? true : "only small companies and OPCs file MGT-7A (rule 11(1))") },
   { form: "ADT-1", what: "Appointment of auditor", from: "agm", days: 15, steps: ["Auditor's consent & certificate", "Resolution", "Attachments", "Checked"],
     law: "s.139(1) Companies Act 2013; rule 4(2) Companies (Audit and Auditors) Rules 2014: within 15 days of the meeting at which the auditor is appointed. Filed in a year with an appointment only: at the AGM where the auditor's term ends (here); the first auditor (s.139(6)) and a casual vacancy (s.139(8)) are started as events (Auditor appointed).",
-    // the year of the AGM where the term ends; a term not entered (or ended before this year): asked, never shown late
-    applies: (p, fy) => (!p.auditorTill || p.auditorTill < fy ? { ask: "Enter the auditor's term in the profile (Statutory auditor): ADT-1 is filed in the year it ends" }
-      : p.auditorTill === fy ? true : "the auditor continues: appointed till the AGM of FY " + p.auditorTill) },
+    // due in the year of the AGM that appointed the auditor (Auditor appointed on: kept due when the new term is entered
+    // before ADT-1 is filed), and in the year of the AGM where the term ends; a term not entered (or ended before this
+    // year): asked, never shown late
+    applies: (p, fy) => (apptFy(p) === fy || p.auditorTill === fy ? true
+      : !p.auditorTill || p.auditorTill < fy ? { ask: "Enter the auditor's term in the profile (Statutory auditor): ADT-1 is filed in the year it ends" }
+      : "the auditor continues: appointed till the AGM of FY " + p.auditorTill) },
   { form: "DIR-3 KYC", what: "Director KYC", from: "kyc", perDirector: true, steps: ["Details & OTP", "DSC", "Checked", "Ready"],
     law: "Rule 12A Companies (Appointment and Qualification of Directors) Rules 2014: every director holding a DIN; as amended, once every three financial years by 30 June (DIR-3 KYC or DIR-3 KYC-WEB); how often is the setting DIR3_KYC above.",
     applies: () => true },
@@ -67,7 +82,8 @@ export const ANNUAL = [
     applies: () => true },
   { form: "MSME-1", what: "Dues to micro & small suppliers over 45 days · half-yearly", from: "half", steps: ["Dues listed", "Reasons", "Checked", "Ready"],
     law: "Specified Companies (Furnishing of information about payment to micro and small enterprise suppliers) Order 2019 (s.405): by 31 October for April–September and by 30 April for October–March, when such dues are outstanding over 45 days.",
-    halves: [{ key: "H1", label: "Apr–Sep", month: 10, day: 31, yearAfter: -1 }, { key: "H2", label: "Oct–Mar", month: 4, day: 30, yearAfter: 0 }],
+    // end: the last day of the half-year (month, day, in the calendar year the financial year ends + yearAfter)
+    halves: [{ key: "H1", label: "Apr–Sep", month: 10, day: 31, yearAfter: -1, end: [9, 30, -1] }, { key: "H2", label: "Oct–Mar", month: 4, day: 30, yearAfter: 0, end: [3, 31, 0] }],
     applies: (p) => (p.msmeNone ? "no dues to micro or small suppliers over 45 days" : true) },
 ];
 
