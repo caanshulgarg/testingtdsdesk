@@ -106,6 +106,22 @@ func driveEveryRequest(t *testing.T) *standTally {
 	pull.mu.Unlock()
 	must("a day's group", err)
 	applyPeriodDays(M{"periodDays": []any{}})
+	// next-fast-entries (FastEntries, off by default; the paths are driven in fastentries_test.go): refused with the
+	// switch off even while being asked; with it on, only the request being asked goes
+	wx, gx := fastHeadsRequest(zz, addDays(td, -1), td), fastBatchRequest(zz, addDays(td, -1), td, 1, 2)
+	for _, x := range []string{wx, gx} {
+		fast.mu.Lock()
+		fast.ask = x
+		fast.mu.Unlock()
+		if _, err = invokeTally(recorderTC(nil), f.port, x, 5); err == nil {
+			t.Fatal("a window went to Tally with FastEntries off")
+		}
+		setCfg("FastEntries", true)
+		_, err = invokeTally(recorderTC(nil), f.port, x, 5)
+		setCfg("FastEntries", false)
+		must("a window of older entries", err)
+	}
+	fastReset()
 	// 2.5.2: the stock, for a person's click in FinCom only (stock.go; the paths are driven in stock251_test.go)
 	stockReset()
 	noteCompanyGUID(zz, f.guid)

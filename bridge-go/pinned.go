@@ -124,7 +124,9 @@ var requestRebuild = map[string]func(x string) []string{
 		}
 		return o
 	},
-	vchBatchID: pinOne(voucherBatchRebuild), // 2.4.9: one day, a..b or a list of at most 100 MasterIDs (batch249.go)
+	vchBatchID:  pinOne(voucherBatchRebuild), // 2.4.9: one day, a..b or a list of at most 100 MasterIDs (batch249.go)
+	fastHeadsID: pinOne(fastHeadsRebuild),    // next-fast-entries: a window of 2 to 31 days (fastentries.go)
+	fastBatchID: pinOne(fastBatchRebuild),    // next-fast-entries: a window's dates and a run of MasterIDs
 	ledIdsID: pinOne(func(x string) string {
 		a, u := pinMasterRange(x)
 		if a < 0 || (u > 0 && u-a > 2000) {

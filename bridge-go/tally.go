@@ -364,6 +364,8 @@ var requestClass = map[string]string{
 	// 2.4.5: one listed day's heads (the exception, by its id always), and the ledger count (masters, no period)
 	dayHeadsID: "exception", ledIdsID: "undated",
 	vchBatchID: "exception", // 2.4.9: the group the older-entries fetch reads now, by its id always (batch249.go)
+	// next-fast-entries (FastEntries on only): the window being read now, by its id always (fastentries.go)
+	fastHeadsID: "exception", fastBatchID: "exception",
 	// 2.5.2 (the owner's decision of 30-Oct-2026): the stock for the period a person chose, by its id always, only while
 	// that click's request is in flight (stock.go)
 	stockID: "exception",
@@ -400,6 +402,13 @@ func datedRefused(tc *TC, x string) error {
 			return nil
 		}
 		return errBatchRefused
+	case fastHeadsID, fastBatchID:
+		// next-fast-entries (PROTOTYPE, FastEntries on only, off by default): exactly the window or group being read now,
+		// as built, under the 2 s stop; refused otherwise whatever ReadDays says (fastentries.go)
+		if fastExact(tc, x) {
+			return nil
+		}
+		return errFastRefused
 	case ledListID, ledChangesID, ledByNameID:
 		// 2.5.0 (the owner's decision of 30-Oct-2026; booksfrom.go): the narrow ReadDays exemption for exactly these three:
 		// as built, with exactly SVFROMDATE = the company's books-from and SVTODATE = a year on less a day (TYPE="Date"),

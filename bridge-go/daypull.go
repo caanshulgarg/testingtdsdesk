@@ -474,6 +474,7 @@ func pullNote(it pullItem, phase string, w *pullWork) {
 // --- the loop: one request at a time, at most DayPullPerTurn a turn, the conditions looked at before every one
 func dayPullLoop() {
 	pullLoad()
+	fastLoad() // next-fast-entries: the window and group sizes reached before a restart
 	sleepOrStop(20 * time.Second)
 	for !stopping() {
 		n := 0
@@ -569,10 +570,17 @@ func pullStep() (bool, bool) {
 	}
 	switch {
 	case !w.headsDone:
+		// next-fast-entries (FastEntries, off by default; fastentries.go): a day the window read already is taken as read
+		if fastTake(w) {
+			return false, true
+		}
 		port, why := pullMayAsk(w.it)
 		if why != "" {
 			pullSayWait(w.it, why)
 			return false, false
+		}
+		if handled, sent, more := fastStep(w, port); handled {
+			return sent, more
 		}
 		return pullHeadsStep(w, port)
 	case !w.sentHeads:
@@ -983,6 +991,7 @@ func pullFlush(w *pullWork) bool {
 	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
 		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0]))
 	w.got, w.gone = append([]string(nil), w.got[n:]...), nil
+	fastRateNote(it.Company, n) // next-fast-entries: the speed told in the beat (entries FinCom took, a minute)
 	// an entry whose lines did not total zero was not taken: FinCom marked the day to be uploaded by hand (its words)
 	if words := str(r.json["upload"]); words != "" {
 		pullNoteUpload(it, "entries", words)
@@ -1199,6 +1208,25 @@ func pullLoad() {
 
 // --- for the beat and the tray
 func pullBeat() M {
+	b := pullBeatLocked()
+	// next-fast-entries: each company's speed (entries FinCom took in the last 10 minutes, a minute; 0 until known) and
+	// the fast read's switch and sizes; FinCom's page may use the speed for "about N min left"
+	cos := M{}
+	for k, v := range obj(b["companies"]) {
+		st := M{}
+		for kk, vv := range obj(v) {
+			st[kk] = vv
+		}
+		if r := fastRate(k); r > 0 {
+			st["entriesPerMin"] = r
+		}
+		cos[k] = st
+	}
+	b["companies"], b["fast"] = cos, fastBeat()
+	return b
+}
+
+func pullBeatLocked() M {
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
 	cos := M{}

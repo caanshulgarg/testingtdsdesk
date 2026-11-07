@@ -60,6 +60,10 @@ var tallyAllowList = map[string]allowedReq{
 	// in one request (batch249.go)
 	vchBatchID: {purpose: "older entries for a period the person chose in FinCom (2.4.9), on a computer whose owner switched it on, idle only: up to 100 entries of ONE day FinCom listed (SVFROMDATE = SVTODATE) in one request, by a run of that day's MasterIDs (a..b) or a list of them, after that day's FinComDayHeads; FETCH exactly FinComVoucherObject's approved fields, the ledger lines also under LEDGERENTRIES (an entry with items keeps those, any other its ALLLEDGERENTRIES), then FinComVoucherObject's strip (only approved fields kept, before anything is logged, stored or sent); payroll entries one by one; a group stopped at 2 s asked again in halves, then the day one by one; Tally's window held 2 s stops the period for that company", maxSec: 1.41,
 		measuredOn: "2026-10-28 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode batch, run 40750991113, at 30,021 and 100,021 entries: 100 entries of a day of up to 2,216 entries 945 ms worst (4.1), of a day of 7,601 entries 1,405 ms worst (6.2), window held 1.35 s at most; exactly the entries asked in 6,280 requests; every kept field identical to FinComVoucherObject's on 150 of 150 entries a release)"},
+	// next-fast-entries (PROTOTYPE, not released; docs/fast-entries-design.md): sent only with FastEntries switched on
+	// (off by default), not yet measured on real Tally: a build with these rows reports its table unmeasured
+	fastHeadsID: {purpose: "older entries for a period the person chose (next-fast-entries, FastEntries on only, off by default): the entry heads (GUID, MasterID, AlterID, date) of a WINDOW of 2 to 31 consecutive days FinCom listed (SVFROMDATE < SVTODATE, yyyymmdd TYPE=\"Date\"), split by day and told to FinCom as each day's FinComDayHeads is; idle only, postings first, one in flight, stopped at 2 s (the window halved; at two days the fast read stops for the choice); a row of another date: no window asked of that Tally until restart; Tally's window held 2 s stops the period for that company"},
+	fastBatchID: {purpose: "older entries for a period the person chose (next-fast-entries, FastEntries on only, off by default): up to 100 entries of a window FinCom listed in one request, the dates the group spans (SVFROMDATE..SVTODATE, 31 days at most) and a run of MasterIDs (a..b) whose every head in those dates is wanted; FETCH exactly FinComVoucherBatch's (frozen), then its converter and FinComVoucherObject's strip; the group grown while fast, halved when slow or stopped at 2 s, then one by one; any error or inexact answer: those days one by one as before; Tally's window held 2 s stops the period for that company"},
 	ledIdsID: {purpose: "the ledger count for Connect Tally's step-5 bar (2.4.5): the ledgers' MasterIDs only, the rows counted (no computed figure); in chunks of 2,000 MasterIDs when the one request is stopped at 2 s", maxSec: 0.41,
 		measuredOn: "2026-10-21 (real TallyPrime 3.0, 4.1, 5.1, 6.2, 7.1; tally-versions mode dbbig, run 39542962661: 50,000 ledgers in one request 405 ms worst (3.0), each chunk of 2,000 MasterIDs 107 ms worst; exact on every release)"},
 	// 2.5.2 (the owner's decision of 30-Oct-2026, "1"): the stock for the period a person chose, only on that person's click
@@ -211,6 +215,8 @@ func allowListSamples() map[string]string {
 		ledIdsID:             ledgerIdsRequest(c, 0, 0),
 		stockID:              stockRequest(c, a, z), // 2.5.2 (stock.go)
 		vchBatchID:           voucherBatchRangeRequest(c, a, 1, 100),
+		fastHeadsID:          fastHeadsRequest(c, a, z),
+		fastBatchID:          fastBatchRequest(c, a, z, 1, 100),
 		"TDSDeskLedgers":     ledgersFullRequest(c, 0, 2000),
 		"TDSDeskGroups":      groupsFullRequest(c),
 		"TDSDeskNames":       namesRequest(c, 0, 2000),

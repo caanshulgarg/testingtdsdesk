@@ -543,7 +543,8 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 func allowRowsBeforeStock() string {
 	var o []string
 	for _, l := range strings.SplitAfter(allowListRows(), "\n") {
-		if !strings.HasPrefix(l, "| "+stockID+" |") {
+		// next-fast-entries adds two rows (fastentries_test.go); the older tables are without them
+		if !strings.HasPrefix(l, "| "+stockID+" |") && !strings.HasPrefix(l, "| "+fastHeadsID+" |") && !strings.HasPrefix(l, "| "+fastBatchID+" |") {
 			o = append(o, l)
 		}
 	}
