@@ -133,7 +133,8 @@ export function fromUpload(up) {
   });
   LEAVES.forEach(([k]) => { if (!src[k]) src[k] = "Upload · nil"; });
   const u = +up.unit || 1;
-  return { cy, py, src, unmapped, bad, totals: totalsOf(up), unit: u, guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
+  const nLines = Object.entries(up.map || {}).filter(([, k]) => k && k !== "-").length;
+  return { cy, py, src, unmapped, bad, totals: totalsOf(up), unit: u, nLines, guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
 }
 
 // the file's own total lines, worked out again from the map as it is now: a line counts as a total while its head is the
@@ -142,7 +143,7 @@ export function fromUpload(up) {
 const TOTAL_WORDS = /total|^profit|^\(?loss|before tax|for the (year|period)/i;
 export function totalsOf(up) {
   const u = +up.unit || 1, out = [], map = up.map || {}, guessed = up.guessed || {};
-  let g = { cy: 0, py: 0, n: 0 }, sec = "";
+  let g = { cy: 0, py: 0, n: 0 }, sec = "";   // n: the lines in the group (the rounding allowed grows with it)
   (up.lines || []).forEach((z, i) => {
     const k = map[i];
     if (k === "-" && guessed[i] && TOTAL_WORDS.test(z.label) && (z.cy || z.py)) {
@@ -249,17 +250,24 @@ export function linesOf(file, sheet, rows, cols) {
 // the balance sheet and the P&L when they are on two sheets of the file: the P&L sheet guessed by its name or its first
 // lines ("Profit and Loss", "Statement of Profit"); the lines of both, one after the other (the P&L with its own columns)
 const PL_SHEET = /profit\s*(and|&)\s*loss|statement of profit|\bp\s*&\s*l\b|income statement/i;
+const BS_SHEET = /balance sheet|statement of assets/i;
 export function guessSheets(sheets) {
-  const isPl = (x) => PL_SHEET.test(x.name) || PL_SHEET.test(x.rows.slice(0, 5).map((r) => r.join(" ")).join(" "));
-  const pl = sheets.find(isPl) || null, bs = sheets.find((x) => x !== pl) || sheets[0];
-  return { bs: bs.name, pl: pl && pl !== bs ? pl.name : "" };
+  const top = (x) => x.rows.slice(0, 5).map((r) => r.join(" ")).join(" ");
+  const nums = (x) => x.rows.some((r) => r.some((c) => isNum(c) && Math.abs(num(c)) >= 1));
+  const plHeads = (x) => x.rows.some((r) => ["INC", "EXP"].includes(SEC_OF[guessHead(r[0])]));
+  // by name first, then by the first lines, then by what the lines are; a sheet with no amounts (a cover) is neither
+  const plByName = sheets.find((x) => PL_SHEET.test(x.name)) || null;
+  const bs = sheets.find((x) => BS_SHEET.test(x.name)) || sheets.find((x) => x !== plByName && nums(x) && BS_SHEET.test(top(x)))
+    || sheets.find((x) => x !== plByName && nums(x) && !(PL_SHEET.test(top(x)) && !BS_SHEET.test(top(x)))) || sheets.find((x) => x !== plByName) || sheets[0];
+  const pl = (plByName !== bs && plByName) || sheets.find((x) => x !== bs && nums(x) && PL_SHEET.test(top(x))) || sheets.find((x) => x !== bs && nums(x) && plHeads(x)) || sheets.find((x) => x !== bs && PL_SHEET.test(top(x))) || null;
+  return { bs: bs.name, pl: pl ? pl.name : "" };
 }
-export function linesOfSheets(file, sheets, bsName, plName, cols) {
+export function linesOfSheets(file, sheets, bsName, plName, cols, plCols) {
   const bs = sheets.find((x) => x.name === bsName) || sheets[0], pl = plName && plName !== bs.name ? sheets.find((x) => x.name === plName) : null;
   const a = linesOf(file, bs.name, bs.rows, cols || autoCols(bs.rows));
-  if (!pl) return Object.assign(a, { plSheet: "" });
-  const b = linesOf(file, pl.name, pl.rows, autoCols(pl.rows)), n = a.lines.length, shift = (o) => Object.fromEntries(Object.entries(o).map(([i, v]) => [+i + n, v]));
-  return Object.assign(a, { plSheet: pl.name, lines: a.lines.concat(b.lines), map: Object.assign({}, a.map, shift(b.map)), guessed: Object.assign({}, a.guessed, shift(b.guessed)),
+  if (!pl) return Object.assign(a, { plSheet: "", plCols: null });
+  const pc = plCols || autoCols(pl.rows), b = linesOf(file, pl.name, pl.rows, pc), n = a.lines.length, shift = (o) => Object.fromEntries(Object.entries(o).map(([i, v]) => [+i + n, v]));
+  return Object.assign(a, { plSheet: pl.name, plCols: pc, lines: a.lines.concat(b.lines), map: Object.assign({}, a.map, shift(b.map)), guessed: Object.assign({}, a.guessed, shift(b.guessed)),
     unit: a.unit !== 1 ? a.unit : b.unit, unitFound: a.unitFound !== 1 ? a.unitFound : b.unitFound });
 }
 
@@ -344,7 +352,8 @@ export function totalChecks(f, totals) {
   (totals || []).forEach((t) => {
     const l = String(t.label || "").toLowerCase().replace(/\s+/g, " ").trim(), plain = /^(grand |sub[- ]?)?total$/.test(l);
     // rounding allowed: the file's own unit (half of it, at least half a rupee)
-    const tol = Math.max(0.5, 0.01 * (+t.unit || 1));
+    // rounding allowed: each line of the group may be off by half the file's unit (n × 0.005 × unit), ₹0.5 at least
+    const tol = Math.max(0.5, Math.max(1, (t.group && t.group.n) || 1) * 0.005 * (+t.unit || 1));
     const near = (c, v) => isNaN(t[c]) || Math.abs((+t[c] || 0) - v) <= tol;
     const diff = (get) => R(Math.max(...["cy", "py"].map((c) => (isNaN(t[c]) ? 0 : Math.abs((+t[c] || 0) - get(c))))));
     if (plain) {
@@ -384,7 +393,13 @@ export function checks(f, o) {
   o = o || {};
   const out = [], rs = (x) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(x);
   const d1 = R(f.tot.cy.TL - f.tot.cy.TA), d0 = R(f.tot.py.TL - f.tot.py.TA);
-  out.push({ key: "bs", ok: Math.abs(d1) < TOL && Math.abs(d0) < TOL, text: Math.abs(d1) < TOL && Math.abs(d0) < TOL ? "Balance sheet tallies: assets = equity + liabilities" : "Balance sheet does not tally: equity and liabilities less assets " + rs(d1) + (Math.abs(d0) >= TOL ? " (previous year " + rs(d0) + ")" : "") });
+  // a file in lakhs or thousands rounds each line: the tally allows half its unit a line (n lines), ₹0.5 at least
+  const bt = (+o.unit || 1) > 1 ? Math.max(0.5, Math.max(1, +o.nLines || 1) * 0.005 * o.unit) : TOL, tallies = Math.abs(d1) <= bt && Math.abs(d0) <= bt;
+  const rd = Math.max(Math.abs(d1), Math.abs(d0));
+  out.push({ key: "bs", ok: tallies, text: tallies ? "Balance sheet tallies: assets = equity + liabilities" + (rd >= TOL ? " (rounding difference " + rs(R(rd)) + ")" : "") : "Balance sheet does not tally: equity and liabilities less assets " + rs(d1) + (Math.abs(d0) >= TOL ? " (previous year " + rs(d0) + ")" : "") });
+  // nothing to file: a balance sheet with no assets in either year, or a P&L nil in both (its sheet not given)
+  if (!f.tot.cy.TA && !f.tot.py.TA) out.push({ key: "bsNil", ok: false, text: "The balance sheet is nil in both years: pick the sheet that holds it" });
+  if (!f.tot.cy.TI && !f.tot.cy.TE && !f.tot.py.TI && !f.tot.py.TE) out.push({ key: "plNil", ok: false, text: "The statement of profit and loss is nil in both years: the P&L sheet is missing (pick it, or upload a file with it)" });
   const move = R((+f.cy.rs || 0) - (+f.py.rs || 0)), pat = f.tot.cy.PAT, dm = R(move - pat);
   out.push({ key: "reserves", ok: Math.abs(dm) < TOL, warn: true, text: Math.abs(dm) < TOL ? "Profit for the year matches the movement in reserves" : "Profit for the year " + rs(pat) + " is not the movement in reserves " + rs(move) + " (difference " + rs(dm) + ": dividends, transfers or an adjustment to explain)" });
   if (o.lastFiled) {
