@@ -360,6 +360,8 @@ func ledResendFile(dir string) string { return filepath.Join(dir, "ledger-resend
 
 // 2.5.0: the date the outbox's openings are as at (the books' beginning, yyyymmdd), sent with every batch as openingsAt
 func setLedOutOpeningsAt(dir, bf string, whole bool) {
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		return
@@ -380,6 +382,8 @@ func setLedOutOpeningsAt(dir, bf string, whole bool) {
 // a ledger the new round no longer lists (nothing to tell the cloud of it). Every complete round is saved, changed
 // rows or not: the cloud works deletions out from seen
 func mergeLedOut(dir string, d ledDiff, groups [][2]string, round string, seen []string, natures []any) {
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}
@@ -475,6 +479,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		ls["bound"] = b
 	}
 	if !truthy(ls["groups"]) {
+		k.holdNow() // third review T5: reading on, the group list too waits while the person types
 		g, err := readGroupList(k.tc, company, port)
 		if errors.Is(err, errRecorderStop) {
 			// 2.5.5: the groups (one request) stopped at 2 s: said, and the ledgers are read anyway; this round keeps the
@@ -629,6 +634,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				// still not answering at the smallest chunk: halved on, down to one MasterID, to find the ledger that hangs
 				ls["size"] = maxI(1, int(upto-after)/2)
 				ls["iso"] = true
+				delete(ls, "isoOK")
 			default:
 				// one MasterID that does not answer (no answer in its wait, never only stopped: ledJudge): that ledger
 				// hangs Tally. It is skipped from now on and named to FinCom (as in 2.5.4)
@@ -656,15 +662,21 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		sec := time.Since(t1).Seconds()
 		delete(ls, "minStops") // 2.5.5: a chunk in time ends a run of stops (the 125 chunk's and a single ledger's)
 		delete(ls, "oneStops")
-		clearBgBackoff(port) // 2.5.5 (review M2): Tally answered in time: the next back-off starts small again
-		if truthy(ls["iso"]) || truthy(ls["grow"]) {
-			// past the ledger that hangs: back up, doubling each chunk in time (2.5.5, reviews M2 and N1: up to the full
-			// chunk, until the first stop: then the size that last answered in time is kept for the round)
-			delete(ls, "iso")
-			ls["size"], ls["grow"] = minI(ledChunkDefault(), size*2), true
-			if toInt(ls["size"]) >= ledChunkDefault() {
-				delete(ls, "grow")
+		delete(ls, "oneHung") // third review T4: a run of stops ended, so did its "kept over 30 s"
+		clearBgBackoff(port)  // 2.5.5 (review M2): Tally answered in time: the next back-off starts small again
+		if truthy(ls["iso"]) {
+			// third review T3: the search goes on at this size (the next chunk, the stopped one's other half, is halved
+			// at once if stopped); it ends, and the growth starts, when a single ledger is read in time or two chunks in a
+			// row are (the slow patch passed), or when the single ledger is judged (ledJudge)
+			if n := toInt(ls["isoOK"]) + 1; upto-after == 1 || n >= 2 {
+				ledGrowFrom(ls, size)
+			} else {
+				ls["isoOK"] = n
 			}
+		} else if truthy(ls["grow"]) {
+			// back up, doubling each chunk in time (reviews M2, N1: up to the full chunk, until the first stop: then the
+			// size that last answered in time is kept for the round)
+			ledGrowFrom(ls, size)
 		}
 		appendLedRead(dir, rows)
 		ls["n"], ls["reqs"] = toInt(ls["n"])+len(rows), toInt(ls["reqs"])+1
@@ -803,7 +815,13 @@ func renameHeldOpening(dir, old, nw string) {
 // sends nothing: the next complete round replaces it
 var ledPushAfter = map[string]time.Time{} // under cloudMu
 
+// third review T1: every read, change and write of the ledger outbox (ledger-out.json) is under this one lock: a push
+// (held across its batches) and a round's merge or a skip's note never interleave, so no round's rows are lost
+var ledOutMu sync.Mutex
+
 func pushLedgerList(company, dir string) error {
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	if !exists(ledOutFile(dir)) || time.Now().Before(ledPushAfter[company]) {
 		return nil
 	}
@@ -1044,6 +1062,17 @@ func ledKept(p ledPending) (kept time.Duration, hung, known bool) {
 	return kept, p.slot.bound || kept > time.Duration(keepNum("LedgerHangSec", 30))*time.Second, true
 }
 
+// third review T3: the search is over: the chunks grow back from size, doubling each in time, until the full chunk or
+// the first stop
+func ledGrowFrom(ls M, size int) {
+	delete(ls, "iso")
+	delete(ls, "isoOK")
+	ls["size"], ls["grow"] = minI(ledChunkDefault(), size*2), true
+	if toInt(ls["size"]) >= ledChunkDefault() {
+		delete(ls, "grow")
+	}
+}
+
 // 2.5.5 (reviews H1, M1, N2): the pending single ledger judged once Tally has finished it. Found by halving, it is
 // asked again after the back-off and skipped only when stopped 3 times in a row (a chunk in time between resets the
 // count): as hanging Tally when Tally kept one of the three over LedgerHangSec (30 s) or never finished it, else as
@@ -1101,6 +1130,9 @@ func (k *keepRun) ledJudge(company, dir string, st, ls M, save func()) (bool, er
 	tries[fmt.Sprint(p.mid)] = today()
 	st["ledSlowTry"] = tries
 	ls["after"] = p.mid
+	if truthy(ls["iso"]) {
+		ledGrowFrom(ls, 1) // third review T3: the search is over once the single ledger is judged
+	}
 	hangs := truthy(ls["oneHung"])
 	delete(ls, "oneStops")
 	delete(ls, "oneHung")
@@ -1145,6 +1177,8 @@ func ledPoisonName(st M, mid int64) string {
 // 2.5.5: the ledger no longer skipped (here and in the outbox not sent yet: review L5)
 func removePoison(dir string, st M, mid int64) {
 	st["ledPoison"] = withoutMid(arr(st["ledPoison"]), mid)
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	if o := readObjFile(ledOutFile(dir)); o != nil && o["skipped"] != nil {
 		o["skipped"] = withoutMid(arr(o["skipped"]), mid)
 		_ = saveFile(ledOutFile(dir), jsonText(o))
@@ -1167,6 +1201,8 @@ func setPoisonWhy(dir string, st M, mid int64, name, why string) {
 			a[2] = why
 		}
 	}
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}
@@ -1195,6 +1231,8 @@ func addPoisonWhy(dir string, st M, mid int64, name, why string) {
 		}
 	}
 	st["ledPoison"] = append(arr(st["ledPoison"]), []any{mid, name, why})
+	ledOutMu.Lock()
+	defer ledOutMu.Unlock()
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {
 		o = M{}

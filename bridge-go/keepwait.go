@@ -6,6 +6,7 @@ package main
 // that came in meanwhile and waits behind it is said as queued. Nothing here asks Tally anything.
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -80,7 +81,7 @@ func keepWaitBeat() any {
 	nowRun := kwRun != nil && kwRun.kind == "now"
 	kwMu.Unlock()
 	if code == "userInTally" && nowRun {
-		words += " An Update now reads on after 2 minutes at most, in short parts, giving way while you type."
+		words += " An Update now reads on after " + keepNowWaitWords() + " at most, in short parts, giving way while you type."
 	}
 	out := M{"reason": code, "words": words, "since": since.UTC().Format(time.RFC3339)}
 	if pk != "" {
@@ -91,4 +92,16 @@ func keepWaitBeat() any {
 		out["queued"] = what + " is queued: " + words
 	}
 	return out
+}
+
+// third review T8: the Update now's wait as KeepNowWaitSec says it ("2 minutes", "90 seconds")
+func keepNowWaitWords() string {
+	sec := keepNum("KeepNowWaitSec", 120)
+	if sec%60 == 0 {
+		if sec == 60 {
+			return "1 minute"
+		}
+		return fmt.Sprintf("%d minutes", sec/60)
+	}
+	return fmt.Sprintf("%d seconds", sec)
 }

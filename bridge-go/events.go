@@ -348,9 +348,9 @@ func bridgeTurn(safe func(string, func())) {
 	safe("Nightly catch-up", nightlyCheck)
 	safe("After a posting", postedDue)
 	// the outbox goes on without the copier too (days kept while offline go as soon as FinCom can be reached)
-	// next-fix-read-any-bridge: also while a run waits before reading (someone working in Tally, a posting, FinCom
-	// reading): the run itself pushes only after it reads, so a held run sent nothing and asked no links for its whole wait
-	if (!keepRunning() || keepWaitWhy() != "") && (now.Sub(turnPushAt) >= 60*time.Second || now.Before(turnPushAt)) {
+	// (third review T1: a run held before reading pushes from its own wait loop, at most once a minute (keepWorker), never
+	// a push started here beside it: that one could still be sending when the round writes the ledger outbox)
+	if !keepRunning() && (now.Sub(turnPushAt) >= 60*time.Second || now.Before(turnPushAt)) {
 		turnPushAt = now
 		go safe("Cloud", func() { invokeCloudPush() })
 	}

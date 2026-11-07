@@ -20,21 +20,28 @@ func TestHeldRunStillPushesAndSaysWhy(t *testing.T) {
 	liveCopy(t) // a company kept here: the links are asked for it
 	setFinComReading()
 	defer func() { _ = os.Remove(sp("fincom-reading.txt")) }()
+	before := c.count("companies")
 	wakeUpdate("")
 	// the run starts and waits on the hold
 	time.Sleep(1500 * time.Millisecond)
 	if !keepRunning() || logLines("waiting, FinCom is reading from Tally") == 0 {
 		t.Fatalf("the run is not held (running %v)", keepRunning())
 	}
-	// the main loop's turn while the run is held: the push (and with it the links) still goes
-	before := c.count("companies")
-	turnPushAt, turnFirst = time.Time{}, false // not the first turn (that one starts an Update now asked before a restart)
-	bridgeTurn(func(_ string, fn func()) { fn() })
+	// the held run pushes itself (third review T1: from its own wait loop, at most once a minute), and with it the links
+	// are asked
 	for i := 0; i < 50 && c.count("companies") == before; i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
 	if c.count("companies") == before {
 		t.Fatal("a held run stops the cloud push: the links are never asked")
+	}
+	// the main loop's turn while the run is held starts no push of its own beside it (T1: it could race the round)
+	mid := c.count("companies")
+	turnPushAt, turnFirst = time.Time{}, false // not the first turn (that one starts an Update now asked before a restart)
+	bridgeTurn(func(_ string, fn func()) { fn() })
+	time.Sleep(1500 * time.Millisecond)
+	if c.count("companies") != mid {
+		t.Fatal("the main loop pushed beside a held run")
 	}
 	// the beat says why, in plain words, and since when
 	kw := obj(beatBody(true, "open", "", nil, nil, nil)["keepWait"])

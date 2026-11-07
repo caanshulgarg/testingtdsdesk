@@ -48,7 +48,7 @@ func TestKeepNowReadsOnAfterWait(t *testing.T) {
 	if f.n(ledListID) != before {
 		t.Fatal("the Update now read at once while someone worked in Tally")
 	}
-	if kw := obj(beatBody(true, "open", "", nil, nil, nil)["keepWait"]); str(kw["reason"]) != "userInTally" || !strings.Contains(str(kw["words"]), "reads on after 2 minutes at most") {
+	if kw := obj(beatBody(true, "open", "", nil, nil, nil)["keepWait"]); str(kw["reason"]) != "userInTally" || !strings.Contains(str(kw["words"]), "reads on after 3 seconds at most") {
 		t.Fatalf("the Update now's wait: %v", kw)
 	}
 	waitIdle(t)
@@ -84,5 +84,35 @@ func TestKeepNowGivesWayWhileTyping(t *testing.T) {
 	setFinComReading()
 	if h := k.holdNow(); !strings.Contains(h, "FinCom is reading") {
 		t.Fatalf("FinCom reading: %q", h)
+	}
+}
+
+// third review T2: an Update now pressed while another run (the ledger wake) is held by someone in Tally: that run gives
+// way at once, and the Update now waits KeepNowWaitSec at most, then reads on; never the held run's 30 minutes
+func TestKeepNowTakesOverAHeldRun(t *testing.T) {
+	f := ledgerTally(t, 300, `,"KeepNowWaitSec":3,"KeepNowYieldSec":1`)
+	busy, _ := keepNowFake(t)
+	busy.Store(true)
+	startKeepRun(runReq{kind: "ledgers", only: []string{zz}, why: "test"})
+	time.Sleep(1500 * time.Millisecond)
+	t0 := time.Now()
+	wakeUpdate("")
+	for i := 0; i < 200 && f.n(ledListID) == 0; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if f.n(ledListID) == 0 {
+		t.Fatal("the Update now behind a held run read nothing")
+	}
+	if took := time.Since(t0); took > 12*time.Second {
+		t.Fatalf("the Update now read only after %s", took)
+	}
+	if logLines("an Update now came in: it goes first") == 0 || logLines("reading goes on in short parts") == 0 {
+		t.Fatalf("not said:\n%s", readText(logFile()))
+	}
+	busy.Store(false)
+	waitIdle(t)
+	// third review T7: no wait said once the runs are over
+	if kw := beatBody(true, "open", "", nil, nil, nil)["keepWait"]; kw != nil {
+		t.Fatalf("keepWait after the runs: %v", kw)
 	}
 }

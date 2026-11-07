@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -247,7 +248,26 @@ func TestLedger255SlowLedgerSkippedRestRead(t *testing.T) {
 	slow := f.led[76].mid
 	f.mu.Unlock()
 	led255SlowMids(f, 800*time.Millisecond, slow)
+	var stops atomic.Int32 // every request over the stop (third review T3)
+	f.mu.Lock()
+	inner := f.slow
+	f.slow = func(id, body string) time.Duration {
+		d := inner(id, body)
+		if d > 0 {
+			stops.Add(1)
+		}
+		return d
+	}
+	f.mu.Unlock()
 	plain, _ := led255Run(t, f, newRun("now", "r255e"), 160, 1500*time.Millisecond)
+	// third review T3: no more stops than the halving had before N1 (0455fe936, worked out for MasterID 77 here: 250; 125
+	// three times; then 62 in time, 124, 62, 31, 15, 7 in time, 14, 7 in time, 14, 7, 3, and the one ledger three times:
+	// 15 stops)
+	if n := stops.Load(); n > 15 {
+		t.Fatalf("%d stops to find one slow ledger (15 before N1)", n)
+	} else {
+		t.Logf("%d stops to find one slow ledger (15 before N1)", n)
+	}
 	if plain < 4 || plain%2 != 0 {
 		t.Fatalf("the turn ended %d times with plain words, want twice for each run of three stops (at 125, at a size kept, and for the one ledger)", plain)
 	}
@@ -547,4 +567,50 @@ func led255Round(t *testing.T, f *standTally, id, kind string) {
 		led255Settle(t, f)
 	}
 	t.Fatalf("%s did not finish", id)
+}
+
+// third review T1: a round that completes while a push of the ledger outbox is still going: no ledger change is lost
+// (one lock over every read, change and write of the outbox)
+func TestLedger255RoundDuringPushLosesNothing(t *testing.T) {
+	f := newStandTally(t)
+	f.grp = [][2]string{{"Sundry Creditors", ""}}
+	for i := 1; i <= 50; i++ {
+		f.addLed(fmt.Sprintf("Party %05d", i), "Sundry Creditors", "0.00")
+	}
+	c := newStandCloud(t)
+	standBridge(t, f, `,"KeepBudgetSec":600`+c.cfg())
+	liveFrom(today())
+	dir := syncFolder(zz)
+	if err := newRun("now", "r255p1").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(ledOutFile(dir)) {
+		t.Fatal("no outbox after the first round")
+	}
+	// a slow push of the outbox (the cloud answers each batch in 2 s), and meanwhile a round with a new ledger completes
+	c.mu.Lock()
+	c.ledDelay = 2 * time.Second
+	c.mu.Unlock()
+	done := make(chan struct{})
+	go func() { defer close(done); _ = pushLedgerList(zz, dir) }()
+	time.Sleep(300 * time.Millisecond)
+	f.addLed("Party new one", "Sundry Creditors", "0.00")
+	if err := newRun("now", "r255p2").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	c.mu.Lock()
+	c.ledDelay = 0
+	c.mu.Unlock()
+	if err := pushLedgerList(zz, dir); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, b := range c.ledList {
+		if strings.Contains(jsonText(b), "Party new one") {
+			return
+		}
+	}
+	t.Fatalf("the new ledger never reached FinCom (%d ledger lists sent)", len(c.ledList))
 }
