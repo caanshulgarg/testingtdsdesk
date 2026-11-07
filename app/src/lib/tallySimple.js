@@ -736,6 +736,8 @@ const idle = (fn) => (typeof requestIdleCallback === "function" ? requestIdleCal
 const hiddenNow = () => typeof document === "object" && document.visibilityState === "hidden";
 // from the drawing: {rows, extra (the companies open that no client has, the one just linked, the best client; null until
 // the first work is done)}
+// the rows as last worked out, without asking for them (Advanced's day check: never the page's own options, its focus)
+export const rowsLast = () => ROWS.rows || [];
 export function rowsFor(opts) {
   // the page's own reads start from the drawing, at its moment, as when the rows were worked out in it (each returns at
   // once when not due); the working-out itself starts none of them (lib/quietReads.js)

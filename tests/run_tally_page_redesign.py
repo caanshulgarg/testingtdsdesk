@@ -124,7 +124,7 @@ def main():
         # Connect again: looks again and says what is missing
         pg.click(R(ACME) + " [data-tsm-away-again]"); pg.wait_for_timeout(2500)
         w = txt(R(ACME) + " .tpt-why")
-        ok("is not open in your Tally" in w or w.startswith("Step "), "2. Connect again: the plain reason (%s)" % w[:140])
+        ok("is not open in Tally" in w or w.startswith("Step "), "2. Connect again: the plain reason (%s)" % w[:140])
         shot("tally-redesign-desktop.png", 1280, 900)
 
         print("== 3. Update now is never silent")
@@ -250,13 +250,15 @@ def main():
         o2 = T.dev(6, NW, "made-up-o2", tally="open", opened=(NOVA,), version="2.5.4", rec=(NOVA,), beat={"bridgePort": 9102, "windowsUser": NW + "\\made-up-o2"},
                    ports=[{"port": 9043, "ok": True, "skipped": False, "n": 1, "error": "", "reason": "open"}])
         c9 = [{"company": ORB, "client_id": "NAME:" + ORBIT, "device_id": o1["id"], "gstin": "", "last_seen": "ago:0.5"},
-              {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"}]
-        scene([o1, o2], c9, [ORBIT, NOVA_C], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
+              {"company": NOVA, "client_id": "NAME:" + NOVA_C, "device_id": o2["id"], "gstin": "", "last_seen": "ago:0.5"},
+              {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
+        scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
         ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (2 bridges online)", "9. the top line: through the office Tally, 2 bridges online (%s)" % txt("#app [data-tsm-top]")[:160])
         ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "Connect Tally on this computer", "9. the six steps folded: 'Connect Tally on this computer'")
         sts = {nm: attr(R(nm) + " [data-tpt-state]", "data-tpt-state") for nm in (ORBIT, NOVA_C)}
-        ok(all(v in ("ok", "reading") for v in sts.values()) and n(TB + " .tpt-need") == 0, "9. both clients fine or reading, none needs you (%s)" % sts)
+        ok(all(v in ("ok", "reading") for v in sts.values()) and n(R(ORBIT) + ".tpt-need") + n(R(NOVA_C) + ".tpt-need") == 0, "9. both clients open in the office's Tally fine or reading, not 'needs you' (%s)" % sts)
         ok(all(mains(nm) in (["update"], ["reading"]) for nm in (ORBIT, NOVA_C)), "9. each its Update now (%s)" % [mains(nm) for nm in (ORBIT, NOVA_C)])
+        ok("this Windows login" not in txt(TB) and "on the Tally computer" in txt(R(LARK) + " .tpt-why"), "9. no bridge here: a company open nowhere, 'on the Tally computer', never 'this Windows login' (%s)" % txt(R(LARK) + " .tpt-why"))
         shot("tally-redesign-nobridge.png", 1280, 900)
         pg.set_viewport_size({"width": 1440, "height": 900})
         pg.click("#app [data-tsm-steps-link='laptop']"); pg.wait_for_timeout(600)
@@ -264,14 +266,14 @@ def main():
           return a && b ? Math.round(b.getBoundingClientRect().top - a.getBoundingClientRect().bottom) : -1; }""")
         ok(0 <= gap <= 40, "9. opened: no blank area between its lines (%s px)" % gap)
 
-        print("== 10 (Sentry FINCOM-APP-STAGING-K: opening Advanced ran 2.2 s of script). 10 bridges, 500 history rows, 300 companies seen: no task over 300 ms")
+        print("== 10 (Sentry FINCOM-APP-STAGING-K: opening Advanced ran 2.2 s of script). 10 bridges, 500 history rows, 500 companies seen: no task over 300 ms")
         big = [adev([up], opened=(ORB, NOVA, ZETA))]
         for i in range(10):
             d = T.dev(i % 9 + 1, "PC%02d" % i, "made-up-u%d" % i, tally="open", opened=("BIG CO %03d" % i,), version="2.5.4", rec=("BIG CO %03d" % i,), beat={"bridgePort": 9110 + i, "windowsUser": "PC%02d\\made-up-u%d" % (i, i)})
             d["id"] = "d0000000-0000-4000-8000-0000000001%02d" % i; d["name"] = "PC%02d" % i
             d["info"]["history"] = [{"at": "ago:%d" % (k * 2 + 1), "to": "ago:%d" % (k * 2), "kind": "bridge" if k % 2 else "tally", "state": "offline" if k % 3 else "online"} for k in range(50)]
             big.append(d)
-        cbig = c1 + [{"company": "SEEN COMPANY %03d PVT LTD" % k, "client_id": None, "device_id": big[1 + k % 10]["id"], "gstin": "", "last_seen": "ago:%d" % (60 + k)} for k in range(300)]
+        cbig = c1 + [{"company": "SEEN COMPANY %03d PVT LTD" % k, "client_id": None, "device_id": big[1 + k % 10]["id"], "gstin": "", "last_seen": "ago:%d" % (60 + k)} for k in range(500)]
         scene(big, cbig, CLx + ["Client %03d" % k for k in range(60)], A_PINGS)
         LT = """() => { window.__lt = []; try { const po = new PerformanceObserver((l) => l.getEntries().forEach(e => window.__lt.push(Math.round(e.duration)))); po.observe({type: 'longtask', buffered: false}); window.__po = po; } catch (e) { window.__lt = null; } }"""
         E(LT)
@@ -281,6 +283,44 @@ def main():
         lt = E("() => window.__lt")
         ok(n("#app [data-support-body] [data-bridge-more]") == 1 and n("#app [data-staged-wait]") == 0, "10. Advanced and every support tool drawn in full")
         ok(lt is not None and (max(lt) if lt else 0) < 300, "10. the longest task while opening them under 300 ms (%s)" % (sorted(lt or [], reverse=True)[:6]))
+
+        print("== 11 (review of dd9288be4)")
+        # 1. a client's "Open Tally page": its row marked, Advanced open, the focus kept (the day check reads the rows as they are)
+        ids = scene([dA, bdev()], c1, CLx, A_PINGS)
+        E("(c) => { S.tallyFocus = c; S.tallyMore = {}; navHome('tally'); render(); }", ids[ACME]); pg.wait_for_timeout(3000)
+        ok(n(TB + " tr[data-focus]") == 1 and attr(TB + " tr[data-focus]", "data-tsm-row") == ACME and n("#app [data-support-body]") == 1, "11.1 from a client: its row marked, Advanced open (%s)" % attr(TB + " tr[data-focus]", "data-tsm-row"))
+        E("() => { S.tallyFocus = ''; S.tallyMore = {}; render(); }")
+        # 2. a row's one button: the missing days' fetch, the Day Book upload, else Update now
+        M = lambda r: E("(r) => FCTallyMain(r)", r)
+        base_r = {"kind": "client", "c": {"w": "Yes"}, "o": {"w": "Yes"}, "l": {"w": "Yes"}, "company": ORB, "cid": "x"}
+        ok(M(dict(base_r, e={"w": "No"}, need=True, act={"kind": "bring", "label": "Bring missing days"}, todo="Press the button: FinCom brings them from Tally.")) == {"main": "bring", "label": "Bring missing days"}, "11.2 missing days: Bring missing days")
+        ok(M(dict(base_r, e={"w": "No"}, need=True, act={"kind": "upload", "label": "Upload Day Book"}, todo="Upload the Day Book for those days.")) == {"main": "upload", "label": "Upload Day Book"}, "11.2 held lines: Upload Day Book")
+        ok(M(dict(base_r, e={"w": "Yes"}, act=None, todo="Nothing.")) == {"main": "update", "label": "Update now"}, "11.2 up to date: Update now")
+        # 3. a stuck read of a company open in Tally: the read's own reason, never "not open"
+        E("(c) => { S.tcoSync = {}; S.tcoSync[c] = {cid: c, company: 'ORBIT SPACE', at: Date.now() - 200000, via: 'cloud', err: 'Could not ask Tally: made-up reason', end: 0, late: false, samples: []}; render(); }", ids[ORBIT]); pg.wait_for_timeout(2500)
+        w = txt(R(ORBIT) + " .tpt-why")
+        ok(mains(ORBIT) == ["again"] and "made-up reason" in w and "not open" not in w, "11.3 stuck, its company open: the read's own reason (%s)" % w)
+        E("() => { S.tcoSync = {}; render(); }")
+        # 5. the result only of the read pressed for
+        E("""(c) => { const x = S.tcoSync[c] = {cid: c, at: Date.now(), via: 'cloud', samples: [], end: Date.now(), led: 5, ledAt: Date.now()}; FCRunState[c] = {b: {n: 5, g: 1}, at: x.at, say: 'Updated: 3 new', ok: true}; render(); }""", ids[ORBIT]); pg.wait_for_timeout(1300)
+        ok(txt(R(ORBIT) + " .tpt-why") == "Updated: 3 new", "11.5 the result of the read pressed for")
+        E("(c) => { S.tcoSync[c] = {cid: c, at: Date.now() + 5, via: 'cloud', samples: []}; render(); }", ids[ORBIT]); pg.wait_for_timeout(1300)
+        ok("Updated: 3 new" not in txt(R(ORBIT) + " .tpt-why"), "11.5 another read started: the old result is not said (%s)" % txt(R(ORBIT) + " .tpt-why"))
+        E("(c) => { S.tcoSync = {}; delete FCRunState[c]; render(); }", ids[ORBIT])
+        # 6. another login's wait words never shown: a client of a company in B's Tally (B's beat with keepWait)
+        KCO = "Kestrel Co"
+        ck = cos[:] ; ck[0] = dict(ck[0], client_id="NAME:" + KCO)
+        dB = bdev(); dB["info"]["beat"]["keepWait"] = {"reason": "user-active", "words": "Waiting: someone is working in Tally on this computer.", "since": "2026-11-07T06:12:00Z", "queued": True}
+        idk = scene([dA, dB], ck + c1[1:], CLx + [KCO], A_PINGS)
+        E("() => { window.__askK = Ledgers.askTally; Ledgers.askTally = () => new Promise(() => {}); S.tcoSync = {}; render(); }"); pg.wait_for_timeout(500)
+        if n(R(KCO) + ' [data-tpt-main="update"]'):
+            pg.click(R(KCO) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(1300)
+            E("(c) => { const x = S.tcoSync[c]; if (x) { x.via = 'cloud'; FCRunState[c].asking = false; FCRunState[c].at = x.at; } render(); }", idk[KCO]); pg.wait_for_timeout(1300)
+            ok("someone is working" not in txt(R(KCO) + " .tpt-why") and n("#app [data-tsm-top-wait]") == 0, "11.6 B's wait words are not said on A's page (%s)" % txt(R(KCO) + " .tpt-why"))
+        else: ok(False, "11.6 Kestrel Co's Update now (%s)" % mains(KCO))
+        E("() => { Ledgers.askTally = window.__askK; S.tcoSync = {}; }")
+        # 10. connected: See the 6 steps stays near Check again
+        ok(n("#app [data-tsm-top] [data-tsm-steps-link]") == 1, "11.10 See the 6 steps beside Check again when connected")
 
         print("== 6. a phone: cards, one 44 px button each, no sideways scroll")
         scene([dA, bdev()], c1, CLx, A_PINGS)

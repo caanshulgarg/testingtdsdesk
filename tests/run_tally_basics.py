@@ -156,7 +156,7 @@ def main():
         E("() => { window.__probed = []; }")
         pg.click(AW + " [data-tsm-away-again]"); pg.wait_for_timeout(2500)
         why = txt(AW + " .tpt-why")
-        ok(why.startswith("“ACME TRADERS 2025-26” is not open in your Tally.") or why.startswith("Step "), "3. Connect again: what is missing, plainly (%s)" % why)
+        ok(why.startswith("“ACME TRADERS 2025-26” is not open in Tally.") or why.startswith("Step "), "3. Connect again: what is missing, plainly (%s)" % why)
         ok(len(E("() => window.__probed || []")) >= 1, "3. Connect again looks again (the shared look of this login's bridge)")
         ok(E("() => document.querySelectorAll('#app [data-tsm-table] [data-tsm-away-again]').length") == 1, "3. only the client not connected has Connect again")
 

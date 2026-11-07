@@ -36,7 +36,7 @@ import LinkStatus from "./LinkStatus.jsx";
 import { LedgerDrop } from "./Bell.jsx";
 import { linkWord } from "../lib/linkStatus.js";
 import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
-import { ownOpen, NO_CO, lookOnce, rescanLocal, checkAll } from "../lib/tallySimple.js";
+import { ownOpen, ownBridge, NO_CO, lookOnce, rescanLocal, checkAll } from "../lib/tallySimple.js";
 import { TITLES } from "../lib/connectSteps.js";
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
@@ -727,7 +727,15 @@ export async function runPress(cid, company, opts) {
 export function keepWaitOf(company) {
   const devs = tallyDevs(), id = (coRows(company).find((r) => r.device_id) || {}).device_id || "";
   const d = devs.find((v) => v.id === id) || devs.find((v) => openOn(v).some((o) => coKey(o) === coKey(company)));
-  return keepWaitWords(d && d.info && d.info.beat && d.info.beat.keepWait);
+  if (!d || !d.info) return "";
+  // the bridge (a Windows login) that holds the company, when its own record carries keepWait; else the computer's beat,
+  // only when that beat is this login's bridge's or the company is open in this login's own Tally: never another login's words
+  const br = Object.values(d.info.bridges || {}).find((b) => b && [].concat(b.open || []).some((o) => coKey((o && o.name) || o) === coKey(company)));
+  if (br && br.keepWait) return keepWaitWords(br.keepWait);
+  const beat = d.info.beat || {}, lcu = (u) => String(u || "").split("\\").pop().trim().toLowerCase();
+  let mine = false;
+  try { const o = ownBridge(); mine = !!(o && o.dev && o.dev.id === d.id && (!beat.windowsUser || !o.user || lcu(beat.windowsUser) === lcu(o.user))) || ownOpen().has({ company }); } catch (e) { mine = false; }
+  return mine ? keepWaitWords(beat.keepWait) : "";
 }
 export function keepWaitWords(k) {
   if (!k || !String(k.words || "").trim()) return "";
@@ -750,9 +758,9 @@ export function runSettle(cid, company, done) {
 export function runWords(cid, company) {
   const m = MR[cid], x = SYNC()[cid];
   if (!m) return null;
-  if (m.say) return { phase: m.ok ? "done" : "why", text: m.say };
   if (m.asking) return { phase: "asking", text: "Asking Tally…" };
   if (!x || x.at !== m.at) return null;   // (that read is gone, or another one started: nothing of it to say)
+  if (m.say) return { phase: m.ok ? "done" : "why", text: m.say };
   if (!x.via && !x.err) return { phase: "asking", text: "Asking Tally…" };
   if (x.err || x.late) return { phase: "asking", text: "Asking Tally…" };   // (runSettle says why at the next drawing)
   if (x.end) return { phase: "reading", text: "Reading… done, counting the changes" };
@@ -777,7 +785,7 @@ export function MastersLine({ cid }) {
   // the result once this Update now's read is done (counts read again, the rounds since the press)
   useEffect(() => { runSettle(cid, company, () => tick((k) => k + 1)); });
   // (each second while an Update now is on its way: its words move from Asking Tally… to the count, the reason or the result)
-  const live = !!(m && !m.say);
+  const rw0 = runWords(cid, company), live = !!(rw0 && rw0.phase !== "done" && rw0.phase !== "why");
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 1000); return () => clearInterval(t); }, [live]);
   const may = !(S.account && S.account.me) || ["owner", "staff"].includes(S.account.me.role);
   // one read at a time: the button is off from the press (before its first count is read) until the read ends
@@ -1087,6 +1095,11 @@ function LinkedClientRow({ co, r, k, more, earlier, here, open, onOpen, hooks })
 // "Choose on Tally page"); focus: the client whose rows are marked (from its "Open in Tally page")
 // only: which of every company this list holds (Help & support › Every company seen: those not on the page already), with
 // the hidden and the removed computer's behind their toggles as before
+// next-tally-page-redesign (review of dd9288be4): the long list's rows drawn again only when what they show changed (the
+// company's own fields, the client it has, the list's size, a click kept for it), so each 40-row tick draws its new rows only
+const rowSig = (p) => { const r = p.r || {}; return [r.company, r.client, r.open, r.seen, r.device, r.hidden, r.gone, r.moved, r.nowName, r.st && r.st.state, (p.rows || []).length,
+  p.forCo && p.forCo.id, p.focus, p.pcs, !!PEND()[coKey(r.company)], typeof LinkRec === "object" && LinkRec.ready && LinkRec.ready()].join("|"); };
+const MemoRow = React.memo(CompanyRow, (a, b) => rowSig(a) === rowSig(b));
 export default function CompaniesInTally({ rows = null, forCo = null, focus = "", title = "Companies in Tally", note = null, empty = null, onDone = null, hook = "firm", count = null, pcs = false, only = null, after = null }) {
   const [q, setQ] = useState(""), [showHid, setShowHid] = useState(false), [showGone, setShowGone] = useState(false), [, tick] = useState(0);
   const all = companyRows({ hidden: true, gone: true }).filter((r) => !only || only(r)), list = rows || all.filter((r) => (showHid || !r.hidden) && (showGone || !r.gone));
@@ -1100,10 +1113,11 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
   }, POLL_MS); return () => clearInterval(t); }, [waiting]);
   useEffect(() => { if (!focus) return; const t = setTimeout(() => { const e = document.querySelector("#app [data-tco-row][data-focus]"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "center" }); }, 120); return () => clearTimeout(t); }, [focus]);
   const k = list.length > SEARCH_AT ? coKey(q) : "", hits = k ? list.filter((r) => coKey(r.company).includes(k) || (r.client && S.companies[r.client] && coKey(S.companies[r.client].name).includes(k))) : list;
-  // next-tally-page-redesign (Sentry FINCOM-APP-STAGING-K): a long list (Every company seen: hundreds) drawn 40 rows a
-  // task, the next 40 a tick later, so no one task holds the page while it opens
-  const [upto, setUpto] = useState(40);
-  useEffect(() => { if (upto >= hits.length) return; const t = setTimeout(() => setUpto((u) => u + 40), 0); return () => clearTimeout(t); }, [upto, hits.length]);
+  // next-tally-page-redesign (Sentry FINCOM-APP-STAGING-K): a long list (Every company seen: hundreds) drawn 15 rows a
+  // task, the next ones a tick later, so no one task holds the page while it opens
+  // (15 rows a task: a row of this list is about 7 ms to draw, so a task stays near 100 ms)
+  const [upto, setUpto] = useState(15), Row = hook === "all" ? MemoRow : CompanyRow;
+  useEffect(() => { if (upto >= hits.length) return; const t = setTimeout(() => setUpto((u) => u + 15), 0); return () => clearTimeout(t); }, [upto, hits.length]);
   const nOpen = list.filter((r) => r.open).length;
   const countWords = count ? count(list) : nOf(list.length, "company", "companies") + " · " + nOpen + " open in Tally now";
   return <section className="tco" data-tco-list={hook} data-tco-n={list.length}>
@@ -1114,7 +1128,7 @@ export default function CompaniesInTally({ rows = null, forCo = null, focus = ""
     {list.length === 0 ? (empty || <p className="note" data-tco-empty="">No company seen in Tally yet. Open your company in TallyPrime on the computer with FinCom Bridge: it shows here within a minute.</p>)
       : <>{/* the owner's two headings: the client on the left, the Tally company on the right */}
         <div className="tco-cols" data-tco-cols="" aria-hidden="true"><span>Client</span><span /><span>Tally company</span></div>
-        <ul className="tco-rows">{hits.slice(0, upto).map((r) => <CompanyRow key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} pcs={pcs} />)}</ul></>}
+        <ul className="tco-rows">{hits.slice(0, upto).map((r) => <Row key={r.company} r={r} rows={all} forCo={forCo} focus={!!focus && r.client === focus} onDone={onDone} pcs={pcs} />)}</ul></>}
     {k && !hits.length && <p className="note" data-tco-none="">No company matches “{q}”.</p>}
     {!rows && nGone > 0 && <button className="linkbtn" data-tco-show-gone={nGone} aria-expanded={showGone} onClick={() => setShowGone(!showGone)}>{(showGone ? "Hide: from a removed computer (" : "From a removed computer (") + nGone + ")"}</button>}
     {!rows && nHid > 0 && <button className="linkbtn" data-tco-show-hidden={nHid} onClick={() => setShowHid(!showHid)}>{showHid ? "Hide removed companies" : "Show hidden (" + nHid + ")"}</button>}

@@ -188,3 +188,8 @@
 /* (the owner's Mac: ~400 px of white under the laptop card's first line. .tsm-now-text grows (flex: 1 1 300px) to share a
    row in .tsm-now, but the laptop card puts it straight in the guide, a column: there its 300 px basis became height) */
 #app .tsm-guide > .tsm-now-text { flex: 0 0 auto; }
+/* each answer's question, said by the page's style (not its text) */
+#app .tsm-dcell::before { content: attr(data-label) " "; color: var(--text-secondary); }
+@media (max-width: 700px) and (prefers-color-scheme: dark) {
+  #app .tpt-grid tr.tpt-tr.tpt-need { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); border-color: color-mix(in srgb, var(--warning, #B45309) 40%, var(--border)); }
+}

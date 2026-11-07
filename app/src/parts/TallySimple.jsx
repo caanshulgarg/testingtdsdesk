@@ -12,7 +12,7 @@
 // Book upload); nothing new is asked of the bridge or of Tally. No computer's name anywhere here.
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
-import { checkAll, bridgesOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
+import { checkAll, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, FILTERS, PICK, ledChangeKnown, openKnown, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
 import { coKey } from "../lib/tallyState.js";
 import { LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
@@ -239,7 +239,7 @@ function Word({ w }) { return <span className={"tsm-word " + (CLS[w] || "dash")}
 function Cell({ k, label, x, children }) {
   return <td className="tsm-td" data-tsm-col={k} data-label={label}><Word w={x.w} />{x.note && <div className="tsm-note" data-tsm-note="">{x.note}</div>}{children}</td>;
 }
-function Act({ row }) {
+function Act({ row, main = false }) {
   const [busy, setBusy] = useState(false), [pick, setPick] = useState(false), a = row.act;
   if (!a) return null;
   if (!canWrite()) return null;
@@ -248,8 +248,8 @@ function Act({ row }) {
   if (a.kind === "connect") btn = <ConnectBtn r={row.r} co={row.co} label="Link" hook={{ "data-tsm-act": "connect" }} />;
   else if (a.kind === "choose" && row.best) btn = <ConnectBtn r={row.r} co={row.best} label="Link" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id }} />;
   else if (a.kind === "choose" || a.kind === "pickco") btn = <button type="button" className="btn primary" data-tsm-act={a.kind} onClick={() => setPick(!pick)} aria-expanded={pick}>{a.label}</button>;
-  else if (a.kind === "upload") btn = <button type="button" className="btn primary" data-tsm-act="upload" onClick={() => a.run ? a.run() : (a.day && typeof Rec === "object" && Rec.uploadFrom ? Rec.uploadFrom(row.cid, a.day) : openFromTally(row.cid))}>{a.label}</button>;
-  else if (a.kind === "bring") btn = <button type="button" className="btn primary" data-tsm-act="bring" disabled={busy}
+  else if (a.kind === "upload") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="upload" data-tpt-main={main ? "upload" : undefined} onClick={() => a.run ? a.run() : (a.day && typeof Rec === "object" && Rec.uploadFrom ? Rec.uploadFrom(row.cid, a.day) : openFromTally(row.cid))}>{a.label}</button>;
+  else if (a.kind === "bring") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="bring" data-tpt-main={main ? "bring" : undefined} disabled={busy}
     onClick={run(() => rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) }).then((r) => { if (r && r.ok === false) toast(String(r.error || "FinCom did not take it")); askStatus(true); },
       () => toast("FinCom’s cloud did not answer; try again in a minute.")))}>{busy ? "Asking Tally…" : a.label}</button>;
   return <>{btn}
@@ -359,6 +359,15 @@ export function pageOf(row, seen) {
   if (reading) return { kind: "reading", dot: "read", say: "Reading from Tally…", why: row.l.w === NOTYET ? row.l.note || "" : row.e.note || "", btn: "update" };
   return { kind: "ok", dot: "ok", say: "Up to date" + (row.last ? " · " + lastWords(row.last).replace(/ IST$/, "") : ""), why: "", btn: "update" };
 }
+// a row's one button: {main, label} (update | upload | bring | again | connect | link)
+export function mainOf(row, pg) {
+  if (pg.btn === "update" && row.act && (row.act.kind === "upload" || row.act.kind === "bring")) return { main: row.act.kind, label: row.act.label };
+  if (pg.btn === "update") return { main: "update", label: "Update now" };
+  if (pg.btn === "again") return { main: "again", label: "Connect again" };
+  if (pg.kind === "open" || (pg.kind === "company" && row.best)) return { main: "connect", label: "Connect" };
+  return { main: "link", label: "Link" };
+}
+if (typeof globalThis === "object") globalThis.FCTallyMain = (row) => mainOf(row, pageOf(row, new Set()));
 const DOT = { ok: "#17803D", read: "#1D5FD1", warn: "#B45309", idle: "#8A9099" };
 function Dot({ k }) { return <span aria-hidden="true" className={"tpt-dot " + k} data-tpt-dot={k} />; }
 // Connect again (the "Open in your Tally now" panel's, moved here): the shared look and Check again, a new read where the
@@ -373,14 +382,18 @@ function Again({ row, x, cs, checkAgain, primary = true }) {
 }
 Again.why = (row, cs) => {
   const step = cs && cs.now && cs.now.n <= 4 ? cs.now : null;
-  const sw = stallWhy(row.cid, row.company), shut = !sw || /^Open .+ in Tally|is not open in Tally|^No computer with FinCom Bridge holds /.test(sw);
-  return { step, text: step ? "Step " + step.n + " of 6 is not done: " + step.title + "." : shut ? "“" + shown(row.company) + "” is not open in your Tally. Open it in TallyPrime in this Windows login: it connects by itself within a minute." : sw };
+  const sw = stallWhy(row.cid, row.company), shut = /^Open .+ in Tally|is not open in Tally|^No computer with FinCom Bridge holds /.test(sw);
+  const open = typeof openAnywhere === "function" && openAnywhere().has(coKey(row.company));
+  const where = placeOf() === "pc" ? "in this Windows login" : "on the Tally computer";
+  const notOpen = "“" + shown(row.company) + "” is not open in Tally. Open it in TallyPrime " + where + ": it connects by itself within a minute.";
+  // (a stuck read of a company that IS open: the read's own reason, never "not open")
+  return { step, text: step ? "Step " + step.n + " of 6 is not done: " + step.title + "." : sw && !shut ? sw : open ? (row.l && row.l.note) || sw || "Nothing came from Tally: press Connect again." : notOpen };
 };
 // the old table's cells, in Details (the same marks: data-tsm-col, data-tsm-word, the buttons of each)
 function DCell({ k, label, x, children }) {
-  return <div className="tsm-dcell" data-tsm-col={k} data-label={label}><span className="tsm-dlabel">{label}</span> <Word w={x.w} />{x.note && <div className="tsm-note" data-tsm-note="">{x.note}</div>}{children}</div>;
+  return <div className="tsm-dcell" data-tsm-col={k} data-label={label}><Word w={x.w} />{x.note && <div className="tsm-note" data-tsm-note="">{x.note}</div>}{children}</div>;
 }
-function Details({ row, download, oneDl }) {
+function Details({ row, download, oneDl, main }) {
   const [list, setList] = useState(false), a = row.act;
   return <div className="tsm-details" data-tsm-details={row.cid || row.company}>
     <DCell k="c" label="Linked to Tally?" x={row.c} />
@@ -394,8 +407,8 @@ function Details({ row, download, oneDl }) {
     <DCell k="e" label="All entries received?" x={row.e}>
       {row.e.pct > 0 && <div className="tsm-bar" role="progressbar" aria-label={"Entries of " + row.client + " received"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={row.e.pct} data-tsm-pct={row.e.pct}><i style={{ width: row.e.pct + "%" }} /></div>}
     </DCell>
-    <div className="tsm-dcell" data-tsm-col="do" data-label="What to do"><span className="tsm-dlabel">What to do</span>
-      {a && (a.kind === "upload" || a.kind === "bring") && <Act row={row} />}
+    <div className="tsm-dcell" data-tsm-col="do" data-label="What to do">
+      {a && (a.kind === "upload" || a.kind === "bring") && main !== a.kind && <Act row={row} />}
       {row.todo && <div className="tsm-todo" data-tsm-todo="">{row.todo}</div>}
       {row.upload && <div><button type="button" className="linkbtn tsm-small" data-tsm-upload={row.cid} onClick={() => openFromTally(row.cid)}>or upload the file yourself</button></div>}</div>
     {list && row.open && row.open.state === "differ" && <Differences row={row} />}
@@ -422,6 +435,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const label = row.client || shown(row.company);
   let btn = null;
   if (!canWrite()) btn = null;
+  // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
+  else if (mainOf(row, pg).main === "upload" || mainOf(row, pg).main === "bring") btn = <Act row={row} main />;
   else if (pg.btn === "update") btn = runningRead ? <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>
     : <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).then(() => tick((k) => k + 1))}>Update now</button>;
   else if (pg.btn === "again") btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} />;
@@ -442,7 +457,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
       {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
         <ConnectBtn r={near} co={row.co} label={"Link " + row.client + " to it"} primary={false} hook={{ "data-tsm-away-relink": row.cid }} /></span>}
-      {open && <Details row={row} download={download} oneDl={oneDl} />}
+      {open && <Details row={row} download={download} oneDl={oneDl} main={mainOf(row, pg).main} />}
     </td>
     <td className="tpt-td tpt-last" data-label="Last entry">{row.last ? lastWords(row.last) : "—"}</td>
     <td className="tpt-td tpt-act" data-label="">{btn}<More row={row} label={label} open={!!open} onDetails={() => set({ details: Object.assign({}, typeof ui.details === "object" ? ui.details : {}, { [key]: !open }) })} /></td>
@@ -520,7 +535,7 @@ function Top({ cs, own, rows, checkAgain, ready }) {
       {said && !ck && <div className="tsm-note" data-tsm-top-checked="" role="status">{"Checked at " + lastWords(new Date().toISOString()).replace(/ IST$/, "") + ": " + (down ? "not connected yet (step " + cs.now.n + " of 6)" : login ? "connected" : title.toLowerCase())}</div>}</div></div>
     <span className="tpt-top-acts">
       {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide: Connect Tally on this computer" : "Connect Tally on this computer"}</button>}
-      {login && !down && cs.now && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide the 6 steps" : "See the 6 steps"}</button>}
+      {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide the 6 steps" : "See the 6 steps"}</button>}
       <button type="button" className="btn tpt-btn" data-tsm-top-check="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></span>
   </section>;
 }
@@ -532,7 +547,8 @@ function ShortCard({ rows, cs }) {
 }
 // for Advanced (for support): the day check of every client, and the computers in one line (were the page's header and foot)
 export function SupportTools({ checkAgain, pcs, download, sha }) {
-  const R = rowsFor({}), rows = R.rows, on = checking();
+  // (the rows as the page last worked them out: rowsFor would replace the page's own options, its focused client)
+  const rows = rowsLast(), on = checking();
   return <div className="tsm-support" data-tsm-support="">
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn small" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check every client for changes in Tally"}</button>
       <span className="note">Each linked client’s entries of this year checked against Tally, one day at a time.</span></div>

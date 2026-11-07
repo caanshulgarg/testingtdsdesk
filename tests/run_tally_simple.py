@@ -280,9 +280,9 @@ def main():
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
         ok(re.match(r"Till today \d\d:\d\d$", txt(cell(ACME, "e") + " [data-tsm-note]") or ""), "3. entries: Till today <time> (%s)" % txt(cell(ACME, "e")))
         ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_MINE, "3. %s: not open in this user's Tally: No, %s (%s)" % (BRIGHT, NOT_MINE, txt(cell(BRIGHT, "o"))))
-        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(cell(BRIGHT, "do") + ' [data-tsm-act="upload"]') == "Upload Day Book"
+        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(row(BRIGHT) + ' [data-tpt-main="again"]') == "Connect again" and txt(cell(BRIGHT, "do") + ' [data-tsm-act]') == "Upload Day Book"
            and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.",
-           "3. held lines (migration 136): All entries received? No, the period, the row's button Upload Day Book (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
+           "3. held lines (migration 136): All entries received? No, the period, the row's button Connect again (not open anywhere), Upload Day Book in its details (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
         ok(n("#app [data-tally-simple] [data-held-block]") == 0, "3. the held lines are the row's, not a block of their own")
         ok(word(CORAL, "e") == "Not yet" and txt(cell(CORAL, "e") + " [data-tsm-note]") == "New client · 62% received · 6 min left" and pg.get_attribute(cell(CORAL, "e") + " [role=progressbar]", "aria-valuenow") == "62",
            "3. being brought: Not yet, New client · 62%% received · 6 min left, the bar (%s)" % txt(cell(CORAL, "e")))
@@ -409,11 +409,17 @@ def main():
 
         print("== 7. For support")
         fs = "#app [data-for-support]"
-        ok(n(fs) == 1 and n(fs + " [data-support-body]") == 0 and txt(fs + " [data-support-toggle]") == "For support" and n("#app [data-status-card], #app [data-tco-list], #app [data-bridges]") == 0,
+        # next-tally-page-redesign: For support is "Advanced (for support)", its parts drawn one a task (wait for the last)
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: false}); render(); }"); pg.wait_for_timeout(500)   # (section 3 left it open)
+        ok(n(fs) == 1 and n(fs + " [data-support-body]") == 0 and txt(fs + " [data-support-toggle]").startswith("Advanced (for support)") and n("#app [data-status-card], #app [data-tco-list], #app [data-bridges]") == 0,
            "7. For support: closed by default, the former page inside it")
         pg.click(fs + " [data-support-toggle]"); pg.wait_for_timeout(1200)
+        try: pg.wait_for_function("() => !document.querySelector('#app [data-staged-wait]')", timeout=10000)
+        except Exception: pass
         ok(n(fs + " [data-support-body] [data-status-card]") == 1 and n(fs + " [data-support-body] [data-tco-list=firm]") == 1, "7. open: this computer's card and the companies open in Tally")
         pg.click(fs + " [data-advanced] > [data-more-toggle]"); pg.wait_for_timeout(1200)
+        try: pg.wait_for_function("() => !document.querySelector('#app [data-staged-wait]')", timeout=10000)
+        except Exception: pass
         E("""() => { const c = {url: 'http://127.0.0.1:9100', key: 'made-up-key', follow: false, port: 0}; Bridge.cfg = () => c; Bridge.on = () => true; Bridge.up = () => true;
           Bridge.st = Object.assign({}, Bridge.st, {state: 'ok', sessions: [], tallyUp: true, version: '2.5.1', at: Date.now(), open: [], mode: 'auto'}); render(); }"""); pg.wait_for_timeout(1200)
         tools = {"this computer's card": "[data-status-card]", "the companies open with their ⋯": "[data-tco-list=firm]", "every client's Tally company": "[data-tlk]",
