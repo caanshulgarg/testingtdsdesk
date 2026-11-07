@@ -76,6 +76,12 @@ func keepWaitBeat() any {
 		return nil
 	}
 	words := keepWaitWords(code, lw)
+	kwMu.Lock()
+	nowRun := kwRun != nil && kwRun.kind == "now"
+	kwMu.Unlock()
+	if code == "userInTally" && nowRun {
+		words += " An Update now reads on after 2 minutes at most, in short parts, giving way while you type."
+	}
 	out := M{"reason": code, "words": words, "since": since.UTC().Format(time.RFC3339)}
 	if pk != "" {
 		what := map[string]string{"now": "Update now", "nightly": "The nightly catch-up", "ledgers": "A ledger list", "light": "A light update"}[pk]

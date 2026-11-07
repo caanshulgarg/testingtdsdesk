@@ -139,7 +139,7 @@ func (k *keepRun) natureList(company string, port int, st, ls M, inBudget func()
 		return true, nil
 	}
 	for !truthy(ls["natDone"]) {
-		if !inBudget() || keepHold() != "" {
+		if !inBudget() || k.holdNow() != "" {
 			return false, nil
 		}
 		after, bound := toI64(ls["natAfter"]), toI64(ls["bound"])

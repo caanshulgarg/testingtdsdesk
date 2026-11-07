@@ -503,10 +503,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the nightly run read the list as before
 	bar := k.kind == "ledgers"
 	if bar {
-		ledCountFor(company, port, ls, save, inBudget, nextPoison(st, 0) > 0)
+		ledCountFor(company, port, ls, save, func() bool { return inBudget() && k.holdNow() == "" }, nextPoison(st, 0) > 0)
 	}
 	for !truthy(ls["done"]) {
-		if !inBudget() || keepHold() != "" {
+		if !inBudget() || k.holdNow() != "" {
 			return false, nil
 		}
 		// 2.5.5 (review H1): a single ledger stopped at 2 s is judged by how long Tally then kept it, once Tally has

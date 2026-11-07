@@ -165,7 +165,7 @@ func keepHoldWhy() (string, string) {
 	if platTallyYoung(float64(keepNum("KeepSettleMin", 3))) {
 		return "tallyYoung", "Tally has just opened; letting it finish loading"
 	}
-	if keepUserInTally() {
+	if keepUserInTallyFn() {
 		return "userInTally", "someone is working in Tally"
 	}
 	return "", ""
@@ -653,6 +653,9 @@ type keepRun struct {
 	told      map[string]bool
 	id        string           // this run (a round of slices resumes within it)
 	alter     map[string]int64 // each company's highest AlterID, as its check said (for the rewind guard)
+	// an Update now a person pressed that waited KeepNowWaitSec (2 minutes) for a 15 s pause in Tally: it reads on, in
+	// short slices (each request under the 2 s stop), giving way between them while the person types (holdNow)
+	pressOn bool
 }
 type keepBack struct {
 	n     int
@@ -896,7 +899,11 @@ func (k *keepRun) step(company string, port int, booksFrom string) error {
 	// the same name). Round 4 (03-Oct-2026): the check is made once per ROUND (k.id), not once per keeper, so the rewind
 	// guard sent at the round's end carries the company's highest AlterID as of this round, never a stale one
 	if ck := "check:" + company + ":" + k.id; !k.told[ck] {
-		g, err := companyCheck(k.tc, company, port)
+		ctc := k.tc
+		if k.pressOn {
+			ctc = ledgerTC(k.tc) // the Update now reading on while someone types: this request too under the 2 s stop
+		}
+		g, err := companyCheck(ctc, company, port)
 		if err != nil {
 			return err
 		}
@@ -1257,7 +1264,7 @@ func keepWorker(r runReq) {
 			why = "time is up; the rest follows at the next update"
 			break
 		}
-		if code, hold := keepHoldWhy(); hold != "" {
+		if code, hold := keepHoldWhy(); hold != "" && !(k.pressOn && code == "userInTally") {
 			if hold != held {
 				writeLog(what + ": waiting, " + hold)
 				heldAt = time.Now()
@@ -1267,6 +1274,14 @@ func keepWorker(r runReq) {
 			if k.light && time.Since(heldAt) > 2*time.Minute {
 				why = hold
 				break
+			}
+			// the agreed rule: an Update now a person pressed waits about 2 minutes at most for a 15 s pause in Tally;
+			// then it reads on in short slices, giving way while the person types. The nightly and light runs keep
+			// waiting as before; a posting is never held (it does not ask keepHold)
+			if r.kind == "now" && code == "userInTally" && time.Since(heldAt) >= time.Duration(keepNum("KeepNowWaitSec", 120))*time.Second {
+				k.pressOn = true
+				writeLog(what + ": someone has been working in Tally for " + time.Since(heldAt).Round(time.Second).String() + " without a 15 s pause; reading goes on in short parts (each request 2 s at most), giving way while they type")
+				continue
 			}
 			sleepOrStop(5 * time.Second)
 			continue
@@ -1557,4 +1572,33 @@ func writeDayFile(dir, d, text string, full bool) {
 		return
 	}
 	_ = os.Remove(m)
+}
+
+// the hold for the next slice of a run: keepHold's words, except for an Update now reading on (pressOn) while someone
+// works in Tally: then it gives way while they type (no slice until KeepNowGapMs without a key or click, KeepNowYieldSec
+// at most) and goes on
+func (k *keepRun) holdNow() string {
+	code, h := keepHoldWhy()
+	if h == "" || !(k.pressOn && code == "userInTally") {
+		return h
+	}
+	end := time.Now().Add(time.Duration(keepNum("KeepNowYieldSec", 20)) * time.Second)
+	for keepTypingFn() && time.Now().Before(end) && !stopping() {
+		sleepOrStop(200 * time.Millisecond)
+	}
+	return ""
+}
+
+// someone works in Tally, and is typing or clicking there right now (hooks for the tests)
+var (
+	keepUserInTallyFn = keepUserInTally
+	keepTypingFn      = keepTypingNow
+)
+
+// the person is typing or clicking in Tally right now (less than KeepNowGapMs, 1 s, since the last key or click)
+func keepTypingNow() bool {
+	if idleSec()*1000 >= float64(keepNum("KeepNowGapMs", 1000)) {
+		return false
+	}
+	return isFake() || platFrontIsTally()
 }
