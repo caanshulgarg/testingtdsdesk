@@ -171,9 +171,9 @@ def main():
             ids = scene([adev()], cw, [ORBIT], {}, books={ORBIT: T.book(ORBIT)})
             return ids
         ids = down_scene()
-        ok(txt("#app [data-tsm-top-title]") != "Connected to your Tally", "W. not reachable at the start: not connected (%s)" % txt("#app [data-tsm-top-title]"))
+        ok(txt("#app [data-tsm-top-title]") != "Connected to Tally", "W. not reachable at the start: not connected (%s)" % txt("#app [data-tsm-top-title]"))
         press("W. the top line's Check again", "#app [data-tsm-top-check]", "#app [data-tsm-top] [data-checked]", WIN, before=comes_up)
-        ok(txt("#app [data-tsm-top-title]") == "Connected to your Tally", "W. and the top line: Connected to your Tally (%s)" % txt("#app [data-tsm-top-title]"))
+        ok(txt("#app [data-tsm-top-title]") == "Connected to Tally", "W. and the top line: Connected to Tally (%s)" % txt("#app [data-tsm-top-title]"))
         down_scene()
         sel = "#app [data-tsm-guide] [data-tsm-go=check], #app [data-tsm-guide] [data-tsm-recheck]"
         # (connected, the steps fold away: the words stay, on the top line)

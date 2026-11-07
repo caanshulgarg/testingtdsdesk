@@ -97,7 +97,7 @@ MASTERS = ("<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>"
 DAYBOOK = [held(i, "GB TEXCOAT") for i in range(1, 63)] + [held(100 + i, "ABC TRADERS") for i in range(3)]
 SETUP = """([devs, companies, lines, role, clients, onlyMine, books]) => {
   const now = Date.now(), ago = m => new Date(now - m * 60000).toISOString();
-  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date().toISOString().slice(0, 10) : v);
+  const fix = (o) => JSON.parse(JSON.stringify(o), (k, v) => typeof v === "string" && v.startsWith("ago:") ? ago(Number(v.slice(4))) : v === "TODAY" ? new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10) : v);   // (the day in India, as the app counts it)
   // the firm's clients: these three only (the others are set aside, so "All good" means what it says)
   if (onlyMine) Object.values(S.companies).forEach(c => { if (!clients.includes(c.name)) delete S.companies[c.id]; });
   const ids = {};

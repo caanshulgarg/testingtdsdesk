@@ -1,4 +1,4 @@
-"""python3 run_tally_daybook_drop.py - "Or drop a Day Book file here" in a client's Entries card on the Tally page
+"""python3 run_tally_daybook_drop.py - "Or drop a Day Book file here" under a client's More ▾ › Upload a Day Book file on the Tally page
 (next-tally-daybook; TallyProgress.jsx DayBookDrop, app/src/lib/dayBookDrop.js). The review of 0b3c34839 blocked the first
 version, which swapped the open client (S.coId / S.books) around Books › From Tally's reading. Here the file is read into
 the books of the client dropped on, taken explicitly end to end, and each case proves that its entries land only in that
@@ -111,17 +111,20 @@ def main():
         ups = lambda: E("() => window.__ups")
         lark0 = books(L)
         ok(lark0 and lark0["n"] == ["LARK-own"] and E("() => S.coId") == L and E("() => S.books && S.books.cid") == L, "setup: Lark Studio open here, its books (S.books) open, one entry of its own")
+        # next-tally-simple2: the box is under the row's More ▾ › Upload a Day Book file (its light row)
         def details(name):
-            if n('#app [data-tpg-drow="%s"]' % ids[name]) == 0: pg.click(R(name) + " [data-tpt-open]"); pg.wait_for_timeout(1200)
-            return '#app [data-tpg-drow="%s"]' % ids[name]
+            LR = '#app [data-tsm-table] tr[data-tpt-light-of="%s"]' % name
+            if n(LR) == 0: pg.click(R(name) + " [data-tpt-open]"); pg.wait_for_timeout(800)
+            if n(LR + " [data-tpg-drop]") == 0: pg.click(LR + " [data-tpt-daybook]"); pg.wait_for_timeout(800)
+            return LR
         def wait_free(ms=8000):
             try: pg.wait_for_function("() => { const b = document.querySelector('#app [data-tpg-drop]'); return b && !b.classList.contains('off') && /Or drop a Day Book/.test(b.innerText); }", timeout=ms)
             except Exception: pass
 
         print("== 1. a drop while another client is open")
         DH = details(HERON)
-        box = DH + ' [data-tpg-d="entries"] [data-tpg-drop]'
-        ok(n(box) == 1 and txt(box) == "Or drop a Day Book file here" and n(DH + " input[type=file][data-tpg-drop-file]") == 1, "1. Heron's Entries card: Or drop a Day Book file here (%s)" % txt(box))
+        box = DH + ' [data-tpt-part="daybook"] [data-tpg-drop]'
+        ok(n(box) == 1 and txt(box) == "Or drop a Day Book file here" and n(DH + " input[type=file][data-tpg-drop-file]") == 1, "1. Heron's More ▾ › Upload a Day Book file: Or drop a Day Book file here (%s)" % txt(box))
         pg.set_input_files(DH + " input[data-tpg-drop-file]", XML("heron-jul.xml", daybook(HERON, "HERON1")))
         wait_free(); pg.wait_for_timeout(1500)
         lines = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-drop-line]')].map((e) => [e.getAttribute('data-tpg-drop-line'), e.innerText])", DH)

@@ -35,14 +35,15 @@ with sync_playwright() as p:
     # 24-Oct-2026 (next-tally-one-page): Add client picks no Tally company; its one button opens the Tally page's list
     ok(pg.locator("#app [data-tco-list=add]").count() == 0 and pg.locator("#app [data-add-tally-go]").count() == 1, "Add client: no Pick from Tally; 'Add it from the Tally page'")
     pg.click("#app [data-add-tally-go]"); pg.wait_for_timeout(1200)
-    # next-tally-page-redesign: each row's old answers ("Tally company: …", "Open in Tally: …") are in its ⋯ › Details
+    # next-tally-page-redesign: each row's old answers ("Tally company: …", "Open in Tally: …") are in its More ▾ › Answers
     pg.evaluate("() => { S.tsm = Object.assign(S.tsm || {}, {details: 'all'}); render(); }")
     try: pg.wait_for_selector('#app [data-tsm-table] tr[data-tsm-row="ZZ TEST"]', timeout=8000)
     except Exception: pass
     pg.wait_for_timeout(500)
     # 02-Nov-2026 (next-tally-simple): the Tally page's one table: a row a client, and a row for each company open in Tally
     # that no client has ("Not chosen yet", Choose the client: the picker, + New client with this name inside it)
-    rows = pg.evaluate("[...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => [r.getAttribute('data-tsm-row'), r.innerText.replace(/\\s+/g, ' '), r.getAttribute('data-tsm-kind')])")
+    # (next-tally-simple2: the answers in the row's More ▾ › Answers, the light row right under it: read with the row)
+    rows = pg.evaluate("[...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => { const nx = r.nextElementSibling, lt = nx && nx.matches('tr[data-tpt-light]') ? ' ' + nx.innerText : ''; return [r.getAttribute('data-tsm-row'), (r.innerText + lt).replace(/\\s+/g, ' '), r.getAttribute('data-tsm-kind')]; })")
     zz = [r for r in rows if r[0] == "ZZ TEST"]
     ok(zz and zz[0][2] == "company" and "Not chosen yet" in zz[0][1] and "Open in Tally: “ZZ TEST”" in zz[0][1] and "Link" in zz[0][1] and "Add as client" not in zz[0][1],
        "the Tally page: ZZ TEST, open in Tally, no client yet, Link to a client (no Add as client) (%s)" % (zz and zz[0][1]))

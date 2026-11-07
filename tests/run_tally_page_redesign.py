@@ -2,11 +2,12 @@
 owner: "please make sure the reconnect button is in that table... currently it's very cluttered... can you redesign"; the
 approved design: tallydesign Main / NotConnected / Phone). Made-up firm, logins, clients and companies only (the stand-in
 cloud of run_tally_simple.py). Login A (made-up-a) on the shared server SRV01; login B's Tally holds Kestrel (never A's).
-   1. the top line: "Connected to your Tally", "TallyPrime on port 9041 · 3 companies open · last entry …", Check again.
-   2. ONE table "Clients and Tally": Client | Tally company | State | Last entry | one button and ⋯. Each row type its one
-      button: linked and open: Update now; linked, its company open nowhere: Connect again (the reason; a close name to link
-      to); a client whose company is open here: Connect; a company open here with a client of its name: Connect; open here,
-      no client: Link; a client with nothing: Link. ⋯: Details (the old answers) and Unlink. Rows that need you shaded.
+   1. the top line: "Connected to Tally", "TallyPrime on port 9041 · 3 companies open · last entry …", Check again.
+   2. ONE table "Clients · N" (next-tally-simple2): Client · Tally company | Masters | Entries | Action, one button and
+      More ▾. Each row type its one button: linked and open: Update now; linked, its company open nowhere: Check again
+      ("Open it in Tally first"; the reason; a close name to link to), Connect again when no bridge is heard; a client whose
+      company is open here: Connect; a company open here with a client of its name: Connect; open here, no client: Link; a
+      client with nothing: Link. More ▾: Answers (the old answers) and Unlink. Rows that need you shaded.
    3. Update now is never silent: "Asking Tally…" at once, "Reading ledgers: 1,200 of 3,400", the result; nothing in 30 s:
       why in plain words. Books › From Tally's Update now the same.
    4. Advanced (for support): closed; open, everything that was on the page (the day check of every client, the computers,
@@ -98,31 +99,32 @@ def main():
         print("== 1. the top line")
         ids = scene([dA, bdev()], c1, CLx, A_PINGS)
         top = txt("#app [data-tsm-top]")
-        ok(attr("#app [data-tsm-top]", "data-tsm-top") == "up" and txt("#app [data-tsm-top-title]") == "Connected to your Tally", "1. 'Connected to your Tally' (%s)" % top[:160])
+        ok(attr("#app [data-tsm-top]", "data-tsm-top") == "up" and txt("#app [data-tsm-top-title]") == "Connected to Tally", "1. 'Connected to Tally' (%s)" % top[:160])
         sub = txt("#app [data-tsm-top-sub]")
         ok(sub.startswith("TallyPrime on port 9041 · 3 companies open"), "1. 'TallyPrime on port 9041 · 3 companies open …' (%s)" % sub)
         ok(n("#app [data-tsm-top] [data-tsm-top-check]") == 1 and "Kestrel" not in top and "made-up" not in top, "1. Check again; nothing of B's, no login name")
         ok(n("#app [data-tsm-guide]") == 0 or attr("#app [data-tsm-guide]", "data-tsm-guide") not in ("1", "2", "3", "4"), "1. connected: the six steps are not on the page")
 
         print("== 2. one table, one button a row")
-        ok(n(TB) == 1 and txt(TB + " .tpt-title") == "Clients and Tally", "2. one table, 'Clients and Tally'")
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => t.innerText.trim())")
-        # next-tally-progress: Masters and Entries columns (the company under the client)
-        ok(heads == ["Client · Tally company", "Connection", "Masters (ledgers & groups)", "Entries", "Action"], "2. the columns (%s)" % heads)
+        ok(n(TB) == 1 and txt(TB + " .tpt-title").startswith("Clients · ") and n("#app [data-tsm-filter]") == 0, "2. one table, 'Clients · N', no filter chips (%s)" % txt(TB + " .tpt-title"))
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(t => t.textContent.trim())")
+        # next-tally-simple2: Client · Tally company | Masters | Entries | Action (the state under the client)
+        ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
         for name, want in ((ORBIT, ("update", "reading")), (ACME, ("again",)), (NOVA_C, ("connect",)), (ZETA, ("link",)), (LARK, ("link",))):
             m = mains(name)
             ok(len(m) == 1 and m[0] in want, "2. %s: exactly one button, %s (%s)" % (name, "/".join(want), m))
-            ok(n(R(name) + " .tpt-more summary") == 1, "2. %s: and its ⋯" % name)
-        ok(n(R(ACME) + ".tpt-need") == 1 and "Not connected" in txt(R(ACME) + " [data-tpt-state]"), "2. Acme Traders: shaded, Not connected (%s)" % txt(R(ACME) + " .tpt-state")[:120])
-        ok(txt(R(ACME) + " [data-tsm-away-again]") == "Connect again", "2. Connect again for the linked client not connected (the reconnect button, in the table)")
+            ok(txt(R(name) + " [data-tpt-open]") == "More ▾", "2. %s: and its More ▾" % name)
+        ok(n(R(ACME) + ".tpt-need") == 1 and txt(R(ACME) + " [data-tpt-state]").startswith("Not open in Tally"), "2. Acme Traders: shaded, Not open in Tally (the firm's bridge online) (%s)" % txt(R(ACME) + " .tpt-state")[:120])
+        ok(txt(R(ACME) + " [data-tsm-away-again]") == "Check again" and txt(R(ACME) + " [data-tpt-note]") == "Open it in Tally first", "2. Check again for the linked client not open (the reconnect button, in the table), Open it in Tally first")
         ok(attr(R(ORBIT) + " [data-tpt-dot]", "data-tpt-dot") in ("ok", "read", "warn") and "Kestrel" not in txt(TB), "2. Orbit Space: its state with a dot; never B's company")
-        # ⋯ › Details: the old answers (linked, open now, ledgers, entries, what to do)
-        pg.click(R(ORBIT) + " .tpt-more summary"); pg.wait_for_timeout(300)
-        ok(n(R(ORBIT) + " [data-tpt-unlink]") == 1 and n(R(ORBIT) + " [data-tpt-details]") == 1, "2. ⋯: Details and Unlink")
-        pg.click(R(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(500)
-        ok(all(n(R(ORBIT) + ' [data-tsm-details] [data-tsm-col="%s"]' % k) == 1 for k in ("c", "o", "l", "e", "do")), "2. Details: Linked, Open now, Ledgers, Entries, What to do")
-        E("() => { S.tsm.details = {}; render(); }"); pg.wait_for_timeout(300)
-        # Connect again: looks again and says what is missing
+        # More ▾ › Answers: the old answers (linked, open now, ledgers, entries, what to do)
+        LR = TB + ' tr[data-tpt-light-of="%s"]' % ORBIT
+        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
+        ok(n(LR + " [data-tpt-unlink]") == 1 and n(LR + " [data-tpt-details]") == 1, "2. More ▾: Answers and Unlink")
+        pg.click(LR + " [data-tpt-details]"); pg.wait_for_timeout(500)
+        ok(all(n(LR + ' [data-tsm-details] [data-tsm-col="%s"]' % k) == 1 for k in ("c", "o", "l", "e", "do")), "2. Answers: Linked, Open now, Ledgers, Entries, What to do")
+        E("() => { S.tsm.details = {}; S.tsm.more = ''; render(); }"); pg.wait_for_timeout(300)
+        # Check again (Connect again): looks again and says what is missing
         pg.click(R(ACME) + " [data-tsm-away-again]"); pg.wait_for_timeout(2500)
         w = txt(R(ACME) + " .tpt-why")
         ok("is not open in Tally" in w or w.startswith("Step "), "2. Connect again: the plain reason (%s)" % w[:140])
@@ -219,7 +221,7 @@ def main():
           mo.observe(document.getElementById('app'), {subtree: true, childList: true, characterData: true}); window.__mo8 = mo; }"""
         E(WATCH)
         pg.click("#app [data-tsm-top-check]")
-        try: pg.wait_for_function("() => { const t = document.querySelector('#app [data-tsm-top-title]'); return t && t.innerText.trim() === 'Connected to your Tally'; }", timeout=8000); con = True
+        try: pg.wait_for_function("() => { const t = document.querySelector('#app [data-tsm-top-title]'); return t && t.innerText.trim() === 'Connected to Tally'; }", timeout=8000); con = True
         except Exception: con = False
         ok(con and E("() => window.__navMark") is not None, "8. the bridge reachable now, Check again: Connected, without a reload (%s)" % txt("#app [data-tsm-top]")[:160])
         ok("Checking…" in E("() => window.__seen"), "8. Checking… while it looks")
@@ -239,7 +241,7 @@ def main():
         E("() => { window.__up = true; }"); E(TS.PINGS, A_PINGS); pg.wait_for_timeout(2500)
         r0 = E("() => window.__refreshes")
         pg.click("#app [data-tsm-top-check]")
-        try: pg.wait_for_function("() => { const t = document.querySelector('#app [data-tsm-top-title]'); return t && t.innerText.trim() === 'Connected to your Tally'; }", timeout=8000); con = True
+        try: pg.wait_for_function("() => { const t = document.querySelector('#app [data-tsm-top-title]'); return t && t.innerText.trim() === 'Connected to Tally'; }", timeout=8000); con = True
         except Exception: con = False
         ok(con and E("() => window.__refreshes") > r0, "8b. Check again asks the bridge's status again: Connected, no reload (%s; status asked %s)" % (txt("#app [data-tsm-top-title]"), E("() => window.__refreshes") - r0))
         E("() => { if (window.__bridge0) Object.assign(Bridge, window.__bridge0); }")
@@ -255,7 +257,7 @@ def main():
               {"company": "LARKSPUR CO", "client_id": "NAME:" + LARK, "device_id": o1["id"], "gstin": "", "last_seen": "ago:3000"}]
         scene([o1, o2], c9, [ORBIT, NOVA_C, LARK], {}, books={ORBIT: T.book(ORBIT), NOVA_C: T.book(NOVA_C)})
         ok(txt("#app [data-tsm-top-title]") == "Connected through the office Tally (Tally open in 2 of 2 bridges)", "9. the top line: through the office Tally, Tally open in 2 of 2 bridges (%s)" % txt("#app [data-tsm-top]")[:160])
-        ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "Connect Tally on this computer", "9. the six steps folded: 'Connect Tally on this computer'")
+        ok(n("#app [data-tsm-guide]") == 0 and txt("#app [data-tsm-steps-link='laptop']") == "How to connect", "9. the six steps folded: 'How to connect'")
         sts = {nm: attr(R(nm) + " [data-tpt-state]", "data-tpt-state") for nm in (ORBIT, NOVA_C)}
         ok(all(v in ("ok", "reading") for v in sts.values()) and n(R(ORBIT) + ".tpt-need") + n(R(NOVA_C) + ".tpt-need") == 0, "9. both clients open in the office's Tally fine or reading, not 'needs you' (%s)" % sts)
         ok(all(mains(nm) in (["update"], ["reading"]) for nm in (ORBIT, NOVA_C)), "9. each its Update now (%s)" % [mains(nm) for nm in (ORBIT, NOVA_C)])

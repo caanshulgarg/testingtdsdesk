@@ -102,8 +102,8 @@ def main():
         E(T.SETUP, [[da], cos, [], "owner", clients, True, {}]); pg.wait_for_timeout(1500)
         def look(list_):
             E("""(list) => { const L = FCTallySimple.LOCALB; Object.assign(L, {list, busy: false, n: L.n + 1, sig: 'x' + Date.now()}); render(); }""", list_); pg.wait_for_timeout(900)
-        # next-tally-page-redesign: the steps are folded while connected (a laptop: "Connect Tally on this computer"), a row's
-        # "Open in Tally right now?" is in its Details: first what shows folded, then the steps and every row's details opened
+        # next-tally-page-redesign: the steps are folded while connected (behind "How to connect"), a row's "Open in Tally right
+        # now?" is in its More ▾ › Answers (next-tally-simple2): first what shows folded, then the steps and every row's answers opened
         def folded():
             return E("""(co) => { const q = (s) => document.querySelector(s); S.tsm = {filter: 'all', q: '', open: false, again: 0, check: 0}; S.tallyGuide = {}; render();
               return new Promise((r) => setTimeout(() => r({guide: document.querySelectorAll('#app [data-tsm-guide]').length, link: (q('#app [data-tsm-steps-link]') || {}).getAttribute ? q('#app [data-tsm-steps-link]').getAttribute('data-tsm-steps-link') : null,
@@ -111,7 +111,7 @@ def main():
         def words():
             E("() => { S.tsm = {filter: 'all', q: '', open: true, again: 0, check: 0, details: 'all'}; render(); }"); pg.wait_for_timeout(900)
             return E("""() => { const t = (s) => [...document.querySelectorAll(s)].map(e => e.innerText.replace(/\\s+/g, ' ').trim());
-              const row = (n) => { const r = document.querySelector('#app [data-tsm-row="' + n + '"] [data-tsm-col=o]'); return r ? r.innerText.replace(/\\s+/g, ' ').trim() : ''; };
+              const row = (n) => { const r = document.querySelector('#app tr[data-tpt-light-of="' + n + '"] [data-tsm-col=o]'); return r ? r.innerText.replace(/\\s+/g, ' ').trim() : ''; };
               const tsm = document.querySelector('#app [data-tally-simple]') || {dataset: {}};
               return {own: tsm.dataset.tsmOwn || '', how: tsm.dataset.tsmOwnHow || '', strip: t('#app [data-tsm-strip]').join(' | '), say: [(t('#app [data-tsm-now]').join(' | ') || t('#app [data-tsm-laptop-here]').join(' | ').replace(/^If TallyPrime runs on this computer, F/, 'F')).replace(/^Step \\d: /, ''), t('#app [data-tsm-bridge-say]').join(' | ')].filter(Boolean).join(' | '),
                 gb: row('GB TEXCOAT'), eps: row('EPSILON X DESIGNS'), dl: document.querySelectorAll('#app [data-tsm-o-say] a[download], #app [data-tsm-guide] .tsm-now-act a[download]').length,
@@ -122,7 +122,7 @@ def main():
         own251 = {"ok": True, "bridge": "FinCom Tally Bridge", "version": "2.5.1", "impl": "go", "yours": True, "bridgeId": "go-9", "port": 9104}
         E("() => { try { localStorage.removeItem(LocalOwner.P + 'ownbridge'); } catch (e) {} }")
         look([mine, other253, other251]); f = folded(); w = words(); print("      a.", f, w)
-        ok(f["guide"] == 0 and f["link"] == "" and f["coMain"] == "Link", "a. connected: the steps folded behind See the 6 steps; the company no client has, its row's Link (%s)" % f)
+        ok(f["guide"] == 0 and f["link"] == "" and f["coMain"] == "Link", "a. connected: the steps folded behind How to connect; the company no client has, its row's Link (%s)" % f)
         ok(w["own"] == "ok" and w["how"] == "found", "a. this login's 2.5.3 bridge found (sameSession true)")
         # next-tally-connect-steps: the first company to link is Connect Tally's step 5 (the strip is for the ones after it)
         # (nothing linked yet: the company is Connect Tally's step 5, the strip only for the ones after it)
@@ -139,7 +139,7 @@ def main():
         NOTRUN = "FinCom Bridge is not running in this Windows login: start it, or install it."
         ok(w["own"] == "none" and w["gb"].startswith("— " + NOTRUN) and w["say"].startswith(NOTRUN), "c. only other logins' bridges: not running in this Windows login")
         look([]); f = folded(); w = words(); print("      d.", f, w)
-        ok(f["guide"] == 0 and f["link"] == "laptop", "d. nothing answers, the office's bridge online: the steps folded as Connect Tally on this computer (%s)" % f)
+        ok(f["guide"] == 0 and f["link"] == "laptop", "d. nothing answers, the office's bridge online: the steps folded behind How to connect (%s)" % f)
         ok(w["gb"].startswith("— " + NOTRUN) and "choose Allow" in w["say"], "d. nothing answers: not running, and Allow when the browser asks")
         ok("not set up" not in json.dumps(w) and w["gb"] != "—", "b-d. never a blank or “not set up” while a reason is known")
         E("() => localStorage.setItem(LocalOwner.P + 'ownbridge', JSON.stringify({id: 'go-1', port: 9103, user: 'PC1\\\\usera'}))")

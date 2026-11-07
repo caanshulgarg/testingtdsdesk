@@ -1,21 +1,19 @@
-// next-tally-progress (07-Nov-2026; the owner: "the Tally page needs more redesign… I don't want to do anything elsewhere";
-// the approved design: tallyprog Main / Client). Everything Tally from the Tally page alone:
-//   ComingNow     "Coming in from Tally now · <client>": Step 1 · Masters (ledgers N of M, groups, the bar, its state:
-//                 Reading / Waiting: <the bridge's words> / Done · updated HH:MM / Not done: <why>) and Step 2 · Entries
-//                 (Bring books' progress, with Pause and Stop); "Masters always go first"; a posting this computer's bridge
-//                 holds (StuckJobs). Shown while something reads, waits or is paused.
-//   MastersCell / EntriesCell   the table's two columns, each its small bar or its state in words.
-//   ClientDetails one client inside the Tally page: Masters (ledgers and groups in FinCom, the whole list last read,
-//                 changes checked, Bring ledgers & groups), Entries (the year's 12 months: in FinCom / coming / to bring,
-//                 Bring books with Pause, Stop and another year, "Or drop a Day Book file here") and the Update history (tally_ledger_rounds, Bring books,
-//                 the Update now pressed here and why it waits).
+// next-tally-progress (07-Nov-2026), made simpler in next-tally-simple2 (the owner's approved "Tally simple page v4":
+// one connection card, one table, one main button a row, More ▾ for the rest). The parts of each client's row:
+//   MastersCell / EntriesCell   the table's two columns: Masters (ledgers & groups) always shown: ✓ Up to date with the
+//                 counts and when, Reading now with its bar, Not brought yet; Entries: Up to <day> · N days to bring, Next
+//                 after masters / Bringing with its bar, ✓ Up to date with the last entry, Not brought yet.
+//   BringMasters, BringBooks, PullButtons   the row's actions (the masters' read, this year's missing days, Pause /
+//                 Resume / Stop of Bring books), the same RPCs as before.
+//   History       the Update history (tally_ledger_rounds, Bring books, the Update now pressed here, the bridge's wait),
+//                 read from FinCom's cloud only while it is open under More.
+//   DayBookDrop   "Or drop a Day Book file here" (next-tally-daybook), unchanged.
 // The numbers are the cloud's and the bridge's own (FinCom's counts of ledgers and groups, the read's progress, the
-// rounds, the books' summary): none is made up; a read with no total known says "Reading…" and the count so far. Nothing
-// new is asked of Tally; the rounds are read from FinCom's cloud only while one client's details are open.
+// rounds, the books' summary): none is made up; a count not known says "—"; a read with no total known says the count so
+// far. Nothing new is asked of Tally.
 import { useEffect, useState } from "react";
-import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, lightAt, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, fyStart, daybookHeld } from "./TallyCompanies.jsx";
-import OlderEntries, { bookSum, bookFetch, pctOf, partWords, etaWords, nf, rpc, summary, fyLabel, fyNow } from "./TallyFetch.jsx";
-import { PostingWait } from "./StuckJobs.jsx";
+import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld } from "./TallyCompanies.jsx";
+import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow } from "./TallyFetch.jsx";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ist = (ms) => new Date(ms + 5.5 * 3600e3);
@@ -26,7 +24,9 @@ export function whenWords(at) {
   const d = ist(t).toISOString().slice(0, 10), now = ist(Date.now()), today = now.toISOString().slice(0, 10), y = new Date(now.getTime() - 86400e3).toISOString().slice(0, 10);
   return (d === today ? "Today " : d === y ? "Yesterday " : Number(d.slice(8, 10)) + "-" + MON[Number(d.slice(5, 7)) - 1] + " ") + hhmm(at);
 }
-const day8w = (d8) => /^\d{8}$/.test(d8) ? Number(d8.slice(6, 8)) + "-" + MON[Number(d8.slice(4, 6)) - 1] : "";
+const day8w = (d8) => /^\d{8}$/.test(d8) ? Number(d8.slice(6, 8)) + "-" + MON[Number(d8.slice(4, 6)) - 1] + "-" + d8.slice(0, 4) : "";
+// "today 12:09" / "yesterday 02:10" / "5-Nov 14:02", inside a line ("Updated today 12:09")
+const whenIn = (at) => whenWords(at).replace(/^Today/, "today").replace(/^Yesterday/, "yesterday");
 const today8 = () => ist(Date.now()).toISOString().slice(0, 10).replace(/-/g, "");
 const daysBetween = (a8, b8) => Math.max(0, Math.round((Date.parse(b8.slice(0, 4) + "-" + b8.slice(4, 6) + "-" + b8.slice(6, 8)) - Date.parse(a8.slice(0, 4) + "-" + a8.slice(4, 6) + "-" + a8.slice(6, 8))) / 86400e3));
 const sync = (cid) => ((typeof S === "object" && S.tcoSync) || {})[cid] || null;
@@ -51,7 +51,7 @@ export function mastersOf(cid, company) {
   // (the cloud's count not read yet, or not read: "—", never a made-up 0)
   if (held) return Object.assign(base, { st: "done", words: "✓ " + (nKnown ? nf(n) + (n === 1 ? " ledger" : " ledgers") : "— ledgers") + " · " + (g != null ? nf(g) + (g === 1 ? " group" : " groups") : "— groups"),
     sub: (at ? "updated " + hhmm(at) + " · " : "") + "changes every 10 min", done: rw && rw.phase === "done" ? rw.text : "" });
-  return Object.assign(base, { st: "none", words: "Not brought in yet" });
+  return Object.assign(base, { st: "none", words: "Not brought yet" });
 }
 // ---------- Step 2 · Entries: {st: going | after | paused | stopped | done | uptodate | behind | none, words, sub, pct, p}
 export function entriesOf(cid, ms, last) {
@@ -76,98 +76,88 @@ function Bar({ pct, kind, label }) {
     <i className={kind} style={{ width: Math.max(2, pct || 0) + "%" }} /></div>;
 }
 // ---------- the table's two columns
+// "N ledgers · M groups" ("—" for a count not known yet, never a made-up 0)
+const countWords = (n, g) => (n == null ? "—" : nf(n)) + (n === 1 ? " ledger" : " ledgers") + " · " + (g == null ? "—" : nf(g)) + (g === 1 ? " group" : " groups");
 export function MastersCell({ row }) {
   const [, tick] = useState(0);
   // the counts of ledgers and groups in FinCom's cloud (each kept a minute; the ledgers' the table's own count)
   useEffect(() => { let on = true; if (ledgersHeld(row.cid)) Promise.all([cloudLedgerCount(row.cid).catch(() => null), groupCount(row.cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); });
     return () => { on = false; }; }, [row.cid, (ledBook(row.cid) || {}).ledgersAt]);
   const m = mastersOf(row.cid, row.company), live = m.st === "reading" || m.st === "waiting";
+  // (each 2 s while the masters are read: the read's own counts)
+  useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [live]);
+  let head, sub = "", sub2 = "", cls = "";
+  if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.at ? "Updated " + whenIn(m.at) : ""; }
+  else if (m.st === "reading") { head = "Reading now"; cls = " read"; sub = (m.of > 0 ? nf(m.read) + " of " + nf(m.of) + " ledgers" : m.read > 0 ? nf(m.read) + " ledgers so far" : m.words) + " · " + (m.g == null ? "—" : nf(m.g)) + (m.g === 1 ? " group" : " groups"); }
+  else if (m.st === "waiting") { head = "Waiting"; cls = " warn"; sub = m.words; }
+  else if (m.st === "why") { head = "Not done"; cls = " bad"; sub = m.words.replace(/^Not done:\s*/, ""); }
+  // (0 only when FinCom's book for it is known and says no ledger ever came; else "—")
+  else { const bk = ledBook(row.cid); head = "Not brought yet"; cls = " bad"; sub = (m.n != null ? nf(m.n) : bk && !bk.ledgersAt ? "0" : "—") + " ledgers in FinCom"; sub2 = "TDS and GST need these"; }
   return <div className="tpg-cell" data-tpg-masters={m.st}>
-    {live && m.pct > 0 && <Bar pct={m.pct} kind="read" label={"Ledgers of " + row.client} />}
-    <span className={"tpg-words" + (m.st === "none" || m.st === "why" || m.st === "waiting" ? " warn" : "")} data-tpg-mw="">{m.words}</span>
-    {m.st === "done" && m.sub && <span className="tpg-sub">{m.sub}</span>}
-    {m.st === "none" && <span className="tpg-sub">{row.o && row.o.w === "Yes" ? "Bring ledgers & groups to start" : "needs the company open in Tally"}</span>}
+    <span className={"tpg-words" + cls} data-tpg-mw="">{head}</span>
+    {live && <Bar pct={m.pct} kind="read" label={"Ledgers of " + row.client} />}
+    {sub && <span className="tpg-sub" data-tpg-ms="">{sub}</span>}
+    {sub2 && <span className="tpg-sub2">{sub2}</span>}
   </div>;
 }
 export function EntriesCell({ row }) {
-  const ms = mastersOf(row.cid, row.company), e = entriesOf(row.cid, ms, row.last);
+  const ms = mastersOf(row.cid, row.company), e = entriesOf(row.cid, ms, row.last), p = e.p;
+  const xy = p && Number(p.y) ? nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : p && p.counting ? "counting the year in Tally" : "";
+  let head, sub = "", cls = "";
+  if (e.st === "behind") { head = e.words; cls = " warn"; sub = e.sub; }
+  else if (e.st === "after" || e.st === "going") { head = e.st === "after" ? "Next, after masters" : "Bringing now"; cls = e.st === "going" ? " read" : " muted";
+    sub = [xy, p.state === "going" && Number(p.etaMin) > 0 ? etaWords(p.etaMin) : ""].filter(Boolean).join(" · "); }
+  else if (e.st === "paused" || e.st === "stopped") { head = e.st === "paused" ? "Paused" : "Stopped"; cls = " warn"; sub = [partWords(p), xy].filter(Boolean).join(" · "); }
+  else if (e.st === "uptodate") { head = "✓ Up to date"; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
+  else if (e.st === "done") { head = e.words; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
+  else { head = "Not brought yet"; cls = " muted"; sub = ms.st !== "done" ? "Comes after masters" : ""; }
   return <div className="tpg-cell" data-tpg-entries={e.st}>
-    {(e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
-    <span className={"tpg-words" + (e.st === "behind" || e.st === "stopped" ? " warn" : "")} data-tpg-ew="">{e.words}</span>
-    {e.sub && <span className="tpg-sub">{e.sub}</span>}
+    <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
+    {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
+    {sub && <span className="tpg-sub" data-tpg-es="">{sub}</span>}
   </div>;
 }
-// Bring ledgers & groups (masters missing): the masters' read, as Update now (FinCom's Update now: never a second read)
+// "Apr 2025 – today" / "Apr 2026 – 12-Oct-2026" / "" (the client's books in FinCom: their first and last day)
+export function rangeWords(cid) {
+  const bk = cloudBook(cid) || {}, from = d8Of(bk.from), to = d8Of(bk.to);
+  if (!/^\d{8}$/.test(from) || !/^\d{8}$/.test(to)) return "";
+  return MON[Number(from.slice(4, 6)) - 1] + " " + from.slice(0, 4) + " – " + (daysBetween(to, today8()) <= 1 ? "today" : day8w(to));
+}
+// Bring masters (= Bring ledgers & groups, masters missing): the masters' read, as Update now (FinCom's Update now: never
+// a second read)
 export function BringMasters({ row, primary = true }) {
   const [busy, setBusy] = useState(false), x = sync(row.cid), running = busy || runBusy(row.cid) || !!(x && !x.end && !x.err && !x.late);
   if (!mayChange()) return null;
   return <button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="masters" data-tpg-bring={row.cid} disabled={running}
-    onClick={() => { setBusy(true); runPress(row.cid, row.company).finally(() => setBusy(false)); }}>{running ? "Reading…" : "Bring ledgers & groups"}</button>;
+    onClick={() => { setBusy(true); runPress(row.cid, row.company).finally(() => setBusy(false)); }}>{running ? "Reading…" : "Bring masters"}</button>;
 }
-// Pause / Resume / Stop of Bring books, the same RPCs as Books › From Tally's (tally_period_pause / cancel)
-function PullButtons({ e, small }) {
+// Pause / Resume / Stop of Bring books, the same RPCs as Books › From Tally's (tally_period_pause / cancel). only: the
+// buttons to draw ("pause", "resume", "stop"); main: the row's one main button (its look and data-tpt-main)
+export function PullButtons({ e, only = ["pause", "resume", "stop"], main = false, link = false }) {
   const [busy, setBusy] = useState(""), [err, setErr] = useState(""), p = e.p, book = e.b && e.b.book;
   if (!p || !book || !mayChange() || p.done) return null;
   const act = (fn, args, what) => { setBusy(what); setErr("");
     rpc(fn, args).then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy("")); };
-  const cls = "btn" + (small ? " small" : "");
-  return <span className="tpg-acts">
-    {p.state === "going" && <button type="button" className={cls} data-tpg-pause="" disabled={!!busy} onClick={() => act("tally_period_pause", { p_book: book, p_pause: true }, "pause")}>{busy === "pause" ? "Pausing…" : "Pause"}</button>}
-    {p.state === "paused" && <button type="button" className={cls + " primary"} data-tpg-resume="" disabled={!!busy} onClick={() => act("tally_period_pause", { p_book: book, p_pause: false }, "resume")}>{busy === "resume" ? "Resuming…" : "Resume"}</button>}
-    {(p.state === "going" || p.state === "paused") && <button type="button" className={cls} data-tpg-stop="" disabled={!!busy} onClick={() => act("tally_period_cancel", { p_book: book }, "stop")}>{busy === "stop" ? "Stopping…" : "Stop"}</button>}
+  const cls = link ? "linkbtn" : "btn tpt-btn", has = (k) => only.includes(k);
+  return <>
+    {has("pause") && p.state === "going" && <button type="button" className={cls} data-tpg-pause="" data-tpt-main={main ? "pause" : undefined} disabled={!!busy} onClick={() => act("tally_period_pause", { p_book: book, p_pause: true }, "pause")}>{busy === "pause" ? "Pausing…" : "Pause"}</button>}
+    {has("resume") && p.state === "paused" && <button type="button" className={cls + (main ? " primary" : "")} data-tpg-resume="" data-tpt-main={main ? "resume" : undefined} disabled={!!busy} onClick={() => act("tally_period_pause", { p_book: book, p_pause: false }, "resume")}>{busy === "resume" ? "Resuming…" : "Resume"}</button>}
+    {has("stop") && (p.state === "going" || p.state === "paused") && <button type="button" className={cls} data-tpg-stop="" disabled={!!busy} onClick={() => act("tally_period_cancel", { p_book: book }, "stop")}>{busy === "stop" ? "Stopping…" : "Stop"}</button>}
     {err && <span className="tsm-note bad" data-tpg-err="">{err}</span>}
-  </span>;
+  </>;
 }
-const BADGE = { reading: "Reading", waiting: "Waiting", done: "Done", why: "Not done", none: "Not brought in yet", going: "Bringing", after: "After masters", paused: "Paused", stopped: "Stopped", uptodate: "Up to date", behind: "To bring" };
-// ---------- Coming in from Tally now: one line each client being read (rows: the table's rows)
-export function busyRows(rows) {
-  const linked = rows.filter((r) => r.kind === "client" && r.cid && r.company && r.c && r.c.w === "Yes");
-  const st = linked.map((r) => { const m = mastersOf(r.cid, r.company), e = entriesOf(r.cid, m, r.last); return { r, m, e }; });
-  const rank = (s) => s.m.st === "reading" ? 0 : s.m.st === "waiting" ? 1 : ["going", "after", "paused", "stopped"].includes(s.e.st) ? 2 : 9;
-  return st.filter((s) => rank(s) < 9).sort((a, b) => rank(a) - rank(b));
+// Bring books: this year's days FinCom lacks (as Books › From Tally's Start), the row's main button or a link under More
+export function BringBooks({ row, e, main = true }) {
+  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), book = e.b && e.b.book;
+  if (!mayChange()) return null;
+  const start = () => { const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }; setBusy(true); setErr("");
+    rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; })
+      .then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
+  return <>
+    <button type="button" className={main ? "btn tpt-btn primary" : "linkbtn"} data-tpt-main={main ? "books" : undefined} data-tpg-bring-books={row.cid} disabled={busy || !book} onClick={start}>{busy ? "Starting…" : "Bring books"}</button>
+    {err && <div className="tsm-note bad" data-tpg-err="">{err}</div>}
+  </>;
 }
-export const busyRow = (rows) => busyRows(rows)[0] || null;
-function NowLine({ s }) {
-  const { r, m, e } = s, ml = m.st === "reading" || m.st === "waiting", ep = e.p && !e.p.done;
-  const mWords = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) + " ledgers" : m.st === "done" ? m.words.replace(/^✓ /, "") : m.words;
-  const eWords = ep && Number(e.p.y) ? nf(Math.min(Number(e.p.x || 0), Number(e.p.y))) + " of " + nf(e.p.y) + (e.p.state === "going" && Number(e.p.etaMin) > 0 ? " · ~" + etaWords(e.p.etaMin).replace(/^about /, "") : "") : e.words;
-  return <div className="tpg-nl" data-tpg-nl={r.cid}>
-    <b className="tpg-nl-name">{r.client}</b>
-    <div className="tpg-nl-part" data-tpg-nl-masters={m.st}><span className="tpg-sub">{"Masters · " + (BADGE[m.st] || "").toLowerCase()}</span>
-      {ml && <Bar pct={m.pct} kind="read" label={"Masters of " + r.client} />}<span className={"tpg-words" + (m.st === "waiting" || m.st === "why" ? " warn" : "")}>{mWords}</span></div>
-    <div className="tpg-nl-part" data-tpg-nl-entries={e.st}><span className="tpg-sub">{"Entries · " + (BADGE[e.st] || "").toLowerCase()}</span>
-      {ep && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + r.client} />}<span className="tpg-words">{eWords}</span></div>
-    <PullButtons e={e} small />
-  </div>;
-}
-export function ComingNow({ rows, beat }) {
-  const [, tick] = useState(0), list = busyRows(rows);
-  // (each 2 s while something moves: the read's own counts; the books' summary reads itself every 30 s)
-  useEffect(() => { if (!list.length) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [list.length > 0]);
-  if (!list.length) return <PostingWait beat={beat} hook="panel" />;
-  return <section className="tsm-card tpg-now" aria-label="Coming in from Tally now" data-tpg-now={list[0].r.cid}>
-    <div className="tpg-now-head"><h3>Coming in from Tally now</h3><span className="tsm-note">Masters always go first; entries follow</span></div>
-    {list.map((s) => <NowLine key={s.r.cid} s={s} />)}
-    <PostingWait beat={beat} hook="panel" />
-  </section>;
-}
-
-// ---------- one client's details, inside the Tally page
-function months(fy, bk, p) {
-  const out = [], from = d8Of(bk && bk.from), to = d8Of(bk && bk.to), t8 = today8();
-  const pf = p && !p.done ? String(p.fy || "").replace(/-/g, "").slice(0, 8) : "", part = p ? p.part : "";
-  for (let i = 0; i < 12; i++) {
-    const m = ((3 + i) % 12) + 1, y = fy + (i >= 9 ? 1 : 0), first = y + String(m).padStart(2, "0") + "01", last = y + String(m).padStart(2, "0") + "31";
-    let k = "later";
-    if (first > t8) k = "later";
-    else if (/^\d{8}$/.test(to) && /^\d{8}$/.test(from) && first <= to && last >= from) k = last <= to ? "in" : "part";
-    else k = "bring";
-    if (k !== "in" && k !== "later" && pf && pf.slice(0, 4) === String(fy) && (part === "h1" ? i < 6 : part === "h2" ? i >= 6 : true)) k = "coming";
-    out.push({ m: MON[m - 1], k });
-  }
-  return out;
-}
-const MK = { in: "In FinCom", part: "Partly in FinCom", coming: "Coming in now", bring: "To bring", later: "Not yet in the year" };
 // the update history: the rounds of the ledgers' reads (tally_ledger_rounds), Bring books, the Update now pressed here
 function useRounds(cid) {
   const [st, setSt] = useState({ rows: null, err: "" }), bk = ledBook(cid) || {};
@@ -231,56 +221,13 @@ export function DayBookDrop({ cid }) {
       {lines.map((l, k) => <div key={k} className={l.ok === false ? "bad" : ""} data-tpg-drop-line={l.ok === false ? "bad" : "ok"}>{l.text}</div>)}</div>}
   </div>;
 }
-// Bring books (this year: the days FinCom lacks, as Books › From Tally's Start) and Bring another year (that card, here)
-function BringBooks({ cid, e }) {
-  const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [other, setOther] = useState(false), book = e.b && e.b.book, going = e.p && !e.p.done && (e.p.state === "going" || e.p.state === "paused");
-  const start = () => { const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }; setBusy(true); setErr("");
-    rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; })
-      .then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
-  return <>
-    {mayChange() && <div className="tpg-acts">
-      {!going && <button type="button" className="btn small" data-tpg-bring-books={cid} disabled={busy || !book} onClick={start}>{busy ? "Starting…" : "Bring books"}</button>}
-      <button type="button" className="btn small" data-tpg-another-year={cid} aria-expanded={other ? "true" : "false"} onClick={() => setOther(!other)}>{other ? "Hide other years" : "Bring another year"}</button>
-      <PullButtons e={e} small /></div>}
-    {err && <p className="tsm-note bad" data-tpg-err="">{err}</p>}
-    {other && <OlderEntries cid={cid} />}
-  </>;
-}
-export function ClientDetails({ row }) {
-  const [, tick] = useState(0), cid = row.cid, company = row.company;
-  useEffect(() => { let on = true; Promise.all([cloudLedgerCount(cid).catch(() => null), groupCount(cid).catch(() => null)]).then(() => { if (on) tick((k) => k + 1); }); return () => { on = false; }; }, [cid]);
-  const m = mastersOf(cid, company), e = entriesOf(cid, m, row.last), h = useRounds(cid), kw = company ? keepWaitOf(company) : "";
-  useEffect(() => { if (m.st !== "reading" && m.st !== "waiting") return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [m.st]);
-  const lt = lightAt(company), whole = (h.rows || []).find((r) => r.complete && r.rows_read != null && !(Number(r.rows_received) < Number(r.rows_read)));
-  const live = (h.rows || []).find((r) => !r.complete && Date.now() - Date.parse(r.last_seen_at || "") < 180000);
-  const total = whole ? Number(whole.rows_read) || 0 : 0;
-  const ledW = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) : live ? nf(Number(live.rows_received) || 0) + (total ? " of " + nf(total) : " so far") : m.n == null ? "—" : nf(m.n);
-  const fy = e.p ? Number(String(e.p.fy || "").slice(0, 4)) || fyNow() : fyNow(), bk = cloudBook(cid) || {}, hist = h.rows ? historyRows(h.rows, m, e, kw) : null;
-  return <div className="tpg-details tpg-three" data-tpg-details={cid}>
-    <section className="tpg-d-card" data-tpg-d="masters">
-      <div className="tpg-kicker">Masters</div>
-      <div className="tpg-line">Ledgers <b data-tpg-d-ledgers="">{m.held || m.st === "reading" || live ? ledW : "none yet"}</b>{" · groups "}<b data-tpg-d-groups="">{m.g != null ? nf(m.g) : "—"}</b>{m.st === "done" && !live ? " ✓" : ""}</div>
-      {(m.st === "reading" || m.st === "waiting") && <Bar pct={m.pct} kind="read" label="Masters progress" />}
-      <div className="tsm-note">{"Whole list last read: "}<span data-tpg-d-whole="">{whole ? whenWords(whole.started_at) + " · " + nf(whole.rows_read) + " ledgers" : live || m.st === "reading" ? "reading now" : h.rows ? "not yet" : "…"}</span>
-        <br /><span data-tpg-d-light="">{"Changes checked every 10 min while open" + (lt ? " · last " + hhmm(/[zZ]|[+-]\d\d:?\d\d$/.test(lt) ? lt : lt + "+05:30") : "")}</span></div>
-      {m.st === "waiting" && <div className="tsm-note bad" data-tpg-d-wait="">{m.words}</div>}
-      {m.st === "why" && <div className="tsm-note bad">{m.words}</div>}
-      {row.c && row.c.w === "Yes" && <div className="tpg-acts"><BringMasters row={row} primary={false} /></div>}
-    </section>
-    <section className="tpg-d-card" data-tpg-d="entries">
-      <div className="tpg-kicker">{"Entries · " + fyLabel(fy)}</div>
-      <div className="tpg-months" aria-label="Months" data-tpg-months="">{months(fy, bk, e.p).map((x) => <span key={x.m} data-tpg-month={x.k} title={x.m + ": " + MK[x.k]}><i className={x.k} />{x.m.charAt(0)}</span>)}</div>
-      <div className="tsm-note">Green: in FinCom · light green: coming now · grey: to bring</div>
-      <div className="tpg-line" data-tpg-d-entries="">{e.words}{e.sub ? " · " + e.sub : ""}</div>
-      {e.p && !e.p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
-      <BringBooks cid={cid} e={e} />
-      <DayBookDrop cid={cid} />
-    </section>
-    <section className="tpg-d-card" data-tpg-history="">
-      <div className="tpg-kicker">Update history</div>
-      {h.err && <p className="tsm-note bad">{h.err}</p>}
-      {!hist ? <p className="tsm-note">Reading…</p> : !hist.length ? <p className="tsm-note">No update yet.</p>
-        : <ul className="tpg-hlist">{hist.map((r, k) => <li key={k} className={"tpg-h " + r.k} data-tpg-h={r.k}><span data-tpg-h-what="">{[whenWords(r.at), r.what, r.how].filter(Boolean).join(" · ")}</span><span data-tpg-h-res="">{r.res}</span></li>)}</ul>}
-    </section>
+// the Update history, under More (the rounds read from FinCom's cloud only while it is open)
+export function History({ row }) {
+  const cid = row.cid, m = mastersOf(cid, row.company), e = entriesOf(cid, m, row.last), h = useRounds(cid), kw = row.company ? keepWaitOf(row.company) : "";
+  const hist = h.rows ? historyRows(h.rows, m, e, kw) : null;
+  return <div className="tpg-hist-in" data-tpg-history="">
+    {h.err && <p className="tsm-note bad">{h.err}</p>}
+    {!hist ? <p className="tsm-note">Reading…</p> : !hist.length ? <p className="tsm-note">No update yet.</p>
+      : <ul className="tpg-hlist">{hist.map((r, k) => <li key={k} className={"tpg-h " + r.k} data-tpg-h={r.k}><span data-tpg-h-what="">{[whenWords(r.at), r.what, r.how].filter(Boolean).join(" · ")}</span><span data-tpg-h-res="">{r.res}</span></li>)}</ul>}
   </div>;
 }

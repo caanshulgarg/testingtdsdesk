@@ -67,8 +67,9 @@ def main():
             pg.goto(base + hash_, wait_until="domcontentloaded", timeout=120000)
             return ctx, pg, loop
         def row_words(pg):
-            return pg.evaluate("""() => [...document.querySelectorAll('#app [data-tsm-table] tbody tr[data-tsm-kind=client]')].map((r) => ({c: (r.querySelector('[data-tsm-col=c] [data-tsm-word]') || {}).textContent || '',
-              o: ((r.querySelector('[data-tsm-col=o]') || {}).innerText || '').replace(/\\s+/g, ' ').trim()}))""")
+            # (next-tally-simple2: a row's answers are in its More ▾ › Answers, the light row right under it)
+            return pg.evaluate("""() => [...document.querySelectorAll('#app [data-tsm-table] tbody tr[data-tsm-kind=client]')].map((r0) => { const nx = r0.nextElementSibling, r = r0.querySelector('[data-tsm-col=c]') ? r0 : nx && nx.matches('tr[data-tpt-light]') ? nx : r0;
+              return {c: (r.querySelector('[data-tsm-col=c] [data-tsm-word]') || {}).textContent || '', o: ((r.querySelector('[data-tsm-col=o]') || {}).innerText || '').replace(/\\s+/g, ' ').trim()}; })""")
 
         print("1. from Today to the Tally page, at a %gx slower CPU: every client within 1 s, whatever the bridges do" % CPU)
         WANT = {"own253": ("No ", "Yes"), "none": ("FinCom Bridge is not running in this Windows login",), "ownhang": ("FinCom Bridge is not running in this Windows login",),

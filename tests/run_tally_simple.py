@@ -88,7 +88,7 @@ EXTRA = """([sum, open, rows, changes, heldSt]) => {
   };
   TCloud.restAll = async (u) => Cloud.api(u);
   FCTallySimple.OPEN.at = 0; FCTallySimple.OPEN.books = null; FCTallySimple.OPEN.off = false; FCTallySimple.JUST.linked = null; FCTallySimple.JUST.at = 0; FCTallySimple.forget();
-  // next-tally-page-redesign: the six steps open (the top line's "See the 6 steps") and each row's ⋯ › Details open, where
+  // next-tally-simple2: the six steps open (the top line's "How to connect") and each row's More ▾ › Answers open (details: 'all'), where
   // the table's old answers now are (Linked to Tally?, Open now, Ledgers, Entries, What to do): these tests read them there
   S.tsm = {filter: 'all', q: '', open: true, again: 0, check: 0, details: 'all'}; S.tallyMore = {}; if (Rec.heldReload) Rec.heldReload();
   if (window.tfxRefresh) window.tfxRefresh();
@@ -172,7 +172,8 @@ def main():
             pg.wait_for_selector(sel, state="visible", timeout=10000); body = txt("#confirmBox"); pg.click(sel)
             pg.wait_for_selector(sel, state="hidden", timeout=10000); pg.wait_for_timeout(600); return body
         def row(name): return '#app [data-tsm-table] tr[data-tsm-row="%s"]' % name
-        def cell(name, k): return row(name) + ' [data-tsm-col="%s"]' % k
+        # next-tally-simple2: the old answers are in each row's More ▾ › Answers, its light row under it (open in these tests)
+        def cell(name, k): return (row(name) if k == "client" else '#app [data-tsm-table] tr[data-tpt-light-of="%s"]' % name) + ' [data-tsm-col="%s"]' % k
         def word(name, k): return pg.get_attribute(cell(name, k) + " [data-tsm-word]", "data-tsm-word") if n(cell(name, k) + " [data-tsm-word]") else None
         def steps(): return E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => [e.getAttribute('data-tsm-step'), e.hasAttribute('data-now'), e.hasAttribute('data-done')])")
         def main_text(): return E("() => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll('[data-for-support]').forEach(e => e.remove()); return a.innerText; }")
@@ -272,18 +273,19 @@ def main():
         E(LOCAL, [HERE, PC + "\\" + WIN, "go-7"]); pg.wait_for_timeout(2500)
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
-        # next-tally-page-redesign: five columns; the six questions' answers are in each row's ⋯ › Details (open in these tests)
-        # next-tally-progress: Client · Tally company | Connection | Masters | Entries | Action (the answers in ⋯ › Answers)
-        ok(heads == ["Client · Tally company", "Connection", "Masters (ledgers & groups)", "Entries", "Action"], "3. the five columns (the six questions in the answers) (%s)" % heads)
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.textContent.trim())")
+        # next-tally-simple2: Client · Tally company | Masters | Entries | Action (the six questions' answers in More ▾ › Answers)
+        ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "3. the four columns (the six questions in the answers) (%s)" % heads)
+        ok(all(txt(row(c) + " .tpt-co-line") == "Tally: " + c for c in (ACME, BRIGHT, CORAL, GAMMA, HAZEL, IRIS)) and txt(row(DELTA) + " .tpt-co-line") == "Not linked",
+           "3. every linked row: 'Tally: <its company>'; not linked: 'Not linked' (%s)" % [txt(row(c) + " .tpt-co-line") for c in (ACME, DELTA)])
         ok([word(ACME, k) for k in "cole"] == ["Yes"] * 4 and txt(cell(ACME, "c") + " [data-tsm-note]") == "Tally company: " + ACME and txt(cell(ACME, "do")) == "Nothing.", "3. %s: Yes Yes Yes Yes, Nothing. (%s)" % (ACME, txt(row(ACME))))
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
         ok(re.match(r"Till today \d\d:\d\d$", txt(cell(ACME, "e") + " [data-tsm-note]") or ""), "3. entries: Till today <time> (%s)" % txt(cell(ACME, "e")))
         ok(word(BRIGHT, "o") == "No" and txt(cell(BRIGHT, "o") + " [data-tsm-note]") == NOT_MINE, "3. %s: not open in this user's Tally: No, %s (%s)" % (BRIGHT, NOT_MINE, txt(cell(BRIGHT, "o"))))
-        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(row(BRIGHT) + ' [data-tpt-main="again"]') == "Connect again" and txt(cell(BRIGHT, "do") + ' [data-tsm-act]') == "Upload Day Book"
+        ok(word(BRIGHT, "e") == "No" and txt(cell(BRIGHT, "e") + " [data-tsm-note]") == "12-Oct to 13-Oct are missing · FinCom is checking them with Tally now (50%)" and txt(row(BRIGHT) + ' [data-tpt-main="again"]') == "Check again" and txt(cell(BRIGHT, "do") + ' [data-tsm-act]') == "Upload Day Book"
            and txt(cell(BRIGHT, "do") + " [data-tsm-todo]") == "5 changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.",
-           "3. held lines (migration 136): All entries received? No, the period, the row's button Connect again (not open anywhere), Upload Day Book in its details (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
+           "3. held lines (migration 136): All entries received? No, the period, the row's button Check again (not open anywhere, the firm's bridge online), Upload Day Book in its details (%s | %s)" % (txt(cell(BRIGHT, "e")), txt(cell(BRIGHT, "do"))))
         ok(n("#app [data-tally-simple] [data-held-block]") == 0, "3. the held lines are the row's, not a block of their own")
         ok(word(CORAL, "e") == "Not yet" and txt(cell(CORAL, "e") + " [data-tsm-note]") == "New client · 62% received · 6 min left" and pg.get_attribute(cell(CORAL, "e") + " [role=progressbar]", "aria-valuenow") == "62",
            "3. being brought: Not yet, New client · 62%% received · 6 min left, the bar (%s)" % txt(cell(CORAL, "e")))
@@ -305,8 +307,9 @@ def main():
         shot("tally-1440-light")
 
         print("== 3b. Open in Tally right now? on THIS computer only")
-        def col_o(): return E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => [r.getAttribute('data-tsm-row'), (r.querySelector('[data-tsm-col=o] [data-tsm-word]') || {}).textContent || '']))")
-        def fcount(k): return int(pg.get_attribute('#app [data-tsm-filter="%s"]' % k, "data-tsm-count"))
+        def col_o(): return E("() => Object.fromEntries([...document.querySelectorAll('#app [data-tsm-table] tr[data-tpt-light-of]')].map(r => [r.getAttribute('data-tpt-light-of'), (r.querySelector('[data-tsm-col=o] [data-tsm-word]') || {}).textContent || '']))")
+        # next-tally-simple2: no filter chips; the clients not open in this user's Tally counted from the answers themselves
+        def fcount(k): assert k == "closed"; return sum(1 for v in col_o().values() if v == "No")
         def say_ok():
             nd, fn = n("#app [data-tsm-table] tr[data-tsm-need]"), n("#app [data-tsm-table] tr[data-tsm-fine]")
             return txt("#app [data-tsm-say]") == "%s %s" % ("1 client is fine." if fn == 1 else "%d clients are fine." % fn, "1 needs you." if nd == 1 else "%d need you." % nd)
@@ -376,23 +379,19 @@ def main():
         dh = E("() => [...document.querySelectorAll('#app [data-tsm-diffs] thead th')].map(e => e.innerText.trim())")
         dr = E("() => [...document.querySelectorAll('#app [data-tsm-diffs] tbody tr')].map(r => [...r.cells].map(c => c.innerText.trim()))")
         ok(dh == ["Ledger", "FinCom amount", "Tally amount", "Difference"] and dr == [["Capital", "500.00 Cr", "900.00 Cr", "400.00 Cr"], ["Cash", "500.00 Dr", "900.00 Dr", "400.00 Dr"]], "4. See differences: Ledger | FinCom | Tally | Difference (%s %s)" % (dh, dr))
-        flt = E("() => { const b = document.querySelector('#app [data-tsm-filter=opendiff]'); return b ? [b.innerText, b.getAttribute('data-tsm-count')] : null; }")
-        ok(flt == ["Opening balances differ 3", "3"], "4. the filter Opening balances differ (%s)" % flt)
+        ok(n("#app [data-tsm-filter]") == 0 and n(row(BRIGHT) + ".tpt-need") == 1 and txt(row(BRIGHT) + " [data-tpt-main]"), "4. no filter chips; a row whose opening balances differ is shaded, its one button there")
         E("() => { window.__calls = []; }"); pg.click(ow + " [data-tsm-open-use]"); body = confirm(True); pg.wait_for_timeout(1500)
         ok({"p_book": "bk-" + BRIGHT, "p_action": "use"} in calls("tally_openings_decide") and "2 ledgers’ opening balances" in body, "4. Use Tally's: asked once, then tally_openings_decide use (%s)" % body[:120])
         ok(pg.get_attribute(cell(BRIGHT, "l") + " [data-tsm-open]", "data-tsm-open") == "same", "4. then: same as Tally")
         pg.click(cell(IRIS, "l") + " [data-tsm-open-keep]"); confirm(True); pg.wait_for_timeout(1500)
         ok({"p_book": "bk-" + IRIS, "p_action": "keep"} in calls("tally_openings_decide"), "4. Keep FinCom's: tally_openings_decide keep")
 
-        print("== 5. filters and search")
+        print("== 5. no filter chips (next-tally-simple2); the search, for a long list")
         def shown(): return E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
-        for k in ("all", "need", "notconn", "closed", "missing", "ledchg", "opendiff", "fine"):
-            if not n('#app [data-tsm-filter="%s"]' % k): ok(False, "5. the filter %s is there" % k); continue
-            c = int(pg.get_attribute('#app [data-tsm-filter="%s"]' % k, "data-tsm-count")); pg.click('#app [data-tsm-filter="%s"]' % k); pg.wait_for_timeout(300)
-            s = shown(); ok(len(s) == c and pg.get_attribute('#app [data-tsm-filter="%s"]' % k, "aria-pressed") == "true", "5. %s: %d rows, as its count (%s)" % (k, c, s))
-        pg.click('#app [data-tsm-filter="notconn"]'); pg.wait_for_timeout(300)
-        ok(shown() == [DELTA, EVER, ZETA], "5. Not connected: %s" % shown())
-        pg.click('#app [data-tsm-filter="all"]'); pg.fill("#app [data-tsm-q]", "01 apr 2018"); pg.wait_for_timeout(300)
+        ok(n("#app [data-tsm-filter]") == 0 and n("#app .tsm-filters") == 0 and len(shown()) == 9, "5. no filter chips: every row shown (%s)" % shown())
+        nc = [r for r in shown() if pg.get_attribute(row(r), "data-tpt-kind") in ("free", "company", "open")]
+        ok(nc == [DELTA, EVER, ZETA] and all(pg.get_attribute(row(r) + " [data-tpt-main]", "data-tpt-main") in ("link", "connect") for r in nc), "5. not connected: Link (or Connect) on their rows (%s)" % nc)
+        pg.fill("#app [data-tsm-q]", "01 apr 2018"); pg.wait_for_timeout(300)
         ok(shown() == [EVER], "5. search by the Tally company's name (%s)" % shown())
         pg.fill("#app [data-tsm-q]", "coral"); pg.wait_for_timeout(300)
         ok(shown() == [CORAL], "5. search by the client's name (%s)" % shown())

@@ -1,16 +1,18 @@
-"""python3 run_tally_progress.py [--shots DIR] - everything Tally from the Tally page (next-tally-progress, 07-Nov-2026; the
-owner: "the Tally page needs more redesign… I don't want to do anything elsewhere"; the approved design: tallyprog Main /
-Client). Made-up firm, login, clients and companies only (the stand-in cloud of run_tally_simple.py).
-  1. Coming in from Tally now: hidden while nothing moves; Step 1 · Masters reading "7,560 of 12,195 (62%)" with its bar;
-     waiting in the bridge's own words; Step 2 · Entries after masters ("After masters · 1,304 of 2,651"), Pause and Stop
-     there (tally_period_pause / tally_period_cancel); "Masters always go first".
-  2. The table: Client · Tally company | Connection | Masters | Entries | Action; "✓ 438 ledgers · 52 groups", "✓ Up to
-     date", "Up to <day> · N days to bring", "Not brought in yet"; masters missing: Bring ledgers & groups (the masters'
-     read), each client's Details.
-  3. Details inside the Tally page: Masters (ledgers, groups, whole list last read, changes checked), Entries (12 months,
-     Bring books), the Update history from tally_ledger_rounds (a whole list, a changes check, one reading now with its
-     total from the last whole list), Bring books' line, the bridge's wait; ‹ Tally back.
-  4. a phone (390 px): no sideways scroll, the row a card with Masters and Entries.
+"""python3 run_tally_progress.py [--shots DIR] - everything Tally from the Tally page, the simpler page (next-tally-simple2,
+07-Nov-2026; the owner's approved "Tally simple page v4"). Made-up firm, login, clients and companies only (the stand-in
+cloud of run_tally_simple.py).
+  2. The table: Client · Tally company | Masters | Entries | Action; "Tally: <COMPANY>" on every row; Masters "✓ Up to date ·
+     438 ledgers · 52 groups · Updated <when>", "Not brought yet · 0 ledgers in FinCom · TDS and GST need these"; Entries
+     "✓ Up to date · Last entry <when>", "Up to 12-Oct-2026 · N days to bring", "Not brought yet · Comes after masters"; ONE
+     main button a row (Update now, Check again + "Open it in Tally first", Bring masters); no filter chips, no "Coming in
+     from Tally now" panel.
+  1. Masters reading in the row ("Reading now", its bar, "7,560 of 12,195 ledgers · 148 groups"), Entries "Next, after
+     masters" with its bar; the row's button Pause, Stop under More (tally_period_pause / tally_period_cancel); waiting in
+     the bridge's own words; the title and Download FinCom Bridge <version>; the connection card's How to connect.
+  3. More ▾: one light row (one open at a time): Entries in FinCom: <range>, Update history from tally_ledger_rounds
+     (read only once opened), Bring another year, the Day Book drop box, Answers, Unlink; Bring books as the row's button
+     when days are missing; paused: Resume, Stop under More, the history's wait and pause.
+  4. a phone (390 px): no sideways scroll, each row a stacked card, its light row inside the screen.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_tally_progress.py"""
 import os, re, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -48,7 +50,7 @@ def main():
         R = lambda name: TB + ' tr[data-tsm-row="%s"]' % name
         def shot(name, w, h):
             if not SHOTS: return
-            os.makedirs(SHOTS, exist_ok=True); pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(600)
+            os.makedirs(SHOTS, exist_ok=True); pg.set_viewport_size({"width": w, "height": h}); pg.evaluate("() => window.scrollTo(0, 0)"); pg.wait_for_timeout(600)
             pg.screenshot(path=os.path.join(SHOTS, name), full_page=True); pg.set_viewport_size({"width": 1440, "height": 900})
 
         up = {"port": 9039, "ok": True, "skipped": False, "n": 3, "error": "", "reason": "open"}
@@ -86,116 +88,138 @@ def main():
         cid = lambda nm: ids[nm]
         E("(c) => { window.__sum = [{book: 'bk-Orbit Space', client: c, company: 'ORBIT SPACE', from: '2026-04-01', devices: [{id: 'd', fetchOn: true}]}]; if (window.tfxRefresh) window.tfxRefresh(); }", cid(ORBIT))
 
-        print("== 2. the table")
-        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
-        ok(heads == ["Client · Tally company", "Connection", "Masters (ledgers & groups)", "Entries", "Action"], "2. the columns (%s)" % heads)
-        ok(txt(R(ORBIT) + " [data-tpt-co]") == ORB, "2. the Tally company under the client (%s)" % txt(R(ORBIT) + " .tpt-client"))
-        mo = txt(R(ORBIT) + " [data-tpg-masters]")
-        ok((pg.get_attribute(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "done") and mo.startswith("✓ 438 ledgers · 52 groups") and "updated " in mo, "2. Orbit: ✓ 438 ledgers · 52 groups · updated HH:MM (%s)" % mo)
-        eo = txt(R(ORBIT) + " [data-tpg-entries]")
-        ok(eo.startswith("✓ Up to date"), "2. Orbit's entries: ✓ Up to date (%s)" % eo)
-        ea = txt(R(ACME) + " [data-tpg-entries]")
-        ok(re.match(r"Up to 12-Oct \d+ days to bring", ea), "2. Acme: Up to 12-Oct · N days to bring (%s)" % ea)
-        mn = txt(R(NIMB) + " [data-tpg-masters]")
-        ok(mn.startswith("Not brought in yet") and n(R(NIMB) + ' [data-tpt-main="masters"]') == 1 and txt(R(NIMB) + ' [data-tpt-main="masters"]') == "Bring ledgers & groups",
-           "2. Nimbus: masters not brought in yet, Bring ledgers & groups (%s | %s)" % (mn, txt(R(NIMB) + " .tpt-act")))
-        ok(all(n(R(nm) + " [data-tpt-open]") == 1 and txt(R(nm) + " [data-tpt-open]") == "▾" for nm in (KES, ORBIT, ACME, NIMB)), "2. each client its ▾ (details here)")
-        ok(n("#app [data-tpg-now]") == 0, "1. nothing coming in: no 'Coming in from Tally now'")
-        E("(c) => { window.__fs = 0; }", 0)
-        pg.click(R(NIMB) + ' [data-tpt-main="masters"]'); pg.wait_for_timeout(800)
-        ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring ledgers & groups: the masters' read asked (the Update now of From Tally)")
+        L = lambda name: TB + ' tr[data-tpt-light-of="%s"]' % name
+        def mains(name): return E("(s) => [...document.querySelectorAll(s + ' [data-tpt-main]')].map(b => b.getAttribute('data-tpt-main'))", R(name))
+        def calls(prefix): return [c for c in E("() => window.__calls || []") if c[0].startswith(prefix)]
+        def more(name):
+            if not n(L(name)): pg.click(R(name) + " [data-tpt-open]"); pg.wait_for_timeout(700)
 
-        print("== 1. Coming in from Tally now")
+        print("== 2. the table (next-tally-simple2: Client · Tally company | Masters | Entries | Action)")
+        heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.textContent.trim())")
+        ok(heads == ["Client · Tally company", "Masters", "Entries", "Action"], "2. the columns (%s)" % heads)
+        ok(txt("#app [data-tsm-table] [data-tpt-title]") == "Clients · 4" and txt("#app [data-tsm-table] [data-tpt-say]") == "Masters (ledgers & groups) always come first, then entries",
+           "2. 'Clients · 4', masters always come first (%s | %s)" % (txt("#app [data-tsm-table] [data-tpt-title]"), txt("#app [data-tsm-table] [data-tpt-say]")))
+        cos_ = {KES: KESC, ORBIT: ORB, ACME: ACO, NIMB: NIC}
+        ok(all(txt(R(nm) + " .tpt-co-line") == "Tally: " + co and txt(R(nm) + " [data-tpt-co]") == co for nm, co in cos_.items()),
+           "2. every row: its Tally company, 'Tally: <NAME>' (%s)" % [txt(R(nm) + " .tpt-co-line") for nm in cos_])
+        ok(n("#app [data-tsm-filter]") == 0 and n("#app .tsm-filters") == 0, "2. no filter chips")
+        ok(n("#app [data-tpg-now]") == 0 and "Coming in from Tally now" not in txt("#app [data-tally-simple]") and n("#app [data-tpg-details]") == 0, "2. no 'Coming in from Tally now' panel, no detail cards")
+        mo = txt(R(ORBIT) + " [data-tpg-masters]")
+        ok(pg.get_attribute(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "done" and re.match(r"✓ Up to date 438 ledgers · 52 groups Updated (today|yesterday|\d+-\w{3}) \d\d:\d\d$", mo),
+           "2. Masters, up to date: ✓ Up to date · 438 ledgers · 52 groups · Updated <when> (%s)" % mo)
+        eo = txt(R(ORBIT) + " [data-tpg-entries]")
+        ok(re.match(r"✓ Up to date Last entry (today|yesterday|\d+-\w{3}) \d\d:\d\d$", eo), "2. Entries, up to date: ✓ Up to date · Last entry <when> (%s)" % eo)
+        ok(mains(ORBIT) == ["update"] and txt(R(ORBIT) + ' [data-tpt-main]') == "Update now", "2. Orbit: Update now (%s)" % mains(ORBIT))
+        ea = txt(R(ACME) + " [data-tpg-entries]")
+        ok(re.match(r"Up to 12-Oct-2026 \d+ days to bring$", ea), "2. Entries behind: Up to 12-Oct-2026 · N days to bring (%s)" % ea)
+        ok(n(R(ACME) + ".tpt-need") == 1 and txt(R(ACME) + " [data-tpt-state]") in ("Not open in Tally", "Not open in Tally on the server") and mains(ACME) == ["again"] and txt(R(ACME) + " [data-tpt-main]") == "Check again"
+           and txt(R(ACME) + " [data-tpt-note]") == "Open it in Tally first", "2. Acme (open nowhere, the firm's bridge online): shaded, Not open in Tally, Check again, Open it in Tally first (%s)" % txt(R(ACME) + " .tpt-act"))
+        mn = txt(R(NIMB) + " [data-tpg-masters]")
+        ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") == "none" and mn == "Not brought yet 0 ledgers in FinCom TDS and GST need these" and "bad" in (pg.get_attribute(R(NIMB) + " [data-tpg-mw]", "class") or ""),
+           "2. Masters, never read: red Not brought yet · 0 ledgers in FinCom · TDS and GST need these (%s)" % mn)
+        ok(txt(R(NIMB) + " [data-tpg-entries]") == "Not brought yet Comes after masters", "2. Entries before masters: Not brought yet · Comes after masters (%s)" % txt(R(NIMB) + " [data-tpg-entries]"))
+        ok(mains(NIMB) == ["masters"] and txt(R(NIMB) + ' [data-tpt-main="masters"]') == "Bring masters", "2. Nimbus: Bring masters (the old Bring ledgers & groups) (%s)" % txt(R(NIMB) + " .tpt-act"))
+        ok(all(len(mains(nm)) == 1 for nm in (KES, ORBIT, ACME, NIMB)), "2. one main button a row (%s)" % [mains(nm) for nm in (KES, ORBIT, ACME, NIMB)])
+        ok(all(txt(R(nm) + " [data-tpt-open]") == "More ▾" for nm in (KES, ORBIT, ACME, NIMB)) and n(TB + " tr[data-tpt-light]") == 0, "2. each row its More ▾, all closed")
+        pg.click(R(NIMB) + ' [data-tpt-main="masters"]'); pg.wait_for_timeout(800)
+        ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update now of From Tally)")
+
+        print("== 1. masters read, entries after masters: in the row itself")
         E("""([c, b]) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'KESTREL TEXTILES', prog: {read: 7560, of: 12195}};
           window.__sum = window.__sum.filter(x => x.book !== b).concat([{book: b, client: c, company: 'KESTREL TEXTILES', from: '2026-04-01', devices: [{id: 'd', fetchOn: true}], pull: {fy: '20260401', part: 'year', state: 'going', x: 1304, y: 2651, etaMin: 12, rate: 113, chosenAt: new Date(Date.now() - 1800000).toISOString(), pace: true}}]);
-          if (window.tfxRefresh) window.tfxRefresh(); S.tsm = Object.assign(S.tsm || {}); delete S.tsm.client; render(); }""", [cid(KES), "bk-Kestrel Textiles"]); pg.wait_for_timeout(2500)
-        now = "#app [data-tpg-now]"; NL = now + ' [data-tpg-nl="%s"]' % cid(KES)
-        ok(n(now) == 1 and txt(now + " h3") == "Coming in from Tally now" and "Masters always go first" in txt(now) and E("() => [...document.querySelectorAll('#app [data-tpg-now] [data-tpg-nl]')].map(e => e.getAttribute('data-tpg-nl'))") == [cid(KES), cid(NIMB)],
-           "1. the panel: one line each client being read (Kestrel; Nimbus, its ledgers asked above) (%s)" % txt(now)[:160])
-        mw, ew = txt(NL + " [data-tpg-nl-masters]"), txt(NL + " [data-tpg-nl-entries]")
-        ok(txt(NL + " .tpg-nl-name") == KES and mw == "Masters · reading 7,560 of 12,195 ledgers" and pg.get_attribute(NL + " [data-tpg-nl-masters] [role=progressbar]", "aria-valuenow") == "62", "1. Masters: its bar, 7,560 of 12,195 ledgers (%s)" % mw)
-        ok(ew == "Entries · after masters 1,304 of 2,651 · ~12 min" and n(NL + " [data-tpg-nl-entries] [role=progressbar]") == 1, "1. Entries: after masters, its bar, 1,304 of 2,651 · ~12 min (%s)" % ew)
-        ok("left" not in mw and "slow" not in txt(now), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
-        ok(txt(R(KES) + " [data-tpg-masters]").startswith("Reading · 7,560 of 12,195") and txt(R(KES) + " [data-tpg-entries]").startswith("After masters · 1,304 of 2,651"),
-           "2. Kestrel's row: Reading · 7,560 of 12,195 / After masters · 1,304 of 2,651 (%s | %s)" % (txt(R(KES) + " [data-tpg-masters]"), txt(R(KES) + " [data-tpg-entries]")))
-        ok(n('#app [data-tpg-drow="%s"]' % cid(KES)) == 1 and n("#app [data-tpg-drow]") == 1 and txt(R(KES) + " [data-tpt-open]") == "Hide details ▴", "2. the client being read: its details open under its row, by default")
+          if (window.tfxRefresh) window.tfxRefresh(); render(); }""", [cid(KES), "bk-Kestrel Textiles"]); pg.wait_for_timeout(2500)
+        mk, ek = txt(R(KES) + " [data-tpg-masters]"), txt(R(KES) + " [data-tpg-entries]")
+        ok(pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "reading" and mk == "Reading now 7,560 of 12,195 ledgers · 148 groups" and pg.get_attribute(R(KES) + " [data-tpg-masters] [role=progressbar]", "aria-valuenow") == "62",
+           "1. Masters reading: Reading now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
+        ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
+        ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
+        ok(mains(KES) == ["pause"] and txt(R(KES) + " [data-tpt-main]") == "Pause", "1. the row's one button while Bring books runs: Pause (%s)" % mains(KES))
         dl = "#app [data-tpg-dl-head]"
-        ok(n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-latest]") == "Latest bridge 2.5.5 · for Windows, no admin needed" and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge",
-           "1. top right: Download FinCom Bridge, the latest version, for Windows, no admin needed (%s)" % txt(dl))
-        ok(txt("#app [data-tsm-steps-link]") == "6 steps ▾" and n("#app [data-tsm-top-check]") == 1, "1. the connection card: Check again, 6 steps ▾ (%s)" % txt("#app [data-tsm-top]")[:120])
+        ok(txt(dl + " .tpg-title") == "Tally" and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
+           and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),
+           "1. the title and the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
+        ok(txt("#app [data-tsm-steps-link]") == "How to connect" and n("#app [data-tsm-top] [data-tsm-top-check]") == 1, "1. the connection card: How to connect, Check again (%s)" % txt("#app [data-tsm-top]")[:120])
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();
           window.__rounds['bk-Kestrel Textiles'] = [{round_id: 'k1', started_at: t(2), last_seen_at: t(0.2), rows_received: 7560, rows_read: null, complete: null, batches: 4}]; }""")
-        shot("tally-progress-desktop.png", 1360, 1500)
+        more(ORBIT); shot("tally-progress-desktop.png", 1360, 1200); pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(400)
         E("() => { window.__calls = []; }")
-        pg.click(NL + " [data-tpg-pause]"); pg.wait_for_timeout(800)
-        pg.click(NL + " [data-tpg-stop]"); pg.wait_for_timeout(800)
-        cl = [c[0] for c in E("() => window.__calls") if c[0].startswith("tally_period")]
-        pz = [c[1] for c in E("() => window.__calls") if c[0] == "tally_period_pause"]
-        ok(cl == ["tally_period_pause", "tally_period_cancel"] and pz and pz[0].get("p_pause") is True and pz[0].get("p_book") == "bk-Kestrel Textiles", "1. Pause and Stop on the line (%s %s)" % (cl, pz))
+        pg.click(R(KES) + " [data-tpg-pause]"); pg.wait_for_timeout(800)
+        more(KES)
+        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-pause]") == 0, "1. More: Stop while it reads (Pause is the row's button)")
+        pg.click(L(KES) + " [data-tpg-stop]"); pg.wait_for_timeout(800)
+        cl = [c[0] for c in calls("tally_period")]
+        pz = [c[1] for c in calls("tally_period_pause")]
+        ok(cl == ["tally_period_pause", "tally_period_cancel"] and pz and pz[0].get("p_pause") is True and pz[0].get("p_book") == "bk-Kestrel Textiles", "1. Pause (the row) and Stop (More) (%s %s)" % (cl, pz))
         E("""([c, w]) => { S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'KESTREL TEXTILES'}; const d = window.__devs[0]; d.info.beat.keepWait = {reason: 'userInTally', words: w, since: new Date().toISOString()};
           TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }""", [cid(KES), WAIT]); pg.wait_for_timeout(2500)
-        mw = txt(NL + " [data-tpg-nl-masters]")
-        ok(mw.startswith("Masters · waiting") and WAIT in mw, "1. masters waiting: the bridge's own words (%s)" % mw)
+        mw = txt(R(KES) + " [data-tpg-masters]")
+        ok(mw.startswith("Waiting") and WAIT in mw and pg.get_attribute(R(KES) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "1. masters waiting: the bridge's own words (%s)" % mw)
 
-        print("== 3. details under the row")
+        print("== 3. More ▾: one light row under the row")
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();
           window.__rounds['bk-Orbit Space'] = [
             {round_id: 'r3', started_at: t(1), last_seen_at: t(0.2), rows_received: 120, rows_read: null, complete: null, batches: 1},
             {round_id: 'r2', started_at: t(40), last_seen_at: t(39), rows_received: 4, rows_read: 438, complete: true, batches: 1},
             {round_id: 'r1', started_at: t(600), last_seen_at: t(598), rows_received: 438, rows_read: 438, complete: true, batches: 3}]; }""")
-        v0 = E("() => [S.view, location.hash]")
-        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(2000)
-        D = '#app [data-tpg-drow="%s"] [data-tpg-details]' % cid(ORBIT)
-        ok(n(D) == 1 and n("#app [data-tpg-drow]") == 1 and n(TB) == 1 and E("() => [S.view, location.hash]") == v0, "3. Orbit's details under its row, one open at a time, the page stays (%s)" % E("() => [S.view, location.hash]"))
-        ok([e for e in E("(s) => [...document.querySelectorAll(s + ' > [data-tpg-d], ' + s + ' > [data-tpg-history]')].map(x => x.getAttribute('data-tpg-d') || 'history')", D)] == ["masters", "entries", "history"]
-           and E("(s) => getComputedStyle(document.querySelector(s)).gridTemplateColumns.split(' ').length", D) == 3, "3. three cards side by side: Masters, Entries, Update history")
-        ok(txt(D + " [data-tpg-d-ledgers]") == "120 of 438" and txt(D + " [data-tpg-d-groups]") == "52", "3. Masters: 120 of 438 reading now (the last whole list's total), groups 52 (%s | %s)" % (txt(D + " [data-tpg-d-ledgers]"), txt(D + " [data-tpg-d-groups]")))
-        ok(txt(D + " [data-tpg-d-whole]").endswith("· 438 ledgers") and "every 10 min while open" in txt(D + " [data-tpg-d-light]") and n(D + " [data-tpg-bring]") == 1, "3. whole list last read, changes checked, Bring ledgers & groups (%s)" % txt(D + " [data-tpg-d-whole]"))
-        mk = E("() => [...document.querySelectorAll('#app [data-tpg-month]')].map(e => e.getAttribute('data-tpg-month'))")
-        ok(len(mk) == 12 and mk[0] == "in" and "later" in mk, "3. Entries: the year's 12 months (%s)" % mk)
-        hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", D)
+        v0 = E("() => [S.view, location.hash]"); r0 = E("() => window.__roundsAsked || 0")
+        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(1200)
+        ok(n(L(ORBIT)) == 1 and n(TB + " tr[data-tpt-light]") == 1 and txt(R(ORBIT) + " [data-tpt-open]") == "Less ▴" and E("() => [S.view, location.hash]") == v0,
+           "3. More ▾ opens one light row under Orbit, one open at a time (Kestrel's closed), Less ▴, the page stays")
+        ok(E("() => window.__roundsAsked || 0") == r0, "3. the history is not read until it is opened")
+        lt = txt(L(ORBIT) + " .tpt-light-links")
+        ok(re.match(r"Entries in FinCom: Apr 2026 – today ", lt) and all(w in lt for w in ("Bring another year", "Upload a Day Book file", "Update history", "Unlink")) and n(L(ORBIT) + " [data-tpg-stop]") == 0,
+           "3. the light row: Entries in FinCom: Apr 2026 – today · Bring another year · Upload a Day Book file · Update history · Unlink; no Stop (nothing reading) (%s)" % lt)
+        pg.click(L(ORBIT) + " [data-tpt-history]"); pg.wait_for_timeout(1500)
+        hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", L(ORBIT))
         res = [h[1] for h in hist]
-        ok("Reading · 120 of 438" in res and "4 new or changed" in res and "Whole list read · 438 ledgers" in res and hist[0][0].endswith("Masters · Read"), "3. the Update history from tally_ledger_rounds (%s)" % hist)
-        shot("tally-progress-details.png", 1360, 1500)
-        # Bring books (this year) and Bring another year, here
-        E("() => { window.__calls = []; const rpc = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/^tally_period_choose/.test(fn)) { window.__calls.push([fn, a]); return {ok: true}; } return rpc(fn, a); }; }")
-        pg.click(D + " [data-tpg-bring-books]"); pg.wait_for_timeout(800)
-        bb = [c for c in E("() => window.__calls") if c[0].startswith("tally_period_choose")]
-        ok(bb and bb[0][0] == "tally_period_choose_lean" and bb[0][1].get("p_book") == "bk-Orbit Space" and bb[0][1].get("p_part") == "year", "3. Bring books: this year's missing days asked (%s)" % bb)
-        pg.click(D + " [data-tpg-another-year]"); pg.wait_for_timeout(600)
-        ok(n(D + " [data-older-entries] [data-older-fy]") == 1, "3. Bring another year: the year to choose, here")
-        # next-tally-daybook: the Day Book drop box is back in the Entries card (its reading: run_tally_daybook_drop.py)
-        ok(n(D + ' [data-tpg-d="entries"] [data-tpg-drop]') == 1 and txt(D + " [data-tpg-drop]") == "Or drop a Day Book file here" and n(D + " input[type=file][data-tpg-drop-file]") == 1,
-           "3. Entries: Or drop a Day Book file here (%s)" % txt(D + " [data-tpg-drop]"))
+        ok("Reading · 120 of 438" in res and "4 new or changed" in res and "Whole list read · 438 ledgers" in res and hist[0][0].endswith("Masters · Read"), "3. Update history, inline, from tally_ledger_rounds (%s)" % hist)
+        shot("tally-progress-more.png", 1360, 1200)
+        pg.click(L(ORBIT) + " [data-tpg-another-year]"); pg.wait_for_timeout(600)
+        ok(n(L(ORBIT) + " [data-older-entries] [data-older-fy]") == 1, "3. Bring another year: the year to choose, inline")
+        pg.click(L(ORBIT) + " [data-tpt-daybook]"); pg.wait_for_timeout(600)
+        ok(n(L(ORBIT) + " [data-tpg-drop]") == 1 and txt(L(ORBIT) + " [data-tpg-drop]") == "Or drop a Day Book file here" and n(L(ORBIT) + " input[type=file][data-tpg-drop-file]") == 1,
+           "3. Upload a Day Book file: the Day Book drop box, inline (%s)" % txt(L(ORBIT) + " [data-tpg-drop]"))
+        pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(500)
+        ok(all(n(L(ORBIT) + ' [data-tsm-details] [data-tsm-col="%s"]' % k) == 1 for k in ("c", "o", "l", "e", "do")), "3. Answers: Linked, Open now, Ledgers, Entries, What to do")
+        ok(n(L(ORBIT) + " [data-tpt-unlink]") == 1, "3. Unlink there")
         ok(E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space") <= 2, "3 (review B2). the groups' count of a book asked once at a time, not once per part (%s)" % E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space"))
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(600)
-        ok(n("#app [data-tpg-drow]") == 0, "3. Hide details: closed")
+        ok(n(TB + " tr[data-tpt-light]") == 0 and txt(R(ORBIT) + " [data-tpt-open]") == "More ▾", "3. Less ▴: closed")
+        # Bring books: the row's one button when this year's days are missing (and its masters are in)
+        E("(c) => { (TCloud.st[c].books || []).forEach(b => { b.to = '2026-10-12'; }); render(); }", cid(ORBIT)); pg.wait_for_timeout(800)
+        ok(mains(ORBIT) == ["books"] and txt(R(ORBIT) + " [data-tpt-main]") == "Bring books" and txt(R(ORBIT) + " [data-tpg-entries]").startswith("Up to 12-Oct-2026"), "3. entries behind: Bring books (%s)" % mains(ORBIT))
+        E("() => { window.__calls = []; const rpc = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/^tally_period_choose/.test(fn)) { window.__calls.push([fn, a]); return {ok: true}; } return rpc(fn, a); }; }")
+        pg.click(R(ORBIT) + " [data-tpt-main]"); pg.wait_for_timeout(800)
+        bb = calls("tally_period_choose")
+        ok(bb and bb[0][0] == "tally_period_choose_lean" and bb[0][1].get("p_book") == "bk-Orbit Space" and bb[0][1].get("p_part") == "year", "3. Bring books: this year's missing days asked (%s)" % bb)
+        more(ORBIT)
+        ok(n(L(ORBIT) + " [data-tpt-update-more]") == 1, "3. More: Update now too, when the row's button is another")
+        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
+        E("(c) => { (TCloud.st[c].books || []).forEach(b => { b.to = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }); render(); }", cid(ORBIT))
         # Kestrel's: Bring books paused, the bridge's wait, in its history
         E("() => { window.__sum.find(x => x.pull).pull.state = 'paused'; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(1500)
-        pg.click(R(KES) + " [data-tpt-open]"); pg.wait_for_timeout(2000)
-        DK = '#app [data-tpg-drow="%s"]' % cid(KES)
-        hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", DK)
+        ok(mains(KES) == ["resume"] and txt(R(KES) + " [data-tpt-main]") == "Resume" and txt(R(KES) + " [data-tpg-entries]").startswith("Paused"), "3. paused: Resume, Entries Paused (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
+        more(KES); pg.click(L(KES) + " [data-tpt-history]"); pg.wait_for_timeout(2000)
+        hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", L(KES))
         ok(any("Masters · FinCom Bridge" in h[0] and WAIT in h[1] for h in hist) and any("Bring books" in h[0] and h[1].startswith("Paused at 1,304 of 2,651") for h in hist), "3. history: the bridge's wait, Bring books paused (%s)" % hist)
-        ok(n(DK + " [data-tpg-resume]") == 1 and n(DK + " [data-tpg-stop]") == 1, "3. Entries: Resume and Stop there")
+        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-resume]") == 0, "3. More: Stop (Resume is the row's button)")
 
-        print("== 3b (review B1, B3)")
-        # B1: the ledgers' count not read: "—", never "✓ 0 ledgers"
+        print("== 3b (review B1)")
+        # B1: the ledgers' count not read: "—", never "0 ledgers"
         E("""(c) => { const st = TCloud.st[c]; window.__ledN = st.ledN; delete st.ledN; window.__lstat = Ledgers.status; Ledgers.status = () => ({n: 0}); render(); }""", cid(ACME)); pg.wait_for_timeout(300)
-        b1 = E("(s) => { const e = document.querySelector(s + ' [data-tpg-mw]'); return e ? e.innerText : ''; }", R(ACME))
-        ok(b1.startswith("✓ — ledgers") and "0 ledgers" not in b1, "3b (B1). the count not known yet: '— ledgers', never '0 ledgers' (%s)" % b1)
+        b1 = txt(R(ACME) + " [data-tpg-masters]")
+        ok(b1.startswith("✓ Up to date — ledgers · 30 groups") and "0 ledgers" not in b1, "3b (B1). the count not known yet: '— ledgers', never '0 ledgers' (%s)" % b1)
         E("() => { Ledgers.status = window.__lstat; }")
-        # B3: Bring books of Oct–Mar: only those months 'coming'
-        E("""(c) => { const x = window.__sum.find(y => y.pull); x.pull.part = 'h2'; x.pull.state = 'going'; (TCloud.st[c].books || []).forEach(b => { b.to = '2026-05-31'; });
-          if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(KES)); pg.wait_for_timeout(1500)
-        mk = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-month]')].map(e => e.getAttribute('data-tpg-month'))", DK)
-        ok(mk[:2] == ["in", "in"] and mk[2:6] == ["bring"] * 4 and mk[6] == "coming", "3b (B3). Oct–Mar being brought: Jun–Sep to bring, never 'coming'; Oct coming (%s)" % mk)
 
         print("== 4. a phone")
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(800)
         sw = E("() => document.documentElement.scrollWidth")
         ok(sw <= 390, "4. no sideways scroll (%d px)" % sw)
-        ok(E("(s) => { const r = document.querySelector(s); return !!r && getComputedStyle(r).display === 'grid'; }", R(ORBIT)) and n(R(ORBIT) + " .tpt-masters") == 1, "4. a row is a card, with Masters and Entries")
-        ok(E("(s) => { const d = document.querySelector(s + ' [data-tpg-details]'); return !!d && getComputedStyle(d).gridTemplateColumns.split(' ').length === 1; }", DK), "4. the details: the three cards stacked")
+        ok(E("(s) => { const r = document.querySelector(s); return !!r && getComputedStyle(r).display === 'grid'; }", R(ORBIT)) and n(R(ORBIT) + " .tpt-masters") == 1, "4. a row is a stacked card, with Masters and Entries")
+        ok(E("(s) => { const a = document.querySelector(s + ' .tpt-client'), b = document.querySelector(s + ' .tpt-masters'); return !!a && !!b && b.getBoundingClientRect().top >= a.getBoundingClientRect().bottom - 1; }", R(ORBIT)), "4. Masters under the client, not beside it")
+        ok(n(L(KES)) == 1 and E("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return r.right <= 390 && r.left >= 0; }", L(KES)), "4. the light row a part of the card, inside the screen")
+        hs = E("() => [...document.querySelectorAll('#app [data-tsm-table] [data-tpt-main]')].map(b => Math.round(b.getBoundingClientRect().height))")
+        ok(hs and min(hs) >= 44, "4. each main button at least 44 px (%s)" % hs)
         if SHOTS: os.makedirs(SHOTS, exist_ok=True); pg.wait_for_timeout(400); pg.screenshot(path=os.path.join(SHOTS, "tally-progress-phone.png"), full_page=True)
         pg.set_viewport_size({"width": 1440, "height": 900})
         print("== 5 (the owner's Mac: 'showing blank'). No bridge on this computer: the page draws within 1 s, from the cloud")

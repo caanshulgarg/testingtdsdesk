@@ -50,7 +50,8 @@ def main():
             E(TS.MINE, ["linked", devs[0]["main_bridge"], devs[0]["id"]] if devs else [None, "", ""]); pg.wait_for_timeout(2600)
             return ids
         def row(name): return '#app [data-tsm-table] tr[data-tsm-row="%s"]' % name
-        def cell(name, k): return row(name) + ' [data-tsm-col="%s"]' % k
+        # next-tally-simple2: the answers are in the row's More ▾ › Answers, its light row under it
+        def cell(name, k): return (row(name) if k == "client" else '#app [data-tsm-table] tr[data-tpt-light-of="%s"]' % name) + ' [data-tsm-col="%s"]' % k
         def word(name, k): return pg.get_attribute(cell(name, k) + " [data-tsm-word]", "data-tsm-word") if n(cell(name, k) + " [data-tsm-word]") else None
         btn = lambda name: cell(name, "l") + " [data-tsm-bring-btn]"
         def press(sel):

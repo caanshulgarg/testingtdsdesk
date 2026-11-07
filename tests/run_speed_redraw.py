@@ -70,10 +70,11 @@ async def main():
         ok(1 <= c <= 3, "20 background asks over a second: %d drawings (1-3)" % c)
         d = await pg.evaluate("() => { const a = __renders; render(); return __renders - a; }")
         ok(d == 1, "render() still draws at once (%d)" % d)
-        f = await pg.evaluate("""() => { const b = document.querySelector('#app [data-tsm-filter="need"]'); if (!b) return 'no filter'; const a = __renders; b.click();
-            const now = document.querySelector('#app [data-tsm-filter="need"]'); return [__renders - a, now && now.getAttribute('aria-pressed')]; }""")
-        ok(f == [1, "true"], "a click (the Need you filter) draws in the same moment: %s" % (f,))
-        await pg.evaluate("""() => { const b = document.querySelector('#app [data-tsm-filter="all"]'); if (b) b.click(); }""")
+        # next-tally-simple2: no filter chips; a row's More ▾ is the click
+        f = await pg.evaluate("""() => { const b = document.querySelector('#app [data-tpt-open]'); if (!b) return 'no More'; const k = b.getAttribute('data-tpt-open'), a = __renders; b.click();
+            const now = document.querySelector('#app [data-tpt-open="' + k + '"]'); return [__renders - a, now && now.getAttribute('aria-expanded')]; }""")
+        ok(f == [1, "true"], "a click (a row's More ▾) draws in the same moment: %s" % (f,))
+        await pg.evaluate("""() => { const b = document.querySelector('#app [data-tpt-open][aria-expanded="true"]'); if (b) b.click(); }""")
         ok(not errs, "no page errors (%s)" % errs[:2])
         await ctx.close()
 
