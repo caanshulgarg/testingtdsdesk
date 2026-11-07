@@ -94,11 +94,12 @@ def main():
         ok(top.startswith("Waiting for a posting on this computer: %s · waiting (and 2 more)" % ORB), "1. the top line: Waiting for a posting on this computer: <company> · <status> (%s)" % top)
         pg.click("#app [data-stuck-jobs=top] [data-stuck-see]"); pg.wait_for_timeout(300)
         rows = E("() => [...document.querySelectorAll('#app [data-stuck-jobs=top] [data-stuck-job]')].map(e => e.getAttribute('data-stuck-job'))")
-        ok(rows == [DIRECT, RUNNING, CHECKING] and n("#app [data-stuck-jobs=top] [data-stuck-cancel]") == 3, "1. See postings: the 3 left, a Cancel each (%s)" % rows)
+        labels = E("() => [...document.querySelectorAll('#app [data-stuck-jobs=top] [data-stuck-cancel]')].map(b => b.textContent)")
+        ok(rows == [DIRECT, RUNNING, CHECKING] and labels == ["Stop posting"] * 3, "1. See postings: the 3 left, a Stop posting each (%s %s)" % (rows, labels))
         E("() => { window.__asked = []; window.__askWas = window.askConfirm; window.askConfirm = async (q) => { window.__asked.push(q); return window.__askAns; }; window.__askAns = {ok: false}; }")
         pg.click('#app [data-stuck-jobs=top] [data-stuck-cancel="%s"]' % DIRECT); pg.wait_for_timeout(600)
         q = (E("() => window.__asked") or [{}])[0]
-        ok(q.get("title") == "Stop this posting?" and q.get("body") == "Nothing more is sent to Tally for it." and DIRECT not in BR["cancels"],
+        ok(q.get("title") == "Stop this posting?" and q.get("body") == "Nothing more is sent to Tally for it." and q.get("danger") is True and DIRECT not in BR["cancels"],
            "1. Cancel asks first: Stop this posting? Nothing more is sent to Tally for it.; Keep it: nothing stopped (%s)" % q)
         E("() => { window.__askAns = {ok: true}; }")
         pg.click('#app [data-stuck-jobs=top] [data-stuck-cancel="%s"]' % DIRECT); pg.wait_for_timeout(1200)
@@ -109,6 +110,14 @@ def main():
         E("(c) => { location.hash = '#/c/' + encodeURIComponent(c) + '/from-tally'; if (typeof Route === 'object' && Route.apply) Route.apply(location.hash); else openCompany(c).then(() => { S.tab = 'books'; S.booksTab = 'import'; render(); }); }", ids[ORBIT])
         pg.wait_for_timeout(4000)
         ok(txt("#app [data-masters] [data-stuck-jobs=masters]").startswith("Waiting for a posting on this computer: %s · running" % ORB), "1. Books › From Tally: beside Update now (%s)" % txt("#app [data-masters]")[:200])
+
+        # the postings finished by themselves, the bridge no longer waits for one: the line goes without a reload
+        BR["jobs"] = []; g1 = BR["gets"]
+        E("""() => { const d = window.__devs[0]; delete d.info.beat.keepWait; d.info.beat.at = new Date().toISOString();
+          TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }""")
+        try: pg.wait_for_function("() => !document.querySelector('#app [data-stuck-jobs]')", timeout=8000); gone = True
+        except Exception: gone = False
+        ok(gone and BR["gets"] == g1 + 1, "1. keepWait no longer 'posting': the list asked once more, the line gone (%d asks; %s)" % (BR["gets"] - g1, txt("#app [data-masters]")[:120]))
 
         print("== 2. a Mac: no bridge here")
         BR["jobs"] = [dict(j) for j in JOBS]; BR["cancels"] = []; g0 = BR["gets"]

@@ -56,7 +56,7 @@ export async function jobsLook(force) {
   return J.list;
 }
 const ask = async () => {
-  const q = { title: "Stop this posting?", body: "Nothing more is sent to Tally for it.", ok: "Stop it", cancel: "Keep it" };
+  const q = { title: "Stop this posting?", body: "Nothing more is sent to Tally for it.", ok: "Stop it", cancel: "Keep it", danger: true };
   if (typeof window.askConfirm === "function") { const r = await window.askConfirm(q); return !!(r && (r.ok || r === true)); }
   return window.confirm(q.title + " " + q.body);
 };
@@ -64,7 +64,8 @@ const ask = async () => {
 export function PostingWait({ beat, hook = "line" }) {
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(""), wait = postingWait(beat), up = here();
   // (once a page; again, at most every 30 s, while the bridge waits for a posting)
-  useEffect(() => { if (up && (wait || !J.at)) jobsLook(false); });
+  // and once more when the bridge stops waiting for a posting (one finished by itself: the line goes, no reload)
+  useEffect(() => { if (up && (wait || !J.at)) jobsLook(false); else if (up && J.wasWait && !wait) jobsLook(true); J.wasWait = wait; });
   const list = (up && J.list) || [];
   if (!list.length) return null;
   const j = list[0];
@@ -74,6 +75,6 @@ export function PostingWait({ beat, hook = "line" }) {
     {open && <ul className="tsm-stuck-list" data-stuck-list="" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{list.map((x) => <li key={x.id} data-stuck-job={x.id}>
       {(x.company || "") + " · " + (x.status || "") + (x.message ? " · " + x.message : "") + " "}
       <button type="button" className="btn small" data-stuck-cancel={x.id} disabled={busy === x.id}
-        onClick={async () => { if (!(await ask())) return; setBusy(x.id); try { await cancelJob(x.id); } catch (e) { J.err = String((e && e.message) || e); } setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Cancel"}</button></li>)}</ul>}
+        onClick={async () => { if (!(await ask())) return; setBusy(x.id); try { await cancelJob(x.id); } catch (e) { J.err = String((e && e.message) || e); } setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button></li>)}</ul>}
   </div>;
 }
