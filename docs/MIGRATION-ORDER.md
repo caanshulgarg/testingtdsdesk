@@ -710,17 +710,12 @@ tally_post_count_for dfacb63ec76bcec7de9a5ce7f7060a95, tally_post_any_bridge 121
 `tally_post_any_bridge()` answer false (tested: `ROLLBACK_142=<file> tests/run_migration142.py`). Tested on pg_stand:
 `tests/run_migration142.py` (RED_WITHOUT_142=1 fails).
 
-## 143-145: Corporate phase 1 (not run yet; branch next-corporate, 07-Nov-2026)
+## 143: Corporate phase 1, the company profile (not run yet; branch next-corporate, 07-Nov-2026)
 
-Three add-only files in `server/corporate`, each independent of every other migration (they need only firms, members,
-my_firm() and can_write()), each one transaction, safe to run twice, each with a rollback file (not a migration; it refuses
-while the table has rows unless `set fincom.corp_rollback = 'drop-with-rows'` after a copy is kept). Explicit grants:
-anon nothing; authenticated read for the firm's members, write for owner and staff (can_write()); service_role all.
-- **143** `migration-143-corp-profiles.sql`: `corp_profiles` (one row a client: profile, directors, shareholders, charges,
-  letterhead; read / add / change, no delete), trigger `corp_profiles_touch` (who and when; firm and client never change).
-- **144** `migration-144-corp-filings.sql`: `corp_filings` (the e-Forms tracked; unique firm, client, ref; filed needs SRN
-  and date, not needed a reason; read / add / change / remove), trigger `corp_filings_touch`.
-- **145** `migration-145-corp-documents.sql`: `corp_documents` (resolutions, notices, minutes; a draft may be removed, a
-  final may not), trigger `corp_documents_touch`.
-Tested on pg_stand: `tests/run_migration_corp.py` (`CORP_ONLY=143` for one). The app works without them (kept on each
-computer, and says sharing starts once the server is updated). The md5s are in the deploy note of the release.
+**143** `server/corporate/migration-143-corp-profiles.sql`: `corp_profiles` (one row a client: profile, directors,
+shareholders, charges, letterhead; read for the firm's members, add / change for owner and staff (can_write()), no delete;
+anon nothing, service_role all), trigger `corp_profiles_touch` (who and when; firm and client never change). Add-only, one
+transaction, safe to run twice; independent of every other migration (needs only firms, members, my_firm(), can_write()).
+Rollback `server/corporate/rollback-143-corp-profiles.sql` (not a migration): refuses while the table has rows unless
+`set fincom.corp_rollback = 'drop-with-rows'` after a copy is kept. Tested on pg_stand: `tests/run_migration_corp.py`
+(`CORP_ONLY=143`). The app works without it (kept on each computer, and says sharing starts once the server is updated).

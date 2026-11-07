@@ -20,7 +20,8 @@ RED before stage 2: no profile page. Run on the React build: TDSDESK_SITE=../app
 import os, sys, json, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
 from playwright.sync_api import sync_playwright
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
+from corp_fake_cloud import INSTALL
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = os.environ.get("TDSDESK_SHOTS", os.path.join(HERE, "out", "corp-shots")); os.makedirs(SHOTS, exist_ok=True)
 PORT = int(os.environ.get("CORP_PORT") or 8722)
@@ -34,8 +35,8 @@ def ok(c, w):
 
 OPEN = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 SETUP = """() => {
-  const a = newCompany({name: "Kestrel Textiles Private Limited", gstin: "07AABCK1234F1Z5"}); a.pan = "AABCK1234F"; a.tan = "DELK12345E"; a.address = "12 Sample Road, New Delhi 110001";
-  const b = newCompany({name: "Heron Looms Private Limited", gstin: "29AABCH5678G1Z9"}); b.pan = "AABCH5678G";
+  const a = newCompany({name: "Kestrel Textiles Private Limited (made-up)", gstin: "07AABCK1234F1Z5"}); a.pan = "AABCK1234F"; a.tan = "DELK12345E"; a.address = "12 Sample Road, New Delhi 110001";
+  const b = newCompany({name: "Heron Looms Private Limited (made-up)", gstin: "29AABCH5678G1Z9"}); b.pan = "AABCH5678G";
   [a, b].forEach((c) => { S.companies[c.id] = c; Store.saveCompany(c); });
   S.coId = a.id; S.view = "company"; S.tab = "dash"; S.loadingCo = false; render(); return [a.id, b.id]; }"""
 def go_profile(pg, cid):
@@ -55,7 +56,7 @@ with sync_playwright() as p:
 
     print("1. what FinCom holds")
     ok(E("!!document.querySelector('#app [data-corp-page=profile]')"), "the profile page")
-    ok(txt(pg, "#app [data-corp-name]") == "Kestrel Textiles Private Limited", "the name (%s)" % txt(pg, "#app [data-corp-name]"))
+    ok(txt(pg, "#app [data-corp-name]") == "Kestrel Textiles Private Limited (made-up)", "the name (%s)" % txt(pg, "#app [data-corp-name]"))
     ok(txt(pg, "#app [data-rec=pan]") == "AABCK1234F · DELK12345E" and txt(pg, "#app [data-rec=gstin]") == "07AABCK1234F1Z5", "PAN · TAN and GSTIN from the client (%s, %s)" % (txt(pg, "#app [data-rec=pan]"), txt(pg, "#app [data-rec=gstin]")))
     ok(E("!!document.querySelector('#app [data-corp-health]')") and E("!!document.querySelector('#app [data-corp-directors]')") and E("!!document.querySelector('#app [data-corp-shares]')") and E("!!document.querySelector('#app [data-corp-charges]')"),
        "the parts: health, directors, shareholding, charges")
@@ -96,7 +97,7 @@ with sync_playwright() as p:
     pg.check("#app [data-director-row='0'] input[data-kyc]"); W(300)
     pg.click("#app [data-corp-edit=directors]"); W(400)
     rows = E("[...document.querySelectorAll('#app [data-corp-directors] tbody tr')].map(r => r.innerText.replace(/\\s+/g, ' ').trim())")
-    ok(len(rows) == 3 and "Asha Verma (made-up) 00000011 Director 10-Jun-2019 Done" == rows[0] and rows[1].endswith("Due by 30-Sep") and "Not needed (no DIN)" in rows[2], "the directors and their KYC (%s)" % rows)
+    ok(len(rows) == 3 and "Asha Verma (made-up) 00000011 Director 10-Jun-2019 Done" == rows[0] and (rows[1].endswith("Overdue") if E("istToday()") > "20260930" else rows[1].endswith("Due by 30-Sep")) and "Not needed (no DIN)" in rows[2], "the directors and their KYC (%s)" % rows)
     pg.click("#app [data-corp-edit=shares]"); W(300)
     for n, s in (("Asha Verma (made-up)", "6000"), ("Ravi Menon (made-up)", "4000")):
         pg.click("#app [data-corp-add=holder]"); W(250)
@@ -141,7 +142,7 @@ with sync_playwright() as p:
     print("6. Paste MCA master data")
     go_profile(pg, co2)
     pg.click("#app [data-corp-paste]"); W(300)
-    MASTER = "\n".join(["CIN\tU13990KA2020PTC000002", "Company Name\tHeron Looms Private Limited", "ROC Code\tRoC-Bangalore", "Class of Company\tPrivate", "Company SubCategory\tNon-govt company",
+    MASTER = "\n".join(["CIN\tU13990KA2020PTC000002", "Company Name\tHeron Looms Private Limited (made-up)", "ROC Code\tRoC-Bangalore", "Class of Company\tPrivate", "Company SubCategory\tNon-govt company",
                         "Authorised Capital(Rs)\t5,00,000", "Paid up Capital(Rs)\t1,00,000", "Date of Incorporation\t15/07/2020", "Registered Address\t3 Made-up Street, Bengaluru 560001",
                         "Email Id\toffice@example.com", "Date of last AGM\t28/09/2025", "Company Status(for efiling)\tActive", "", "DIN/PAN\tName\tBegin Date", "00000033\tKiran Rao (made-up)\t15/07/2020"])
     pg.fill("#app [data-corp-paste-box] textarea", MASTER); W(400)
@@ -154,50 +155,43 @@ with sync_playwright() as p:
     ok("Kiran Rao (made-up)" in (txt(pg, "#app [data-corp-directors]") or ""), "the director from the master data")
 
     print("7. the firm's copy")
-    calls = E("""(cid) => new Promise(async (done) => {
-      const log = [], realOn = Cloud.on, realApi = Cloud.api;
-      Cloud.on = () => true;
-      Cloud.api = async (path, opts) => { log.push({path, method: (opts && opts.method) || 'GET', prefer: opts && opts.headers && opts.headers.Prefer, body: opts && opts.body});
-        if (/^corp_profiles\\?select/.test(path)) return [{client_id: cid, profile: {cin: 'U17299DL2019PTC000000', nic: '13990 · weaving (from the firm)'}, directors: [{name: 'Firm Director (made-up)', din: '00000099', desig: 'Director'}], shareholders: [], charges: [], letterhead: {}, updated_at: '2099-01-01T00:00:00Z'}];
-        return []; };
-      try {
-        // this computer's edits already sent (nothing pending): the firm's newer copy wins
-        const k = 'fincom:corp:' + cid, kept = JSON.parse(localStorage.getItem(k)); kept.pending = {}; localStorage.setItem(k, JSON.stringify(kept));
-        FCCorp.forget(cid); FCCorp.corpOf(cid);
-        await new Promise((r) => setTimeout(r, 800));
-        const nic = (FCCorp.corpOf(cid).profile || {}).nic + ' / ' + ((FCCorp.corpOf(cid).profile.directors || [])[0] || {}).name;
-        await FCCorp.flush(cid);
-        done({log, nic});
-      } finally { Cloud.on = realOn; Cloud.api = realApi; }
-    })""", co)
-    reads = [c["path"] for c in calls["log"] if c["method"] == "GET"]
+    E(INSTALL)
+    E("(cid) => { __fake.rows.corp_profiles.push({client_id: cid, profile: {cin: 'U17299DL2019PTC000000', nic: '13990 · weaving (from the firm)'}, directors: [{id: 'f1', name: 'Firm Director (made-up)', din: '00000099', desig: 'Director'}], shareholders: [], charges: [], letterhead: {}, updated_at: __fake.stamp()}); }", co)
+    # this computer's edits already sent (nothing waiting): the firm's copy is the one shown
+    E("(cid) => { const k = FCCorp.key() + cid, o = JSON.parse(localStorage.getItem(k)); o.profile.dirty = {}; localStorage.setItem(k, JSON.stringify(o)); FCCorp.forget(cid); FCCorp.corpOf(cid); }", co); W(1200)
+    reads = [c["path"] for c in E("() => __fake.log") if c["method"] == "GET"]
     ok(any(r.startswith("corp_profiles?select=*&client_id=eq.") for r in reads) and any(r.startswith("corp_filings?") for r in reads) and any(r.startswith("corp_documents?") for r in reads),
        "signed in: the three tables are read for this client (%s)" % reads)
-    ok(calls["nic"] == "13990 · weaving (from the firm) / Firm Director (made-up)", "the firm's newer copy is taken, its lists too (%s)" % calls["nic"])
-    sent = E("""(cid) => new Promise(async (done) => {
-      const log = [], realOn = Cloud.on, realApi = Cloud.api;
-      Cloud.on = () => true;
-      Cloud.api = async (path, opts) => { log.push({path, method: (opts && opts.method) || 'GET', prefer: opts && opts.headers && opts.headers.Prefer, body: opts && opts.body}); return []; };
-      try {
-        FCCorp.corpOf(cid).pending.profile = 1; await FCCorp.flush(cid);
-        done(log);
-      } finally { Cloud.on = realOn; Cloud.api = realApi; }
-    })""", co)
-    post = [c for c in sent if c["method"] == "POST"]
-    ok(post and post[0]["path"] == "corp_profiles?on_conflict=firm_id,client_id" and "resolution=merge-duplicates" in (post[0]["prefer"] or "") and post[0]["body"]["client_id"] == co
-       and [d["din"] for d in post[0]["body"]["directors"]] == ["00000099"] and "directors" not in post[0]["body"]["profile"] and post[0]["body"]["profile"].get("nic", "").startswith("13990"),
-       "a change is an upsert on (firm_id, client_id), the lists beside the profile (%s)" % json.dumps(post[:1])[:300])
-    note = E("""(cid) => new Promise(async (done) => {
-      const realOn = Cloud.on, realApi = Cloud.api;
-      Cloud.on = () => true;
-      Cloud.api = async () => { throw new Error("Could not find the table 'public.corp_profiles' in the schema cache"); };
-      try { FCCorp.forget(cid); FCCorp.corpOf(cid); await new Promise((r) => setTimeout(r, 500)); FCCorp.corpOf(cid).pending.profile = 1; await FCCorp.flush(cid); render(); await new Promise((r) => setTimeout(r, 400));
-        done({text: (document.querySelector('#app [data-corp-cloud]') || {}).innerText || '', pending: Object.keys(FCCorp.corpOf(cid).pending)}); }
-      finally { Cloud.on = realOn; Cloud.api = realApi; }
-    })""", co2)
-    ok("Sharing with the firm starts once" in note["text"] and "profile" in note["pending"], "no table on the server: kept here, waiting, and said (%s)" % note)
-    E("() => { FCCorp.forget(); render(); }"); W(500)
+    got = E("(cid) => { const p = FCCorp.corpOf(cid).profile; return p.nic + ' / ' + (p.directors[0] || {}).name; }", co)
+    ok(got == "13990 · weaving (from the firm) / Firm Director (made-up)", "the firm's copy is taken, its lists too (%s)" % got)
+    E("(cid) => { __fake.log = []; FCCorp.saveProfile(cid, {phone: '+91 11 0000 0002'}); }", co); W(1200)
+    pt = [c for c in E("() => __fake.log") if c["method"] == "PATCH"]
+    ok(pt and pt[0]["path"].startswith("corp_profiles?client_id=eq.") and "updated_at=eq." in pt[0]["path"] and [d["din"] for d in pt[0]["body"]["directors"]] == ["00000099"]
+       and "directors" not in pt[0]["body"]["profile"] and pt[0]["body"]["profile"].get("phone") == "+91 11 0000 0002", "a change: a conditional update of the row, the lists beside the profile (%s)" % json.dumps(pt[:1])[:300])
+    E("(cid) => { __fake.missing.corp_profiles = true; FCCorp.forget(cid); FCCorp.corpOf(cid); }", co2); W(800)
+    E("(cid) => { FCCorp.saveProfile(cid, {phone: '+91 80 0000 0003'}); render(); }", co2); W(1200)
+    note = E("() => (document.querySelector('#app [data-corp-cloud]') || {}).innerText || ''")
+    ok("Sharing with the firm starts once" in note and "profile" in E("(cid) => Object.keys(FCCorp.corpOf(cid).pending)", co2), "no table on the server: kept here, waiting, and said (%s)" % note)
+    E("() => __fake.restore()"); E("() => { FCCorp.forget(); render(); }"); W(500)
     ok("Kiran Rao (made-up)" in (txt(pg, "#app [data-corp-directors]") or ""), "this computer's copy is still there afterwards")
+
+    print("M4, M5, L3: row ids, another client, a viewer")
+    pg.click("#app [data-corp-edit=directors]"); W(300)
+    pg.click("#app [data-corp-add=director]"); W(300)
+    fill(pg, "#app [data-director-row='1'] input[aria-label=\"Director's name\"]", "Second Director (made-up)")
+    ids = E("[...document.querySelectorAll('#app [data-director-row]')].map(r => r.dataset.rowId)")
+    ok(len(ids) == 2 and all(ids) and len(set(ids)) == 2, "each row has its own id (%s)" % ids)
+    pg.click("#app [data-director-row='0'] button:has-text('Remove')"); W(400)
+    left = E("[...document.querySelectorAll('#app [data-director-row] input[aria-label=\"Director\\'s name\"]')].map(e => e.value)")
+    ok(left == ["Second Director (made-up)"] and E("[...document.querySelectorAll('#app [data-director-row]')].map(r => r.dataset.rowId)") == ids[1:], "the first removed: the second row keeps its own words and id (%s)" % left)
+    pg.click("#app [data-corp-edit=directors]"); W(300)
+    pg.click("#app [data-corp-paste]"); W(300)
+    ok(E("!!document.querySelector('#app [data-corp-paste-box]')"), "Paste open on this client")
+    go_profile(pg, co); W(400)
+    ok(not E("!!document.querySelector('#app [data-corp-paste-box]')") and not E("!!document.querySelector('#app [data-corp-details]')"), "another client: Paste and Edit closed")
+    E("() => { window.__realOn = Cloud.on; window.__realRole = Cloud.st.role; Cloud.on = () => true; Cloud.st.role = 'viewer'; Cloud.api = async () => []; render(); }"); W(600)
+    ok(E("!!document.querySelector('#app [data-corp-readonly]')") and not E("!!document.querySelector('#app [data-corp-edit]')") and not E("!!document.querySelector('#app [data-corp-paste]')"), "a viewer: the profile read-only, no Edit, no Paste")
+    pg.reload(); W(3500); E(OPEN); W(1200)
     ctx.close()
 
     print("8. a phone")

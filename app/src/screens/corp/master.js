@@ -22,7 +22,10 @@ const LABELS = [
 ];
 const MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 // "25/09/2025", "25-09-2025", "25-Sep-2025", "2025-09-25" -> "2025-09-25"
-export function dayOf(s) {
+// a real day only: 31/02/2026 or 2026-13-01 is no date (the review of 30f70eea6)
+const real = (d) => { if (!d) return ""; const [y, m, dd] = d.split("-").map(Number), x = new Date(Date.UTC(y, m - 1, dd)); return x.getUTCFullYear() === y && x.getUTCMonth() === m - 1 && x.getUTCDate() === dd && y > 1850 ? d : ""; };
+export function dayOf(s) { return real(dayRaw(s)); }
+function dayRaw(s) {
   const t = String(s || "").trim();
   let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t); if (m) return m[1] + "-" + m[2] + "-" + m[3];
   m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/.exec(t); if (m) return m[3] + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
@@ -45,11 +48,11 @@ export function readMaster(text) {
   // the directors' table: a DIN (8 digits) and a name, with a begin date and designation where shown
   const directors = [];
   lines.forEach((l) => {
-    const m = /^(\d{8})\s+(.+?)(?:\s{2,}|\t|$)(.*)$/.exec(l.replace(/\t/g, "  "));
-    if (!m || /capital|incorporat/i.test(l)) return;
-    const rest = (m[3] || "").split(/\s{2,}/).map((x) => x.trim()).filter(Boolean);
-    const date = rest.map(dayOf).find(Boolean) || "", desig = rest.find((x) => /director|secretary|officer|manager/i.test(x)) || "Director";
-    if (!directors.some((d) => d.din === m[1])) directors.push({ din: m[1], name: m[2].replace(/\s+/g, " ").trim(), desig: desig.replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bOf\b/g, "of"), appointed: date });
+    // a row of the table: its cells apart by a tab or two spaces or more; the first an 8-digit DIN, the second the name
+    const cells = l.split(/\t+|\s{2,}/).map((x) => x.trim()).filter(Boolean);
+    if (cells.length < 2 || !/^\d{8}$/.test(cells[0]) || /capital|incorporat/i.test(l)) return;
+    const rest = cells.slice(2), date = rest.map(dayOf).find(Boolean) || "", desig = rest.find((x) => /director|secretary|officer|manager/i.test(x)) || "Director";
+    if (!directors.some((d) => d.din === cells[0])) directors.push({ din: cells[0], name: cells[1].replace(/\s+/g, " "), desig: desig.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bOf\b/g, "of"), appointed: date });
   });
   const f = {};
   if (raw.cin) f.cin = raw.cin.toUpperCase().replace(/\s+/g, "");

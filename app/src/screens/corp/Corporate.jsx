@@ -62,6 +62,6 @@ export default function Corporate() {
     {page === "forms" ? <div className="corp-card corp-empty" data-corp-page="forms">e-Forms come with the next part of this release.</div>
       : page === "docs" ? <div className="corp-card corp-empty" data-corp-page="docs">Resolutions &amp; minutes come with the next part of this release.</div>
       : page === "aoc4" ? <div className="corp-card corp-empty" data-corp-page="aoc4">The AOC-4 builder comes with the next part of this release.</div>
-      : <Profile co={co} formsDue={[]} />}
+      : <Profile key={co.id} co={co} formsDue={[]} />}
   </div>;
 }

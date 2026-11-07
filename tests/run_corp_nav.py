@@ -28,7 +28,7 @@ def ok(c, w):
 OPEN = "() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"
 # two made-up clients: a company (PAN AABCK1234F: C) and a partnership firm (PAN AAFFL5678G: F)
 SETUP = """() => {
-  const a = newCompany({name: "Kestrel Textiles Private Limited", gstin: "07AABCK1234F1Z5"}); a.pan = "AABCK1234F";
+  const a = newCompany({name: "Kestrel Textiles Private Limited (made-up)", gstin: "07AABCK1234F1Z5"}); a.pan = "AABCK1234F";
   const b = newCompany({name: "Lantern Traders (made-up firm)", gstin: "27AAFFL5678G1Z2"}); b.pan = "AAFFL5678G";
   [a, b].forEach((c) => { S.companies[c.id] = c; Store.saveCompany(c); });
   S.coId = a.id; S.view = "company"; S.tab = "dash"; S.loadingCo = false; render(); return [a.id, b.id]; }"""
@@ -69,7 +69,7 @@ with sync_playwright() as p:
     ok(E("S.tab === 'books' && booksTab() === 'corp'") and E("location.hash").endswith("/books/corp"), "Corporate opens Company profile (%s)" % E("location.hash"))
     ok(E(LIT) == ["Corporate"], "Corporate lit as the current page (%s)" % E(LIT))
     ok(E(TITLE) == "Corporate", "the top bar's title: Corporate (%s)" % E(TITLE))
-    tabs = E("[...document.querySelectorAll('#app [data-corp-tab]')].map(e => e.innerText.trim())")
+    tabs = E("[...document.querySelectorAll('#app [data-corp-tab]')].map(e => e.innerText.trim().split('\\n')[0])")
     ok(tabs == ["Company profile", "e-Forms", "Resolutions & minutes"], "the tabs (%s)" % tabs)
     ok(E("!!document.querySelector('#app [data-corp-page=profile]')"), "the profile page is shown")
     for k, page, addr in (("forms", "forms", "/books/corp-forms"), ("docs", "docs", "/books/corp-docs"), ("profile", "profile", "/books/corp")):

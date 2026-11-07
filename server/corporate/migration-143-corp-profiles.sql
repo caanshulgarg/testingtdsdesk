@@ -12,7 +12,7 @@
 --     updated_by, updated_at   who changed it last and when: set by the database (corp_profiles_touch)
 -- Row security: a firm's members read their firm's rows; its owner and staff (can_write()) add and change them, for their
 -- own firm only; nobody deletes (no grant, no policy). The service role keeps all rights, as on every table.
--- Tested by tests/run_migration143.py (run twice, the row security, the checks; ROLLBACK_143 for the rollback file).
+-- Tested by tests/run_migration_corp.py (run three times, the row security, the checks, the rollback file).
 
 begin;
 set local lock_timeout = '10s';     -- never queue long behind a session holding a table here (a timeout rolls the whole file back: run it again)
