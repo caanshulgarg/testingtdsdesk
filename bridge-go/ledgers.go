@@ -18,8 +18,10 @@
 // with plain words (the company's trouble, in the beat; the round's end line): Tally is left alone for the back-off
 // (1 minute, doubling to 30 minutes) and the round goes on from that chunk at the next try. Stopped the third time in a
 // row (ledMinStops), it is halved on, down to one MasterID (each request still stopped at 2 s), and a ledger that alone
-// takes Tally longer than 2 s is skipped from now on and named to FinCom ("takes Tally longer than 2 s"), as a ledger
-// that hangs Tally is; the rest is read. The group list stopped at 2 s never holds the ledgers: it is said, the round
+// takes Tally longer than 2 s is skipped and named to FinCom ("takes Tally longer than 2 s"), as a ledger that hangs
+// Tally is; the rest is read. Unlike a ledger that hangs Tally, it is asked once more, alone and under the same stop, at
+// the first full read of each later day (Update now or the nightly run): in time, it is read and no longer skipped;
+// stopped again, it stays skipped and is named to FinCom again. The group list stopped at 2 s never holds the ledgers: it is said, the round
 // reads the ledgers with the groups FinCom already has, and the next full read asks for the groups again. Nothing is
 // read while a posting goes, and a stopped request keeps Tally's one lock until Tally has finished it, so a posting
 // still goes first and never meets two requests at once.
@@ -500,6 +502,18 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		// a ledger that hangs Tally (found before, by halving): never asked again; the chunks stop short of it
 		if p := nextPoison(st, after); p > 0 && (tail || p <= upto) {
 			if p == after+1 {
+				// 2.5.5: a ledger skipped as taking Tally longer than 2 s is asked once more, alone and under the same
+				// stop, at the first full read of a day (Update now, the nightly run): in time, it is read and no longer
+				// skipped; else it stays skipped and is named to FinCom again
+				if k.slowRetryDue(st, p) {
+					done, err := k.slowRetry(company, bf, port, dir, st, ls, p, save)
+					if err != nil {
+						return false, err
+					}
+					if done {
+						continue
+					}
+				}
 				ls["after"] = p
 				save()
 				continue
@@ -576,6 +590,12 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				}
 				if stopped {
 					addPoisonWhy(dir, st, upto, name, ledSlowWhy())
+					tries := obj(st["ledSlowTry"]) // asked again from tomorrow's first full read
+					if tries == nil {
+						tries = M{}
+					}
+					tries[fmt.Sprint(upto)] = today()
+					st["ledSlowTry"] = tries
 					writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) takes Tally longer than 2 s; it is skipped from now on and named to FinCom", company, upto, or(name, "name not known")))
 				} else {
 					addPoison(dir, st, upto, name)
@@ -859,13 +879,103 @@ func nextPoison(st M, after int64) int64 {
 	}
 	return best
 }
+
+// 2.5.5: a ledger skipped because it took Tally longer than 2 s (not one that hangs Tally: those stay skipped)
+func slowSkipped(st M, mid int64) bool {
+	for _, x := range arr(st["ledPoison"]) {
+		a := arr(x)
+		if toI64(at(a, 0)) == mid {
+			return strings.Contains(str(at(a, 2)), "takes Tally longer than 2 s")
+		}
+	}
+	return false
+}
+
+// 2.5.5: the retry is due: a full read (Update now or the nightly run, not the ledger wake), and the ledger not tried
+// today yet (at most once a day)
+func (k *keepRun) slowRetryDue(st M, mid int64) bool {
+	if (k.kind != "now" && k.kind != "nightly") || !slowSkipped(st, mid) {
+		return false
+	}
+	return str(obj(st["ledSlowTry"])[fmt.Sprint(mid)]) != today()
+}
+
+// 2.5.5: the one retry of a slow ledger: its MasterID alone, under the 2 s stop. true when the round may go on past it
+// (read and cleared, or stopped again and kept skipped); an error when nothing reached Tally (asked again at the next
+// turn, the day's try not used) or Tally failed otherwise
+func (k *keepRun) slowRetry(company, bf string, port int, dir string, st, ls M, mid int64, save func()) (bool, error) {
+	tries := obj(st["ledSlowTry"])
+	if tries == nil {
+		tries = M{}
+	}
+	tries[fmt.Sprint(mid)] = today()
+	st["ledSlowTry"] = tries
+	save()
+	rows, _, err := readLedgerChunkAt(k.tc, company, bf, port, mid-1, mid)
+	switch {
+	case err == nil:
+		appendLedRead(dir, rows)
+		removePoison(st, mid)
+		delete(tries, fmt.Sprint(mid))
+		ls["after"], ls["n"], ls["reqs"] = mid, toInt(ls["n"])+len(rows), toInt(ls["reqs"])+1
+		save()
+		writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d answered in time when asked again; it is read and no longer skipped", company, mid))
+		return true, nil
+	case errors.Is(err, errRecorderStop) || tallyNoAnswer(err):
+		name := ""
+		for _, x := range arr(st["ledPoison"]) {
+			if a := arr(x); toI64(at(a, 0)) == mid {
+				name = str(at(a, 1))
+			}
+		}
+		why := "this ledger still takes Tally longer than 2 s (asked again " + nowS() + "); the bridge skips it and asks again tomorrow"
+		setPoisonWhy(dir, st, mid, name, why)
+		ls["after"], ls["reqs"] = mid, toInt(ls["reqs"])+1
+		save()
+		writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) still takes Tally longer than 2 s; it stays skipped, is named to FinCom again, and is asked again at the next day's full read", company, mid, or(name, "name not known")))
+		return true, nil
+	default:
+		if gaveWay(err) {
+			delete(tries, fmt.Sprint(mid)) // nothing reached Tally: the day's try is not used
+			save()
+		}
+		return false, err
+	}
+}
+
+// 2.5.5: the ledger no longer skipped
+func removePoison(st M, mid int64) {
+	keep := []any{}
+	for _, x := range arr(st["ledPoison"]) {
+		if toI64(at(arr(x), 0)) != mid {
+			keep = append(keep, x)
+		}
+	}
+	st["ledPoison"] = keep
+}
+
+// 2.5.5: a skipped ledger's reason renewed, and named to FinCom again with the next ledger list
+func setPoisonWhy(dir string, st M, mid int64, name, why string) {
+	for _, x := range arr(st["ledPoison"]) {
+		if a := arr(x); toI64(at(a, 0)) == mid && len(a) >= 3 {
+			a[2] = why
+		}
+	}
+	o := readObjFile(ledOutFile(dir))
+	if o == nil {
+		o = M{}
+	}
+	o["skipped"] = append(arr(o["skipped"]), []any{mid, name, why})
+	_ = saveFile(ledOutFile(dir), jsonText(o))
+}
+
 func addPoison(dir string, st M, mid int64, name string) {
 	addPoisonWhy(dir, st, mid, name, "this ledger does not answer and holds Tally (found "+nowS()+"); the bridge skips it")
 }
 
 // 2.5.5: a ledger found (by halving, each request stopped at 2 s) to take Tally longer than 2 s on its own
 func ledSlowWhy() string {
-	return "this ledger takes Tally longer than 2 s (found " + nowS() + "); the bridge skips it"
+	return "this ledger takes Tally longer than 2 s (found " + nowS() + "); the bridge skips it and asks again tomorrow"
 }
 
 // 2.5.5: how many times in a row the smallest chunk is stopped at 2 s (each with the back-off) before it is halved

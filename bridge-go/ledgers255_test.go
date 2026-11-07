@@ -263,4 +263,88 @@ func TestLedger255SlowLedgerSkippedRestRead(t *testing.T) {
 	if strings.Count(readText(logFile()), "(stopped)") != stops {
 		t.Fatal("the next round asked for the slow ledger again")
 	}
+	asked0 := slowAsks(f, slow)
+
+	// a day later, still slow: asked once at the next full read (alone, stopped at the limit), stays skipped, named again
+	led255Yesterday(t, slow)
+	led255Round(t, f, "r255g", "nightly")
+	if slowAsks(f, slow) != asked0+1 || len(poisonMids(readKeepState(syncFolder(zz)))) != 1 {
+		t.Fatalf("still slow: asked %d more time(s), skipped %v", slowAsks(f, slow)-asked0, poisonMids(readKeepState(syncFolder(zz))))
+	}
+	if r := arr(skippedLedgers(zz)); len(r) != 1 || !strings.Contains(str(at(arr(r[0]), 2)), "still takes Tally longer than 2 s") {
+		t.Fatalf("named to FinCom while skipped: %v", r)
+	}
+	if !strings.Contains(readText(logFile()), "it stays skipped, is named to FinCom again") {
+		t.Fatal("the retry was not said")
+	}
+	// the same day again: not asked; the ledger wake never asks it
+	led255Round(t, f, "r255h", "now")
+	led255Yesterday(t, slow)
+	led255Round(t, f, "r255i", "ledgers")
+	if slowAsks(f, slow) != asked0+1 {
+		t.Fatalf("asked %d times more (want once a day, full reads only)", slowAsks(f, slow)-asked0)
+	}
+
+	// the next day, quick again: asked once, read, and no longer skipped
+	f.mu.Lock()
+	f.slow = nil
+	f.mu.Unlock()
+	led255Round(t, f, "r255j", "now")
+	st = readKeepState(syncFolder(zz))
+	if len(poisonMids(st)) != 0 || len(arr(skippedLedgers(zz))) != 0 || len(loadLedList(syncFolder(zz))) != n {
+		t.Fatalf("cleared: skipped %v, held %d", poisonMids(st), len(loadLedList(syncFolder(zz))))
+	}
+	if !strings.Contains(readText(logFile()), fmt.Sprintf("the ledger with MasterID %d answered in time when asked again; it is read and no longer skipped", slow)) {
+		t.Fatal("the clearing was not said")
+	}
+	// and from then on it is read with the others, in the ordinary chunks
+	before := slowAsks(f, slow)
+	led255Round(t, f, "r255k", "now")
+	if slowAsks(f, slow) != before+1 || len(loadLedList(syncFolder(zz))) != n {
+		t.Fatal("not read normally after it was cleared")
+	}
+}
+
+// the ledger list requests that asked for MasterID mid (in its range)
+func slowAsks(f *standTally, mid int64) int {
+	c := 0
+	for _, r := range ledRanges(f) {
+		a := strings.SplitN(r, "-", 2)
+		if len(a) == 2 && toI64(a[0]) < mid && (a[1] == "end" || mid <= toI64(a[1])) {
+			c++
+		}
+	}
+	return c
+}
+
+// the slow ledger's last try moved to yesterday (a day passes)
+func led255Yesterday(t *testing.T, mid int64) {
+	t.Helper()
+	dir := syncFolder(zz)
+	st := readKeepState(dir)
+	tries := obj(st["ledSlowTry"])
+	if tries == nil {
+		tries = M{}
+	}
+	tries[fmt.Sprint(mid)] = "20000101"
+	st["ledSlowTry"] = tries
+	saveKeepState(dir, st)
+}
+
+// one full round of the given kind, through any stop's cool-down
+func led255Round(t *testing.T, f *standTally, id, kind string) {
+	t.Helper()
+	led255Settle(t, f)
+	k := newRun(kind, id)
+	for i := 0; i < 10; i++ {
+		err := k.step(zz, f.port, "")
+		if err == nil {
+			return
+		}
+		if !gaveWay(err) {
+			t.Fatalf("%s: %v", id, err)
+		}
+		led255Settle(t, f)
+	}
+	t.Fatalf("%s did not finish", id)
 }
