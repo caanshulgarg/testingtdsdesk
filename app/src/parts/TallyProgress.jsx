@@ -223,7 +223,7 @@ export function ClientDetails({ row }) {
   const lt = lightAt(company), whole = (h.rows || []).find((r) => r.complete && r.rows_read != null && !(Number(r.rows_received) < Number(r.rows_read)));
   const live = (h.rows || []).find((r) => !r.complete && Date.now() - Date.parse(r.last_seen_at || "") < 180000);
   const total = whole ? Number(whole.rows_read) || 0 : 0;
-  const ledW = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) : live ? nf(Number(live.rows_received) || 0) + (total ? " of " + nf(total) : " so far") : nf(m.n);
+  const ledW = m.st === "reading" && m.of > 0 ? nf(m.read) + " of " + nf(m.of) : live ? nf(Number(live.rows_received) || 0) + (total ? " of " + nf(total) : " so far") : m.n == null ? "—" : nf(m.n);
   const fy = e.p ? Number(String(e.p.fy || "").slice(0, 4)) || fyNow() : fyNow(), bk = cloudBook(cid) || {}, hist = h.rows ? historyRows(h.rows, m, e, kw) : null;
   return <div className="tpg-details tpg-three" data-tpg-details={cid}>
     <section className="tpg-d-card" data-tpg-d="masters">
