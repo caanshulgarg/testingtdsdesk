@@ -227,7 +227,7 @@ func tallyIniApply(path, addon string) (M, error) {
 	if state == "added" {
 		base = nb
 	}
-	cb, cstate, cport, cchg := iniConnect(base, iniPortUsed(path))
+	cb, cstate, cport, cchg := iniConnectPref(base, iniPortUsed(path), iniLoginPortFn) // 2.5.5: this login's own port first
 	// 2.5.4 (iniconnect254.go): never in a tally.ini every user of the computer shares; the port the file names is
 	// reported, none is chosen for it
 	if cstate == connectEnabled && iniSharedFn() {
