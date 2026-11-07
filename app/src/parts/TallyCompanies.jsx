@@ -776,7 +776,7 @@ export function runWords(cid, company) {
   return { phase: "reading", text: "Reading…" + (x.via === "cloud" ? " (the Tally computer picks it up within a minute)" : "") };
 }
 export function MastersLine({ cid }) {
-  const [ck, setCk] = useState(false), [pressing, setPressing] = useState(false);
+  const [ck, setCk] = useState(false), [pressing, setPressing] = useState(false), [said, setSaid] = useState("");
   const [, tick] = useState(0), co = S.companies && S.companies[cid];
   const link = typeof tallyLinkOf === "function" && co ? tallyLinkOf(co) || {} : {}, company = link.company || (TCloud.companyOf ? TCloud.companyOf(cid) : "") || "";
   const x = SYNC()[cid], running = !!(x && !x.end && !x.err && !x.late), m = MR[cid];
@@ -802,12 +802,14 @@ export function MastersLine({ cid }) {
   const c0 = typeof globalThis.FCConnectNow === "function" ? globalThis.FCConnectNow() : null;
   const devId = (coRows(company).find((r) => r.device_id) || {}).device_id || "";
   const step = c0 && c0.n <= 3 && typeof globalThis.FCOwnOrNone === "function" && globalThis.FCOwnOrNone(devId) ? c0 : null;
-  const again = () => { setCk(true); checkAll().finally(() => setCk(false)); };
+  const again = () => { setCk(true); setSaid(""); checkAll().then(setSaid, () => setSaid("")).finally(() => setCk(false)); };
   return <div className="tco-masters-line" data-masters="" data-masters-n={n || 0} data-masters-g={g == null ? "" : g}>
     {/* the client's Tally section: this login's Connect Tally step not done, with the steps' Check again (nothing to do next time: it reconnects by itself) */}
     {step && <p className="note bad" data-masters-step={step.n} style={{ margin: "0 0 4px" }}>{"Step " + step.n + " of 6: " + step.title + " — not done. "}
       <button type="button" className="linkbtn" data-masters-recheck="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button>{" · "}
       <button type="button" className="linkbtn" data-masters-steps={step.n} onClick={() => globalThis.FCGoSteps && globalThis.FCGoSteps()}>See the 6 steps</button></p>}
+    {/* (the step line may go while it checks: "Checking…" and the words stay here) */}
+    {(said || ck) && <p className="note" data-checked="" role="status" style={{ margin: "0 0 4px" }}>{ck ? "Checking…" : said}</p>}
     <p style={{ margin: "0 0 4px" }}><b data-masters-head="">{head}</b>{" "}<span className="note" data-masters-auto="">{"(" + AUTO_WORDS + (lt ? "; last checked " + lt : "") + ")"}</span>{" "}
       {may && <button type="button" className="btn small" data-masters-update="" disabled={running || pressing} onClick={press}>{running || pressing ? "Updating…" : "Update now"}</button>}</p>
     {m && m.say && x && x.at === m.at ? <><p className={"note" + (m.ok ? " ok" : " bad")} data-masters-result={m.ok ? "ok" : "why"} role="status" style={{ margin: "0 0 4px" }}>{m.say}</p><LaterLine cid={cid} /></>

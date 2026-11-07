@@ -285,7 +285,7 @@ def main():
         ok(n("header.top .tally-pop [data-tally-pop-steps]") == 1 and n("header.top .tally-pop [data-tally-pop-recheck], header.top .tally-pop [data-tally-pop-act=check]") >= 1, "7. See the 6 steps and Check again (%s)" % txt("header.top .tally-pop")[:200])
         if n("header.top .tally-pop [data-tally-pop-recheck]"):
             pg.click("header.top .tally-pop [data-tally-pop-recheck]"); pg.wait_for_timeout(1500)
-            ok(txt("header.top .tally-pop [data-tally-pop-msg]").startswith("Checked at "), "7. Check again says when it looked (%s)" % txt("header.top .tally-pop [data-tally-pop-msg]"))
+            ok(re.match(r"Checked \d\d:\d\d: ", txt("header.top .tally-pop [data-tally-pop-msg]")), "7. Check again says when it looked (%s)" % txt("header.top .tally-pop [data-tally-pop-msg]"))
         print("== 10 (the owner: Books › From Tally is the only place that updates ledgers). The Ledgers page and its unknown-ledgers box: the way there")
         import ledpage_setup as LP
         LP.open_page(pg, "owner")

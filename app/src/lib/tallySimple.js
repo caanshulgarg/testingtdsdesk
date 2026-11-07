@@ -313,6 +313,15 @@ export const rescanLocal = () => { HERE.again = true; HERE.last = null; look(); 
 // over), the paired bridge pointed at the address the look found, its status asked again, the cloud's beats, computers
 // and links read again, and the page drawn. Nothing new is asked of Tally (the status is the one the page start asks).
 const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+// next-fix-check-again (the owner on a Mac: "Check again is not working anywhere"): each Check again ends in words, even
+// when nothing changed: "Checked 14:32: the office Tally is connected (2 bridges). This computer has no FinCom Bridge."
+export function checkedSay() {
+  const d = new Date(), p = (x) => String(x).padStart(2, "0"), o = ownState();
+  const on = bridgesOf().filter((b) => b.at && Date.now() - Date.parse(b.at) < 3 * 60000).length;
+  return "Checked " + p(d.getHours()) + ":" + p(d.getMinutes()) + ": " + (on ? "the office Tally is connected (" + on + (on > 1 ? " bridges)." : " bridge).") : "no FinCom Bridge of the firm is online.")
+    + (o.state === "ok" ? " This computer's FinCom Bridge is connected." : o.own ? " This computer's FinCom Bridge is not answering." : " This computer has no FinCom Bridge.");
+}
+// (a part that never answers is waited for 10 s at most: the words come all the same; returns them)
 export async function checkAll(checkAgain) {
   rescanLocal();
   for (let i = 0; i < 60 && LOCALB.busy; i++) await pause(100);
@@ -323,9 +332,10 @@ export async function checkAll(checkAgain) {
   else if (typeof TCloud === "object" && TCloud.on && TCloud.on() && TCloud.refreshPane) jobs.push(Promise.resolve(TCloud.refreshPane()).catch(() => {}));
   try { if (typeof TLight === "object" && TLight.refresh && typeof TCloud === "object" && TCloud.on && TCloud.on()) { TLight.st.at = 0; jobs.push(Promise.resolve(TLight.refresh()).catch(() => {})); } } catch (e) { /* */ }
   try { if (typeof LinkRec === "object" && LinkRec.load) jobs.push(Promise.resolve(LinkRec.load(true)).catch(() => {})); } catch (e) { /* */ }
-  await Promise.all(jobs);
+  await Promise.race([Promise.all(jobs), pause(10000)]);
   try { if (typeof TallySteady === "object" && TallySteady.now) TallySteady.now(); } catch (e) { /* */ }
   if (typeof render === "function") render();
+  return checkedSay();
 }
 // the firm's bridge (bridgesOf) a local /ping answer is: its id (given with "yours"), its port, else its Windows user
 function cloudOf(x, all) {

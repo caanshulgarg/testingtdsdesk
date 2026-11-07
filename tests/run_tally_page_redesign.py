@@ -222,7 +222,7 @@ def main():
         except Exception: con = False
         ok(con and E("() => window.__navMark") is not None, "8. the bridge reachable now, Check again: Connected, without a reload (%s)" % txt("#app [data-tsm-top]")[:160])
         ok("Checking…" in E("() => window.__seen"), "8. Checking… while it looks")
-        ok(txt("#app [data-tsm-top-checked]").startswith("Checked at ") and "connected" in txt("#app [data-tsm-top-checked]"), "8. and says what it found (%s)" % txt("#app [data-tsm-top-checked]"))
+        ok(re.match(r"Checked \d\d:\d\d: ", txt("#app [data-tsm-top-checked]")) and "This computer's FinCom Bridge is connected" in txt("#app [data-tsm-top-checked]"), "8. and says what it found (%s)" % txt("#app [data-tsm-top-checked]"))
         # the owner's case: this browser paired with its bridge, which did not answer when the page opened (Bridge.st: down)
         # and answers now; its beat in the cloud not new yet. Before: Check again never asked the bridge's status again
         scene([dOff, bdev()], c1, CLx, B_ONLY)
