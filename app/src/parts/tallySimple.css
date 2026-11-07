@@ -106,3 +106,85 @@
 #app .tsm-here-co .tsm-pick, #app .tsm-here-why { flex: 1 1 100%; }
 #app .tsm-here-away { border-top: 1px solid var(--rule, var(--border)); padding-top: 8px; margin-top: 4px; }
 #app .tsm-here { border-top: 1px solid var(--rule, var(--border)); margin-top: 12px; padding-top: 10px; }
+/* next-tally-page-redesign (the owner's approved design): the top line, the one "Clients and Tally" table, Advanced. The
+   app's tokens; the design's colours where the app has none (the dots, the amber shade of a row that needs you) */
+#app .tpt-top { padding: 16px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+#app .tpt-top-main { display: flex; align-items: flex-start; gap: 12px; flex: 1 1 420px; min-width: 0; }
+#app .tpt-top-words { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+#app .tpt-top-title { font-size: 17px; font-weight: 600; }
+#app .tpt-top .tpt-dot { width: 12px; height: 12px; margin-top: 5px; }
+#app .tpt-top-acts { display: inline-flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+#app .tpt-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: #8A9099; }
+#app .tpt-dot.ok { background: var(--success, #17803D); }
+#app .tpt-dot.read { background: var(--accent, #1D5FD1); }
+#app .tpt-dot.warn { background: var(--warning, #B45309); }
+#app .tpt-dot.ring { background: transparent; border: 2px solid #8A9099; box-sizing: border-box; }
+#app .tpt-btn { min-height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 500; }
+#app .tpt-top .tpt-btn { min-height: 44px; }
+#app .tpt { overflow: hidden; }
+#app .tpt-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; padding: 16px 20px 10px; }
+#app .tpt-title { margin: 0; font-size: 18px; font-weight: 600; }
+#app .tpt .tsm-tools { padding: 0 20px 10px; }
+#app .tpt-grid { width: 100%; border-collapse: collapse; font-size: 14px; }
+#app .tpt-grid th { text-align: left; font-weight: 500; font-size: 13px; color: var(--text-secondary); background: var(--surface-muted); padding: 10px 12px; }
+#app .tpt-grid th:first-child, #app .tpt-grid td:first-child { padding-left: 20px; }
+#app .tpt-grid th.tpt-th-act { text-align: right; padding-right: 20px; }
+#app .tpt-td { padding: 12px; border-top: 1px solid var(--border-subtle, var(--border)); vertical-align: top; }
+#app .tpt-client { font-weight: 500; }
+#app .tpt-co, #app .tpt-last { color: var(--text-secondary); overflow-wrap: anywhere; }
+#app .tpt-last { white-space: nowrap; }
+#app .tpt-say { display: inline-flex; align-items: center; gap: 8px; }
+#app .tpt-why { display: block; font-size: 12px; color: var(--text-secondary); padding-left: 17px; margin-top: 2px; overflow-wrap: anywhere; }
+#app .tpt-need .tpt-why { color: #6B4A12; }
+#app .tpt-why.bad { color: var(--warning, #B45309); }
+#app .tpt-act { text-align: right; white-space: nowrap; padding-right: 20px; }
+#app .tpt-act > .btn, #app .tpt-act .tpt-link > .btn { vertical-align: middle; }
+#app .tpt-tr.tpt-need > td { background: #FFF8EC; }
+@media (prefers-color-scheme: dark) { #app .tpt-tr.tpt-need > td { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); } #app .tpt-need .tpt-why { color: var(--text-secondary); } }
+#app .tpt-more { display: inline-block; position: relative; vertical-align: middle; text-align: left; }
+#app .tpt-more > summary { list-style: none; cursor: pointer; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 18px; color: var(--text-secondary); }
+#app .tpt-more > summary::-webkit-details-marker { display: none; }
+#app .tpt-more > summary::after, #app .tpt-more > summary::before { content: none !important; display: none !important; }
+#app .tpt-more .bk-menu-list { right: 0; left: auto; }
+#app .tpt-link { display: inline-block; }
+#app .tpt-link .tsm-pick, #app .tpt-act .tsm-pick { white-space: normal; text-align: left; }
+#app .tpt-foot { padding: 10px 20px; border-top: 1px solid var(--border-subtle, var(--border)); }
+#app .tsm-details { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; display: grid; gap: 8px; font-size: 13px; white-space: normal; }
+#app .tsm-dlabel { color: var(--text-secondary); }
+#app .tpt-short { padding: 14px 20px; display: flex; flex-direction: column; gap: 6px; }
+#app .tsm-support { display: flex; flex-direction: column; gap: 10px; }
+#app .tsupport-toggle { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 0; background: transparent;
+  color: var(--foreground); font: inherit; font-size: 15px; font-weight: 600; text-align: left; cursor: pointer; padding: 0; }
+#app .tsupport-sub { font-weight: 400; }
+/* the six steps, one under another; the step to do now shaded */
+#app .tsm-guide .tsm-steps { display: flex; flex-direction: column; gap: 0; }
+#app .tsm-guide .tsm-step { border: 0; border-top: 1px solid var(--border-subtle, var(--border)); border-radius: 0; padding: 12px 4px; }
+#app .tsm-guide .tsm-step.now { background: #FFF8EC; border-color: var(--border-subtle, var(--border)); }
+#app .tsm-guide .tsm-step.now .tsm-mark { background: var(--warning, #B45309); color: #fff; }
+@media (prefers-color-scheme: dark) { #app .tsm-guide .tsm-step.now { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); } }
+/* a phone: each row a card, its one button full width (44 px), nothing wider than the screen */
+@media (max-width: 700px) {
+  #app .tpt-grid, #app .tpt-grid tbody, #app .tpt-grid tr, #app .tpt-grid td { display: block; width: auto; }
+  #app .tpt-grid thead { display: none; }
+  #app .tpt-grid tr.tpt-tr { margin: 0 12px 12px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 6px 8px; }
+  #app .tpt-grid tr.tpt-tr.tpt-need { background: #FFF8EC; border-color: #F0D9B0; }
+  #app .tpt-grid tr.tpt-tr > td { border: 0; padding: 0 !important; background: transparent !important; }
+  #app .tpt-client { grid-column: 1; grid-row: 1; }
+  #app .tpt-co { grid-column: 1 / -1; font-size: 13px; }
+  #app .tpt-state { grid-column: 1 / -1; font-size: 13px; }
+  #app .tpt-last { grid-column: 1 / -1; font-size: 12px; }
+  #app .tpt-last::before { content: "Last entry: "; }
+  #app .tpt-grid tr.tpt-tr > td.tpt-act { display: contents; }
+  #app .tpt-act > .btn, #app .tpt-act > .tpt-link { grid-column: 1 / -1; order: 10; }
+  #app .tpt-act > .btn, #app .tpt-act .tpt-link > .btn { min-height: 44px; width: 100%; }
+  #app .tpt-act > .tpt-more { grid-column: 2; grid-row: 1; }
+  #app .tpt-more > summary { width: 44px; height: 44px; }
+  #app .tpt-top-acts { flex-basis: 100%; }
+  #app .tpt-top-acts .tpt-btn { flex: 1 1 auto; }
+  #app .tpt-head, #app .tpt .tsm-tools, #app .tpt-foot { padding-left: 14px; padding-right: 14px; }
+}
+#app .tpt-wait { color: var(--warning, #B45309); }
+#app .tsm-guide .tsm-step .tsm-now { margin-top: 8px; border: 0; padding: 0; background: transparent; }
+/* (the owner's Mac: ~400 px of white under the laptop card's first line. .tsm-now-text grows (flex: 1 1 300px) to share a
+   row in .tsm-now, but the laptop card puts it straight in the guide, a column: there its 300 px basis became height) */
+#app .tsm-guide > .tsm-now-text { flex: 0 0 auto; }

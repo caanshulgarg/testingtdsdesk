@@ -81,6 +81,8 @@ def main():
             try: pg.wait_for_function("() => 'rows' in window.__tt", timeout=15000)
             except Exception: pass
             pg.wait_for_timeout(6000)
+            # next-tally-page-redesign: the rows' answers (Linked to Tally?, Open in Tally right now?) are in each row's ⋯ › Details
+            pg.evaluate("() => { S.tsm = Object.assign(S.tsm || {}, {details: 'all'}); render(); }"); pg.wait_for_timeout(800)
             r = pg.evaluate("() => ({tt: Object.fromEntries(Object.entries(window.__tt).map(([k, v]) => [k, Math.round(v - window.__t0)])), said: window.__said, n: Object.values(S.companies).filter((c) => !c.deleted).length})")
             w = row_words(pg); linked = [x for x in w if x["c"] == "Yes"]
             print("      %s: %s; linked rows' Open in Tally: %s" % (scene, json.dumps(r), json.dumps(sorted(set(x["o"][:70] for x in linked)))[:400]))

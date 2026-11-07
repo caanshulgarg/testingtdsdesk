@@ -71,6 +71,8 @@ def main():
             pg.wait_for_timeout(2200)
             return ids
         def row(name): return '#app [data-tsm-table] tr[data-tsm-row="%s"]' % name
+        # (next-tally-page-redesign: a row's one button, Connect / Link, is the row's own, not inside a column; the old
+        # answers are in its Details, open in these tests: run_tally_simple.py's EXTRA)
         def picker_groups(sel):
             return E("(s) => [...document.querySelectorAll(s + ' optgroup')].map(g => [g.label, [...g.querySelectorAll('option')].map(o => o.value)])", sel)
 
@@ -168,9 +170,9 @@ def main():
         cn = cos + [{"company": NOVAS, "client_id": None, "device_id": dn["id"], "gstin": "", "last_seen": "ago:0.5"}]
         ids = scene([dn, db], cn, [NOVA, ACME], LINK_B, A_PINGS, local=[[NOVAS], UA, "go-7", 9101])
         note = txt(row(NOVA) + ' [data-tsm-col="c"] [data-tsm-note]')
-        ok(note == "Found in Tally: “%s”" % NOVAS and txt(row(NOVA) + ' [data-tsm-col="c"] [data-tsm-connect]') == "Connect", "8. %s's row: Found in Tally: %s, Connect (%s)" % (NOVA, NOVAS, txt(row(NOVA))))
+        ok(note == "Found in Tally: “%s”" % NOVAS and txt(row(NOVA) + ' [data-tsm-connect]') == "Connect", "8. %s's row: Found in Tally: %s, Connect (%s)" % (NOVA, NOVAS, txt(row(NOVA))))
         E("() => { window.__calls = []; }")
-        pg.click(row(NOVA) + ' [data-tsm-col="c"] [data-tsm-connect]'); pg.wait_for_timeout(2500)
+        pg.click(row(NOVA) + ' [data-tsm-connect]'); pg.wait_for_timeout(2500)
         lk = [c[1] for c in E("window.__calls") if c[0] == "tally_company_link" and c[1].get("p_client")]
         ok(lk == [{"p_company": NOVAS, "p_client": ids[NOVA]}], "8. Link: %s to %s in one call (%s)" % (NOVAS, NOVA, lk))
         # the Tally icon on a client of that name (not linked): its own Tally's company chosen first
@@ -192,18 +194,18 @@ def main():
         cl9 = ["Delta Exports", NOVA, KITE, "Iris Foods"]
         # first time: nothing linked. Each of this login's three companies has its row (a client's, or its own), each one click
         ids = scene([d9, b9], c9, cl9, LINK_B, A_PINGS, local=[[DEX, NOVAS, ZEN], UA, "go-7", 9101])
-        con = lambda c: txt(row(c) + ' [data-tsm-col="c"] [data-tsm-connect]')
+        con = lambda c: txt(row(c) + ' [data-tsm-connect]')
         ok(con(DEX) == "Connect" and con(NOVA) == "Connect", "9. the exact and the near name (%s / %s): Connect in Linked to Tally? (%r, %r)" % (DEX, NOVAS, con(DEX), con(NOVA)))
-        ok(n(row(ZEN)) == 1 and txt(row(ZEN) + ' [data-tsm-col="do"] [data-tsm-act]') in ("Link", "Link to a client"), "9. %s (no client of its name): its own row with Link (%s)" % (ZEN, txt(row(ZEN))))
+        ok(n(row(ZEN)) == 1 and txt(row(ZEN) + ' [data-tsm-act]') in ("Link", "Link to a client"), "9. %s (no client of its name): its own row with Link (%s)" % (ZEN, txt(row(ZEN))))
         sk = E("(c) => JSON.stringify(tallySignNow(S.companies[c]))", ids[KITE])
         ok('"on":false' in sk and "KITE WORKS" not in sk, "9. the firm's sign for %s: not ready here, its company open only in another login's Tally (%s)" % (KITE, sk[:200]))
         ok(n(row(KESTREL)) == 0 and con(KITE) == "" and "KITE WORKS" not in txt(row(KITE)) and "Kestrel" not in main_text(), "9. another login's open companies: no row, no Connect, not offered to %s (%s)" % (KITE, txt(row(KITE))))
         ok(con("Iris Foods") == "" and txt(row("Iris Foods") + ' [data-tsm-col="c"] [data-tsm-note]') == "Found in Tally: “%s”" % IRIS, "9. a company not open now: plain words, no Connect (%s)" % txt(row("Iris Foods")))
         E("() => { window.__calls = []; }")
-        pg.click(row(NOVA) + ' [data-tsm-col="c"] [data-tsm-connect]'); pg.wait_for_timeout(2500)
+        pg.click(row(NOVA) + ' [data-tsm-connect]'); pg.wait_for_timeout(2500)
         lk = [c[1] for c in E("window.__calls") if c[0] == "tally_company_link" and c[1].get("p_client")]
         ok(lk == [{"p_company": NOVAS, "p_client": ids[NOVA]}], "9. Connect: one click, one link (%s)" % lk)
-        pg.click(row(ZEN) + ' [data-tsm-col="do"] [data-tsm-act]'); pg.wait_for_timeout(600)
+        pg.click(row(ZEN) + ' [data-tsm-act]'); pg.wait_for_timeout(600)
         ok(n(row(ZEN) + " [data-tco-add-new]") == 1 or n(row(ZEN) + " select[data-tco-relink-pick]") == 1, "9. %s's Link: a short list of clients, + New client" % ZEN)
         # later: one linked and open (its normal state), one not linked and open (Connect)
         c9b = [dict(x, client_id="NAME:" + DEX) if x["company"] == DEX else x for x in c9]

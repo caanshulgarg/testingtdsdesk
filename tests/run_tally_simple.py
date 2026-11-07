@@ -88,7 +88,9 @@ EXTRA = """([sum, open, rows, changes, heldSt]) => {
   };
   TCloud.restAll = async (u) => Cloud.api(u);
   FCTallySimple.OPEN.at = 0; FCTallySimple.OPEN.books = null; FCTallySimple.OPEN.off = false; FCTallySimple.JUST.linked = null; FCTallySimple.JUST.at = 0; FCTallySimple.forget();
-  S.tsm = null; S.tallyMore = {}; if (Rec.heldReload) Rec.heldReload();
+  // next-tally-page-redesign: the six steps open (the top line's "See the 6 steps") and each row's ⋯ › Details open, where
+  // the table's old answers now are (Linked to Tally?, Open now, Ledgers, Entries, What to do): these tests read them there
+  S.tsm = {filter: 'all', q: '', open: true, again: 0, check: 0, details: 'all'}; S.tallyMore = {}; if (Rec.heldReload) Rec.heldReload();
   if (window.tfxRefresh) window.tfxRefresh();
   render();
 }"""
@@ -188,9 +190,14 @@ def main():
         ok(txt("#app [data-tsm-now]").startswith("Step 1: On the computer or server where TallyPrime runs, download FinCom Bridge") and txt(g + " [data-tsm-download]") == "Download FinCom Bridge"
            and (pg.get_attribute(g + " [data-tsm-download]", "href") or "").startswith("assets/bridge-go/FinComBridge-Setup-2.5.1.exe?v="), "1. step 1: one sentence, Download FinCom Bridge (this site's setup) (%s)" % txt("#app [data-tsm-now]"))
         ok(n(g + " [data-tsm-panel]") == 1, "1. step 1: the connect panel (open it, type its code) under the box")
-        ok(n("#app [data-tsm-strip]") == 0 and "none connected" in txt("#app [data-tsm-pcs]"), "1. no strip; Computers with Tally: none connected (%s)" % txt("#app [data-tsm-pcs]"))
+        # next-tally-page-redesign: the top line (its Check again); the computers line and the day check of every client
+        # (Check Tally now) are under Advanced (for support)
         hd = txt("#app [data-tsm-head]")
-        ok(hd.startswith("Tally") and "Check Tally now" in hd and n("#app [data-tsm-check]") == 1, "1. the header: Tally, the sentence, Check Tally now (%s)" % hd)
+        ok(hd.startswith("Not connected yet: step 1 of 6") and n("#app [data-tsm-top-check]") == 1, "1. the top line: not connected, step 1, Check again (%s)" % hd)
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(1500)
+        ok(n("#app [data-tsm-strip]") == 0 and "none connected" in txt("#app [data-tsm-pcs]"), "1. no strip; Computers with Tally: none connected (Advanced) (%s)" % txt("#app [data-tsm-pcs]"))
+        ok(n("#app [data-support-body] [data-tsm-check]") == 1 and "Check every client for changes in Tally" in txt("#app [data-tsm-check]"), "1. the day check of every client, in Advanced (%s)" % txt("#app [data-tsm-check]"))
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore, {support: false}); render(); }"); pg.wait_for_timeout(500)
 
         # this login's own bridge answers here (bridge 2.5.3's sameSession); its Tally open, no company
         P1 = {"9101": ping(9101, True, PC + "\\" + WIN, version="2.5.3", bridgeId="go-7")}
@@ -266,7 +273,8 @@ def main():
         names = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(e => e.getAttribute('data-tsm-row'))")
         ok(names == [ACME, BRIGHT, CORAL, DELTA, EVER, GAMMA, HAZEL, IRIS, ZETA], "3. one row a client (by name), then the company no client has (%s)" % names)
         heads = E("() => [...document.querySelectorAll('#app [data-tsm-table] thead th')].map(e => e.innerText.trim())")
-        ok(heads == ["Client", "Linked to Tally?", "Open in Tally right now?", "Ledgers received?", "All entries received?", "What to do"], "3. the six questions (%s)" % heads)
+        # next-tally-page-redesign: five columns; the six questions' answers are in each row's ⋯ › Details (open in these tests)
+        ok(heads == ["Client", "Tally company", "State", "Last entry", "Action"], "3. the five columns (the six questions in Details) (%s)" % heads)
         ok([word(ACME, k) for k in "cole"] == ["Yes"] * 4 and txt(cell(ACME, "c") + " [data-tsm-note]") == "Tally company: " + ACME and txt(cell(ACME, "do")) == "Nothing.", "3. %s: Yes Yes Yes Yes, Nothing. (%s)" % (ACME, txt(row(ACME))))
         ok("412 ledgers" in txt(cell(ACME, "l")) and txt(cell(ACME, "l") + " [data-tsm-lchange]") == "Changed in Tally today: 2 new or changed, 1 renamed" and n(cell(ACME, "l") + " [data-tsm-ledgers]") == 1,
            "3. ledgers: the count, today's change in Tally, See ledgers (%s)" % txt(cell(ACME, "l")))
@@ -279,17 +287,18 @@ def main():
         ok(word(CORAL, "e") == "Not yet" and txt(cell(CORAL, "e") + " [data-tsm-note]") == "New client · 62% received · 6 min left" and pg.get_attribute(cell(CORAL, "e") + " [role=progressbar]", "aria-valuenow") == "62",
            "3. being brought: Not yet, New client · 62%% received · 6 min left, the bar (%s)" % txt(cell(CORAL, "e")))
         ok(txt(cell(CORAL, "do") + " [data-tsm-todo]") == "Nothing. It is coming in by itself." and n(cell(CORAL, "do") + " [data-tsm-upload]") == 1, "3. coming in by itself, or upload the file yourself (%s)" % txt(cell(CORAL, "do")))
-        ok(word(DELTA, "c") == "No" and txt(cell(DELTA, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % DELTA and [word(DELTA, k) for k in "ole"] == ["—"] * 3 and txt(cell(DELTA, "do") + " [data-tsm-act]") == "Link",
+        ok(word(DELTA, "c") == "No" and txt(cell(DELTA, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % DELTA and [word(DELTA, k) for k in "ole"] == ["—"] * 3 and txt(row(DELTA) + " [data-tsm-act]") == "Link",
            "3. not connected, found in Tally: No, —, Link (%s)" % txt(row(DELTA)))
         ok(txt(cell(EVER, "c") + " [data-tsm-note]") == "Found in Tally: “%s”" % SPLIT, "3. a split is found by its client's name, said in full (%s)" % txt(cell(EVER, "c")))
         ok(word(GAMMA, "l") == "Not yet" and word(GAMMA, "e") == "Not yet" and word(GAMMA, "o") == "No" and txt(cell(GAMMA, "do") + " [data-tsm-todo]") == "Open the company in Tally.", "3. linked, nothing received yet: Not yet (%s)" % txt(row(GAMMA)))
-        ok(pg.get_attribute(row(ZETA), "data-tsm-kind") == "company" and "Not chosen yet" in txt(cell(ZETA, "client")) and txt(cell(ZETA, "c") + " [data-tsm-note]") == "Open in Tally: “%s”" % ZETA and txt(cell(ZETA, "do") + " [data-tsm-act]") == "Link to a client",
+        ok(pg.get_attribute(row(ZETA), "data-tsm-kind") == "company" and "Not chosen yet" in txt(cell(ZETA, "client")) and txt(cell(ZETA, "c") + " [data-tsm-note]") == "Open in Tally: “%s”" % ZETA and txt(row(ZETA) + " [data-tsm-act]") == "Link",
            "3. a company no client has: Not chosen yet, Link to a client (%s)" % txt(row(ZETA)))
-        acts = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => r.querySelectorAll('[data-tsm-col=do] .btn').length)")
-        ok(max(acts) <= 1, "3. at most one button in What to do (%s)" % acts)
+        acts = E("() => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].map(r => r.querySelectorAll('[data-tpt-main]').length)")
+        ok(max(acts) <= 1 and min(acts) == 1, "3. one button a row (%s)" % acts)
         need, fine = n("#app [data-tsm-table] tr[data-tsm-need]"), n("#app [data-tsm-table] tr[data-tsm-fine]")
         ok(txt("#app [data-tsm-say]") == "%s %s" % ("1 client is fine." if fine == 1 else "%d clients are fine." % fine, "1 needs you." if need == 1 else "%d need you." % need) and fine == 1, "3. the header from the rows (%s; %d fine, %d need)" % (txt("#app [data-tsm-say]"), fine, need))
-        E("() => { window.__calls = []; }"); pg.click("#app [data-tsm-check]"); pg.wait_for_timeout(2500)
+        E("() => { window.__calls = []; S.tallyMore = Object.assign({}, S.tallyMore, {support: true}); render(); }"); pg.wait_for_timeout(1500)   # (in Advanced now)
+        pg.click("#app [data-tsm-check]"); pg.wait_for_timeout(2500)
         cr = calls("tally_check_request")
         ok(sorted(x["p_client"] for x in cr) == sorted(ids[c] for c in (ACME, BRIGHT, CORAL, IRIS, HAZEL)) and all(x["p_from"] == "2026-04-01" for x in cr), "3. Check Tally now: each connected client's day check, this year so far (%s)" % cr)
         shot("tally-1440-light")
@@ -349,7 +358,7 @@ def main():
            "3b. no own bridge: no Yes from another login's Tally, no company row or strip of theirs, Connect Tally at step 1 (or, nothing answering here, where to do it) (%s)" % o)
         pg.click(cell(ACME, "o") + " [data-tsm-setup]"); pg.wait_for_timeout(1200)
         ok(n("#app [data-tsm-guide][data-tsm-forced]") == 1 and n("#app [data-tsm-guide] [data-tsm-panel]") == 1, "3b. Set it up: the pairing steps (step 1, the connect panel)")
-        E("() => { S.tallyGuide = {}; S.tsm = null; render(); }")
+        E("() => { S.tallyGuide = {}; S.tsm = {filter: 'all', q: '', open: true, again: 0, check: 0, details: 'all'}; render(); }")
         # paired in this browser (its key and id held here, the bridge itself not answering): that bridge's beat
         E(MINE, ["paired", "go-7", ""]); pg.wait_for_timeout(1500)
         ok(word(ACME, "o") == "Yes" and word(BRIGHT, "o") == "No" and pg.get_attribute("#app [data-tally-simple]", "data-tsm-own") == "ok", "3b. paired in this browser: its bridge's beat answers (%s)" % col_o())
@@ -431,7 +440,7 @@ def main():
         ok(word(ACME, "o") == "Yes" and n("#app [data-tsm-strip]") == 0 and ZETA not in rows_a and pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") != "3"
            and "Zeta" not in mt and "is not connected:" not in mt, "3c. A's page: A's %s Yes; no strip, no row, no step 3 for B's open %s / %s (%s)" % (ACME, ZETA, SPLIT, rows_a))
         # (next-tally-other-login: a company open now in another login's Tally is not even offered as found)
-        ok(SPLIT not in txt(row(EVER)) and word(EVER, "o") == "—" and n(cell(EVER, "c") + " [data-tsm-connect]") == 0, "3c. A's page: B's open company is not offered to A's client (%s)" % txt(row(EVER)))
+        ok(SPLIT not in txt(row(EVER)) and word(EVER, "o") == "—" and n(row(EVER) + " [data-tsm-connect]") == 0, "3c. A's page: B's open company is not offered to A's client (%s)" % txt(row(EVER)))
         # B's own browser (B's bridge paired there): B's companies, and A's is not open in B's Tally
         E(MINE, ["paired", "go-8", ""]); pg.wait_for_timeout(1500)
         ok((n("#app [data-tsm-strip]") == 1 or pg.get_attribute("#app [data-tsm-guide]", "data-tsm-guide") == "5") and ZETA in shown() and word(ACME, "o") == "No" and word(ZETA, "o") == "Yes", "3c. B's page: B's open companies (the strip, %s's row Yes); A's %s No (%s)" % (ZETA, ACME, shown()))
