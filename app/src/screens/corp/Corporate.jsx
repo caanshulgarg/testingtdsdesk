@@ -15,16 +15,19 @@
 // are books tabs for their addresses: books:corp (profile), corp-forms, corp-docs, corp-aoc4 (#/c/<client>/books/corp...).
 // Shown for companies only (FS.entityOf: the PAN's fourth letter C, or Company chosen in Client setup). Where the work is
 // kept is said under the tabs (store.js).
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import "./corp.css";
 import { loadSerif } from "./fonts.js";
 import PageTabs from "../../parts/PageTabs.jsx";
 import Button from "../../parts/Button.jsx";
+import Loading from "../../parts/Loading.jsx";
 import Profile, { shown } from "./Profile.jsx";
 import Forms from "./Forms.jsx";
 import Docs from "./Docs.jsx";
 import { corpOf, cloudNote, retryNow, settleRemoved } from "./store.js";
 import { dueCount, dueItems } from "./eforms.js";
+// the AOC-4 builder with the Financial statements' model (FinSt), only when it is opened
+const Aoc4 = lazy(() => import("./Aoc4.jsx"));
 
 // the serif of the documents and headings, kept with the app (fonts.js; never from another site), once, when the page
 // first opens (Georgia meanwhile)
@@ -65,7 +68,7 @@ export default function Corporate() {
     </div>
     {page === "forms" ? <Forms key={co.id} co={co} />
       : page === "docs" ? <Docs key={co.id} co={co} />
-      : page === "aoc4" ? <div className="corp-card corp-empty" data-corp-page="aoc4">The AOC-4 builder comes with the next part of this release.</div>
+      : page === "aoc4" ? <Suspense fallback={<Loading what="the AOC-4 builder" page="books" />}><Aoc4 key={co.id} co={co} /></Suspense>
       : <Profile key={co.id} co={co} formsDue={dueItems(P, c.filings)} />}
   </div>;
 }

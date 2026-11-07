@@ -512,7 +512,9 @@ function Table({ rows, download, oneDl, cs, x, checkAgain }) {
   </section>;
 }
 // ---------- the top: this login's Tally in one line, with Check again (and See the 6 steps while a step is not done)
-function Top({ cs, own, rows, checkAgain, ready }) {
+function Top({ cs, own, rows, checkAgain, ready, shown }) {
+  // the steps' toggle follows what is shown (also steps asked for elsewhere, Connect another computer): hiding them ends that ask
+  const steps = () => shown ? (S.tallyGuide = {}, set({ open: false, again: 0 })) : set({ open: true });
   const [ck, setCk] = useState(false), said = saidNow();
   // Check again does what a refresh does for the connection (checkAll), then says what it found (the steps' too: UI().said)
   const again = () => { setCk(true); checkAll(checkAgain).then(keepSaid).finally(() => { setCk(false); render(); }); };
@@ -552,8 +554,8 @@ function Top({ cs, own, rows, checkAgain, ready }) {
       {kw && <div className="tsm-note tpt-wait" data-tsm-top-wait="" role="status">{kw}</div>}
       {said && !ck && <div className="tsm-note" data-tsm-top-checked="" data-checked="" role="status">{said + (down ? " Not connected yet: step " + cs.now.n + " of 6." : "")}</div>}</div></div>
     <span className="tpt-top-acts">
-      {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" onClick={() => set({ open: !UI().open })}>{UI().open ? "Hide: Connect Tally on this computer" : "Connect Tally on this computer"}</button>}
-      {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" onClick={() => set({ open: !UI().open })}>{UI().open ? "6 steps ▴" : "6 steps ▾"}</button>}
+      {cs.mode === "laptop" && office.length > 0 && <button type="button" className="linkbtn" data-tsm-steps-link="laptop" aria-expanded={shown ? "true" : "false"} onClick={steps}>{shown ? "Hide: Connect Tally on this computer" : "Connect Tally on this computer"}</button>}
+      {login && !down && <button type="button" className="linkbtn" data-tsm-steps-link="" aria-expanded={shown ? "true" : "false"} onClick={steps}>{shown ? "6 steps ▴" : "6 steps ▾"}</button>}
       <button type="button" className="btn tpt-btn" data-tsm-top-check="" disabled={ck} onClick={again}>{ck ? "Checking…" : "Check again"}</button></span>
   </section>;
 }
@@ -627,7 +629,7 @@ export default function SimpleTally({ installed, ready = true, pcs, download, sh
   const showGuide = cs.mode === "laptop" ? !officeUp || forced || ui.open || asked : cs.mode !== "login" || down || forced || ui.open || asked;
   const beat = ((own.own || {}).beat) || null;
   return <div className="tsm" data-tally-simple="" data-tsm-own={own.state} data-tsm-own-from={own.from || undefined} data-tsm-own-how={(own.own && own.own.how) || undefined} data-tsm-rows={R.extra ? "done" : "quick"}>
-    <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} /></Part>
+    <Part name="top" v={v}><Top cs={cs} own={own} rows={rows} checkAgain={checkAgain} ready={ready} shown={!!ready && showGuide} /></Part>
     {strip && !(ready && R.extra && cs.mode === "login") && <Part name="strip" v={v}><Strip key={coKey(open.company)} r={open} best={best} more={unlinked.length - 1} /></Part>}
     {ready && showGuide && <Part name="guided box" v={v}><Guide cs={cs} collapsed={!expanded} forced={forced} asked={!!g.at && (g.step || 0) <= 3 && now - g.at < GUIDE_MS} connectPanel={connectPanel} download={download} checkAgain={checkAgain} /></Part>}
     {/* next-tally-progress (the owner: "a single page doing all the things"): what comes in from Tally now, then the table,

@@ -32,7 +32,9 @@ function Detail({ co, r, close }) {
     <span>{words(r)}</span><p className="corp-help" data-form-law="" style={{ margin: 0 }}>{r.law}</p></div>;
   const base = { ref: r.ref, form: r.form, kind: r.kind, period: r.period, director: r.din || r.director || "", due: r.due, event: r.event || "", data: r.data || {} };
   const keep = (patch) => saveFiling(co.id, Object.assign({}, base, { status: r.status === "not_needed" && r.auto ? "not_started" : r.status, steps: r.done, srn: r.srn, filedOn: r.filedOn, reason: r.reason }, patch));
-  const step = (i, v) => { const n = v ? Math.max(r.done, i + 1) : i; keep({ steps: n, status: n >= 4 ? "ready" : n > 0 ? "in_progress" : "not_started" }); };
+  // AOC-4: Ready only by the builder's Ready for MCA (which keeps its figures): its steps here go to 3 at most
+  const aoc = r.builder === "aoc4", figs = !!(r.data && r.data.figures);
+  const step = (i, v) => { let n = v ? Math.max(r.done, i + 1) : i; if (aoc) n = Math.min(n, 3); keep({ steps: n, status: !aoc && n >= 4 ? "ready" : n > 0 ? "in_progress" : "not_started" }); };
   const okSrn = srnOk(srn);
   const filed = () => {
     keep({ status: "filed", srn: srn.trim().toUpperCase(), filedOn: on, steps: 4 });
@@ -44,16 +46,17 @@ function Detail({ co, r, close }) {
     {r.status !== "filed" && r.status !== "not_needed" && <fieldset style={{ border: 0, padding: 0, margin: 0, display: "flex", gap: 18, flexWrap: "wrap" }}>
       <legend className="corp-note" style={{ marginBottom: 6 }}>Steps</legend>
       {r.steps.map((s, i) => <label key={s} className="chk" style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-        <input type="checkbox" data-form-step={i} checked={r.done > i} onChange={(e) => step(i, e.target.checked)} /> {(i + 1) + ". " + s}</label>)}
+        <input type="checkbox" data-form-step={i} checked={r.done > i} disabled={aoc && i === 3} title={aoc && i === 3 ? "The AOC-4 builder's Ready for MCA does this step" : undefined} onChange={(e) => step(i, e.target.checked)} /> {(i + 1) + ". " + s}</label>)}
     </fieldset>}
     {r.builder === "aoc4" && r.status !== "filed" && <div className="corp-row"><Button className="btn small primary" data-open-aoc4="" onClick={() => { S.corpFy = r.period; goClient("books:corp-aoc4"); }}>Open the AOC-4 builder</Button>
       <span className="corp-note">Figures in the form's order from the balance sheet and P&amp;L, checked, with the attachments.</span></div>}
     {r.status !== "filed" ? <div className="corp-row" style={{ alignItems: "flex-end" }}>
       <label className="corp-f"><span>SRN (after filing on the MCA portal)</span><input type="text" data-form-srn="" value={srn} onChange={(e) => setSrn(e.target.value)} placeholder="AB1234567" maxLength={14} /></label>
       <label className="corp-f"><span>Filed on</span><input type="date" data-form-filed-on="" value={on} onChange={(e) => setOn(e.target.value)} /></label>
-      <Button className="btn small primary" data-form-filed="" disabled={!okSrn || !on} onClick={filed}>Mark as filed</Button>
+      <Button className="btn small primary" data-form-filed="" disabled={!okSrn || !on || (aoc && (r.status !== "ready" || !figs))} onClick={filed}>Mark as filed</Button>
+      {aoc && (r.status !== "ready" || !figs) && <span className="corp-note" data-form-filed-wait="">Mark it Ready for MCA in the AOC-4 builder first: its figures are kept then.</span>}
       {srn && !okSrn && <span className="corp-note">An SRN is a letter and 7 to 11 letters or digits (e.g. AB1234567).</span>}
-    </div> : <div className="corp-row"><span>{words(r)}</span><button className="linkbtn" data-form-unfile="" onClick={() => keep({ status: r.done >= 4 ? "ready" : "in_progress", srn: "", filedOn: "" })}>Not filed after all</button></div>}
+    </div> : <div className="corp-row"><span>{words(r)}</span><button className="linkbtn" data-form-unfile="" onClick={() => keep(aoc && !figs ? { status: "in_progress", steps: Math.min(r.done, 3), srn: "", filedOn: "" } : { status: r.done >= 4 ? "ready" : "in_progress", srn: "", filedOn: "" })}>Not filed after all</button></div>}
     {r.status !== "filed" && (r.status === "not_needed" ? <div className="corp-row"><span>{words(r)}</span>
       <button className="linkbtn" data-form-needed="" onClick={() => keep({ status: "not_started", reason: "", steps: 0 })}>Needed after all</button></div>
       : <div className="corp-row" style={{ alignItems: "flex-end" }}>

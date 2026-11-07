@@ -162,6 +162,12 @@ def main():
         txt = lambda sel: pg.inner_text(sel).strip() if pg.locator(sel).count() else ""
         n = lambda sel: pg.locator(sel).count()
         page = lambda: pg.inner_text("#app")
+        # next-tally-page-redesign: "Install again or on another computer" (the bridge card, its fingerprint and PowerShell
+        # line) heads Advanced (for support) itself, above the fold this test calls "the fold" ([data-advanced]); the page
+        # outside Advanced (for support) is the one to keep calm
+        def without(sel):
+            return E("(s) => { const a = document.querySelector('#app').cloneNode(true); a.querySelectorAll(s).forEach(e => e.remove()); return a.innerText; }", sel)
+        outside = lambda sel, keep: E("([s, k]) => [...document.querySelectorAll('#app ' + s)].filter(e => !e.closest(k)).length", [sel, keep])
         def scene(devs, cos, lines=(), role="owner", only=True, books=None):
             ids = E(SETUP, [devs, cos, list(lines), role, CLIENTS, only, books or {}]); pg.wait_for_timeout(1800); return ids
         def fold(open_it=True):
@@ -177,10 +183,11 @@ def main():
         G = ids["garg shekhar & company"]
         body = page()
         ok(n("#app [data-advanced]") == 1 and n("#app [data-advanced] [data-bridge-more]") == 0 and "Every support tool" in body, "one support fold (Every support tool, under For support), closed")
-        inside = [s for s in FOLD if n("#app " + s)]
-        ok(not inside, "fold closed: install, this browser's connect, history, versions, every bridge, clients' lines all inside it (%s)" % inside)
+        inside = [s for s in FOLD if outside(s, "[data-install-again]")]
+        ok(not inside and all(outside(s, "[data-for-support]") == 0 for s in FOLD), "fold closed: install, this browser's connect, history, versions, every bridge, clients' lines all inside it (%s)" % inside)
         # (next-tally-simple: the computers' line has Download FinCom Bridge and its fingerprint when a bridge is older)
-        ok(not [w for w in ["127.0.0.1", "PowerShell", "Every bridge FinCom has heard from", "Connection history", "Roll back", "Hold version", "Stop reading on all computers", "Bridge key", "6-digit"] if w in body],
+        bw = without("[data-install-again]")
+        ok(not [w for w in ["127.0.0.1", "PowerShell", "Every bridge FinCom has heard from", "Connection history", "Roll back", "Hold version", "Stop reading on all computers", "Bridge key", "6-digit"] if w in bw],
            "fold closed: none of its words on the page")
         ok(n("#app [data-tally-tab]") == 0 and "Sync activity" not in body and "Everything sent" not in body, "no tabs on the page: Sync activity and Everything sent are in the fold")
         ok("in three steps" not in body and n("#app [data-tally-guide]") == 0, "no old three-steps guide (%s)" % [l for l in body.split("\n") if "three steps" in l])
@@ -208,9 +215,14 @@ def main():
         # 2. nothing said twice, no Day Book counts
         body = page()
         once = ["Update to 2.4.4", "Reading is paused"]
-        ok(all(body.count(w) == 1 for w in once), "each problem's words once on the page (%s)" % [(w, body.count(w)) for w in once])
+        # (next-tally-page-redesign: each client's row says why it waits, once in that row; outside the table, once)
+        bt = without("[data-tsm-table]")
+        rows_twice = E("(w) => [...document.querySelectorAll('#app [data-tsm-table] tr[data-tsm-row]')].filter(r => r.innerText.split(w).length > 2).length", "Reading is paused")
+        ok(all(bt.count(w) == 1 for w in once) and rows_twice == 0, "each problem's words once on the page, and once in each row it holds (%s; rows saying it twice: %d)" % ([(w, bt.count(w)) for w in once], rows_twice))
         gone = ["needs its Day Book", "entries waiting", "entries of", "Install FinCom Bridge 2.4.4", "Update now", "Tally not open on NWS144", "Seen, not linked", "Clients not linked", "Needs you", "Clients and their Tally company"]
-        ok(not [w for w in gone if w in body], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in body])
+        # (Advanced (for support) holds the day check's own words, "each linked client's entries of this year checked")
+        bg = without("[data-for-support]")
+        ok(not [w for w in gone if w in bg], "no Day Book counts, no Update now per client, nothing said twice (%s)" % [w for w in gone if w in bg])
         ok(n("#app [data-all-good]") == 0, "something needs him: no All good")
         # round 66: the reading table and the clients' table are in Help & support (closed by default): open it
         ok(n("#app [data-reading]") == 0 and n("#app [data-tally-clients]") == 0, "round 66: fold closed: no reading table, no clients' table on the page")
@@ -234,7 +246,7 @@ def main():
         # the fold, opened: everything else, nothing removed
         ids = scene([PAUSED, OLD], companies(), DAYBOOK)
         fold(True)
-        missing = [s for s in FOLD if s not in ('[data-install-help]',) and not n("#app [data-advanced] " + s)]
+        missing = [s for s in FOLD if s not in ('[data-install-help]',) and not n("#app [data-for-support] " + s)]
         ok(not missing, "fold open: install again, this browser's connect, history, versions, stop on all, every bridge, clients' lines (%s)" % missing)
         ok(n("#app [data-advanced] [data-bridges] [data-bridge-row]") >= 2 and "Older bridge" in txt("#app [data-advanced] [data-bridges]"), "fold: every bridge heard from, the old one too")
         ok(n('#app [data-advanced] [data-tally-tab="activity"]') == 1 and n('#app [data-advanced] [data-tally-tab="sent"]') == 1, "fold: Sync activity and Everything sent")
@@ -291,10 +303,12 @@ def main():
         pg.wait_for_timeout(1500)
         held_l = txt('#app [data-tco-row="GB TEXCOAT"] [data-tco-sync=held]')
         ok(re.match(r"Ledgers [\d,]+ \u00b7 Entries Apr\u2013\w{3} 2026$", held_l) or held_l.startswith("Ledgers"), "a linked company's row: what FinCom holds (%s)" % held_l)
+        # next-tally-connect-steps: Connect Tally's six steps (the four of before are gone); hidden by the top line's "6 steps ▴"
         fold(True); pg.click("#app [data-guide-again]"); pg.wait_for_timeout(700)
-        ok(n("#app [data-connect-step]") == 4 and n("#app [data-guide-hide]") == 1, "Help & support › Connect another computer: the four steps again, with Hide the steps")
-        pg.click("#app [data-guide-hide]"); pg.wait_for_timeout(500)
-        ok(n("#app [data-connect-step]") == 0 and n("#app [data-status-card]") == 1, "Hide the steps: the card alone again")
+        # (no bridge answers in this browser: the guide is "Connect Tally on this computer", its toggle the same)
+        ok(n("#app [data-tsm-guide]") == 1 and pg.get_attribute("#app [data-tsm-steps-link]", "aria-expanded") == "true", "Help & support › Connect another computer: the steps again, with their hide (%s)" % txt("#app [data-tsm-steps-link]"))
+        pg.click("#app [data-tsm-steps-link]"); pg.wait_for_timeout(500)
+        ok(n("#app [data-tsm-guide]") == 0 and n("#app [data-tsm-top]") == 1 and n("#app [data-status-card]") == 1, "Hide the steps: the top line and the card alone again")
         fold(False)
         # ---- 17-Oct-2026 (the owner: "why it is asking to update add on.. pls remove that option.. include this automatically
         # in 2.4.5.. it should not ask the clients"): the add-on not recording on a computer whose bridge is older than 2.2.0:
@@ -459,8 +473,12 @@ def main():
         ok(rows and rows[0][1] == "stopped" and "Stopped: a request to Tally (TDSDeskCompanies) took 21.2 s" in rows[0][2], "Stopped by the bridge itself (2.3.0): its reason (%s)" % rows)
         # nothing installed: step 1 with the one download
         scene([], [])
-        ok(steps() == [["install", False], ["port", False], ["open", False], ["add", False]] and n('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') == 1
-           and "2.4.4" in txt('#app [data-firstlink] [data-fl-step="download"] [data-bridge-download]') and n("#app [data-all-good]") == 0, "nothing installed: the four steps, step 1 with the download (%s)" % steps())
+        # next-tally-connect-steps: Connect Tally's six steps replace the four of before ([data-connect-guide]); step 1 now, with
+        # the one download (the version in its link) and Connect this computer under it
+        six = E("() => [...document.querySelectorAll('#app [data-tsm-guide] [data-tsm-step]')].map(e => [e.getAttribute('data-tsm-step-key'), e.hasAttribute('data-done')])")
+        dl1 = '#app [data-tsm-guide="1"] [data-tsm-download]'
+        ok([x[0] for x in six] == ["bridge", "tally", "connect", "company", "link", "reading"] and not any(x[1] for x in six) and n(dl1) == 1 and "2.4.4" in (pg.get_attribute(dl1, "href") or "")
+           and n("#app [data-all-good]") == 0, "nothing installed: the six steps, none done, step 1 with the download (%s)" % six)
 
         # ---- 5. every former entry point lands on the one place to link a client: its own Tally card (the companies in Tally
         # it may be, each with Link) or Companies in Tally; none links or connects on its own
