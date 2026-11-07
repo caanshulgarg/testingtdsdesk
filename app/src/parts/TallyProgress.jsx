@@ -7,7 +7,7 @@
 //   MastersCell / EntriesCell   the table's two columns, each its small bar or its state in words.
 //   ClientDetails one client inside the Tally page: Masters (ledgers and groups in FinCom, the whole list last read,
 //                 changes checked, Bring ledgers & groups), Entries (the year's 12 months: in FinCom / coming / to bring,
-//                 Bring books with Pause, Stop and another year) and the Update history (tally_ledger_rounds, Bring books,
+//                 Bring books with Pause, Stop and another year, "Or drop a Day Book file here") and the Update history (tally_ledger_rounds, Bring books,
 //                 the Update now pressed here and why it waits).
 // The numbers are the cloud's and the bridge's own (FinCom's counts of ledgers and groups, the read's progress, the
 // rounds, the books' summary): none is made up; a read with no total known says "Reading…" and the count so far. Nothing
@@ -200,6 +200,37 @@ export function historyRows(rounds, m, e, kw) {
     res: p.done ? "All in FinCom" : (p.state === "going" ? "Bringing" : p.state === "paused" ? "Paused" : "Stopped") + (Number(p.y) ? " at " + nf(Math.min(Number(p.x || 0), Number(p.y))) + " of " + nf(p.y) : "") });
   return out.sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
 }
+// "Or drop a Day Book file here" (next-tally-daybook): the file read into THIS client's books by ../lib/dayBookDrop.js
+// (loaded on the first drop), which takes the client, its record and its books explicitly and never swaps the open
+// client (review of 0b3c34839). One drop at a time on the page (DROP.on: every other box says so); a viewer only reads
+// why; its progress and result lines stay under the box (DROP.lines) while the page is left and come back
+const DROP = { on: "", lines: {}, step: {}, subs: new Set() };
+const dropTell = () => DROP.subs.forEach((f) => f());
+export function DayBookDrop({ cid }) {
+  const [over, setOver] = useState(false), [, tick] = useState(0);
+  useEffect(() => { const f = () => tick((k) => k + 1); DROP.subs.add(f); return () => { DROP.subs.delete(f); }; }, []);
+  const may = mayChange(), busy = DROP.on, lines = DROP.lines[cid] || [], step = busy === cid ? DROP.step[cid] : "";
+  const go = async (files) => {
+    files = Array.from(files || []);
+    if (!files.length || DROP.on || !mayChange()) return;
+    DROP.on = cid; DROP.lines[cid] = []; DROP.step[cid] = "Opening the file…"; dropTell();
+    const say = (l) => { DROP.lines[cid] = (DROP.lines[cid] || []).concat([l]); dropTell(); }, at = (t) => { DROP.step[cid] = t; dropTell(); };
+    try { await (await import("../lib/dayBookDrop.js")).dropDayBook(cid, files, { say, step: at }); }
+    catch (e) { say({ ok: false, text: "Not read: " + String((e && e.message) || e).replace(/[.\s]+$/, "") + "." }); }
+    finally { DROP.on = ""; DROP.step[cid] = ""; dropTell(); }
+  };
+  const off = !!busy || !may, stop = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+  return <div className="tpg-drop-wrap">
+    <label className={"tpg-drop" + (over && !off ? " over" : "") + (off ? " off" : "")} data-tpg-drop={cid} aria-disabled={off ? "true" : undefined}
+      onDragOver={(ev) => { stop(ev); if (!off) setOver(true); }} onDragLeave={() => setOver(false)}
+      onDrop={(ev) => { stop(ev); setOver(false); if (!off) go(ev.dataTransfer && ev.dataTransfer.files); }}>
+      {may && <input type="file" className="sr-only" data-tpg-drop-file={cid} accept=".xml,.json,.zip" multiple disabled={off} onChange={(ev) => { const f = Array.from(ev.target.files || []); ev.target.value = ""; go(f); }} />}
+      {!may ? "A member of the firm who may make changes uploads a Day Book." : busy === cid ? "Reading the file…" : busy ? "Another file is being read…" : "Or drop a Day Book file here"}</label>
+    {(step || lines.length > 0) && <div className="tsm-note" data-tpg-drop-say="" role="status">
+      {step && <div data-tpg-drop-step="">{step}</div>}
+      {lines.map((l, k) => <div key={k} className={l.ok === false ? "bad" : ""} data-tpg-drop-line={l.ok === false ? "bad" : "ok"}>{l.text}</div>)}</div>}
+  </div>;
+}
 // Bring books (this year: the days FinCom lacks, as Books › From Tally's Start) and Bring another year (that card, here)
 function BringBooks({ cid, e }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState(""), [other, setOther] = useState(false), book = e.b && e.b.book, going = e.p && !e.p.done && (e.p.state === "going" || e.p.state === "paused");
@@ -243,6 +274,7 @@ export function ClientDetails({ row }) {
       <div className="tpg-line" data-tpg-d-entries="">{e.words}{e.sub ? " · " + e.sub : ""}</div>
       {e.p && !e.p.done && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label="Entries progress" />}
       <BringBooks cid={cid} e={e} />
+      <DayBookDrop cid={cid} />
     </section>
     <section className="tpg-d-card" data-tpg-history="">
       <div className="tpg-kicker">Update history</div>
