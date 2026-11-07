@@ -16,10 +16,13 @@
 // 2 s is halved as a chunk that did not answer (2,000, 1,000, 500, 250, 125), and the next one waits only for the stop's
 // own cool-down (RecorderStopCoolSec, 30 s), not a back-off. The smallest chunk (125) stopped at 2 s ends the turn
 // with plain words (the company's trouble, in the beat; the round's end line): Tally is left alone for the back-off
-// (1 minute, doubling to 30 minutes) and the round goes on from that chunk at the next try. It is not halved further:
-// a ledger is taken as hanging Tally (skipped, named to FinCom) only when Tally did not answer at all (as before), never
-// for a 2-second stop. Nothing is read while a posting goes, and a stopped request keeps Tally's one lock until Tally
-// has finished it, so a posting still goes first and never meets two requests at once.
+// (1 minute, doubling to 30 minutes) and the round goes on from that chunk at the next try. Stopped the third time in a
+// row (ledMinStops), it is halved on, down to one MasterID (each request still stopped at 2 s), and a ledger that alone
+// takes Tally longer than 2 s is skipped from now on and named to FinCom ("takes Tally longer than 2 s"), as a ledger
+// that hangs Tally is; the rest is read. The group list stopped at 2 s never holds the ledgers: it is said, the round
+// reads the ledgers with the groups FinCom already has, and the next full read asks for the groups again. Nothing is
+// read while a posting goes, and a stopped request keeps Tally's one lock until Tally has finished it, so a posting
+// still goes first and never meets two requests at once.
 // Every request goes through the one gate to Tally (postings first, the check after a timeout, the company's GUID, the
 // lease). Groups are few: one request.
 //
@@ -456,19 +459,22 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	if !truthy(ls["groups"]) {
 		g, err := readGroupList(k.tc, company, port)
 		if errors.Is(err, errRecorderStop) {
-			// 2.5.5: the groups (one request) stopped at 2 s: plain words; asked again at the next try, before the ledgers
-			return false, fmt.Errorf("Tally took longer than 2 s for the group list; the bridge stopped waiting and asks again at the next try (the ledger list follows the groups)")
-		}
-		if err != nil {
+			// 2.5.5: the groups (one request) stopped at 2 s: said, and the ledgers are read anyway; this round keeps the
+			// groups FinCom already has (group-list.json as last read, unchanged), and the next full read asks again
+			writeLog("Keeping " + company + ": Tally took longer than 2 s for the group list; the bridge stopped waiting and reads the ledgers anyway (FinCom keeps the groups it has; they are asked again at the next full read)")
+			ls["groups"], ls["groupsStopped"], ls["reqs"] = true, true, toInt(ls["reqs"])+1
+			save()
+		} else if err != nil {
 			return false, err
+		} else {
+			gl := []any{}
+			for _, x := range g {
+				gl = append(gl, []any{x[0], x[1]})
+			}
+			_ = saveFile(filepath.Join(dir, "group-list.json"), jsonText(gl))
+			ls["groups"], ls["reqs"] = true, toInt(ls["reqs"])+1
+			save()
 		}
-		gl := []any{}
-		for _, x := range g {
-			gl = append(gl, []any{x[0], x[1]})
-		}
-		_ = saveFile(filepath.Join(dir, "group-list.json"), jsonText(gl))
-		ls["groups"], ls["reqs"] = true, toInt(ls["reqs"])+1
-		save()
 	}
 	// 2.4.3: the natures of payment (few; never holding the ledger list: tdsnatures.go)
 	if ok, err := k.natureList(company, port, st, ls, inBudget, save); !ok {
@@ -529,6 +535,17 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				return false, err
 			}
 			span := fmt.Sprintf("%d-%d", after+1, upto)
+			// 2.5.5: the smallest chunk stopped at 2 s: the turn ends (back-off) twice; the third time in a row it is halved
+			// on, down to one MasterID, to find the slow ledger(s), each stop still at 2 s
+			minStop := false
+			if stopped && !tail && size <= ledChunkMin() && !truthy(ls["iso"]) {
+				if n := toInt(ls["minStops"]) + 1; n < ledMinStops {
+					ls["minStops"], minStop = n, true
+				} else {
+					delete(ls, "minStops")
+					writeLog(fmt.Sprintf("Keeping %s: the ledger list MasterID %s took Tally longer than 2 s %d times in a row; it is read in smaller parts to find the slow ledger(s)", company, span, n))
+				}
+			}
 			switch {
 			case tail:
 				// the last request (no upper end) did not answer: the rest is read in chunks again
@@ -536,10 +553,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				span = fmt.Sprintf("from %d", after+1)
 			case size > ledChunkMin():
 				ls["size"] = maxI(ledChunkMin(), size/2)
-			case stopped:
-				// 2.5.5: the smallest chunk stopped at 2 s: Tally is slow or busy, not hanging on one ledger. Not halved
-				// further and nothing marked: the turn ends with plain words, Tally is left alone for the back-off, and the
-				// round goes on from this chunk at the next try
+			case minStop:
+				// 2.5.5: the smallest chunk stopped at 2 s (the first or second time in a row): Tally may only be busy. Not
+				// halved yet and nothing marked: the turn ends with plain words, Tally is left alone for the back-off, and
+				// the round goes on from this chunk at the next try
 				st["ledSize"] = ls["size"]
 				save()
 				return false, fmt.Errorf("Tally took longer than 2 s for %d ledgers (MasterID %s), the smallest part the ledger list is read in; the bridge stopped waiting, and the ledger list goes on from MasterID %d at the next try",
@@ -549,16 +566,22 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 				ls["size"] = maxI(1, int(upto-after)/2)
 				ls["iso"] = true
 			default:
-				// one MasterID that does not answer: that ledger hangs Tally. It is skipped from now on and named to FinCom
+				// one MasterID that does not answer: that ledger hangs Tally. It is skipped from now on and named to FinCom.
+				// 2.5.5: one stopped at 2 s: that ledger takes Tally longer than 2 s; skipped and named the same way
 				name := ""
 				for _, h := range loadLedList(dir) {
 					if h.mid == upto {
 						name = h.name
 					}
 				}
-				addPoison(dir, st, upto, name)
+				if stopped {
+					addPoisonWhy(dir, st, upto, name, ledSlowWhy())
+					writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) takes Tally longer than 2 s; it is skipped from now on and named to FinCom", company, upto, or(name, "name not known")))
+				} else {
+					addPoison(dir, st, upto, name)
+					writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) does not answer and holds Tally; it is skipped from now on and named to FinCom", company, upto, or(name, "name not known")))
+				}
 				ls["after"] = upto
-				writeLog(fmt.Sprintf("Keeping %s: the ledger with MasterID %d (%s) does not answer and holds Tally; it is skipped from now on and named to FinCom", company, upto, or(name, "name not known")))
 			}
 			st["ledSize"] = ls["size"]
 			save()
@@ -571,6 +594,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 			return false, fmt.Errorf("Tally did not give the ledger list (MasterID %s: %s); the next try reads %d from MasterID %d", span, err.Error(), toInt(ls["size"]), after+1)
 		}
 		sec := time.Since(t1).Seconds()
+		delete(ls, "minStops") // 2.5.5: a chunk in time ends a run of stops
 		if truthy(ls["iso"]) {
 			// past the ledger that hangs: back up towards the smallest chunk
 			if size*2 >= ledChunkMin() {
@@ -639,6 +663,10 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 		a := arr(x)
 		groups = append(groups, [2]string{str(at(a, 0)), str(at(a, 1))})
 	}
+	sendGroups := groups
+	if truthy(ls["groupsStopped"]) {
+		sendGroups = nil // 2.5.5: the group list was not read this round: FinCom keeps the groups it has
+	}
 	// the copy's entries carry a renamed ledger's new name (and its opening in the balances held)
 	for _, x := range d.renamed {
 		renameKeepLedger(dir, st, x.from, x.to)
@@ -657,7 +685,7 @@ func (k *keepRun) ledgerList(company string, port int, dir string, st M, inBudge
 	// the held list: what Tally listed (and the skipped ledgers)
 	saveLedList(dir, read)
 	delete(st, "ledGone") // the second-look bookkeeping of 2.1.4: the cloud holds many gone at once now
-	mergeLedOut(dir, d, groups, round, seen, natOfRound(ls))
+	mergeLedOut(dir, d, sendGroups, round, seen, natOfRound(ls))
 	setLedOutOpeningsAt(dir, bf, whole) // a whole list held again is not sent whole again (review of 2.5.0, round 3)
 	st["ledOpeningsAt"] = bf
 	if resend {
@@ -832,12 +860,24 @@ func nextPoison(st M, after int64) int64 {
 	return best
 }
 func addPoison(dir string, st M, mid int64, name string) {
+	addPoisonWhy(dir, st, mid, name, "this ledger does not answer and holds Tally (found "+nowS()+"); the bridge skips it")
+}
+
+// 2.5.5: a ledger found (by halving, each request stopped at 2 s) to take Tally longer than 2 s on its own
+func ledSlowWhy() string {
+	return "this ledger takes Tally longer than 2 s (found " + nowS() + "); the bridge skips it"
+}
+
+// 2.5.5: how many times in a row the smallest chunk is stopped at 2 s (each with the back-off) before it is halved
+// below it to find the slow ledger(s)
+const ledMinStops = 3
+
+func addPoisonWhy(dir string, st M, mid int64, name, why string) {
 	for _, p := range poisonMids(st) {
 		if p == mid {
 			return
 		}
 	}
-	why := "this ledger does not answer and holds Tally (found " + nowS() + "); the bridge skips it"
 	st["ledPoison"] = append(arr(st["ledPoison"]), []any{mid, name, why})
 	o := readObjFile(ledOutFile(dir))
 	if o == nil {

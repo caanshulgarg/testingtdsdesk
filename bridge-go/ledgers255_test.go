@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -134,9 +135,15 @@ func TestLedger255SmallestChunkStoppedEndsCleanly(t *testing.T) {
 	}
 }
 
-// the groups stopped at 2 s: plain words, asked again at the next try, then the ledgers
-func TestLedger255GroupsStoppedAt2s(t *testing.T) {
+// the groups stopped at 2 s: said, and the ledgers are read anyway (FinCom keeps the groups it has); the next full read
+// asks for the groups again
+func TestLedger255GroupsStoppedAt2sNeverHoldTheLedgers(t *testing.T) {
 	f := ledgerTally(t, 50, `,"RecorderStopCoolSec":1`)
+	// a first full read: the groups as FinCom has them
+	if err := newRun("now", "r255c0").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	groups0 := readText(syncFolder(zz) + "/group-list.json")
 	f.mu.Lock()
 	f.slow = func(id, body string) time.Duration {
 		if id == grpListID {
@@ -144,23 +151,116 @@ func TestLedger255GroupsStoppedAt2s(t *testing.T) {
 		}
 		return 0
 	}
+	f.addLedLocked("Party new", "Sundry Creditors", "-1.00")
 	f.mu.Unlock()
 	k := newRun("now", "r255c")
-	err := k.step(zz, f.port, "")
-	if err == nil || gaveWay(err) || !strings.Contains(err.Error(), "Tally took longer than 2 s for the group list") {
-		t.Fatalf("groups stopped: %v", err)
+	var err error
+	for i := 0; i < 5; i++ {
+		t0 := time.Now()
+		if err = k.step(zz, f.port, ""); err == nil {
+			break
+		}
+		if time.Since(t0) > 2900*time.Millisecond || !gaveWay(err) {
+			t.Fatalf("turn %d: %v (%s): the group list's stop held the ledgers", i, err, time.Since(t0))
+		}
+		led255Settle(t, f)
 	}
-	if f.n(ledListID) != 0 {
-		t.Fatal("ledgers asked while the groups were not read")
+	if err != nil {
+		t.Fatal(err)
 	}
+	if f.n(grpListID) != 2 || len(loadLedList(syncFolder(zz))) != 51 {
+		t.Fatalf("groups asked %d times, ledgers held %d (want the new one read)", f.n(grpListID), len(loadLedList(syncFolder(zz))))
+	}
+	if !strings.Contains(readText(logFile()), "Tally took longer than 2 s for the group list; the bridge stopped waiting and reads the ledgers anyway") {
+		t.Fatal("the group list's stop was not said")
+	}
+	if readText(syncFolder(zz)+"/group-list.json") != groups0 {
+		t.Fatal("the groups FinCom has were changed by a round that did not read them")
+	}
+	// the next full read asks for the groups again (quick now)
 	led255Settle(t, f)
 	f.mu.Lock()
 	f.slow = nil
 	f.mu.Unlock()
-	if err := k.step(zz, f.port, ""); err != nil {
+	if err := newRun("now", "r255d").step(zz, f.port, ""); err != nil {
 		t.Fatal(err)
 	}
-	if f.n(grpListID) != 2 || len(loadLedList(syncFolder(zz))) != 50 {
-		t.Fatalf("groups %d, ledgers %d", f.n(grpListID), len(loadLedList(syncFolder(zz))))
+	if f.n(grpListID) != 3 {
+		t.Fatalf("the next full read: groups asked %d times, want 3", f.n(grpListID))
+	}
+}
+
+// one ledger that alone takes Tally longer than the stop: the smallest chunk stopped three times in a row (the turn ends
+// twice, with plain words), then halved down to that one ledger, which is skipped and named ("takes Tally longer than
+// 2 s"); every other ledger is read, and every request is stopped at the limit
+func TestLedger255SlowLedgerSkippedRestRead(t *testing.T) {
+	const n = 300
+	f := ledgerTally(t, n, `,"LedgerChunk":250,"LedgerChunkMin":125,"RecorderStopCoolSec":1,"RecorderLimitMs":500`)
+	f.mu.Lock()
+	slow := f.led[76].mid
+	f.slow = func(id, body string) time.Duration {
+		if id != ledListID {
+			return 0
+		}
+		m := reMidRange.FindStringSubmatch(body)
+		if m != nil && toI64(m[1]) < slow && (m[2] == "" || slow <= toI64(m[2])) {
+			return 800 * time.Millisecond
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	k := newRun("now", "r255e")
+	plain := 0
+	var err error
+	for i := 0; i < 80; i++ {
+		t0 := time.Now()
+		if err = k.step(zz, f.port, ""); err == nil {
+			break
+		}
+		if time.Since(t0) > 1500*time.Millisecond {
+			t.Fatalf("turn %d took %s: a request was not stopped at the limit", i, time.Since(t0))
+		}
+		if !gaveWay(err) {
+			if !strings.Contains(err.Error(), "the smallest part the ledger list is read in") {
+				t.Fatalf("turn %d: %v", i, err)
+			}
+			plain++
+		}
+		led255Settle(t, f)
+	}
+	if err != nil {
+		t.Fatalf("the round did not finish: %v", err)
+	}
+	if plain != 2 {
+		t.Fatalf("the smallest chunk ended the turn %d times before it was halved, want 2", plain)
+	}
+	st := readKeepState(syncFolder(zz))
+	sk := arr(st["ledPoison"])
+	if len(sk) != 1 || toI64(at(arr(sk[0]), 0)) != slow || !strings.Contains(str(at(arr(sk[0]), 2)), "takes Tally longer than 2 s") {
+		t.Fatalf("skipped: %v (want MasterID %d, slow)", sk, slow)
+	}
+	if r := arr(skippedLedgers(zz)); len(r) != 1 {
+		t.Fatalf("named to FinCom: %v", r)
+	}
+	held := loadLedList(syncFolder(zz))
+	if len(held) != n-1 {
+		t.Fatalf("the list held: %d ledgers, want %d", len(held), n-1)
+	}
+	for _, h := range held {
+		if h.mid == slow {
+			t.Fatal("the slow ledger was read")
+		}
+	}
+	if !strings.Contains(readText(logFile()), fmt.Sprintf("the ledger with MasterID %d (name not known) takes Tally longer than 2 s; it is skipped from now on", slow)) { // a first read: no list held yet to name it
+		t.Fatal("the skip was not said")
+	}
+	// the next round never asks for it: no request stopped
+	led255Settle(t, f)
+	stops := strings.Count(readText(logFile()), "(stopped)")
+	if err := newRun("now", "r255f").step(zz, f.port, ""); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(readText(logFile()), "(stopped)") != stops {
+		t.Fatal("the next round asked for the slow ledger again")
 	}
 }
