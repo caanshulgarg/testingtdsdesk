@@ -19,8 +19,8 @@ const G = { "Intangible assets": "intang", "Other intangible assets": "intang", 
 const gw = Object.entries(G).filter(([l, k]) => A.guessHead(l) !== k);
 ok(!gw.length, "each to its head (" + gw.map(([l]) => l + " => " + A.guessHead(l)).join("; ") + ")");
 console.log("3, 5. the lines kept; in no head; the file's totals");
-const up = { file: "made-up.csv", sheet: "Sheet1", cols: { label: 0, cy: 1, py: 2 }, lines: [{ label: "Share capital", cy: 100, py: 100 }, { label: "Odd line", cy: 50, py: 0 }, { label: "Cash", cy: 150, py: 100 }, { label: "Bad", cy: NaN, py: 1 }],
-  map: { 0: "sc", 2: "cash" }, guessed: { 0: true, 2: true }, totals: [{ label: "Total", cy: 150, py: 100, sec: "CA" }] };
+const up = { file: "made-up.csv", sheet: "Sheet1", cols: { label: 0, cy: 1, py: 2 }, lines: [{ label: "Share capital", cy: 100, py: 100 }, { label: "Odd line", cy: 50, py: 0 }, { label: "Cash", cy: 150, py: 100 }, { label: "Bad", cy: NaN, py: 1 }, { label: "Total", cy: 150, py: 100 }],
+  map: { 0: "sc", 2: "cash", 4: "-" }, guessed: { 0: true, 2: true, 4: true } };
 const b = A.fromUpload(up), f = A.figures(b, {});
 ok(b.unmapped.length === 1 && b.unmapped[0].label === "Odd line" && b.unmapped[0].cy === 50 && b.bad.includes("Bad"), "a line with an amount and no head: listed; a cell not an amount: said");
 const ck = A.checks(f, { lastFy: "2024-25", unmapped: b.unmapped, totals: A.totalChecks(f, b.totals), bad: b.bad, udin: "26012345ABCDEF1234" });

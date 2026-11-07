@@ -8,7 +8,7 @@ import "../../lib/finGlobals.js";
 import Button from "../../parts/Button.jsx";
 import { Card } from "./parts.jsx";
 import { canEdit, corpOf, saveFiling } from "./store.js";
-import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, UNITS, autoCols, checks, csvOf, figures, fromBooks, fromUpload, linesOf, num, sheetLines, sheetRows, totalChecks, udinOk } from "./aoc4.js";
+import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, UNITS, autoCols, guessSheets, linesOfSheets, checks, csvOf, figures, fromBooks, fromUpload, linesOf, num, sheetLines, sheetRows, totalChecks, udinOk } from "./aoc4.js";
 import { annual } from "./eforms.js";
 import { dmy, dueIn, finKey, fyEnd, fyNext, lastClosedFy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
@@ -62,10 +62,12 @@ function Grid({ heads, f, edit, setEdit, which, final, onBad }) {
 function UploadMap({ up, set, raw, setRaw }) {
   const opts = [["", "Choose the head"], ["-", "Not used (a total or a heading)"]].concat(LEAVES.map(([k, l]) => [k, l]));
   const sheet = raw && raw.file === up.file ? raw.sheets.find((x) => x.name === up.sheet) || raw.sheets[0] : null;
-  const recut = (sheetName, cols) => { const sh = raw.sheets.find((x) => x.name === sheetName) || raw.sheets[0], c = cols || autoCols(sh.rows); set(linesOf(up.file, sh.name, sh.rows, c)); };
+  const recut = (sheetName, cols, plName) => set(linesOfSheets(up.file, raw.sheets, sheetName, plName === undefined ? up.plSheet || "" : plName, cols));
   return <div data-aoc4-map="" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     {sheet ? <div className="corp-row" style={{ fontSize: 13 }}>
-      {raw.sheets.length > 1 && <label className="corp-f"><span>Sheet</span><select data-aoc4-sheet="" value={sheet.name} onChange={(e) => recut(e.target.value)}>{raw.sheets.map((x) => <option key={x.name} value={x.name}>{x.name + " · " + x.rows.length + " lines"}</option>)}</select></label>}
+      {raw.sheets.length > 1 && <label className="corp-f"><span>Balance sheet: sheet</span><select data-aoc4-sheet="" value={sheet.name} onChange={(e) => recut(e.target.value, undefined, up.plSheet === e.target.value ? "" : up.plSheet || "")}>{raw.sheets.map((x) => <option key={x.name} value={x.name}>{x.name + " · " + x.rows.length + " lines"}</option>)}</select></label>}
+      {raw.sheets.length > 1 && <label className="corp-f"><span>Profit and loss: sheet</span><select data-aoc4-pl-sheet="" value={up.plSheet || ""} onChange={(e) => recut(sheet.name, undefined, e.target.value)}>
+        <option value="">The same sheet</option>{raw.sheets.filter((x) => x.name !== sheet.name).map((x) => <option key={x.name} value={x.name}>{x.name + " · " + x.rows.length + " lines"}</option>)}</select></label>}
       {[["label", "Item column"], ["cy", "Current year column"], ["py", "Previous year column"]].map(([k, l]) => <label key={k} className="corp-f"><span>{l}</span>
       <select data-aoc4-col={k} value={up.cols[k]} onChange={(e) => recut(sheet.name, Object.assign({}, up.cols, { [k]: +e.target.value }))}>
         {Array.from({ length: Math.min(30, Math.max(3, ...sheet.rows.map((r) => r.length))) }, (_, j) => <option key={j} value={j}>{"Column " + String.fromCharCode(65 + j) + (sheet.rows[0] && sheet.rows[0][j] !== undefined ? ": " + String(sheet.rows[0][j]).slice(0, 18) : "")}</option>)}</select></label>)}</div>
@@ -125,7 +127,7 @@ export default function Aoc4({ co }) {
   const holdNext = un.length ? "Not in any head: map every line first" : noWhy.length ? "Give the reason for each figure changed" : base && base.bad && base.bad.length ? "Some cells of the file are not amounts" : "";
   // the file's own totals (P&L ones included: total income, total expenses, profit) must agree, as the balance sheet must tally
   const badTotal = cks.find((x) => /^total\d+$/.test(x.key) && x.ok === false);
-  const hold = holdNext || (!bsOk ? "The balance sheet does not tally" : badTotal ? badTotal.text : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : guessLeft ? "Check the heads guessed from the file's words (or tick that you have)" : "");
+  const hold = holdNext || (!bsOk ? "The balance sheet does not tally" : badTotal ? badTotal.text : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : guessLeft ? "Check the heads guessed from the file's words (or tick that you have)" : "");
   const att = data.attach || {}, attDone = ATTACHMENTS.every(([k]) => att[k] === "ready" || att[k] === "na");
   const stepNow = !f ? 0 : !data.figuresOk ? 1 : !attDone ? 2 : 3;
   // a figure changed: kept with this source's edits; after Ready, the form is in progress again
@@ -136,7 +138,9 @@ export default function Aoc4({ co }) {
   const fileBase = (meta.company + " AOC-4 figures FY " + fy).replace(/[\\/:*?"<>|]+/g, " ");
   // Save draft keeps the figures; a form Ready keeps the figures it was made Ready with: figures that differ take it back to
   // In progress (change), never replaced quietly; downloads keep nothing
-  const same = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
+  // equal as values, whatever the order of the keys (the server's jsonb keeps its own)
+  const canon = (x) => (x && typeof x === "object" ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, canon(x[k])])) : x);
+  const same = (a, b) => JSON.stringify(canon(a || {})) === JSON.stringify(canon(b || {}));
   const stamp = () => {
     if (final || !f) return;
     if (fl.status === "ready") { if (!same(f.cy, data.figures) || !same(f.py, data.pyFigures)) change({ figures: f.cy, pyFigures: f.py, srcSaved: f.src, figuresOk: false }, { steps: Math.min(fl.steps || 0, 1) }); return; }
@@ -160,7 +164,7 @@ export default function Aoc4({ co }) {
     const file = e.target.files && e.target.files[0]; e.target.value = ""; if (!file) return;
     setErr(""); setBusy("upload");
     try {
-      const r = await readSheet(file), sh = r.sheets[0], up = linesOf(r.file, sh.name, sh.rows, autoCols(sh.rows));
+      const r = await readSheet(file), g = guessSheets(r.sheets), up = linesOfSheets(r.file, r.sheets, g.bs, g.pl);
       // a new file starts again: the figures changed by hand for the upload go (asked first)
       if (Object.keys(editsOf("upload")).length && !window.confirm("A new file: the figures you changed by hand for the upload will be cleared. Go on?")) return;
       setRaw(r); change({ source: "upload", upload: up, editsBy: { books: editsOf("books"), upload: {} }, edits: undefined, figuresOk: false });

@@ -30,7 +30,7 @@ ok(wrongSide.cy.tpo === -5000, "a liability marked Dr: negative");
 console.log("8. subtotals with their own sums");
 const f2 = A.figures({ cy: { sc: 100, tpo: 50, cash: 150 }, py: {}, src: {} }, {});
 const sc = A.totalChecks(f2, [{ label: "Total current liabilities", cy: 50, py: 0 }, { label: "Total current assets", cy: 150, py: 0 }, { label: "Total tax expense", cy: 0, py: 0 }, { label: "Total current liabilities", cy: 150, py: 0 }, { label: "Sub-total", cy: 5, py: 0 }]);
-ok(sc.length === 4 && sc[0].ok && sc[1].ok && sc[2].ok && !sc[3].ok, "current liabilities with current liabilities only; a Sub-total not known: left out");
+ok(sc.length === 5 && sc[0].ok && sc[1].ok && sc[2].ok && sc[3].ok === false && sc[4].ok === null && sc[4].warn, "current liabilities with current liabilities only; a Sub-total that cannot be told: said, not held");
 console.log("7. columns");
 ok(JSON.stringify(A.autoCols(rd("Particulars,Note,As at 31-03-2026,As at 31-03-2025\nShare capital,3,\"1,00,000.00\",\"1,00,000.00\"\nReserves and surplus,4,\"(25,000.00)\",\"10,000.00\"\nTrade payables,6,\"5,000\",\"4,000\"\n"))) === JSON.stringify({ label: 0, cy: 2, py: 3 }), "the Note column left out");
 console.log("3. large ranges (big)");

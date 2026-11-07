@@ -133,7 +133,28 @@ export function fromUpload(up) {
   });
   LEAVES.forEach(([k]) => { if (!src[k]) src[k] = "Upload · nil"; });
   const u = +up.unit || 1;
-  return { cy, py, src, unmapped, bad, totals: (up.totals || []).map((t) => Object.assign({}, t, { cy: R(t.cy * u), py: R(t.py * u) })), unit: u, guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
+  return { cy, py, src, unmapped, bad, totals: totalsOf(up), unit: u, guessed: Object.keys(up.guessed || {}).length, headsOk: !!up.headsOk, info: { from: "", to: "", py: "the upload", file: up.file } };
+}
+
+// the file's own total lines, worked out again from the map as it is now: a line counts as a total while its head is the
+// guessed "Not used" (a line set to Not used by hand, or given a head, is not one). Each keeps the sum of the lines since
+// the previous total or heading (its own group) and its section, and the unit (for the rounding allowed)
+const TOTAL_WORDS = /total|^profit|^\(?loss|before tax|for the (year|period)/i;
+export function totalsOf(up) {
+  const u = +up.unit || 1, out = [], map = up.map || {}, guessed = up.guessed || {};
+  let g = { cy: 0, py: 0, n: 0 }, sec = "";
+  (up.lines || []).forEach((z, i) => {
+    const k = map[i];
+    if (k === "-" && guessed[i] && TOTAL_WORDS.test(z.label) && (z.cy || z.py)) {
+      out.push({ label: z.label, cy: R(z.cy * u), py: R(z.py * u), sec, group: { cy: R(g.cy), py: R(g.py), n: g.n }, unit: u });
+      g = { cy: 0, py: 0, n: 0 }; return;
+    }
+    if (!k || k === "-") { if (!z.cy && !z.py) g = { cy: 0, py: 0, n: 0 }; return; }   // a heading starts a group
+    if (isNaN(z.cy) || isNaN(z.py) || z.cy === null || z.py === null) return;
+    sec = SEC_OF[k] || sec;
+    g.cy += signed(z.cy, z.cm, k) * u; g.py += signed(z.py, z.pm, k) * u; g.n++;
+  });
+  return out;
 }
 
 // an amount as an auditor's sheet writes it: 1,00,000.00 · 1,000/- · (1,000) · (-1,000) · -1,000 · 1000- · −1,000 (the
@@ -181,10 +202,11 @@ const headCell = (c) => {
 export const UNITS = [[1, "Rupees"], [1000, "Thousands"], [100000, "Lakhs"], [1000000, "Millions"], [10000000, "Crores"]];
 export function unitOf(rows) {
   const t = (rows || []).slice(0, 12).map((r) => r.join(" ")).join(" ").toLowerCase();
-  if (/\bin\s+crores?\b|\bcrores?\b\s*\)/.test(t)) return 10000000;
-  if (/\bin\s+(lakhs?|lacs?)\b|\b(lakhs?|lacs?)\s*\)/.test(t)) return 100000;
-  if (/\bin\s+millions?\b/.test(t)) return 1000000;
-  if (/\bin\s+thousands?\b|'000|’000/.test(t)) return 1000;
+  const IN = "\\bin\\s+(₹|rs\\.?|inr)?\\s*";
+  if (new RegExp(IN + "crores?\\b|\\bcrores?\\b\\s*\\)").test(t)) return 10000000;
+  if (new RegExp(IN + "(lakhs?|lacs?)\\b|\\b(lakhs?|lacs?)\\s*\\)").test(t)) return 100000;
+  if (new RegExp(IN + "millions?\\b").test(t)) return 1000000;
+  if (new RegExp(IN + "thousands?\\b|'000|’000").test(t)) return 1000;
   return 1;
 }
 
@@ -224,9 +246,33 @@ export function linesOf(file, sheet, rows, cols) {
   return { file, sheet, cols, lines, map, guessed, totals, unit: unitOf(rows), unitFound: unitOf(rows) };
 }
 
+// the balance sheet and the P&L when they are on two sheets of the file: the P&L sheet guessed by its name or its first
+// lines ("Profit and Loss", "Statement of Profit"); the lines of both, one after the other (the P&L with its own columns)
+const PL_SHEET = /profit\s*(and|&)\s*loss|statement of profit|\bp\s*&\s*l\b|income statement/i;
+export function guessSheets(sheets) {
+  const isPl = (x) => PL_SHEET.test(x.name) || PL_SHEET.test(x.rows.slice(0, 5).map((r) => r.join(" ")).join(" "));
+  const pl = sheets.find(isPl) || null, bs = sheets.find((x) => x !== pl) || sheets[0];
+  return { bs: bs.name, pl: pl && pl !== bs ? pl.name : "" };
+}
+export function linesOfSheets(file, sheets, bsName, plName, cols) {
+  const bs = sheets.find((x) => x.name === bsName) || sheets[0], pl = plName && plName !== bs.name ? sheets.find((x) => x.name === plName) : null;
+  const a = linesOf(file, bs.name, bs.rows, cols || autoCols(bs.rows));
+  if (!pl) return Object.assign(a, { plSheet: "" });
+  const b = linesOf(file, pl.name, pl.rows, autoCols(pl.rows)), n = a.lines.length, shift = (o) => Object.fromEntries(Object.entries(o).map(([i, v]) => [+i + n, v]));
+  return Object.assign(a, { plSheet: pl.name, lines: a.lines.concat(b.lines), map: Object.assign({}, a.map, shift(b.map)), guessed: Object.assign({}, a.guessed, shift(b.guessed)),
+    unit: a.unit !== 1 ? a.unit : b.unit, unitFound: a.unitFound !== 1 ? a.unitFound : b.unitFound });
+}
+
 // the head a line of an uploaded statement is read by (a guess: the page marks it "check the head" until chosen by hand).
 // The order matters: the narrower words first
 const SYN = [
+  // a line starting "Total" is a total, never a head (the MSME dues line of Schedule III aside); a "Statement of ..." a
+  // heading; a profit before or after something a total
+  ["-", /^(sub[- ]?)?total\b(?!\s+outstanding dues)|^statement of|^(profit|loss)\b.*\b(before|after|for)\b/],
+  ["tpo", /other than (micro|msme)/],
+  ["tpm", /micro (and|&) small|micro enterprises|\bmsme\b|micro and small/],
+  ["tpo", /bills payable/],
+  ["oltl", /security deposits? (received|from (dealers|customers|distributors|tenants))/],
   // a payable / outstanding / provision word wins over an expense's words: a liability (Schedule III)
   ["stp", /provision for (employee benefits|leave|bonus|expenses)|(income[- ]?tax|tax) payable/],
   ["ocl", /^(?!.*trade).*\b(payable|outstanding expenses|outstanding liabilit)/],
@@ -286,20 +332,34 @@ function whichTotal(l, sec) {
   if (/tax expense/.test(l)) return "TAX";
   if (/total (revenue|income)$/.test(l)) return "TI";
   if (/total expenses$/.test(l)) return "TE";
-  if (/before (exceptional|extraordinary)/.test(l)) return "PBE";
+  if (/before exceptional/.test(l)) return "PBE";
+  if (/before extraordinary/.test(l)) return "PBX";   // after the exceptional items, before the extraordinary
   if (/before tax/.test(l)) return "PBT";
   if (/^(profit|\(?loss)\b.*(for|after tax|the (year|period))/.test(l)) return "PAT";
   if (/^(grand )?total$/.test(l)) return { EQ: "TL", NCL: "TL", CL: "TL", NCA: "TA", CA: "TA", INC: "TI", EXP: "TE" }[sec] || "";
   return "";
 }
 export function totalChecks(f, totals) {
-  const out = [];
+  const out = [], plNil = ["cy", "py"].every((c) => !f.tot[c].TI && !f.tot[c].TE);
   (totals || []).forEach((t) => {
-    const w = whichTotal(String(t.label || "").toLowerCase().replace(/\s+/g, " ").trim(), t.sec);
+    const l = String(t.label || "").toLowerCase().replace(/\s+/g, " ").trim(), plain = /^(grand |sub[- ]?)?total$/.test(l);
+    // rounding allowed: the file's own unit (half of it, at least half a rupee)
+    const tol = Math.max(0.5, 0.01 * (+t.unit || 1));
+    const near = (c, v) => isNaN(t[c]) || Math.abs((+t[c] || 0) - v) <= tol;
+    const diff = (get) => R(Math.max(...["cy", "py"].map((c) => (isNaN(t[c]) ? 0 : Math.abs((+t[c] || 0) - get(c))))));
+    if (plain) {
+      // a plain Total: its own group; or the side's total; else it cannot be told what it closes: said, not held
+      const cands = [(c) => (t.group ? t.group[c] : NaN)].concat(["TL", "TA", "TI", "TE"].map((w) => (c) => f.tot[c][w]));
+      const hit = t.group && t.group.n ? cands.find((get) => near("cy", get("cy")) && near("py", get("py"))) : null;
+      out.push({ label: t.label, ok: hit ? true : null, warn: !hit, cy: t.cy, py: t.py, note: hit && diff(hit) ? "rounding difference ₹" + diff(hit) : "" });
+      return;
+    }
+    const w = whichTotal(l, t.sec);
     if (!w) return;
-    const get = (c) => (["TL", "TA", "TI", "TE", "PBE", "PBT", "PAT"].includes(w) ? f.tot[c][w] : sumOf(f, c, w));
-    const ok = ["cy", "py"].every((c) => isNaN(t[c]) || Math.abs((+t[c] || 0) - get(c)) < 0.005);
-    out.push({ label: t.label, ok, cy: t.cy, py: t.py });
+    if (plNil && ["TI", "TE", "PBE", "PBX", "PBT", "PAT"].includes(w)) return;   // the P&L not in the file (another sheet not chosen): no check
+    const get = (c) => (w === "PBX" ? R(f.tot[c].PBE - (+f[c].exc || 0)) : ["TL", "TA", "TI", "TE", "PBE", "PBT", "PAT"].includes(w) ? f.tot[c][w] : sumOf(f, c, w));
+    const ok = near("cy", get("cy")) && near("py", get("py"));
+    out.push({ label: t.label, ok, cy: t.cy, py: t.py, note: ok && diff(get) ? "rounding difference ₹" + diff(get) : "" });
   });
   return out;
 }
@@ -338,7 +398,8 @@ export function checks(f, o) {
   // in no head: ledgers without a code (Books) or lines of the upload not mapped
   const un = o.unmapped || [];
   if (un.length) out.push({ key: "unmapped", ok: false, text: "Not in any head: " + un.length + (un.length === 1 ? " line" : " lines") + ", " + rs(un.reduce((x, z) => x + Math.abs(z.cy || 0), 0)) + " this year, " + rs(un.reduce((x, z) => x + Math.abs(z.py || 0), 0)) + " last year" });
-  (o.totals || []).forEach((t, i) => out.push({ key: "total" + i, ok: t.ok, text: t.ok ? "The file's " + t.label + " equals the total worked out" : "The file's " + t.label + " (" + rs(t.cy) + ") differs from the total worked out" }));
+  (o.totals || []).forEach((t, i) => out.push({ key: "total" + i, ok: t.ok, warn: !!t.warn, text: t.ok ? "The file's " + t.label + " equals the total worked out" + (t.note ? " (" + t.note + ")" : "")
+    : t.ok === null ? "The file's " + t.label + " (" + rs(t.cy) + "): what it is the total of could not be told; check it by eye" : "The file's " + t.label + " (" + rs(t.cy) + ") differs from the total worked out" }));
   if (o.bad && o.bad.length) out.push({ key: "bad", ok: false, text: "Not an amount in the file: " + o.bad.slice(0, 3).join(", ") + (o.bad.length > 3 ? " and " + (o.bad.length - 3) + " more" : "") });
   return out;
 }
