@@ -14,7 +14,7 @@
 // filled in.
 import { TEMPLATES, MINUTES, byKey } from "./templates/index.js";
 import { dayLong, dmy, fyEnd, isDay, lastClosedFy, today, ordinal } from "./dates.js";
-import { isDirector } from "./profile.js";
+import { cinInfo, isDirector } from "./profile.js";
 
 export const VENUES = [["office", "the registered office of the Company"], ["vc", "through video conferencing"], ["other", "another place"]];
 const inr = (v) => (v === "" || v == null || isNaN(+String(v).replace(/,/g, "")) ? "" : new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(+String(v).replace(/,/g, "")));
@@ -24,12 +24,18 @@ export const realDirectors = (p) => directorsOf(p).filter(isDirector);
 export const idOf = (d) => (d && (d.id || d.din)) || "";
 // a director by id among all the profile's rows (one who has ceased since is still found: a resignation names them)
 export const dirOf = (p, id) => { if (!id) return null; const all = (p.directors || []).filter((d) => d && d.name); return all.find((d) => d.id === id) || all.find((d) => d.din && d.din === id) || null; };
-const isPrivate = (p) => p.cls === "private" || p.cls === "opc";
+// a private company: the class says so, or the CIN's type does (PTC, OPC, a foreign company's private subsidiary FTC, a
+// private unlimited ULT, a private company limited by guarantee GAT), or the profile marks a Section 8 / unlimited
+// company as private (privateCo)
+const PRIVATE_CIN = ["PTC", "OPC", "FTC", "ULT", "GAT"];
+export const isPrivate = (p) => p.cls === "private" || p.cls === "opc" || p.privateCo === true || PRIVATE_CIN.includes((cinInfo(p.cin || "") || {}).type || "");
 // the template's conditional words, for this company and these values
 function cond(text, p, vals) {
-  return String(text || "").replace(/\[\[(public|private|(\w+)(!?=)([^:\]]*)):([\s\S]*?)\]\]/g, (m, all, k, op, v, body) => {
+  return String(text || "").replace(/\[\[(public|private|opc|notopc|(\w+)(!?=)([^:\]]*)):([\s\S]*?)\]\]/g, (m, all, k, op, v, body) => {
     if (all === "public") return isPrivate(p) ? "" : body;
     if (all === "private") return isPrivate(p) ? body : "";
+    if (all === "opc") return p.cls === "opc" ? body : "";
+    if (all === "notopc") return p.cls === "opc" ? "" : body;
     const is = String((vals || {})[k] == null ? "" : vals[k]) === v;
     return (op === "=" ? is : !is) ? body : "";
   });
@@ -174,6 +180,11 @@ export function build(doc, p0, co) {
   const need = (v, l) => { if (!v) { if (!missing.includes(l)) missing.push(l); return { miss: l }; } return v; };
   if (tpl.kind === "minutes") return minutes(tpl, vals, p, co, company, missing, warn);
   // the dates the law sets (warnings: the document can still be made)
+  // the certified copy is certified on or after the meeting
+  if (tpl.kind === "resolution" && isDay(vals.certifiedOn) && isDay(vals.meetingDate) && vals.certifiedOn < vals.meetingDate)
+    warn.push("Certified on " + dmy(vals.certifiedOn) + ": before the meeting (" + dmy(vals.meetingDate) + ") that passed the resolution.");
+  if (tpl.key === "accounts-approval" && p.cls === "opc" && Array.isArray(vals.signers) && vals.signers.length !== 1)
+    warn.push("A One Person Company: one director signs the financial statements and the Board's report (s.134(1), s.134(6)).");
   if (tpl.key === "first-auditor" && isDay(p.incorporated) && isDay(vals.meetingDate) && days(p.incorporated, vals.meetingDate) > 30)
     warn.push("The first auditor is appointed by the Board within 30 days of incorporation (s.139(6)): this meeting is " + days(p.incorporated, vals.meetingDate) + " days after it.");
   const blocks = [];
@@ -190,8 +201,9 @@ export function build(doc, p0, co) {
   } else {
     // a notice: seven days at least (s.173(3)); shorter only for urgent business (the proviso, said in the notice)
     const s = signer(p, vals.signer), gap = days(vals.noticeDate, vals.meetingDate);
-    if (gap != null && gap < 7) warn.push("Less than seven days' notice (" + gap + " day" + (gap === 1 ? "" : "s") + "): a shorter notice only for urgent business, with an independent director present where the company has one (s.173(3), proviso). The notice says so.");
-    vals.shortNotice = gap != null && gap < 7 ? "yes" : "no";
+    if (gap != null && gap < 0) warn.push("The notice is dated " + dmy(vals.noticeDate) + ", after the meeting (" + dmy(vals.meetingDate) + "): a notice is given before it.");
+    else if (gap != null && gap < 7) warn.push("Less than seven days' notice (" + gap + " day" + (gap === 1 ? "" : "s") + "): a shorter notice only for urgent business, with an independent director present where the company has one (s.173(3), proviso). The notice says so.");
+    vals.shortNotice = gap != null && gap >= 0 && gap < 7 ? "yes" : "no";
     blocks.push({ t: "to", lines: [["To,"], ["The Directors of ", { b: company }], [dmy(vals.noticeDate) ? "Date: " + dmy(vals.noticeDate) : { miss: "Date of this notice" }]] });
     blocks.push({ t: "title", runs: fill(tpl.subject, fields, vals, p, ctx, missing)[0].runs.map((r) => (typeof r === "string" ? r.toUpperCase() : r)) });
     blocks.push({ t: "rule" });
@@ -233,15 +245,17 @@ function minutes(tpl, vals, p, co, company, missing, warn) {
   const sv = Object.assign({}, vals, { leaveText });
   let no = 0;
   const off = vals.off || [];
+  // no quorum: the meeting stood adjourned (s.174(4)); no business is minuted
   tpl.standard.forEach((s) => {
     if (!s.fixed && off.includes(s.k)) return;
+    if (!q.ok && !s.fixed) return;
     no++; blocks.push({ t: "item", no, title: s.title });
     // the quorum is minuted as present only when it was (s.174)
     const txt = s.k === "leave" ? leaveText : s.k === "chair" && !q.ok ? s.noQuorum : s.text;
     fill(txt.replace("{{leaveText}}", leaveText), stdFields, sv, p, ctx, missing).forEach((b) => blocks.push(b));
     if (s.k === "chair") blocks.push({ t: "p", runs: ["Quorum: " + q.present + " of the " + q.total + " Directors present; the quorum under section 174 of the Companies Act, 2013 is " + q.need + "."] });
   });
-  (vals.items || []).forEach((it) => {
+  (q.ok ? vals.items || [] : []).forEach((it) => {
     const t = byKey(it.template);
     if (!t) return;
     const fs = fieldsOf(t), iv = Object.assign({}, vals, it.fields || {});
@@ -249,12 +263,14 @@ function minutes(tpl, vals, p, co, company, missing, warn) {
     if (t.minute) fill(t.minute, fs, iv, p, ctx, missing).forEach((b) => blocks.push(b));
     quote(fill(t.text, fs, iv, p, ctx, missing)).forEach((b) => blocks.push(b));
   });
-  no++; blocks.push({ t: "item", no, title: tpl.close.title });
-  fill(tpl.close.text, stdFields, sv, p, ctx, missing).forEach((b) => blocks.push(b));
+  const close = q.ok ? tpl.close : tpl.adjourned;
+  no++; blocks.push({ t: "item", no, title: close.title });
+  fill(close.text, stdFields, sv, p, ctx, missing).forEach((b) => blocks.push(b));
   blocks.push({ t: "sig", chairman: true, lines: ["", [chair ? { b: chair.name } : { miss: "Chairman" }], ["Chairman"], ["Date of signing: ", dmy(vals.signedOn) || "____________"], ["Place: ", need(vals.place, "Place (city)")]] });
   if (!chair && !missing.includes("Chairman")) missing.push("Chairman");
-  const sg = days(vals.meetingDate, vals.signedOn);
-  if (sg != null && sg > 30) warn.push("Minutes are to be entered and signed within 30 days of the meeting (s.118, SS-1 para 7.4): signed " + sg + " days after it.");
+  // s.118(1): minutes are prepared and entered in the minutes book within 30 days of the meeting (signing is not held to it)
+  const en = days(vals.meetingDate, vals.enteredOn);
+  if (en != null && en > 30) warn.push("Minutes are to be entered in the minutes book within 30 days of the meeting (s.118(1)): entered " + en + " days after it.");
   return { kind: "minutes", blocks, missing, warn, quorum: q, finalBlock: q.ok ? "" : "Quorum not present", title: "Minutes of board meeting" + (vals.serial ? " " + vals.serial : ""),
     head: { left: company + " · Minutes Book of Board Meetings", startPage: Math.max(1, parseInt(vals.startPage, 10) || 1) }, foot: "initials", letterhead: false };
 }

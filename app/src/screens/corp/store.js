@@ -204,7 +204,16 @@ const dup = (e) => /23505|duplicate key/i.test(String((e && e.message) || e));
 const why = (e) => (typeof navigator === "object" && navigator.onLine === false ? "you're offline" : String((e && e.message) || e).replace(/^TypeError: /, "").slice(0, 160));
 
 // a server row laid under a record: the shown value of a field edited here is merged three ways, the rest is the server's
+// a document marked Final on another computer takes no edit from here, except its owner's Back to draft: the edit is dropped
+// and said (never sent again and again to a trigger that refuses it)
+const FINAL_ELSEWHERE = "Marked Final on another computer: your unsaved change was not applied.";
+const ownerBack = (e) => Object.keys(e.dirty).every((k) => k === "status") && e.cur.status === "draft" && String((typeof Cloud === "object" && Cloud.st && Cloud.st.role) || "") === "owner";
+const locked = (x) => /final document is locked|takes a final document back to draft/i.test(String((x && x.message) || x));
 function take(kind, e, row) {
+  if (kind === "docs" && row.status === "final" && Object.keys(e.dirty).length && !ownerBack(e)) {
+    e.dirty = {}; e.err = "";
+    Object.keys(mem).forEach((cid) => { if (mem[cid].docs && Object.values(mem[cid].docs).includes(e)) mem[cid].note = FINAL_ELSEWHERE; });
+  }
   const srv = KIND[kind].from(row), cur = copy(srv);
   Object.keys(e.dirty).forEach((k) => { const v = merge3(e.row ? e.row[k] : undefined, e.cur[k], srv[k]); if (v === undefined) delete cur[k]; else cur[k] = v; });
   Object.keys(e.dirty).forEach((k) => { if (same(cur[k], srv[k])) delete e.dirty[k]; });
@@ -265,7 +274,11 @@ async function sendOne(cid, kind, e, tries) {
   try {
     rows = e.at ? await api(K.table + "?" + K.where(cid, e.cur) + "&updated_at=eq." + encodeURIComponent(e.at), { method: "PATCH", headers: { Prefer: "return=representation" }, body })
       : await api(K.table, { method: "POST", headers: { Prefer: "return=representation" }, body });
-  } catch (x) { if (!(dup(x) && !e.at)) throw x; rows = []; } finally { e.posting = false; }
+  } catch (x) {
+    // the server's lock on a Final document: read it again (the edit is dropped and said, above), no retry
+    if (locked(x) && kind === "docs") { e.posting = false; const now = await api(K.table + "?select=*&" + K.where(cid, e.cur)); e.dirty = {}; if (now && now[0]) take(kind, e, now[0]); mem[cid].note = FINAL_ELSEWHERE; return "merged"; }
+    if (!(dup(x) && !e.at)) throw x; rows = [];
+  } finally { e.posting = false; }
   if (!rows || !rows.length) {
     if (tries >= 3) throw new Error("another computer kept changing it");
     const now = await api(K.table + "?select=*&" + K.where(cid, e.cur));

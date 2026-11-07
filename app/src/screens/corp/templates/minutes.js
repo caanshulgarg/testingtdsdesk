@@ -13,6 +13,7 @@ export default {
     { k: "endTime", label: "Meeting ended at", type: "text", def: "12:00 Noon" },
     { k: "inAttendance", label: "In attendance", type: "text", ph: "Company Secretary, Statutory Auditor (optional)" },
     { k: "prevDate", label: "Previous board meeting held on", type: "date", def: "profile.lastBoard" },
+    { k: "enteredOn", label: "Entered in the minutes book on", type: "date" },
     { k: "signedOn", label: "Minutes signed on", type: "date" },
   ],
   // the standard items, in order; each may be taken out except the Chairman and the quorum
@@ -25,5 +26,7 @@ export default {
     { k: "mbp", title: "Disclosure of interest", text: "The Board noted the disclosures of interest received from the Directors in Form MBP-1 under section 184(1) of the Companies Act, 2013, and the declarations in Form DIR-8 under section 164(2)." },
   ],
   close: { title: "Vote of thanks", text: "There being no other business, the meeting ended at {{endTime}} with a vote of thanks to the Chair." },
+  // the quorum not present (s.174(4)): no business; the meeting stands adjourned
+  adjourned: { title: "Adjournment", text: "The quorum not being present, the meeting stood adjourned under section 174(4) of the Companies Act, 2013 to the same day in the next week, at the same time and place, or, if that day is a national holiday, to the next day which is not a national holiday, at the same time and place." },
   attendance: ["In person", "Video conference", "Leave of absence", "Absent"],
 };
