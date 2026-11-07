@@ -51,7 +51,8 @@ function Detail({ co, r, close }) {
     {r.status !== "filed" ? <div className="corp-row" style={{ alignItems: "flex-end" }}>
       <label className="corp-f"><span>SRN (after filing on the MCA portal)</span><input type="text" data-form-srn="" value={srn} onChange={(e) => setSrn(e.target.value)} placeholder="AB1234567" maxLength={14} /></label>
       <label className="corp-f"><span>Filed on</span><input type="date" data-form-filed-on="" value={on} onChange={(e) => setOn(e.target.value)} /></label>
-      <Button className="btn small primary" data-form-filed="" disabled={!okSrn || !on} onClick={filed}>Mark as filed</Button>
+      <Button className="btn small primary" data-form-filed="" disabled={!okSrn || !on || (r.builder === "aoc4" && r.status !== "ready")} onClick={filed}>Mark as filed</Button>
+      {r.builder === "aoc4" && r.status !== "ready" && <span className="corp-note" data-form-filed-wait="">Mark it Ready for MCA in the AOC-4 builder first: its figures are kept then.</span>}
       {srn && !okSrn && <span className="corp-note">An SRN is a letter and 7 to 11 letters or digits (e.g. AB1234567).</span>}
     </div> : <div className="corp-row"><span>{words(r)}</span><button className="linkbtn" data-form-unfile="" onClick={() => keep({ status: r.done >= 4 ? "ready" : "in_progress", srn: "", filedOn: "" })}>Not filed after all</button></div>}
     {r.status !== "filed" && (r.status === "not_needed" ? <div className="corp-row"><span>{words(r)}</span>

@@ -187,6 +187,8 @@ with sync_playwright() as p:
     E("() => { const d = document.querySelector('#app [data-aoc4-mapping]'); if (d) d.open = true; }"); W(300)
     pg.select_option("#app [data-upload-head='3']", "tpm"); W(500)
     ok(not E("!!document.querySelector('#app [data-upload-guessed=\"3\"]')"), "a head chosen by hand: no longer marked")
+    ok(E("(cid) => FCCorp.corpOf(cid).filings.find(x => x.ref === 'annual:AOC-4:2025-26').status", co) == "in_progress", "a head changed after Ready: in progress again")
+    ok(E("!!document.querySelector('#app [data-aoc4-heads-ok]')"), "the heads guessed: one tick to say they are checked")
     pg.select_option("#app [data-upload-head='5']", ""); W(500)
     un = E("(document.querySelector('#app [data-aoc4-unmapped]') || {}).innerText || ''")
     ok("Not in any head: 1 line, ₹2,00,000.00" in un and "Property plant and equipment" in un and (check(pg, "unmapped") or [""])[0] == "no", "a line in no head: listed with its amount (%s)" % un[:80])

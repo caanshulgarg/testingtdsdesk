@@ -8,7 +8,7 @@ import "../../lib/finGlobals.js";
 import Button from "../../parts/Button.jsx";
 import { Card } from "./parts.jsx";
 import { canEdit, corpOf, saveFiling } from "./store.js";
-import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, checks, csvOf, figures, fromBooks, fromUpload, guessHead, isNum, num, sheetRows, totalChecks } from "./aoc4.js";
+import { ATTACHMENTS, BS_HEADS, LEAVES, PL_HEADS, autoCols, checks, csvOf, figures, fromBooks, fromUpload, linesOf, num, sheetLines, sheetRows, totalChecks, udinOk } from "./aoc4.js";
 import { annual } from "./eforms.js";
 import { dmy, dueIn, finKey, fyEnd, fyNext, lastClosedFy, today } from "./dates.js";
 import { shown } from "./Profile.jsx";
@@ -26,46 +26,18 @@ function booksFigures(b, fy) {
   return memo.v;
 }
 
-// a file read: every sheet (the person picks one), at most 400 lines of at most 30 columns each; a CSV read as UTF-8.
-// Kept on this page only while it is open: what is saved is the lines made from it (linesOf), never the raw cells
-const MAXR = 400, MAXC = 30;
+// a file read: every sheet (the person picks one), at most 400 lines of at most 30 columns each (XLSX reads 401 rows at
+// most, and each sheet's used range is cut before it is read: a sheet formatted far down stays quick); a CSV read as
+// UTF-8. Kept on this page only while it is open: what is saved is the lines made from it (linesOf), never the raw cells
 async function readSheet(file) {
   if (/\.pdf$/i.test(file.name)) throw new Error("Reading a PDF comes in phase 2: upload the Excel or CSV for now.");
   if (typeof window.ensureXlsx === "function") await window.ensureXlsx();
   if (!window.XLSX) throw new Error("The Excel reader could not be loaded.");
-  const X = window.XLSX, wb = /\.csv$/i.test(file.name) ? X.read(await file.text(), { type: "string", raw: true }) : X.read(await file.arrayBuffer(), { type: "array" });
-  const sheets = (wb.SheetNames || []).map((name) => {
-    const ws = wb.Sheets[name]; if (!ws) return { name, rows: [] };
-    const rows = X.utils.sheet_to_json(ws, { header: 1, raw: true, defval: "", blankrows: false }).map((r) => r.slice(0, MAXC)).filter((r) => r.some((c) => String(c).trim() !== "")).slice(0, MAXR);
-    return { name, rows };
-  }).filter((x) => x.rows.length);
+  const X = window.XLSX, opt = { sheetRows: 401 };
+  const wb = /\.csv$/i.test(file.name) ? X.read(await file.text(), Object.assign({ type: "string", raw: true }, opt)) : X.read(await file.arrayBuffer(), Object.assign({ type: "array" }, opt));
+  const sheets = (wb.SheetNames || []).map((name) => ({ name, rows: sheetLines(X, wb.Sheets[name]) })).filter((x) => x.rows.length);
   if (!sheets.length) throw new Error("No lines found in the file.");
   return { file: file.name, sheets };
-}
-// the columns guessed: the label (the column with the most text), this year and last year (the two with the most amounts)
-function autoCols(rows) {
-  const w = Math.min(MAXC, Math.max(0, ...rows.map((r) => r.length)));
-  const score = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (isNum(r[j]) ? 1 : 0), 0)), text = Array.from({ length: w }, (_, j) => rows.reduce((s, r) => s + (r[j] !== "" && !isNum(r[j]) ? 1 : 0), 0));
-  const label = text.indexOf(Math.max(...text)), nums = score.map((s, j) => [s, j]).filter(([s, j]) => j !== label && s > 0).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 2).map(([, j]) => j).sort((a, b) => a - b);
-  return { label: Math.max(0, label), cy: nums[0] != null ? nums[0] : 1, py: nums[1] != null ? nums[1] : 2 };
-}
-// the lines to keep from a sheet and its columns: label and both years as numbers (NaN: not an amount, said), the heads
-// guessed (each marked "check the head"), the file's own totals
-function linesOf(file, sheet, rows, cols) {
-  const lines = [], map = {}, guessed = {}, totals = [];
-  rows.forEach((r) => {
-    const label = String(r[cols.label] == null ? "" : r[cols.label]).trim().slice(0, 200), a = r[cols.cy], b = r[cols.py];
-    // neither year an amount: a heading (or the column titles, e.g. dates): its amounts nil. One year an amount and the
-    // other not: that cell is not an amount (NaN, said)
-    const head = !isNum(a) && !isNum(b);
-    const z = { label, cy: head || a === "" ? 0 : num(a), py: head || b === "" ? 0 : num(b) };
-    if (!label && !z.cy && !z.py) return;
-    const i = lines.length; lines.push(z);
-    const k = guessHead(label);
-    if (k) { map[i] = k; guessed[i] = true; }
-    if (k === "-" && /total/i.test(label) && (z.cy || z.py)) totals.push({ label, cy: z.cy, py: z.py });
-  });
-  return { file, sheet, cols, lines, map, guessed, totals };
 }
 
 function Grid({ heads, f, edit, setEdit, which, final, onBad }) {
@@ -125,6 +97,9 @@ export default function Aoc4({ co }) {
   const [tab, setTab] = useState("bs"), [err, setErr] = useState(""), [busy, setBusy] = useState(""), [raw, setRaw] = useState(null), [mapOpen, setMapOpen] = useState(false);
   // a viewer, or a page whose copy is not in, looks and downloads; nothing it does is kept
   const may = canEdit(co.id);
+  // any change to a form marked Ready puts it back to In progress (it is Ready again only by Ready for MCA)
+  const back = () => (fl.status === "ready" ? { status: "in_progress", steps: Math.min(fl.steps || 0, 2) } : {});
+  const change = (patch, extra) => keep(patch, Object.assign(back(), extra || {}));
   const keep = (patch, extra) => may && saveFiling(co.id, Object.assign({ ref: row.ref, form: "AOC-4", kind: "annual", period: fy, due: row.due, status: fl.status || "in_progress", steps: fl.steps || 0 }, extra || {}, { data: Object.assign({}, data, patch) }));
   const source = data.source || "books", final = fl.status === "filed";
   // each source has its own edits (switching source starts with that source's); older drafts kept one set, the Books'
@@ -134,8 +109,8 @@ export default function Aoc4({ co }) {
   const b = S.books && S.books.cid === co.id ? S.books : null;
   if (source === "books" && !b) { if (typeof openBooks === "function") openBooks(co.id); }
   let base = null, why = "";
-  // a filed AOC-4 is shown (and downloaded) as it was saved: never worked out again
-  if (final && data.figures) base = { cy: data.figures, py: data.pyFigures || {}, src: data.srcSaved || {}, unmapped: [], info: {} };
+  // a filed AOC-4 is shown (and downloaded) as it was saved: never worked out again; filed with nothing saved: said
+  if (final) { if (data.figures) base = { cy: data.figures, py: data.pyFigures || {}, src: data.srcSaved || {}, unmapped: [], info: {} }; else why = "Marked filed without figures saved in FinCom: nothing is worked out for a filed form."; }
   else if (source === "upload") base = data.upload && data.upload.lines ? fromUpload(data.upload) : null;
   else if (!b || b.loading) why = "Opening the books…";
   else if (!(b.vouchers || []).length) why = "The books have no day book yet: bring it in from Tally (Books › From Tally), or upload the balance sheet and P&L instead.";
@@ -144,12 +119,15 @@ export default function Aoc4({ co }) {
   const prev = (c.filings || []).find((x) => x.ref === "annual:AOC-4:" + fyNext(fy, -1) && x.status === "filed");
   const un = (base && base.unmapped) || [], noWhy = Object.entries(edits).filter(([, e]) => !String(e.why || "").trim()).map(([k]) => k);
   const cks = f ? checks(f, { lastFiled: prev && prev.data && prev.data.figures, lastFy: fyNext(fy, -1), udin: data.udin, unmapped: un, totals: base.totals ? totalChecks(f, base.totals) : [], bad: base.bad }) : [];
-  const hold = un.length ? "Not in any head: map every line first" : noWhy.length ? "Give the reason for each figure changed" : base && base.bad && base.bad.length ? "Some cells of the file are not amounts" : "";
+  const bsOk = !!cks.find((x) => x.key === "bs" && x.ok), guessLeft = base && base.guessed && !base.headsOk;
+  // what holds back Next (the figures) and Ready (as well: the balance sheet tallies, the UDIN is right, the heads checked)
+  const holdNext = un.length ? "Not in any head: map every line first" : noWhy.length ? "Give the reason for each figure changed" : base && base.bad && base.bad.length ? "Some cells of the file are not amounts" : "";
+  const hold = holdNext || (!bsOk ? "The balance sheet does not tally" : !udinOk(data.udin) ? "Enter the auditor's UDIN (18 characters)" : guessLeft ? "Check the heads guessed from the file's words (or tick that you have)" : "");
   const att = data.attach || {}, attDone = ATTACHMENTS.every(([k]) => att[k] === "ready" || att[k] === "na");
   const stepNow = !f ? 0 : !data.figuresOk ? 1 : !attDone ? 2 : 3;
   // a figure changed: kept with this source's edits; after Ready, the form is in progress again
   const setEdit = (k, e) => { const ed = Object.assign({}, edits); if (e) ed[k] = e; else delete ed[k];
-    keep({ editsBy: Object.assign({ books: editsOf("books"), upload: editsOf("upload") }, { [source]: ed }), edits: undefined, figuresOk: false }, fl.status === "ready" ? { status: "in_progress", steps: Math.min(fl.steps || 0, 1) } : null); };
+    change({ editsBy: Object.assign({ books: editsOf("books"), upload: editsOf("upload") }, { [source]: ed }), edits: undefined, figuresOk: false }, fl.status === "ready" ? { steps: Math.min(fl.steps || 0, 1) } : null); };
   const d = dueIn(row.due);
   const meta = { company: P.name || co.name, cin: P.cin, fy, source: source === "upload" ? "the uploaded " + ((data.upload || {}).file || "file") : "FinCom Books", cyDate: dmy(fyEnd(fy)), pyDate: dmy(fyEnd(fyNext(fy, -1))) };
   const fileBase = (meta.company + " AOC-4 figures FY " + fy).replace(/[\\/:*?"<>|]+/g, " ");
@@ -175,7 +153,7 @@ export default function Aoc4({ co }) {
       const r = await readSheet(file), sh = r.sheets[0], up = linesOf(r.file, sh.name, sh.rows, autoCols(sh.rows));
       // a new file starts again: the figures changed by hand for the upload go (asked first)
       if (Object.keys(editsOf("upload")).length && !window.confirm("A new file: the figures you changed by hand for the upload will be cleared. Go on?")) return;
-      setRaw(r); keep({ source: "upload", upload: up, editsBy: { books: editsOf("books"), upload: {} }, edits: undefined, figuresOk: false });
+      setRaw(r); change({ source: "upload", upload: up, editsBy: { books: editsOf("books"), upload: {} }, edits: undefined, figuresOk: false });
     } catch (x) { setErr(String((x && x.message) || x)); } finally { setBusy(""); }
   };
   return <div data-corp-page="aoc4" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -189,8 +167,8 @@ export default function Aoc4({ co }) {
         </div>
         <div className="corp-row">
           {!final && <Button className="btn" data-aoc4-save="" disabled={!f} onClick={() => { stamp(); }}>Save draft</Button>}
-          {stepNow === 1 && !final && hold && <span className="corp-note" data-aoc4-hold="" style={{ color: "var(--corp-bad)" }}>{hold}</span>}
-          {stepNow === 1 && !final && <Button className="btn primary" data-aoc4-next="" disabled={!f || !!hold} title={hold || undefined} onClick={() => { if (hold) return; keep({ figuresOk: true, figures: f.cy, pyFigures: f.py, srcSaved: f.src }, { steps: Math.max(fl.steps || 0, 2), status: "in_progress" }); }}>Next: attachments</Button>}
+          {stepNow === 1 && !final && holdNext && <span className="corp-note" data-aoc4-hold="" style={{ color: "var(--corp-bad)" }}>{holdNext}</span>}
+          {stepNow === 1 && !final && <Button className="btn primary" data-aoc4-next="" disabled={!f || !!holdNext} title={holdNext || undefined} onClick={() => { if (holdNext) return; keep({ figuresOk: true, figures: f.cy, pyFigures: f.py, srcSaved: f.src }, { steps: Math.max(fl.steps || 0, 2), status: "in_progress" }); }}>Next: attachments</Button>}
           {stepNow === 3 && !final && <Button className="btn primary" data-aoc4-ready="" disabled={!!hold} title={hold || undefined} onClick={() => { if (hold) return; keep({ figures: f.cy, pyFigures: f.py, srcSaved: f.src }, { steps: 4, status: "ready" }); goClient("books:corp-forms"); }}>Ready for MCA</Button>}
           {stepNow === 3 && !final && hold && <span className="corp-note" data-aoc4-hold="" style={{ color: "var(--corp-bad)" }}>{hold}</span>}
         </div>
@@ -205,18 +183,21 @@ export default function Aoc4({ co }) {
     <div className="corp-cols">
       <div className="corp-main">
         <section className="corp-card" style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }} data-aoc4-source="">
-          <label className="corp-row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}><input type="radio" name="aoc4src" data-aoc4-src="books" checked={source === "books"} disabled={final} onChange={() => keep({ source: "books", figuresOk: false })} />
+          <label className="corp-row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}><input type="radio" name="aoc4src" data-aoc4-src="books" checked={source === "books"} disabled={final} onChange={() => change({ source: "books", figuresOk: false })} />
             <span><b>From FinCom Books</b><br /><span className="corp-note">{"Balance sheet & P&L of FY " + fy + (base && source === "books" ? " · books " + dmy(String(base.info.from).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3")) + " to " + dmy(String(base.info.to).replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3")) + " · " + base.info.ledgers + " ledgers mapped to Schedule III · previous year from " + base.info.py : " · the Statements page's figures")}</span></span></label>
-          <label className="corp-row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}><input type="radio" name="aoc4src" data-aoc4-src="upload" checked={source === "upload"} disabled={final} onChange={() => keep({ source: "upload", figuresOk: false })} />
+          <label className="corp-row" style={{ alignItems: "flex-start", flexWrap: "nowrap" }}><input type="radio" name="aoc4src" data-aoc4-src="upload" checked={source === "upload"} disabled={final} onChange={() => change({ source: "upload", figuresOk: false })} />
             <span><b>Upload balance sheet &amp; P&amp;L</b><br /><span className="corp-note">Excel or CSV from the auditor: FinCom reads the lines and you map them to the form's heads. PDF: coming in phase 2.</span></span></label>
           {source === "upload" && !final && <div className="corp-row"><label className="btn small" style={{ cursor: "pointer" }}><input type="file" accept=".xlsx,.xls,.csv" data-aoc4-file="" style={{ display: "none" }} onChange={upload} />{data.upload ? "Upload another file" : "Choose the Excel or CSV"}</label>
             <span className="btn small" aria-disabled="true" title="Reading a PDF balance sheet comes in phase 2" style={{ opacity: 0.55 }}>PDF · coming</span>
             {data.upload && <span className="corp-note">{data.upload.file + " · " + Object.keys(data.upload.map || {}).length + " lines mapped"}</span>}</div>}
           {source === "upload" && data.upload && data.upload.lines && !final && <details data-aoc4-mapping="" open={mapOpen || !Object.keys(data.upload.map || {}).length || undefined} onToggle={(e) => setMapOpen(e.currentTarget.open)}><summary style={{ cursor: "pointer", fontSize: 13 }}>Map the file's lines to AOC-4's heads</summary>
-            <UploadMap up={data.upload} raw={raw} setRaw={setRaw} set={(up) => keep({ upload: up, figuresOk: false })} /></details>}
+            <UploadMap up={data.upload} raw={raw} setRaw={setRaw} set={(up) => change({ upload: Object.assign({}, up, { headsOk: false }), figuresOk: false })} /></details>}
+          {source === "upload" && data.upload && Object.keys(data.upload.guessed || {}).length > 0 && !final && <label className="corp-row" style={{ fontSize: 13 }} data-aoc4-heads-ok="">
+            <input type="checkbox" checked={!!data.upload.headsOk} onChange={(e) => keep({ upload: Object.assign({}, data.upload, { headsOk: e.target.checked }) })} />
+            {"I've checked the heads (" + Object.keys(data.upload.guessed).length + " guessed from the file's words)"}</label>}
           {source === "upload" && data.upload && !data.upload.lines && !final && <p className="corp-note">This upload was kept in an older form: upload the file again.</p>}
           {f && un.length > 0 && <div data-aoc4-unmapped="" style={{ border: "1px solid var(--corp-bad)", borderRadius: 8, padding: "10px 12px", fontSize: 13 }}>
-            <b style={{ color: "var(--corp-bad)" }}>{"Not in any head: " + un.length + (un.length === 1 ? " line" : " lines") + ", ₹" + fmt(un.reduce((x, z) => x + Math.abs(z.cy || 0), 0)) + " this year"}</b>
+            <b style={{ color: "var(--corp-bad)" }}>{"Not in any head: " + un.length + (un.length === 1 ? " line" : " lines") + ", ₹" + fmt(un.reduce((x, z) => x + Math.abs(z.cy || 0), 0)) + " this year, ₹" + fmt(un.reduce((x, z) => x + Math.abs(z.py || 0), 0)) + " last year"}</b>
             <ul style={{ margin: "6px 0", paddingLeft: 18 }}>{un.slice(0, 12).map((z, i) => <li key={i}>{(z.label || "(no name)") + " · " + fmt(z.cy) + " / " + fmt(z.py)}</li>)}{un.length > 12 && <li>{"and " + (un.length - 12) + " more"}</li>}</ul>
             {source === "upload" ? <button className="linkbtn" data-aoc4-map-open="" onClick={() => setMapOpen(true)}>Map them</button>
               : <button className="linkbtn" onClick={() => { S.fsTab = "map"; goClient("books:fs"); }}>Give these ledgers their codes in Statements</button>}</div>}
@@ -232,7 +213,7 @@ export default function Aoc4({ co }) {
             : <div className="corp-card-body" style={{ paddingTop: 14 }}><div className="corp-grid">
               {[["cin", "CIN", P.cin], ["auditor", "Auditor", P.auditor], ["frn", "Auditor's FRN", P.auditorFrn]].map(([k, l, v]) => <label key={k} className="corp-f"><span>{l}</span><input type="text" value={v || ""} readOnly aria-label={l} /></label>)}
               {[["udin", "Auditor's UDIN"], ["signedOn", "Date the statements were signed"], ["agm", "Date of the AGM"]].map(([k, l]) => <label key={k} className="corp-f"><span>{l}</span>
-                <input type={k === "udin" ? "text" : "date"} data-aoc4-detail={k} defaultValue={k === "agm" ? (data.agm || (P.agms || {})[fy] || "") : data[k] || ""} disabled={final} onBlur={(e) => keep({ [k]: e.target.value.trim() })} /></label>)}</div>
+                <input type={k === "udin" ? "text" : "date"} data-aoc4-detail={k} defaultValue={k === "agm" ? (data.agm || (P.agms || {})[fy] || "") : data[k] || ""} disabled={final} onBlur={(e) => { const v = e.target.value.trim(); if (v !== String(data[k] || "")) change({ [k]: v }); }} /></label>)}</div>
               <p className="corp-note">The CIN and the auditor come from Company profile; edit them there.</p></div>}
         </section>
         <div className="corp-row" data-aoc4-out="">
@@ -254,7 +235,8 @@ export default function Aoc4({ co }) {
           {ATTACHMENTS.map(([k, l, how]) => <div key={k} className="corp-row" style={{ justifyContent: "space-between", fontSize: 13, borderBottom: "1px solid var(--corp-soft)", paddingBottom: 8, flexWrap: "nowrap" }} data-attach={k}>
             <span style={{ minWidth: 0 }}>{l}<br /><span className="corp-note" style={{ fontSize: 12 }}>{how}</span></span>
             <select aria-label={"State of: " + l} data-attach-state={k} disabled={final} value={att[k] || ""} onChange={(e) => { const na = Object.assign({}, att, { [k]: e.target.value }), all = ATTACHMENTS.every(([z]) => na[z] === "ready" || na[z] === "na");
-              keep({ attach: na }, data.figuresOk && all ? { steps: Math.max(fl.steps || 0, 3), status: final ? "filed" : "in_progress" } : null); }} style={{ maxWidth: 130 }}>
+              // all done: the third step; one back to To do: in progress again (Ready only by Ready for MCA)
+              if (all) keep({ attach: na }, data.figuresOk ? { steps: Math.max(fl.steps || 0, 3) } : null); else change({ attach: na }, { steps: Math.min(fl.steps || 0, 2) }); }} style={{ maxWidth: 130 }}>
               <option value="">To do</option><option value="ready">Ready</option><option value="na">Not applicable</option></select></div>)}
           <div className="corp-row" style={{ fontSize: 13 }}>
             <button className="linkbtn" onClick={() => { S.fsTab = "reports"; goClient("books:fs"); }}>Board's report: draft it in Statements › Reports</button>

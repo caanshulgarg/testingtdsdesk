@@ -32,12 +32,14 @@
 //   n_final   a document marked Final elsewhere: the unsaved edit here dropped and said; the lock: no retries
 // after the review of e17fa7c75 (stage 5):
 //   o_aoc4    the AOC-4 model: amounts, the heads guessed, lines in no head, the file's totals, tolerance, UDIN, CSV
+// after the re-review of 700e4b5ff:
+//   p_aoc4    the probes p, n, z, big: amounts, headings, Cr / Dr by the head's side, subtotals, columns, large ranges
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 const dir = join(dirname(fileURLToPath(import.meta.url)), "corp_store_sim");
 let bad = 0;
-for (const s of ["a_selfping", "a_reread", "a_early", "b_lay", "c_dropnew", "d_order", "e_exhaust", "f_tabs", "g_none", "h_postfail_drop", "i_two_reads", "j_drop_during_patch", "k_more", "s1_lostanswer_other_edit_drop", "s2_dup_while_deleting", "s3_rls_delete", "s4_drop_pending_then_other_change", "l_rules", "x1_jsonb", "x1_ctl", "x2_items", "m_docs", "n_final", "o_aoc4"]) {
+for (const s of ["a_selfping", "a_reread", "a_early", "b_lay", "c_dropnew", "d_order", "e_exhaust", "f_tabs", "g_none", "h_postfail_drop", "i_two_reads", "j_drop_during_patch", "k_more", "s1_lostanswer_other_edit_drop", "s2_dup_while_deleting", "s3_rls_delete", "s4_drop_pending_then_other_change", "l_rules", "x1_jsonb", "x1_ctl", "x2_items", "m_docs", "n_final", "o_aoc4", "p_aoc4"]) {
   console.log(s);
   const r = spawnSync(process.execPath, [join(dir, s + ".mjs")], { cwd: dir, encoding: "utf8", timeout: 30000 });
   process.stdout.write(r.stdout || ""); if (r.stderr) process.stdout.write(r.stderr);
