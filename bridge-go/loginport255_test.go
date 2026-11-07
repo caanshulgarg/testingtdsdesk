@@ -14,11 +14,11 @@ import (
 
 // the production hook, kept before the tests below set their own (the tests written before 2.5.5 check the 2.5.3
 // choice of port: they get no per-login port, as a login name the test computer gives would make them depend on it)
-var iniLoginPortProd func() int
+var iniLoginPortProd func(func(int) bool) int
 
 func init() {
 	iniLoginPortProd = iniLoginPortFn
-	iniLoginPortFn = func() int { return 0 }
+	iniLoginPortFn = func(func(int) bool) int { return 0 }
 }
 
 type lpCase struct {
@@ -82,6 +82,11 @@ func TestLoginPortSameAsPage(t *testing.T) {
 			in = append(in, []any{n, s})
 		}
 	}
+	// (review P2) the login's port with ports found taken: the page's freePort with those seen
+	takenSets := [][]int{{9029}, {9029, 9031, 9032}, {9026, 9027, 9028, 9029, 9031}}
+	for _, ts := range takenSets {
+		in = append(in, []any{"made-up-a", ts})
+	}
 	b, _ := json.Marshal(in)
 	out, err := exec.Command(node, filepath.Join("..", "tests", "run_login_port.mjs"), string(b)).CombinedOutput()
 	if err != nil {
@@ -100,6 +105,13 @@ func TestLoginPortSameAsPage(t *testing.T) {
 			t.Errorf("%q seen %v: the bridge says %d, the page %d", x[0], seen, got, page[i])
 		}
 	}
+	for i, ts := range takenSets {
+		taken := lpSeen(ts)
+		got := loginOwnPortFree(`PC1\made-up-a`, func(p int) bool { return taken[p] })
+		if want := page[len(page)-len(takenSets)+i]; got != want {
+			t.Errorf("made-up-a with %v taken: the bridge writes %d, the page offers %d", ts, got, want)
+		}
+	}
 }
 
 // a tally.ini only this login uses, its connection off and no port named: this login's own port is written
@@ -109,7 +121,7 @@ func TestLoginPortWrittenForOwnIni(t *testing.T) {
 	old, oldS := iniLoginPortFn, iniSharedFn
 	t.Cleanup(func() { iniLoginPortFn, iniSharedFn = old, oldS })
 	iniSharedFn = func() bool { return false }
-	iniLoginPortFn = func() int { return iniLoginPort(`PC1\made-up-a`) }
+	iniLoginPortFn = func(used func(int) bool) int { return iniLoginPort(`PC1\made-up-a`, used) }
 	_, p := r253Ini(t, "[Tally]\r\nUser TDL = Yes\r\nClient Server = None\r\n")
 	e, err := tallyIniApply(p, addonIniPath())
 	if err != nil || str(e["connect"]) != connectEnabled || toInt(e["serverPort"]) != 9029 {
@@ -125,15 +137,16 @@ func TestLoginPortWrittenForOwnIni(t *testing.T) {
 	}
 }
 
-// the per-login port taken by another tally.ini, or listened on: the 2.5.3 choice; a port the file names, or a file whose
-// connection is already on, keeps its port; a shared computer writes nothing (2.5.4)
+// the per-login port taken by another tally.ini, or listened on: the login's next port, as the page gives it; all taken:
+// the 2.5.3 choice; a port the file names, or a Tally working on 9000 with no port named, is kept; a shared computer
+// writes nothing (2.5.4)
 func TestLoginPortFallsBackAndNeverMovesAWorkingPort(t *testing.T) {
 	f := newStandTally(t)
 	standBridge(t, f, "")
 	old, oldS := iniLoginPortFn, iniSharedFn
 	t.Cleanup(func() { iniLoginPortFn, iniSharedFn = old, oldS })
 	iniSharedFn = func() bool { return false }
-	iniLoginPortFn = func() int { return iniLoginPort(`PC1\made-up-a`) }
+	iniLoginPortFn = func(used func(int) bool) int { return iniLoginPort(`PC1\made-up-a`, used) }
 
 	// another TallyPrime's tally.ini names 9029
 	root := t.TempDir()
@@ -149,22 +162,47 @@ func TestLoginPortFallsBackAndNeverMovesAWorkingPort(t *testing.T) {
 	fake := filepath.Join(root, "fake.json")
 	_ = os.WriteFile(fake, []byte(`{"mySession": 1, "processes": [], "listeners": []}`), 0o644)
 	t.Setenv("TDSBRIDGE_FAKE", fake)
-	if e, err := tallyIniApply(p, addonIniPath()); err != nil || toInt(e["serverPort"]) != 9000 {
-		t.Fatalf("named by another tally.ini: %v %v (want the 2.5.3 choice, 9000)", e, err)
+	// (review P2) the login's next port, as the page gives it with 9029 seen: 9031 (9030 is one FinCom never proposes)
+	if e, err := tallyIniApply(p, addonIniPath()); err != nil || toInt(e["serverPort"]) != 9031 {
+		t.Fatalf("named by another tally.ini: %v %v (want the login's next port, 9031)", e, err)
 	}
-	// something listens on 9029 (and on 9000): the 2.5.3 choice, the first free port
+	// something listens on 9029 (and on 9000): the login's next port too
 	_ = os.WriteFile(filepath.Join(other, "tally.ini"), []byte("[Tally]\r\nClient Server = Both\r\nServer Port = 9070\r\n"), 0o644)
 	_ = os.WriteFile(p, []byte("[Tally]\r\nClient Server = None\r\n"), 0o644)
 	_ = os.Remove(p + ".fincom-bak")
 	_ = os.WriteFile(fake, []byte(`{"mySession": 1, "processes": [{"pid": 30, "name": "svc", "session": 1}], "listeners": [{"port": 9029, "pid": 30}, {"port": 9000, "pid": 30}]}`), 0o644)
 	resetIniPorts()
-	if e, err := tallyIniApply(p, addonIniPath()); err != nil || toInt(e["serverPort"]) != 9001 {
-		t.Fatalf("listened on: %v %v (want 9001)", e, err)
+	if e, err := tallyIniApply(p, addonIniPath()); err != nil || toInt(e["serverPort"]) != 9031 {
+		t.Fatalf("listened on: %v %v (want 9031)", e, err)
+	}
+	// every port of the login's taken: the 2.5.3 choice
+	if p := iniLoginPort(`PC1\made-up-a`, func(p int) bool { return p < 9200 }); p != 0 {
+		t.Fatalf("every login port taken: %d", p)
+	}
+	if _, _, port, _ := iniConnectPref([]byte("[Tally]\r\nClient Server = None\r\n"), func(p int) bool { return p < 9200 }, iniLoginPortFn); port != 9200 {
+		t.Fatalf("every login port taken: wrote %d (want the 2.5.3 choice, 9200)", port)
 	}
 
-	// the pure rule: a port named is kept; a connection already on keeps its (default) port's choice as before
+	// (review P1) the connection on, no port named, and the user's Tally listening on TallyPrime's own 9000: that is
+	// this file's working port: nothing written
+	orig := "[Tally]\r\nUser TDL = Yes\r\nClient Server = Both\r\nTDL = " + addonIniPath() + "\r\n"
+	_ = os.WriteFile(p, []byte(orig), 0o644)
+	_ = os.Remove(p + ".fincom-bak")
+	_ = os.WriteFile(fake, []byte(`{"mySession": 1, "processes": [{"pid": 31, "name": "tally.exe", "session": 1}], "listeners": [{"port": 9000, "pid": 31}]}`), 0o644)
+	resetIniPorts()
+	if e, err := tallyIniApply(p, addonIniPath()); err != nil || str(e["connect"]) != connectAlready || toInt(e["serverPort"]) != 9000 || r253Read(t, p) != orig || exists(p+".fincom-bak") {
+		t.Fatalf("Tally working on 9000: %v %v\n%s", e, err, r253Read(t, p))
+	}
+	// another program (not a Tally) on 9000: the file gets a free port, as before
+	_ = os.WriteFile(fake, []byte(`{"mySession": 1, "processes": [{"pid": 32, "name": "svc", "session": 1}], "listeners": [{"port": 9000, "pid": 32}]}`), 0o644)
+	resetIniPorts()
+	if e, err := tallyIniApply(p, addonIniPath()); err != nil || str(e["connect"]) != connectEnabled || toInt(e["serverPort"]) != 9001 {
+		t.Fatalf("another program on 9000: %v %v", e, err)
+	}
+
+	// the pure rule: a port named is kept; a connection already on (no Tally on 9000) keeps the 2.5.3 choice
 	used := func(int) bool { return false }
-	pref := func() int { return 9029 }
+	pref := func(func(int) bool) int { return 9029 }
 	if _, st, port, _ := iniConnectPref([]byte("[Tally]\r\nClient Server = None\r\nServer Port = 9070\r\n"), used, pref); st != connectEnabled || port != 9070 {
 		t.Fatalf("named port: %s %d", st, port)
 	}
@@ -176,7 +214,7 @@ func TestLoginPortFallsBackAndNeverMovesAWorkingPort(t *testing.T) {
 	}
 	// on a computer several people use: no per-login port, and nothing written (2.5.4)
 	iniSharedFn = func() bool { return true }
-	if p := iniLoginPort(`PC1\made-up-a`); p != 0 {
+	if p := iniLoginPort(`PC1\made-up-a`, nil); p != 0 {
 		t.Fatalf("shared computer: per-login port %d", p)
 	}
 	_ = os.WriteFile(p, []byte("[Tally]\r\nClient Server = None\r\n"), 0o644)
@@ -196,7 +234,7 @@ func TestLoginPortProductionHook(t *testing.T) {
 	iniSharedFn = func() bool { return false }
 	setCfg("Owner", `PC1\made-up-b`) // Windows
 	t.Setenv("USER", "made-up-b")    // elsewhere
-	if p := iniLoginPortProd(); p != 9031 {
+	if p := iniLoginPortProd(nil); p != 9031 {
 		t.Fatalf("the bridge's own hook: %d (want made-up-b's 9031)", p)
 	}
 }

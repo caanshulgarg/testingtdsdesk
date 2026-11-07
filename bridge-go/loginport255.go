@@ -6,7 +6,8 @@
 // Used only where the bridge chooses a port for a tally.ini that only this login uses (iniconnect253.go): the file names
 // no port and its connection is being switched on by the bridge's write, on a computer one person uses (a shared
 // tally.ini keeps 2.5.4's rule: nothing written). The port is taken only when no other tally.ini names it and nothing
-// listens on it; otherwise the 2.5.3 choice stands. A port the file already names is never changed.
+// listens on it (else the login's next port, as the page would give it with that port seen); none free, the 2.5.3
+// choice. A port the file already names is never changed.
 package main
 
 import (
@@ -98,4 +99,23 @@ func loginOwnPort(windowsUser string) int {
 		return 0
 	}
 	return loginFreePort(nil, u)
+}
+
+// 2.5.5 (review P2): this login's own port, taken ports aside as the page puts them aside: the page's freePort with
+// every port found taken added to what it has seen (its next port each time), so page and bridge agree; 0 when every
+// candidate is taken (the caller's own choice then)
+func loginOwnPortFree(windowsUser string, used func(int) bool) int {
+	u := loginShort(windowsUser)
+	if u == "" {
+		return 0
+	}
+	seen := map[int]bool{}
+	for i := 0; i < 100; i++ {
+		p := loginFreePort(seen, u)
+		if p == 0 || used == nil || !used(p) {
+			return p
+		}
+		seen[p] = true
+	}
+	return 0
 }
