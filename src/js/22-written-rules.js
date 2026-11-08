@@ -998,8 +998,9 @@ function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r
 // next-bank-overlap: a line held aside as a repeat of an earlier entry, or kept aside as one (src/js/96): ignored and marked,
 // it stays among the lines (in its place) but is in no tab, no total, no suggestion and no Tally matching
 // and the one posting check (review of 08-Nov-2026): a line marked as a possible repeat and not confirmed, whatever the mark
-// (after an Undo, or a Restore in an older version), that is not ignored, is never posted until Keep it or It's a repeat
-function bankRepOpen(r){ return !!(r && r.rep && !r.rep.ok && r.state !== "ignored"); }
+// (after an Undo, or a Restore in an older version), that is not ignored, is never posted until Keep it or It's a repeat.
+// A line already posted or already in Tally is past that: never set aside (no Keep it / It's a repeat for it)
+function bankRepOpen(r){ return !!(r && r.rep && !r.rep.ok && !["ignored", "sent", "intally"].includes(r.state)); }
 function bankAside(r){ return !!(r && r.rep && r.state === "ignored" && (r.rep.gone || (r.rep.kind === "strong" && !r.rep.ok))); }
 function bankTabOf(r){
   if (bankAside(r)) return "aside";

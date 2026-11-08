@@ -1201,7 +1201,8 @@ async function postBankToTally(ids){
   misread.forEach(r => { r.state = "attention"; r.why = ["This line does not agree with the statement\u2019s running balance, so it may have been misread. Check the amount against the bank statement before posting."]; });
   const skipped = b.rows.filter(r => r.state === "intally").length - inTallyBefore;
   const movedBack = b.rows.filter(r => readyBefore.has(r.id) && ["attention", "suggested"].includes(r.state)).length;
-  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
+  // checked again: a line marked Possible repeat that became ready during the awaits above is not sent
+  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r));
   const failed = [];
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)

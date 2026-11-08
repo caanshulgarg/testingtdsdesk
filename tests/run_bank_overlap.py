@@ -258,6 +258,30 @@ with sync_playwright() as p:
     ok(any("Possible repeat" in x for x in E("bankExportProblems(B().rows.filter(r => r.state === 'ready'))")) and E("(id) => postRows(CO()).find(x => x.id === id).state[0]", o) == "Possible repeat — check", "and the Tally file and the Post page agree")
     pg.click("[data-rep-keep='%s']" % o); pg.wait_for_timeout(300)
     ok(o in (E(POST) or []), "Keep it: now it is posted")
+    # a marked line that becomes ready while the posting waits (its ledger confirmed meanwhile): checked again at the end
+    d = E("B().rows.find(r => r.date === '2026-06-02').id")
+    fin = E("""async ([c, d]) => {
+      const names = ['ensureTallyCompany', 'bankSentHeal', 'syncLedgersFromTally', 'bankLedgerReady', 'syncBankBookFromTally', 'tallyCall', 'scanStatementInTally', 'isOwnBank', 'dropOwnBank', 'bankGoneAsk'];
+      const sv = {}; names.forEach(n => { sv[n] = window[n]; });
+      const r = B().rows.find(x => x.id === c), dr = B().rows.find(x => x.id === d);
+      r.rep = {kind: 'weak', of: '2026-04-28', ofId: 'x', why: 'test'}; r.state = 'attention'; r.ledger = 'Some Ledger'; dr.state = 'ready'; dr.ledger = 'Some Ledger';
+      window.__final = []; B().ledgers.live = false;
+      window.ensureTallyCompany = async () => 'ZZ TEST'; window.bankSentHeal = async () => ({n: 0}); window.bankGoneAsk = async (b, ids) => ids;
+      window.syncLedgersFromTally = async () => { r.state = 'ready'; };
+      window.bankLedgerReady = () => 'Demo Bank A/c'; window.syncBankBookFromTally = async () => {}; window.tallyCall = async () => ({vouchers: []});
+      window.scanStatementInTally = async () => ({extra: [], wrongDate: []});
+      window.isOwnBank = (x) => { window.__final.push(x.id); return true; }; window.dropOwnBank = () => {};
+      try { await postBankToTally(); } finally { names.forEach(n => { window[n] = sv[n]; }); B().busy = ''; }
+      return window.__final; }""", [c2, d])
+    ok(d in fin and c2 not in fin, "a marked line made ready while the posting waited is checked again and not sent (sent: %s)" % fin)
+    # a line already posted / already in Tally is never set aside
+    for stt in ("sent", "intally"):
+        E("([id, s]) => { const r = B().rows.find(x => x.id === id); r.rep = {kind: 'weak', of: '2026-04-28', ofId: 'x', why: 'test'}; r.state = s; render(); }", [c2, stt])
+        pg.wait_for_timeout(250)
+        E("(id) => BankOverlap.repeat(id)", c2); pg.wait_for_timeout(200)
+        ok(E("(id) => bankRepOpen(B().rows.find(r => r.id === id))", c2) is False and E("(id) => B().rows.find(r => r.id === id).state", c2) == stt and not E("(id) => bankAside(B().rows.find(r => r.id === id))", c2)
+           and not E("(id) => !!document.querySelector(`[data-rep-keep='${id}'],[data-rep-repeat='${id}']`)", c2), "a line %s: no Keep it / It's a repeat, and It's a repeat refused (it stays %s)" % ("already posted" if stt == "sent" else "already in Tally", stt))
+    E("(id) => { const r = B().rows.find(x => x.id === id); r.state = 'ready'; r.rep.ok = true; render(); }", c2)
     # the reconciliation: lines set aside are not the statement's entries, never take a Tally voucher
     E("(id) => { B().rows.find(x => x.id === id).state = 'ignored'; B().rows.find(x => x.id === id).rep = {kind: 'strong', of: '2026-04-15', ofId: 'y', why: 'test'}; }", o)
     aside = E("B().rows.filter(bankAside).map(r => r.id)")
