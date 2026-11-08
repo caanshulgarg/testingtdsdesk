@@ -23,6 +23,7 @@ import { soonDraw } from "../lib/soonDraw.js";
 import { QUIET } from "../lib/quietReads.js";
 import { pullPaced } from "../lib/pullSpeed.js";
 import { tallyDevs } from "../lib/tallyState.js";
+import { press, busyOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -151,37 +152,52 @@ function Bar({ p, label }) {
     <i className="det" style={{ width: Math.max(2, pc) + "%" }} /></div>;
 }
 export function TurnOn({ b, onDone, main = false }) {
-  const [busy, setBusy] = useState(false), [err, setErr] = useState("");
-  const off = ((b && b.devices) || []).filter((d) => !d.fetchOn);
-  if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return null;
+  useSaid();
+  const off = ((b && b.devices) || []).filter((d) => !d.fetchOn), k = "turnon:" + ((b && b.book) || "");
+  // (next-buttons: once on, the button goes; what came of the press stays a while in its place)
+  if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return <Said k={k} hook="turnon" className="note" />;
   if (!owner()) return <span className="note" data-tfx-turnon-who="">{" An owner of the firm can turn it on."}</span>;
-  const go = () => { setBusy(true); setErr("");
-    rpc("tally_device_period_fetch", { p_device: off[0].id, p_on: true }).then((r) => { if (r && r.ok === false) throw new Error(r.error || "not done"); summary(true); if (onDone) onDone(); },
-      (e) => setErr(String((e && e.message) || e).replace(/^ERROR:\s*/i, ""))).finally(() => setBusy(false)); };
-  return <>{" "}<button type="button" className={main ? "btn tpt-btn primary" : "btn small primary"} data-tpt-main={main ? "turnon" : undefined} data-tfx-turnon={off[0].id} disabled={busy} onClick={go}>{busy ? "Turning on…" : "Turn on for this computer"}</button>
-    {err && <span className="bad" data-tfx-turnon-err="">{" " + err}</span>}</>;
+  // (the old .then threw inside its own success handler: a refusal was an unhandled rejection, said nowhere)
+  const go = () => press(k, () => rpc("tally_device_period_fetch", { p_device: off[0].id, p_on: true }).then((r) => {
+    if (r && r.ok === false) return { text: "Not turned on: " + String(r.error || "FinCom did not take it").replace(/^ERROR:\s*/i, "").replace(/[.\s]+$/, "") + ".", bad: true };
+    summary(true); if (onDone) onDone();
+    return "Turned on: the Tally computer starts reading older entries within a minute."; }));
+  return <>{" "}<button type="button" className={main ? "btn tpt-btn primary" : "btn small primary"} data-tpt-main={main ? "turnon" : undefined} data-tfx-turnon={off[0].id} disabled={busyOf(k)} onClick={go}>{busyOf(k) ? "Turning on…" : "Turn on for this computer"}</button>
+    <Said k={k} hook="turnon" className="note" /></>;
 }
 
+// next-buttons: a pull asked at `at` has started: chosen since (its state or count moved), or its count moved past x0
+export const doneOf = (q) => Number((q && q.x) || 0) + Number((q && q.countedDays) || 0);
+export const startedOf = (q, at, x0) => (Date.parse(q.chosenAt || "") >= at - 60000 && (q.done || q.state !== "going" || doneOf(q) > 0)) || (x0 >= 0 && doneOf(q) > x0);
 // ---------- Books › From Tally: Bring books from Tally
-export default function OlderEntries({ cid }) {
+// say: drawn where a person opened it (the Tally page's Bring another year): never empty, its words while the books are read
+export default function OlderEntries({ cid, say = false }) {
   const b = bookSum(cid), [fy, setFy] = useState(0), [busy, setBusy] = useState(""), [err, setErr] = useState("");
+  useSaid();
   const book = (b && b.book) || "", cur = useRef(book); cur.current = book;
   useEffect(() => { setFy(0); setErr(""); }, [book]);
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done));
-  if (!b) return null;
+  if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
+    : SUM.off ? "Bring another year is not in FinCom’s cloud yet. Use Upload a Day Book file instead."
+    : SUM.books ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first, then come back here." : "Reading the books from FinCom’s cloud…"}</p> : null;
   const now = fyNow(), first = Math.max(fyOfDate(b.from) || now - 5, now - 5), years = [];
   for (let y = now; y >= first; y--) years.push(y);
   const chosenFy = fy || (p ? fyOf8(p.fy) : now), same = !!(p && fyOf8(p.fy) === chosenFy);
   const act = (fn, args, what) => { const bk = book; setBusy(what); setErr("");
     return rpc(fn, args).then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); },
-      () => { if (cur.current === bk) setErr("FinCom’s cloud did not answer; try again in a minute."); }).finally(() => setBusy("")); };
+      (e) => { if (cur.current === bk) setErr(errWords(e)); }).finally(() => setBusy("")); };
   // 30-Oct-2026, 16:30 (the owner): Start walks only the days FinCom lacks (tally_period_choose_lean, migration 135: the days
   // FinCom already holds set aside); a cloud without 135: 98's tally_period_choose as before
-  const start = () => { const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book; setBusy("start"); setErr("");
-    rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
-      .then((r) => { if (cur.current !== bk) return; if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); askStatus(true); },
-        () => { if (cur.current === bk) setErr("FinCom’s cloud did not answer; try again in a minute."); }).finally(() => setBusy("")); };
+  // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
+  const sk = "older:" + book;
+  const start = () => { if (busy) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, at = Date.now(), x0 = p ? doneOf(p) : -1; setBusy("start"); setErr("");
+    press(sk, () => rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
+      .then((r) => { summary(true); askStatus(true);
+        if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
+        const started = () => { const q = (bookSum(cid) || {}).pull; return !!q && startedOf(q, at, x0); };
+        return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "" } }; }))
+      .finally(() => { if (cur.current === bk) setBusy(""); }); };
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");
   const stop = () => act("tally_period_cancel", { p_book: book }, "stop");
   // the bridge stopped it (Tally busy): Resume is a fresh choice of the same period (the bridge reads the company again)
@@ -209,6 +225,8 @@ export default function OlderEntries({ cid }) {
     {why && <p className={"note" + (p.state === "stopped" ? " bad" : "")} data-older-why={p.state} style={{ margin: "6px 0 0" }}>{why}
       {p.state === "going" && <TurnOn b={b} />}</p>}
     {err && <p className="note bad" data-older-err="" style={{ margin: "4px 0 0" }}>{err}</p>}
+    <Said k={sk} hook="older" className="note" />
+    {!may() && <p className="note" data-older-view="" style={{ margin: "4px 0 0" }}>{VIEW_ONLY}</p>}
     {p && (p.upload || []).map((u) => <p key={u.day} className="note" data-older-upload={u.day} style={{ margin: "4px 0 0" }}>{u.words + " "}
       <button className="linkbtn" data-older-upload-go={u.day} onClick={() => typeof tallyPickFor === "function" && tallyPickFor(tallyDate(u.day), tallyDate(u.day))}>{"Upload " + dayLong(u.day)}</button></p>)}
     <p className="note" data-older-safe="" style={{ margin: "8px 0 0" }}>FinCom Bridge reads one day at a time, only while nobody is working in Tally; each request stops at 2 seconds and postings go first, so Tally never hangs.</p>

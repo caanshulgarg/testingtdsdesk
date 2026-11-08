@@ -24,6 +24,8 @@ import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
 import { ownOpen, NO_CO, lookOnce, checkAll, checkedSay } from "../lib/tallySimple.js";
 import "../lib/connectSteps.js";
+import { errWords, within } from "./TallyBtn.jsx";   // next-buttons: a failure in plain words; a cloud that never answers said so
+import { noAnswer, readWhere } from "../lib/readFollow.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
 const isOwner = () => !!(S.account && S.account.me && S.account.me.role === "owner");
@@ -42,7 +44,7 @@ function Download() {
 }
 
 // Link to Tally company: the companies seen that are no client's, the same GSTIN (then the same name) first
-function LinkPick({ co, run }) {
+function LinkPick({ co, run, busy }) {
   // 31-Oct-2026: a split's date or the period off ("… 01 Apr 2018"): the client's splits and years first, each in full
   const g = String(co.gstin || "").trim().toUpperCase(), k = baseKey(co.tallyName || co.name), kn = baseKey(co.name);
   // next-fix-clientremove: a client restored is offered the companies it held before it was removed (tally_link_history,
@@ -69,22 +71,24 @@ function LinkPick({ co, run }) {
       {!sel && <option value="">Choose a Tally company…</option>}
       {rows.map((r) => <option key={r.company} value={r.company}>{r.company + (r.gstin && String(r.gstin).toUpperCase() === g ? " (same GSTIN)" : (hist || []).includes(r.company) ? " (linked before)" : "")}</option>)}
     </select>
-    <button type="button" className="btn small primary" data-tally-pop-act="link" onClick={() => run(async () => {
-      const r = rows.find((x) => x.company === sel); if (!r) return "Choose a company.";
+    <button type="button" className="btn small primary" data-tally-pop-act="link" disabled={!!busy} title={!sel ? "Choose a Tally company first" : undefined} onClick={() => run(async () => {
+      const r = rows.find((x) => x.company === sel); if (!r) return "Choose a Tally company first.";
+      if (typeof TCloud === "object") TCloud.linkErr = "";
       const ok = await linkTo(r, co);
-      return ok ? co.name + (String(co.name).replace(/\s+/g, " ").trim().toLowerCase() === String(sel).replace(/\s+/g, " ").trim().toLowerCase() ? " is linked." : " is linked to " + sel + ".") : "Not linked: " + ((typeof TCloud === "object" && TCloud.linkErr) || "the cloud did not take it") + ".";
+      if (ok == null) return "Not linked: nothing was changed.";
+      return ok ? co.name + (String(co.name).replace(/\s+/g, " ").trim().toLowerCase() === String(sel).replace(/\s+/g, " ").trim().toLowerCase() ? " is linked." : " is linked to " + sel + ".") : "Not linked: " + String((typeof TCloud === "object" && TCloud.linkErr) || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + ".";
     })}>Link</button>
     {own.noCo && <p className="note" data-tally-pop-noco="">{NO_CO}</p>}
   </div>;
 }
 
 // the same company in two places: Use ① (the place FinCom reads) or Use ② (owners)
-function Places({ co, run }) {
+function Places({ co, run, busy }) {
   const lp = typeof linkPostOf === "function" ? linkPostOf(co) : null, rec = lp ? lp.pick || lp.recs[0] : null;
   const places = rec && typeof LinkRec === "object" ? (LinkRec.realPlaces ? LinkRec.realPlaces(rec) : LinkRec.placesOf(rec)) : [];
   return <div data-tally-pop-places="">
     <ol className="note tally-pop-places">{places.map((p) => <li key={p.data_loc}>{(p.state === "chosen" ? "The data FinCom reads now" : "The other copy") + (p.last_seen ? ", last seen " + clock(p.last_seen) : "")}</li>)}</ol>
-    {isOwner() ? <p className="tally-pop-acts">{places.map((p, i) => <button key={p.data_loc} type="button" className={"btn small" + (i ? "" : " primary")} data-tally-pop-act={"place" + (i + 1)}
+    {isOwner() ? <p className="tally-pop-acts">{places.map((p, i) => <button key={p.data_loc} type="button" className={"btn small" + (i ? "" : " primary")} data-tally-pop-act={"place" + (i + 1)} disabled={!!busy}
       onClick={() => run(async () => ((await LinkRec.choosePlace(rec, p.data_loc)) ? "FinCom reads " + LinkRec.nameOf(rec) + " from the data you chose." : "Not chosen: please try again."))}>{"Use " + "①②③④"[i]}</button>)}</p>
       : OWNER_ONLY}
   </div>;
@@ -94,14 +98,21 @@ function Actions({ co, s, run, busy }) {
   const btn = (act, label, fn, primary) => <button type="button" className={"btn small" + (primary ? " primary" : "")} data-tally-pop-act={act} disabled={!!busy} onClick={() => run(fn, act === "check" && "Checking…")}>{label}</button>;
   const row = (...b) => <p className="tally-pop-acts">{b}</p>;
   const check = (primary) => btn("check", busy === "Checking…" ? "Checking…" : "Check again", async () => { await checkAll(); return checkedSay(tallyIconState(co).word); }, primary);
-  const update = () => btn("update", "Update now", async () => { await tallyUpdateNow(co ? co.id : null); return "Asked Tally for its new entries at " + now() + "."; }, true);
+  // next-buttons: what Update now really did (reading stopped: nothing asked; no Tally can answer: said at once)
+  const update = () => btn("update", "Update now", async () => {
+    const st = co && typeof tallyStopFor === "function" ? tallyStopFor(co.id) : null;
+    if (st) return { bad: true, text: "Not asked: reading is stopped (" + (st.reason || "no reason given") + "). An owner resumes it on the Tally page." };
+    await tallyUpdateNow(co ? co.id : null);
+    // (only when the link's serving list says nobody reads it now: migration 146's view)
+    const rw = co && s.company ? readWhere(s.company) : null, na = rw && !rw.reader ? noAnswer(s.company) : "";
+    return na ? { bad: true, text: "Asked at " + now() + ", but " + na.charAt(0).toLowerCase() + na.slice(1) } : "Asked Tally for its new entries at " + now() + ". They come within a few minutes."; }, true);
   if (!co) return s.icon === "none" ? <Download /> : s.icon === "linked" ? null : row(check(true));
   if (s.icon === "linked") return row(update());
   if (s.icon === "waiting") return row(check(true));
-  if (s.icon === "none") return s.p && (s.p.kind === "unlinked" || s.p.state === "unlinked") ? <LinkPick co={co} run={run} /> : <Download />;
+  if (s.icon === "none") return s.p && (s.p.kind === "unlinked" || s.p.state === "unlinked") ? <LinkPick co={co} run={run} busy={busy} /> : <Download />;
   const w = s.p || {}, b = w.button || {}, l = typeof tallyLine === "function" ? tallyLine(co) : null;
   if (s.cause === "posting") return row(btn("allow", "Allow posting", async () => ((await b.act()) ? "Posting to Tally is allowed again." : "Not changed: please try again."), true));
-  if (s.cause === "two") return <Places co={co} run={run} />;
+  if (s.cause === "two") return <Places co={co} run={run} busy={busy} />;
   if (s.cause === "stopped") return isOwner() && l && l.stop && typeof TCloud === "object"
     ? row(btn("resume", "Resume reading", async () => { await TCloud.readResume(l.stop.all ? null : { device: { id: l.stop.deviceId }, computer: l.stop.computer || l.computer }); return "Reading from Tally starts again within a minute."; }, true)) : OWNER_ONLY;
   if (s.cause === "paused") return row(update());
@@ -110,7 +121,7 @@ function Actions({ co, s, run, busy }) {
 }
 
 export default function TallyPop({ co, nOpen, close, back }) {
-  const ref = useRef(null), [msg, setMsg] = useState(null), [busy, setBusy] = useState(false);
+  const ref = useRef(null), on = useRef(false), [msg, setMsg] = useState(null), [busy, setBusy] = useState(false);
   const s = tallyIconState(co), line = s.line;
   // how fresh the books are (never the reading-stopped words: the line says that, plainly)
   const stale = co && s.cause !== "stopped" ? staleWords(co.id) : "";
@@ -119,10 +130,14 @@ export default function TallyPop({ co, nOpen, close, back }) {
   // next-tally-connect-steps: this login's bridge looked for (once a tab, the shared look), so the step is known
   useEffect(() => { lookOnce(); }, []);
   // (Check again: "Checking…" below, even when the button it was pressed on goes as the state changes)
+  // (next-buttons: one press at a time; an answer {bad, text} or words; a failure in plain words; 60 s at most, a
+  // question to the person aside)
   const run = async (fn, word) => {
+    if (on.current) return; on.current = true;
     setBusy(word || true); setMsg(null);
-    try { setMsg({ ok: true, text: await fn() }); } catch (e) { setMsg({ ok: false, text: "Did not work: " + ((e && e.message) || e) }); }
-    setBusy(false);
+    try { const r = await within(fn(), 60000); setMsg(r && typeof r === "object" ? { ok: !r.bad, text: r.text } : r ? { ok: true, text: String(r) } : null); }
+    catch (e) { setMsg({ ok: false, text: errWords(e) }); }
+    finally { on.current = false; setBusy(false); }
   };
   return <div className="tally-pop" role="dialog" aria-label={"Tally: " + s.word} data-tally-pop={s.icon} ref={ref}
     onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (back) back(); } }}>

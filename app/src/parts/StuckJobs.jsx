@@ -67,7 +67,10 @@ export function PostingWait({ beat, hook = "line" }) {
   // and once more when the bridge stops waiting for a posting (one finished by itself: the line goes, no reload)
   useEffect(() => { if (up && (wait || !J.at)) jobsLook(false); else if (up && J.wasWait && !wait) jobsLook(true); J.wasWait = wait; });
   const list = (up && J.list) || [];
-  if (!list.length) return null;
+  // next-buttons: Stop posting says what came of it (stopped, or why not), also once the list is empty
+  const said = J.said && Date.now() - J.said.at < 120000 ? J.said : null;
+  const saidLine = said && <div className={"tsm-note" + (said.bad ? " bad" : "")} data-stuck-said={said.bad ? "bad" : "ok"} role="status">{said.text}</div>;
+  if (!list.length) return saidLine || null;
   const j = list[0];
   return <div className="tsm-note tpt-wait" data-stuck-jobs={hook} role="status">
     {"Waiting for a posting on this computer: " + (j.company || "a company") + " · " + (j.status || "waiting") + (list.length > 1 ? " (and " + (list.length - 1) + " more)" : "") + " "}
@@ -75,6 +78,10 @@ export function PostingWait({ beat, hook = "line" }) {
     {open && <ul className="tsm-stuck-list" data-stuck-list="" style={{ margin: "6px 0 0", paddingLeft: 18 }}>{list.map((x) => <li key={x.id} data-stuck-job={x.id}>
       {(x.company || "") + " · " + (x.status || "") + (x.message ? " · " + x.message : "") + " "}
       <button type="button" className="btn small" data-stuck-cancel={x.id} disabled={busy === x.id}
-        onClick={async () => { if (!(await ask())) return; setBusy(x.id); try { await cancelJob(x.id); } catch (e) { J.err = String((e && e.message) || e); } setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button></li>)}</ul>}
+        onClick={async () => { if (busy || !(await ask())) return; setBusy(x.id);
+          try { await cancelJob(x.id); J.said = { at: Date.now(), text: "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
+          catch (e) { J.err = String((e && e.message) || e); J.said = { at: Date.now(), bad: true, text: "Not stopped: FinCom Bridge on this computer did not answer (" + J.err.replace(/[.\s]+$/, "") + "). Check that it is running, then try again." }; }
+          setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button></li>)}</ul>}
+    {saidLine}
   </div>;
 }

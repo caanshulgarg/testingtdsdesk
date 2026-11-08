@@ -57,7 +57,26 @@ function Status({ b, days }) {
   const linked = typeof tallyLinkOf === "function" && tallyLinkOf(CO()).state !== "unlinked";
   const can = n > 0 && (linked || (typeof Bridge === "object" && Bridge.on() && Bridge.up()) || (typeof TCloud === "object" && S.coId && TCloud.has(S.coId)));
   return <p className="up-status" style={{ margin: "10px 0 12px" }}><b data-up-status="">{bits.join(" · ")}</b>
-    {can && <>{" "}<button className="linkbtn" data-update-now="" onClick={() => doAct("keepNow")}>Update now</button></>}</p>;
+    {can && <>{" "}<UpdateNow /></>}</p>;
+}
+// next-buttons (the owner: every Tally button does something visible): Update now's result beside it, not only a toast.
+// The same asks as before (doAct keepNow: the bridge here, else tally_want_update through FinCom's cloud), its answer said
+function UpdateNow() {
+  const [said, setSaid] = useState(null), [busy, setBusy] = useState(false), cid = S.coId;
+  const go = async () => {
+    if (busy) return;
+    const st = typeof tallyStopFor === "function" ? tallyStopFor(cid) : null;
+    if (st) { setSaid({ bad: true, text: "Not asked: reading is stopped (" + (st.reason || "no reason given") + "). An owner resumes it on the Tally page." }); return; }
+    const here = typeof Bridge === "object" && Bridge.on() && (Bridge.up() || !(typeof TCloud === "object" && TCloud.has(cid)));
+    if (here || typeof TCloud !== "object" || !TCloud.on()) { doAct("keepNow"); setSaid({ text: here ? "Asked FinCom Bridge on this computer to update now; the books here follow in a few minutes." : "Sign in to the firm account to ask the Tally computer." , bad: !here }); return; }
+    setBusy(true); setSaid(null);
+    try { const j = await TCloud.rpc("tally_want_update", { p_client: cid });
+      setSaid(j && j.ok ? { text: "Asked: the Tally computer starts within a minute; the books here follow in a few minutes." } : { bad: true, text: "Not asked: no Tally computer is linked to this client yet. Link it on the Tally page." }); }
+    catch (e) { const m = String((e && e.message) || e || ""); setSaid({ bad: true, text: /not allowed|42501/i.test(m) ? "Only an owner or staff of the firm can do this." : /PGRST202|schema cache|does not exist/i.test(m) ? "FinCom’s cloud is not ready for this yet. Try again later." : "Couldn’t reach FinCom. Check the internet and try again." }); }
+    finally { setBusy(false); }
+  };
+  return <><button className="linkbtn" data-update-now="" disabled={busy} onClick={go}>{busy ? "Asking…" : "Update now"}</button>
+    {said && <span className={"note" + (said.bad ? " bad" : "")} data-update-said={said.bad ? "bad" : "ok"} role="status" style={{ display: "block", fontWeight: 400 }}>{said.text}</span>}</>;
 }
 
 // 2. the one drop area (the same file box as the top bar's Upload Tally data)
