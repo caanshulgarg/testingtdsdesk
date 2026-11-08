@@ -234,8 +234,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
-import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";
-import { bookStartPatch } from "./bookstart.js";   // next-book-start: the book's start from the bridge's state (bookStartFromState)   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { bookStartPatch, earliestDay, pullStart } from "./bookstart.js";   // next-book-start: a book's start when it has none (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -1685,7 +1685,7 @@ let openMissing = 0;
 const CHECK_TYPES = ["Sales", "Purchase", "Receipt", "Payment", "Journal", "Contra"];
 const chosenOf = (d: any) => typeof d?.chosenAt === "string" && !isNaN(Date.parse(d.chosenAt)) ? { chosenAt: d.chosenAt.slice(0, 60) } : {};
 // FinCom Bridge 2.5.1 (book 3d36a836, 30-Oct-2026): FinCom's first day of the book of each company the beat says open in
-// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet; next-book-start: set from the bridge's state, bookStartFromState), {company: day}; at most 200 companies. The
+// Tally (tally_books.from_date as yyyymmdd; "" when FinCom has none yet; next-book-start: set when it has none, bookStartFromState), {company: day}; at most 200 companies. The
 // bridge dates its three ledger requests (FinComLedgers, FinComLedgerChanges, FinComLedgerByName) from it when it is on
 // or after Tally's own books-from, and from Tally's BOOKSFROM only when FinCom has none: a Tally whose books begin a year
 // before FinCom's copy never sends openings as at that earlier day. Review of 2.5.1: (R1, as review 245 R3) a computer
@@ -3463,23 +3463,37 @@ async function bookStartFromUpload(book: string, from: string) {
 }
 // next-book-start (08-Nov-2026): a book filled only by a bridge's period entries and ledger-list rounds had no start nor
 // openings date (only an openings file or an upload set them), so the browser and tally_pick ignored it, its entries shown
-// nowhere. The bridge's reported start (its state's from: the copy's manifest, yyyymmdd; read from the stored state when
-// the call carries none) sets them as bookStartFromUpload does (bookstart.js): one update, only where from_date is null;
-// a start already there is never moved. booksFromFor then answers it (its memo of the book dropped). Never fails the call
-const startKnown = new Set<string>();
-async function bookStartFromState(book: string, stateFrom?: string) {
+// nowhere. When the book has none, its start is set to the EARLIEST of the bridge's reported start (its state's from, read
+// from the stored state when the call carries none), the book's first entry and first day held, the day just stored and
+// the start of the older period the person chose (bookstart.js; migration 91's rule: never later than an entry held), with
+// openings as on the day before; a dated ledger-list round (o.openingsAt) sets its own day only when nothing known is
+// earlier. One update, only where from_date is null: a start already there is never moved. booksFromFor then answers it
+// (its memo of the book dropped). A book with nothing to go by is looked at again after 5 minutes, or at once when a call
+// brings a day. Never fails the call
+const startKnown = new Set<string>(), startNone = new Map<string, number>();
+async function bookStartFromState(book: string, o: { stateFrom?: string; day?: string; openingsAt?: string } = {}) {
   if (!book || startKnown.has(book)) return;
+  if (!o.day && !o.openingsAt && Date.now() - (startNone.get(book) || 0) < 300000) return;
   try {
     const { data: bk, error } = await db.from("tally_books").select("from_date, open_as_on, state").eq("book_id", book).maybeSingle();
     if (error || !bk) { if (error) console.log("tally-ingest: the book's start not read", book, String(error.message || "").slice(0, 160)); return; }
-    if (bk.from_date) { if (startKnown.size > 5000) startKnown.clear(); startKnown.add(book); return; }
-    const from = typeof stateFrom === "string" ? stateFrom : (bk.state && typeof bk.state === "object" ? String((bk.state as any).from || "") : "");
-    const patch = bookStartPatch(null, bk.open_as_on, from);
-    if (!patch) return;
+    if (bk.from_date) { if (startKnown.size > 5000) startKnown.clear(); startKnown.add(book); startNone.delete(book); return; }
+    const first = (t: string) => db.from(t).select("day").eq("book_id", book).order("day", { ascending: true }).limit(1);
+    const [{ data: v, error: ve }, { data: d, error: de }, { data: pull }] = await Promise.all([first("tally_vouchers"), first("tally_days"),
+      db.from("tally_period_pulls").select("fy_start, part, state").eq("book_id", book).maybeSingle()]);   // without migration 98: no pull
+    if (ve || de) { console.log("tally-ingest: the book's first day not read", book, String((ve || de)?.message || "").slice(0, 160)); return; }
+    const from = typeof o.stateFrom === "string" ? o.stateFrom : (bk.state && typeof bk.state === "object" ? String((bk.state as any).from || "") : "");
+    const known = earliestDay([from, (v as any)?.[0]?.day, (d as any)?.[0]?.day, pullStart(pull), o.day]);
+    const patch = bookStartPatch(null, bk.open_as_on, known, o.openingsAt);
+    if (!patch) {
+      if (!known) { if (startNone.size > 5000) startNone.clear(); startNone.set(book, Date.now()); }
+      else if (o.openingsAt) console.log("tally-ingest: the book's start not set from the ledger round", book, "openings as at", o.openingsAt, "but known from", known);
+      return;
+    }
     const { error: e1 } = await db.from("tally_books").update(patch).eq("book_id", book).is("from_date", null);
     if (e1) { console.log("tally-ingest: the book's start not set", book, String(e1.message || "").slice(0, 160)); return; }
-    fromMemo.delete(book);
-    console.log("tally-ingest: the book's start set from the bridge's state", book, patch.from_date, patch.open_as_on ? "openings as on " + patch.open_as_on : "");
+    fromMemo.delete(book); startNone.delete(book);
+    console.log("tally-ingest: the book's start set", book, patch.from_date, patch.open_as_on ? "openings as on " + patch.open_as_on : "", "(state from " + (from || "none") + ", first known " + (known || "none") + (o.openingsAt ? ", openings as at " + o.openingsAt : "") + ")");
   } catch (e) { console.log("tally-ingest: the book's start not set", book, String((e as Error)?.message || e).slice(0, 160)); }
 }
 // a person hands over work: a day book (its days, a part at a time) or the kept day books to be read again
@@ -4508,7 +4522,8 @@ Deno.serve(sentry.wrap(async (req) => {
         if (!book) return reply(409, { ok: false, notLinked: true, error: "This Tally company is not linked to a FinCom client yet." });
         { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
         const listed = await applyLedgerList(firm, book, body, dev, bridgeOf(dev, body, false));
-        await bookStartFromState(book);   // next-book-start: after the round (its openings taken as before)
+        // next-book-start: after the round (its openings taken as before); a dated round's day only when nothing is earlier
+        await bookStartFromState(book, { openingsAt: isDay(body.openingsAt) ? String(body.openingsAt) : "" });
         return listed;
       }
       case "ledger_changes": {
@@ -4541,8 +4556,11 @@ Deno.serve(sentry.wrap(async (req) => {
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         if (body.kind === "ledger_progress") return await ledgerProgress(book, dev, body);
         if (body.kind === "period_stop") return await periodStop(book, body);
-        if (body.kind === "period_entries") await bookStartFromState(book);   // next-book-start
-        return body.kind === "period_heads" ? await periodHeads(book, body) : await periodEntries(book, body);
+        if (body.kind === "period_heads") return await periodHeads(book, body);
+        const stored = await periodEntries(book, body);
+        // next-book-start: after the entries are stored, the day just sent counted when they were taken
+        await bookStartFromState(book, { day: stored.status === 200 ? String(body.day || "") : "" });
+        return stored;
       }
       case "stock": {
         // FinCom Bridge 2.5.2 (migration 134): Tally's answer to a person's click for the stock (stockAnswer)
@@ -4568,7 +4586,7 @@ Deno.serve(sentry.wrap(async (req) => {
         const st = cleanState(body.state && typeof body.state === "object" ? body.state : {});
         const { error } = await db.rpc("tally_ingest_state", { p_book: book, p_state: st });
         if (error) throw new Error(error.message);
-        await bookStartFromState(book, st.from);   // next-book-start: the bridge's start, when the book has none
+        await bookStartFromState(book, { stateFrom: st.from });   // next-book-start: when the book has none
         return reply(200, { ok: true });
       }
       case "selfcheck": {
