@@ -469,12 +469,12 @@ func TestR2510KeepAliveTask(t *testing.T) {
 	}
 	for _, want := range []string{"<Interval>PT5M</Interval>", "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>", "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
 		"<LogonType>InteractiveToken</LogonType>", "<RunLevel>LeastPrivilege</RunLevel>", "<UserId>" + sid + "</UserId>", "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
-		"<Command>" + exe + "</Command>", "<Arguments>keepalive --config &#34;" + cfgp + "&#34;</Arguments>", "<ExecutionTimeLimit>PT2M</ExecutionTimeLimit>"} {
+		"<Command>" + exe + "</Command>", "<Arguments>keepalive --config &#34;" + cfgp + "&#34;</Arguments>", "<ExecutionTimeLimit>PT2M</ExecutionTimeLimit>", "<Priority>5</Priority>"} {
 		if !strings.Contains(x, want) {
 			t.Fatalf("the task file lacks %s:\n%s", want, x)
 		}
 	}
-	for _, bad := range []string{"Password", "HighestAvailable", "S4U", "LogonTrigger"} {
+	for _, bad := range []string{"Password", "HighestAvailable", "S4U", "LogonTrigger", "<Priority>7</Priority>"} {
 		if strings.Contains(x, bad) {
 			t.Fatalf("needs a password or an administrator: %s", bad)
 		}

@@ -41,7 +41,8 @@ func keepAliveTaskName(login, sid string) string {
 }
 
 // the task, as Task Scheduler's own file: every 5 minutes from a day in the past, also on battery, one at a time, at
-// most 2 minutes a run, as the user signed in (no password, least privilege)
+// most 2 minutes a run, as the user signed in (no password, least privilege), at priority 5 (round 2 of the review: not
+// Task Scheduler's default 7, below normal)
 func keepAliveTaskXML(exe, config, sid string) (string, error) {
 	if exe == "" || strings.ContainsAny(exe+config, "\"\r\n") {
 		return "", errors.New("the program's or the settings' path cannot be named in a task")
@@ -76,7 +77,7 @@ func keepAliveTaskXML(exe, config, sid string) (string, error) {
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>false</WakeToRun>
     <ExecutionTimeLimit>PT2M</ExecutionTimeLimit>
-    <Priority>7</Priority>
+    <Priority>5</Priority>
   </Settings>
   <Actions Context="Author"><Exec><Command>` + esc(exe) + `</Command><Arguments>` + esc(args) + `</Arguments></Exec></Actions>
 </Task>
