@@ -152,6 +152,15 @@ def main():
            "1 (review 6). no second 'Tally' title; the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
         ok(E("(s) => { const h = document.querySelector(s).getBoundingClientRect(), b = document.querySelector(s + ' [data-tpg-download]').getBoundingClientRect(); return Math.abs(h.right - b.right) <= 2 && b.left > h.left + h.width / 2; }", dl),
            "1 (review 6). the Download right-aligned")
+        # (the owner's Mac, 08-Nov-2026) the Download never under the sticky top bar, the page scrolled a little or a lot
+        DLV = """(y) => { window.scrollTo(0, y); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => {
+          const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--head-h')) || 0, b = document.querySelector('#app [data-tpg-download]').getBoundingClientRect();
+          r({y: Math.round(window.scrollY), head: Math.round(h), top: Math.round(b.top), bottom: Math.round(b.bottom), vh: window.innerHeight}); }))); }"""
+        for y in (60, 500):
+            v = E(DLV, y)
+            ok(v["y"] > 0 and v["head"] > 0 and v["top"] >= v["head"] - 1 and v["bottom"] <= v["vh"], "1 (owner's Mac). scrolled %d px: the Download fully below the top bar (%s)" % (y, v))
+            if SHOTS and y == 60: os.makedirs(SHOTS, exist_ok=True); pg.screenshot(path=os.path.join(SHOTS, "tally-progress-scrolled.png"))
+        E("() => window.scrollTo(0, 0)")
         ok(txt("#app [data-tsm-steps-link]") == "How to connect" and n("#app [data-tsm-top] [data-tsm-top-check]") == 1, "1. the connection card: How to connect, Check again (%s)" % txt("#app [data-tsm-top]")[:120])
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();
           window.__rounds['bk-Kestrel Textiles'] = [{round_id: 'k1', started_at: t(2), last_seen_at: t(0.2), rows_received: 7560, rows_read: null, complete: null, batches: 4}]; }""")
@@ -217,6 +226,51 @@ def main():
         ok(n(L(ORBIT) + " [data-tpt-update-more]") == 1, "3. More: Update now too, when the row's button is another")
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
         E("(c) => { (TCloud.st[c].books || []).forEach(b => { b.to = new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }); render(); }", cid(ORBIT))
+        # (the owner's Fingate row, 08-Nov-2026; review of next-tally-simple3) days missing, an upload as the row's action. The
+        # upload stays the button where it is the only way; one exception: a computer has the company with reading older
+        # entries off, and an owner can turn it on (Turn on for this computer is the button; others: the upload and a note)
+        E("""(c) => { window.__gapWas = Rec.gapFor; Rec.gapFor = (x) => x === c ? [{gap: {since: new Date(Date.now() - 3 * 86400e3).toISOString(), missing: 4}}] : [];
+          window.__orbBooks = JSON.parse(JSON.stringify(TCloud.st[c].books || [])); (TCloud.st[c].books || []).forEach(b => { b.days = 0; b.to = null; b.daysAt = null; });
+          const sm = window.__sum.find(x => x.client === c) || {devices: []}; window.__orbDevs = JSON.parse(JSON.stringify(sm.devices)); sm.devices.forEach(d => { d.fetchOn = false; });
+          if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(3000)
+        ok(mains(ORBIT) == ["turnon"] and txt(R(ORBIT) + " [data-tpt-main]") == "Turn on for this computer" and n(R(ORBIT) + " [data-tpt-note]") == 0,
+           "3 (Fingate, review). reading older entries off, an owner: Turn on for this computer is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-act")))
+        more(ORBIT); pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(600)
+        ok(n(L(ORBIT) + ' [data-tsm-col="do"] [data-tsm-act="upload"]') == 1 and n(L(ORBIT) + " [data-tpt-daybook]") == 1,
+           "3 (Fingate, review). the upload still there for an owner: in Answers, Upload a Day Book file under More (%s)" % txt(L(ORBIT) + ' [data-tsm-col="do"]'))
+        pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(300)
+        pg.click(R(ORBIT) + ' [data-tpt-main="turnon"]'); pg.wait_for_timeout(800)
+        to = calls("tally_device_period_fetch")
+        ok(to and to[-1][1].get("p_on") is True and to[-1][1].get("p_device"), "3 (Fingate, review). Turn on for this computer: tally_device_period_fetch, on (%s)" % to)
+        E("(c) => { (window.__sum.find(x => x.client === c) || {devices: []}).devices.forEach(d => { d.fetchOn = false; }); S.account.me.role = 'staff'; if (window.tfxRefresh) window.tfxRefresh(); render(); }", cid(ORBIT)); pg.wait_for_timeout(1500)
+        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book"
+           and txt(R(ORBIT) + " [data-tpt-note]") == "Reading older entries is off for the computer that has this company: an owner can turn it on",
+           "3 (Fingate, review). not an owner: Upload Day Book, and the note that an owner can turn reading on (%s)" % txt(R(ORBIT) + " .tpt-act"))
+        E("(c) => { S.account.me.role = 'owner'; (window.__sum.find(x => x.client === c) || {}).devices = []; if (window.tfxRefresh) window.tfxRefresh(); render(); }", cid(ORBIT)); pg.wait_for_timeout(1500)
+        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and n(R(ORBIT) + " [data-tpt-note]") == 0,
+           "3 (Fingate, review). no computer has the company: Upload Day Book is the button, never Bring books (%s)" % txt(R(ORBIT) + " .tpt-act"))
+        # (review) held lines and a held day: the upload is the button even with the company open on a live bridge
+        E("""(c) => { (window.__sum.find(x => x.client === c) || {}).devices = window.__orbDevs; window.__ah0 = {heldFor: AlertHub.heldFor, heldDay: AlertHub.heldDay}; window.__nk0 = Rec.needKind; const d = new Date(Date.now() - 2 * 86400e3).toISOString().slice(0, 10);
+          AlertHub.heldFor = (ids) => ids.includes(c) ? [{cid: c, day: d, kind: 'daybook'}] : []; AlertHub.heldDay = (l) => l.day; Rec.needKind = (l) => l.kind || '';
+          if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(1500)
+        ok(mains(ORBIT) == ["upload"] and txt(R(ORBIT) + " [data-tpt-main]") == "Upload Day Book" and "Upload that day" in txt(R(ORBIT) + " .tpt-client"),
+           "3 (Fingate, review). a held day, the company open on a live bridge: Upload Day Book is the button (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-client")))
+        # (review) the held day's note stays in view while a read runs (Update now pressed: the run's words)
+        E("""(c) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'ORBIT SPACE', prog: {read: 40, of: 438}}; }""", cid(ORBIT))
+        E("(c) => { if (window.FCRunState) window.FCRunState[c] = {at: S.tcoSync[c].at}; render(); }", cid(ORBIT)); pg.wait_for_timeout(1200)
+        hs = [txt(R(ORBIT) + " [data-tpt-state]"), txt(R(ORBIT) + " [data-tpt-held]")]
+        ok(hs[0] in ("Updating", "Waiting for Tally") and hs[1] == "Tally could not send these entries. Upload that day’s Day Book.",
+           "3 (review). a read running: the held day's note stays (%s)" % hs)
+        E("""(c) => { Object.assign(AlertHub, window.__ah0); Rec.needKind = window.__nk0; delete S.tcoSync[c]; if (window.FCRunState) delete window.FCRunState[c];
+          Rec.gapFor = window.__gapWas; TCloud.st[c].books = window.__orbBooks; (window.__sum.find(x => x.client === c) || {}).devices = window.__orbDevs;
+          (window.__sum.find(x => x.client === c) || {devices: []}).devices.forEach(d => { d.fetchOn = true; }); S.tsm.details = {}; if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(ORBIT)); pg.wait_for_timeout(2000)
+        # (review) Bring books asked and waiting: why, in the Entries cell (reading older entries off on the computer)
+        E("""() => { const sm = window.__sum.find(x => x.pull); window.__pull0 = JSON.parse(JSON.stringify(sm)); sm.devices.forEach(d => { d.fetchOn = false; }); sm.pull.state = 'going';
+          window.__kSync = S.tcoSync[sm.client]; delete S.tcoSync[sm.client]; if (window.tfxRefresh) window.tfxRefresh(); render(); }"""); pg.wait_for_timeout(1500)
+        ew = txt(R(KES) + " [data-tpg-ewait]")
+        ok(pg.get_attribute(R(KES) + " [data-tpg-entries]", "data-tpg-entries") == "going" and ew == "Waiting: reading older entries is off for the Tally computer that has this company.",
+           "3 (review). Bring books waiting: why, in the Entries cell (%s | %s)" % (pg.get_attribute(R(KES) + " [data-tpg-entries]", "data-tpg-entries"), ew))
+        E("""() => { const sm = window.__sum.find(x => x.pull); Object.assign(sm, window.__pull0); if (window.__kSync) S.tcoSync[sm.client] = window.__kSync; if (window.tfxRefresh) window.tfxRefresh(); }"""); pg.wait_for_timeout(1500)
         # Kestrel's: Bring books paused, the bridge's wait, in its history
         E("() => { window.__sum.find(x => x.pull).pull.state = 'paused'; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(1500)
         ok(mains(KES) == ["resume"] and txt(R(KES) + " [data-tpt-main]") == "Resume" and txt(R(KES) + " [data-tpg-entries]").startswith("Paused"), "3. paused: Resume, Entries Paused (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
@@ -243,6 +297,8 @@ def main():
         pg.set_viewport_size({"width": 390, "height": 844}); pg.wait_for_timeout(800)
         sw = E("() => document.documentElement.scrollWidth")
         ok(sw <= 390, "4. no sideways scroll (%d px)" % sw)
+        dp = E("() => { const h = document.querySelector('#app .tpg-dl-head'); return h ? getComputedStyle(h).position : ''; }")
+        ok(dp == "static", "4 (review). a phone: the Download row scrolls with the page, not kept under the top bar (%s)" % dp)
         ok(E("(s) => { const r = document.querySelector(s); return !!r && getComputedStyle(r).display === 'grid'; }", R(ORBIT)) and n(R(ORBIT) + " .tpt-masters") == 1, "4. a row is a stacked card, with Masters and Entries")
         ok(E("(s) => { const a = document.querySelector(s + ' .tpt-client'), b = document.querySelector(s + ' .tpt-masters'); return !!a && !!b && b.getBoundingClientRect().top >= a.getBoundingClientRect().bottom - 1; }", R(ORBIT)), "4. Masters under the client, not beside it")
         ok(n(L(KES)) == 1 and E("(s) => { const r = document.querySelector(s).getBoundingClientRect(); return r.right <= 390 && r.left >= 0; }", L(KES)), "4. the light row a part of the card, inside the screen")

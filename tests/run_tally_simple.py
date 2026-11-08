@@ -413,6 +413,16 @@ def main():
         pg.click("#app [data-tsm-showall]"); pg.wait_for_timeout(300)
         ok(len(shown()) == 9 and pg.input_value("#app [data-tsm-q]") == "", "5. Show all: every row again")
 
+        # (the owner's Mac, 08-Nov-2026: ~250 px of blank under the search box) the table right under the search box, desktop
+        # and phone (WebKit is not installed here: Chromium, and the search box's own computed height)
+        GAP = """() => { const s = document.querySelector('#app [data-tsm-table] .tsm-search'), t = document.querySelector('#app [data-tsm-table] .tpt');
+          return s && t ? [Math.round(t.getBoundingClientRect().top - s.getBoundingClientRect().bottom), Math.round(parseFloat(getComputedStyle(s).height))] : null; }"""
+        for w, h in ((1440, 900), (390, 844)):
+            pg.set_viewport_size({"width": w, "height": h}); pg.wait_for_timeout(600)
+            g = E(GAP)
+            ok(len(shown()) == 9 and g and 0 <= g[0] <= 40 and g[1] <= 60, "5 (owner's Mac). %d px wide, 9 rows: the table within 40 px of the search box, the box no taller than 60 px (%s)" % (w, g))
+        pg.set_viewport_size({"width": 1440, "height": 900}); pg.wait_for_timeout(400)
+
         print("== 6. no computer names outside For support")
         mt = main_text()
         mt = rest_text()
