@@ -1,5 +1,5 @@
 // next-fast-measure (08-Nov-2026): "Fast read measured on ZZ TEST" under Advanced (for support), read only, shown only
-// when a measurement was sent (tally_fast_measures, migration 143; nothing shown on a cloud without it). Each run: when,
+// when a measurement was sent (tally_fast_measures, migration 148; nothing shown on a cloud without it). Each run: when,
 // TallyPrime's version, PASS or NOT A PASS (lib/fastMeasure.js: worst under 1.5 s, window hold under 1 s, every entry the
 // same), and why not. Times, counts and field names only: the cloud holds no entry data. Nothing to press.
 import { useEffect, useState } from "react";

@@ -1,5 +1,5 @@
 // next-fast-measure (08-Nov-2026): the fast-read measurement a bridge sends (tally-ingest {kind: "fast_measure"}),
-// cleaned to exactly the fields FinCom keeps (migration 143, tally_fast_measures): times, counts and field NAMES only.
+// cleaned to exactly the fields FinCom keeps (migration 148, tally_fast_measures): times, counts and field NAMES only.
 // Pure; the database call is in index.ts. Anything else in the body is dropped; a body that is not a measurement is
 // refused (null).
 

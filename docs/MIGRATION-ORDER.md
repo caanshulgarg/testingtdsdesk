@@ -742,3 +742,14 @@ trigger `corp_documents_touch` (it also locks a FINAL document: only its status 
 and 144 included. Rollback `server/corporate/rollback-145-corp-documents.sql` (refuses while rows exist unless
 `fincom.corp_rollback`). Tested: `tests/run_migration_corp.py` (`CORP_ONLY=145`). Without it the profile and e-Forms work
 and the documents page says it is not set up on the server.
+
+## 148: the fast-read measurement kept per run (not run yet; branch next-fast-measure, 08-Nov-2026)
+
+**148, fast measure** (08-Nov-2026, branch `next-fast-measure`; numbered 148 because 143 (Corporate `corp_profiles`,
+applied on staging), 146 (link-follow) and 147 (period_fetch default) are taken; **written, not run yet**; file md5
+f68b489c545288b34140376006e6db51): `server/tally-cloud/migration-148-fast-measure.sql`. New table `tally_fast_measures`, one row a run of the
+bridge tray's "Measure the fast read (ZZ TEST only)": times, counts and field NAMES only, no entry data. Grants:
+service_role reads and inserts (tally-ingest kind `fast_measure`); authenticated reads its own firm's rows only (row
+security, `my_firm()`); anon nothing. Add-only, one transaction (lock_timeout 10 s), safe to run twice; no table
+altered, no function. Deploy: this file first, then tally-ingest (it answers "not set up yet" (503) until this has run),
+then the app (the Tally page shows nothing under Advanced without it). Tested: `tests/run_migration148.py`.

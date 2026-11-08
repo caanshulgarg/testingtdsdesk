@@ -1,5 +1,5 @@
 // next-fast-measure (08-Nov-2026): the fast-read measurement's verdict on the Tally page (Advanced, read only), from a
-// row of tally_fast_measures (migration 143) as FinCom's cloud keeps it: times, counts and field names only. The same
+// row of tally_fast_measures (migration 148) as FinCom's cloud keeps it: times, counts and field names only. The same
 // rule as the cloud's (server/tally-cloud/fastmeasure.js fastMeasurePass) and the bridge's: every request under 1.5 s,
 // every window hold under 1 s, every compared entry the same (at least one), the plan run to its end with Tally's window
 // watched.

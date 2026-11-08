@@ -180,7 +180,7 @@
 //                                                    -> {ok, stored, stale, held, n, done} (parsed as a Day Book's entries,
 //                                                       each dated the day, through tally_period_entries); an entry whose
 //                                                       lines do not total zero marks the day to be uploaded by hand
-//   {kind:"fast_measure", company: "ZZ TEST", company_guid, result} -> {ok}: next-fast-measure (migration 143): the fast-read
+//   {kind:"fast_measure", company: "ZZ TEST", company_guid, result} -> {ok}: next-fast-measure (migration 148): the fast-read
 //                                                       measurement a person ran from the bridge's tray (fastmeasure.js keeps
 //                                                       only its times, counts and field names); ZZ TEST only, its own computer
 //   {kind:"stock", company, company_guid, from, to, at, status, opening?, closing?, readAt?, ms, holdMs, words?} -> {ok}:
@@ -238,7 +238,7 @@ import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";
-import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";   // next-fast-measure (migration 143)   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";   // next-fast-measure (migration 148)   // next-fast-entries: 30 days an answer by day to a bridge reading windows
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -4535,7 +4535,7 @@ Deno.serve(sentry.wrap(async (req) => {
         return await stockAnswer(firm, book, body);
       }
       case "fast_measure": {
-        // next-fast-measure (migration 143): the fast-read measurement a person ran from the bridge's tray, on the company
+        // next-fast-measure (migration 148): the fast-read measurement a person ran from the bridge's tray, on the company
         // named exactly ZZ TEST only, from the computer that named it in its own heartbeat, its GUID the book's
         if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many calls in the last minute; try again in a minute." });
         if (String(body.company || "") !== FAST_MEASURE_COMPANY) return reply(403, { ok: false, error: "FinCom keeps the fast-read measurement only for the company named exactly ZZ TEST." });
@@ -4551,7 +4551,7 @@ Deno.serve(sentry.wrap(async (req) => {
           pass: fastMeasurePass(r), worst_ms: r.worstMs, worst_hold_ms: r.worstHoldMs, compared: r.compared, differ: r.differ, line: r.line.slice(0, 400), result: r });
         if (error) {
           const m = String(error.message || "");
-          if (/tally_fast_measures/i.test(m) && /does not exist|schema cache/i.test(m)) return reply(503, { ok: false, error: "FinCom is not set up for the fast-read measurement yet (migration 143)." });
+          if (/tally_fast_measures/i.test(m) && /does not exist|schema cache/i.test(m)) return reply(503, { ok: false, error: "FinCom is not set up for the fast-read measurement yet (migration 148)." });
           throw new Error(m);
         }
         return reply(200, { ok: true });

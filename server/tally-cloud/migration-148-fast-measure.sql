@@ -1,4 +1,4 @@
--- Migration 143 (08-Nov-2026, branch next-fast-measure; NOT run on staging: the owner reads it and runs it). The fast-read
+-- Migration 148 (08-Nov-2026, branch next-fast-measure; NOT run on staging: the owner reads it and runs it). The fast-read
 -- measurement (docs/fast-entries-design.md section 9b; docs/fast-entries-measure-steps.md): a person at the Tally
 -- computer clicks "Measure the fast read (ZZ TEST only)" in the FinCom Bridge tray; the bridge times the two window
 -- requests on the company named exactly ZZ TEST and sends the result (tally-ingest {kind: "fast_measure"}). Kept here,
@@ -10,7 +10,7 @@
 -- rows only (row security, my_firm()); anon nothing.
 --
 -- Deploy: this file first, then tally-ingest (it answers "not set up yet" until this has run), then the app. Tested on
--- pg_stand: tests/run_migration143.py.
+-- pg_stand: tests/run_migration148.py.
 
 begin;
 set local lock_timeout = '10s';

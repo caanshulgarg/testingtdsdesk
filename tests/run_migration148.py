@@ -1,5 +1,5 @@
-"""python3 run_migration143.py - migration-143-fast-measure (08-Nov-2026, branch next-fast-measure): the fast-read
-measurement kept per run (tally_fast_measures). On a throwaway PostgreSQL (pg_stand, port 31430; never a real database).
+"""python3 run_migration148.py - migration-148-fast-measure (08-Nov-2026, branch next-fast-measure): the fast-read
+measurement kept per run (tally_fast_measures). On a throwaway PostgreSQL (pg_stand, port 31481; never a real database).
 Checks:
   0. the file: one transaction (lock_timeout 10 s), add-only (no delete from / drop / truncate / alter table other than the
      new table's row security), names no real database; runs twice; one new table, no function; explicit grants:
@@ -10,18 +10,18 @@ import os, re, sys, json, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
 SQLDIR = os.path.join(HERE, "..", "server", "tally-cloud")
-M143 = os.path.join(SQLDIR, "migration-143-fast-measure.sql")
+M148 = os.path.join(SQLDIR, "migration-148-fast-measure.sql")
 fails = []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
     if not c: fails.append(w)
 def q(s): return "'" + str(s).replace("'", "''") + "'"
-F, F2 = "99999999-9999-9999-9999-999999999143", "88888888-8888-8888-8888-888888888143"
-B, B2 = "819d4a59-4cee-4bf7-8f8c-000000000143", "819d4a59-4cee-4bf7-8f8c-000000000144"
-U, U2 = "11111111-1111-1111-1111-111111111143", "22222222-2222-2222-2222-222222222143"
+F, F2 = "99999999-9999-9999-9999-999999999148", "88888888-8888-8888-8888-888888888148"
+B, B2 = "819d4a59-4cee-4bf7-8f8c-000000000148", "819d4a59-4cee-4bf7-8f8c-000000000149"
+U, U2 = "11111111-1111-1111-1111-111111111148", "22222222-2222-2222-2222-222222222148"
 
-text = open(M143).read()
-print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M143), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
+text = open(M148).read()
+print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M148), hashlib.md5(text.encode()).hexdigest(), len(text.encode())))
 low = text.lower(); code = "\n".join(l.split("--")[0] for l in low.splitlines())
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1 and code.count("commit;") == 1, "0. one transaction, lock_timeout 10 s")
 alters = sorted(re.findall(r"\balter\s+table\b[^;]*;", code))
@@ -31,7 +31,7 @@ ok(sorted(re.findall(r"create table if not exists public\.(\w+)", text)) == ["ta
 ok(re.search(r"revoke all on public\.tally_fast_measures from public, anon, authenticated;", text) and re.search(r"grant select on public\.tally_fast_measures to authenticated;", text)
    and re.search(r"grant select, insert on public\.tally_fast_measures to service_role;", text), "0. the table's grants written out")
 
-db = pg_stand.start(int(os.environ.get("PG143_PORT") or 31430))
+db = pg_stand.start(int(os.environ.get("PG148_PORT") or 31481))
 def psql_text(sql):
     return subprocess.run(["runuser", "-u", "postgres", "--", pg_stand.BIN + "/psql", "-h", "127.0.0.1", "-p", str(db.port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"], input=sql, capture_output=True, text=True)
 try:
@@ -42,7 +42,7 @@ try:
       grant usage on schema public, auth to authenticated, anon, service_role; grant select on members to authenticated;""" % {"F": q(F), "F2": q(F2), "B": q(B), "B2": q(B2), "U": q(U), "U2": q(U2)})
     for i in (1, 2):
         r = psql_text(text)
-        ok(r.returncode == 0, "143 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
+        ok(r.returncode == 0, "148 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
     print("== 0. grants")
     priv = lambda rl, p: db.one("select has_table_privilege(%s, 'public.tally_fast_measures', %s)" % (q(rl), q(p))) in ("t", "true")
     ok(not any(priv("anon", p) for p in ("select", "insert", "update", "delete")), "0. anon: nothing")
