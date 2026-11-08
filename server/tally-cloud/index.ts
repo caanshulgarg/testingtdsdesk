@@ -2000,6 +2000,8 @@ function tallyIniOf(b: any) {
 }
 // bridge 2.5.3: a port's reason, and the beat's tallyWhy (anything else dropped)
 const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown", "another user", "another bridge", "not Tally"];
+// bridge 2.5.8: what Tally's last answer to the company list named on a port (never: not asked since the bridge started)
+const PORT_LISTS = ["named", "empty", "kept", "never"];
 // bridge 2.5.4: "connection off" (this login's Tally runs but takes no connection; the fix in tallyConnectSay)
 const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another user", "no Tally running in this login"];
 // bridge 2.5.4: why a bridge did or did not update (the beat's update: the last look, its words, the version offered,
@@ -3987,7 +3989,9 @@ Deno.serve(sentry.wrap(async (req) => {
           ports: (Array.isArray(b.ports) ? b.ports : []).slice(0, 20).map((p: any) => ({ port: Math.max(0, Math.min(65535, Math.floor(Number(p?.port) || 0))), ok: !!p?.ok, skipped: !!p?.skipped,
             n: Math.max(0, Math.min(1000, Math.floor(Number(p?.n) || 0))), error: s(p?.error, 120),
             // bridge 2.5.3: why the port stands as it does, and whether Windows did not say whose Tally it is
-            ...(PORT_REASONS.includes(p?.reason) ? { reason: p.reason } : {}), ...(p?.owner === "unknown" ? { owner: "unknown" } : {}) })),
+            ...(PORT_REASONS.includes(p?.reason) ? { reason: p.reason } : {}), ...(p?.owner === "unknown" ? { owner: "unknown" } : {}),
+            // bridge 2.5.8: when Tally last answered the company list on this port, and what it named
+            ...(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(p?.askedAt) ? { askedAt: p.askedAt } : {}), ...(PORT_LISTS.includes(p?.list) ? { list: p.list } : {}) })),
           // bridge 2.5.3: why none of the user's Tallys answers ("" when one does), and the person's words after FinCom
           // switched on Tally's connection in tally.ini
           ...(TALLY_WHY.includes(b.tallyWhy) ? { tallyWhy: b.tallyWhy } : {}), ...(s(b.tallyConnectSay, 200) ? { tallyConnectSay: s(b.tallyConnectSay, 200) } : {}),

@@ -15,7 +15,7 @@
 // A browser with no bridge (a laptop): "Do these steps on the computer or server where TallyPrime runs", with the firm's
 // state, and no per-login steps. Nothing new is asked of the bridge or Tally: what ownState() (lib/tallySimple.js), the
 // beats and the rows already hold. Never another login's company, and never the firm's state shown as this login's.
-import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, bridgesOf, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, YES } from "./tallySimple.js";
+import { ownState, ownBridge, localBridges, LOCALB, placeOf, bridgeSay, bridgesOf, ownConnOff, NEED_V, BRIDGE, BLOCKED, NO_CO, NO_CO_HELP, YES } from "./tallySimple.js";
 import { tallyDevs } from "./tallyState.js";
 import { freePort, portHowWords } from "./tallyPort.js";
 
@@ -50,7 +50,8 @@ export const WORDS = {
   cantWrite: "If TallyPrime does not keep the change, this Windows login may not change TallyPrime’s settings: make the change once as a user who may.",
   reopen: "Your Tally’s connection is set but not on yet. Close TallyPrime and open it again once.",
   notanswering: "TallyPrime is open in this login but does not answer FinCom. Close any message or report open in Tally; if it stays, close TallyPrime and open it again once.",
-  noco: () => NO_CO,
+  // bridge 2.5.8: its port's last answer (askedAt, list "empty"): "Tally answered at 07:16 with no company; checking again…"
+  noco: (at) => NO_CO + (at ? " Tally answered at " + at + " with no company; checking again…" : "") + " " + NO_CO_HELP,
   link: (co, client) => "“" + shown(co) + "” is open in your Tally. " + (client ? "Link it to client “" + client + "”." : "Choose which client it is."),
   rowsWait: "Reading your clients…",
   linkAny: "Link the company open in your Tally to its client in the list below.",
@@ -166,7 +167,10 @@ export function connectSteps(opts) {
   // 4. a company open in this login's own Tally
   const ok3 = steps[2].done;
   if (ok3 && names.size) put("company", true, "", null, "", nOf(names.size, "company", "companies") + " open in your Tally");
-  else put("company", false, ok3 ? WORDS.noco() : "", ok3 ? { kind: "check" } : null, ok3 ? "noco" : "");
+  else {
+    const e = mineP.find((p) => p.list === "empty" && /T\d\d:\d\d/.test(p.askedAt || ""));
+    put("company", false, ok3 ? WORDS.noco(e ? e.askedAt.split("T")[1].slice(0, 5) : "") : "", ok3 ? { kind: "check" } : null, ok3 ? "noco" : "");
+  }
   // 5 and 6: the Tally page's rows (this login's own open companies only: the row's "Open in Tally right now?" is Yes)
   if (o0.rowsWait) { put("link", false, steps[3].done ? WORDS.rowsWait : "", null, "checking"); put("reading", false); }
   else if (o0.rows) {

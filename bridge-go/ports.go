@@ -661,6 +661,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"] = true
 			e["companies"] = list
 			e["tallyState"] = "open"
+			noteAsked(toInt(pp["port"]), toInt(pp["pid"]), len(list) == 0) // 2.5.8: when Tally answered, and whether it named none (nocompany258.go)
 		}
 		e["reason"] = portReason(e)
 		sessions = append(sessions, e)
@@ -814,7 +815,9 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 	}
 	list := []M{}
 	changed := len(held) != len(plan)
+	pidOf := map[int]int{}
 	for _, pp := range plan {
+		pidOf[toInt(pp["port"])] = toInt(pp["pid"])
 		now := planEntry(pp)
 		e, had := byPort[toInt(pp["port"])]
 		if !had || (e["skipped"] == true) != (now["skipped"] == true) || fmt.Sprint(e["mine"]) != fmt.Sprint(now["mine"]) {
@@ -823,13 +826,22 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 		}
 		list = append(list, e)
 	}
-	ask := false
+	ask, reopen := false, false
 	for _, e := range list {
 		if e["skipped"] == true {
 			continue
 		}
+		heldState := str(e["tallyState"])
 		st := tallyState(toInt(e["port"]))
 		open := st != "closed"
+		// 2.5.8 (nocompany258.go, 2): a port the list held as closed that takes a connection now (the rule cacheMatches
+		// uses), or a port another Tally program holds now than the one that answered last: asked at once
+		if open && heldState == "closed" {
+			reopen = true
+		}
+		if n, had := askNoteOf(toInt(e["port"])); open && had && n.pid != 0 && pidOf[toInt(e["port"])] != 0 && n.pid != pidOf[toInt(e["port"])] {
+			reopen = true
+		}
 		e["ok"] = open
 		e["tallyState"], e["busy"] = st, st == "busy"
 		if !open {
@@ -842,6 +854,10 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 		}
 		// a Tally Windows shows now that the list held does not (or not as it is), or one held without its companies
 		ask = ask || changed
+	}
+	if reopen && mayAsk && !typingInTally() {
+		askAfreshNow() // not held by the minute's wait (one in flight, postings first: askAfreshBg's light request)
+		ask = true
 	}
 	if ask && mayAsk && askAfreshSoon() {
 		if after, ok := mtime(shared); ok && after.After(before) {

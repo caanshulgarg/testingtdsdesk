@@ -497,6 +497,8 @@ function whyOf(src) {
 }
 // next-tally-other-login: this login's own Tally open with no company loaded: said plainly (never another login's company)
 export const NO_CO = "Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.";
+// bridge 2.5.8 (asks again within 30 s while Tally names no company): step 4's help when it stays
+export const NO_CO_HELP = "If the company is already open and this stays more than a minute: in TallyPrime press Alt+F3, then F3 to make sure it is loaded (enter its password or TallyVault if asked), then press Check again.";
 const noCo = (o, up) => (up && !o.names.size && !o.why ? Object.assign(o, { noCo: true, why: NO_CO }) : o);
 // this login's own Tally answers: its bridge's own sessions (another user's never), else (an older answer) Tally up
 const upHere = (st) => { const s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && x.mine !== false); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };

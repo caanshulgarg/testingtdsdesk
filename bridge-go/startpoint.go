@@ -497,8 +497,19 @@ func lightCheckBlocked() string {
 func lightCompanyList(sessions []M) []M {
 	shared := filepath.Join(syncDir(), "open-companies.json")
 	before, had := mtime(shared)
-	if had && nowFn().Sub(before) < 10*time.Minute {
+	// 2.5.8 (nocompany258.go, 1): this login's open Tally named no company: asked again on a short age (30 s, easing to
+	// 2 minutes while it stays empty), never while someone is typing in Tally right now; a list naming one keeps 10 minutes
+	wait, empty := emptyListWait(sessions)
+	if !empty {
+		wait = 10 * time.Minute
+	} else {
+		wait -= emptyWaitSlack
+	}
+	if had && nowFn().Sub(before) < wait {
 		return sessions
+	}
+	if empty && had && typingInTally() {
+		return sessions // asked at the next turn
 	}
 	open := false
 	for _, s := range sessions {
@@ -513,6 +524,10 @@ func lightCompanyList(sessions []M) []M {
 		return sessions // 2.3.1: backed off after the list took over 2 s (retry.go): the list held stands
 	}
 	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
+	if empty && ok && namesAny(fresh) {
+		writeLog("Company list: Tally names a company now (it named none before); FinCom is told at once")
+		beatSoon()
+	}
 	switch {
 	case ok:
 		_ = os.Chtimes(shared, nowFn(), nowFn()) // its age by the bridge's clock

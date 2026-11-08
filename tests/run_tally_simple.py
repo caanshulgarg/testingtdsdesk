@@ -52,6 +52,8 @@ import run_tally_page_clean as T
 SITE = os.environ.get("TDSDESK_SITE", os.path.join(HERE, "..", "app", "dist-test"))
 SHOTS = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else ""
 PORT = 9537
+# bridge 2.5.8: step 4's help when no company shows (lib/tallySimple.js NO_CO_HELP)
+NO_CO_HELP = "If the company is already open and this stays more than a minute: in TallyPrime press Alt+F3, then F3 to make sure it is loaded (enter its password or TallyVault if asked), then press Check again."
 fails, errors = [], []
 def ok(c, w):
     print(("  ok   " if c else "  FAIL ") + w)
@@ -205,9 +207,20 @@ def main():
         d = T.dev(7, PC, WIN, tally="open", opened=(), version="2.5.3", rec=())
         scene([d], [], [ACME, EVER], pings=P1)
         ok(pg.get_attribute(g, "data-tsm-guide") == "4" and states()[:4] == ["done", "done", "done", "now"], "1. a bridge, Tally open, no company: step 4 now, 1 to 3 ticked (%s)" % states())
-        ok(txt("#app [data-tsm-now]") == "Step 4: Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.", "1. step 4's sentence (%s)" % txt("#app [data-tsm-now]"))
+        ok(txt("#app [data-tsm-now]") == "Step 4: Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute. " + NO_CO_HELP, "1. step 4's sentence, with bridge 2.5.8's help (%s)" % txt("#app [data-tsm-now]"))
         r0 = E("window.__reads"); pg.click(g + ' [data-tsm-go="check"]'); pg.wait_for_timeout(1500)
         ok(E("window.__reads") > r0, "1. Check again: the computers are read again (%d -> %d)" % (r0, E("window.__reads")))
+        # bridge 2.5.8: Check again on the Tally computer asks this login's own bridge /status?fresh=1 (Bridge.refresh(true)), where
+        # the bridge asks Tally now; with no bridge paired in this browser (a laptop) nothing is asked of any bridge
+        E("""() => { window.__rf = []; window.__rf0 = {on: Bridge.on, call: Bridge.call, refresh: Bridge.refresh, st: Bridge.st};
+          if (window.__bridge0) Bridge.refresh = window.__bridge0.refresh;
+          Bridge.on = () => true; Bridge.call = async (path) => { window.__rf.push(path); throw {code: 'bridge_down', message: 'made up'}; }; }""")
+        E("() => FCTallySimple.checkAll()")
+        ok("/status?fresh=1" in E("window.__rf"), "1. Check again (paired here): this login's bridge asked /status?fresh=1 (%s)" % E("window.__rf"))
+        E("() => { window.__rf = []; Bridge.on = () => false; }")
+        E("() => FCTallySimple.checkAll()")
+        ok(E("window.__rf") == [], "1. Check again (no bridge paired here): nothing asked of a bridge (%s)" % E("window.__rf"))
+        E("() => { const o = window.__rf0; Bridge.on = o.on; Bridge.call = o.call; Bridge.refresh = o.refresh; Bridge.st = o.st; render(); }"); pg.wait_for_timeout(300)
 
         d = T.dev(7, PC, WIN, tally="open", opened=(SPLIT,), version="2.5.3", rec=(SPLIT,))
         ids = scene([d], [{"company": SPLIT, "client_id": None, "device_id": d["id"], "gstin": "", "last_seen": "ago:1"}], [ACME, EVER], pings=P1)

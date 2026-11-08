@@ -417,12 +417,17 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		}
 		var sessions []M
 		if qs.Get("fresh") != "" {
-			sessions = openCompanies(false)
+			sessions = personCheckNow() // 2.5.8: a person's Check again / Connect asks Tally now (nocompany258.go, 3)
 		} else {
 			sessions = openCompaniesCached() // Tally is not asked on a status check, unless a person's action asks
 		}
 		why := readOnlyWhy()
 		_, beatPorts, _, _ := beatParts(sessions)
+		for _, s := range sessions { // 2.5.8: when Tally last answered the list, and what it named (nocompany258.go, 4)
+			if at, l := askFields(s); l != "" {
+				s["askedAt"], s["list"] = at, l
+			}
+		}
 		why253 := tallyWhy(beatPorts) // 2.5.3: why no Tally of this user answers ("" when one does)
 		coMu.Lock()
 		pm := planMode
