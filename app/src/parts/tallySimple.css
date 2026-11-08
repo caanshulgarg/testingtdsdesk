@@ -100,7 +100,12 @@
 /* next-tally-simple2 (the owner's approved "Tally simple page v4"): the title and Download, ONE connection card, "Clients · N"
    and ONE table (Client · Tally company | Masters | Entries | Action), More ▾'s light row, the foot. The app's tokens; the
    design's colours where the app has none (the dots, the amber shade of a row that needs you) */
-#app .tpg-dl-head { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; margin-bottom: 16px; }
+/* (the owner's Mac, 08-Nov-2026: the Download went under the sticky top bar once the page scrolled a little) kept in view
+   just under the top bar, as the status tabs are (--head-h, TopBar.jsx) */
+#app .tpg-dl-head { display: flex; justify-content: space-between; align-items: center; gap: 12px 16px; flex-wrap: wrap; margin: 0 0 8px; padding: 8px 0;
+  position: sticky; top: var(--head-h, 0px); z-index: 3; background: var(--background); }
+/* (a phone: the top bar and the row would take too much of a small screen) the Download row scrolls with the page */
+@media (max-width: 600px) { #app .tpg-dl-head { position: static; } }
 #app .tpg-dl-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-left: auto; }
 #app .tpg-dl-btn { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 18px; border-radius: 10px; background: var(--foreground); color: var(--surface); border-color: var(--foreground); font-weight: 600; text-decoration: none; }
 #app .tpg-dl-btn:hover { opacity: .92; color: var(--surface); }
@@ -124,6 +129,9 @@
 #app .tpt-sec { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 #app .tpt-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 #app .tpt-head .tsm-note { margin: 0; font-size: 14px; }
+/* (the owner's Mac, 08-Nov-2026: ~250 px of blank between the search box and the table) .tsm-search's flex: 1 1 200px is
+   for a row; in this column its 200 px basis became height */
+#app .tpt-sec > .tsm-search { flex: none; align-self: flex-start; width: 100%; }
 #app .tpt-title { margin: 0; font-size: 17px; font-weight: 600; }
 #app .tpt { overflow: hidden; border-radius: 14px; }
 #app .tpt-grid { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
@@ -156,7 +164,7 @@
 #app .tpg-words { font-size: 14.5px; font-weight: 500; }
 #app .tpg-words.ok { color: var(--success, #17803D); }
 #app .tpg-words.read { color: var(--accent); }
-#app .tpg-words.warn { color: #8A4B00; }
+#app .tpg-words.warn, #app .tpg-sub2.warn { color: #8A4B00; }
 #app .tpg-words.bad { color: var(--danger, #A1302A); }
 #app .tpg-words.muted { color: var(--text-secondary); }
 #app .tpg-sub { font-size: 13.5px; color: var(--text-secondary); }
@@ -203,7 +211,7 @@
 #app .tsm-guide > .tsm-now-text { flex: 0 0 auto; }
 @media (prefers-color-scheme: dark) {
   #app .tpt-tr.tpt-need > td, #app .tpt-light-tr.tpt-need > td, #app .tsm-guide .tsm-step.now { background: color-mix(in srgb, var(--warning, #B45309) 14%, var(--surface)); }
-  #app .tpt-need .tpt-why, #app .tpt-note, #app .tpt-say.warn, #app .tpg-words.warn { color: var(--warning, #B45309); }
+  #app .tpt-need .tpt-why, #app .tpt-note, #app .tpt-say.warn, #app .tpg-words.warn, #app .tpg-sub2.warn { color: var(--warning, #B45309); }
 }
 /* a phone: each row a stacked card (the client, Masters, Entries, the one button full width), its light row under it;
    nothing wider than the screen */

@@ -38,7 +38,7 @@ export const rpc = (fn, args) => (typeof TCloud === "object" && TCloud.rpc ? TCl
 export const missing = (e) => /PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((e && e.message) || e));
 // owner or staff change it; a member who may only look sees it (as the Tally page's rows)
 export const may = () => (typeof S === "object" && S.account && S.account.me ? ["owner", "staff"].includes(S.account.me.role) : true);
-const owner = () => !!(typeof S === "object" && S.account && S.account.me && S.account.me.role === "owner");
+export const owner = () => !!(typeof S === "object" && S.account && S.account.me && S.account.me.role === "owner");
 // next-tally-table: one drawing for the answers that come together (lib/soonDraw.js), not one each
 const redraw = () => soonDraw();
 
@@ -150,7 +150,7 @@ function Bar({ p, label }) {
   return <div className="tco-bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pc} data-tfx-pct={pc}>
     <i className="det" style={{ width: Math.max(2, pc) + "%" }} /></div>;
 }
-export function TurnOn({ b, onDone }) {
+export function TurnOn({ b, onDone, main = false }) {
   const [busy, setBusy] = useState(false), [err, setErr] = useState("");
   const off = ((b && b.devices) || []).filter((d) => !d.fetchOn);
   if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return null;
@@ -158,7 +158,7 @@ export function TurnOn({ b, onDone }) {
   const go = () => { setBusy(true); setErr("");
     rpc("tally_device_period_fetch", { p_device: off[0].id, p_on: true }).then((r) => { if (r && r.ok === false) throw new Error(r.error || "not done"); summary(true); if (onDone) onDone(); },
       (e) => setErr(String((e && e.message) || e).replace(/^ERROR:\s*/i, ""))).finally(() => setBusy(false)); };
-  return <>{" "}<button className="btn small primary" data-tfx-turnon={off[0].id} disabled={busy} onClick={go}>{busy ? "Turning on…" : "Turn on for this computer"}</button>
+  return <>{" "}<button type="button" className={main ? "btn tpt-btn primary" : "btn small primary"} data-tpt-main={main ? "turnon" : undefined} data-tfx-turnon={off[0].id} disabled={busy} onClick={go}>{busy ? "Turning on…" : "Turn on for this computer"}</button>
     {err && <span className="bad" data-tfx-turnon-err="">{" " + err}</span>}</>;
 }
 

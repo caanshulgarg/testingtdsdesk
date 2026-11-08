@@ -13,7 +13,7 @@
 // far. Nothing new is asked of Tally.
 import { useEffect, useState } from "react";
 import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld } from "./TallyCompanies.jsx";
-import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow } from "./TallyFetch.jsx";
+import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords } from "./TallyFetch.jsx";
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -115,10 +115,14 @@ export function EntriesCell({ row }) {
   else if (e.st === "uptodate") { head = "✓ Up to date"; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
   else if (e.st === "done") { head = e.words; cls = " ok"; sub = row.last ? "Last entry " + whenIn(row.last) : ""; }
   else { head = "Not brought yet"; cls = " muted"; sub = ms.st !== "done" ? "Comes after masters" : ""; }
+  // (Bring books asked, not moving: why, in the words of Books › From Tally: the computer, reading of older entries off,
+  // Tally busy, stopped. Not while it waits for the masters, which the head says)
+  const wait = p && !p.done && e.st !== "after" ? whyWords(p, e.b) : "";
   return <div className="tpg-cell" data-tpg-entries={e.st}>
     <span className={"tpg-words" + cls} data-tpg-ew="">{head}</span>
     {p && !p.done && (e.st === "going" || e.st === "after" || e.st === "paused") && <Bar pct={e.pct} kind={e.st === "going" ? "read" : "wait"} label={"Entries of " + row.client} />}
     {sub && <span className="tpg-sub" data-tpg-es="">{sub}</span>}
+    {wait && <span className="tpg-sub2 warn" data-tpg-ewait="" role="status">{wait}</span>}
   </div>;
 }
 // "Apr 2025 – today" / "Apr 2026 – 12-Oct-2026" / "" (the client's books in FinCom: their first and last day)

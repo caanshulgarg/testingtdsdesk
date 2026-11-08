@@ -23,7 +23,7 @@ import { coKey } from "../lib/tallyState.js";
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
-import OlderEntries from "./TallyFetch.jsx";
+import OlderEntries, { TurnOn, owner } from "./TallyFetch.jsx";
 import { PostingWait } from "./StuckJobs.jsx";
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
 function countLedgers(rows) {
@@ -440,7 +440,8 @@ function Details({ row, download, oneDl, main }) {
 // open at a time): Entries in FinCom: <range> · Bring another year · Upload a Day Book file (the Day Book drop box,
 // unchanged) · Update history · Pause / Resume / Stop while Bring books runs · Answers (the old table's answers) · Unlink.
 // Each part opens inline in that row; nothing is read for it until it is opened
-const SHOW_UPDATE = ["books", "upload", "bring", "masters"];
+const SHOW_UPDATE = ["books", "upload", "bring", "masters", "turnon"];
+const OFF_NOTE = "Reading older entries is off for the computer that has this company: an owner can turn it on";
 function MoreRow({ row, linked, e, main, det, running, download, oneDl, onAnswers }) {
   const [show, setShow] = useState(""), flip = (k) => setShow(show === k ? "" : k), p = e && e.p && !e.p.done ? e.p : null, range = linked ? rangeWords(row.cid) : "";
   const ex = (k) => (show === k ? "true" : "false");
@@ -477,10 +478,16 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   const m = linked ? mastersOf(row.cid, row.company) : null, e = linked ? entriesOf(row.cid, m, row.last) : null, p = e && e.p && !e.p.done && e.b && e.b.book ? e.p : null;
   // the row's ONE main button, chosen by its state; a short note under it when needed
   const mm = mainOf(row, pg).main;
+  // (the owner's Fingate row, 08-Nov-2026: "Not brought yet" with Upload Day Book as its button) the upload stays the
+  // button wherever it is the only way: held lines, a held day, days missing with no computer set to read older entries.
+  // One exception: a computer has the company with that reading turned off; an owner can turn it on (Turn on for this
+  // computer is the button); anyone else keeps the upload and is told an owner can
+  const off = mm === "upload" && !!(row.act && row.act.off);
   let btn = null, main = "", note = "";
   if (!canWrite()) btn = null;
+  else if (off && owner()) { btn = <TurnOn b={bookSum(row.cid)} main />; main = "turnon"; }
   // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
-  else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; }
+  else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; if (off) note = OFF_NOTE; }
   else if (pg.btn === "again") { btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} label={pg.label} />; main = "again"; note = pg.note || ""; }
   // masters read first, entries only waiting after them: Reading… (Pause and Stop under More)
   else if (pg.btn === "update" && p && e.st === "after") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>; main = "reading"; }
@@ -501,6 +508,8 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   // (a client being read: its Masters and Entries cells say how far, the read's own words too; not a second time here.
   // The read's result, or why it was not done, stays here)
   const why = rw && (rw.phase === "done" || rw.phase === "why") ? rw.text : rw ? "" : aw ? aw.text : pg.kind === "reading" ? "" : pg.why;
+  // (held lines or a held day: what to do about them stays in view while a read runs, and after it)
+  const held = row.act && row.act.held && row.todo && row.todo !== why ? row.todo : "";
   const co = shown(row.company);
   const toggle = () => set(more ? { more: "", details: ui.details === "all" ? "all" : Object.assign({}, ui.details || {}, { [key]: false }) } : { more: key, details: ui.details === "all" ? "all" : {} });
   return <><tr className={"tsm-tr tpt-tr" + (pg.need ? " tpt-need" : "") + (more ? " tpt-open" : "") + (row.focus ? " tsm-focus" : "")} data-tsm-row={name} data-tsm-kind={row.kind} data-tsm-cid={row.cid || undefined}
@@ -512,6 +521,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         <span className={"tpt-say " + pg.dot} data-tpt-state={pg.kind}><Dot k={pg.dot} />{rw && rw.phase !== "done" && rw.phase !== "why" ? (rw.phase === "waiting" ? "Waiting for Tally" : "Updating") : pg.say}</span>
         {why && <span className={"tpt-why" + (rw && (rw.phase === "why" || rw.phase === "waiting") ? " bad" : "")} data-tpt-why={rw ? "run-" + rw.phase : aw ? (aw.step ? "step" + aw.step.n : "why") : ""} role={rw ? "status" : undefined}>{why}
           {aw && aw.step && <>{" "}<button type="button" className="linkbtn" data-tsm-away-steps={aw.step.n} onClick={() => { set({ open: true }); window.scrollTo(0, 0); }}>See step {aw.step.n}</button></>}</span>}
+        {held && <span className="tpt-why" data-tpt-held="">{held}</span>}
         {/* next-link-follow (migration 146): where the book is read from, or the linked computer offline with the company open nowhere */}
         {row.where && row.where.text !== why && <span className={"tpt-why" + (row.where.kind === "offline" ? " bad" : "")} data-tpt-where={row.where.kind}>{row.where.text}</span>}
         {near && canWrite() && <span className="tpt-why" data-tsm-away-near={near.company}>{"“" + shown(near.company) + "” is open in your Tally, a close name. "}
