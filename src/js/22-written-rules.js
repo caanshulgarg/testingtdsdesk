@@ -422,16 +422,13 @@ async function uploadStatements(files, force){
         Store.saveCompany(co);
       }
       const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
-      const sid = uid("st");
-      const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, b.keys, b.stmts, sid, co.name);
+      // the lines not yet here, near-repeats held or marked, the statement's own dates and figures (src/js/96 BankOverlap)
+      const sid = uid("st"), x = await bankTake(parsed, acc, b, sid, co.name, chk, file, hash), {rows, st} = x;
       // every line is already here, in a statement here: that statement is opened, nothing is charged or added
-      if (!rows.length && top){ b.busy = ""; await bankOpenHeld(b.cid, top); continue; }
+      if (!rows.length && !st.held && x.top){ b.busy = ""; await bankOpenHeld(b.cid, x.top); continue; }
       if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
-      Object.assign(b.keys, nk);
-      const from = rows.length ? rows[0].date : meta.from, to = rows.length ? rows[rows.length - 1].date : meta.to;
-      const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || from, to: meta.to || to,
-        opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
-        totDr: chk.totDr, totCr: chk.totCr, source: parsed.source, method: parsed.method || "", uploadedAt: new Date().toISOString(), otherClient: other ? other.name : ""};
+      Object.assign(b.keys, x.nk);
+      st.otherClient = other ? other.name : "";
       b.stmts.push(st);
       b.cur = sid; b.rows = rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
       suggestAll(rows);
@@ -441,7 +438,7 @@ async function uploadStatements(files, force){
       await BankDB.set("stmt:" + b.cid + ":" + sid, rows);
       saveBank({stmts: true, keys: true});
       b.filter = "review";
-      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
+      toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
       b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
@@ -452,18 +449,21 @@ async function uploadStatements(files, force){
 }
 // The lines of a statement not yet here. A line counts as here only when the statement holding it is here: a fingerprint
 // left by a statement this browser lost no longer hides the line (26-Oct-2026). top: the statement holding most of the rest.
+// Two same lines of one file are both kept: the second and later carry their count (next-bank-overlap), so each is matched
+// once against an earlier statement's. Every line gets its fingerprint (r.fp); a line added also its id.
 function bankNewRows(list, acc, keys, stmts, sid, name){
-  const live = new Set(stmts.map(s => s.id)), nk = {}, by = {}, rows = [];
+  const live = new Set(stmts.map(s => s.id)), nk = {}, by = {}, rows = [], o = {};
   let dupRows = 0;
   list.forEach((r, i) => {
-    const fp = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|"), was = keys[fp];
-    if (nk[fp] || live.has(was)){ dupRows++; if (was) by[was] = (by[was] || 0) + 1; return; }
+    const f = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|"), k = o[f] = (o[f] || 0) + 1, fp = r.fp = k > 1 ? f + "|" + k : f, was = keys[fp];
+    if (live.has(was)){ dupRows++; by[was] = (by[was] || 0) + 1; return; }
     nk[fp] = sid;
-    rows.push(Object.assign(r, {id: sid + "-" + i, fp, dec: decodeNarr(r.narr, name), state: "attention", ledger: "", userSet: false}));
+    rows.push(Object.assign(r, {id: sid + "-" + i, dec: decodeNarr(r.narr, name), state: "attention", ledger: "", userSet: false}));
     if (r.repaired) r.fixedDir = false;
   });
   return {rows, dupRows, nk, top: Object.keys(by).sort((x, y) => by[y] - by[x])[0]};
 }
+async function bankTake(...a){ return (window.BankOverlap || (await loadBankOverlap()).BankOverlap).take(...a); }
 // Keep a statement under the client that owns the bank account (it is matched when that client is opened)
 async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
   const cid = owner.id;
@@ -474,13 +474,11 @@ async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
   const stmts = stmts0 || [], keys = keys0 || {};
   // already there (26-Oct-2026: it was read and charged, then refused, and this client's empty page stayed): opened there
   const held = stmts.find(x => x.hash === hash), sid = uid("st");
-  const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, keys, stmts, sid, owner.name);
-  if (held || (!rows.length && top)){ await bankOpenHeld(cid, held ? held.id : top, owner.name); return false; }
+  const x = await bankTake(parsed, acc, {cid, keys, stmts}, sid, owner.name, chk, file, hash), {rows, st} = x;
+  if (held || (!rows.length && !st.held && x.top)){ await bankOpenHeld(cid, held ? held.id : x.top, owner.name); return false; }
   if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))) return null;
-  Object.assign(keys, nk);
-  const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || (rows[0] || {}).date, to: meta.to || (rows[rows.length - 1] || {}).date,
-    opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
-    totDr: chk.totDr, totCr: chk.totCr, source: parsed.source, method: parsed.method || "", uploadedAt: new Date().toISOString(), counts: {attention: rows.length}};
+  Object.assign(keys, x.nk);
+  st.counts = {attention: rows.length};
   stmts.push(st);
   S.files["st:" + sid] = file; FileStore.put(cid, "st:" + sid, file); CloudDocs.add(cid, "st:" + sid, file, "stmt");
   await BankDB.set("stmt:" + cid + ":" + sid, rows);

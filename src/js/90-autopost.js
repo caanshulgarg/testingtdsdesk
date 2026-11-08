@@ -477,7 +477,8 @@ const AutoPost = {
         });
         res.waiting += b.rows.filter(r => ["attention", "suggested", "ready"].includes(r.state) && !r.autoHold && !r.auto).length;
         // never a line posted before from a deleted statement until a person says post again (app/src/parts/bank/goneSent.js)
-        const due = b.rows.filter(r => r.autoHold && !r.auto && !(r.goneSent && !r.goneSent.ok) && ["attention", "suggested", "ready"].includes(r.state) && Date.parse(r.autoHold.until) <= Date.now());
+        // nor a line marked "Possible repeat — check" until it is confirmed (src/js/96 BankOverlap)
+        const due = b.rows.filter(r => r.autoHold && !r.auto && !(r.goneSent && !r.goneSent.ok) && !(r.rep && r.rep.kind === "weak" && !r.rep.ok) && ["attention", "suggested", "ready"].includes(r.state) && Date.parse(r.autoHold.until) <= Date.now());
         res.held += b.rows.filter(r => r.autoHold && !r.auto && Date.parse(r.autoHold.until) > Date.now()).length;
         saveBank({rows: true});
         if (due.length && via) res.bank = await this.postBank(cid, due, res);
