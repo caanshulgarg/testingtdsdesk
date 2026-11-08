@@ -171,7 +171,7 @@ func bgListTC(only map[int]bool) *TC {
 	tc := bgCompaniesTC()
 	y := tc.yield
 	tc.yield = func() bool { return y() || typingInTally() }
-	tc.only = only
+	tc.only, tc.typingGive = only, true
 	return tc
 }
 

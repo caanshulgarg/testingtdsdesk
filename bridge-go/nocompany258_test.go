@@ -464,8 +464,9 @@ func TestR258TypingAfterTheLock(t *testing.T) {
 	nowFn = func() time.Time { return base.Add(30 * time.Second) }
 	n0 := f.n("FinComCompany")
 	lightCheckOpen(openCompaniesCachedOnce(false))
-	if f.n("FinComCompany") != n0 || f.n("TDSDeskCompanyInfo") != 0 {
-		t.Fatalf("the company's first check went while someone types: %v", f.ids())
+	// (round-2 review, low 1: its GSTIN / PAN is asked all the same, never held back 5 minutes by a give-way)
+	if f.n("FinComCompany") != n0 || f.n("TDSDeskCompanyInfo") != 1 {
+		t.Fatalf("the company's first check went while someone types, or its GSTIN / PAN was not asked: %v", f.ids())
 	}
 	if logLines("someone is typing in Tally (the check goes after it)") == 0 {
 		t.Fatalf("the skip is not in the log: %s", readText(logFile()))
@@ -533,5 +534,77 @@ func TestR258ReopenAskedOnceInTheBeat(t *testing.T) {
 	_ = lightCompanyList(ss)    // its light check in the same beat
 	if f.n("TDSDeskCompanies") != n0+1 {
 		t.Fatalf("asked %d times in one beat", f.n("TDSDeskCompanies")-n0)
+	}
+}
+
+// round-2 review (medium): an ask of the empty Tally only is no complete look at the own Tallys: the recorder's mark that
+// Tally A was not seen in full (blind) stays
+func TestR258PartialAskLeavesTheRecorderBlind(t *testing.T) {
+	a, b := newStandTally(t), newStandTally(t)
+	standBridge(t, a, "")
+	r253Server(t, `{"pid": 10, "name": "tally", "session": 1}, {"pid": 11, "name": "tally", "session": 1}`,
+		fmt.Sprintf(`{"port": %d, "pid": 10}, {"port": %d, "pid": 11}`, a.port, b.port))
+	var empty atomic.Bool
+	empty.Store(true)
+	emptyAnswer(b, &empty)
+	oldTyping := keepTypingFn
+	keepTypingFn = func() bool { return false }
+	t.Cleanup(func() { keepTypingFn, nowFn = oldTyping, time.Now })
+	base := time.Now()
+	nowFn = func() time.Time { return base }
+	_ = lightCompanyList(openCompaniesCachedOnce(false)) // both asked
+	liveOwnBlindNow()                                    // then a look at A stopped at 2 s
+	nb := b.n("TDSDeskCompanies")
+	nowFn = func() time.Time { return base.Add(30 * time.Second) }
+	_ = lightCompanyList(openCompaniesCachedOnce(false)) // only B asked
+	if b.n("TDSDeskCompanies") != nb+1 || a.n("TDSDeskCompanies") != 1 {
+		t.Fatalf("the short ask: A %d, B %d", a.n("TDSDeskCompanies"), b.n("TDSDeskCompanies")-nb)
+	}
+	live.mu.Lock()
+	blind := live.ownBlind
+	live.mu.Unlock()
+	if !blind {
+		t.Fatal("an ask of B only was taken as a complete look at every own Tally (the recorder's blind mark cleared)")
+	}
+}
+
+// round-2 review (low 2): an ask that gave way is not asked again on every beat or status poll while its cause lasts,
+// nor more than once a minute; the light check's same-beat guard is set only when an ask started
+func TestR258GaveWayNotAskedEveryPoll(t *testing.T) {
+	f, _ := r258Stand(t)
+	_, _ = openCompaniesAsk(bgCompaniesTC(), true)
+	shared := filepath.Join(syncDir(), "open-companies.json")
+	gaveWay := func() {
+		held := sessionsFromFile(shared)
+		for _, e := range held {
+			if toInt(e["port"]) == f.port {
+				e["ok"], e["companies"], e["error"], e["gaveWay"] = false, []any{}, "gave way", true
+			}
+		}
+		_ = saveFile(shared, jsonText(held))
+		coMu.Lock()
+		coCache = nil
+		coMu.Unlock()
+	}
+	gaveWay()
+	n0 := f.n("TDSDeskCompanies")
+	importsInFlight.Add(1)
+	for i := 0; i < 5; i++ {
+		_ = openCompaniesCached()
+	}
+	importsInFlight.Add(-1)
+	if f.n("TDSDeskCompanies") != n0 || askAfreshAt.Load() != 0 || reopenAskedLately() {
+		t.Fatalf("while the posting lasts: %d asked, minute %v, guard %v", f.n("TDSDeskCompanies")-n0, askAfreshAt.Load(), reopenAskedLately())
+	}
+	_ = openCompaniesCached() // the posting over: asked once
+	if f.n("TDSDeskCompanies") != n0+1 || !reopenAskedLately() {
+		t.Fatalf("after the posting: %d asked", f.n("TDSDeskCompanies")-n0)
+	}
+	gaveWay() // it gave way again: not before the minute
+	for i := 0; i < 5; i++ {
+		_ = openCompaniesCached()
+	}
+	if f.n("TDSDeskCompanies") != n0+1 {
+		t.Fatalf("a give-way asked again within the minute: %d", f.n("TDSDeskCompanies")-n0)
 	}
 }

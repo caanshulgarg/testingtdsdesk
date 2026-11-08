@@ -321,6 +321,8 @@ type TC struct {
 	only map[int]bool
 	// 2.5.8 review 3: a person's Check again keeps a Tally's wait after it did not give its list in 2 s (colistHold)
 	holdOK bool
+	// 2.5.8: gives way to typing in Tally (bgListTC); its follow-up GSTIN / PAN ask does not (round-2 review, low 1)
+	typingGive bool
 }
 
 // 2.4.8 (anyport.go): the typed port's trial's yield, looked at right before the send (tallyRaw)
