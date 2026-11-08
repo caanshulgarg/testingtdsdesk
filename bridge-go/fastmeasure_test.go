@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -243,7 +244,7 @@ func TestFastMeasureStopsAtWindowHold(t *testing.T) {
 	k := 0
 	windowHoldFn = func() func(time.Time) int {
 		k++
-		if k == 2 {
+		if k == 3 { // the first is the check at the start, then one a request
 			return func(time.Time) int { return 1100 }
 		}
 		return func(time.Time) int { return 0 }
@@ -297,5 +298,90 @@ func TestFastMeasureInexactNoEntryData(t *testing.T) {
 		if strings.Contains(string(b), "MasterID "+v.master) || strings.Contains(string(b), v.date) {
 			t.Fatalf("entry data in the upload: %s", b)
 		}
+	}
+}
+
+// review (bca62f92d) 3: Tally's window not watchable: refused at the start, nothing asked; unwatched later: stops there
+func TestFastMeasureNeverUnwatched(t *testing.T) {
+	f, _, ups := fmBridge(t)
+	fmFill(f, map[string]int{"20261010": 30})
+	old := windowHoldFn
+	t.Cleanup(func() { windowHoldFn = old })
+	windowHoldFn = func() func(time.Time) int { return func(time.Time) int { return -1 } }
+	n0 := f.n("")
+	_, r := callLocal(t, "POST", "/tray/fastmeasure", "", `{}`)
+	if r["ok"] != false || !strings.Contains(str(r["error"]), "cannot watch") || f.n("") != n0 || len(*ups) != 0 {
+		t.Fatalf("unwatched at the start: %v (asked %v)", r, f.ids()[n0:])
+	}
+	k := 0
+	windowHoldFn = func() func(time.Time) int {
+		k++
+		if k >= 3 {
+			return func(time.Time) int { return -1 }
+		}
+		return func(time.Time) int { return 0 }
+	}
+	s := fmRun(t)
+	if s["pass"] == true || !strings.Contains(str(s["stopped"]), "could not be watched") || len(arr(s["results"])) != 2 || f.n(fastHeadsID) != 2 {
+		t.Fatalf("unwatched later: %v (asked %v)", s, f.ids())
+	}
+}
+
+// review 4: the raw names: "ZZ TEST" and "zz test" open together refuse; another company opened during the run stops it
+// before its next request
+func TestFastMeasureAloneByRawNames(t *testing.T) {
+	if _, why := fastMeasureWhyNotOf([]string{"ZZ TEST", "zz test"}); !strings.Contains(why, "alone") {
+		t.Fatalf("ZZ TEST and zz test: %q", why)
+	}
+	f, _, ups := fmBridge(t)
+	fmFill(f, map[string]int{"20261010": 30})
+	if o := fmOpenNames(); len(o) != 1 || o[0] != fastMeasureCompany {
+		t.Fatalf("the stand's open companies: %v", o)
+	}
+	old := fmOpenNames
+	t.Cleanup(func() { fmOpenNames = old })
+	calls := 0
+	fmOpenNames = func() []string {
+		calls++
+		if calls > 3 { // the start, then the first two requests
+			return []string{fastMeasureCompany, "zz test"}
+		}
+		return []string{fastMeasureCompany}
+	}
+	s := fmRun(t)
+	if s["pass"] == true || !strings.Contains(str(s["stopped"]), "another company") || f.n(fastHeadsID) != 2 {
+		t.Fatalf("another company opened: %v (asked %v)", s, f.ids())
+	}
+	if b, _ := json.Marshal(*ups); strings.Contains(string(b), "zz test") {
+		t.Fatalf("the other company's name uploaded: %s", b)
+	}
+}
+
+// review 2: what is uploaded for a request not asked is fixed words, never the period read's own text
+func TestFastMeasureStopFixedWords(t *testing.T) {
+	fmBridge(t) // the log in the test's own folder (fastMeasureStop logs the details)
+	for _, a := range []fmAnswer{{err: errFmNotFree, nothingAsked: true},
+		{err: errors.New("Tally busy reading Client Books 20261010 to 20261012"), nothingAsked: true}} {
+		w := fastMeasureStop(a)
+		if !strings.HasPrefix(w, "not measured: Tally was not free") || strings.Contains(w, "2026") || strings.Contains(w, "Client") {
+			t.Fatalf("%q", w)
+		}
+	}
+}
+
+// review 5: a step's window hold counts from its start, the pause between its requests too
+func TestFastMeasureHoldFromStepStart(t *testing.T) {
+	fmBridge(t)
+	old := windowHoldFn
+	t.Cleanup(func() { windowHoldFn = old })
+	windowHoldFn = func() func(time.Time) int {
+		return func(from time.Time) int { return int(time.Since(from).Milliseconds()) } // all of it a hold
+	}
+	a := fastMeasureAsk(fastMeasureCompany, "", "", func(tc *TC, port int) (string, error) {
+		time.Sleep(400 * time.Millisecond) // the pause before the step's second request
+		return "", fastCompanyListed(tc, fastMeasureCompany, port, 5)
+	})
+	if a.err != nil || a.ms > 300 || a.holdMs < 400 {
+		t.Fatalf("the hold: %+v", a)
 	}
 }

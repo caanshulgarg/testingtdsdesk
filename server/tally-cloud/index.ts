@@ -237,8 +237,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
-import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";
-import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";   // next-fast-measure (migration 148)   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";   // next-fast-measure (migration 148): the fast-read measurement
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)

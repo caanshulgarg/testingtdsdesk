@@ -66,11 +66,37 @@ const (
 
 // why the measurement may not start now ("" when it may), and the company's GUID
 func fastMeasureWhyNot() (string, string) {
-	var open []string
-	for _, c := range oldTestCompanies() {
-		open = append(open, str(c["company"]))
+	guid, why := fastMeasureWhyNotOf(fmOpenNames())
+	if why == "" && windowHoldFn()(time.Now()) < 0 {
+		// never run the plan unwatched: the 1 s stop could not see Tally's window
+		return "", "FinCom Bridge cannot watch Tally's window on this computer (Tally not shown on this desktop, or the bridge running as a service): open Tally on this desktop, then try again."
 	}
-	return fastMeasureWhyNotOf(open)
+	return guid, why
+}
+
+// the companies open in this bridge's own Tally, by their names as Tally gives them (NOT companyKey-folded: "ZZ TEST" and
+// "zz test" open together are two companies, and the measurement refuses); the tests replace it
+var fmOpenNames = func() []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range openCompaniesCached() {
+		if s["skipped"] == true || s["ok"] != true || s["mine"] == false {
+			continue
+		}
+		for _, c := range sessCompanies(s) {
+			if n := str(c["name"]); n != "" && !seen[n] {
+				seen[n] = true
+				out = append(out, n)
+			}
+		}
+	}
+	return out
+}
+
+// ZZ TEST still open alone (checked before every request of the plan)
+func fmAloneNow() bool {
+	o := fmOpenNames()
+	return len(o) == 1 && o[0] == fastMeasureCompany
 }
 
 // the company's starting point (startpoint.go; the tests replace it)
@@ -155,6 +181,7 @@ type fmAnswer struct {
 	ms, holdMs   int
 	watched      bool
 	nothingAsked bool
+	otherOpen    bool // another company was open in Tally when the request was due: not asked
 }
 
 var fastMeasureWaitMax = 2 * time.Minute
@@ -165,15 +192,21 @@ func fastMeasureAsk(company, guid string, x string, guarded func(tc *TC, port in
 	port, why := pullMayAsk(it)
 	for why != "" {
 		if time.Now().After(end) || stopping() {
-			return fmAnswer{err: errors.New("Tally was not free for " + fmt.Sprint(int(fastMeasureWaitMax.Seconds())) + " s (" + why + ")"), nothingAsked: true}
+			// pullMayAsk's words may name another company's entry dates: in this computer's log only, never sent
+			writeLog("Fast-read measurement: Tally was not free for " + fmt.Sprint(int(fastMeasureWaitMax.Seconds())) + " s: " + cutRunes(why, 200))
+			return fmAnswer{err: errFmNotFree, nothingAsked: true}
 		}
 		time.Sleep(500 * time.Millisecond)
 		port, why = pullMayAsk(it)
+	}
+	if !fmAloneNow() {
+		return fmAnswer{err: errFmOtherOpen, nothingAsked: true, otherOpen: true}
 	}
 	var a fmAnswer
 	var took float64
 	tc := recorderTC(func(sec float64) { took += sec })
 	held := windowHoldFn()
+	t0 := time.Now()
 	if x != "" {
 		fast.mu.Lock()
 		fast.ask = x
@@ -186,7 +219,7 @@ func fastMeasureAsk(company, guid string, x string, guarded func(tc *TC, port in
 		fast.mu.Unlock()
 	}
 	a.ms = int(took * 1000)
-	a.holdMs = held(time.Now().Add(-time.Duration(took * float64(time.Second))))
+	a.holdMs = held(t0) // from the step's start: a two-request step's pause between its requests is counted too
 	if took == 0 {
 		a.holdMs = 0
 	}
@@ -200,11 +233,24 @@ func fastMeasureAsk(company, guid string, x string, guarded func(tc *TC, port in
 	return a
 }
 
-// why a request ends the run ("" when it does not)
+var (
+	errFmNotFree   = errors.New("Tally was not free")
+	errFmOtherOpen = errors.New("another company open in Tally")
+)
+
+// why a request ends the run ("" when it does not). Fixed words only: what is uploaded never carries Tally's or the
+// period read's own text (the details are in this computer's log)
 func fastMeasureStop(a fmAnswer) string {
 	switch {
+	case a.otherOpen:
+		return "another company was opened in Tally (ZZ TEST must stay open alone); the measurement stopped there"
 	case a.nothingAsked:
-		return "not measured: nothing was sent to Tally (" + cutRunes(errText(a.err), 120) + "); try again in a few minutes"
+		if !errors.Is(a.err, errFmNotFree) {
+			writeLog("Fast-read measurement: nothing was sent to Tally: " + cutRunes(errText(a.err), 200))
+		}
+		return "not measured: Tally was not free (a posting waiting, someone working in Tally, or another read); try again in a few minutes"
+	case !a.watched:
+		return "Tally's window could not be watched; the measurement stopped there"
 	case errors.Is(a.err, errRecorderStop):
 		return "Tally took longer than 2 s; the measurement stopped there"
 	case a.holdMs >= fastMeasureHoldMs:

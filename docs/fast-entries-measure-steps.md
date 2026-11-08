@@ -10,7 +10,9 @@ Only times, counts and the names of fields go to FinCom, never your entries.
 
 ## 1. Make the ZZ TEST company
 
-1. In TallyPrime on the office server, create a company named exactly **ZZ TEST** (capital letters, one space).
+1. In TallyPrime on the office server, create a **new, empty** company named exactly **ZZ TEST** (capital letters, one
+   space). Never use a copy or a restored backup of a client's company: linked to FinCom, it would carry that client's
+   real entries and its Tally GUID.
 2. In FinCom, on the Tally page, link ZZ TEST to a test client, as you link any company.
 3. Leave ZZ TEST open for a few minutes, so FinCom Bridge records its starting point.
 
@@ -22,14 +24,14 @@ your biggest client in FinCom (Books › From Tally shows its entries) and note:
 - its busiest day (the most entries on one day), and
 - its busiest month (the most entries in 31 days).
 
-Then fill ZZ TEST until it has at least that many on one day. Either:
+Then fill ZZ TEST with the bridge's trial tool until it has at least that many on one day. Only its TRIAL entries go
+into ZZ TEST:
 
-- **The bridge's trial tool.** In FinCom, switch on "Trial tools on this computer" for the office server. In the
-  FinCom Bridge tray, "Recorder trial: time saving" adds 100 test entries to the company open in Tally, dated today,
-  each marked TRIAL. Run it as many times as needed. For example, 8 times gives 800 entries on one day. Switch the trial
-  tools off again afterwards.
-- **Or a copy of a big company.** Restore a backup of your biggest client's company in Tally under the name ZZ TEST.
-  The entries stay in your Tally. The measurement sends FinCom only times, counts and field names.
+1. In FinCom, switch on "Trial tools on this computer" for the office server.
+2. With ZZ TEST open alone, choose "Recorder trial: time saving" in the FinCom Bridge tray. Each run adds 100 test
+   entries to ZZ TEST, dated today, each marked TRIAL. Run it as many times as needed. For example, 8 runs give 800
+   entries on one day.
+3. Switch the trial tools off again afterwards.
 
 ## 3. Measure
 
@@ -42,7 +44,8 @@ Then fill ZZ TEST until it has at least that many on one day. Either:
    answer, and how many entries were the same.
 
 If the box says it cannot start, it says why (another company open, ZZ TEST not linked or not recorded yet, the fast
-read switched on). Fix that and try again.
+read switched on, or Tally's window not on this desktop). Fix that and try again. Opening another company while it
+runs stops the measurement.
 
 ## 4. What to send FinCom support
 
