@@ -1,9 +1,10 @@
 # Security review: FinCom Bridge 2.5.8
 
 Reviewers: the session that built it, then an independent review session at d633d28d3 (its findings 1-5, none about
-security, fixed in f4f1c1c99; bridge-2.5.8-code-review.md). The fixes are not re-reviewed yet.
+security, fixed in f4f1c1c99; round 2's, none about security either, fixed in ef6e15406; bridge-2.5.8-code-review.md).
+The round-2 fixes are not re-reviewed yet.
 
-Range: 67646b38d..f4f1c1c99 (staging-next with 2.5.7 merged, to the review's fixes)
+Range: 67646b38d..ef6e15406 (staging-next with 2.5.7 merged, to the round-2 fixes)
 
 ## Requests to Tally
 
@@ -26,4 +27,4 @@ Range: 67646b38d..f4f1c1c99 (staging-next with 2.5.7 merged, to the review's fix
 
 ## Verdict
 
-Ship, as far as security goes, once the independent review session has looked at f4f1c1c99.
+Ship, as far as security goes, once the independent review session has looked at ef6e15406.

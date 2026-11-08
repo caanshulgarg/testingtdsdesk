@@ -2,10 +2,11 @@
 
 Reviewers: the session that built it (a self-review against the owner's rules), then an independent review session
 (the coordinator's) on next-bridge-258 at d633d28d3: findings 1-5 (one medium, one low-medium, three low), all fixed
-with tests in f4f1c1c99, after staging-next fae5cf1a1 was merged in (27fc5a3c8). The fixes are not re-reviewed yet.
+with tests in f4f1c1c99, after staging-next fae5cf1a1 was merged in (27fc5a3c8); round 2 on f4f1c1c99: 1-5 fixed,
+one medium regression and two lows, fixed with tests in ef6e15406 (not re-reviewed yet).
 
-Range: 67646b38d..f4f1c1c99 (staging-next with 2.5.7 merged, to the review's fixes; 27fc5a3c8 merges staging-next
-fae5cf1a1, reviewed on its own; 535884a5f withdraws the unpublished first 2.5.8 build)
+Range: 67646b38d..ef6e15406 (staging-next with 2.5.7 merged, to the round-2 fixes; 27fc5a3c8 merges staging-next
+fae5cf1a1, reviewed on its own; 535884a5f and bbf1dbc81 withdraw the unpublished first and second 2.5.8 builds)
 
 (bridge-go/: nocompany258.go and nocompany258_test.go (new); startpoint.go lightCompanyList (the short age while the
 list is empty); ports.go openCompaniesAsk (each answer noted) and openCompaniesCachedOnce (a closed port open now, or
@@ -67,6 +68,17 @@ about 07:17 was seen at 07:27. askAfreshSoon fired only when Windows' port list 
    off, or the answer over 5 minutes old) says only when Tally answered (run_tally_connect_steps.py; tally-ingest keeps
    "emptyHeld", run_beat258_ingest.py).
 
+## Round 2 (on f4f1c1c99), fixed in ef6e15406
+
+- (medium) An ask of some ports only (TC.only) called liveNoteOwnTally as if it were a complete look at every own
+  Tally (the recorder's stretches went on and its blind mark was cleared). It is not called for such an ask
+  (TestR258PartialAskLeavesTheRecorderBlind: two own Tallys, A blind).
+- (low 1) The GSTIN / PAN ask after a short re-ask uses the plain background rules, not the typing give-way, which
+  would have held it back 5 minutes (coInfoFailAt) (TestR258TypingAfterTheLock).
+- (low 2) An ask that gave way is asked again under the minute's wait, not while its cause lasts (a posting, typing);
+  the same-beat guard is set only when an ask started (TestR258GaveWayNotAskedEveryPoll).
+- Lows 3-4 of round 2: as they are (the reviewer's call).
+
 ## Known, to watch
 
 - A Tally left open on its company list (no company) for hours is asked every 2 minutes (each ask the light list, under
@@ -89,4 +101,4 @@ about 07:17 was seen at 07:27. askAfreshSoon fired only when Windows' port list 
 
 ## Verdict
 
-Ship once the independent review session has looked at f4f1c1c99.
+Ship once the independent review session has looked at ef6e15406.
