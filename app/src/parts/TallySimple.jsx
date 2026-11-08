@@ -278,10 +278,14 @@ async function bringDays(row, a) {
   if (na) return { text: "Queued. " + na, bad: true };
   // (started: more of the fill's days done than when asked; the fill counts the last day's fills, earlier ones too, so the
   // count the cloud gave with this answer, else the one before the press, is the base)
-  const base = Number(((r && r.fill) || f0 || {}).done) || 0;
-  const fill = () => { const f = fillNow(row.cid); return !!f && Number(f.done) > base; };
+  // (a day Tally could not send is marked for a Day Book upload: handled, said as such, never "Not started")
+  const b0 = (r && r.fill) || f0 || {}, base = Number(b0.done) || 0, up0 = Number(b0.upload) || 0;
+  const fill = () => { const f = fillNow(row.cid); return !!f && (Number(f.done) > base || Number(f.upload) > up0); };
+  const words = () => { const f = fillNow(row.cid) || {}, up = (Number(f.upload) || 0) - up0;
+    return up > 0 ? nOfW(up, "day needs", "days need") + " a Day Book upload: Tally did not send " + (up === 1 ? "it" : "them") + "." + (Number(f.done) > base ? " The rest are coming in from Tally now." : "")
+      : "Bringing the missing days from Tally now."; };
   return { text: "Asked: FinCom brings " + (q > 0 ? nOfW(q, "missing day", "missing days") : "the missing days") + " from Tally within a few minutes.",
-    watch: { started: fill, cid: row.cid, company: row.company, startedText: "Bringing the missing days from Tally now." } };
+    watch: { started: fill, cid: row.cid, company: row.company, startedText: words } };
 }
 function Act({ row, main = false }) {
   useSaid();

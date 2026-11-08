@@ -23,7 +23,7 @@ import { soonDraw } from "../lib/soonDraw.js";
 import { QUIET } from "../lib/quietReads.js";
 import { pullPaced } from "../lib/pullSpeed.js";
 import { tallyDevs } from "../lib/tallyState.js";
-import { press, busyOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
+import { press, busyOf, lockOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -173,12 +173,12 @@ export const TURN_FROM = {};
 // count seen of it (tally_period_choose_lean's skip of held days counts those at once: never "started" by itself). The
 // same pull as before (chosen again in place): its count moved past the one before the press
 export const doneOf = (q) => Number((q && q.x) || 0) + Number((q && q.countedDays) || 0);
-export function pullWatch(p0, at) {
+export function pullWatch(p0) {
   const x0 = p0 ? doneOf(p0) : -1, c0 = p0 ? String(p0.chosenAt || "") : "";
   let base = null;
   return (q) => {
     if (!q) return false;
-    const fresh = String(q.chosenAt || "") !== c0 && Date.parse(q.chosenAt || "") >= at - 60000;
+    const fresh = !!q.chosenAt && String(q.chosenAt) !== c0;   // (the snapshot's chosenAt only: no clock is compared)
     if (fresh) { if (q.done || q.state !== "going") return true; if (base === null) { base = doneOf(q); return false; } return doneOf(q) > base; }
     return x0 >= 0 && doneOf(q) > x0;
   };
@@ -205,12 +205,12 @@ export default function OlderEntries({ cid, say = false }) {
   // FinCom already holds set aside); a cloud without 135: 98's tally_period_choose as before
   // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
   const sk = "older:" + book;
-  const start = () => { if (busy) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p, Date.now()); setBusy("start"); setErr("");
+  const start = () => { if (busy || lockOf("choose:" + book)) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p); setBusy("start"); setErr("");
     press(sk, () => rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
       .then((r) => { summary(true); askStatus(true);
         if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
         const started = () => seen((bookSum(cid) || {}).pull);
-        return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "" } }; }))
+        return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "" } }; }), undefined, "choose:" + book)
       .finally(() => { if (cur.current === bk) setBusy(""); }); };
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");
   const stop = () => act("tally_period_cancel", { p_book: book }, "stop");
@@ -224,7 +224,7 @@ export default function OlderEntries({ cid, say = false }) {
     <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       <select data-older-fy="" aria-label="Financial year to bring from Tally" value={chosenFy} disabled={!may()} style={{ width: "auto", minWidth: 0 }} onChange={(ev) => setFy(Number(ev.target.value))}>
         {years.map((y) => <option key={y} value={y}>{fyLabel(y)}</option>)}</select>
-      {may() && !going && !paused && !stoppedT && <button className="btn small primary" data-older-start="" disabled={!!busy} onClick={start}>{busy === "start" ? "Starting…" : "Start"}</button>}
+      {may() && !going && !paused && !stoppedT && <button className="btn small primary" data-older-start="" disabled={!!busy || (lockOf("choose:" + book) && !busyOf(sk))} title={lockOf("choose:" + book) && !busyOf(sk) ? "FinCom is asking for this client’s books from Tally now; one moment." : undefined} onClick={start}>{busy === "start" ? "Starting…" : "Start"}</button>}
       {may() && going && <button className="btn small" data-older-pause="" disabled={!!busy} onClick={() => pause(true)}>Pause</button>}
       {may() && paused && <button className="btn small primary" data-older-resume="" disabled={!!busy} onClick={() => pause(false)}>Resume</button>}
       {may() && stoppedT && <button className="btn small primary" data-older-resume="" disabled={!!busy} onClick={resumeStopped}>Resume</button>}

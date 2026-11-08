@@ -244,6 +244,8 @@ def main():
                 ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Not started: ", 8000) != "", "4. Bring missing days, earlier fills done but none of this one in 2 minutes: 'Not started: <why>' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
                 E("() => { window.__fill = {total: 7, done: 6, waiting: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
                 ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Bringing the missing days", 6000) != "", "4. Bring missing days, one more day done: 'Bringing …' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+                E("() => { window.__fill = {total: 7, done: 6, waiting: 0, upload: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
+                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^1 day needs a Day Book upload", 6000) != "", "4. Bring missing days, a day Tally could not send: handled, '1 day needs a Day Book upload' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
             E("() => { TCloud.rpc = window.__fillRpc0; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(2000)
             for mode, rx in (("denied", r"^Only an owner or staff"), ("net", r"^Couldn’t reach FinCom"), ("refuse", r"^Not asked: Made-up refusal\.$")):
                 fail({"tally_fill_request": mode}); forget("fill:")

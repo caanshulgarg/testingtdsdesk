@@ -28,9 +28,13 @@ export function errWords(e) {
 }
 // a clock that runs only while no confirm question (askConfirm's box) is open: onSlow once after ms of it; stop() ends it
 const asking = () => { try { const b = document.getElementById("confirmBox"); return !!(b && b.style.display !== "none" && b.firstChild); } catch (e) { return false; } };
+// (real time between looks, Date.now differences: a hidden tab's slowed timers still fire on time; a look that finds the
+// question open sets that span aside)
 export function slowClock(ms, onSlow) {
-  let spent = 0, fired = false;
-  const t = setInterval(() => { if (!asking()) spent += 250; if (!fired && spent >= ms) { fired = true; try { onSlow(); } catch (e) { /* */ } } }, 250);
+  let spent = 0, fired = false, last = Date.now();
+  const look = () => { const now = Date.now(); if (!asking()) spent += now - last; last = now;
+    if (!fired && spent >= ms) { fired = true; clearInterval(t); try { onSlow(); } catch (e) { /* */ } } };
+  const t = setInterval(look, 250);
   return () => clearInterval(t);
 }
 export const HARD_MS = 180000;
@@ -40,19 +44,23 @@ const SAID = {}, BUSY = {}, subs = new Set();
 const tell = () => { subs.forEach((f) => { try { f(); } catch (e) { /* */ } }); soonDraw(); };
 export const busyOf = (k) => !!BUSY[k];
 export const slowOf = (k) => !!(BUSY[k] && BUSY[k].slow);
+// one lock shared by two keys (Bring books and Bring another year › Start on the same book: one request at a time)
+const LOCK = {};
+export const lockOf = (l) => !!(l && LOCK[l]);
 export function saidOf(k) { const s = SAID[k]; return s && Date.now() - s.at < (s.keep || KEEP_MS) ? s : null; }
 export function say(k, text, bad = false, more = null) { if (!text) delete SAID[k]; else SAID[k] = Object.assign({ text, bad: !!bad, at: Date.now() }, more); tell(); }
 const sayAnswer = (k, r) => { if (r && typeof r === "object") say(k, r.text, r.bad, r.watch ? { watch: r.watch, keep: LATE_MS + KEEP_MS } : null); else if (r) say(k, String(r)); };
-export async function press(k, fn, ms = SLOW_MS) {
-  if (BUSY[k]) return;
-  const me = BUSY[k] = { at: Date.now(), slow: false }; delete SAID[k]; tell();
+export async function press(k, fn, ms = SLOW_MS, lock = "") {
+  if (BUSY[k] || lockOf(lock)) return;
+  const me = BUSY[k] = { at: Date.now(), slow: false }; if (lock) LOCK[lock] = me; delete SAID[k]; tell();
+  const free = () => { if (lock && LOCK[lock] === me) delete LOCK[lock]; };
   let gone = false;
   const stopSlow = slowClock(ms, () => { if (BUSY[k] === me) { me.slow = true; tell(); } });
-  const stopHard = slowClock(HARD_MS, () => { if (BUSY[k] !== me) return; gone = true; delete BUSY[k];
+  const stopHard = slowClock(HARD_MS, () => { stopSlow(); stopHard(); free(); if (BUSY[k] !== me) return; gone = true; delete BUSY[k];
     say(k, "FinCom did not answer in 3 minutes. Try again; an answer that comes later shows here.", true); });
   try { const r = await Promise.resolve().then(fn); sayAnswer(k, r); }
   catch (e) { say(k, errWords(e), true); }
-  finally { stopSlow(); stopHard(); if (!gone && BUSY[k] === me) delete BUSY[k]; tell(); }
+  finally { stopSlow(); stopHard(); free(); if (!gone && BUSY[k] === me) delete BUSY[k]; tell(); }
 }
 // redraws on every press and answer
 export function useSaid() {
@@ -87,7 +95,7 @@ export function Said({ k, hook = "", className = "tsm-note" }) {
   let text = s.text, bad = s.bad, st = bad ? "bad" : "ok";
   if (w) {
     let on = false; try { on = !!w.started(); } catch (e) { on = false; }
-    if (on) { st = "started"; if (w.startedText) text = w.startedText; else return null; }
+    if (on) { st = "started"; if (w.startedText) text = typeof w.startedText === "function" ? w.startedText() : w.startedText; else return null; }
     else if (Date.now() - s.at > LATE_MS) { text = "Not started: " + lateWhy(w.cid, w.company); bad = true; st = "late"; }
     else st = "asked";
   }
