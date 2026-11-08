@@ -742,3 +742,19 @@ trigger `corp_documents_touch` (it also locks a FINAL document: only its status 
 and 144 included. Rollback `server/corporate/rollback-145-corp-documents.sql` (refuses while rows exist unless
 `fincom.corp_rollback`). Tested: `tests/run_migration_corp.py` (`CORP_ONLY=145`). Without it the profile and e-Forms work
 and the documents page says it is not set up on the server.
+
+## 146: reads follow the company (not run yet; branch next-link-follow)
+
+**146** `server/tally-cloud/migration-146-reads-follow-company.sql` (08-Nov-2026; the owner: "it should automatically bring
+all the data"; "nothing should remain with only the connected person"). New: `tally_read_moves` (every move of a book's
+reads: the old computer key, computer, Windows user, port and `tally_companies.device_id` kept for rollback; why
+`offline` | `not_open`; `fetch_on`; RLS on, members read their own firm's rows, no direct writes); `tally_read_follow(firm,
+book)` (service_role only; tally-ingest's beat): the ONE bridge of the SAME firm that reads the book now (the link's own
+key with the company open first; else a bound "go-" bridge heard within 3 minutes with the company open under the link's
+GUID, reading the link's data location, reading not stopped; the link's computer first, then the newest heard, then the
+ids), the link record (device_id, computer, windows_user, tally_port) and `tally_companies.device_id` moved to it and the
+move recorded; 2 minutes settling after a move; `tally_read_move_back(move)` (owners): put back, the book then held 24
+hours. Posting permission, version, GUID and data location never change; postings keep 142's rules. Add-only, one
+transaction, `lock_timeout` 10 s, safe twice; after 54, 110, 127, 142. Tested on pg_stand: `tests/run_migration146.py`
+(`RED_WITHOUT_146=1` fails). Deploy order: 146, then tally-ingest of next-link-follow (without 146 it answers as before),
+then the app build (without the table the page's words come from the beats alone).

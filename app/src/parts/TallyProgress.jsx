@@ -14,6 +14,7 @@
 import { useEffect, useState } from "react";
 import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld } from "./TallyCompanies.jsx";
 import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow } from "./TallyFetch.jsx";
+import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ist = (ms) => new Date(ms + 5.5 * 3600e3);
@@ -158,10 +159,11 @@ export function BringBooks({ row, e, main = true }) {
   if (!mayChange()) return null;
   const start = () => { const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }; setBusy(true); setErr("");
     rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; })
-      .then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
+      // next-link-follow: no Tally can answer now (the linked computer offline, the company open nowhere): said at once
+      .then((r) => { if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); else { const na = noAnswer(row.company); if (na) setErr("Queued. " + na); } summary(true); }, () => setErr("FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
   return <>
     <button type="button" className={main ? "btn tpt-btn primary" : "linkbtn"} data-tpt-main={main ? "books" : undefined} data-tpg-bring-books={row.cid} disabled={busy || !book} onClick={start}>{busy ? "Starting…" : "Bring books"}</button>
-    {err && <div className="tsm-note bad" data-tpg-err="">{err}</div>}
+    {err && <div className="tsm-note bad" data-tpg-err="" role="status">{err}</div>}
   </>;
 }
 // the update history: the rounds of the ledgers' reads (tally_ledger_rounds), Bring books, the Update now pressed here
