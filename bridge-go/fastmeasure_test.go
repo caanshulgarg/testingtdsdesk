@@ -1,7 +1,8 @@
 package main
 
-// next-fast-measure: "Measure the fast read (ZZ TEST only)" (fastmeasure.go) against the stand Tally and cloud: the tray
-// only; refused unless ZZ TEST is the one company open, its starting point recorded and FastEntries off; the plan's
+// next-fast-measure: "Measure the fast read on the company open in Tally" (fastmeasure.go) against the stand Tally and
+// cloud: the tray only, after its yes/no; refused unless one company is open, LINKED (FinCom's check), its starting point
+// recorded and FastEntries off (the owner's decision of 08-Nov-2026: a real client company, ZZ TEST too); the plan's
 // requests only (the two window requests and FinComVoucherObject, with the company list); the stop rules; the upload
 // carries no entry data.
 
@@ -27,10 +28,19 @@ func fmBridge(t *testing.T) (*standTally, *standCloud, *[]M) {
 		fastMeasure.mu.Unlock()
 	})
 	var ups []M
+	fmLinked = true
+	fmChecks = nil
 	c.mu.Lock()
 	prev := c.other
 	c.other = func(k string, b M) (int, M) {
 		if k == "fast_measure" {
+			if b["check"] == true { // FinCom's link check: nothing kept
+				fmChecks = append(fmChecks, b)
+				if !fmLinked {
+					return 409, M{"ok": false, "notLinked": true, "error": "This Tally company is not linked to a FinCom client yet."}
+				}
+				return 200, M{"ok": true, "linked": true}
+			}
 			ups = append(ups, b)
 			return 200, M{"ok": true}
 		}
@@ -40,15 +50,32 @@ func fmBridge(t *testing.T) (*standTally, *standCloud, *[]M) {
 	return f, c, &ups
 }
 
+// what the stand cloud says of the link check, and the checks it was sent
+var (
+	fmLinked = true
+	fmChecks []M
+)
+
 // ZZ TEST's entries: n a day on the days given (pullBridgeWith's clock: 21-Oct-2026)
 func fmFill(f *standTally, per map[string]int) []*tVch {
 	return fastDays(f, 7000, per)
 }
 
+// the tray's way: the preview naming the company, then the start with the confirm
+func fmStart(t *testing.T) M {
+	t.Helper()
+	_, pv := callLocal(t, "POST", "/tray/fastmeasure", "", `{"preview":true}`)
+	if pv["ok"] != true {
+		return pv
+	}
+	b, _ := json.Marshal(M{"company": pv["company"], "confirm": true})
+	_, r := callLocal(t, "POST", "/tray/fastmeasure", "", string(b))
+	return r
+}
+
 func fmRun(t *testing.T) M {
 	t.Helper()
-	_, r := callLocal(t, "POST", "/tray/fastmeasure", "", `{}`)
-	if r["ok"] != true {
+	if r := fmStart(t); r["ok"] != true {
 		t.Fatalf("not started: %v", r)
 	}
 	var s M
@@ -91,14 +118,14 @@ func TestFastMeasureRefusals(t *testing.T) {
 	fmFill(f, map[string]int{"20261010": 3})
 	n0 := f.n("")
 	setCfg("FastEntries", true)
-	_, r := callLocal(t, "POST", "/tray/fastmeasure", "", `{}`)
+	r := fmStart(t)
 	if r["ok"] != false || !strings.Contains(str(r["error"]), "FastEntries") {
 		t.Fatalf("FastEntries on: %v", r)
 	}
 	setCfg("FastEntries", false)
-	// no starting point for ZZ TEST
+	// no starting point
 	clearStartPoints(t)
-	_, r = callLocal(t, "POST", "/tray/fastmeasure", "", `{}`)
+	r = fmStart(t)
 	if r["ok"] != false || !strings.Contains(str(r["error"]), "starting point") {
 		t.Fatalf("no starting point: %v", r)
 	}
@@ -114,19 +141,101 @@ func clearStartPoints(t *testing.T) {
 	t.Cleanup(func() { fmStartPoint = old })
 }
 
-// 2b. a company not named exactly ZZ TEST open alone: refused (the name the stand Tally gives)
-func TestFastMeasureOnlyZZTest(t *testing.T) {
-	for _, name := range []string{"ZZ TEST2", "zz test", "ZZ  TEST", "Client Books"} {
-		if guid, why := fastMeasureWhyNotOf([]string{name}); why == "" || guid != "" {
-			t.Fatalf("%q allowed", name)
+// 2b. any company name (the owner's decision of 08-Nov-2026), but one open alone, by the names Tally gives
+func TestFastMeasureOneOpenAlone(t *testing.T) {
+	fmBridge(t) // the bridge's own folders (noteCompanyGUID writes there)
+	old := fmStartPoint
+	fmStartPoint = func(string) (int64, bool) { return 5, true }
+	t.Cleanup(func() { fmStartPoint = old })
+	noteCompanyGUID("Sharma Traders 2026-27", "6d1f4e0a-1111-4c2b-9d3e-abcdefabcdef")
+	if co, g, why := fastMeasureWhyNotOf([]string{"Sharma Traders 2026-27"}); why != "" || co != "Sharma Traders 2026-27" || g == "" {
+		t.Fatalf("a client company open alone: %q %q %q", co, g, why)
+	}
+	for _, two := range [][]string{{zz, "Client Books"}, {"Sharma Traders 2026-27", "sharma traders 2026-27"}} {
+		if _, _, why := fastMeasureWhyNotOf(two); !strings.Contains(why, "Open only the company to measure") {
+			t.Fatalf("%v open: %q", two, why)
 		}
 	}
-	if _, why := fastMeasureWhyNotOf([]string{"ZZ TEST", "Client Books"}); !strings.Contains(why, "alone") {
-		t.Fatalf("two companies open: %q", why)
-	}
-	if _, why := fastMeasureWhyNotOf(nil); !strings.Contains(why, "No company") {
+	if _, _, why := fastMeasureWhyNotOf(nil); !strings.Contains(why, "No company") {
 		t.Fatalf("none open: %q", why)
 	}
+	if _, _, why := fastMeasureWhyNotOf([]string{"Unknown Co"}); !strings.Contains(why, "GUID") {
+		t.Fatalf("no GUID held: %q", why)
+	}
+}
+
+// 2c. a company not linked to a FinCom client: refused before anything is asked of Tally; a start without the tray's
+// yes/no: refused
+func TestFastMeasureRefusesUnlinked(t *testing.T) {
+	f, _, ups := fmBridge(t)
+	fmFill(f, map[string]int{"20261010": 30})
+	n0 := f.n("")
+	fmLinked = false
+	r := fmStart(t)
+	if r["ok"] != false || !strings.Contains(str(r["error"]), "not linked") || f.n("") != n0 || len(*ups) != 0 || fastMeasure.running.Load() {
+		t.Fatalf("unlinked: %v (asked %v)", r, f.ids()[n0:])
+	}
+	if len(fmChecks) != 1 || str(fmChecks[0]["company"]) != zz || str(fmChecks[0]["company_guid"]) != b220CoGUID || fmChecks[0]["result"] != nil {
+		t.Fatalf("the link check: %v", fmChecks)
+	}
+	fmLinked = true
+	for _, body := range []string{`{}`, `{"company":"ZZ TEST"}`, `{"confirm":true}`, `{"company":"Other Co","confirm":true}`} {
+		_, r = callLocal(t, "POST", "/tray/fastmeasure", "", body)
+		if r["ok"] != false || fastMeasure.running.Load() {
+			t.Fatalf("%s started it: %v", body, r)
+		}
+	}
+	if f.n("") != n0 || len(*ups) != 0 {
+		t.Fatalf("asked of Tally: %v", f.ids()[n0:])
+	}
+}
+
+// 2d. a real client company, linked: measured on it, pinned to its exact name and GUID; the upload names it only as
+// every kind does (company, company_guid) and carries no entry data
+func TestFastMeasureRealLinkedCompany(t *testing.T) {
+	const co = "Sharma Traders 2026-27"
+	f, _, ups := fmBridge(t)
+	f.mu.Lock()
+	f.coName = co
+	f.mu.Unlock()
+	noteCompanyGUID(co, b220CoGUID)
+	noteStartPoint(co, b220CoGUID, 90000, 500)
+	if _, err := findCompanyPort(co, 0); err != nil { // the company list as the beat keeps it, now naming this company
+		t.Fatal(err)
+	}
+	old := fmOpenNames
+	t.Cleanup(func() { fmOpenNames = old })
+	fmOpenNames = func() []string { return []string{co} }
+	vs := fmFill(f, map[string]int{"20261009": 12, "20261010": 14})
+	_, pv := callLocal(t, "POST", "/tray/fastmeasure", "", `{"preview":true}`)
+	if pv["ok"] != true || str(pv["company"]) != co || !strings.HasPrefix(str(pv["confirm"]), "Measure on "+co+"? Tally is only read, nothing is written. It stops at once if Tally slows.") {
+		t.Fatalf("the preview: %v", pv)
+	}
+	s := fmRun(t)
+	if s["ok"] != true || str(s["company"]) != co || s["sent"] != true || len(*ups) != 1 {
+		t.Fatalf("the result: %v (uploads %d)", s, len(*ups))
+	}
+	if str((*ups)[0]["company"]) != co || str((*ups)[0]["company_guid"]) != b220CoGUID {
+		t.Fatalf("the upload names: %v", (*ups)[0])
+	}
+	r, _ := json.Marshal((*ups)[0]["result"])
+	for _, v := range vs {
+		for _, bad := range []string{v.guid, v.narr, `"` + v.no + `"`, v.date, "Customer A", "Bank", "10.00", co, b220CoGUID} {
+			if bad != "" && strings.Contains(string(r), bad) {
+				t.Fatalf("the result carries %q: %s", bad, r)
+			}
+		}
+	}
+	// the dated guard's exception is the run's company only: another company's window request is never let through
+	fastMeasure.running.Store(true)
+	fastMeasure.mu.Lock()
+	fastMeasure.co = co
+	fastMeasure.mu.Unlock()
+	x := fastHeadsRequest(zz, "20261001", "20261007")
+	if fastMeasureExact(recorderTC(nil), x) {
+		t.Fatal("another company's request let through")
+	}
+	fastMeasure.running.Store(false)
 }
 
 // 3. the full plan on ZZ TEST: only its requests; pass; FinCom has the result; the table is unchanged afterwards; the
@@ -244,7 +353,7 @@ func TestFastMeasureStopsAtWindowHold(t *testing.T) {
 	k := 0
 	windowHoldFn = func() func(time.Time) int {
 		k++
-		if k == 3 { // the first is the check at the start, then one a request
+		if k == 4 { // the first two are the checks of the preview and the start, then one a request
 			return func(time.Time) int { return 1100 }
 		}
 		return func(time.Time) int { return 0 }
@@ -309,14 +418,14 @@ func TestFastMeasureNeverUnwatched(t *testing.T) {
 	t.Cleanup(func() { windowHoldFn = old })
 	windowHoldFn = func() func(time.Time) int { return func(time.Time) int { return -1 } }
 	n0 := f.n("")
-	_, r := callLocal(t, "POST", "/tray/fastmeasure", "", `{}`)
+	r := fmStart(t)
 	if r["ok"] != false || !strings.Contains(str(r["error"]), "cannot watch") || f.n("") != n0 || len(*ups) != 0 {
 		t.Fatalf("unwatched at the start: %v (asked %v)", r, f.ids()[n0:])
 	}
 	k := 0
 	windowHoldFn = func() func(time.Time) int {
 		k++
-		if k >= 3 {
+		if k >= 4 {
 			return func(time.Time) int { return -1 }
 		}
 		return func(time.Time) int { return 0 }
@@ -330,12 +439,12 @@ func TestFastMeasureNeverUnwatched(t *testing.T) {
 // review 4: the raw names: "ZZ TEST" and "zz test" open together refuse; another company opened during the run stops it
 // before its next request
 func TestFastMeasureAloneByRawNames(t *testing.T) {
-	if _, why := fastMeasureWhyNotOf([]string{"ZZ TEST", "zz test"}); !strings.Contains(why, "alone") {
+	if _, _, why := fastMeasureWhyNotOf([]string{"ZZ TEST", "zz test"}); !strings.Contains(why, "Open only the company") {
 		t.Fatalf("ZZ TEST and zz test: %q", why)
 	}
 	f, _, ups := fmBridge(t)
 	fmFill(f, map[string]int{"20261010": 30})
-	if o := fmOpenNames(); len(o) != 1 || o[0] != fastMeasureCompany {
+	if o := fmOpenNames(); len(o) != 1 || o[0] != zz {
 		t.Fatalf("the stand's open companies: %v", o)
 	}
 	old := fmOpenNames
@@ -343,10 +452,10 @@ func TestFastMeasureAloneByRawNames(t *testing.T) {
 	calls := 0
 	fmOpenNames = func() []string {
 		calls++
-		if calls > 3 { // the start, then the first two requests
-			return []string{fastMeasureCompany, "zz test"}
+		if calls > 4 { // the preview, the start, then the first two requests
+			return []string{zz, "zz test"}
 		}
-		return []string{fastMeasureCompany}
+		return []string{zz}
 	}
 	s := fmRun(t)
 	if s["pass"] == true || !strings.Contains(str(s["stopped"]), "another company") || f.n(fastHeadsID) != 2 {
@@ -377,9 +486,9 @@ func TestFastMeasureHoldFromStepStart(t *testing.T) {
 	windowHoldFn = func() func(time.Time) int {
 		return func(from time.Time) int { return int(time.Since(from).Milliseconds()) } // all of it a hold
 	}
-	a := fastMeasureAsk(fastMeasureCompany, "", "", func(tc *TC, port int) (string, error) {
+	a := fastMeasureAsk(zz, b220CoGUID, "", func(tc *TC, port int) (string, error) {
 		time.Sleep(400 * time.Millisecond) // the pause before the step's second request
-		return "", fastCompanyListed(tc, fastMeasureCompany, port, 5)
+		return "", fastCompanyListed(tc, zz, port, 5)
 	})
 	if a.err != nil || a.ms > 300 || a.holdMs < 400 {
 		t.Fatalf("the hold: %+v", a)

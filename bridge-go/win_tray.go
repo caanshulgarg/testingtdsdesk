@@ -729,12 +729,23 @@ func (t *tray) command(id int, st M) {
 		}
 		msgBox(title, company+"\n\nOld-days test: "+str(s["line"])+"\n\nFinCom shows this on its Tally page. Nothing was changed, kept or posted.", mbIconInfo)
 	case 27:
-		// next-fast-measure: the fast read's two requests timed on the test company (fastMeasureCompany), open alone (fastmeasure.go); read only
+		// next-fast-measure: the fast read's two requests timed on the company open in Tally, alone (fastmeasure.go); read
+		// only. The bridge names the company and gives the yes/no's words; it starts only with the confirm sent after it
 		title := "FinCom Bridge - Measure the fast read"
-		if !yesNo(title, fastMeasureConfirm) {
+		pv := trayCall("POST", "/tray/fastmeasure", M{"preview": true})
+		if pv == nil || pv["ok"] != true {
+			why := "The bridge is not answering."
+			if pv != nil {
+				why = str(pv["error"])
+			}
+			msgBox(title, why, mbIconWarning)
 			return
 		}
-		r := trayCall("POST", "/tray/fastmeasure", M{})
+		company := str(pv["company"])
+		if !yesNo(title, str(pv["confirm"])) {
+			return
+		}
+		r := trayCall("POST", "/tray/fastmeasure", M{"company": company, "confirm": true})
 		if r == nil || r["ok"] != true {
 			why := "The bridge is not answering."
 			if r != nil {
@@ -743,7 +754,7 @@ func (t *tray) command(id int, st M) {
 			msgBox(title, why, mbIconWarning)
 			return
 		}
-		t.reply("FinCom Bridge", fastMeasureRunning, false)
+		t.reply("FinCom Bridge", fastMeasureRunningText(company), false)
 		var s M
 		for i := 0; i < 900; i++ {
 			time.Sleep(2 * time.Second)
@@ -764,7 +775,7 @@ func (t *tray) command(id int, st M) {
 		if s["pass"] != true {
 			icon = mbIconWarning
 		}
-		msgBox(title, fastMeasureCompany+"\n\n"+str(s["line"])+"\n\n"+sent+" Nothing was changed in Tally.", icon)
+		msgBox(title, company+"\n\n"+str(s["line"])+"\n\n"+sent+" Nothing was changed in Tally.", icon)
 	case 18:
 		// round 13: three requests for one day, one after the other (up to 60 s each, plus the wait for Tally behind a
 		// copier or posting request); 13b: started in the bridge and polled, as Measure Tally is

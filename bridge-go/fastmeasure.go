@@ -1,22 +1,29 @@
 // next-fast-measure (the owner's "ok to build faster old books", 08-Nov-2026; docs/fast-entries-design.md section 9b,
-// docs/fast-entries-measure-steps.md): "Measure the fast read (ZZ TEST only)", a tray item. Before FastEntries may be
-// switched on for a computer, its two window requests (FinComWindowHeads, FinComVoucherWindow; 2.5.7, unchanged) are
-// timed on that computer's own TallyPrime, on a company named exactly ZZ TEST, open alone.
+// docs/fast-entries-measure-steps.md): "Measure the fast read on the company open in Tally", a tray item. Before
+// FastEntries may be switched on for a computer, its two window requests (FinComWindowHeads, FinComVoucherWindow; 2.5.7,
+// unchanged) are timed on that computer's own TallyPrime, on the company open in it.
 //
-// Started by a person only: the tray item (a web page, FinCom's own included, is refused: server.go). Refused unless the
-// one company open in this bridge's own Tally is named exactly "ZZ TEST", its starting point is recorded, and FastEntries
-// is OFF. The fixed plan (section 9b scaled to one company), one request at a time, the six conditions of the period
-// read before every request (pullMayAsk: postings first, nobody working in Tally, ...), each request stopped at 2 s:
+// The owner's decision of 08-Nov-2026 (it replaced "ZZ TEST only"): measured on a REAL client company, to see the real
+// speed. The person picks it by opening it alone: the one company open in this bridge's own Tally, named in the tray's
+// yes/no. Refused unless exactly one company is open (by the names Tally gives, not folded: "ABC" with "abc" open is two),
+// FastEntries is OFF, the company's starting point is recorded, the bridge holds its Tally GUID, Tally's window can be
+// watched, and FinCom says the company is LINKED to a client of this firm with that GUID (tally-ingest's check, nothing
+// kept). The run is pinned to that exact name and GUID: before every request the open list is re-checked (that company
+// alone, its GUID unchanged). Started by a person only: the tray item, after its yes/no (a web page, FinCom's own
+// included, is refused: server.go). The fixed plan (section 9b scaled to one company), one request at a time, the six
+// conditions of the period read before every request (pullMayAsk: postings first, nobody working in Tally, ...), each
+// request stopped at 2 s:
 //  1. find the busiest day: W1 over 7-day windows back from today, at most 53 (a year);
 //  2. W1 windows of 2, 7, 14 and 31 days ending at the busiest day;
 //  3. W2 groups of 10, 50 and 100 entries over 1, 3 and 7 days ending at that day, each group's entries then asked one
 //     by one with FinComVoucherObject (unchanged) and compared as FinCom keeps them (50 entries at most in all).
 //
 // The run STOPS at the first request over 2 s, or one during which Tally's window did not answer for 1 s or more. What
-// is kept and sent to FinCom (tally-ingest kind fast_measure) is per request: its kind, days, rows, Tally's time, the
-// longest window hold, and for W2 the counts of entries the same / different / left for one by one with the NAMES of the
-// fields that differed; with TallyPrime's version (tally.exe's file version) and the bridge's. No entry data: no
-// GUID, number, date of an entry, party, ledger, amount or narration. Nothing is written to Tally. No AI.
+// is kept and sent to FinCom (tally-ingest kind fast_measure, with the company's name and GUID as every other kind) is
+// per request: its kind, days, rows, Tally's time, the longest window hold, and for W2 the counts of entries the same /
+// different / left for one by one with the NAMES of the fields that differed; with TallyPrime's version (tally.exe's
+// file version) and the bridge's. No entry data: no GUID, number, date of an entry, party, ledger, amount or narration.
+// Nothing is written to Tally. No AI.
 package main
 
 import (
@@ -30,20 +37,27 @@ import (
 	"time"
 )
 
-const fastMeasureCompany = "ZZ TEST"
-
 // the tray's words for it (win_tray.go names no company itself: round 21's check)
 const (
-	fastMeasureMenuText = "Measure the fast read (" + fastMeasureCompany + " only)"
-	fastMeasureConfirm  = "Measure the fast read on " + fastMeasureCompany + "?\n\nRead only: FinCom Bridge asks Tally for lists of entries and groups of entries of " + fastMeasureCompany +
-		", one request at a time, only while nobody is working in Tally, and stops at once if Tally takes longer than 2 seconds or its window stops answering for 1 second. Nothing is changed in Tally. The times (no entry data) go to FinCom.\n\n" +
-		fastMeasureCompany + " must be the only company open. It takes a few minutes."
-	fastMeasureRunning = "Measuring the fast read on " + fastMeasureCompany + ": one request at a time, a few minutes. A message box says the result."
+	fastMeasureMenuText = "Measure the fast read on the company open in Tally"
 )
+
+// the tray's yes/no, naming the company (the owner's words, 08-Nov-2026)
+func fastMeasureConfirmText(co string) string {
+	return "Measure on " + cutRunes(co, 80) + "? Tally is only read, nothing is written. It stops at once if Tally slows.\n\n" +
+		"One request at a time, only while nobody is working in Tally; it stops if Tally takes longer than 2 seconds or its " +
+		"window stops answering for 1 second. Only times, counts and field names go to FinCom, never the entries. Keep only " +
+		"this company open and do not type in Tally meanwhile. It takes a few minutes."
+}
+
+func fastMeasureRunningText(co string) string {
+	return "Measuring the fast read on " + cutRunes(co, 80) + ": one request at a time, a few minutes. A message box says the result."
+}
 
 var fastMeasure = struct {
 	mu      sync.Mutex
 	last    M
+	co, gd  string // the company the run is pinned to: its exact name and GUID
 	running atomic.Bool
 }{}
 
@@ -64,18 +78,42 @@ const (
 	fastMeasurePassMs  = 1500 // the result passes below this worst time
 )
 
-// why the measurement may not start now ("" when it may), and the company's GUID
-func fastMeasureWhyNot() (string, string) {
-	guid, why := fastMeasureWhyNotOf(fmOpenNames())
-	if why == "" && windowHoldFn()(time.Now()) < 0 {
-		// never run the plan unwatched: the 1 s stop could not see Tally's window
-		return "", "FinCom Bridge cannot watch Tally's window on this computer (Tally not shown on this desktop, or the bridge running as a service): open Tally on this desktop, then try again."
+// why the measurement may not start now ("" when it may): the company and its GUID. The local checks first, then the
+// window, then FinCom's link check (a call to the cloud; nothing is asked of Tally)
+func fastMeasureWhyNot() (string, string, string) {
+	co, guid, why := fastMeasureWhyNotOf(fmOpenNames())
+	if why != "" {
+		return "", "", why
 	}
-	return guid, why
+	if windowHoldFn()(time.Now()) < 0 {
+		// never run the plan unwatched: the 1 s stop could not see Tally's window
+		return "", "", "FinCom Bridge cannot watch Tally's window on this computer (Tally not shown on this desktop, or the bridge running as a service): open Tally on this desktop, then try again."
+	}
+	if why := fmLinkCheck(co, guid); why != "" {
+		return "", "", why
+	}
+	return co, guid, ""
 }
 
-// the companies open in this bridge's own Tally, by their names as Tally gives them (NOT companyKey-folded: "ZZ TEST" and
-// "zz test" open together are two companies, and the measurement refuses); the tests replace it
+// FinCom's answer whether the company is linked to a client of this firm with this GUID, from this computer
+// (tally-ingest kind fast_measure with check: true; nothing is kept); "" when it is. The tests replace it
+var fmLinkCheck = func(co, guid string) string {
+	r := invokeCloud(M{"kind": "fast_measure", "check": true, "company": co, "company_guid": guid}, 15)
+	if r.code == 200 && r.json != nil && truthy(r.json["ok"]) {
+		return ""
+	}
+	if r.json != nil && truthy(r.json["notLinked"]) {
+		return cutRunes(co, 80) + " is not linked to a FinCom client: link it on FinCom's Tally page first, then measure."
+	}
+	if r.json != nil && str(r.json["error"]) != "" {
+		return "FinCom did not allow the measurement: " + cutRunes(str(r.json["error"]), 200)
+	}
+	writeLog("Fast-read measurement: FinCom could not be asked whether the company is linked (" + or(r.err, fmt.Sprint("HTTP ", r.code)) + ")")
+	return "FinCom could not be asked whether this company is linked to a client: check the internet, then try again."
+}
+
+// the companies open in this bridge's own Tally, by their names as Tally gives them (NOT companyKey-folded: "ABC" and
+// "abc" open together are two companies, and the measurement refuses); the tests replace it
 var fmOpenNames = func() []string {
 	var out []string
 	seen := map[string]bool{}
@@ -93,57 +131,76 @@ var fmOpenNames = func() []string {
 	return out
 }
 
-// ZZ TEST still open alone (checked before every request of the plan)
-func fmAloneNow() bool {
+// the chosen company still open alone, its GUID unchanged (checked before every request of the plan)
+func fmAloneNow(co, guid string) bool {
 	o := fmOpenNames()
-	return len(o) == 1 && o[0] == fastMeasureCompany
+	return len(o) == 1 && o[0] == co && strings.EqualFold(heldGUID(co), guid)
 }
 
 // the company's starting point (startpoint.go; the tests replace it)
 var fmStartPoint = startPointOf
 
-func fastMeasureWhyNotOf(open []string) (string, string) {
+func fastMeasureWhyNotOf(open []string) (string, string, string) {
 	switch {
 	case len(open) == 0:
-		return "", "No company is open in Tally: open ZZ TEST alone, then try again."
+		return "", "", "No company is open in Tally: open only the company to measure, then try again."
 	case len(open) > 1:
-		return "", "Open ZZ TEST alone in Tally (close the other companies), then try again."
-	case open[0] != fastMeasureCompany:
-		return "", "This measures only a company named exactly ZZ TEST; the company open in Tally is " + cutRunes(open[0], 80) + "."
+		return "", "", "Open only the company to measure (close the other companies in Tally), then try again."
 	case fastOn():
-		return "", "FastEntries is switched on on this computer: switch it off, then measure."
+		return "", "", "FastEntries is switched on on this computer: switch it off, then measure."
 	}
-	if _, ok := fmStartPoint(fastMeasureCompany); !ok {
-		return "", "ZZ TEST's starting point is not recorded yet: leave it open in Tally for a few minutes, then try again."
+	co := open[0]
+	if _, ok := fmStartPoint(co); !ok {
+		return "", "", "The bridge has not recorded this company's starting point yet: leave it open in Tally for a few minutes, then try again."
 	}
-	g := heldGUID(fastMeasureCompany)
+	g := heldGUID(co)
 	if g == "" {
-		return "", "The bridge does not hold ZZ TEST's Tally GUID yet: leave it open for a minute, then try again."
+		return "", "", "The bridge does not hold this company's Tally GUID yet: leave it open for a minute, then try again."
 	}
-	return g, ""
+	return co, g, ""
 }
 
-// POST /tray/fastmeasure: started at once; GET: how far (the tray polls)
-func startFastMeasure() M {
-	guid, why := fastMeasureWhyNot()
+// POST /tray/fastmeasure {preview: true}: the company and the yes/no's words, nothing started
+func fastMeasurePreview() M {
+	if fastMeasure.running.Load() {
+		return M{"ok": false, "error": "A measurement is already running; wait for its message box."}
+	}
+	co, _, why := fastMeasureWhyNot()
 	if why != "" {
 		return M{"ok": false, "error": why}
+	}
+	return M{"ok": true, "company": co, "confirm": fastMeasureConfirmText(co)}
+}
+
+// POST /tray/fastmeasure {company, confirm: true}: started at once, after the tray's yes/no naming that company (all the
+// checks again; the company open must still be the one named); GET: how far (the tray polls)
+func startFastMeasure(named string, confirmed bool) M {
+	if !confirmed || named == "" {
+		return M{"ok": false, "error": "The bridge asks first: choose Measure the fast read in the FinCom tray icon, which names the company. Nothing was started."}
+	}
+	co, guid, why := fastMeasureWhyNot()
+	if why != "" {
+		return M{"ok": false, "error": why}
+	}
+	if co != named {
+		return M{"ok": false, "error": "The company open in Tally is not the one you said yes to; choose Measure the fast read again. Nothing was started."}
 	}
 	if !fastMeasure.running.CompareAndSwap(false, true) {
 		return M{"ok": false, "error": "A measurement is already running; wait for its message box."}
 	}
 	fastMeasure.mu.Lock()
-	fastMeasure.last = M{"ok": true, "state": "running", "company": fastMeasureCompany, "at": nowFn().Format(time.RFC3339)}
+	fastMeasure.co, fastMeasure.gd = co, guid
+	fastMeasure.last = M{"ok": true, "state": "running", "company": co, "at": nowFn().Format(time.RFC3339)}
 	fastMeasure.mu.Unlock()
 	go func() {
 		defer fastMeasure.running.Store(false)
-		r := runFastMeasure(fastMeasureCompany, guid)
-		r["sent"] = fastMeasureSend(guid, r)
+		r := runFastMeasure(co, guid)
+		r["sent"] = fastMeasureSend(co, guid, r)
 		fastMeasure.mu.Lock()
 		fastMeasure.last = r
 		fastMeasure.mu.Unlock()
 	}()
-	return M{"ok": true, "started": true, "company": fastMeasureCompany}
+	return M{"ok": true, "started": true, "company": co}
 }
 
 func fastMeasureStatus() M {
@@ -155,10 +212,22 @@ func fastMeasureStatus() M {
 	return fastMeasure.last
 }
 
-// the dated guard's exception while the measurement runs: exactly the window or group being asked now, as built, the
-// company ZZ TEST, the period read's own background request under the 2 s stop
+// the run's company (its exact name), "" when none runs
+func fastMeasureCo() string {
+	if !fastMeasure.running.Load() {
+		return ""
+	}
+	fastMeasure.mu.Lock()
+	defer fastMeasure.mu.Unlock()
+	return fastMeasure.co
+}
+
+// the dated guard's exception while the measurement runs: exactly the window or group being asked now, as built, for
+// the run's own company (its exact name; its GUID re-checked before every request), the period read's own background
+// request under the 2 s stop
 func fastMeasureExact(tc *TC, x string) bool {
-	return fastMeasure.running.Load() && pinCo(x) == fastMeasureCompany && fastExactWith(tc, x, true)
+	co := fastMeasureCo()
+	return co != "" && pinCo(x) == co && fastExactWith(tc, x, true)
 }
 
 // the allow-list's entry for an id: the list in force, and the two window requests while the measurement runs
@@ -199,7 +268,7 @@ func fastMeasureAsk(company, guid string, x string, guarded func(tc *TC, port in
 		time.Sleep(500 * time.Millisecond)
 		port, why = pullMayAsk(it)
 	}
-	if !fmAloneNow() {
+	if !fmAloneNow(company, guid) {
 		return fmAnswer{err: errFmOtherOpen, nothingAsked: true, otherOpen: true}
 	}
 	var a fmAnswer
@@ -243,7 +312,7 @@ var (
 func fastMeasureStop(a fmAnswer) string {
 	switch {
 	case a.otherOpen:
-		return "another company was opened in Tally (ZZ TEST must stay open alone); the measurement stopped there"
+		return "another company was opened in Tally, or the company changed (it must stay open alone); the measurement stopped there"
 	case a.nothingAsked:
 		if !errors.Is(a.err, errFmNotFree) {
 			writeLog("Fast-read measurement: nothing was sent to Tally: " + cutRunes(errText(a.err), 200))
@@ -335,7 +404,7 @@ func runFastMeasure(company, guid string) M {
 		}
 	}
 	if best == "" {
-		res["ok"], res["state"], res["error"] = false, "failed", "ZZ TEST has no entries in the last year: fill it first (docs/fast-entries-measure-steps.md)"
+		res["ok"], res["state"], res["error"] = false, "failed", "The company has no entries in the last year: measure a company with entries"
 		return finish()
 	}
 	busiest31 := 0
@@ -547,8 +616,8 @@ func fastMeasureVerdict(res M) {
 
 // the result to FinCom (tally-ingest kind fast_measure); false when FinCom did not take it (it stays in the log and the
 // tray's box)
-func fastMeasureSend(guid string, res M) bool {
-	r := invokeCloud(M{"kind": "fast_measure", "company": fastMeasureCompany, "company_guid": guid, "result": fastMeasureUpload(res)}, 30)
+func fastMeasureSend(co, guid string, res M) bool {
+	r := invokeCloud(M{"kind": "fast_measure", "company": co, "company_guid": guid, "result": fastMeasureUpload(res)}, 30)
 	ok := r.code == 200 && r.json != nil && truthy(r.json["ok"])
 	if !ok {
 		writeLog("Fast-read measurement: FinCom did not take the result (" + or(r.err, fmt.Sprint("HTTP ", r.code)) + "); it is in this log")

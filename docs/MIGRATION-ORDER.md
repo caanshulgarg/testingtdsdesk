@@ -771,8 +771,9 @@ out as before; without 146 it answers as before), then the app build (without `t
 
 **148, fast measure** (08-Nov-2026, branch `next-fast-measure`; numbered 148 because 143 (Corporate `corp_profiles`,
 applied on staging), 146 (link-follow) and 147 (period_fetch default) are taken; **written, not run yet**; file md5
-f68b489c545288b34140376006e6db51): `server/tally-cloud/migration-148-fast-measure.sql`. New table `tally_fast_measures`, one row a run of the
-bridge tray's "Measure the fast read (ZZ TEST only)": times, counts and field NAMES only, no entry data. Grants:
+c72c908c7148f58c47fab31216497e97): `server/tally-cloud/migration-148-fast-measure.sql`. New table `tally_fast_measures`, one row a run of the
+bridge tray's "Measure the fast read on the company open in Tally" (a company linked to a client: the owner's decision
+of 08-Nov-2026; ZZ TEST too), its book's: times, counts and field NAMES only, no entry data. Grants:
 service_role reads and inserts (tally-ingest kind `fast_measure`); authenticated reads its own firm's rows only (row
 security, `my_firm()`); anon nothing. Add-only, one transaction (lock_timeout 10 s), safe to run twice; no table
 altered, no function. Deploy: this file first, then tally-ingest (it answers "not set up yet" (503) until this has run),

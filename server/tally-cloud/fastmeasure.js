@@ -3,7 +3,7 @@
 // Pure; the database call is in index.ts. Anything else in the body is dropped; a body that is not a measurement is
 // refused (null).
 
-export const FAST_MEASURE_COMPANY = "ZZ TEST";
+// (any company LINKED to a client of the firm: the owner's decision of 08-Nov-2026; index.ts checks the link and GUID)
 const KINDS = new Set(["locate", "W1", "W2", "object"]);
 const n = (v, max = 1e7) => { const x = Math.floor(Number(v)); return Number.isFinite(x) && x >= 0 ? Math.min(x, max) : 0; };
 const s = (v, max) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, max) : "");

@@ -1,7 +1,8 @@
 -- Migration 148 (08-Nov-2026, branch next-fast-measure; NOT run on staging: the owner reads it and runs it). The fast-read
 -- measurement (docs/fast-entries-design.md section 9b; docs/fast-entries-measure-steps.md): a person at the Tally
--- computer clicks "Measure the fast read (ZZ TEST only)" in the FinCom Bridge tray; the bridge times the two window
--- requests on the company named exactly ZZ TEST and sends the result (tally-ingest {kind: "fast_measure"}). Kept here,
+-- computer clicks "Measure the fast read on the company open in Tally" in the FinCom Bridge tray; the bridge times the
+-- two window requests on that company (linked to a client, the owner's decision of 08-Nov-2026: a real client's books)
+-- and sends the result (tally-ingest {kind: "fast_measure"}). Kept here,
 -- one row a run, for the Tally page's hidden results panel (Advanced) and for FinCom to read before FastEntries is
 -- switched on for that computer. Times, counts and field NAMES only: no entry data.
 --

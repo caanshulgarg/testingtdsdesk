@@ -1,60 +1,56 @@
-# Measuring the fast read on your Tally (ZZ TEST only)
+# Measuring the fast read on your Tally
 
 Before the faster way of bringing older entries ("the fast read") can be switched on for a computer, FinCom needs to
-know how quickly that computer's TallyPrime answers its two new questions. This sheet is how you measure it. It takes
-about 15 minutes, plus the time to fill ZZ TEST.
+know how quickly that computer's TallyPrime answers its two new questions on a real client's books. This sheet is how
+you measure it. It takes a few minutes.
 
 The measurement only reads. It never changes anything in Tally. It asks one question at a time, only while nobody is
 working in Tally, and stops at once if Tally takes longer than 2 seconds or its window stops answering for 1 second.
-Only times, counts and the names of fields go to FinCom, never your entries.
+Only times, counts and the names of fields go to FinCom, never the client's entries.
 
-## 1. Make the ZZ TEST company
+## 1. Choose when
 
-1. In TallyPrime on the office server, create a **new, empty** company named exactly **ZZ TEST** (capital letters, one
-   space). Never use a copy or a restored backup of a client's company: linked to FinCom, it would carry that client's
-   real entries and its Tally GUID.
-2. In FinCom, on the Tally page, link ZZ TEST to a test client, as you link any company.
-3. Leave ZZ TEST open for a few minutes, so FinCom Bridge records its starting point.
+Best outside office hours, or when nobody is entering vouchers in that company. The measurement waits whenever someone
+types in Tally, and gives up after 2 minutes of it.
 
-## 2. Fill ZZ TEST
+## 2. Choose the company
 
-ZZ TEST must hold at least as many entries as your biggest client, so the times are true for your real books. Look at
-your biggest client in FinCom (Books › From Tally shows its entries) and note:
-
-- its busiest day (the most entries on one day), and
-- its busiest month (the most entries in 31 days).
-
-Then fill ZZ TEST with the bridge's trial tool until it has at least that many on one day. Only its TRIAL entries go
-into ZZ TEST:
-
-1. In FinCom, switch on "Trial tools on this computer" for the office server.
-2. With ZZ TEST open alone, choose "Recorder trial: time saving" in the FinCom Bridge tray. Each run adds 100 test
-   entries to ZZ TEST, dated today, each marked TRIAL. Run it as many times as needed. For example, 8 runs give 800
-   entries on one day.
-3. Switch the trial tools off again afterwards.
+Any client company that is linked to a FinCom client (on FinCom's Tally page) can be measured, ZZ TEST too. A big one
+(many entries on its busiest day) tells the most. The bridge must have seen it before: if it was never opened with the
+bridge running, open it and wait a few minutes first.
 
 ## 3. Measure
 
-1. Close every other company in Tally. **ZZ TEST must be the only company open.**
-2. Make sure nobody is entering vouchers, and no posting from FinCom is waiting.
+1. In Tally, close every other company. **Open only the company to measure.**
+2. Make sure no posting from FinCom is waiting.
 3. Leave the fast read switched off. It is off unless FinCom support switched it on.
-4. Right-click the FinCom Bridge icon (near the clock) and choose **Measure the fast read (ZZ TEST only)**. Say Yes.
-5. Leave the computer alone for a few minutes. Do not type in Tally meanwhile; the measurement waits whenever you do.
-6. A box says **PASS** or **NOT A PASS**, the slowest answer in seconds, the longest moment Tally's window did not
+4. Right-click the FinCom Bridge icon (near the clock) and choose **Measure the fast read on the company open in
+   Tally**.
+5. The box names the company: "Measure on <name>? Tally is only read, nothing is written. It stops at once if Tally
+   slows." Check the name and say Yes.
+6. Leave the computer alone for a few minutes. Do not type in Tally meanwhile.
+7. A box says **PASS** or **NOT A PASS**, the slowest answer in seconds, the longest moment Tally's window did not
    answer, and how many entries were the same.
 
-If the box says it cannot start, it says why (another company open, ZZ TEST not linked or not recorded yet, the fast
-read switched on, or Tally's window not on this desktop). Fix that and try again. Opening another company while it
-runs stops the measurement.
+If the box says it cannot start, it says why: no company or more than one open ("Open only the company to measure"),
+the company not linked to a FinCom client, the bridge not knowing the company yet, the fast read switched on, or
+Tally's window not on this desktop. Fix that and try again. Opening another company while it runs stops the
+measurement.
 
-## 4. What to send FinCom support
+## 4. What PASS and NOT A PASS mean
 
-- A screenshot (or the words) of the result box.
-- Your TallyPrime version (Help › About in Tally) and the office server's name.
-- How many entries ZZ TEST had on its busiest day.
+- **PASS**: every answer came in under 1.5 seconds, Tally's window never stopped answering for 1 second, and every
+  entry the fast read brought was the same as when FinCom asks for it on its own. The fast read is safe on this
+  computer for books like this one.
+- **NOT A PASS**: one of those was not so. The box says which (a slow answer, Tally's window held, entries not the
+  same, or the run stopped). The fast read stays off; FinCom keeps reading older entries the usual way. Nothing is
+  wrong with your books.
 
-FinCom also receives the result by itself. It shows under Advanced (for support) on the Tally page, as "Fast read
-measured on ZZ TEST". If the box says FinCom did not take the result, open **Show log** in the tray and send the last
-lines too.
+The result also shows under Advanced (for support) on FinCom's Tally page, as "Fast read measured", with the
+company's name. If the box says FinCom did not take the result, open **Show log** in the tray and send FinCom support
+the last lines.
 
-Afterwards you can delete ZZ TEST's test entries, or the whole ZZ TEST company. Nothing else changed.
+## 5. After a PASS
+
+FinCom support switches the fast read on for that computer. Then, on FinCom, open that client and press **Bring books**
+to see the real speed on its older entries.

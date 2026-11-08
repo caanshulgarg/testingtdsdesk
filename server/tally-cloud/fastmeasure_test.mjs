@@ -1,8 +1,9 @@
 // node server/tally-cloud/fastmeasure_test.mjs (no Deno needed): the fast-read measurement as FinCom keeps it
 import assert from "node:assert/strict";
-import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";
+import * as FM from "./fastmeasure.js";
+const { cleanFastMeasure, fastMeasurePass } = FM;
 
-assert.equal(FAST_MEASURE_COMPANY, "ZZ TEST");
+assert.equal(FM.FAST_MEASURE_COMPANY, undefined);   // no company name rule (any linked company: index.ts)
 const good = { ok: true, state: "done", at: "2026-11-08T10:00:00Z", bridge: "2.5.8", tallyVersion: "7.1.0.0", plan: "9b", watched: true, pass: true,
   busiestDay: 120, busiest31: 175, worstMs: 900, worstHoldMs: 200, compared: 50, differ: 0, line: "PASS: worst 0.90 s",
   results: [{ kind: "locate", days: 7, rows: 30, ms: 40, holdMs: 0 }, { kind: "W1", days: 31, rows: 175, ms: 900, holdMs: 200 },

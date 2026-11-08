@@ -25,7 +25,7 @@ import SimpleTally, { SupportTools } from "../parts/TallySimple.jsx";
 import { ownBridge, ownOpen, placeOf } from "../lib/tallySimple.js";
 import { connectNow, stepLine } from "../lib/connectSteps.js";
 import { useState, useEffect, Children } from "react";
-import FastMeasure from "../parts/FastMeasure.jsx";   // next-fast-measure: the fast read measured on ZZ TEST (read only)
+import FastMeasure from "../parts/FastMeasure.jsx";   // next-fast-measure: the fast read measured on the company open in Tally (read only)
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
