@@ -358,7 +358,7 @@ function suggestAll(rows, onlyOpen){
   const stNow = curStmt();
   const accNow = stNow ? (co.bankAccounts || []).find(a => a.id === stNow.acctId) : null;
   rows.forEach(r => {
-    if (onlyOpen && !["attention", "suggested"].includes(r.state)) return;
+    if (bankAside(r) || (onlyOpen && !["attention", "suggested"].includes(r.state))) return;
     if (r.userSet && exactLedger(r.ledger) && !isOwnBank(r, r.ledger)) return;
     const rule = matchRule(r, co, accNow);          // a written rule beats every guess
     if (rule){ applyRule(rule, r, co, accNow); if (isOwnBank(r, r.ledger)) dropOwnBank(r); return; }
@@ -422,16 +422,15 @@ async function uploadStatements(files, force){
         Store.saveCompany(co);
       }
       const other = Object.values(S.companies).find(c => c.id !== co.id && (c.bankAccounts || []).some(a => last4 && a.last4 === last4 && (!meta.ifsc || a.ifsc === meta.ifsc)));
-      const sid = uid("st");
-      const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, b.keys, b.stmts, sid, co.name);
+      // the lines not yet here, near-repeats held or marked, the statement's own dates and figures (src/js/96 BankOverlap)
+      const sid = uid("st"), x = await bankTake(parsed, acc, b, sid, co.name, chk, file, hash), {rows, st} = x;
       // every line is already here, in a statement here: that statement is opened, nothing is charged or added
-      if (!rows.length && top){ b.busy = ""; await bankOpenHeld(b.cid, top); continue; }
-      if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
-      Object.assign(b.keys, nk);
-      const from = rows.length ? rows[0].date : meta.from, to = rows.length ? rows[rows.length - 1].date : meta.to;
-      const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || from, to: meta.to || to,
-        opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
-        totDr: chk.totDr, totCr: chk.totCr, source: parsed.source, method: parsed.method || "", uploadedAt: new Date().toISOString(), otherClient: other ? other.name : ""};
+      if (!rows.length && x.top){ b.busy = ""; await bankOpenHeld(b.cid, x.top); continue; }
+      // a line held aside as a repeat is not charged (review of 08-Nov-2026)
+      const paid = parsed.rows.length - x.held;
+      if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))){ if (newAcc){ co.bankAccounts = co.bankAccounts.filter(a => a !== acc); Store.saveCompany(co); } b.busy = ""; render(); return; }
+      Object.assign(b.keys, x.nk);
+      st.otherClient = other ? other.name : "";
       b.stmts.push(st);
       b.cur = sid; b.rows = rows; b.sel.clear(); b.sticky.clear(); b.undo = null;
       suggestAll(rows);
@@ -441,7 +440,7 @@ async function uploadStatements(files, force){
       await BankDB.set("stmt:" + b.cid + ":" + sid, rows);
       saveBank({stmts: true, keys: true});
       b.filter = "review";
-      toast(file.name + ": " + rows.length + " transactions" + (dupRows ? ", " + dupRows + " already uploaded" : "") + (chk.bad ? ", " + chk.bad + " failing the balance check" : "") + "." + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
+      toast(file.name + ": " + x.say + (newAcc ? (acc.ledger ? " Confirm the Tally ledger for this bank account." : " Choose the Tally ledger for this bank account.") : ""));
     } catch (err){
       toast(file.name + ": " + bankErr(err));
       b.lastFail = {file: file.name, report: bankReport(Object.assign({diag: {file: file.name, size: file.size}}, err)), msg: bankErr(err), at: new Date().toISOString()};
@@ -452,18 +451,21 @@ async function uploadStatements(files, force){
 }
 // The lines of a statement not yet here. A line counts as here only when the statement holding it is here: a fingerprint
 // left by a statement this browser lost no longer hides the line (26-Oct-2026). top: the statement holding most of the rest.
+// Two same lines of one file are both kept: the second and later carry their count (next-bank-overlap), so each is matched
+// once against an earlier statement's. Every line gets its fingerprint (r.fp); a line added also its id.
 function bankNewRows(list, acc, keys, stmts, sid, name){
-  const live = new Set(stmts.map(s => s.id)), nk = {}, by = {}, rows = [];
+  const live = new Set(stmts.map(s => s.id)), nk = {}, by = {}, rows = [], o = {};
   let dupRows = 0;
   list.forEach((r, i) => {
-    const fp = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|"), was = keys[fp];
-    if (nk[fp] || live.has(was)){ dupRows++; if (was) by[was] = (by[was] || 0) + 1; return; }
+    const f = [acc.id, r.date, r.debit, r.credit, r.balance === null ? "" : r.balance, normName(r.narr).slice(0, 30)].join("|"), k = o[f] = (o[f] || 0) + 1, fp = r.fp = k > 1 ? f + "|" + k : f, was = keys[fp];
+    if (live.has(was)){ dupRows++; by[was] = (by[was] || 0) + 1; return; }
     nk[fp] = sid;
-    rows.push(Object.assign(r, {id: sid + "-" + i, fp, dec: decodeNarr(r.narr, name), state: "attention", ledger: "", userSet: false}));
+    rows.push(Object.assign(r, {id: sid + "-" + i, dec: decodeNarr(r.narr, name), state: "attention", ledger: "", userSet: false}));
     if (r.repaired) r.fixedDir = false;
   });
   return {rows, dupRows, nk, top: Object.keys(by).sort((x, y) => by[y] - by[x])[0]};
 }
+async function bankTake(...a){ return (window.BankOverlap || (await loadBankOverlap()).BankOverlap).take(...a); }
 // Keep a statement under the client that owns the bank account (it is matched when that client is opened)
 async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
   const cid = owner.id;
@@ -474,13 +476,12 @@ async function fileStatementFor(owner, file, hash, parsed, chk, meta, last4){
   const stmts = stmts0 || [], keys = keys0 || {};
   // already there (26-Oct-2026: it was read and charged, then refused, and this client's empty page stayed): opened there
   const held = stmts.find(x => x.hash === hash), sid = uid("st");
-  const {rows, dupRows, nk, top} = bankNewRows(parsed.rows, acc, keys, stmts, sid, owner.name);
-  if (held || (!rows.length && top)){ await bankOpenHeld(cid, held ? held.id : top, owner.name); return false; }
-  if (!(await charge("bank", parsed.rows.length, file.name, parsed.rows.length + " statement lines"))) return null;
-  Object.assign(keys, nk);
-  const st = {id: sid, fileName: file.name, hash, bank: acc.bank, acctId: acc.id, acct: meta.acct || "", ifsc: meta.ifsc || "", from: meta.from || (rows[0] || {}).date, to: meta.to || (rows[rows.length - 1] || {}).date,
-    opening: meta.opening, closing: meta.closing, n: rows.length, dupRows, badRows: chk.bad, fixedRows: chk.fixed, summaryOk: chk.summaryOk,
-    totDr: chk.totDr, totCr: chk.totCr, source: parsed.source, method: parsed.method || "", uploadedAt: new Date().toISOString(), counts: {attention: rows.length}};
+  const x = await bankTake(parsed, acc, {cid, keys, stmts}, sid, owner.name, chk, file, hash), {rows, st} = x;
+  if (held || (!rows.length && x.top)){ await bankOpenHeld(cid, held ? held.id : x.top, owner.name); return false; }
+  const paid = parsed.rows.length - x.held;
+  if (paid > 0 && !(await charge("bank", paid, file.name, paid + " statement lines"))) return null;
+  Object.assign(keys, x.nk);
+  st.counts = {attention: rows.length};
   stmts.push(st);
   S.files["st:" + sid] = file; FileStore.put(cid, "st:" + sid, file); CloudDocs.add(cid, "st:" + sid, file, "stmt");
   await BankDB.set("stmt:" + cid + ":" + sid, rows);
@@ -606,7 +607,7 @@ function matchTallyBook(acc, rows, force){
     r.tallyRef = [t.vt, t.vn, t.party].filter(Boolean).join(" \u00b7 ");
     if (t.party && !/as per details|^\(|^opening|^closing/i.test(t.party) && b.hist){ b.hist.rows[r.fp] = histEntry(r, t.party, "tally"); b.histVer++; learnedFromTally = true; }
   };
-  const open = () => rows.filter(r => r.state !== "intally" && r.state !== "sent");
+  const open = () => rows.filter(r => r.state !== "intally" && r.state !== "sent" && !bankAside(r));
   // 1. posted by FinCom before (tag in the narration)
   open().forEach(r => {
     const tag = "TDSDESK:" + fpHash(r.fp || r.id).toUpperCase();
@@ -649,7 +650,7 @@ function sameParty(a, b){
   const [short, long] = pa.length <= pb.length ? [pa, pb] : [pb, pa];
   return short.length >= 17 && long.startsWith(short);
 }
-function rowSnapshot(r){ return {id: r.id, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
+function rowSnapshot(r){ return {id: r.id, rep: r.rep ? Object.assign({}, r.rep) : r.rep, ledger: r.ledger, state: r.state, userSet: r.userSet, why: r.why, source: r.source, vtype: r.vtype, billId: r.billId, billRef: r.billRef, tdsAtPay: r.tdsAtPay}; }
 // Set a ledger on some rows; every other open row of the same party follows, and a rule is kept for next time
 function setLedgerFor(rows, ledger, how){
   const b = B(), co = CO(b.cid);
@@ -790,7 +791,7 @@ function bankVisibleRows(){
   if (b.focus && b.focus.ids){ const only = new Set(b.focus.ids); return b.rows.filter(r => only.has(r.id)); }
   const q = b.q.trim().toLowerCase();
   const tab = bankTab(), states = tabStates(tab);
-  return b.rows.filter(r => inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
+  return b.rows.filter(r => !bankAside(r) && inBankRange(r) && (!states || bankTabOf(r) === tab || b.sticky.has(r.id)) && (!q || (r.narr + " " + r.ledger + " " + (r.debit || r.credit) + " " + (r.dec.name || "")).toLowerCase().includes(q)));
 }
 let bankLastClicked = null;
 function bankToggle(cb, shift){
@@ -935,7 +936,8 @@ function bankExportProblems(rows){
     else if (!exactLedger(r.ledger)) probs.push(fmtDate(r.date) + ": \u201c" + r.ledger + "\u201d is not a Tally ledger");
     else if (isOwnBank(r, r.ledger)) probs.push(fmtDate(r.date) + ": " + OWN_BANK);
   });
-  return probs;
+  const n = rows.filter(bankRepOpen).length;
+  return (n ? [(n === 1 ? "1 entry is" : n + " entries are") + " marked Possible repeat — check: Keep it or It’s a repeat first"] : []).concat(probs);
 }
 async function exportBankXml(){
   const b = B(), st = curStmt(), co = CO(b.cid);
@@ -975,7 +977,7 @@ function exportBankCsv(){
   const b = B(), st = curStmt(), co = CO(b.cid);
   if (!st) return;
   const head = ["Date","Narration","Party (decoded)","Mode","Reference","Withdrawal","Deposit","Balance","Balance check","Ledger","Voucher type","Status","Why","Against bill","Tally voucher"];
-  const rows = b.rows.map(r => [r.date, r.narr, r.dec.name, r.dec.mode, r.dec.utr || r.dec.chq || r.ref, r.debit || "", r.credit || "", r.balance, r.balOk === false ? "FAILED" : r.balOk ? "OK" : "",
+  const rows = b.rows.filter(r => !bankAside(r)).map(r => [r.date, r.narr, r.dec.name, r.dec.mode, r.dec.utr || r.dec.chq || r.ref, r.debit || "", r.credit || "", r.balance, r.balOk === false ? "FAILED" : r.balOk ? "OK" : "",
     r.ledger, r.vtype, BANK_STATES[r.state] || r.state, r.why, r.billRef, r.tallyRef || ""]);
   saveFile("bank-" + (co.name || "client").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + "-" + st.from + "-to-" + st.to + ".csv", "\uFEFF" + [head].concat(rows).map(r => r.map(csvCell).join(",")).join("\r\n"));
 }
@@ -993,7 +995,15 @@ function tabStates(tab){ return tab === "ready" ? ["ready"] : tab === "done" ? [
 // posted on 27-Sep were deleted in Tally afterwards) is not in Tally either: it goes back under Post to Tally, marked so
 // round 17: a line posted by Tally's reply (FinCom Bridge 2.1.8, no read-back) is matched: Tally said it created it
 function bankMatched(r){ return !r.goneFromTally && (r.state === "intally" || (r.state === "sent" && (!!(r.tally && (r.tally.guid || r.tally.masterId || r.tally.number)) || r.postByReply === true) && !r.checking)); }
+// next-bank-overlap: a line held aside as a repeat of an earlier entry, or kept aside as one (src/js/96): ignored and marked,
+// it stays among the lines (in its place) but is in no tab, no total, no suggestion and no Tally matching
+// and the one posting check (review of 08-Nov-2026): a line marked as a possible repeat and not confirmed, whatever the mark
+// (after an Undo, or a Restore in an older version), that is not ignored, is never posted until Keep it or It's a repeat.
+// A line already posted or already in Tally is past that: never set aside (no Keep it / It's a repeat for it)
+function bankRepOpen(r){ return !!(r && r.rep && !r.rep.ok && !["ignored", "sent", "intally"].includes(r.state)); }
+function bankAside(r){ return !!(r && r.rep && r.state === "ignored" && (r.rep.gone || (r.rep.kind === "strong" && !r.rep.ok))); }
 function bankTabOf(r){
+  if (bankAside(r)) return "aside";
   if (r.state === "attention" || r.state === "suggested") return "review";
   if (r.state === "ready" || ((r.state === "sent" || r.state === "intally") && !bankMatched(r))) return "ready";
   return r.state === "ignored" ? "ignored" : "done";
@@ -1001,7 +1011,7 @@ function bankTabOf(r){
 function bankTab(){ const b = B(); return ["review", "ready", "done", "ignored", "all", "rules"].includes(b.filter) ? b.filter : "review"; }
 function tabCounts(rows){
   const c = countStates(rows);
-  const t = {review: 0, ready: 0, done: 0, ignored: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
+  const t = {review: 0, ready: 0, done: 0, ignored: 0, aside: 0}; (rows || []).forEach(r => { t[bankTabOf(r)]++; });
   return {review: t.review, ready: t.ready, done: t.done, ignored: t.ignored, post: c.ready || 0, inTally: (rows || []).filter(bankMatched).length, filed: (rows || []).filter(r => r.state === "sent" && !bankMatched(r) && !r.goneFromTally).length, gone: (rows || []).filter(r => r.goneFromTally).length, attention: c.attention || 0, suggested: c.suggested || 0};
 }
 function plural(n, word){ return n + " " + word + (n === 1 ? "" : word.endsWith("y") ? "" : "s"); }

@@ -39,6 +39,7 @@ import { cloudKnows, linkNow } from "../lib/tallyConnect.js";
 import { ownOpen, ownBridge, NO_CO, lookOnce, rescanLocal, checkAll } from "../lib/tallySimple.js";
 import { TITLES } from "../lib/connectSteps.js";
 import { PostingWait } from "./StuckJobs.jsx";
+import { noAnswer } from "../lib/readFollow.js";   // next-link-follow (migration 146): Update now says at once when no Tally can answer
 // 30-Oct-2026 (the owner): a client's row says the books being brought from Tally (the bar and its time) and what FinCom
 // received from Tally today
 import { OlderLine, TodayLine } from "./TallyFetch.jsx";
@@ -771,6 +772,9 @@ export function runWords(cid, company) {
   if (m.asking) return { phase: "asking", text: "Asking Tally…" };
   if (!x || x.at !== m.at) return null;   // (that read is gone, or another one started: nothing of it to say)
   if (m.say) return { phase: m.ok ? "done" : "why", text: m.say };
+  // next-link-follow: no bridge with the company open, and the linked computer offline or the company open nowhere: said
+  // at once (3 s after the press, a beat's chance to arrive), not after a silent wait
+  if (!x.end && !(x.prog && Number(x.prog.read) > 0) && Date.now() - m.at > 3000) { const na = noAnswer(company || x.company); if (na) return { phase: "why", text: "Not updated. " + na }; }
   if (!x.via && !x.err) return { phase: "asking", text: "Asking Tally…" };
   if (x.err || x.late) return { phase: "asking", text: "Asking Tally…" };   // (runSettle says why at the next drawing)
   if (x.end) return { phase: "reading", text: "Reading… done, counting the changes" };

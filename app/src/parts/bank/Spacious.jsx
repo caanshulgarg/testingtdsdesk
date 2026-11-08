@@ -10,6 +10,8 @@ import { goneOpen, goneLine } from "./goneSent.js";
 import { chipsOn, toggleChip, setF, setRange, setSugOnly, CHIPS, vtypeOf, setVtype, VTYPES } from "./smart.js";
 import { isAuto } from "../AutoPost.jsx";
 import { keep, kept } from "./Rail.jsx";
+import { RepMark } from "./Overlap.jsx";
+import { BankOverlap } from "../../lib/bankOverlap.js";
 import "./spacious.css";
 
 const live = () => Bridge.on() && Bridge.up();
@@ -156,6 +158,7 @@ export function Drawer({ rows }) {
       <button type="button" className="icon" aria-label="Close details" data-drawer-close="" onClick={close}>✕</button>
     </div>
     {goneOpen(r) && <div className="bk-alert bsp-gone" data-drawer-gone="">⚠ {goneLine(r)}. Posting it asks you first.</div>}
+    <RepMark r={r} />
     <div className="bsp-party">{bankParty(r) || "—"}</div>
     <div className="bsp-narr" data-drawer-narr="">{r.narr}</div>
     <dl className="bsp-grid">
@@ -175,7 +178,7 @@ export function Drawer({ rows }) {
     <div className="bsp-hist" data-drawer-history=""><b>History</b>{history(b, r).map((x, i) => <div key={i}>{x}</div>)}</div>
     {!isAuto(r) && <div className="bsp-acts" data-drawer-acts="">
       {r.state === "suggested" && <button className="btn small primary" data-drawer-act="accept" onClick={act("accept")}>Confirm {r.ledger}</button>}
-      {r.state === "ready" && live() && <button className="btn small" data-drawer-act="post" onClick={act("post")}>Post</button>}
+      {r.state === "ready" && live() && !BankOverlap.isOpen(r) && <button className="btn small" data-drawer-act="post" onClick={act("post")}>Post</button>}
       {r.state === "ready" && <button className="btn small" data-drawer-act="unready" onClick={act("unready")}>Undo</button>}
       {isOpen && <button className="btn small" data-drawer-act="rule" onClick={act("rule")}>Make a rule</button>}
       {isOpen && <button className="btn small" data-drawer-act="split" onClick={() => { b.splitOpen = r.id; b.drawer = null; render(); }}>Split</button>}

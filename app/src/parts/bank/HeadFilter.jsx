@@ -38,7 +38,7 @@ export default function HeadFilter({ k, label }) {
     const th = btn.current.closest("th") || btn.current, r = th.getBoundingClientRect(), w = Math.min(252, innerWidth - 24);
     setAt({ left: Math.max(12, Math.min(r.left, innerWidth - w - 12)), top: Math.min(r.bottom + 4, innerHeight - 200) });
   };
-  const count = (fn) => { const m = new Map(); b.rows.forEach((r) => { const v = fn(r); m.set(v, (m.get(v) || 0) + 1); }); return m; };
+  const count = (fn) => { const m = new Map(); b.rows.forEach((r) => { if (bankAside(r)) return; const v = fn(r); m.set(v, (m.get(v) || 0) + 1); }); return m; };
   let body = null;
   if (at && k === "bal") body = <Range f={f} lo="bmin" hi="bmax" />;
   if (at && k === "st") { const n = count((r) => r.state); body = <Pick f={f} k="sts" values={Object.keys(STATE_WORDS).filter((s) => n.get(s) || (f.sts || []).includes(s)).map((s) => [s, STATE_WORDS[s], n.get(s) || 0])} />; }
