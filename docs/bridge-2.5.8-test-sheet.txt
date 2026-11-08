@@ -13,6 +13,7 @@ CHECK 2.5.8-A - A COMPANY OPENED RIGHT AFTER TALLY STARTS
    Close TallyPrime. Open it again and wait on its company list (no company loaded) for about a minute, so the bridge
    sees Tally with no company. On FinCom's Tally page, step 4 says "Tally is open, but no company is open in it. ...
    Tally answered at HH:MM with no company; checking again… If the company is already open ...". Now open ZZ TEST.
+   (While a posting goes, or the answer is over 5 minutes old, it says only "Tally answered at HH:MM with no company.")
    You should see: within about a minute ZZ TEST shows as open on the Tally page (without pressing anything); the
    bridge's log says "Company list: Tally names a company now (it named none before); FinCom is told at once".
    (The "Tally answered at HH:MM" words come from this computer's bridge; seen from another computer they need
@@ -35,7 +36,13 @@ CHECK 2.5.8-D - NOTHING MORE WHILE A COMPANY IS OPEN, OR WHILE POSTING OR TYPING
    You should see: the company list is asked about every 10 minutes as before (not every 30 s); while a posting goes
    or someone types in Tally nothing extra is asked; Tally never feels stuck.
 
-CHECK 2.5.8-E - THE UPGRADE (2.5.8 over 2.5.7)
+CHECK 2.5.8-E - TWO TALLYS IN THIS LOGIN (one with a company, one at Select Company)
+   Open two TallyPrime installs in this Windows login: ZZ TEST in one, the other left on its company list.
+   You should see: the Tally with ZZ TEST is asked about every 10 minutes as before; only the other is asked every
+   30 s to 2 minutes; the log says "Tally names a company now" only when a company is opened in the second one, and
+   it shows within about a minute.
+
+CHECK 2.5.8-F - THE UPGRADE (2.5.8 over 2.5.7)
    Let 2.5.7 update itself to 2.5.8 (or run the setup over it).
    You should see: the tray says 2.5.8; postings and Update now work as before; Help & support shows the request table
    as before (the same rows as 2.5.7, the FinComStockInHand row's words aside).

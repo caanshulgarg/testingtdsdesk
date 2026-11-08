@@ -1,9 +1,11 @@
 # Code review: FinCom Bridge 2.5.8 (a company opened in Tally shows within a minute, not up to 10)
 
-Reviewer: the session that built it (a self-review against the owner's rules), on branch next-bridge-258. No
-independent review session has looked at this range yet: one is to be done before the publish.
+Reviewers: the session that built it (a self-review against the owner's rules), then an independent review session
+(the coordinator's) on next-bridge-258 at d633d28d3: findings 1-5 (one medium, one low-medium, three low), all fixed
+with tests in f4f1c1c99, after staging-next fae5cf1a1 was merged in (27fc5a3c8). The fixes are not re-reviewed yet.
 
-Range: 67646b38d..04938e593 (staging-next with 2.5.7 merged, to the version commit)
+Range: 67646b38d..f4f1c1c99 (staging-next with 2.5.7 merged, to the review's fixes; 27fc5a3c8 merges staging-next
+fae5cf1a1, reviewed on its own; 535884a5f withdraws the unpublished first 2.5.8 build)
 
 (bridge-go/: nocompany258.go and nocompany258_test.go (new); startpoint.go lightCompanyList (the short age while the
 list is empty); ports.go openCompaniesAsk (each answer noted) and openCompaniesCachedOnce (a closed port open now, or
@@ -47,12 +49,30 @@ about 07:17 was seen at 07:27. askAfreshSoon fired only when Windows' port list 
   last second; the 10-minute ask is unchanged.
 - No AI anywhere in this.
 
+## The independent review's findings, fixed in f4f1c1c99 (each with a test)
+
+1. (medium) With two Tallys of one login (one naming a company, one at Select Company) the short schedule ran for both
+   for ever, and the log line and the beat fired falsely. Now per port (askNotes, emptyPorts): only a port that
+   ANSWERED with no company is on the short age, only those ports are asked (TC.only; the others' held lists stand and
+   the list's 10 minutes go on), and the log line and the beat only when one of them names a company now
+   (TestR258TwoTallysOnlyTheEmptyOneAskedSoon, TestR258EmptyPortsOnlyAnsweredEmpty).
+2. (low-medium) Typing re-checked after Tally's lock is taken: the short asks and askAfreshBg use bgListTC (its yield:
+   a posting, or typing in Tally); the first check of a company that just appeared waits while someone types; a reopen
+   ask that gave way is asked again when it may (TestR258TypingAfterTheLock).
+3. (low) A held Check again no longer resets the background's minute; a press keeps a Tally's wait after no answer in
+   2 s (TC.holdOK, colistHold): one 2 s ask a press at most (TestR258CheckAgainHeldAndColistHold).
+4. (low) A port that opened is asked once a beat: the light check does not ask again within 10 s
+   (TestR258ReopenAskedOnceInTheBeat).
+5. (low) The page says "checking again…" only while the bridge asks again: the beat's list "emptyHeld" (held, backed
+   off, or the answer over 5 minutes old) says only when Tally answered (run_tally_connect_steps.py; tally-ingest keeps
+   "emptyHeld", run_beat258_ingest.py).
+
 ## Known, to watch
 
 - A Tally left open on its company list (no company) for hours is asked every 2 minutes (each ask the light list, under
-  2 s). The owner's choice; nothing else is sent.
-- An own Tally that answers with an error (not "no company") is also on the short age, as its held list names no
-  company; the shared retry schedule backs it off after a stop, as before.
+  2 s, that Tally only). The owner's choice; nothing else is sent.
+- A Tally that does not answer the list (an error) is asked at each turn as before 2.5.8 (its list's age is not
+  renewed); the shared retry schedule backs it off after a stop. It is not on the short age.
 - Check again is a person's ask (not a background one): the background reads wait their usual few seconds after it.
 - The "Tally answered at" line seen from another computer needs the cloud change (tally-ingest) deployed; without it
   the page says the rest of step 4.
@@ -65,8 +85,8 @@ about 07:17 was seen at 07:27. askAfreshSoon fired only when Windows' port list 
   at a time, the plain status asks nothing; the beat's fields).
 - tests/run_beat258_ingest.py and run_beat254_ingest.py (tally-ingest under Deno); tests/run_tally_simple.py and
   run_tally_connect_steps.py on the React build (step 4's words, the answer time, Check again reaching /status?fresh=1
-  only with this login's bridge paired here). Main bundle 266,036 B gzip (limit 266,240); legacy.js unchanged.
+  only with this login's bridge paired here). Main bundle 266,031 B gzip after the merge of fae5cf1a1 (limit 266,240); legacy.js unchanged (614,992 B).
 
 ## Verdict
 
-Ship after an independent review session agrees.
+Ship once the independent review session has looked at f4f1c1c99.

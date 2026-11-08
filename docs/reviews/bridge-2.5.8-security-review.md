@@ -1,9 +1,9 @@
 # Security review: FinCom Bridge 2.5.8
 
-Reviewer: the session that built it (a self-review); the code findings are in bridge-2.5.8-code-review.md. No
-independent review session has looked at this range yet: one is to be done before the publish.
+Reviewers: the session that built it, then an independent review session at d633d28d3 (its findings 1-5, none about
+security, fixed in f4f1c1c99; bridge-2.5.8-code-review.md). The fixes are not re-reviewed yet.
 
-Range: 67646b38d..04938e593 (staging-next with 2.5.7 merged, to the version commit)
+Range: 67646b38d..f4f1c1c99 (staging-next with 2.5.7 merged, to the review's fixes)
 
 ## Requests to Tally
 
@@ -16,7 +16,7 @@ Range: 67646b38d..04938e593 (staging-next with 2.5.7 merged, to the version comm
 
 ## Data and the cloud
 
-- The beat's ports carry two small fields: askedAt (a local time) and list (one of four words). No company data. The
+- The beat's ports carry two small fields: askedAt (a local time) and list (one of five words). No company data. The
   cloud keeps them only in that form (a time of the bridge's shape, a known word) and drops anything else.
 - Nothing new is kept on the computer (the answers are noted in memory only).
 
@@ -26,4 +26,4 @@ Range: 67646b38d..04938e593 (staging-next with 2.5.7 merged, to the version comm
 
 ## Verdict
 
-Ship, as far as security goes, after an independent review session agrees.
+Ship, as far as security goes, once the independent review session has looked at f4f1c1c99.
