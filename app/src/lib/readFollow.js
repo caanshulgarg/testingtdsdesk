@@ -52,7 +52,16 @@ export function readWhere(company) {
     return { kind: mine ? "here" : "other", n, reader: r, book: b,
       text: "Read from " + where + " — " + (linkLive ? "the company is not open in the linked login’s Tally" : "the linked login’s bridge is offline") };
   }
+  // review of 314a178f1: the cloud's list is empty also when the link has no GUID, the bridge is older than 2.4.5 or its
+  // beat lists over 50 companies: when a bridge FinCom hears has the company open for reading (tallyServe), not known
+  // (null: the page as before), never "offline" or "Nothing can answer now"
+  if (heardOpen(company)) return null;
   return linkLive ? { kind: "closed", n, text: "", reader: null, book: b } : { kind: "offline", n, text: offlineWords(b.linkHeardAt), reader: null, book: b };
+}
+// a bridge FinCom hears has the company open for reading (98-link-record's tallyServe, reads: true); unsure: true
+function heardOpen(company) {
+  if (typeof globalThis.tallyServe !== "function") return false;
+  try { return globalThis.tallyServe(company, { own: "", reads: true }) !== null; } catch (e) { return true; }
 }
 // a button's result when nothing can answer it now ("" when a bridge with the company open answers)
 export function noAnswer(company) {
@@ -60,8 +69,7 @@ export function noAnswer(company) {
   if (w) return w.reader ? "" : w.kind === "offline" ? "Nothing can answer now. " + w.text : closedWords(company);
   // (no 146, or not decided lately: only when no bridge FinCom hears has the company open for reading)
   if (typeof globalThis.tallyServe !== "function") return "";
-  let sv; try { sv = globalThis.tallyServe(company, { own: "", reads: true }); } catch (e) { return ""; }
-  return sv === null ? closedWords(company) : "";
+  return heardOpen(company) ? "" : closedWords(company);
 }
 const closedWords = (company) => "Nothing can answer now: “" + String(company || "").trim() + "” is not open in any Tally FinCom hears. Open it in Tally; FinCom then brings it by itself.";
 // the book's older days are read by a serving bridge under the switch that holds there (the cloud's fetchOn)

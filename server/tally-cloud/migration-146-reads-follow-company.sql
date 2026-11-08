@@ -19,18 +19,22 @@
 --      check (a day of Check for changes), held (a held line asked again), masters (the book's full ledger list); the
 --      bridge holding it and until when. tally_work_claim(firm, book, kind, units, device, bridge, ttl): under one lock per
 --      book and kind, each unit free, expired or already this bridge's is (re)claimed for it and returned; the others are
---      not. An unfinished claim returns to the pool when it expires.
+--      not. An unfinished claim returns to the pool when it expires; a claim ended over a day ago is deleted (claim rows
+--      only) the next time that book and kind is claimed.
 --   3. tally_days_claim(firm, book, device, bridge, kind, max, night): 98's tally_period_next_paced (kind period) or 135's
 --      tally_check_next_open (kind check) as they are (their order, pace and stop rules), asked for as many more days as
 --      other bridges hold, the days another bridge holds left out, the rest claimed for this bridge (5 minutes, renewed
---      while it is handed them again); nothing for a bridge not serving the book. Two bridges read different days of one
+--      while it is handed them again); a day listed but not given to this bridge gets its asked stamps back as they were;
+--      nothing for a bridge not serving the book. Two bridges read different days of one
 --      book in parallel; a day is never handed to two at once.
---   4. tally_fetch_on(device): "read older entries" for this key: its own switch, or the CURRENT switch of a key of the
---      same firm on the same computer that has it on (the owner's switch is per computer; turned off there, off here). The
---      switch itself is never changed.
+--   4. tally_fetch_on(device): "read older entries" for this key: its own switch; only a key no person ever switched
+--      (period_fetch_at null; off only where 147 has not run) also takes the CURRENT switch of a key of the same firm on the
+--      same computer (info.computer; never the key's name) that has it on. A key a person turned off stays off. The switch
+--      itself is never changed.
 --   5. tally_read_view() (members; the page): each linked book's serving bridges (key, bridge, Windows user, whether it is
 --      the link's key), when the link's key was last heard, fetchOn on a serving key, and the held lines the cloud asks a
---      serving bridge again (another bridge's, not serving now; the last 7 days, or ended slow in the last 30 days for a
+--      serving bridge again (another bridge's, not serving now; only lines a bridge accepts: the link's company GUID, a
+--      MasterID or type and number, the company still this book, not waiting for a ledger; the last 7 days, or ended slow in the last 30 days for a
 --      bridge of 2.3.4 or later; never one with its "<line id>:resolved" line in FinCom; never of a locked month). Its
 --      presence is the page's sign that 146 is here.
 -- The per-book lease (tally_company_lease, 32 / 37 / 55) is unchanged: the keeper's run (Update now: masters and the live
@@ -92,7 +96,7 @@ returns jsonb language sql stable security definer set search_path = public, pg_
   select coalesce((select jsonb_agg(jsonb_build_object('device', d.id, 'bridge', k.key, 'at', k.value ->> 'at',
                            'user', nullif(btrim(coalesce(k.value ->> 'user', '')), ''), 'version', nullif(btrim(coalesce(k.value ->> 'version', '')), ''),
                            'computer', coalesce(nullif(btrim(k.value ->> 'computer'), ''), nullif(btrim(d.info ->> 'computer'), ''), d.name),
-                           'linked', d.id is not distinct from l.device_id)
+                           'linked', d.id is not distinct from l.device_id, 'guid', l.g)
                          order by (d.id is not distinct from l.device_id) desc, k.value ->> 'at' desc, d.id, k.key)
      from l, tally_devices d
      cross join lateral jsonb_each(case when jsonb_typeof(d.info -> 'bridges') = 'object' then d.info -> 'bridges' else '{}'::jsonb end) k
@@ -137,6 +141,8 @@ begin
   if tally_bridge_device(p_firm, p_bridge) is distinct from p_device then return got; end if;
   if not exists (select 1 from tally_links l where l.firm_id = p_firm and l.book_id = p_book and l.state = 'linked') then return got; end if;
   perform pg_advisory_xact_lock(hashtext('tally_work_claim:' || p_book::text || ':' || p_kind));
+  -- the book's claims ended more than a day ago are cleared (claim rows only)
+  delete from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.until < now() - interval '1 day';
   for u in select distinct x from unnest(coalesce(p_units, '{}'::text[])) x where coalesce(x, '') <> '' limit 400 loop
     insert into tally_work_claims as c (firm_id, book_id, kind, unit, device_id, bridge_id, claimed_at, until)
     values (p_firm, p_book, p_kind, left(u, 120), p_device, p_bridge, now(), now() + make_interval(secs => ttl))
@@ -158,12 +164,20 @@ grant execute on function public.tally_work_claim(uuid, uuid, text, text[], uuid
 create or replace function public.tally_days_claim(p_firm uuid, p_book uuid, p_device uuid, p_bridge text, p_kind text, p_max integer, p_night boolean)
 returns jsonb language plpgsql security definer set search_path = public, pg_temp as $function$
 declare lim int := least(greatest(coalesce(p_max, 3), 0), 30); others int; got jsonb; e jsonb; mine text[] := '{}'; want text[] := '{}'; ok text[]; out jsonb := '[]'::jsonb;
+  snap jsonb; back text[] := '{}';
 begin
   if auth.role() <> 'service_role' then raise exception 'not allowed' using errcode = '42501'; end if;
   if lim = 0 or p_kind not in ('period', 'check') or not tally_read_serves(p_firm, p_book, p_device, p_bridge) then return out; end if;
   perform pg_advisory_xact_lock(hashtext('tally_days_claim:' || p_book::text || ':' || p_kind));
   select count(*)::int into others from tally_work_claims c where c.book_id = p_book and c.kind = p_kind and c.until > now()
      and not (c.device_id = p_device and c.bridge_id = p_bridge);
+  -- the asked stamps of the book's days as they are now: a day the call below lists but this bridge is not given gets its
+  -- own stamps back (never marked asked for a bridge that never got it)
+  if p_kind = 'period' then
+    select coalesce(jsonb_object_agg(to_char(x.day, 'YYYYMMDD'), jsonb_build_array(x.asked_at, x.first_asked_at)), '{}'::jsonb) into snap from tally_period_days x where x.book_id = p_book;
+  else
+    select coalesce(jsonb_object_agg(to_char(x.day, 'YYYYMMDD'), jsonb_build_array(x.asked_at, x.first_asked_at)), '{}'::jsonb) into snap from tally_check_days x where x.book_id = p_book;
+  end if;
   got := case when p_kind = 'period' then tally_period_next_paced(p_book, least(30, lim + others), p_night) else tally_check_next_open(p_book, least(30, lim + others)) end;
   for e in select x from jsonb_array_elements(coalesce(got, '[]'::jsonb)) x loop
     if coalesce(e ->> 'day', '') !~ '^\d{8}$' then continue; end if;
@@ -174,8 +188,18 @@ begin
   end loop;
   ok := tally_work_claim(p_firm, p_book, p_kind, want, p_device, p_bridge, 300);
   for e in select x from jsonb_array_elements(coalesce(got, '[]'::jsonb)) x loop
-    if (e ->> 'day') = any(ok) and not ((e ->> 'day') = any(mine)) then out := out || jsonb_build_array(e); mine := mine || (e ->> 'day'); end if;
+    if (e ->> 'day') = any(ok) and not ((e ->> 'day') = any(mine)) then out := out || jsonb_build_array(e); mine := mine || (e ->> 'day');
+    elsif coalesce(e ->> 'day', '') ~ '^\d{8}$' and not ((e ->> 'day') = any(mine)) then back := back || (e ->> 'day'); end if;
   end loop;
+  if cardinality(back) > 0 then
+    if p_kind = 'period' then
+      update tally_period_days x set asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 0)::timestamptz, first_asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 1)::timestamptz
+       where x.book_id = p_book and to_char(x.day, 'YYYYMMDD') = any(back);
+    else
+      update tally_check_days x set asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 0)::timestamptz, first_asked_at = (snap -> to_char(x.day, 'YYYYMMDD') ->> 1)::timestamptz
+       where x.book_id = p_book and to_char(x.day, 'YYYYMMDD') = any(back);
+    end if;
+  end if;
   return out;
 end $function$;
 revoke all on function public.tally_days_claim(uuid, uuid, uuid, text, text, integer, boolean) from public, anon, authenticated;
@@ -184,10 +208,12 @@ grant execute on function public.tally_days_claim(uuid, uuid, uuid, text, text, 
 -- ---------------------------------------------------------------- 4. "read older entries" for a key
 create or replace function public.tally_fetch_on(p_device uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp as $function$
-  select coalesce((select coalesce(d.period_fetch, false) or exists (
-             select 1 from tally_devices o where o.firm_id = d.firm_id and o.id <> d.id and not coalesce(o.revoked, false) and coalesce(o.period_fetch, false)
-                and lower(btrim(coalesce(nullif(btrim(o.info ->> 'computer'), ''), o.name, ''))) <> ''
-                and lower(btrim(coalesce(nullif(btrim(o.info ->> 'computer'), ''), o.name, ''))) = lower(btrim(coalesce(nullif(btrim(d.info ->> 'computer'), ''), d.name, ''))))
+  -- its own switch when on, or when a person ever turned it (period_fetch_at set: off stays off); a key never touched that
+  -- is off takes the CURRENT switch of another key of the firm on the same computer (info.computer only, never the key's name)
+  select coalesce((select coalesce(d.period_fetch, false)
+             or (d.period_fetch_at is null and nullif(lower(btrim(coalesce(d.info ->> 'computer', ''))), '') is not null and exists (
+               select 1 from tally_devices o where o.firm_id = d.firm_id and o.id <> d.id and not coalesce(o.revoked, false) and coalesce(o.period_fetch, false)
+                  and lower(btrim(coalesce(o.info ->> 'computer', ''))) = lower(btrim(d.info ->> 'computer'))))
            from tally_devices d where d.id = p_device and not coalesce(d.revoked, false)), false)
 $function$;
 revoke all on function public.tally_fetch_on(uuid) from public, anon, authenticated;
@@ -208,6 +234,12 @@ begin
           select x.id from tally_recorder_lines x
            where x.firm_id = f and x.book_id = l.book_id and x.state = 'held' and x.event in ('created', 'altered', 'imported')
              and coalesce(x.line_id, '') <> '' and x.line_id not like '%:resolved'
+             -- the serving bridge's own acceptance rules (bridge-go applyHeldLines): the line's company GUID, not empty, the
+             -- link's; a MasterID or a type and number to ask Tally by; the company still this book; not waiting for a ledger
+             and nullif(lower(btrim(coalesce(x.company_guid, ''))), '') = nullif(lower(btrim(coalesce(l.company_guid, ''))), '')
+             and ((length(regexp_replace(coalesce(x.master_id::text, ''), '\D', '', 'g')) between 1 and 18 and regexp_replace(coalesce(x.master_id::text, ''), '\D', '', 'g') ~ '[1-9]') or (btrim(coalesce(x.vch_type, '')) <> '' and btrim(coalesce(x.vch_no, '')) <> ''))
+             and exists (select 1 from tally_companies c where c.firm_id = f and c.company = x.company and c.book_id = l.book_id and c.client_id is not null)
+             and coalesce(x.held_why, '') not like 'waiting for the ledger%'
              and not exists (select 1 from jsonb_array_elements(sv.srv) s where s ->> 'device' = x.device_id::text and s ->> 'bridge' = x.bridge)
              and (x.received_at > now() - interval '7 days'
                   or (x.received_at > now() - interval '30 days'

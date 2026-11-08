@@ -755,10 +755,14 @@ read their own firm's rows, no direct writes). Functions (service role unless sa
 OWN record `info.bridges[id].cos`, kept by this branch's tally-ingest, lists the company open with the link's GUID, reading
 the link's data location, reading not stopped); `tally_read_serves`; `tally_work_claim` (one holder a unit, renewed by
 it, free again after expiry); `tally_days_claim` (98's `tally_period_next_paced` / 135's `tally_check_next_open` as they
-are, the days another bridge holds left out, the rest held 5 minutes); `tally_fetch_on(device)` ("read older entries":
-its own switch or the CURRENT switch of a key of the firm on the same computer); `tally_read_heard`; `tally_read_view()`
-(members; the page). No existing table, column, function or row changed; the lease and postings (142) unchanged.
-Add-only, one transaction, `lock_timeout` 10 s, safe twice; after 54, 98, 110, 127, 133, 135, 142. Tested on pg_stand:
+are, the days another bridge holds left out, the rest held 5 minutes; a day listed but given to nobody gets its asked
+stamps back); `tally_fetch_on(device)` ("read older entries": its own switch; a key no person ever switched, off, also
+takes the CURRENT switch of a key of the firm on the same computer by `info.computer`, never the key's name; a key a person
+turned off stays off); `tally_read_heard`; `tally_read_view()` (members; the page; the held lines re-asked only those a
+bridge accepts: the link's company GUID, a MasterID or type and number, the company still this book, not waiting for a
+ledger). Claims ended over a day ago are deleted (claim rows only) when that book and kind is claimed next. No existing
+table, column or function changed; the lease and postings (142) unchanged.
+Add-only, one transaction, `lock_timeout` 10 s, safe twice; after 54, 98, 110, 127, 133, 135, 142 (147 before or after). Tested on pg_stand:
 `tests/run_migration146.py` (two bridges claiming at the same time; `RED_WITHOUT_146=1` fails). Deploy order: 146, then
 tally-ingest of next-link-follow (until it runs no bridge record has `cos`: nobody serves by these rules and the days go
 out as before; without 146 it answers as before), then the app build (without `tally_read_view` the page is as before).

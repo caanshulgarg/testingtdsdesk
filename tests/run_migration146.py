@@ -14,7 +14,8 @@ computer (LAPTOP7) of the same firm; X of ANOTHER firm with the same company ope
      from two connections: no day held by two; a dead claim (expired) goes to the other bridge; the check's days the same
   3. tally_work_claim: one holder a unit; the same bridge renews; another gets it only after expiry; a bridge id not bound
      to the key gets nothing
-  4. "read older entries": B (its own off) follows A's switch on the same computer, as it is NOW; C (another computer) not
+  4. "read older entries": B (its own off, never switched) follows A's switch on the same computer (info.computer only), as
+     it is NOW; C (another computer) not; B turned off by a person stays off; no computer in B's record: never its key name
   5. a posting taken once: A offline, B and D open, one waiting posting for A taken by B and D at the same time: exactly
      one takes it
   6. tally_read_view (members): the serving bridges, fetchOn, and the held lines the cloud asks again (another bridge's,
@@ -53,7 +54,7 @@ print("  md5 of %s: %s (%d bytes)" % (os.path.basename(M146), hashlib.md5(text.e
 code = "\n".join(l.split("--")[0] for l in text.lower().splitlines())
 print("== 0. the file")
 ok(re.search(r"^begin;\s*\nset local lock_timeout = '10s';", text, re.M) is not None and text.rstrip().endswith("commit;") and code.count("\nbegin;") == 1, "one transaction, lock_timeout 10 s")
-ok("delete from" not in code and not re.search(r"\b(drop|truncate)\s", code) and not re.search(r"\balter\s+table\s+(?!public\.tally_work_claims\s+enable)", code), "add-only: nothing dropped, deleted, truncated; no other table altered")
+ok(re.findall(r"delete from [\w.]+", code) == ["delete from tally_work_claims"] and not re.search(r"\b(drop|truncate)\s", code) and not re.search(r"\balter\s+table\s+(?!public\.tally_work_claims\s+enable)", code), "add-only: nothing dropped or truncated; no other table altered; the one delete is of expired claim rows")
 ok("create table if not exists public.tally_work_claims" in code and "alter table public.tally_work_claims enable row level security" in code, "the new table, RLS on")
 ok(not re.search(r"supabase\.co|https?://|qbocskai|project[_ ]ref", text.lower()), "names no real database")
 SVC = {"tally_read_heard": "(uuid)", "tally_read_serving": "(uuid, uuid)", "tally_read_serving_many": "(uuid, uuid[])", "tally_read_serves": "(uuid, uuid, uuid, text)",
@@ -204,6 +205,13 @@ try:
     hb = held_by()
     ok(len(res[BA]) > 0 and len(res[BB]) > 0 and not (set(res[BA]) & set(res[BB])), "2 x 15 claims at the same time: %d and %d days, none given to both" % (len(set(res[BA])), len(set(res[BB]))))
     ok(all(hb.get(d) == (DA, BA) for d in set(res[BA]) | set(a1)) and all(hb.get(d) == (DB, BB) for d in set(res[BB]) | set(b1)), "each day held by the bridge it was given to")
+    # review of 314a178f1: a day listed but given to nobody keeps its asked stamps (never marked asked for nobody)
+    if not RED:
+        stamped = {r["d"] for r in db.rows("select to_char(day, 'YYYYMMDD') d from tally_period_days where book_id = %s and asked_at is not null" % q(BK))}
+        given = {r["unit"] for r in db.rows("select unit from tally_work_claims where book_id = %s and kind = 'period'" % q(BK))}
+        ok(stamped and stamped <= given, "every day marked asked is a day some bridge was given (%d stamped, %d given; %s)" % (len(stamped), len(given), sorted(stamped - given)[:5]))
+        pre = db.rows("select to_char(day, 'YYYYMMDD') d, asked_at::text a from tally_period_days where book_id = %s order by 1" % q(BK))
+        ok(claim(DC, BC) == [] and db.rows("select to_char(day, 'YYYYMMDD') d, asked_at::text a from tally_period_days where book_id = %s order by 1" % q(BK)) == pre, "a bridge not serving: no day stamped")
     # the check's days: three days, all to A; B none; A's claims expire: B gets them
     if not RED:
         rq = rpc(OWNER, "select tally_check_request('c1', %s::date, %s::date)::text" % (q((FY + datetime.timedelta(days=10)).isoformat()), q((FY + datetime.timedelta(days=12)).isoformat())))
@@ -213,6 +221,10 @@ try:
     if not RED: db.sql("update tally_work_claims set until = now() - interval '1 second' where book_id = %s and kind = 'check' and bridge_id = %s" % (q(BK), q(BA)))
     cb = claim(DB, BB, "check", 5)
     ok(sorted(cb) == sorted(ca) and len(cb) == 3, "A's claims dead (expired): B gets those days (%s)" % cb)
+    if not RED:
+        before = db.rows("select to_char(day, 'YYYYMMDD') d, asked_at::text a, first_asked_at::text f from tally_check_days where book_id = %s order by 1" % q(BK))
+        ok(claim(DA, BA, "check", 5) == [] and db.rows("select to_char(day, 'YYYYMMDD') d, asked_at::text a, first_asked_at::text f from tally_check_days where book_id = %s order by 1" % q(BK)) == before,
+           "A asks while B holds all 3: none given, and none of their asked stamps changed")
 
     print("== 3. tally_work_claim")
     w0 = wclaim(["L-1", "L-2"], DA, BA); ok(sorted(w0) == ["L-1", "L-2"], "A claims two held lines (%s)" % w0)
@@ -221,14 +233,32 @@ try:
     if not RED: db.sql("update tally_work_claims set until = now() - interval '1 second' where book_id = %s and kind = 'held' and unit = 'L-1'" % q(BK))
     ok(wclaim(["L-1"], DB, BB) == ["L-1"], "A's claim expired: B gets it")
     ok(wclaim(["L-9"], DA, BB) == [] and wclaim(["L-9"], DA, "v1") == [], "a bridge id not bound to that key, or a v1 bridge: nothing")
+    if not RED:
+        db.sql("insert into tally_work_claims (firm_id, book_id, kind, unit, device_id, bridge_id, until) values (%s, %s, 'held', 'L-old', %s, %s, now() - interval '2 days'), (%s, %s, 'held', 'L-hour', %s, %s, now() - interval '1 hour'), (%s, %s, 'masters', 'L-oldm', %s, %s, now() - interval '2 days')"
+               % (q(F), q(BK), q(DA), q(BA), q(F), q(BK), q(DA), q(BA), q(F), q(BK), q(DA), q(BA)))
+    wclaim(["L-5"], DB, BB)
+    left = {} if RED else {r["unit"] for r in db.rows("select unit from tally_work_claims where book_id = %s" % q(BK))}
+    ok("L-old" not in left and "L-hour" in left and "L-oldm" in left, "a claim ended over a day ago is cleared when that book and kind is claimed; one ended an hour ago, or of another kind, stays")
 
-    print("== 4. read older entries follows the switch of a key on the same computer, as it is now")
+    print("== 4. read older entries: a key nobody switched follows a key on the same computer (info.computer), as it is now")
     fon = lambda d: (db.one("select tally_fetch_on(%s::uuid)::text" % q(d)) == "true") if not RED else None
+    db.sql("update tally_devices set period_fetch = false, period_fetch_at = null where firm_id = %s" % q(F))
     db.sql("update tally_devices set period_fetch = true where id = %s" % q(DA))
-    ok(fon(DB) is True and fon(DC) is False, "A's switch on: B (same computer) on, C (another computer) off")
+    ok(fon(DB) is True and fon(DC) is False, "A's switch on: B (same computer, never switched) on, C (another computer) off")
     db.sql("update tally_devices set period_fetch = false where id = %s" % q(DA))
     ok(fon(DB) is False, "A's switch turned off: B off too")
     db.sql("update tally_devices set period_fetch = true where id = %s" % q(DA))
+    db.sql("update tally_devices set period_fetch = false, period_fetch_at = now() where id = %s" % q(DB))
+    ok(fon(DB) is False, "B turned off by a person (period_fetch_at set): stays off whatever A's switch")
+    db.sql("update tally_devices set period_fetch = true, period_fetch_at = now() where id = %s" % q(DB))
+    ok(fon(DB) is True, "B turned on by a person: on")
+    db.sql("update tally_devices set period_fetch = false, period_fetch_at = null where id = %s" % q(DB))
+    nb = beat("made-up-b", BB, [CO], port=9001); nb.pop("computer")
+    setbeat(DB, nb)
+    ok(fon(DB) is False, "B with no computer in its record: the key's name (SRV9 · ...) is never matched")
+    setbeat(DB, beat("made-up-b", BB, [CO], port=9001))
+    ok(fon(DB) is True, "B's record says SRV9 again: on")
+    db.sql("update tally_devices set period_fetch = true where firm_id = %s" % q(F))
 
     print("== 5. a waiting posting: taken by exactly one bridge")
     setbeat(DA, beat("made-up-a", BA, [])); setbeat(DD, beat("made-up-d", BD, [CO], port=9003)); db.one("select tally_bridge_bind(%s::uuid, %s)::text" % (q(DD), q(BD)))
@@ -247,11 +277,15 @@ try:
 
     print("== 6. the page's view")
     setbeat(DA, beat("made-up-a", BA, [CO], ago=10), ago=10)
-    line = lambda lid, dev, br, days=1, why="Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it": db.one(
-        "insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, line_id, event, state, held_why, received_at) values (%s, 'c1', %s, %s, %s, %s, 'created', 'held', %s, now() - interval '%d days') returning id::text"
-        % (q(F), q(BK), q(dev), q(br), q(lid), q(why), days))
+    line = lambda lid, dev, br, days=1, why="Tally did not answer in time for this entry when asked again; upload that day's Day Book to settle it", guid=GUID, mid="146", typ="Sales", no="7", co=CO: db.one(
+        "insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, line_id, event, state, held_why, received_at, company, company_guid, master_id, vch_type, vch_no) values (%s, 'c1', %s, %s, %s, %s, 'created', 'held', %s, now() - interval '%d days', %s, %s, %s, %s, %s) returning id::text"
+        % (q(F), q(BK), q(dev), q(br), q(lid), q(why), days, q(co), "null" if guid is None else q(guid), "null" if mid is None else q(mid), q(typ), q(no)))
     ids = {"a1": line("L-a1", DA, BA), "a2": line("L-a2", DA, BA), "b1": line("L-b1", DB, BB), "a10": line("L-a10", DA, BA, 10, "could not tell which entry; upload the Day Book"),
-           "a20": line("L-a20", DA, BA, 20), "lk": line("L-lk", DA, BA)}
+           "a20": line("L-a20", DA, BA, 20), "lk": line("L-lk", DA, BA),
+           # review of 314a178f1: lines no bridge would ask (bridge-go applyHeldLines), so their Day Book upload stays
+           "tn": line("L-tn", DA, BA, mid=None), "ng": line("L-ng", DA, BA, guid=None), "og": line("L-og", DA, BA, guid="ffffffff-0000-0000-0000-000000000146"),
+           "nm": line("L-nm", DA, BA, mid=None, no=""), "wl": line("L-wl", DA, BA, why="waiting for the ledger Made-up Rent; FinCom asks Tally for it"),
+           "cb": line("L-cb", DA, BA, co="Made-up Another Company")}
     db.one("insert into tally_recorder_lines (firm_id, client_id, book_id, device_id, bridge, line_id, event, state) values (%s, 'c1', %s, %s, %s, 'L-a2:resolved', 'created', 'applied') returning id::text" % (q(F), q(BK), q(DB), q(BB)))
     db.sql("update tally_recorder_lines set vch_date = date '2026-04-10' where id = %s" % ids["lk"])
     db.sql("insert into tally_month_locks (firm_id, client_id, book_id, month) values (%s, 'c1', %s, date '2026-04-01')" % (q(F), q(BK)))
@@ -260,6 +294,8 @@ try:
     sv = [(x.get("device"), x.get("bridge")) for x in (bk.get("serving") or [])]
     ok(set(sv) == {(DB, BB), (DD, BD)} and bk.get("linkDevice") == DA and bk.get("fetchOn") is True, "the view: B and D serve (A offline), fetchOn (%s, %s)" % (sv, bk.get("fetchOn")))
     re_ = set(str(x) for x in (bk.get("reask") or []))
+    ok(ids["tn"] in re_ and not (re_ & {ids["ng"], ids["og"], ids["nm"], ids["wl"], ids["cb"]}),
+       "re-asked only lines a bridge asks: by type and number too; never no GUID, another GUID, nothing to ask by, waiting for a ledger, another company (%s)" % sorted(re_))
     ok(ids["a1"] in re_ and ids["a20"] in re_ and not (re_ & {ids["a2"], ids["b1"], ids["a10"], ids["lk"]}),
        "re-asked: A's line (1 day) and its slow-ended one (20 days); not one resolved, a serving bridge's own, a 10-day other one, or one of a locked month (%s)" % sorted(re_))
     good, out = as_role("anon", None, "select tally_read_view()::text"); ok(not good, "anon: no view")

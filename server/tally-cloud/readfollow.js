@@ -12,13 +12,19 @@
 // {follow: Map book -> Set of "device|bridge" serving it (the books this bridge serves), others: Set of company names
 // served only by other bridges, shared: Set of company names this bridge serves}
 export function servingGate(map, devId, bridgeId) {
+  // follow.guid: book -> the link's Tally GUID (146's serving list carries it), for followAskable
   const follow = new Map(), others = new Set(), shared = new Set();
+  follow.guid = new Map();
   const me = String(devId) + "|" + String(bridgeId);
   for (const [name, x] of map instanceof Map ? map : new Map(Object.entries(map || {}))) {
     const list = x && Array.isArray(x.serving) ? x.serving.filter((s) => s && s.device && s.bridge) : [];
     if (!x || !x.book || !list.length) continue;
     const keys = new Set(list.map((s) => String(s.device) + "|" + String(s.bridge)));
-    if (keys.has(me)) { follow.set(String(x.book), keys); shared.add(name); } else others.add(name);
+    if (keys.has(me)) {
+      follow.set(String(x.book), keys); shared.add(name);
+      const g = list.map((s) => String(s.guid || "").trim().toLowerCase()).find(Boolean);
+      if (g) follow.guid.set(String(x.book), g);
+    } else others.add(name);
   }
   return { follow, others, shared };
 }
@@ -38,4 +44,16 @@ export function lineFollows(r, follow, devId, bridgeId) {
   if (!serving) return false;
   if (String(r.device_id || "") === String(devId) && String(r.bridge || "") === String(bridgeId)) return false;
   return !serving.has(String(r.device_id || "") + "|" + String(r.bridge || ""));
+}
+
+// next-link-follow (review of 314a178f1): another bridge's held line is listed for this bridge only when it would ask Tally
+// for it (bridge-go applyHeldLines): the line's company GUID, not empty, the link's (the GUID this bridge serves the book
+// under), and a MasterID (1 to 18 digits, above 0) or a voucher type and number. A follow map without GUIDs: never
+export function followAskable(r, follow) {
+  if (!r || !(follow instanceof Map) || !(follow.guid instanceof Map)) return false;
+  const want = follow.guid.get(String(r.book_id || "")), cg = String(r.company_guid || "").trim().toLowerCase();
+  if (!want || !cg || cg !== want) return false;
+  const mid = String(r.master_id ?? "").replace(/\D/g, "");
+  if (mid && mid.length <= 18 && /[1-9]/.test(mid)) return true;
+  return String(r.vch_type || "").trim() !== "" && String(r.vch_no || "").trim() !== "";
 }

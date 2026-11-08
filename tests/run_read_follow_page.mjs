@@ -11,6 +11,7 @@
 //   4. served by nobody and the linked computer offline: the row's words and the buttons' result; open nowhere: its words
 //   5. fetchOn is the cloud's (a key's switch on the same computer, as it is now)
 //   6. "asking Tally again" only for lines the cloud lists to re-ask (every one of them)
+//   7. the cloud's list empty but a bridge FinCom hears has the company open (tallyServe): nothing said, never "offline"
 import assert from "node:assert/strict";
 
 const now = Date.now(), iso = (minAgo) => new Date(now - minAgo * 60000).toISOString();
@@ -69,4 +70,17 @@ assert.equal(reasked([{ id: 11 }], CO), false);                    // nobody ser
 book({ serving: [], linkHeardAt: iso(0) });
 assert.equal(readWhere(CO).kind, "closed"); assert.match(noAnswer(CO), /is not open in any Tally FinCom hears/);
 assert.equal(readWhere("Made-up Not Linked"), null);
+// 7. review of 314a178f1: the cloud's list empty (a link with no GUID, a bridge older than 2.4.5, a beat of over 50
+//    companies) while a bridge FinCom hears has the company open for reading: not "offline", not "Nothing can answer now"
+globalThis.tallyServe = (company, o) => { assert.equal(o.reads, true); assert.equal(o.own, ""); return serve; };
+serve = { dev: dev(B), id: BB };
+book({ serving: [], linkHeardAt: iso(60 * 20) });
+assert.equal(readWhere(CO), null); assert.equal(noAnswer(CO), "");
+book({ serving: [], linkHeardAt: iso(0) });
+assert.equal(readWhere(CO), null); assert.equal(noAnswer(CO), "");
+globalThis.tallyServe = () => { throw new Error("made-up"); };                // unsure: never "offline"
+assert.equal(readWhere(CO), null); assert.equal(noAnswer(CO), "");
+globalThis.tallyServe = (company, o) => null;                               // open nowhere FinCom hears: as in 4.
+book({ serving: [], linkHeardAt: iso(60 * 20) });
+assert.equal(readWhere(CO).kind, "offline"); assert.match(noAnswer(CO), /^Nothing can answer now\. The computer this client is linked to is offline/);
 console.log("run_read_follow_page: all passed");
