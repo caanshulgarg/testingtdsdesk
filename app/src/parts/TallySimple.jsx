@@ -25,7 +25,7 @@ import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
 import OlderEntries, { TurnOn, owner } from "./TallyFetch.jsx";
 import { PostingWait } from "./StuckJobs.jsx";
-import { press, say, busyOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
+import { press, say, busyOf, saidOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
 function countLedgers(rows) {
   rows.forEach((r) => {
@@ -562,7 +562,9 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
     <td className="tpt-td tpt-act" data-label="">
       <div className="tpt-act-in">{btn}{note && <span className="tpt-note" data-tpt-note="">{note}</span>}
         {/* next-buttons: what came of Bring books / Bring missing days, kept with the row whatever its button turns into */}
-        {linked && <><Said k={"books:" + row.cid} hook="books" /><Said k={"fill:" + row.cid} hook="bring" /></>}
+        {/* (drawn only once pressed: a long list keeps its drawing light; a press redraws the page) */}
+        {linked && (saidOf("books:" + row.cid) || busyOf("books:" + row.cid)) && <Said k={"books:" + row.cid} hook="books" />}
+        {linked && (saidOf("fill:" + row.cid) || busyOf("fill:" + row.cid)) && <Said k={"fill:" + row.cid} hook="bring" />}
         <button type="button" className="linkbtn tpt-more-btn" data-tpt-open={key} aria-expanded={more ? "true" : "false"} aria-label={(more ? "Less for " : "More for ") + label} onClick={toggle}>{more ? "Less ▴" : "More ▾"}</button></div>
     </td>
   </tr>

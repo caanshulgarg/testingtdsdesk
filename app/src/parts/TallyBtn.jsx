@@ -11,6 +11,7 @@
 // Loaded only with the Tally page's code (the Tally and TallyCompanies chunks): the app's first file does not grow.
 import { useEffect, useState } from "react";
 import { noAnswer } from "../lib/readFollow.js";
+import { soonDraw } from "../lib/soonDraw.js";
 
 export const LATE_MS = 120000, SLOW_MS = 20000, KEEP_MS = 180000;
 export function errWords(e) {
@@ -30,7 +31,8 @@ export const within = (p, ms = SLOW_MS) => new Promise((yes, no) => { let t = 0;
   Promise.resolve(p).then((v) => { clearTimeout(t); yes(v); }, (e) => { clearTimeout(t); no(e); }); });
 
 const SAID = {}, BUSY = {}, subs = new Set();
-const tell = () => { subs.forEach((f) => { try { f(); } catch (e) { /* */ } }); };
+// (and the page drawn again: a part that draws its words only once something was pressed sees them)
+const tell = () => { subs.forEach((f) => { try { f(); } catch (e) { /* */ } }); soonDraw(); };
 export const busyOf = (k) => !!BUSY[k];
 export function saidOf(k) { const s = SAID[k]; return s && Date.now() - s.at < (s.keep || KEEP_MS) ? s : null; }
 export function say(k, text, bad = false, more = null) { if (!text) delete SAID[k]; else SAID[k] = Object.assign({ text, bad: !!bad, at: Date.now() }, more); tell(); }
