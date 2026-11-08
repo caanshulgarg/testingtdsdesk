@@ -14,6 +14,8 @@ import { heldFor } from "../parts/HeldBlock.jsx";
 import { soonDraw } from "./soonDraw.js";
 import { QUIET } from "./quietReads.js";
 import { HERE, ownHint, lastMine } from "./tallyConnect.js";
+// next-link-follow (migration 146): where a linked book is read from, and when nothing can answer
+import { readWhere, followFetch, reasked } from "./readFollow.js";
 
 export const YES = "Yes", NO = "No", NOTYET = "Not yet", DASH = "—";
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -116,7 +118,13 @@ function changeWords(cid) {
   const bits = [v.changed > 0 ? nf(v.changed) + " new or changed" : "", v.renamed > 0 ? nf(v.renamed) + " renamed" : ""].filter(Boolean);
   return { known: true, words: bits.length ? "Changed in Tally today: " + bits.join(", ") : "" };
 }
-// the held lines a person must settle by uploading that day's Day Book (the one classifier: Rec.needKind), first day first
+// the held lines a person must settle by uploading that day's Day Book (the one classifier: Rec.needKind)
+function heldLines(cid) {
+  if (typeof AlertHub !== "object" || !AlertHub.heldFor || typeof Rec !== "object" || !Rec.needKind) return [];
+  let lines = []; try { lines = AlertHub.heldFor([cid]) || []; } catch (e) { lines = []; }
+  return lines.filter((l) => ["daybook", "dupid"].includes(Rec.needKind(l)));
+}
+// (their days, first day first)
 function heldDays(cid) {
   if (typeof AlertHub !== "object" || !AlertHub.heldFor || typeof Rec !== "object" || !Rec.needKind) return [];
   let lines = []; try { lines = AlertHub.heldFor([cid]) || []; } catch (e) { lines = []; }
@@ -497,6 +505,8 @@ function whyOf(src) {
 }
 // next-tally-other-login: this login's own Tally open with no company loaded: said plainly (never another login's company)
 export const NO_CO = "Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute.";
+// bridge 2.5.8 (asks again within 30 s while Tally names no company): step 4's help when it stays
+export const NO_CO_HELP = "If the company is already open and this stays more than a minute: in TallyPrime press Alt+F3, then F3 to make sure it is loaded (enter its password or TallyVault if asked), then press Check again.";
 const noCo = (o, up) => (up && !o.names.size && !o.why ? Object.assign(o, { noCo: true, why: NO_CO }) : o);
 // this login's own Tally answers: its bridge's own sessions (another user's never), else (an older answer) Tally up
 const upHere = (st) => { const s = [].concat(st.sessions || []).filter((x) => x && !x.skipped && x.mine !== false); return (st.sessions || []).length ? s.some((x) => x.ok) : !!st.tallyUp; };
@@ -650,7 +660,11 @@ function clientRow(co, all, opts) {
   // next-tally-ledgers-button (04-Nov-2026): not yet or stuck, the button "Bring ledgers from Tally" (firstSync, now: the
   // ledgers wake and, through the cloud, Update now); it can run when the company is open in Tally on this user's own
   // computer or on any computer FinCom hears now, else one plain line
-  const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company));
+  // next-link-follow (migration 146): where the book is read from (another login's Tally when the linked one is offline or
+  // lacks it), or the linked computer offline with the company open in no other Tally: said on the row, never a silent queue
+  const rw = readWhere(company);
+  row.where = rw && rw.text ? { kind: rw.kind, text: rw.text } : null;
+  const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company)) || !!(rw && rw.reader);
   // next-tally-connectfix (finding 6; staging: "Coming in now" / "coming in by itself" for 34 hours): no ledgers yet, and
   // the computer the company is linked to cannot bring them (its bridge older than 2.5.3, or it sees none of its Tallys):
   // the true reason, and no button that cannot work
@@ -668,25 +682,34 @@ function clientRow(co, all, opts) {
   const bs = bookSum(cid), p = bs && bs.pull && !bs.pull.done ? bs.pull : null, fill = bs ? (bookFetch(cid, bs.book) || {}).fill : null;
   const days = daybookHeld(cid), bk = cloudBook(cid), hd = heldDays(cid);
   let need = []; try { need = needDays({}, cid); } catch (e) { need = []; }
-  const canFetch = !!(bs && (bs.devices || []).some((d) => d.fetchOn));
-  const hb = heldFor(cid);
-  if (hb) {
+  // (the switch of the computer key the book moved from, on the same computer, reads its older days: the cloud's fetch_on)
+  const canFetch = !!(bs && (bs.devices || []).some((d) => d.fetchOn)) || followFetch(company);
+  // next-link-follow: entries Tally did not answer for in time (or that a computer not reading the company held) are asked
+  // again by the live bridge that has the company open, by itself, before anyone is asked for a Day Book upload
+  const hl = heldLines(cid), again = hl.length > 0 && reasked(hl, company);
+  const hb = again ? null : heldFor(cid);
+  if (again) {
+    row.e = { w: NOTYET, note: "FinCom is asking Tally again for " + (hl.length === 1 ? "1 entry" : nf(hl.length) + " entries") + " where the company is open now" };
+    row.todo = "Nothing yet: FinCom asks Tally again by itself first. Upload the Day Book only if this stays.";
+    row.upload = true;
+  } else if (hb) {
     // the held lines (136): All entries received? No, the period, FinCom's own check of them; the row's button is the upload
     const c = hb.check || {}, pct = c.total > 0 ? Math.round((100 * c.done) / c.total) : 0;
     row.e = { w: NO, note: missingWords([{ from: hb.from, to: hb.to }]) + (c.state === "checking" || c.state === "queued" ? " · FinCom is checking them with Tally now (" + pct + "%)" : "") };
-    row.act = { kind: "upload", label: "Upload Day Book", run: hb.upload };
+    row.act = { kind: "upload", label: "Upload Day Book", run: hb.upload, held: true };
     row.todo = hb.n === 1 ? "1 change saved in Tally is not in FinCom yet. Upload the Day Book for those days." : nf(hb.n) + " changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.";
   } else if (fill && Number(fill.waiting) > 0) {
     row.e = { w: NOTYET, note: "Bringing " + nOf(fill.total, "missing day", "missing days") + (Number(fill.etaMin) > 0 ? " · " + etaWords(fill.etaMin) + " left" : "") };
   } else if (p) {
     const pc = pctOf(p);
     row.e = { w: NOTYET, note: (days ? "" : "New client · ") + pc + "% received" + (Number(p.etaMin) > 0 ? " · " + etaWords(p.etaMin).replace(/^about /, "") + " left" : ""), pct: Math.max(2, pc) };
-  } else if (hd.length || need.length) {
+  } else if ((hd.length && !again) || need.length) {
     const words = missingWords(hd.length ? hd.map((d) => ({ from: d, to: d })) : need);
     row.e = { w: NO, note: words || "Some entries are missing" };
-    if (hd.length) { row.act = { kind: "upload", label: "Upload Day Book", day: iso(hd[0]) }; row.todo = "Tally could not send these entries. Upload that day’s Day Book."; }
+    if (hd.length) { row.act = { kind: "upload", label: "Upload Day Book", day: iso(hd[0]), held: true }; row.todo = "Tally could not send these entries. Upload that day’s Day Book."; }
     else if (canFetch) { row.act = { kind: "bring", label: "Bring missing days", need }; row.todo = anyOpen ? "Press the button: FinCom brings them from Tally." : "Open the company in Tally, then press the button."; }
-    else { row.act = { kind: "upload", label: "Upload Day Book", day: iso(need[need.length - 1].from) }; row.todo = "Upload the Day Book for those days."; }
+    // (off: a computer has this company, its reading of older entries turned off; an owner can turn it on, TallySimple's Row)
+    else { row.act = { kind: "upload", label: "Upload Day Book", day: iso(need[need.length - 1].from), off: !!(bs && (bs.devices || []).length) }; row.todo = "Upload the Day Book for those days."; }
     row.upload = row.act.kind !== "upload";
   } else if (days) {
     const last = lastEntry(co, k), to = d8(bk && bk.to);
@@ -695,8 +718,8 @@ function clientRow(co, all, opts) {
   } else {
     row.e = { w: NOTYET, note: running || (open && held) ? "Entries starting" : "" };
   }
-  // what to do (at most one button), else plain words
-  if (!row.act) {
+  // what to do (at most one button), else plain words (the entries being asked again: their own words above)
+  if (!row.act && !again) {
     if (wait && row.l.w !== YES) { row.todo = wait + "."; row.upload = true; }
     else if (stuck && !held) { row.todo = "Keep the company open in Tally, then press Bring ledgers from Tally."; row.upload = true; }
     else if (row.l.bring && anyOpen && !p && !(fill && Number(fill.waiting) > 0)) { row.todo = "Press Bring ledgers from Tally."; row.upload = true; }
@@ -704,9 +727,10 @@ function clientRow(co, all, opts) {
       // (next-tally-page-redesign; the owner on a Mac with no bridge: "0 clients are fine. 8 need you"): a company open in
       // ANY of the firm's Tallys FinCom hears now comes in by itself; only one open nowhere needs opening
       if (anyOpen || p || running || (fill && Number(fill.waiting) > 0)) row.todo = "Nothing. It is coming in by itself.";
-      else row.todo = "Open the company in Tally.";
+      else row.todo = row.where && row.where.kind === "offline" ? row.where.text : "Open the company in Tally.";
       row.upload = true;
-    } else if (row.o.w !== YES) row.todo = "Nothing. Updates when the company is opened in Tally.";
+    } else if (row.where && row.where.kind === "offline") row.todo = row.where.text;
+    else if (row.o.w !== YES) row.todo = "Nothing. Updates when the company is opened in Tally.";
     else row.todo = "Nothing.";
   }
   return row;

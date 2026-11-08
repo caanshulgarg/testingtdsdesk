@@ -19,7 +19,9 @@ export function AutoChip({ x, inert }) {
   const a = x && (x.auto || x.autoHold);
   if (!a) return null;
   const hold = x.autoHold && !x.auto && Date.parse(x.autoHold.until) > Date.now();
-  const when = x.auto ? (notInTally(x) ? "Queued automatically" : "Posted automatically") + (a.at ? " at " + fmtDateTime(a.at) : "") : hold ? "Auto · posting at " + hhmm(x.autoHold.until) : "Auto · posting now";
+  // next-bank-overlap: a line marked "Possible repeat — check" waits (src/js/90): no time is shown for it
+  const rep = !x.auto && typeof bankRepOpen === "function" && bankRepOpen(x);
+  const when = rep ? "Auto · waits: Possible repeat — check" : x.auto ? (notInTally(x) ? "Queued automatically" : "Posted automatically") + (a.at ? " at " + fmtDateTime(a.at) : "") : hold ? "Auto · posting at " + hhmm(x.autoHold.until) : "Auto · posting now";
   return <span className="ap-chip" tabIndex={inert ? undefined : 0} data-ap-chip={a.rule || ""}>
     <span className="ap-chip-t">{a.chip || "Auto"}</span>
     <span className="ap-tip" role="tooltip"><b>{when}</b>{x.auto && x.auto.run ? " (run " + String(x.auto.run).slice(0, 8) + ")" : ""}<br />{a.tip}

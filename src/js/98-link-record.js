@@ -174,6 +174,7 @@ function tallyCoNameRec(co){
 // tally_link_loc: a copy of the company in another folder is never the books; a bridge naming no real folder counts, as
 // tally_link_place_check applies its data), this browser's own bridge first, then the link's computer key (tally_links.device_id / tally_companies.device_id: the
 // last used), then the newest heard. null: open in none. {dev, id, how: "own" | "linked" | "other", at, all: Set of the keys}
+// o.reads (next-link-follow): for a read, a bridge with reading stopped or in test mode does not count
 function tallyServeDevs(){
   const by = new Map(), at = d => String((((d && d.info) || {}).beat || {}).at || "");
   [].concat((typeof TLight === "object" && TLight.st.devs) || [], (typeof TCloud === "object" && TCloud.pane && TCloud.pane.devices) || [])
@@ -212,6 +213,8 @@ function tallyServe(company, o){
       const bf = LinkRec.folderKey(b.dataFolder || (mine ? beat.dataFolder : "")), at = String(b.computer || info.computer || beat.computer || "").trim().toLowerCase() + "|" + bf;
       if (place && bf && at !== place) return;
       if (o.only && !o.only(d, id)) return;
+      // next-link-follow: for reads (o.reads), never a bridge whose reading is stopped (by itself, or from FinCom) or one in test mode
+      if (o.reads && ((b.readStopped && typeof b.readStopped === "object") || (info.readStop && typeof info.readStop === "object") || b.mode === "test")) return;
       if (now - t < 180000 && open.some(n => same((n && n.name) || n))) hits.push({dev: d, id, at: t, how: own && id === own ? "own" : d.id === linked ? "linked" : "other"});
     });
   });

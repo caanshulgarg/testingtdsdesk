@@ -902,7 +902,12 @@ func beatParts(sessions []M) (open, ports []any, tally bool, cos []any) {
 	open, ports = []any{}, []any{}
 	for _, s := range sessions {
 		// 2.5.3: why each port stands as it does (reason), and whether its owner is unknown
-		ports = append(ports, M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"]), "reason": portReason(s), "owner": str(s["owner"])})
+		pe := M{"port": toInt(s["port"]), "ok": s["ok"] == true, "skipped": s["skipped"] == true, "n": len(sessCompanies(s)), "error": cut(str(s["error"]), 120), "state": str(s["tallyState"]), "reason": portReason(s), "owner": str(s["owner"])}
+		// 2.5.8: when Tally last answered the company list on this port, and what it named (nocompany258.go, 4)
+		if at, l := askFields(s); l != "" {
+			pe["askedAt"], pe["list"] = at, l
+		}
+		ports = append(ports, pe)
 		if s["skipped"] == true {
 			continue
 		}

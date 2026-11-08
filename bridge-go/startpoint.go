@@ -495,10 +495,34 @@ func lightCheckBlocked() string {
 // held stays then). Round 22 (the 2.1.10 code review's Low 7): the list is marked fresh only when Tally gave it afresh;
 // when it gave way or did not answer, its age stays as it was, so it is asked again at the next turn
 func lightCompanyList(sessions []M) []M {
+	l, _ := lightCompanyListFound(sessions)
+	return l
+}
+
+// 2.5.8 (nocompany258.go, 1; review 1): also the ports of this login's open Tallys that ANSWERED with no company are
+// asked again on their short age (30 s, easing to 2 minutes while they stay empty), those ports only (the others keep
+// their list and its 10 minutes); never while someone is typing in Tally, nor in the beat where a port that opened was
+// just asked (review 4). found: the companies such a port names now (the light check's FinComCompany for them waits
+// while someone is typing, review 2)
+func lightCompanyListFound(sessions []M) ([]M, map[string]bool) {
 	shared := filepath.Join(syncDir(), "open-companies.json")
 	before, had := mtime(shared)
+	var only map[int]bool
 	if had && nowFn().Sub(before) < 10*time.Minute {
-		return sessions
+		for port, due := range emptyPorts(sessions, sessionsFromFile(shared), before) {
+			if !nowFn().Before(due) {
+				if only == nil {
+					only = map[int]bool{}
+				}
+				only[port] = true
+			}
+		}
+		if only == nil || typingInTally() {
+			return sessions, nil // (typing: asked at the next turn)
+		}
+	}
+	if reopenAskedLately() {
+		return sessions, nil // review 4: a port that opened was asked a moment ago (ports.go openCompaniesCachedOnce)
 	}
 	open := false
 	for _, s := range sessions {
@@ -507,10 +531,24 @@ func lightCompanyList(sessions []M) []M {
 		}
 	}
 	if !open {
-		return sessions
+		return sessions, nil
 	}
 	if retryHeld() {
-		return sessions // 2.3.1: backed off after the list took over 2 s (retry.go): the list held stands
+		return sessions, nil // 2.3.1: backed off after the list took over 2 s (retry.go): the list held stands
+	}
+	if only != nil {
+		fresh, _ := openCompaniesAsk(bgListTC(only), true) // the 2 s hard stop; postings and typing first
+		_ = os.Chtimes(shared, before, before)             // the others' 10 minutes go on from where they were
+		var found map[string]bool
+		if names := namesAnyOf(fresh, only); len(names) > 0 {
+			found = map[string]bool{}
+			for _, n := range names {
+				found[n] = true
+			}
+			writeLog("Company list: Tally names a company now (it named none before); FinCom is told at once")
+			beatSoon()
+		}
+		return fresh, found
 	}
 	fresh, ok := openCompaniesAsk(bgCompaniesTC(), true) // 2.3.1: the 2 s hard stop (recorder_owntally.go)
 	switch {
@@ -522,7 +560,7 @@ func lightCompanyList(sessions []M) []M {
 		old := nowFn().Add(-time.Hour)
 		_ = os.Chtimes(shared, old, old)
 	}
-	return fresh
+	return fresh, nil
 }
 
 // the owner's addition of 04-Oct-2026: a company seen open in Tally for the first time in this run, and at most every
@@ -550,7 +588,7 @@ func lightCheckOpen(sessions []M) {
 		}
 		return
 	}
-	sessions = lightCompanyList(sessions)
+	sessions, found := lightCompanyListFound(sessions)
 	for _, s := range sessions {
 		if s["skipped"] == true || s["ok"] != true {
 			continue
@@ -567,6 +605,11 @@ func lightCheckOpen(sessions []M) {
 			if why := lightCheckBlocked(); why != "" {
 				lightSkip(name, why)
 				return
+			}
+			// 2.5.8 review 2: a company that just appeared after Tally named none: its first check waits while someone types
+			if found[name] && typingInTally() {
+				lightSkip(name, "someone is typing in Tally (the check goes after it)")
+				continue
 			}
 			if leaseHeldHere(name) {
 				lightSkip(name, "this bridge holds the company for a posting (the check goes after it)")

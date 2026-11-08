@@ -156,6 +156,17 @@ def main():
         scene([adev([up, skipped_b]), bdev()], cos, CL, A_PINGS)
         g = guide()
         ok(g["now"] == "4" and g["states"][:4] == ["done", "done", "done", "now"] and g["say"].startswith("Step 4: Tally is open, but no company is open in it."), "7. step 4: %s" % g["say"])
+        ok(g["say"].endswith(TS.NO_CO_HELP) and "checking again" not in g["say"], "7. step 4's help (bridge 2.5.8), no answer time from an older bridge (%s)" % g["say"])
+        # bridge 2.5.8's beat: when Tally answered the company list on this port, and that it named none
+        scene([adev([dict(up, askedAt="2026-11-08T07:16:03", list="empty"), skipped_b]), bdev()], cos, CL, A_PINGS)
+        g = guide()
+        ok(g["now"] == "4" and g["say"] == "Step 4: Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute. Tally answered at 07:16 with no company; checking again… " + TS.NO_CO_HELP,
+           "7. step 4 with the bridge's answer time (%s)" % g["say"])
+        # (review 5) the bridge not asking again now (held, backed off, or the answer long ago): no "checking again"
+        scene([adev([dict(up, askedAt="2026-11-08T07:16:03", list="emptyHeld"), skipped_b]), bdev()], cos, CL, A_PINGS)
+        g = guide()
+        ok(g["say"] == "Step 4: Tally is open, but no company is open in it. Open your company in TallyPrime: it shows here within a minute. Tally answered at 07:16 with no company. " + TS.NO_CO_HELP,
+           "7. step 4 while the bridge does not ask again: no 'checking again' (%s)" % g["say"])
         ok("port 9041" in g["all"], "7. step 3 done says the port (%s)" % g["all"][:300])
         never_b("7", g)
         probes = E("() => { window.__probed = []; return 0; }"); pg.wait_for_timeout(4000)

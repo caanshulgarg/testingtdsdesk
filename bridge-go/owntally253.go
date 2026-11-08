@@ -279,7 +279,7 @@ func askAfreshBg() {
 				writeLog(fmt.Sprint("Tally list asked afresh: ", r))
 			}
 		}()
-		openCompaniesAsk(bgCompaniesTC(), true)
+		openCompaniesAsk(bgListTC(nil), true) // 2.5.8 review 2: gives way to typing in Tally too, after the lock is taken
 		select {
 		case beatNow <- struct{}{}:
 		default:

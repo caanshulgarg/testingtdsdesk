@@ -562,6 +562,13 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	// fix 3: what the bridge's OWN Tallys list now (never a Tally Windows shows as another user's), for the recorder's rule
 	// that a line is taken only for a company open in the own Tally (recorder_owntally.go); ownAll: each answered or is closed
 	ownOpen, ownAll := map[string]string{}, true
+	partial := false
+	// 2.5.8 round-2 review (low 1): a company's GSTIN / PAN is asked under the background rules (postings first), not
+	// held back by typing: a give-way there would hold it back for 5 minutes (coInfoFailAt)
+	itc := tc
+	if tc.typingGive {
+		itc = bgCompaniesTC()
+	}
 	for _, pp := range plan {
 		e := planEntry(pp)
 		if e["skipped"] == true {
@@ -587,8 +594,30 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		// passed; meanwhile the list it gave last stands (nothing is sent). Only while a list is held (a Tally never
 		// listed is always asked, under the small-check rule after no answer), not for a background ask (it follows
 		// the shared retry schedule, retry.go), and (review B2) never for a fresh ask: a posting, Test connection, Connect
-		if !tc.bg && !fresh {
+		// 2.5.8 (nocompany258.go): a port not among the ports asked keeps its held entry; nothing is sent to it
+		// (round-2 review, medium: then this is not a complete look at the own Tallys for the recorder: partial)
+		if tc.only != nil && !tc.only[toInt(pp["port"])] {
+			if h := heldEntry(toInt(pp["port"])); h != nil {
+				if pp["mine"] != false {
+					partial = true
+				}
+				sessions = append(sessions, h)
+				continue
+			}
+		}
+		if !tc.bg && (!fresh || tc.holdOK) {
 			if _, held := colistHold(toInt(pp["port"]), toInt(pp["pid"])); held {
+				if tc.holdOK && prevCompanies(toInt(pp["port"])) == nil {
+					// 2.5.8 review 3: a Check again on a Tally still in its wait after no answer: not asked this press
+					allFresh = false
+					if pp["mine"] != false {
+						ownAll = false
+					}
+					e["error"], e["tallyState"] = "Tally did not give its company list in 2 s; asked again after a short wait", "open"
+					e["reason"] = portReason(e)
+					sessions = append(sessions, e)
+					continue
+				}
 				if prev := prevCompanies(toInt(pp["port"])); prev != nil {
 					allFresh = false
 					if pp["mine"] != false {
@@ -629,6 +658,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
 			e["error"] = err.Error()
+			if errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRetryWait) {
+				e["gaveWay"] = true // 2.5.8: nothing was answered (it gave way): asked again at once when it may (openCompaniesCachedOnce)
+			}
 			if pp["mine"] == nil {
 				e["error"] = ownerUnknownWords + ": " + err.Error()
 			}
@@ -649,7 +681,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 				if name == "" {
 					continue
 				}
-				inf := getCoInfo(tc, name, toInt(pp["port"]))
+				inf := getCoInfo(itc, name, toInt(pp["port"]))
 				noteCompanyGUID(name, nt(c, "GUID")) // the first GUID seen is held; another one is noted, never taken
 				if pp["mine"] != false {
 					noteBooksFrom(name, nt(c, "BOOKSFROM")) // 2.5.0: the ledger reads' period, from this user's own Tally only (booksfrom.go)
@@ -661,6 +693,7 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"] = true
 			e["companies"] = list
 			e["tallyState"] = "open"
+			noteAsked(toInt(pp["port"]), toInt(pp["pid"]), len(list) == 0) // 2.5.8: when Tally answered, and whether it named none (nocompany258.go)
 		}
 		e["reason"] = portReason(e)
 		sessions = append(sessions, e)
@@ -670,8 +703,26 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	coCache, coCacheAt = sessions, time.Now()
 	coMu.Unlock()
 	_ = saveFile(shared, jsonText(sessions))
-	liveNoteOwnTally(ownOpen, ownAll)
+	if !partial { // 2.5.8 round-2 review: an ask of some ports only is no look at every own Tally (recorder_owntally.go)
+		liveNoteOwnTally(ownOpen, ownAll)
+	}
 	return copySessions(sessions), allFresh
+}
+
+// 2.5.8: the entry the list held for a port (the last ask's), a copy; nil when none
+func heldEntry(port int) M {
+	coMu.Lock()
+	c := coCache
+	coMu.Unlock()
+	if c == nil {
+		c = sessionsFromFile(filepath.Join(syncDir(), "open-companies.json"))
+	}
+	for _, e := range c {
+		if toInt(e["port"]) == port {
+			return copySessions([]M{e})[0]
+		}
+	}
+	return nil
 }
 
 // the companies a Tally named the last time it answered
@@ -814,7 +865,9 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 	}
 	list := []M{}
 	changed := len(held) != len(plan)
+	pidOf := map[int]int{}
 	for _, pp := range plan {
+		pidOf[toInt(pp["port"])] = toInt(pp["pid"])
 		now := planEntry(pp)
 		e, had := byPort[toInt(pp["port"])]
 		if !had || (e["skipped"] == true) != (now["skipped"] == true) || fmt.Sprint(e["mine"]) != fmt.Sprint(now["mine"]) {
@@ -823,13 +876,25 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 		}
 		list = append(list, e)
 	}
-	ask := false
+	ask, reopen, gave := false, false, false
 	for _, e := range list {
 		if e["skipped"] == true {
 			continue
 		}
+		heldState := str(e["tallyState"])
 		st := tallyState(toInt(e["port"]))
 		open := st != "closed"
+		// 2.5.8 (nocompany258.go, 2): a port the list held as closed that takes a connection now (the rule cacheMatches
+		// uses), or a port another Tally program holds now than the one that answered last: asked at once
+		if open && heldState == "closed" {
+			reopen = true
+		}
+		if open && e["gaveWay"] == true {
+			gave = true // an ask that gave way: asked again under the minute's wait (round-2 review, low 2)
+		}
+		if n, had := askNoteOf(toInt(e["port"])); open && had && n.pid != 0 && pidOf[toInt(e["port"])] != 0 && n.pid != pidOf[toInt(e["port"])] {
+			reopen = true
+		}
 		e["ok"] = open
 		e["tallyState"], e["busy"] = st, st == "busy"
 		if !open {
@@ -843,7 +908,18 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 		// a Tally Windows shows now that the list held does not (or not as it is), or one held without its companies
 		ask = ask || changed
 	}
+	// (round-2 review, low 2: not while the cause of a give-way lasts: a posting going, someone typing in Tally)
+	soon := (reopen || gave) && mayAsk && !typingInTally() && !postingGoing()
+	if soon {
+		if reopen {
+			askAfreshNow() // not held by the minute's wait (one in flight, postings first: askAfreshBg's light request)
+		}
+		ask = true
+	}
 	if ask && mayAsk && askAfreshSoon() {
+		if soon {
+			noteReopenAsk() // review 4: the light check does not ask again in this beat (only when an ask started)
+		}
 		if after, ok := mtime(shared); ok && after.After(before) {
 			return openCompaniesCachedOnce(false) // asked at once (a person's check now): its answer
 		}

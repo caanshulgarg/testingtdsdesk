@@ -534,7 +534,7 @@ func TestStock251FiguresAndExceptions(t *testing.T) {
 	a := tallyAllowList[stockID]
 	// 2.5.3: the row says it, as history ("2.5.2 allowed by ...; unchanged in 2.5.3"); the decision line names 2.5.3
 	if !strings.Contains(a.purpose, "2.5.2 allowed by the owner's decision of 2026-10-30 (person's click only; unchanged in "+BridgeVersion+")") || a.measureOnly || a.maxSec <= 0 ||
-		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.7" { // 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+		!strings.Contains(a.measuredOn, "41009967960") || requestClass[stockID] != "exception" || BridgeVersion != "2.5.8" { // 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("the allow-list row: %+v, class %q, version %s", a, requestClass[stockID], BridgeVersion)
 	}
 }
@@ -553,7 +553,7 @@ func allowRowsBeforeStock() string {
 // --- 8. 2.5.2: the version; one request added (the table otherwise 2.5.0's); the decision line names 2.5.2 by the owner's
 // decision of 2026-10-30 (person's click only), 2.5.0's kept as history; the dated line; the test sheet
 func TestStock251VersionAllowList(t *testing.T) {
-	if BridgeVersion != "2.5.7" { // 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
+	if BridgeVersion != "2.5.8" { // 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go)
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	if h := allowListHash(allowRowsBeforeStock()); h != "0ed4d3e21f6fa4d61374a8bcbdef95d2044078d786d49d5d779c4b6d926332ad" {

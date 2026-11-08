@@ -563,7 +563,7 @@ async function clearStatement(){
   if (ans.check) b.rules = [];
   const histPrev = unlearnRows(b.rows.filter(r => r.state !== "sent"));
   b.rows.forEach(r => {
-    if (r.state === "sent") return;
+    if (r.state === "sent" || bankAside(r)) return;
     Object.assign(r, {ledger: "", state: "attention", userSet: false, why: "", source: "", billId: null, billRef: "", tdsAtPay: 0, tdsLedger: "", newGroup: ""});
     delete r.prevState; delete r.tallyIdx; delete r.tallyRef;
   });

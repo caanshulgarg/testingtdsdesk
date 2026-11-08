@@ -43,6 +43,8 @@ import { installAutopost } from "./lib/autopostBoot.js";
 // the registers' and reconciliations' engine, loaded the first time it is needed (registersLoad, src/js/82-registers.js)
 // fast-firstopen: a client's books new to this browser, brought in newest year first (lib/firstOpen.js; TCloud.load)
 window.loadFirstOpen = () => import("./lib/firstOpen.js");
+// next-bank-overlap: an upload's overlap with the statements already here (src/js/96, with the Bank screen too)
+window.loadBankOverlap = () => import("./lib/bankOverlap.js").catch((e) => { staleReload(e, true); throw e; });
 // 28-Oct-2026 (the owner: "anyone can upload XML or JSON"): a Tally JSON export, a zip of Tally files, an Excel file chosen on
 // Books > From Tally, opened by its own module (lib/tallyJson.js; tallyFiles, src/js/23) only when such a file is chosen
 window.loadTallyJson = () => import("./lib/tallyJson.js").catch((e) => { staleReload(e, true); throw e; });

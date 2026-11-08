@@ -183,7 +183,7 @@ function saveBank(what){
   if (what && what.hist){ clearTimeout(saveBank.histTimer); saveBank.histTimer = setTimeout(() => BankDB.set("hist:" + cid, b.hist), 700); }
 }
 window.addEventListener("pagehide", () => { if (bankSaveTimer && S.bank){ clearTimeout(bankSaveTimer); const b = S.bank; BankDB.set("stmt:" + b.cid + ":" + b.cur, b.rows); } });
-function countStates(rows){ const c = {}; rows.forEach(r => { c[r.state] = (c[r.state] || 0) + 1; }); return c; }
+function countStates(rows){ const c = {}; rows.forEach(r => { if (!(typeof bankAside === "function" && bankAside(r))) c[r.state] = (c[r.state] || 0) + 1; }); return c; }
 
 /* ---------- reading cells ---------- */
 function cellText(v){

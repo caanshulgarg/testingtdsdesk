@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "ec765a5d512d40216c67e7b6ae811b022b4b9b19c08fdac987452c8292c6374b",
+    "hash": "c53bc1cf1e7b6a24c182d1629d1e223f5084500c269800e1200434dc09e9d7b8",
     "measured": false
   },
   "autoUpdate": true,
@@ -55,7 +55,9 @@
   },
   "ports": [
     {
+      "askedAt": "2026-10-04T18:30:00",
       "error": "",
+      "list": "named",
       "n": 1,
       "ok": true,
       "owner": "unknown",
@@ -133,6 +135,6 @@
     "offered": ""
   },
   "updating": false,
-  "version": "2.5.7",
+  "version": "2.5.8",
   "windowsUser": ""
 }
