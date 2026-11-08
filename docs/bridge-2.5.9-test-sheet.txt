@@ -3,28 +3,30 @@ FINCOM BRIDGE 2.5.9 - TEST SHEET (2.5.8's sheet below, with 2.5.9's new checks f
 File:        FinComBridge-Setup-2.5.9.exe
 Fingerprint: (written in at the build)
 
-2.5.9: a new tray item, "Measure the fast read (ZZ TEST only)". It times the faster read of older entries (FastEntries,
-in the bridge since 2.5.7 and still SWITCHED OFF) on this computer's own TallyPrime, on a company named exactly ZZ TEST
-open alone, so FinCom can decide whether FastEntries may be switched on for this computer. It only reads, one request
-at a time, only while nobody is working in Tally, and stops at once if Tally takes longer than 2 seconds or its window
-stops answering for 1 second. Only times, counts and field names go to FinCom. Nothing else changes: with nobody
-pressing the item nothing new is sent to Tally. The owner's steps: docs/fast-entries-measure-steps.md.
+2.5.9: a new tray item, "Measure the fast read on the company open in Tally". It times the faster read of older
+entries (FastEntries, in the bridge since 2.5.7 and still SWITCHED OFF) on this computer's own TallyPrime, on the one
+company open in it, which must be linked to a FinCom client (the owner's decision of 08-Nov-2026: a real client's books,
+to see the real speed; ZZ TEST too). It only reads, one request at a time, only while nobody is working in Tally, and
+stops at once if Tally takes longer than 2 seconds or its window stops answering for 1 second. Only times, counts and
+field names go to FinCom. Nothing else changes: with nobody pressing the item nothing new is sent to Tally. The
+owner's steps: docs/fast-entries-measure-steps.md.
 
-CHECK 2.5.9-A - THE MEASUREMENT ON ZZ TEST
-   Follow docs/fast-entries-measure-steps.md: a NEW, empty company named exactly ZZ TEST (never a copy or a restored
-   backup of a client's company), linked to a test client, filled with the trial tool's TRIAL entries only. Close
-   every other company. Right-click the FinCom Bridge icon, choose "Measure the fast read (ZZ TEST only)", say Yes, and
-   leave the computer alone for a few minutes.
-   You should see: a box saying PASS or NOT A PASS, the slowest answer, the longest moment Tally's window did not
-   answer and how many entries were the same, then "FinCom has the result. Nothing was changed in Tally." Tally never
-   feels stuck. On FinCom's Tally page, Advanced (for support) shows "Fast read measured on ZZ TEST" with that run.
+CHECK 2.5.9-A - THE MEASUREMENT ON A CLIENT COMPANY
+   Outside office hours (or with nobody entering in it), open only a linked client company in Tally, the bigger the
+   better. Right-click the FinCom Bridge icon, choose "Measure the fast read on the company open in Tally".
+   You should see: a box "Measure on <the company>? Tally is only read, nothing is written. It stops at once if Tally
+   slows." naming that company. Say Yes and leave the computer alone for a few minutes. Then a box with the company,
+   PASS or NOT A PASS, the slowest answer, the longest moment Tally's window did not answer and how many entries were
+   the same, then "FinCom has the result. Nothing was changed in Tally." Tally never feels stuck. On FinCom's Tally
+   page, Advanced (for support) shows "Fast read measured" with that company and run.
    (Without migration 148 on the server the box says FinCom did not take the result; the run is in Show log.)
 
 CHECK 2.5.9-B - THE REFUSALS (nothing is sent to Tally)
-   Try the item with: no company open; ZZ TEST and another company open; only another company open; FastEntries
-   switched on for this computer (FinCom support); the bridge running as a service with no Tally window on this
-   desktop.
-   You should see: each time a box saying why it cannot start, and nothing in the log about a fast-read request.
+   Try the item with: no company open; two companies open; a company not linked to a FinCom client; FastEntries
+   switched on for this computer (FinCom support); the internet off; the bridge running as a service with no Tally
+   window on this desktop.
+   You should see: each time a box saying why ("Open only the company to measure", "... is not linked to a FinCom
+   client", ...), and nothing in the log about a fast-read request.
 
 CHECK 2.5.9-C - IT STOPS
    Start the measurement, then (a) open another company in Tally, or (b) start typing in Tally and keep at it.
