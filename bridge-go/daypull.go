@@ -120,6 +120,7 @@ type pullItem struct {
 	ChosenAt            string // FinCom's time of the person's choice (ROUND 103: a stop holds until another choice)
 	Fetch               bool
 	Types               []string
+	Check               bool // next-fast-entries: a "Check for changes" day (FinCom marks it "check" only for a fast bridge)
 }
 
 func (it pullItem) key() string {
@@ -221,7 +222,9 @@ func applyPeriodDays(j M) {
 	}
 	nightAns := truthy(j["periodNight"]) && len(arr(v)) > 0
 	max := 3
-	if nightAns {
+	if nightAns || fastOn() {
+		// next-fast-entries: with FastEntries on FinCom hands out up to 30 days by day too (periodpace.js), read as windows;
+		// the night pace itself (more requests a turn, no rest) still follows periodNight only
 		max = pullNightDays()
 	}
 	var items []pullItem
@@ -235,7 +238,7 @@ func applyPeriodDays(j M) {
 			liveSayOnce("pull|notown|"+companyKey(co), "Older entries: "+co+": not asked (FinCom names another company GUID than this bridge holds)")
 			continue
 		}
-		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"]), ChosenAt: cutRunes(str(e["chosenAt"]), 60)}
+		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"]), ChosenAt: cutRunes(str(e["chosenAt"]), 60), Check: e["check"] == true}
 		if pullStoppedFor(co, str(e["chosenAt"])) {
 			continue // ROUND 103 (1b): stopped for this company; only a newer choice in FinCom starts it again
 		}
@@ -474,6 +477,7 @@ func pullNote(it pullItem, phase string, w *pullWork) {
 // --- the loop: one request at a time, at most DayPullPerTurn a turn, the conditions looked at before every one
 func dayPullLoop() {
 	pullLoad()
+	fastLoad() // next-fast-entries: the window and group sizes reached before a restart
 	sleepOrStop(20 * time.Second)
 	for !stopping() {
 		n := 0
@@ -569,10 +573,18 @@ func pullStep() (bool, bool) {
 	}
 	switch {
 	case !w.headsDone:
+		// next-fast-entries (FastEntries, off by default; fastentries.go): a day the window read already is taken as read
+		if fastTake(w) {
+			return false, true
+		}
 		port, why := pullMayAsk(w.it)
 		if why != "" {
+			fastWaited() // review (5): the window's company list is asked again after any wait, as the per-day path's
 			pullSayWait(w.it, why)
 			return false, false
+		}
+		if handled, sent, more := fastStep(w, port); handled {
+			return sent, more
 		}
 		return pullHeadsStep(w, port)
 	case !w.sentHeads:
@@ -649,7 +661,9 @@ func pullHeadsStep(w *pullWork, port int) (bool, bool) {
 		}
 		return true, false
 	}
-	if !strings.Contains(raw, "<ENVELOPE") {
+	// review of 0de692f49 (2), the per-day path too: an answer that is a Tally error (LINEERROR) is a failure, never a day
+	// of no entries (the same handling as an answer that cannot be read)
+	if !strings.Contains(raw, "<ENVELOPE") || reTallyLineErr.MatchString(raw) {
 		w.fails++
 		liveSayOnce("pull|unread|"+it.key(), "Older entries of "+it.Company+": Tally's answer for "+liveDay(it.Day)+" could not be read; asked again later")
 		if w.fails >= 5 {
@@ -983,6 +997,7 @@ func pullFlush(w *pullWork) bool {
 	writeLog(fmt.Sprintf("Older entries of %s: %s: %d entr%s sent to FinCom%s", it.Company, liveDay(it.Day), n, map[bool]string{true: "y", false: "ies"}[n == 1],
 		map[bool]string{true: fmt.Sprintf(" (%d no longer in Tally)", len(w.gone)), false: ""}[len(w.gone) > 0]))
 	w.got, w.gone = append([]string(nil), w.got[n:]...), nil
+	fastRateNote(it, n) // next-fast-entries: the speed told in the beat, FastEntries on only (entries FinCom took, a minute)
 	// an entry whose lines did not total zero was not taken: FinCom marked the day to be uploaded by hand (its words)
 	if words := str(r.json["upload"]); words != "" {
 		pullNoteUpload(it, "entries", words)
@@ -1199,6 +1214,16 @@ func pullLoad() {
 
 // --- for the beat and the tray
 func pullBeat() M {
+	b := pullBeatLocked()
+	// next-fast-entries (review of 0de692f49, 1 and 9): only with FastEntries on, the fast read's switch, sizes and each
+	// company's speed (periodPull.fast); with it off the beat is exactly staging-next's
+	if fastOn() {
+		b["fast"] = fastBeat()
+	}
+	return b
+}
+
+func pullBeatLocked() M {
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
 	cos := M{}

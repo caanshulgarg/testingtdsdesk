@@ -502,6 +502,26 @@ func newStandTally(t *testing.T) *standTally {
 					o.WriteString(v.xml())
 				}
 			}
+		case fastHeadsID: // next-fast-entries: a window's heads, as FinComDayHeads gives them (headsAllDays: the dates not applied)
+			a, z := pinDates(body)
+			for _, v := range f.vch {
+				if (v.date >= a && v.date <= z) || f.headsAllDays {
+					fmt.Fprintf(&o, `<VOUCHER REMOTEID="%s" VCHKEY="%s-0000b4b8:00000008" VCHTYPE="%s" OBJVIEW="Accounting Voucher View"><DATE TYPE="Date">%s</DATE><GUID>%s</GUID><REQUESTORRULE/><VOUCHERTYPENAME>%s</VOUCHERTYPENAME><VOUCHERNUMBER>%s</VOUCHERNUMBER><ALTERID TYPE="Number"> %d</ALTERID><MASTERID TYPE="Number"> %s</MASTERID></VOUCHER>`,
+						v.guid, v.guid, esc(v.typ), v.date, v.guid, esc(v.typ), esc(v.no), v.alter, v.master)
+				}
+			}
+		case fastBatchID: // next-fast-entries: the entries dated in the window with a MasterID in a..b (batchAll: the filter not applied)
+			a, z := pinDates(body)
+			var lo, hi int64 = -1, -1
+			if m := reFastRange.FindStringSubmatch(body); m != nil {
+				lo, hi = toI64(m[1]), toI64(m[2])
+			}
+			for _, v := range f.vch {
+				mv := toI64(v.master)
+				if v.date >= a && v.date <= z && (f.batchAll || (lo >= 0 && mv >= lo && mv <= hi)) {
+					o.WriteString(v.xml())
+				}
+			}
 		case stockID: // 2.5.2: the Stock-in-Hand group (Tally's own figures; the stand gives the same for any period)
 			if f.stockGrp[0] != "" || f.stockGrp[1] != "" {
 				fmt.Fprintf(&o, `<GROUP NAME="Stock-in-Hand" RESERVEDNAME="Stock-in-Hand"><CLOSINGBALANCE TYPE="Amount">%s</CLOSINGBALANCE><OPENINGBALANCE TYPE="Amount">%s</OPENINGBALANCE><LANGUAGENAME.LIST><NAME.LIST TYPE="String"><NAME>Stock-in-Hand</NAME></NAME.LIST></LANGUAGENAME.LIST></GROUP>`, f.stockGrp[1], f.stockGrp[0])

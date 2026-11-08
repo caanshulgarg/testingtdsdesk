@@ -21,6 +21,8 @@ import { useEffect, useRef, useState } from "react";
 import "./tallyCompanies.css";
 import { soonDraw } from "../lib/soonDraw.js";
 import { QUIET } from "../lib/quietReads.js";
+import { pullPaced } from "../lib/pullSpeed.js";
+import { tallyDevs } from "../lib/tallyState.js";
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -59,7 +61,8 @@ function bookOf(cid) {
 export function bookSum(cid) {
   const books = summary(), bk = bookOf(cid);
   if (!books) return null;
-  return (bk && books.find((x) => x.book === bk.book)) || books.filter((x) => x.client === cid).sort((a, b) => String(b.from || "").localeCompare(String(a.from || "")))[0] || null;
+  // next-fast-entries: the time left from the bridge's own speed while its beat is fresh (lib/pullSpeed.js)
+  return pullPaced((bk && books.find((x) => x.book === bk.book)) || books.filter((x) => x.client === cid).sort((a, b) => String(b.from || "").localeCompare(String(a.from || "")))[0] || null, tallyDevs());
 }
 // (read again at once from outside, e.g. after the person's own change elsewhere on the page)
 if (typeof window === "object") window.tfxRefresh = () => { askStatus(true); return summary(true); };
