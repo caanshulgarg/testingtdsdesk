@@ -674,7 +674,7 @@ function clientRow(co, all, opts) {
     // the held lines (136): All entries received? No, the period, FinCom's own check of them; the row's button is the upload
     const c = hb.check || {}, pct = c.total > 0 ? Math.round((100 * c.done) / c.total) : 0;
     row.e = { w: NO, note: missingWords([{ from: hb.from, to: hb.to }]) + (c.state === "checking" || c.state === "queued" ? " · FinCom is checking them with Tally now (" + pct + "%)" : "") };
-    row.act = { kind: "upload", label: "Upload Day Book", run: hb.upload };
+    row.act = { kind: "upload", label: "Upload Day Book", run: hb.upload, held: true };
     row.todo = hb.n === 1 ? "1 change saved in Tally is not in FinCom yet. Upload the Day Book for those days." : nf(hb.n) + " changes saved in Tally are not in FinCom yet. Upload the Day Book for those days.";
   } else if (fill && Number(fill.waiting) > 0) {
     row.e = { w: NOTYET, note: "Bringing " + nOf(fill.total, "missing day", "missing days") + (Number(fill.etaMin) > 0 ? " · " + etaWords(fill.etaMin) + " left" : "") };
@@ -684,9 +684,10 @@ function clientRow(co, all, opts) {
   } else if (hd.length || need.length) {
     const words = missingWords(hd.length ? hd.map((d) => ({ from: d, to: d })) : need);
     row.e = { w: NO, note: words || "Some entries are missing" };
-    if (hd.length) { row.act = { kind: "upload", label: "Upload Day Book", day: iso(hd[0]) }; row.todo = "Tally could not send these entries. Upload that day’s Day Book."; }
+    if (hd.length) { row.act = { kind: "upload", label: "Upload Day Book", day: iso(hd[0]), held: true }; row.todo = "Tally could not send these entries. Upload that day’s Day Book."; }
     else if (canFetch) { row.act = { kind: "bring", label: "Bring missing days", need }; row.todo = anyOpen ? "Press the button: FinCom brings them from Tally." : "Open the company in Tally, then press the button."; }
-    else { row.act = { kind: "upload", label: "Upload Day Book", day: iso(need[need.length - 1].from) }; row.todo = "Upload the Day Book for those days."; }
+    // (off: a computer has this company, its reading of older entries turned off; an owner can turn it on, TallySimple's Row)
+    else { row.act = { kind: "upload", label: "Upload Day Book", day: iso(need[need.length - 1].from), off: !!(bs && (bs.devices || []).length) }; row.todo = "Upload the Day Book for those days."; }
     row.upload = row.act.kind !== "upload";
   } else if (days) {
     const last = lastEntry(co, k), to = d8(bk && bk.to);
