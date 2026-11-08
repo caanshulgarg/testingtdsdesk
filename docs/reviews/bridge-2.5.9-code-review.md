@@ -8,8 +8,9 @@ both outside bridge-go (docs/MIGRATION-ORDER.md: 146 and 148 both kept; server/t
 imports kept), and bf1da6fe5 raises the version to 2.5.9 (the version tests, the stock row's words, the allow-list's
 decision and dated lines, the table hash, the fixtures). Those two are the building session's self-review only.
 
-Range: 4e10e8d0c..bf1da6fe5 (released 2.5.8 to the version bump; the feature is 67646b38d..ce342c9c1, merged with 2.5.8 at
-e3bcf95fe)
+Range: 4e10e8d0c..bf1da6fe5 (released 2.5.8 to the version bump)
+
+The feature's own commits run from 67646b38d to ce342c9c1; e3bcf95fe merges them with 2.5.8.
 
 (bridge-go/: fastmeasure.go and fastmeasure_test.go (new); win_tallyver.go (new, Windows: tally.exe's file version);
 win_tray.go (item 27, its words from fastmeasure.go); server.go (/tray/fastmeasure, a person's only; the dated guard's
