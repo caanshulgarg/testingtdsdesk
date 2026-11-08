@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.8 - TEST SHEET (2.5.7's sheet below, with 2.5.8's new checks first)
 
 File:        FinComBridge-Setup-2.5.8.exe
-Fingerprint: SHA-256 @@SETUP_SHA@@ (FinComBridge-Setup-2.5.8.exe, built @@BUILT@@ at bridge sources @@SRC@@, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.8.exe SHA-256 @@PROG_SHA@@
+Fingerprint: SHA-256 b80b1adc424e4824cb917010501c535fcb6615972aa423c2f2c0f3b1dcd70b5d (FinComBridge-Setup-2.5.8.exe, built 08-Nov-2026 05:06 UTC at bridge sources 04938e593, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.8.exe SHA-256 69524a8cf51504162dd029a345d7546d8ead2fcf3f12329ac49b6a2c0da349ff
 
 2.5.8: a company opened in Tally shows in FinCom within about a minute, also when Tally answered a moment earlier
 that no company was open (Tally just started, the company not loaded yet). It was up to 10 minutes. No new request to
