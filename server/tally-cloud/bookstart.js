@@ -10,7 +10,16 @@
 //   - the book's first day held (min tally_vouchers.day, min tally_days.day; the day just sent by period_entries);
 //   - the start of the older period the person chose to bring in (tally_period_pulls: its days are handed out newest
 //     first, so the earliest arrive last).
-// Openings as on the day before. A start already there is never moved; an openings date already there is kept.
+// Openings as on the day before; a book with no start keeps an openings date already there.
+// A start already there only ever moves EARLIER (bookStartEarlier: "Bring another year", older entries or days stored),
+// never later, to the earliest known day, openings then as on the day before it. The openings held were as at the old
+// start: they stay (nothing is deleted or zeroed) and are said to be so (movedWords, one bell line a day), the existing
+// rules then bring the right ones: booksFromFor answers the new start, the bridge starts its ledger round again with it
+// (bridge-go ledgers.go: a round begun with another books-from starts again) and the round's openings, dated the new start,
+// pass migration 130's check (openingsAt = from_date); a round dated the old start is not taken ("openings as at ... not
+// taken: FinCom's books of this company begin on ...") and an openings file starting later than the book is kept out
+// (ingestLedgers). A chosen period counts only once Tally has counted entries in it (a year Tally does not have never
+// moves the start).
 // A ledger-list round dated with openingsAt (the day its openings are as at): that day is the start when nothing known
 // is earlier (openings and entries then agree); when an entry or a reported start is earlier, nothing is set from the
 // round (openings as at a later day would count the entries between twice): the state or the entries set the earlier
@@ -27,9 +36,10 @@ export function dayOf(v) {
   const d = /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10).replace(/-/g, "") : s;
   return realDay(d) ? d : "";
 }
-// the first day of a chosen older period (tally_period_pulls: fy_start 1 April, part year | h1 | h2); "" when none or stopped
-export function pullStart(pull) {
-  if (!pull || typeof pull !== "object" || pull.state === "stopped") return "";
+// the first day of a chosen older period (tally_period_pulls: fy_start 1 April, part year | h1 | h2); "" when none,
+// stopped, or (counted false) Tally has counted no entry in it yet
+export function pullStart(pull, counted = true) {
+  if (!pull || typeof pull !== "object" || pull.state === "stopped" || !counted) return "";
   const f = dayOf(pull.fy_start);
   if (!f) return "";
   return pull.part === "h2" ? f.slice(0, 4) + "1001" : f;
@@ -51,4 +61,33 @@ export function bookStartPatch(fromDate, openAsOn, known, openingsAt) {
   const f = s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8);
   const before = new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8) - 1)).toISOString().slice(0, 10);
   return openAsOn ? { from_date: f } : { from_date: f, open_as_on: before };
+}
+
+// a book WITH a start: the move EARLIER to the earliest known day, {from_date, open_as_on, was}; null when the known day
+// is not earlier (never later)
+export function bookStartEarlier(fromDate, known) {
+  const was = dayOf(fromDate), s = dayOf(known);
+  if (!was || !s || s >= was) return null;
+  const before = new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8) - 1)).toISOString().slice(0, 10);
+  return { from_date: s.slice(0, 4) + "-" + s.slice(4, 6) + "-" + s.slice(6, 8), open_as_on: before, was: was.slice(0, 4) + "-" + was.slice(4, 6) + "-" + was.slice(6, 8) };
+}
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dmy = (d) => +d.slice(8, 10) + "-" + MON[+d.slice(5, 7) - 1] + "-" + d.slice(0, 4);
+// the bell's words for a start moved earlier (ISO days)
+export function movedWords(company, move) {
+  const c = typeof company === "string" && company.trim() ? company.trim().slice(0, 120) + ": " : "";
+  return c + "the books in FinCom now begin on " + dmy(move.from_date) + " (older entries brought in; they began on " + dmy(move.was) + "). " +
+    "The opening balances held are still as at " + dmy(move.was) + ", not " + dmy(move.from_date) + ": balances and reports are not right until FinCom Bridge reads the opening balances again as at " + dmy(move.from_date) + " (its next ledger read).";
+}
+// India's date (the bell's day) of a moment
+export const istDay = (ms) => new Date(ms + 5.5 * 3600000).toISOString().slice(0, 10);
+// a UUID from a SHA-256 hex (the bell's one-a-day key stands in for the device, as migration 130's notices do)
+export const uuidOfHex = (h) => h.slice(0, 8) + "-" + h.slice(8, 12) + "-" + h.slice(12, 16) + "-" + h.slice(16, 20) + "-" + h.slice(20, 32);
+// the whole decision for one book, from what index.ts read: {kind: "move", move} | {kind: "set", patch} |
+// {kind: "none", known}. b = {fromDate, openAsOn, stateFrom, firstVoucher, firstDay, pull, pullCounted, day, openingsAt}
+export function startDecision(b) {
+  const known = earliestDay([b.stateFrom, b.firstVoucher, b.firstDay, pullStart(b.pull, b.pullCounted === true), b.day]);
+  if (dayOf(b.fromDate || "")) { const move = bookStartEarlier(b.fromDate, known); return move ? { kind: "move", move } : { kind: "none", known }; }
+  const patch = bookStartPatch(null, b.openAsOn, known, b.openingsAt);
+  return patch ? { kind: "set", patch } : { kind: "none", known };
 }

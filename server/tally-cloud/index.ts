@@ -235,7 +235,7 @@ import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
-import { bookStartPatch, earliestDay, pullStart } from "./bookstart.js";   // next-book-start: a book's start when it has none (bookStartFromState)
+import { startDecision, pullStart, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start when it has none (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -3463,37 +3463,69 @@ async function bookStartFromUpload(book: string, from: string) {
 }
 // next-book-start (08-Nov-2026): a book filled only by a bridge's period entries and ledger-list rounds had no start nor
 // openings date (only an openings file or an upload set them), so the browser and tally_pick ignored it, its entries shown
-// nowhere. When the book has none, its start is set to the EARLIEST of the bridge's reported start (its state's from, read
-// from the stored state when the call carries none), the book's first entry and first day held, the day just stored and
-// the start of the older period the person chose (bookstart.js; migration 91's rule: never later than an entry held), with
-// openings as on the day before; a dated ledger-list round (o.openingsAt) sets its own day only when nothing known is
-// earlier. One update, only where from_date is null: a start already there is never moved. booksFromFor then answers it
-// (its memo of the book dropped). A book with nothing to go by is looked at again after 5 minutes, or at once when a call
-// brings a day. Never fails the call
-const startKnown = new Set<string>(), startNone = new Map<string, number>();
+// nowhere. The book's start is the EARLIEST of the bridge's reported start (its state's from, read from the stored state
+// when the call carries none), the book's first entry and first day held, the day just stored and the start of the older
+// period the person chose once Tally has counted entries in it (bookstart.js; migration 91's rule: never later than an
+// entry held), openings as on the day before. A book with none gets it (a dated ledger-list round, o.openingsAt, sets its
+// own day only when nothing known is earlier); a book with one has it moved EARLIER only, never later ("Bring another
+// year"), its openings then said in the bell to be still as at the old start until the bridge reads them again as at the
+// new one (bookstart.js says how the existing rules bring them). One update each, guarded in the database (from_date is
+// null / from_date later than the new day). booksFromFor then answers it (its memo of the book dropped). A book is looked
+// at again after 5 minutes, or at once when a call brings a day earlier than its start. Never fails the call
+const startMemo = new Map<string, { from: string; t: number }>();
 async function bookStartFromState(book: string, o: { stateFrom?: string; day?: string; openingsAt?: string } = {}) {
-  if (!book || startKnown.has(book)) return;
-  if (!o.day && !o.openingsAt && Date.now() - (startNone.get(book) || 0) < 300000) return;
+  if (!book) return;
+  const m = startMemo.get(book), day = dayOf(o.day || ""), sf = dayOf(o.stateFrom || "");
+  if (m && Date.now() - m.t < 300000) {
+    const sooner = (d: string) => !!d && (!m.from || d < m.from);
+    if (!(m.from ? sooner(day) || sooner(sf) : day || sf || o.openingsAt)) return;
+  }
+  const memo = (from: string) => { if (startMemo.size > 5000) startMemo.clear(); startMemo.set(book, { from, t: Date.now() }); };
   try {
-    const { data: bk, error } = await db.from("tally_books").select("from_date, open_as_on, state").eq("book_id", book).maybeSingle();
+    const { data: bk, error } = await db.from("tally_books").select("from_date, open_as_on, state, firm_id, client_id, company").eq("book_id", book).maybeSingle();
     if (error || !bk) { if (error) console.log("tally-ingest: the book's start not read", book, String(error.message || "").slice(0, 160)); return; }
-    if (bk.from_date) { if (startKnown.size > 5000) startKnown.clear(); startKnown.add(book); startNone.delete(book); return; }
+    const was = dayOf(bk.from_date ? String(bk.from_date) : "");
     const first = (t: string) => db.from(t).select("day").eq("book_id", book).order("day", { ascending: true }).limit(1);
     const [{ data: v, error: ve }, { data: d, error: de }, { data: pull }] = await Promise.all([first("tally_vouchers"), first("tally_days"),
       db.from("tally_period_pulls").select("fy_start, part, state").eq("book_id", book).maybeSingle()]);   // without migration 98: no pull
     if (ve || de) { console.log("tally-ingest: the book's first day not read", book, String((ve || de)?.message || "").slice(0, 160)); return; }
-    const from = typeof o.stateFrom === "string" ? o.stateFrom : (bk.state && typeof bk.state === "object" ? String((bk.state as any).from || "") : "");
-    const known = earliestDay([from, (v as any)?.[0]?.day, (d as any)?.[0]?.day, pullStart(pull), o.day]);
-    const patch = bookStartPatch(null, bk.open_as_on, known, o.openingsAt);
-    if (!patch) {
-      if (!known) { if (startNone.size > 5000) startNone.clear(); startNone.set(book, Date.now()); }
-      else if (o.openingsAt) console.log("tally-ingest: the book's start not set from the ledger round", book, "openings as at", o.openingsAt, "but known from", known);
+    // a chosen period counts once Tally has counted an entry in it (a year Tally does not have never moves the start)
+    let counted = false;
+    const ps = pullStart(pull);
+    if (ps && (!was || ps < was)) {
+      let q = db.from("tally_period_days").select("day").eq("book_id", book).gte("day", iso(ps)).gt("tally_n", 0);
+      if (was) q = q.lt("day", iso(was));   // a day Tally counted entries on, before the start held
+      const { data: cn } = await q.limit(1);
+      counted = Array.isArray(cn) && cn.length > 0;
+    }
+    const from = o.stateFrom !== undefined ? sf : dayOf(bk.state && typeof bk.state === "object" ? String((bk.state as any).from || "") : "");
+    const r = startDecision({ fromDate: was, openAsOn: bk.open_as_on, stateFrom: from, firstVoucher: (v as any)?.[0]?.day, firstDay: (d as any)?.[0]?.day,
+      pull, pullCounted: counted, day, openingsAt: o.openingsAt });
+    const said = "(state from " + (from || "none") + (r.kind === "none" ? ", first known " + (r.known || "none") : "") + (o.openingsAt ? ", openings as at " + o.openingsAt : "") + ")";
+    if (r.kind === "move") {
+      const mv = r.move;
+      const { data: up, error: e2 } = await db.from("tally_books").update({ from_date: mv.from_date, open_as_on: mv.open_as_on }).eq("book_id", book).gt("from_date", mv.from_date).select("book_id");
+      if (e2) { console.log("tally-ingest: the book's start not moved", book, String(e2.message || "").slice(0, 160)); return; }
+      fromMemo.delete(book); memo(mv.from_date.replace(/-/g, ""));
+      if (!Array.isArray(up) || !up.length) return;   // moved by another call meanwhile
+      console.log("tally-ingest: the book's start moved earlier", book, mv.was, "->", mv.from_date, "openings as on " + mv.open_as_on, said);
+      // the bell (migration 47's tally_alerts, as migration 130's held openings): one line a day for the book and the new day
+      const { error: ae } = await db.from("tally_alerts").insert({ firm_id: bk.firm_id, client_id: bk.client_id, book_id: book, device_id: uuidOfHex(await sha256("tally_book_start:" + book + ":" + mv.from_date)),
+        kind: "summary", day: istDay(Date.now()), words: movedWords(String(bk.company || ""), mv), data: { bookStartMoved: { from: mv.from_date, was: mv.was }, openingsAt: mv.was } });
+      if (ae && !/duplicate|23505/i.test(String(ae.message || "") + String((ae as any).code || ""))) console.log("tally-ingest: the start's bell line not kept", book, String(ae.message || "").slice(0, 160));
       return;
     }
+    if (r.kind === "none") {
+      if (was) memo(was);
+      else if (!r.known) memo("");
+      else if (o.openingsAt) console.log("tally-ingest: the book's start not set from the ledger round", book, said);
+      return;
+    }
+    const patch = r.patch;
     const { error: e1 } = await db.from("tally_books").update(patch).eq("book_id", book).is("from_date", null);
     if (e1) { console.log("tally-ingest: the book's start not set", book, String(e1.message || "").slice(0, 160)); return; }
-    fromMemo.delete(book); startNone.delete(book);
-    console.log("tally-ingest: the book's start set", book, patch.from_date, patch.open_as_on ? "openings as on " + patch.open_as_on : "", "(state from " + (from || "none") + ", first known " + (known || "none") + (o.openingsAt ? ", openings as at " + o.openingsAt : "") + ")");
+    fromMemo.delete(book); startMemo.delete(book);
+    console.log("tally-ingest: the book's start set", book, patch.from_date, patch.open_as_on ? "openings as on " + patch.open_as_on : "", said);
   } catch (e) { console.log("tally-ingest: the book's start not set", book, String((e as Error)?.message || e).slice(0, 160)); }
 }
 // a person hands over work: a day book (its days, a part at a time) or the kept day books to be read again
