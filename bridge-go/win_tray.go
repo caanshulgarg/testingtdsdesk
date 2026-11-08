@@ -518,6 +518,7 @@ func (t *tray) menu() {
 	add(11, "Test connection", mfString)
 	add(16, "Measure Tally (for FinCom support)", mfString)
 	add(26, "Test reading old days (read-only)", mfString) // ROUND 103 (1d): the owner's check before older entries are switched on
+	add(27, fastMeasureMenuText, mfString)                 // next-fast-measure: before FastEntries is switched on (fastmeasure.go)
 	// round 21 (2.1.10): the five trial items only while the owner's "Trial tools on this computer" is on in FinCom
 	for _, it := range trayTrialItems(st) {
 		add(it.id, it.text, mfString)
@@ -727,6 +728,43 @@ func (t *tray) command(id int, st M) {
 			return
 		}
 		msgBox(title, company+"\n\nOld-days test: "+str(s["line"])+"\n\nFinCom shows this on its Tally page. Nothing was changed, kept or posted.", mbIconInfo)
+	case 27:
+		// next-fast-measure: the fast read's two requests timed on the test company (fastMeasureCompany), open alone (fastmeasure.go); read only
+		title := "FinCom Bridge - Measure the fast read"
+		if !yesNo(title, fastMeasureConfirm) {
+			return
+		}
+		r := trayCall("POST", "/tray/fastmeasure", M{})
+		if r == nil || r["ok"] != true {
+			why := "The bridge is not answering."
+			if r != nil {
+				why = str(r["error"])
+			}
+			msgBox(title, why, mbIconWarning)
+			return
+		}
+		t.reply("FinCom Bridge", fastMeasureRunning, false)
+		var s M
+		for i := 0; i < 900; i++ {
+			time.Sleep(2 * time.Second)
+			s = trayCall("GET", "/tray/fastmeasure", nil)
+			if s != nil && str(s["state"]) != "running" {
+				break
+			}
+		}
+		if s == nil || str(s["state"]) == "running" {
+			msgBox(title, "The measurement is still running; its result is in Show log when it ends.", mbIconWarning)
+			return
+		}
+		sent := "FinCom has the result."
+		if s["sent"] != true {
+			sent = "FinCom did not take the result; it is in Show log: send the log's last lines to FinCom."
+		}
+		icon := uintptr(mbIconInfo)
+		if s["pass"] != true {
+			icon = mbIconWarning
+		}
+		msgBox(title, fastMeasureCompany+"\n\n"+str(s["line"])+"\n\n"+sent+" Nothing was changed in Tally.", icon)
 	case 18:
 		// round 13: three requests for one day, one after the other (up to 60 s each, plus the wait for Tally behind a
 		// copier or posting request); 13b: started in the bridge and polled, as Measure Tally is

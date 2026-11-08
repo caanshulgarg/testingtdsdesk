@@ -180,6 +180,9 @@
 //                                                    -> {ok, stored, stale, held, n, done} (parsed as a Day Book's entries,
 //                                                       each dated the day, through tally_period_entries); an entry whose
 //                                                       lines do not total zero marks the day to be uploaded by hand
+//   {kind:"fast_measure", company: "ZZ TEST", company_guid, result} -> {ok}: next-fast-measure (migration 143): the fast-read
+//                                                       measurement a person ran from the bridge's tray (fastmeasure.js keeps
+//                                                       only its times, counts and field names); ZZ TEST only, its own computer
 //   {kind:"stock", company, company_guid, from, to, at, status, opening?, closing?, readAt?, ms, holdMs, words?} -> {ok}:
 //                                                       FinCom Bridge 2.5.2 (migration 134): Tally's answer to that click (the
 //                                                       Stock-in-Hand group's opening and closing, a positive stock), or why not
@@ -234,7 +237,8 @@ import { packMonth, monthEnd } from "./monthpack.js";
 import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
-import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
+import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";
+import { cleanFastMeasure, fastMeasurePass, FAST_MEASURE_COMPANY } from "./fastmeasure.js";   // next-fast-measure (migration 143)   // next-fast-entries: 30 days an answer by day to a bridge reading windows
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -4529,6 +4533,28 @@ Deno.serve(sentry.wrap(async (req) => {
         const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
         if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for this client's books." });
         return await stockAnswer(firm, book, body);
+      }
+      case "fast_measure": {
+        // next-fast-measure (migration 143): the fast-read measurement a person ran from the bridge's tray, on the company
+        // named exactly ZZ TEST only, from the computer that named it in its own heartbeat, its GUID the book's
+        if (!periodAllowed(String(dev.id))) return reply(429, { ok: false, error: "This computer has sent too many calls in the last minute; try again in a minute." });
+        if (String(body.company || "") !== FAST_MEASURE_COMPANY) return reply(403, { ok: false, error: "FinCom keeps the fast-read measurement only for the company named exactly ZZ TEST." });
+        const book = await bookFor(firm, FAST_MEASURE_COMPANY);
+        if (!book) return reply(409, { ok: false, notLinked: true, error: "ZZ TEST is not linked to a FinCom client yet: link it on the Tally page, then measure again." });
+        { const elsewhere = await otherPlace(firm, book, dev, body); if (elsewhere) return reply(409, elsewhere); }
+        if (!(await deviceNamed(dev, book, FAST_MEASURE_COMPANY))) return reply(403, { ok: false, notMine: true, error: "This computer has not named ZZ TEST in its own heartbeat; FinCom keeps the measurement only from the computer that has it open." });
+        const recorded = await bookGuidOf(book), sent = typeof body.company_guid === "string" ? body.company_guid.trim() : "";
+        if (recorded && sent.toLowerCase() !== recorded.toLowerCase()) return reply(409, { ok: false, otherGuid: true, error: "This Tally company's GUID is not the one FinCom keeps for ZZ TEST's books." });
+        const r = cleanFastMeasure(body.result);
+        if (!r) return reply(400, { ok: false, error: "Not a fast-read measurement." });
+        const { error } = await db.from("tally_fast_measures").insert({ firm_id: firm, book_id: book, device_id: dev.id, measured_at: r.at, bridge: r.bridge, tally_version: r.tallyVersion,
+          pass: fastMeasurePass(r), worst_ms: r.worstMs, worst_hold_ms: r.worstHoldMs, compared: r.compared, differ: r.differ, line: r.line.slice(0, 400), result: r });
+        if (error) {
+          const m = String(error.message || "");
+          if (/tally_fast_measures/i.test(m) && /does not exist|schema cache/i.test(m)) return reply(503, { ok: false, error: "FinCom is not set up for the fast-read measurement yet (migration 143)." });
+          throw new Error(m);
+        }
+        return reply(200, { ok: true });
       }
       case "groups": {
         const book = await bookFor(firm, String(body.company || ""));

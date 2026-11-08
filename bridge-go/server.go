@@ -794,6 +794,17 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 			return startMeasure(m), nil
 		}
 		return measureStatus(), nil
+	case "/tray/fastmeasure":
+		// next-fast-measure: "Measure the fast read (ZZ TEST only)" (fastmeasure.go). Started by a person only, as Measure
+		// Tally is: a web page, FinCom's own included, is refused
+		if r.Header.Get("Origin") != "" || r.Header.Get("Sec-Fetch-Site") != "" || r.Header.Get("Sec-Fetch-Mode") != "" || r.Header.Get("Sec-Fetch-Dest") != "" {
+			writeLog("Refused a fast-read measurement request from a web page (" + path + ", " + r.Header.Get("Origin") + ").")
+			return nil, &httpErr{403, M{"ok": false, "error": "Measure the fast read is started from the FinCom Bridge tray icon only, never from a web page."}}
+		}
+		if r.Method == "POST" {
+			return startFastMeasure(), nil
+		}
+		return fastMeasureStatus(), nil
 	case "/tray/oldtest":
 		// ROUND 103 (1d): "Test reading old days (read-only)": three days' lists, one at a time, nothing kept (oldtest.go).
 		// Started by a person only, as Measure Tally is: a web page, FinCom's own included, is refused

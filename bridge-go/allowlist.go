@@ -165,7 +165,7 @@ func (e *notAllowedError) Error() string {
 // nil when the request may go to Tally
 func checkAllowed(x string) error {
 	id := tallyRequestID(x)
-	a, ok := allowListNow()[id]
+	a, ok := allowedEntry(id) // next-fast-measure: the two window requests also while the measurement runs
 	if !ok {
 		return &notAllowedError{id, "not on the list"}
 	}
