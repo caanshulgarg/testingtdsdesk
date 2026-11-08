@@ -1,7 +1,7 @@
 FINCOM BRIDGE 2.5.9 - TEST SHEET (2.5.8's sheet below, with 2.5.9's new checks first)
 
 File:        FinComBridge-Setup-2.5.9.exe
-Fingerprint: (written in at the build)
+Fingerprint: SHA-256 fdb1142b943b484fc8e7e05d489db50753e09077fa72396aaeba4cc8c21ef4f7 (FinComBridge-Setup-2.5.9.exe, built 08-Nov-2026 08:56 UTC at bridge sources 497503622, POSTONLY=any; compare with the .sha256 file next to the setup); program FinComBridge-2.5.9.exe SHA-256 4062606bd2fd6c0d0cc8fef6d485c3b76b13ddd72c6a575137a99b1fe18d504e
 
 2.5.9: a new tray item, "Measure the fast read on the company open in Tally". It times the faster read of older
 entries (FastEntries, in the bridge since 2.5.7 and still SWITCHED OFF) on this computer's own TallyPrime, on the one
