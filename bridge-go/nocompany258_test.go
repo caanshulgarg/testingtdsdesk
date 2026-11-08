@@ -308,3 +308,230 @@ func TestR258BeatNeverAsked(t *testing.T) {
 		t.Fatalf("before any answer: %s", jsonText(p))
 	}
 }
+
+// --- the review of next-bridge-258 (findings 1-4)
+
+// emptyAnswer: a stand-in Tally's company list answered with no company while on is set
+func emptyAnswer(f *standTally, on *atomic.Bool) {
+	f.mu.Lock()
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == "TDSDeskCompanies" && on.Load() {
+			_, _ = w.Write([]byte("<ENVELOPE><BODY><DATA><COLLECTION></COLLECTION></DATA></BODY></ENVELOPE>"))
+			return true
+		}
+		return false
+	}
+	f.mu.Unlock()
+}
+
+func drainBeat() {
+	for {
+		select {
+		case <-beatNow:
+		default:
+			return
+		}
+	}
+}
+
+func beatSent() bool {
+	select {
+	case <-beatNow:
+		return true
+	default:
+		return false
+	}
+}
+
+// review 1: two Tallys of this login (the owner's server has several TallyPrime installs), one naming a company, one
+// at Select Company: only the empty one is asked on the short age; the other keeps its 10 minutes; nothing is logged and
+// no beat is sent until the empty one names a company
+func TestR258TwoTallysOnlyTheEmptyOneAskedSoon(t *testing.T) {
+	a, b := newStandTally(t), newStandTally(t)
+	standBridge(t, a, "")
+	r253Server(t, `{"pid": 10, "name": "tally", "session": 1}, {"pid": 11, "name": "tally", "session": 1}`,
+		fmt.Sprintf(`{"port": %d, "pid": 10}, {"port": %d, "pid": 11}`, a.port, b.port))
+	var empty atomic.Bool
+	empty.Store(true)
+	emptyAnswer(b, &empty)
+	oldTyping := keepTypingFn
+	keepTypingFn = func() bool { return false }
+	t.Cleanup(func() { keepTypingFn, nowFn = oldTyping, time.Now })
+	base := time.Now()
+	tick := func(sec int) []M {
+		nowFn = func() time.Time { return base.Add(time.Duration(sec) * time.Second) }
+		return lightCompanyList(openCompaniesCachedOnce(false))
+	}
+	_ = tick(0)
+	a0, b0 := a.n("TDSDeskCompanies"), b.n("TDSDeskCompanies")
+	if a0 != 1 || b0 != 1 {
+		t.Fatalf("the first look: %d and %d asked", a0, b0)
+	}
+	drainBeat()
+	for sec := 30; sec < 9*60; sec += 30 {
+		_ = tick(sec)
+	}
+	if a.n("TDSDeskCompanies") != a0 {
+		t.Fatalf("the Tally naming a company was asked %d more times in 9 minutes (it keeps its 10)", a.n("TDSDeskCompanies")-a0)
+	}
+	if n := b.n("TDSDeskCompanies") - b0; n < 10 {
+		t.Fatalf("the empty Tally was asked again %d times in 9 minutes (the short age)", n)
+	}
+	if logLines("Tally names a company now") != 0 || beatSent() {
+		t.Fatal("logged or beat as if a company appeared, while the empty Tally still names none")
+	}
+	b.mu.Lock()
+	b.coName = "ZZ SECOND"
+	b.mu.Unlock()
+	empty.Store(false)
+	nb := b.n("TDSDeskCompanies")
+	got := tick(9*60 + 30)
+	if b.n("TDSDeskCompanies") != nb+1 || a.n("TDSDeskCompanies") != a0 {
+		t.Fatalf("at the next turn: %d / %d asked", a.n("TDSDeskCompanies")-a0, b.n("TDSDeskCompanies")-nb)
+	}
+	names := map[string]bool{}
+	for _, n := range r258Names(got) {
+		names[n] = true
+	}
+	if !names[zz] || !names["ZZ SECOND"] || logLines("Tally names a company now") != 1 || !beatSent() {
+		t.Fatalf("the company opened in the second Tally: %v, logged %d", r258Names(got), logLines("Tally names a company now"))
+	}
+	// both name a company now: the next ask is at 10 minutes, of both
+	for sec := 10 * 60; sec < 20*60; sec += 30 {
+		_ = tick(sec)
+	}
+	if a.n("TDSDeskCompanies") != a0+1 || b.n("TDSDeskCompanies") != nb+2 {
+		t.Fatalf("after both name one: %d / %d asked in 10 minutes (want one each)", a.n("TDSDeskCompanies")-a0, b.n("TDSDeskCompanies")-nb-1)
+	}
+}
+
+// review 1: only a port that ANSWERED with no company is on the short age: not one that failed or is only open (its
+// earlier answer named a company, or it never answered), nor another user's
+func TestR258EmptyPortsOnlyAnsweredEmpty(t *testing.T) {
+	resetAsks()
+	t.Cleanup(func() { nowFn = time.Now; resetAsks() })
+	base := time.Now()
+	nowFn = func() time.Time { return base }
+	noteAsked(9001, 1, true)  // answered with no company
+	noteAsked(9002, 2, false) // named one; now open with none held (its last ask failed)
+	open := func(port int, mine any) M { return M{"port": port, "ok": true, "mine": mine, "companies": []any{}} }
+	ss := []M{open(9001, true), open(9002, true), open(9003, true), open(9004, true), open(9005, false)}
+	held := []M{{"port": 9003, "ok": false, "error": "Tally did not answer", "companies": []any{}},
+		{"port": 9004, "ok": true, "error": "", "companies": []any{}}}
+	got := emptyPorts(ss, held, base.Add(-time.Minute))
+	if _, ok := got[9001]; !ok || len(got) != 2 {
+		t.Fatalf("on the short age: %v (want 9001, and 9004 that answered with none before this run)", got)
+	}
+	if _, ok := got[9004]; !ok {
+		t.Fatalf("a Tally that answered with none before this run: %v", got)
+	}
+	if d := got[9001].Sub(base); d != 25*time.Second {
+		t.Fatalf("due after %s", d)
+	}
+}
+
+// review 2: the short re-asks give way to typing in Tally after the lock is taken; the first check of a company that
+// just appeared waits while someone types
+func TestR258TypingAfterTheLock(t *testing.T) {
+	f, empty := r258Stand(t)
+	empty.Store(true)
+	var typing atomic.Bool
+	keepTypingFn = typing.Load
+	typing.Store(true)
+	_, _ = openCompaniesAsk(bgListTC(nil), true)
+	if f.n("") != 0 {
+		t.Fatalf("asked while someone types: %v", f.ids())
+	}
+	typing.Store(false)
+	_ = os.Remove(filepath.Join(syncDir(), "open-companies.json"))
+	coMu.Lock()
+	coCache = nil
+	coMu.Unlock()
+	// the empty answer, then the company opened; the person starts typing right after Tally gave the list
+	base := time.Now()
+	nowFn = func() time.Time { return base }
+	lightCheckOpen(openCompaniesCachedOnce(false))
+	empty.Store(false)
+	f.mu.Lock()
+	old := f.behave
+	f.behave = func(w http.ResponseWriter, r *http.Request, id, body string) bool {
+		if id == "TDSDeskCompanies" {
+			defer typing.Store(true)
+		}
+		return old(w, r, id, body)
+	}
+	f.mu.Unlock()
+	nowFn = func() time.Time { return base.Add(30 * time.Second) }
+	n0 := f.n("FinComCompany")
+	lightCheckOpen(openCompaniesCachedOnce(false))
+	if f.n("FinComCompany") != n0 || f.n("TDSDeskCompanyInfo") != 0 {
+		t.Fatalf("the company's first check went while someone types: %v", f.ids())
+	}
+	if logLines("someone is typing in Tally (the check goes after it)") == 0 {
+		t.Fatalf("the skip is not in the log: %s", readText(logFile()))
+	}
+	typing.Store(false)
+	nowFn = func() time.Time { return base.Add(60 * time.Second) }
+	lightCheckOpen(openCompaniesCachedOnce(false))
+	if f.n("FinComCompany") != n0+1 {
+		t.Fatalf("the check did not go once the typing stopped: %v", f.ids())
+	}
+}
+
+// review 3: a Check again held (a posting) keeps the background's minute; after no answer in 2 s the next press does
+// not ask that Tally again during its wait (one 2 s ask a press at most)
+func TestR258CheckAgainHeldAndColistHold(t *testing.T) {
+	f, empty := r258Stand(t)
+	empty.Store(true)
+	at := time.Now().Add(-10 * time.Second).UnixNano()
+	askAfreshAt.Store(at)
+	importsInFlight.Add(1)
+	_ = personCheckNow()
+	importsInFlight.Add(-1)
+	if askAfreshAt.Load() != at {
+		t.Fatal("a held Check again reset the background's minute")
+	}
+	f.mu.Lock()
+	f.slow = func(id, body string) time.Duration {
+		if id == "TDSDeskCompanies" {
+			return 3 * time.Second
+		}
+		return 0
+	}
+	f.mu.Unlock()
+	start := time.Now()
+	_ = personCheckNow()
+	if took := time.Since(start); took > 3500*time.Millisecond {
+		t.Fatalf("a press waited %s", took)
+	}
+	n := f.n("TDSDeskCompanies")
+	_ = personCheckNow()
+	if f.n("TDSDeskCompanies") != n {
+		t.Fatal("a Tally that did not answer in 2 s was asked again at the next press, within its wait")
+	}
+}
+
+// review 4: a port that opened is asked once, not again by the light check in the same beat
+func TestR258ReopenAskedOnceInTheBeat(t *testing.T) {
+	f, _ := r258Stand(t)
+	_, _ = openCompaniesAsk(bgCompaniesTC(), true)
+	shared := filepath.Join(syncDir(), "open-companies.json")
+	held := sessionsFromFile(shared)
+	for _, e := range held {
+		if toInt(e["port"]) == f.port {
+			e["ok"], e["companies"], e["tallyState"], e["reason"] = false, []any{}, "closed", "closed"
+		}
+	}
+	_ = saveFile(shared, jsonText(held))
+	coMu.Lock()
+	coCache = nil
+	coMu.Unlock()
+	later := time.Now().Add(11 * time.Minute) // the list's 10 minutes passed too
+	nowFn = func() time.Time { return later }
+	n0 := f.n("TDSDeskCompanies")
+	ss := openCompaniesCached() // the beat: the port that opened, asked at once
+	_ = lightCompanyList(ss)    // its light check in the same beat
+	if f.n("TDSDeskCompanies") != n0+1 {
+		t.Fatalf("asked %d times in one beat", f.n("TDSDeskCompanies")-n0)
+	}
+}

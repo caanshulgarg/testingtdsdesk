@@ -316,6 +316,11 @@ type TC struct {
 	// 2.5.4 review B2: Tally itself is asked, never a late answer kept (late254.go): a posting whose company the kept list
 	// does not name asks once more
 	noLate bool
+	// 2.5.8 (nocompany258.go): the company list asked of these ports only (the others' held lists stand, nothing sent
+	// to them): the short re-ask of a Tally that answered with no company. nil: every port, as before
+	only map[int]bool
+	// 2.5.8 review 3: a person's Check again keeps a Tally's wait after it did not give its list in 2 s (colistHold)
+	holdOK bool
 }
 
 // 2.4.8 (anyport.go): the typed port's trial's yield, looked at right before the send (tallyRaw)

@@ -2003,7 +2003,7 @@ function tallyIniOf(b: any) {
 // bridge 2.5.3: a port's reason, and the beat's tallyWhy (anything else dropped)
 const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown", "another user", "another bridge", "not Tally"];
 // bridge 2.5.8: what Tally's last answer to the company list named on a port (never: not asked since the bridge started)
-const PORT_LISTS = ["named", "empty", "kept", "never"];
+const PORT_LISTS = ["named", "empty", "emptyHeld", "kept", "never"];
 // bridge 2.5.4: "connection off" (this login's Tally runs but takes no connection; the fix in tallyConnectSay)
 const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another user", "no Tally running in this login"];
 // bridge 2.5.4: why a bridge did or did not update (the beat's update: the last look, its words, the version offered,

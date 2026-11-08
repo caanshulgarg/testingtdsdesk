@@ -587,8 +587,31 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 		// passed; meanwhile the list it gave last stands (nothing is sent). Only while a list is held (a Tally never
 		// listed is always asked, under the small-check rule after no answer), not for a background ask (it follows
 		// the shared retry schedule, retry.go), and (review B2) never for a fresh ask: a posting, Test connection, Connect
-		if !tc.bg && !fresh {
+		// 2.5.8 (nocompany258.go): a port not among the ports asked keeps its held entry; nothing is sent to it
+		if tc.only != nil && !tc.only[toInt(pp["port"])] {
+			if h := heldEntry(toInt(pp["port"])); h != nil {
+				if pp["mine"] != false && h["ok"] == true {
+					for _, c := range sessCompanies(h) {
+						ownOpen[liveOwnKey(str(c["guid"]), str(c["name"]))], ownOpen[liveOwnKey("", str(c["name"]))] = str(c["name"]), str(c["name"])
+					}
+				}
+				sessions = append(sessions, h)
+				continue
+			}
+		}
+		if !tc.bg && (!fresh || tc.holdOK) {
 			if _, held := colistHold(toInt(pp["port"]), toInt(pp["pid"])); held {
+				if tc.holdOK && prevCompanies(toInt(pp["port"])) == nil {
+					// 2.5.8 review 3: a Check again on a Tally still in its wait after no answer: not asked this press
+					allFresh = false
+					if pp["mine"] != false {
+						ownAll = false
+					}
+					e["error"], e["tallyState"] = "Tally did not give its company list in 2 s; asked again after a short wait", "open"
+					e["reason"] = portReason(e)
+					sessions = append(sessions, e)
+					continue
+				}
 				if prev := prevCompanies(toInt(pp["port"])); prev != nil {
 					allFresh = false
 					if pp["mine"] != false {
@@ -629,6 +652,9 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 			e["ok"], e["companies"], e["busy"], e["tallyState"] = true, prevCompanies(toInt(pp["port"])), true, "busy"
 		} else if err != nil {
 			e["error"] = err.Error()
+			if errors.Is(err, errPreempted) || errors.Is(err, errBackoff) || errors.Is(err, errRetryWait) {
+				e["gaveWay"] = true // 2.5.8: nothing was answered (it gave way): asked again at once when it may (openCompaniesCachedOnce)
+			}
 			if pp["mine"] == nil {
 				e["error"] = ownerUnknownWords + ": " + err.Error()
 			}
@@ -673,6 +699,22 @@ func openCompaniesAsk(tc *TC, fresh bool) ([]M, bool) {
 	_ = saveFile(shared, jsonText(sessions))
 	liveNoteOwnTally(ownOpen, ownAll)
 	return copySessions(sessions), allFresh
+}
+
+// 2.5.8: the entry the list held for a port (the last ask's), a copy; nil when none
+func heldEntry(port int) M {
+	coMu.Lock()
+	c := coCache
+	coMu.Unlock()
+	if c == nil {
+		c = sessionsFromFile(filepath.Join(syncDir(), "open-companies.json"))
+	}
+	for _, e := range c {
+		if toInt(e["port"]) == port {
+			return copySessions([]M{e})[0]
+		}
+	}
+	return nil
 }
 
 // the companies a Tally named the last time it answered
@@ -836,7 +878,7 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 		open := st != "closed"
 		// 2.5.8 (nocompany258.go, 2): a port the list held as closed that takes a connection now (the rule cacheMatches
 		// uses), or a port another Tally program holds now than the one that answered last: asked at once
-		if open && heldState == "closed" {
+		if open && (heldState == "closed" || e["gaveWay"] == true) {
 			reopen = true
 		}
 		if n, had := askNoteOf(toInt(e["port"])); open && had && n.pid != 0 && pidOf[toInt(e["port"])] != 0 && n.pid != pidOf[toInt(e["port"])] {
@@ -858,6 +900,7 @@ func openCompaniesCachedOnce(mayAsk bool) []M {
 	if reopen && mayAsk && !typingInTally() {
 		askAfreshNow() // not held by the minute's wait (one in flight, postings first: askAfreshBg's light request)
 		ask = true
+		noteReopenAsk() // review 4: the light check does not ask again in this beat
 	}
 	if ask && mayAsk && askAfreshSoon() {
 		if after, ok := mtime(shared); ok && after.After(before) {
