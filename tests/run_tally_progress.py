@@ -123,6 +123,17 @@ def main():
         ok(all(txt(R(nm) + " [data-tpt-open]") == "More ▾" for nm in (KES, ORBIT, ACME, NIMB)) and n(TB + " tr[data-tpt-light]") == 0, "2. each row its More ▾, all closed")
         pg.click(R(NIMB) + ' [data-tpt-main="masters"]'); pg.wait_for_timeout(800)
         ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(NIMB)), "2. Bring masters: the masters' read asked (the Update now of From Tally)")
+        nm_ = txt(R(NIMB) + " [data-tpg-masters]")
+        ok(pg.get_attribute(R(NIMB) + " [data-tpg-masters]", "data-tpg-masters") in ("reading", "waiting") and "group" not in nm_, "2 (review 1). a first masters read: no '· N groups' before FinCom holds them (%s)" % nm_)
+        ok(txt(R(NIMB) + " [data-tpt-state]") in ("Updating", "Waiting for Tally") and n(R(NIMB) + " .tpt-why") == 0 and mains(NIMB) == ["reading"],
+           "2 (review 5). the client cell just '● Updating', the read's words only in the Masters cell (%s | %s)" % (txt(R(NIMB) + " .tpt-client"), nm_))
+        # (review 5) "on the server" only once the look on this computer has found no bridge, never while it still looks
+        E("() => { window.__cfg0 = Bridge.cfg; const L = FCTallySimple.LOCALB; window.__lb0 = {list: L.list, busy: L.busy, cut: L.cut, blocked: L.blocked}; Bridge.cfg = () => ({}); Object.assign(L, {list: null, busy: true}); render(); }"); pg.wait_for_timeout(300)
+        sa = [E("() => FCTallySimple.placeOf()"), txt(R(ACME) + " [data-tpt-state]")]
+        E("() => { Object.assign(FCTallySimple.LOCALB, {list: [], busy: false, cut: false, blocked: false}); render(); }"); pg.wait_for_timeout(300)
+        sb = [E("() => FCTallySimple.placeOf()"), txt(R(ACME) + " [data-tpt-state]")]
+        E("() => { Bridge.cfg = window.__cfg0; Object.assign(FCTallySimple.LOCALB, window.__lb0); render(); }"); pg.wait_for_timeout(300)
+        ok(sa == ["unknown", "Not open in Tally"] and sb == ["laptop", "Not open in Tally on the server"], "2 (review 5). still looking: 'Not open in Tally'; no bridge here: '… on the server' (%s %s)" % (sa, sb))
 
         print("== 1. masters read, entries after masters: in the row itself")
         E("""([c, b]) => { S.tcoSync = S.tcoSync || {}; S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'KESTREL TEXTILES', prog: {read: 7560, of: 12195}};
@@ -133,23 +144,27 @@ def main():
            "1. Masters reading: Reading now, its bar (62), 7,560 of 12,195 ledgers · 148 groups (%s)" % mk)
         ok(ek == "Next, after masters 1,304 of 2,651 · about 12 min" and n(R(KES) + " [data-tpg-entries] [role=progressbar]") == 1, "1. Entries: Next, after masters, its bar, 1,304 of 2,651 · about 12 min (%s)" % ek)
         ok("left" not in mk and "slow" not in txt(R(KES)), "1. no masters time left, no 'ledgers slow in Tally' (no data for them)")
-        ok(mains(KES) == ["pause"] and txt(R(KES) + " [data-tpt-main]") == "Pause", "1. the row's one button while Bring books runs: Pause (%s)" % mains(KES))
+        ok(mains(KES) == ["reading"] and txt(R(KES) + " [data-tpt-main]") == "Reading…" and pg.is_disabled(R(KES) + " [data-tpt-main]"),
+           "1 (review 4). masters read, entries only waiting: the row's button the disabled Reading… (%s)" % mains(KES))
         dl = "#app [data-tpg-dl-head]"
-        ok(txt(dl + " .tpg-title") == "Tally" and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
+        ok(n(dl + " .tpg-title") == 0 and n("#app h2.tpg-title") == 0 and n(dl + " [data-tpg-download]") == 1 and txt(dl + " [data-tpg-download]") == "Download FinCom Bridge 2.5.5"
            and re.match(r"assets/bridge-go/FinComBridge-Setup-2\.5\.5\.exe\?v=cdcdcdcdcdcd$", pg.get_attribute(dl + " [data-tpg-download]", "href") or ""),
-           "1. the title and the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
+           "1 (review 6). no second 'Tally' title; the dark Download FinCom Bridge 2.5.5 (its fingerprinted link) (%s | %s)" % (txt(dl), pg.get_attribute(dl + " [data-tpg-download]", "href")))
+        ok(E("(s) => { const h = document.querySelector(s).getBoundingClientRect(), b = document.querySelector(s + ' [data-tpg-download]').getBoundingClientRect(); return Math.abs(h.right - b.right) <= 2 && b.left > h.left + h.width / 2; }", dl),
+           "1 (review 6). the Download right-aligned")
         ok(txt("#app [data-tsm-steps-link]") == "How to connect" and n("#app [data-tsm-top] [data-tsm-top-check]") == 1, "1. the connection card: How to connect, Check again (%s)" % txt("#app [data-tsm-top]")[:120])
         E("""() => { const t = (m) => new Date(Date.now() - m * 60000).toISOString();
           window.__rounds['bk-Kestrel Textiles'] = [{round_id: 'k1', started_at: t(2), last_seen_at: t(0.2), rows_received: 7560, rows_read: null, complete: null, batches: 4}]; }""")
         more(ORBIT); shot("tally-progress-desktop.png", 1360, 1200); pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(400)
         E("() => { window.__calls = []; }")
-        pg.click(R(KES) + " [data-tpg-pause]"); pg.wait_for_timeout(800)
         more(KES)
-        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-pause]") == 0, "1. More: Stop while it reads (Pause is the row's button)")
+        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-pause]") == 1, "1 (review 4). More: Pause and Stop while the masters are read first")
+        pg.click(L(KES) + " [data-tpg-pause]"); pg.wait_for_timeout(800)
         pg.click(L(KES) + " [data-tpg-stop]"); pg.wait_for_timeout(800)
         cl = [c[0] for c in calls("tally_period")]
         pz = [c[1] for c in calls("tally_period_pause")]
-        ok(cl == ["tally_period_pause", "tally_period_cancel"] and pz and pz[0].get("p_pause") is True and pz[0].get("p_book") == "bk-Kestrel Textiles", "1. Pause (the row) and Stop (More) (%s %s)" % (cl, pz))
+        ok(cl == ["tally_period_pause", "tally_period_cancel"] and pz and pz[0].get("p_pause") is True and pz[0].get("p_book") == "bk-Kestrel Textiles", "1. Pause and Stop under More (%s %s)" % (cl, pz))
+        ok(n(L(KES) + " [data-tpt-masters-more]") == 1, "1 (review 2). More: Bring masters too while Bring books runs")
         E("""([c, w]) => { S.tcoSync[c] = {at: Date.now(), via: 'bridge', company: 'KESTREL TEXTILES'}; const d = window.__devs[0]; d.info.beat.keepWait = {reason: 'userInTally', words: w, since: new Date().toISOString()};
           TLight.st.devs = JSON.parse(JSON.stringify(window.__devs)); TCloud.pane.devices = TLight.st.devs; render(); }""", [cid(KES), WAIT]); pg.wait_for_timeout(2500)
         mw = txt(R(KES) + " [data-tpg-masters]")
@@ -182,6 +197,12 @@ def main():
         pg.click(L(ORBIT) + " [data-tpt-details]"); pg.wait_for_timeout(500)
         ok(all(n(L(ORBIT) + ' [data-tsm-details] [data-tsm-col="%s"]' % k) == 1 for k in ("c", "o", "l", "e", "do")), "3. Answers: Linked, Open now, Ledgers, Entries, What to do")
         ok(n(L(ORBIT) + " [data-tpt-unlink]") == 1, "3. Unlink there")
+        # (review 2) Bring masters under More: the masters alone read again (runPress without the entries' Update now)
+        E("(c) => { window.__upd = []; window.__updWas = window.tallyUpdateNow; window.tallyUpdateNow = (x) => { window.__upd.push(x); }; if (window.FCRunState) delete window.FCRunState[c]; S.tcoSync = S.tcoSync || {}; delete S.tcoSync[c]; render(); }", cid(ORBIT)); pg.wait_for_timeout(300)
+        ok(txt(L(ORBIT) + " [data-tpt-masters-more]") == "Bring masters" and mains(ORBIT) == ["update"], "3 (review 2). More: Bring masters (the row's button Update now)")
+        pg.click(L(ORBIT) + " [data-tpt-masters-more]"); pg.wait_for_timeout(800)
+        ok(E("(c) => !!(window.FCRunState && window.FCRunState[c])", cid(ORBIT)) and E("() => window.__upd") == [], "3 (review 2). Bring masters: the masters' read asked, no entries asked (%s)" % E("() => window.__upd"))
+        E("(c) => { window.tallyUpdateNow = window.__updWas; if (window.FCRunState) delete window.FCRunState[c]; delete S.tcoSync[c]; render(); }", cid(ORBIT)); pg.wait_for_timeout(300)
         ok(E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space") <= 2, "3 (review B2). the groups' count of a book asked once at a time, not once per part (%s)" % E("(b) => window.__groupsAsked[b] || 0", "bk-Orbit Space"))
         pg.click(R(ORBIT) + " [data-tpt-open]"); pg.wait_for_timeout(600)
         ok(n(TB + " tr[data-tpt-light]") == 0 and txt(R(ORBIT) + " [data-tpt-open]") == "More ▾", "3. Less ▴: closed")
@@ -202,7 +223,14 @@ def main():
         more(KES); pg.click(L(KES) + " [data-tpt-history]"); pg.wait_for_timeout(2000)
         hist = E("(s) => [...document.querySelectorAll(s + ' [data-tpg-h]')].map(r => [r.querySelector('[data-tpg-h-what]').innerText, r.querySelector('[data-tpg-h-res]').innerText])", L(KES))
         ok(any("Masters · FinCom Bridge" in h[0] and WAIT in h[1] for h in hist) and any("Bring books" in h[0] and h[1].startswith("Paused at 1,304 of 2,651") for h in hist), "3. history: the bridge's wait, Bring books paused (%s)" % hist)
-        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-resume]") == 0, "3. More: Stop (Resume is the row's button)")
+        ok(n(L(KES) + " [data-tpg-stop]") == 1 and n(L(KES) + " [data-tpg-resume]") == 0 and n(L(KES) + " [data-tpt-masters-more]") == 1, "3. More: Stop and Bring masters (Resume is the row's button)")
+        # the masters read done: Bring books going is Pause (the row's button); stopped: Bring books again (review 3)
+        E("""(c) => { S.tcoSync[c] = {at: Date.now() - 60000, via: 'bridge', company: 'KESTREL TEXTILES', end: Date.now()}; if (window.FCRunState) delete window.FCRunState[c];
+          [window.__devs, TLight.st.devs, TCloud.pane.devices].forEach(L => (L || []).forEach(d => { if (d && d.info && d.info.beat) delete d.info.beat.keepWait; }));
+          window.__sum.find(x => x.pull).pull.state = 'going'; if (window.tfxRefresh) window.tfxRefresh(); render(); }""", cid(KES)); pg.wait_for_timeout(1800)
+        ok(mains(KES) == ["pause"] and txt(R(KES) + " [data-tpt-main]") == "Pause" and txt(R(KES) + " [data-tpg-entries]").startswith("Bringing now"), "3. entries running (masters done): Pause is the row's button (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
+        E("() => { window.__sum.find(x => x.pull).pull.state = 'stopped'; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(1800)
+        ok(mains(KES) == ["books"] and txt(R(KES) + " [data-tpt-main]") == "Bring books" and txt(R(KES) + " [data-tpg-entries]").startswith("Stopped"), "3 (review 3). Bring books stopped: Bring books again, not Update now (%s | %s)" % (mains(KES), txt(R(KES) + " [data-tpg-entries]")))
 
         print("== 3b (review B1)")
         # B1: the ledgers' count not read: "—", never "0 ledgers"

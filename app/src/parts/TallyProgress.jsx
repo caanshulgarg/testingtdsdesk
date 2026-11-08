@@ -44,6 +44,8 @@ export function mastersOf(cid, company) {
     if (kw && !(read > 0)) return Object.assign(base, { st: "waiting", words: /^waiting/i.test(kw) ? kw : "Waiting: " + kw, read, of, pct: 0 });
     if (of > 0) return Object.assign(base, { st: "reading", read, of, pct: Math.min(99, Math.round((read * 100) / of)), words: "Reading · " + nf(read) + " of " + nf(of) });
     if (read > 0) return Object.assign(base, { st: "reading", read, of: 0, pct: 0, words: "Reading… " + nf(read) + " so far" });
+    // (the read asked, nothing from Tally yet and a reason known: "Not started yet: …", amber)
+    if (rw && rw.phase === "waiting") return Object.assign(base, { st: "waiting", read: 0, of: 0, pct: 0, words: rw.text });
     return Object.assign(base, { st: "reading", read: 0, of: 0, pct: 0, words: rw && rw.text ? rw.text : "Reading…" });
   }
   if (rw && rw.phase === "why") return Object.assign(base, { st: "why", words: "Not done: " + rw.text.replace(/^Not updated:\s*/, "") });
@@ -88,7 +90,8 @@ export function MastersCell({ row }) {
   useEffect(() => { if (!live) return; const t = setInterval(() => tick((k) => k + 1), 2000); return () => clearInterval(t); }, [live]);
   let head, sub = "", sub2 = "", cls = "";
   if (m.st === "done") { head = "✓ Up to date"; cls = " ok"; sub = countWords(m.n, m.g); sub2 = m.at ? "Updated " + whenIn(m.at) : ""; }
-  else if (m.st === "reading") { head = "Reading now"; cls = " read"; sub = (m.of > 0 ? nf(m.read) + " of " + nf(m.of) + " ledgers" : m.read > 0 ? nf(m.read) + " ledgers so far" : m.words) + " · " + (m.g == null ? "—" : nf(m.g)) + (m.g === 1 ? " group" : " groups"); }
+  // (the groups only once FinCom holds this client's masters: a first read has no count yet, never "0 groups")
+  else if (m.st === "reading") { head = "Reading now"; cls = " read"; sub = (m.of > 0 ? nf(m.read) + " of " + nf(m.of) + " ledgers" : m.read > 0 ? nf(m.read) + " ledgers so far" : m.words) + (m.held && m.g != null ? " · " + nf(m.g) + (m.g === 1 ? " group" : " groups") : ""); }
   else if (m.st === "waiting") { head = "Waiting"; cls = " warn"; sub = m.words; }
   else if (m.st === "why") { head = "Not done"; cls = " bad"; sub = m.words.replace(/^Not done:\s*/, ""); }
   // (0 only when FinCom's book for it is known and says no ledger ever came; else "—")
@@ -125,9 +128,12 @@ export function rangeWords(cid) {
 }
 // Bring masters (= Bring ledgers & groups, masters missing): the masters' read, as Update now (FinCom's Update now: never
 // a second read)
-export function BringMasters({ row, primary = true }) {
+export function BringMasters({ row, primary = true, link = false }) {
   const [busy, setBusy] = useState(false), x = sync(row.cid), running = busy || runBusy(row.cid) || !!(x && !x.end && !x.err && !x.late);
   if (!mayChange()) return null;
+  // (link: under More, the masters alone read again; never the row's main button)
+  if (link) return <button type="button" className="linkbtn" data-tpt-masters-more={row.cid} disabled={running}
+    onClick={() => { setBusy(true); runPress(row.cid, row.company).finally(() => setBusy(false)); }}>{running ? "Reading masters…" : "Bring masters"}</button>;
   return <button type="button" className={"btn tpt-btn" + (primary ? " primary" : "")} data-tpt-main="masters" data-tpg-bring={row.cid} disabled={running}
     onClick={() => { setBusy(true); runPress(row.cid, row.company).finally(() => setBusy(false)); }}>{running ? "Reading…" : "Bring masters"}</button>;
 }

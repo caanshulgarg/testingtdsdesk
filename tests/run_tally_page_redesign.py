@@ -136,26 +136,28 @@ def main():
         E("() => { S.tcoSync = {}; render(); }"); pg.wait_for_timeout(400)
         if n(R(ORBIT) + ' [data-tpt-main="update"]'):
             pg.click(R(ORBIT) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(300)
-            ok(txt(R(ORBIT) + " .tpt-why").startswith("Asking Tally…") and mains(ORBIT) == ["reading"], "3. at once: 'Asking Tally…', the button Reading… (%s | %s)" % (txt(R(ORBIT) + " .tpt-why"), mains(ORBIT)))
+            # (next-tally-simple2, review 5: the read's words in the Masters cell; the client cell just "● Updating")
+            ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Asking Tally…") and mains(ORBIT) == ["reading"] and txt(R(ORBIT) + " [data-tpt-state]") == "Updating" and n(R(ORBIT) + " .tpt-why") == 0,
+               "3. at once: 'Asking Tally…' (Masters), '● Updating', the button Reading… (%s | %s)" % (txt(R(ORBIT) + " [data-tpg-masters]"), mains(ORBIT)))
         else: ok(False, "3. Orbit Space's Update now (%s)" % mains(ORBIT))
         E("() => { Ledgers.askTally = window.__askO; }")
         # the read on its way: its count
         E("""(c) => { const x = S.tcoSync[c] || (S.tcoSync[c] = {cid: c, at: Date.now(), samples: []}); FCRunState[c] = Object.assign(FCRunState[c] || {b: {n: 0, g: 0}}, {at: x.at, asking: false, say: ''});
           x.via = 'cloud'; x.prog = {round: 'r1', read: 1200, of: 3400, done: false, at: new Date().toISOString()}; render(); }""", cid); pg.wait_for_timeout(1300)
-        ok(txt(R(ORBIT) + " .tpt-why") == "Reading ledgers: 1,200 of 3,400", "3. 'Reading ledgers: 1,200 of 3,400' (%s)" % txt(R(ORBIT) + " .tpt-why"))
+        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("1,200 of 3,400 ledgers") and n(R(ORBIT) + " .tpt-why") == 0, "3. '1,200 of 3,400 ledgers', once, in Masters (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
         # nothing from the bridge in 30 s: why
         E("(c) => { const x = S.tcoSync[c]; x.prog = null; x.at -= 31000; FCRunState[c].at = x.at; x.why = 'Tally is not open on SRV01: open TallyPrime there with ORBIT SPACE.'; render(); }", cid); pg.wait_for_timeout(1300)
-        ok(txt(R(ORBIT) + " .tpt-why").startswith("Not started yet: Tally is not open on SRV01"), "3. nothing in 30 s: why, plainly (%s)" % txt(R(ORBIT) + " .tpt-why"))
+        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Not started yet: Tally is not open on SRV01") and attr(R(ORBIT) + " [data-tpg-masters]", "data-tpg-masters") == "waiting", "3. nothing in 30 s: why, plainly, Masters waiting (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
         # FinCom Bridge 2.5.5: the beat says why it waits (keepWait): its words, amber, with since; the top line too
         KW = "Waiting: someone is working in Tally on this computer. Reading starts once Tally has had no typing or clicks for 15 s."
         SETKW = """(kw) => { const set = (L) => (L || []).forEach(d => { if (d && d.info && d.info.user === 'made-up-a' && d.info.beat) { if (kw) d.info.beat.keepWait = kw; else delete d.info.beat.keepWait; } });
           set(window.__devs); set(TLight.st.devs); set(TCloud.pane.devices); render(); }"""
         E(SETKW, {"reason": "user-active", "words": KW, "since": "2026-11-07T06:12:00Z", "queued": True}); pg.wait_for_timeout(1300)
-        w = txt(R(ORBIT) + " .tpt-why")
-        ok(w == KW + " (since 11:42)" and "bad" in (attr(R(ORBIT) + " .tpt-why", "class") or ""), "3. bridge 2.5.5's keepWait: its words, amber, since 11:42 (%s)" % w)
+        w = txt(R(ORBIT) + " [data-tpg-ms]")
+        ok(KW in w and "warn" in (attr(R(ORBIT) + " [data-tpg-mw]", "class") or "") and n(R(ORBIT) + " .tpt-why") == 0, "3. bridge 2.5.5's keepWait: its words, amber, in Masters (%s)" % w)
         ok(txt("#app [data-tsm-top-wait]") == KW + " (since 11:42)", "3. and in the top line (%s)" % txt("#app [data-tsm-top-wait]"))
         E(SETKW, None); pg.wait_for_timeout(1300)
-        ok(txt(R(ORBIT) + " .tpt-why").startswith("Not started yet: ") and n("#app [data-tsm-top-wait]") == 0, "3. an older bridge (no keepWait): the 30 s reason again (%s)" % txt(R(ORBIT) + " .tpt-why"))
+        ok(txt(R(ORBIT) + " [data-tpg-ms]").startswith("Not started yet: ") and n("#app [data-tsm-top-wait]") == 0, "3. an older bridge (no keepWait): the 30 s reason again (%s)" % txt(R(ORBIT) + " [data-tpg-masters]"))
         # done: the result
         E("(c) => { const x = S.tcoSync[c]; x.why = ''; x.prog = {round: 'r1', read: 3400, of: 3400, done: true, at: new Date().toISOString()}; x.ledAt = Date.now(); x.end = Date.now(); render(); }", cid); pg.wait_for_timeout(2500)
         res = txt(R(ORBIT) + " .tpt-why")
@@ -319,7 +321,7 @@ def main():
         if n(R(KCO) + ' [data-tpt-main="update"]'):
             pg.click(R(KCO) + ' [data-tpt-main="update"]'); pg.wait_for_timeout(1300)
             E("(c) => { const x = S.tcoSync[c]; if (x) { x.via = 'cloud'; FCRunState[c].asking = false; FCRunState[c].at = x.at; } render(); }", idk[KCO]); pg.wait_for_timeout(1300)
-            ok("someone is working" not in txt(R(KCO) + " .tpt-why") and n("#app [data-tsm-top-wait]") == 0, "11.6 B's wait words are not said on A's page (%s)" % txt(R(KCO) + " .tpt-why"))
+            ok("someone is working" not in txt(R(KCO)) and n("#app [data-tsm-top-wait]") == 0, "11.6 B's wait words are not said on A's page (%s)" % txt(R(KCO))[:200])
         else: ok(False, "11.6 Kestrel Co's Update now (%s)" % mains(KCO))
         E("() => { Ledgers.askTally = window.__askK; S.tcoSync = {}; }")
         # 10. connected: See the 6 steps stays near Check again

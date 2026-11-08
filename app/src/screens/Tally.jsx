@@ -1193,11 +1193,10 @@ export function CloudBooks() {
 }
 
 // next-tally-progress (the owner: "a single page doing all the things"): "Download FinCom Bridge" always at the top right,
-// with the latest version (setupOf: the same link and fingerprint as everywhere). next-tally-simple2: "Tally" and the dark
-// "Download FinCom Bridge <version>", in every state (signed out too)
+// with the latest version (setupOf: the same link and fingerprint as everywhere). next-tally-simple2: the dark "Download
+// FinCom Bridge <version>", right-aligned, in every state (signed out too); the page's title is the top bar's "Tally"
 function DownloadHead({ set, m }) {
   return <div className="tpg-dl-head" data-tpg-dl-head="">
-    <h2 className="tpg-title">Tally</h2>
     <span className="tpg-dl-right">
       {set ? <a className="btn tpg-dl-btn" data-tpg-download="" data-tpg-latest={set.version} title="For Windows, no admin needed" href={set.href} download={set.file}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4v11" /><path d="M7 10l5 5 5-5" /><path d="M5 20h14" /></svg>{"Download FinCom Bridge " + set.version}</a> : <DownloadBtn m={m} primary />}</span>
   </div>;

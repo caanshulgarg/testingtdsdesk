@@ -370,7 +370,7 @@ export function pageOf(row, seen) {
   // next-tally-simple2: a bridge of the firm heard now, the company open nowhere: "Not open in Tally", Check again (open it
   // first); no bridge heard: "Not connected", Connect again
   if (!open) { const up = bridgesUp();
-    return { kind: "away", dot: "warn", say: up ? "Not open in Tally" + (placeOf() === "pc" ? "" : " on the server") : "Not connected", why: row.o.note && row.o.note !== "Checking…" ? row.o.note : "Company not open in Tally",
+    return { kind: "away", dot: "warn", say: up ? "Not open in Tally" + (placeOf() === "laptop" ? " on the server" : "") : "Not connected", why: row.o.note && row.o.note !== "Checking…" ? row.o.note : "Company not open in Tally",
       btn: "again", label: up ? "Check again" : "Connect again", note: up ? "Open it in Tally first" : "", need: true }; }
   if (stuck) return { kind: "stuck", dot: "warn", say: "Not reading", why: row.l.note || "Nothing came from Tally", btn: "again", label: "Connect again", need: true };
   const reading = row.l.w === NOTYET || row.e.w === NOTYET;
@@ -444,6 +444,7 @@ function MoreRow({ row, linked, e, main, det, running, download, oneDl, onAnswer
   return <div className="tpt-light" data-tpt-light-in="">
     <div className="tpt-light-links">
       {linked && <span className="tpt-range" data-tpt-range="">{"Entries in FinCom: " + (range || "none yet")}</span>}
+      {linked && main !== "masters" && <BringMasters row={row} link />}
       {linked && canWrite() && SHOW_UPDATE.includes(main) && !running && <button type="button" className="linkbtn" data-tpt-update-more={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).then(() => render())}>Update now</button>}
       {linked && canWrite() && <button type="button" className="linkbtn" data-tpg-another-year={row.cid} aria-expanded={ex("year")} onClick={() => flip("year")}>Bring another year</button>}
       {linked && <button type="button" className="linkbtn" data-tpt-daybook={row.cid} aria-expanded={ex("daybook")} onClick={() => flip("daybook")}>Upload a Day Book file</button>}
@@ -478,22 +479,25 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   // (a row whose own action is the Day Book upload or the missing days' fetch: that action, in its words)
   else if (mm === "upload" || mm === "bring") { btn = <Act row={row} main />; main = mm; }
   else if (pg.btn === "again") { btn = <Again row={row} x={x} cs={cs} checkAgain={checkAgain} label={pg.label} />; main = "again"; note = pg.note || ""; }
+  // masters read first, entries only waiting after them: Reading… (Pause and Stop under More)
+  else if (pg.btn === "update" && p && e.st === "after") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>; main = "reading"; }
   // Bring books going or paused: Pause / Resume (Stop under More)
   else if (pg.btn === "update" && p && (p.state === "going" || p.state === "paused")) { btn = <PullButtons e={e} only={[p.state === "going" ? "pause" : "resume"]} main />; main = p.state === "going" ? "pause" : "resume"; }
   // masters not in FinCom yet: Bring masters (the masters' read; entries follow by themselves). Only for a book FinCom
   // knows with no ledgers: a client whose book is not known yet keeps Update now, which brings them too
   else if (pg.btn === "update" && linked && !runningRead && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES)) note = "Needs the company open in Tally"; }
   else if (pg.btn === "update" && runningRead) { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>; main = "reading"; }
-  // this year's days missing in FinCom: Bring books
-  else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }
+  // this year's days missing in FinCom, or Bring books stopped: Bring books (again)
+  else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || e.st === "stopped" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }
   else if (pg.btn === "update") { btn = <button type="button" className="btn tpt-btn" data-tpt-main="update" data-tsm-update={row.cid} onClick={() => runPress(row.cid, row.company, { entries: true }).then(() => tick((k) => k + 1))}>Update now</button>; main = "update"; }
   else if (pg.kind === "open") { btn = <ConnectBtn r={row.r} co={row.co} label="Connect" hook={{ "data-tsm-connect": row.cid, "data-tpt-main": "connect" }} />; main = "connect"; }
   else if (pg.kind === "company" && row.best) { btn = <ConnectBtn r={row.r} co={row.best} label="Connect" hook={{ "data-tsm-act": "connect", "data-tsm-act-client": row.best.id, "data-tpt-main": "connect" }} />; main = "connect"; }
   else { btn = <ActLink row={row} />; main = "link"; }
   const aw = pg.btn === "again" ? Again.why(row, cs) : null;
   const near = pg.kind === "away" && x ? (x.unlinked || []).find((u) => coKey(u.company) !== coKey(row.company) && (baseKey(u.company) === baseKey(row.company) || !!(globalThis.LinkRec && LinkRec.same && LinkRec.same(u.company, row.company)))) : null;
-  // (a client being read: its Masters and Entries cells say how far; not a second time here)
-  const why = rw && rw.phase !== "done" ? rw.text : rw ? rw.text : aw ? aw.text : pg.kind === "reading" ? "" : pg.why;
+  // (a client being read: its Masters and Entries cells say how far, the read's own words too; not a second time here.
+  // The read's result, or why it was not done, stays here)
+  const why = rw && (rw.phase === "done" || rw.phase === "why") ? rw.text : rw ? "" : aw ? aw.text : pg.kind === "reading" ? "" : pg.why;
   const co = shown(row.company);
   const toggle = () => set(more ? { more: "", details: ui.details === "all" ? "all" : Object.assign({}, ui.details || {}, { [key]: false }) } : { more: key, details: ui.details === "all" ? "all" : {} });
   return <><tr className={"tsm-tr tpt-tr" + (pg.need ? " tpt-need" : "") + (more ? " tpt-open" : "") + (row.focus ? " tsm-focus" : "")} data-tsm-row={name} data-tsm-kind={row.kind} data-tsm-cid={row.cid || undefined}
