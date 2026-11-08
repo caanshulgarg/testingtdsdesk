@@ -111,9 +111,12 @@ var errFastRefused = errors.New("FinCom Bridge asks Tally for a window of older 
 
 // the dated guard's exception for the two ids (tally.go datedRefused): the switch on, the period fetch's own background
 // request under the 2 s stop, exactly as built, a company with a starting point, and the request being asked now
-func fastExact(tc *TC, x string) bool {
+func fastExact(tc *TC, x string) bool { return fastExactWith(tc, x, fastOn()) }
+
+// next-fast-measure: the same rules with the switch given (the measurement runs with FastEntries off)
+func fastExactWith(tc *TC, x string, on bool) bool {
 	id := tallyRequestID(x)
-	if !fastOn() || (id != fastHeadsID && id != fastBatchID) || tc == nil || !tc.copier || tc.person || !tc.bg || tc.limitMs <= 0 || tc.limitMs > 2000 {
+	if !on || (id != fastHeadsID && id != fastBatchID) || tc == nil || !tc.copier || tc.person || !tc.bg || tc.limitMs <= 0 || tc.limitMs > 2000 {
 		return false
 	}
 	rb := fastHeadsRebuild

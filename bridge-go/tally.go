@@ -412,7 +412,7 @@ func datedRefused(tc *TC, x string) error {
 	case fastHeadsID, fastBatchID:
 		// next-fast-entries (PROTOTYPE, FastEntries on only, off by default): exactly the window or group being read now,
 		// as built, under the 2 s stop; refused otherwise whatever ReadDays says (fastentries.go)
-		if fastExact(tc, x) {
+		if fastExact(tc, x) || fastMeasureExact(tc, x) { // next-fast-measure: or the measurement's request now (its own company)
 			return nil
 		}
 		return errFastRefused

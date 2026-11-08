@@ -84,6 +84,7 @@ EXTRA = """([sum, open, rows, changes, heldSt]) => {
   const api = Cloud.api;
   Cloud.api = async (p, o) => {
     const m = /book_id=eq\\.([^&]+)/.exec(p), bk = m ? decodeURIComponent(m[1]) : '';
+    if (/^tally_fast_measures/.test(p)) return JSON.parse(JSON.stringify(window.__fastMeasures || []));   // next-fast-measure
     if (/^tally_ledger_rounds/.test(p)) return (changes[bk] || {}).rounds || [];
     if (/^tally_ledgers\\?select=name&book_id=.*renamed_at/.test(p)) return (changes[bk] || {}).renamed || [];
     return api(p, o);
@@ -440,6 +441,21 @@ def main():
         try: pg.wait_for_function("() => !document.querySelector('#app [data-staged-wait]')", timeout=10000)
         except Exception: pass
         ok(n(fs + " [data-support-body] [data-status-card]") == 1 and n(fs + " [data-support-body] [data-tco-list=firm]") == 1, "7. open: this computer's card and the companies open in Tally")
+        # next-fast-measure: "Fast read measured", read only, only when a measurement was sent; each run names its company
+        # (the owner's decision of 08-Nov-2026: the company open in Tally, a linked client's)
+        ok(n(fs + " [data-fast-measure]") == 0, "7. no fast-read measurement: nothing shown")
+        E("""() => { const run = (ms, differ, co) => ({ok: true, watched: true, tallyVersion: '7.1.0.0', company: co, results: [{kind: 'W1', days: 31, rows: 175, ms: ms, holdMs: 120},
+            {kind: 'W2', days: 3, asked: 50, rows: 50, ms: 600, holdMs: 80, objectMs: 30, objectHoldMs: 0, compare: {same: 50 - differ, differ: differ, left: 0, fields: differ ? ['ALLLEDGERENTRIES.LIST/AMOUNT'] : []}}]});
+          window.__fastMeasures = [{received_at: '2026-11-08T05:00:00Z', tally_version: '7.1.0.0', bridge: '2.5.8', pass: true, line: '', result: run(900, 0, 'Sharma Traders 2026-27')},
+                                   {received_at: '2026-11-07T05:00:00Z', tally_version: '7.1.0.0', bridge: '2.5.8', pass: false, line: '', result: run(1700, 2, 'ZZ TEST')}];
+          S.tallyMore = Object.assign({}, S.tallyMore, {support: false}); render(); }"""); pg.wait_for_timeout(400)
+        pg.click(fs + " [data-support-toggle]"); pg.wait_for_timeout(1200)
+        try: pg.wait_for_function("() => !document.querySelector('#app [data-staged-wait]')", timeout=10000)
+        except Exception: pass
+        fm = txt(fs + " [data-fast-measure]")
+        ok(n(fs + " [data-fast-measure-row=pass]") == 1 and n(fs + " [data-fast-measure-row=fail]") == 1 and "Fast read measured" in fm and "Sharma Traders 2026-27 · PASS · TallyPrime 7.1.0.0 · worst 0.90 s" in fm and "ZZ TEST · NOT A PASS" in fm
+           and "a request took 1.70 s (1.5 s at most); 2 of 50 entries not the same; fields that differed: ALLLEDGERENTRIES.LIST/AMOUNT" in fm and n(fs + " [data-fast-measure] button") == 0,
+           "7. the fast read measured, each run naming its company: a pass and a run that is not, with why; nothing to press (%s)" % fm)
         pg.click(fs + " [data-advanced] > [data-more-toggle]"); pg.wait_for_timeout(1200)
         try: pg.wait_for_function("() => !document.querySelector('#app [data-staged-wait]')", timeout=10000)
         except Exception: pass

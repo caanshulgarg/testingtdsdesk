@@ -221,6 +221,17 @@ FinComVoucherObject's answer. Pass: every request under 1.5 s worst, window held
 times then go into `fastAllowList` (maxSec, measuredOn), and the ZZ TEST run on the office server (section 9) follows
 before any client.
 
+On the owner's own TallyPrime (one computer) this measurement is the bridge's tray item "Measure the fast read on the
+company open in Tally" (next-fast-measure, bridge 2.5.9: bridge-go/fastmeasure.go; the steps for the owner:
+docs/fast-entries-measure-steps.md). The owner's decision of 08-Nov-2026 replaced "ZZ TEST only": it is run on a REAL
+client company, to see the real speed (ZZ TEST is allowed too). It runs the plan above scaled to one company, on the one
+company open in Tally, which must be linked to a FinCom client with its GUID (FinCom checks before anything is asked of
+Tally), with FastEntries off, pinned to that company's exact name and GUID (re-checked before every request), and stops
+at the first request over 2 s or a window hold of 1 s. Its result (times, counts, field names; no entry data) is kept in
+tally_fast_measures (migration 148) with the book, and shown under Advanced on the Tally page. A pass there allows
+switching FastEntries on for that one computer only (the same TallyPrime release, books about as big as the one
+measured); release-wide times still need every release, 3.0 to 7.1.
+
 ## 10. Decisions
 
 Taken (the owner, 07-Nov-2026, "Yes to both"):

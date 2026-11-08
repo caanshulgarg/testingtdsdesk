@@ -766,3 +766,15 @@ Add-only, one transaction, `lock_timeout` 10 s, safe twice; after 54, 98, 110, 1
 `tests/run_migration146.py` (two bridges claiming at the same time; `RED_WITHOUT_146=1` fails). Deploy order: 146, then
 tally-ingest of next-link-follow (until it runs no bridge record has `cos`: nobody serves by these rules and the days go
 out as before; without 146 it answers as before), then the app build (without `tally_read_view` the page is as before).
+
+## 148: the fast-read measurement kept per run (not run yet; branch next-fast-measure, 08-Nov-2026)
+
+**148, fast measure** (08-Nov-2026, branch `next-fast-measure`; numbered 148 because 143 (Corporate `corp_profiles`,
+applied on staging), 146 (link-follow) and 147 (period_fetch default) are taken; **written, not run yet**; file md5
+c72c908c7148f58c47fab31216497e97): `server/tally-cloud/migration-148-fast-measure.sql`. New table `tally_fast_measures`, one row a run of the
+bridge tray's "Measure the fast read on the company open in Tally" (a company linked to a client: the owner's decision
+of 08-Nov-2026; ZZ TEST too), its book's: times, counts and field NAMES only, no entry data. Grants:
+service_role reads and inserts (tally-ingest kind `fast_measure`); authenticated reads its own firm's rows only (row
+security, `my_firm()`); anon nothing. Add-only, one transaction (lock_timeout 10 s), safe to run twice; no table
+altered, no function. Deploy: this file first, then tally-ingest (it answers "not set up yet" (503) until this has run),
+then the app (the Tally page shows nothing under Advanced without it). Tested: `tests/run_migration148.py`.

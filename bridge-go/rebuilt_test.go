@@ -867,7 +867,7 @@ func newStandCloud(t *testing.T) *standCloud {
 				c.recBodies = append(c.recBodies, o)
 			}
 			out["results"], out["applied"] = res, len(res)
-		case "period_heads", "period_entries", "ledger_progress", "period_stop", "oldtest", "stock":
+		case "period_heads", "period_entries", "ledger_progress", "period_stop", "oldtest", "stock", "fast_measure":
 			if c.other != nil {
 				code, ans := c.other(k, o)
 				if code != 200 {

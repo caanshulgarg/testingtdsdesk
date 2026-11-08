@@ -26,6 +26,7 @@ import { ownBridge, ownOpen, placeOf } from "../lib/tallySimple.js";
 import { connectNow, stepLine } from "../lib/connectSteps.js";
 import { useState, useEffect, Children } from "react";
 import { press, busyOf, Said, useSaid } from "../parts/TallyBtn.jsx";   // next-buttons: every click says what came of it
+import FastMeasure from "../parts/FastMeasure.jsx";   // next-fast-measure: the fast read measured on the company open in Tally (read only)
 
 const Act = ({ act, className = "btn small", children, disabled }) => <button className={className} disabled={disabled} onClick={() => doAct(act)}>{children}</button>;
 
@@ -1267,6 +1268,7 @@ export default function TallyHome({ connectStep = null, sourcesSlot = null }) {
       {!Bridge.blocked() && <ThisComputer rows={rows} latest={latest} m={m} allStopped={allStopped} codeBelow={false} />}
       <OpenCompanies rows={rows} />
       <PageMore rows={rows} latest={latest} m={m} cards={week} old={cards.length - week.length} connectStep={connectStep} />
+      <FastMeasure />
     </ForSupport>
   </>;
 }

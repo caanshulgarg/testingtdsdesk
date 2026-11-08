@@ -13,7 +13,7 @@ import (
 // hash unchanged (TestAllowListUnchanged); the add-on unchanged from 2.4.1 (the data locations moved to 2.4.3); migration
 // 72 add-only; the notes and the test sheet
 func TestRelease242VersionAndDecisionLine(t *testing.T) {
-	if BridgeVersion != "2.5.8" { // 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): 2.4.2's decision kept as history
+	if BridgeVersion != "2.5.9" { // 2.5.9 (fastmeasure_test.go); 2.5.8 (nocompany258_test.go); 2.5.7 (fastentries_test.go); 2.5.6 (firstread_test.go); 2.5.5 (ledgers255_test.go, loginport255_test.go); 2.5.4 (r254_test.go); 2.5.3 (r253owntally_test.go); 2.5.2 (stock251_test.go); 2.5.1 (r251openings_test.go); 2.5.0 (r250dated_test.go); 2.4.9 (r249batch_test.go); 2.4.8 (r248anyport_test.go); 2.4.7 (r247pair_test.go); 2.4.6 (r246pair_test.go); 2.4.5 (r245_test.go): 2.4.2's decision kept as history
 		t.Fatalf("BridgeVersion %s", BridgeVersion)
 	}
 	al := readText(filepath.Join("..", "docs", "tally-allowlist.md"))

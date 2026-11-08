@@ -108,3 +108,6 @@ func platListenerUser(port int) (string, bool, error) { return "", false, nil }
 func platWindowHold() func(from time.Time) int {
 	return func(time.Time) int { return 0 }
 }
+
+// next-fast-measure: TallyPrime's version (tally.exe's file version) is read on Windows only
+func platTallyVersion() string { return "" }
