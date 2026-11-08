@@ -35,6 +35,9 @@ import "../../../src/js/96-bank-sent-heal.js";
 import "../../../src/js/98-link-record.js";
 import "../../../src/js/97-postto-link.js";
 import "../../../src/js/98-post-register.js";
+// an upload that overlapped the statements already here: what it left out, held or marked, and the join (next-bank-overlap)
+import "../../../src/js/96-bank-overlap.js";
+import { DupWords, OverlapPanel, RepMark } from "../parts/bank/Overlap.jsx";
 
 // an empty tab says what to do next (spec K6, round 2)
 const EMPTY = { review: "Nothing to do: every line has its ledger, and waits under Ready to post.", ready: "Nothing ready to post. Give each line under To do its ledger; it then waits here.",
@@ -86,7 +89,7 @@ function RowActions({ r }) {
   const rule = <>{split}<button className="linkbtn" title="Make a rule from this line" onClick={act("rule")}>Rule</button></>;
   const ignore = <button className="icon" title="Ignore this entry" aria-label="Ignore" onClick={act("ignore")}>✕</button>;
   if (r.state === "suggested") return <>{rule}{ignore}</>;
-  if (r.state === "ready") return <>{live() && <><button className="btn small" onClick={act("post")}>Post</button> </>}{rule} <button className="linkbtn" onClick={act("unready")}>Undo</button></>;
+  if (r.state === "ready") return <>{live() && !BankOverlap.isOpen(r) && <><button className="btn small" onClick={act("post")}>Post</button> </>}{rule} <button className="linkbtn" onClick={act("unready")}>Undo</button></>;
   if (r.state === "attention") return <>{rule}{ignore}</>;
   return r.state === "sent" ? null : <button className="linkbtn" onClick={act("restore")}>Restore</button>;
 }
@@ -117,6 +120,7 @@ function bankCols(b, rows, nSel) {
         <div className={"pn" + (party ? "" : " solo")}>{party || r.narr}</div>
         <div className="l2">{sub && <span className="md">{sub}</span>}{sub && party && <span className="sep" aria-hidden="true"> · </span>}{party && <span className="nr">{r.narr}</span>}</div>
         {goneOpen(r) && <div className="bs-gone" data-gone={r.id}>⚠ {goneLine(r)}</div>}
+        <RepMark r={r} />
         <button type="button" className="linkbtn bs-narr-more" data-narr-more="" aria-expanded={open ? "true" : "false"} title={open ? "Show less" : "Show all of the narration"}
           onClick={(ev) => { ev.stopPropagation(); b.narrOpen = { ...(b.narrOpen || {}), [r.id]: !open }; render(); }}>{open ? "Less" : "More"}</button></div>; } },
     { k: "wd", role: "amount", label: "Withdrawal", cls: "n", filter: <ColFunnel t="bank" k="wd" label="Withdrawal" />, v: (r) => num(r.debit) || null, sum: (r) => num(r.debit), cell: (r) => <>{bkAmt(r.debit)}{r.debit ? flag(r) : null}</> },
@@ -423,7 +427,7 @@ function BankPage() {
   // the account's Tally ledger, once confirmed, is a few words in the header line (24-Oct-2026: a line of its own)
   const accFull = acc.id ? acc : Object.assign({ id: st.acctId, bank: st.bank }, acc), accSure = !!accLedger && !accChoice.gone && accChoice.state === "confirmed";
   const repaired = b.rows.filter((r) => r.repaired).length, book = b.books[st.acctId];
-  const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
+  const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : num(r[k])), 0));
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
   const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);
@@ -453,7 +457,7 @@ function BankPage() {
           {st.badRows ? <span className="bad">✖ {st.badRows} entries do not agree with the running balance — check them before posting</span>
             : <span className="ok">✔ The statement adds up<span className="bs-more-words">: every line agrees with its running balance{st.summaryOk ? ", and opening + deposits − withdrawals = closing" : ""}</span></span>}
           {repaired > 0 && <> <span className="warn">· {repaired} amounts were read from the balance change (marked ≈)</span></>}
-          {st.dupRows > 0 && <> <span className="muted">· {st.dupRows} entries skipped (already uploaded)</span></>}
+          <DupWords st={st} />
           {book && <> <span className="muted">· {book.live ? "Checked against Tally " + fmtDateTime(book.importedAt) : "Matched with the Tally bank book"}</span></>}
         </div>
         <dl className="bk-figs">
@@ -474,6 +478,7 @@ function BankPage() {
         <Recon />
         {!accSure && <BankLedger co={CO()} acc={accFull} />}
         {top}
+        <OverlapPanel st={st} />
         <Gone /><DupFind /><BankFocus />
         {tab === "done" && !b.focus && live() && tc.done > 0 && <div className="bk-found"><span className="muted">Deleted some of these in Tally?</span> <button className="btn small" onClick={() => bankAct("goneCheck")}>Check they are still in Tally</button></div>}
         {b.offerRule && <div className="bk-found" style={{ borderColor: "var(--ledger)" }}><b>Keep this as a rule?</b> Every future line containing “{b.offerRule.text}” would go to <b>{b.offerRule.ledger}</b> by itself.{" "}

@@ -1,0 +1,11 @@
+/* next-bank-overlap (parts/bank/Overlap.jsx): lines an overlapping upload held aside, kept aside or marked to check */
+#app .bo-box { margin: 6px 0 0; }
+#app .bo-box .bo-tbl, #app .bo-reps .bo-tbl { margin-top: 6px; max-height: 260px; overflow: auto; }
+#app .bo-tbl td.bo-narr { max-width: 420px; white-space: normal; word-break: break-word; }
+#app .bo-tbl .bo-why { font-size: 11.5px; }
+#app .bo-tbl td.bo-acts { white-space: nowrap; }
+#app .bo-reps { display: block; }
+#app .bo-reps > summary { cursor: pointer; }
+#app .bo-mark { font-size: 11.5px; line-height: 1.35; color: var(--warn, #b45309); font-weight: 600; white-space: normal; }
+#app .bo-mark.ok { color: var(--muted); font-weight: 400; }
+@media (max-width: 600px) { #app .bo-tbl td.bo-narr { max-width: 180px; } }

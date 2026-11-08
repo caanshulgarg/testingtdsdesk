@@ -624,7 +624,8 @@ async function reconcileBank(opts){
         narr: String(v.narration || ""), tag: ((String(v.narration || "").match(/TDSDesk:([A-Za-z0-9]+)/i) || [])[1] || "").toLowerCase(), optional: /^yes$/i.test(v.optional || "")});
     });
     // pair them
-    const rows = b.rows.filter(r => r.date >= st.from && r.date <= st.to);
+    // a line held or kept aside as a repeat (bankAside) is not one of the statement's entries here
+    const rows = b.rows.filter(r => r.date >= st.from && r.date <= st.to && !bankAside(r));
     const byTag = new Map(); rows.forEach(r => byTag.set(fpHash(r.fp || r.id), r));
     const pairOf = new Map(), used = new Set(), differ = [], dupOf = new Map();
     T.forEach(t => {                                   // 1. by FinCom's tag
@@ -656,7 +657,7 @@ async function reconcileBank(opts){
     saveBank({rows: true, posted: true});
     const sum = (list, f) => r2(list.reduce((a, x) => a + f(x), 0));
     const rowById = new Map(b.rows.map(r => [r.id, r]));
-    const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
+    const all = b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : bankEffect(r)), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
     const tClose = tb.close, tOpen = r2(tClose - T.reduce((a, t) => a + t.eff, 0));
@@ -679,7 +680,7 @@ async function reconcileBank(opts){
 async function reconPost(){
   const b = B(), R = S.recon;
   if (!R) return;
-  const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && r.ledger && exactLedger(r.ledger); });
+  const ids = R.missing.filter(id => { const r = b.rows.find(x => x.id === id); return r && ["ready", "sent", "intally"].includes(r.state) && !bankAside(r) && !bankRepOpen(r) && r.ledger && exactLedger(r.ledger); });
   if (!ids.length) return;
   // lines marked as posted that Tally does not have: posted afresh
   b.rows.forEach(r => { if (ids.includes(r.id) && ["sent", "intally"].includes(r.state)){ if (b.postedTags) delete b.postedTags[fpHash(r.fp || r.id)]; r.state = "ready"; r.tally = null; r.postVerified = false; r.postByReply = false; r.checking = false; r.tallyHow = ""; r.tallyRef = ""; delete r.tallyIdx; } });
@@ -998,14 +999,14 @@ async function checkBankBalance(opts){
     const wait = bankNotReadBack(b.rows, cid);
     if (wait.length) throw {pending: wait.length};
     const tb = await tallyBankBalance(tname, ledger, st.to, cid);
-    const all = b.rows.reduce((a, r) => a + bankEffect(r), 0);
+    const all = b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : bankEffect(r)), 0);
     const sOpen = st.opening !== undefined && st.opening !== null && st.opening !== "" ? r2(num(st.opening)) : (st.closing !== undefined ? r2(num(st.closing) - all) : null);
     const sClose = st.closing !== undefined && st.closing !== null && st.closing !== "" ? r2(num(st.closing)) : (sOpen !== null ? r2(sOpen + all) : null);
     res = Object.assign(base(), {openAsOn: addDays(st.from, -1), tOpen: null, tClose: tb.close, how: tb.how, later: tb.laterN, sOpen, sClose, line: tb.line, asOf: tb.asOf});
     res.diffOpen = sOpen === null || res.tOpen === null ? null : r2(sOpen - res.tOpen);
     res.diff = sClose === null ? null : r2(sClose - res.tClose);
     const notIn = b.rows.filter(r => !["sent", "intally", "ignored"].includes(r.state));
-    const left = b.rows.filter(r => r.state === "ignored");
+    const left = b.rows.filter(r => r.state === "ignored" && !bankAside(r));
     res.notIn = notIn.map(r => r.id); res.notInEffect = r2(notIn.reduce((a, r) => a + bankEffect(r), 0));
     res.left = left.map(r => r.id); res.leftEffect = r2(left.reduce((a, r) => a + bankEffect(r), 0));
     res.extra = null;
@@ -1085,7 +1086,15 @@ function postingLine(pj, tname){
 function refreshBusy(){ softRender(); }
 async function postBankToTally(ids){
   const b = B(), co = CO(b.cid), st = curStmt();
-  if (!st || typeof bankGoneAsk == "function" && (ids = await bankGoneAsk(b, ids)) === false) return;
+  if (!st) return;
+  // a line marked Possible repeat — check is never sent until confirmed (bankRepOpen, src/js/22)
+  const want = r => r.state === "ready" && (!ids || ids.includes(r.id)), heldRep = b.rows.filter(r => want(r) && bankRepOpen(r));
+  if (heldRep.length){
+    ids = b.rows.filter(r => want(r) && !bankRepOpen(r)).map(r => r.id);
+    toast((heldRep.length === 1 ? "1 entry is" : heldRep.length + " entries are") + " marked Possible repeat — check, and " + (heldRep.length === 1 ? "was" : "were") + " not posted: Keep it or It’s a repeat first.");
+    if (!ids.length) return;
+  }
+  if (typeof bankGoneAsk == "function" && (ids = await bankGoneAsk(b, ids)) === false) return;
   const tname = await ensureTallyCompany(co);
   if (!tname) return;
   // round 17a: a line a finished posting of FinCom's cloud already put in Tally is marked first, so it is not sent again
@@ -1192,7 +1201,8 @@ async function postBankToTally(ids){
   misread.forEach(r => { r.state = "attention"; r.why = ["This line does not agree with the statement\u2019s running balance, so it may have been misread. Check the amount against the bank statement before posting."]; });
   const skipped = b.rows.filter(r => r.state === "intally").length - inTallyBefore;
   const movedBack = b.rows.filter(r => readyBefore.has(r.id) && ["attention", "suggested"].includes(r.state)).length;
-  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)));
+  // checked again: a line marked Possible repeat that became ready during the awaits above is not sent
+  let rows = b.rows.filter(r => r.state === "ready" && (!ids || ids.includes(r.id)) && !bankRepOpen(r));
   const failed = [];
   rows = rows.filter(r => {
     // 26-Oct-2026: a line whose ledger is this bank account's own is never posted (a Contra to and from itself)
