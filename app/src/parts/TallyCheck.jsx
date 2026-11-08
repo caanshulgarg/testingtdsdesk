@@ -12,6 +12,9 @@
 // within budget).
 import { useEffect, useState } from "react";
 import { nf, day8, dayLong, hm, fyNow, plural, rpc, missing, may, TurnOn, bookSum, summary, etaWords, partWords, askStatus, askOff, bookFetch, paceWords } from "./TallyFetch.jsx";
+// bridge 2.5.10: once pressed, what the bridge itself said of the check ("Started at …" / "Not started: <its words>"); with
+// nothing said (an older bridge) the waiting words below, as before
+import { ackSnap, ackNew, ackWords } from "../lib/pickAck.js";
 
 const istToday = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10);
 const istDay = (at) => { const t = Date.parse(at || ""); return t ? new Date(t + 5.5 * 3600e3).toISOString().slice(0, 10) : ""; };
@@ -78,8 +81,9 @@ function List({ cid }) {
 export default function CheckChanges({ cid, where = "books" }) {
   const b = bookSum(cid), k0 = b ? askOf(cid, b.book) : null;
   const [kind, setKind] = useState("fy"), [own, setOwn] = useState(["", ""]), [busy, setBusy] = useState(false), [err, setErr] = useState(""), [mine, setMine] = useState(null), [open, setOpen] = useState(where === "books");
+  const [snap, setSnap] = useState(null);
   const book = (b && b.book) || "";
-  useEffect(() => { setErr(""); setMine(null); }, [book]);
+  useEffect(() => { setErr(""); setMine(null); setSnap(null); }, [book]);
   // the press's own answer until the firm's list carries it (then the list, read again while it goes)
   const k = k0 && (!mine || Date.parse(k0.at) >= Date.parse(mine.at)) ? k0 : mine;
   const going = !!(k && k.state !== "done");
@@ -88,12 +92,13 @@ export default function CheckChanges({ cid, where = "books" }) {
   if (!b || askOff()) return null;
   const [a, z] = periodOf(kind, own[0], own[1], b.from), today = istToday(), bf = iso8(b.from);
   const press = () => { if (!a || !z) { setErr("Choose the first and the last day."); return; }
-    setBusy(true); setErr("");
+    setBusy(true); setErr(""); setSnap(ackSnap(b.company || "", ["check"]));
     rpc("tally_check_request", { p_client: cid, p_from: a, p_to: z }).then((r) => {
       if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); else if (r && r.ok) setMine(r);
       askStatus(true); summary(true); },
       (e) => setErr(missing(e) ? "FinCom’s cloud cannot check for changes yet." : "FinCom’s cloud did not answer; try again in a minute.")).finally(() => setBusy(false)); };
   const off = !((b.devices || []).some((x) => x.fetchOn)) && (b.devices || []).length > 0;
+  const ack = snap && k && going ? ackNew(snap) : null;
   const wait = waitWords(k, b), pct = k && k.total ? Math.min(100, Math.round(((k.checked + (k.upload || 0)) * 100) / k.total)) : 0;
   const picker = may() && <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
     <select data-cc-period="" aria-label="Period to check against Tally" value={kind} style={{ width: "auto", minWidth: 0 }} onChange={(ev) => setKind(ev.target.value)}>
@@ -110,6 +115,7 @@ export default function CheckChanges({ cid, where = "books" }) {
       <div className="tco-bar" role="progressbar" aria-label="Checking FinCom against Tally" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i className="det" style={{ width: Math.max(2, pct) + "%" }} /></div>
       <span data-cc-words="">{progressWords(k) + " (" + rangeWords(k.from, k.to) + ")"}</span></div>}
     {k && going && !wait && paceWords((bookFetch(cid, book) || {}).hours) && <p className="note" data-cc-pace="" style={{ margin: "4px 0 0" }}>{paceWords((bookFetch(cid, book) || {}).hours)}</p>}
+    {ack && <p className={"note" + (ack.state === "refused" ? " bad" : "")} data-cc-ack={ack.state} style={{ margin: "6px 0 0" }}>{ackWords(ack)}</p>}
     {wait && <p className={"note" + (k && k.run && k.run.state === "stopped" ? " bad" : "")} data-cc-wait={k && k.run && k.run.state === "stopped" ? "stopped" : k && k.paused ? "paused" : k && k.after ? "after" : "computer"} style={{ margin: "6px 0 0" }}>{wait}<TurnOn b={b} /></p>}
     {!k && off && <p className="note" data-cc-off="" style={{ margin: "6px 0 0" }}>Checking needs reading older entries on for the Tally computer that has this company.<TurnOn b={b} /></p>}
     {k && !going && <div data-cc-result={Number(k.added || 0) + Number(k.changed || 0) + Number(k.deleted || 0) ? "changes" : "none"} style={{ marginTop: 8 }}>

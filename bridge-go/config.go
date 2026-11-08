@@ -285,6 +285,7 @@ var logEcho = true
 
 func writeLog(msg string) {
 	line := time.Now().Format("2006-01-02 15:04:05") + "  " + protectLogText(msg)
+	lastLogText.Store(line) // 2.5.10: its kind (never its words) is said after a stall (selfheal.go)
 	logMu.Lock()
 	defer logMu.Unlock()
 	if logEcho {

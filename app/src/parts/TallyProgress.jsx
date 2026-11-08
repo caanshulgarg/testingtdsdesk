@@ -16,6 +16,7 @@ import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, G
 import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, pullWatch } from "./TallyFetch.jsx";
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, lockOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
+import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const ist = (ms) => new Date(ms + 5.5 * 3600e3);
@@ -173,7 +174,7 @@ export function BringBooks({ row, e, main = true }) {
   // does not start on it in 2 minutes: "Not started: <why>" (Said's watch: the pull's own count moving, or its state).
   // The words are the row's (Tally page: Row), so they stay when the row's button turns into Pause
   const start = () => press(k, async () => {
-    const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }, seen = pullWatch((bookSum(row.cid) || {}).pull || null);
+    const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }, seen = pullWatch((bookSum(row.cid) || {}).pull || null), acks = ackSnap(row.company, ["period"]);
     const r = await rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; });
     summary(true);
     if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
@@ -181,7 +182,7 @@ export function BringBooks({ row, e, main = true }) {
     const na = noAnswer(row.company); if (na) return { text: "Queued. " + na, bad: true };
     const started = () => seen((bookSum(row.cid) || {}).pull);
     return { text: "Asked: FinCom brings this year’s missing days from Tally. The Tally computer starts within a minute, while nobody is working in Tally.",
-      watch: { started, cid: row.cid, company: row.company } };
+      watch: { started, cid: row.cid, company: row.company, acks } };
   }, undefined, "choose:" + book);
   const off = !book ? "FinCom’s cloud has no books of this client from Tally yet: press Update now first." : "";
   return <>

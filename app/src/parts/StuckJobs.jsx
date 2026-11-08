@@ -84,8 +84,11 @@ export function PostingWait({ beat, hook = "line" }) {
         onClick={async () => { if (busy || !(await ask())) return; setBusy(x.id);
           try { await cancelJob(x.id); SD[x.id] = { at: Date.now(), text: "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
           catch (e) { J.err = String((e && e.message) || e).replace(/[.\s]+$/, "");
-            // (the bridge's own answer when it gave one; not reached: said so)
-            SD[x.id] = { at: Date.now(), bad: true, text: /failed to fetch|networkerror|load failed|timed? ?out|aborted|refused|not answering/i.test(J.err) || !J.err
+            // (the bridge's own answer when it gave one; not reached: said so). Bridge 2.5.10: a refusal is its reason's
+            // plain words (already sent to Tally, being posted right now, not this computer's, not found); another
+            // Windows login's bridge: not allowed from this login
+            SD[x.id] = { at: Date.now(), bad: true, text: e && e.code === "bridge_other_user" ? "Not stopped: FinCom Bridge said: not allowed from this login — this computer’s FinCom Bridge is another Windows login’s; stop the posting from that login."
+              : /failed to fetch|networkerror|load failed|timed? ?out|aborted|refused|not answering/i.test(J.err) || !J.err
               ? "Not stopped: FinCom Bridge on this computer did not answer. Check that it is running, then try again." : "Not stopped: FinCom Bridge said: " + J.err + "." }; }
           setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button>{line(fresh(x.id))}</li>)}</ul>}
     {saidLine}

@@ -120,7 +120,8 @@ type pullItem struct {
 	ChosenAt            string // FinCom's time of the person's choice (ROUND 103: a stop holds until another choice)
 	Fetch               bool
 	Types               []string
-	Check               bool // next-fast-entries: a "Check for changes" day (FinCom marks it "check" only for a fast bridge)
+	Check               bool   // next-fast-entries: a "Check for changes" day (FinCom marks it "check" only for a fast bridge)
+	Kind                string // 2.5.10 (pickack.go): what FinCom handed it out for: period, check or fill
 }
 
 func (it pullItem) key() string {
@@ -228,18 +229,31 @@ func applyPeriodDays(j M) {
 		max = pullNightDays()
 	}
 	var items []pullItem
+	// 2.5.10 (pickack.go): the days listed that this bridge will not read, with why (said in the beat)
+	refused, refusedWhy := map[string]pullItem{}, map[string]string{}
+	refuse := func(it pullItem, code string) {
+		if k := pickKey(it.Company, it.CGUID, it.Kind); refusedWhy[k] == "" {
+			refused[k], refusedWhy[k] = it, code
+		}
+	}
 	for _, x := range arr(v) {
 		e := obj(x)
 		co, cg, d := cutRunes(strings.TrimSpace(str(e["company"])), 200), cut(cleanGUID(str(e["company_guid"])), 100), normDate(str(e["day"]))
 		if co == "" || cg == "" || len(d) != 8 || !isTallyDate(d) || d > nowFn().Format("20060102") || d < "19900101" {
 			continue
 		}
+		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"]), ChosenAt: cutRunes(str(e["chosenAt"]), 60), Check: e["check"] == true, Kind: pickKindOf(e)}
 		if held := heldGUID(co); held == "" || !strings.EqualFold(held, cg) {
 			liveSayOnce("pull|notown|"+companyKey(co), "Older entries: "+co+": not asked (FinCom names another company GUID than this bridge holds)")
+			if held == "" {
+				refuse(it, "notOpen")
+			} else {
+				refuse(it, "otherCompany")
+			}
 			continue
 		}
-		it := pullItem{Company: co, CGUID: cg, Day: d, Fetch: truthy(e["fetch"]), ChosenAt: cutRunes(str(e["chosenAt"]), 60), Check: e["check"] == true}
 		if pullStoppedFor(co, str(e["chosenAt"])) {
+			refuse(it, "stopped")
 			continue // ROUND 103 (1b): stopped for this company; only a newer choice in FinCom starts it again
 		}
 		for _, t := range arr(e["types"]) {
@@ -252,6 +266,7 @@ func applyPeriodDays(j M) {
 			break
 		}
 	}
+	pickTake(items, refused, refusedWhy)
 	pull.mu.Lock()
 	defer pull.mu.Unlock()
 	keep := map[string]bool{}
@@ -355,83 +370,100 @@ func pullRowsOf(raw, day string) ([]pullHead, string) {
 
 // --- the six conditions (plan section 3.2), nothing sent to Tally; why the day waits ("" when it may be asked now)
 func pullMayAsk(it pullItem) (int, string) {
+	port, _, why := pullMayAskWhy(it)
+	return port, why
+}
+
+// 2.5.10 (pickack.go): the same, with the reason's code (pickWords) for the beat's acknowledgement
+func pullMayAskWhy(it pullItem) (int, string, string) {
 	if !tallyRunning() {
-		return 0, "Tally is not open"
+		return 0, "tallyClosed", "Tally is not open"
 	}
 	if paused() {
-		return 0, "background reading is paused"
+		return 0, "paused", "background reading is paused"
 	}
 	if readStop() != nil {
-		return 0, "reading is stopped from FinCom"
+		return 0, "readingStopped", "reading is stopped from FinCom"
 	}
 	if postingGoing() || importsInFlight.Load() > 0 {
-		return 0, "a posting goes first"
+		return 0, "posting", "a posting goes first"
 	}
 	if liveQueueReady() {
-		return 0, "a save in Tally goes to FinCom first"
+		return 0, "saving", "a save in Tally goes to FinCom first"
 	}
 	if pullBusyPerson(it) {
-		return 0, "someone is working in Tally"
+		return 0, "typing", "someone is working in Tally"
 	}
 	if retryWaiting() != nil {
-		return 0, "Tally did not answer in time lately; the shared retry schedule waits"
+		return 0, "retryWait", "Tally did not answer in time lately; the shared retry schedule waits"
 	}
 	if _, ok := startPointOf(it.Company); !ok {
-		return 0, "the company's starting point is not recorded yet"
+		return 0, "noStart", "the company's starting point is not recorded yet"
 	}
 	if slowMarked(it.Company, it.CGUID) {
-		return 0, "this company's entries are not asked (finding one took longer than 2 s)"
+		return 0, "slow", "this company's entries are not asked (finding one took longer than 2 s)"
 	}
-	port, why := pullPort(it)
+	port, code, why := pullPortWhy(it)
 	if why != "" {
-		return 0, why
+		return 0, code, why
 	}
 	if !tallyPortOpen(port) {
-		return 0, "Tally's port is closed"
+		return 0, "tallyClosed", "Tally's port is closed"
 	}
 	if busy, _ := tallyBusy(port); busy {
-		return 0, "Tally is busy"
+		return 0, "tallyBusy", "Tally is busy"
 	}
 	// the holds every background read keeps (review 245 R1): FinCom's own reading, Tally just opened and still loading
-	if h := keepHold(); h != "" {
-		return 0, h
+	if c, h := keepHoldWhy(); h != "" {
+		switch c {
+		case "stopped":
+			return 0, "readingStopped", h
+		case "userInTally":
+			return 0, "typing", h
+		}
+		return 0, "held", h
 	}
 	if !pullWindowOK() {
-		return 0, "Tally's window is not answering"
+		return 0, "notAnswering", "Tally's window is not answering"
 	}
 	if earlierRefusal(port) != nil {
-		return 0, "Tally is still on an earlier request"
+		return 0, "earlier", "Tally is still on an earlier request"
 	}
 	pull.mu.Lock()
 	stop := pull.stopped[port]
 	pull.mu.Unlock()
 	if stop != "" {
-		return 0, "single days are not read from this Tally until the bridge restarts (" + stop + ")"
+		return 0, "stoppedHere", "single days are not read from this Tally until the bridge restarts (" + stop + ")"
 	}
-	return port, ""
+	return port, "", ""
 }
 
 // the port of this bridge's own Tally with the company open, from the list as last seen (nothing asked of Tally here:
 // the beat and the light check keep that list)
 func pullPort(it pullItem) (int, string) {
+	p, _, why := pullPortWhy(it)
+	return p, why
+}
+
+func pullPortWhy(it pullItem) (int, string, string) {
 	live.mu.Lock()
 	liveFresh()
 	open := liveOwnOpenNow(it.CGUID, it.Company)
 	live.mu.Unlock()
 	if !open {
-		return 0, "the company is not open in this bridge's own Tally"
+		return 0, "notOpen", "the company is not open in this bridge's own Tally"
 	}
 	cached := openCompaniesCached()
 	p, _, err := findCompanyWith(it.Company, 0, []bool{false}, func(bool) []M { return cached })
 	if err != nil {
-		return 0, "the company is not open in Tally (" + cutRunes(err.Error(), 120) + ")"
+		return 0, "notOpen", "the company is not open in Tally (" + cutRunes(err.Error(), 120) + ")"
 	}
 	for _, s := range cached {
 		if toInt(s["port"]) == p && s["mine"] == false {
-			return 0, fmt.Sprintf("the Tally on port %d is another Windows user's", p)
+			return 0, "otherLogin", fmt.Sprintf("the Tally on port %d is another Windows user's", p)
 		}
 	}
-	return p, ""
+	return p, "", ""
 }
 
 // the person at Tally comes first: a recorder line for the company (a save in Tally) in the last minute, or typing in
@@ -563,11 +595,17 @@ func pullCurrent() *pullWork {
 }
 
 // one step: sent (a request reached the gate to Tally), more (another step may follow now)
-func pullStep() (bool, bool) {
+func pullStep() (sent bool, more bool) {
 	w := pullCurrent()
 	if w == nil {
 		return false, false
 	}
+	// 2.5.10 (pickack.go): a request for the day reached the gate to Tally: its hand-out started
+	defer func() {
+		if sent {
+			pickStarted(w.it)
+		}
+	}()
 	if nowFn().Before(w.cloudWait) {
 		return false, false
 	}
@@ -575,14 +613,17 @@ func pullStep() (bool, bool) {
 	case !w.headsDone:
 		// next-fast-entries (FastEntries, off by default; fastentries.go): a day the window read already is taken as read
 		if fastTake(w) {
+			pickStarted(w.it) // (read by the fast window already)
 			return false, true
 		}
-		port, why := pullMayAsk(w.it)
+		port, code, why := pullMayAskWhy(w.it)
 		if why != "" {
 			fastWaited() // review (5): the window's company list is asked again after any wait, as the per-day path's
 			pullSayWait(w.it, why)
+			pickRefused(w.it, code)
 			return false, false
 		}
+		pickQueued(w.it)
 		if handled, sent, more := fastStep(w, port); handled {
 			return sent, more
 		}
@@ -593,8 +634,9 @@ func pullStep() (bool, bool) {
 		if len(w.got)+len(w.gone) >= pullFlushAt() || pullGotBytes(w) >= 4<<20 {
 			return false, pullFlush(w)
 		}
-		port, why := pullMayAsk(w.it)
+		port, code, why := pullMayAskWhy(w.it)
 		if why != "" {
+			pickRefused(w.it, code)
 			w.coAt = time.Time{} // ROUND 104 (a): after any wait the company list is asked again before the next entry
 			pullSayWait(w.it, why)
 			if len(w.got)+len(w.gone) > 0 {

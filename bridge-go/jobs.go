@@ -352,6 +352,58 @@ func cancelJob(id, why string) (M, error) {
 	return jobView(dir), nil
 }
 
+// 2.5.10 (the owner's request of 08-Nov-2026): Stop posting from FinCom's page (POST /jobs/cancel). What may be stopped is
+// as before (cancelJob: a mark seen while the posting waits and between its requests); a stop that cannot do what the
+// person asked is answered with a reason's code and plain words (the page says "FinCom Bridge said: <words>"):
+//
+//	notHere      no posting of that number on this computer (another computer's, or never here)
+//	notFound     its folder is here but nothing of it is left to stop (already finished)
+//	alreadySent  it finished: sent to Tally; nothing is stopped (it may be in Tally)
+//	postingNow   a request of it is at Tally now: that request finishes, nothing after it goes (the mark is set, as before)
+//	otherLogin   asked by a program of another Windows login (server.go, before anything is looked at)
+var cancelWords = map[string]string{
+	"notHere":     "not this computer's posting — FinCom Bridge here has no posting with that number",
+	"notFound":    "not found (already finished) — nothing of it is left to stop here",
+	"alreadySent": "already sent to Tally — it may be in Tally; check Tally before posting it again",
+	"postingNow":  "being posted right now — the part at Tally now finishes first and nothing after it is sent; wait for it to finish, then check Tally",
+	"otherLogin":  "not allowed from this login — this FinCom Bridge is another Windows login's; stop the posting from that login",
+}
+
+func cancelRefusal(status int, code string, more M) error {
+	b := M{"ok": false, "code": code, "error": cancelWords[code], "words": cancelWords[code]}
+	for k, v := range more {
+		b[k] = v
+	}
+	return &httpErr{status, b}
+}
+
+func cancelAsked(id, why string) (M, error) {
+	dir, err := jobDir(id)
+	if err != nil || !exists(dir) {
+		return nil, cancelRefusal(404, "notHere", nil)
+	}
+	if !exists(filepath.Join(dir, "progress.json")) {
+		return nil, cancelRefusal(404, "notFound", nil)
+	}
+	v := jobView(dir)
+	if v == nil {
+		return nil, cancelRefusal(404, "notFound", nil)
+	}
+	if str(v["status"]) == "done" {
+		return nil, cancelRefusal(409, "alreadySent", nil)
+	}
+	atTally := jobAlive(id) && len(arr(v["inflight"])) > 0
+	r, err := cancelJob(id, why)
+	if err != nil {
+		return nil, err
+	}
+	if atTally {
+		writeLog("Posting job " + id + ": stop asked while a request of it is at Tally; that request finishes, nothing after it is sent")
+		return nil, cancelRefusal(409, "postingNow", M{"stopAsked": true})
+	}
+	return r, nil
+}
+
 // the posting going on now, in its one line (the tray, /status); "" when none
 func postingNow() string {
 	for _, j := range activeJobs() {

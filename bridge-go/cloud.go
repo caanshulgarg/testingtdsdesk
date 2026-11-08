@@ -735,7 +735,10 @@ func tallyOverall(sessions []M) (string, string) {
 
 func beatLoop() {
 	sleepOrStop(3 * time.Second)
+	fails := 0
 	for !stopping() {
+		beatLoopAt.Store(time.Now().Unix()) // 2.5.10: the loop's progress, for the watchdogs (selfheal.go)
+		before, _ := beatTimes()
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -750,11 +753,30 @@ func beatLoop() {
 				trialToolsOff("this computer is not connected to FinCom") // round 22 (S1)
 			}
 		}()
-		select {
-		case <-stopCh:
+		runAlive()
+		// 2.5.10: a heartbeat that did not reach FinCom (no network, DNS, TLS, FinCom not answering) is tried again after
+		// 5 s growing to 1 minute, for as long as it takes; after a sleep or a network change at once
+		ok := true
+		if cloudOn() {
+			if after, _ := beatTimes(); !after.After(before) {
+				ok = false
+			}
+		}
+		d := beatPause(ok, fails, time.Duration(beatEvery())*time.Second)
+		if ok {
+			fails = 0
+		} else {
+			if fails == 0 {
+				beatFresh() // a connection of a network gone only times out
+			}
+			fails++
+		}
+		switch beatWait(d, beatNow, stopCh) {
+		case "stop":
 			return
-		case <-beatNow:
-		case <-time.After(time.Duration(beatEvery()) * time.Second):
+		case "sleep", "network":
+			fails = 0
+			beatFresh()
 		}
 	}
 }
@@ -1163,7 +1185,11 @@ func beatBody(tally bool, tstate, tsince string, open, ports, cos []any) M {
 		"bankAlerts": bankBeat(),
 		// 2.4.5: the older entries being read for the period the person chose (per company: the day, its phase), the days to
 		// upload by hand, and the ledger read's progress ("312 of 1,240"); the tally.ini step's result per file (tallyini.go)
-		"periodPull": pullBeat(), "ledgerProgress": ledProgressBeat(), "tallyIni": tallyIniBeat(), "oldDaysTest": oldTestBeat()}
+		"periodPull": pullBeat(), "ledgerProgress": ledProgressBeat(), "tallyIni": tallyIniBeat(), "oldDaysTest": oldTestBeat(),
+		// 2.5.10: each book's days as taken from FinCom's answer: started (when, the first day) or why not (pickack.go)
+		"pickups": pickBeat(),
+		// 2.5.10: why the last run ended and when it ran again, for 6 hours (selfheal.go; null when nothing to say)
+		"lastStop": lastStopBeat()}
 }
 
 // --- the posting queue (build 199): postings queued in FinCom on any computer, taken one at a time

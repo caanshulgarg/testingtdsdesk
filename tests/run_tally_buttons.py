@@ -72,6 +72,14 @@ def main():
         def fail(m): E("(m) => { window.__fail = m; }", m)
         def age(prefix, ms=130000): E("([p, ms]) => { const S_ = FCTallyBtn.SAID; Object.keys(S_).forEach(k => { if (k.startsWith(p)) S_[k].at -= ms; }); render(); }", [prefix, ms])
         def forget(prefix): E("(p) => { const S_ = FCTallyBtn.SAID; Object.keys(S_).forEach(k => { if (k.startsWith(p)) delete S_[k]; }); render(); }", prefix)
+        # bridge 2.5.10: the bridge's own acknowledgement arrives in a beat (FinCom's broadcast, TLight.beatIn), as the cloud keeps it
+        def acks(lst): E("([d, l]) => { TLight.beatIn({device: d, beat: {pickups: l}}); render(); }", [dA["id"], lst])
+        def ack(state, kind="period", company=ORB, taken="2026-11-08T05:11:00Z", **more):
+            a = {"company": company, "guid": "g-" + company, "kind": kind, "chosenAt": "2026-11-08T05:10:00Z", "takenAt": taken, "state": state, "day": "20261001",
+                 "login": "made-up-a", "bridge": "go-7", "seen": "2026-11-08T05:12:30Z"}
+            if state == "started": a.update(pickedAt="2026-11-08T10:42:00+05:30", pickedUtc="2026-11-08T05:12:00Z")
+            else: a.update(code="typing", words="someone is working in Tally; reading starts once Tally has been left alone for a minute", at="2026-11-08T05:12:10Z")
+            a.update(more); return a
         def confirm(yes=True):
             try: pg.wait_for_selector("#confirmBox [data-cbx]", timeout=3000)
             except Exception: return False
@@ -223,6 +231,35 @@ def main():
         fail({}); forget("books:")
         E(SUM, [[{"book": "bk-" + nm, "client": cid(nm), "company": co, "from": "2026-04-01", "devices": [{"id": dA["id"], "fetchOn": True}]} for nm, co in ((KES, KESC), (ORBIT, ORB), (ACME, ACO))]]); pg.wait_for_timeout(1500)
         no_rejections("3. Bring books")
+        print("== 3b. Bring books: the bridge's own acknowledgement (bridge 2.5.10)")
+        if mains(ORBIT) == ["books"]:
+            # an acknowledgement already there before the press (an earlier hand-out): never this press's
+            acks([ack("refused", taken="2026-11-08T04:00:00Z", code="posting", words="a posting into Tally goes first; reading follows by itself")]); forget("books:")
+            pg.click(R(ORBIT) + ' [data-tpt-main="books"]')
+            ok(seen(R(ORBIT) + ' [data-said="books"][data-said-state="asked"]', r"^Asked", 5000) != "", "3b. Bring books, an older acknowledgement only: 'Asked: …' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+            acks([ack("started")])
+            w = seen(R(ORBIT) + ' [data-said="books"][data-said-ack="started"]', r"^Started at 10:42 IST on made-up-a’s Tally\.$", 6000)
+            ok(w != "", "3b. Bring books, the bridge took it: 'Started at 10:42 IST on made-up-a’s Tally.' at once (%s)" % (w or txt(R(ORBIT) + ' [data-said="books"]')))
+            age("books:")
+            ok(seen(R(ORBIT) + ' [data-said="books"][data-said-ack="started"]', r"^Started at ", 6000) != "", "3b. Bring books, started: never 'Not started' after 2 minutes (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+            forget("books:")
+            pg.click(R(ORBIT) + ' [data-tpt-main="books"]')
+            ok(seen(R(ORBIT) + ' [data-said="books"]', r"^Asked", 5000) != "", "3b. pressed again: 'Asked: …' (the earlier started one is not this press's) (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+            acks([ack("refused", taken="2026-11-08T05:20:00Z")])
+            w = seen(R(ORBIT) + ' [data-said="books"][data-said-state="refused"]', r"^Not started: someone is working in Tally; reading starts once Tally has been left alone for a minute\.$", 6000)
+            ok(w != "", "3b. Bring books, the bridge could not start: 'Not started: <its own reason>' at once (%s)" % (w or txt(R(ORBIT) + ' [data-said="books"]')))
+            ok(not re.search(r"SRV01|9101|9039|port ", w), "3b. its reason: no computer's name or port (%s)" % w)
+            acks([ack("started", taken="2026-11-08T05:20:00Z", pickedUtc="2026-11-08T05:21:00Z")])
+            ok(seen(R(ORBIT) + ' [data-said="books"][data-said-ack="started"]', r"^Started at 10:51 IST on made-up-a’s Tally\.$", 6000) != "", "3b. then it started: 'Started at 10:51 IST …' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+            # an acknowledgement of another kind or company: not this one's; with none, the inference as before
+            forget("books:"); pg.click(R(ORBIT) + ' [data-tpt-main="books"]'); seen(R(ORBIT) + ' [data-said="books"]', r"^Asked", 5000)
+            acks([ack("started", taken="2026-11-08T05:30:00Z", kind="check"), ack("started", company=KESC, taken="2026-11-08T05:30:00Z")])
+            pg.wait_for_timeout(1200); age("books:")
+            lw = seen(R(ORBIT) + ' [data-said="books"][data-said-state="late"]', r"^Not started: ", 8000)
+            ok(lw != "" and "made-up-a" not in lw, "3b. no acknowledgement of this work: the inference after 2 minutes, as before (%s)" % (lw or txt(R(ORBIT) + ' [data-said="books"]')))
+            forget("books:"); acks([])
+        else: ok(False, "3b. Orbit: Bring books expected (%s)" % mains(ORBIT))
+        no_rejections("3b. Bring books, acknowledged")
 
         print("== 4. Bring missing days, Turn on for this computer")
         E("""(c) => { window.__gapWas = Rec.gapFor; Rec.gapFor = (x) => x === c ? [{gap: {since: new Date(Date.now() - 3 * 86400e3).toISOString(), missing: 4}}] : [];
@@ -247,6 +284,17 @@ def main():
                 E("() => { window.__fill = {total: 7, done: 6, waiting: 0, upload: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
                 ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^1 day needs a Day Book upload", 6000) != "", "4. Bring missing days, a day Tally could not send: handled, '1 day needs a Day Book upload' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
             E("() => { TCloud.rpc = window.__fillRpc0; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(2000)
+            # bridge 2.5.10: the bridge's own acknowledgement of the missing days (kind fill)
+            forget("fill:"); pg.click(R(ORBIT) + ' [data-tpt-main="bring"]')
+            if seen(R(ORBIT) + ' [data-said="bring"]', r"^Asked", 5000):
+                acks([ack("refused", kind="fill", taken="2026-11-08T06:00:00Z", code="posting", words="a posting into Tally goes first; reading follows by itself")])
+                ok(seen(R(ORBIT) + ' [data-said="bring"][data-said-state="refused"]', r"^Not started: a posting into Tally goes first; reading follows by itself\.$", 6000) != "",
+                   "4. Bring missing days, the bridge could not start: 'Not started: <its reason>' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+                acks([ack("started", kind="fill", taken="2026-11-08T06:00:00Z", pickedUtc="2026-11-08T06:01:00Z")])
+                ok(seen(R(ORBIT) + ' [data-said="bring"][data-said-ack="started"]', r"^Started at 11:31 IST on made-up-a’s Tally\.", 6000) != "",
+                   "4. Bring missing days, the bridge took them: 'Started at 11:31 IST on made-up-a’s Tally.' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+            else: ok(False, "4. Bring missing days pressed again: 'Asked' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+            forget("fill:"); acks([])
             for mode, rx in (("denied", r"^Only an owner or staff"), ("net", r"^Couldn’t reach FinCom"), ("refuse", r"^Not asked: Made-up refusal\.$")):
                 fail({"tally_fill_request": mode}); forget("fill:")
                 pg.click(R(ORBIT) + ' [data-tpt-main="bring"]')
@@ -361,7 +409,11 @@ def main():
           Bridge.st = Object.assign({}, Bridge.st || {}, {keepWait: {reason: 'posting', words: 'Waiting: a posting into Tally is going on.'}});
           window.__jobs = [{id: 'job-made-up-1', company: 'KESTREL TEXTILES', status: 'running'}]; window.__cancelFail = true;
           Bridge.call = async (p, b) => { if (p === '/jobs') return {jobs: JSON.parse(JSON.stringify(window.__jobs))};
-            if (p === '/jobs/cancel') { if (window.__cancelFail === 'said') throw new Error('made-up job is already done'); if (window.__cancelFail) throw new TypeError('Failed to fetch'); window.__jobs = []; return {ok: true}; } return window.__bc0(p, b); };
+            if (p === '/jobs/cancel') { if (window.__cancelFail === 'said') throw new Error('made-up job is already done');
+              // bridge 2.5.10: a refusal as Bridge.call throws it ({code, message}: the bridge's words), another login's bridge as its own code
+              if (window.__cancelFail && window.__cancelFail.words) throw {code: 'bridge', message: window.__cancelFail.words};
+              if (window.__cancelFail === 'other') throw {code: 'bridge_other_user', message: 'The FinCom Bridge at http://127.0.0.1:9100 is another Windows user’s on this computer'};
+              if (window.__cancelFail) throw new TypeError('Failed to fetch'); window.__jobs = []; return {ok: true}; } return window.__bc0(p, b); };
           if (window.FCStuckJobs) { window.FCStuckJobs.at = 0; window.FCStuckJobs.list = null; } render(); }""")
         pg.evaluate("() => window.scrollTo(0, 0)")
         if seen("#app [data-stuck-jobs]", r"Waiting for a posting", 6000):
@@ -370,12 +422,47 @@ def main():
             E("() => { window.__cancelFail = 'said'; }")
             pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
             ok(seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge said: made-up job is already done\.$", 5000) != "", "8. Stop posting, the bridge refusing: its own answer said (%s)" % txt("#app [data-stuck-said]"))
+            # bridge 2.5.10: each refusal's own words (jobs.go cancelWords)
+            for words in ("already sent to Tally — it may be in Tally; check Tally before posting it again",
+                          "being posted right now — the part at Tally now finishes first and nothing after it is sent; wait for it to finish, then check Tally",
+                          "not this computer's posting — FinCom Bridge here has no posting with that number", "not found (already finished) — nothing of it is left to stop here"):
+                E("(w) => { window.__cancelFail = {words: w}; }", words)
+                pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
+                ok(seen("#app [data-stuck-said]", "^Not stopped: FinCom Bridge said: " + re.escape(words) + r"\.$", 5000) != "", "8. Stop posting refused, its words: %s (%s)" % (words[:40], txt("#app [data-stuck-said]")))
+            E("() => { window.__cancelFail = 'other'; }")
+            pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
+            w = seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge said: not allowed from this login", 5000)
+            ok(w != "" and "9100" not in w, "8. Stop posting from another login's bridge: 'not allowed from this login' (%s)" % (w or txt("#app [data-stuck-said]")))
             E("() => { window.__cancelFail = false; }")
             pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
             ok(seen("#app [data-stuck-said]", r"^Stopped\.", 5000) != "", "8. Stop posting: 'Stopped. …', also once the list is empty (%s)" % txt("#app [data-stuck-said]"))
         else: ok(False, "8. the posting line shows (%s)" % txt("#app [data-tsm-top]")[:200])
         E("() => { Bridge.call = window.__bc0; Bridge.on = window.__bon; Bridge.up = window.__bup; if (Bridge.st) delete Bridge.st.keepWait; render(); }")
         no_rejections("8. Stop posting")
+
+        print("== 8b. the bridge stopped answering, or back by itself (bridge 2.5.10)")
+        # (both lists the page reads: TLight's and the Tally pane's, the newer beat of each computer counts)
+        E("""() => { window.__devs1 = JSON.parse(JSON.stringify(TLight.st.devs)); window.__pdevs1 = TCloud.pane && TCloud.pane.devices ? JSON.parse(JSON.stringify(TCloud.pane.devices)) : null;
+          const t = new Date(Date.now() - 25 * 60000).toISOString();
+          [].concat(TLight.st.devs || [], (TCloud.pane && TCloud.pane.devices) || []).forEach(d => { d.last_seen = t; d.info = Object.assign({}, d.info, {beat: Object.assign({}, (d.info || {}).beat, {at: t})}); }); render(); }""")
+        hm = E("() => new Date(Date.now() - 25 * 60000 + 5.5 * 3600e3).toISOString().slice(11, 16)")
+        w = seen("#app [data-tsm-top] [data-tsm-top-title], #app [data-tsm-top] [data-tsm-top-stopped]", r"^FinCom Bridge on the office Tally computer stopped answering at " + hm + " IST", 6000)
+        ok(w != "", "8b. every bridge silent 25 minutes: the top line says so, with the time (%s)" % (w or txt("#app [data-tsm-top]")[:200]))
+        top = txt("#app [data-tsm-top]")
+        ok("Check that the office Tally computer is on" in top and not re.search(r"SRV01|made-up-a|9101", top), "8b. what to do; no computer's name or login in the top line (%s)" % top[:300])
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, {support: true}); render(); }")
+        ws = seen("#app [data-tsm-support-stopped]", r"^FinCom Bridge on \S+ stopped answering at ", 8000)
+        ok(ws != "" and "office Tally computer" not in ws, "8b. Advanced names the computer (%s)" % ws)
+        E("() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, {support: false}); render(); }")
+        E("""() => { TLight.st.devs = JSON.parse(JSON.stringify(window.__devs1)); const now = new Date().toISOString(), back = new Date(Date.now() - 5 * 60000).toISOString();
+          if (window.__pdevs1 && TCloud.pane) TCloud.pane.devices = JSON.parse(JSON.stringify(window.__pdevs1));
+          TLight.st.devs.forEach(d => { d.last_seen = now; d.info = Object.assign({}, d.info, {beat: Object.assign({}, (d.info || {}).beat, {at: now}),
+            lastStop: {at: new Date(Date.now() - 9 * 60000).toISOString(), back, why: 'stall', log: 'olderEntries', bridge: 'go-7'}}); }); render(); }""")
+        hb = E("() => new Date(Date.now() - 5 * 60000 + 5.5 * 3600e3).toISOString().slice(11, 16)")
+        ok(seen("#app [data-tsm-top-back]", r"^FinCom Bridge restarted itself at " + hb + r" IST after its heartbeat stopped moving\.$", 6000) != "", "8b. back by itself: 'FinCom Bridge restarted itself at HH:MM IST after …' (%s)" % txt("#app [data-tsm-top]")[:300])
+        ok(n("#app [data-tsm-top-stopped]") == 0 and not re.search(r"stopped answering", txt("#app [data-tsm-top]")), "8b. heard now: no stopped line")
+        E("() => { TLight.st.devs = window.__devs1; if (window.__pdevs1 && TCloud.pane) TCloud.pane.devices = window.__pdevs1; render(); }")
+        no_rejections("8b. the bridge stopped answering")
 
         print("== 9. a viewer: every button off says why")
         E("() => { S.account.me.role = 'viewer'; render(); }"); pg.wait_for_timeout(800)

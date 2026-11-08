@@ -69,15 +69,19 @@ func applyUpdate(exe string, b []byte) error {
 	return os.WriteFile(exe+".new", b, 0o755)
 }
 
-func defaultHome() string                       { return "" }
-func checkCodeSignature(b []byte) error         { return errNoCodeSign }
-func trayAlive(session int)                     {}
-func trayQuitSession(session int)               {}
-func openFile(f string)                         { println(f) }
-func attachConsole()                            {}
-func stopCmd(args []string) int                 { return 0 }
-func runUser(args []string) int                 { return runBridge(true) }
-func runWorker(args []string) int               { return runBridge(true) }
+func defaultHome() string               { return "" }
+func checkCodeSignature(b []byte) error { return errNoCodeSign }
+func trayAlive(session int)             {}
+func trayQuitSession(session int)       {}
+func openFile(f string)                 { println(f) }
+func attachConsole()                    {}
+func stopCmd(args []string) int         { return 0 }
+func runUser(args []string) int         { return runBridge(true) }
+func runWorker(args []string) int       { return runBridge(true) }
+func keepAliveCmd(args []string) int    { return 0 } // 2.5.10: the keep-alive task is Windows' (keepalive.go)
+func platSchtasks(args ...string) error {
+	return errors.New("scheduled tasks are for Windows")
+}
 func perUserInstall() bool                      { return false }
 func restartServiceCmd() int                    { return 0 }
 func installedConfig() string                   { return "" }

@@ -79,7 +79,7 @@ func main() {
 		cmd = "worker"
 	}
 	switch cmd {
-	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker", "connect":
+	case "", "service", "tray", "install", "uninstall", "stop", "restart-service", "user", "worker", "connect", "keepalive":
 	default:
 		attachConsole() // the program is a windowed one (no console flashes for the tray): commands typed in a window print there
 	}
@@ -132,6 +132,8 @@ func main() {
 		os.Exit(runUser(rest)) // the start at sign-in: HKCU\...\Run runs "FinComBridge.exe user"
 	case "worker":
 		os.Exit(runWorker(rest))
+	case "keepalive":
+		os.Exit(keepAliveCmd(rest)) // 2.5.10: the keep-alive task's run (keepalive.go)
 	case "":
 		if isWindowsService() {
 			os.Exit(runService(rest))

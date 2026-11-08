@@ -161,12 +161,16 @@ func runUser(args []string) int {
 	_ = windows.ResetEvent(quitEv) // a new start shows the icon again
 	stop := whenSet(stopEv)
 	writeLog(fmt.Sprintf("FinCom Bridge %s: started just for %s (no service); it keeps the bridge and its icon running", BridgeVersion, ownerName()))
+	ensureKeepAlive(exe) // 2.5.10: started again within 5 minutes if this supervisor ever ends (keepalive.go)
 	go keepTray(exe, stop, quitEv)
 	stamp := exeStamp(exe)
 	fails := 0
 	for {
 		started := time.Now()
 		code, stopped := superviseWorker(exe, stop)
+		if !stopped {
+			superviseNote(code, code == 9) // 2.5.10: why it ended, said once it runs again (selfheal.go)
+		}
 		if stopped {
 			writeLog("Stopping: asked to (setup or uninstall)")
 			return 0
@@ -241,6 +245,9 @@ func superviseWorker(exe string, stop <-chan struct{}) (int, bool) {
 				answered, lastOK = true, time.Now()
 				if l := time.Duration(toInt(r["loopSec"])) * time.Second; l > hangLoop {
 					why = fmt.Sprintf("its main loop has not moved for %d minutes", int(l.Minutes()))
+				} else if b := time.Duration(toInt(r["beatSec"])) * time.Second; b > hangBeat+2*time.Minute {
+					// 2.5.10: its heartbeat stuck (its own watchdog ends it after hangBeat; this is the one after it)
+					why = fmt.Sprintf("its heartbeat has not moved for %d minutes", int(b.Minutes()))
 				}
 			} else if answered && time.Since(lastOK) > hangAnswer {
 				why = fmt.Sprintf("it has not answered for %d minutes", int(time.Since(lastOK).Minutes()))
@@ -485,6 +492,7 @@ func uninstallUserCmd(args []string) int {
 		rk.Close()
 	}
 	removeOwnTask()
+	removeKeepAlive(installLog) // 2.5.10 (keepalive.go)
 	putBackOldBridge(mode, home)
 	removeOwnFilesLogged(home, mode, contains(args, "--keep-pairing"))
 	_ = registry.DeleteKey(registry.CURRENT_USER, regKey)

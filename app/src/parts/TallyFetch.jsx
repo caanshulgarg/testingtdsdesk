@@ -24,6 +24,7 @@ import { QUIET } from "../lib/quietReads.js";
 import { pullPaced } from "../lib/pullSpeed.js";
 import { tallyDevs } from "../lib/tallyState.js";
 import { press, busyOf, lockOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
+import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
 
 export const nf = (n) => Number(n || 0).toLocaleString("en-IN");
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -206,11 +207,11 @@ export default function OlderEntries({ cid, say = false }) {
   // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
   const sk = "older:" + book;
   const start = () => { if (busy || lockOf("choose:" + book)) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p); setBusy("start"); setErr("");
-    press(sk, () => rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
+    press(sk, () => { const acks = ackSnap(b.company || "", ["period"]); return rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
       .then((r) => { summary(true); askStatus(true);
         if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
         const started = () => seen((bookSum(cid) || {}).pull);
-        return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "" } }; }), undefined, "choose:" + book)
+        return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "", acks } }; }); }, undefined, "choose:" + book)
       .finally(() => { if (cur.current === bk) setBusy(""); }); };
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");
   const stop = () => act("tally_period_cancel", { p_book: book }, "stop");

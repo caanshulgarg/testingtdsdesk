@@ -19,13 +19,15 @@
 import { Component, useEffect, useState } from "react";
 import { linkTo, Pick, ChangePick, booksLoad, firstSync, syncPoll, openFromTally } from "./TallyCompanies.jsx";
 import { checkAll, connSig, tallyOpenOn, bridgesOf, rowsLast, placeOf, LEDN, ASKED_N, rowsFor, quickRows, openingsAll, openingsDecide, rupees, matches, headWords, ownState, localBridges, rescanLocal, lookOnce, aimLocal, LOCALB, YES, NO, NOTYET, BLOCKED } from "../lib/tallySimple.js";
-import { coKey } from "../lib/tallyState.js";
+import { coKey, tallyDevs, pcRawOf } from "../lib/tallyState.js";
+import { bridgeStopped, bridgeBack, stoppedWhere } from "../lib/bridgeStop.js";   // bridge 2.5.10: a bridge stopped, or back by itself
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
 import OlderEntries, { TurnOn, owner, TURN_FROM } from "./TallyFetch.jsx";
 import { PostingWait } from "./StuckJobs.jsx";
 import { press, say, busyOf, saidOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
+import { ackSnap } from "../lib/pickAck.js";   // bridge 2.5.10: what the bridge said of it
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
 function countLedgers(rows) {
   rows.forEach((r) => {
@@ -269,7 +271,7 @@ function Cell({ k, label, x, children }) {
 // Tally computer starts on it in 2 minutes: "Not started: <why>" (Said's watch: the fill's days done, or none waiting)
 const fillNow = (cid, r) => { const b = bookSum(cid); return (b ? (bookFetch(cid, b.book) || {}).fill : null) || (r && r.fill) || null; };
 async function bringDays(row, a) {
-  const f0 = fillNow(row.cid);
+  const f0 = fillNow(row.cid), acks = ackSnap(row.company, ["fill", "check"]);
   const r = await rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) });
   askStatus(true);
   if (r && r.ok === false) return { text: "Not asked: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
@@ -285,7 +287,7 @@ async function bringDays(row, a) {
     return up > 0 ? nOfW(up, "day needs", "days need") + " a Day Book upload: Tally did not send " + (up === 1 ? "it" : "them") + "." + (Number(f.done) > base ? " The rest are coming in from Tally now." : "")
       : "Bringing the missing days from Tally now."; };
   return { text: "Asked: FinCom brings " + (q > 0 ? nOfW(q, "missing day", "missing days") : "the missing days") + " from Tally within a few minutes.",
-    watch: { started: fill, cid: row.cid, company: row.company, startedText: words } };
+    watch: { started: fill, cid: row.cid, company: row.company, startedText: words, acks } };
 }
 function Act({ row, main = false }) {
   useSaid();
@@ -634,7 +636,11 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
   const lastAny = rows.filter((r) => r.kind === "client" && r.c.w === YES && r.last).map((r) => r.last).sort().pop() || "";
   const o = own || {}, far = o.state === "ok" && o.far, kw = login ? keepWaitWords((((o.own || {}).beat) || {}).keepWait) : "";
   let dot, title, sub;
+  // bridge 2.5.10: every bridge of the firm silent over 10 minutes (lib/bridgeStop.js): said first; one back by itself
+  let stop = null, back = null;
+  try { const dv = tallyDevs(); stop = bridgeStopped(dv); back = stop ? null : bridgeBack(dv); } catch (e) { stop = back = null; }
   if (!ready) { dot = "idle"; title = "Looking for your Tally…"; sub = ""; }
+  else if (stop && !(cs.mode === "laptop" && office.length)) { dot = "warn"; title = stop.title; sub = stop.todo; }
   // a computer with no bridge of its own (a laptop, a Mac): the office's Tally through the firm's bridges heard now
   // (counted by Tally open there: bridges heard with Tally closed are not "connected", amber)
   else if (cs.mode === "laptop" && office.length && !officeK) { dot = "warn"; title = "Office bridges online, but Tally is not open";
@@ -648,7 +654,7 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
     sub = [ok.length === 1 ? "TallyPrime on port " + ok[0].port : ok.length > 1 ? ok.length + " Tallys (ports " + ok.map((t) => t.port).join(", ") + ")" : "TallyPrime",
       nOfW(names.size, "company open", "companies open"), last ? "last entry " + lastWords(last) : ""].filter(Boolean).join(" · "); }
   const many = !down && login && (T.tallys.length > 1 || T.unknown.length > 0 && ok.length > 1);
-  return <section className="tsm-card tpt-top" aria-label="Your Tally" data-tsm-top={down ? "down" : login ? "up" : cs.mode} data-tsm-head="">
+  return <section className="tsm-card tpt-top" aria-label="Your Tally" data-tsm-top={down ? "down" : login ? "up" : cs.mode} data-tsm-head="" data-tsm-stopped={stop ? "" : undefined}>
     <div className="tpt-top-main"><Dot k={dot} /><div className="tpt-top-words"><div className="tpt-top-title" data-tsm-top-title="">{title}</div>
       {sub && <div className="tsm-note" data-tsm-top-sub="">{sub}</div>}
       {many && T.tallys.map((t) => <div key={t.port} className="tsm-note" data-tsm-top-tally={t.port}>{"port " + t.port + " · " + t.state + (t.ok ? " · " + nOfW(t.names.length, "company", "companies") : cs.steps[2] && cs.steps[2].state !== "done" ? " · what to do: step 3" : "")}</div>)}
@@ -659,6 +665,8 @@ function Top({ cs, own, rows, checkAgain, ready, shown, beat }) {
       {cs.mode === "laptop" && <div className="tsm-note" data-tsm-nobridge="">{LOCALB.busy ? "Looking for a bridge on this computer…" : "No bridge on this computer"}</div>}
       {/* FinCom Bridge 2.5.5: why this login's bridge waits to read (its own words); an older bridge sends none */}
       {kw && <div className="tsm-note tpt-wait" data-tsm-top-wait="" role="status">{kw}</div>}
+      {ready && stop && title !== stop.title && <div className="tsm-note bad" data-tsm-top-stopped="" role="status">{stop.title + ". " + stop.todo}</div>}
+      {ready && back && <div className="tsm-note" data-tsm-top-back={back.why} role="status">{back.text}</div>}
       {said && !ck && <div className="tsm-note" data-tsm-top-checked="" data-checked="" role="status">{said + (down ? " Not connected yet: step " + cs.now.n + " of 6." : "")}</div>}
       {/* next-tally-simple2: a posting this computer's bridge holds (StuckJobs: Stop posting), one line in this card */}
       <PostingWait beat={beat} hook="panel" /></div></div>
@@ -679,7 +687,9 @@ function ShortCard({ rows, cs }) {
 export function SupportTools({ checkAgain, pcs, download, sha }) {
   // (the rows as the page last worked them out: rowsFor would replace the page's own options, its focused client)
   const rows = rowsLast(), on = checking();
+  let st = null; try { st = bridgeStopped(tallyDevs()); } catch (e) { st = null; }
   return <div className="tsm-support" data-tsm-support="">
+    {st && <div className="tsm-note bad" data-tsm-support-stopped="">{stoppedWhere(st, pcRawOf(st.dev))}</div>}
     <div className="row" style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}><button type="button" className="btn small" data-tsm-check="" disabled={on} onClick={() => checkTallyNow(rows, checkAgain)}>{on ? "Checking Tally…" : "Check every client for changes in Tally"}</button>
       <span className="note">Each linked client’s entries of this year checked against Tally, one day at a time.</span></div>
     <Said k="checkall" hook="check-all" />

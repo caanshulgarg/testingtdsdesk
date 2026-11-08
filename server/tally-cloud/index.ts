@@ -1920,7 +1920,9 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         const types = (Array.isArray(d?.types) ? d.types : []).filter((t: unknown) => typeof t === "string" && t.length > 0 && t.length <= 60 && t === t.trim() && !/["\u0000-\u001f\u007f]/.test(t)).slice(0, 40);
         // 30-Oct-2026 (migration 133): the choice time travels with the day (the bridge's stop names it; without it a stop
         // never reached FinCom, so the page could not say "stopped", and only a fresh choice clears the bridge's stop)
-        out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types, ...chosenOf(d) });
+        // bridge 2.5.10: what the day is handed out for (the bridge's pick-up acknowledgement names it; an older bridge
+        // ignores it)
+        out.push({ company, company_guid: guid, day: String(d.day), fetch: d?.fetch === true, types, ...chosenOf(d), kind: "period" });
       }
       // 30-Oct-2026 (the owner: an upload that differs from Tally is found and corrected; migration 133): the uploaded days
       // to check against Tally, in the room left of the answer, through the same older-entries path (no new Tally request)
@@ -1945,12 +1947,16 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
           if (missingFn(String(ce.message || ""))) { if (!checkMissing) console.log("tally-ingest beat: the upload check is off: migration 133 is not applied"); checkMissing = Date.now(); }
           else { fail("check_next", ce); console.log("tally-ingest beat: the days to check not worked out:", company, String(ce.message || "").slice(0, 200)); }
         } else {
-          for (const d of Array.isArray(cd) ? cd as any[] : []) {
+          const rows = (Array.isArray(cd) ? cd as any[] : []).filter((d) => isDay(String(d?.day || "")));
+          // bridge 2.5.10: a day queued by Bring missing days (tally_check_days.source 'fill') is handed out as kind fill,
+          // any other as check (one read of the days' sources, only when there are days; not read: check)
+          const fills = await fillDaysOf(book, rows.map((d) => String(d.day)));
+          for (const d of rows) {
             if (out.length >= max) break;
             const day = String(d?.day || "");
-            if (!isDay(day) || out.some((x) => x.company === company && x.day === day)) continue;
+            if (out.some((x) => x.company === company && x.day === day)) continue;
             // next-fast-entries (review 7): to a fast bridge a check day says so (its speed counts the period's own days only)
-            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}) });
+            out.push({ company, company_guid: guid, day, fetch: true, types: CHECK_TYPES, ...chosenOf(d), ...(markCheck ? { check: true } : {}), kind: fills.has(day) ? "fill" : "check" });
           }
         }
       }
@@ -1961,6 +1967,60 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
   }
   // nothing listed while one company's days could not be worked out: the key left out (the bridge keeps the day it reads)
   return unsure && out.length === 0 ? null : out;
+}
+// bridge 2.5.10: which of a book's check days were queued by Bring missing days (yyyymmdd); none when not read
+async function fillDaysOf(book: string, days: string[]): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (!days.length) return out;
+  try {
+    const { data, error } = await db.from("tally_check_days").select("day, source").eq("book_id", book).in("day", days.slice(0, 30).map(iso));
+    if (error) return out;
+    for (const r of (data || []) as any[]) if (r?.source === "fill") out.add(String(r.day || "").slice(0, 10).replace(/-/g, ""));
+  } catch { /* the kind is check then */ }
+  return out;
+}
+// bridge 2.5.10 (the owner's request of 08-Nov-2026): each book's days as the bridge took them from this answer, said in
+// its next beat: started (when, the first day) or refused (a known reason's code and the bridge's fixed words). Kept on
+// the computer's beat (info.beat.pickups) for the page's "Started at 10:42 IST on <login>'s Tally" / "Not started: <words>":
+// cleaned (anything else dropped), merged with the beat before (a computer with two bridges keeps both's), each kept 2
+// hours from when it was last said, at most 20 (the newest)
+const PICK_KINDS = ["period", "check", "fill"];
+const PICK_CODES = ["tallyClosed", "paused", "readingStopped", "posting", "saving", "typing", "retryWait", "noStart", "slow", "notOpen", "otherLogin", "tallyBusy",
+  "held", "notAnswering", "earlier", "stoppedHere", "otherCompany", "stopped", "queued"];
+const ISO_T = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/;
+function pickupsOf(b: any, prevInfo: any, bridge: string, now = Date.now()) {
+  const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
+  const t = (v: unknown) => ISO_T.test(s(v, 40)) && !isNaN(Date.parse(s(v, 40))) ? s(v, 40) : "";
+  const seen = new Date(now).toISOString();
+  const got: any[] = [];
+  for (const x of (Array.isArray(b?.pickups) ? b.pickups : []).slice(0, 20) as any[]) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const company = coTrim(x.company), guid = s(x.guid, 100).trim(), kind = PICK_KINDS.includes(x.kind) ? x.kind : "", takenAt = t(x.takenAt);
+    const state = x.state === "started" || x.state === "refused" ? x.state : "";
+    if (!company || !kind || !takenAt || !state) continue;
+    const day = isDay(String(x.day || "")) ? String(x.day) : "";
+    const e: Record<string, unknown> = { company, guid, kind, chosenAt: t(x.chosenAt), takenAt, state, day, login: s(x.login, 60).replace(/[\u0000-\u001f\u007f<>]/g, ""), bridge, seen };
+    if (state === "started") {
+      const pu = t(x.pickedUtc);
+      if (!pu) continue;
+      e.pickedUtc = pu; e.pickedAt = t(x.pickedAt) || pu;
+    } else {
+      if (!PICK_CODES.includes(x.code)) continue;
+      e.code = x.code; e.words = s(x.words, 200).replace(/[\u0000-\u001f\u007f<>]/g, "").trim(); e.at = t(x.at);
+    }
+    got.push(e);
+  }
+  const key = (e: any) => [e.bridge, String(e.company).toLowerCase(), String(e.guid).toLowerCase(), e.kind].join("|");
+  const by = new Map<string, any>();
+  const before = (prevInfo?.beat && Array.isArray(prevInfo.beat.pickups)) ? prevInfo.beat.pickups : [];
+  for (const e of before) if (e && typeof e === "object" && Date.parse(String(e.seen || "")) > now - 7200000) by.set(key(e), e);
+  // this bridge's own: what it says now (a hand-out it no longer says is dropped); another bridge's: kept as it was
+  for (const k of [...by.keys()]) if (by.get(k).bridge === bridge) by.delete(k);
+  for (const e of got) {
+    const old = by.get(key(e));
+    if (!old || String(old.takenAt) <= String(e.takenAt)) by.set(key(e), e);
+  }
+  return [...by.values()].sort((x, y) => String(y.seen).localeCompare(String(x.seen)) || String(y.takenAt).localeCompare(String(x.takenAt))).slice(0, 20);
 }
 // the book's recorded company GUID (tally_sync_cursor), "" when none is recorded yet
 async function bookGuidOf(book: string): Promise<string> {
@@ -2143,6 +2203,21 @@ const PORT_REASONS = ["open", "busy", "closed", "not answering", "owner unknown"
 const PORT_LISTS = ["named", "empty", "emptyHeld", "kept", "never"];
 // bridge 2.5.4: "connection off" (this login's Tally runs but takes no connection; the fix in tallyConnectSay)
 const TALLY_WHY = ["not answering", "connection off", "owner unknown", "another user", "no Tally running in this login"];
+// bridge 2.5.10 (the owner: "Bridge should work every time except when Tally itself is unavailable"): why the bridge's
+// last run ended and when it ran again (it says so for 6 hours): when (ISO times only), a known reason, the exit code, the
+// kind of its last log line (a known kind, never the line); anything else dropped. Kept on the beat and, for the page's
+// "FinCom Bridge restarted itself at HH:MM after …" once the bridge stops saying it, on the computer (info.lastStop)
+const STOP_WHYS = ["exit", "panic", "stall", "hang", "sleep", "unclean", "notRunning"];
+const STOP_LOGS = ["heartbeat", "posting", "olderEntries", "recorder", "update", "ledgers", "company", "watchdog", "start", "tally", "other"];
+function lastStopOf(b: any) {
+  const x = b?.lastStop;
+  if (!x || typeof x !== "object" || Array.isArray(x) || !STOP_WHYS.includes(x.why)) return null;
+  const t = (v: unknown) => typeof v === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(v) && !isNaN(Date.parse(v)) ? v : "";
+  const at = t(x.at), back = t(x.back);
+  if (!at || !back) return null;
+  const code = Number.isInteger(x.code) && Math.abs(x.code) <= 4294967295 ? x.code : 0;
+  return { at, back, why: x.why, ...(code ? { code } : {}), ...(STOP_LOGS.includes(x.log) ? { log: x.log } : {}) };
+}
 // bridge 2.5.4: why a bridge did or did not update (the beat's update: the last look, its words, the version offered,
 // whether it is being put in place or looked for now, NoAutoUpdate, the next look); anything else dropped
 function updateOf(b: any) {
@@ -4242,9 +4317,14 @@ Deno.serve(sentry.wrap(async (req) => {
           ...tallyIniOf(b), ...periodPullOf(b, await speedBooksFor(firm, b)), ...oldDaysTestOf(b), ...updateOf(b),
           // next-fix-read-any-bridge (bridge 2.5.5): why its run waits before reading Tally, and an Update now queued behind it
           ...keepWaitOf(b),
+          // bridge 2.5.10: why its last run ended, when it ran again (lastStopOf)
+          ...(lastStopOf(b) ? { lastStop: lastStopOf(b) } : {}),
           windowsUser: s(b.windowsUser, 60), bridgePort: Math.max(0, Math.min(65535, Math.floor(Number(b.bridgePort) || 0))), tallyPort: Math.max(0, Math.min(65535, Math.floor(Number(b.tallyPort) || 0))), dataFolder: s(b.dataFolder, 260) };
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
+        // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
+        const pickups = pickupsOf(b, prevInfo, me.id);
+        if (pickups.length) (beat as any).pickups = pickups;
         // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
         const co = await changesOnly(dev, me.id);
         if (co) (me.entry as any).changesOnly = true;
@@ -4253,6 +4333,9 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
+        // bridge 2.5.10: the newest last stop said by a bridge of this computer, kept after the bridge stops saying it
+        { const ls = (beat as any).lastStop, was = (prevInfo as any).lastStop;
+          if (ls && !(was && typeof was === "object" && String(was.back || "") >= ls.back)) (info as any).lastStop = { ...ls, bridge: me.id }; }
         // 2.3.1 (2.3.0 review, cloud Lows): the computer's row was read before the bind; a refusal of THIS bridge's id that
         // the bind has just cleared (the id is this computer's own again) is not written back. Another bridge's is kept
         if (boundOwn && boundOwn === me.id && (info as any).idRefused?.bridge === me.id) delete (info as any).idRefused;
@@ -4268,7 +4351,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // instead of when a page next looks at tally_devices. Only the times and states, nothing of the books or keys
         const pb = (prevInfo.beat && typeof prevInfo.beat === "object") ? prevInfo.beat : {};
         const said = (x: any, stop: unknown) => JSON.stringify([x.lastRead || "", !!x.updating, x.tallyState || "", !!x.paused, x.notAnsweringSince || "",
-          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null, x.recorderStuck ?? null, x.keepWait ?? null]);
+          (Array.isArray(x.companies) ? x.companies : []).map((c: any) => [c.name, c.lastRead || "", c.at || ""]), x.reqs ?? null, x.readStopped ?? null, stop ?? null, x.postOnly ?? null, x.postBatchBills ?? null, x.postBatchBank ?? null, x.settingsAt ?? null, x.tallyRetry?.words ?? null, x.recorderStuck ?? null, x.keepWait ?? null, x.lastStop ?? null,
+          (Array.isArray(x.pickups) ? x.pickups : []).map((p: any) => [p.bridge, p.company, p.kind, p.takenAt, p.state, p.code || ""])]);
         if (said(pb, prevInfo.readStop) !== said(beat, (info as any).readStop)) {
           await broadcast("fincom-tally-" + firm, "beat", { device: dev.id, beat: { at: beat.at, every: beat.every, lastRead: beat.lastRead, updating: beat.updating, tallyState: beat.tallyState,
             tally: beat.tally, paused: beat.paused, notAnsweringSince: beat.notAnsweringSince, busySince: beat.busySince, open: beat.open,
@@ -4278,7 +4362,11 @@ Deno.serve(sentry.wrap(async (req) => {
             // bridge 2.3.1: a request not answered in time and when it tries again by itself (null: as normal)
             tallyRetry: (beat as any).tallyRetry ?? null, recorderStuck: (beat as any).recorderStuck ?? null,
             // next-fix-read-any-bridge: why an Update now waits on this computer (null: it does not)
-            keepWait: (beat as any).keepWait ?? null } });
+            keepWait: (beat as any).keepWait ?? null,
+            // bridge 2.5.10: the days as the bridge took them (the page's "Started at …" / "Not started: …"); [] when none
+            pickups: (beat as any).pickups ?? [],
+            // bridge 2.5.10: why its last run ended and when it ran again (null: nothing to say)
+            lastStop: (beat as any).lastStop ?? null } });
         }
         // 2.1.8 (round 15, migration 43): the owner's per-computer posting settings (tally_device_post_settings), read from the
         // device's row: postOnly (null = no restriction, [] = any company, else the names), the batch sizes, and when they were

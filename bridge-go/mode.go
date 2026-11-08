@@ -357,6 +357,9 @@ func runBridge(console bool) int {
 		return exitNoPort
 	}
 	_ = os.Remove(startFailedFile())
+	runStarted() // 2.5.10: why the run before ended, said in the beat (selfheal.go)
+	defer runEnded()
+	go beatWatch(stopCh, 15*time.Second)
 	serve(ln)
 	openPairWindow(toInt(cfg("PairWindowMin")))
 	mode := "the only bridge on this computer"

@@ -240,6 +240,7 @@ func pullReset() {
 	pull.stopCo = map[string]M{}
 	pull.batchCo = map[string]int{}
 	pull.empAt, pull.night, pull.nightAt, pull.beatAt = map[string]time.Time{}, false, time.Time{}, time.Time{}
+	pickReset() // 2.5.10 (pickack.go)
 	pullSaveMu.Lock()
 	pullSaveText.Store("")
 	_ = os.Remove(pullFile())

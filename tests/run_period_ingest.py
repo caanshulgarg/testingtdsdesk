@@ -87,7 +87,7 @@ try:
     ok(odt.get("line", "").endswith("no freeze") and "raw" not in odt and "secret" not in (odt.get("results") or [{}])[0] and odt["results"][0]["ms"] == 210, "1. the old-days test kept, cleaned (%s)" % odt)
     pd = r.get("periodDays") or []
     ok(c == 200 and len(pd) == 3, "the beat answers 3 days (%s %s)" % (c, pd))
-    ok(pd and pd[0] == {"company": "BIG CO", "company_guid": CG, "day": "20250830", "fetch": False, "types": ["Sales", "Receipt"]}, "1. the first: BIG CO under the beat's GUID, counting, a type with a quote mark left out (%s)" % (pd[:1],))
+    ok(pd and pd[0] == {"company": "BIG CO", "company_guid": CG, "day": "20250830", "fetch": False, "types": ["Sales", "Receipt"], "kind": "period"}, "1. the first: BIG CO under the beat's GUID, counting, a type with a quote mark left out; bridge 2.5.10: its kind (%s)" % (pd[:1],))
     ok(len(pd) == 3 and pd[2]["company"] == "SECOND CO" and pd[2]["company_guid"] == "book2-guid" and pd[2]["fetch"] is True, "1. SECOND CO under the book's GUID, fetching (%s)" % (pd[2:],))
     dev = next(d for d in FS.T["tally_devices"] if d["id"] == DA)
     ti = (((dev.get("info") or {}).get("beat") or {}).get("tallyIni") or [])

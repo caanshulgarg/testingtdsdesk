@@ -778,3 +778,18 @@ service_role reads and inserts (tally-ingest kind `fast_measure`); authenticated
 security, `my_firm()`); anon nothing. Add-only, one transaction (lock_timeout 10 s), safe to run twice; no table
 altered, no function. Deploy: this file first, then tally-ingest (it answers "not set up yet" (503) until this has run),
 then the app (the Tally page shows nothing under Advanced without it). Tested: `tests/run_migration148.py`.
+
+## 149: one bell line when a firm's FinCom Bridges all stop answering (not run yet; branch next-bridge-2510, 08-Nov-2026)
+
+**149, bridge stopped** (08-Nov-2026, branch `next-bridge-2510`, bridge 2.5.10; the owner: "Bridge should work every time
+except when Tally itself is unavailable"; **written, not run yet**; file md5 80a5cd6b26aa2f02da966c675a227c66):
+`server/tally-cloud/migration-149-bridge-stopped-alert.sql`. One function, `tally_alert_scan_stopped(p_now)`: a firm
+whose computers' newest heartbeat (`tally_devices.info.beat.at`) is more than 10 minutes and less than 24 hours old gets
+one `tally_alerts` line (kind `summary`, the computer's id, India's day of the stop): "FinCom Bridge on the office Tally
+computer stopped answering at HH:MM IST. ...", no computer's name; once per stop (a later stop the same day makes it
+unread again with the new time; another summary line of that computer and day is never overwritten); only Monday to
+Saturday 09:00-19:00 India time, as migration 47's other alerts. Not executable by anon or authenticated; pg_cron job
+`tally-alert-stopped` every 5 minutes where pg_cron is there. Add-only (no table created, altered or emptied), one
+transaction (lock_timeout 10 s), safe to run twice. Needs migration 47. Deploy: this file any time; tally-ingest and the
+app do not depend on it (without it the bell has no such line; the Tally page's top line says it all the same).
+Tested: `tests/run_migration149.py`.

@@ -167,7 +167,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	mine, why := fromOwnUser(r)
 	if path == "/ping" {
 		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
-		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine}
+		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine,
+			"beatSec": beatSec()} // 2.5.10: the heartbeat loop's progress too (selfheal.go)
 		// 2.5.3: the Tallys this bridge uses (its own, and those it found with the owner unknown), so the other users'
 		// bridges of this computer leave them alone; the Windows user, to name it in their words
 		own, unknown := claimedPorts()
@@ -215,7 +216,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if !mine {
 		writeLog("Refused a request from a program of another Windows user (" + path + "): " + why)
-		sendJSON(w, 403, M{"ok": false, "error": notYours, "notYours": true}, origin)
+		nb := M{"ok": false, "error": notYours, "notYours": true}
+		if path == "/jobs/cancel" {
+			nb["code"], nb["words"] = "otherLogin", cancelWords["otherLogin"] // 2.5.10: Stop posting says why (jobs.go)
+		}
+		sendJSON(w, 403, nb, origin)
 		return
 	}
 	if sentOrigin != "" && !originOK {
@@ -652,7 +657,7 @@ func route(w http.ResponseWriter, r *http.Request, path string, qs url.Values, b
 		if err != nil {
 			return nil, err
 		}
-		return cancelJob(str(o["id"]), "asked by FinCom on this computer")
+		return cancelAsked(str(o["id"]), "asked by FinCom on this computer") // 2.5.10: a refusal says why (jobs.go)
 	case "/jobs/resume":
 		if err := needPost(r, "Use POST."); err != nil {
 			return nil, err

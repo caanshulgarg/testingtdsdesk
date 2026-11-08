@@ -11,10 +11,14 @@
 //   <Said k>      those words, role=status; with a watch ({started, company, cid}), work asked that no Tally computer
 //                 picked up within 2 minutes turns into "Not started: <why>" (the beats, the link's serving bridges)
 //   lateWhy       that why, from what the page already reads (no computer's name: the computers are "the Tally computer")
+//   bridge 2.5.10: a watch with acks (lib/pickAck.js ackSnap, taken before the request) says what the bridge itself said
+//                 of the work since: "Started at 10:42 IST on <login>’s Tally." or "Not started: <its own words>." at
+//                 once; with none (an older bridge, or not said yet) the inference above, as before
 // Loaded only with the Tally page's code (the Tally and TallyCompanies chunks): the app's first file does not grow.
 import { useEffect, useState } from "react";
 import { noAnswer } from "../lib/readFollow.js";
 import { soonDraw } from "../lib/soonDraw.js";
+import { ackNew, ackWords } from "../lib/pickAck.js";
 
 export const LATE_MS = 120000, SLOW_MS = 20000, KEEP_MS = 180000;
 export function errWords(e) {
@@ -92,14 +96,18 @@ export function Said({ k, hook = "", className = "tsm-note" }) {
   useEffect(() => { if (!w) return; const t = setInterval(() => tick((n) => n + 1), 5000); return () => clearInterval(t); }, [w]);
   if (busyOf(k)) return <div className={className} data-said={hook || k} data-said-state={slowOf(k) ? "slow" : "busy"} role="status">{slowOf(k) ? "Still waiting for FinCom…" : "Working…"}</div>;
   if (!s) return null;
-  let text = s.text, bad = s.bad, st = bad ? "bad" : "ok";
+  let text = s.text, bad = s.bad, st = bad ? "bad" : "ok", ack = null;
   if (w) {
     let on = false; try { on = !!w.started(); } catch (e) { on = false; }
-    if (on) { st = "started"; if (w.startedText) text = typeof w.startedText === "function" ? w.startedText() : w.startedText; else return null; }
+    try { ack = w.acks ? ackNew(w.acks) : null; } catch (e) { ack = null; }
+    const more = () => (on && w.startedText ? " " + (typeof w.startedText === "function" ? w.startedText() : w.startedText) : "");
+    if (ack && ack.state === "started") { st = "started"; bad = false; text = ackWords(ack) + more(); }
+    else if (on) { ack = null; st = "started"; if (w.startedText) text = more().slice(1); else return null; }
+    else if (ack) { text = ackWords(ack); bad = true; st = "refused"; }
     else if (Date.now() - s.at > LATE_MS) { text = "Not started: " + lateWhy(w.cid, w.company); bad = true; st = "late"; }
     else st = "asked";
   }
-  return <div className={className + (bad ? " bad" : "")} data-said={hook || k} data-said-state={st} role="status">{text}</div>;
+  return <div className={className + (bad ? " bad" : "")} data-said={hook || k} data-said-state={st} data-said-ack={ack ? ack.state : undefined} role="status">{text}</div>;
 }
 // the note under a button that is off, and its title: why, in plain words
 export const VIEW_ONLY = "View only: an owner or staff of the firm makes changes.";
