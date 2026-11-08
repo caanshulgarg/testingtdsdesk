@@ -427,7 +427,7 @@ function BankPage() {
   // the account's Tally ledger, once confirmed, is a few words in the header line (24-Oct-2026: a line of its own)
   const accFull = acc.id ? acc : Object.assign({ id: st.acctId, bank: st.bank }, acc), accSure = !!accLedger && !accChoice.gone && accChoice.state === "confirmed";
   const repaired = b.rows.filter((r) => r.repaired).length, book = b.books[st.acctId];
-  const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + num(r[k]), 0));
+  const sum = (k) => money(st[k === "debit" ? "totDr" : "totCr"] || b.rows.reduce((a, r) => a + (bankAside(r) ? 0 : num(r[k])), 0));
   // the lines the table lists: the tab, search, column filters and dates (bankVisibleRows, src/js/22), then the quick
   // chips and "suggestions only" (parts/bank/smart.js); the filter bar counts and adds them up (it replaces the ChipBar)
   const view = apView("bank") === "auto" ? b.rows.filter(isAuto) : apRows("bank", bankVisibleRows()), shown = smartRows(b, view);

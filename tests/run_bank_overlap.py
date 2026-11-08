@@ -14,7 +14,12 @@ design, 08-Nov-2026). Made-up statements and names only. Checked:
     later file;
 (5) the join check: an opening that is not the closing of the statement before: "Rs X difference between <date> and
     <date>", and the days no statement holds;
-(6) a deleted statement uploaded again: all its lines come in, as before.
+(6) a deleted statement uploaded again: all its lines come in, as before;
+(7) review of 08-Nov-2026: held lines and repeats stay among the lines (marked, in their place): another computer that
+    syncs the parts after "It's a repeat" gets each line once, nothing postable twice; the line's own state decides
+    (a kept line cannot be put aside by a stale screen); a reference names one entry only within 2 days (monthly rent to
+    the same account is not held), never words ("TRANSFER TO <acct>") or a number on two lines; a cheque number is
+    compared as a number (004512 = 4512); a held line is not charged.
 Run on the React build: TDSDESK_SITE=../app/dist-test python3 run_bank_overlap.py   (BANK_SHOTS=<dir>: screenshots)"""
 import os, threading, functools, http.server
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/opt/pw-browsers")
@@ -55,6 +60,7 @@ MAY = [("03/05/2026", "NEFT CR-DELTA AGENCIES-HDFCN26123000222", "", 0, 40000, 1
 PDF = [("02/04/2026", "BY TRANSFER NEFT ALPHA TRADERS AXISN26092000111", "", 0, 25000, 125000),     # same UTR and amount: held
        ("05/04/2026", "UPI 609512345678 BETA STORES", "", 1200, 0, 123800),                         # same UTR and amount: held
        ("09/04/2026", "ATM-CASH WDL/MG ROAD BLR", "", 5000, 0, 118800),                              # same date, amount, balance: held
+       ("15/04/2026", "CHEQUE 4512 GAMMA SERVICES", "4512", 8000, 0, None),                          # same cheque (004512) and amount: held
        ("21/04/2026", "BANK CHGS INCL GST", "", 118, 0, None),                                       # same amount a day apart: marked
        ("28/04/2026", "INTEREST CREDITED", "", 0, 350, None),                                        # same amount, same day: marked
        ("02/06/2026", "NEFT CR-ETA LTD-ICICN26153000444", "", 0, 10000, None)]                       # new
@@ -65,6 +71,15 @@ I2 = [SAME, SAME, ("12/01/2026", "NEFT CR-ONE TRADING-UTIBN26012000555", "", 0, 
 I3 = [SAME, ("20/01/2026", "NEFT CR-THREE TRADING-UTIBN26020000777", "", 0, 900, None)]
 A3 = ("70300555559911", "DEMO0009012")
 J1 = [("05/01/2026", "NEFT CR-KAPPA CO-KKBKN26005000888", "", 0, 20000, 70000), ("28/01/2026", "RENT PAID", "", 20000, 0, 50000)]
+# monthly rent to the same account (its number in the narration and in the Chq/Ref column), and an EMI whose loan number is on every line
+A5 = ("80400123456789", "DEMO0003456")
+K1 = [("01/03/2026", "EMI LOAN 998877665544", "998877665544", 15000, 0, 185000), ("31/03/2026", "NEFT DR-123456789012-LANDLORD RENT", "TRANSFER TO 50100999998888", 30000, 0, 155000)]
+K2 = [("01/04/2026", "EMI LOAN 998877665544", "998877665544", 15000, 0, 140000), ("01/04/2026", "NEFT DR-123456789012-LANDLORD RENT", "TRANSFER TO 50100999998888", 30000, 0, 110000),
+      ("30/04/2026", "NEFT DR-123456789012-LANDLORD RENT", "TRANSFER TO 50100999998888", 30000, 0, 80000)]
+# a long statement (two sync parts of 300 lines): its first line a possible repeat of a line already here
+A6 = ("90500111112222", "DEMO0007890")
+L0 = [("01/06/2026", "CASH DEP BRANCH", "", 0, 777, None)]
+L1 = [("01/06/2026", "CASH DEPOSIT AT BRANCH", "", 0, 777, None)] + [("%02d/06/2026" % (2 + i // 12), "UPI/7%011d/SHOP %d" % (i, i), "", 10 + i, 0, None) for i in range(304)]
 J2 = [("03/03/2026", "NEFT CR-LAMBDA CO-KKBKN26062000999", "", 0, 4000, 55500), ("20/03/2026", "ELECTRICITY BILL", "", 2500, 0, 53000)]
 
 STUB = """(firm) => {
@@ -104,7 +119,7 @@ with sync_playwright() as p:
     pg.goto("http://localhost:%d/" % PORT); pg.wait_for_timeout(2500); pg.evaluate("() => new Promise((r) => { const go = () => (typeof doAct === 'function' && typeof signInNeeded === 'function' && typeof S === 'object' && S && S.firm) ? (() => { try { if (signInNeeded()) doAct('useOffline'); } finally { r(); } })() : setTimeout(go, 50); go(); })"); pg.wait_for_timeout(800)
     E = pg.evaluate
     E(STUB, "f0000000-0000-0000-0000-0000000000ab")
-    E(SETUP, [["zzov1", "Sample Works Pvt Ltd", A1[0], A1[1]], ["zzov2", "Model Traders", A2[0], A2[1]], ["zzov3", "Example Stores", A3[0], A3[1]]])
+    E(SETUP, [["zzov1", "Sample Works Pvt Ltd", A1[0], A1[1]], ["zzov2", "Model Traders", A2[0], A2[1]], ["zzov3", "Example Stores", A3[0], A3[1]], ["zzov5", "Sample Rentals", A5[0], A5[1]], ["zzov6", "Model Kirana", A6[0], A6[1]]])
     toasts = lambda: E("window.__toasts")
     def up(text, name, n_before):
         E("window.__toasts = []"); E(UPLOAD, [text, name]); wait(pg, "!B().busy && B().stmts.length > %d" % n_before); pg.wait_for_timeout(600)
@@ -137,14 +152,22 @@ with sync_playwright() as p:
     print("== 2. the April lines read again in another style")
     say = up(csv(A1[0], A1[1], PDF), "apr-pdf.csv", 2)
     s3 = st(); sid3 = s3["id"]
-    held = s3.get("held") or []
-    ok([h["date"] for h in held] == ["2026-04-02", "2026-04-05", "2026-04-09"] and [h["rep"]["of"] for h in held] == ["2026-04-02", "2026-04-05", "2026-04-09"] and all(h["rep"]["kind"] == "strong" for h in held),
-       "the same UTR and amount (2), the same date, amount and balance (1): held aside (%s)" % [(h["date"], h["rep"]["why"]) for h in held])
-    rows = E("B().rows.map(r => [r.date, r.rep ? r.rep.kind : ''])")
+    HELD = "JSON.parse(JSON.stringify(B().rows.filter(BankOverlap.isHeld)))"
+    held = E(HELD)
+    ok([h["date"] for h in held] == ["2026-04-02", "2026-04-05", "2026-04-09", "2026-04-15"] and [h["rep"]["of"] for h in held] == ["2026-04-02", "2026-04-05", "2026-04-09", "2026-04-15"] and all(h["rep"]["kind"] == "strong" for h in held),
+       "the same UTR and amount (2), the same date, amount and balance (1), the same cheque 004512 = 4512 (1): held aside (%s)" % [(h["date"], h["rep"]["why"]) for h in held])
+    ok("same cheque 4512 and amount" in held[3]["rep"]["why"], "the cheque compared as a number: %s" % held[3]["rep"]["why"])
+    ok(E("B().rows.length") == 7 and [h["state"] for h in held] == ["ignored"] * 4 and E("B().rows.map(r => r.date).join()") == "2026-04-02,2026-04-05,2026-04-09,2026-04-15,2026-04-21,2026-04-28,2026-06-02",
+       "held lines stay among the statement's lines, in their place, ignored and marked")
+    ok(E("window.__charges.length && window.__charges[window.__charges.length - 1]") and "3" in str(E("JSON.stringify(window.__charges[window.__charges.length - 1])")), "only the 3 lines not held are charged (%s)" % E("JSON.stringify(window.__charges[window.__charges.length - 1])"))
+    rows = E("B().rows.filter(r => !bankAside(r)).map(r => [r.date, r.rep ? r.rep.kind : ''])")
     ok(rows == [["2026-04-21", "weak"], ["2026-04-28", "weak"], ["2026-06-02", ""]], "the same amount near the date with nothing to compare: added and marked; the new line added (%s)" % rows)
-    ok(not any(E("(f) => B().keys[f] === '%s'" % sid3, h["fp"]) for h in held) and s3["n"] == 3, "held lines are not in the books (no key, not counted)")
-    ok(any("3 entries are held aside" in t and "2 entries are marked Possible repeat" in t for t in say), "said: %s" % say)
-    ok(E("document.querySelectorAll('[data-bo-list=held] [data-bo-line]').length") == 3 and "Repeat of 02-Apr-2026 entry" in E("document.querySelector('[data-held-repeats]').innerText"), "the held lines are listed: Repeat of 02-Apr-2026 entry, Keep it / It's a repeat")
+    E("() => { B().filter = 'all'; render(); }"); pg.wait_for_timeout(200)
+    ok(E("bankVisibleRows().length") == 3 and s3["n"] == 3 and E("tabCounts(B().rows).ignored") == 0 and E("countStates(B().rows).ignored || 0") == 0 and abs(s3["totDr"] - 118) < 0.01,
+       "held lines are not in the books: in no tab (not even All or Ignored), not counted, not in the totals (%s)" % [E("bankVisibleRows().length"), s3["n"], s3["totDr"]])
+    E("() => { B().filter = 'review'; render(); }"); pg.wait_for_timeout(200)
+    ok(any("4 entries are held aside" in t and "2 entries are marked Possible repeat" in t for t in say), "said: %s" % say)
+    ok(E("document.querySelectorAll('[data-bo-list=held] [data-bo-line]').length") == 4 and "Repeat of 02-Apr-2026 entry" in E("document.querySelector('[data-held-repeats]').innerText"), "the held lines are listed: Repeat of 02-Apr-2026 entry, Keep it / It's a repeat")
     ok(E("document.querySelectorAll('[data-weak]').length") == 2 and "Possible repeat — check" in E("document.querySelector('[data-weak]').innerText"), "the marked lines say Possible repeat — check")
     if SHOTS:
         os.makedirs(SHOTS, exist_ok=True)
@@ -152,7 +175,7 @@ with sync_playwright() as p:
         pg.locator("[data-held-repeats]").screenshot(path=os.path.join(SHOTS, "held-repeats.png"))
         pg.locator("[data-weak]").first.screenshot(path=os.path.join(SHOTS, "possible-repeat-line.png"))
     # posting: the marked lines are left out until confirmed
-    E("""() => { B().rows.forEach(r => { r.ledger = 'Some Ledger'; r.state = 'ready'; }); window.__posted = []; window.ensureTallyCompany = async () => { window.__posted.push('reached'); return null; };
+    E("""() => { B().rows.filter(r => !bankAside(r)).forEach(r => { r.ledger = 'Some Ledger'; r.state = 'ready'; }); window.__posted = []; window.ensureTallyCompany = async () => { window.__posted.push('reached'); return null; };
       const o = window.bankGoneAsk; window.bankGoneAsk = async (b, ids) => { const r = await o(b, ids); window.__ids = r; return r; }; render(); }""")
     E("window.__toasts = []; postBankToTally()"); pg.wait_for_timeout(500)
     d = E("B().rows.find(r => r.date === '2026-06-02').id")
@@ -160,6 +183,14 @@ with sync_playwright() as p:
     ok(any("2 entries are marked Possible repeat" in t and "not posted" in t for t in toasts()), "and says why the 2 were not posted (%s)" % toasts()[-1:])
     probs = E("bankExportProblems(B().rows.filter(r => r.state === 'ready'))")
     ok(any("Possible repeat" in x for x in probs), "the Tally file waits for them too (%s)" % probs[:1])
+    pr = E("postRows(CO()).filter(x => x.kind === 'bank').map(x => x.state[0])")
+    ok(pr.count("Possible repeat — check") == 2 and pr.count("Waiting for Tally") == 1, "the Post page lists them as Possible repeat — check (%s)" % pr)
+    wid = E("B().rows.find(r => r.date === '2026-04-21').id")
+    E("(id) => { B().drawer = id; render(); }", wid); pg.wait_for_timeout(400)
+    dr = E("(document.querySelector('[data-bank-drawer]') || {}).innerText || ''")
+    ok("Possible repeat — check" in dr and not E("document.querySelector('[data-bank-drawer] [data-drawer-act=post]')") and E("!!document.querySelector('[data-bank-drawer] [data-rep-keep]')"),
+       "the line's drawer: Possible repeat — check, Keep it / It's a repeat, no Post (%s)" % dr[:80].replace("\n", " "))
+    E("() => { B().drawer = null; render(); }")
 
     print("== 3. Keep it / It's a repeat / Bring back")
     c2, c1 = E("B().rows.find(r => r.date === '2026-04-28').id"), E("B().rows.find(r => r.date === '2026-04-21').id")
@@ -170,25 +201,31 @@ with sync_playwright() as p:
     ok(sorted(E("window.__ids") or []) == sorted([c2, d]), "now it is posted with the new line (%s)" % E("window.__ids"))
     pg.click("[data-rep-repeat='%s']" % c1); pg.wait_for_timeout(300)
     s3 = st()
-    ok(not E("(id) => B().rows.some(r => r.id === id)", c1) and [r["id"] for r in s3.get("repeats") or []] == [c1] and s3["n"] == 2, "It's a repeat on a marked line: out of the books, kept aside (%s)" % [r["id"] for r in s3.get("repeats") or []])
+    REPS = "B().rows.filter(BankOverlap.isRepeat).map(r => r.id)"; HIDS = "B().rows.filter(BankOverlap.isHeld).map(r => r.id)"
+    ok(E("B().rows.length") == 7 and E("(id) => B().rows.findIndex(r => r.id === id)", c1) == 4 and E(REPS) == [c1] and s3["n"] == 2 and not E("(id) => bankVisibleRows().some(r => r.id === id)", c1),
+       "It's a repeat on a marked line: kept in its place, out of the books (%s)" % E(REPS))
+    E("(id) => BankOverlap.repeat(id)", c2); pg.wait_for_timeout(200)
+    ok(E("(id) => B().rows.find(r => r.id === id).state", c2) != "ignored" and E(REPS) == [c1], "the line's own state decides: a kept line is not put aside by a stale screen")
     a = held[0]["id"]; bb = held[2]["id"]
     pg.click("[data-held-keep='%s']" % a); pg.wait_for_timeout(300)
     s3 = st()
-    ok(E("B().rows[0].id") == a and E("B().rows[0].state") in ("attention", "suggested", "ready", "intally") and E("(f) => B().keys[f]", held[0]["fp"]) == sid3 and s3["n"] == 3 and s3["from"] == "2026-04-02",
+    ok(E("B().rows[0].id") == a and E("B().rows[0].state") in ("attention", "suggested", "ready", "intally") and E("(id) => bankVisibleRows().some(r => r.id === id) || bankTabOf(B().rows[0]) !== 'aside'", a) and E("(f) => B().keys[f]", held[0]["fp"]) == sid3 and s3["n"] == 3 and s3["from"] == "2026-04-02",
        "Keep it on a held line: into the books in its place by date, with its key; the statement's dates follow (%s)" % [E("B().rows[0].id"), s3["n"], s3["from"]])
     pg.click("[data-held-repeat='%s']" % bb); pg.wait_for_timeout(300)
     s3 = st()
-    ok([h["id"] for h in s3.get("held") or []] == [held[1]["id"]] and [r["id"] for r in s3.get("repeats") or []] == [c1, bb], "It's a repeat on a held line: kept aside")
+    ok(E(HIDS) == [held[1]["id"], held[3]["id"]] and E(REPS) == [bb, c1] and E("B().rows.length") == 7, "It's a repeat on a held line: kept aside, in its place")
     pg.click("[data-repeats] > summary"); pg.click("[data-rep-back='%s']" % bb); pg.wait_for_timeout(300)
     s3 = st()
-    ok([h["id"] for h in s3.get("held") or []] == [held[1]["id"], bb] and [r["id"] for r in s3.get("repeats") or []] == [c1], "Bring back: held again, to choose")
+    ok(E(HIDS) == [held[1]["id"], bb, held[3]["id"]] and E(REPS) == [c1], "Bring back: held again, to choose")
     E("saveBank({rows: true, stmts: true})"); pg.wait_for_timeout(1300)
     E("(async () => { S.bank = null; await loadBank('zzov1'); await openStatement('%s'); })()" % sid3); wait(pg, "B() && !B().loading && B().cur === '%s'" % sid3); pg.wait_for_timeout(400)
     s3 = st()
-    ok(len(s3.get("held") or []) == 2 and len(s3.get("repeats") or []) == 1 and E("B().rows.length") == 3 and E("(id) => B().rows.find(r => r.id === id).rep.ok", c2) is True, "after a reload: held 2, repeats 1, the 3 lines with the confirmation")
+    ok(len(E(HIDS)) == 3 and len(E(REPS)) == 1 and E("B().rows.length") == 7 and E("bankVisibleRows().length") + 0 >= 0 and s3["n"] == 3 and E("(id) => B().rows.find(r => r.id === id).rep.ok", c2) is True, "after a reload: held 3, repeats 1, 3 lines in the books, the confirmation kept")
     E("cloudPush()"); pg.wait_for_timeout(800)
     rec = E("(sid) => (Object.values(__db).find(r => r.kind === 'bank_stmt' && r.id.endsWith(':' + sid)) || {}).data || null", sid3)
-    ok(rec and len(rec.get("held") or []) == 2 and len(rec.get("repeats") or []) == 1 and rec.get("fileFrom") == "2026-04-02", "the firm account's statement record carries them (bank_stmt)")
+    rws = E("(sid) => (Object.values(__db).find(r => r.kind === 'bank_rows' && r.id.endsWith(':' + sid + ':0')) || {}).data || null", sid3)
+    ok(rec and "held" not in rec and "repeats" not in rec and rec.get("n") == 3 and rws and len(rws["rows"]) == 7 and sum(1 for r in rws["rows"] if r.get("rep") and r["state"] == "ignored" and (r["rep"].get("gone") or not r["rep"].get("ok"))) == 4,
+       "the firm account's copy: the lines carry their marks (bank_rows, 7 lines, 4 aside); the statement record holds no list of them")
     rec2 = E("(sid) => (Object.values(__db).find(r => r.kind === 'bank_stmt' && r.id.endsWith(':' + sid)) || {}).data || null", s2["id"])
     ok(rec2 and len(rec2.get("dupIds") or []) == 6, "and the skipped lines' list (bank_stmt of May)")
     kinds = sorted(set(E("Object.values(__db).map(r => r.kind)")))
@@ -219,6 +256,38 @@ with sync_playwright() as p:
     up(csv(A3[0], A3[1], J1, ("01/01/2026", "31/01/2026")), "jan.csv", 1)
     s6 = st()
     ok(s6["n"] == 2 and not s6.get("dupRows") and not s6.get("held") and E("B().rows.length") == 2, "all its lines come in again, none held or skipped (%s)" % [s6["n"], s6.get("dupRows"), len(s6.get("held") or [])])
+
+    print("== 7. a reference names one entry; syncing after It's a repeat")
+    E(OPEN, "zzov5"); wait(pg, "B() && B().cid === 'zzov5' && !B().loading")
+    up(csv(A5[0], A5[1], K1, ("01/03/2026", "31/03/2026")), "mar-rent.csv", 0)
+    say = up(csv(A5[0], A5[1], K2, ("01/04/2026", "30/04/2026")), "apr-rent.csv", 1)
+    ok(not E(HIDS) and E("B().rows.length") == 3 and not E("B().rows.some(r => r.rep)"),
+       "monthly rent to the same account (31-Mar, 30-Apr), the same text in the Chq/Ref column a day apart, the loan number on every EMI: none held or marked (%s)" % E("JSON.stringify(B().rows.map(r => r.rep || null))"))
+    ok(E("BankOverlap.refKey('TRANSFER TO 50100999998888')") == "" and E("BankOverlap.refKey('50100999998888')") == "" and E("BankOverlap.refKey('004512')") == "C:4512" and E("BankOverlap.refKey('012', true)") == "" and E("BankOverlap.refKey('AXISN26092000111')") == "U:AXISN26092000111",
+       "references: words and account-shaped numbers are not; a cheque number is a number of 4 digits or more; a UTR is")
+    E(OPEN, "zzov6"); wait(pg, "B() && B().cid === 'zzov6' && !B().loading")
+    up(csv(A6[0], A6[1], L0), "jun-a.csv", 0)
+    up(csv(A6[0], A6[1], L1), "jun-b.csv", 1)
+    sid6 = st()["id"]
+    w0 = E("B().rows[0].id")
+    ok(E("B().rows.length") == 305 and E("B().rows[0].rep && B().rows[0].rep.kind") == "weak", "a statement of 305 lines (two sync parts), its first line marked Possible repeat")
+    E("cloudPush()"); pg.wait_for_timeout(900)
+    pre = E("JSON.parse(JSON.stringify(B().rows))")
+    E("() => { B().filter = 'all'; render(); }"); pg.wait_for_timeout(300)
+    E("(id) => BankOverlap.repeat(id)", w0); pg.wait_for_timeout(300)
+    E("cloudPush()"); pg.wait_for_timeout(900)
+    parts = E("(sid) => Object.values(__db).filter(r => r.kind === 'bank_rows' && r.id.split(':')[1] === sid).map(r => JSON.parse(JSON.stringify(r)))", sid6)
+    ok(sorted(p_["id"].split(":")[2] for p_ in parts) == ["0", "1"] and sum(len(p_["data"]["rows"]) for p_ in parts) == 305, "the firm account holds 2 parts, 305 lines (%s)" % [len(p_["data"]["rows"]) for p_ in parts])
+    # the other computer: it held the lines before It's a repeat, and now applies the parts sent after it
+    got = E("""async ([sid, pre, parts]) => {
+      const key = 'stmt:zzdevB:' + sid; await BankDB.set(key, pre);
+      for (const p of parts) await cloudApplyBankPart(Object.assign({}, p, {id: p.id.replace(/^[^:]+/, 'zzdevB')}));
+      return (await BankDB.get(key)) || []; }""", [sid6, pre, parts])
+    ids = [r["id"] for r in got]
+    ok(len(got) == 305 and len(set(ids)) == 305 and ids == [r["id"] for r in pre], "the other computer: 305 lines, each once, in the same places (%d lines, %d different)" % (len(got), len(set(ids))))
+    postable = [r for r in got if not (r.get("rep") and r["state"] == "ignored")]
+    ok(len(postable) == 304 and got[0]["id"] == w0 and got[0]["state"] == "ignored" and got[0]["rep"].get("gone"), "and the repeat is kept aside there too: 304 lines in the books, none twice")
+    ok(E("B().rows.length") == 305 and E("bankVisibleRows().length") == 304, "here: 305 lines held, 304 in the books")
     br.close()
 errors = [e for e in errors if "ResizeObserver" not in e]
 ok(not errors, "no page errors (%s)" % errors[:3])

@@ -4,6 +4,7 @@
 //   - the header: "April 2026 already uploaded (31 entries kept as they are)", with See them (the lines, from the
 //     statements that hold them);
 //   - held aside: "Repeat of <date> entry", Keep it / It's a repeat (not in the books, never posted until chosen);
+//     held lines and repeats are the statement's own lines, marked (BankOverlap.isHeld / isRepeat: the line's state);
 //   - kept aside as repeats: Bring back (nothing is ever deleted);
 //   - a line marked "Possible repeat — check" (RepMark, in the line's particulars): Keep it / It's a repeat;
 //   - the join: "₹X difference between <date> and <date>", and the days no statement holds.
@@ -26,7 +27,7 @@ export function RepMark({ r }) {
   if (r.rep.ok) return <div className="bo-mark ok" data-rep-ok={r.id}>Checked: not a repeat of the entry of {fmtDate(r.rep.of)}</div>;
   if (r.rep.kind !== "weak") return null;
   return <div className="bo-mark" data-weak={r.id} title={r.rep.why}>⚠ Possible repeat — check: same amount as the entry of {fmtDate(r.rep.of)}. Not posted until you choose.
-    {r.state !== "sent" && <> <button type="button" className="linkbtn" data-rep-keep={r.id} onClick={(ev) => { ev.stopPropagation(); BankOverlap.keep(r.id); }}>Keep it</button>
+    {BankOverlap.isOpen(r) && <> <button type="button" className="linkbtn" data-rep-keep={r.id} onClick={(ev) => { ev.stopPropagation(); BankOverlap.keep(r.id); }}>Keep it</button>
       {" · "}<button type="button" className="linkbtn" data-rep-repeat={r.id} onClick={(ev) => { ev.stopPropagation(); BankOverlap.repeat(r.id); }}>It’s a repeat</button></>}</div>;
 }
 
@@ -52,7 +53,7 @@ function Skipped({ st }) {
 export function OverlapPanel({ st }) {
   const b = B();
   if (!st) return null;
-  const held = st.held || [], reps = st.repeats || [], j = BankOverlap.join(b.stmts, st);
+  const held = b.rows.filter(BankOverlap.isHeld), reps = b.rows.filter(BankOverlap.isRepeat), j = BankOverlap.join(b.stmts, st);
   return <>
     {j && j.diff && <NoticeLine sev="warn" data-join-gap="" text={j.diff.words + ": this statement’s opening " + money(st.opening) + " does not follow on from the closing " + money(j.prev.closing) + " of " + stmtLabel(j.prev) + "."} how="Some entries between the two statements may be missing, or one statement was read wrongly. Upload the statement for the days in between, or check the balances against the bank." />}
     {j && j.gap && <NoticeLine sev={j.diff ? "warn" : "info"} data-join-days="" text={j.gap.words + " (between " + stmtLabel(j.prev) + " and this one)."} />}
