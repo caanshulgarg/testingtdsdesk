@@ -662,7 +662,7 @@ function clientRow(co, all, opts) {
   // lacks it), or the linked computer offline with the company open in no other Tally: said on the row, never a silent queue
   const rw = readWhere(company);
   row.where = rw && rw.text ? { kind: rw.kind, text: rw.text } : null;
-  const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company)) || !!(rw && rw.sv);
+  const anyOpen = open || all.some((r) => r.open && coKey(r.company) === coKey(company)) || !!(rw && rw.reader);
   // next-tally-connectfix (finding 6; staging: "Coming in now" / "coming in by itself" for 34 hours): no ledgers yet, and
   // the computer the company is linked to cannot bring them (its bridge older than 2.5.3, or it sees none of its Tallys):
   // the true reason, and no button that cannot work

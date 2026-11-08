@@ -41,7 +41,7 @@ import "./tallySimple.css";
 // (Connect this computer: doConnect, its answer in OC.c), nothing new
 import { OC, doConnect, Line } from "./TallyOneClick.jsx";
 import { HERE } from "../lib/tallyConnect.js";
-import { noAnswer, readWhere } from "../lib/readFollow.js";
+import { noAnswer, readWhere, followOn } from "../lib/readFollow.js";
 import { connectSteps, LAPTOP, LAPTOP_HERE } from "../lib/connectSteps.js";
 
 const shown = (n) => String(n || "").replace(/\s+/g, " ").trim();
@@ -266,7 +266,7 @@ function Act({ row, main = false }) {
   else if (a.kind === "bring") btn = <button type="button" className={"btn primary" + (main ? " tpt-btn" : "")} data-tsm-act="bring" data-tpt-main={main ? "bring" : undefined} disabled={busy}
     onClick={run(() => { setSaid(""); return rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) }).then((r) => { if (r && r.ok === false) toast(String(r.error || "FinCom did not take it"));
         // next-link-follow: the result in a line, and at once when no Tally can answer (never a silent queue)
-        else { const na = noAnswer(row.company); setSaid(na ? "Queued. " + na : "Asked: FinCom brings the missing days from Tally now."); } askStatus(true); },
+        else { const na = noAnswer(row.company); setSaid(na ? "Queued. " + na : followOn() ? "Asked: FinCom brings the missing days from Tally now." : ""); } askStatus(true); },
       () => toast("FinCom’s cloud did not answer; try again in a minute.")); })}>{busy ? "Asking Tally…" : a.label}</button>;
   return <>{btn}{said && <div className={"tsm-note" + (/^Queued\. Nothing/.test(said) ? " bad" : "")} data-tsm-said="bring" role="status">{said}</div>}
     {a.kind === "choose" && row.best && !pick && <div><button type="button" className="linkbtn tsm-small" data-tsm-act-choose="" onClick={() => setPick(true)}>Choose another client</button></div>}
@@ -488,7 +488,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
   else if (pg.btn === "update" && p && (p.state === "going" || p.state === "paused")) { btn = <PullButtons e={e} only={[p.state === "going" ? "pause" : "resume"]} main />; main = p.state === "going" ? "pause" : "resume"; }
   // masters not in FinCom yet: Bring masters (the masters' read; entries follow by themselves). Only for a book FinCom
   // knows with no ledgers: a client whose book is not known yet keeps Update now, which brings them too
-  else if (pg.btn === "update" && linked && !runningRead && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES) && !(readWhere(row.company) || {}).sv) note = "Needs the company open in Tally"; }
+  else if (pg.btn === "update" && linked && !runningRead && ledBook(row.cid) && !ledgersHeld(row.cid)) { btn = <BringMasters row={row} />; main = "masters"; if (!(row.o && row.o.w === YES) && !(readWhere(row.company) || {}).reader) note = "Needs the company open in Tally"; }
   else if (pg.btn === "update" && runningRead) { btn = <button type="button" className="btn tpt-btn" data-tpt-main="reading" disabled>Reading…</button>; main = "reading"; }
   // this year's days missing in FinCom, or Bring books stopped: Bring books (again)
   else if (pg.btn === "update" && linked && e.b && e.b.book && (e.st === "behind" || e.st === "stopped" || (e.st === "none" && m.st === "done"))) { btn = <BringBooks row={row} e={e} />; main = "books"; }

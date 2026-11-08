@@ -235,7 +235,7 @@ import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
-import { followGate, beatOnly, lineFollows } from "./readfollow.js";   // next-link-follow (migration 146): reads follow the company
+import { servingGate, beatOnly, lineFollows } from "./readfollow.js";   // next-link-follow (migration 146): every bridge with the company open serves it
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -332,6 +332,9 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     mode: shadow ? "test" : "main", runMode: ["user", "service", "window"].includes(b?.runMode) ? b.runMode : "",
     tally: !!body?.tally, tallyState: ["open", "busy", "closed"].includes(body?.tallyState) ? body.tallyState : (body?.tally ? "open" : "closed"),
     open: (Array.isArray(body?.open) ? body.open : []).slice(0, 50).map((x: unknown) => coTrim(x)),
+    // next-link-follow (migration 146): the companies THIS bridge's own beat says open, each with its Tally GUID
+    // ([[name, guid]], at most 50): a bridge is a candidate to read a linked book only with the link's GUID here
+    ...cosOf(body),
     // 2.1.5: its request timings, whether it stopped reading, and (round 2) its allow-list state
     reqs: cleanReqs(body?.reqs), readStopped: cleanReadStopped(body?.readStopped), allowlist: cleanAllowlist(body?.allowlist),
     ...tallyRetryOf(body),
@@ -345,6 +348,16 @@ function bridgeOf(dev: any, body: any, shadow: boolean) {
     // condition 4 (bridge 2.2.0): per company, the methods its 2-second rule switched off (the entry fetch, Tally's change
     // list, month slices), {bodies, B, C}; absent on an older bridge or when none is off
     ...recorderOffOf(body) } };
+}
+function cosOf(body: any): { cos?: string[][] } {
+  if (!Array.isArray(body?.companies)) return {};
+  const out: string[][] = [];
+  for (const c of body.companies.slice(0, 200) as any[]) {
+    const n = coTrim(c?.name), g = typeof c?.guid === "string" ? c.guid.trim().toLowerCase().slice(0, 100) : "";
+    if (c?.open === true && n && /^[0-9a-z-]{1,100}$/.test(g) && !out.some((x) => x[0] === n)) out.push([String(n).slice(0, 200), g]);
+    if (out.length >= 50) break;
+  }
+  return { cos: out };
 }
 // condition 4: recorderBodyFetch / recorderSourceB / recorderSourceC of a 2.2.0 beat, each {company: {off, seconds, at, why}}
 // (bridge-go/recorder_probes.go liveBeatOff): company names up to 200, at most 50, off true, seconds a number 0..3600 (to
@@ -468,45 +481,64 @@ async function bookForBeat(firm: string, name: string) {
   bookMemo.set(k, { book, t: Date.now() });
   return book;
 }
-// next-link-follow (migration 146; the owner, 08-Nov-2026: "it should automatically bring all the data"): for each linked
-// company this beat says open (at most 20), the ONE bridge of the firm that reads its book now (tally_read_follow: the
-// link's own when it has the company open, else one of the SAME firm that has it open under the link's GUID and data
-// location; the link record moved to it and the move recorded). Each book asked at most every 20 s (any bridge's beat:
-// the decision does not depend on who asks). {company name: {book, dec}}; empty on a cloud without 146 (asked again after
-// 10 minutes) or on any error: the beat answers as before (readfollow.js: "free")
-let followMissing = 0;
-const followMemo = new Map<string, { dec: any; t: number }>();
-async function readFollowFor(firm: string, b: any): Promise<Map<string, { book: string; dec: any }>> {
-  const out = new Map<string, { book: string; dec: any }>();
-  if (Date.now() - followMissing < 600000) return out;
+// next-link-follow (migration 146; the owner, 08-Nov-2026: "it should connect to both Tally rather than switching"): for
+// every linked company this beat says open (at most 200, in one call: tally_read_serving_many), the bridges of the SAME
+// firm serving it now (the company open in each one's OWN record under the link's GUID, the link's data location, reading
+// not stopped, not test mode, "go-" only). Each book asked at most every 20 s. {company name: {book, serving}}; empty on a
+// cloud without 146 (asked again after 10 minutes) or on any error: the beat answers as before
+let servingMissing = 0;
+const servingMemo = new Map<string, { serving: any[]; t: number }>();
+async function servingFor(firm: string, b: any): Promise<Map<string, { book: string; serving: any[] }>> {
+  const out = new Map<string, { book: string; serving: any[] }>();
+  if (Date.now() - servingMissing < 600000) return out;
   try {
     const names: string[] = [];
     for (const c of (Array.isArray(b?.companies) ? b.companies : []).slice(0, 200) as any[]) {
       const n = typeof c?.name === "string" ? c.name.trim().slice(0, 200) : "";
       if (n && c?.open === true && !names.includes(n)) names.push(n);
     }
-    for (const name of names.slice(0, 20)) {
-      let book: string | null = null;
-      try { book = await bookForBeat(firm, name); } catch { book = null; }
-      if (!book) continue;
-      const m = followMemo.get(book);
-      if (m && Date.now() - m.t < 20000) { out.set(name, { book, dec: m.dec }); continue; }
-      const { data, error } = await db.rpc("tally_read_follow", { p_firm: firm, p_book: book });
-      if (error) {
-        if (missingFn(String(error.message || "")) || error.code === "PGRST202") { if (!followMissing) console.log("tally-ingest beat: reads follow the company: migration 146 is not applied"); followMissing = Date.now(); return new Map(); }
-        fail("read_follow", error); console.log("tally-ingest beat: the reader of a book not worked out:", book, String(error.message || "").slice(0, 200));
-        continue;
-      }
-      if (followMemo.size > 5000) followMemo.clear();
-      followMemo.set(book, { dec: data, t: Date.now() });
-      if (data && (data as any).state === "moved") {
-        console.log("tally-ingest beat: the reads of a book moved", book, JSON.stringify({ why: (data as any).why, to: (data as any).reader?.device, bridge: (data as any).reader?.bridge, move: (data as any).move }));
-        bookMemo.clear();      // (the book's link record changed: read afresh)
-      }
-      out.set(name, { book, dec: data });
+    const bookOf = new Map<string, string>();
+    for (let i = 0; i < names.length; i += 20) {
+      const part = names.slice(i, i + 20);
+      const got = await Promise.all(part.map(async (n) => { try { return await bookForBeat(firm, n); } catch { return null; } }));
+      part.forEach((n, k) => { if (got[k]) bookOf.set(n, String(got[k])); });
     }
-  } catch (e) { fail("read_follow", e); console.log("tally-ingest beat: reads follow the company:", String((e as Error)?.message || e).slice(0, 200)); }
+    const ask = [...new Set(bookOf.values())].filter((bk) => { const m = servingMemo.get(bk); return !m || Date.now() - m.t >= 20000; });
+    if (ask.length) {
+      const { data, error } = await db.rpc("tally_read_serving_many", { p_firm: firm, p_books: ask });
+      if (error) {
+        if (missingFn(String(error.message || "")) || error.code === "PGRST202") { if (!servingMissing) console.log("tally-ingest beat: shared reading: migration 146 is not applied"); servingMissing = Date.now(); return new Map(); }
+        fail("read_serving", error); console.log("tally-ingest beat: the bridges serving the books not worked out:", String(error.message || "").slice(0, 200));
+      } else {
+        if (servingMemo.size > 5000) servingMemo.clear();
+        for (const bk of ask) servingMemo.set(bk, { serving: Array.isArray((data as any)?.[bk]) ? (data as any)[bk] : [], t: Date.now() });
+      }
+    }
+    for (const [n, bk] of bookOf) { const m = servingMemo.get(bk); if (m && Date.now() - m.t < 60000) out.set(n, { book: bk, serving: m.serving }); }
+  } catch (e) { fail("read_serving", e); console.log("tally-ingest beat: shared reading:", String((e as Error)?.message || e).slice(0, 200)); }
   return out;
+}
+// migration 146: claim units of work of one book for this bridge (tally_work_claim); the units granted. A cloud without
+// 146, or any error: null (the caller keeps its own rule)
+async function workClaim(firm: string, book: string, kind: string, units: string[], dev: any, bridge: string, ttl: number): Promise<Set<string> | null> {
+  if (!units.length) return new Set();
+  const { data, error } = await db.rpc("tally_work_claim", { p_firm: firm, p_book: book, p_kind: kind, p_units: units, p_device: dev.id, p_bridge: bridge, p_ttl: ttl });
+  if (error) { if (!missingFn(String(error.message || ""))) fail("work_claim", error); return null; }
+  return new Set(((Array.isArray(data) ? data : []) as unknown[]).map((x) => String(x)));
+}
+// migration 146: "read older entries" for this key: its own switch, or the CURRENT switch of a key of the firm on the
+// same computer that has it on (tally_fetch_on), a minute at most; a cloud without 146: its own switch only
+const fetchOnMemo = new Map<string, { on: boolean; t: number }>();
+async function fetchOnFor(dev: any): Promise<boolean> {
+  if ((dev as any).period_fetch === true) return true;
+  if (Date.now() - servingMissing < 600000) return false;
+  const m = fetchOnMemo.get(dev.id);
+  if (m && Date.now() - m.t < 60000) return m.on;
+  const { data, error } = await db.rpc("tally_fetch_on", { p_device: dev.id });
+  const on = !error && data === true;
+  if (fetchOnMemo.size > 5000) fetchOnMemo.clear();
+  fetchOnMemo.set(dev.id, { on, t: Date.now() });
+  return on;
 }
 // each company of the beat (either shape) with a GUID and an ALTVCHID: tally_start_point(firm, book, GUID, the bridge's starting
 // numbers, else the numbers now) once per 5 minutes (migration 44, 46: kept once per book; another GUID never moves it and is
@@ -676,13 +708,14 @@ function fastBridge(version: unknown): boolean {
   return !!m && newer(m[1] + "." + m[2] + "." + m[3], "2.3.4") >= 0;
 }
 // next-link-follow (migration 146; the owner, 08-Nov-2026: "nothing should remain with only the connected person"): follow,
-// the books this bridge reads now (readfollow.js followGate): the held lines of ANOTHER bridge of the firm for those books,
+// the books this bridge serves now (readfollow.js servingGate): the held lines of ANOTHER bridge of the firm for those books,
 // whose own bridge does not serve the book now (offline, or the company not open there), are listed here too, after this
 // bridge's own (the last 7 days; slow-ended ones of 7 to 30 days to a bridge of 2.3.4 or later, as its own), under every
 // rule below (a line already resolved, the ledger wait, a locked month, the company still linked to the same book). The
 // bridge asks its own Tally by MasterID (else type and number) only for a company it holds under the same GUID, and
-// sends "<line id>:resolved", which replaces the held line in its book by its line id (migrations 50-53): a person is
-// asked for a Day Book upload only once no live bridge with the company open could settle it
+// sends "<line id>:resolved", which replaces the held line in its book by its line id (migrations 50-53). Each such line
+// is claimed by ONE serving bridge (tally_work_claim, kind held): a person is asked for a Day Book upload only once no
+// live bridge with the company open could settle it
 async function heldOwnLines(dev: any, firm: string, bridge: string, max: number, want: (r: any) => boolean, what: string, unresolved = false, fast = false, follow?: Map<string, Set<string>>) {
   try {
     if (!bridge) return [];
@@ -696,7 +729,7 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
     if (follow && follow.size) {
       const since30 = new Date(Date.now() - HELD_SLOW_DAYS * 86400000).toISOString();
       const { data: fd, error: fe } = await db.from("tally_recorder_lines").select("line_id, company, company_guid, event, master_id, vch_type, vch_no, vch_date, book_id, received_at, bridge, device_id, object_guid, body, held_why, payload")
-        .eq("firm_id", firm).in("book_id", [...follow.keys()].slice(0, 20)).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30)
+        .eq("firm_id", firm).in("book_id", [...follow.keys()].slice(0, 100)).eq("state", "held").in("event", ["created", "altered", "imported"]).gt("received_at", since30)
         .order("received_at", { ascending: true }).limit(400);
       if (fe) { fail("held_follow", fe); console.log("tally-ingest beat: " + what + ": the lines of the books read here not read:", String(fe.message || "").slice(0, 200)); }
       else {
@@ -707,6 +740,16 @@ async function heldOwnLines(dev: any, firm: string, bridge: string, max: number,
           if (!(t > Date.now() - 7 * 86400000)) { if (!(unresolved && fast && slowEnded(r.held_why))) continue; r._old = true; }
           seen.add(String(r.line_id || "")); r._follow = true; rows.push(r);
         }
+        // each other bridge's line asked of one serving bridge only (tally_work_claim, kind held; 10 minutes, renewed while
+        // it is listed again); a line another serving bridge holds is left to it; a cloud that cannot claim: none listed
+        const fol = rows.filter((r) => r._follow), byBook = new Map<string, any[]>();
+        for (const r of fol) byBook.set(String(r.book_id), [...(byBook.get(String(r.book_id)) || []), r]);
+        const keep = new Set<any>();
+        for (const [bk, rs] of byBook) {
+          const got = await workClaim(firm, bk, "held", rs.map((r) => String(r.line_id || "")), dev, bridge, 600);
+          if (got) for (const r of rs) if (got.has(String(r.line_id || ""))) keep.add(r);
+        }
+        rows = rows.filter((r) => !r._follow || keep.has(r));
       }
     }
     // 2.3.4: the slow-ended lines of 7 to 30 days ago (kept only below, once their ":resolved" rows are read), after these
@@ -1800,7 +1843,11 @@ async function booksFromFor(firm: string, body: any): Promise<Record<string, str
   }
   return Object.keys(out).length ? out : null;
 }
-async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false): Promise<Record<string, unknown>[] | null> {
+// next-link-follow (migration 146): claim {dev, bridge, shared}: a company in shared (served by this bridge with others,
+// tally_read_serving) gets its days by claim (tally_days_claim: 98's and 135's own order and rules, the days another
+// bridge holds left out, the rest held for this bridge 5 minutes): two bridges read different days of one book at once
+let daysClaimMissing = 0;
+async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3, night = max > 3, markCheck = false, claim?: { dev: any; bridge: string; shared: Set<string> }): Promise<Record<string, unknown>[] | null> {
   const out: Record<string, unknown>[] = [];
   max = Math.max(1, Math.min(30, Math.floor(Number(max) || 3)));
   let unsure = false;
@@ -1831,7 +1878,14 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
       // asked only for the days left of the answer, so every day it stamps as handed out is handed out
       // next-fast-entries: the pace said is the computer's own hours (night), not the answer's size (a fast bridge by day
       // is handed 30 and still called "day")
-      let { data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night });
+      const byClaim = !!claim && claim.shared.has(company) && Date.now() - daysClaimMissing >= 600000;
+      const dArgs = byClaim ? { p_firm: firm, p_book: book, p_device: claim!.dev.id, p_bridge: claim!.bridge } : null;
+      let { data, error } = byClaim ? await db.rpc("tally_days_claim", { ...dArgs, p_kind: "period", p_max: max - out.length, p_night: night })
+        : await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night });
+      if (byClaim && error && missingFn(String(error.message || ""))) {
+        daysClaimMissing = Date.now();
+        ({ data, error } = await db.rpc("tally_period_next_paced", { p_book: book, p_max: max - out.length, p_night: night }));
+      }
       if (error && missingFn(String(error.message || ""))) {
         // a database with an earlier copy of 98 (no tally_period_next_paced): as before
         // review (6): its pace comes from p_max: by day at most 3 (a fast bridge's day never recorded as night), only what fits
@@ -1861,7 +1915,11 @@ async function periodDaysFor(firm: string, body: any, stopped: boolean, max = 3,
         // 133's tally_check_next as before (asked again after 10 minutes)
         const cArgs = { p_book: book, p_max: Math.min(30, max - out.length + out.filter((x) => x.company === company).length) };
         let got: any = null;
-        if (Date.now() - openMissing >= 600000) {
+        if (byClaim && Date.now() - daysClaimMissing >= 600000) {
+          got = await db.rpc("tally_days_claim", { ...dArgs, p_kind: "check", p_max: cArgs.p_max, p_night: false });
+          if (got.error && missingFn(String(got.error.message || ""))) { daysClaimMissing = Date.now(); got = null; }
+        }
+        if (!got && Date.now() - openMissing >= 600000) {
           got = await db.rpc("tally_check_next_open", cArgs);
           if (got.error && missingFn(String(got.error.message || ""))) { if (!openMissing) console.log("tally-ingest beat: the check's days by 133's rule: migration 135 is not applied"); openMissing = Date.now(); got = null; }
         }
@@ -4178,12 +4236,11 @@ Deno.serve(sentry.wrap(async (req) => {
         // round 20 (migration 47): where this computer's changes come from (the owner's tally_device_recorder_source): addon,
         // alterid or both; left out when the cloud has no column (the bridge keeps its own default)
         const rs = (dev as any).recorder_source, recorderSource = rs === "addon" || rs === "alterid" || rs === "both" ? rs : null;
-        // next-link-follow (migration 146): the bridge of the firm that reads each open linked book now (the link's own when it
-        // has the company open, else the one where it is open; the link moved and the move recorded). A book read by another
-        // bridge: none of its hand-out here (gate.skip); a book read here: other bridges' held lines too (gate.follow), and its
-        // older days under the switch of the key it moved from on the same computer (gate.inherit). No 146: as before
-        const gate = followGate(await readFollowFor(firm, b), dev.id, me.id);
-        const bRead = gate.skip.size ? beatOnly(b, (n: string) => !gate.skip.has(n)) : b;
+        // next-link-follow (migration 146): the bridges serving each open linked book now. A book served only by others: none of
+        // its older days here (gate.others); a book this bridge serves: its days and other bridges' held lines by claim
+        // (gate.shared, gate.follow); a book nobody serves by 146's rules, or no 146: as before
+        const gate = servingGate(await servingFor(firm, b), dev.id, me.id);
+        const bRead = gate.others.size ? beatOnly(b, (n: string) => !gate.others.has(n)) : b;
         // FinCom Bridge 2.2.2: the lines held without their entry, asked of Tally again by the bridge (left out when none)
         const heldLines = await heldLinesFor(dev, firm, me.id, me.entry.version, gate.follow);
         // 06-Oct-2026: this bridge's own held lines without their entry's body or with a placeholder GUID, at most 20
@@ -4198,10 +4255,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // and the ledger read's progress the beat carries (in case a ledger_progress call was lost)
         // ROUND 103 (1c): only on a computer whose owner switched reading older entries on (tally_devices.period_fetch,
         // migration 98; off by default and on a cloud without the column): else an empty list and periodFetch false
-        const ownFetch = (dev as any).period_fetch === true;
-        // next-link-follow: a book this bridge reads after a move within the same computer keeps that computer's switch
-        const inheritOnly = !ownFetch && gate.inherit.size > 0;
-        const periodFetch = ownFetch || inheritOnly;
+        // next-link-follow (migration 146): or the CURRENT switch of a key of the firm on the same computer (tally_fetch_on)
+        const periodFetch = await fetchOnFor(dev);
         // ROUND 103 (evening): outside this computer's office hours up to 30 days an answer (the bridge reads day after day
         // while Tally is idle and asks again when they are done); the switch above still wins
         const periodNight = periodFetch && periodNightNow(dev);
@@ -4210,12 +4265,23 @@ Deno.serve(sentry.wrap(async (req) => {
         // next-fast-entries (periodpace.js): a bridge whose beat says its fast read is on (FastEntries) is handed up to 30 days
         // by day too; every other bridge as before (3 by day, 30 at night)
         const pace = periodPace(periodNight, b);
-        const bDays = inheritOnly ? beatOnly(bRead, (n: string) => gate.inherit.has(n)) : bRead;
-        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bDays, periodStopped, pace.max, pace.night, fastOn(b)) : null;
+        const periodDays = !periodFetch ? [] : periodStopped || await periodGate(dev.id) ? await periodDaysFor(firm, bRead, periodStopped, pace.max, pace.night, fastOn(b), { dev, bridge: me.id, shared: gate.shared }) : null;
         await ledgerProgressFromBeat(firm, dev, b);
         // bridge 2.5.1: FinCom's first day of each open company's book (the period of the ledger requests; booksFromFor)
         let booksFrom: Record<string, string> | null = null;
         try { booksFrom = await booksFromFor(firm, b); } catch (e) { console.log("tally-ingest beat: the books' first days not worked out:", String((e as Error)?.message || e).slice(0, 200)); }
+        // next-link-follow (migration 146): a book's full ledger list asked of one of its serving bridges at a time (kind
+        // masters, 10 minutes); a company not shared: as before
+        if (auto.full.length && gate.shared.size) {
+          const sv = await servingFor(firm, b), keepFull: string[] = [];
+          for (const c of auto.full) {
+            const x = gate.shared.has(c) ? sv.get(c) : null;
+            if (!x) { keepFull.push(c); continue; }
+            const got = await workClaim(firm, x.book, "masters", ["full"], dev, me.id, 600);
+            if (!got || got.has("full")) keepFull.push(c);
+          }
+          auto.full.splice(0, auto.full.length, ...keepFull);
+        }
         if (auto.full.length) { const at = new Date().toISOString(); for (const c of auto.full) ledgers[c] = at; console.log("tally-ingest beat: the full ledger list asked", dev.id, JSON.stringify(auto.full)); }
         return reply(200, { ok: true, updateNow, posts: posts || 0, wake, opened, ledgers, ...(Object.keys(stock).length ? { stock } : {}), activityAt, settings, trialTools, ...(recorderSource ? { recorderSource } : {}), ...(Object.keys(recorder).length ? { recorder } : {}), ...(heldLines ? { heldLines } : {}), ...(refetch ? { refetch } : {}), ...(ledgersWanted ? { ledgersWanted } : {}), ...(periodDays ? { periodDays } : {}), ...(booksFrom ? { booksFrom } : {}), periodFetch, periodNight, ...(co ? { notMain: true, changesOnly: true, error: CHANGES_ONLY } : may ? {} : { notMain: true }), ...ctl.out });
       }

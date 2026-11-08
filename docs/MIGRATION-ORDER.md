@@ -743,18 +743,22 @@ and 144 included. Rollback `server/corporate/rollback-145-corp-documents.sql` (r
 `fincom.corp_rollback`). Tested: `tests/run_migration_corp.py` (`CORP_ONLY=145`). Without it the profile and e-Forms work
 and the documents page says it is not set up on the server.
 
-## 146: reads follow the company (not run yet; branch next-link-follow)
+## 146: every bridge with the company open serves it (not run yet; branch next-link-follow)
 
 **146** `server/tally-cloud/migration-146-reads-follow-company.sql` (08-Nov-2026; the owner: "it should automatically bring
-all the data"; "nothing should remain with only the connected person"). New: `tally_read_moves` (every move of a book's
-reads: the old computer key, computer, Windows user, port and `tally_companies.device_id` kept for rollback; why
-`offline` | `not_open`; `fetch_on`; RLS on, members read their own firm's rows, no direct writes); `tally_read_follow(firm,
-book)` (service_role only; tally-ingest's beat): the ONE bridge of the SAME firm that reads the book now (the link's own
-key with the company open first; else a bound "go-" bridge heard within 3 minutes with the company open under the link's
-GUID, reading the link's data location, reading not stopped; the link's computer first, then the newest heard, then the
-ids), the link record (device_id, computer, windows_user, tally_port) and `tally_companies.device_id` moved to it and the
-move recorded; 2 minutes settling after a move; `tally_read_move_back(move)` (owners): put back, the book then held 24
-hours. Posting permission, version, GUID and data location never change; postings keep 142's rules. Add-only, one
-transaction, `lock_timeout` 10 s, safe twice; after 54, 110, 127, 142. Tested on pg_stand: `tests/run_migration146.py`
-(`RED_WITHOUT_146=1` fails). Deploy order: 146, then tally-ingest of next-link-follow (without 146 it answers as before),
-then the app build (without the table the page's words come from the beats alone).
+all the data"; "nothing should remain with only the connected person"; "it should connect to both Tally rather than
+switching… like Tally can be opened by n persons and used simultaneously"). No single reader and no moving links: every
+bridge of the firm serving a linked book reads it at the same time and the work is shared by claims. New table
+`tally_work_claims` (book, kind period | check | held | masters, unit; the bridge holding it and until when; RLS on, members
+read their own firm's rows, no direct writes). Functions (service role unless said): `tally_read_serving(firm, book)` /
+`_many` (a bound "go-" bridge of the SAME firm, not in test mode, heard within 3 minutes, 5 for the link's own key, whose
+OWN record `info.bridges[id].cos`, kept by this branch's tally-ingest, lists the company open with the link's GUID, reading
+the link's data location, reading not stopped); `tally_read_serves`; `tally_work_claim` (one holder a unit, renewed by
+it, free again after expiry); `tally_days_claim` (98's `tally_period_next_paced` / 135's `tally_check_next_open` as they
+are, the days another bridge holds left out, the rest held 5 minutes); `tally_fetch_on(device)` ("read older entries":
+its own switch or the CURRENT switch of a key of the firm on the same computer); `tally_read_heard`; `tally_read_view()`
+(members; the page). No existing table, column, function or row changed; the lease and postings (142) unchanged.
+Add-only, one transaction, `lock_timeout` 10 s, safe twice; after 54, 98, 110, 127, 133, 135, 142. Tested on pg_stand:
+`tests/run_migration146.py` (two bridges claiming at the same time; `RED_WITHOUT_146=1` fails). Deploy order: 146, then
+tally-ingest of next-link-follow (until it runs no bridge record has `cos`: nobody serves by these rules and the days go
+out as before; without 146 it answers as before), then the app build (without `tally_read_view` the page is as before).
