@@ -23,7 +23,7 @@ import { coKey } from "../lib/tallyState.js";
 import { ledgersHeld, LED_N, ledBook, cloudLedgerCount, baseKey, stallWhy, companyRows, unlink, runPress, runWords, runSettle, runBusy, keepWaitWords } from "./TallyCompanies.jsx";
 import { soonDraw } from "../lib/soonDraw.js";
 import { MastersCell, EntriesCell, BringMasters, BringBooks, PullButtons, History, DayBookDrop, rangeWords, mastersOf, entriesOf } from "./TallyProgress.jsx";
-import OlderEntries, { TurnOn, owner } from "./TallyFetch.jsx";
+import OlderEntries, { TurnOn, owner, TURN_FROM } from "./TallyFetch.jsx";
 import { PostingWait } from "./StuckJobs.jsx";
 import { press, say, busyOf, saidOf, Said, useSaid, errWords, VIEW_ONLY } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 // each connected client's ledger count from FinCom's cloud (tally_ledgers, counted; kept a minute), asked once a minute at most
@@ -267,14 +267,19 @@ function Cell({ k, label, x, children }) {
 // Bring missing days (tally_fill_request): asked, with what happens and when; at once when no Tally can answer (never a
 // silent queue: next-link-follow); a day already brought in the last 6 hours is not asked again (queued 0: said so); no
 // Tally computer starts on it in 2 minutes: "Not started: <why>" (Said's watch: the fill's days done, or none waiting)
+const fillNow = (cid, r) => { const b = bookSum(cid); return (b ? (bookFetch(cid, b.book) || {}).fill : null) || (r && r.fill) || null; };
 async function bringDays(row, a) {
+  const f0 = fillNow(row.cid);
   const r = await rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) });
   askStatus(true);
   if (r && r.ok === false) return { text: "Not asked: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
   const q = r && r.queued != null ? Number(r.queued) : -1, na = noAnswer(row.company);
   if (q === 0) return "Nothing new to ask: these days were brought from Tally in the last 6 hours.";
   if (na) return { text: "Queued. " + na, bad: true };
-  const fill = () => { const b = bookSum(row.cid), f = b ? (bookFetch(row.cid, b.book) || {}).fill : (r && r.fill) || null; return !!f && (Number(f.done) > 0 || !(Number(f.waiting) > 0)); };
+  // (started: more of the fill's days done than when asked; the fill counts the last day's fills, earlier ones too, so the
+  // count the cloud gave with this answer, else the one before the press, is the base)
+  const base = Number(((r && r.fill) || f0 || {}).done) || 0;
+  const fill = () => { const f = fillNow(row.cid); return !!f && Number(f.done) > base; };
   return { text: "Asked: FinCom brings " + (q > 0 ? nOfW(q, "missing day", "missing days") : "the missing days") + " from Tally within a few minutes.",
     watch: { started: fill, cid: row.cid, company: row.company, startedText: "Bringing the missing days from Tally now." } };
 }
@@ -565,6 +570,7 @@ function Row({ row, download, oneDl, seen, cs, x, checkAgain }) {
         {/* (drawn only once pressed: a long list keeps its drawing light; a press redraws the page) */}
         {linked && (saidOf("books:" + row.cid) || busyOf("books:" + row.cid)) && <Said k={"books:" + row.cid} hook="books" />}
         {linked && (saidOf("fill:" + row.cid) || busyOf("fill:" + row.cid)) && <Said k={"fill:" + row.cid} hook="bring" />}
+        {linked && TURN_FROM["turnon:" + row.cid] === "row" && (saidOf("turnon:" + row.cid) || busyOf("turnon:" + row.cid)) && <Said k={"turnon:" + row.cid} hook="turnon" />}
         <button type="button" className="linkbtn tpt-more-btn" data-tpt-open={key} aria-expanded={more ? "true" : "false"} aria-label={(more ? "Less for " : "More for ") + label} onClick={toggle}>{more ? "Less ▴" : "More ▾"}</button></div>
     </td>
   </tr>

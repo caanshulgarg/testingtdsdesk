@@ -137,7 +137,7 @@ const NOT_READY = "FinCom’s cloud is not ready for this yet";
 function Release({ rows, latest, owner }) {
   if (!latest || !TCloud.on()) return null;
   const p = TCloud.pane, rel = (p.releases || []).find((x) => x.version === latest), rb = p.rollback || null;
-  const wd = !!(rel && rel.withdrawn_at), held = !!(rel && rel.held_at), ctl = p.ctl || {}, busy = !!ctl.busy;
+  const wd = !!(rel && rel.withdrawn_at), held = !!(rel && rel.held_at), ctl = p.ctl || {}, busy = !!ctl.busy, mine = Date.now() - REL.at < 180000;
   if (!p.releases && !rb) return null;
   // the owner's rule of 05-Oct-2026 (migration 54): no pilot, no approval; an owner holds a version, lets it go, rolls
   // the bridges back, clears that; withdraws a version (migration 37). Who, when and why are said
@@ -149,19 +149,24 @@ function Release({ rows, latest, owner }) {
       : held ? <span className="note" data-release-held="">{"Version " + latest + " is held: no bridge takes it until an owner lets it go."}</span>
       : <span className="note">{"Version " + latest + " goes to every computer by itself (each bridge checks every few hours)."}</span>}
     {lines.length > 0 && <span className="note" data-release-who="">{lines.join(" ")}</span>}
-    {owner && !p.noHold && !wd && !held && !rb && <button className="btn small" data-release-hold="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={() => TCloud.releaseHold(latest)}>{"Hold version " + latest}</button>}
-    {owner && !p.noHold && held && <button className="btn small" data-release-unhold="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={() => TCloud.releaseUnhold(latest)}>{"Let version " + latest + " go"}</button>}
-    {owner && !p.noRollback && (rb ? <button className="btn small" data-release-rollback-clear="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={() => TCloud.releaseRollbackClear()}>Clear the rollback</button>
-      : <button className="btn small" data-release-rollback="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={() => TCloud.releaseRollback()}>Roll back to an earlier version</button>)}
+    {owner && !p.noHold && !wd && !held && !rb && <button className="btn small" data-release-hold="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={relAct(() => TCloud.releaseHold(latest))}>{"Hold version " + latest}</button>}
+    {owner && !p.noHold && held && <button className="btn small" data-release-unhold="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={relAct(() => TCloud.releaseUnhold(latest))}>{"Let version " + latest + " go"}</button>}
+    {owner && !p.noRollback && (rb ? <button className="btn small" data-release-rollback-clear="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={relAct(() => TCloud.releaseRollbackClear())}>Clear the rollback</button>
+      : <button className="btn small" data-release-rollback="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={relAct(() => TCloud.releaseRollback())}>Roll back to an earlier version</button>)}
     {owner && rel && !wd && (p.noWithdraw
       ? <span className="note" data-not-ready="">{NOT_READY + " (withdrawing a version needs migration 37)."}</span>
-      : <button className="btn small" data-release-withdraw="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={() => TCloud.releaseWithdraw(latest)}>{"Withdraw version " + latest}</button>)}
+      : <button className="btn small" data-release-withdraw="" disabled={busy} title={busy ? BUSY_WHY : undefined} onClick={relAct(() => TCloud.releaseWithdraw(latest))}>{"Withdraw version " + latest}</button>)}
     {!owner && <span className="note" data-release-owner="">An owner of the firm holds, lets go or rolls back a version.</span>}
     {/* next-buttons: what came of the owner's press, here where it was pressed (also at the top of the page) */}
-    {busy ? <span className="note" data-release-said="busy" role="status">Working…</span> : ctl.err ? <span className="note bad" data-release-said="bad" role="status">{ctl.err}</span> : ctl.ok ? <span className="note" data-release-said="ok" role="status">{ctl.ok}</span> : null}
+    {mine && (REL.going ? <span className="note" data-release-said="busy" role="status">Working…</span> : REL.ctl && REL.ctl.err ? <span className="note bad" data-release-said="bad" role="status">{REL.ctl.err}</span>
+      : REL.ctl && REL.ctl.ok ? <span className="note" data-release-said="ok" role="status">{REL.ctl.ok}</span> : null)}
   </div>;
 }
 const BUSY_WHY = "FinCom is doing the last change; one moment.";
+// (the release line says only what came of a release action pressed here, for 3 minutes; a question answered No says nothing)
+const REL = { at: 0, going: false, ctl: null };
+const relAct = (f) => () => { const c0 = TCloud.pane.ctl; Object.assign(REL, { at: Date.now(), going: true, ctl: null }); render();
+  Promise.resolve().then(f).catch(() => {}).then(() => { REL.going = false; REL.ctl = TCloud.pane.ctl !== c0 ? TCloud.pane.ctl : null; render(); }); };
 // item 24: on a computer's line, who stopped reading from FinCom (or resumed it) and when
 function ReadWho({ r }) {
   const st = TCloud.stopFor ? TCloud.stopFor(r.device.id) : null;
@@ -379,9 +384,9 @@ export const DownloadBtn = ({ m, primary }) => { const s = setupOf(m);
 const ROW = { alignItems: "center", gap: 8, flexWrap: "wrap", margin: "4px 0" };
 // next-buttons: the computers read again from FinCom's cloud, and what came of it beside the button (a cloud not reached
 // said so; a second click while it reads does nothing)
-function PaneCheck({ label, hook = {} }) {
+function PaneCheck({ k, label, hook = {} }) {
   useSaid();
-  const k = "pane", busy = busyOf(k);
+  const busy = busyOf(k);
   return <><button className="btn small" {...hook} disabled={busy} onClick={() => press(k, async () => { await TCloud.refreshPane();
     const e = TCloud.pane && TCloud.pane.err; return e ? { bad: true, text: "Not read: " + String(e).replace(/[.\s]+$/, "") + "." } : "Read again at " + tallyHm(new Date().toISOString()) + "."; })}>{busy ? "Reading…" : label}</button>
     <Said k={k} hook="pane" className="note" /></>;
@@ -449,7 +454,7 @@ function NeedAct({ r, n, m, top }) {
   if (n.act === "resume") return <button className="btn small primary" {...h("data-read-resume", r.device.id)} onClick={() => TCloud.readResume(r)}>{top ? "Resume" : "Resume reading"}</button>;
   if (n.act === "makeMain") return <button className="btn small primary" {...h("data-make-main", r.id)} onClick={() => TCloud.makeMain(r)}>Make this the main bridge</button>;
   if (n.act === "baseline") return <button className="btn small primary" data-need-act="baseline" onClick={() => TCloud.baselineClear(n.book, n.company)}>Clear it</button>;
-  if (n.act === "check") return <PaneCheck hook={h("data-check-again", "")} label="Check again" />;
+  if (n.act === "check") return <PaneCheck k={"pane:need:" + (r.id || (r.device && r.device.id) || "")} hook={h("data-check-again", "")} label="Check again" />;
   if (n.act === "details") return <button className="btn small" {...h("data-open-details", "")} onClick={() => { S.tallyMore = Object.assign({}, S.tallyMore || {}, { [cardKey(r)]: true }); render(); }}>Details</button>;
   return n.say ? <span className="note">{n.say}</span> : null;
 }
@@ -1004,7 +1009,7 @@ export function BridgesHeard() {
   const rows = TCloud.bridgesHeard(), owner = S.account && S.account.me && S.account.me.role === "owner";
   return <div className="pane" data-bridges="">
     <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3 style={{ margin: 0 }}>Every bridge FinCom has heard from</h3>
-      <PaneCheck label="Refresh" /></div>
+      <PaneCheck k="pane:computers" label="Refresh" /></div>
     <p className="note" style={{ margin: "6px 0 10px" }}>Every bridge on the firm’s computers, from its last heartbeat. Only the <b>main</b> bridge posts to Tally; a bridge in <b>test mode</b> reads only.</p>
     {p.err && <p className="note bad"><Msg text={p.err} /></p>}
     {/* the one list table (spec K6): last seen (date), computer, mode (status), then the rest */}
@@ -1194,7 +1199,7 @@ export function CloudBooks() {
     <div className="pane"><h2>Books in FinCom’s cloud <TallyPill /></h2><p className="note" style={{ margin: "0 0 12px" }}>The bridge on each connected computer sends the books of the Tally companies it keeps in step. Then Look up, Reports and the books open on any computer or phone, even with Tally closed, and a trial balance or ledger for any date comes back in a moment. Kept in India, for your firm only.</p>
       {p.err && <p className="note bad"><Msg text={p.err} /></p>}{p.busy && <p className="note">{p.busy}</p>}
       <p className="note">The computer with Tally and the bridge sends by itself once someone signs in to FinCom there. Nothing to press.</p>
-      {TCloud.autoErr && <p className="note bad">{"Last try: " + TCloud.autoErr}</p>}<div className="row"><PaneCheck label="Refresh" /></div></div>
+      {TCloud.autoErr && <p className="note bad">{"Last try: " + TCloud.autoErr}</p>}<div className="row"><PaneCheck k="pane:cloud" label="Refresh" /></div></div>
     <div className="pane"><h3 style={{ marginTop: 0 }}>Computers that send</h3><ListTable name="cloudDevices" className="data" rows={dv} loading={p.devices == null && !p.err ? "the computers" : false} rowKey={(d) => d.id} unit={["computer", "computers"]}
         empty="None yet. Open FinCom on the computer with Tally, signed in to the firm, and it connects by itself within a minute."
         cols={[

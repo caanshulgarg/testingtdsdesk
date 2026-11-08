@@ -67,9 +67,12 @@ export function PostingWait({ beat, hook = "line" }) {
   // and once more when the bridge stops waiting for a posting (one finished by itself: the line goes, no reload)
   useEffect(() => { if (up && (wait || !J.at)) jobsLook(false); else if (up && J.wasWait && !wait) jobsLook(true); J.wasWait = wait; });
   const list = (up && J.list) || [];
-  // next-buttons: Stop posting says what came of it (stopped, or why not), also once the list is empty
-  const said = J.said && Date.now() - J.said.at < 120000 ? J.said : null;
-  const saidLine = said && <div className={"tsm-note" + (said.bad ? " bad" : "")} data-stuck-said={said.bad ? "bad" : "ok"} role="status">{said.text}</div>;
+  // next-buttons: Stop posting says what came of it, for that posting (beside its button while it is listed; once it is
+  // gone, under the line), for 3 minutes
+  const SD = J.saids = J.saids || {}, fresh = (id) => SD[id] && Date.now() - SD[id].at < 180000 ? SD[id] : null;
+  const line = (x) => x && <div className={"tsm-note" + (x.bad ? " bad" : "")} data-stuck-said={x.bad ? "bad" : "ok"} role="status">{x.text}</div>;
+  const goneLines = Object.keys(SD).filter((id) => fresh(id) && !list.some((x) => x.id === id)).map((id) => <div key={id}>{line(SD[id])}</div>);
+  const saidLine = goneLines.length ? goneLines : null;
   if (!list.length) return saidLine || null;
   const j = list[0];
   return <div className="tsm-note tpt-wait" data-stuck-jobs={hook} role="status">
@@ -79,9 +82,12 @@ export function PostingWait({ beat, hook = "line" }) {
       {(x.company || "") + " · " + (x.status || "") + (x.message ? " · " + x.message : "") + " "}
       <button type="button" className="btn small" data-stuck-cancel={x.id} disabled={busy === x.id}
         onClick={async () => { if (busy || !(await ask())) return; setBusy(x.id);
-          try { await cancelJob(x.id); J.said = { at: Date.now(), text: "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
-          catch (e) { J.err = String((e && e.message) || e); J.said = { at: Date.now(), bad: true, text: "Not stopped: FinCom Bridge on this computer did not answer (" + J.err.replace(/[.\s]+$/, "") + "). Check that it is running, then try again." }; }
-          setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button></li>)}</ul>}
+          try { await cancelJob(x.id); SD[x.id] = { at: Date.now(), text: "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
+          catch (e) { J.err = String((e && e.message) || e).replace(/[.\s]+$/, "");
+            // (the bridge's own answer when it gave one; not reached: said so)
+            SD[x.id] = { at: Date.now(), bad: true, text: /failed to fetch|networkerror|load failed|timed? ?out|aborted|refused|not answering/i.test(J.err) || !J.err
+              ? "Not stopped: FinCom Bridge on this computer did not answer. Check that it is running, then try again." : "Not stopped: FinCom Bridge said: " + J.err + "." }; }
+          setBusy(""); jobsLook(true); }}>{busy === x.id ? "Stopping…" : "Stop posting"}</button>{line(fresh(x.id))}</li>)}</ul>}
     {saidLine}
   </div>;
 }

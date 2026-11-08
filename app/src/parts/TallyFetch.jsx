@@ -153,29 +153,43 @@ function Bar({ p, label }) {
 }
 export function TurnOn({ b, onDone, main = false }) {
   useSaid();
-  const off = ((b && b.devices) || []).filter((d) => !d.fetchOn), k = "turnon:" + ((b && b.book) || "");
-  // (next-buttons: once on, the button goes; what came of the press stays a while in its place)
-  if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return <Said k={k} hook="turnon" className="note" />;
+  // (next-buttons: keyed by the client, so the Tally page's row says it (the row's button changes once it is on);
+  // elsewhere (Bring books from Tally) the line is drawn where it was pressed: one line, never two)
+  const off = ((b && b.devices) || []).filter((d) => !d.fetchOn), k = "turnon:" + ((b && (b.client || b.book)) || ""), here = !main && TURN_FROM[k] === "card";
+  if (!off.length || ((b && b.devices) || []).some((d) => d.fetchOn)) return here ? <Said k={k} hook="turnon" className="note" /> : null;
   if (!owner()) return <span className="note" data-tfx-turnon-who="">{" An owner of the firm can turn it on."}</span>;
   // (the old .then threw inside its own success handler: a refusal was an unhandled rejection, said nowhere)
-  const go = () => press(k, () => rpc("tally_device_period_fetch", { p_device: off[0].id, p_on: true }).then((r) => {
+  const go = () => { TURN_FROM[k] = main ? "row" : "card"; press(k, () => rpc("tally_device_period_fetch", { p_device: off[0].id, p_on: true }).then((r) => {
     if (r && r.ok === false) return { text: "Not turned on: " + String(r.error || "FinCom did not take it").replace(/^ERROR:\s*/i, "").replace(/[.\s]+$/, "") + ".", bad: true };
     summary(true); if (onDone) onDone();
-    return "Turned on: the Tally computer starts reading older entries within a minute."; }));
+    return "Turned on: the Tally computer starts reading older entries within a minute."; })); };
   return <>{" "}<button type="button" className={main ? "btn tpt-btn primary" : "btn small primary"} data-tpt-main={main ? "turnon" : undefined} data-tfx-turnon={off[0].id} disabled={busyOf(k)} onClick={go}>{busyOf(k) ? "Turning on…" : "Turn on for this computer"}</button>
-    <Said k={k} hook="turnon" className="note" /></>;
+    {here && <Said k={k} hook="turnon" className="note" />}</>;
 }
+export const TURN_FROM = {};
 
-// next-buttons: a pull asked at `at` has started: chosen since (its state or count moved), or its count moved past x0
+// next-buttons: has the pull asked at `at` started? p0: the pull as it was just before the press. A pull chosen since
+// (a new chosenAt): done, or no longer going (paused, stopped: its own words say why), or its count moved past the FIRST
+// count seen of it (tally_period_choose_lean's skip of held days counts those at once: never "started" by itself). The
+// same pull as before (chosen again in place): its count moved past the one before the press
 export const doneOf = (q) => Number((q && q.x) || 0) + Number((q && q.countedDays) || 0);
-export const startedOf = (q, at, x0) => (Date.parse(q.chosenAt || "") >= at - 60000 && (q.done || q.state !== "going" || doneOf(q) > 0)) || (x0 >= 0 && doneOf(q) > x0);
+export function pullWatch(p0, at) {
+  const x0 = p0 ? doneOf(p0) : -1, c0 = p0 ? String(p0.chosenAt || "") : "";
+  let base = null;
+  return (q) => {
+    if (!q) return false;
+    const fresh = String(q.chosenAt || "") !== c0 && Date.parse(q.chosenAt || "") >= at - 60000;
+    if (fresh) { if (q.done || q.state !== "going") return true; if (base === null) { base = doneOf(q); return false; } return doneOf(q) > base; }
+    return x0 >= 0 && doneOf(q) > x0;
+  };
+}
 // ---------- Books › From Tally: Bring books from Tally
 // say: drawn where a person opened it (the Tally page's Bring another year): never empty, its words while the books are read
 export default function OlderEntries({ cid, say = false }) {
   const b = bookSum(cid), [fy, setFy] = useState(0), [busy, setBusy] = useState(""), [err, setErr] = useState("");
   useSaid();
   const book = (b && b.book) || "", cur = useRef(book); cur.current = book;
-  useEffect(() => { setFy(0); setErr(""); }, [book]);
+  useEffect(() => { setFy(0); setErr(""); setBusy(""); }, [book]);   // (next-buttons: a Start still on its way for the client left does not hold this one)
   const p = b && b.pull;
   useLive(!!(p && p.state === "going" && !p.done));
   if (!b) return say ? <p className="note" data-older-none={SUM.off ? "off" : SUM.books ? "none" : "reading"}>{!(typeof TCloud === "object" && TCloud.on && TCloud.on()) ? "Sign in to the firm account first: books come from Tally through FinCom’s cloud."
@@ -191,11 +205,11 @@ export default function OlderEntries({ cid, say = false }) {
   // FinCom already holds set aside); a cloud without 135: 98's tally_period_choose as before
   // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
   const sk = "older:" + book;
-  const start = () => { if (busy) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, at = Date.now(), x0 = p ? doneOf(p) : -1; setBusy("start"); setErr("");
+  const start = () => { if (busy) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p, Date.now()); setBusy("start"); setErr("");
     press(sk, () => rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
       .then((r) => { summary(true); askStatus(true);
         if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
-        const started = () => { const q = (bookSum(cid) || {}).pull; return !!q && startedOf(q, at, x0); };
+        const started = () => seen((bookSum(cid) || {}).pull);
         return { text: "Asked: FinCom brings " + fyLabel(chosenFy) + " from Tally. The Tally computer starts within a minute, while nobody is working in Tally.", watch: { started, cid, company: b.company || "" } }; }))
       .finally(() => { if (cur.current === bk) setBusy(""); }); };
   const pause = (on) => act("tally_period_pause", { p_book: book, p_pause: on }, on ? "pause" : "resume");

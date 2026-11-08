@@ -13,7 +13,7 @@
 // far. Nothing new is asked of Tally.
 import { useEffect, useState } from "react";
 import { LED_N, ledBook, ledgersOf, ledgersHeld, cloudLedgerCount, groupCount, GRP, runPress, runWords, runBusy, keepWaitOf, cloudBook, d8Of, daybookHeld } from "./TallyCompanies.jsx";
-import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, doneOf, startedOf } from "./TallyFetch.jsx";
+import { bookSum, pctOf, partWords, etaWords, nf, rpc, summary, fyNow, whyWords, pullWatch } from "./TallyFetch.jsx";
 import { noAnswer } from "../lib/readFollow.js";   // next-link-follow: a result line when no Tally can answer
 import { press, busyOf, Said, useSaid, errWords } from "./TallyBtn.jsx";   // next-buttons: every click says what came of it
 
@@ -172,14 +172,13 @@ export function BringBooks({ row, e, main = true }) {
   // does not start on it in 2 minutes: "Not started: <why>" (Said's watch: the pull's own count moving, or its state).
   // The words are the row's (Tally page: Row), so they stay when the row's button turns into Pause
   const start = () => press(k, async () => {
-    const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }, p0 = (bookSum(row.cid) || {}).pull || null;
+    const args = { p_book: book, p_fy_start: fyNow() + "-04-01", p_part: "year" }, seen = pullWatch((bookSum(row.cid) || {}).pull || null, Date.now());
     const r = await rpc("tally_period_choose_lean", args).catch((er) => { if (/PGRST202|Could not find the function|schema cache|does not exist|\b404\b/i.test(String((er && er.message) || er))) return rpc("tally_period_choose", args); throw er; });
     summary(true);
     if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
     // next-link-follow: no Tally can answer now (the linked computer offline, the company open nowhere): said at once
     const na = noAnswer(row.company); if (na) return { text: "Queued. " + na, bad: true };
-    const at = Date.now() - 2000, x0 = p0 ? doneOf(p0) : -1;
-    const started = () => { const p = (bookSum(row.cid) || {}).pull; return !!p && startedOf(p, at, x0); };
+    const started = () => seen((bookSum(row.cid) || {}).pull);
     return { text: "Asked: FinCom brings this year’s missing days from Tally. The Tally computer starts within a minute, while nobody is working in Tally.",
       watch: { started, cid: row.cid, company: row.company } };
   });

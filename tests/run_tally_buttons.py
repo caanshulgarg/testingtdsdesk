@@ -32,7 +32,7 @@ FAIL = """() => { if (window.__failOn) return; window.__failOn = true; window.__
     if (m === 'missing') throw new Error('PGRST202: Could not find the function public.' + fn + ' in the schema cache');
     if (m === 'denied') throw new Error('not allowed');
     if (m === 'refuse') { window.__calls.push([fn, a]); return {ok: false, error: 'Made-up refusal'}; }
-    if (m === 'hang') { window.__calls.push([fn, a]); return new Promise(() => {}); }
+    if (m === 'hang') { window.__calls.push([fn, a]); return new Promise((y) => { (window.__hangs = window.__hangs || []).push(() => y(f(fn, a))); }); }
     return f(fn, a); };
   TCloud.rpc = wrap(rpc); Cloud.rpc = wrap(crpc); }"""
 
@@ -140,10 +140,17 @@ def main():
         st = seen(R(ORBIT) + " .tpt-state", r"Updating|Waiting for Tally|Asking Tally|Not (started|updated)", 5000)
         ok(st != "", "2. Update now: the row says it is updating, within 5 s (%s)" % st)
         pg.click(R(ORBIT) + ' [data-tpt-main]', timeout=1500) if n(R(ORBIT) + ' [data-tpt-main]:not([disabled])') else None   # (a second click: nothing more)
-        # nothing picked up in 2 minutes: Not started, with why
-        E("(c) => { const m = window.FCRunState[c], x = (S.tcoSync || {})[c]; if (m) m.at -= 130000; if (x) { x.at -= 130000; x.prog = null; } render(); }", cid(ORBIT))
+        # nothing reported in 2 minutes, the bridge beating with the company open (an older bridge reports no progress):
+        # waiting, never "Not started"
+        E("(c) => { const m = window.FCRunState[c], x = (S.tcoSync || {})[c]; if (m) m.at -= 130000; if (x) { x.at -= 130000; x.prog = null; x.late = false; x.err = ''; x.end = 0; } render(); }", cid(ORBIT))
+        pg.wait_for_timeout(1500)
+        ok(not re.search(r"Not started", txt(R(ORBIT) + " .tpt-state")) and txt(R(ORBIT) + " [data-tpt-state]") in ("Updating", "Waiting for Tally"),
+           "2. Update now, no progress reported in 2 minutes but the bridge beats with it open: still updating, not 'Not started' (%s)" % txt(R(ORBIT) + " .tpt-state"))
+        # evidence: no bridge of the firm heard (its beats 10 minutes old): Not started, with why
+        E("() => { window.__devs0 = JSON.parse(JSON.stringify(TLight.st.devs)); TLight.st.devs.forEach(d => { const t = new Date(Date.now() - 600000).toISOString(); d.last_seen = t; if (d.info && d.info.beat) d.info.beat.at = t; }); render(); }")
         late = seen(R(ORBIT) + " [data-tpt-why]", r"^Not (started|updated)", 8000)
-        ok(late != "", "2. Update now, no Tally computer on it in 2 minutes: 'Not started: <why>' (%s)" % (late or txt(R(ORBIT) + " .tpt-state")))
+        ok(late != "", "2. Update now, no bridge heard and nothing in 2 minutes: 'Not started: <why>' (%s)" % (late or txt(R(ORBIT) + " .tpt-state")))
+        E("() => { TLight.st.devs = window.__devs0; render(); }")
         no_rejections("2. Update now")
         # FinCom not reached: said in the row, never a silent row
         E("(c) => { delete window.FCRunState[c]; if (S.tcoSync) delete S.tcoSync[c]; window.__up0 = TCloudUp.post; TCloudUp.post = () => Promise.reject(new TypeError('Failed to fetch')); window.__lk0 = Ledgers.askTally; Ledgers.askTally = () => Promise.reject(new TypeError('Failed to fetch')); render(); }", cid(KES))
@@ -193,8 +200,28 @@ def main():
         fail({"tally_period_choose_lean": "hang"}); forget("books:")
         pg.click(R(ORBIT) + ' [data-tpt-main="books"]')
         ok(seen(R(ORBIT) + ' [data-tpt-main="books"]', r"^Starting…$", 2000) != "" and seen(R(ORBIT) + ' [data-said="books"]', r"Working…", 2000) != "", "3. Bring books, FinCom never answering: 'Starting…' at once")
-        ok(seen(R(ORBIT) + ' [data-said="books"]', r"did not answer in time", 26000) != "", "3. Bring books, FinCom never answering: 'FinCom did not answer in time' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        ok(seen(R(ORBIT) + ' [data-said="books"][data-said-state="slow"]', r"^Still waiting for FinCom…$", 26000) != "", "3. Bring books, FinCom slow: 'Still waiting for FinCom…' after 20 s (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        n0 = len(calls("tally_period_choose"))
+        pg.click(R(ORBIT) + ' [data-tpt-main="books"]', force=True, timeout=1500)
+        ok(pg.is_disabled(R(ORBIT) + ' [data-tpt-main="books"]') and len(calls("tally_period_choose")) == n0, "3. Bring books, still waiting: the button held, no second request (%d)" % len(calls("tally_period_choose")))
+        fail({}); E("() => { (window.__hangs || []).splice(0).forEach(f => f()); }")
+        ok(seen(R(ORBIT) + ' [data-said="books"]', r"^(Asked|Queued)", 5000) != "", "3. Bring books, the late answer: said when it comes (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        forget("books:")
+        # (migration 135's skip of held days: the new pull counted at once; never "started" by that alone)
+        E(SUM, [[{"book": "bk-" + ORBIT, "client": cid(ORBIT), "company": ORB, "from": "2026-04-01", "devices": [{"id": dA["id"], "fetchOn": True}]}]])
+        E("""(c) => { window.__choose0 = TCloud.rpc; const r0 = TCloud.rpc; TCloud.rpc = async (fn, a) => { if (/^tally_period_choose/.test(fn)) { window.__calls.push([fn, a]);
+            window.__sum = window.__sum.map(b => b.client === c ? Object.assign({}, b, {pull: {fy: '20260401', part: 'year', state: 'going', x: 0, y: 2600, counting: true, countedDays: 40, yearDays: 222, chosenAt: new Date().toISOString(), pace: true}}) : b);
+            return {ok: true}; } return r0(fn, a); }; }""", cid(ORBIT))
+        pg.click(R(ORBIT) + ' [data-tpt-main="books"]')
+        ok(seen(R(ORBIT) + ' [data-said="books"]', r"^Asked", 5000) != "", "3. Bring books, held days counted at once: 'Asked: …' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        pg.wait_for_timeout(2500); age("books:")
+        ok(seen(R(ORBIT) + ' [data-said="books"][data-said-state="late"]', r"^Not started: ", 8000) != "", "3. Bring books, only held days counted in 2 minutes: still 'Not started: <why>' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        E("(c) => { window.__sum = window.__sum.map(b => b.client === c ? Object.assign({}, b, {pull: Object.assign({}, b.pull, {countedDays: 45})}) : b); if (window.tfxRefresh) window.tfxRefresh(); render(); }", cid(ORBIT))
+        pg.wait_for_timeout(2500)
+        ok(n(R(ORBIT) + ' [data-said="books"]') == 0, "3. Bring books, the count moves past the first seen: the line goes (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
+        E("() => { TCloud.rpc = window.__choose0; }")
         fail({}); forget("books:")
+        E(SUM, [[{"book": "bk-" + nm, "client": cid(nm), "company": co, "from": "2026-04-01", "devices": [{"id": dA["id"], "fetchOn": True}]} for nm, co in ((KES, KESC), (ORBIT, ORB), (ACME, ACO))]]); pg.wait_for_timeout(1500)
         no_rejections("3. Bring books")
 
         print("== 4. Bring missing days, Turn on for this computer")
@@ -203,13 +230,21 @@ def main():
         ok(mains(ORBIT) == ["bring"], "4. days missing, reading older entries on: Bring missing days (%s)" % mains(ORBIT))
         if mains(ORBIT) == ["bring"]:
             E("() => { window.__calls = []; }")
+            # (fills of earlier in the day: 5 days done already; this ask queues 2 more)
+            E("""(c) => { window.__fill = {total: 5, done: 5, waiting: 0}; const r0 = TCloud.rpc; window.__fillRpc0 = r0;
+              TCloud.rpc = async (fn, a) => { if (fn === 'tally_check_ask_status') return {ok: true, asks: [], books: [{book: 'bk-Orbit Space', client: c, fill: JSON.parse(JSON.stringify(window.__fill))}]};
+                if (fn === 'tally_fill_request') { window.__calls.push([fn, a]); window.__fill = {total: 7, done: 5, waiting: 2}; return {ok: true, queued: 2, fill: JSON.parse(JSON.stringify(window.__fill))}; } return r0(fn, a); };
+              if (window.tfxRefresh) window.tfxRefresh(); }""", cid(ORBIT)); pg.wait_for_timeout(1500)
             E("(s) => { const b = document.querySelector(s); b.click(); b.click(); }", R(ORBIT) + ' [data-tpt-main="bring"]')
             w = seen(R(ORBIT) + ' [data-said="bring"]', r"^(Asked|Queued|Nothing new)", 5000)
             ok(w != "", "4. Bring missing days: what happens and when, within 5 s (%s)" % w)
             ok(len(calls("tally_fill_request")) == 1, "4. Bring missing days, a double click: asked once (%s)" % len(calls("tally_fill_request")))
             if w.startswith("Asked"):
-                age("fill:")
-                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Not started: ", 8000) != "", "4. Bring missing days, nothing picked up in 2 minutes: 'Not started: <why>' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+                pg.wait_for_timeout(1500); age("fill:")
+                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Not started: ", 8000) != "", "4. Bring missing days, earlier fills done but none of this one in 2 minutes: 'Not started: <why>' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+                E("() => { window.__fill = {total: 7, done: 6, waiting: 1}; if (window.tfxRefresh) window.tfxRefresh(); }"); pg.wait_for_timeout(2500)
+                ok(seen(R(ORBIT) + ' [data-said="bring"]', r"^Bringing the missing days", 6000) != "", "4. Bring missing days, one more day done: 'Bringing …' (%s)" % txt(R(ORBIT) + ' [data-said="bring"]'))
+            E("() => { TCloud.rpc = window.__fillRpc0; if (window.tfxRefresh) window.tfxRefresh(); render(); }"); pg.wait_for_timeout(2000)
             for mode, rx in (("denied", r"^Only an owner or staff"), ("net", r"^Couldn’t reach FinCom"), ("refuse", r"^Not asked: Made-up refusal\.$")):
                 fail({"tally_fill_request": mode}); forget("fill:")
                 pg.click(R(ORBIT) + ' [data-tpt-main="bring"]')
@@ -225,6 +260,9 @@ def main():
             fail({}); forget("turnon:")
             pg.click(R(ORBIT) + ' [data-tpt-main="turnon"]')
             ok(seen(R(ORBIT) + ' [data-said="turnon"]', r"^Turned on", 5000) != "", "4. Turn on: 'Turned on: …' (%s)" % txt(R(ORBIT) + " .tpt-act"))
+            E(SUM, [[{"book": "bk-" + ORBIT, "client": cid(ORBIT), "company": ORB, "from": "2026-04-01", "devices": [{"id": dA["id"], "fetchOn": True}]}]]); pg.wait_for_timeout(2500)
+            ok(mains(ORBIT) != ["turnon"] and n(R(ORBIT) + ' [data-said="turnon"]') == 1 and txt(R(ORBIT) + ' [data-said="turnon"]').startswith("Turned on"),
+               "4. Turn on: once on, the row's button changes and 'Turned on …' stays, once (%s | %s)" % (mains(ORBIT), txt(R(ORBIT) + " .tpt-act")))
         no_rejections("4. Turn on for this computer")
         E("() => { Rec.gapFor = window.__gapWas; }")
 
@@ -321,12 +359,15 @@ def main():
           Bridge.st = Object.assign({}, Bridge.st || {}, {keepWait: {reason: 'posting', words: 'Waiting: a posting into Tally is going on.'}});
           window.__jobs = [{id: 'job-made-up-1', company: 'KESTREL TEXTILES', status: 'running'}]; window.__cancelFail = true;
           Bridge.call = async (p, b) => { if (p === '/jobs') return {jobs: JSON.parse(JSON.stringify(window.__jobs))};
-            if (p === '/jobs/cancel') { if (window.__cancelFail) throw new TypeError('Failed to fetch'); window.__jobs = []; return {ok: true}; } return window.__bc0(p, b); };
+            if (p === '/jobs/cancel') { if (window.__cancelFail === 'said') throw new Error('made-up job is already done'); if (window.__cancelFail) throw new TypeError('Failed to fetch'); window.__jobs = []; return {ok: true}; } return window.__bc0(p, b); };
           if (window.FCStuckJobs) { window.FCStuckJobs.at = 0; window.FCStuckJobs.list = null; } render(); }""")
         pg.evaluate("() => window.scrollTo(0, 0)")
         if seen("#app [data-stuck-jobs]", r"Waiting for a posting", 6000):
             pg.click("#app [data-stuck-jobs] [data-stuck-see]"); pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
             ok(seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge on this computer did not answer", 5000) != "", "8. Stop posting, the bridge not answering: said (%s)" % txt("#app [data-stuck-said]"))
+            E("() => { window.__cancelFail = 'said'; }")
+            pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
+            ok(seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge said: made-up job is already done\.$", 5000) != "", "8. Stop posting, the bridge refusing: its own answer said (%s)" % txt("#app [data-stuck-said]"))
             E("() => { window.__cancelFail = false; }")
             pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
             ok(seen("#app [data-stuck-said]", r"^Stopped\.", 5000) != "", "8. Stop posting: 'Stopped. …', also once the list is empty (%s)" % txt("#app [data-stuck-said]"))

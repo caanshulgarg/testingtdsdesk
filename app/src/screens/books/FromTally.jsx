@@ -68,8 +68,15 @@ function UpdateNow() {
     const st = typeof tallyStopFor === "function" ? tallyStopFor(cid) : null;
     if (st) { setSaid({ bad: true, text: "Not asked: reading is stopped (" + (st.reason || "no reason given") + "). An owner resumes it on the Tally page." }); return; }
     const here = typeof Bridge === "object" && Bridge.on() && (Bridge.up() || !(typeof TCloud === "object" && TCloud.has(cid)));
-    if (here || typeof TCloud !== "object" || !TCloud.on()) { doAct("keepNow"); setSaid({ text: here ? "Asked FinCom Bridge on this computer to update now; the books here follow in a few minutes." : "Sign in to the firm account to ask the Tally computer." , bad: !here }); return; }
+    if (!here && (typeof TCloud !== "object" || !TCloud.on())) { setSaid({ bad: true, text: "Sign in to the firm account to ask the Tally computer." }); return; }
     setBusy(true); setSaid(null);
+    // (the bridge here: "Asked" only once it answered, the same ask as doAct keepNow: LK.keepSet, which keeps its answer)
+    if (here) { const t0 = Date.now();
+      try { if (typeof LK === "object" && LK.keepSet) await LK.keepSet({ now: true }, "Updating from Tally now. The books here follow in a few minutes."); else doAct("keepNow"); } catch (e) { /* said below */ }
+      const k = (S.setupKeep || {})[cid]; setBusy(false);
+      setSaid(typeof LK !== "object" || (k && k.at >= t0) ? { text: "Asked FinCom Bridge on this computer to update now; the books here follow in a few minutes." }
+        : { bad: true, text: "Not asked: FinCom Bridge on this computer did not do it. Check that it is running, then try again." });
+      return; }
     try { const j = await TCloud.rpc("tally_want_update", { p_client: cid });
       setSaid(j && j.ok ? { text: "Asked: the Tally computer starts within a minute; the books here follow in a few minutes." } : { bad: true, text: "Not asked: no Tally computer is linked to this client yet. Link it on the Tally page." }); }
     catch (e) { const m = String((e && e.message) || e || ""); setSaid({ bad: true, text: /not allowed|42501/i.test(m) ? "Only an owner or staff of the firm can do this." : /PGRST202|schema cache|does not exist/i.test(m) ? "FinCom’s cloud is not ready for this yet. Try again later." : "Couldn’t reach FinCom. Check the internet and try again." }); }

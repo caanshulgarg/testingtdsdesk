@@ -24,7 +24,7 @@ import { staleWords } from "./TallyLine.jsx";
 import { tallyIconState, clock } from "./TallyIcon.jsx";
 import { ownOpen, NO_CO, lookOnce, checkAll, checkedSay } from "../lib/tallySimple.js";
 import "../lib/connectSteps.js";
-import { errWords, within } from "./TallyBtn.jsx";   // next-buttons: a failure in plain words; a cloud that never answers said so
+import { errWords, slowClock, SLOW_MS } from "./TallyBtn.jsx";   // next-buttons: a failure in plain words; a slow cloud said so
 import { noAnswer, readWhere } from "../lib/readFollow.js";
 
 const TONE = { linked: "on", waiting: "warn", needs: "off", none: "idle" };
@@ -130,14 +130,15 @@ export default function TallyPop({ co, nOpen, close, back }) {
   // next-tally-connect-steps: this login's bridge looked for (once a tab, the shared look), so the step is known
   useEffect(() => { lookOnce(); }, []);
   // (Check again: "Checking…" below, even when the button it was pressed on goes as the state changes)
-  // (next-buttons: one press at a time; an answer {bad, text} or words; a failure in plain words; 60 s at most, a
-  // question to the person aside)
+  // (next-buttons: one press at a time, held until the real answer (no second request); an answer {bad, text} or words;
+  // a failure in plain words; a cloud slow to answer: "Still waiting for FinCom…", the time on a question aside)
   const run = async (fn, word) => {
     if (on.current) return; on.current = true;
     setBusy(word || true); setMsg(null);
-    try { const r = await within(fn(), 60000); setMsg(r && typeof r === "object" ? { ok: !r.bad, text: r.text } : r ? { ok: true, text: String(r) } : null); }
+    const stop = slowClock(SLOW_MS, () => setBusy("Still waiting for FinCom…"));
+    try { const r = await fn(); setMsg(r && typeof r === "object" ? { ok: !r.bad, text: r.text } : r ? { ok: true, text: String(r) } : null); }
     catch (e) { setMsg({ ok: false, text: errWords(e) }); }
-    finally { on.current = false; setBusy(false); }
+    finally { stop(); on.current = false; setBusy(false); }
   };
   return <div className="tally-pop" role="dialog" aria-label={"Tally: " + s.word} data-tally-pop={s.icon} ref={ref}
     onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); if (back) back(); } }}>

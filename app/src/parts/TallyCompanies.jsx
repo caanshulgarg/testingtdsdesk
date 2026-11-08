@@ -349,8 +349,8 @@ export function ChangePick({ co, cur = "", onClose }) {
   const mk = baseKey(co.name), g = String(co.gstin || "").toUpperCase(), mine = (r) => (!!mk && baseKey(r.company) === mk) || (!!g && String(r.gstin || "").toUpperCase() === g);
   const opt = (r) => <option key={r.company} value={r.company}>{label(r)}</option>, same = rows.filter(mine), open = rows.filter((r) => r.open && !mine(r)), rest = rows.filter((r) => !r.open && !mine(r));
   // (next-buttons: a link that fails says why here; never a rejection)
-  const go = async () => { const r = rows.find((x) => x.company === pick); if (!r || busy) return; setBusy(true); setErr(""); TCloud.linkErr = ""; let ok = false;
-    try { ok = await changeTo(co, r); if (ok === false) setErr("Not linked: " + String(TCloud.linkErr || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + "."); }
+  const go = async () => { const r = rows.find((x) => x.company === pick); if (!r || busy) return; setBusy(true); setErr(""); let ok = false;
+    try { if (typeof TCloud === "object") TCloud.linkErr = ""; ok = await changeTo(co, r); if (ok === false) setErr("Not linked: " + String((typeof TCloud === "object" && TCloud.linkErr) || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + "."); }
     catch (e) { setErr(errWords(e)); } finally { setBusy(false); } if (ok && onClose) onClose(); };
   return <div className="tco-relink tlk-pick" data-tlk-pick-box={co.id}>
     <span className="note">{"Tally company for " + co.name + ":"}</span>
@@ -792,11 +792,14 @@ export function runWords(cid, company) {
   const of = x.prog ? Number(x.prog.of) || 0 : 0, rd = x.prog ? Math.min(Number(x.prog.read) || 0, of || Infinity) : 0;
   if (of > 0) return { phase: "reading", text: "Reading ledgers: " + rd.toLocaleString("en-IN") + " of " + of.toLocaleString("en-IN") };
   if (rd > 0) return { phase: "reading", text: "Reading ledgers… " + rd.toLocaleString("en-IN") + " so far" };
+  // next-buttons: nothing reported in 2 minutes. "Not started" only with evidence (the serving list says nobody reads it,
+  // no bridge of the firm beats, or the beat's own reason); a bridge that reports no progress (older, or no ledger
+  // progress yet) may be reading: said as waiting, never "not started"
+  if (Date.now() - m.at > LATE_MS && !x.prog) { const lw = lateWhy(cid, company || x.company, true);
+    return lw ? { phase: "why", text: "Not started: " + lw } : { phase: "reading", text: "Still waiting for the Tally computer: no progress reported yet." }; }
   // nothing from the bridge 30 s after the press: why, in plain words (the computer's beat)
   const why = Date.now() - m.at > 30000 ? x.why || stallWhy(cid, company) : "";
   if (why) return { phase: "waiting", text: "Not started yet: " + (stepOf(why) ? stepTitle(stepOf(why)) : why) };
-  // next-buttons: no Tally computer picked it up in 2 minutes (and no reason above): said plainly, with what to do
-  if (Date.now() - m.at > LATE_MS && !x.prog) return { phase: "why", text: "Not started: " + lateWhy(cid, company || x.company) };
   return { phase: "reading", text: "Reading…" + (x.via === "cloud" ? " (the Tally computer picks it up within a minute)" : "") };
 }
 export function MastersLine({ cid }) {
@@ -922,9 +925,9 @@ export function Pick({ r, co, onClose, pre = "", inline = false }) {
   useEffect(() => { if (pre && gone(pick)) setPick(pre); }, [pre]);
   const cs = rankClients(r, co ? co.id : "");
   // (next-buttons: never left on "Linking…"; a link that fails says why here)
-  const go = async () => { const t = S.companies[pick]; if (!t || busy) return; setBusy(true); setErr(""); TCloud.linkErr = ""; let ok = false;
-    try { ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true));
-      if (ok === false) setErr("Not linked: " + String(TCloud.linkErr || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + "."); }
+  const go = async () => { const t = S.companies[pick]; if (!t || busy) return; setBusy(true); setErr(""); let ok = false;
+    try { if (typeof TCloud === "object") TCloud.linkErr = ""; ok = await (co ? moveTo(Object.assign({}, r, { client: co.id }), t) : r.reported || r.open ? linkTo(r, t) : (keep(r, { kind: "link", cid: t.id }), true));
+      if (ok === false) setErr("Not linked: " + String((typeof TCloud === "object" && TCloud.linkErr) || "FinCom did not take it. Try again in a minute").replace(/[.\s]+$/, "") + "."); }
     catch (e) { setErr(errWords(e)); } finally { setBusy(false); }
     if (ok && onClose) onClose(); };
   return <div className={"tco-relink" + (inline ? " tco-relink-inline" : "")} data-tco-relink-box={r.company}>
