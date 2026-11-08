@@ -22,8 +22,10 @@
 //     openings then still as at the old start: one bell line on the day of the move says so, and the existing rules
 //     bring the right ones (booksFromFor answers the new start, the bridge starts its ledger round again with another
 //     books-from, ledgers.go, and that round's openings are dated the new start);
-//   - meanwhile the day is WANTED: booksFromFor answers it in place of the start, so the bridge's next ledger round is
-//     dated it and moves the start with its openings (the first case).
+//   - meanwhile the day is WANTED once Tally has counted every day between (none left with tally_n null: counting goes
+//     newest first, so an earlier day would still turn up and each new wanted day restarts the bridge's ledger round):
+//     booksFromFor answers it in place of the start, so the bridge's next ledger round is dated it and moves the start with
+//     its openings (the first case). Until then nothing is wanted.
 
 // a real calendar day as yyyymmdd (19xx/20xx)
 export function realDay(d) {
@@ -59,7 +61,8 @@ export function bookStartEarlier(fromDate, known) {
   return { from_date: isoOf(s), open_as_on: before(s), was: isoOf(was) };
 }
 // the whole decision for one book: b = {fromDate, openAsOn, stateFrom, firstVoucher, firstDay, firstCounted, day,
-// openingsAt, gapPending (a tally_period_days day in [known, fromDate) still to count or bring)} ->
+// openingsAt, gapPending (a tally_period_days day in [known, fromDate) still to count or bring), gapUncounted (one still
+// to count: tally_n null)} ->
 //   {kind: "set", patch} | {kind: "move", move, withRound} | {kind: "wait", want} | {kind: "none", known}
 export function startDecision(b) {
   const known = earliestKnown(b);
@@ -68,7 +71,18 @@ export function startDecision(b) {
   if (!move) return { kind: "none", known };
   if (dayOf(b.openingsAt || "") === known) return { kind: "move", move, withRound: true };
   if (b.gapPending === false) return { kind: "move", move, withRound: false };
-  return { kind: "wait", want: known };
+  return { kind: "wait", want: b.gapUncounted === false ? known : "" };
+}
+// whether a book's memo (index.ts startMemo {from, want, t}, the start and the wanted day as yyyymmdd) answers a call
+// without reading the database: fresh (5 minutes) and the call brings nothing new (for a book with a start: no day nor
+// reported start before it or the day wanted, no ledger round dated another day than the start; for one without: no day
+// and no reported start; a round's openingsAt never sets a start)
+export function memoAnswers(m, o, now) {
+  if (!m || !(now - m.t < 300000)) return false;
+  const day = dayOf(o.day || ""), sf = dayOf(o.stateFrom || ""), at = dayOf(o.openingsAt || "");
+  if (!m.from) return !day && !sf;
+  const sooner = (d) => !!d && d < (m.want || m.from);
+  return !(sooner(day) || sooner(sf) || (at && at !== m.from));
 }
 // booksFromFor's day for a book (yyyymmdd): the wanted earlier day when there is one, else the start; "" when none
 export function booksFromDay(fromDate, want) {

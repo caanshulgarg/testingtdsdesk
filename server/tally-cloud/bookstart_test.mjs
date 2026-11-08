@@ -1,6 +1,6 @@
 // node server/tally-cloud/bookstart_test.mjs (no Deno needed): a book's start (next-book-start)
 import assert from "node:assert/strict";
-import { startDecision, earliestKnown, bookStartPatch, bookStartEarlier, booksFromDay, earliestDay, movedWords, istDay, uuidOfHex, dayOf, realDay } from "./bookstart.js";
+import { startDecision, earliestKnown, memoAnswers, bookStartPatch, bookStartEarlier, booksFromDay, earliestDay, movedWords, istDay, uuidOfHex, dayOf, realDay } from "./bookstart.js";
 
 // ---- a book with no start: the earliest known day, openings as on the day before
 assert.deepEqual(bookStartPatch(null, null, "20250401"), { from_date: "2025-04-01", open_as_on: "2025-03-31" });
@@ -37,9 +37,13 @@ assert.deepEqual(bookStartEarlier("20250401", "20240229"), { from_date: "2024-02
 assert.deepEqual(startDecision({ fromDate: "2025-04-01", stateFrom: "20260401", firstVoucher: "2025-04-01", day: "20260402", gapPending: false }), { kind: "none", known: "20250401" });
 // "Bring another year" after the start was set, Tally counting it (newest first), days still to fetch: the day is WANTED
 // (booksFromFor answers it), the start not moved yet
-const counting = { fromDate: "2026-04-01", stateFrom: "20260401", firstVoucher: "2026-04-01", firstCounted: "2025-04-02", gapPending: true };
+const counting = { fromDate: "2026-04-01", stateFrom: "20260401", firstVoucher: "2026-04-01", firstCounted: "2025-04-02", gapPending: true, gapUncounted: false };
 assert.deepEqual(startDecision(counting), { kind: "wait", want: "20250402" });
 assert.deepEqual(startDecision({ ...counting, gapPending: undefined }), { kind: "wait", want: "20250402" });   // not known: wait
+// round 3 should-fix: Tally still counting days between (tally_n null; newest first, an earlier day may turn up): nothing
+// wanted yet (no ledger round restarted for each new earliest day); not known: nothing wanted either
+assert.deepEqual(startDecision({ ...counting, gapUncounted: true }), { kind: "wait", want: "" });
+assert.deepEqual(startDecision({ ...counting, gapUncounted: undefined }), { kind: "wait", want: "" });
 // the bridge's ledger round dated that day: moved at once, with the round's openings (before the round is taken)
 assert.deepEqual(startDecision({ ...counting, openingsAt: "20250402" }), { kind: "move", move: { from_date: "2025-04-02", open_as_on: "2025-04-01", was: "2026-04-01" }, withRound: true });
 // a round dated another day (Tally's BOOKSFROM, the old start): never moves it with the round
@@ -50,6 +54,27 @@ assert.deepEqual(startDecision({ ...counting, gapPending: false }), { kind: "mov
 // entries earlier than the start arrive (the day just stored), no period days between: moved
 assert.deepEqual(startDecision({ fromDate: "2026-04-01", stateFrom: "20260401", firstVoucher: "2025-12-01", day: "20251115", gapPending: false }).move,
   { from_date: "2025-11-15", open_as_on: "2025-11-14", was: "2026-04-01" });
+
+// ---- round 3 blocker: the memo never swallows a ledger round dated the wanted day
+const t0 = Date.UTC(2026, 10, 8, 6, 0);
+const warm = { from: "20260401", want: "20250402", t: t0 - 60000 };
+assert.equal(memoAnswers(warm, { openingsAt: "20250402" }, t0), false);           // looks: the round dated the wanted day
+assert.deepEqual(startDecision({ ...counting, openingsAt: "20250402" }).withRound, true);   // ... and moves with the round
+assert.equal(memoAnswers(warm, { openingsAt: "20240401" }, t0), false);           // a round dated another day: looks too
+assert.equal(memoAnswers(warm, { openingsAt: "20260401" }, t0), true);            // dated the start: nothing new
+assert.equal(memoAnswers(warm, {}, t0), true);
+assert.equal(memoAnswers(warm, { stateFrom: "20260401" }, t0), true);
+assert.equal(memoAnswers(warm, { day: "20250601" }, t0), true);                    // a day already within the wanted span
+assert.equal(memoAnswers(warm, { day: "20250301" }, t0), false);                   // a day before the wanted one: looks
+assert.equal(memoAnswers({ from: "20260401", want: "", t: t0 - 60000 }, { day: "20251201" }, t0), false);   // before the start
+assert.equal(memoAnswers({ from: "20260401", want: "", t: t0 - 60000 }, { day: "20260501" }, t0), true);
+assert.equal(memoAnswers({ ...warm, t: t0 - 301000 }, {}, t0), false);           // stale: looks
+assert.equal(memoAnswers(null, {}, t0), false);
+// a book with no start: a day or a reported start looks; a round's openingsAt alone never does (B2)
+const bare = { from: "", want: "", t: t0 - 60000 };
+assert.equal(memoAnswers(bare, { openingsAt: "20190401" }, t0), true);
+assert.equal(memoAnswers(bare, { day: "20250402" }, t0), false);
+assert.equal(memoAnswers(bare, { stateFrom: "20260401" }, t0), false);
 
 // ---- booksFromFor's day: the wanted earlier day, else the start; never a later "want"
 assert.equal(booksFromDay("2026-04-01", "20250402"), "20250402");

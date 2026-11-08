@@ -235,7 +235,7 @@ import { isJsonText, jsonScanner, elemXml } from "../_shared/tallyjson.js";
 import { linkDevice, beatNewOpen, cleanCompany, latestEntryDay, linkPlace, coTrim } from "./linknow.js";   // next-tally-linknow: a company open in Tally is linked at a click
 import { gateTrack, checkWindow, busyWhy, peerNear } from "./updategate.js";   // migration 139: the gated rollout of bridge updates
 import { periodPace, speedOf, speedBooks, olderNextMax, fastOn } from "./periodpace.js";   // next-fast-entries: 30 days an answer by day to a bridge reading windows
-import { startDecision, earliestKnown, booksFromDay, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
+import { startDecision, earliestKnown, booksFromDay, memoAnswers, movedWords, istDay, uuidOfHex, dayOf } from "./bookstart.js";   // next-book-start: a book's start (bookStartFromState)
 import { corsFor } from "../_shared/cors.ts";   // the one list of headers for every function (server/_shared/cors.ts)
 import { cloudReporter } from "../_shared/sentry.ts";
 // 23-Oct-2026 (next-fix-tally-link): the one rule for linking a company to a client by itself (server/_shared/tallyname.js)
@@ -3476,10 +3476,7 @@ const startMemo = new Map<string, { from: string; want: string; t: number }>();
 async function bookStartFromState(book: string, o: { stateFrom?: string; day?: string; openingsAt?: string } = {}): Promise<string> {
   if (!book) return "";
   const m = startMemo.get(book), day = dayOf(o.day || ""), sf = dayOf(o.stateFrom || ""), at = dayOf(o.openingsAt || "");
-  if (m && Date.now() - m.t < 300000) {
-    const sooner = (d: string) => !!d && (!m.from || d < (m.want || m.from));   // a day before the start (or the day already wanted)
-    if (!(m.from ? sooner(day) || sooner(sf) || sooner(at) : day || sf)) return m.want;
-  }
+  if (m && memoAnswers(m, o, Date.now())) return m.want;   // (a round dated another day than the start always looks)
   const memo = (from: string, want = "") => {
     if ((m?.want || "") !== want) fromMemo.delete(book);
     if (startMemo.size > 5000) startMemo.clear();
@@ -3499,10 +3496,13 @@ async function bookStartFromState(book: string, o: { stateFrom?: string; day?: s
       firstCounted: (c as any)?.[0]?.day, day, openingsAt: at };
     const known = earliestKnown(b);
     if (was && known && known < was && at !== known) {
-      // the days between still to count or to bring (as tally_period_next: not counted, or Tally's entries not all held)
-      const { data: pend, error: pe } = await db.from("tally_period_days").select("day").eq("book_id", book).gte("day", iso(known)).lt("day", iso(was))
-        .or("tally_n.is.null,and(tally_n.gt.0,done_at.is.null,upload_at.is.null)").limit(1);
-      b.gapPending = pe ? !/does not exist|schema cache|PGRST/i.test(String(pe.message || "")) : Array.isArray(pend) && pend.length > 0;
+      // the days between still to count or to bring (as tally_period_next: not counted, or Tally's entries not all held),
+      // and still to count (tally_n null: an earlier day may yet turn up); without migration 98: none
+      const gap = () => db.from("tally_period_days").select("day").eq("book_id", book).gte("day", iso(known)).lt("day", iso(was));
+      const [{ data: pend, error: pe }, { data: unc, error: ue }] = await Promise.all([
+        gap().or("tally_n.is.null,and(tally_n.gt.0,done_at.is.null,upload_at.is.null)").limit(1), gap().is("tally_n", null).limit(1)]);
+      const has = (rows: unknown, err: any) => err ? !/does not exist|schema cache|PGRST/i.test(String(err.message || "")) : Array.isArray(rows) && rows.length > 0;
+      b.gapPending = has(pend, pe); b.gapUncounted = has(unc, ue);
     }
     const r = startDecision(b);
     const said = "(state from " + (from || "none") + ", first known " + (known || "none") + (at ? ", openings as at " + at : "") + ")";
@@ -4197,6 +4197,8 @@ Deno.serve(sentry.wrap(async (req) => {
         // and the ledger read's progress the beat carries (in case a ledger_progress call was lost)
         // ROUND 103 (1c): only on a computer whose owner switched reading older entries on (tally_devices.period_fetch,
         // migration 98; off by default and on a cloud without the column): else an empty list and periodFetch false
+        // next-book-start: ON by default from migration 147 (the owner's decision of 08-Nov-2026: the column's default true, every
+        // key nobody switched turned on); the column stays the one switch the page and migrations 133, 135-137 read
         const periodFetch = (dev as any).period_fetch === true;
         // ROUND 103 (evening): outside this computer's office hours up to 30 days an answer (the bridge reads day after day
         // while Tally is idle and asks again when they are done); the switch above still wins
