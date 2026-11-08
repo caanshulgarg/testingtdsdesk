@@ -4,7 +4,7 @@ Reviewers: the session that built it (a self-review against the owner's rules, b
 coordinator's) at c936bdcf5: no duplicate postings, one instance, versions numbered right; seven items to fix before the
 release, all fixed with tests in d144a3663 (below). The fixes are the building session's self-review only.
 
-Range: 1400f77d6..d144a3663 (released 2.5.9 to the review's fixes)
+Range: 1400f77d6..fd11cff34 (released 2.5.9 to the review's fixes, d144a3663, and the first build's withdrawal, fd11cff34: build files moved only)
 
 The first build of 2.5.10 (e6aeb8422, setup 0ca4dace...2ef3, never published) is withdrawn; its files are kept in
 assets-test/bridge-go-old as *-2.5.10-withdrawn-0ca4dace*.

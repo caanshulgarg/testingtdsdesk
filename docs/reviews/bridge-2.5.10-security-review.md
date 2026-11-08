@@ -3,7 +3,7 @@
 Reviewers: the session that built it (self-review), then an independent review at c936bdcf5 (seven items, fixed in
 d144a3663: bridge-2.5.10-code-review.md); the fixes are the building session's self-review only.
 
-Range: 1400f77d6..d144a3663 (released 2.5.9 to the review's fixes)
+Range: 1400f77d6..fd11cff34 (released 2.5.9 to the review's fixes, d144a3663, and the first build's withdrawal, fd11cff34: build files moved only)
 
 ## Requests to Tally
 
