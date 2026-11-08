@@ -1,9 +1,13 @@
 # Code review: FinCom Bridge 2.5.10 (the pick-up acknowledgement, Stop posting's reasons, the bridge heals itself)
 
-Reviewers: the session that built it (a self-review against the owner's rules, below). An independent review is to
-follow before the release; this file names the range it is to cover.
+Reviewers: the session that built it (a self-review against the owner's rules, below), then an independent review (the
+coordinator's) at c936bdcf5: no duplicate postings, one instance, versions numbered right; seven items to fix before the
+release, all fixed with tests in d144a3663 (below). The fixes are the building session's self-review only.
 
-Range: 1400f77d6..c936bdcf5 (released 2.5.9 to the version bump)
+Range: 1400f77d6..d144a3663 (released 2.5.9 to the review's fixes)
+
+The first build of 2.5.10 (e6aeb8422, setup 0ca4dace...2ef3, never published) is withdrawn; its files are kept in
+assets-test/bridge-go-old as *-2.5.10-withdrawn-0ca4dace*.
 
 (bridge-go/: pickack.go (new), daypull.go (pullMayAskWhy: the six conditions with a reason code; applyPeriodDays notes
 each book's hand-out and the days it will not read; pullStep says started / refused / queued), cloud.go (the beat's
@@ -90,3 +94,37 @@ pick_ack_test.mjs (new); run_tally_buttons.py, run_period_ingest.py. docs: MIGRA
 - The bell line follows working hours only (as migration 47's); a computer turned off at 18:50 gets one line that day.
 - The keep-alive needs Task Scheduler open to standard users (the Windows default); where a policy refuses it, the log
   says so and the bridge still starts at sign-in, as before.
+
+## The independent review (at c936bdcf5), fixed in d144a3663
+
+1. (HIGH) A sleep, a hibernate or a clock jumped forward was taken for a stall or a hang (beatSec was a wall-clock age).
+   Now the worker's watchdog and the supervisor judge the heartbeat by its progress count (beatN) across their own
+   looks (stallTracker): each look adds the time since the one before while the count stands still; a look over three
+   looks late, or before the last, starts the count again; two looks without a move at least. The supervisor's late
+   look judges nothing (its answer and start times start again too). The heartbeat's time is refreshed before the sleep
+   note. TestR2510StallTracker, TestR2510WatchdogStallRestarts (a 10-minute sleep at every look: no restart, the sleep
+   note kept).
+2. (MEDIUM) The watchdog's exit waits while a posting is being sent or a Tally is still on a request given up
+   (TallyAbandonMaxSec at most; the supervisor waits as long, from /ping's busy). The requests Tally is still on are
+   kept on disk while they last (earlier-hold.json); the next run holds each such Tally as an earlier request (nothing
+   sent to it, a posting waits and says so) until TallyAbandonMaxSec after the send, then the small check goes first.
+   TestR2510WatchdogStallRestarts (the posting first), TestR2510EarlierHoldKeptAcrossRestart.
+3. (MEDIUM-LOW) The keep-alive task: made from Task Scheduler's own file (schtasks /Create /XML, UTF-16): also on
+   battery, InteractiveToken and least privilege as the user's SID (no password, no administrator), one run at a time, 2
+   minutes at most; named "FinCom Bridge keep-alive (<login> <SID>)" (the login in Unicode, only the characters a task
+   name cannot hold left out); made again when the task was deleted (schtasks /Query at the supervisor's start); the
+   bridge it starts runs at NORMAL_PRIORITY_CLASS; nothing started while a setup is between its stop and its install
+   (SetupAt in HKCU, set by the setup's stop, cleared when the install starts the bridge, 30 minutes at most).
+   TestR2510KeepAliveTask, TestR2510KeepAliveWindows (Windows).
+4. Stop posting while a part is at Tally: the stop is set, so it answers 200 with its words; the page says "Stop asked.
+   FinCom Bridge said: being posted right now - ...". TestR2510StopPostingReasons, run_tally_buttons.py 8.
+5. Migration 149: a line only for a stop between 09:30 and 18:30 India time, Monday to Saturday, of a computer that had
+   been beating at least 30 minutes earlier that day (tally-ingest keeps info.dayFirst). New md5
+   6e4a0f5a7818036097f838dbbf14cc33. run_migration149.py, run_pickups_ingest.py 6.
+6. The page matches an acknowledgement by its book (tally-ingest matches each to its book, bookForBeat), never by the
+   company's name; the words are FinCom's own for each code (the bridge's text is never kept). pick_ack_test.mjs,
+   run_pickups_ingest.py 2, run_tally_buttons.py 3b and 4.
+7. A worker that ended with code 9 by itself is recorded as it ended (only one the supervisor ended is a hang); the
+   network's fingerprint leaves out IPv6 (its temporary addresses), adapters that are down, the loopback and virtual
+   adapters; a failed heartbeat's pause is moved by up to a fifth. TestR2510WatchdogStallRestarts, TestR2510NetPrintAndJitter.
+

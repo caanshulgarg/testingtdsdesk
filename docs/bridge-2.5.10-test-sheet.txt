@@ -34,27 +34,31 @@ CHECK 2.5.10-B - BRING MISSING DAYS AND CHECK FOR CHANGES
 
 CHECK 2.5.10-C - STOP POSTING SAYS WHY
    Post a few entries to ZZ TEST; while they go, on the Tally page open See postings and press Stop posting.
-   You should see: "Stopped. ..." while it waits for Tally, or, while a request is at Tally, "Not stopped: FinCom
+   You should see: "Stopped. ..." while it waits for Tally, or, while a request is at Tally, "Stop asked. FinCom
    Bridge said: being posted right now - the part at Tally now finishes first and nothing after it is sent; wait for it
    to finish, then check Tally." Nothing after that part is posted.
 
 CHECK 2.5.10-D - THE KEEP-ALIVE TASK (installed just for this user)
    After the update, open Task Scheduler (taskschd.msc), Task Scheduler Library.
-   You should see: "FinCom Bridge keep-alive (<your login>)", every 5 minutes, "Run only when user is logged on". In
+   You should see: "FinCom Bridge keep-alive (<your login> <your SID>)", every 5 minutes, "Run only when user is logged
+   on", Conditions: "Start the task only if the computer is on AC power" NOT ticked. In
    Task Manager end every "FinCom Bridge" process of your login (the tray icon goes). Wait up to 5 minutes.
    You should see: FinCom Bridge and its icon back by themselves; its log says "Keep-alive: FinCom Bridge was not
    running for this Windows user; it is started again"; the Tally page says "FinCom Bridge restarted itself at HH:MM IST
    after it was found not running."
 
 CHECK 2.5.10-E - SLEEP AND NETWORK
-   Put the computer to sleep for a few minutes, wake it (or pull the network cable for 2 minutes and put it back).
+   Put the computer to sleep (or hibernate it) for 10 minutes or more, wake it (or pull the network cable for 2 minutes
+   and put it back).
    You should see: the Tally page shows the computer connected again within about a minute; the log says "Heartbeat:
    the computer slept or its clock changed ..." (or "... this computer's network changed ..."), then "FinCom reached
-   again".
+   again"; never "Watchdog: ... ends itself" or "the bridge hangs" for the sleep. While a posting is going, a stuck
+   heartbeat waits for it (the log says "ends itself once a posting is being sent to Tally no more").
 
 CHECK 2.5.10-F - THE BRIDGE STOPPED ANSWERING
-   Turn the Tally computer off (or sign out of Windows) during office hours and wait 10 minutes; look at FinCom's Tally
-   page from another computer.
+   With the Tally computer on since the morning, turn it off (or sign out of Windows) between 09:30 and 18:30 and wait 10
+   minutes; look at FinCom's Tally page from another computer. (Switched off after 18:30: the page says it, the bell does
+   not.)
    You should see: the top line "FinCom Bridge on the office Tally computer stopped answering at HH:MM IST" with what to
    do; Advanced (for support) names the computer; the bell has one line about it (once migration 149 is applied).
    Turn it on again: within a few minutes of signing in, connected again.

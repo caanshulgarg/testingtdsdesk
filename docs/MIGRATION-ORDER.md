@@ -782,13 +782,16 @@ then the app (the Tally page shows nothing under Advanced without it). Tested: `
 ## 149: one bell line when a firm's FinCom Bridges all stop answering (not run yet; branch next-bridge-2510, 08-Nov-2026)
 
 **149, bridge stopped** (08-Nov-2026, branch `next-bridge-2510`, bridge 2.5.10; the owner: "Bridge should work every time
-except when Tally itself is unavailable"; **written, not run yet**; file md5 80a5cd6b26aa2f02da966c675a227c66):
+except when Tally itself is unavailable"; **written, not run yet**; file md5 6e4a0f5a7818036097f838dbbf14cc33, after the
+independent review of 2.5.10 (item 5; the first file, md5 80a5cd6b..., was never run)):
 `server/tally-cloud/migration-149-bridge-stopped-alert.sql`. One function, `tally_alert_scan_stopped(p_now)`: a firm
 whose computers' newest heartbeat (`tally_devices.info.beat.at`) is more than 10 minutes and less than 24 hours old gets
 one `tally_alerts` line (kind `summary`, the computer's id, India's day of the stop): "FinCom Bridge on the office Tally
 computer stopped answering at HH:MM IST. ...", no computer's name; once per stop (a later stop the same day makes it
-unread again with the new time; another summary line of that computer and day is never overwritten); only Monday to
-Saturday 09:00-19:00 India time, as migration 47's other alerts. Not executable by anon or authenticated; pg_cron job
+unread again with the new time; another summary line of that computer and day is never overwritten); only a stop inside
+the office day, 09:30-18:30 India time, Monday to Saturday, of a computer that had been beating at least 30 minutes
+earlier that day (tally-ingest of 2.5.10 keeps `info.dayFirst`, the first heartbeat of India's day; without it: no
+line), scanned within migration 47's working hours. Not executable by anon or authenticated; pg_cron job
 `tally-alert-stopped` every 5 minutes where pg_cron is there. Add-only (no table created, altered or emptied), one
 transaction (lock_timeout 10 s), safe to run twice. Needs migration 47. Deploy: this file any time; tally-ingest and the
 app do not depend on it (without it the bell has no such line; the Tally page's top line says it all the same).
