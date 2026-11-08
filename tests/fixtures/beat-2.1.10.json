@@ -1,6 +1,6 @@
 {
   "allowlist": {
-    "hash": "8ee9954a812571a706ab73bab13ac44965de247a77a907491e7bdd680063ca67",
+    "hash": "eb2b50400bbcd278b94de086a4b3e5dbdbab518ba083b581eba08105e94ae98c",
     "measured": false
   },
   "autoUpdate": true,
@@ -39,6 +39,7 @@
   "kind": "beat",
   "lastRead": "",
   "lastRun": "",
+  "lastStop": null,
   "ledgerProgress": [],
   "nightlyAt": "19:00",
   "notAnsweringSince": "",
@@ -53,6 +54,7 @@
     "stoppedCompanies": [],
     "uploadDays": []
   },
+  "pickups": [],
   "ports": [
     {
       "askedAt": "2026-10-04T18:30:00",
@@ -135,6 +137,6 @@
     "offered": ""
   },
   "updating": false,
-  "version": "2.5.9",
+  "version": "2.5.10",
   "windowsUser": ""
 }
