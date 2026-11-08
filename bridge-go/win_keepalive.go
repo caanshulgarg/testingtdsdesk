@@ -8,8 +8,39 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
+
+	"golang.org/x/sys/windows/registry"
 )
+
+const normalPriorityClass = 0x00000020 // NORMAL_PRIORITY_CLASS
+
+func platUserSID() string { return userSID() }
+
+// SetupAt (HKCU\SOFTWARE\FinCom\Bridge): the setup's stop, cleared once its install starts the bridge again
+func setupAtValue() string {
+	k, err := registry.OpenKey(registry.CURRENT_USER, regKey, registry.QUERY_VALUE)
+	if err != nil {
+		return ""
+	}
+	defer k.Close()
+	v, _, _ := k.GetStringValue("SetupAt")
+	return v
+}
+
+func setSetupAt(on bool) {
+	k, _, err := registry.CreateKey(registry.CURRENT_USER, regKey, registry.SET_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+	if on {
+		_ = k.SetStringValue("SetupAt", time.Now().UTC().Format(time.RFC3339))
+	} else {
+		_ = k.DeleteValue("SetupAt")
+	}
+}
 
 func platSchtasks(args ...string) error {
 	c := exec.Command("schtasks.exe", args...)
@@ -31,6 +62,9 @@ func keepAliveCmd(args []string) int {
 	if ev := userEvent("Stop"); ev != 0 && eventSet(ev) {
 		return 0
 	}
+	if setupRunning(setupAtValue(), time.Now()) {
+		return 0 // review of 2.5.10 (3): a setup between its stop and its install
+	}
 	loadConfigRO()
 	exe, err := os.Executable()
 	if err != nil {
@@ -40,6 +74,11 @@ func keepAliveCmd(args []string) int {
 	writeLog("Keep-alive: FinCom Bridge was not running for this Windows user; it is started again")
 	c := exec.Command(exe, "user", "--config", ConfigPath)
 	hideWindow(c)
+	// review of 2.5.10 (3): at normal priority, never Task Scheduler's own (below normal) passed on
+	if c.SysProcAttr == nil {
+		c.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	c.SysProcAttr.CreationFlags |= normalPriorityClass
 	if err := c.Start(); err != nil {
 		writeLog("Keep-alive: FinCom Bridge could not be started: " + err.Error())
 		return 1

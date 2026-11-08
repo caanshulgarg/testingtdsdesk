@@ -95,8 +95,10 @@ try:
        and s0.get("login") == "madeup-a" and s0.get("bridge") == GA["id"] and s0.get("seen") and "secret" not in s0 and "code" not in s0,
        "2. started: when, the first day, the login, the bridge (%s)" % s0)
     r0 = by.get("MADE UP CO|check") or {}
-    ok(r0.get("state") == "refused" and r0.get("code") == "typing" and len(r0.get("words", "")) <= 200 and "<" not in r0.get("words", "") and r0.get("at") == "2026-11-08T05:00:04Z" and "pickedUtc" not in r0,
-       "2. refused: its code, its words cut and plain (%s)" % {k: (v[:40] if isinstance(v, str) else v) for k, v in r0.items()})
+    ok(r0.get("state") == "refused" and r0.get("code") == "typing" and r0.get("words") == "someone is working in Tally; reading starts once Tally has been left alone for a minute"
+       and r0.get("at") == "2026-11-08T05:00:04Z" and "pickedUtc" not in r0,
+       "2. refused: its code, FinCom's own words for it (the bridge's text never kept: review 6) (%s)" % {k: (v[:40] if isinstance(v, str) else v) for k, v in r0.items()})
+    ok(s0.get("book") == BOOK and r0.get("book") == BOOK and (by.get("BAD DAY|period") or {}).get("book") == "", "2. each matched to its book (a company not linked: none) (review 6)")
     bd = by.get("BAD DAY|period") or {}
     ok(bd.get("day") == "" and len(bd.get("login", "")) <= 60 and "<" not in bd.get("login", ""), "2. a day not yyyymmdd: none; the login cut, plain (%s)" % bd)
     c, r = call(dict(base, pickups=[started(company="CO %02d" % i) for i in range(30)]))
@@ -148,6 +150,14 @@ try:
     call(dict(base, lastStop=dict(LS, back="2026-11-08T09:00:00Z", why="exit", code=-1073741510, log="made up")))
     k5 = (next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("lastStop") or {}
     ok(k5.get("why") == "exit" and k5.get("code") == -1073741510 and "log" not in k5, "5. its exit code; an unknown log kind dropped (%s)" % k5)
+    print("== 6. the first heartbeat of India's day (migration 149, review 5)")
+    info = next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}
+    df = info.get("dayFirst") or {}
+    today = (datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)).strftime("%Y-%m-%d")
+    ok(df.get("day") == today and df.get("at", "") < (info.get("beat") or {}).get("at", ""), "6. kept, the day's first beat (%s)" % df)
+    first = df.get("at")
+    call(dict(base))
+    ok(((next(d for d in FS.T["tally_devices"] if d["id"] == DA).get("info") or {}).get("dayFirst") or {}).get("at") == first, "6. not moved by a later beat")
 finally:
     fn.terminate()
 if fails:

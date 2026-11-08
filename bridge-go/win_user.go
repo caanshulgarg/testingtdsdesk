@@ -167,9 +167,9 @@ func runUser(args []string) int {
 	fails := 0
 	for {
 		started := time.Now()
-		code, stopped := superviseWorker(exe, stop)
+		code, stopped, hung := superviseWorker(exe, stop)
 		if !stopped {
-			superviseNote(code, code == 9) // 2.5.10: why it ended, said once it runs again (selfheal.go)
+			superviseNote(code, hung) // 2.5.10: why it ended, said once it runs again (selfheal.go; review 7: hung only when ended here)
 		}
 		if stopped {
 			writeLog("Stopping: asked to (setup or uninstall)")
@@ -210,12 +210,12 @@ func runUser(args []string) int {
 }
 
 // one run of the worker: its exit code, or stopped when the setup asked everything to stop
-func superviseWorker(exe string, stop <-chan struct{}) (int, bool) {
+func superviseWorker(exe string, stop <-chan struct{}) (int, bool, bool) {
 	c := exec.Command(exe, "worker", "--config", ConfigPath, "--home", Home, "--parent", strconv.Itoa(os.Getpid()))
 	hideWindow(c)
 	if err := c.Start(); err != nil {
 		writeLog("The bridge could not be started: " + err.Error())
-		return 1, false
+		return 1, false, false
 	}
 	done := make(chan int, 1)
 	go func() {
@@ -223,12 +223,17 @@ func superviseWorker(exe string, stop <-chan struct{}) (int, bool) {
 		done <- c.ProcessState.ExitCode()
 	}()
 	pid, start, answered, lastOK := c.Process.Pid, time.Now(), false, time.Now()
-	tick := time.NewTicker(20 * time.Second)
+	const every = 20 * time.Second
+	tick := time.NewTicker(every)
 	defer tick.Stop()
+	// review of 2.5.10 (1): the heartbeat judged by its progress count across these looks (stallTracker), and a look
+	// that comes late (the computer slept or hibernated, the clock jumped) judges nothing: every count starts again
+	beat := stallTracker{every: every}
+	lastLook := wallNow()
 	for {
 		select {
 		case code := <-done:
-			return code, false
+			return code, false, false
 		case <-stop:
 			// the worker sees the same stop and ends by itself; it is ended only if it does not
 			select {
@@ -238,16 +243,28 @@ func superviseWorker(exe string, stop <-chan struct{}) (int, bool) {
 				_ = c.Process.Kill()
 				<-done
 			}
-			return 0, true
+			return 0, true, false
 		case <-tick.C:
+			now := wallNow()
+			gap := now.Sub(lastLook)
+			lastLook = now
+			if gap < 0 || gap > 3*every {
+				writeLog("Watchdog: a late look (the computer slept or its clock changed); the bridge is judged afresh")
+				start, lastOK, beat = time.Now(), time.Now(), stallTracker{every: every}
+				continue
+			}
 			why := ""
 			if r := pingWorker(); r != nil && toInt(r["pid"]) == pid {
 				answered, lastOK = true, time.Now()
+				stuck, _ := beat.observe(toI64(r["beatN"]), now)
 				if l := time.Duration(toInt(r["loopSec"])) * time.Second; l > hangLoop {
 					why = fmt.Sprintf("its main loop has not moved for %d minutes", int(l.Minutes()))
-				} else if b := time.Duration(toInt(r["beatSec"])) * time.Second; b > hangBeat+2*time.Minute {
-					// 2.5.10: its heartbeat stuck (its own watchdog ends it after hangBeat; this is the one after it)
-					why = fmt.Sprintf("its heartbeat has not moved for %d minutes", int(b.Minutes()))
+				} else if r["beatN"] != nil && stuck > hangBeat+2*time.Minute {
+					// 2.5.10: its heartbeat stuck (its own watchdog ends it after hangBeat, or waits for a posting or a
+					// busy Tally up to TallyAbandonMaxSec; this one waits for that too)
+					if b := watchBusyOf(r); b == "" || stuck > hangBeat+2*time.Minute+abandonMax() {
+						why = fmt.Sprintf("its heartbeat has not moved for %d minutes", int(stuck.Minutes()))
+					}
 				}
 			} else if answered && time.Since(lastOK) > hangAnswer {
 				why = fmt.Sprintf("it has not answered for %d minutes", int(time.Since(lastOK).Minutes()))
@@ -258,7 +275,7 @@ func superviseWorker(exe string, stop <-chan struct{}) (int, bool) {
 				writeLog("Watchdog: the bridge hangs (" + why + "); it is ended and started again")
 				_ = c.Process.Kill()
 				<-done
-				return 9, false
+				return 9, false, true
 			}
 		}
 	}
@@ -369,6 +386,7 @@ func runWorker(args []string) int {
 
 // FinComBridge.exe stop --per-user: this user's supervisor, worker and tray end (at most half a minute)
 func stopUser() {
+	setSetupAt(true) // review of 2.5.10 (3): the keep-alive task starts nothing until the install is done (keepalive.go)
 	ev := userEvent("Stop")
 	if ev == 0 {
 		return
@@ -462,6 +480,7 @@ func installUserCmd(args []string) int {
 		return installFailed(7, "The start at sign-in could not be set (HKCU\\"+runKey+": "+err.Error()+"); a policy of this computer may forbid it.", "Ask the administrator to allow programs to start at sign-in, or to install FinCom Bridge for all users.")
 	}
 	installLog("Install: starts when " + o.name + " signs in to Windows (HKCU Run)")
+	setSetupAt(false)
 	c := exec.Command(exe, "user", "--config", cfgPath)
 	if err := c.Start(); err != nil {
 		return installFailed(5, "FinCom Bridge did not start ("+err.Error()+"); an antivirus may have blocked "+exe+".", "Allow FinCom Bridge in the antivirus, or sign out and in again; if it stays, send the install log to FinCom.")

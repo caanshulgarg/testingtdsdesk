@@ -3,6 +3,7 @@ package main
 // bridge 2.5.10: the bridge heals itself (selfheal.go, keepalive.go): the heartbeat's watchdog, its retries, a sleep or a
 // network change noticed, why the last run ended said in the beat, and the keep-alive task's command line
 import (
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"reflect"
@@ -16,12 +17,13 @@ func r2510HealBridge(t *testing.T) {
 	t.Helper()
 	f := newStandTally(t)
 	standBridge(t, f, `,"Key":"own-user-key"`)
-	oldW, oldM, oldP, oldR, oldX := wallNow, monoNow, netPrint, runMode, beatWatchExit
+	oldW, oldM, oldP, oldR, oldX, oldH, oldB := wallNow, monoNow, netPrint, runMode, beatWatchExit, hangBeat, watchBusy
 	oldLast, oldLook := netLast, netLookAt
 	t.Cleanup(func() {
-		wallNow, monoNow, netPrint, runMode, beatWatchExit = oldW, oldM, oldP, oldR, oldX
+		wallNow, monoNow, netPrint, runMode, beatWatchExit, hangBeat, watchBusy = oldW, oldM, oldP, oldR, oldX, oldH, oldB
 		netLast, netLookAt = oldLast, oldLook
 		beatLoopAt.Store(0)
+		resetEarlier()
 	})
 	for _, p := range []string{lastStopFile(), runningFile(), keepAliveHintFile(), crashLogFile(), keepAliveMarkFile()} {
 		_ = os.Remove(p)
@@ -99,74 +101,6 @@ func TestR2510BeatWaitWakes(t *testing.T) {
 	close(stop)
 	if w := beatWait(time.Minute, nil, stop); w != "stop" {
 		t.Fatalf("stopped: %q", w)
-	}
-}
-
-// the heartbeat stalled: the worker ends itself (code 13) with the reason written, when something starts it again;
-// started again, it says so in the beat
-func TestR2510WatchdogStallRestarts(t *testing.T) {
-	r2510HealBridge(t)
-	runStarted()
-	var got []int
-	var mu sync.Mutex
-	beatWatchExit = func(c int) { mu.Lock(); got = append(got, c); mu.Unlock() }
-	// by hand (window): said, never ended
-	runMode = "window"
-	beatLoopAt.Store(time.Now().Add(-4 * time.Minute).Unix())
-	stop := make(chan struct{})
-	go beatWatch(stop, 10*time.Millisecond)
-	time.Sleep(100 * time.Millisecond)
-	close(stop)
-	mu.Lock()
-	n := len(got)
-	mu.Unlock()
-	if n != 0 || !strings.Contains(readText(logFile()), "started by hand: nothing restarts it") {
-		t.Fatalf("by hand: ended %v", got)
-	}
-	writeLog("Older entries of MADE UP CO: 01-Jul-2025 waits")
-	// moving: nothing
-	runMode = "user"
-	beatLoopAt.Store(time.Now().Unix())
-	stop = make(chan struct{})
-	go beatWatch(stop, 10*time.Millisecond)
-	time.Sleep(60 * time.Millisecond)
-	close(stop)
-	if len(got) != 0 {
-		t.Fatalf("a moving heartbeat ended: %v", got)
-	}
-	// stalled under the supervisor: ended with exitStall, the reason and the last log line's kind written
-	beatLoopAt.Store(time.Now().Add(-4 * time.Minute).Unix())
-	stop = make(chan struct{})
-	done := make(chan struct{})
-	go func() { beatWatch(stop, 10*time.Millisecond); close(done) }()
-	select {
-	case <-done:
-	case <-time.After(3 * time.Second):
-		t.Fatal("the watchdog did not end the worker")
-	}
-	close(stop)
-	if len(got) != 1 || got[0] != exitStall {
-		t.Fatalf("ended with %v", got)
-	}
-	s := readLastStop()
-	if s == nil || s.Why != "stall" || s.Log != "olderEntries" || time.Since(s.At) < 3*time.Minute {
-		t.Fatalf("the reason: %+v", s)
-	}
-	if lastStopBeat() != nil {
-		t.Fatal("said before it runs again")
-	}
-	// started again (the supervisor's code 13: its own reason kept)
-	superviseNote(exitStall, false)
-	runStarted()
-	b := obj(lastStopBeat())
-	if str(b["why"]) != "stall" || str(b["log"]) != "olderEntries" || str(b["back"]) == "" || str(b["at"]) == "" || b["code"] != nil {
-		t.Fatalf("the beat's lastStop: %v", b)
-	}
-	if strings.Contains(jsonText(b), "MADE UP") {
-		t.Fatal("a log line's words in the beat")
-	}
-	if l, ok := beatBody(false, "closed", "", nil, nil, nil)["lastStop"].(M); !ok || str(l["why"]) != "stall" {
-		t.Fatalf("not in the beat's body: %v", beatBody(false, "closed", "", nil, nil, nil)["lastStop"])
 	}
 }
 
@@ -260,80 +194,378 @@ func TestR2510LogCategory(t *testing.T) {
 	}
 }
 
-// the supervisor's look: /ping says how long the heartbeat has not moved
+// review of 2.5.10 (1): the stall is judged by the progress count across the watchdog's looks: a late look (a sleep, a
+// hibernate, a clock jumped forward or back) starts the count again; two looks or more without a move are needed
+func TestR2510StallTracker(t *testing.T) {
+	tr := stallTracker{every: 15 * time.Second}
+	at := time.Date(2026, 11, 8, 8, 0, 0, 0, time.UTC)
+	look := func(n int64, d time.Duration) (time.Duration, bool) { at = at.Add(d); return tr.observe(n, at) }
+	look(1, 0)
+	if st, _ := look(1, 15*time.Second); st != 0 {
+		t.Fatalf("one look without a move: %s", st)
+	}
+	for i := 0; i < 10; i++ {
+		look(1, 15*time.Second)
+	}
+	if st, _ := look(1, 15*time.Second); st != 3*time.Minute {
+		t.Fatalf("12 looks without a move: %s", st)
+	}
+	// the computer slept 10 minutes (or hibernated, or the clock jumped): a late look, the count starts again
+	if st, slept := look(1, 10*time.Minute); st != 0 || !slept {
+		t.Fatalf("after a 10-minute sleep: %s %v", st, slept)
+	}
+	if st, _ := look(1, 15*time.Second); st != 0 {
+		t.Fatalf("the first look after it: %s", st)
+	}
+	// the clock set back
+	if st, slept := look(1, -time.Hour); st != 0 || !slept {
+		t.Fatalf("the clock back: %s %v", st, slept)
+	}
+	// a move: nothing
+	look(2, 15*time.Second)
+	if st, _ := look(3, 15*time.Second); st != 0 {
+		t.Fatalf("moving: %s", st)
+	}
+}
+
+// the heartbeat stalled: the worker ends itself (code 13) with the reason written, when something starts it again;
+// a 10-minute sleep is never taken for a stall (review 1); a posting or a busy Tally first (review 2)
+func TestR2510WatchdogStallRestarts(t *testing.T) {
+	r2510HealBridge(t)
+	runStarted()
+	var mu sync.Mutex
+	var got []int
+	beatWatchExit = func(c int) { mu.Lock(); got = append(got, c); mu.Unlock() }
+	exits := func() int { mu.Lock(); defer mu.Unlock(); return len(got) }
+	hangBeat = 60 * time.Millisecond
+	watchBusy = func() string { return "" }
+	watch := func(d time.Duration) {
+		stop := make(chan struct{})
+		done := make(chan struct{})
+		go func() { beatWatch(stop, 10*time.Millisecond); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(d):
+		}
+		close(stop)
+		<-done
+	}
+	// by hand (window): said, never ended
+	runMode = "window"
+	watch(200 * time.Millisecond)
+	if exits() != 0 || !strings.Contains(readText(logFile()), "started by hand: nothing restarts it") {
+		t.Fatalf("by hand: ended %v", got)
+	}
+	runMode = "user"
+	// moving: nothing
+	stopMove := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopMove:
+				return
+			case <-time.After(3 * time.Millisecond):
+				noteBeat()
+			}
+		}
+	}()
+	watch(200 * time.Millisecond)
+	close(stopMove)
+	if exits() != 0 {
+		t.Fatalf("a moving heartbeat ended: %v", got)
+	}
+	// a 10-minute sleep at each look (the heartbeat still, as while asleep): never a stall, the sleep note kept
+	base := time.Now()
+	var n int
+	wallNow = func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		n++
+		return base.Add(time.Duration(n) * 10 * time.Minute)
+	}
+	noteSleep(base, base.Add(10*time.Minute))
+	watch(200 * time.Millisecond)
+	if exits() != 0 {
+		t.Fatalf("a sleep taken for a stall: %v", got)
+	}
+	if s := readLastStop(); s == nil || s.Why != "sleep" {
+		t.Fatalf("the sleep note: %+v", s)
+	}
+	wallNow = func() time.Time { return time.Now().Round(0) }
+	// a posting being sent: the exit waits (TallyAbandonMaxSec at most), then goes
+	setCfg("TallyAbandonMaxSec", 1)
+	t.Cleanup(func() { setCfg("TallyAbandonMaxSec", nil) })
+	watchBusy = func() string { return "a posting is being sent to Tally" }
+	writeLog("Older entries of MADE UP CO: 01-Jul-2025 waits")
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	t0 := time.Now()
+	go func() { beatWatch(stop, 10*time.Millisecond); close(done) }()
+	time.Sleep(500 * time.Millisecond)
+	if exits() != 0 {
+		t.Fatal("ended while a posting was being sent")
+	}
+	select {
+	case <-done:
+	case <-time.After(4 * time.Second):
+		t.Fatal("never ended after TallyAbandonMaxSec")
+	}
+	close(stop)
+	if exits() != 1 || got[0] != exitStall || time.Since(t0) < time.Second {
+		t.Fatalf("ended with %v after %s", got, time.Since(t0))
+	}
+	if !strings.Contains(readText(logFile()), "ends itself once a posting is being sent to Tally no more") {
+		t.Fatal("the wait not said")
+	}
+	s := readLastStop()
+	if s == nil || s.Why != "stall" || s.Log != "olderEntries" {
+		t.Fatalf("the reason: %+v", s)
+	}
+	if lastStopBeat() != nil {
+		t.Fatal("said before it runs again")
+	}
+	superviseNote(exitStall, false)
+	runStarted()
+	b := obj(lastStopBeat())
+	if str(b["why"]) != "stall" || str(b["log"]) != "olderEntries" || str(b["back"]) == "" || str(b["at"]) == "" || b["code"] != nil {
+		t.Fatalf("the beat's lastStop: %v", b)
+	}
+	if strings.Contains(jsonText(b), "MADE UP") {
+		t.Fatal("a log line's words in the beat")
+	}
+	if l, ok := beatBody(false, "closed", "", nil, nil, nil)["lastStop"].(M); !ok || str(l["why"]) != "stall" {
+		t.Fatalf("not in the beat's body: %v", beatBody(false, "closed", "", nil, nil, nil)["lastStop"])
+	}
+	// review 7: a worker that ended with code 9 by itself is not a hang (only one the supervisor ended is)
+	runEnded()
+	runStarted()
+	superviseNote(9, false)
+	runStarted()
+	if b := obj(lastStopBeat()); str(b["why"]) != "exit" || toInt(b["code"]) != 9 {
+		t.Fatalf("code 9 by itself: %v", b)
+	}
+}
+
+// review of 2.5.10 (2): a Tally still on a request given up is held across a restart, until TallyAbandonMaxSec after
+// the send; then the small check is owed and the hold goes
+func TestR2510EarlierHoldKeptAcrossRestart(t *testing.T) {
+	r2510HealBridge(t)
+	resetEarlier()
+	setCfg("TallyAbandonMaxSec", 2)
+	t.Cleanup(func() { setCfg("TallyAbandonMaxSec", nil) })
+	port := 43991
+	sl := &abandonSlot{done: make(chan struct{}), id: "FinComDayHeads", at: time.Now().Add(-1200 * time.Millisecond)}
+	holdUntilAnswered(port, sl, func() {})
+	m := readObjFile(earlierFile())
+	if e := obj(m[fmt.Sprint(port)]); str(e["id"]) != "FinComDayHeads" || str(e["until"]) == "" {
+		t.Fatalf("not kept on disk: %v", m)
+	}
+	// the run ends (the watchdog, a crash): a new run starts with nothing in memory
+	saved := readText(earlierFile())
+	resetEarlier()
+	_ = saveFile(earlierFile(), saved)
+	if n := earlierLoad(); n != 1 {
+		t.Fatalf("%d holds taken over", n)
+	}
+	if earlierRefusal(port) == nil || !earlierBusyAny() || len(portLock(port).ch) != 1 {
+		t.Fatal("the Tally not held after the restart")
+	}
+	if !strings.Contains(readText(logFile()), "nothing is sent to it until") {
+		t.Fatal("not said")
+	}
+	for i := 0; i < 40 && earlierRefusal(port) != nil; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+	if earlierRefusal(port) != nil || len(portLock(port).ch) != 0 {
+		t.Fatal("still held after TallyAbandonMaxSec")
+	}
+	probeMu.Lock()
+	need := probes[port] != nil && probes[port].need
+	probeMu.Unlock()
+	if !need {
+		t.Fatal("the small check not owed")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if exists(earlierFile()) {
+		t.Fatal("the file kept after the hold ended")
+	}
+	// a hold already over, or one further ahead than the bound: not taken
+	_ = saveFile(earlierFile(), jsonText(M{"43992": M{"id": "x", "at": time.Now().Add(-time.Hour).UTC().Format(time.RFC3339), "until": time.Now().Add(-time.Minute).UTC().Format(time.RFC3339)},
+		"43993": M{"id": "y", "at": time.Now().UTC().Format(time.RFC3339), "until": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)}}))
+	if n := earlierLoad(); n != 0 || earlierRefusal(43992) != nil || earlierRefusal(43993) != nil {
+		t.Fatalf("%d stale holds taken", n)
+	}
+	close(sl.done)
+}
+
+// the supervisor's look: /ping says the heartbeat's progress count, its age and what keeps it from ending
 func TestR2510PingBeatSec(t *testing.T) {
 	r2510HealBridge(t)
+	watchBusy = func() string { return "Tally is still on an earlier request" }
 	beatLoopAt.Store(time.Now().Add(-200 * time.Second).Unix())
+	n0 := beatLoopN.Load()
 	r := httptest.NewRequest("GET", "http://127.0.0.1:9100/ping", nil)
 	r.RemoteAddr = "127.0.0.1:50123"
 	w := httptest.NewRecorder()
 	handle(w, r)
-	if res := parseObj(w.Body.String()); toInt(res["beatSec"]) < 199 {
+	res := parseObj(w.Body.String())
+	if toInt(res["beatSec"]) < 199 || toI64(res["beatN"]) != n0 || watchBusyOf(res) != "Tally is still on an earlier request" {
 		t.Fatalf("/ping: %v", res)
 	}
 }
 
-// the keep-alive task: its exact command line, made once, made again when the program moves, taken off when asked;
-// refused for a path schtasks cannot take; nothing real is run here
+// review of 2.5.10 (7): the network's fingerprint leaves out IPv6 (its temporary addresses change by themselves),
+// adapters that are down, the loopback and virtual adapters; the backoff is moved by up to a fifth
+func TestR2510NetPrintAndJitter(t *testing.T) {
+	l := []ifaceAddrs{
+		{name: "Ethernet", up: true, addrs: []string{"192.168.1.20/24", "2401:4900:1c3d:1111:aaaa:bbbb:cccc:dddd/64", "fe80::1/64"}},
+		{name: "vEthernet (WSL)", up: true, addrs: []string{"172.20.0.1/20"}},
+		{name: "VirtualBox Host-Only Network", up: true, addrs: []string{"192.168.56.1/24"}},
+		{name: "Wi-Fi", up: false, addrs: []string{"10.0.0.5/24"}},
+		{name: "Loopback Pseudo-Interface 1", up: true, loop: true, addrs: []string{"127.0.0.1/8"}},
+		{name: "Bluetooth Network Connection", up: true, addrs: []string{"169.254.3.4/16"}},
+	}
+	if p := netPrintOf(l); p != "192.168.1.20/24" {
+		t.Fatalf("the fingerprint: %q", p)
+	}
+	l[0].addrs[1] = "2401:4900:1c3d:1111:1234:5678:9abc:def0/64" // a new temporary IPv6 address
+	if p := netPrintOf(l); p != "192.168.1.20/24" {
+		t.Fatalf("a temporary IPv6 address changed it: %q", p)
+	}
+	l[0].addrs[0] = "192.168.2.7/24"
+	if p := netPrintOf(l); p != "192.168.2.7/24" {
+		t.Fatalf("a real change not seen: %q", p)
+	}
+	old := jitterRand
+	t.Cleanup(func() { jitterRand = old })
+	for _, f := range []float64{0, 0.5, 0.999} {
+		jitterRand = func() float64 { return f }
+		if d := beatJitter(10 * time.Second); d < 8*time.Second || d > 12*time.Second {
+			t.Fatalf("jitter %v: %s", f, d)
+		}
+	}
+	jitterRand = old
+	seen := map[time.Duration]bool{}
+	for i := 0; i < 20; i++ {
+		seen[beatJitter(10*time.Second)] = true
+	}
+	if len(seen) < 2 {
+		t.Fatal("no jitter")
+	}
+}
+
+// review of 2.5.10 (3): the keep-alive task, from Task Scheduler's own file: every 5 minutes, also on battery, as the
+// signed-in user (InteractiveToken, least privilege: no password, no administrator), one name per Windows user (its SID,
+// the login in Unicode); made once, made again when the program moves or the task was deleted, taken off when asked;
+// nothing real is run here
 func TestR2510KeepAliveTask(t *testing.T) {
 	r2510HealBridge(t)
 	exe := `C:\Users\made-up-a\AppData\Local\FinCom Bridge\FinComBridge.exe`
 	cfgp := `C:\Users\made-up-a\AppData\Local\FinCom Bridge\tds-bridge.config.json`
-	args, err := keepAliveTaskArgs(exe, cfgp, "made-up-a")
-	want := []string{"/Create", "/F", "/TN", "FinCom Bridge keep-alive (made-up-a)", "/SC", "MINUTE", "/MO", "5", "/IT", "/TR",
-		`"C:\Users\made-up-a\AppData\Local\FinCom Bridge\FinComBridge.exe" keepalive --config "C:\Users\made-up-a\AppData\Local\FinCom Bridge\tds-bridge.config.json"`}
-	if err != nil || !reflect.DeepEqual(args, want) {
-		t.Fatalf("the task: %v %q", err, args)
+	sid := "S-1-5-21-1111111111-2222222222-3333333333-1001"
+	x, err := keepAliveTaskXML(exe, cfgp, sid)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, a := range args {
-		if strings.EqualFold(a, "/RU") || strings.EqualFold(a, "/RL") || strings.EqualFold(a, "HIGHEST") || strings.EqualFold(a, "SYSTEM") || strings.EqualFold(a, "ONLOGON") {
-			t.Fatalf("needs an administrator or a password: %v", args)
+	for _, want := range []string{"<Interval>PT5M</Interval>", "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>", "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>",
+		"<LogonType>InteractiveToken</LogonType>", "<RunLevel>LeastPrivilege</RunLevel>", "<UserId>" + sid + "</UserId>", "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>",
+		"<Command>" + exe + "</Command>", "<Arguments>keepalive --config &#34;" + cfgp + "&#34;</Arguments>", "<ExecutionTimeLimit>PT2M</ExecutionTimeLimit>"} {
+		if !strings.Contains(x, want) {
+			t.Fatalf("the task file lacks %s:\n%s", want, x)
 		}
 	}
-	if !reflect.DeepEqual(keepAliveDeleteArgs("made-up-a"), []string{"/Delete", "/TN", "FinCom Bridge keep-alive (made-up-a)", "/F"}) {
-		t.Fatal("the delete")
+	for _, bad := range []string{"Password", "HighestAvailable", "S4U", "LogonTrigger"} {
+		if strings.Contains(x, bad) {
+			t.Fatalf("needs a password or an administrator: %s", bad)
+		}
 	}
-	if n := keepAliveTaskName(`made"up|a*?`); n != "FinCom Bridge keep-alive (madeupa)" {
-		t.Fatalf("a name schtasks refuses: %q", n)
+	if b := utf16File("<a>"); len(b) != 8 || b[0] != 0xFF || b[1] != 0xFE || b[2] != '<' || b[3] != 0 {
+		t.Fatalf("not UTF-16 with its mark: %v", b)
 	}
-	if _, err := keepAliveTaskArgs(`C:\a"b\FinComBridge.exe`, "", "x"); err == nil {
+	if n := keepAliveTaskName(`SRV01\made-up-a`, sid); n != "FinCom Bridge keep-alive (SRV01made-up-a "+sid+")" {
+		t.Fatalf("the name: %q", n)
+	}
+	if n := keepAliveTaskName("ना:म|ए", ""); n != "FinCom Bridge keep-alive (नामए)" {
+		t.Fatalf("a Unicode login: %q", n)
+	}
+	if keepAliveTaskName("made-up-a", "S-1-5-21-1") == keepAliveTaskName("made-up-a", "S-1-5-21-2") {
+		t.Fatal("two users of the same name share a task")
+	}
+	if _, err := keepAliveTaskXML(`C:\a"b\FinComBridge.exe`, "", ""); err == nil {
 		t.Fatal("a quote in the path")
 	}
-	if _, err := keepAliveTaskArgs(`C:\`+strings.Repeat("a", 250)+`\FinComBridge.exe`, "", "x"); err == nil {
-		t.Fatal("a path longer than schtasks takes")
+	if !reflect.DeepEqual(keepAliveCreateArgs("N", `C:\x.xml`), []string{"/Create", "/F", "/TN", "N", "/XML", `C:\x.xml`}) {
+		t.Fatal("the create")
 	}
 	var runs [][]string
-	fail := false
+	var files []string
+	fail, present := false, true
 	old := schtasksRun
 	t.Cleanup(func() { schtasksRun = old })
 	schtasksRun = func(a ...string) error {
 		runs = append(runs, a)
-		if fail {
-			return os.ErrPermission
+		switch a[0] {
+		case "/Create":
+			if fail {
+				return os.ErrPermission
+			}
+			b, _ := os.ReadFile(a[len(a)-1])
+			files = append(files, string(b))
+			present = true
+		case "/Query":
+			if !present {
+				return os.ErrNotExist
+			}
+		case "/Delete":
+			present = false
 		}
 		return nil
+	}
+	creates := func() int {
+		n := 0
+		for _, r := range runs {
+			if r[0] == "/Create" {
+				n++
+			}
+		}
+		return n
 	}
 	fail = true
 	ensureKeepAlive(exe)
 	fail = false
 	ensureKeepAlive(exe)
 	ensureKeepAlive(exe)
-	if len(runs) != 2 || runs[1][0] != "/Create" || !strings.Contains(readText(logFile()), "could not be made") {
+	if creates() != 2 || !strings.Contains(readText(logFile()), "could not be made") || len(files) != 1 || len(files[0]) < 100 || files[0][0] != 0xFF {
 		t.Fatalf("made once after a failure: %v", runs)
 	}
+	if exists(keepAliveXMLFile()) {
+		t.Fatal("the task's file left behind")
+	}
+	present = false // deleted in Task Scheduler by someone
+	ensureKeepAlive(exe)
+	if creates() != 3 {
+		t.Fatalf("a deleted task not made again: %v", runs)
+	}
 	ensureKeepAlive(`D:\FinCom\FinComBridge.exe`)
-	if len(runs) != 3 || !strings.Contains(runs[2][10], `D:\FinCom\FinComBridge.exe`) {
+	if creates() != 4 {
 		t.Fatalf("the program moved: %v", runs)
 	}
 	setCfg("NoKeepAlive", true)
 	ensureKeepAlive(exe)
 	ensureKeepAlive(exe)
 	setCfg("NoKeepAlive", false)
-	if len(runs) != 4 || runs[3][0] != "/Delete" {
+	if r := runs[len(runs)-1]; r[0] != "/Delete" || creates() != 4 {
 		t.Fatalf("NoKeepAlive: %v", runs)
 	}
 	removeKeepAlive(nil)
 	if runs[len(runs)-1][0] != "/Delete" || readText(keepAliveMarkFile()) != "" {
 		t.Fatal("the uninstall")
+	}
+	// a setup between its stop and its install: nothing started for 30 minutes at most
+	now := time.Now()
+	for at, want := range map[string]bool{now.Add(-5 * time.Minute).UTC().Format(time.RFC3339): true, now.Add(-31 * time.Minute).UTC().Format(time.RFC3339): false, "": false, "noon": false} {
+		if setupRunning(at, now) != want {
+			t.Fatalf("SetupAt %q: %v", at, !want)
+		}
 	}
 }

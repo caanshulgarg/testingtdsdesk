@@ -359,7 +359,8 @@ func cancelJob(id, why string) (M, error) {
 //	notHere      no posting of that number on this computer (another computer's, or never here)
 //	notFound     its folder is here but nothing of it is left to stop (already finished)
 //	alreadySent  it finished: sent to Tally; nothing is stopped (it may be in Tally)
-//	postingNow   a request of it is at Tally now: that request finishes, nothing after it goes (the mark is set, as before)
+//	postingNow   a request of it is at Tally now: that request finishes, nothing after it goes (the mark is set, as before;
+//	             answered 200 with these words: the stop is taken)
 //	otherLogin   asked by a program of another Windows login (server.go, before anything is looked at)
 var cancelWords = map[string]string{
 	"notHere":     "not this computer's posting — FinCom Bridge here has no posting with that number",
@@ -398,8 +399,12 @@ func cancelAsked(id, why string) (M, error) {
 		return nil, err
 	}
 	if atTally {
+		// review of 2.5.10 (4): the stop is set (nothing after the request at Tally goes): answered as done, with its words
 		writeLog("Posting job " + id + ": stop asked while a request of it is at Tally; that request finishes, nothing after it is sent")
-		return nil, cancelRefusal(409, "postingNow", M{"stopAsked": true})
+		if r == nil {
+			r = M{}
+		}
+		r["ok"], r["code"], r["words"], r["stopAsked"] = true, "postingNow", cancelWords["postingNow"], true
 	}
 	return r, nil
 }

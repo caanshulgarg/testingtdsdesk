@@ -357,7 +357,8 @@ func runBridge(console bool) int {
 		return exitNoPort
 	}
 	_ = os.Remove(startFailedFile())
-	runStarted() // 2.5.10: why the run before ended, said in the beat (selfheal.go)
+	runStarted()  // 2.5.10: why the run before ended, said in the beat (selfheal.go)
+	earlierLoad() // review of 2.5.10 (2): a Tally the run before left busy stays held (inflight.go)
 	defer runEnded()
 	go beatWatch(stopCh, 15*time.Second)
 	serve(ln)

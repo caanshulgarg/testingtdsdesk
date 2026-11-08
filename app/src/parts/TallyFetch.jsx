@@ -207,7 +207,7 @@ export default function OlderEntries({ cid, say = false }) {
   // next-buttons: Start says what happens and when; no Tally computer on it in 2 minutes: "Not started: <why>"
   const sk = "older:" + book;
   const start = () => { if (busy || lockOf("choose:" + book)) return; const args = { p_book: book, p_fy_start: chosenFy + "-04-01", p_part: same && p.part ? p.part : "year" }, bk = book, seen = pullWatch(p); setBusy("start"); setErr("");
-    press(sk, () => { const acks = ackSnap(b.company || "", ["period"]); return rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
+    press(sk, () => { const acks = ackSnap(book, ["period"]); return rpc("tally_period_choose_lean", args).catch((e) => { if (missing(e)) return rpc("tally_period_choose", args); throw e; })
       .then((r) => { summary(true); askStatus(true);
         if (r && r.ok === false) return { text: "Not started: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };
         const started = () => seen((bookSum(cid) || {}).pull);

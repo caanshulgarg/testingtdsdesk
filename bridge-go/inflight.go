@@ -19,6 +19,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 )
@@ -45,6 +46,7 @@ type abandonSlot struct {
 	took  time.Duration // Tally's time on it when it finished, set before done closes
 	// 2.4.8 review round 3 (R3-3): the typed port's trial on a port not in the plan: the long bound leaves no stuck record
 	noMark bool
+	until  time.Time // 2.5.10: a hold taken over from the run before (earlierLoad): it ends then
 }
 
 // the bridge's own hold (probeHold): nothing was sent; the words as before, told apart by errors.Is(err, errProbeHold)
@@ -98,6 +100,7 @@ func holdUntilAnswered(port int, s *abandonSlot, unlock func()) {
 	earlierMu.Lock()
 	earlier[port] = s
 	earlierMu.Unlock()
+	earlierSave()
 	go func() {
 		<-s.done
 		earlierMu.Lock()
@@ -105,8 +108,80 @@ func holdUntilAnswered(port int, s *abandonSlot, unlock func()) {
 			delete(earlier, port)
 		}
 		earlierMu.Unlock()
+		earlierSave()
 		unlock()
 	}()
+}
+
+// review of 2.5.10 (2): a Tally still on a request the bridge gave up on is held across a restart (the watchdog's own
+// exit, a crash, a hang the supervisor ended): the requests open now, with when each was sent, are kept on disk
+// (earlier-hold.json) while they last; the next run holds each such Tally (nothing sent to it, a posting waits and says
+// so, as for any earlier request) until TallyAbandonMaxSec after the send, then the small check goes first
+func earlierFile() string { return sp("earlier-hold.json") }
+
+var earlierSaveMu sync.Mutex
+
+func earlierSave() {
+	if syncDir() == "" {
+		return
+	}
+	earlierSaveMu.Lock()
+	defer earlierSaveMu.Unlock()
+	earlierMu.Lock()
+	m := M{}
+	for p, sl := range earlier {
+		if sl.noMark {
+			continue
+		}
+		until := sl.until
+		if until.IsZero() {
+			until = sl.at.Add(abandonMax())
+		}
+		m[fmt.Sprint(p)] = M{"id": sl.id, "at": sl.at.UTC().Format(time.RFC3339Nano), "until": until.UTC().Format(time.RFC3339Nano)}
+	}
+	earlierMu.Unlock()
+	if len(m) == 0 {
+		_ = os.Remove(earlierFile())
+		return
+	}
+	_ = saveFile(earlierFile(), jsonText(m))
+}
+
+// at the start of a run: the holds the run before left, while they last (a time over TallyAbandonMaxSec ahead: ignored)
+func earlierLoad() int {
+	n := 0
+	now := time.Now()
+	for k, v := range readObjFile(earlierFile()) {
+		port, e := toInt(k), obj(v)
+		until, err := time.Parse(time.RFC3339, str(e["until"]))
+		if port <= 0 || err != nil || !until.After(now) || until.After(now.Add(abandonMax()+time.Minute)) {
+			continue
+		}
+		g := portLock(port)
+		select {
+		case g.ch <- struct{}{}:
+		default:
+			continue
+		}
+		at, _ := time.Parse(time.RFC3339, str(e["at"]))
+		sl := &abandonSlot{done: make(chan struct{}), id: or(cutRunes(str(e["id"]), 60), "a request"), at: at.Local(), until: until}
+		holdUntilAnswered(port, sl, func() { <-g.ch })
+		go func(p int) {
+			select {
+			case <-time.After(time.Until(until)):
+			case <-stopCh:
+			}
+			sl.bound = true
+			setProbeFrom(p, sl.at) // Tally taken as not answering it: the small check goes first
+			close(sl.done)
+		}(port)
+		writeLog(fmt.Sprintf("Tally %d: still taken as working on a request the run before gave up on (%s, sent at %s); nothing is sent to it until %s", port, sl.id, sl.at.Format("15:04:05"), until.Local().Format("15:04:05")))
+		n++
+	}
+	if n == 0 {
+		_ = os.Remove(earlierFile())
+	}
+	return n
 }
 
 // next-inflight: after the long bound the small check is owed; the minute before it counts from when the bridge gave up

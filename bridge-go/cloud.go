@@ -737,7 +737,7 @@ func beatLoop() {
 	sleepOrStop(3 * time.Second)
 	fails := 0
 	for !stopping() {
-		beatLoopAt.Store(time.Now().Unix()) // 2.5.10: the loop's progress, for the watchdogs (selfheal.go)
+		noteBeat() // 2.5.10: the loop's progress, for the watchdogs (selfheal.go)
 		before, _ := beatTimes()
 		func() {
 			defer func() {
@@ -766,6 +766,7 @@ func beatLoop() {
 		if ok {
 			fails = 0
 		} else {
+			d = beatJitter(d) // review of 2.5.10 (7)
 			if fails == 0 {
 				beatFresh() // a connection of a network gone only times out
 			}

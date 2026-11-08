@@ -92,7 +92,7 @@ export default function CheckChanges({ cid, where = "books" }) {
   if (!b || askOff()) return null;
   const [a, z] = periodOf(kind, own[0], own[1], b.from), today = istToday(), bf = iso8(b.from);
   const press = () => { if (!a || !z) { setErr("Choose the first and the last day."); return; }
-    setBusy(true); setErr(""); setSnap(ackSnap(b.company || "", ["check"]));
+    setBusy(true); setErr(""); setSnap(ackSnap(book, ["check"]));
     rpc("tally_check_request", { p_client: cid, p_from: a, p_to: z }).then((r) => {
       if (r && r.ok === false) setErr(String(r.error || "FinCom did not take it")); else if (r && r.ok) setMine(r);
       askStatus(true); summary(true); },

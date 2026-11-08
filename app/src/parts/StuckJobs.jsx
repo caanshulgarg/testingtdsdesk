@@ -27,9 +27,10 @@ function dropLocal(id) {
   try { const m = JSON.parse(localStorage.getItem("tdsdesk:bridgejob") || "null"); if (m && m.id === id) localStorage.removeItem("tdsdesk:bridgejob"); } catch (e) { /* */ }
 }
 export async function cancelJob(id) {
-  await Bridge.call("/jobs/cancel", { id }, 15000);
+  const r = await Bridge.call("/jobs/cancel", { id }, 15000);
   dropLocal(id);
   J.list = (J.list || []).filter((j) => j.id !== id);
+  return r;
 }
 // the bridge's active postings, and the stale ones cleared (see above); force: asked now
 export async function jobsLook(force) {
@@ -82,7 +83,9 @@ export function PostingWait({ beat, hook = "line" }) {
       {(x.company || "") + " · " + (x.status || "") + (x.message ? " · " + x.message : "") + " "}
       <button type="button" className="btn small" data-stuck-cancel={x.id} disabled={busy === x.id}
         onClick={async () => { if (busy || !(await ask())) return; setBusy(x.id);
-          try { await cancelJob(x.id); SD[x.id] = { at: Date.now(), text: "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
+          // (bridge 2.5.10: a stop taken while a part of it is at Tally says so, in the bridge's words)
+          try { const r = await cancelJob(x.id); SD[x.id] = { at: Date.now(), text: r && r.code === "postingNow" && r.words ? "Stop asked. FinCom Bridge said: " + String(r.words).replace(/[.\s]+$/, "") + "."
+            : "Stopped. Nothing more is sent to Tally for it; reading goes on within a minute." }; }
           catch (e) { J.err = String((e && e.message) || e).replace(/[.\s]+$/, "");
             // (the bridge's own answer when it gave one; not reached: said so). Bridge 2.5.10: a refusal is its reason's
             // plain words (already sent to Tally, being posted right now, not this computer's, not found); another

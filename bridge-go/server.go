@@ -168,7 +168,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	if path == "/ping" {
 		// pid and loopSec: the per-user supervisor checks that its own worker answers and that its main loop still turns
 		p := M{"ok": true, "bridge": "FinCom Tally Bridge", "version": BridgeVersion, "impl": "go", "testMode": testMode(), "runMode": runMode, "pid": os.Getpid(), "loopSec": loopSec(), "yours": mine,
-			"beatSec": beatSec()} // 2.5.10: the heartbeat loop's progress too (selfheal.go)
+			"beatSec": beatSec(), "beatN": beatLoopN.Load(), "busy": watchBusy()} // 2.5.10: the heartbeat loop's progress too (selfheal.go)
 		// 2.5.3: the Tallys this bridge uses (its own, and those it found with the owner unknown), so the other users'
 		// bridges of this computer leave them alone; the Windows user, to name it in their words
 		own, unknown := claimedPorts()

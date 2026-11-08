@@ -1985,10 +1985,32 @@ async function fillDaysOf(book: string, days: string[]): Promise<Set<string>> {
 // cleaned (anything else dropped), merged with the beat before (a computer with two bridges keeps both's), each kept 2
 // hours from when it was last said, at most 20 (the newest)
 const PICK_KINDS = ["period", "check", "fill"];
-const PICK_CODES = ["tallyClosed", "paused", "readingStopped", "posting", "saving", "typing", "retryWait", "noStart", "slow", "notOpen", "otherLogin", "tallyBusy",
-  "held", "notAnswering", "earlier", "stoppedHere", "otherCompany", "stopped", "queued"];
+// review of 2.5.10 (6): the words are FinCom's own for each code (the bridge's pickack.go pickWords, word for word); the
+// bridge's text is never kept; and each is matched to its book (the page matches by book, never by name)
+const PICK_WORDS: Record<string, string> = {
+  tallyClosed: "Tally is not open on this computer",
+  paused: "background reading is paused in the FinCom Bridge tray icon",
+  readingStopped: "reading from Tally is stopped from FinCom for this computer",
+  posting: "a posting into Tally goes first; reading follows by itself",
+  saving: "a save made in Tally goes to FinCom first; reading follows by itself",
+  typing: "someone is working in Tally; reading starts once Tally has been left alone for a minute",
+  retryWait: "Tally did not answer in time lately; FinCom Bridge waits before asking again",
+  noStart: "the company's starting point is not recorded yet; it is recorded at the next read",
+  slow: "this company's entries are not asked (finding one took longer than 2 seconds)",
+  notOpen: "the company is not open in this login's Tally",
+  otherLogin: "the company is open in another Windows login's Tally, not in this one's",
+  tallyBusy: "Tally is busy; reading starts once it is free",
+  held: "Tally is held for a moment (just opened, or FinCom is reading it); reading follows by itself",
+  notAnswering: "Tally's window is not answering",
+  earlier: "Tally is still on an earlier request; reading follows by itself",
+  stoppedHere: "single days are not read from this Tally until FinCom Bridge restarts",
+  otherCompany: "the company open in Tally here is another copy than the book's (its GUID differs)",
+  stopped: "reading older entries of this company was stopped because Tally was too slow; choose it again in FinCom",
+  queued: "other days are being read first, one day at a time; this follows by itself",
+};
+const PICK_CODES = Object.keys(PICK_WORDS);
 const ISO_T = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/;
-function pickupsOf(b: any, prevInfo: any, bridge: string, now = Date.now()) {
+async function pickupsOf(b: any, prevInfo: any, bridge: string, bookOf: (company: string) => Promise<string | null | undefined>, now = Date.now()) {
   const s = (v: unknown, n: number) => typeof v === "string" ? v.slice(0, n) : "";
   const t = (v: unknown) => ISO_T.test(s(v, 40)) && !isNaN(Date.parse(s(v, 40))) ? s(v, 40) : "";
   const seen = new Date(now).toISOString();
@@ -2006,9 +2028,16 @@ function pickupsOf(b: any, prevInfo: any, bridge: string, now = Date.now()) {
       e.pickedUtc = pu; e.pickedAt = t(x.pickedAt) || pu;
     } else {
       if (!PICK_CODES.includes(x.code)) continue;
-      e.code = x.code; e.words = s(x.words, 200).replace(/[\u0000-\u001f\u007f<>]/g, "").trim(); e.at = t(x.at);
+      e.code = x.code; e.words = PICK_WORDS[x.code]; e.at = t(x.at);
     }
     got.push(e);
+  }
+  // each one's book (bookForBeat, memoised): "" when the company is not linked
+  const books = new Map<string, string>();
+  for (const e of got) {
+    const c = String(e.company);
+    if (!books.has(c)) { let bk = ""; try { bk = String((await bookOf(c)) || ""); } catch { bk = ""; } books.set(c, bk); }
+    e.book = books.get(c) || "";
   }
   const key = (e: any) => [e.bridge, String(e.company).toLowerCase(), String(e.guid).toLowerCase(), e.kind].join("|");
   const by = new Map<string, any>();
@@ -4323,7 +4352,7 @@ Deno.serve(sentry.wrap(async (req) => {
         const prevInfo = ((dev as any).info && typeof (dev as any).info === "object") ? (dev as any).info : {};
         const me = bridgeOf(dev, body, false);
         // bridge 2.5.10: the days as the bridge took them (pickupsOf); none from an older bridge
-        const pickups = pickupsOf(b, prevInfo, me.id);
+        const pickups = await pickupsOf(b, prevInfo, me.id, (c: string) => bookForBeat(firm, c));
         if (pickups.length) (beat as any).pickups = pickups;
         // migration 54: switched to changes only by an owner (said on the bridge's line and to the bridge)
         const co = await changesOnly(dev, me.id);
@@ -4333,6 +4362,10 @@ Deno.serve(sentry.wrap(async (req) => {
         // migration 139: the gate's record of this bridge (its requests' last change, its start as seen here)
         const ug = gateTrack(prevInfo, beat, Date.now());
         const info = { ...prevInfo, ...ctl.info, beat, history: beatHistory(prevInfo, beat), bridges: bridgesWith(prevInfo, me.id, me.entry), updGate: ug };
+        // bridge 2.5.10 (review 5): the computer's first heartbeat of India's day (migration 149 says a stop only of a computer
+        // that had been beating earlier that day)
+        { const today = istDay(Date.now()), df = (prevInfo as any).dayFirst;
+          (info as any).dayFirst = df && typeof df === "object" && df.day === today && typeof df.at === "string" ? { day: today, at: df.at } : { day: today, at: beat.at }; }
         // bridge 2.5.10: the newest last stop said by a bridge of this computer, kept after the bridge stops saying it
         { const ls = (beat as any).lastStop, was = (prevInfo as any).lastStop;
           if (ls && !(was && typeof was === "object" && String(was.back || "") >= ls.back)) (info as any).lastStop = { ...ls, bridge: me.id }; }

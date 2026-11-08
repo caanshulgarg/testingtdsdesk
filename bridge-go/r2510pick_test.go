@@ -353,10 +353,10 @@ func TestR2510StopPostingReasons(t *testing.T) {
 		t.Fatal("a finished posting was marked")
 	}
 	dn := r2510Job(t, "job-now-2510", M{"status": "running", "message": "Sending 3 of 9", "inflight": []any{"a1", "a2"}, "updatedAt": time.Now().Format(time.RFC3339Nano)}, true)
+	// review of 2.5.10 (4): the stop is set, so it is answered 200, with the words of what happens
 	c, r = call("job-now-2510")
-	refused("a request at Tally now", c, r, "postingNow", 409)
-	if r["stopAsked"] != true || !exists(filepath.Join(dn, "cancel")) {
-		t.Fatalf("the rest not stopped as before: %v", r)
+	if c != 200 || r["ok"] != true || str(r["code"]) != "postingNow" || str(r["words"]) != cancelWords["postingNow"] || r["stopAsked"] != true || !exists(filepath.Join(dn, "cancel")) {
+		t.Fatalf("a request at Tally now: %d %v", c, r)
 	}
 	// as before: a posting waiting for Tally, or one stopped part-way, is stopped
 	dw := r2510Job(t, "job-wait-2510", M{"status": "waiting", "message": "Waiting for Tally", "updatedAt": time.Now().Format(time.RFC3339Nano)}, true)

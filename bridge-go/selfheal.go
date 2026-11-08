@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	mrand "math/rand"
 	"net"
 	"os"
 	"regexp"
@@ -26,10 +27,56 @@ import (
 	"time"
 )
 
-// --- the heartbeat loop's progress (Unix seconds of its last turn or wait slice)
-var beatLoopAt atomic.Int64
+// --- the heartbeat loop's progress: a count of its turns and wait slices (the watchdogs judge by it), and the Unix
+// seconds of the last one (for the log and /ping only)
+var (
+	beatLoopAt atomic.Int64
+	beatLoopN  atomic.Int64
+)
 
-const hangBeat = 3 * time.Minute // the beat turns every 30 s (a failed one sooner); 3 minutes without a move is a hang
+func noteBeat() {
+	beatLoopAt.Store(time.Now().Unix())
+	beatLoopN.Add(1)
+}
+
+// the beat turns every 30 s (a failed one sooner), its wait in 5 s slices: 3 minutes AWAKE without a move is a hang
+var hangBeat = 3 * time.Minute
+
+// review of 2.5.10 (1, HIGH): a stall is judged by the progress count across the watchdog's own looks, never by a
+// clock's age: each look adds the time since the one before while the count stands still; a look that comes over three
+// looks late (the computer slept or hibernated, or the clock jumped forward) or before the last (the clock went back)
+// starts the count again (slept). A stall needs two looks or more without a move
+type stallTracker struct {
+	every  time.Duration
+	lastN  int64
+	lastAt time.Time
+	stuck  time.Duration
+	still  int
+	begun  bool
+}
+
+func (t *stallTracker) observe(n int64, now time.Time) (stuck time.Duration, slept bool) {
+	if !t.begun {
+		t.begun, t.lastN, t.lastAt = true, n, now
+		return 0, false
+	}
+	gap := now.Sub(t.lastAt)
+	t.lastAt = now
+	if n != t.lastN {
+		t.lastN, t.stuck, t.still = n, 0, 0
+		return 0, false
+	}
+	if gap < 0 || gap > 3*t.every {
+		t.stuck, t.still = 0, 0
+		return 0, true
+	}
+	t.stuck += gap
+	t.still++
+	if t.still < 2 {
+		return 0, false
+	}
+	return t.stuck, false
+}
 
 func beatSec() int64 {
 	if t := beatLoopAt.Load(); t > 0 {
@@ -66,20 +113,61 @@ var (
 	netLast   string
 )
 
-// this computer's network, as a fingerprint of its addresses (no name, nothing sent)
+// this computer's network, as a fingerprint of its adapters' IPv4 addresses (no name, nothing sent). Review of 2.5.10
+// (7): IPv6 is left out (Windows' temporary addresses change by themselves every day), and so are adapters that are down,
+// the loopback and virtual ones (Hyper-V, WSL, Docker, VirtualBox, VMware, tunnels, Bluetooth)
+type ifaceAddrs struct {
+	name  string
+	up    bool
+	loop  bool
+	addrs []string
+}
+
+var reVirtualIf = regexp.MustCompile(`(?i)vethernet|hyper-v|wsl|docker|virtualbox|vmware|vbox|loopback|teredo|isatap|6to4|bluetooth|npcap|pseudo`)
+
+func netPrintOf(l []ifaceAddrs) string {
+	var out []string
+	for _, f := range l {
+		if !f.up || f.loop || reVirtualIf.MatchString(f.name) {
+			continue
+		}
+		for _, a := range f.addrs {
+			ip, _, err := net.ParseCIDR(a)
+			if err != nil || ip.To4() == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+			out = append(out, a)
+		}
+	}
+	sort.Strings(out)
+	return strings.Join(out, ",")
+}
+
 func localAddrs() string {
-	as, err := net.InterfaceAddrs()
+	ifs, err := net.Interfaces()
 	if err != nil {
 		return ""
 	}
-	var l []string
-	for _, a := range as {
-		if s := a.String(); !strings.HasPrefix(s, "127.") && s != "::1/128" {
-			l = append(l, s)
+	var l []ifaceAddrs
+	for _, f := range ifs {
+		e := ifaceAddrs{name: f.Name, up: f.Flags&net.FlagUp != 0, loop: f.Flags&net.FlagLoopback != 0}
+		if as, err := f.Addrs(); err == nil {
+			for _, a := range as {
+				e.addrs = append(e.addrs, a.String())
+			}
 		}
+		l = append(l, e)
 	}
-	sort.Strings(l)
-	return strings.Join(l, ",")
+	return netPrintOf(l)
+}
+
+// review of 2.5.10 (7): a failed heartbeat's pause moved by up to a fifth either way, so many computers that lost the
+// same network do not all come back in the same second
+var jitterRand = func() float64 { return mrand.Float64() }
+
+func beatJitter(d time.Duration) time.Duration {
+	f := 0.8 + 0.4*jitterRand()
+	return time.Duration(float64(d) * f)
 }
 
 // beatWait: the wait before the next heartbeat, in slices of at most 5 s (the loop's progress noted at each); it ends
@@ -88,7 +176,7 @@ func localAddrs() string {
 func beatWait(d time.Duration, now <-chan struct{}, stop <-chan struct{}) string {
 	end := monoNow().Add(d)
 	for {
-		beatLoopAt.Store(time.Now().Unix())
+		noteBeat()
 		left := end.Sub(monoNow())
 		if left <= 0 {
 			return ""
@@ -106,6 +194,7 @@ func beatWait(d time.Duration, now <-chan struct{}, stop <-chan struct{}) string
 		case <-time.After(slice):
 		}
 		if wallNow().Sub(w0)-monoNow().Sub(m0) > 2*time.Minute || wallNow().Sub(w0) > slice+2*time.Minute {
+			noteBeat() // (review 1: the heartbeat's time refreshed before anything else looks at it)
 			noteSleep(w0, wallNow())
 			return "sleep"
 		}
@@ -137,29 +226,66 @@ var beatWatchExit = func(code int) { os.Exit(code) }
 
 const exitStall = 13 // the worker ended itself: its heartbeat stalled (the supervisor starts it again at once)
 
+// review of 2.5.10 (2, MEDIUM): the exit waits while a posting is being sent or a Tally is still on a request the bridge
+// gave up on (at most TallyAbandonMaxSec): ending then would cut a posting short, or let the next run send into a Tally
+// still busy (the hold is also kept on disk across a restart: inflight.go earlierSave)
+var watchBusy = func() string {
+	if postingGoing() || importsInFlight.Load() > 0 {
+		return "a posting is being sent to Tally"
+	}
+	if earlierBusyAny() {
+		return "Tally is still on an earlier request"
+	}
+	return ""
+}
+
+// what the worker's /ping says keeps it from ending (the supervisor waits for it as the worker's own watchdog does)
+func watchBusyOf(ping M) string { return cutRunes(str(ping["busy"]), 100) }
+
 func beatWatch(stop <-chan struct{}, every time.Duration) {
-	said := false
+	tr := stallTracker{every: every}
+	said, waitSaid, cat := false, false, ""
+	var waitFrom time.Time
 	for {
 		select {
 		case <-stop:
 			return
 		case <-time.After(every):
 		}
-		s := beatSec()
-		if s < int64(hangBeat/time.Second) || stopping() {
-			said = false
+		stuck, slept := tr.observe(beatLoopN.Load(), wallNow())
+		if slept {
+			writeLogOnce("watch|slept", "Watchdog: a late look (the computer slept or its clock changed); the heartbeat is judged afresh", 10*time.Minute)
+		}
+		if stuck < hangBeat || stopping() {
+			said, waitSaid, waitFrom, cat = false, false, time.Time{}, ""
 			continue
 		}
+		if cat == "" {
+			cat = or(lastLogCat(), "other") // what it was doing (before the watchdog's own lines)
+		}
+		m := int(stuck.Minutes())
 		if runMode != "user" && runMode != "service" {
 			if !said {
-				writeLog(fmt.Sprintf("Watchdog: the heartbeat has not moved for %d minutes (started by hand: nothing restarts it; close and start FinCom Bridge again)", s/60))
+				writeLog(fmt.Sprintf("Watchdog: the heartbeat has not moved for %d minutes (started by hand: nothing restarts it; close and start FinCom Bridge again)", m))
 				said = true
 			}
 			continue
 		}
-		cat := lastLogCat() // what it was doing (before its own line below)
-		writeLog(fmt.Sprintf("Watchdog: the heartbeat has not moved for %d minutes; FinCom Bridge ends itself and is started again", s/60))
-		saveLastStop(lastStop{At: time.Now().Add(-time.Duration(s) * time.Second), Why: "stall", Log: cat})
+		if b := watchBusy(); b != "" {
+			if waitFrom.IsZero() {
+				waitFrom = monoNow()
+			}
+			if monoNow().Sub(waitFrom) < abandonMax() {
+				if !waitSaid {
+					writeLog("Watchdog: the heartbeat has not moved for " + fmt.Sprint(m) + " minutes; FinCom Bridge ends itself once " + b + " no more (at most " + abandonMax().String() + ")")
+					waitSaid = true
+				}
+				continue
+			}
+		}
+		writeLog(fmt.Sprintf("Watchdog: the heartbeat has not moved for %d minutes; FinCom Bridge ends itself and is started again", m))
+		earlierSave() // (the holds of a Tally still busy, for the next run)
+		saveLastStop(lastStop{At: time.Now().Add(-stuck), Why: "stall", Log: cat})
 		beatWatchExit(exitStall)
 		return
 	}

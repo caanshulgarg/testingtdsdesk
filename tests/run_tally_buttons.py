@@ -74,8 +74,8 @@ def main():
         def forget(prefix): E("(p) => { const S_ = FCTallyBtn.SAID; Object.keys(S_).forEach(k => { if (k.startsWith(p)) delete S_[k]; }); render(); }", prefix)
         # bridge 2.5.10: the bridge's own acknowledgement arrives in a beat (FinCom's broadcast, TLight.beatIn), as the cloud keeps it
         def acks(lst): E("([d, l]) => { TLight.beatIn({device: d, beat: {pickups: l}}); render(); }", [dA["id"], lst])
-        def ack(state, kind="period", company=ORB, taken="2026-11-08T05:11:00Z", **more):
-            a = {"company": company, "guid": "g-" + company, "kind": kind, "chosenAt": "2026-11-08T05:10:00Z", "takenAt": taken, "state": state, "day": "20261001",
+        def ack(state, kind="period", company=ORB, taken="2026-11-08T05:11:00Z", book="bk-" + ORBIT, **more):
+            a = {"company": company, "book": book, "guid": "g-" + company, "kind": kind, "chosenAt": "2026-11-08T05:10:00Z", "takenAt": taken, "state": state, "day": "20261001",
                  "login": "made-up-a", "bridge": "go-7", "seen": "2026-11-08T05:12:30Z"}
             if state == "started": a.update(pickedAt="2026-11-08T10:42:00+05:30", pickedUtc="2026-11-08T05:12:00Z")
             else: a.update(code="typing", words="someone is working in Tally; reading starts once Tally has been left alone for a minute", at="2026-11-08T05:12:10Z")
@@ -253,7 +253,7 @@ def main():
             ok(seen(R(ORBIT) + ' [data-said="books"][data-said-ack="started"]', r"^Started at 10:51 IST on made-up-a’s Tally\.$", 6000) != "", "3b. then it started: 'Started at 10:51 IST …' (%s)" % txt(R(ORBIT) + ' [data-said="books"]'))
             # an acknowledgement of another kind or company: not this one's; with none, the inference as before
             forget("books:"); pg.click(R(ORBIT) + ' [data-tpt-main="books"]'); seen(R(ORBIT) + ' [data-said="books"]', r"^Asked", 5000)
-            acks([ack("started", taken="2026-11-08T05:30:00Z", kind="check"), ack("started", company=KESC, taken="2026-11-08T05:30:00Z")])
+            acks([ack("started", taken="2026-11-08T05:30:00Z", kind="check"), ack("started", company=KESC, book="bk-" + KES, taken="2026-11-08T05:30:00Z"), ack("started", company=ORB, book="", taken="2026-11-08T05:31:00Z")])
             pg.wait_for_timeout(1200); age("books:")
             lw = seen(R(ORBIT) + ' [data-said="books"][data-said-state="late"]', r"^Not started: ", 8000)
             ok(lw != "" and "made-up-a" not in lw, "3b. no acknowledgement of this work: the inference after 2 minutes, as before (%s)" % (lw or txt(R(ORBIT) + ' [data-said="books"]')))
@@ -412,6 +412,7 @@ def main():
             if (p === '/jobs/cancel') { if (window.__cancelFail === 'said') throw new Error('made-up job is already done');
               // bridge 2.5.10: a refusal as Bridge.call throws it ({code, message}: the bridge's words), another login's bridge as its own code
               if (window.__cancelFail && window.__cancelFail.words) throw {code: 'bridge', message: window.__cancelFail.words};
+              if (window.__cancelFail === 'atTally') { window.__jobs = []; return {ok: true, code: 'postingNow', stopAsked: true, words: 'being posted right now — the part at Tally now finishes first and nothing after it is sent; wait for it to finish, then check Tally'}; }
               if (window.__cancelFail === 'other') throw {code: 'bridge_other_user', message: 'The FinCom Bridge at http://127.0.0.1:9100 is another Windows user’s on this computer'};
               if (window.__cancelFail) throw new TypeError('Failed to fetch'); window.__jobs = []; return {ok: true}; } return window.__bc0(p, b); };
           if (window.FCStuckJobs) { window.FCStuckJobs.at = 0; window.FCStuckJobs.list = null; } render(); }""")
@@ -424,11 +425,17 @@ def main():
             ok(seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge said: made-up job is already done\.$", 5000) != "", "8. Stop posting, the bridge refusing: its own answer said (%s)" % txt("#app [data-stuck-said]"))
             # bridge 2.5.10: each refusal's own words (jobs.go cancelWords)
             for words in ("already sent to Tally — it may be in Tally; check Tally before posting it again",
-                          "being posted right now — the part at Tally now finishes first and nothing after it is sent; wait for it to finish, then check Tally",
                           "not this computer's posting — FinCom Bridge here has no posting with that number", "not found (already finished) — nothing of it is left to stop here"):
                 E("(w) => { window.__cancelFail = {words: w}; }", words)
                 pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
                 ok(seen("#app [data-stuck-said]", "^Not stopped: FinCom Bridge said: " + re.escape(words) + r"\.$", 5000) != "", "8. Stop posting refused, its words: %s (%s)" % (words[:40], txt("#app [data-stuck-said]")))
+            # review of 2.5.10 (4): stopped while a part is at Tally: the stop taken (200), the bridge's words said
+            E("() => { window.__cancelFail = 'atTally'; }")
+            pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
+            ok(seen("#app [data-stuck-said]", r"^Stop asked\. FinCom Bridge said: being posted right now — the part at Tally now finishes first", 5000) != "", "8. Stop posting while a part is at Tally: 'Stop asked. FinCom Bridge said: being posted right now …' (%s)" % txt("#app [data-stuck-said]"))
+            E("() => { window.__jobs = [{id: 'job-made-up-1', company: 'KESTREL TEXTILES', status: 'running'}]; window.FCStuckJobs.at = 0; window.FCStuckJobs.list = null; if (window.FCStuckJobs.saids) delete window.FCStuckJobs.saids['job-made-up-1']; render(); }")
+            seen("#app [data-stuck-jobs]", r"Waiting for a posting", 6000)
+            if not n("#app [data-stuck-jobs] [data-stuck-cancel]"): pg.click("#app [data-stuck-jobs] [data-stuck-see]")
             E("() => { window.__cancelFail = 'other'; }")
             pg.click("#app [data-stuck-jobs] [data-stuck-cancel]"); confirm(True)
             w = seen("#app [data-stuck-said]", r"^Not stopped: FinCom Bridge said: not allowed from this login", 5000)

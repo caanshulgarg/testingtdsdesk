@@ -5,9 +5,11 @@ when all of a firm's FinCom Bridges have been silent more than 10 minutes. On a 
      real database; runs twice; one function, not executable by anon or authenticated;
   1. a firm silent 20 minutes (working hours): one 'summary' line, the stop's time in India's time, no computer's name;
      scanned again: nothing new; a later stop the same day: the same line, its new time, unread again;
-  2. none: a firm with another computer beating, a stop under 10 minutes, a heartbeat over 24 hours old, a stop or a scan
-     outside Monday to Saturday 09:00-19:00 India time, a revoked computer; another summary line of the computer that day
-     is never overwritten."""
+  2. none: a firm with another computer beating, a stop under 10 minutes, a heartbeat over 24 hours old, a scan outside
+     Monday to Saturday 09:00-19:00 India time, a revoked computer; review of 2.5.10 (5): a stop outside 09:30-18:30 India
+     time (the evening's switch-off), a computer not beating at least 30 minutes earlier that day (tally-ingest's
+     info.dayFirst: none, another day's, a start just before the stop); another summary line of the computer that day is
+     never overwritten."""
 import os, re, sys, hashlib, subprocess
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import pg_stand
@@ -42,7 +44,11 @@ try:
         ok(r.returncode == 0, "149 runs (%s time): %s" % ("first" if i == 1 else "second", r.stderr[-300:]))
     ex = lambda rl: db.one("select has_function_privilege(%s, 'public.tally_alert_scan_stopped(timestamptz)', 'execute')" % q(rl)) in ("t", "true")
     ok(not ex("anon") and not ex("authenticated"), "0. anon and authenticated cannot run it")
-    beat = lambda ago: "jsonb_build_object('beat', jsonb_build_object('at', to_char((timestamptz %s - interval '%s') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')))" % (q(NOW), ago)
+    def beat(ago, now=NOW, first="03:30:00", day=None):
+        at = "to_char((timestamptz %s - interval '%s') at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')" % (q(now), ago)
+        d = day or "to_char((timestamptz %s - interval '%s') at time zone 'Asia/Kolkata', 'YYYY-MM-DD')" % (q(now), ago)
+        df = "jsonb_build_object('day', %s, 'at', %s)" % (d if day is None else q(day), "to_char((timestamptz %s - interval '%s') at time zone 'UTC', 'YYYY-MM-DD') || 'T%sZ'" % (q(now), ago, first)) if first else "null"
+        return "jsonb_build_object('beat', jsonb_build_object('at', %s), 'dayFirst', %s)" % (at, df)
     db.sql("""insert into tally_devices (id, firm_id, name, revoked, info) values
       (%s, %s, 'MADEUP-SRV', false, %s),
       (%s, %s, 'MADEUP-A', false, %s), (%s, %s, 'MADEUP-B', false, %s),
@@ -59,14 +65,23 @@ try:
     ok(w.startswith("FinCom Bridge on the office Tally computer stopped answering at 11:10 IST.") and "MADEUP" not in w and "MADEUP" not in (rows[0]["data"] if rows else ""), "1. the words: the stop in India's time, no computer's name (%s)" % w)
     ok('"written": 0' in scan(), "1. scanned again: nothing new")
     ok(not db.rows("select 1 from tally_alerts where firm_id in (%s, %s, %s)" % (q(F2), q(F3), q(F4))), "2. another computer beating, over 24 h, under 10 minutes (a revoked one not counted)")
-    db.sql("update tally_alerts set read_at = now(); update tally_devices set info = %s where id = %s;" % (beat("12 minutes").replace(q(NOW), q("2026-11-09 08:00:00+00")), q(D[0])))
+    db.sql("update tally_alerts set read_at = now(); update tally_devices set info = %s where id = %s;" % (beat("12 minutes", now="2026-11-09 08:00:00+00"), q(D[0])))
     r = scan("2026-11-09 08:00:00+00")
     rows = db.rows("select words, read_at, data::text from tally_alerts where firm_id = %s" % q(F1))
     ok(len(rows) == 1 and "at 13:18 IST" in rows[0]["words"] and rows[0]["read_at"] == "", "1. a later stop that day: the same line, its new time, unread (%s)" % rows)
     print("== 2. none")
     ok("skipped" in scan("2026-11-08 06:00:00+00") and "skipped" in scan("2026-11-09 14:00:00+00"), "2. a Sunday, after 19:00 India time: skipped")
-    db.sql("delete from tally_alerts; update tally_devices set info = %s where id = %s;" % (beat("3 hours").replace(q(NOW), q("2026-11-09 06:00:00+00")), q(D[0])))
-    ok('"written": 0' in scan() and not db.rows("select 1 from tally_alerts"), "2. a stop at 08:30 India time (before working hours): none")
+    db.sql("delete from tally_alerts; update tally_devices set info = %s where id = %s;" % (beat("3 hours", first="02:00:00"), q(D[0])))
+    ok('"written": 0' in scan() and not db.rows("select 1 from tally_alerts"), "2. a stop at 08:30 India time (before the office day): none")
+    # the evening: a stop at 18:40 India time (13:10Z), scanned at 18:55 (13:25Z)
+    db.sql("update tally_devices set info = %s where id = %s;" % (beat("15 minutes", now="2026-11-09 13:25:00+00"), q(D[0])))
+    scan("2026-11-09 13:25:00+00")
+    ok(not db.rows("select 1 from tally_alerts where firm_id = %s" % q(F1)), "2. a stop at 18:40 India time (the evening's switch-off): none")
+    for what, info in (("no first heartbeat of the day", beat("20 minutes", first=None)), ("its first heartbeat another day's", beat("20 minutes", day="2026-11-08")),
+                       ("started 10 minutes before the stop", beat("20 minutes", first="05:30:00"))):
+        db.sql("update tally_devices set info = %s where id = %s;" % (info, q(D[0])))
+        db.sql("delete from tally_alerts;"); scan()
+        ok(not db.rows("select 1 from tally_alerts where firm_id = %s" % q(F1)), "2. %s: none" % what)
     db.sql("update tally_devices set info = %s where id = %s; insert into tally_alerts (firm_id, device_id, kind, day, words, data) values (%s, %s, 'summary', '2026-11-09', 'another line', '{\"x\": 1}');" % (beat("20 minutes"), q(D[0]), q(F1), q(D[0])))
     scan()
     ok(db.one("select words from tally_alerts where firm_id = %s" % q(F1)) == "another line", "2. another summary line of the computer that day: never overwritten")

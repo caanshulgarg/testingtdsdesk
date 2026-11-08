@@ -271,7 +271,7 @@ function Cell({ k, label, x, children }) {
 // Tally computer starts on it in 2 minutes: "Not started: <why>" (Said's watch: the fill's days done, or none waiting)
 const fillNow = (cid, r) => { const b = bookSum(cid); return (b ? (bookFetch(cid, b.book) || {}).fill : null) || (r && r.fill) || null; };
 async function bringDays(row, a) {
-  const f0 = fillNow(row.cid), acks = ackSnap(row.company, ["fill", "check"]);
+  const f0 = fillNow(row.cid), acks = ackSnap((bookSum(row.cid) || {}).book, ["fill", "check"]);
   const r = await rpc("tally_fill_request", { p_client: row.cid, p_days: daysOf(a.need) });
   askStatus(true);
   if (r && r.ok === false) return { text: "Not asked: " + String(r.error || "FinCom did not take it").replace(/[.\s]+$/, "") + ".", bad: true };

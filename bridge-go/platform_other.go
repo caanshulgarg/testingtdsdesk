@@ -79,6 +79,7 @@ func stopCmd(args []string) int         { return 0 }
 func runUser(args []string) int         { return runBridge(true) }
 func runWorker(args []string) int       { return runBridge(true) }
 func keepAliveCmd(args []string) int    { return 0 } // 2.5.10: the keep-alive task is Windows' (keepalive.go)
+func platUserSID() string               { return "" }
 func platSchtasks(args ...string) error {
 	return errors.New("scheduled tasks are for Windows")
 }
